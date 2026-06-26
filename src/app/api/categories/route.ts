@@ -1,4 +1,6 @@
 import { DEFAULT_ACCOUNTS } from "@/constants/defaultCategories";
+import { getAccessibleAccount } from "@/lib/accountAccess";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -42,14 +44,20 @@ export async function GET(_req: NextRequest) {
     });
   }
 
-  let query = supabase
+  const account = await getAccessibleAccount(supabase, user.id, accountId);
+  if (!account) {
+    return NextResponse.json({ error: "Account not found" }, { status: 404 });
+  }
+  const admin = supabaseAdmin();
+
+  let query = admin
     .from("user_categories")
     .select("id,name,slug,color,parent_id,position,visible,account_id")
-    .eq("user_id", user.id)
+    .eq("user_id", account.user_id)
     .eq("account_id", accountId);
 
   // Only filter out hidden categories if not explicitly including them
-  if (!includeHidden) {
+  if (!includeHidden || !account.isOwner) {
     query = query.eq("visible", true);
   }
 
@@ -58,7 +66,6 @@ export async function GET(_req: NextRequest) {
     .order("id", { ascending: true });
 
   if (error) {
-    console.error("user_categories error:", error);
     return NextResponse.json(
       { error: "Failed to fetch categories" },
       { status: 500 }

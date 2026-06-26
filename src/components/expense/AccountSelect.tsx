@@ -18,10 +18,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateAccount, useMyAccounts } from "@/features/accounts/hooks";
+import {
+  useCreateAccount,
+  useDeleteAccount,
+  useAccounts,
+} from "@/features/accounts/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import type { AccountType } from "@/types/domain";
+import { Lock, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -40,8 +46,9 @@ export default function AccountSelect({ value, onChange }: Props) {
     isError,
     error,
     refetch,
-  } = useMyAccounts();
+  } = useAccounts();
   const createAccount = useCreateAccount();
+  const deleteAccount = useDeleteAccount();
 
   const [internal, setInternal] = useState<string | undefined>(value);
   const selected = value ?? internal;
@@ -49,6 +56,7 @@ export default function AccountSelect({ value, onChange }: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<AccountType>("expense");
+  const [newIsPublic, setNewIsPublic] = useState(false);
 
   useEffect(() => setInternal(value), [value]);
 
@@ -80,12 +88,21 @@ export default function AccountSelect({ value, onChange }: Props) {
       const created = await createAccount.mutateAsync({
         name: newName.trim(),
         type: newType,
+        is_public: newIsPublic,
       });
-      toast.success("Account created");
+      toast.success("Account created", {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => deleteAccount.mutate(created.id),
+        },
+      });
       setSelected(created.id);
       setAddOpen(false);
       setNewName("");
       setNewType("expense");
+      setNewIsPublic(false);
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Failed to create account",
@@ -212,6 +229,39 @@ export default function AccountSelect({ value, onChange }: Props) {
                   </Label>
                 </div>
               </RadioGroup>
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Visibility</Label>
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => setNewIsPublic(false)}
+                  className={cn(
+                    "h-11 rounded-md border text-sm font-medium flex items-center justify-center gap-2 transition-colors",
+                    !newIsPublic
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground",
+                  )}
+                  disabled={createAccount.isPending}
+                >
+                  <Lock className="h-4 w-4" />
+                  Private
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewIsPublic(true)}
+                  className={cn(
+                    "h-11 rounded-md border text-sm font-medium flex items-center justify-center gap-2 transition-colors",
+                    newIsPublic
+                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
+                      : "border-border text-muted-foreground",
+                  )}
+                  disabled={createAccount.isPending}
+                >
+                  <Users className="h-4 w-4" />
+                  Shared
+                </button>
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button

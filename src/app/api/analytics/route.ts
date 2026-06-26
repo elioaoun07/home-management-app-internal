@@ -57,24 +57,22 @@ export async function GET(req: NextRequest) {
 
     let accountsQuery = supabase
       .from("accounts")
-      .select("id, name, type, user_id")
+      .select("id, name, type, user_id, visible, is_public")
       .in("user_id", userIds);
 
     if (accountIdFilter) {
       accountsQuery = accountsQuery.eq("id", accountIdFilter);
     }
 
-    const { data: accounts, error: accountsError } = await accountsQuery;
-    console.log("[analytics] accounts query:", {
-      count: accounts?.length,
-      error: accountsError,
-      userIds,
+    const { data: accounts } = await accountsQuery;
+    const accountList = (accounts || []).filter((account) => {
+      if (account.visible === false) return false;
+      if (account.user_id === user.id) return true;
+      return partnerId && account.user_id === partnerId && account.is_public;
     });
-    const accountList = accounts || [];
     const accountIds = accountList.map((a) => a.id);
 
     if (accountIds.length === 0) {
-      console.log("[analytics] No accounts found, returning empty");
       return NextResponse.json(emptyResponse(!!partnerId));
     }
 
@@ -98,10 +96,9 @@ export async function GET(req: NextRequest) {
     );
     const startStr = startDate.toISOString().slice(0, 10);
     const endStr = now.toISOString().slice(0, 10);
-    console.log("[analytics] date range:", { startStr, endStr, monthsBack });
 
     // --- Fetch transactions ---
-    const { data: rawTxs, error: txError } = await supabase
+    const { data: rawTxs } = await supabase
       .from("transactions")
       .select(
         "id, amount, date, account_id, category_id, subcategory_id, user_id, is_private, description, is_debt_return",
@@ -110,10 +107,6 @@ export async function GET(req: NextRequest) {
       .gte("date", startStr)
       .lte("date", endStr)
       .order("date", { ascending: true });
-    console.log("[analytics] transactions:", {
-      rawCount: rawTxs?.length,
-      error: txError,
-    });
 
     const transactions = (rawTxs || []).filter((t) => {
       // Filter out partner's private transactions
@@ -122,12 +115,7 @@ export async function GET(req: NextRequest) {
     });
 
     // --- Fetch categories (with classification for 50/30/20) ---
-    const catUserIds =
-      partnerId && ownership !== "partner"
-        ? [user.id]
-        : partnerId && ownership === "partner"
-          ? [partnerId]
-          : [user.id];
+    const catUserIds = [...new Set(accountList.map((a) => a.user_id))];
 
     // Try with classification column, fall back without it
     let categories: any[] | null = null;
@@ -139,10 +127,6 @@ export async function GET(req: NextRequest) {
 
     if (catError) {
       // classification column might not exist; retry without it
-      console.warn(
-        "[analytics] categories query failed, retrying without classification:",
-        catError.message,
-      );
       const { data: catsBasic } = await supabase
         .from("user_categories")
         .select("id, name, color, parent_id, account_id")
@@ -401,18 +385,6 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    console.log("[analytics] final:", {
-      monthsCount: months.length,
-      monthKeys: months.map((m) => m.month),
-      firstMonth: months[0]
-        ? {
-            income: months[0].income,
-            expense: months[0].expense,
-            txCount: months[0].transactionCount,
-          }
-        : null,
-    });
-
     return NextResponse.json({
       months,
       needsWantsSavings,
@@ -430,7 +402,6 @@ export async function GET(req: NextRequest) {
       currentUserId: user.id,
     });
   } catch (error: any) {
-    console.error("Analytics API error:", error);
     return NextResponse.json(
       { error: "Failed to fetch analytics", detail: error?.message },
       { status: 500 },

@@ -1,3 +1,4 @@
+import { getAccessibleAccount } from "@/lib/accountAccess";
 import { adjustAccountBalance } from "@/lib/balance";
 import type { AccountType } from "@/lib/balance-utils";
 import { getBalanceDelta } from "@/lib/balance-utils";
@@ -100,7 +101,6 @@ export class SupabaseTransactionService implements TransactionService {
     const { data: rawRows, error } = (await query) as any;
 
     if (error) {
-      console.error("Failed to fetch transactions:", error);
       throw new Error("Failed to fetch transactions");
     }
 
@@ -108,34 +108,25 @@ export class SupabaseTransactionService implements TransactionService {
     const accountIds = [
       ...new Set((rawRows || []).map((r: any) => r.account_id).filter(Boolean)),
     ];
-    let accountNamesMap: Record<string, string> = {};
+    let accountMap: Record<
+      string,
+      { name: string; user_id: string; is_public?: boolean | null }
+    > = {};
 
     if (accountIds.length > 0) {
-      // Fetch accounts for current user
-      const { data: myAccounts } = await this.supabase
+      const { data: accounts } = await this.supabase
         .from("accounts")
-        .select("id, name")
+        .select("id, name, user_id, is_public")
         .in("id", accountIds);
 
-      if (myAccounts) {
-        myAccounts.forEach((acc: any) => {
-          accountNamesMap[acc.id] = acc.name;
+      if (accounts) {
+        accounts.forEach((acc: any) => {
+          accountMap[acc.id] = {
+            name: acc.name,
+            user_id: acc.user_id,
+            is_public: acc.is_public,
+          };
         });
-      }
-
-      // If household linked, fetch partner's account names
-      if (partnerId) {
-        const { data: partnerAccounts } = await this.supabase
-          .from("accounts")
-          .select("id, name")
-          .eq("user_id", partnerId)
-          .in("id", accountIds);
-
-        if (partnerAccounts) {
-          partnerAccounts.forEach((acc: any) => {
-            accountNamesMap[acc.id] = acc.name;
-          });
-        }
       }
     }
 
@@ -193,9 +184,15 @@ export class SupabaseTransactionService implements TransactionService {
     const filteredRows = (rawRows || []).filter((r: any) => {
       // If it's the user's own transaction, show it (even if private)
       if (r.user_id === userId) return true;
-      // If it's partner's transaction and it's private, hide it
+      if (r.collaborator_id === userId && r.split_completed_at) return true;
       if (r.is_private === true) return false;
-      return true;
+      const account = accountMap[r.account_id];
+      if (!account) return false;
+      if (account.user_id === userId) return account.is_public === true;
+      if (partnerId && account.user_id === partnerId) {
+        return account.is_public === true;
+      }
+      return false;
     });
 
     // Fetch user theme preferences for color coding
@@ -260,7 +257,7 @@ export class SupabaseTransactionService implements TransactionService {
       inserted_at: r.inserted_at,
       user_id: r.user_id,
       user_name: r.user_id === userId ? meName : partnerName || "Partner",
-      account_name: accountNamesMap[r.account_id] || "Unknown",
+      account_name: accountMap[r.account_id]?.name || "Unknown",
       category_color:
         categoryNamesMap[r.category_id]?.color ||
         r.category?.color ||
@@ -357,6 +354,15 @@ export class SupabaseTransactionService implements TransactionService {
       throw new Error("account_id, category_id, and amount are required");
     }
 
+    const account = await getAccessibleAccount(
+      this.supabase,
+      userId,
+      account_id,
+    );
+    if (!account?.canWrite) {
+      throw new Error("Invalid account_id");
+    }
+
     // If split requested, get the partner's user ID from household link
     let collaboratorId: string | null = null;
     if (split_requested) {
@@ -384,11 +390,11 @@ export class SupabaseTransactionService implements TransactionService {
       .from("user_categories")
       .select("name")
       .eq("id", category_id)
-      .eq("user_id", userId)
+      .eq("user_id", account.user_id)
+      .eq("account_id", account_id)
       .single();
 
     if (categoryError) {
-      console.error("Error fetching category:", categoryError);
       throw new Error("Invalid category_id");
     }
 
@@ -398,11 +404,11 @@ export class SupabaseTransactionService implements TransactionService {
         .from("user_categories")
         .select("name")
         .eq("id", subcategory_id)
-        .eq("user_id", userId)
+        .eq("user_id", account.user_id)
+        .eq("account_id", account_id)
         .single();
 
       if (subcategoryError) {
-        console.error("Error fetching subcategory:", subcategoryError);
         throw new Error("Invalid subcategory_id");
       }
     }
@@ -439,7 +445,6 @@ export class SupabaseTransactionService implements TransactionService {
       .single();
 
     if (error) {
-      console.error("Error creating transaction:", error);
       throw new Error("Failed to create transaction");
     }
 
@@ -485,13 +490,7 @@ export class SupabaseTransactionService implements TransactionService {
 
     // Adjust balance for the new transaction
     if (account_id && created) {
-      const { data: accountData2 } = await this.supabase
-        .from("accounts")
-        .select("type")
-        .eq("id", account_id)
-        .single();
-
-      const accountType = (accountData2?.type || "expense") as AccountType;
+      const accountType = (account.type || "expense") as AccountType;
       const delta = getBalanceDelta(amount, accountType, false, "create");
       await adjustAccountBalance(account_id, delta, "transaction", {
         userId,
@@ -536,14 +535,7 @@ export class SupabaseTransactionService implements TransactionService {
 
     // Fetch account name
     if (account_id) {
-      const { data: accountData } = await this.supabase
-        .from("accounts")
-        .select("name")
-        .eq("id", account_id)
-        .single();
-      if (accountData) {
-        accountName = accountData.name;
-      }
+      accountName = account.name;
     }
 
     // Return the complete transaction object with all display names
@@ -637,7 +629,6 @@ export class SupabaseTransactionService implements TransactionService {
       .single();
 
     if (error) {
-      console.error("Error updating transaction:", error);
       throw new Error("Failed to update transaction");
     }
 

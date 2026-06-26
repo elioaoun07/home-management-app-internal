@@ -3,12 +3,15 @@
 import WidgetCard from "@/components/dashboard-v2/WidgetCard";
 import BlurredAmount from "@/components/ui/BlurredAmount";
 import { useTheme } from "@/contexts/ThemeContext";
-import type { MonthlyAnalytics } from "@/features/analytics/useAnalytics";
+import type {
+  AccountBalance,
+  MonthlyAnalytics,
+} from "@/features/analytics/useAnalytics";
 import { cn } from "@/lib/utils";
 import type { Account } from "@/types/domain";
 import { format, subMonths } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
-import { LayoutGrid, LayoutList, Users } from "lucide-react";
+import { Check, LayoutGrid, LayoutList, Users } from "lucide-react";
 import { useCallback, useId, useMemo, useState } from "react";
 import {
   Bar,
@@ -35,6 +38,7 @@ type Props = {
   analyticsMonths: MonthlyAnalytics[] | undefined;
   transactions: TransactionLike[];
   accounts: Account[] | undefined;
+  balanceAccounts?: AccountBalance[] | undefined;
   currentUserId?: string;
   hasPartner?: boolean;
 };
@@ -42,6 +46,7 @@ type Props = {
 type Grouping = "month" | "quarter" | "year";
 type ViewMode = "combined" | "split";
 type Layout = "columns" | "stacked";
+type MetricKey = "income" | "expense" | "savings" | "expectedSavings";
 
 type MonthBucket = { key: string; label: string };
 
@@ -51,12 +56,15 @@ type BucketRow = {
   income: number;
   expense: number;
   savings: number;
+  expectedSavings: number;
   myIncome: number;
   partnerIncome: number;
   myExpense: number;
   partnerExpense: number;
   mySavings: number;
   partnerSavings: number;
+  myExpectedSavings: number;
+  partnerExpectedSavings: number;
 };
 
 type Totals = Omit<BucketRow, "key" | "label">;
@@ -66,13 +74,28 @@ type Totals = Omit<BucketRow, "key" | "label">;
 const INCOME_COLOR = "#34d399";
 const EXPENSE_COLOR = "#fb7185";
 const SAVINGS_COLOR = "#a78bfa";
+const EXPECTED_SAVINGS_COLOR = "#22d3ee";
+
+const METRIC_OPTIONS: Array<{ key: MetricKey; label: string; color: string }> =
+  [
+    { key: "income", label: "Income", color: INCOME_COLOR },
+    { key: "expense", label: "Expense", color: EXPENSE_COLOR },
+    { key: "savings", label: "Savings", color: SAVINGS_COLOR },
+    {
+      key: "expectedSavings",
+      label: "Expected Savings",
+      color: EXPECTED_SAVINGS_COLOR,
+    },
+  ];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtDollar(n: number): string {
-  if (n >= 10_000) return `$${(n / 1000).toFixed(0)}k`;
-  if (n >= 1_000) return `$${(n / 1000).toFixed(1)}k`;
-  return `$${Math.round(n)}`;
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  if (abs >= 10_000) return `${sign}$${(abs / 1000).toFixed(0)}k`;
+  if (abs >= 1_000) return `${sign}$${(abs / 1000).toFixed(1)}k`;
+  return `${sign}$${Math.round(abs)}`;
 }
 
 function lightenHex(hex: string, pct: number): string {
@@ -149,8 +172,20 @@ function ChartDefs({ id, color }: { id: string; color: string }) {
       </linearGradient>
       <filter id={`${id}-glow`} x="-40%" y="-15%" width="180%" height="140%">
         <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
-        <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.55 0" result="glow" />
-        <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.35" result="shadow" />
+        <feColorMatrix
+          in="blur"
+          type="matrix"
+          values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.55 0"
+          result="glow"
+        />
+        <feDropShadow
+          dx="0"
+          dy="2"
+          stdDeviation="3"
+          floodColor="#000"
+          floodOpacity="0.35"
+          result="shadow"
+        />
         <feMerge>
           <feMergeNode in="shadow" />
           <feMergeNode in="glow" />
@@ -162,11 +197,25 @@ function ChartDefs({ id, color }: { id: string; color: string }) {
 }
 
 function OutlinedBar({
-  x, y, width, height, fillId, hlId, filterId, strokeColor, onClick,
+  x,
+  y,
+  width,
+  height,
+  fillId,
+  hlId,
+  filterId,
+  strokeColor,
+  onClick,
 }: {
-  x: number; y: number; width: number; height: number;
-  fillId: string; hlId: string; filterId: string;
-  strokeColor: string; onClick?: () => void;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fillId: string;
+  hlId: string;
+  filterId: string;
+  strokeColor: string;
+  onClick?: () => void;
 }) {
   if (!height || height <= 0) return null;
   const r = Math.min(5, width / 2, height);
@@ -174,15 +223,70 @@ function OutlinedBar({
   return (
     <g
       filter={`url(#${filterId})`}
-      style={{ cursor: onClick ? "pointer" : undefined, transition: "opacity 0.3s ease" }}
+      style={{
+        cursor: onClick ? "pointer" : undefined,
+        transition: "opacity 0.3s ease",
+      }}
       onClick={onClick}
     >
-      <rect x={x} y={y} width={width} height={height} rx={r} ry={r} fill={`url(#${fillId})`} />
-      <rect x={x} y={y} width={width} height={Math.min(height, height * 0.55)} rx={r} ry={r} fill={`url(#${hlId})`} />
-      <rect x={x} y={y} width={2} height={height} rx={1} fill={strokeColor} fillOpacity={0.15} />
-      <rect x={x + width - 2} y={y} width={2} height={height} rx={1} fill={strokeColor} fillOpacity={0.08} />
-      <rect x={x + 0.5} y={y + 0.5} width={width - 1} height={height - 1} rx={r} ry={r} fill="none" stroke={bright} strokeWidth={1.3} strokeOpacity={0.7} />
-      <line x1={x + r} y1={y + 0.5} x2={x + width - r} y2={y + 0.5} stroke={bright} strokeWidth={2} strokeOpacity={0.9} strokeLinecap="round" />
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        rx={r}
+        ry={r}
+        fill={`url(#${fillId})`}
+      />
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={Math.min(height, height * 0.55)}
+        rx={r}
+        ry={r}
+        fill={`url(#${hlId})`}
+      />
+      <rect
+        x={x}
+        y={y}
+        width={2}
+        height={height}
+        rx={1}
+        fill={strokeColor}
+        fillOpacity={0.15}
+      />
+      <rect
+        x={x + width - 2}
+        y={y}
+        width={2}
+        height={height}
+        rx={1}
+        fill={strokeColor}
+        fillOpacity={0.08}
+      />
+      <rect
+        x={x + 0.5}
+        y={y + 0.5}
+        width={width - 1}
+        height={height - 1}
+        rx={r}
+        ry={r}
+        fill="none"
+        stroke={bright}
+        strokeWidth={1.3}
+        strokeOpacity={0.7}
+      />
+      <line
+        x1={x + r}
+        y1={y + 0.5}
+        x2={x + width - r}
+        y2={y + 0.5}
+        stroke={bright}
+        strokeWidth={2}
+        strokeOpacity={0.9}
+        strokeLinecap="round"
+      />
     </g>
   );
 }
@@ -193,6 +297,7 @@ export default function MonthlyDistributionTabContent({
   analyticsMonths,
   transactions,
   accounts,
+  balanceAccounts,
   currentUserId,
   hasPartner,
 }: Props) {
@@ -203,9 +308,20 @@ export default function MonthlyDistributionTabContent({
   const [grouping, setGrouping] = useState<Grouping>("month");
   const [viewMode, setViewMode] = useState<ViewMode>("combined");
   const [layout, setLayout] = useState<Layout>("columns");
+  const [visibleMetrics, setVisibleMetrics] = useState<
+    Record<MetricKey, boolean>
+  >({
+    income: true,
+    expense: true,
+    savings: true,
+    expectedSavings: true,
+  });
 
   const buckets = useMemo(() => buildBuckets(grouping), [grouping]);
-  const bucketKeys = useMemo(() => new Set(buckets.map((b) => b.key)), [buckets]);
+  const bucketKeys = useMemo(
+    () => new Set(buckets.map((b) => b.key)),
+    [buckets],
+  );
 
   const accountTypeMap = useMemo(() => {
     const m = new Map<string, "income" | "expense" | "saving">();
@@ -213,31 +329,72 @@ export default function MonthlyDistributionTabContent({
     return m;
   }, [accounts]);
 
+  const ourSavingsAccount = useMemo(
+    () =>
+      (balanceAccounts ?? []).find(
+        (a) =>
+          a.type === "saving" && a.name.trim().toLowerCase() === "our savings",
+      ),
+    [balanceAccounts],
+  );
+
+  const ourSavingsBalance = Number(ourSavingsAccount?.currentBalance ?? 0);
+  const mySavingsBalance =
+    ourSavingsAccount && currentUserId
+      ? ourSavingsAccount.userId === currentUserId
+        ? ourSavingsBalance
+        : 0
+      : ourSavingsBalance;
+  const partnerSavingsBalance =
+    ourSavingsAccount &&
+    currentUserId &&
+    ourSavingsAccount.userId !== currentUserId
+      ? ourSavingsBalance
+      : 0;
+
+  const toggleMetric = useCallback((metric: MetricKey) => {
+    setVisibleMetrics((prev) => ({ ...prev, [metric]: !prev[metric] }));
+  }, []);
+
+  const hasVisibleMetric = useMemo(
+    () => METRIC_OPTIONS.some((metric) => visibleMetrics[metric.key]),
+    [visibleMetrics],
+  );
+
   const rows = useMemo((): BucketRow[] => {
     const map = new Map<string, BucketRow>();
     for (const b of buckets) {
       map.set(b.key, {
-        key: b.key, label: b.label,
-        income: 0, expense: 0, savings: 0,
-        myIncome: 0, partnerIncome: 0,
-        myExpense: 0, partnerExpense: 0,
-        mySavings: 0, partnerSavings: 0,
+        key: b.key,
+        label: b.label,
+        income: 0,
+        expense: 0,
+        savings: ourSavingsBalance,
+        expectedSavings: 0,
+        myIncome: 0,
+        partnerIncome: 0,
+        myExpense: 0,
+        partnerExpense: 0,
+        mySavings: mySavingsBalance,
+        partnerSavings: partnerSavingsBalance,
+        myExpectedSavings: 0,
+        partnerExpectedSavings: 0,
       });
     }
 
-    // Fill combined + expense split from analytics
+    // Fill combined income + expense split from analytics.
+    // Savings is a flat current account balance from "Our Savings" for now.
     for (const m of analyticsMonths ?? []) {
       const bk = dateToBucketKey(`${m.month}-01`, grouping);
       if (!bucketKeys.has(bk)) continue;
       const row = map.get(bk)!;
       row.income += m.income;
       row.expense += m.expense;
-      row.savings += m.savings;
       row.myExpense += m.myExpense;
       row.partnerExpense += m.partnerExpense;
     }
 
-    // Derive income + savings split from raw transactions
+    // Derive income split from raw transactions
     for (const t of transactions) {
       const bk = dateToBucketKey(t.date, grouping);
       if (!bucketKeys.has(bk)) continue;
@@ -249,33 +406,71 @@ export default function MonthlyDistributionTabContent({
       if (acctType === "income" && !t.is_debt_return) {
         if (isMe) row.myIncome += amt;
         else row.partnerIncome += amt;
-      } else if (acctType === "saving") {
-        if (isMe) row.mySavings += amt;
-        else row.partnerSavings += amt;
       }
     }
 
-    return buckets.map((b) => map.get(b.key)!);
-  }, [analyticsMonths, transactions, buckets, bucketKeys, grouping, accountTypeMap, currentUserId]);
+    return buckets.map((b) => {
+      const row = map.get(b.key)!;
+      row.expectedSavings = row.income - row.expense;
+      row.myExpectedSavings = row.myIncome - row.myExpense;
+      row.partnerExpectedSavings = row.partnerIncome - row.partnerExpense;
+      return row;
+    });
+  }, [
+    analyticsMonths,
+    transactions,
+    buckets,
+    bucketKeys,
+    grouping,
+    accountTypeMap,
+    currentUserId,
+    ourSavingsBalance,
+    mySavingsBalance,
+    partnerSavingsBalance,
+  ]);
 
-  const totals = useMemo((): Totals => ({
-    income: rows.reduce((s, r) => s + r.income, 0),
-    expense: rows.reduce((s, r) => s + r.expense, 0),
-    savings: rows.reduce((s, r) => s + r.savings, 0),
-    myIncome: rows.reduce((s, r) => s + r.myIncome, 0),
-    partnerIncome: rows.reduce((s, r) => s + r.partnerIncome, 0),
-    myExpense: rows.reduce((s, r) => s + r.myExpense, 0),
-    partnerExpense: rows.reduce((s, r) => s + r.partnerExpense, 0),
-    mySavings: rows.reduce((s, r) => s + r.mySavings, 0),
-    partnerSavings: rows.reduce((s, r) => s + r.partnerSavings, 0),
-  }), [rows]);
+  const totals = useMemo(
+    (): Totals => ({
+      income: rows.reduce((s, r) => s + r.income, 0),
+      expense: rows.reduce((s, r) => s + r.expense, 0),
+      savings: ourSavingsBalance,
+      expectedSavings:
+        rows.reduce((s, r) => s + r.income, 0) -
+        rows.reduce((s, r) => s + r.expense, 0),
+      myIncome: rows.reduce((s, r) => s + r.myIncome, 0),
+      partnerIncome: rows.reduce((s, r) => s + r.partnerIncome, 0),
+      myExpense: rows.reduce((s, r) => s + r.myExpense, 0),
+      partnerExpense: rows.reduce((s, r) => s + r.partnerExpense, 0),
+      mySavings: mySavingsBalance,
+      partnerSavings: partnerSavingsBalance,
+      myExpectedSavings:
+        rows.reduce((s, r) => s + r.myIncome, 0) -
+        rows.reduce((s, r) => s + r.myExpense, 0),
+      partnerExpectedSavings:
+        rows.reduce((s, r) => s + r.partnerIncome, 0) -
+        rows.reduce((s, r) => s + r.partnerExpense, 0),
+    }),
+    [rows, ourSavingsBalance, mySavingsBalance, partnerSavingsBalance],
+  );
 
   if (!analyticsMonths) {
-    return <div className="text-center py-16 text-white/40 text-sm">No monthly data available</div>;
+    return (
+      <div className="text-center py-16 text-white/40 text-sm">
+        No monthly data available
+      </div>
+    );
   }
 
-  const periodLabel = buckets.length > 0 ? `${buckets[0].label} — ${buckets[buckets.length - 1].label}` : "";
-  const groupLabel = grouping === "month" ? "months" : grouping === "quarter" ? "quarters" : "years";
+  const periodLabel =
+    buckets.length > 0
+      ? `${buckets[0].label} — ${buckets[buckets.length - 1].label}`
+      : "";
+  const groupLabel =
+    grouping === "month"
+      ? "months"
+      : grouping === "quarter"
+        ? "quarters"
+        : "years";
 
   return (
     <div className="space-y-6">
@@ -292,7 +487,9 @@ export default function MonthlyDistributionTabContent({
               onClick={() => setViewMode("combined")}
               className={cn(
                 "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all",
-                viewMode === "combined" ? "bg-white/15 text-white shadow-sm" : "text-white/40 hover:text-white/60",
+                viewMode === "combined"
+                  ? "bg-white/15 text-white shadow-sm"
+                  : "text-white/40 hover:text-white/60",
               )}
             >
               Combined
@@ -301,7 +498,9 @@ export default function MonthlyDistributionTabContent({
               onClick={() => setViewMode("split")}
               className={cn(
                 "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all",
-                viewMode === "split" ? "bg-white/15 text-white shadow-sm" : "text-white/40 hover:text-white/60",
+                viewMode === "split"
+                  ? "bg-white/15 text-white shadow-sm"
+                  : "text-white/40 hover:text-white/60",
               )}
             >
               <Users className="w-3 h-3" />
@@ -316,7 +515,9 @@ export default function MonthlyDistributionTabContent({
             onClick={() => setLayout("columns")}
             className={cn(
               "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all",
-              layout === "columns" ? "bg-white/15 text-white shadow-sm" : "text-white/40 hover:text-white/60",
+              layout === "columns"
+                ? "bg-white/15 text-white shadow-sm"
+                : "text-white/40 hover:text-white/60",
             )}
             title="3 separate charts"
           >
@@ -327,7 +528,9 @@ export default function MonthlyDistributionTabContent({
             onClick={() => setLayout("stacked")}
             className={cn(
               "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all",
-              layout === "stacked" ? "bg-white/15 text-white shadow-sm" : "text-white/40 hover:text-white/60",
+              layout === "stacked"
+                ? "bg-white/15 text-white shadow-sm"
+                : "text-white/40 hover:text-white/60",
             )}
             title="Single overview chart"
           >
@@ -344,12 +547,55 @@ export default function MonthlyDistributionTabContent({
               onClick={() => setGrouping(g)}
               className={cn(
                 "px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all",
-                grouping === g ? "bg-white/15 text-white shadow-sm" : "text-white/40 hover:text-white/60",
+                grouping === g
+                  ? "bg-white/15 text-white shadow-sm"
+                  : "text-white/40 hover:text-white/60",
               )}
             >
               {g === "month" ? "Mo" : g === "quarter" ? "Qtr" : "Yr"}
             </button>
           ))}
+        </div>
+
+        {/* Metrics */}
+        <div className="flex items-center gap-1 flex-wrap shrink-0">
+          {METRIC_OPTIONS.map((metric) => {
+            const active = visibleMetrics[metric.key];
+            return (
+              <button
+                key={metric.key}
+                type="button"
+                aria-pressed={active}
+                onClick={() => toggleMetric(metric.key)}
+                className={cn(
+                  "flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-semibold transition-all",
+                  active
+                    ? "bg-white/12 text-white"
+                    : "bg-white/[0.04] text-white/35 hover:text-white/60",
+                )}
+              >
+                <span
+                  className="flex h-3.5 w-3.5 items-center justify-center rounded border"
+                  style={{
+                    borderColor: active
+                      ? metric.color
+                      : "rgba(255,255,255,0.18)",
+                    backgroundColor: active
+                      ? `${metric.color}22`
+                      : "transparent",
+                  }}
+                >
+                  {active && (
+                    <Check
+                      className="h-2.5 w-2.5"
+                      style={{ color: metric.color }}
+                    />
+                  )}
+                </span>
+                <span>{metric.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -364,48 +610,77 @@ export default function MonthlyDistributionTabContent({
             transition={{ duration: 0.2 }}
             className="space-y-4"
           >
-            <MetricWidget
-              title="Income"
-              color={INCOME_COLOR}
-              total={viewMode === "split" ? undefined : totals.income}
-              rows={rows}
-              dataKey="income"
-              myKey="myIncome"
-              myTotal={totals.myIncome}
-              partnerKey="partnerIncome"
-              partnerTotal={totals.partnerIncome}
-              viewMode={viewMode}
-              myColor={myColor}
-              partnerColor={partnerColor}
-            />
-            <MetricWidget
-              title="Expense"
-              color={EXPENSE_COLOR}
-              total={viewMode === "split" ? undefined : totals.expense}
-              rows={rows}
-              dataKey="expense"
-              myKey="myExpense"
-              myTotal={totals.myExpense}
-              partnerKey="partnerExpense"
-              partnerTotal={totals.partnerExpense}
-              viewMode={viewMode}
-              myColor={myColor}
-              partnerColor={partnerColor}
-            />
-            <MetricWidget
-              title="Savings"
-              color={SAVINGS_COLOR}
-              total={viewMode === "split" ? undefined : totals.savings}
-              rows={rows}
-              dataKey="savings"
-              myKey="mySavings"
-              myTotal={totals.mySavings}
-              partnerKey="partnerSavings"
-              partnerTotal={totals.partnerSavings}
-              viewMode={viewMode}
-              myColor={myColor}
-              partnerColor={partnerColor}
-            />
+            {visibleMetrics.income && (
+              <MetricWidget
+                title="Income"
+                color={INCOME_COLOR}
+                total={viewMode === "split" ? undefined : totals.income}
+                rows={rows}
+                dataKey="income"
+                myKey="myIncome"
+                myTotal={totals.myIncome}
+                partnerKey="partnerIncome"
+                partnerTotal={totals.partnerIncome}
+                viewMode={viewMode}
+                myColor={myColor}
+                partnerColor={partnerColor}
+              />
+            )}
+            {visibleMetrics.expense && (
+              <MetricWidget
+                title="Expense"
+                color={EXPENSE_COLOR}
+                total={viewMode === "split" ? undefined : totals.expense}
+                rows={rows}
+                dataKey="expense"
+                myKey="myExpense"
+                myTotal={totals.myExpense}
+                partnerKey="partnerExpense"
+                partnerTotal={totals.partnerExpense}
+                viewMode={viewMode}
+                myColor={myColor}
+                partnerColor={partnerColor}
+              />
+            )}
+            {visibleMetrics.savings && (
+              <MetricWidget
+                title="Savings"
+                color={SAVINGS_COLOR}
+                total={viewMode === "split" ? undefined : totals.savings}
+                rows={rows}
+                dataKey="savings"
+                myKey="mySavings"
+                myTotal={totals.mySavings}
+                partnerKey="partnerSavings"
+                partnerTotal={totals.partnerSavings}
+                viewMode={viewMode}
+                myColor={myColor}
+                partnerColor={partnerColor}
+              />
+            )}
+            {visibleMetrics.expectedSavings && (
+              <MetricWidget
+                title="Expected Savings"
+                color={EXPECTED_SAVINGS_COLOR}
+                total={
+                  viewMode === "split" ? undefined : totals.expectedSavings
+                }
+                rows={rows}
+                dataKey="expectedSavings"
+                myKey="myExpectedSavings"
+                myTotal={totals.myExpectedSavings}
+                partnerKey="partnerExpectedSavings"
+                partnerTotal={totals.partnerExpectedSavings}
+                viewMode={viewMode}
+                myColor={myColor}
+                partnerColor={partnerColor}
+              />
+            )}
+            {!hasVisibleMetric && (
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-10 text-center text-sm text-white/40">
+                No metrics selected
+              </div>
+            )}
           </motion.div>
         ) : (
           <motion.div
@@ -419,6 +694,7 @@ export default function MonthlyDistributionTabContent({
               rows={rows}
               totals={totals}
               viewMode={viewMode}
+              visibleMetrics={visibleMetrics}
               myColor={myColor}
               partnerColor={partnerColor}
             />
@@ -468,17 +744,24 @@ function MetricWidget({
   const zoomedRow = zoomedKey ? rows.find((r) => r.key === zoomedKey) : null;
 
   const avg = useMemo(() => {
-    const nonZero = rows.filter((r) => (r[dataKey] as number) > 0);
+    const nonZero = rows.filter((r) => (r[dataKey] as number) !== 0);
     if (nonZero.length === 0) return 0;
-    return nonZero.reduce((s, r) => s + (r[dataKey] as number), 0) / nonZero.length;
+    return (
+      nonZero.reduce((s, r) => s + (r[dataKey] as number), 0) / nonZero.length
+    );
   }, [rows, dataKey]);
 
-  const displayTotal = viewMode === "split" ? myTotal + partnerTotal : (total ?? 0);
+  const displayTotal =
+    viewMode === "split" ? myTotal + partnerTotal : (total ?? 0);
 
   return (
     <WidgetCard
       title={title}
-      subtitle={zoomedRow ? `${zoomedRow.label} · ${fmtDollar(zoomedRow[dataKey] as number)}` : undefined}
+      subtitle={
+        zoomedRow
+          ? `${zoomedRow.label} · ${fmtDollar(zoomedRow[dataKey] as number)}`
+          : undefined
+      }
       filterActive={!!zoomedKey}
       onFilterReset={() => setZoomedKey(null)}
       action={
@@ -487,11 +770,16 @@ function MetricWidget({
             <div className="flex items-center gap-2 text-[11px] tabular-nums font-semibold">
               <span style={{ color: myColor }}>{fmtDollar(myTotal)}</span>
               <span className="text-white/20">·</span>
-              <span style={{ color: partnerColor }}>{fmtDollar(partnerTotal)}</span>
+              <span style={{ color: partnerColor }}>
+                {fmtDollar(partnerTotal)}
+              </span>
             </div>
           )}
           <BlurredAmount blurIntensity="sm">
-            <span className="text-[15px] font-bold tabular-nums tracking-tight" style={{ color }}>
+            <span
+              className="text-[15px] font-bold tabular-nums tracking-tight"
+              style={{ color }}
+            >
               {fmtDollar(displayTotal)}
             </span>
           </BlurredAmount>
@@ -504,30 +792,47 @@ function MetricWidget({
           <BlurredAmount blurIntensity="sm">
             <span>
               Total:{" "}
-              <span className="font-semibold" style={{ color }}>{fmtDollar(displayTotal)}</span>
+              <span className="font-semibold" style={{ color }}>
+                {fmtDollar(displayTotal)}
+              </span>
             </span>
           </BlurredAmount>
           <span className="text-white/20">|</span>
           <BlurredAmount blurIntensity="sm">
             <span>
               Avg:{" "}
-              <span className="text-white/70 font-semibold">{fmtDollar(avg)}/mo</span>
+              <span className="text-white/70 font-semibold">
+                {fmtDollar(avg)}/mo
+              </span>
             </span>
           </BlurredAmount>
           {viewMode === "split" && (
             <>
               <span className="text-white/20">|</span>
               <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: myColor }} />
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: myColor }}
+                />
                 <BlurredAmount blurIntensity="sm">
-                  <span className="font-semibold" style={{ color: myColor }}>{fmtDollar(myTotal)}</span>
+                  <span className="font-semibold" style={{ color: myColor }}>
+                    {fmtDollar(myTotal)}
+                  </span>
                 </BlurredAmount>
               </span>
               <span className="text-white/20">·</span>
               <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: partnerColor }} />
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: partnerColor }}
+                />
                 <BlurredAmount blurIntensity="sm">
-                  <span className="font-semibold" style={{ color: partnerColor }}>{fmtDollar(partnerTotal)}</span>
+                  <span
+                    className="font-semibold"
+                    style={{ color: partnerColor }}
+                  >
+                    {fmtDollar(partnerTotal)}
+                  </span>
                 </BlurredAmount>
               </span>
             </>
@@ -538,7 +843,9 @@ function MetricWidget({
       {/* Color accent bar */}
       <div
         className="h-[3px] rounded-full mb-4"
-        style={{ background: `linear-gradient(90deg, ${color}cc, ${color}40 60%, transparent)` }}
+        style={{
+          background: `linear-gradient(90deg, ${color}cc, ${color}40 60%, transparent)`,
+        }}
       />
 
       {/* Chart */}
@@ -576,11 +883,19 @@ function MetricWidget({
             className="overflow-hidden"
           >
             <div className="flex items-center gap-3 mt-2 px-2 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06]">
-              <div className="w-1 h-8 rounded-full shrink-0" style={{ backgroundColor: color }} />
+              <div
+                className="w-1 h-8 rounded-full shrink-0"
+                style={{ backgroundColor: color }}
+              />
               <div className="flex-1 min-w-0">
-                <div className="text-[11px] text-white/50 font-medium">{zoomedRow.label}</div>
+                <div className="text-[11px] text-white/50 font-medium">
+                  {zoomedRow.label}
+                </div>
                 <BlurredAmount blurIntensity="sm">
-                  <span className="text-sm font-bold tabular-nums" style={{ color }}>
+                  <span
+                    className="text-sm font-bold tabular-nums"
+                    style={{ color }}
+                  >
                     {fmtDollar(zoomedRow[dataKey] as number)}
                   </span>
                 </BlurredAmount>
@@ -592,10 +907,18 @@ function MetricWidget({
                     { key: partnerKey, color: partnerColor, label: "Partner" },
                   ].map((p) => (
                     <div key={p.label} className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-                      <span className="text-[10px] text-white/50">{p.label}</span>
+                      <div
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: p.color }}
+                      />
+                      <span className="text-[10px] text-white/50">
+                        {p.label}
+                      </span>
                       <BlurredAmount blurIntensity="sm">
-                        <span className="text-[11px] tabular-nums font-semibold" style={{ color: p.color }}>
+                        <span
+                          className="text-[11px] tabular-nums font-semibold"
+                          style={{ color: p.color }}
+                        >
                           {fmtDollar(zoomedRow[p.key] as number)}
                         </span>
                       </BlurredAmount>
@@ -663,7 +986,14 @@ function MetricChart({
       const partner = row[partnerKey] as number;
       return (
         <div style={TOOLTIP_STYLE}>
-          <div style={{ color: "rgba(255,255,255,0.7)", fontWeight: 600, marginBottom: 8, fontSize: 13 }}>
+          <div
+            style={{
+              color: "rgba(255,255,255,0.7)",
+              fontWeight: 600,
+              marginBottom: 8,
+              fontSize: 13,
+            }}
+          >
             {label}
           </div>
           {viewMode === "split" ? (
@@ -672,26 +1002,86 @@ function MetricChart({
                 { label: "Me", color: myColor, value: me },
                 { label: "Partner", color: partnerColor, value: partner },
               ].map((e) => (
-                <div key={e.label} style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: e.color, flexShrink: 0, display: "inline-block" }} />
-                    <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>{e.label}</span>
+                <div
+                  key={e.label}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        backgroundColor: e.color,
+                        flexShrink: 0,
+                        display: "inline-block",
+                      }}
+                    />
+                    <span
+                      style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}
+                    >
+                      {e.label}
+                    </span>
                   </div>
-                  <span style={{ color: "rgba(255,255,255,0.9)", fontSize: 12, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-                    ${Math.round(e.value).toLocaleString()}
+                  <span
+                    style={{
+                      color: "rgba(255,255,255,0.9)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {fmtDollar(e.value)}
                   </span>
                 </div>
               ))}
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", marginTop: 4, paddingTop: 6, display: "flex", justifyContent: "space-between" }}>
-                <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 12, fontWeight: 600 }}>Total</span>
-                <span style={{ color, fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                  ${Math.round(combined).toLocaleString()}
+              <div
+                style={{
+                  borderTop: "1px solid rgba(255,255,255,0.1)",
+                  marginTop: 4,
+                  paddingTop: 6,
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span
+                  style={{
+                    color: "rgba(255,255,255,0.5)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  Total
+                </span>
+                <span
+                  style={{
+                    color,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {fmtDollar(combined)}
                 </span>
               </div>
             </div>
           ) : (
-            <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-              ${Math.round(combined).toLocaleString()}
+            <div
+              style={{
+                color: "rgba(255,255,255,0.9)",
+                fontSize: 13,
+                fontWeight: 600,
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {fmtDollar(combined)}
             </div>
           )}
         </div>
@@ -706,10 +1096,18 @@ function MetricChart({
     return (
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} barCategoryGap={zoomedKey ? "40%" : "18%"} barGap={2}>
+          <BarChart
+            data={rows}
+            barCategoryGap={zoomedKey ? "40%" : "18%"}
+            barGap={2}
+          >
             <ChartDefs id={`${uid}-me`} color={myColor} />
             <ChartDefs id={`${uid}-pt`} color={partnerColor} />
-            <CartesianGrid strokeDasharray="3 6" stroke="rgba(255,255,255,0.10)" vertical={false} />
+            <CartesianGrid
+              strokeDasharray="3 6"
+              stroke="rgba(255,255,255,0.10)"
+              vertical={false}
+            />
             <XAxis {...xAxis} />
             <YAxis {...yAxis} />
             <Tooltip content={renderTooltip as any} cursor={cursorProps} />
@@ -720,8 +1118,13 @@ function MetricChart({
               maxBarSize={zoomedKey ? 70 : undefined}
               shape={(props: any) => (
                 <OutlinedBar
-                  x={props.x} y={props.y} width={props.width} height={props.height}
-                  fillId={`${uid}-me-fill`} hlId={`${uid}-me-hl`} filterId={`${uid}-me-glow`}
+                  x={props.x}
+                  y={props.y}
+                  width={props.width}
+                  height={props.height}
+                  fillId={`${uid}-me-fill`}
+                  hlId={`${uid}-me-hl`}
+                  filterId={`${uid}-me-glow`}
                   strokeColor={myColor}
                   onClick={() => onBarClick(rows[props.index]?.key ?? "")}
                 />
@@ -734,8 +1137,13 @@ function MetricChart({
               maxBarSize={zoomedKey ? 70 : undefined}
               shape={(props: any) => (
                 <OutlinedBar
-                  x={props.x} y={props.y} width={props.width} height={props.height}
-                  fillId={`${uid}-pt-fill`} hlId={`${uid}-pt-hl`} filterId={`${uid}-pt-glow`}
+                  x={props.x}
+                  y={props.y}
+                  width={props.width}
+                  height={props.height}
+                  fillId={`${uid}-pt-fill`}
+                  hlId={`${uid}-pt-hl`}
+                  filterId={`${uid}-pt-glow`}
                   strokeColor={partnerColor}
                   onClick={() => onBarClick(rows[props.index]?.key ?? "")}
                 />
@@ -752,7 +1160,11 @@ function MetricChart({
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={rows} barCategoryGap={zoomedKey ? "40%" : "20%"}>
           <ChartDefs id={uid} color={color} />
-          <CartesianGrid strokeDasharray="3 6" stroke="rgba(255,255,255,0.10)" vertical={false} />
+          <CartesianGrid
+            strokeDasharray="3 6"
+            stroke="rgba(255,255,255,0.10)"
+            vertical={false}
+          />
           <XAxis {...xAxis} />
           <YAxis {...yAxis} />
           <Tooltip content={renderTooltip as any} cursor={cursorProps} />
@@ -762,8 +1174,13 @@ function MetricChart({
             maxBarSize={zoomedKey ? 90 : undefined}
             shape={(props: any) => (
               <OutlinedBar
-                x={props.x} y={props.y} width={props.width} height={props.height}
-                fillId={`${uid}-fill`} hlId={`${uid}-hl`} filterId={`${uid}-glow`}
+                x={props.x}
+                y={props.y}
+                width={props.width}
+                height={props.height}
+                fillId={`${uid}-fill`}
+                hlId={`${uid}-hl`}
+                filterId={`${uid}-glow`}
                 strokeColor={color}
                 onClick={() => onBarClick(rows[props.index]?.key ?? "")}
               />
@@ -781,12 +1198,14 @@ function OverviewWidget({
   rows,
   totals,
   viewMode,
+  visibleMetrics,
   myColor,
   partnerColor,
 }: {
   rows: BucketRow[];
   totals: Totals;
   viewMode: ViewMode;
+  visibleMetrics: Record<MetricKey, boolean>;
   myColor: string;
   partnerColor: string;
 }) {
@@ -807,20 +1226,92 @@ function OverviewWidget({
     tickMargin: 4,
   };
 
-  const bars = viewMode === "split"
-    ? [
-        { key: "myIncome" as const, color: myColor, name: "Income (Me)" },
-        { key: "partnerIncome" as const, color: partnerColor, name: "Income (Partner)" },
-        { key: "myExpense" as const, color: myColor, name: "Expense (Me)" },
-        { key: "partnerExpense" as const, color: partnerColor, name: "Expense (Partner)" },
-        { key: "mySavings" as const, color: myColor, name: "Savings (Me)" },
-        { key: "partnerSavings" as const, color: partnerColor, name: "Savings (Partner)" },
-      ]
-    : [
-        { key: "income" as const, color: INCOME_COLOR, name: "Income" },
-        { key: "expense" as const, color: EXPENSE_COLOR, name: "Expense" },
-        { key: "savings" as const, color: SAVINGS_COLOR, name: "Savings" },
-      ];
+  const bars = (
+    viewMode === "split"
+      ? [
+          {
+            metric: "income" as const,
+            key: "myIncome" as const,
+            color: myColor,
+            name: "Income (Me)",
+          },
+          {
+            metric: "income" as const,
+            key: "partnerIncome" as const,
+            color: partnerColor,
+            name: "Income (Partner)",
+          },
+          {
+            metric: "expense" as const,
+            key: "myExpense" as const,
+            color: myColor,
+            name: "Expense (Me)",
+          },
+          {
+            metric: "expense" as const,
+            key: "partnerExpense" as const,
+            color: partnerColor,
+            name: "Expense (Partner)",
+          },
+          {
+            metric: "savings" as const,
+            key: "mySavings" as const,
+            color: myColor,
+            name: "Savings (Me)",
+          },
+          {
+            metric: "savings" as const,
+            key: "partnerSavings" as const,
+            color: partnerColor,
+            name: "Savings (Partner)",
+          },
+          {
+            metric: "expectedSavings" as const,
+            key: "myExpectedSavings" as const,
+            color: myColor,
+            name: "Expected Savings (Me)",
+          },
+          {
+            metric: "expectedSavings" as const,
+            key: "partnerExpectedSavings" as const,
+            color: partnerColor,
+            name: "Expected Savings (Partner)",
+          },
+        ]
+      : [
+          {
+            metric: "income" as const,
+            key: "income" as const,
+            color: INCOME_COLOR,
+            name: "Income",
+          },
+          {
+            metric: "expense" as const,
+            key: "expense" as const,
+            color: EXPENSE_COLOR,
+            name: "Expense",
+          },
+          {
+            metric: "savings" as const,
+            key: "savings" as const,
+            color: SAVINGS_COLOR,
+            name: "Savings",
+          },
+          {
+            metric: "expectedSavings" as const,
+            key: "expectedSavings" as const,
+            color: EXPECTED_SAVINGS_COLOR,
+            name: "Expected Savings",
+          },
+        ]
+  ).filter((bar) => visibleMetrics[bar.metric]);
+
+  const actionItems = METRIC_OPTIONS.filter(
+    (metric) => visibleMetrics[metric.key],
+  ).map((metric) => ({
+    ...metric,
+    total: totals[metric.key],
+  }));
 
   const renderTooltip = useCallback(
     ({ active, label }: { active?: boolean; label?: string }) => {
@@ -828,55 +1319,156 @@ function OverviewWidget({
       const row = rows.find((r) => r.label === label);
       if (!row) return null;
 
-      const entries = viewMode === "split"
-        ? [
-            { label: "My Income", color: myColor, value: row.myIncome },
-            { label: "Partner Income", color: partnerColor, value: row.partnerIncome },
-            { label: "My Expense", color: myColor, value: row.myExpense },
-            { label: "Partner Expense", color: partnerColor, value: row.partnerExpense },
-            { label: "My Savings", color: myColor, value: row.mySavings },
-            { label: "Partner Savings", color: partnerColor, value: row.partnerSavings },
-          ]
-        : [
-            { label: "Income", color: INCOME_COLOR, value: row.income },
-            { label: "Expense", color: EXPENSE_COLOR, value: row.expense },
-            { label: "Savings", color: SAVINGS_COLOR, value: row.savings },
-          ];
+      const entries = (
+        viewMode === "split"
+          ? [
+              {
+                metric: "income" as const,
+                label: "My Income",
+                color: myColor,
+                value: row.myIncome,
+              },
+              {
+                metric: "income" as const,
+                label: "Partner Income",
+                color: partnerColor,
+                value: row.partnerIncome,
+              },
+              {
+                metric: "expense" as const,
+                label: "My Expense",
+                color: myColor,
+                value: row.myExpense,
+              },
+              {
+                metric: "expense" as const,
+                label: "Partner Expense",
+                color: partnerColor,
+                value: row.partnerExpense,
+              },
+              {
+                metric: "savings" as const,
+                label: "My Savings",
+                color: myColor,
+                value: row.mySavings,
+              },
+              {
+                metric: "savings" as const,
+                label: "Partner Savings",
+                color: partnerColor,
+                value: row.partnerSavings,
+              },
+              {
+                metric: "expectedSavings" as const,
+                label: "My Expected Savings",
+                color: myColor,
+                value: row.myExpectedSavings,
+              },
+              {
+                metric: "expectedSavings" as const,
+                label: "Partner Expected Savings",
+                color: partnerColor,
+                value: row.partnerExpectedSavings,
+              },
+            ]
+          : [
+              {
+                metric: "income" as const,
+                label: "Income",
+                color: INCOME_COLOR,
+                value: row.income,
+              },
+              {
+                metric: "expense" as const,
+                label: "Expense",
+                color: EXPENSE_COLOR,
+                value: row.expense,
+              },
+              {
+                metric: "savings" as const,
+                label: "Savings",
+                color: SAVINGS_COLOR,
+                value: row.savings,
+              },
+              {
+                metric: "expectedSavings" as const,
+                label: "Expected Savings",
+                color: EXPECTED_SAVINGS_COLOR,
+                value: row.expectedSavings,
+              },
+            ]
+      ).filter((entry) => visibleMetrics[entry.metric]);
 
       return (
         <div style={TOOLTIP_STYLE}>
-          <div style={{ color: "rgba(255,255,255,0.7)", fontWeight: 600, marginBottom: 8, fontSize: 13 }}>
+          <div
+            style={{
+              color: "rgba(255,255,255,0.7)",
+              fontWeight: 600,
+              marginBottom: 8,
+              fontSize: 13,
+            }}
+          >
             {label}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            {entries.filter((e) => e.value > 0).map((e) => (
-              <div key={e.label} style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 3, backgroundColor: e.color, flexShrink: 0, display: "inline-block" }} />
-                  <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>{e.label}</span>
+            {entries
+              .filter((e) => e.value !== 0)
+              .map((e) => (
+                <div
+                  key={e.label}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 3,
+                        backgroundColor: e.color,
+                        flexShrink: 0,
+                        display: "inline-block",
+                      }}
+                    />
+                    <span
+                      style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}
+                    >
+                      {e.label}
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      color: e.color,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {fmtDollar(e.value)}
+                  </span>
                 </div>
-                <span style={{ color: e.color, fontSize: 12, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                  ${Math.round(e.value).toLocaleString()}
-                </span>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       );
     },
-    [rows, viewMode, myColor, partnerColor],
+    [rows, viewMode, myColor, partnerColor, visibleMetrics],
   );
 
-  const legendItems = viewMode === "split"
-    ? [
-        { color: myColor, label: "Me" },
-        { color: partnerColor, label: "Partner" },
-      ]
-    : [
-        { color: INCOME_COLOR, label: "Income", total: totals.income },
-        { color: EXPENSE_COLOR, label: "Expense", total: totals.expense },
-        { color: SAVINGS_COLOR, label: "Savings", total: totals.savings },
-      ];
+  const legendItems =
+    viewMode === "split"
+      ? [
+          { color: myColor, label: "Me" },
+          { color: partnerColor, label: "Partner" },
+        ]
+      : actionItems;
 
   return (
     <WidgetCard
@@ -884,11 +1476,18 @@ function OverviewWidget({
       action={
         <BlurredAmount blurIntensity="sm">
           <div className="flex items-center gap-2 text-[11px] font-bold tabular-nums">
-            <span style={{ color: INCOME_COLOR }}>{fmtDollar(totals.income)}</span>
-            <span className="text-white/20">·</span>
-            <span style={{ color: EXPENSE_COLOR }}>{fmtDollar(totals.expense)}</span>
-            <span className="text-white/20">·</span>
-            <span style={{ color: SAVINGS_COLOR }}>{fmtDollar(totals.savings)}</span>
+            {actionItems.length > 0 ? (
+              actionItems.map((item, index) => (
+                <span key={item.key} className="contents">
+                  {index > 0 && <span className="text-white/20">·</span>}
+                  <span style={{ color: item.color }}>
+                    {fmtDollar(item.total)}
+                  </span>
+                </span>
+              ))
+            ) : (
+              <span className="text-white/35">No metrics</span>
+            )}
           </div>
         </BlurredAmount>
       }
@@ -899,12 +1498,19 @@ function OverviewWidget({
           <div key={item.label} className="flex items-center gap-2">
             <div
               className="w-3 h-3 rounded shrink-0"
-              style={{ background: `linear-gradient(135deg, ${lightenHex(item.color, 15)}, ${item.color})` }}
+              style={{
+                background: `linear-gradient(135deg, ${lightenHex(item.color, 15)}, ${item.color})`,
+              }}
             />
-            <span className="text-xs text-white/65 font-medium">{item.label}</span>
+            <span className="text-xs text-white/65 font-medium">
+              {item.label}
+            </span>
             {"total" in item && item.total != null && (
               <BlurredAmount blurIntensity="sm">
-                <span className="text-xs tabular-nums font-bold" style={{ color: item.color }}>
+                <span
+                  className="text-xs tabular-nums font-bold"
+                  style={{ color: item.color }}
+                >
                   {fmtDollar(item.total)}
                 </span>
               </BlurredAmount>
@@ -913,41 +1519,63 @@ function OverviewWidget({
         ))}
         {viewMode === "split" && (
           <div className="ml-auto flex items-center gap-4 text-[11px] tabular-nums font-semibold text-white/40">
-            <span>Income · Expense · Savings</span>
+            <span>
+              {METRIC_OPTIONS.filter((metric) => visibleMetrics[metric.key])
+                .map((metric) => metric.label)
+                .join(" · ") || "No metrics"}
+            </span>
             <span className="text-white/20">(by color above)</span>
           </div>
         )}
       </div>
 
       {/* Chart */}
-      <div className="h-72">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} barCategoryGap="15%" barGap={2}>
-            {bars.map((b, i) => (
-              <ChartDefs key={b.key} id={`${uid}-b${i}`} color={b.color} />
-            ))}
-            <CartesianGrid strokeDasharray="3 6" stroke="rgba(255,255,255,0.10)" vertical={false} />
-            <XAxis {...xAxis} />
-            <YAxis {...yAxis} />
-            <Tooltip content={renderTooltip as any} cursor={{ fill: "rgba(255,255,255,0.04)", radius: 4 } as any} />
-            {bars.map((b, i) => (
-              <Bar
-                key={b.key}
-                dataKey={b.key}
-                name={b.name}
-                fill="transparent"
-                shape={(props: any) => (
-                  <OutlinedBar
-                    x={props.x} y={props.y} width={props.width} height={props.height}
-                    fillId={`${uid}-b${i}-fill`} hlId={`${uid}-b${i}-hl`} filterId={`${uid}-b${i}-glow`}
-                    strokeColor={b.color}
-                  />
-                )}
+      {bars.length > 0 ? (
+        <div className="h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={rows} barCategoryGap="15%" barGap={2}>
+              {bars.map((b, i) => (
+                <ChartDefs key={b.key} id={`${uid}-b${i}`} color={b.color} />
+              ))}
+              <CartesianGrid
+                strokeDasharray="3 6"
+                stroke="rgba(255,255,255,0.10)"
+                vertical={false}
               />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+              <XAxis {...xAxis} />
+              <YAxis {...yAxis} />
+              <Tooltip
+                content={renderTooltip as any}
+                cursor={{ fill: "rgba(255,255,255,0.04)", radius: 4 } as any}
+              />
+              {bars.map((b, i) => (
+                <Bar
+                  key={b.key}
+                  dataKey={b.key}
+                  name={b.name}
+                  fill="transparent"
+                  shape={(props: any) => (
+                    <OutlinedBar
+                      x={props.x}
+                      y={props.y}
+                      width={props.width}
+                      height={props.height}
+                      fillId={`${uid}-b${i}-fill`}
+                      hlId={`${uid}-b${i}-hl`}
+                      filterId={`${uid}-b${i}-glow`}
+                      strokeColor={b.color}
+                    />
+                  )}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="h-72 flex items-center justify-center text-sm text-white/40">
+          No metrics selected
+        </div>
+      )}
     </WidgetCard>
   );
 }

@@ -1,3 +1,4 @@
+import { getAccessibleAccount } from "@/lib/accountAccess";
 import { adjustAccountBalance } from "@/lib/balance";
 import { getTransferDeltas } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -21,8 +22,8 @@ const TRANSFER_SELECT = `
   household_link_id,
   created_at,
   updated_at,
-  from_account:accounts!transfers_from_account_id_fkey(id, name, type, user_id),
-  to_account:accounts!transfers_to_account_id_fkey(id, name, type, user_id)
+  from_account:accounts!transfers_from_account_id_fkey(id, name, type, user_id, is_public),
+  to_account:accounts!transfers_to_account_id_fkey(id, name, type, user_id, is_public)
 `;
 
 function formatTransfer(transfer: any, currentUserId: string) {
@@ -68,15 +69,33 @@ export async function GET(
 
   const { id } = await params;
 
-  // Allow fetching if user is the owner OR the recipient
   const { data: transfer, error } = await supabase
     .from("transfers")
     .select(TRANSFER_SELECT)
     .eq("id", id)
-    .or(`user_id.eq.${user.id},recipient_user_id.eq.${user.id}`)
     .single();
 
   if (error) {
+    return NextResponse.json({ error: "Transfer not found" }, { status: 404 });
+  }
+
+  const fromAccess = await getAccessibleAccount(
+    supabase,
+    user.id,
+    transfer.from_account_id,
+  );
+  const toAccess = await getAccessibleAccount(
+    supabase,
+    user.id,
+    transfer.to_account_id,
+  );
+  const canRead =
+    transfer.user_id === user.id ||
+    transfer.recipient_user_id === user.id ||
+    !!fromAccess ||
+    !!toAccess;
+
+  if (!canRead) {
     return NextResponse.json({ error: "Transfer not found" }, { status: 404 });
   }
 
@@ -121,7 +140,6 @@ export async function DELETE(
     .eq("user_id", user.id);
 
   if (deleteError) {
-    console.error("Error deleting transfer:", deleteError);
     return NextResponse.json(
       { error: "Failed to delete transfer" },
       { status: 500 },
@@ -299,7 +317,6 @@ export async function PATCH(
     .single();
 
   if (updateError) {
-    console.error("Error updating transfer:", updateError);
     return NextResponse.json(
       { error: "Failed to update transfer" },
       { status: 500 },

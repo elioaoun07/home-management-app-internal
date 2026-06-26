@@ -23,6 +23,8 @@ The default landing surface after login. Renders KPI cards (balance, spend, inco
 
 **2026-06-19:** Mobile Dashboard also owns the `Insights` tab for Schedule/reminder stats, rendered through `src/components/reminder/RemindersInsightsPage.tsx`. This tab moved out of `/reminders` so `/reminders` can focus on day planning and flexible assignment.
 
+**2026-06-25:** Review V2 Monthly tab keeps Income and Expense as monthly distributions, but Savings now reads the current balance from the `Our Savings` saving account via `analytics.accounts`. This is intentionally a flat amount until savings transfers are modeled month-by-month. The same tab also includes `Expected Savings` (`Income - Expense`) and per-metric visibility toggles for Income, Expense, Savings, and Expected Savings.
+
 ## Architecture
 
 Data is prefetched eagerly via `EagerDataPrefetch.tsx` on first paint so the dashboard feels instant. Prefetch logic lives in `src/lib/prefetch/prefetchDashboard.ts` (moved from `src/features/dashboard/`). Transactions are fetched for the current billing cycle (custom month start from Preferences) via `useDashboardTransactions`. Theme changes trigger a full query invalidation — the dashboard refetches everything.

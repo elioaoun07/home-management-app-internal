@@ -1,29 +1,11 @@
+import { getAccessibleAccount } from "@/lib/accountAccess";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { format, startOfMonth } from "date-fns";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-
-// Helper to get partner user ID if linked
-async function getPartnerUserId(
-  supabase: any,
-  userId: string,
-): Promise<string | null> {
-  const { data: link } = await supabase
-    .from("household_links")
-    .select("owner_user_id, partner_user_id, active")
-    .or(`owner_user_id.eq.${userId},partner_user_id.eq.${userId}`)
-    .eq("active", true)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!link) return null;
-  return link.owner_user_id === userId
-    ? link.partner_user_id
-    : link.owner_user_id;
-}
 
 interface Transaction {
   id: string;
@@ -84,24 +66,14 @@ export async function GET(
   const { searchParams } = new URL(req.url);
   const limit = parseInt(searchParams.get("limit") || "30");
 
-  // Get partner ID if linked
-  const partnerId = await getPartnerUserId(supabase, user.id);
-  const allowedUserIds = partnerId ? [user.id, partnerId] : [user.id];
-
-  // Verify account access
-  const { data: account } = await supabase
-    .from("accounts")
-    .select("id, user_id")
-    .eq("id", accountId)
-    .in("user_id", allowedUserIds)
-    .single();
-
+  const account = await getAccessibleAccount(supabase, user.id, accountId);
   if (!account) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
+  const admin = supabaseAdmin();
 
   // Get current balance
-  const { data: balanceData } = await supabase
+  const { data: balanceData } = await admin
     .from("account_balances")
     .select("balance")
     .eq("account_id", accountId)
@@ -114,7 +86,7 @@ export async function GET(
   const endDate = format(new Date(), "yyyy-MM-dd");
 
   // Get transactions (all are expenses, stored as positive amounts)
-  const { data: transactions } = await supabase
+  let transactionsQuery = admin
     .from("transactions")
     .select(
       `
@@ -127,12 +99,17 @@ export async function GET(
     )
     .eq("account_id", accountId)
     .eq("is_draft", false)
+    .is("deleted_at", null)
     .gte("date", currentMonthStart)
     .lte("date", endDate)
     .order("date", { ascending: false });
+  if (!account.isOwner) {
+    transactionsQuery = transactionsQuery.eq("is_private", false);
+  }
+  const { data: transactions } = await transactionsQuery;
 
   // Get transfers INTO this account
-  const { data: transfersIn } = await supabase
+  const { data: transfersIn } = await admin
     .from("transfers")
     .select(
       `
@@ -151,7 +128,7 @@ export async function GET(
     .lte("date", endDate);
 
   // Get transfers OUT OF this account
-  const { data: transfersOut } = await supabase
+  const { data: transfersOut } = await admin
     .from("transfers")
     .select(
       `
@@ -170,7 +147,7 @@ export async function GET(
     .lte("date", endDate);
 
   // Get manual balance changes (manual_set, manual_adjustment, initial_set)
-  const { data: manualChanges } = await supabase
+  const { data: manualChanges } = await admin
     .from("account_balance_history")
     .select(
       "id, effective_date, change_amount, change_type, reason, previous_balance, new_balance, created_at",

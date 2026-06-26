@@ -47,7 +47,7 @@ async function fetchHouseholdMembers(): Promise<HouseholdMembersData> {
       partner_user_id,
       partner_email,
       active
-    `
+    `,
     )
     .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
     .eq("active", true)
@@ -81,20 +81,17 @@ async function fetchHouseholdMembers(): Promise<HouseholdMembersData> {
       // Fetch partner's profile for display name
       const { data: partnerProfile } = await supabase
         .from("profiles")
-        .select("id, display_name, email")
+        .select("id, full_name")
         .eq("id", partnerId)
         .maybeSingle();
 
       const partnerDisplayName =
-        partnerProfile?.display_name ||
-        partnerProfile?.email?.split("@")[0] ||
-        partnerEmail?.split("@")[0] ||
-        "Partner";
+        partnerProfile?.full_name || partnerEmail?.split("@")[0] || "Partner";
 
       members.push({
         id: partnerId,
         displayName: partnerDisplayName,
-        email: partnerProfile?.email || partnerEmail || null,
+        email: partnerEmail || null,
         isCurrentUser: false,
       });
     }
@@ -127,7 +124,7 @@ export function useHouseholdMembers() {
  */
 export function getMemberDisplayName(
   members: HouseholdMember[],
-  userId: string
+  userId: string,
 ): string {
   const member = members.find((m) => m.id === userId);
   return member?.displayName || "Unknown";
@@ -138,7 +135,7 @@ export function getMemberDisplayName(
  */
 export function isCurrentUser(
   members: HouseholdMember[],
-  userId: string
+  userId: string,
 ): boolean {
   const member = members.find((m) => m.id === userId);
   return member?.isCurrentUser ?? false;

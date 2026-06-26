@@ -4,6 +4,7 @@
 import { CACHE_TIMES } from "@/lib/queryConfig";
 import { invalidateAccountData } from "@/lib/queryInvalidation";
 import { qk } from "@/lib/queryKeys";
+import { safeFetch } from "@/lib/safeFetch";
 import type { Account, AccountType } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -86,10 +87,11 @@ type CreateAccountInput = {
   country_code?: string;
   location_name?: string;
   with_default_categories?: boolean;
+  is_public?: boolean;
 };
 
 async function createAccount(input: CreateAccountInput): Promise<Account> {
-  const res = await fetch("/api/accounts", {
+  const res = await safeFetch("/api/accounts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -114,7 +116,13 @@ export function useCreateAccount() {
     { previous?: Account[]; previousOwn?: Account[]; tempId: string }
   >({
     mutationFn: createAccount,
-    onMutate: async ({ name, type, country_code, location_name }) => {
+    onMutate: async ({
+      name,
+      type,
+      country_code,
+      location_name,
+      is_public,
+    }) => {
       // Cancel all account queries
       await qc.cancelQueries({ queryKey: qk.accounts() });
 
@@ -130,6 +138,8 @@ export function useCreateAccount() {
         inserted_at: new Date().toISOString(),
         country_code,
         location_name,
+        visible: true,
+        is_public: is_public ?? false,
       };
 
       // Update both caches optimistically
@@ -168,7 +178,7 @@ export function useCreateAccount() {
 
 // Set default account mutation
 async function setDefaultAccount(accountId: string): Promise<void> {
-  const res = await fetch(`/api/accounts/${accountId}/default`, {
+  const res = await safeFetch(`/api/accounts/${accountId}/default`, {
     method: "PATCH",
   });
   if (!res.ok) {
@@ -193,7 +203,7 @@ export function useSetDefaultAccount() {
 
 // Delete account mutation
 async function deleteAccount(accountId: string): Promise<void> {
-  const res = await fetch(`/api/accounts/${accountId}`, {
+  const res = await safeFetch(`/api/accounts/${accountId}`, {
     method: "DELETE",
   });
   if (!res.ok) {
@@ -264,7 +274,7 @@ export function useDeleteAccount() {
 
 // Unhide account mutation
 async function unhideAccount(accountId: string): Promise<void> {
-  const res = await fetch(`/api/accounts/${accountId}`, {
+  const res = await safeFetch(`/api/accounts/${accountId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ visible: true }),
@@ -289,11 +299,85 @@ export function useUnhideAccount() {
   });
 }
 
+async function updateAccountSharing(input: {
+  id: string;
+  is_public: boolean;
+}): Promise<Account> {
+  const res = await safeFetch(`/api/accounts/${input.id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_public: input.is_public }),
+  });
+  if (!res.ok) {
+    let msg = "Failed to update account visibility";
+    try {
+      const j = await res.json();
+      if (j?.error) msg = j.error;
+    } catch {}
+    throw new Error(msg);
+  }
+  return (await res.json()) as Account;
+}
+
+export function useUpdateAccountSharing() {
+  const qc = useQueryClient();
+  return useMutation<
+    Account,
+    Error,
+    { id: string; is_public: boolean },
+    {
+      previous?: Account[];
+      previousOwn?: Account[];
+      previousWithHidden?: Account[];
+    }
+  >({
+    mutationFn: updateAccountSharing,
+    onMutate: async ({ id, is_public }) => {
+      await qc.cancelQueries({ queryKey: qk.accounts() });
+      const previous = qc.getQueryData<Account[]>(qk.accounts());
+      const previousOwn = qc.getQueryData<Account[]>([...qk.accounts(), "own"]);
+      const previousWithHidden = qc.getQueryData<Account[]>([
+        ...qk.accounts(),
+        "own",
+        "withHidden",
+      ]);
+      const update = (accounts: Account[] = []) =>
+        accounts.map((account) =>
+          account.id === id ? { ...account, is_public } : account,
+        );
+
+      qc.setQueryData<Account[]>(qk.accounts(), update);
+      qc.setQueryData<Account[]>([...qk.accounts(), "own"], update);
+      qc.setQueryData<Account[]>(
+        [...qk.accounts(), "own", "withHidden"],
+        update,
+      );
+
+      return { previous, previousOwn, previousWithHidden };
+    },
+    onError: (_error, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(qk.accounts(), ctx.previous);
+      if (ctx?.previousOwn) {
+        qc.setQueryData([...qk.accounts(), "own"], ctx.previousOwn);
+      }
+      if (ctx?.previousWithHidden) {
+        qc.setQueryData(
+          [...qk.accounts(), "own", "withHidden"],
+          ctx.previousWithHidden,
+        );
+      }
+    },
+    onSettled: () => {
+      invalidateAccountData(qc);
+    },
+  });
+}
+
 // Reorder accounts mutation
 async function reorderAccounts(
   updates: Array<{ id: string; position: number }>
 ): Promise<void> {
-  const res = await fetch("/api/accounts/reorder", {
+  const res = await safeFetch("/api/accounts/reorder", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ updates }),

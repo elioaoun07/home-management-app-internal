@@ -8,6 +8,7 @@ tags:
   - type/feature-doc
   - module/transfers
 ---
+
 # Account Transfers Feature
 
 ## Overview
@@ -76,6 +77,39 @@ psql "YOUR_CONNECTION_STRING" -f migrations/add_transfers.sql
    - **Amount**: How much to transfer
    - **Description**: Optional note
    - **Date**: When the transfer occurred
+
+### 2b. NFC / URL Wallet Refill Shortcut
+
+Implemented 2026-06-25: `/expense?transfer=salary-wallet` opens the mobile
+expense entry form and immediately shows a small transfer prompt for funding
+Wallet from Salary.
+
+- The URL does **not** store account UUIDs.
+- The prompt fetches the signed-in user's own visible accounts through
+  `useMyAccounts()`.
+- It resolves `Salary` and `Wallet` by case-insensitive account name (exact
+  match first, then contains-match fallback), so the same URL works for whichever
+  household user taps the NFC link.
+- If either default account name cannot be resolved, the prompt stays usable and
+  lets the user pick source/destination accounts manually.
+- Optional query params: `from`, `to`, and `amount`, e.g.
+  `/expense?transfer=salary-wallet&from=Salary&to=Wallet&amount=400`.
+- `/expense` preserves the full shortcut query through login via
+  `/login?redirect=...`, so unauthenticated taps return to the prompt after
+  sign-in.
+- Follow-up 2026-06-26: the prompt is mounted from the expense tab shell
+  (`TabContainer`) instead of the page child, because the shell owns the live
+  mobile expense form and does not render route children in normal mode.
+
+### 2c. Shared Household Accounts
+
+Implemented 2026-06-26: accounts can be private or public.
+
+- Private accounts are the default and behave like the original owner-only account model.
+- Public accounts are visible to the active household partner when the account is also visible.
+- Both household users can open a public account, adjust its balance, add/deduct transactions against it, and transfer to or from it.
+- The account row remains owned by the creator (`accounts.user_id`); partner writes are authorized through `src/lib/accountAccess.ts` and balance rows continue to belong to the account owner.
+- Partner access does not make private transactions visible. Partner reads still filter out transactions where `transactions.is_private=true`.
 
 ### 3. Viewing Transfers
 
@@ -166,10 +200,14 @@ The feature uses React Query hooks for:
 - `src/app/api/transfers/[id]/route.ts` - API endpoints (GET, PATCH, DELETE)
 - `src/features/transfers/hooks.ts` - React Query hooks
 - `src/components/expense/TransferDialog.tsx` - Transfer UI component
+- `src/components/expense/NfcWalletTransferPrompt.tsx` - URL/NFC wallet refill prompt
 
 ### Modified Files
 
 - `src/components/expense/AccountBalance.tsx` - Added transfer button
+- `src/components/layouts/TabContainer.tsx` - Opens the wallet refill prompt from `/expense?transfer=salary-wallet`
+- `src/app/expense/ExpenseClientWrapper.tsx` - Watch-mode expense page wrapper
+- `src/app/expense/page.tsx` - Preserves expense shortcut query params through login redirects
 
 ## Wallet Balance Reconciliation
 

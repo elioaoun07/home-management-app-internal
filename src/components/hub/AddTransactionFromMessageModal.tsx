@@ -4,11 +4,12 @@
 import { SaveIcon, XIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useMyAccounts } from "@/features/accounts/hooks";
+import { useAccounts, useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useCreateMessageAction } from "@/features/hub/messageActions";
 import { useAddTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { safeFetch } from "@/lib/safeFetch";
 import { yyyyMmDd } from "@/lib/utils/date";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -40,9 +41,9 @@ export default function AddTransactionFromMessageModal({
   const addMutation = useAddTransaction();
   const createActionMutation = useCreateMessageAction();
 
-  // Get ONLY current user's accounts (not partner's) for adding transactions
-  const { data: accounts = [] } = useMyAccounts();
-  const defaultAccount = accounts.find((a: any) => a.is_default);
+  const { data: accounts = [] } = useAccounts();
+  const { data: ownAccounts = [] } = useMyAccounts();
+  const defaultAccount = ownAccounts.find((a: any) => a.is_default);
   const [selectedAccount, setSelectedAccount] = useState<string | undefined>(
     defaultAccount?.id,
   );
@@ -96,7 +97,7 @@ export default function AddTransactionFromMessageModal({
       setIsClosing(true);
       setTimeout(async () => {
         try {
-          const res = await fetch("/api/drafts", {
+          const res = await safeFetch("/api/drafts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -158,7 +159,7 @@ export default function AddTransactionFromMessageModal({
               });
             } catch (err) {
               toast.error(
-                "Transaction added, but action tracking failed. Check console.",
+                "Transaction added, but action tracking failed. Try again.",
               );
             }
 

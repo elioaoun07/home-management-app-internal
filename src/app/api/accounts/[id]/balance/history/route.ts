@@ -1,28 +1,10 @@
+import { getAccessibleAccount } from "@/lib/accountAccess";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-
-// Helper to get partner user ID if linked
-async function getPartnerUserId(
-  supabase: any,
-  userId: string,
-): Promise<string | null> {
-  const { data: link } = await supabase
-    .from("household_links")
-    .select("owner_user_id, partner_user_id, active")
-    .or(`owner_user_id.eq.${userId},partner_user_id.eq.${userId}`)
-    .eq("active", true)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!link) return null;
-  return link.owner_user_id === userId
-    ? link.partner_user_id
-    : link.owner_user_id;
-}
 
 // GET /api/accounts/[id]/balance/history - Get balance history for an account
 export async function GET(
@@ -48,24 +30,14 @@ export async function GET(
   const excludeTransactions =
     searchParams.get("exclude_transactions") !== "false";
 
-  // Get partner ID if linked
-  const partnerId = await getPartnerUserId(supabase, user.id);
-  const allowedUserIds = partnerId ? [user.id, partnerId] : [user.id];
-
-  // Verify account belongs to user or partner
-  const { data: account, error: accountError } = await supabase
-    .from("accounts")
-    .select("id, name, type, user_id")
-    .eq("id", accountId)
-    .in("user_id", allowedUserIds)
-    .single();
-
-  if (accountError || !account) {
+  const account = await getAccessibleAccount(supabase, user.id, accountId);
+  if (!account) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
+  const admin = supabaseAdmin();
 
   // Get current balance
-  const { data: balanceData } = await supabase
+  const { data: balanceData } = await admin
     .from("account_balances")
     .select("balance")
     .eq("account_id", accountId)
@@ -74,7 +46,7 @@ export async function GET(
   const currentBalance = balanceData?.balance ?? 0;
 
   // Build history query
-  let query = supabase
+  let query = admin
     .from("account_balance_history")
     .select(
       `
@@ -114,7 +86,6 @@ export async function GET(
   const { data: history, error: historyError, count } = await query;
 
   if (historyError) {
-    console.error("Error fetching balance history:", historyError);
     return NextResponse.json(
       { error: "Failed to fetch history" },
       { status: 500 },
@@ -132,7 +103,7 @@ export async function GET(
   // Fetch transaction details
   let transactionsMap: Record<string, any> = {};
   if (transactionIds.length > 0) {
-    const { data: transactions } = await supabase
+    const { data: transactions } = await admin
       .from("transactions")
       .select(
         `
@@ -160,7 +131,7 @@ export async function GET(
   // Fetch transfer details
   let transfersMap: Record<string, any> = {};
   if (transferIds.length > 0) {
-    const { data: transfers } = await supabase
+    const { data: transfers } = await admin
       .from("transfers")
       .select(
         `

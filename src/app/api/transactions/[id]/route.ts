@@ -1,3 +1,4 @@
+import { getAccessibleAccount } from "@/lib/accountAccess";
 import { adjustAccountBalance } from "@/lib/balance";
 import type { AccountType } from "@/lib/balance-utils";
 import { getBalanceDelta } from "@/lib/balance-utils";
@@ -7,6 +8,15 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+
+type TransactionUpdateData = {
+  date?: string;
+  amount?: number;
+  description?: string | null;
+  category_id?: string | null;
+  subcategory_id?: string | null;
+  account_id?: string;
+};
 
 // GET - Fetch a single transaction by ID
 export async function GET(
@@ -33,7 +43,7 @@ export async function GET(
         *,
         category:user_categories!transactions_category_id_fkey(id, name, color),
         subcategory:user_categories!transactions_subcategory_id_fkey(id, name, color),
-        account:accounts!transactions_account_id_fkey(id, name)
+        account:accounts!transactions_account_id_fkey(id, name, user_id, is_public)
       `,
       )
       .eq("id", id)
@@ -46,28 +56,16 @@ export async function GET(
       );
     }
 
-    // Check if user has access (owner or household member)
+    // Check if user has access (owner or via a public household account)
     const isOwner = transaction.user_id === user.id;
 
     if (!isOwner) {
-      // Check if user is in the same household
-      const { data: userProfile } = await supabase
-        .from("profiles")
-        .select("household_id")
-        .eq("id", user.id)
-        .single();
-
-      const { data: ownerProfile } = await supabase
-        .from("profiles")
-        .select("household_id")
-        .eq("id", transaction.user_id)
-        .single();
-
-      const sameHousehold =
-        userProfile?.household_id &&
-        userProfile.household_id === ownerProfile?.household_id;
-
-      if (!sameHousehold) {
+      const accountAccess = await getAccessibleAccount(
+        supabase,
+        user.id,
+        transaction.account_id,
+      );
+      if (!accountAccess || transaction.is_private === true) {
         return NextResponse.json(
           { error: "Transaction not found" },
           { status: 404 },
@@ -90,13 +88,13 @@ export async function GET(
         subcategory_id: transaction.subcategory_id,
         inserted_at: transaction.inserted_at,
         user_id: transaction.user_id,
+        is_private: transaction.is_private,
         is_owner: isOwner,
         split_requested: transaction.split_requested,
         split_completed_at: transaction.split_completed_at,
       },
     });
-  } catch (error) {
-    console.error("Get transaction error:", error);
+  } catch {
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
@@ -132,7 +130,7 @@ export async function PATCH(
     } = body;
 
     // Build update object with only provided fields
-    const updateData: Record<string, any> = {};
+    const updateData: TransactionUpdateData = {};
     if (date !== undefined) updateData.date = date;
     if (amount !== undefined) updateData.amount = amount;
     if (description !== undefined) updateData.description = description;
@@ -166,7 +164,6 @@ export async function PATCH(
       .single();
 
     if (error) {
-      console.error("Error updating transaction:", error);
       return NextResponse.json(
         { error: "Failed to update transaction" },
         { status: 500 },
@@ -314,8 +311,7 @@ export async function PATCH(
       subcategory_color: subcategoryColor || "#38bdf8",
       is_owner: true,
     });
-  } catch (error) {
-    console.error("Update transaction error:", error);
+  } catch {
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
@@ -385,7 +381,6 @@ export async function DELETE(
       .eq("user_id", user.id);
 
     if (error) {
-      console.error("Error soft-deleting transaction:", error);
       return NextResponse.json(
         { error: "Failed to delete transaction" },
         { status: 500 },
@@ -445,8 +440,7 @@ export async function DELETE(
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Delete transaction error:", error);
+  } catch {
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

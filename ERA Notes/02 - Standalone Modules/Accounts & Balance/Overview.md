@@ -25,6 +25,7 @@ tags:
 ## Key Concepts
 
 - Baseline + delta balance model
+- Account visibility: accounts are private by default; `is_public=true` makes a visible account shared with the active household partner for viewing, balance edits, transactions, categories, and transfers.
 - Account types: `expense`, `income`, `saving` — affect balance direction
 - Custom month start day for billing cycles
 

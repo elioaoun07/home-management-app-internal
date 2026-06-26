@@ -2,11 +2,67 @@ import {
   DEFAULT_ACCOUNTS,
   DEFAULT_CATEGORIES,
 } from "@/constants/defaultCategories";
+import {
+  ACCOUNT_SELECT,
+  getActiveHouseholdPartnerId,
+} from "@/lib/accountAccess";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic"; // disable caching
+
+const createAccountSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  type: z.enum(["expense", "income", "saving"]),
+  country_code: z.string().trim().min(1).max(2).optional(),
+  location_name: z.string().trim().min(1).max(120).optional(),
+  with_default_categories: z.boolean().optional(),
+  is_public: z.boolean().optional(),
+});
+
+async function fetchAccountList(
+  supabase: any,
+  userId: string,
+  options: { ownOnly: boolean; includeHidden: boolean },
+) {
+  let ownQuery = supabase
+    .from("accounts")
+    .select(ACCOUNT_SELECT)
+    .eq("user_id", userId);
+
+  if (!options.includeHidden) {
+    ownQuery = ownQuery.neq("visible", false);
+  }
+
+  const { data: ownAccounts, error: ownError } = await ownQuery;
+  if (ownError) throw ownError;
+
+  let partnerAccounts: any[] = [];
+  if (!options.ownOnly) {
+    const partnerId = await getActiveHouseholdPartnerId(supabase, userId);
+    if (partnerId) {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select(ACCOUNT_SELECT)
+        .eq("user_id", partnerId)
+        .eq("is_public", true)
+        .neq("visible", false);
+      if (error) throw error;
+      partnerAccounts = data ?? [];
+    }
+  }
+
+  return [...(ownAccounts ?? []), ...partnerAccounts].sort((a, b) => {
+    const positionDiff = (a.position ?? 0) - (b.position ?? 0);
+    if (positionDiff !== 0) return positionDiff;
+    return (
+      new Date(b.inserted_at ?? 0).getTime() -
+      new Date(a.inserted_at ?? 0).getTime()
+    );
+  });
+}
 
 export async function GET(req: NextRequest) {
   // Use SSR client bound to request cookies to identify the logged-in user
@@ -25,50 +81,13 @@ export async function GET(req: NextRequest) {
   const includeHidden =
     req.nextUrl.searchParams.get("includeHidden") === "true";
 
-  let userIds: string[] = [user.id];
-
-  // Only fetch partner accounts if not requesting own accounts only
-  if (!ownOnly) {
-    // Check for household link to also fetch partner's accounts
-    const { data: link } = await supabase
-      .from("household_links")
-      .select("owner_user_id, partner_user_id, active")
-      .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
-      .eq("active", true)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const partnerId = link
-      ? link.owner_user_id === user.id
-        ? link.partner_user_id
-        : link.owner_user_id
-      : null;
-
-    // Fetch accounts for current user AND partner (if linked)
-    if (partnerId) {
-      userIds = [user.id, partnerId];
-    }
-  }
-
-  let query = supabase
-    .from("accounts")
-    .select(
-      "id,user_id,name,type,is_default,inserted_at,country_code,location_name,position,visible",
-    )
-    .in("user_id", userIds);
-
-  // Only filter out hidden accounts if not explicitly including them
-  if (!includeHidden) {
-    query = query.neq("visible", false);
-  }
-
-  const { data, error } = await query
-    .order("position", { ascending: true })
-    .order("inserted_at", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching accounts:", error);
+  let data: any[] = [];
+  try {
+    data = await fetchAccountList(supabase, user.id, {
+      ownOnly,
+      includeHidden,
+    });
+  } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -88,7 +107,7 @@ export async function GET(req: NextRequest) {
         const { data: acc, error: accErr } = await supabase
           .from("accounts")
           .insert({ user_id: user.id, name: seed.name, type: typeNorm })
-          .select("id,user_id,name,type,inserted_at")
+          .select(ACCOUNT_SELECT)
           .single();
 
         if (accErr) {
@@ -152,22 +171,15 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // Re-read accounts after seeding (include partner's accounts too)
-      const { data: seeded, error: seededErr } = await supabase
-        .from("accounts")
-        .select(
-          "id,user_id,name,type,is_default,inserted_at,country_code,location_name,position,visible",
-        )
-        .in("user_id", userIds)
-        .neq("visible", false)
-        .order("position", { ascending: true })
-        .order("inserted_at", { ascending: false });
-      if (seededErr) throw seededErr;
+      // Re-read accounts after seeding (include partner public accounts too)
+      const seeded = await fetchAccountList(supabase, user.id, {
+        ownOnly,
+        includeHidden: false,
+      });
       return NextResponse.json(seeded ?? [], {
         headers: { "Cache-Control": "no-store" },
       });
-    } catch (e) {
-      console.error("Seeding default accounts/categories failed:", e);
+    } catch {
       return NextResponse.json(
         { error: "Failed to seed default data" },
         { status: 500 },
@@ -192,25 +204,21 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const { name, type, country_code, location_name, with_default_categories } =
-      body || {};
-
-    if (!name || !type) {
+    const parsed = createAccountSchema.safeParse(await req.json());
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "name and type are required" },
+        { error: parsed.error.flatten() },
         { status: 400 },
       );
     }
-
-    // Optional: constrain type to known values
-    const typeNorm = String(type).toLowerCase();
-    if (!["expense", "income", "saving"].includes(typeNorm)) {
-      return NextResponse.json(
-        { error: "type must be 'expense', 'income', or 'saving'" },
-        { status: 400 },
-      );
-    }
+    const {
+      name,
+      type: typeNorm,
+      country_code,
+      location_name,
+      with_default_categories,
+      is_public,
+    } = parsed.data;
 
     // Determine if we should seed default categories and which ones
     // - Expense accounts: seed expense categories (DEFAULT_CATEGORIES)
@@ -228,22 +236,23 @@ export async function POST(req: NextRequest) {
 
     const insertData: Record<string, any> = {
       user_id: user.id,
-      name: String(name).trim(),
+      name,
       type: typeNorm,
+      is_public: is_public ?? false,
     };
 
     // Add optional country fields if provided
     if (country_code) {
-      insertData.country_code = String(country_code).toUpperCase().trim();
+      insertData.country_code = country_code.toUpperCase();
     }
     if (location_name) {
-      insertData.location_name = String(location_name).trim();
+      insertData.location_name = location_name;
     }
 
     const { data, error } = await supabase
       .from("accounts")
       .insert(insertData)
-      .select("id,user_id,name,type,inserted_at,country_code,location_name")
+      .select(ACCOUNT_SELECT)
       .single();
 
     if (error) {
@@ -254,7 +263,6 @@ export async function POST(req: NextRequest) {
           { status: 409 },
         );
       }
-      console.error("Error creating account:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
@@ -279,7 +287,6 @@ export async function POST(req: NextRequest) {
             .single();
 
           if (rootErr) {
-            console.error("Error seeding root category:", rootErr);
             continue; // Don't fail account creation if category seeding fails
           }
 
@@ -300,8 +307,7 @@ export async function POST(req: NextRequest) {
             }
           }
         }
-      } catch (seedError) {
-        console.error("Error seeding categories for new account:", seedError);
+      } catch {
         // Don't fail the account creation, categories can be added manually
       }
     }
@@ -316,8 +322,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data, {
       headers: { "Cache-Control": "no-store" },
     });
-  } catch (e) {
-    console.error("Failed to create account:", e);
+  } catch {
     return NextResponse.json(
       { error: "Failed to create account" },
       { status: 500 },

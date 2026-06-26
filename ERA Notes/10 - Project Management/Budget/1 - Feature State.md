@@ -41,13 +41,19 @@ tags:
 | **Transactions** | 🟢 Core | Full CRUD, drafts, private, split-bill, category grid, voice entry. `MobileExpenseForm` is **2,890 LOC** — a change-risk hotspot. | Split the mega-form when next touched; don't refactor "just because". |
 | **Categories** | 🟢 Core | Hierarchical, icons/colors, DnD reorder, cross-user slug matching (module Hard Rule). Solid. | — (stable) |
 | **Recurring Payments** | 🟢 Core | Schedule, auto next-due, confirm→transaction, exceptions. `recurring/page.tsx` **2,772 LOC**. Next-due math unit-tested ✅ (2026-06-10); confirm→transaction flow still uncovered. | Test confirm→transaction (FABLED O1); monthly "confirm paid" digest (backlog). |
-| **Budget Allocation** | 🔵 Established | Envelope allocations per category. | Auto-suggest minimums from recurring (gap 2d). |
-| **Transfers** | 🔵 Established | Between-account transfers with correct balance direction. | — (stable) |
+| **Budget Allocation** | 🔵 Established | Envelope allocations per category. User pain surfaced 2026-06-25: allocation across accounts feels weak after Salary -> Wallet funding. | Make allocation workflow the next Budget focus; clarify how Wallet funding, account balances, and category envelopes connect. |
+| **Transfers** | 🔵 Established | Between-account transfers with correct balance direction. Done 2026-06-25: `/expense?transfer=salary-wallet` opens a small Salary -> Wallet amount prompt and resolves account IDs from the tapping user's own account names. | — (stable) |
 | **Statement Import** | 🔵 Established | CSV/PDF parse, merchant→category mapping. Recently split ("split estatement import", May 28). | Feed merchant map into manual entry (gap 1b). |
-| **Analytics** | 🔵 Established | Net worth, mini-charts, world spend map. Has a `debug` route shipped to prod surface. | Remove/guard `analytics/debug`; build Dashboard V2 widgets + 50/30/20 (backlog). |
+| **Analytics** | 🔵 Established | Net worth, mini-charts, world spend map. Has a `debug` route shipped to prod surface. Dashboard V2 Monthly Savings now reads the flat `Our Savings` account balance and adds `Expected Savings` (`Income - Expense`) with metric toggles ✅ (2026-06-25); month-by-month transfer attribution is still future work. | Remove/guard `analytics/debug`; build Dashboard V2 widgets + 50/30/20 (backlog). |
 | **Debts** | 🔵 Established | Owed-to / owed-by, settlement, standalone debts. | Auto-reminder on collection date (gap 2e → Schedule bridge). |
 | **Future Purchases** | 🔵 Established | Wishlist, target amount/date, allocation, spending analysis. | Link actual purchase → auto-complete (gap 2f). |
 | **Drafts** | 🔵 Established | Drafts drawer/badge/dialog for pending (voice) transactions. | — (stable) |
+
+---
+
+## Implemented Notes
+
+- [x] 2026-06-26 - Public/shared accounts shipped. Accounts remain private by default; public visible accounts can be opened and used by the active household partner for balances, transactions, categories, and transfers.
 
 ---
 

@@ -846,6 +846,10 @@ Mic tap → Record audio → Send to /api/ai-chat/voice
 - Each account has own balance
 - Transactions scoped to account
 - Transfers move between accounts
+- URL/NFC shortcut: `/expense?transfer=salary-wallet` opens the mobile expense
+  form with a focused Salary -> Wallet transfer prompt. Account IDs are resolved
+  from the signed-in user's own account names at runtime, so the URL does not
+  embed UUIDs.
 
 ### **5. Split Bills**
 

@@ -12,38 +12,49 @@ tags: []
 
 # Expense
 
-> TODO: one-sentence description.
+> Mobile-first precision form for entering expenses, checking balances, and
+> launching transfer or quick-entry flows.
 
 ## Files
 
 - **Page**: `src/app/expense/page.tsx`
 - **Main component**: `src/app/expense/ExpenseClientWrapper.tsx`
-- **Sub-components**: TODO
+- **Sub-components**:
+  - `src/components/expense/MobileExpenseForm.tsx`
+  - `src/components/expense/NfcWalletTransferPrompt.tsx`
 
 ## Hooks
 
-- TODO
+- `useMyAccounts()` resolves user-owned accounts for form/account shortcuts.
+- `useCreateTransfer()` powers the Salary -> Wallet URL/NFC transfer prompt.
 
 ## API routes
 
-- TODO
+- `/api/accounts`
+- `/api/transfers`
 
 ## DB tables
 
-- TODO
+- `accounts`
+- `account_balances`
+- `transfers`
+- `transactions`
 
 ## How to get here
 
-- TODO (which button/icon/deep-link navigates here)
 - Direct URL: `/expense`
+- Direct wallet refill shortcut: `/expense?transfer=salary-wallet`
+- Optional shortcut params: `from`, `to`, `amount`
 
 ## What it links to
 
-- TODO
+- Transfer activity/history through the transfers feature.
+- Login redirects preserve `/expense` shortcut query params.
 
 ## Related vault doc
 
-- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)
+- `ERA Notes/02 - Standalone Modules/Transactions/`
+- `ERA Notes/02 - Standalone Modules/Accounts & Balance/Account Transfers.md`
 
 ## Screenshots
 
@@ -52,4 +63,6 @@ tags: []
 
 ## Notes
 
-- TODO
+- `/expense?transfer=salary-wallet` opens the mobile expense form with a small
+  Salary -> Wallet transfer prompt. Account IDs are resolved from the signed-in
+  user's own account names instead of being encoded in the URL.

@@ -32,8 +32,10 @@ import {
 import { MOBILE_NAV_HEIGHT } from "@/constants/layout";
 import {
   useDeleteAccount,
+  useAccounts,
   useMyAccountsWithHidden,
   useReorderAccounts,
+  useUpdateAccountSharing,
   useUnhideAccount,
 } from "@/features/accounts/hooks";
 import {
@@ -73,7 +75,9 @@ import {
   Eye,
   EyeOff,
   GripVertical,
+  Lock,
   MinusCircle,
+  Users,
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -166,18 +170,6 @@ function useLongPress(callback: () => void, threshold = 500) {
 }
 
 export default function MobileExpenseForm() {
-  // ── Diagnostic: verify this module loaded (not stale SW cache) ──
-  if (
-    process.env.NODE_ENV === "development" &&
-    typeof window !== "undefined" &&
-    !(window as any).__expenseFormLogged
-  ) {
-    (window as any).__expenseFormLogged = true;
-    console.log(
-      "[OFFLINE] MobileExpenseForm MODULE LOADED (code version: 2026-03-06)",
-    );
-  }
-
   const {
     step,
     setStep,
@@ -216,13 +208,13 @@ export default function MobileExpenseForm() {
     return sectionOrder.filter((s) => VALID_STEPS.includes(s));
   }, [sectionOrder]);
 
-  // OPTIMIZED: Single API call for accounts - derive visible accounts from it
-  const { data: accountsWithHidden = [], isLoading: accountsLoading } =
+  const { data: accessibleAccounts = [], isLoading: accountsLoading } =
+    useAccounts();
+  const { data: ownAccountsWithHidden = [] } =
     useMyAccountsWithHidden();
-  // Derive visible accounts (visible !== false) from the full list
   const accounts = useMemo(
-    () => accountsWithHidden.filter((a: any) => a.visible !== false),
-    [accountsWithHidden],
+    () => accessibleAccounts.filter((a: any) => a.visible !== false),
+    [accessibleAccounts],
   );
   const defaultAccount = accounts.find((a: any) => a.is_default);
 
@@ -306,6 +298,7 @@ export default function MobileExpenseForm() {
   const deleteTransactionMutation = useDeleteTransaction();
   const queryClient = useQueryClient();
   const deleteAccountMutation = useDeleteAccount();
+  const updateAccountSharingMutation = useUpdateAccountSharing();
   const deleteCategoryMutation = useDeleteCategory(selectedAccountId);
   const unhideAccountMutation = useUnhideAccount();
   const unhideCategoryMutation = useUnhideCategory(selectedAccountId);
@@ -322,7 +315,7 @@ export default function MobileExpenseForm() {
   useEffect(() => {
     if (editModeAccount) {
       // In edit mode, show all accounts including hidden ones
-      if (accountsWithHidden.length > 0 && !accountsSaving) {
+      if (ownAccountsWithHidden.length > 0 && !accountsSaving) {
         if (lastSavedAccountsRef.current) {
           lastSavedAccountsRef.current = null;
           return;
@@ -330,9 +323,9 @@ export default function MobileExpenseForm() {
         // Only update if content actually changed to prevent infinite loops
         setOrderedAccounts((prev) => {
           const prevIds = prev.map((a) => a.id).join(",");
-          const newIds = accountsWithHidden.map((a: any) => a.id).join(",");
+          const newIds = ownAccountsWithHidden.map((a: any) => a.id).join(",");
           if (prevIds === newIds) return prev;
-          return accountsWithHidden;
+          return ownAccountsWithHidden;
         });
         setAccountsOrderChanged(false);
       }
@@ -351,7 +344,7 @@ export default function MobileExpenseForm() {
       });
       setAccountsOrderChanged(false);
     }
-  }, [accounts, accountsWithHidden, editModeAccount, accountsSaving]);
+  }, [accounts, ownAccountsWithHidden, editModeAccount, accountsSaving]);
 
   // Sync categories with ordered list (only when NOT in edit mode and NOT saving)
   useEffect(() => {
@@ -660,10 +653,6 @@ export default function MobileExpenseForm() {
       (accounts.length > 0 || isReallyOnline())
     ) {
       hasInitializedRef.current = true;
-      if (process.env.NODE_ENV === "development")
-        console.log(
-          `[OFFLINE] Form INITIALIZED: step=${firstValidStep}, accounts=${accounts.length}, categories will load for accountId=${accounts.find((a: any) => a.is_default)?.id || "none"}`,
-        );
       setStep(firstValidStep);
       setIsInitialized(true);
     }
@@ -1769,6 +1758,62 @@ export default function MobileExpenseForm() {
                                   className="w-3.5 h-3.5"
                                   strokeWidth={2.5}
                                 />
+                              </button>
+
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const nextPublic = !account.is_public;
+                                  try {
+                                    await updateAccountSharingMutation.mutateAsync(
+                                      {
+                                        id: account.id,
+                                        is_public: nextPublic,
+                                      },
+                                    );
+                                    toast.success(
+                                      nextPublic
+                                        ? "Account shared"
+                                        : "Account made private",
+                                      {
+                                        icon: ToastIcons.update,
+                                        duration: 4000,
+                                        action: {
+                                          label: "Undo",
+                                          onClick: () =>
+                                            updateAccountSharingMutation.mutate({
+                                              id: account.id,
+                                              is_public: !nextPublic,
+                                            }),
+                                        },
+                                      },
+                                    );
+                                  } catch (error: any) {
+                                    toast.error(
+                                      error.message ||
+                                        "Failed to update visibility",
+                                      { icon: ToastIcons.error },
+                                    );
+                                  }
+                                }}
+                                className={cn(
+                                  "absolute -top-2 -right-2 z-20 w-6 h-6 rounded-full flex items-center justify-center text-white shadow-lg transform transition-transform hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-200",
+                                  account.is_public
+                                    ? "bg-emerald-500"
+                                    : "bg-slate-600",
+                                )}
+                              >
+                                {account.is_public ? (
+                                  <Users
+                                    className="w-3.5 h-3.5"
+                                    strokeWidth={2.5}
+                                  />
+                                ) : (
+                                  <Lock
+                                    className="w-3.5 h-3.5"
+                                    strokeWidth={2.5}
+                                  />
+                                )}
                               </button>
 
                               <div

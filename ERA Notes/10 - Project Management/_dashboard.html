@@ -24,6 +24,10 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
 #sidebar-header{padding:16px 16px 10px;border-bottom:1px solid var(--border-soft);}
 #sidebar-header h1{font-size:15px;margin:0 0 2px;letter-spacing:.02em;color:var(--text);}
 #generated-at{font-size:11px;color:var(--muted-2);margin-bottom:10px;}
+#hide-completed-row{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);
+  cursor:pointer;margin-bottom:10px;user-select:none;}
+#hide-completed-row input{accent-color:var(--accent);width:13px;height:13px;cursor:pointer;}
+#hide-completed-row:hover{color:var(--text);}
 #search{width:100%;background:var(--card);border:1px solid var(--border);color:var(--text);
   padding:7px 10px;border-radius:6px;font-size:13px;outline:none;}
 #search:focus{border-color:var(--accent);}
@@ -126,6 +130,9 @@ article li.task.done{color:var(--muted-2);}
 article li.task.done .cb-inner-text{text-decoration:line-through;}
 article li.task.skipped > .cb{background:var(--gray);border-color:var(--gray);position:relative;}
 article li.task.open > .cb{}
+body.hide-completed article li.task.done,
+body.hide-completed article li.task.skipped,
+body.hide-completed article .resolved-note{display:none !important;}
 article code{background:var(--card);border:1px solid var(--border);padding:1px 5px;border-radius:4px;
   font-family:var(--mono);font-size:13px;}
 article pre{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;
@@ -221,6 +228,10 @@ body.pv-open #preview{transform:translateX(0);}
     <div id="sidebar-header">
       <h1>PM Command Center</h1>
       <div id="generated-at"></div>
+      <label id="hide-completed-row" for="hide-completed-toggle">
+        <input type="checkbox" id="hide-completed-toggle">
+        <span>Hide completed items</span>
+      </label>
       <input id="search" placeholder="Search docs... ( / )" autocomplete="off">
       <div id="search-results"></div>
     </div>
@@ -542,7 +553,7 @@ var PM_DATA = {"generatedAt":"2026-06-21T05:17:37.744Z","repoRootFileUrl":"file:
   function renderList(items, ordered){
     var html = ordered ? "<ol>" : "<ul>";
     items.forEach(function(it){
-      var cls = it.cbState ? (" task " + it.cbState) : "";
+      var cls = it.cbState ? (" task " + it.cbState) : (it.resolvedNote ? " resolved-note" : "");
       var cb = it.cbState ? '<span class="cb"></span>' : "";
       html += '<li class="'+cls.trim()+'">' + cb + '<span>' + it.html + '</span>';
       if (it.children && it.children.length) html += renderList(it.children, it.ordered);
@@ -555,7 +566,7 @@ var PM_DATA = {"generatedAt":"2026-06-21T05:17:37.744Z","repoRootFileUrl":"file:
     var root = []; var stack = [{ indent:-1, children: root }];
     items.forEach(function(it){
       while (stack.length > 1 && it.indent <= stack[stack.length-1].indent) stack.pop();
-      var node = { indent: it.indent, html: it.html, cbState: it.cbState, ordered: it.ordered, children: [] };
+      var node = { indent: it.indent, html: it.html, cbState: it.cbState, resolvedNote: it.resolvedNote, ordered: it.ordered, children: [] };
       stack[stack.length-1].children.push(node);
       stack.push({ indent: it.indent, children: node.children });
     });
@@ -576,9 +587,12 @@ var PM_DATA = {"generatedAt":"2026-06-21T05:17:37.744Z","repoRootFileUrl":"file:
     var toc = [];
     var i = 0;
     var para = [];
+    var sectionStack = [];
     function flushPara(){
       if (para.length){
-        out.push("<p>" + inline(para.join(" "), currentFile) + "</p>");
+        var joined = para.join(" ");
+        var cls = /✅/.test(joined) ? ' class="resolved-note"' : "";
+        out.push("<p"+cls+">" + inline(joined, currentFile) + "</p>");
         para = [];
       }
     }
@@ -601,7 +615,13 @@ var PM_DATA = {"generatedAt":"2026-06-21T05:17:37.744Z","repoRootFileUrl":"file:
         var text = h[2].trim();
         var slug = slugify(text) + "-" + out.length;
         if (level === 2 || level === 3) toc.push({ level: level, text: text, slug: slug });
+        while (sectionStack.length && sectionStack[sectionStack.length-1].level >= level){
+          out.push("</div>"); sectionStack.pop();
+        }
+        var headingResolved = /✅/.test(text);
+        if (headingResolved) out.push('<div class="resolved-note">');
         out.push("<h"+level+' id="'+slug+'">' + inline(text, currentFile) + "</h"+level+">");
+        if (headingResolved) sectionStack.push({ level: level });
         i++; continue;
       }
 
@@ -629,15 +649,15 @@ var PM_DATA = {"generatedAt":"2026-06-21T05:17:37.744Z","repoRootFileUrl":"file:
         var rows = [];
         while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])){
           var cells = lines[i].split("|").map(function(c){ return c.trim(); }).filter(function(c,idx,arr){ return !(c==="" && (idx===0||idx===arr.length-1)); });
-          rows.push(cells);
+          rows.push({ cells: cells, resolved: /✅/.test(lines[i]) });
           i++;
         }
         var t = "<table><thead><tr>";
         headerCells.forEach(function(c){ t += "<th>"+inline(c, currentFile)+"</th>"; });
         t += "</tr></thead><tbody>";
         rows.forEach(function(r){
-          t += "<tr>";
-          r.forEach(function(c){ t += "<td>"+inline(c, currentFile)+"</td>"; });
+          t += "<tr"+(r.resolved ? ' class="resolved-note"' : "")+">";
+          r.cells.forEach(function(c){ t += "<td>"+inline(c, currentFile)+"</td>"; });
           t += "</tr>";
         });
         t += "</tbody></table>";
@@ -662,7 +682,8 @@ var PM_DATA = {"generatedAt":"2026-06-21T05:17:37.744Z","repoRootFileUrl":"file:
             var tag = rest.match(SKIP_TAG_RE);
             if (tag){ cbState = "skipped"; rest = tag[2] || tag[1]; }
           }
-          items.push({ indent: indent, ordered: ordered, cbState: cbState, html: inline(rest, currentFile) });
+          var resolvedNote = !cbState && /✅/.test(lm[3]);
+          items.push({ indent: indent, ordered: ordered, cbState: cbState, resolvedNote: resolvedNote, html: inline(rest, currentFile) });
           i++;
         }
         var tree = buildListTree(items);
@@ -674,6 +695,7 @@ var PM_DATA = {"generatedAt":"2026-06-21T05:17:37.744Z","repoRootFileUrl":"file:
       i++;
     }
     flushPara();
+    while (sectionStack.length){ out.push("</div>"); sectionStack.pop(); }
     return { html: out.join("\n"), meta: fm.meta, toc: toc };
   }
 
@@ -686,6 +708,7 @@ var PM_DATA = {"generatedAt":"2026-06-21T05:17:37.744Z","repoRootFileUrl":"file:
     searchResults: document.getElementById("search-results"),
     generatedAt: document.getElementById("generated-at"),
     sidebarToggle: document.getElementById("sidebar-toggle"),
+    hideCompletedToggle: document.getElementById("hide-completed-toggle"),
     preview: document.getElementById("preview"),
     previewBackdrop: document.getElementById("preview-backdrop"),
     previewName: document.getElementById("preview-name"),
@@ -1257,6 +1280,18 @@ var PM_DATA = {"generatedAt":"2026-06-21T05:17:37.744Z","repoRootFileUrl":"file:
     document.body.classList.toggle("sb-open");
   });
   els.view.addEventListener("click", function(){ document.body.classList.remove("sb-open"); });
+
+  // ---------- hide completed (global) ----------
+  var HIDE_COMPLETED_KEY = "pm-dash-hide-completed";
+  var hideCompleted = false;
+  try{ hideCompleted = localStorage.getItem(HIDE_COMPLETED_KEY) === "1"; }catch(e){}
+  els.hideCompletedToggle.checked = hideCompleted;
+  document.body.classList.toggle("hide-completed", hideCompleted);
+  els.hideCompletedToggle.addEventListener("change", function(){
+    var on = els.hideCompletedToggle.checked;
+    document.body.classList.toggle("hide-completed", on);
+    try{ localStorage.setItem(HIDE_COMPLETED_KEY, on ? "1" : "0"); }catch(e){}
+  });
 
   // ---------- boot ----------
   renderTree();

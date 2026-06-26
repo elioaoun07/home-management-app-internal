@@ -119,9 +119,9 @@ export async function GET(req: NextRequest) {
       ...new Set(messages?.map((m) => m.sender_user_id) || []),
     ];
 
-    const { data: profiles, error: profilesError } = await supabase
+    const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, display_name, email")
+      .select("id, full_name")
       .in("id", senderIds);
 
     // Create profile lookup map
@@ -231,10 +231,7 @@ export async function GET(req: NextRequest) {
         );
         const lastReceipt = sortedReceipts[0];
         const senderProfile = profileMap.get(lastReceipt.sender_user_id);
-        const senderName =
-          senderProfile?.display_name ||
-          senderProfile?.email?.split("@")[0] ||
-          "Someone";
+        const senderName = senderProfile?.full_name || "Someone";
         const threadName = thread?.title || "Chat";
 
         // Build notification content (WhatsApp style)
@@ -312,6 +309,11 @@ export async function GET(req: NextRequest) {
           .select()
           .single();
 
+        if (insertError || !notification) {
+          pushFailed++;
+          continue;
+        }
+
         notificationsSent++;
 
         // Send push notification to all active subscriptions
@@ -359,6 +361,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       users_notified: groupedByUser.size,
+      notifications_created: notificationsSent,
       push_sent: pushSent,
       push_failed: pushFailed,
       skipped_duplicate: skippedDuplicate,

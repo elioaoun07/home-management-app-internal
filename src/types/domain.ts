@@ -13,6 +13,9 @@ export type Account = {
   inserted_at: string; // ISO
   country_code?: string | null; // ISO 3166-1 alpha-2 for trip tracking
   location_name?: string | null; // City/region name for trip tracking
+  position?: number | null;
+  visible?: boolean | null;
+  is_public?: boolean | null;
 };
 
 /** User (DB) categories are flat; subcats use parent_id */

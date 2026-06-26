@@ -285,7 +285,8 @@ export function useCreateTransfer() {
             try {
               await deleteTransfer(data.id);
               queryClient.invalidateQueries({ queryKey: transferKeys.all });
-              queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+              invalidateAccountData(queryClient, data.from_account_id);
+              invalidateAccountData(queryClient, data.to_account_id);
               toast.success("Transfer reversed", { icon: ToastIcons.delete });
             } catch {
               toast.error("Failed to undo transfer");
@@ -355,6 +356,8 @@ export function useUpdateTransfer() {
                 returned_amount: prev.returned_amount,
               });
               queryClient.invalidateQueries({ queryKey: transferKeys.all });
+              invalidateAccountData(queryClient, prev.from_account_id);
+              invalidateAccountData(queryClient, prev.to_account_id);
               toast.success("Transfer reverted", { icon: ToastIcons.update });
             } catch {
               toast.error("Failed to undo transfer update");
@@ -438,7 +441,8 @@ export function useDeleteTransfer() {
                 returned_amount: deleted.returned_amount,
               });
               queryClient.invalidateQueries({ queryKey: transferKeys.all });
-              queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+              invalidateAccountData(queryClient, deleted.from_account_id);
+              invalidateAccountData(queryClient, deleted.to_account_id);
               toast.success("Transfer restored", { icon: ToastIcons.create });
             } catch {
               toast.error("Failed to undo transfer deletion");

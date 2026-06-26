@@ -1,28 +1,10 @@
+import { getAccessibleAccount } from "@/lib/accountAccess";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-
-// Helper to get partner user ID if linked
-async function getPartnerUserId(
-  supabase: any,
-  userId: string,
-): Promise<string | null> {
-  const { data: link } = await supabase
-    .from("household_links")
-    .select("owner_user_id, partner_user_id, active")
-    .or(`owner_user_id.eq.${userId},partner_user_id.eq.${userId}`)
-    .eq("active", true)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!link) return null;
-  return link.owner_user_id === userId
-    ? link.partner_user_id
-    : link.owner_user_id;
-}
 
 // GET /api/accounts/[id]/balance/archives - Get monthly summaries from archived daily data
 export async function GET(
@@ -40,24 +22,14 @@ export async function GET(
 
   const { id: accountId } = await params;
 
-  // Get partner ID if linked
-  const partnerId = await getPartnerUserId(supabase, user.id);
-  const allowedUserIds = partnerId ? [user.id, partnerId] : [user.id];
-
-  // Verify account access
-  const { data: account } = await supabase
-    .from("accounts")
-    .select("id, user_id")
-    .eq("id", accountId)
-    .in("user_id", allowedUserIds)
-    .single();
-
+  const account = await getAccessibleAccount(supabase, user.id, accountId);
   if (!account) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
+  const admin = supabaseAdmin();
 
   // Get current balance for calculating historical balances
-  const { data: balanceData } = await supabase
+  const { data: balanceData } = await admin
     .from("account_balances")
     .select("balance")
     .eq("account_id", accountId)
@@ -73,23 +45,28 @@ export async function GET(
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   // Get all transactions for the 6-month window (both archived and current)
-  const { data: transactions } = await supabase
+  let transactionsQuery = admin
     .from("transactions")
     .select("date, amount")
     .eq("account_id", accountId)
     .eq("is_draft", false)
+    .is("deleted_at", null)
     .gte("date", sixMonthsAgoStr)
     .lte("date", todayStr);
+  if (!account.isOwner) {
+    transactionsQuery = transactionsQuery.eq("is_private", false);
+  }
+  const { data: transactions } = await transactionsQuery;
 
   // Get transfers for the 6-month window
-  const { data: transfersIn } = await supabase
+  const { data: transfersIn } = await admin
     .from("transfers")
     .select("date, amount")
     .eq("to_account_id", accountId)
     .gte("date", sixMonthsAgoStr)
     .lte("date", todayStr);
 
-  const { data: transfersOut } = await supabase
+  const { data: transfersOut } = await admin
     .from("transfers")
     .select("date, amount")
     .eq("from_account_id", accountId)

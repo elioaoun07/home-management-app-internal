@@ -17,7 +17,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import type { AccountType } from "@/types/domain";
-import { FolderTree, MapPin, PenLine } from "lucide-react";
+import { FolderTree, Lock, MapPin, PenLine, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -58,6 +58,7 @@ export default function NewAccountDrawer({
   const [locationName, setLocationName] = useState("");
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [withDefaultCategories, setWithDefaultCategories] = useState(true);
+  const [isPublic, setIsPublic] = useState(false);
 
   const resetForm = () => {
     setName("");
@@ -66,6 +67,7 @@ export default function NewAccountDrawer({
     setLocationName("");
     setShowCountryPicker(false);
     setWithDefaultCategories(true);
+    setIsPublic(false);
   };
 
   const handleSelectCountry = (code: string, countryName: string) => {
@@ -87,6 +89,7 @@ export default function NewAccountDrawer({
         country_code: countryCode || undefined,
         location_name: locationName || undefined,
         with_default_categories: withDefaultCategories,
+        is_public: isPublic,
       },
       {
         onSuccess: (account) => {
@@ -290,6 +293,84 @@ export default function NewAccountDrawer({
                     )}
                   >
                     Saving
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Sharing */}
+          <div className="space-y-2">
+            <Label className={`text-sm font-medium ${themeClasses.text}`}>
+              Visibility
+            </Label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setIsPublic(false)}
+                className={cn(
+                  "p-3 rounded-xl border text-center transition-all active:scale-95",
+                  !isPublic
+                    ? `neo-card ${themeClasses.borderActive} bg-gradient-to-br from-slate-500/20 to-cyan-500/10 shadow-lg shadow-cyan-500/10`
+                    : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`,
+                )}
+              >
+                <div className="flex flex-col items-center gap-1.5">
+                  <div
+                    className={cn(
+                      "w-9 h-9 rounded-full flex items-center justify-center",
+                      !isPublic ? "bg-cyan-500/20" : "bg-slate-700/50",
+                    )}
+                  >
+                    <Lock
+                      className={cn(
+                        "w-4 h-4",
+                        !isPublic ? "text-cyan-400" : "text-slate-400",
+                      )}
+                    />
+                  </div>
+                  <span
+                    className={cn(
+                      "font-semibold text-sm",
+                      !isPublic ? "text-cyan-400" : "text-slate-300",
+                    )}
+                  >
+                    Private
+                  </span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsPublic(true)}
+                className={cn(
+                  "p-3 rounded-xl border text-center transition-all active:scale-95",
+                  isPublic
+                    ? `neo-card ${themeClasses.borderActive} bg-gradient-to-br from-emerald-500/20 to-blue-500/10 shadow-lg shadow-emerald-500/10`
+                    : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`,
+                )}
+              >
+                <div className="flex flex-col items-center gap-1.5">
+                  <div
+                    className={cn(
+                      "w-9 h-9 rounded-full flex items-center justify-center",
+                      isPublic ? "bg-emerald-500/20" : "bg-slate-700/50",
+                    )}
+                  >
+                    <Users
+                      className={cn(
+                        "w-4 h-4",
+                        isPublic ? "text-emerald-400" : "text-slate-400",
+                      )}
+                    />
+                  </div>
+                  <span
+                    className={cn(
+                      "font-semibold text-sm",
+                      isPublic ? "text-emerald-400" : "text-slate-300",
+                    )}
+                  >
+                    Shared
                   </span>
                 </div>
               </button>

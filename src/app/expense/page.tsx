@@ -25,7 +25,28 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function ExpensePage() {
+function buildExpenseRedirectPath(
+  searchParams?: Record<string, string | string[] | undefined>,
+) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(searchParams ?? {})) {
+    if (Array.isArray(value)) {
+      value.forEach((entry) => params.append(key, entry));
+    } else if (value) {
+      params.set(key, value);
+    }
+  }
+
+  const query = params.toString();
+  return query ? `/expense?${query}` : "/expense";
+}
+
+export default async function ExpensePage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const supabase = await supabaseServerRSC();
   // getSession() reads from cookies — no network call, works on slow/offline connections.
   // getUser() makes a Supabase auth network call that hangs for 60 s on slow 3G.
@@ -34,7 +55,9 @@ export default async function ExpensePage() {
   } = await supabase.auth.getSession();
 
   if (!session?.user) {
-    redirect("/login");
+    const resolvedSearchParams = searchParams ? await searchParams : undefined;
+    const redirectPath = buildExpenseRedirectPath(resolvedSearchParams);
+    redirect(`/login?redirect=${encodeURIComponent(redirectPath)}`);
   }
 
   return <ExpenseClientWrapper />;

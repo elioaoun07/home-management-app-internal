@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAccounts, useMyAccounts } from "@/features/accounts/hooks";
+import { useAccounts } from "@/features/accounts/hooks";
 import { useCreateTransfer } from "@/features/transfers/hooks";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
@@ -74,7 +74,6 @@ export default function TransferDialog({
   onOpenChange,
 }: TransferDialogProps) {
   const themeClasses = useThemeClasses();
-  const { data: myAccounts = [] } = useMyAccounts();
   const { data: allAccounts = [] } = useAccounts();
   const { data: householdData } = useHouseholdMembers();
   const createTransfer = useCreateTransfer();
@@ -100,19 +99,17 @@ export default function TransferDialog({
   const partnerAccounts = allAccounts.filter(
     (a) => partner && a.user_id === partner.id,
   );
+  const accessibleAccounts = allAccounts.filter((a) => a.visible !== false);
 
   // Filter accounts for destination dropdown
   const availableDestinations =
     transferType === "household"
       ? partnerAccounts
-      : myAccounts.filter((a) => a.id !== fromAccountId);
+      : accessibleAccounts.filter((a) => a.id !== fromAccountId);
 
   // Get account details for display
-  const fromAccount = myAccounts.find((a) => a.id === fromAccountId);
-  const toAccount =
-    transferType === "household"
-      ? allAccounts.find((a) => a.id === toAccountId)
-      : myAccounts.find((a) => a.id === toAccountId);
+  const fromAccount = accessibleAccounts.find((a) => a.id === fromAccountId);
+  const toAccount = accessibleAccounts.find((a) => a.id === toAccountId);
 
   const parsedAmount = parseFloat(amount) || 0;
   const parsedReturned = parseFloat(returnedAmount) || 0;
@@ -235,7 +232,7 @@ export default function TransferDialog({
             </div>
           )}
 
-          {/* From Account (always current user's) */}
+          {/* From Account */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">From Account</Label>
             <Select value={fromAccountId} onValueChange={setFromAccountId}>
@@ -243,7 +240,7 @@ export default function TransferDialog({
                 <SelectValue placeholder="Select source account" />
               </SelectTrigger>
               <SelectContent>
-                {myAccounts.map((a) => (
+                {accessibleAccounts.map((a) => (
                   <SelectItem key={a.id} value={a.id}>
                     <div className="flex items-center gap-2">
                       <div
@@ -256,6 +253,11 @@ export default function TransferDialog({
                       <span className="text-xs text-muted-foreground ml-1">
                         ({a.type})
                       </span>
+                      {partner && a.user_id === partner.id && (
+                        <span className="text-xs text-emerald-400 ml-1">
+                          Shared
+                        </span>
+                      )}
                     </div>
                   </SelectItem>
                 ))}
@@ -317,6 +319,11 @@ export default function TransferDialog({
                       <span className="text-xs text-muted-foreground ml-1">
                         ({a.type})
                       </span>
+                      {partner && a.user_id === partner.id && (
+                        <span className="text-xs text-emerald-400 ml-1">
+                          Shared
+                        </span>
+                      )}
                     </div>
                   </SelectItem>
                 ))}

@@ -12,6 +12,7 @@ CREATE TABLE public.accounts (
   location_name text,
   position integer NOT NULL DEFAULT 0,
   visible boolean NOT NULL DEFAULT true,
+  is_public boolean NOT NULL DEFAULT false,
   CONSTRAINT accounts_pkey PRIMARY KEY (id),
   CONSTRAINT accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );

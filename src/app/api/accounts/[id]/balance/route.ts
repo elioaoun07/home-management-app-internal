@@ -1,3 +1,5 @@
+import { getAccessibleAccount } from "@/lib/accountAccess";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -16,26 +18,6 @@ const postBalanceSchema = z.object({
   restoreHistoryId: z.string().uuid().optional(),
 });
 
-// Helper to get partner user ID if linked
-async function getPartnerUserId(
-  supabase: any,
-  userId: string,
-): Promise<string | null> {
-  const { data: link } = await supabase
-    .from("household_links")
-    .select("owner_user_id, partner_user_id, active")
-    .or(`owner_user_id.eq.${userId},partner_user_id.eq.${userId}`)
-    .eq("active", true)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!link) return null;
-  return link.owner_user_id === userId
-    ? link.partner_user_id
-    : link.owner_user_id;
-}
-
 // GET /api/accounts/[id]/balance - Get balance for a specific account
 export async function GET(
   _req: NextRequest,
@@ -52,27 +34,16 @@ export async function GET(
 
   const { id: accountId } = await params;
 
-  // Get partner ID if linked
-  const partnerId = await getPartnerUserId(supabase, user.id);
-  const allowedUserIds = partnerId ? [user.id, partnerId] : [user.id];
-
-  // Verify account belongs to user OR partner AND get account type
-  const { data: account, error: accountError } = await supabase
-    .from("accounts")
-    .select("id, type, user_id")
-    .eq("id", accountId)
-    .in("user_id", allowedUserIds)
-    .single();
-
-  if (accountError || !account) {
+  const account = await getAccessibleAccount(supabase, user.id, accountId);
+  if (!account) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
 
-  // The account owner (could be current user or partner)
   const accountOwnerId = account.user_id;
+  const admin = supabaseAdmin();
 
   // Read balance directly from account_balances (source of truth, updated atomically by all write operations)
-  const { data: balanceRow, error: balanceError } = await supabase
+  const { data: balanceRow } = await admin
     .from("account_balances")
     .select("balance, balance_set_at, updated_at, created_at")
     .eq("account_id", accountId)
@@ -85,17 +56,12 @@ export async function GET(
 
   // Get pending draft transactions (always count all drafts)
   // Separate regular drafts from future payments (drafts with scheduled_date)
-  const { data: draftTransactions, error: draftError } = await supabase
+  const { data: draftTransactions } = await admin
     .from("transactions")
     .select("amount, scheduled_date")
     .eq("account_id", accountId)
-    .eq("user_id", accountOwnerId)
     .eq("is_draft", true)
     .is("deleted_at", null);
-
-  if (draftError) {
-    console.error("Error fetching draft transactions:", draftError);
-  }
 
   // Split into regular drafts and future payments
   const regularDrafts =
@@ -117,7 +83,7 @@ export async function GET(
   const currentBalance = storedBalance - allDraftsTotal;
 
   // Also fetch open debt count for display
-  const { data: openDebts } = await supabase
+  const { data: openDebts } = await admin
     .from("debts")
     .select("original_amount, returned_amount")
     .eq("user_id", accountOwnerId)
@@ -144,6 +110,7 @@ export async function GET(
     updated_at: updatedAt || new Date().toISOString(),
     _debug: {
       user_id: user.id,
+      account_owner_id: accountOwnerId,
       stored_balance: storedBalance,
       drafts_count: regularDrafts.length,
       drafts_total: totalDrafts,
@@ -185,20 +152,14 @@ export async function POST(
     restoreHistoryId,
   } = parsed.data;
 
-  // Verify account belongs to user and get type
-  const { data: account, error: accountError } = await supabase
-    .from("accounts")
-    .select("id, type")
-    .eq("id", accountId)
-    .eq("user_id", user.id)
-    .single();
-
-  if (accountError || !account) {
+  const account = await getAccessibleAccount(supabase, user.id, accountId);
+  if (!account?.canWrite) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
+  const admin = supabaseAdmin();
 
   // Get current stored balance + checkpoint date for history/undo tracking
-  const { data: currentRow } = await supabase
+  const { data: currentRow } = await admin
     .from("account_balances")
     .select("balance, balance_set_at")
     .eq("account_id", accountId)
@@ -216,12 +177,12 @@ export async function POST(
   const now = new Date().toISOString();
   const effectiveSetAt = balanceSetAt || now;
   const today = now.split("T")[0];
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from("account_balances")
     .upsert(
       {
         account_id: accountId,
-        user_id: user.id,
+        user_id: account.user_id,
         balance,
         balance_set_at: effectiveSetAt,
         updated_at: now,
@@ -234,7 +195,6 @@ export async function POST(
     .single();
 
   if (error) {
-    console.error("Error upserting balance:", error);
     if ((error as any).code === "23505") {
       return NextResponse.json(
         { error: "Balance record already exists for this account" },
@@ -248,16 +208,12 @@ export async function POST(
   // undone instead of logging a new one. Scoped to this account + user so a
   // forged id can't delete unrelated history.
   if (restoreHistoryId) {
-    const { error: deleteError } = await supabase
+    await admin
       .from("account_balance_history")
       .delete()
       .eq("id", restoreHistoryId)
       .eq("account_id", accountId)
       .eq("user_id", user.id);
-
-    if (deleteError) {
-      console.error("Error removing undone balance history:", deleteError);
-    }
 
     return NextResponse.json({
       ...data,
@@ -283,16 +239,11 @@ export async function POST(
     effective_date: today,
   };
 
-  const { data: historyData, error: historyError } = await supabase
+  const { data: historyData } = await admin
     .from("account_balance_history")
     .insert(historyEntry)
     .select("id")
     .single();
-
-  if (historyError) {
-    // Log but don't fail - history is supplementary
-    console.error("Error logging balance history:", historyError);
-  }
 
   return NextResponse.json({
     ...data,

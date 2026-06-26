@@ -980,6 +980,7 @@ export default function ReviewV2Dashboard({
             analyticsMonths={analytics?.months}
             transactions={transactions}
             accounts={accounts}
+            balanceAccounts={analytics?.accounts}
             currentUserId={currentUserId}
             hasPartner={analytics?.hasPartner}
           />

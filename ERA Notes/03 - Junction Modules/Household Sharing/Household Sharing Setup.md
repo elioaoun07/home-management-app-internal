@@ -16,8 +16,8 @@ This migration sets up Row Level Security (RLS) policies to enable household sha
 
 ## Features Enabled
 
-1. **Read-only access** to partner's accounts, categories, and transactions
-2. **Edit/Delete restrictions** - users can only modify their own data
+1. **Account-level sharing** - partner accounts stay private by default, but public accounts can be opened, used, and balanced by both active household users
+2. **Edit/Delete restrictions** - users can only modify their own rows except for authorized writes through public household accounts
 3. **Private transaction support** - hide sensitive transactions from partner
 4. **Dashboard visibility** - view partner's data for context without polluting add expense forms
 
@@ -100,9 +100,9 @@ AND tablename IN ('accounts', 'user_categories', 'transactions', 'household_link
 
 | Table               | Own Data  | Partner Data (Household Linked) |
 | ------------------- | --------- | ------------------------------- |
-| **accounts**        | Full CRUD | Read-only                       |
-| **user_categories** | Full CRUD | Read-only                       |
-| **transactions**    | Full CRUD | Read-only (excluding private)   |
+| **accounts**        | Full CRUD | Public visible accounts are readable/usable by partner |
+| **user_categories** | Full CRUD | Public-account categories are readable/usable by partner |
+| **transactions**    | Full CRUD | Public-account transactions are readable/creatable by partner (excluding private reads) |
 
 ## Frontend Implementation
 
@@ -134,4 +134,5 @@ DROP POLICY IF EXISTS "Users can view household partner transactions" ON public.
 - Policies only affect household-linked users (active=true in household_links)
 - Private transactions are automatically hidden from partner's view
 - Category/account names are fetched separately in the API to bypass RLS on JOINs
-- All edit/delete operations require user_id to match auth.uid()
+- Account ownership still requires `user_id = auth.uid()` for changing the account row itself, except the API owner can toggle `is_public`.
+- Public account collaboration is enforced in API routes through `src/lib/accountAccess.ts`; direct RLS still keeps account updates/deletes owner-only.

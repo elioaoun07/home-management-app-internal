@@ -24,6 +24,9 @@ tags:
 - Private transactions filtering
 - Active partner check via `household_links`
 - API routes must check `household_links` for partner data inclusion
+- `profiles` schema is minimal: `id`, `full_name`, `created_at`. Do not query
+  `profiles.display_name` or `profiles.email`; use `household_links.owner_email`
+  / `partner_email` as the email fallback.
 
 ## See Also
 

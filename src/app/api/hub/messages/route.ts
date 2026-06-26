@@ -5,6 +5,26 @@ import { sendPushToUser } from "@/lib/pushSender";
 
 export const dynamic = "force-dynamic";
 
+type HubMessageActionRow = Record<string, unknown>;
+
+type VerifiedMessageRow = {
+  sender_user_id: string;
+  hub_chat_threads:
+    | {
+        household_id: string;
+      }
+    | Array<{
+        household_id: string;
+      }>;
+};
+
+function getVerifiedMessageHouseholdId(message: VerifiedMessageRow) {
+  const thread = Array.isArray(message.hub_chat_threads)
+    ? message.hub_chat_threads[0]
+    : message.hub_chat_threads;
+
+  return thread?.household_id ?? null;
+}
 
 // GET - Fetch chat messages for a specific thread
 export async function GET(request: NextRequest) {
@@ -247,7 +267,7 @@ export async function GET(request: NextRequest) {
     .map((m) => m.id);
 
   // Get my receipts for these messages
-  let myReceipts: Record<string, string> = {};
+  const myReceipts: Record<string, string> = {};
   if (otherUserMessageIds.length > 0) {
     const { data: receipts } = await supabase
       .from("hub_message_receipts")
@@ -323,7 +343,7 @@ export async function GET(request: NextRequest) {
     .filter((msg) => msg.sender_user_id === user.id)
     .map((msg) => msg.id);
 
-  let receiptStatuses: Record<string, string> = {};
+  const receiptStatuses: Record<string, string> = {};
 
   if (myMessageIds.length > 0 && partnerUserId) {
     // Get partner's receipts for my messages
@@ -340,7 +360,7 @@ export async function GET(request: NextRequest) {
 
   // OPTIMIZED: Fetch message actions inline to avoid separate API call
   const allMessageIds = visibleMessages.map((msg) => msg.id);
-  let messageActions: any[] = [];
+  let messageActions: HubMessageActionRow[] = [];
   if (allMessageIds.length > 0) {
     const { data: actions } = await supabase
       .from("hub_message_actions")
@@ -557,45 +577,43 @@ export async function POST(request: NextRequest) {
       // Get sender's display name
       const { data: senderProfile } = await supabase
         .from("profiles")
-        .select("display_name, email")
+        .select("full_name")
         .eq("id", user.id)
         .maybeSingle();
 
       const senderName =
-        senderProfile?.display_name ||
-        senderProfile?.email?.split("@")[0] ||
-        "Partner";
+        senderProfile?.full_name || user.email?.split("@")[0] || "Partner";
 
       const payload = JSON.stringify({
-          title: thread?.title || "New Message",
-          body: `${senderName}: ${content.trim().substring(0, 100)}${content.length > 100 ? "..." : ""}`,
-          icon: "/appicon-192.png",
-          badge: "/appicon-192.png",
-          tag: `chat-${thread_id}`,
-          data: {
-            type: "chat_message",
-            thread_id,
-            message_id: message.id,
-            url: `/chat?thread=${thread_id}`,
-          },
-        });
+        title: thread?.title || "New Message",
+        body: `${senderName}: ${content.trim().substring(0, 100)}${content.length > 100 ? "..." : ""}`,
+        icon: "/appicon-192.png",
+        badge: "/appicon-192.png",
+        tag: `chat-${thread_id}`,
+        data: {
+          type: "chat_message",
+          thread_id,
+          message_id: message.id,
+          url: `/chat?thread=${thread_id}`,
+        },
+      });
 
-        const pushResult = await sendPushToUser(supabase, partnerUserId, payload);
+      const pushResult = await sendPushToUser(supabase, partnerUserId, payload);
 
-        // Update receipt push status
-        if (receiptId) {
-          await supabase
-            .from("hub_message_receipts")
-            .update({
-              push_status: pushResult.sent > 0 ? "sent" : "failed",
-              push_sent_at: new Date().toISOString(),
-              push_error:
-                pushResult.sent > 0
-                  ? null
-                  : "No active subscriptions or delivery failed",
-            })
-            .eq("id", receiptId);
-        }
+      // Update receipt push status
+      if (receiptId) {
+        await supabase
+          .from("hub_message_receipts")
+          .update({
+            push_status: pushResult.sent > 0 ? "sent" : "failed",
+            push_sent_at: new Date().toISOString(),
+            push_error:
+              pushResult.sent > 0
+                ? null
+                : "No active subscriptions or delivery failed",
+          })
+          .eq("id", receiptId);
+      }
     } catch (pushError) {
       console.error("[Chat] Error sending push notification:", pushError);
       // Update receipt with error
@@ -1066,7 +1084,9 @@ export async function PATCH(request: NextRequest) {
 
           // Broadcast assignment update for realtime sync
           if (assignMsg?.thread_id) {
-            const assignChannel = supabase.channel(`thread-${assignMsg.thread_id}`);
+            const assignChannel = supabase.channel(
+              `thread-${assignMsg.thread_id}`,
+            );
             await assignChannel.subscribe();
             await assignChannel.send({
               type: "broadcast",
@@ -1123,11 +1143,18 @@ export async function PATCH(request: NextRequest) {
           }
           // Batch update sort orders
           await Promise.all(
-            itemOrders.map(({ id, item_sort_order }: { id: string; item_sort_order: number }) =>
-              supabase
-                .from("hub_messages")
-                .update({ item_sort_order })
-                .eq("id", id),
+            itemOrders.map(
+              ({
+                id,
+                item_sort_order,
+              }: {
+                id: string;
+                item_sort_order: number;
+              }) =>
+                supabase
+                  .from("hub_messages")
+                  .update({ item_sort_order })
+                  .eq("id", id),
             ),
           );
           return NextResponse.json({ success: true });
@@ -1266,8 +1293,13 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Check household membership
+    const verifiedMessages = messages as unknown as VerifiedMessageRow[];
     const householdIds = [
-      ...new Set(messages.map((m: any) => m.hub_chat_threads.household_id)),
+      ...new Set(
+        verifiedMessages
+          .map(getVerifiedMessageHouseholdId)
+          .filter((id): id is string => Boolean(id)),
+      ),
     ];
 
     for (const householdId of householdIds) {
@@ -1287,8 +1319,8 @@ export async function PATCH(request: NextRequest) {
     // Handle undo action
     if (action === "undo") {
       // Only allow users to undo their own deletions
-      const unauthorizedMessages = messages.filter(
-        (m: any) => m.sender_user_id !== user.id,
+      const unauthorizedMessages = verifiedMessages.filter(
+        (m) => m.sender_user_id !== user.id,
       );
 
       if (unauthorizedMessages.length > 0) {
@@ -1391,7 +1423,7 @@ export async function PATCH(request: NextRequest) {
       success: true,
       hiddenCount: messageIds.length,
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
