@@ -40,9 +40,15 @@ const WebViewContainer = dynamic(
 );
 
 const WALLET_TRANSFER_SHORTCUTS = new Set([
+  // Legacy slugs (backward compat for existing NFC tags)
   "salary-wallet",
   "salary-to-wallet",
   "wallet-refill",
+  // New single-URL template slugs
+  "salary-deposit",
+  "refill-wallet",
+  "savings",
+  "transfer", // generic — opens modal with template picker
 ]);
 
 export default function TabContainer() {
@@ -110,6 +116,7 @@ export default function TabContainer() {
       key={shortcutKey}
       open={transferPromptOpen}
       onOpenChange={handleTransferPromptOpenChange}
+      templateId={shortcutValue ?? undefined}
       fromAccountName={fromAccountName}
       toAccountName={toAccountName}
       initialAmount={initialAmount}

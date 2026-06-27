@@ -61,7 +61,9 @@ checkpoint (done), then the quick `analytics/debug` hygiene fix.
 
 **Just shipped - Wallet refill shortcut.** `/expense?transfer=salary-wallet`
 opens the mobile expense form with a focused amount prompt and resolves
-Salary/Wallet account IDs from the tapping user's own accounts.
+Salary/Wallet account IDs from the tapping user's own accounts. Follow-up
+2026-06-27: the NFC prompt remains own-account scoped even though the general
+transfer dialog supports shared household accounts.
 
 **Just shipped - Public/shared accounts.** Accounts are private by default, but
 owners can mark visible accounts public so the active household partner can open

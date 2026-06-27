@@ -78,28 +78,58 @@ psql "YOUR_CONNECTION_STRING" -f migrations/add_transfers.sql
    - **Description**: Optional note
    - **Date**: When the transfer occurred
 
-### 2b. NFC / URL Wallet Refill Shortcut
+### 2b. NFC / URL Transfer Shortcut
 
 Implemented 2026-06-25: `/expense?transfer=salary-wallet` opens the mobile
-expense entry form and immediately shows a small transfer prompt for funding
-Wallet from Salary.
+expense entry form and immediately shows a small transfer prompt.
 
-- The URL does **not** store account UUIDs.
+Optimized 2026-06-27: the prompt now supports **single-URL template slugs** and
+**quick-template toggle chips** inside the modal, so a single NFC tag URL covers
+all common transfer patterns without requiring `from` / `to` params.
+
+#### New single-URL template slugs
+
+| URL | Template pre-selected | From | To |
+|-----|-----------------------|------|----|
+| `/expense?transfer=salary-deposit` | Salary Deposit | Salary | Drawer |
+| `/expense?transfer=refill-wallet` | Refill Wallet | Drawer | Wallet |
+| `/expense?transfer=savings` | Savings | *(user picks)* | Wallet |
+| `/expense?transfer=transfer` | *(none — picker shown)* | *(user picks)* | *(user picks)* |
+
+The slug alone determines the preset. No `from` / `to` params are needed.
+
+#### In-modal template chips
+
+Three quick-toggle chips appear at the top of every transfer prompt:
+**Salary Deposit · Refill Wallet · Savings**
+
+Tapping a chip pre-fills the accounts for that template. The user can still
+override the accounts via the selects. The Savings chip leaves the From account
+open for the user to specify.
+
+#### Legacy slugs (backward compat)
+
+The old slugs (`salary-wallet`, `salary-to-wallet`, `wallet-refill`) continue to
+work unchanged. They rely on explicit `from` / `to` URL params (or the Salary /
+Wallet name-match defaults) and do not pre-select a template chip.
+
+#### General behaviour
+
 - The prompt fetches the signed-in user's own visible accounts through
   `useMyAccounts()`.
-- It resolves `Salary` and `Wallet` by case-insensitive account name (exact
-  match first, then contains-match fallback), so the same URL works for whichever
-  household user taps the NFC link.
-- If either default account name cannot be resolved, the prompt stays usable and
-  lets the user pick source/destination accounts manually.
-- Optional query params: `from`, `to`, and `amount`, e.g.
-  `/expense?transfer=salary-wallet&from=Salary&to=Wallet&amount=400`.
+- Account resolution: UUID first, then case-insensitive exact name, then
+  contains-match fallback — so name-based URLs work across household users.
+- If a template's fixed account can't be matched, an amber warning is shown and
+  the selects remain open for manual pick.
+- Optional `amount` param still works for all slugs, e.g.
+  `/expense?transfer=salary-deposit&amount=400`.
 - `/expense` preserves the full shortcut query through login via
   `/login?redirect=...`, so unauthenticated taps return to the prompt after
   sign-in.
-- Follow-up 2026-06-26: the prompt is mounted from the expense tab shell
-  (`TabContainer`) instead of the page child, because the shell owns the live
-  mobile expense form and does not render route children in normal mode.
+- The prompt is intentionally **own-account only** — uses `useMyAccounts()` so
+  tapping the same NFC URL never presets the partner's Salary or Wallet.
+- UUID `from` / `to` URL params still work on legacy slugs and visibly preselect
+  the matching accounts in the selects.
 
 ### 2c. Shared Household Accounts
 
@@ -110,6 +140,9 @@ Implemented 2026-06-26: accounts can be private or public.
 - Both household users can open a public account, adjust its balance, add/deduct transactions against it, and transfer to or from it.
 - The account row remains owned by the creator (`accounts.user_id`); partner writes are authorized through `src/lib/accountAccess.ts` and balance rows continue to belong to the account owner.
 - Partner access does not make private transactions visible. Partner reads still filter out transactions where `transactions.is_private=true`.
+- Exception: `/expense?transfer=salary-wallet` stays own-account scoped even in a
+  household, because a physical NFC tap should fund the logged-in user's Wallet
+  from the logged-in user's Salary.
 
 ### 3. Viewing Transfers
 
@@ -230,6 +263,6 @@ This maintains accurate reconciliation against your physical wallet.
 ## Future Enhancements
 
 - [ ] Transfers history view in the UI
-- [ ] Quick transfer templates (e.g., "Monthly Savings")
+- [x] Quick transfer templates (e.g., "Monthly Savings") *(IMPLEMENTED 2026-06-27)*
 - [ ] Recurring transfers (auto-transfer on payday)
 - [ ] Transfer insights (how much moved between accounts over time)
