@@ -89,6 +89,7 @@ tags:
 | `feature-analytics`        | `src/features/analytics/`        | [[feature-analytics]]        |
 | `feature-balance`          | `src/features/balance/`          | [[feature-balance]]          |
 | `feature-budget`           | `src/features/budget/`           | [[feature-budget]]           |
+| `feature-budget-ai`        | `src/components/ai/`             | [[feature-budget-ai]]        |
 | `feature-catalogue`        | `src/features/catalogue/`        | [[feature-catalogue]]        |
 | `feature-categories`       | `src/features/categories/`       | [[feature-categories]]       |
 | `feature-debts`            | `src/features/debts/`            | [[feature-debts]]            |

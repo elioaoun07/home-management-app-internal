@@ -141,7 +141,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       // for all clients on next load. Bumped to v3 (2026-06-26): the public-accounts
       // work changed which accounts the dashboard sees (household vs is_public), so
       // the persisted partner-less `accounts` list must be invalidated.
-      buster: "hm-v3",
+      // Bumped to v4 (2026-06-27): accounts API now returns balance_set_at (joined
+      // from account_balances) — old cached Account objects lack this field.
+      buster: "hm-v4",
       dehydrateOptions: {
         shouldDehydrateQuery: (q: {
           state: { status: string };

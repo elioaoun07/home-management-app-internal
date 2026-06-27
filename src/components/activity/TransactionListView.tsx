@@ -17,7 +17,7 @@ import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format, isToday, isTomorrow, isYesterday, parseISO } from "date-fns";
-import { Mail, Tag } from "lucide-react";
+import { EyeOff, Mail, Tag } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import SwipeableItem from "./SwipeableItem";
@@ -363,6 +363,12 @@ export default function TransactionListView({
               </div>
             </div>
             <div className="text-right flex items-center gap-2">
+              {tx.is_masked && (
+                <EyeOff
+                  className="w-3.5 h-3.5 text-slate-500 shrink-0"
+                  aria-label="Private — only your partner can see this amount"
+                />
+              )}
               {tx._isPending && (
                 <svg
                   className="w-4 h-4 text-amber-400 animate-spin"
@@ -384,7 +390,7 @@ export default function TransactionListView({
                   />
                 </svg>
               )}
-              <BlurredAmount blurIntensity="sm">
+              <BlurredAmount blurIntensity="sm" forceBlur={tx.is_masked}>
                 <p className="text-lg font-bold bg-gradient-to-br from-emerald-400 via-emerald-300 to-teal-400 bg-clip-text text-transparent">
                   ${tx.amount.toFixed(2)}
                 </p>

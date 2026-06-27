@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useMyAccounts } from "@/features/accounts/hooks";
+import { useAccounts } from "@/features/accounts/hooks";
 import { useCreateTransfer } from "@/features/transfers/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
@@ -68,7 +68,7 @@ export default function NfcWalletTransferPrompt({
   initialAmount,
 }: NfcWalletTransferPromptProps) {
   const themeClasses = useThemeClasses();
-  const { data: accounts = [], isLoading: accountsLoading } = useMyAccounts();
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
   const createTransfer = useCreateTransfer();
 
   const [fromAccountId, setFromAccountId] = useState("");

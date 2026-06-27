@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useAccounts, useHouseholdAccounts } from "@/features/accounts/hooks";
 import { useCreateTransfer } from "@/features/transfers/hooks";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
@@ -75,6 +75,7 @@ export default function TransferDialog({
 }: TransferDialogProps) {
   const themeClasses = useThemeClasses();
   const { data: allAccounts = [] } = useAccounts();
+  const { data: allHouseholdAccounts = [] } = useHouseholdAccounts();
   const { data: householdData } = useHouseholdMembers();
   const createTransfer = useCreateTransfer();
 
@@ -95,11 +96,12 @@ export default function TransferDialog({
   const hasPartner = householdData?.hasPartner ?? false;
   const partner = householdData?.members.find((m) => !m.isCurrentUser);
 
-  // Partner's accounts (for household transfer destination)
-  const partnerAccounts = allAccounts.filter(
-    (a) => partner && a.user_id === partner.id,
-  );
+  // Own + partner public accounts (for the "From" dropdown)
   const accessibleAccounts = allAccounts.filter((a) => a.visible !== false);
+  // ALL partner accounts regardless of is_public (for household transfer destination)
+  const partnerAccounts = allHouseholdAccounts.filter(
+    (a) => partner && a.user_id === partner.id && a.visible !== false,
+  );
 
   // Filter accounts for destination dropdown
   const availableDestinations =
@@ -107,9 +109,13 @@ export default function TransferDialog({
       ? partnerAccounts
       : accessibleAccounts.filter((a) => a.id !== fromAccountId);
 
-  // Get account details for display
-  const fromAccount = accessibleAccounts.find((a) => a.id === fromAccountId);
-  const toAccount = accessibleAccounts.find((a) => a.id === toAccountId);
+  // Get account details for display (search all household accounts so partner picks resolve)
+  const allVisible = [
+    ...accessibleAccounts,
+    ...partnerAccounts.filter((a) => !accessibleAccounts.some((b) => b.id === a.id)),
+  ];
+  const fromAccount = allVisible.find((a) => a.id === fromAccountId);
+  const toAccount = allVisible.find((a) => a.id === toAccountId);
 
   const parsedAmount = parseFloat(amount) || 0;
   const parsedReturned = parseFloat(returnedAmount) || 0;

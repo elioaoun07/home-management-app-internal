@@ -6,7 +6,14 @@ import type { TransactionOutlier } from "@/lib/utils/anomalyDetection";
 import type { TransactionWithAccount } from "@/lib/utils/incomeExpense";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { ArrowDownRight, ArrowUpRight, Minus, Sparkles, X } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  EyeOff,
+  Minus,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import { useMemo } from "react";
 
@@ -213,12 +220,16 @@ function TxRow({
   amount,
   color,
   isOutlier,
+  masked = false,
 }: {
   desc: string;
   date: string;
   amount: number;
   color: string;
   isOutlier: boolean;
+  /** Partner's private transaction — amount permanently blurred (eye toggle
+   *  can't reveal it); only the owner sees it. */
+  masked?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between gap-2 py-1 text-xs">
@@ -228,6 +239,12 @@ function TxRow({
           style={{ background: color }}
         />
         <span className="text-white/70 truncate">{desc}</span>
+        {masked && (
+          <EyeOff
+            className="w-3 h-3 text-slate-500 flex-shrink-0"
+            aria-label="Private — only your partner can see this amount"
+          />
+        )}
         {isOutlier && (
           <span className="text-[8px] px-1 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-medium flex-shrink-0">
             outlier
@@ -238,7 +255,7 @@ function TxRow({
         <span className="text-[10px] text-white/30 tabular-nums">
           {format(new Date(`${date}T00:00:00`), "MMM d")}
         </span>
-        <BlurredAmount blurIntensity="sm">
+        <BlurredAmount blurIntensity="sm" forceBlur={masked}>
           <span className="text-white/85 tabular-nums font-medium">
             {fmtFull(amount)}
           </span>
@@ -617,6 +634,7 @@ export default function InsightFocusPanel({
                   amount={Math.abs(t.amount)}
                   color={color}
                   isOutlier={outlierIds.has(t.id)}
+                  masked={(t as { is_masked?: boolean }).is_masked}
                 />
               ))}
             </div>
@@ -686,6 +704,7 @@ export default function InsightFocusPanel({
                   amount={Math.abs(t.amount)}
                   color={color}
                   isOutlier={outlierIds.has(t.id)}
+                  masked={(t as { is_masked?: boolean }).is_masked}
                 />
               ))}
             </div>

@@ -7,8 +7,29 @@ import type {
 } from "@/types/budgetAllocation";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
+
+// Query params. `start`/`end` (YYYY-MM-DD) define the custom-month billing
+// window the dashboard uses; when present they take precedence over the
+// calendar month derived from `month`, so the budget "Spent" figure lines up
+// exactly with the dashboard's spending total.
+const budgetQuerySchema = z.object({
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional(),
+  accountId: z.string().optional(),
+  start: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  end: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+});
 
 const emptySummary: BudgetSummary = {
   total_budget: 0,
@@ -47,8 +68,22 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const month = searchParams.get("month"); // YYYY-MM format
-    const accountId = searchParams.get("accountId");
+    const parsedQuery = budgetQuerySchema.safeParse({
+      month: searchParams.get("month") ?? undefined,
+      accountId: searchParams.get("accountId") ?? undefined,
+      start: searchParams.get("start") ?? undefined,
+      end: searchParams.get("end") ?? undefined,
+    });
+    const month = parsedQuery.success ? (parsedQuery.data.month ?? null) : null; // YYYY-MM format
+    const accountId = parsedQuery.success
+      ? (parsedQuery.data.accountId ?? null)
+      : null;
+    const startParam = parsedQuery.success
+      ? (parsedQuery.data.start ?? null)
+      : null;
+    const endParam = parsedQuery.success
+      ? (parsedQuery.data.end ?? null)
+      : null;
 
     // Get household link to check for partner
     const { data: householdLink } = await supabase
@@ -66,11 +101,15 @@ export async function GET(req: NextRequest) {
 
     const userIds = partnerId ? [user.id, partnerId] : [user.id];
 
-    // Fetch ALL accounts for users
+    // Fetch household accounts for users — exclude hidden (visible=false) to
+    // match the dashboard's account scope (useHouseholdAccounts /
+    // /api/accounts?household=true), so the budget "Spent" total reconciles
+    // with the Review dashboard instead of counting spend on hidden accounts.
     const { data: accounts } = await supabase
       .from("accounts")
       .select("id, name, type, user_id")
-      .in("user_id", userIds);
+      .in("user_id", userIds)
+      .neq("visible", false);
 
     if (!accounts || accounts.length === 0) {
       return NextResponse.json({
@@ -194,35 +233,65 @@ export async function GET(req: NextRequest) {
     const rootCategories = (allCategories || []).filter((c) => !c.parent_id);
     const subcategories = (allCategories || []).filter((c) => c.parent_id);
 
-    // --- Fetch transactions for spending ---
-    const startDate = month
-      ? `${month}-01`
-      : new Date().toISOString().slice(0, 8) + "01";
-    const endDate = month
-      ? new Date(parseInt(month.slice(0, 4)), parseInt(month.slice(5, 7)), 0)
-          .toISOString()
-          .slice(0, 10)
-      : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)
-          .toISOString()
-          .slice(0, 10);
+    // --- Spending window ---
+    // Prefer the explicit [start, end] custom-month window passed by the client
+    // (the dashboard's billing cycle). Fall back to the calendar month derived
+    // from `month`, then to the current calendar month.
+    const startDate =
+      startParam ??
+      (month ? `${month}-01` : new Date().toISOString().slice(0, 8) + "01");
+    const endDate =
+      endParam ??
+      (month
+        ? new Date(parseInt(month.slice(0, 4)), parseInt(month.slice(5, 7)), 0)
+            .toISOString()
+            .slice(0, 10)
+        : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)
+            .toISOString()
+            .slice(0, 10));
 
     const { data: transactions } = await supabase
       .from("transactions")
-      .select("amount, category_id, subcategory_id, user_id, account_id")
+      .select(
+        "amount, category_id, subcategory_id, user_id, account_id, is_private, is_debt_return",
+      )
       .in("account_id", expenseAccountIds)
+      .eq("is_draft", false)
+      .is("deleted_at", null)
+      .is("parent_transaction_id", null)
       .gte("date", startDate)
       .lte("date", endDate);
 
     const spendingById: Record<string, { user: number; partner: number }> = {};
+    // Canonical spend totals — computed independent of category mapping so they
+    // include uncategorized spend and spend in hidden categories, exactly like
+    // the dashboard. Per-category cards still use spendingById below.
+    let totalSpentUser = 0;
+    let totalSpentPartner = 0;
 
     (transactions || []).forEach((tx) => {
+      // Canonical spending rule (mirrors getSpendingTransactions on the client):
+      //  - exclude debt-return rows (repayments coming back, not spend)
+      //  - absolute, full amount
+      if (tx.is_debt_return) return;
+      const isMine = tx.user_id === user.id;
+      const isPartner = tx.user_id === partnerId;
+      if (!isMine && !isPartner) return;
+
+      const amount = Math.abs(Number(tx.amount) || 0);
+      // The total includes the partner's private spend so the headline "Spent"
+      // reconciles with the dashboard. The per-category attribution below skips
+      // it so the partner's category is never revealed.
+      if (isMine) totalSpentUser += amount;
+      else totalSpentPartner += amount;
+
+      if (isPartner && tx.is_private) return;
+
       const catId = tx.subcategory_id || tx.category_id;
       if (!catId) return;
-
       if (!spendingById[catId]) spendingById[catId] = { user: 0, partner: 0 };
-      if (tx.user_id === user.id) spendingById[catId].user += tx.amount;
-      else if (tx.user_id === partnerId)
-        spendingById[catId].partner += tx.amount;
+      if (isMine) spendingById[catId].user += amount;
+      else spendingById[catId].partner += amount;
     });
 
     // --- Merge categories by slug across accounts (slug is the canonical cross-user key) ---
@@ -414,19 +483,21 @@ export async function GET(req: NextRequest) {
       (sum, c) => sum + c.total_budget,
       0,
     );
-    const totalSpent = categoryViews.reduce((sum, c) => sum + c.total_spent, 0);
+    // Window-wide canonical spend totals (include uncategorized + hidden-category
+    // spend) so the "Spent" figures reconcile with the dashboard to the penny.
+    const totalSpent = totalSpentUser + totalSpentPartner;
 
     const summary: BudgetSummary = {
       total_budget: totalBudget,
       total_spent: totalSpent,
       total_remaining: totalBudget - totalSpent,
       user_budget: categoryViews.reduce((sum, c) => sum + c.user_budget, 0),
-      user_spent: categoryViews.reduce((sum, c) => sum + c.user_spent, 0),
+      user_spent: totalSpentUser,
       partner_budget: categoryViews.reduce(
         (sum, c) => sum + c.partner_budget,
         0,
       ),
-      partner_spent: categoryViews.reduce((sum, c) => sum + c.partner_spent, 0),
+      partner_spent: totalSpentPartner,
       shared_budget: categoryViews.reduce((sum, c) => sum + c.shared_budget, 0),
       income_balance: totalIncomeBalance,
       user_income_balance: userIncomeBalance,
@@ -546,6 +617,65 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Already exists" }, { status: 409 });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // --- Household-global consolidation ---
+  // Categories are duplicated per expense account (same slug, different id), so
+  // a budget envelope is global per slug — independent of which account/card or
+  // who pays. The GET path SUMS allocations across those sibling category ids,
+  // which would double-count if the same slug carried a budget on more than one
+  // account. After writing the canonical allocation we zero out any sibling
+  // per-account allocations for the SAME slug so the global number stays the
+  // single source of truth. Non-destructive (rows are kept at 0) and best-effort.
+  try {
+    // The id whose slug defines the envelope: subcategory when present, else category.
+    const targetId = subcategory_id || category_id;
+    const { data: targetCat } = await supabase
+      .from("user_categories")
+      .select("slug, name, parent_id")
+      .eq("id", targetId)
+      .maybeSingle();
+
+    const slug = targetCat?.slug || targetCat?.name;
+    if (slug) {
+      const isSub = !!subcategory_id;
+      const { data: siblings } = await supabase
+        .from("user_categories")
+        .select("id, parent_id")
+        .eq("user_id", user.id)
+        .eq("slug", slug);
+
+      const siblingIds = (siblings || [])
+        .filter((c) => c.id !== targetId)
+        // parent budget → only sibling root categories; sub budget → only sibling subs
+        .filter((c) => (isSub ? c.parent_id !== null : c.parent_id === null))
+        .map((c) => c.id);
+
+      if (siblingIds.length > 0) {
+        let zeroQuery = supabase
+          .from("budget_allocations")
+          .update({ monthly_budget: 0, updated_at: new Date().toISOString() })
+          .eq("user_id", user.id)
+          .eq("assigned_to", assigned_to)
+          .gt("monthly_budget", 0);
+
+        if (subcategory_id) {
+          zeroQuery = zeroQuery.in("subcategory_id", siblingIds);
+        } else {
+          zeroQuery = zeroQuery
+            .in("category_id", siblingIds)
+            .is("subcategory_id", null);
+        }
+
+        zeroQuery = budget_month
+          ? zeroQuery.eq("budget_month", budget_month)
+          : zeroQuery.is("budget_month", null);
+
+        await zeroQuery;
+      }
+    }
+  } catch {
+    // Consolidation is best-effort — the canonical write already succeeded.
   }
 
   return NextResponse.json(data);

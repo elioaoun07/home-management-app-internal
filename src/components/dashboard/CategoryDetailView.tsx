@@ -17,7 +17,14 @@ import {
   type OwnershipFilter,
 } from "@/lib/utils/splitBill";
 import { format } from "date-fns";
-import { ChevronDown, ChevronRight, Heart, User, Users } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  EyeOff,
+  Heart,
+  User,
+  Users,
+} from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 type Transaction = {
@@ -33,6 +40,9 @@ type Transaction = {
   category_color?: string;
   subcategory_color?: string;
   is_owner?: boolean;
+  /** Partner's private transaction: amount is permanently blurred (the eye
+   *  toggle can't reveal it) and its details are withheld server-side. */
+  is_masked?: boolean;
   // Split bill fields
   is_collaborator?: boolean;
   split_requested?: boolean;
@@ -650,13 +660,22 @@ export default function CategoryDetailView({
                               )}
                             </div>
                             <div className="flex items-center gap-2">
+                              {tx.is_masked && (
+                                <EyeOff
+                                  className="w-3.5 h-3.5 text-slate-500 shrink-0"
+                                  aria-label="Private — only your partner can see this amount"
+                                />
+                              )}
                               <p
                                 className={cn(
                                   "text-base font-bold ml-3",
                                   themeClasses.text,
                                 )}
                               >
-                                <BlurredAmount blurIntensity="sm">
+                                <BlurredAmount
+                                  blurIntensity="sm"
+                                  forceBlur={tx.is_masked}
+                                >
                                   ${displayAmount.toFixed(2)}
                                 </BlurredAmount>
                               </p>

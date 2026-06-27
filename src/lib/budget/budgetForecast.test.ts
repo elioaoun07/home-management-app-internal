@@ -1,3 +1,4 @@
+import type { AiCategorySuggestion } from "@/types/budgetAllocation";
 import { describe, expect, it } from "vitest";
 import {
   aggregateCleanMonthlyByCategory,
@@ -7,7 +8,6 @@ import {
   type ForecastCategory,
   type ForecastTransaction,
 } from "./budgetForecast";
-import type { AiCategorySuggestion } from "@/types/budgetAllocation";
 
 /** Established "Groceries" history: ~$50/mo over 4 months, plus one $2000 spike. */
 function groceriesHistory(): ForecastTransaction[] {
@@ -74,8 +74,20 @@ describe("buildStatisticalSuggestion", () => {
 
   it("distributes a category budget across subcategories by spend share", () => {
     const txs: ForecastTransaction[] = [
-      { id: "a", amount: 80, category: "Produce", description: "x", date: "2026-01-01" },
-      { id: "b", amount: 20, category: "Snacks", description: "y", date: "2026-01-02" },
+      {
+        id: "a",
+        amount: 80,
+        category: "Produce",
+        description: "x",
+        date: "2026-01-01",
+      },
+      {
+        id: "b",
+        amount: 20,
+        category: "Snacks",
+        description: "y",
+        date: "2026-01-02",
+      },
     ];
     const cats: ForecastCategory[] = [
       {
@@ -106,7 +118,12 @@ describe("computeCategoryBaselines", () => {
 describe("softClampSuggestions", () => {
   it("caps an inflated AI value at factor x baseline", () => {
     const sugg: AiCategorySuggestion[] = [
-      { category_id: "cat-g", category_name: "Groceries", suggested_budget: 500, reasoning: "" },
+      {
+        category_id: "cat-g",
+        category_name: "Groceries",
+        suggested_budget: 500,
+        reasoning: "",
+      },
     ];
     const clamped = softClampSuggestions(sugg, { "cat-g": 50 }, 2.5);
     expect(clamped[0].suggested_budget).toBeCloseTo(125, 1);
@@ -114,7 +131,12 @@ describe("softClampSuggestions", () => {
 
   it("leaves novel categories (no baseline) untouched", () => {
     const sugg: AiCategorySuggestion[] = [
-      { category_id: "cat-novel", category_name: "Gym", suggested_budget: 300, reasoning: "" },
+      {
+        category_id: "cat-novel",
+        category_name: "Gym",
+        suggested_budget: 300,
+        reasoning: "",
+      },
     ];
     const clamped = softClampSuggestions(sugg, { "cat-novel": 0 }, 2.5);
     expect(clamped[0].suggested_budget).toBe(300);
@@ -128,7 +150,12 @@ describe("softClampSuggestions", () => {
         suggested_budget: 500,
         reasoning: "",
         subcategories: [
-          { subcategory_id: "s1", subcategory_name: "Produce", percentage: 100, suggested_amount: 500 },
+          {
+            subcategory_id: "s1",
+            subcategory_name: "Produce",
+            percentage: 100,
+            suggested_amount: 500,
+          },
         ],
       },
     ];

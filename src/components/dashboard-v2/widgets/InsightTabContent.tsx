@@ -3,16 +3,22 @@
 import WidgetCard from "@/components/dashboard-v2/WidgetCard";
 import InsightFocusPanel from "@/components/dashboard-v2/widgets/InsightFocusPanel";
 import BlurredAmount from "@/components/ui/BlurredAmount";
+import { usePrivacyBlur } from "@/contexts/PrivacyBlurContext";
 import type { MonthlyAnalytics } from "@/features/analytics/useAnalytics";
+import { cn } from "@/lib/utils";
 import {
   detectTransactionOutliers,
   type RecurringHint,
   type TransactionOutlier,
 } from "@/lib/utils/anomalyDetection";
-import type { TransactionWithAccount } from "@/lib/utils/incomeExpense";
-import { usePrivacyBlur } from "@/contexts/PrivacyBlurContext";
-import { cn } from "@/lib/utils";
+import {
+  getIncomeTransactions,
+  getSpendingTransactions,
+  spendAmount,
+  type TransactionWithAccount,
+} from "@/lib/utils/incomeExpense";
 import type { BudgetSummary } from "@/types/budgetAllocation";
+import type { Account } from "@/types/domain";
 import { format, subMonths } from "date-fns";
 import { ChevronDown, Eye, EyeOff } from "lucide-react";
 import { Fragment, useId, useMemo, useState } from "react";
@@ -60,13 +66,17 @@ const MAX_STACK_CATEGORIES = 10;
 type Props = {
   /** Expense transactions, already debt-filtered, with category + category_color */
   expenseTransactions: TransactionWithAccount[];
-  /** Analytics months (oldest → newest) for income/expense per month */
+  /** All transactions for the period (every account type) — drives the cash-flow pie */
+  allTransactions: TransactionWithAccount[];
+  /** Household accounts — used to classify transactions by type for the pie */
+  accounts: Account[] | undefined;
+  /** Analytics months (oldest → newest) — feeds the focus drill-down panel */
   analyticsMonths: MonthlyAnalytics[] | undefined;
   /** Current-month budget summary from useBudgetAllocations */
   budgetSummary: BudgetSummary | undefined;
   /** Registered recurring payments — exempted from outlier flagging */
   recurringHints?: RecurringHint[];
-  /** Active global date range (header filter) — drives the income/expense pie */
+  /** Active global date range (header filter) — scopes the cash-flow pie */
   startDate: string;
   endDate: string;
 };
@@ -226,7 +236,15 @@ function OutlinedBar({
         ry={r}
         fill={`url(#${highlightId})`}
       />
-      <rect x={x} y={y} width={2} height={height} rx={1} fill={strokeColor} fillOpacity={0.15} />
+      <rect
+        x={x}
+        y={y}
+        width={2}
+        height={height}
+        rx={1}
+        fill={strokeColor}
+        fillOpacity={0.15}
+      />
       <rect
         x={x + width - 2}
         y={y}
@@ -266,6 +284,8 @@ function OutlinedBar({
 
 export default function InsightTabContent({
   expenseTransactions,
+  allTransactions,
+  accounts,
   analyticsMonths,
   budgetSummary,
   recurringHints,
@@ -327,13 +347,18 @@ export default function InsightTabContent({
   const outliers = useMemo(
     () =>
       detectTransactionOutliers(
-        expenseTransactions.map((t) => ({
-          id: t.id,
-          amount: Math.abs(t.amount),
-          category: t.category ?? "Uncategorized",
-          description: t.description ?? null,
-          date: t.date,
-        })),
+        expenseTransactions
+          // A partner's private (masked) transaction must never be surfaced as a
+          // reviewable outlier — the viewer can't act on it and its amount must
+          // never be flashed. It still counts in the category totals above.
+          .filter((t) => !(t as { is_masked?: boolean }).is_masked)
+          .map((t) => ({
+            id: t.id,
+            amount: Math.abs(t.amount),
+            category: t.category ?? "Uncategorized",
+            description: t.description ?? null,
+            date: t.date,
+          })),
         { recurringHints },
       ),
     [expenseTransactions, recurringHints],
@@ -373,7 +398,8 @@ export default function InsightTabContent({
           .slice()
           .sort(
             (a, b) =>
-              b.date.localeCompare(a.date) || a.category.localeCompare(b.category),
+              b.date.localeCompare(a.date) ||
+              a.category.localeCompare(b.category),
           ),
       }));
   }, [outliers]);
@@ -462,51 +488,70 @@ export default function InsightTabContent({
     return { totalBudget: total, budgetByCategory: map };
   }, [budgetSummary]);
 
-  // ── Pie: income / expense / expected savings over the global date range ───
-  // Follows the dashboard's top date filter (no per-widget month picker).
-  // Aggregates the always-12-month `analyticsMonths` to the months that fall
-  // inside [startDate, endDate]; empty bounds (All Time) include every month.
+  // ── Pie: cash flow (money in vs money out) over the selected period ───────
+  // Computed from the SAME client transactions that feed the stacked chart and
+  // with the same rule (debt repayments excluded), so the pie's "Spent" total
+  // reconciles exactly with the spending total above. Income is summed from
+  // income-type accounts. Previously this read from a separate 12-month
+  // analytics fetch that counted debt-return charges as expense — that mismatch
+  // is what made the two totals disagree ($1,856 vs $2,116).
   const { pie, periodLabel } = useMemo(() => {
-    const list = analyticsMonths ?? [];
-    const startKey = startDate ? startDate.slice(0, 7) : "";
-    const endKey = endDate ? endDate.slice(0, 7) : "";
-    const inRange = list.filter((m) => {
-      if (startKey && m.month < startKey) return false;
-      if (endKey && m.month > endKey) return false;
+    const inRange = (t: TransactionWithAccount) => {
+      const d = t.date.slice(0, 10);
+      if (startDate && d < startDate) return false;
+      if (endDate && d > endDate) return false;
       return true;
+    };
+
+    const incomeTxns = getIncomeTransactions(allTransactions, accounts).filter(
+      (t) => !t.is_debt_return && inRange(t),
+    );
+    // Spending uses the canonical helper so this total reconciles exactly with
+    // the Categories total and the Monthly bars (same rule set everywhere).
+    const spendTxns = getSpendingTransactions(allTransactions, accounts, {
+      start: startDate,
+      end: endDate,
     });
 
-    const income = inRange.reduce((s, m) => s + (m.income ?? 0), 0);
-    const expense = inRange.reduce((s, m) => s + (m.expense ?? 0), 0);
-    const expectedSavings = Math.max(income - expense, 0);
-    const overspent = expense > income;
+    const income = incomeTxns.reduce((s, t) => s + Math.abs(t.amount), 0);
+    const expense = spendTxns.reduce((s, t) => s + spendAmount(t), 0);
+    const net = income - expense; // positive = kept · negative = overspent
+    const overspent = net < 0;
+    const savingsRate = income > 0 ? (net / income) * 100 : 0;
+
+    // The ring sums to income: it splits the period's income into what was
+    // spent vs what was kept. When overspent there is nothing kept, so the ring
+    // is all "Spent" and the centre flags the shortfall.
     const slices = overspent
-      ? [{ name: "Expense", value: expense, color: EXPENSE_COLOR }]
+      ? [{ name: "Spent", value: expense, color: EXPENSE_COLOR }]
       : [
-          { name: "Expense", value: expense, color: EXPENSE_COLOR },
-          {
-            name: "Expected Savings",
-            value: expectedSavings,
-            color: EXPECTED_SAVINGS_COLOR,
-          },
+          { name: "Spent", value: expense, color: EXPENSE_COLOR },
+          { name: "Kept", value: net, color: EXPECTED_SAVINGS_COLOR },
         ];
 
-    // Label the span actually aggregated (months are oldest → newest).
-    const fmtKey = (k: string) => format(new Date(`${k}-01`), "MMM yyyy");
-    const periodLabel =
-      inRange.length === 0
-        ? ""
-        : inRange[0].month === inRange[inRange.length - 1].month
-          ? fmtKey(inRange[0].month)
-          : `${fmtKey(inRange[0].month)} – ${fmtKey(inRange[inRange.length - 1].month)}`;
+    const fmtKey = (d: string) =>
+      format(new Date(`${d.slice(0, 7)}-01`), "MMM yyyy");
+    let periodLabel = "All time";
+    if (startDate && endDate) {
+      const a = fmtKey(startDate);
+      const b = fmtKey(endDate);
+      periodLabel = a === b ? a : `${a} – ${b}`;
+    } else if (startDate) {
+      periodLabel = `From ${fmtKey(startDate)}`;
+    } else if (endDate) {
+      periodLabel = `Until ${fmtKey(endDate)}`;
+    }
 
     return {
-      pie: { income, expense, expectedSavings, overspent, slices },
+      pie: { income, expense, net, overspent, savingsRate, slices },
       periodLabel,
     };
-  }, [analyticsMonths, startDate, endDate]);
+  }, [allTransactions, accounts, startDate, endDate]);
 
-  const hasData = expenseTransactions.length > 0 || (analyticsMonths?.length ?? 0) > 0;
+  const hasData =
+    expenseTransactions.length > 0 ||
+    allTransactions.length > 0 ||
+    (analyticsMonths?.length ?? 0) > 0;
   if (!hasData) {
     return (
       <WidgetCard title="Insight">
@@ -602,374 +647,422 @@ export default function InsightTabContent({
       )}
     >
       <div className="space-y-4 min-w-0">
-      {/* ── Monthly spending — stacked by category ───────────────────────── */}
-      <WidgetCard
-        title="Monthly Spending by Category"
-        subtitle={`Last 12 months · ${categoryMeta.length} categories${
-          totalBudget > 0 ? " · budget line shown" : ""
-        } · tap a bar to zoom in · tap a stack to filter`}
-        interactive
-        filterActive={isFocused}
-        onFilterReset={clearFocus}
-        action={
-          <button
-            onClick={() => setHideOutliers((v) => !v)}
-            className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors",
-              hideOutliers
-                ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30"
-                : "bg-white/5 text-white/50 hover:text-white/70 hover:bg-white/10",
-            )}
-            title="Hide unusually large one-off or out-of-pattern transactions"
-          >
-            {hideOutliers ? (
-              <EyeOff className="w-3 h-3" />
-            ) : (
-              <Eye className="w-3 h-3" />
-            )}
-            {hideOutliers ? "Outliers hidden" : "Hide outliers"}
-          </button>
-        }
-      >
-        <div className="flex items-baseline justify-between mb-2">
-          <BlurredAmount blurIntensity="sm">
-            <span className="text-lg font-bold text-white tabular-nums">
-              {fmtFull(totalSpend)}
-            </span>
-          </BlurredAmount>
-          <span className="text-[10px] text-white/40">
-            total over period
-          </span>
-        </div>
-
-        <div style={{ height: 320 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={stackData}
-              margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
-            >
-              <XAxis
-                dataKey="month"
-                tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={({ x, y, payload }: any) =>
-                  payload ? (
-                    <text
-                      x={x}
-                      y={y}
-                      textAnchor="end"
-                      dominantBaseline="middle"
-                      fill="rgba(255,255,255,0.35)"
-                      fontSize={10}
-                      fontWeight={500}
-                      style={isAmountBlurred ? { filter: "blur(5px)" } : undefined}
-                    >
-                      {fmtDollar(payload.value)}
-                    </text>
-                  ) : null
-                }
-                axisLine={false}
-                tickLine={false}
-                width={48}
-              />
-              <Tooltip
-                content={<StackTooltip />}
-                cursor={{ fill: "rgba(255,255,255,0.04)" }}
-              />
-              {categoryMeta.map((c, i) => (
-                <ChartDefs key={c.name} id={`${uid}-c${i}`} color={c.color} />
-              ))}
-              {categoryMeta.map((c, i) => (
-                <Bar
-                  key={c.name}
-                  dataKey={c.name}
-                  stackId="spend"
-                  fill="transparent"
-                  maxBarSize={48}
-                  shape={(props: {
-                    x: number;
-                    y: number;
-                    width: number;
-                    height: number;
-                    payload?: { key?: string };
-                  }) => {
-                    const monthKey = props.payload?.key;
-                    const monthDim =
-                      focusedMonth !== null && monthKey !== focusedMonth;
-                    const catDim =
-                      focusedCategory !== null && c.name !== focusedCategory;
-                    return (
-                      <OutlinedBar
-                        x={props.x}
-                        y={props.y}
-                        width={props.width}
-                        height={props.height}
-                        fillId={`${uid}-c${i}-fill`}
-                        highlightId={`${uid}-c${i}-highlight`}
-                        filterId={`${uid}-c${i}-glow`}
-                        strokeColor={c.color}
-                        dim={monthDim || catDim}
-                        onClick={() => handleSegmentClick(c.name, monthKey)}
-                      />
-                    );
-                  }}
-                />
-              ))}
-              {totalBudget > 0 && (
-                <ReferenceLine
-                  y={totalBudget}
-                  stroke={BUDGET_COLOR}
-                  strokeDasharray="5 4"
-                  strokeWidth={1.5}
-                  label={{
-                    value: `Budget ${fmtDollar(totalBudget)}`,
-                    position: "insideTopRight",
-                    fill: BUDGET_COLOR,
-                    fontSize: 10,
-                  }}
-                />
-              )}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Legend — tap a category to focus it across all months */}
-        <div className="flex flex-wrap gap-x-2 gap-y-1 mt-2">
-          {categoryMeta.map((c) => {
-            const isOther = c.name === "Other";
-            const active = focusedCategory === c.name;
-            return (
-              <button
-                key={c.name}
-                onClick={() => handleCategoryToggle(c.name)}
-                disabled={isOther}
-                className={cn(
-                  "flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded-full transition-colors",
-                  isOther
-                    ? "cursor-default"
-                    : "hover:bg-white/10 cursor-pointer",
-                  active && "bg-white/15 ring-1 ring-white/15",
-                  focusedCategory !== null && !active && !isOther && "opacity-40",
-                )}
-              >
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ background: c.color }}
-                />
-                <span className="text-white/55">{c.name}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {outlierCount > 0 && (
-          <div className="mt-2">
-            {hideOutliers && (
-              <p className="text-[11px] text-amber-300/80">
-                {outlierCount} outlier transaction{outlierCount === 1 ? "" : "s"}{" "}
-                hidden (
-                <BlurredAmount blurIntensity="sm">{fmtFull(outlierTotal)}</BlurredAmount>)
-              </p>
-            )}
+        {/* ── Monthly spending — stacked by category ───────────────────────── */}
+        <WidgetCard
+          title="Monthly Spending by Category"
+          subtitle={`Monthly breakdown · ${categoryMeta.length} categories${
+            totalBudget > 0 ? " · budget line shown" : ""
+          } · tap a bar to zoom in · tap a stack to filter`}
+          interactive
+          filterActive={isFocused}
+          onFilterReset={clearFocus}
+          action={
             <button
-              onClick={() => setShowOutlierList((v) => !v)}
-              className="mt-1 flex items-center gap-1 text-[11px] text-white/40 hover:text-white/60 transition-colors"
+              onClick={() => setHideOutliers((v) => !v)}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors",
+                hideOutliers
+                  ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30"
+                  : "bg-white/5 text-white/50 hover:text-white/70 hover:bg-white/10",
+              )}
+              title="Hide unusually large one-off or out-of-pattern transactions"
             >
-              <ChevronDown
-                className={cn(
-                  "w-3 h-3 transition-transform",
-                  showOutlierList && "rotate-180",
-                )}
-              />
-              {showOutlierList ? "Hide" : "View"} {outlierCount} outlier
-              {outlierCount === 1 ? "" : "s"}
+              {hideOutliers ? (
+                <EyeOff className="w-3 h-3" />
+              ) : (
+                <Eye className="w-3 h-3" />
+              )}
+              {hideOutliers ? "Outliers hidden" : "Hide outliers"}
             </button>
-
-            {showOutlierList && (
-              <div className="mt-2 space-y-3 rounded-xl bg-white/5 border border-white/10 p-3">
-                {outliersByMonth.map((group) => (
-                  <div key={group.key}>
-                    <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-1.5">
-                      {group.label}
-                    </p>
-                    <div className="space-y-1.5">
-                      {group.items.map((o) => {
-                        const tx = txById.get(o.transactionId);
-                        return (
-                          <div
-                            key={o.transactionId}
-                            className="flex items-center justify-between gap-2 text-xs"
-                          >
-                            <span className="flex items-center gap-1.5 min-w-0">
-                              <span
-                                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                style={{
-                                  background: tx?.category_color || OTHER_COLOR,
-                                }}
-                              />
-                              <span className="text-white/70 truncate">
-                                {o.category}
-                              </span>
-                              {tx?.description && (
-                                <span className="text-white/35 truncate">
-                                  · {tx.description}
-                                </span>
-                              )}
-                            </span>
-                            <span className="flex items-center gap-1.5 flex-shrink-0">
-                              <BlurredAmount blurIntensity="sm">
-                                <span className="text-white tabular-nums font-medium">
-                                  {fmtFull(o.amount)}
-                                </span>
-                              </BlurredAmount>
-                              <span
-                                className={cn(
-                                  "text-[9px] px-1.5 py-0.5 rounded-full font-medium",
-                                  o.reason === "rare"
-                                    ? "bg-violet-500/15 text-violet-300"
-                                    : "bg-amber-500/15 text-amber-300",
-                                )}
-                              >
-                                {o.reason}
-                              </span>
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </WidgetCard>
-
-      {/* ── Income / Expense / Expected Savings pie ──────────────────────── */}
-      <WidgetCard
-        title="Income · Expense · Expected Savings"
-        subtitle="Expense + Expected Savings = Income · follows the date filter above"
-        action={
-          periodLabel ? (
-            <span className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] tabular-nums text-white/55">
-              {periodLabel}
-            </span>
-          ) : undefined
-        }
-      >
-        <div className="flex items-center gap-4">
-          {/* Pie */}
-          <div
-            className="relative flex-shrink-0"
-            style={{ width: 170, height: 170 }}
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <defs>
-                  {pie.slices.map((s, i) => {
-                    const bright = lightenHex(s.color, 35);
-                    return (
-                      <Fragment key={s.name}>
-                        <radialGradient
-                          id={`${uid}-pie${i}-fill`}
-                          cx="35%"
-                          cy="30%"
-                          r="75%"
-                        >
-                          <stop offset="0%" stopColor={bright} stopOpacity={0.85} />
-                          <stop offset="55%" stopColor={s.color} stopOpacity={0.65} />
-                          <stop offset="100%" stopColor={s.color} stopOpacity={0.45} />
-                        </radialGradient>
-                        <filter
-                          id={`${uid}-pie${i}-glow`}
-                          x="-50%"
-                          y="-50%"
-                          width="200%"
-                          height="200%"
-                        >
-                          <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur" />
-                          <feMerge>
-                            <feMergeNode in="blur" />
-                            <feMergeNode in="SourceGraphic" />
-                          </feMerge>
-                        </filter>
-                      </Fragment>
-                    );
-                  })}
-                </defs>
-                <Pie
-                  data={pie.slices}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={52}
-                  outerRadius={78}
-                  paddingAngle={2}
-                  dataKey="value"
-                  stroke="none"
-                >
-                  {pie.slices.map((s, i) => (
-                    <Cell
-                      key={s.name}
-                      fill={`url(#${uid}-pie${i}-fill)`}
-                      stroke={lightenHex(s.color, 25)}
-                      strokeWidth={1}
-                      strokeOpacity={0.6}
-                      style={{ filter: `url(#${uid}-pie${i}-glow)` }}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value, name) => [fmtFull(Number(value)), name as string]}
-                  contentStyle={TOOLTIP_STYLE}
-                  itemStyle={{ color: "#fff" }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            {/* Center: Income total */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <p className="text-[9px] text-white/40 uppercase tracking-wider">
-                Income
-              </p>
+          }
+        >
+          <div className="flex items-baseline justify-between mb-2">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-white/40">
+                Total spent
+              </span>
               <BlurredAmount blurIntensity="sm">
-                <p
-                  className="text-base font-bold tabular-nums"
-                  style={{ color: INCOME_COLOR }}
-                >
-                  {fmtFull(pie.income)}
-                </p>
+                <span className="text-lg font-bold text-white tabular-nums">
+                  {fmtFull(totalSpend)}
+                </span>
               </BlurredAmount>
-              {pie.overspent && (
-                <p className="text-[9px] text-rose-400 font-medium">
-                  overspent
+            </div>
+            <span className="text-[10px] text-white/40">{periodLabel}</span>
+          </div>
+
+          <div style={{ height: 320 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={stackData}
+                margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+              >
+                <XAxis
+                  dataKey="month"
+                  tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={({ x, y, payload }: any) =>
+                    payload ? (
+                      <text
+                        x={x}
+                        y={y}
+                        textAnchor="end"
+                        dominantBaseline="middle"
+                        fill="rgba(255,255,255,0.35)"
+                        fontSize={10}
+                        fontWeight={500}
+                        style={
+                          isAmountBlurred ? { filter: "blur(5px)" } : undefined
+                        }
+                      >
+                        {fmtDollar(payload.value)}
+                      </text>
+                    ) : null
+                  }
+                  axisLine={false}
+                  tickLine={false}
+                  width={48}
+                />
+                <Tooltip
+                  content={<StackTooltip />}
+                  cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                />
+                {categoryMeta.map((c, i) => (
+                  <ChartDefs key={c.name} id={`${uid}-c${i}`} color={c.color} />
+                ))}
+                {categoryMeta.map((c, i) => (
+                  <Bar
+                    key={c.name}
+                    dataKey={c.name}
+                    stackId="spend"
+                    fill="transparent"
+                    maxBarSize={48}
+                    shape={(props: {
+                      x: number;
+                      y: number;
+                      width: number;
+                      height: number;
+                      payload?: { key?: string };
+                    }) => {
+                      const monthKey = props.payload?.key;
+                      const monthDim =
+                        focusedMonth !== null && monthKey !== focusedMonth;
+                      const catDim =
+                        focusedCategory !== null && c.name !== focusedCategory;
+                      return (
+                        <OutlinedBar
+                          x={props.x}
+                          y={props.y}
+                          width={props.width}
+                          height={props.height}
+                          fillId={`${uid}-c${i}-fill`}
+                          highlightId={`${uid}-c${i}-highlight`}
+                          filterId={`${uid}-c${i}-glow`}
+                          strokeColor={c.color}
+                          dim={monthDim || catDim}
+                          onClick={() => handleSegmentClick(c.name, monthKey)}
+                        />
+                      );
+                    }}
+                  />
+                ))}
+                {totalBudget > 0 && (
+                  <ReferenceLine
+                    y={totalBudget}
+                    stroke={BUDGET_COLOR}
+                    strokeDasharray="5 4"
+                    strokeWidth={1.5}
+                    label={{
+                      value: `Budget ${fmtDollar(totalBudget)}`,
+                      position: "insideTopRight",
+                      fill: BUDGET_COLOR,
+                      fontSize: 10,
+                    }}
+                  />
+                )}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Legend — tap a category to focus it across all months */}
+          <div className="flex flex-wrap gap-x-2 gap-y-1 mt-2">
+            {categoryMeta.map((c) => {
+              const isOther = c.name === "Other";
+              const active = focusedCategory === c.name;
+              return (
+                <button
+                  key={c.name}
+                  onClick={() => handleCategoryToggle(c.name)}
+                  disabled={isOther}
+                  className={cn(
+                    "flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded-full transition-colors",
+                    isOther
+                      ? "cursor-default"
+                      : "hover:bg-white/10 cursor-pointer",
+                    active && "bg-white/15 ring-1 ring-white/15",
+                    focusedCategory !== null &&
+                      !active &&
+                      !isOther &&
+                      "opacity-40",
+                  )}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ background: c.color }}
+                  />
+                  <span className="text-white/55">{c.name}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {outlierCount > 0 && (
+            <div className="mt-2">
+              {hideOutliers && (
+                <p className="text-[11px] text-amber-300/80">
+                  {outlierCount} outlier transaction
+                  {outlierCount === 1 ? "" : "s"} hidden (
+                  <BlurredAmount blurIntensity="sm">
+                    {fmtFull(outlierTotal)}
+                  </BlurredAmount>
+                  )
                 </p>
+              )}
+              <button
+                onClick={() => setShowOutlierList((v) => !v)}
+                className="mt-1 flex items-center gap-1 text-[11px] text-white/40 hover:text-white/60 transition-colors"
+              >
+                <ChevronDown
+                  className={cn(
+                    "w-3 h-3 transition-transform",
+                    showOutlierList && "rotate-180",
+                  )}
+                />
+                {showOutlierList ? "Hide" : "View"} {outlierCount} outlier
+                {outlierCount === 1 ? "" : "s"}
+              </button>
+
+              {showOutlierList && (
+                <div className="mt-2 space-y-3 rounded-xl bg-white/5 border border-white/10 p-3">
+                  {outliersByMonth.map((group) => (
+                    <div key={group.key}>
+                      <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-1.5">
+                        {group.label}
+                      </p>
+                      <div className="space-y-1.5">
+                        {group.items.map((o) => {
+                          const tx = txById.get(o.transactionId);
+                          return (
+                            <div
+                              key={o.transactionId}
+                              className="flex items-center justify-between gap-2 text-xs"
+                            >
+                              <span className="flex items-center gap-1.5 min-w-0">
+                                <span
+                                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                  style={{
+                                    background:
+                                      tx?.category_color || OTHER_COLOR,
+                                  }}
+                                />
+                                <span className="text-white/70 truncate">
+                                  {o.category}
+                                </span>
+                                {tx?.description && (
+                                  <span className="text-white/35 truncate">
+                                    · {tx.description}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="flex items-center gap-1.5 flex-shrink-0">
+                                <BlurredAmount blurIntensity="sm">
+                                  <span className="text-white tabular-nums font-medium">
+                                    {fmtFull(o.amount)}
+                                  </span>
+                                </BlurredAmount>
+                                <span
+                                  className={cn(
+                                    "text-[9px] px-1.5 py-0.5 rounded-full font-medium",
+                                    o.reason === "rare"
+                                      ? "bg-violet-500/15 text-violet-300"
+                                      : "bg-amber-500/15 text-amber-300",
+                                  )}
+                                >
+                                  {o.reason}
+                                </span>
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-          </div>
+          )}
+        </WidgetCard>
 
-          {/* Legend */}
-          <div className="flex-1 min-w-0 space-y-2.5">
-            <LegendRow
-              label="Income"
-              value={pie.income}
-              color={INCOME_COLOR}
-            />
-            <LegendRow
-              label="Expense"
-              value={pie.expense}
-              color={EXPENSE_COLOR}
-            />
-            <LegendRow
-              label="Expected Savings"
-              value={pie.overspent ? pie.income - pie.expense : pie.expectedSavings}
-              color={EXPECTED_SAVINGS_COLOR}
-              negative={pie.overspent}
-            />
+        {/* ── Income vs Spending (cash flow) ───────────────────────────────── */}
+        <WidgetCard
+          title="Income vs Spending"
+          subtitle="Money in, money out, and what's left · debt repayments excluded"
+          action={
+            periodLabel ? (
+              <span className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] tabular-nums text-white/55">
+                {periodLabel}
+              </span>
+            ) : undefined
+          }
+        >
+          <div className="flex items-center gap-4">
+            {/* Pie */}
+            <div
+              className="relative flex-shrink-0"
+              style={{ width: 170, height: 170 }}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <defs>
+                    {pie.slices.map((s, i) => {
+                      const bright = lightenHex(s.color, 35);
+                      return (
+                        <Fragment key={s.name}>
+                          <radialGradient
+                            id={`${uid}-pie${i}-fill`}
+                            cx="35%"
+                            cy="30%"
+                            r="75%"
+                          >
+                            <stop
+                              offset="0%"
+                              stopColor={bright}
+                              stopOpacity={0.85}
+                            />
+                            <stop
+                              offset="55%"
+                              stopColor={s.color}
+                              stopOpacity={0.65}
+                            />
+                            <stop
+                              offset="100%"
+                              stopColor={s.color}
+                              stopOpacity={0.45}
+                            />
+                          </radialGradient>
+                          <filter
+                            id={`${uid}-pie${i}-glow`}
+                            x="-50%"
+                            y="-50%"
+                            width="200%"
+                            height="200%"
+                          >
+                            <feGaussianBlur
+                              in="SourceGraphic"
+                              stdDeviation="3.5"
+                              result="blur"
+                            />
+                            <feMerge>
+                              <feMergeNode in="blur" />
+                              <feMergeNode in="SourceGraphic" />
+                            </feMerge>
+                          </filter>
+                        </Fragment>
+                      );
+                    })}
+                  </defs>
+                  <Pie
+                    data={pie.slices}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={52}
+                    outerRadius={78}
+                    paddingAngle={2}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {pie.slices.map((s, i) => (
+                      <Cell
+                        key={s.name}
+                        fill={`url(#${uid}-pie${i}-fill)`}
+                        stroke={lightenHex(s.color, 25)}
+                        strokeWidth={1}
+                        strokeOpacity={0.6}
+                        style={{ filter: `url(#${uid}-pie${i}-glow)` }}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value, name) => [
+                      fmtFull(Number(value)),
+                      name as string,
+                    ]}
+                    contentStyle={TOOLTIP_STYLE}
+                    itemStyle={{ color: "#fff" }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Center: the single takeaway — kept or overspent */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-3 text-center">
+                <p className="text-[9px] uppercase tracking-wider text-white/40">
+                  {pie.overspent ? "Overspent" : "Kept"}
+                </p>
+                <BlurredAmount blurIntensity="sm">
+                  <p
+                    className="text-base font-bold tabular-nums"
+                    style={{
+                      color: pie.overspent
+                        ? EXPENSE_COLOR
+                        : EXPECTED_SAVINGS_COLOR,
+                    }}
+                  >
+                    {fmtFull(Math.abs(pie.net))}
+                  </p>
+                </BlurredAmount>
+                <p className="text-[9px] text-white/35 tabular-nums">
+                  {pie.income > 0
+                    ? pie.overspent
+                      ? `${Math.abs(pie.savingsRate).toFixed(0)}% over income`
+                      : `${pie.savingsRate.toFixed(0)}% of income saved`
+                    : "no income logged"}
+                </p>
+              </div>
+            </div>
+
+            {/* Legend */}
+            <div className="flex-1 min-w-0 space-y-2.5">
+              <LegendRow
+                label="Income"
+                value={pie.income}
+                color={INCOME_COLOR}
+              />
+              <LegendRow
+                label="Spent"
+                value={pie.expense}
+                color={EXPENSE_COLOR}
+              />
+              <LegendRow
+                label={pie.overspent ? "Overspent" : "Kept / saved"}
+                value={Math.abs(pie.net)}
+                color={EXPECTED_SAVINGS_COLOR}
+                negative={pie.overspent}
+              />
+              <div className="flex items-center justify-between gap-2 pt-1.5 mt-0.5 border-t border-white/10">
+                <span className="text-xs text-white/45">Savings rate</span>
+                <span
+                  className="text-sm font-semibold tabular-nums"
+                  style={{
+                    color: pie.overspent ? "#fb7185" : EXPECTED_SAVINGS_COLOR,
+                  }}
+                >
+                  {pie.income > 0 ? `${pie.savingsRate.toFixed(0)}%` : "—"}
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
-      </WidgetCard>
+        </WidgetCard>
       </div>
 
       {/* ── Focus insight panel — appears on the right (below on mobile) ──── */}

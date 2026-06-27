@@ -131,7 +131,11 @@ export function buildStatisticalSuggestion(
   categories: ForecastCategory[],
   cleanedMonthly: Record<string, Record<string, number>>,
   walletBalance: number,
-): { suggestions: AiCategorySuggestion[]; total_suggested: number; summary: string } {
+): {
+  suggestions: AiCategorySuggestion[];
+  total_suggested: number;
+  summary: string;
+} {
   const baselines = computeCategoryBaselines(categories, cleanedMonthly);
   const totalRaw = categories.reduce(
     (s, c) => s + (baselines[c.primaryId] || 0),

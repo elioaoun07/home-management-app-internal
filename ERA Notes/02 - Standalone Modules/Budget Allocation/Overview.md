@@ -15,14 +15,14 @@ tags:
 
 ## Key Files
 
-| File                                      | Purpose                                       |
-| ----------------------------------------- | --------------------------------------------- |
-| `src/features/budget/hooks.ts`            | Query + mutation hooks (optimistic updates, Apply-All) |
-| `src/components/web/WebBudget.tsx`        | Full-page UI — **Allocate** (input) / **Review** (viewing) |
-| `src/app/api/budget-allocations/route.ts` | GET/POST/DELETE API (upsert by composite key) |
-| `src/app/api/budget-allocations/ai-suggest/route.ts` | AI suggestion: outlier-clean history → Gemini → fallback |
-| `src/lib/budget/budgetForecast.ts`        | Outlier-clean aggregation + statistical fallback + clamp (unit-tested) |
-| `src/types/budgetAllocation.ts`           | All budget-related TypeScript types           |
+| File                                                 | Purpose                                                                |
+| ---------------------------------------------------- | ---------------------------------------------------------------------- |
+| `src/features/budget/hooks.ts`                       | Query + mutation hooks (optimistic updates, Apply-All)                 |
+| `src/components/web/WebBudget.tsx`                   | Full-page UI — **Allocate** (input) / **Review** (viewing)             |
+| `src/app/api/budget-allocations/route.ts`            | GET/POST/DELETE API (upsert by composite key)                          |
+| `src/app/api/budget-allocations/ai-suggest/route.ts` | AI suggestion: outlier-clean history → Gemini → fallback               |
+| `src/lib/budget/budgetForecast.ts`                   | Outlier-clean aggregation + statistical fallback + clamp (unit-tested) |
+| `src/types/budgetAllocation.ts`                      | All budget-related TypeScript types                                    |
 
 ## Query & Cache Architecture
 
@@ -60,10 +60,11 @@ Without it, budget edits appear to "not save" due to three interacting cache lay
 > **Source:** `src/app/api/budget-allocations/ai-suggest/route.ts` + `src/lib/budget/budgetForecast.ts`
 
 The Allocate surface shows AI proposals **inline** per category (suggested value
-+ reasoning + a status chip: _Matches AI / +$ vs AI / -$ vs AI / Not set_), with
-a per-row **Apply** and a top-bar **Apply all**. Manual values always win — AI is
-a non-destructive suggestion layer. Read-only health + the AI plan summary live
-on the **Review** surface (the old standalone "AI View" tab was removed).
+
+- reasoning + a status chip: _Matches AI / +$ vs AI / -$ vs AI / Not set_), with
+  a per-row **Apply** and a top-bar **Apply all**. Manual values always win — AI is
+  a non-destructive suggestion layer. Read-only health + the AI plan summary live
+  on the **Review** surface (the old standalone "AI View" tab was removed).
 
 **Generation pipeline (POST):**
 

@@ -6,8 +6,8 @@ import {
   softClampSuggestions,
   type ForecastTransaction,
 } from "@/lib/budget/budgetForecast";
-import type { RecurringHint } from "@/lib/utils/anomalyDetection";
 import { supabaseServer } from "@/lib/supabase/server";
+import type { RecurringHint } from "@/lib/utils/anomalyDetection";
 import type {
   AiBudgetSuggestion,
   AiCategorySuggestion,
@@ -216,7 +216,9 @@ export async function POST(req: NextRequest) {
 
   const { data: transactions } = await supabase
     .from("transactions")
-    .select("id, amount, category_id, subcategory_id, user_id, date, description")
+    .select(
+      "id, amount, category_id, subcategory_id, user_id, date, description",
+    )
     .in("account_id", expenseAccountIds)
     .gte("date", historyStart)
     .order("date", { ascending: false });

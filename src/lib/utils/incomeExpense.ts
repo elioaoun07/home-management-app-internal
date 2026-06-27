@@ -311,3 +311,68 @@ export function getExpenseCategories(
 
   return Array.from(categories).sort();
 }
+
+// ===========================================================================
+// Canonical "spending" definition — SINGLE SOURCE OF TRUTH
+// ---------------------------------------------------------------------------
+// Every surface that shows a "spent" figure (Insight pie, Categories total,
+// Monthly bars, Budget "Spent" card) MUST derive it from these helpers so the
+// numbers reconcile to the penny. Diverging ad-hoc sums are what caused the
+// Insight/Monthly/Categories/Budget totals to disagree.
+//
+// Rules:
+//  - expense-type accounts only
+//  - debt-return rows (is_debt_return) are excluded — they are money coming
+//    back to you (a repayment), not spending
+//  - draft rows (is_draft) are excluded — drafts are unconfirmed/voice/future
+//    entries, not real spending (the spend queries also filter these out)
+//  - restricted to [start, end] inclusive when a window is supplied, compared
+//    on the YYYY-MM-DD prefix so custom-month ranges line up exactly
+//  - amount is the absolute, full transaction amount
+//
+// Partner-private filtering is applied upstream (transaction service on the
+// client, API query on the server), so the transactions handed in here are
+// already privacy-scoped — do not re-implement it per surface.
+// ===========================================================================
+
+export type SpendWindow = { start?: string; end?: string };
+
+/** Canonical per-transaction spend amount (absolute, full amount). */
+export function spendAmount(t: TransactionWithAccount): number {
+  return Math.abs(Number(t.amount) || 0);
+}
+
+/**
+ * Canonical filter for transactions that count as spending in a period.
+ */
+export function getSpendingTransactions(
+  transactions: TransactionWithAccount[],
+  accounts: Account[] | undefined,
+  window: SpendWindow = {},
+): TransactionWithAccount[] {
+  const { start, end } = window;
+  return getExpenseTransactions(transactions, accounts).filter((t) => {
+    const tx = t as { is_debt_return?: boolean; is_draft?: boolean };
+    if (tx.is_debt_return) return false;
+    if (tx.is_draft) return false;
+    const d = t.date.slice(0, 10);
+    if (start && d < start) return false;
+    if (end && d > end) return false;
+    return true;
+  });
+}
+
+/**
+ * Canonical total spending for a period. Use everywhere a "spent" figure is
+ * shown so all surfaces agree.
+ */
+export function sumSpending(
+  transactions: TransactionWithAccount[],
+  accounts: Account[] | undefined,
+  window: SpendWindow = {},
+): number {
+  return getSpendingTransactions(transactions, accounts, window).reduce(
+    (sum, t) => sum + spendAmount(t),
+    0,
+  );
+}

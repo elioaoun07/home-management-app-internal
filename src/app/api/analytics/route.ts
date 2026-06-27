@@ -106,15 +106,17 @@ export async function GET(req: NextRequest) {
         "id, amount, date, account_id, category_id, subcategory_id, user_id, is_private, description, is_debt_return",
       )
       .in("account_id", accountIds)
+      .eq("is_draft", false)
+      .is("deleted_at", null)
+      .is("parent_transaction_id", null)
       .gte("date", startStr)
       .lte("date", endStr)
       .order("date", { ascending: true });
 
-    const transactions = (rawTxs || []).filter((t) => {
-      // Filter out partner's private transactions
-      if (t.user_id !== user.id && t.is_private) return false;
-      return true;
-    });
+    // Keep the partner's private transactions so household totals stay
+    // consistent with the dashboard; their category is withheld from the
+    // breakdown below so the partner's spending categories aren't revealed.
+    const transactions = rawTxs || [];
 
     // --- Fetch categories (with classification for 50/30/20) ---
     const catUserIds = [...new Set(accountList.map((a) => a.user_id))];
@@ -218,7 +220,9 @@ export async function GET(req: NextRequest) {
       // Real income (exclude debt returns)
       if (acctType === "income" && !tx.is_debt_return) {
         m.income += amount;
-      } else if (acctType === "expense") {
+      } else if (acctType === "expense" && !tx.is_debt_return) {
+        // Debt returns are repayments coming back to you (see getBalanceDelta),
+        // not spending — exclude them so expense is not double-counted.
         m.expense += amount;
 
         // Per-user expense tracking
@@ -231,8 +235,15 @@ export async function GET(req: NextRequest) {
         m.savings += amount;
       }
 
-      // Category breakdown (expense only)
-      if (acctType === "expense" && tx.category_id) {
+      // Category breakdown (expense only, debt returns excluded). The partner's
+      // private transactions are withheld here so their category isn't leaked,
+      // even though the amount above still counts toward the expense total.
+      if (
+        acctType === "expense" &&
+        !tx.is_debt_return &&
+        tx.category_id &&
+        !(tx.user_id !== user.id && tx.is_private)
+      ) {
         const catId = tx.subcategory_id || tx.category_id;
         const catInfo = catMap.get(catId) || catMap.get(tx.category_id);
         if (catInfo) {
@@ -258,7 +269,7 @@ export async function GET(req: NextRequest) {
       };
       if (acctType === "income" && !tx.is_debt_return) {
         dayTotals.income += amount;
-      } else if (acctType === "expense") {
+      } else if (acctType === "expense" && !tx.is_debt_return) {
         dayTotals.expense += amount;
       }
       m.dailyTotals.set(dayKey, dayTotals);

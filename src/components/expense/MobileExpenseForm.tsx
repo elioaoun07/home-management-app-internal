@@ -67,9 +67,16 @@ import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useQueryClient } from "@tanstack/react-query";
-import { format, subDays } from "date-fns";
+import {
+  differenceInDays,
+  format,
+  formatDistanceToNow,
+  parseISO,
+  subDays,
+} from "date-fns";
 import { AnimatePresence, Reorder, motion } from "framer-motion";
 import {
+  AlertTriangle,
   Calendar as CalendarLucide,
   Check,
   Eye,
@@ -132,6 +139,28 @@ function getTransactionLabel(type: string | undefined): string {
   if (type === "income") return "Income";
   if (type === "saving") return "Deposit";
   return "Expense";
+}
+
+// Balance is considered stale (needs attention) after this many days — mirrors
+// RECONCILE_STALE_DAYS in AccountBalance.tsx / BalanceHistoryDrawer.tsx.
+const RECONCILE_STALE_DAYS = 7;
+
+/**
+ * Last-checked status for an account, used in the picker so the user can see
+ * which accounts need a balance review. Never-checked and stale (>7d) accounts
+ * are flagged amber (Hard Rule #3: no red on individual rows).
+ */
+function getLastCheckedStatus(balanceSetAt?: string | null): {
+  label: string;
+  stale: boolean;
+} {
+  if (!balanceSetAt) return { label: "Never checked", stale: true };
+  const date = parseISO(balanceSetAt);
+  const stale = differenceInDays(new Date(), date) > RECONCILE_STALE_DAYS;
+  return {
+    label: `Checked ${formatDistanceToNow(date, { addSuffix: true })}`,
+    stale,
+  };
 }
 
 // Delete confirmation state type
@@ -1954,6 +1983,26 @@ export default function MobileExpenseForm() {
                               <div className="text-xs text-accent/70 capitalize mt-0.5">
                                 {account.type}
                               </div>
+                              {(() => {
+                                const status = getLastCheckedStatus(
+                                  account.balance_set_at,
+                                );
+                                return (
+                                  <div
+                                    className={cn(
+                                      "text-[10px] mt-0.5 flex items-center gap-1",
+                                      status.stale
+                                        ? "text-amber-400/80"
+                                        : "text-white/30",
+                                    )}
+                                  >
+                                    {status.stale && (
+                                      <AlertTriangle className="w-2.5 h-2.5" />
+                                    )}
+                                    {status.label}
+                                  </div>
+                                );
+                              })()}
                             </div>
                             {selectedAccountId === account.id && (
                               <CheckIcon className="w-5 h-5 text-secondary drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />

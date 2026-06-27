@@ -1,7 +1,13 @@
 import {
+  type AnalysisReport,
+  generateAnalysisReport,
+  isAnalysisIntent,
+} from "@/lib/ai/analysisReport";
+import {
   BudgetContext,
   ChatMessage,
   GeminiRateLimitError,
+  type MonthlyTrendPoint,
   generateSystemPrompt,
   sendMessageToGemini,
   streamMessageToGemini,
@@ -60,6 +66,8 @@ interface ChatRequest {
   parentMessageId?: string;
   /** When true, stream tokens as SSE instead of returning a buffered JSON response. */
   stream?: boolean;
+  /** "analysis" forces a structured spending-analysis report (dashboard-ready). */
+  mode?: "chat" | "analysis";
 }
 
 /**
@@ -94,6 +102,14 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+
+    // Decide whether to produce a structured, dashboard-ready analysis report.
+    // Forced via { mode: "analysis" } (the "View as Dashboard" affordance) or
+    // detected from the message intent. Buffered only — never on the SSE path.
+    const wantsAnalysis =
+      !body.stream &&
+      includeContext &&
+      (body.mode === "analysis" || isAnalysisIntent(message));
 
     // Check monthly usage before making request
     const monthlyUsage = await getMonthlyTokenUsage(supabase, user.id);
@@ -152,7 +168,9 @@ export async function POST(req: NextRequest) {
 
     if (includeContext) {
       try {
-        budgetContext = await fetchBudgetContext(supabase, user.id);
+        budgetContext = await fetchBudgetContext(supabase, user.id, {
+          includeTrend: wantsAnalysis,
+        });
       } catch (error) {
         console.error("Failed to fetch budget context:", error);
         // Continue without context
@@ -227,12 +245,27 @@ export async function POST(req: NextRequest) {
 
     // Send message to Gemini with detailed error capture
     let response: string;
+    let analysisReport: AnalysisReport | undefined;
     try {
-      response = await sendMessageToGemini(
-        message,
-        formattedHistory,
-        budgetContext,
-      );
+      if (wantsAnalysis && budgetContext) {
+        // Structured, dashboard-ready report. generateAnalysisReport never throws
+        // — it falls back to a deterministic report so the dashboard always works.
+        analysisReport = await generateAnalysisReport({
+          message,
+          history: formattedHistory,
+          context: budgetContext,
+        });
+        response =
+          analysisReport.narrative ||
+          analysisReport.headline ||
+          "Here's your spending analysis.";
+      } else {
+        response = await sendMessageToGemini(
+          message,
+          formattedHistory,
+          budgetContext,
+        );
+      }
     } catch (geminiError) {
       // Capture Gemini-specific errors with full details
       const errMsg =
@@ -263,6 +296,7 @@ export async function POST(req: NextRequest) {
       includedBudgetContext: includeContext && !!budgetContext,
       responseTimeMs: responseTime,
       parentMessageId: parentMessageId || null,
+      analysisReport,
     });
 
     // Calculate updated usage
@@ -270,6 +304,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       message: response,
+      // Present only for analysis requests — drives the "View as Dashboard" view.
+      report: analysisReport,
       timestamp: new Date().toISOString(),
       messageIds, // Return the new message IDs for reference
       usage: {
@@ -411,6 +447,7 @@ export async function GET(req: NextRequest) {
       input_tokens?: number;
       output_tokens?: number;
       is_edited?: boolean;
+      analysis_report?: AnalysisReport | null;
     }> = [];
 
     if (sessionId) {
@@ -418,7 +455,7 @@ export async function GET(req: NextRequest) {
       const { data: newMessages, error: newError } = await supabase
         .from("ai_messages")
         .select(
-          "id, role, content, created_at, input_tokens, output_tokens, is_edited, sequence_num",
+          "id, role, content, created_at, input_tokens, output_tokens, is_edited, analysis_report, sequence_num",
         )
         .eq("user_id", user.id)
         .eq("session_id", sessionId)
@@ -427,7 +464,25 @@ export async function GET(req: NextRequest) {
         .order("created_at", { ascending: true })
         .limit(limit);
 
-      if (newError) {
+      if (isMissingAnalysisReportColumn(newError)) {
+        const { data: fallbackMessages, error: fallbackError } = await supabase
+          .from("ai_messages")
+          .select(
+            "id, role, content, created_at, input_tokens, output_tokens, is_edited, sequence_num",
+          )
+          .eq("user_id", user.id)
+          .eq("session_id", sessionId)
+          .eq("is_active", true)
+          .order("sequence_num", { ascending: true })
+          .order("created_at", { ascending: true })
+          .limit(limit);
+
+        if (fallbackError) {
+          console.error("Failed to fetch messages:", fallbackError);
+        } else if (fallbackMessages) {
+          messages = fallbackMessages;
+        }
+      } else if (newError) {
         console.error("Failed to fetch messages:", newError);
       } else if (newMessages) {
         messages = newMessages;
@@ -567,6 +622,7 @@ async function logMessagesToDatabase(
     includedBudgetContext: boolean;
     responseTimeMs: number;
     parentMessageId: string | null;
+    analysisReport?: AnalysisReport;
   },
 ): Promise<{
   userMessageId: string | null;
@@ -618,22 +674,39 @@ async function logMessagesToDatabase(
       return { userMessageId: null, assistantMessageId: null };
     }
 
+    const assistantInsert = {
+      user_id: data.userId,
+      session_id: data.sessionId,
+      role: "assistant",
+      content: data.assistantResponse,
+      parent_id: userMsg.id,
+      sequence_num: nextSeq + 1,
+      output_tokens: data.outputTokens,
+      included_budget_context: data.includedBudgetContext,
+      response_time_ms: data.responseTimeMs,
+      analysis_report: data.analysisReport ?? null,
+    };
+
     // Insert assistant message
-    const { data: assistantMsg, error: assistantError } = await supabase
+    let { data: assistantMsg, error: assistantError } = await supabase
       .from("ai_messages")
-      .insert({
-        user_id: data.userId,
-        session_id: data.sessionId,
-        role: "assistant",
-        content: data.assistantResponse,
-        parent_id: userMsg.id,
-        sequence_num: nextSeq + 1,
-        output_tokens: data.outputTokens,
-        included_budget_context: data.includedBudgetContext,
-        response_time_ms: data.responseTimeMs,
-      })
+      .insert(assistantInsert)
       .select("id")
       .single();
+
+    if (isMissingAnalysisReportColumn(assistantError)) {
+      const fallbackInsert: Omit<typeof assistantInsert, "analysis_report"> & {
+        analysis_report?: AnalysisReport | null;
+      } = { ...assistantInsert };
+      delete fallbackInsert.analysis_report;
+      const fallback = await supabase
+        .from("ai_messages")
+        .insert(fallbackInsert)
+        .select("id")
+        .single();
+      assistantMsg = fallback.data;
+      assistantError = fallback.error;
+    }
 
     if (assistantError) {
       console.error("Failed to insert assistant message:", assistantError);
@@ -647,6 +720,17 @@ async function logMessagesToDatabase(
     console.error("Failed to log messages:", error);
     return { userMessageId: null, assistantMessageId: null };
   }
+}
+
+function isMissingAnalysisReportColumn(error: {
+  code?: string;
+  message?: string;
+} | null): boolean {
+  return Boolean(
+    error &&
+      (error.code === "PGRST204" ||
+        error.message?.includes("analysis_report")),
+  );
 }
 
 /**
@@ -696,6 +780,7 @@ async function getMonthlyTokenUsage(
 async function fetchBudgetContext(
   supabase: Awaited<ReturnType<typeof supabaseServer>>,
   userId: string,
+  opts: { includeTrend?: boolean } = {},
 ): Promise<BudgetContext> {
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -744,7 +829,7 @@ async function fetchBudgetContext(
   }
 
   // Fetch account balances (try account_balances table first)
-  let accountBalances: Record<string, number> = {};
+  const accountBalances: Record<string, number> = {};
   try {
     const { data: balances } = await supabase
       .from("account_balances")
@@ -936,6 +1021,19 @@ async function fetchBudgetContext(
       spent: lastMonthCategorySpending[cat.id] || 0,
     }));
 
+  // Multi-month income/expense trend (analysis mode only — one extra query).
+  let monthlyTrend: MonthlyTrendPoint[] | undefined;
+  if (opts.includeTrend) {
+    monthlyTrend = await fetchMonthlyTrend(
+      supabase,
+      accountIds,
+      expenseAccountIds,
+      incomeAccountIds,
+      now,
+      6,
+    );
+  }
+
   // Calculate totals (EXPENSES ONLY for spending)
   const totalBudget = categoriesArray.reduce((sum, c) => sum + c.budget, 0);
   const totalSpent = categoriesArray.reduce((sum, c) => sum + c.spent, 0);
@@ -1005,5 +1103,60 @@ async function fetchBudgetContext(
     futurePurchases,
     accounts: accountsWithBalances,
     draftTransactions,
+    monthlyTrend,
   };
+}
+
+/**
+ * Aggregate income/expense/net per month over the last `monthsBack` months.
+ * Empty months are seeded so the trend chart shows a continuous series.
+ */
+async function fetchMonthlyTrend(
+  supabase: Awaited<ReturnType<typeof supabaseServer>>,
+  accountIds: string[],
+  expenseAccountIds: Set<string>,
+  incomeAccountIds: Set<string>,
+  now: Date,
+  monthsBack: number,
+): Promise<MonthlyTrendPoint[]> {
+  const windowStart = new Date(
+    now.getFullYear(),
+    now.getMonth() - (monthsBack - 1),
+    1,
+  );
+  const startStr = windowStart.toISOString().slice(0, 10);
+
+  const { data: txs } = await supabase
+    .from("transactions")
+    .select("amount, date, account_id")
+    .in("account_id", accountIds)
+    .gte("date", startStr)
+    .order("date", { ascending: true });
+
+  // Seed a bucket per month so gaps render as zero, not as missing points.
+  const buckets = new Map<string, { income: number; expense: number }>();
+  for (let i = 0; i < monthsBack; i++) {
+    const d = new Date(
+      now.getFullYear(),
+      now.getMonth() - (monthsBack - 1) + i,
+      1,
+    );
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    buckets.set(key, { income: 0, expense: 0 });
+  }
+
+  for (const tx of txs || []) {
+    const key = String(tx.date).slice(0, 7);
+    const bucket = buckets.get(key);
+    if (!bucket) continue;
+    if (expenseAccountIds.has(tx.account_id)) bucket.expense += tx.amount;
+    else if (incomeAccountIds.has(tx.account_id)) bucket.income += tx.amount;
+  }
+
+  return Array.from(buckets.entries()).map(([period, v]) => ({
+    period,
+    income: v.income,
+    expense: v.expense,
+    net: v.income - v.expense,
+  }));
 }

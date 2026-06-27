@@ -9,8 +9,10 @@ import {
   useGenerateAiBudgetSuggestion,
   useSaveBudgetAllocation,
 } from "@/features/budget/hooks";
+import { useDatePreferences } from "@/features/preferences/useDatePreferences";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
+import { getDefaultDateRange } from "@/lib/utils/date";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import type {
   AiCategorySuggestion,
@@ -22,7 +24,6 @@ import type {
 } from "@/types/budgetAllocation";
 import { BUDGET_WEEK_LABELS } from "@/types/budgetAllocation";
 import { format } from "date-fns";
-import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -47,6 +48,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 // ===== Ownership Toggle (Me / Both / Partner) =====
 const OwnershipToggle = memo(function OwnershipToggle({
@@ -90,50 +92,6 @@ const OwnershipToggle = memo(function OwnershipToggle({
         >
           <item.icon className="w-3.5 h-3.5" />
           {item.label}
-        </button>
-      ))}
-    </div>
-  );
-});
-
-// ===== Account Filter =====
-const AccountFilter = memo(function AccountFilter({
-  accounts,
-  selectedId,
-  onSelect,
-}: {
-  accounts: { id: string; name: string; type: string }[];
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-}) {
-  const expenseAccounts = accounts.filter((a) => a.type === "expense");
-  if (expenseAccounts.length <= 1) return null;
-
-  return (
-    <div className="flex items-center gap-2 overflow-x-auto pb-1">
-      <button
-        onClick={() => onSelect(null)}
-        className={cn(
-          "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
-          selectedId === null
-            ? "bg-white/15 text-white"
-            : "bg-white/5 text-slate-400 hover:bg-white/10",
-        )}
-      >
-        All Accounts
-      </button>
-      {expenseAccounts.map((acc) => (
-        <button
-          key={acc.id}
-          onClick={() => onSelect(acc.id)}
-          className={cn(
-            "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
-            selectedId === acc.id
-              ? "bg-white/15 text-white"
-              : "bg-white/5 text-slate-400 hover:bg-white/10",
-          )}
-        >
-          {acc.name}
         </button>
       ))}
     </div>
@@ -1219,13 +1177,17 @@ const BudgetDashboardView = memo(function BudgetDashboardView({
 const WebBudget = memo(function WebBudget() {
   const tc = useThemeClasses();
   const currentMonth = format(new Date(), "yyyy-MM");
+  // Custom-month billing window (same one the dashboard uses) so the "Spent"
+  // figure reconciles exactly with the Review dashboard's spending total.
+  const { prefs: datePrefs } = useDatePreferences();
+  const monthRange = useMemo(
+    () => getDefaultDateRange(datePrefs.month_start_day),
+    [datePrefs.month_start_day],
+  );
 
   // State
   const [ownershipFilter, setOwnershipFilter] =
     useState<BudgetOwnershipFilter>("all");
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
-    null,
-  );
   const [activeWeek, setActiveWeek] = useState<BudgetWeek>(() => {
     const dayOfMonth = new Date().getDate();
     if (dayOfMonth <= 7) return "w0";
@@ -1247,10 +1209,12 @@ const WebBudget = memo(function WebBudget() {
     return 4;
   }, []);
 
-  // Data
+  // Data — budgets are household-global across every expense account (no
+  // per-account scoping: a "Food" envelope covers card, cash and wallet alike).
   const { data, isLoading, error } = useBudgetAllocations(
     currentMonth,
-    selectedAccountId || undefined,
+    undefined,
+    monthRange,
   );
   const saveMutation = useSaveBudgetAllocation();
 
@@ -1278,7 +1242,6 @@ const WebBudget = memo(function WebBudget() {
 
   const summary = data?.summary;
   const hasPartner = data?.hasPartner ?? false;
-  const accounts = data?.accounts ?? [];
 
   // Wallet balance based on ownership
   const displayWalletBalance = useMemo(() => {
@@ -1473,13 +1436,14 @@ const WebBudget = memo(function WebBudget() {
             </div>
           </div>
 
-          {/* Second row: account filter + week toggle */}
+          {/* Second row: household scope label + week toggle */}
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <AccountFilter
-              accounts={accounts}
-              selectedId={selectedAccountId}
-              onSelect={setSelectedAccountId}
-            />
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg neo-card text-xs font-medium text-slate-400">
+              <Users className="w-3.5 h-3.5 text-violet-400" />
+              <span>Household budget</span>
+              <span className="text-slate-600">·</span>
+              <span className="text-slate-500">all accounts</span>
+            </div>
             <WeekToggle
               value={activeWeek}
               onChange={setActiveWeek}

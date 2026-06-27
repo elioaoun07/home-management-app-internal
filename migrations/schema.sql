@@ -265,6 +265,7 @@ CREATE TABLE public.ai_messages (
   is_active boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   total_tokens integer DEFAULT (COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)),
+  analysis_report jsonb,
   CONSTRAINT ai_messages_pkey PRIMARY KEY (id),
   CONSTRAINT ai_messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT ai_messages_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.ai_messages(id)

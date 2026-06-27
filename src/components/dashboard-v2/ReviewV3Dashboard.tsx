@@ -184,6 +184,8 @@ export default function ReviewV3Dashboard({
       {activeTab === "insight" && (
         <InsightTabContent
           expenseTransactions={expenseTransactions}
+          allTransactions={transactions}
+          accounts={accounts}
           analyticsMonths={analytics?.months}
           budgetSummary={budgetAllocations?.summary}
           recurringHints={recurringHints}

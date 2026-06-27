@@ -58,6 +58,10 @@ export type Transaction = {
   subcategory_id?: string | null;
   is_private?: boolean;
   is_owner?: boolean;
+  /** True when this is the partner's private transaction: content is masked
+   *  server-side (category/description withheld) but the amount still counts
+   *  toward shared totals. The UI blurs the amount and hides the details. */
+  is_masked?: boolean;
   /** True if current user is the collaborator on a completed split transaction */
   is_collaborator?: boolean;
   user_theme?: string;

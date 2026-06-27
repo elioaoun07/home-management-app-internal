@@ -59,14 +59,26 @@ async function fetchAccountList(
     }
   }
 
-  return [...(ownAccounts ?? []), ...partnerAccounts].sort((a, b) => {
-    const positionDiff = (a.position ?? 0) - (b.position ?? 0);
-    if (positionDiff !== 0) return positionDiff;
-    return (
-      new Date(b.inserted_at ?? 0).getTime() -
-      new Date(a.inserted_at ?? 0).getTime()
-    );
-  });
+  // PostgREST returns the embedded account_balances as an OBJECT (1:1, since
+  // account_id is unique) when a row exists, or null when none does — not an array.
+  const flatten = (a: any) => {
+    const ab = a.account_balances;
+    const balance_set_at = Array.isArray(ab)
+      ? (ab[0]?.balance_set_at ?? null)
+      : (ab?.balance_set_at ?? null);
+    return { ...a, balance_set_at, account_balances: undefined };
+  };
+
+  return [...(ownAccounts ?? []), ...partnerAccounts]
+    .sort((a, b) => {
+      const positionDiff = (a.position ?? 0) - (b.position ?? 0);
+      if (positionDiff !== 0) return positionDiff;
+      return (
+        new Date(b.inserted_at ?? 0).getTime() -
+        new Date(a.inserted_at ?? 0).getTime()
+      );
+    })
+    .map(flatten);
 }
 
 export async function GET(req: NextRequest) {

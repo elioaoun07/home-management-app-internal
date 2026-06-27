@@ -16,6 +16,7 @@ export type Account = {
   position?: number | null;
   visible?: boolean | null;
   is_public?: boolean | null;
+  balance_set_at?: string | null;
 };
 
 /** User (DB) categories are flat; subcats use parent_id */

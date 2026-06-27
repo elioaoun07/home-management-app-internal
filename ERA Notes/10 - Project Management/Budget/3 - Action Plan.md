@@ -1,6 +1,6 @@
 ---
 created: 2026-05-30
-updated: 2026-06-26
+updated: 2026-06-27
 type: action-plan
 status: active
 owner: Elio
@@ -12,7 +12,7 @@ tags:
 
 # Budget - 3 - Action Plan
 
-> **Command Center:** [_index](<_index.md>) - [1 - Feature State](<1 - Feature State.md>) - [2 - Vision & Roadmap](<2 - Vision & Roadmap.md>) - [3 - Action Plan](<3 - Action Plan.md>) - [4 - Checklist](<4 - Checklist.md>)
+> **Command Center:** [\_index](_index.md) - [1 - Feature State](<1 - Feature State.md>) - [2 - Vision & Roadmap](<2 - Vision & Roadmap.md>) - [3 - Action Plan](<3 - Action Plan.md>) - [4 - Checklist](<4 - Checklist.md>)
 >
 > **What this file is:** the why, and in what order for Budget - the strategic call and the candidate work as narrative. The flat, checkable version of this plan is [4 - Checklist](<4 - Checklist.md>); tick the boxes there.
 
@@ -37,19 +37,19 @@ surfaces.
 
 ## Candidate Work
 
-| Candidate | Track | Impact | Effort | Foundation? |
-|---|---|---|---|---|
-| `balance-utils` unit tests | A | High | M | yes - done |
-| Recurring next-due unit tests | A | High | M | yes - done |
-| Salary -> Wallet quick refill | A | Med | S | shipped 2026-06-25 |
-| Public/shared accounts | A | High | M | shipped 2026-06-26 |
-| Allocation workflow across accounts | A | Med | M | next |
-| Recurring -> Schedule due-date unify | B | High | H | - |
-| Merchant-map -> manual entry | A | Med | S-M | - |
-| Cashflow forecast -> ERA | B | High | H | - |
-| 50/30/20 + Dashboard V2 widgets | A | High | M | - |
-| Debt -> Schedule auto-reminder | B | Med | S-M | - |
-| Remove/guard `analytics/debug` route | A | Low | S | - |
+| Candidate                            | Track | Impact | Effort | Foundation?        |
+| ------------------------------------ | ----- | ------ | ------ | ------------------ |
+| `balance-utils` unit tests           | A     | High   | M      | yes - done         |
+| Recurring next-due unit tests        | A     | High   | M      | yes - done         |
+| Salary -> Wallet quick refill        | A     | Med    | S      | shipped 2026-06-25 |
+| Public/shared accounts               | A     | High   | M      | shipped 2026-06-26 |
+| Allocation workflow across accounts  | A     | Med    | M      | next               |
+| Recurring -> Schedule due-date unify | B     | High   | H      | -                  |
+| Merchant-map -> manual entry         | A     | Med    | S-M    | -                  |
+| Cashflow forecast -> ERA             | B     | High   | H      | -                  |
+| 50/30/20 + Dashboard V2 widgets      | A     | High   | M      | -                  |
+| Debt -> Schedule auto-reminder       | B     | Med    | S-M    | -                  |
+| Remove/guard `analytics/debug` route | A     | Low    | S      | -                  |
 
 ---
 
@@ -74,6 +74,14 @@ outlier-cleaned history (with a deterministic estimate fallback so it always
 works), shown inline with per-row Apply and Apply-All, and manual edits always
 win. Backend strips one-off outliers before forecasting and soft-clamps the AI's
 numbers to each category's typical spend.
+
+**Just shipped - Budget AI dashboard hardening.** The structured analysis
+dashboard now treats model category names as display labels instead of unique
+keys: duplicate labels are merged, percentages are recalculated, and chart/list
+rows use generated slice IDs. This closes the repeated `Food` key collision
+without changing the `AnalysisReport` contract. The same report JSON is now
+persisted on `ai_messages.analysis_report`, so history-loaded analysis answers
+can reopen **View as Dashboard** without regenerating through AI.
 
 **Next - First enhancement.** Tighten money allocation across accounts: make
 Salary -> Wallet funding, available Wallet balance, recurring commitments, and

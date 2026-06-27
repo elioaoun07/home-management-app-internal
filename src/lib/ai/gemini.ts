@@ -185,6 +185,14 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
+/** One month of income/expense/net totals — feeds the analysis trend chart. */
+export interface MonthlyTrendPoint {
+  period: string; // "YYYY-MM"
+  income: number;
+  expense: number;
+  net: number;
+}
+
 export interface BudgetContext {
   totalBudget: number;
   totalSpent: number;
@@ -254,6 +262,8 @@ export interface BudgetContext {
     transcript: string;
     confidence: number;
   }[];
+  /** Multi-month income/expense/net series for the analysis trend chart. */
+  monthlyTrend?: MonthlyTrendPoint[];
 }
 
 /**
@@ -277,7 +287,8 @@ Your Capabilities:
 
 Guidelines:
 - **Tone:** Professional, empathetic, encouraging, and expert.
-- **Format:** Use clear headings, bullet points, and bold text for key insights.
+- **Format:** ALWAYS answer in clean Markdown — use \`##\` headings, **bold** for key numbers, and bullet/numbered lists. Lead with the answer, keep paragraphs short, and cite real figures from the context. Never dump a wall of plain text.
+- **Depth:** Go beyond restating numbers — surface patterns, compare to last month, and explain *why* something matters.
 - **Currency:** Format amounts clearly (e.g., $1,234.56).
 - **Actionable Advice:** Always provide at least one concrete step the user can take.
 - **Privacy:** Do not ask for sensitive personal info (SSN, passwords).
@@ -431,7 +442,7 @@ export async function sendMessageToGemini(
         temperature: 0.7,
         topP: 0.9,
         topK: 40,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
       },
     });
 
@@ -488,7 +499,7 @@ export async function* streamMessageToGemini(
     temperature: 0.7,
     topP: 0.9,
     topK: 40,
-    maxOutputTokens: 512,
+    maxOutputTokens: 1024,
   };
 
   const modelsToTry = [geminiModel, geminiFallbackModel];

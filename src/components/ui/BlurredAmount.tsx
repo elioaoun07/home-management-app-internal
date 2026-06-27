@@ -9,6 +9,13 @@ type BlurredAmountProps = {
   className?: string;
   /** Additional blur intensity (default: blur-md) */
   blurIntensity?: "sm" | "md" | "lg";
+  /**
+   * Force the blur on permanently, independent of the global privacy toggle.
+   * Used for a partner's PRIVATE transaction amount: the viewer (non-owner)
+   * must never be able to reveal it with the eye toggle — only the owner can
+   * see it. The amount still occupies the layout so it counts in totals.
+   */
+  forceBlur?: boolean;
 };
 
 /**
@@ -22,8 +29,10 @@ export default function BlurredAmount({
   children,
   className,
   blurIntensity = "md",
+  forceBlur = false,
 }: BlurredAmountProps) {
   const { isBlurred } = usePrivacyBlur();
+  const blurred = isBlurred || forceBlur;
 
   const blurValue = {
     sm: "4px",
@@ -38,11 +47,12 @@ export default function BlurredAmount({
         className,
       )}
       style={{
-        filter: isBlurred ? `blur(${blurValue})` : "none",
+        filter: blurred ? `blur(${blurValue})` : "none",
         // Prevent text selection when blurred for extra privacy
-        WebkitUserSelect: isBlurred ? "none" : "auto",
-        userSelect: isBlurred ? "none" : "auto",
+        WebkitUserSelect: blurred ? "none" : "auto",
+        userSelect: blurred ? "none" : "auto",
       }}
+      title={forceBlur ? "Private — only your partner can see this" : undefined}
     >
       {children}
     </span>

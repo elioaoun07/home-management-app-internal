@@ -81,6 +81,7 @@ export class SupabaseTransactionService implements TransactionService {
       )
       .is("parent_transaction_id", null)
       .is("deleted_at", null)
+      .eq("is_draft", false)
       .order("inserted_at", { ascending: false })
       .limit(limit);
 
@@ -180,13 +181,15 @@ export class SupabaseTransactionService implements TransactionService {
       }
     }
 
-    // Filter out private transactions from partner's view.
-    // account.is_public controls the expense-form account picker only —
-    // it does NOT restrict visibility of transactions on the dashboard.
+    // Include all household transactions (own + partner). The partner's PRIVATE
+    // transactions are kept too, but their content is masked in the mapping
+    // below (description/category withheld) — the amount is preserved so it
+    // still counts toward shared totals and every spending figure stays
+    // consistent across the app. account.is_public controls the expense-form
+    // account picker only — it does NOT restrict dashboard visibility.
     const filteredRows = (rawRows || []).filter((r: any) => {
       if (r.user_id === userId) return true;
       if (r.collaborator_id === userId && r.split_completed_at) return true;
-      if (r.is_private === true) return false;
       const account = accountMap[r.account_id];
       if (!account) return false;
       if (account.user_id === userId) return true;
@@ -241,60 +244,85 @@ export class SupabaseTransactionService implements TransactionService {
       }
     }
 
-    const result = (filteredRows || []).map((r: any) => ({
-      id: r.id,
-      date: r.date,
-      category:
-        categoryNamesMap[r.category_id]?.name || r.category?.name || null,
-      subcategory:
-        categoryNamesMap[r.subcategory_id]?.name || r.subcategory?.name || null,
-      amount: r.amount,
-      description: r.description,
-      account_id: r.account_id,
-      category_id: r.category_id,
-      subcategory_id: r.subcategory_id,
-      inserted_at: r.inserted_at,
-      user_id: r.user_id,
-      user_name: r.user_id === userId ? meName : partnerName || "Partner",
-      account_name: accountMap[r.account_id]?.name || "Unknown",
-      category_color:
-        categoryNamesMap[r.category_id]?.color ||
-        r.category?.color ||
-        "#38bdf8",
-      subcategory_color:
-        categoryNamesMap[r.subcategory_id]?.color ||
-        r.subcategory?.color ||
-        "#38bdf8",
-      is_private: r.is_private || false,
-      is_owner: r.user_id === userId,
-      // Track if the current user is the collaborator on this split transaction (must be boolean!)
-      is_collaborator: !!(r.collaborator_id === userId && r.split_completed_at),
-      user_theme:
-        r.user_id === userId
-          ? myPrefs?.theme || "blue"
-          : // Reverse theme for partner: if I'm blue, partner is pink; if I'm pink, partner is blue
-            myPrefs?.theme === "pink"
-            ? "blue"
-            : "pink",
-      // Split bill fields
-      split_requested: r.split_requested || false,
-      collaborator_id: r.collaborator_id || null,
-      collaborator_amount: r.collaborator_amount || null,
-      collaborator_description: r.collaborator_description || null,
-      split_completed_at: r.split_completed_at || null,
-      // Calculate total amount for completed splits
-      total_amount:
-        r.split_requested && r.split_completed_at && r.collaborator_amount
-          ? r.amount + r.collaborator_amount
-          : r.amount,
-      // LBP change tracking for Lebanon dual-currency
-      lbp_change_received: r.lbp_change_received ?? null,
-      // Future payment / debt return fields
-      scheduled_date: r.scheduled_date ?? null,
-      is_debt_return: r.is_debt_return || false,
-      // Receipt
-      receipt_url: r.receipt_url ?? null,
-    }));
+    const result = (filteredRows || []).map((r: any) => {
+      const isOwner = r.user_id === userId;
+      const isCollaborator = !!(
+        r.collaborator_id === userId && r.split_completed_at
+      );
+      // A partner's private transaction is masked. By product decision the
+      // top-level CATEGORY is kept (so the row still buckets under e.g. "Gift"
+      // on the dashboards and counts in that category's total), but the finer
+      // detail — subcategory, description, receipt, debt — is redacted so the
+      // viewer can't see exactly WHAT it was. The amount is preserved and the
+      // `is_masked` flag tells the UI to permanently blur that one amount
+      // (independent of the global privacy toggle) so it's never flashed.
+      const isMasked = r.is_private === true && !isOwner && !isCollaborator;
+
+      return {
+        id: r.id,
+        date: r.date,
+        // Real category kept even when masked → buckets under its true category.
+        category:
+          categoryNamesMap[r.category_id]?.name || r.category?.name || null,
+        subcategory: isMasked
+          ? null
+          : categoryNamesMap[r.subcategory_id]?.name ||
+            r.subcategory?.name ||
+            null,
+        amount: r.amount,
+        description: isMasked ? null : r.description,
+        account_id: r.account_id,
+        category_id: r.category_id,
+        subcategory_id: isMasked ? null : r.subcategory_id,
+        inserted_at: r.inserted_at,
+        user_id: r.user_id,
+        user_name: r.user_id === userId ? meName : partnerName || "Partner",
+        account_name: accountMap[r.account_id]?.name || "Unknown",
+        // Real category color kept so the masked row carries its category's hue.
+        category_color:
+          categoryNamesMap[r.category_id]?.color ||
+          r.category?.color ||
+          "#38bdf8",
+        subcategory_color: isMasked
+          ? "#64748b"
+          : categoryNamesMap[r.subcategory_id]?.color ||
+            r.subcategory?.color ||
+            "#38bdf8",
+        is_private: r.is_private || false,
+        is_owner: isOwner,
+        // Partner's private row — UI blurs the amount and hides the content.
+        is_masked: isMasked,
+        // Track if the current user is the collaborator on this split transaction (must be boolean!)
+        is_collaborator: isCollaborator,
+        user_theme:
+          r.user_id === userId
+            ? myPrefs?.theme || "blue"
+            : // Reverse theme for partner: if I'm blue, partner is pink; if I'm pink, partner is blue
+              myPrefs?.theme === "pink"
+              ? "blue"
+              : "pink",
+        // Split bill fields
+        split_requested: r.split_requested || false,
+        collaborator_id: r.collaborator_id || null,
+        collaborator_amount: r.collaborator_amount || null,
+        collaborator_description: isMasked
+          ? null
+          : r.collaborator_description || null,
+        split_completed_at: r.split_completed_at || null,
+        // Calculate total amount for completed splits
+        total_amount:
+          r.split_requested && r.split_completed_at && r.collaborator_amount
+            ? r.amount + r.collaborator_amount
+            : r.amount,
+        // LBP change tracking for Lebanon dual-currency
+        lbp_change_received: r.lbp_change_received ?? null,
+        // Future payment / debt return fields
+        scheduled_date: r.scheduled_date ?? null,
+        is_debt_return: r.is_debt_return || false,
+        // Receipt
+        receipt_url: isMasked ? null : (r.receipt_url ?? null),
+      };
+    });
 
     // Batch-fetch debt data for all transaction IDs
     const txIds = result.map((r: any) => r.id);
@@ -311,6 +339,7 @@ export class SupabaseTransactionService implements TransactionService {
           debts.map((d: any) => [d.transaction_id, d]),
         );
         for (const tx of result) {
+          if (tx.is_masked) continue; // never expose a partner's private debt
           const debt = debtByTxId.get(tx.id);
           if (debt) {
             tx.debt_id = debt.id;

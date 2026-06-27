@@ -96,6 +96,9 @@ type Transaction = {
   user_theme?: string;
   user_id?: string;
   is_owner?: boolean;
+  /** True when this is the partner's private transaction: content is masked
+   *  server-side and the amount is blurred, but it still counts in totals. */
+  is_masked?: boolean;
   /** True if current user is the collaborator on a completed split transaction */
   is_collaborator?: boolean;
   // Split bill fields
@@ -2383,6 +2386,7 @@ const WebDashboard = memo(function WebDashboard({
             <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1 scrollbar-thin">
               {filteredTransactions.slice(0, 20).map((tx) => {
                 const isPartnerTx = tx.is_owner === false;
+                const isMasked = tx.is_masked === true;
                 const isSplitCompleted =
                   tx.split_requested && tx.split_completed_at;
                 const iconColor = isPartnerTx
@@ -2492,6 +2496,12 @@ const WebDashboard = memo(function WebDashboard({
                         >
                           {tx.category || "Uncategorized"}
                         </p>
+                        {isMasked && (
+                          <EyeOff
+                            className="w-3 h-3 text-slate-500 flex-shrink-0"
+                            aria-label="Private — hidden"
+                          />
+                        )}
                         {isSplitCompleted && (
                           <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
                             Split
@@ -2530,7 +2540,9 @@ const WebDashboard = memo(function WebDashboard({
                         className={cn(
                           "text-sm font-bold tabular-nums",
                           themeClasses.text,
+                          isMasked && "blur-[6px] select-none",
                         )}
+                        title={isMasked ? "Private — hidden" : undefined}
                       >
                         ${displayAmount.toFixed(2)}
                       </p>

@@ -93,7 +93,16 @@ const METRIC_OPTIONS: Array<{ key: MetricKey; label: string; color: string }> =
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// Full, exact dollars for everything the user reads directly (tooltips, totals,
+// summaries) — e.g. "$1,887". Abbreviation is reserved for cramped chart axis
+// ticks via fmtAxis.
 function fmtDollar(n: number): string {
+  const sign = n < 0 ? "-" : "";
+  return `${sign}$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
+}
+
+/** Abbreviated dollars for cramped chart axis ticks only (e.g. "$1.9k"). */
+function fmtAxis(n: number): string {
   const sign = n < 0 ? "-" : "";
   const abs = Math.abs(n);
   if (abs >= 10_000) return `${sign}$${(abs / 1000).toFixed(0)}k`;
@@ -305,7 +314,6 @@ function OutlinedBar({
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function MonthlyDistributionTabContent({
-  analyticsMonths,
   transactions,
   accounts,
   balanceAccounts,
@@ -398,30 +406,30 @@ export default function MonthlyDistributionTabContent({
       });
     }
 
-    // Fill combined income + expense split from analytics.
-    // Savings is a flat current account balance from "Our Savings" for now.
-    for (const m of analyticsMonths ?? []) {
-      const bk = dateToBucketKey(`${m.month}-01`, grouping);
-      if (!bucketKeys.has(bk)) continue;
-      const row = map.get(bk)!;
-      row.income += m.income;
-      row.expense += m.expense;
-      row.myExpense += m.myExpense;
-      row.partnerExpense += m.partnerExpense;
-    }
-
-    // Derive income split from raw transactions
+    // Income + expense are derived from the SAME client transactions that feed
+    // the Insight pie and Categories tab, using the canonical spending rule
+    // (expense-type accounts only, debt-returns excluded, absolute amounts).
+    // The buckets are built from [startDate, endDate] and the client already
+    // fetched exactly that window, so these sums reconcile to the penny with
+    // the other tabs. (Previously expense came from the calendar-month
+    // analytics fetch, which is what made the Monthly total disagree.)
     for (const t of transactions) {
       const bk = dateToBucketKey(t.date, grouping);
       if (!bucketKeys.has(bk)) continue;
       const row = map.get(bk);
       if (!row) continue;
+      if (t.is_debt_return) continue;
       const acctType = accountTypeMap.get(t.account_id);
       const isMe = t.user_id === currentUserId;
       const amt = Math.abs(Number(t.amount));
-      if (acctType === "income" && !t.is_debt_return) {
+      if (acctType === "income") {
+        row.income += amt;
         if (isMe) row.myIncome += amt;
         else row.partnerIncome += amt;
+      } else if (acctType === "expense") {
+        row.expense += amt;
+        if (isMe) row.myExpense += amt;
+        else row.partnerExpense += amt;
       }
     }
 
@@ -433,7 +441,6 @@ export default function MonthlyDistributionTabContent({
       return row;
     });
   }, [
-    analyticsMonths,
     transactions,
     buckets,
     bucketKeys,
@@ -469,7 +476,7 @@ export default function MonthlyDistributionTabContent({
     [rows, ourSavingsBalance, mySavingsBalance, partnerSavingsBalance],
   );
 
-  if (!analyticsMonths) {
+  if (!transactions || transactions.length === 0) {
     return (
       <div className="text-center py-16 text-white/40 text-sm">
         No monthly data available
@@ -749,7 +756,7 @@ function BlurredYAxisTick({
       fontWeight={500}
       style={isBlurred ? { filter: "blur(5px)" } : undefined}
     >
-      {fmtDollar(payload.value)}
+      {fmtAxis(payload.value)}
     </text>
   );
 }

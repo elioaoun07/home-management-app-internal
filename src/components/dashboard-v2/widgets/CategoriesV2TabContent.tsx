@@ -89,7 +89,16 @@ const SUB_PALETTE = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// Full, exact dollars for everything the user reads directly (sidebar, cards,
+// totals) — e.g. "$1,887". Abbreviation is reserved for cramped chart axis
+// ticks via fmtAxis.
 function fmtDollar(n: number): string {
+  const sign = n < 0 ? "-" : "";
+  return `${sign}$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
+}
+
+/** Abbreviated dollars for cramped chart axis ticks only (e.g. "$1.9k"). */
+function fmtAxis(n: number): string {
   if (n >= 10_000) return `$${(n / 1000).toFixed(0)}k`;
   if (n >= 1_000) return `$${(n / 1000).toFixed(1)}k`;
   return `$${Math.round(n)}`;
@@ -1445,7 +1454,7 @@ function CategoryChart({
   const yAxisProps = {
     tick: { fill: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 500 },
     ...commonAxisProps,
-    tickFormatter: (v: number) => fmtDollar(v),
+    tickFormatter: (v: number) => fmtAxis(v),
     width: 52,
     tickMargin: 4,
   };

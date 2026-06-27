@@ -41,6 +41,8 @@ type Transaction = {
   user_theme?: string;
   user_id?: string;
   is_owner?: boolean;
+  is_private?: boolean;
+  is_masked?: boolean;
   receipt_url?: string | null;
 };
 
@@ -97,6 +99,11 @@ export default function TransactionDetailModal({
     (!currentUserId ||
       !transaction.user_id ||
       transaction.user_id === currentUserId);
+
+  // The partner's private transaction: the amount is shown blurred and the
+  // details are withheld (already redacted server-side). Always hidden,
+  // regardless of the global privacy toggle.
+  const isMasked = transaction.is_masked === true;
 
   const deleteMutation = useDeleteTransaction();
   const updateMutation = useUpdateTransaction();
@@ -324,7 +331,24 @@ export default function TransactionDetailModal({
               </div>
             ) : (
               <p className="text-4xl font-bold text-emerald-400">
-                <BlurredAmount>${transaction.amount.toFixed(2)}</BlurredAmount>
+                {isMasked ? (
+                  <span
+                    className="blur-[10px] select-none"
+                    title="Private — hidden"
+                  >
+                    ${transaction.amount.toFixed(2)}
+                  </span>
+                ) : (
+                  <BlurredAmount>
+                    ${transaction.amount.toFixed(2)}
+                  </BlurredAmount>
+                )}
+              </p>
+            )}
+            {isMasked && (
+              <p className="mx-auto mt-1 max-w-xs text-center text-xs text-slate-400">
+                Your partner marked this private. The amount is included in your
+                shared totals, but the details are hidden.
               </p>
             )}
           </div>

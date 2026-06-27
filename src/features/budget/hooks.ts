@@ -25,10 +25,14 @@ const BUDGET_KEY = "budget-allocations";
 async function fetchBudgetAllocations(
   month?: string,
   accountId?: string,
+  range?: { start?: string; end?: string },
 ): Promise<BudgetResponse> {
   const params = new URLSearchParams();
   if (month) params.set("month", month);
   if (accountId) params.set("accountId", accountId);
+  // Explicit custom-month window so the "Spent" total matches the dashboard.
+  if (range?.start) params.set("start", range.start);
+  if (range?.end) params.set("end", range.end);
 
   const res = await fetch(`/api/budget-allocations?${params.toString()}`);
   if (!res.ok) {
@@ -68,10 +72,14 @@ async function deleteBudgetAllocation(id: string): Promise<void> {
  * Overrides global refetchOnMount: false so navigating back to this page
  * always fetches fresh data from the server.
  */
-export function useBudgetAllocations(month?: string, accountId?: string) {
+export function useBudgetAllocations(
+  month?: string,
+  accountId?: string,
+  range?: { start?: string; end?: string },
+) {
   return useQuery({
-    queryKey: [BUDGET_KEY, month, accountId],
-    queryFn: () => fetchBudgetAllocations(month, accountId),
+    queryKey: [BUDGET_KEY, month, accountId, range?.start, range?.end],
+    queryFn: () => fetchBudgetAllocations(month, accountId, range),
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,
     refetchOnMount: "always", // override global false — budget data must be fresh on every mount

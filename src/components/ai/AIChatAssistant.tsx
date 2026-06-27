@@ -4,6 +4,9 @@ import {
   BarChart3Icon,
   SparklesIcon,
 } from "@/components/icons/FuturisticIcons";
+import AnalysisDashboard from "@/components/ai/AnalysisDashboard";
+import ChatMarkdown from "@/components/ai/ChatMarkdown";
+import type { AnalysisReport } from "@/lib/ai/analysisReport";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -12,7 +15,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { useTabSafe } from "@/contexts/TabContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { isReallyOnline } from "@/lib/connectivityManager";
 import { safeFetch } from "@/lib/safeFetch";
@@ -20,6 +22,7 @@ import { cn } from "@/lib/utils";
 import {
   Check,
   Clock,
+  LayoutDashboard,
   MessageSquare,
   Pencil,
   Plus,
@@ -28,13 +31,15 @@ import {
   X,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
   tokens?: number;
+  /** Structured analysis (analysis requests only) — powers "View as Dashboard". */
+  report?: AnalysisReport;
 }
 
 interface Conversation {
@@ -78,7 +83,6 @@ const generateSessionId = () => {
 const MAX_CONTEXT_MESSAGES = 20;
 
 export default function AIChatAssistant() {
-  const tabContext = useTabSafe(); // Safe version that won't throw
   const [isOpen, setIsOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -94,6 +98,15 @@ export default function AIChatAssistant() {
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState<UsageStats | null>(null);
   const [showUsage, setShowUsage] = useState(false);
+  // Ephemeral report being viewed as a dashboard (null = chat view).
+  const [dashboardReport, setDashboardReport] = useState<AnalysisReport | null>(
+    null,
+  );
+  // Most recent analysis report in this session — powers the header shortcut.
+  const lastReport = useMemo(
+    () => [...messages].reverse().find((m) => m.report)?.report ?? null,
+    [messages],
+  );
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editContent, setEditContent] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -250,6 +263,7 @@ export default function AIChatAssistant() {
               input_tokens?: number;
               output_tokens?: number;
               is_edited?: boolean;
+              analysis_report?: AnalysisReport | null;
             }) => {
               if (msg.role === "user" || msg.role === "assistant") {
                 loadedMessages.push({
@@ -257,6 +271,10 @@ export default function AIChatAssistant() {
                   content: msg.content,
                   timestamp: new Date(msg.created_at),
                   tokens: (msg.input_tokens || 0) + (msg.output_tokens || 0),
+                  report:
+                    msg.role === "assistant"
+                      ? msg.analysis_report ?? undefined
+                      : undefined,
                 });
               }
             },
@@ -388,9 +406,10 @@ export default function AIChatAssistant() {
     setError(null);
 
     try {
-      const response = await fetch("/api/ai-chat", {
+      const response = await safeFetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        timeoutMs: 60_000,
         body: JSON.stringify({
           message: lastUserMessage,
           chatHistory: contextMessages.slice(-MAX_CONTEXT_MESSAGES),
@@ -410,6 +429,7 @@ export default function AIChatAssistant() {
         content: data.message,
         timestamp: new Date(data.timestamp),
         tokens: data.usage?.requestTokens,
+        report: data.report,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -445,9 +465,10 @@ export default function AIChatAssistant() {
       const contextMessages = baseMessages.slice(-MAX_CONTEXT_MESSAGES);
 
       try {
-        const response = await fetch("/api/ai-chat", {
+        const response = await safeFetch("/api/ai-chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          timeoutMs: 60_000,
           body: JSON.stringify({
             message: messageText.trim(),
             chatHistory: contextMessages,
@@ -467,6 +488,7 @@ export default function AIChatAssistant() {
           content: data.message,
           timestamp: new Date(data.timestamp),
           tokens: data.usage?.requestTokens,
+          report: data.report,
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
@@ -586,21 +608,37 @@ export default function AIChatAssistant() {
                 >
                   <Clock className="h-4 w-4" />
                 </Button>
-                {/* Usage Stats Button */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowUsage(!showUsage)}
-                  className={cn(
-                    "h-8 w-8 p-0 rounded-full",
-                    showUsage ? "bg-violet-500/20" : "",
-                    themeClasses.textMuted,
-                    "hover:text-white",
-                  )}
-                  title="Token Usage"
-                >
-                  <BarChart3Icon className="h-4 w-4" />
-                </Button>
+                {/* Dashboard shortcut — opens last analysis report; falls back to usage stats */}
+                {lastReport ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDashboardReport(lastReport)}
+                    className={cn(
+                      "h-8 w-8 p-0 rounded-full",
+                      themeClasses.textMuted,
+                      "hover:text-white text-violet-400",
+                    )}
+                    title="View Analysis Dashboard"
+                  >
+                    <LayoutDashboard className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowUsage(!showUsage)}
+                    className={cn(
+                      "h-8 w-8 p-0 rounded-full",
+                      showUsage ? "bg-violet-500/20" : "",
+                      themeClasses.textMuted,
+                      "hover:text-white",
+                    )}
+                    title="Token Usage"
+                  >
+                    <BarChart3Icon className="h-4 w-4" />
+                  </Button>
+                )}
                 {/* New Chat Button */}
                 <Button
                   variant="ghost"
@@ -943,9 +981,13 @@ export default function AIChatAssistant() {
                                       ),
                                 )}
                               >
-                                <div className="text-sm whitespace-pre-wrap leading-relaxed">
-                                  {message.content}
-                                </div>
+                                {message.role === "assistant" ? (
+                                  <ChatMarkdown content={message.content} />
+                                ) : (
+                                  <div className="text-sm whitespace-pre-wrap leading-relaxed">
+                                    {message.content}
+                                  </div>
+                                )}
                                 <div
                                   className={cn(
                                     "text-[10px] mt-1 opacity-60 flex items-center gap-2",
@@ -967,6 +1009,25 @@ export default function AIChatAssistant() {
                                   )}
                                 </div>
                               </div>
+
+                              {/* View as Dashboard — only on structured analysis answers */}
+                              {message.role === "assistant" &&
+                                message.report && (
+                                  <button
+                                    onClick={() =>
+                                      setDashboardReport(message.report!)
+                                    }
+                                    className={cn(
+                                      "flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg text-xs font-medium",
+                                      "bg-gradient-to-r from-violet-600/20 to-indigo-600/20 border border-violet-400/30",
+                                      "text-violet-200 hover:from-violet-600/30 hover:to-indigo-600/30 transition-colors",
+                                    )}
+                                    title="View this analysis as a dashboard"
+                                  >
+                                    <BarChart3Icon className="h-3.5 w-3.5" />
+                                    View as Dashboard
+                                  </button>
+                                )}
 
                               {/* Action buttons - show on hover */}
                               <div
@@ -1116,6 +1177,14 @@ export default function AIChatAssistant() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Ephemeral dashboard translation of the current analysis answer */}
+      {dashboardReport && (
+        <AnalysisDashboard
+          report={dashboardReport}
+          onClose={() => setDashboardReport(null)}
+        />
+      )}
     </>
   );
 }
