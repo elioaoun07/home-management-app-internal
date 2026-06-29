@@ -602,7 +602,10 @@ export default function InsightTabContent({
                 />
                 <span className="text-white/70">{p.dataKey}</span>
               </span>
-              <span className="text-white tabular-nums">
+              <span
+                className="text-white tabular-nums"
+                style={isAmountBlurred ? { filter: "blur(5px)" } : undefined}
+              >
                 {fmtFull(p.value)}
                 {cb && (
                   <span className="text-white/35">
@@ -616,7 +619,10 @@ export default function InsightTabContent({
         })}
         <div className="mt-1.5 pt-1.5 border-t border-white/10 flex items-center justify-between gap-4 text-xs">
           <span className="text-white/50">Total</span>
-          <span className="text-white font-semibold tabular-nums">
+          <span
+            className="text-white font-semibold tabular-nums"
+            style={isAmountBlurred ? { filter: "blur(5px)" } : undefined}
+          >
             {fmtFull(total)}
           </span>
         </div>
@@ -628,6 +634,7 @@ export default function InsightTabContent({
                 "tabular-nums font-medium",
                 total > totalBudget ? "text-rose-400" : "text-emerald-400",
               )}
+              style={isAmountBlurred ? { filter: "blur(5px)" } : undefined}
             >
               {total > totalBudget
                 ? `+${fmtFull(total - totalBudget)} over`
@@ -996,7 +1003,16 @@ export default function InsightTabContent({
                   </Pie>
                   <Tooltip
                     formatter={(value, name) => [
-                      fmtFull(Number(value)),
+                      <span
+                        key="value"
+                        style={
+                          isAmountBlurred
+                            ? { filter: "blur(5px)" }
+                            : undefined
+                        }
+                      >
+                        {fmtFull(Number(value))}
+                      </span>,
                       name as string,
                     ]}
                     contentStyle={TOOLTIP_STYLE}

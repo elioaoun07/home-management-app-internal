@@ -2,6 +2,7 @@
 
 import WidgetCard from "@/components/dashboard-v2/WidgetCard";
 import BlurredAmount from "@/components/ui/BlurredAmount";
+import { usePrivacyBlur } from "@/contexts/PrivacyBlurContext";
 import { useBudgetAllocations } from "@/features/budget/hooks";
 import { cn } from "@/lib/utils";
 import type { BudgetCategoryView } from "@/types/budgetAllocation";
@@ -1237,6 +1238,7 @@ function CategoryChart({
   budgetAmount?: number;
 }) {
   const uid = useId().replace(/:/g, "");
+  const { isBlurred } = usePrivacyBlur();
 
   const commonAxisProps = {
     tickLine: false as const,
@@ -1336,6 +1338,7 @@ function CategoryChart({
                       fontSize: 12,
                       fontWeight: 600,
                       fontVariantNumeric: "tabular-nums",
+                      ...(isBlurred ? { filter: "blur(5px)" } : null),
                     }}
                   >
                     ${Math.round(s.amount).toLocaleString("en-US")}
@@ -1366,6 +1369,7 @@ function CategoryChart({
                     fontSize: 13,
                     fontWeight: 700,
                     fontVariantNumeric: "tabular-nums",
+                    ...(isBlurred ? { filter: "blur(5px)" } : null),
                   }}
                 >
                   ${Math.round(total).toLocaleString("en-US")}
@@ -1379,6 +1383,7 @@ function CategoryChart({
                 fontSize: 13,
                 fontWeight: 600,
                 fontVariantNumeric: "tabular-nums",
+                ...(isBlurred ? { filter: "blur(5px)" } : null),
               }}
             >
               ${Math.round(total).toLocaleString("en-US")}
@@ -1412,6 +1417,7 @@ function CategoryChart({
                   fontSize: 12,
                   fontWeight: 700,
                   fontVariantNumeric: "tabular-nums",
+                  ...(isBlurred ? { filter: "blur(5px)" } : null),
                 }}
               >
                 ${Math.round(budgetAmount).toLocaleString("en-US")}
@@ -1425,6 +1431,7 @@ function CategoryChart({
                     total > budgetAmount
                       ? "rgba(251,191,36,0.9)"
                       : "rgba(52,211,153,0.9)",
+                  ...(isBlurred ? { filter: "blur(5px)" } : null),
                 }}
               >
                 {total > budgetAmount
@@ -1436,7 +1443,7 @@ function CategoryChart({
         </div>
       );
     },
-    [category, subBreakdownByMonth, budgetAmount],
+    [category, subBreakdownByMonth, budgetAmount, isBlurred],
   );
 
   const tooltipProps = {

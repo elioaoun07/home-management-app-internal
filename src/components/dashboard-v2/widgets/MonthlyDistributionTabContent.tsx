@@ -1092,6 +1092,7 @@ function MetricChart({
                       fontSize: 12,
                       fontWeight: 600,
                       fontVariantNumeric: "tabular-nums",
+                      ...(isBlurred ? { filter: "blur(5px)" } : null),
                     }}
                   >
                     {fmtDollar(e.value)}
@@ -1122,6 +1123,7 @@ function MetricChart({
                     fontSize: 13,
                     fontWeight: 700,
                     fontVariantNumeric: "tabular-nums",
+                    ...(isBlurred ? { filter: "blur(5px)" } : null),
                   }}
                 >
                   {fmtDollar(combined)}
@@ -1135,6 +1137,7 @@ function MetricChart({
                 fontSize: 13,
                 fontWeight: 600,
                 fontVariantNumeric: "tabular-nums",
+                ...(isBlurred ? { filter: "blur(5px)" } : null),
               }}
             >
               {fmtDollar(combined)}
@@ -1143,7 +1146,17 @@ function MetricChart({
         </div>
       );
     },
-    [rows, dataKey, myKey, partnerKey, viewMode, myColor, partnerColor, color],
+    [
+      rows,
+      dataKey,
+      myKey,
+      partnerKey,
+      viewMode,
+      myColor,
+      partnerColor,
+      color,
+      isBlurred,
+    ],
   );
 
   const cursorProps = { fill: "rgba(255,255,255,0.04)", radius: 4 } as any;
@@ -1505,6 +1518,7 @@ function OverviewWidget({
                       fontSize: 12,
                       fontWeight: 700,
                       fontVariantNumeric: "tabular-nums",
+                      ...(isBlurred ? { filter: "blur(5px)" } : null),
                     }}
                   >
                     {fmtDollar(e.value)}
@@ -1515,7 +1529,7 @@ function OverviewWidget({
         </div>
       );
     },
-    [rows, viewMode, myColor, partnerColor, visibleMetrics],
+    [rows, viewMode, myColor, partnerColor, visibleMetrics, isBlurred],
   );
 
   const legendItems =
