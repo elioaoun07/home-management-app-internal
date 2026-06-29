@@ -310,10 +310,12 @@ export async function POST(req: NextRequest) {
 
     await adjustAccountBalance(from_account_id, fromDelta, "transfer_out", {
       userId: user.id,
+      transferId: transfer.id,
       reason: `${labelPrefix} transfer to ${toAccount.name || "account"}`,
     });
     await adjustAccountBalance(to_account_id, toDelta, "transfer_in", {
       userId: user.id,
+      transferId: transfer.id,
       reason: `${labelPrefix} transfer from ${fromAccount.name || "account"}`,
     });
 

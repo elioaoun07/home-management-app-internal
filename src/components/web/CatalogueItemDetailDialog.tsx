@@ -34,7 +34,9 @@ import {
   DollarSign,
   Download,
   ExternalLink,
+  FileCheck2,
   Film,
+  Languages,
   Loader2,
   Mail,
   MapPin,
@@ -66,7 +68,14 @@ const MODULE_DISPLAY_FIELDS: Record<
     key: string;
     label: string;
     icon?: React.ComponentType<{ className?: string }>;
-    format?: "currency" | "date" | "url" | "phone" | "email";
+    format?:
+      | "currency"
+      | "date"
+      | "url"
+      | "phone"
+      | "email"
+      | "multiline"
+      | "document-submission";
   }>
 > = {
   contacts: [
@@ -136,6 +145,7 @@ const MODULE_DISPLAY_FIELDS: Record<
     { key: "instructions", label: "Instructions" },
   ],
   documents: [
+    { key: "arabic_name", label: "Arabic Name", icon: Languages },
     { key: "document_type", label: "Type" },
     { key: "document_number", label: "Number" },
     { key: "issue_date", label: "Issue Date", icon: Calendar, format: "date" },
@@ -146,6 +156,26 @@ const MODULE_DISPLAY_FIELDS: Record<
       format: "date",
     },
     { key: "issuing_authority", label: "Issuing Authority" },
+    { key: "issue_location_name", label: "Issuing Location", icon: MapPin },
+    {
+      key: "issue_location_url",
+      label: "Issuing Maps Link",
+      icon: MapPin,
+      format: "url",
+    },
+    { key: "usual_cost", label: "Usual Cost", icon: DollarSign },
+    {
+      key: "prerequisite_documents",
+      label: "Prerequisite Documents",
+      icon: FileCheck2,
+      format: "multiline",
+    },
+    {
+      key: "copy_submission_allowed",
+      label: "Submission Requirement",
+      icon: FileCheck2,
+      format: "document-submission",
+    },
     { key: "location", label: "Storage Location" },
   ],
   movies: [
@@ -184,7 +214,9 @@ export default function CatalogueItemDetailDialog({
   const createPause = useCreatePause();
   const deletePause = useDeletePause();
   const [showPauseForm, setShowPauseForm] = useState(false);
-  const [pauseStart, setPauseStart] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [pauseStart, setPauseStart] = useState(
+    format(new Date(), "yyyy-MM-dd"),
+  );
   const [pauseEnd, setPauseEnd] = useState("");
   const [pauseReason, setPauseReason] = useState("");
 
@@ -259,7 +291,9 @@ export default function CatalogueItemDetailDialog({
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
   const activePause = pauses.find(
-    (p) => p.pause_start <= todayStr && (p.pause_end === null || p.pause_end >= todayStr),
+    (p) =>
+      p.pause_start <= todayStr &&
+      (p.pause_end === null || p.pause_end >= todayStr),
   );
 
   // Progress calculation
@@ -310,6 +344,12 @@ export default function CatalogueItemDetailDialog({
             {strValue}
           </a>
         );
+      case "document-submission":
+        return value === true || strValue === "true"
+          ? "Copy/scanned version accepted"
+          : "Original document required";
+      case "multiline":
+        return strValue;
       default:
         return strValue;
     }
@@ -465,7 +505,9 @@ export default function CatalogueItemDetailDialog({
                       className="flex-1 border-white/10 text-white/80 hover:bg-white/10"
                     >
                       <Copy className="w-4 h-4" />
-                      <span className="ml-1.5">{copyDone ? "Copied!" : "Copy link"}</span>
+                      <span className="ml-1.5">
+                        {copyDone ? "Copied!" : "Copy link"}
+                      </span>
                     </Button>
                     <Button
                       size="sm"
@@ -513,7 +555,14 @@ export default function CatalogueItemDetailDialog({
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="text-xs text-white/40">{field.label}</div>
-                      <div className="text-white break-words">
+                      <div
+                        className={cn(
+                          "text-white break-words",
+                          field.format === "multiline" && "whitespace-pre-wrap",
+                        )}
+                        dir={field.key === "arabic_name" ? "rtl" : undefined}
+                        lang={field.key === "arabic_name" ? "ar" : undefined}
+                      >
                         {formattedValue}
                       </div>
                     </div>
@@ -660,7 +709,9 @@ export default function CatalogueItemDetailDialog({
               <div
                 className={cn(
                   "flex items-center justify-between gap-2 p-3 rounded-xl",
-                  activePause ? "bg-amber-500/10 border border-amber-500/30" : themeClasses.bgHover,
+                  activePause
+                    ? "bg-amber-500/10 border border-amber-500/30"
+                    : themeClasses.bgHover,
                 )}
               >
                 <div className="flex items-center gap-2">
@@ -673,22 +724,31 @@ export default function CatalogueItemDetailDialog({
                     {activePause ? (
                       <>
                         <p className="text-sm font-medium text-amber-300">
-                          Paused{activePause.pause_end ? ` until ${activePause.pause_end}` : " indefinitely"}
+                          Paused
+                          {activePause.pause_end
+                            ? ` until ${activePause.pause_end}`
+                            : " indefinitely"}
                         </p>
                         {activePause.reason && (
-                          <p className="text-xs text-white/50">{activePause.reason}</p>
+                          <p className="text-xs text-white/50">
+                            {activePause.reason}
+                          </p>
                         )}
                       </>
                     ) : (
                       <>
-                        <p className="text-sm font-medium text-emerald-400">Active on Calendar</p>
-                        <p className="text-xs text-white/50">Scheduled and recurring</p>
+                        <p className="text-sm font-medium text-emerald-400">
+                          Active on Calendar
+                        </p>
+                        <p className="text-xs text-white/50">
+                          Scheduled and recurring
+                        </p>
                       </>
                     )}
                   </div>
                 </div>
-                {linkedItemId && (
-                  activePause ? (
+                {linkedItemId &&
+                  (activePause ? (
                     <button
                       type="button"
                       onClick={() =>
@@ -717,8 +777,7 @@ export default function CatalogueItemDetailDialog({
                       <PauseCircle className="w-3.5 h-3.5" />
                       Pause
                     </button>
-                  )
-                )}
+                  ))}
               </div>
 
               {/* Inline pause form */}
@@ -738,7 +797,9 @@ export default function CatalogueItemDetailDialog({
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-xs text-white/50">Until (optional)</label>
+                      <label className="text-xs text-white/50">
+                        Until (optional)
+                      </label>
                       <input
                         type="date"
                         value={pauseEnd}

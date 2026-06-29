@@ -39,7 +39,7 @@ tags:
 | **Categories** | 🟢 Core | ✅ | Hierarchical, icons/colors, DnD reorder, cross-user slug matching. Solid. | — (stable) |
 | **Recurring Payments** | 🟢 Core | ✅ | Schedule, auto next-due, confirm→transaction, exceptions. `recurring/page.tsx` 2,772 LOC. **Auto-post math untested.** | Unit-test next-due + add monthly "confirm paid" digest (backlog). |
 | **Items & Reminders** | 🟢 Core | ✅ | Schedule/calendar, RRULE recurrence, subtasks, alerts, household assignment. `useItems.ts` 2,621 LOC. Uses the `get_schedule_bundle` RPC pattern. Now also supports a draft state (`status='draft'`) for unconfirmed Hub Chat bulk-convert reminders *(added 2026-06-16)*. | — (stable; watch perf) |
-| **Catalogue** | 🟢 Core | ✅ | Modular "UI database" (contacts/tasks/notes/recipes), categories, multi-link product comparison, calendar link. | — (stable) |
+| **Catalogue** | 🟢 Core | ✅ | Modular "UI database" (contacts/tasks/notes/recipes/documents), categories, multi-link product comparison, calendar link. Documents now capture Arabic equivalents with English/Arabizi suggestions, usual cost, prerequisites, copy-vs-original requirement, and issuing location metadata. ✅ 2026-06-29. | — (stable) |
 | **Preferences** | 🟢 Core | ✅ | LBP rate (thousands rule), theme, month-start day, section order, onboarding. | — (stable) |
 | **Recipes** | 🔵 Established | ✅ | Recipe book, ingredients, instructions, cooking mode, version compare, page-flip UI. | Connect to Inventory (gap 2b). |
 | **Meal Planning** | 🔵 Established | ✅ | Weekly planner, drag-drop, recipe→day, web calendar, add-to-shopping. | Add budget-impact estimate (gap 2c). |

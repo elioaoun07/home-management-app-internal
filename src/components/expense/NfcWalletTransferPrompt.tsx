@@ -27,6 +27,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { Account } from "@/types/domain";
 import { format } from "date-fns";
+import { CheckCircle2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -62,23 +63,29 @@ const TEMPLATES: TransferTemplate[] = [
   },
 ];
 
-// Map URL slugs → template IDs.
-// Legacy slugs (salary-wallet, wallet-refill, salary-to-wallet) are intentionally
-// excluded so they continue using the fromAccountName/toAccountName URL params
-// without overriding them with a template.
+// Suggested next template after completing one — helps multi-step salary day flow.
+const NEXT_TEMPLATE_ID: Record<string, string> = {
+  "salary-deposit": "refill-wallet",
+};
+
 const SLUG_TO_TEMPLATE_ID: Record<string, string> = {
   "salary-deposit": "salary-deposit",
   "refill-wallet": "refill-wallet",
   "savings": "savings",
-  // "transfer" is generic — no pre-selected template (returns null)
+};
+
+type CompletedTransfer = {
+  from: string;
+  to: string;
+  amount: number;
 };
 
 type NfcWalletTransferPromptProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   templateId?: string;
-  fromAccountName?: string; // backward-compat override when no template matches
-  toAccountName?: string;   // backward-compat override when no template matches
+  fromAccountName?: string;
+  toAccountName?: string;
   initialAmount?: string;
 };
 
@@ -129,11 +136,11 @@ export default function NfcWalletTransferPrompt({
   const [fromAccountId, setFromAccountId] = useState("");
   const [toAccountId, setToAccountId] = useState("");
   const [amount, setAmount] = useState(initialAmount ?? "");
+  const [completedTransfers, setCompletedTransfers] = useState<CompletedTransfer[]>([]);
 
   const activeTemplate =
     TEMPLATES.find((t) => t.id === activeTemplateId) ?? null;
 
-  // When a template is active, use its fixed accounts; otherwise fall back to URL params
   const effectiveFromName =
     activeTemplate !== null ? activeTemplate.from : (fromAccountName ?? null);
   const effectiveToName =
@@ -163,7 +170,7 @@ export default function NfcWalletTransferPrompt({
 
   const applyTemplate = (id: string) => {
     setActiveTemplateId(id);
-    setFromAccountId(""); // Clear manual picks — let template auto-match take over
+    setFromAccountId("");
     setToAccountId("");
   };
 
@@ -176,6 +183,7 @@ export default function NfcWalletTransferPrompt({
       setActiveTemplateId(resolved);
       setFromAccountId("");
       setToAccountId("");
+      setCompletedTransfers([]);
     }
   }, [open, templateId]);
 
@@ -189,7 +197,6 @@ export default function NfcWalletTransferPrompt({
     }
   }, [fromAccountId, selectedToAccountId]);
 
-  // Warn when a template's fixed account can't be matched
   const missingDefaultAccount =
     !accountsLoading &&
     accounts.length > 0 &&
@@ -234,56 +241,96 @@ export default function NfcWalletTransferPrompt({
         date: format(new Date(), "yyyy-MM-dd"),
         transfer_type: "self",
       });
-      onOpenChange(false);
+
+      // Log completed transfer and stay open for the next one
+      setCompletedTransfers((prev) => [
+        ...prev,
+        {
+          from: fromAccount?.name ?? "",
+          to: toAccount?.name ?? "",
+          amount: parsedAmount,
+        },
+      ]);
+      setAmount("");
+
+      // Auto-advance to the natural next template (e.g. salary-deposit → refill-wallet)
+      const nextId = activeTemplateId ? NEXT_TEMPLATE_ID[activeTemplateId] : undefined;
+      if (nextId) {
+        setActiveTemplateId(nextId);
+        setFromAccountId("");
+        setToAccountId("");
+      }
     } catch {
       // The mutation hook shows the toast.
     }
   };
 
-  const dialogTitle = activeTemplate?.label ?? "Quick Transfer";
+  const dialogTitle =
+    completedTransfers.length > 0
+      ? "Transfer Session"
+      : (activeTemplate?.label ?? "Quick Transfer");
+
   const dialogDescription =
-    fromAccount && toAccount
-      ? `Move money from ${fromAccount.name} to ${toAccount.name}.`
-      : activeTemplate
-        ? `${effectiveFromName ?? "Select source"} → ${effectiveToName ?? "Select destination"}`
-        : "Pick a template or select accounts below.";
+    completedTransfers.length > 0
+      ? `${completedTransfers.length} transfer${completedTransfers.length > 1 ? "s" : ""} done — add another or tap Done.`
+      : fromAccount && toAccount
+        ? `Move money from ${fromAccount.name} to ${toAccount.name}.`
+        : activeTemplate
+          ? `${effectiveFromName ?? "Select source"} → ${effectiveToName ?? "Select destination"}`
+          : "Pick a template or select accounts below.";
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && handleClose()}>
       <DialogContent
         className={cn(
-          "max-w-[calc(100vw-2rem)] sm:max-w-sm border p-5",
+          "max-w-[calc(100vw-3rem)] sm:max-w-md border p-6",
           themeClasses.bgPage,
           themeClasses.border,
         )}
       >
         <DialogHeader>
           <DialogTitle
-            className={cn("flex items-center gap-2 text-lg", themeClasses.text)}
+            className={cn("flex items-center gap-2 text-xl", themeClasses.text)}
           >
             <ArrowRightIcon className={cn("h-5 w-5", themeClasses.glow)} />
             {dialogTitle}
           </DialogTitle>
-          <DialogDescription>{dialogDescription}</DialogDescription>
+          <DialogDescription className="text-sm">{dialogDescription}</DialogDescription>
         </DialogHeader>
 
         {accountsLoading ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">
+          <div className="py-10 text-center text-sm text-muted-foreground">
             Resolving your accounts...
           </div>
         ) : accounts.length === 0 ? (
-          <div className="space-y-4 py-4">
+          <div className="space-y-5 py-4">
             <p className="text-sm text-amber-300">
               No accounts are available yet. Open the expense form once while
               online so ERA can create your default accounts.
             </p>
-            <Button className="w-full" type="button" onClick={handleClose}>
+            <Button className="h-12 w-full text-base" type="button" onClick={handleClose}>
               Done
             </Button>
           </div>
         ) : (
-          <form className="space-y-4 pt-1" onSubmit={handleSubmit}>
-            {/* Template toggles */}
+          <form className="space-y-5 pt-1" onSubmit={handleSubmit}>
+            {/* Completed transfers log */}
+            {completedTransfers.length > 0 && (
+              <div className="space-y-2">
+                {completedTransfers.map((t, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 rounded-xl bg-green-500/10 px-4 py-3 text-sm text-green-300"
+                  >
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-green-400" />
+                    <span className="font-semibold">${t.amount.toFixed(2)}</span>
+                    <span className="text-green-300/70">{t.from} → {t.to}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Template chips */}
             <div className="flex gap-2 flex-wrap">
               {TEMPLATES.map((t) => (
                 <button
@@ -291,7 +338,7 @@ export default function NfcWalletTransferPrompt({
                   type="button"
                   onClick={() => applyTemplate(t.id)}
                   className={cn(
-                    "rounded-full px-3 py-1 text-xs font-medium transition-all",
+                    "rounded-full px-4 py-2 text-sm font-medium transition-all min-h-[2.5rem]",
                     activeTemplateId === t.id
                       ? cn(themeClasses.bgActive, themeClasses.text)
                       : "bg-white/10 text-white/60 hover:bg-white/20",
@@ -303,14 +350,15 @@ export default function NfcWalletTransferPrompt({
             </div>
 
             {missingDefaultAccount && (
-              <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+              <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
                 Could not auto-find the default accounts for this template.
                 Pick them below and the transfer will still work.
               </div>
             )}
 
+            {/* From / To selects */}
             <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label className="text-xs text-white/50">From</Label>
                 <Select
                   value={selectedFromAccountId}
@@ -321,7 +369,7 @@ export default function NfcWalletTransferPrompt({
                     }
                   }}
                 >
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger className="h-12">
                     <SelectValue placeholder="Select source" />
                   </SelectTrigger>
                   <SelectContent className={themeClasses.bgPage}>
@@ -345,21 +393,21 @@ export default function NfcWalletTransferPrompt({
 
               <div
                 className={cn(
-                  "mb-1.5 flex h-8 w-8 items-center justify-center rounded-full",
+                  "mb-1.5 flex h-9 w-9 items-center justify-center rounded-full",
                   themeClasses.bgSurface,
                 )}
               >
                 <ArrowRightIcon className={cn("h-4 w-4", themeClasses.text)} />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label className="text-xs text-white/50">To</Label>
                 <Select
                   value={selectedToAccountId}
                   onValueChange={setToAccountId}
                   disabled={!selectedFromAccountId}
                 >
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger className="h-12">
                     <SelectValue placeholder="Select destination" />
                   </SelectTrigger>
                   <SelectContent className={themeClasses.bgPage}>
@@ -382,13 +430,14 @@ export default function NfcWalletTransferPrompt({
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            {/* Amount */}
+            <div className="space-y-2">
               <Label className="flex items-center gap-2 text-sm font-medium">
                 <DollarSignIcon className={cn("h-4 w-4", themeClasses.glow)} />
                 Amount
               </Label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold text-lg">
                   $
                 </span>
                 <Input
@@ -405,7 +454,7 @@ export default function NfcWalletTransferPrompt({
                     }
                   }}
                   className={cn(
-                    "h-12 pl-8 text-lg font-semibold",
+                    "h-14 pl-9 text-xl font-semibold",
                     themeClasses.inputFocusForce,
                   )}
                   disabled={createTransfer.isPending}
@@ -413,28 +462,35 @@ export default function NfcWalletTransferPrompt({
               </div>
             </div>
 
+            {/* Transfer preview */}
             {fromAccount && toAccount && parsedAmount > 0 && (
               <div
-                className={cn("rounded-lg p-3 text-sm", themeClasses.bgSurface)}
+                className={cn("rounded-xl px-4 py-3 text-sm", themeClasses.bgSurface)}
               >
-                <span className="font-semibold">
+                <span className="font-semibold text-base">
                   ${parsedAmount.toFixed(2)}
                 </span>{" "}
                 {fromAccount.name} → {toAccount.name}
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            {/* Actions */}
+            <div className="grid grid-cols-2 gap-3 pt-1">
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleClose}
                 disabled={createTransfer.isPending}
+                className="h-12 text-base"
               >
-                Cancel
+                {completedTransfers.length > 0 ? "Done" : "Cancel"}
               </Button>
-              <Button type="submit" disabled={!canSubmit}>
-                {createTransfer.isPending ? "Transferring..." : "Done"}
+              <Button
+                type="submit"
+                disabled={!canSubmit}
+                className="h-12 text-base"
+              >
+                {createTransfer.isPending ? "Transferring…" : "Transfer"}
               </Button>
             </div>
           </form>

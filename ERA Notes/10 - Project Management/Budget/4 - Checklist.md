@@ -1,6 +1,6 @@
 ---
 created: 2026-06-20
-updated: 2026-06-27
+updated: 2026-06-29
 type: checklist
 status: active
 owner: Elio
@@ -29,6 +29,9 @@ tags:
 
 ## Next - First Enhancement
 
+- [x] **X0i** Transfer undo/edit balance-history constraint fix - widened `account_balance_history.change_type` for `transfer_deleted`, `transfer_updated`, and the existing `statement_import` event; transfer audit rows now carry `transfer_id` for history drawer enrichment, and already-deleted transfers are ignored before reversal to avoid double reversal on retry. Done 2026-06-29. _(blocker - S)_
+
+- [x] **X0f** NFC transfer modal multi-transfer session + mobile sizing — modal stays open after each transfer (green log row, amount reset, auto-advance template), closes only on "Done"; larger touch targets throughout. Done 2026-06-27. _(friction - S)_
 - [x] **X0e** NFC transfer modal partner account visibility — partner couldn't see owner's public accounts in `NfcWalletTransferPrompt`; switched from `useMyAccounts()` to `useAccounts()`. Done 2026-06-27. _(friction - S)_
 - [x] **X0** Salary -> Wallet URL/NFC refill shortcut - `/expense?transfer=salary-wallet` opens the mobile expense form with an amount prompt, resolves current-user Salary/Wallet account IDs by name, and creates a self transfer through `useCreateTransfer()`. Done 2026-06-25; shell-mounted prompt follow-up fixed 2026-06-26. _(friction - S)_
 - [x] **X0b** Public/shared accounts - account creation and edit mode support private/public visibility; public visible accounts are collaborative for active household partners across balances, transactions, categories, and transfers. Done 2026-06-26. _(friction - M)_

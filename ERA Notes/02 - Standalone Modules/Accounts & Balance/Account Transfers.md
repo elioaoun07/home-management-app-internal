@@ -189,6 +189,10 @@ DELETE /api/transfers/{id}
 ```
 
 This will reverse the balance changes automatically.
+The reversal is logged to `account_balance_history` as `transfer_deleted` for
+both affected accounts and links back to the soft-deleted transfer row.
+The API only reverses rows whose `deleted_at` is still null, so retries or
+double-submits cannot reverse the same transfer twice.
 
 ## Architecture
 
@@ -214,6 +218,8 @@ Transfers directly update the `account_balances` table:
 
 - Creates balance record if it doesn't exist
 - Adjusts both source (-) and destination (+) balances atomically
+- Balance history rows use `transfer_in` / `transfer_out` on create and
+  `transfer_updated` / `transfer_deleted` for lifecycle reversals.
 
 ### React Query Integration
 

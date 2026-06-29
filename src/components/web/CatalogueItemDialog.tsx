@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +43,7 @@ import {
   Camera,
   DollarSign,
   ImageIcon,
+  Languages,
   Loader2,
   Mail,
   MapPin,
@@ -95,7 +97,14 @@ const MODULE_FIELD_CONFIG: Record<
     customFields: Array<{
       key: string;
       label: string;
-      type: "text" | "number" | "date" | "select" | "combobox" | "textarea";
+      type:
+        | "text"
+        | "number"
+        | "date"
+        | "select"
+        | "combobox"
+        | "textarea"
+        | "checkbox";
       placeholder?: string;
       icon?: React.ComponentType<{ className?: string }>;
       options?: string[];
@@ -442,6 +451,13 @@ const MODULE_FIELD_CONFIG: Record<
     showTags: true,
     customFields: [
       {
+        key: "arabic_name",
+        label: "Arabic Equivalent",
+        type: "text",
+        placeholder: "إفادة سكن",
+        icon: Languages,
+      },
+      {
         key: "document_type",
         label: "Document Type",
         type: "combobox",
@@ -465,6 +481,24 @@ const MODULE_FIELD_CONFIG: Record<
         ],
       },
       {
+        key: "usual_cost",
+        label: "Usual Cost",
+        type: "text",
+        placeholder: "500,000 LBP / $10",
+        icon: DollarSign,
+      },
+      {
+        key: "prerequisite_documents",
+        label: "Prerequisite Documents",
+        type: "textarea",
+        placeholder: "ID copy, passport photo, proof of residency...",
+      },
+      {
+        key: "copy_submission_allowed",
+        label: "Copy/scanned version accepted",
+        type: "checkbox",
+      },
+      {
         key: "document_number",
         label: "Document Number",
         type: "text",
@@ -482,6 +516,20 @@ const MODULE_FIELD_CONFIG: Record<
         label: "Issuing Authority",
         type: "text",
         placeholder: "Government, Bank...",
+      },
+      {
+        key: "issue_location_name",
+        label: "Issuing Location",
+        type: "text",
+        placeholder: "Mukhtar office, Nefaa Dekwaneh...",
+        icon: MapPin,
+      },
+      {
+        key: "issue_location_url",
+        label: "Issuing Maps Link",
+        type: "text",
+        placeholder: "https://maps.google.com/...",
+        icon: MapPin,
       },
       {
         key: "location",
@@ -647,6 +695,129 @@ const FREQUENCY_OPTIONS = [
   { value: "as-needed", label: "As needed" },
 ];
 
+const DOCUMENT_ARABIC_SUGGESTIONS = [
+  {
+    englishName: "Proof of Residency",
+    arabicName: "إفادة سكن",
+    aliases: [
+      "proof residency",
+      "proof of residence",
+      "residency certificate",
+      "ifade sakan",
+      "ifedit sakan",
+      "ifedet sakan",
+      "ifade seken",
+      "efade sakan",
+      "efedet seken",
+      "ifadet sokon",
+      "افادت سكن",
+    ],
+  },
+  {
+    englishName: "Individual Civil Record",
+    arabicName: "إخراج قيد فردي",
+    aliases: [
+      "individual record",
+      "civil record",
+      "ikhraj qayd farde",
+      "ikhraj eid farde",
+      "ekhraj eid farde",
+      "ekhraj kayd farde",
+    ],
+  },
+  {
+    englishName: "Family Civil Record",
+    arabicName: "إخراج قيد عائلي",
+    aliases: [
+      "family record",
+      "family civil record",
+      "ikhraj qayd ayle",
+      "ikhraj eid 3ayle",
+      "ekhraj eid ayle",
+      "ekhraj kayd ayle",
+    ],
+  },
+  {
+    englishName: "Birth Certificate",
+    arabicName: "بيان ولادة",
+    aliases: ["birth record", "bayan welade", "bayan wilade", "wlede"],
+  },
+  {
+    englishName: "Marriage Certificate",
+    arabicName: "وثيقة زواج",
+    aliases: ["marriage record", "wathiqat zawaj", "wes2et zawaj", "zawaj"],
+  },
+  {
+    englishName: "Passport",
+    arabicName: "جواز سفر",
+    aliases: ["jawaz safar", "jawaz", "passport"],
+  },
+  {
+    englishName: "National ID",
+    arabicName: "بطاقة هوية",
+    aliases: ["id", "identity card", "hawiyye", "hawiyyeh", "hawiye"],
+  },
+  {
+    englishName: "Driver's License",
+    arabicName: "رخصة سوق",
+    aliases: ["driving license", "rokhsit sou2", "rokhset sou2", "nefaa"],
+  },
+  {
+    englishName: "Police Record",
+    arabicName: "سجل عدلي",
+    aliases: [
+      "criminal record",
+      "no criminal record",
+      "sejel 3adle",
+      "sijil adle",
+      "sejel adli",
+    ],
+  },
+  {
+    englishName: "Employment Certificate",
+    arabicName: "إفادة عمل",
+    aliases: ["work certificate", "ifade amal", "ifedit 3amal", "efedet amal"],
+  },
+  {
+    englishName: "Bank Statement",
+    arabicName: "كشف حساب مصرفي",
+    aliases: ["bank document", "account statement", "kashf hesab", "bank"],
+  },
+  {
+    englishName: "Insurance Policy",
+    arabicName: "بوليصة تأمين",
+    aliases: ["insurance", "polisa ta2min", "ta2min", "تامين"],
+  },
+];
+
+const normalizeDocumentSearch = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/[^0-9a-z\u0600-\u06ff]+/g, " ")
+    .trim();
+
+const getArabicDocumentSuggestions = (...inputs: string[]) => {
+  const terms = inputs
+    .map(normalizeDocumentSearch)
+    .filter((term) => term.length > 1);
+  if (terms.length === 0) return [];
+
+  return DOCUMENT_ARABIC_SUGGESTIONS.filter((suggestion) => {
+    const searchable = normalizeDocumentSearch(
+      [
+        suggestion.englishName,
+        suggestion.arabicName,
+        ...suggestion.aliases,
+      ].join(" "),
+    );
+
+    return terms.some((term) => searchable.includes(term));
+  }).slice(0, 4);
+};
 
 export default function CatalogueItemDialog({
   open,
@@ -678,7 +849,9 @@ export default function CatalogueItemDialog({
   const [progressCurrent, setProgressCurrent] = useState("");
   const [progressTarget, setProgressTarget] = useState("");
   const [progressUnit, setProgressUnit] = useState("");
-  const [customFields, setCustomFields] = useState<Record<string, string>>({});
+  const [customFields, setCustomFields] = useState<
+    Record<string, string | boolean>
+  >({});
 
   // Document-specific state
   const [pendingImage, setPendingImage] = useState<File | null>(null);
@@ -688,7 +861,8 @@ export default function CatalogueItemDialog({
   const [comboboxOpen, setComboboxOpen] = useState<Record<string, boolean>>({});
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  const isLoading = createItem.isPending || updateItem.isPending || uploadingImage;
+  const isLoading =
+    createItem.isPending || updateItem.isPending || uploadingImage;
   const isEditing = !!editingItem;
 
   // Get module-specific title
@@ -743,10 +917,12 @@ export default function CatalogueItemDialog({
         setProgressUnit(editingItem.progress_unit || "");
         // Load custom fields from metadata_json
         const metadata = editingItem.metadata_json || {};
-        const loadedFields: Record<string, string> = {};
+        const loadedFields: Record<string, string | boolean> = {};
         config.customFields.forEach((field) => {
           if (field.key === "notes") {
             loadedFields[field.key] = editingItem.notes || "";
+          } else if (field.type === "checkbox") {
+            loadedFields[field.key] = Boolean(metadata[field.key]);
           } else if (metadata[field.key] !== undefined) {
             loadedFields[field.key] = String(metadata[field.key]);
           }
@@ -786,8 +962,13 @@ export default function CatalogueItemDialog({
     setTags(tags.filter((t) => t !== tag));
   };
 
-  const handleCustomFieldChange = (key: string, value: string) => {
+  const handleCustomFieldChange = (key: string, value: string | boolean) => {
     setCustomFields((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const getCustomFieldString = (key: string) => {
+    const value = customFields[key];
+    return typeof value === "string" ? value : "";
   };
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -819,8 +1000,17 @@ export default function CatalogueItemDialog({
     // Build metadata_json from custom fields (excluding notes)
     const metadataJson: Record<string, unknown> = {};
     config.customFields.forEach((field) => {
-      if (field.key !== "notes" && customFields[field.key]) {
-        const value = customFields[field.key];
+      const rawValue = customFields[field.key];
+      if (field.type === "checkbox") {
+        metadataJson[field.key] = Boolean(rawValue);
+        return;
+      }
+      if (
+        field.key !== "notes" &&
+        typeof rawValue === "string" &&
+        rawValue.trim()
+      ) {
+        const value = rawValue.trim();
         if (field.type === "number") {
           metadataJson[field.key] = parseFloat(value);
         } else {
@@ -837,7 +1027,10 @@ export default function CatalogueItemDialog({
       description: config.showDescription
         ? description.trim() || undefined
         : undefined,
-      notes: customFields.notes?.trim() || undefined,
+      notes:
+        typeof customFields.notes === "string"
+          ? customFields.notes.trim() || undefined
+          : undefined,
       status: config.showStatus ? status : "active",
       priority: config.showPriority ? priority : "normal",
       frequency: config.showFrequency && frequency ? frequency : undefined,
@@ -901,14 +1094,102 @@ export default function CatalogueItemDialog({
   };
 
   const renderCustomField = (field: (typeof config.customFields)[number]) => {
-    const value = customFields[field.key] || "";
+    const value = getCustomFieldString(field.key);
     const Icon = field.icon;
+
+    if (isDocuments && field.key === "arabic_name") {
+      const suggestions = getArabicDocumentSuggestions(
+        name,
+        getCustomFieldString("document_type"),
+        value,
+      );
+
+      return (
+        <div key={field.key} className="space-y-2">
+          <Label className="text-white/70">{field.label}</Label>
+          <div className="relative">
+            {Icon && (
+              <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+            )}
+            <Input
+              value={value}
+              onChange={(e) =>
+                handleCustomFieldChange(field.key, e.target.value)
+              }
+              placeholder={field.placeholder}
+              dir="auto"
+              lang="ar"
+              className={cn(
+                themeClasses.inputBg,
+                "border-white/10 text-white pl-10 text-right",
+              )}
+            />
+          </div>
+          {suggestions.length > 0 && (
+            <div className="grid gap-2">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion.englishName}
+                  type="button"
+                  onClick={() =>
+                    handleCustomFieldChange(field.key, suggestion.arabicName)
+                  }
+                  className={cn(
+                    "flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-colors hover:bg-white/10",
+                    themeClasses.inputBg,
+                    "border-white/10",
+                  )}
+                >
+                  <span className="text-xs text-white/50">
+                    {suggestion.englishName}
+                  </span>
+                  <span className="font-medium text-white" dir="rtl" lang="ar">
+                    {suggestion.arabicName}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (field.type === "checkbox") {
+      const fieldId = `catalogue-${field.key}`;
+      return (
+        <div key={field.key} className="space-y-2">
+          <div
+            className={cn(
+              "flex items-start gap-3 rounded-lg border px-3 py-3",
+              themeClasses.inputBg,
+              "border-white/10",
+            )}
+          >
+            <Checkbox
+              id={fieldId}
+              checked={Boolean(customFields[field.key])}
+              onCheckedChange={(checked) =>
+                handleCustomFieldChange(field.key, checked === true)
+              }
+              className="mt-0.5"
+            />
+            <div className="space-y-1">
+              <Label htmlFor={fieldId} className="text-white/80">
+                {field.label}
+              </Label>
+              <p className="text-xs text-white/40">
+                Unchecked means an original document is needed.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     if (field.type === "combobox") {
       const isOpen = comboboxOpen[field.key] ?? false;
       const filteredOptions = (field.options || []).filter(
-        (opt) =>
-          !value || opt.toLowerCase().includes(value.toLowerCase()),
+        (opt) => !value || opt.toLowerCase().includes(value.toLowerCase()),
       );
       return (
         <div key={field.key} className="space-y-2 relative">
@@ -1017,7 +1298,8 @@ export default function CatalogueItemDialog({
             <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
           )}
           <Input
-            type={field.type}
+            type={field.type === "number" ? "text" : field.type}
+            inputMode={field.type === "number" ? "decimal" : undefined}
             value={value}
             onChange={(e) => handleCustomFieldChange(field.key, e.target.value)}
             placeholder={field.placeholder}
@@ -1285,8 +1567,12 @@ export default function CatalogueItemDialog({
                       <Camera className="w-5 h-5 text-white/60" />
                     </div>
                     <div className="text-left">
-                      <p className="text-sm font-semibold text-white">Take Photo</p>
-                      <p className="text-xs text-white/40">Use rear camera for best quality</p>
+                      <p className="text-sm font-semibold text-white">
+                        Take Photo
+                      </p>
+                      <p className="text-xs text-white/40">
+                        Use rear camera for best quality
+                      </p>
                     </div>
                   </button>
                   <button
@@ -1302,8 +1588,12 @@ export default function CatalogueItemDialog({
                       <ImageIcon className="w-5 h-5 text-white/60" />
                     </div>
                     <div className="text-left">
-                      <p className="text-sm font-semibold text-white">Choose from Gallery</p>
-                      <p className="text-xs text-white/40">Select an existing photo</p>
+                      <p className="text-sm font-semibold text-white">
+                        Choose from Gallery
+                      </p>
+                      <p className="text-xs text-white/40">
+                        Select an existing photo
+                      </p>
                     </div>
                   </button>
                 </div>

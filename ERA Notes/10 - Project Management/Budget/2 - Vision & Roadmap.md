@@ -55,6 +55,12 @@ Each ladders up to a track in the global [3 · Future Vision](<../3 - Future Vis
 
 ---
 
+## Implemented decisions
+
+- *(IMPLEMENTED 2026-06-29)* Transfer lifecycle balance-history events are first-class audit rows: create uses `transfer_in` / `transfer_out`, amount-affecting edits use `transfer_updated`, and undo/delete reversals use `transfer_deleted`. The DB constraint, schema snapshot, and balance-history label map all accept these values; transfer audit rows carry `transfer_id` for drawer enrichment. The same constraint now accepts the existing `statement_import` balance-history emitter.
+
+---
+
 ## Prioritization matrix
 
 ```

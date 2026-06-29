@@ -189,6 +189,9 @@ The feature uses two tables (run the migration in `migrations/add_statement_impo
 - Tracks import history
 - `file_name`, `transactions_count`, `status`
 
+Bulk import also writes one `account_balance_history` row per affected account
+with `change_type = 'statement_import'`, summarizing the imported balance delta.
+
 ## Limitations
 
 - Only text-based PDFs (not scanned images)

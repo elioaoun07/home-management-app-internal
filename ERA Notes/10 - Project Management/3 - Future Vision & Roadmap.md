@@ -64,7 +64,7 @@ Genuinely new surfaces that fit the household graph. Ranked roughly by fit.
 
 1. **Cashflow Forecast Calendar** — a forward-looking calendar merging recurring payments, known income, and scheduled debts: *"On the 15th, 3 payments totaling $X hit; projected low balance June 22."* Your single most-requested-shaped idea (recurring calendar + forecasting). *(4-series, Dashboard V2 iii)*
 2. **Subscriptions Manager** — recurring payments already hold the data; surface "$X/mo on subscriptions," flag ones with no matching transactions (unused), track YoY creep, one-tap cancel-reminder. *(4a)*
-3. **Documents Vault** — you already touched "ID documents" (commit May 16). Generalize: passports, IDs, warranties, insurance, with expiry reminders feeding Notifications. High household value, low module complexity.
+3. **Documents Vault** — you already touched "ID documents" (commit May 16). Generalize: passports, IDs, warranties, insurance, with expiry reminders feeding Notifications. High household value, low module complexity. *(IMPLEMENTED 2026-06-29: Catalogue Documents now stores Arabic equivalents with English/Arabizi suggestions, usual cost, prerequisites, copy/original requirement, and issuing location metadata. Remaining: expiry reminder wiring.)*
 4. **Vehicle / Maintenance** — service intervals, registration/insurance expiry, fuel log (ties to NFC gas-station shortcut), cost-per-km. A natural NFC + recurring + reminders junction.
 5. **Health & Habits** — medication windows (perfect `time_window` prerequisite demo), habit streaks, appointments. Reuses Items + Notifications + Focus.
 6. **Receipts OCR** — photo → parsed transaction (amount, merchant, date) → draft. Closes the loop with Statement Import + Drafts. *(long-requested)*

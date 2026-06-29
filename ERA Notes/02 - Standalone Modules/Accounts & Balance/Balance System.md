@@ -60,6 +60,8 @@ queryClient.invalidateQueries({ queryKey: ["account-balance", accountId] });
 The `account_balance_history` table logs every non-transaction balance event.
 
 ### What gets logged
+- `transfer_updated` / `transfer_deleted` - transfer edits and undo/delete reversals
+- `statement_import` - bulk imported statement rows summarized per affected account
 - `initial_set` / `manual_set` — user sets balance
 - `manual_adjustment` — delta adjustment
 - `transfer_in` / `transfer_out` — transfers between accounts
@@ -107,10 +109,11 @@ balance_set_at    timestamptz -- when the baseline was set (used for delta calcu
 
 -- account_balance_history: change_type constraint
 CHECK (change_type IN ('initial_set','manual_set','manual_adjustment',
-  'transfer_in','transfer_out','transaction_expense','transaction_income',
-  'transaction_deleted','split_bill_paid','split_bill_received',
-  'draft_confirmed','correction','transaction','transfer',
-  'split_bill','future_payment','debt_settled','auto_reconciliation'))
+  'transfer_in','transfer_out','transfer_updated','transfer_deleted',
+  'transaction_expense','transaction_income','transaction_deleted',
+  'split_bill_paid','split_bill_received','draft_confirmed','correction',
+  'transaction','transfer','split_bill','future_payment','debt_settled',
+  'statement_import','auto_reconciliation'))
 ```
 
 ## Key Files

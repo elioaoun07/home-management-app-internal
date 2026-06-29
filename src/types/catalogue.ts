@@ -539,11 +539,19 @@ export interface ContactItemMetadata {
 }
 
 export interface DocumentItemMetadata {
+  arabic_name?: string;
   document_type?: string;
   issue_date?: string;
   expiry_date?: string;
-  issuer?: string;
+  issuing_authority?: string;
   document_number?: string;
+  usual_cost?: string;
+  prerequisite_documents?: string;
+  copy_submission_allowed?: boolean;
+  issue_location_name?: string;
+  issue_location_url?: string;
+  location?: string;
+  belongs_to_user_id?: string;
   file_url?: string;
   reminder_before_days?: number;
 }

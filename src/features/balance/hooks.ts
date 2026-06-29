@@ -10,6 +10,8 @@ export type BalanceChangeType =
   | "manual_adjustment"
   | "transfer_in"
   | "transfer_out"
+  | "transfer_updated"
+  | "transfer_deleted"
   | "transaction_expense"
   | "transaction_income"
   | "transaction_deleted"
@@ -17,7 +19,13 @@ export type BalanceChangeType =
   | "split_bill_received"
   | "draft_confirmed"
   | "correction"
-  | "debt_settled";
+  | "transaction"
+  | "transfer"
+  | "split_bill"
+  | "future_payment"
+  | "debt_settled"
+  | "statement_import"
+  | "auto_reconciliation";
 
 export interface BalanceHistoryTransaction {
   id: string;
@@ -251,6 +259,18 @@ export function getChangeTypeInfo(changeType: BalanceChangeType): {
         icon: "arrow-up",
         colorClass: "text-red-400",
       };
+    case "transfer_updated":
+      return {
+        label: "Transfer Updated",
+        icon: "refresh-cw",
+        colorClass: "text-cyan-400",
+      };
+    case "transfer_deleted":
+      return {
+        label: "Transfer Deleted",
+        icon: "x",
+        colorClass: "text-gray-400",
+      };
     case "transaction_expense":
       return {
         label: "Expense",
@@ -293,11 +313,47 @@ export function getChangeTypeInfo(changeType: BalanceChangeType): {
         icon: "wrench",
         colorClass: "text-orange-400",
       };
+    case "transaction":
+      return {
+        label: "Transaction",
+        icon: "receipt",
+        colorClass: "text-blue-400",
+      };
+    case "transfer":
+      return {
+        label: "Transfer",
+        icon: "repeat",
+        colorClass: "text-cyan-400",
+      };
+    case "split_bill":
+      return {
+        label: "Split Bill",
+        icon: "users",
+        colorClass: "text-purple-400",
+      };
+    case "future_payment":
+      return {
+        label: "Future Payment",
+        icon: "calendar",
+        colorClass: "text-blue-400",
+      };
     case "debt_settled":
       return {
         label: "Debt Settled",
         icon: "handshake",
         colorClass: "text-orange-400",
+      };
+    case "statement_import":
+      return {
+        label: "Statement Import",
+        icon: "upload",
+        colorClass: "text-cyan-400",
+      };
+    case "auto_reconciliation":
+      return {
+        label: "Auto Reconciliation",
+        icon: "refresh-cw",
+        colorClass: "text-amber-400",
       };
     default:
       return {

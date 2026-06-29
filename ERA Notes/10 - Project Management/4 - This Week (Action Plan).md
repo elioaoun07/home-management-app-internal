@@ -73,6 +73,12 @@ You are not short of features — you're short of a _safety net_ and _documentat
 
 ---
 
+## Ad-hoc completions
+
+- [x] **Catalogue Documents metadata enrichment.** Add Arabic-equivalent document names with English/Arabizi suggestions, usual cost, prerequisite documents, copy/scanned-version acceptance flag, and issuing location name/maps link. *(IMPLEMENTED 2026-06-29; tracked in [2 · Feature State](<2 - Feature State — Current Reality.md>) and [3 · Future Vision](<3 - Future Vision & Roadmap.md>).)*
+
+---
+
 ## ✅ Definition of done — the week
 
 - [x] Trips committed. _(pre-week)_

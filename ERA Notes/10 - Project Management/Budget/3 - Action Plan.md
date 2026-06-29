@@ -1,6 +1,6 @@
 ---
 created: 2026-05-30
-updated: 2026-06-27
+updated: 2026-06-29
 type: action-plan
 status: active
 owner: Elio
@@ -69,6 +69,12 @@ transfer dialog supports shared household accounts.
 owners can mark visible accounts public so the active household partner can open
 them, post transactions, adjust balances, use categories, and transfer to/from
 them.
+
+**Just shipped - Transfer audit constraint fix.** Transfer undo/delete and
+amount-affecting edits now write accepted balance-history event types
+(`transfer_deleted`, `transfer_updated`) and link those audit rows back to the
+transfer. The same balance-history constraint now accepts the existing
+statement import summary event.
 
 **Just shipped - AI allocation redesign.** `WebBudget` splits Allocate (input)
 from Review (viewing); AI proposes a per-category allocation from

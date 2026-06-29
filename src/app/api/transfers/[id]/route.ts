@@ -126,6 +126,7 @@ export async function DELETE(
     )
     .eq("id", id)
     .eq("user_id", user.id)
+    .is("deleted_at", null)
     .single();
 
   if (fetchError || !transfer) {
@@ -137,7 +138,8 @@ export async function DELETE(
     .from("transfers")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .is("deleted_at", null);
 
   if (deleteError) {
     return NextResponse.json(
@@ -159,6 +161,8 @@ export async function DELETE(
     "transfer_deleted",
     {
       userId: user.id,
+      transferId: transfer.id,
+      reason: "Deleted transfer reversal",
     },
   );
   await adjustAccountBalance(
@@ -167,6 +171,8 @@ export async function DELETE(
     "transfer_deleted",
     {
       userId: user.id,
+      transferId: transfer.id,
+      reason: "Deleted transfer reversal",
     },
   );
 
@@ -199,6 +205,7 @@ export async function PATCH(
     )
     .eq("id", id)
     .eq("user_id", user.id)
+    .is("deleted_at", null)
     .single();
 
   if (fetchError || !currentTransfer) {
@@ -296,7 +303,11 @@ export async function PATCH(
       currentTransfer.from_account_id,
       fromDiff,
       "transfer_updated",
-      { userId: user.id },
+      {
+        userId: user.id,
+        transferId: currentTransfer.id,
+        reason: "Transfer updated",
+      },
     );
   }
   if (toDiff !== 0) {
@@ -304,7 +315,11 @@ export async function PATCH(
       currentTransfer.to_account_id,
       toDiff,
       "transfer_updated",
-      { userId: user.id },
+      {
+        userId: user.id,
+        transferId: currentTransfer.id,
+        reason: "Transfer updated",
+      },
     );
   }
 
@@ -313,6 +328,7 @@ export async function PATCH(
     .update(updateFields)
     .eq("id", id)
     .eq("user_id", user.id)
+    .is("deleted_at", null)
     .select(TRANSFER_SELECT)
     .single();
 

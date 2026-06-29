@@ -1,5 +1,24 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
+async function logBalanceIssue(
+  admin: ReturnType<typeof supabaseAdmin>,
+  userId: string | undefined,
+  message: string,
+  error: unknown,
+) {
+  try {
+    await admin.from("error_logs").insert({
+      user_id: userId ?? null,
+      error_message: message,
+      error_stack:
+        typeof error === "string" ? error : JSON.stringify(error ?? {}),
+      component_name: "adjustAccountBalance",
+    });
+  } catch {
+    /* best-effort diagnostics only */
+  }
+}
+
 /**
  * Atomically adjust an account's stored balance by a delta amount.
  * This is the PRIMARY way balances change — every transaction/transfer/split/debt
@@ -14,6 +33,7 @@ export async function adjustAccountBalance(
   metadata?: {
     userId?: string;
     transactionId?: string;
+    transferId?: string;
     reason?: string;
     effectiveDate?: string;
   },
@@ -34,10 +54,6 @@ export async function adjustAccountBalance(
 
   if (readError || !balanceRow) {
     // Balance row missing — auto-create it so the operation can proceed
-    console.warn(
-      "[adjustAccountBalance] No balance row for account, creating one:",
-      accountId,
-    );
     await admin
       .from("account_balances")
       .insert({
@@ -67,14 +83,19 @@ export async function adjustAccountBalance(
     .eq("account_id", accountId);
 
   if (updateError) {
-    console.error("[adjustAccountBalance] Update failed:", updateError);
+    await logBalanceIssue(
+      admin,
+      metadata?.userId,
+      "Account balance update failed",
+      updateError,
+    );
     return { newBalance: previousBalance, previousBalance };
   }
 
   // Log to balance history (best-effort, don't fail the operation)
   if (metadata?.userId) {
     const today = new Date().toISOString().split("T")[0];
-    await admin
+    const { error: historyError } = await admin
       .from("account_balance_history")
       .insert({
         account_id: accountId,
@@ -84,13 +105,19 @@ export async function adjustAccountBalance(
         change_amount: delta,
         change_type: changeType,
         transaction_id: metadata.transactionId || null,
+        transfer_id: metadata.transferId || null,
         reason: metadata.reason || null,
         effective_date: metadata.effectiveDate || today,
-      })
-      .then(({ error }) => {
-        if (error)
-          console.error("[adjustAccountBalance] History log failed:", error);
       });
+
+    if (historyError) {
+      await logBalanceIssue(
+        admin,
+        metadata.userId,
+        "Account balance history log failed",
+        historyError,
+      );
+    }
   }
 
   return { newBalance, previousBalance };
