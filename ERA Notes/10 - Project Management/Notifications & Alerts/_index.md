@@ -26,6 +26,7 @@ tags:
 | 2   | [Vision & Roadmap](<2 - Vision & Roadmap.md>) | You want where each pain is *heading* — target design + locked decisions + the best-practices brief + the MoSCoW backlog. |
 | 3   | [Action Plan](<3 - Action Plan.md>)           | The call + sequenced Now/Next/Later queue + candidate-work table — the *why, and in what order*.                         |
 | 4   | [Checklist](<4 - Checklist.md>)               | **Most days.** The flat, phased, checkable build list (IDs + severity + effort).                                         |
+| F2  | [FABLED 2/](<FABLED 2/_index.md>)             | **The deep-dive layer (first generation for this module, verified 2026-07-02):** pipeline X-ray, scored maturity, ranked technical gaps, hardening plan, the delivery-policy-engine enhancement ladder. |
 
 ## How to use this set
 

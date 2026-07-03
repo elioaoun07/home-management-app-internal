@@ -18,6 +18,7 @@ tags:
 |---|---|---|
 | 1 | [Master Checklist — By Priority](<1 - Master Checklist — By Priority.md>) | You want every item in one place, grouped P0→P3, with effort, due week, and dependencies. **The source of truth for scope.** |
 | 2 | [Weekly Schedule — Jun 15 to Sep 13](<2 - Weekly Schedule — Jun 15 to Sep 13.md>) | It's Monday and you're planning the week — or Friday and you're checking it off. **The source of truth for time.** |
+| F2 | [FABLED 2/](<FABLED 2/_index.md>) | **The living scorekeeper (2026-07-02):** the week-3 plan-vs-reality scoreboard (~1.5 of 5 Phase-1 steps done while an unplanned high-value month happened), why the plan diverged, and the honest re-baseline. Read before planning any week from this folder. |
 
 Same items, two views, linked by ID. Tick a box in either file; sync the other in the same sitting.
 

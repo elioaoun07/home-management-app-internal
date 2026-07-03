@@ -24,6 +24,7 @@ tags:
 | 5 | [Missed & Forgotten — The Blind Spots](<5 - Missed & Forgotten — The Blind Spots.md>) | What features were missed entirely, or built and then forgotten. |
 | 6 | [Market Lens & Challenge Letter](<6 - Market Lens & Challenge Letter.md>) | What the market would demand, what *you* would demand — and ten direct challenges to current thinking. |
 | 7 | [Synthesis — The 90-Day Path](<7 - Synthesis — The 90-Day Path.md>) | The order to do it all in, with gates, KPIs, and a definition of done for "proactive". |
+| F2 | [FABLED 2/](<FABLED 2/_index.md>) | **The living delta layer (2026-07-02):** the thesis scoreboard (which claims held three weeks in), the June amendment (campaign work manufactured spine parts), what the frame missed, the re-sequenced nervous-system plan, and the FAR 2.0 trigger. |
 
 ## How to read this set
 

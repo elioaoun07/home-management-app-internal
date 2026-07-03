@@ -19,6 +19,7 @@
     "new:module": "node scripts/new-module.mjs",
     "prebuild": "node scripts/build-atlas.mjs",
     "sync:ai": "node scripts/sync-ai-mirrors.mjs",
+    "pm": "node scripts/pm-server.mjs",
     "pm:dashboard": "node scripts/build-pm-dashboard.mjs",
     "prepare": "husky install"
   },

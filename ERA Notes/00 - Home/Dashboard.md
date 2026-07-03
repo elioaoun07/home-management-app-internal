@@ -30,6 +30,14 @@ The design goal: Hub Chat handles the high-frequency everyday interactions so th
 - [[Common Patterns]] — shared code patterns across the app
 - [[Sync and Offline]] — offline-first architecture
 
+## Deep-Dive Audits — FABLED 2 (current generation, 2026-07-02)
+
+> Every ERA Notes directory and every PM campaign now carries a **FABLED 2** deep-dive folder: scored maturity, verified evidence, ranked gaps, optimization plan, and enhancements with kill criteria. The PM campaign folders' older `FABLED/` folders are the frozen v1 baseline (2026-06-10).
+
+- Campaigns: [[10 - Project Management/Budget/FABLED 2/_index|Budget]] · [[10 - Project Management/Schedule/FABLED 2/_index|Schedule]] · [[10 - Project Management/Kitchen/FABLED 2/_index|Kitchen]] · [[10 - Project Management/Hub & ERA/FABLED 2/_index|Hub & ERA]] · [[10 - Project Management/Trips/FABLED 2/_index|Trips]] · [[10 - Project Management/Notifications & Alerts/FABLED 2/_index|Notifications & Alerts]]
+- System: [[10 - Project Management/FABLED 2/_index|PM system]] · [[01 - Architecture/FABLED 2/_index|Architecture]] · [[02 - Standalone Modules/FABLED 2/_index|Standalone portfolio]] · [[03 - Junction Modules/FABLED 2/_index|Junction layer]] · [[04 - UI & Design/FABLED 2/_index|UI & Design]] · [[05 - Performance/FABLED 2/_index|Performance]] · [[06 - Setup & Onboarding/FABLED 2/_index|Setup]] · [[07 - Backlog & Ideas/FABLED 2/_index|Backlog]] · [[09 - Patterns & Lessons/FABLED 2/_index|Patterns]] · [[00 - Home/FABLED 2/_index|Home]] · [[Templates/FABLED 2/_index|Templates]]
+- Review deltas: [[10 - Project Management/Codebase Audit 2026-07-01/FABLED 2/_index|Codebase Audit]] · [[10 - Project Management/FAR Execution Checklist/FABLED 2/_index|FAR Checklist]] · [[10 - Project Management/Functional Architecture Review/FABLED 2/_index|FAR]]
+
 ---
 
 ## Standalone Modules

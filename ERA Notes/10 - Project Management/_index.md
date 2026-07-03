@@ -8,7 +8,7 @@ tags:
 
 # 10 - Project Management - Command Center
 
-> Your strategic overview. Start here when you're asking "what do I do next?" Audited against `main` on **2026-05-29**.
+> Your strategic overview. Start here when you're asking "what do I do next?" Audited against `main` on **2026-05-29**. Latest codebase audit pack added **2026-07-01**.
 >
 > **Scope:** the numbered files below are **whole-app** (cross-cutting). **Per-module PM lives in subfolders** in the same uniform format (see the Per-module PM table below — Budget, Schedule, Kitchen, Trips, Hub & ERA, Notifications & Alerts). Add a sibling folder per module you want to prioritize on its own.
 
@@ -32,7 +32,9 @@ tags:
 | **Hub & ERA** (Hub Chat · AI Assistant · Voice) | [Hub & ERA/](<Hub & ERA/_index.md>) |
 | **Notifications & Alerts** (bell · drawer · alerts page · system notifs) | [Notifications & Alerts/](<Notifications & Alerts/_index.md>) |
 
-> Each module folder mirrors the same uniform set at module scope: `_index`, `1 - Feature State`, `2 - Vision & Roadmap`, `3 - Action Plan`, `4 - Checklist` — plus (where present) a **`FABLED/`** deep-dive folder: current implementation X-ray, ranked gaps, optimization plan, future enhancements. Files 1–3 carry the reality + strategy + narrative; **file 4 is the flat, checkable list — the daily driver**; FABLED holds the depth and is re-audited per campaign.
+> Each module folder mirrors the same uniform set at module scope: `_index`, `1 - Feature State`, `2 - Vision & Roadmap`, `3 - Action Plan`, `4 - Checklist` — plus the deep-dive layer: **`FABLED 2/`** (current generation, verified 2026-07-02 — scored maturity, delta ledger, X-ray, ranked gaps, optimization plan, enhancements with kill criteria; **all six campaigns have one**) and, where present, `FABLED/` (the frozen v1 baseline from 2026-06-10). Files 1–3 carry the reality + strategy + narrative; **file 4 is the flat, checkable list — the daily driver**; FABLED 2 holds the depth and gets a delta pass per campaign end.
+>
+> **PM-system deep-dive:** this folder itself now has a meta-audit — [FABLED 2/](<FABLED 2/_index.md>) (the PM machine's own implementation, gaps, optimization plan, and future). Domain-level FABLED 2 folders also exist under every other ERA Notes directory (Architecture, Standalone/Junction portfolios, UI & Design, Performance, Setup, Backlog, Patterns, Home, Templates).
 
 ## Cross-cutting reviews
 
@@ -40,6 +42,9 @@ tags:
 |---|---|---|
 | **Functional Architecture Review** (2026-06-12) | [Functional Architecture Review/](<Functional Architecture Review/_index.md>) | Whole-app review against the Proactive AI Assistant goal: strengths, enhancement map, junction leverage, missed/forgotten features, market lens, ten challenges, and a 90-day path. Start with its file 1 (the maturity verdict) and file 7 (the path). |
 | **FAR Execution Checklist** (2026-06-12) | [FAR Execution Checklist/](<FAR Execution Checklist/_index.md>) | The FAR turned executable: master checklist by priority (P0–P3) + 13-week dated schedule (Jun 15 → Sep 13). **Feeds file 4 every Monday.** When lost on "what next," open this. |
+| **Codebase Audit** (2026-07-01) | [Codebase Audit 2026-07-01/](<Codebase Audit 2026-07-01/_index.md>) | Whole-codebase security, functional, structural, enhancement, and hard-rules audit. Start with its executive summary and remediation checklist. |
+
+> Each review folder now carries a **`FABLED 2/`** living delta layer (added 2026-07-02): the FAR gets a thesis scoreboard + re-sequenced nervous-system plan, the FAR Checklist gets the week-3 plan-vs-reality scoreboard + re-baseline, and the Codebase Audit gets its claims pinned to exact numbers + owner mapping. Read the delta before treating any review as current.
 
 ## How to use this set
 

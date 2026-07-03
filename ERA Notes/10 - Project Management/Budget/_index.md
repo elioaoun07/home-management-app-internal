@@ -21,7 +21,8 @@ tags:
 | 2   | [Vision & Roadmap](<2 - Vision & Roadmap.md>) | You want to dream: Budget enhancements + bridges, prioritized.       |
 | 3   | [Action Plan](<3 - Action Plan.md>)           | The strategic call + candidate work — the *why, and in what order*.  |
 | 4   | [Checklist](<4 - Checklist.md>)               | **Most days.** The flat, checkable list — every task, Now/Next/Later. |
-| F   | [FABLED/](<FABLED/_index.md>)                 | You want the 10× deep-dive: current implementation X-ray, ranked gaps, optimization plan, future enhancements. |
+| F   | [FABLED/](<FABLED/_index.md>)                 | *(v1 baseline, frozen 2026-06-10)* — the first-generation deep-dive; kept for lineage. |
+| F2  | [FABLED 2/](<FABLED 2/_index.md>)             | **The living deep-dive (current generation, verified 2026-07-02):** scored maturity model, delta ledger vs v1, implementation X-ray, ranked gaps, optimization plan, enhancements with kill criteria. |
 
 ## How to use this set
 
