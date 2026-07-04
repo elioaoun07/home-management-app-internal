@@ -194,6 +194,11 @@ both affected accounts and links back to the soft-deleted transfer row.
 The API only reverses rows whose `deleted_at` is still null, so retries or
 double-submits cannot reverse the same transfer twice.
 
+Implemented 2026-07-04: account balance history surfaces also exclude
+soft-deleted transfers. Daily and archive balance summaries filter
+`transfers.deleted_at IS NULL`, and direct transfer lookup returns 404 for
+deleted rows, so removed transfers do not re-enter reconstructed balance totals.
+
 ## Architecture
 
 ### Database Schema
@@ -262,6 +267,7 @@ The balance always reflects:
 
 - Initial set balance
 - Plus: All incoming transfers
+- Excluding: Soft-deleted transfers
 - Minus: All expense transactions
 
 This maintains accurate reconciliation against your physical wallet.

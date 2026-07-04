@@ -8,22 +8,34 @@
 // and exposes a small REST API so checkboxes, moves, renames, reorders, creates and
 // deletes write straight back to the .md files. Bound to localhost only.
 
-import { createServer } from "node:http";
-import {
-  readFileSync, writeFileSync, existsSync, statSync, readdirSync,
-  renameSync, mkdirSync,
-} from "node:fs";
-import { watch } from "node:fs";
-import { join, dirname, basename, relative } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { exec } from "node:child_process";
-
-import { walk, collectSources, readSourceFile } from "./pm/scan.mjs";
-import { buildHtml } from "./pm/ui.mjs";
 import {
-  toggleCheckbox, computeRenumber, nextPrefix, stripNumPrefix, isNumbered,
-  sanitizeBaseName, resolveInside, fileStub, appendUnderHeading,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  watch,
+  writeFileSync,
+} from "node:fs";
+import { createServer } from "node:http";
+import { basename, dirname, join, relative } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+import {
+  appendUnderHeading,
+  computeRenumber,
+  fileStub,
+  isNumbered,
+  nextPrefix,
+  resolveInside,
+  sanitizeBaseName,
+  stripNumPrefix,
+  toggleCheckbox,
 } from "./pm/mutations.mjs";
+import { collectSources, readSourceFile, walk } from "./pm/scan.mjs";
+import { buildHtml } from "./pm/ui.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -34,14 +46,19 @@ const PM_DIR = join(ROOT, PM_REL);
 const argv = process.argv.slice(2);
 const noOpen = argv.includes("--no-open");
 const portArg = argv.find((a) => a.startsWith("--port="));
-const PORT = parseInt(portArg ? portArg.slice(7) : process.env.PM_PORT || "4317", 10);
+const PORT = parseInt(
+  portArg ? portArg.slice(7) : process.env.PM_PORT || "4317",
+  10,
+);
 
 // ---- helpers ----
 function pmRel(abs) {
   return relative(PM_DIR, abs).replace(/\\/g, "/");
 }
 function listDirMd(absDir) {
-  return existsSync(absDir) ? readdirSync(absDir).filter((n) => /\.md$/i.test(n)) : [];
+  return existsSync(absDir)
+    ? readdirSync(absDir).filter((n) => /\.md$/i.test(n))
+    : [];
 }
 function uniqueName(absDir, base) {
   if (!existsSync(join(absDir, base))) return base;
@@ -63,7 +80,9 @@ function escapeRe(s) {
 // Build the live data payload (md bodies inline; source bodies fetched lazily).
 function buildData() {
   const files = walk(PM_DIR);
-  const sourceKeys = Object.keys(collectSources(files, ROOT, { keysOnly: true }));
+  const sourceKeys = Object.keys(
+    collectSources(files, ROOT, { keysOnly: true }),
+  );
   return {
     generatedAt: new Date().toISOString(),
     repoRootFileUrl: pathToFileURL(ROOT).href.replace(/\/$/, "") + "/",
@@ -100,12 +119,18 @@ function opMove(b) {
   const fromAbs = resolveInside(PM_DIR, b.from);
   const toDirAbs = resolveInside(PM_DIR, b.toDir || "");
   if (!existsSync(fromAbs)) throw fail(404, "source not found");
-  if (!existsSync(toDirAbs) || !statSync(toDirAbs).isDirectory()) throw fail(400, "target is not a folder");
+  if (!existsSync(toDirAbs) || !statSync(toDirAbs).isDirectory())
+    throw fail(400, "target is not a folder");
   const st = statSync(fromAbs);
   // guard: don't move a folder into itself / a descendant
   if (st.isDirectory()) {
-    const a = toDirAbs + (toDirAbs.endsWith("\\") || toDirAbs.endsWith("/") ? "" : "/");
-    if (a.startsWith(fromAbs + "/") || a.startsWith(fromAbs + "\\") || toDirAbs === fromAbs) {
+    const a =
+      toDirAbs + (toDirAbs.endsWith("\\") || toDirAbs.endsWith("/") ? "" : "/");
+    if (
+      a.startsWith(fromAbs + "/") ||
+      a.startsWith(fromAbs + "\\") ||
+      toDirAbs === fromAbs
+    ) {
       throw fail(400, "cannot move a folder into itself");
     }
   }
@@ -115,7 +140,8 @@ function opMove(b) {
   if (st.isFile()) {
     if (listDirMd(toDirAbs).some(isNumbered)) {
       const np = nextPrefix(listDirMd(toDirAbs));
-      destName = np + " - " + stripNumPrefix(baseName.replace(/\.md$/i, "")) + ".md";
+      destName =
+        np + " - " + stripNumPrefix(baseName.replace(/\.md$/i, "")) + ".md";
     }
   }
   destName = uniqueName(toDirAbs, destName);
@@ -135,7 +161,8 @@ function opRename(b) {
   if (st.isFile()) {
     clean = clean.replace(/\.md$/i, "");
     const m = oldBase.match(/^(\d+)\s*-+\s*/);
-    newBase = m && !isNumbered(clean) ? m[1] + " - " + clean + ".md" : clean + ".md";
+    newBase =
+      m && !isNumbered(clean) ? m[1] + " - " + clean + ".md" : clean + ".md";
   } else {
     newBase = clean;
   }
@@ -149,13 +176,18 @@ function opReorder(b) {
   const dirAbs = resolveInside(PM_DIR, b.dir || "");
   const order = Array.isArray(b.order) ? b.order : [];
   order.forEach((name) => {
-    if (typeof name !== "string" || name.includes("/") || name.includes("\\")) throw fail(400, "bad name");
+    if (typeof name !== "string" || name.includes("/") || name.includes("\\"))
+      throw fail(400, "bad name");
     if (!existsSync(join(dirAbs, name))) throw fail(404, "missing: " + name);
   });
   const ops = computeRenumber(order);
   // two-phase temp rename to avoid collisions within the permutation
-  ops.forEach((o, i) => renameSync(join(dirAbs, o.from), join(dirAbs, "__pmtmp_" + i + "__")));
-  ops.forEach((o, i) => renameSync(join(dirAbs, "__pmtmp_" + i + "__"), join(dirAbs, o.to)));
+  ops.forEach((o, i) =>
+    renameSync(join(dirAbs, o.from), join(dirAbs, "__pmtmp_" + i + "__")),
+  );
+  ops.forEach((o, i) =>
+    renameSync(join(dirAbs, "__pmtmp_" + i + "__"), join(dirAbs, o.to)),
+  );
   return { ok: true, changed: ops.length };
 }
 
@@ -199,7 +231,9 @@ function opAppend(b) {
   const line = String(b.line == null ? "" : b.line);
   if (!line.trim()) throw fail(400, "empty line");
   const raw = readFileSync(abs, "utf8");
-  const headingRe = b.afterHeading ? new RegExp("^#{1,6}\\s+" + escapeRe(b.afterHeading), "i") : /\u0000$^/;
+  const headingRe = b.afterHeading
+    ? new RegExp("^#{1,6}\\s+" + escapeRe(b.afterHeading), "i")
+    : /\u0000$^/;
   const out = appendUnderHeading(raw, headingRe, line);
   writeFileSync(abs, out, "utf8");
   return { ok: true, raw: out };
@@ -241,7 +275,10 @@ try {
 // ---- HTTP plumbing ----
 function sendJson(res, status, obj) {
   const body = JSON.stringify(obj);
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+  });
   res.end(body);
 }
 function readBody(req) {
@@ -274,7 +311,10 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && path === "/") {
       const html = buildHtml({ mode: "server", dataJson: "null" });
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+      });
       return res.end(html);
     }
 

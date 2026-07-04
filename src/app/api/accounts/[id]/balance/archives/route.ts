@@ -63,6 +63,7 @@ export async function GET(
     .from("transfers")
     .select("date, amount")
     .eq("to_account_id", accountId)
+    .is("deleted_at", null)
     .gte("date", sixMonthsAgoStr)
     .lte("date", todayStr);
 
@@ -70,6 +71,7 @@ export async function GET(
     .from("transfers")
     .select("date, amount")
     .eq("from_account_id", accountId)
+    .is("deleted_at", null)
     .gte("date", sixMonthsAgoStr)
     .lte("date", todayStr);
 

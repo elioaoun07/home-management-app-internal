@@ -1,6 +1,6 @@
 import { adjustAccountBalance } from "@/lib/balance";
 import { getBalanceDelta } from "@/lib/balance-utils";
-import { calculateNextDueDate } from "@/lib/recurring";
+import { advanceRecurringPastDate } from "@/features/recurring/commitments";
 import { supabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -14,6 +14,7 @@ type RecurringPaymentUpdate = {
   recurrence_type?: unknown;
   recurrence_day?: unknown;
   next_due_date?: unknown;
+  last_processed_date?: unknown;
   is_active?: unknown;
   payment_method?: unknown;
   is_private?: unknown;
@@ -47,6 +48,7 @@ export async function PATCH(
       "recurrence_type",
       "recurrence_day",
       "next_due_date",
+      "last_processed_date",
       "is_active",
       "payment_method",
       "is_private",
@@ -253,10 +255,11 @@ export async function POST(
       effectiveDate: finalDate,
     });
 
-    const nextDueDateResult = calculateNextDueDate({
+    const nextDueDateResult = advanceRecurringPastDate({
       currentDueDate: recurringPayment.next_due_date,
       recurrenceType: recurringPayment.recurrence_type,
       recurrenceDay: recurringPayment.recurrence_day,
+      paidDate: finalDate,
     });
 
     // Update the recurring payment with new due date

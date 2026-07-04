@@ -124,6 +124,7 @@ export async function GET(
     `,
     )
     .eq("to_account_id", accountId)
+    .is("deleted_at", null)
     .gte("date", currentMonthStart)
     .lte("date", endDate);
 
@@ -143,6 +144,7 @@ export async function GET(
     `,
     )
     .eq("from_account_id", accountId)
+    .is("deleted_at", null)
     .gte("date", currentMonthStart)
     .lte("date", endDate);
 

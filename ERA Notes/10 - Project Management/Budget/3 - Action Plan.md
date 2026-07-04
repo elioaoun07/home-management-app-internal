@@ -39,11 +39,11 @@ surfaces.
 
 | Candidate                            | Track | Impact | Effort | Foundation?        |
 | ------------------------------------ | ----- | ------ | ------ | ------------------ |
-| `balance-utils` unit tests           | A     | High   | M      | yes - done         |
-| Recurring next-due unit tests        | A     | High   | M      | yes - done         |
+| Finance calculation unit tests       | A     | High   | M      | done 2026-07-03    |
+| Recurring next-due + confirm tests   | A     | High   | M      | done 2026-07-03    |
 | Salary -> Wallet quick refill        | A     | Med    | S      | shipped 2026-06-25 |
 | Public/shared accounts               | A     | High   | M      | shipped 2026-06-26 |
-| Allocation workflow across accounts  | A     | Med    | M      | next               |
+| Allocation workflow across accounts  | A     | Med    | M      | shipped 2026-07-03 |
 | Recurring -> Schedule due-date unify | B     | High   | H      | -                  |
 | Merchant-map -> manual entry         | A     | Med    | S-M    | -                  |
 | Cashflow forecast -> ERA             | B     | High   | H      | -                  |
@@ -55,9 +55,7 @@ surfaces.
 
 ## The Sequence
 
-**Now - Foundation.** Lock the highest-stakes logic before anything else:
-`balance-utils` and recurring next-due tests (both done), the reconciliation
-checkpoint (done), then the quick `analytics/debug` hygiene fix.
+**Now - Foundation.** The highest-stakes calculation layer is covered: balance direction, balance computation/adjustment, canonical spending totals, recurring next-due, and confirm→transaction posting all have unit tests as of 2026-07-03. Targeted finance tests are green; the remaining foundation hygiene item is the quick `analytics/debug` guard/removal, and repo-wide `npm.cmd test` is currently blocked by an unrelated Schedule source-guard failure.
 
 **Just shipped - Wallet refill shortcut.** `/expense?transfer=salary-wallet`
 opens the mobile expense form with a focused amount prompt and resolves
@@ -91,10 +89,17 @@ without changing the `AnalysisReport` contract. The same report JSON is now
 persisted on `ai_messages.analysis_report`, so history-loaded analysis answers
 can reopen **View as Dashboard** without regenerating through AI.
 
-**Next - First enhancement.** Tighten money allocation across accounts: make
-Salary -> Wallet funding, available Wallet balance, recurring commitments, and
-category envelopes feel like one intentional flow. Merchant-map -> manual entry
-remains valuable, but allocation is the sharper pain surfaced by this work.
+**Just shipped - Recurring commitments console.** The mobile Plan / Recurring
+surface now treats recurring bills as current-period commitments: compact header,
+commitment chips, Wallet-after-unpaid when Wallet balance is available, monthly
+Cash / Manual grace inside the custom billing period, suggested matches to
+manually logged transactions, and mark-covered reconciliation without duplicate
+spend. Late confirmations advance past the paid date instead of leaving stale
+due dates behind.
+
+**Next - First enhancement.** Merchant-map -> manual entry remains valuable
+after the recurring commitment pass; it is now the sharper remaining Budget
+entry-flow pain.
 
 **Later - Connect outward.** Open the Recurring -> Schedule due-date bridge
 (coordinate with [Schedule - 4 - Checklist](<../Schedule/4 - Checklist.md>)),

@@ -73,6 +73,7 @@ export async function GET(
     .from("transfers")
     .select(TRANSFER_SELECT)
     .eq("id", id)
+    .is("deleted_at", null)
     .single();
 
   if (error) {

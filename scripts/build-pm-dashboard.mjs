@@ -9,9 +9,9 @@
 // Shared UI (CSS/markup/client app) lives in scripts/pm/ — used by both.
 
 import { writeFileSync } from "node:fs";
-import { join, dirname, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { walk, collectSources } from "./pm/scan.mjs";
+import { collectSources, walk } from "./pm/scan.mjs";
 import { buildHtml } from "./pm/ui.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -43,5 +43,8 @@ writeFileSync(OUT_FILE, html, "utf8");
 
 console.log("PM dashboard written: " + OUT_FILE);
 console.log(
-  "Docs embedded: " + files.length + " · source files embedded: " + Object.keys(sources).length,
+  "Docs embedded: " +
+    files.length +
+    " · source files embedded: " +
+    Object.keys(sources).length,
 );

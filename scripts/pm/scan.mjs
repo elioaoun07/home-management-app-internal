@@ -2,8 +2,8 @@
 // Shared filesystem scanning for the PM dashboard (static build + live server).
 // Zero dependencies — Node built-ins only.
 
-import { readdirSync, statSync, readFileSync, existsSync } from "node:fs";
-import { join, relative, resolve, extname } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { extname, join, relative, resolve } from "node:path";
 
 // Directories never walked (trash + anything hidden).
 const SKIP_DIR = /^\./;
@@ -38,8 +38,23 @@ export function walk(dir, base = "") {
 }
 
 const TEXT_EXTS = new Set([
-  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".sql", ".css", ".scss",
-  ".json", ".html", ".htm", ".xml", ".sh", ".bash", ".yml", ".yaml",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".sql",
+  ".css",
+  ".scss",
+  ".json",
+  ".html",
+  ".htm",
+  ".xml",
+  ".sh",
+  ".bash",
+  ".yml",
+  ".yaml",
 ]);
 const MAX_SRC_BYTES = 140000;
 
@@ -62,7 +77,8 @@ function candAbs(cand, absDir, root) {
   let c = cand.trim().replace(/^<|>$/g, "");
   const lm = c.match(/:(\d+)(-\d+)?$/);
   if (lm) c = c.slice(0, c.length - lm[0].length); // drop :line / :line-line
-  if (!c || /\s/.test(c) || /^https?:|^mailto:|^#/.test(c) || /\.md$/i.test(c)) return null;
+  if (!c || /\s/.test(c) || /^https?:|^mailto:|^#/.test(c) || /\.md$/i.test(c))
+    return null;
   if (!c.includes("/")) return null;
   return /^(src|migrations|scripts|public|docs|ERA Notes)\//i.test(c)
     ? join(root, c)

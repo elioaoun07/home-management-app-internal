@@ -2,6 +2,7 @@ import { isReallyOnline } from "@/lib/connectivityManager";
 import { addToQueue } from "@/lib/offlineQueue";
 import { CACHE_TIMES } from "@/lib/queryConfig";
 import { invalidateAccountData } from "@/lib/queryInvalidation";
+import { qk } from "@/lib/queryKeys";
 import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -357,6 +358,71 @@ export function useConfirmPayment() {
     },
     onError: () => {
       toast.error("Failed to confirm payment", { icon: ToastIcons.error });
+    },
+  });
+}
+
+export function useMarkRecurringCovered() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      transaction_id,
+      coverage_date,
+    }: {
+      id: string;
+      transaction_id: string;
+      coverage_date?: string;
+    }) => {
+      const res = await safeFetch(`/api/recurring-payments/${id}/mark-covered`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transaction_id, coverage_date }),
+      });
+      if (!res.ok) throw new Error("Failed to mark recurring payment covered");
+      return res.json();
+    },
+    onMutate: async ({ id }) => {
+      await queryClient.cancelQueries({ queryKey: QUERY_KEY });
+      const previous = queryClient.getQueryData<RecurringPayment[]>(QUERY_KEY);
+      const previousItem = previous?.find((p) => p.id === id);
+      return { previousItem };
+    },
+    onSuccess: (result, variables, context) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: qk.analytics() });
+      const previousItem = context?.previousItem;
+
+      toast.success("Recurring payment covered", {
+        icon: ToastIcons.success,
+        description: result?.next_due_date
+          ? `Next due: ${result.next_due_date}`
+          : undefined,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            if (!previousItem) return;
+            try {
+              await safeFetch(`/api/recurring-payments/${variables.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  last_processed_date: previousItem.last_processed_date,
+                  next_due_date: previousItem.next_due_date,
+                }),
+              });
+              queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+              queryClient.invalidateQueries({ queryKey: qk.analytics() });
+              toast.success("Coverage reverted", { icon: ToastIcons.update });
+            } catch {
+              toast.error("Failed to undo coverage");
+            }
+          },
+        },
+      });
     },
   });
 }

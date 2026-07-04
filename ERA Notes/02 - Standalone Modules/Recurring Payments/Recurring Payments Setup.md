@@ -10,6 +10,8 @@ tags:
 ---
 # Recurring Payments Feature - Implementation Guide
 
+> **Current note (2026-07-03):** the live implementation now includes a mobile commitment-console redesign, custom-billing-month grace status for monthly Cash / Manual commitments, suggested matching to manually logged transactions, `POST /api/recurring-payments/[id]/mark-covered`, and stale due-date advancement via `advanceRecurringPastDate()`. Some older checklist items below are historical setup notes rather than current gaps.
+
 ## ✅ Completed Steps
 
 ### 1. Database Migration

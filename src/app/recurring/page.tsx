@@ -30,10 +30,19 @@ import {
   type RecurringPayment,
   useConfirmPayment,
   useCreateRecurringPayment,
-  useDeleteRecurringPayment,
+  useMarkRecurringCovered,
   useRecurringPayments,
   useUpdateRecurringPayment,
 } from "@/features/recurring/useRecurringPayments";
+import {
+  findRecurringTransactionMatches,
+  getCustomBillingPeriod,
+  getRecurringCommitmentStatus,
+  type CommitmentStatusInfo,
+  type RecurringTransactionMatch,
+} from "@/features/recurring/commitments";
+import { useDashboardTransactions } from "@/features/transactions/useDashboardTransactions";
+import { useDatePreferences } from "@/features/preferences/useDatePreferences";
 import {
   getMemberDisplayName,
   useHouseholdMembers,
@@ -42,6 +51,8 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
+import { yyyyMmDd } from "@/lib/utils/date";
+import { useQuery } from "@tanstack/react-query";
 import {
   addDays,
   format,
@@ -88,7 +99,7 @@ function getOrdinalSuffix(day: number) {
   }
 }
 
-type TabMode = "recurring" | "future" | "draft";
+type TabMode = "recurring" | "future" | "draft" | "schedule";
 
 type DraftItem = {
   id: string;
@@ -118,8 +129,37 @@ export default function RecurringPage() {
   const { data: householdData } = useHouseholdMembers();
   const currentUserId = householdData?.currentUserId ?? null;
   const members = householdData?.members ?? [];
+  const { prefs: datePrefs } = useDatePreferences();
+  const todayDate = yyyyMmDd(new Date());
+  const billingPeriod = useMemo(
+    () => getCustomBillingPeriod(todayDate, datePrefs.month_start_day),
+    [todayDate, datePrefs.month_start_day],
+  );
+  const { data: periodTransactions = [] } = useDashboardTransactions({
+    startDate: billingPeriod.start,
+    endDate: billingPeriod.end,
+  });
+  const walletAccount = useMemo(
+    () =>
+      accounts.find((a) => a.name.toLowerCase() === "wallet") ||
+      accounts.find((a) => a.name.toLowerCase().includes("wallet")),
+    [accounts],
+  );
+  const { data: walletBalance } = useQuery<{
+    balance: number;
+  } | null>({
+    queryKey: ["account-balance", walletAccount?.id],
+    enabled: !!walletAccount?.id,
+    queryFn: async () => {
+      if (!walletAccount?.id) return null;
+      const res = await fetch(`/api/accounts/${walletAccount.id}/balance`);
+      if (!res.ok) throw new Error("Failed to fetch wallet balance");
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
 
-  const [pageMode, setPageMode] = useState<"budget" | "schedule">("budget");
   const [scheduleDate, setScheduleDate] = useState(() => new Date());
   const [activeTab, setActiveTab] = useState<TabMode>("recurring");
   const [showAddDrawer, setShowAddDrawer] = useState(false);
@@ -133,6 +173,10 @@ export default function RecurringPage() {
   const [confirmingDraft, setConfirmingDraft] = useState<DraftItem | null>(
     null,
   );
+  const [reviewingMatches, setReviewingMatches] = useState<{
+    payment: RecurringPayment;
+    matches: RecurringTransactionMatch[];
+  } | null>(null);
 
   // LBP settings
   const { lbpRate, calculateActualValue } = useLbpSettings();
@@ -143,8 +187,8 @@ export default function RecurringPage() {
 
   const createMutation = useCreateRecurringPayment();
   const updateMutation = useUpdateRecurringPayment();
-  const deleteMutation = useDeleteRecurringPayment();
   const confirmRecurringMutation = useConfirmPayment();
+  const markCoveredMutation = useMarkRecurringCovered();
   const confirmFutureMutation = useConfirmFuturePayment();
   const deleteFutureMutation = useDeleteFuturePayment();
   const { data: draftPayments = [], isLoading: isLoadingDrafts } = useDrafts();
@@ -235,6 +279,75 @@ export default function RecurringPage() {
       return sum;
     }, 0);
   }, [activePayments]);
+
+  const isAutoSubscription = useCallback((payment: RecurringPayment) => {
+    if (payment.payment_method !== "auto") return false;
+    const catSlug = payment.category?.slug?.toLowerCase() ?? "";
+    const catName = payment.category?.name?.toLowerCase() ?? "";
+    return catSlug === "subscription" || catName === "subscription";
+  }, []);
+
+  const matchesByPaymentId = useMemo(() => {
+    const map = new Map<string, RecurringTransactionMatch[]>();
+    for (const payment of activePayments) {
+      if (isAutoSubscription(payment)) continue;
+      const matches = findRecurringTransactionMatches({
+        payment,
+        period: billingPeriod,
+        transactions: periodTransactions
+          .filter((tx) => !tx._isPending && !tx.is_masked)
+          .map((tx) => ({
+            id: tx.id,
+            date: tx.date,
+            amount: tx.amount,
+            description: tx.description,
+            account_id: tx.account_id,
+            category_id: tx.category_id,
+            subcategory_id: tx.subcategory_id,
+          })),
+      });
+      map.set(payment.id, matches);
+    }
+    return map;
+  }, [activePayments, billingPeriod, isAutoSubscription, periodTransactions]);
+
+  const getCommitmentStatus = useCallback(
+    (payment: RecurringPayment): CommitmentStatusInfo => {
+      const matches = matchesByPaymentId.get(payment.id) ?? [];
+      return getRecurringCommitmentStatus({
+        payment,
+        today: todayDate,
+        monthStartDay: datePrefs.month_start_day,
+        matchedDate: matches[0]?.transaction.date,
+        monitorOnly: isAutoSubscription(payment),
+      });
+    },
+    [datePrefs.month_start_day, isAutoSubscription, matchesByPaymentId, todayDate],
+  );
+
+  const commitmentMetrics = useMemo(() => {
+    let covered = 0;
+    let unpaid = 0;
+    let unpaidAmount = 0;
+
+    for (const payment of activePayments) {
+      const status = getCommitmentStatus(payment).status;
+      if (status === "covered" || status === "matched" || status === "monitor") {
+        covered += 1;
+      }
+      if (status === "due_this_period" || status === "missed") {
+        unpaid += 1;
+        unpaidAmount += payment.amount;
+      }
+    }
+
+    return { covered, unpaid, unpaidAmount };
+  }, [activePayments, getCommitmentStatus]);
+
+  const walletAfterCommitments =
+    typeof walletBalance?.balance === "number"
+      ? walletBalance.balance - commitmentMetrics.unpaidAmount
+      : null;
 
   // Future payments: separate due/overdue vs upcoming
   const dueFuturePayments = useMemo(
@@ -505,11 +618,21 @@ export default function RecurringPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleMarkCovered = async (
+    payment: RecurringPayment,
+    match: RecurringTransactionMatch,
+  ) => {
     try {
-      await deleteMutation.mutateAsync(id);
+      await markCoveredMutation.mutateAsync({
+        id: payment.id,
+        transaction_id: match.transaction.id,
+        coverage_date: match.transaction.date,
+      });
+      setReviewingMatches(null);
     } catch {
-      // Error toast shown by hook
+      toast.error("Failed to mark recurring payment covered", {
+        icon: ToastIcons.error,
+      });
     }
   };
 
@@ -607,23 +730,6 @@ export default function RecurringPage() {
     }
   };
 
-  const getDueDateInfo = (payment: RecurringPayment) => {
-    const dueDate = new Date(payment.next_due_date);
-    const isDueToday = isToday(dueDate);
-    const isOverdue = isPast(dueDate) && !isDueToday;
-    const isDue = isDueToday || isOverdue;
-    return {
-      isDue,
-      isDueToday,
-      isOverdue,
-      formatted: isDueToday
-        ? "Due Today"
-        : isOverdue
-          ? `Overdue by ${formatDistanceToNow(dueDate)}`
-          : `Due ${formatDistanceToNow(dueDate, { addSuffix: true })}`,
-    };
-  };
-
   const subcategories = formData.category_id
     ? categories.filter((c: any) => c.parent_id === formData.category_id)
     : [];
@@ -636,7 +742,9 @@ export default function RecurringPage() {
       ? isLoadingRecurring
       : activeTab === "future"
         ? isLoadingFuture
-        : isLoadingDrafts;
+        : activeTab === "draft"
+          ? isLoadingDrafts
+          : false;
 
   if (isLoading) {
     return (
@@ -654,43 +762,45 @@ export default function RecurringPage() {
   return (
     <div className={cn("min-h-screen pb-32", tc.bgPage)}>
       <div className="max-w-2xl mx-auto p-4">
-        {/* Sticky Header */}
+        {/* Compact Header */}
         <div
           className={cn(
-            "sticky top-14 z-30 pb-3 mb-3 -mx-4 px-4 pt-3 border-b backdrop-blur-md",
+            "sticky top-14 z-30 pb-2 mb-3 -mx-4 px-4 pt-2 border-b backdrop-blur-md",
             "bg-[hsl(var(--header-bg)/0.95)]",
             tc.border,
           )}
         >
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between gap-3 mb-2">
             <div>
-              <h1 className={cn("text-2xl font-bold", tc.text)}>Plan</h1>
-              <p className={cn("text-sm", tc.textMuted)}>
-                {pageMode === "schedule"
+              <h1 className={cn("text-xl font-bold leading-tight", tc.text)}>
+                Plan
+              </h1>
+              <p className={cn("text-xs", tc.textMuted)}>
+                {activeTab === "schedule"
                   ? isToday(scheduleDate)
                     ? "Today"
                     : format(scheduleDate, "EEEE, MMM d")
                   : activeTab === "recurring"
-                    ? `${activePayments.length} active · $${monthlyTotal.toFixed(0)}/mo`
+                    ? "Commitment console"
                     : activeTab === "future"
                       ? `${futurePayments.length} scheduled · $${futureTotal.toFixed(0)} total`
                       : `${draftPayments.length} draft${draftPayments.length !== 1 ? "s" : ""}`}
               </p>
             </div>
-            {pageMode === "budget" && activeTab === "recurring" && (
+            {activeTab === "recurring" && (
               <button
                 onClick={() => {
                   setEditingPayment(null);
                   resetForm();
                   setShowAddDrawer(true);
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-full neo-gradient text-white neo-glow hover:scale-105 active:scale-95 transition-all shadow-lg"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full neo-gradient text-white neo-glow hover:scale-105 active:scale-95 transition-all shadow-lg"
               >
                 <PlusIcon className="w-4 h-4" />
                 <span className="text-sm font-semibold">Add</span>
               </button>
             )}
-            {pageMode === "schedule" && (
+            {activeTab === "schedule" && (
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setScheduleDate((d) => subDays(d, 1))}
@@ -727,41 +837,11 @@ export default function RecurringPage() {
             )}
           </div>
 
-          {/* Budget / Schedule mode toggle */}
-          <div className="flex gap-1 p-1 rounded-xl bg-white/5 mb-2">
-            <button
-              onClick={() => setPageMode("budget")}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
-                pageMode === "budget"
-                  ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
-                  : "text-white/40 hover:text-white/60",
-              )}
-            >
-              <Banknote className="w-4 h-4" />
-              Budget
-            </button>
-            <button
-              onClick={() => setPageMode("schedule")}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
-                pageMode === "schedule"
-                  ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
-                  : "text-white/40 hover:text-white/60",
-              )}
-            >
-              <CalendarDays className="w-4 h-4" />
-              Schedule
-            </button>
-          </div>
-
-          {/* Budget sub-tabs (only in budget mode) */}
-          {pageMode === "budget" && (
-            <div className="flex gap-1 p-1 rounded-xl bg-white/5">
+          <div className="flex gap-1 p-1 rounded-xl bg-white/5 overflow-x-auto scrollbar-hide">
               <button
                 onClick={() => setActiveTab("recurring")}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
+                  "min-w-fit flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all",
                   activeTab === "recurring"
                     ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
                     : "text-white/40 hover:text-white/60",
@@ -773,7 +853,7 @@ export default function RecurringPage() {
               <button
                 onClick={() => setActiveTab("future")}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
+                  "min-w-fit flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all",
                   activeTab === "future"
                     ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
                     : "text-white/40 hover:text-white/60",
@@ -790,7 +870,7 @@ export default function RecurringPage() {
               <button
                 onClick={() => setActiveTab("draft")}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
+                  "min-w-fit flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all",
                   activeTab === "draft"
                     ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
                     : "text-white/40 hover:text-white/60",
@@ -804,12 +884,23 @@ export default function RecurringPage() {
                   </span>
                 )}
               </button>
+              <button
+                onClick={() => setActiveTab("schedule")}
+                className={cn(
+                  "min-w-fit flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                  activeTab === "schedule"
+                    ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
+                    : "text-white/40 hover:text-white/60",
+                )}
+              >
+                <CalendarDays className="w-4 h-4" />
+                Schedule
+              </button>
             </div>
-          )}
         </div>
 
         {/* ═══ SCHEDULE VIEW ═══ */}
-        {pageMode === "schedule" && (
+        {activeTab === "schedule" && (
           <ScheduleView
             date={scheduleDate}
             allEvents={allEvents}
@@ -820,8 +911,39 @@ export default function RecurringPage() {
         )}
 
         {/* ═══ BUDGET CONTENT ═══ */}
-        {pageMode === "budget" && activeTab === "recurring" && (
+        {activeTab === "recurring" && (
           <>
+            <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
+              <CommitmentChip
+                label="Active"
+                value={activePayments.length.toString()}
+                tc={tc}
+              />
+              <CommitmentChip
+                label="Covered"
+                value={commitmentMetrics.covered.toString()}
+                tc={tc}
+              />
+              <CommitmentChip
+                label="Unpaid"
+                value={commitmentMetrics.unpaid.toString()}
+                tone={commitmentMetrics.unpaid > 0 ? "warm" : "calm"}
+                tc={tc}
+              />
+              <CommitmentChip
+                label="Monthly"
+                value={`$${monthlyTotal.toFixed(0)}`}
+                tc={tc}
+              />
+              {walletAfterCommitments !== null && (
+                <CommitmentChip
+                  label="Wallet after"
+                  value={`$${walletAfterCommitments.toFixed(0)}`}
+                  tone={walletAfterCommitments < 0 ? "warm" : "calm"}
+                  tc={tc}
+                />
+              )}
+            </div>
             {activePayments.length === 0 && disabledPayments.length === 0 ? (
               <div className="neo-card p-8 text-center">
                 <CalendarClock
@@ -852,10 +974,14 @@ export default function RecurringPage() {
                       tc={tc}
                       currentUserId={currentUserId}
                       members={members}
-                      getDueDateInfo={getDueDateInfo}
+                      getStatusInfo={getCommitmentStatus}
+                      matchesByPaymentId={matchesByPaymentId}
                       onConfirm={setConfirmingRecurring}
                       onEdit={setEditingPayment}
-                      onDelete={handleDelete}
+                      onMarkCovered={handleMarkCovered}
+                      onReviewMatches={(payment, matches) =>
+                        setReviewingMatches({ payment, matches })
+                      }
                     />
                   </div>
                 )}
@@ -876,10 +1002,14 @@ export default function RecurringPage() {
                       tc={tc}
                       currentUserId={currentUserId}
                       members={members}
-                      getDueDateInfo={getDueDateInfo}
+                      getStatusInfo={getCommitmentStatus}
+                      matchesByPaymentId={matchesByPaymentId}
                       onConfirm={setConfirmingRecurring}
                       onEdit={setEditingPayment}
-                      onDelete={handleDelete}
+                      onMarkCovered={handleMarkCovered}
+                      onReviewMatches={(payment, matches) =>
+                        setReviewingMatches({ payment, matches })
+                      }
                       onToggle={(p) =>
                         updateMutation.mutate({
                           id: p.id,
@@ -975,7 +1105,7 @@ export default function RecurringPage() {
         )}
 
         {/* ═══ FUTURE PAYMENTS TAB ═══ */}
-        {pageMode === "budget" && activeTab === "future" && (
+        {activeTab === "future" && (
           <>
             {futurePayments.length === 0 ? (
               <div className="neo-card p-8 text-center">
@@ -1058,7 +1188,7 @@ export default function RecurringPage() {
         )}
 
         {/* ═══ DRAFT PAYMENTS TAB ═══ */}
-        {pageMode === "budget" && activeTab === "draft" && (
+        {activeTab === "draft" && (
           <>
             {draftPayments.length === 0 ? (
               <div className="neo-card p-8 text-center">
@@ -1537,6 +1667,19 @@ export default function RecurringPage() {
           </div>
         )}
 
+        {reviewingMatches && (
+          <MatchReviewSheet
+            payment={reviewingMatches.payment}
+            matches={reviewingMatches.matches}
+            tc={tc}
+            onClose={() => setReviewingMatches(null)}
+            onSelect={(match) =>
+              handleMarkCovered(reviewingMatches.payment, match)
+            }
+            isPending={markCoveredMutation.isPending}
+          />
+        )}
+
         {/* ═══ CONFIRM DRAWER (shared for recurring + future) ═══ */}
         {(confirmingRecurring || confirmingFuture || confirmingDraft) && (
           <ConfirmDrawer
@@ -1586,15 +1729,133 @@ export default function RecurringPage() {
 /* ═══════════════════════════════════════════════════
    RECURRING SECTION (compact rows)
    ═══════════════════════════════════════════════════ */
+function CommitmentChip({
+  label,
+  value,
+  tone = "default",
+  tc,
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "warm" | "calm";
+  tc: ReturnType<typeof useThemeClasses>;
+}) {
+  return (
+    <div
+      className={cn(
+        "shrink-0 rounded-lg border px-3 py-2 min-w-[86px]",
+        tone === "warm"
+          ? "border-amber-500/25 bg-amber-500/10"
+          : tone === "calm"
+            ? cn(tc.borderActive, tc.bgActive)
+            : cn(tc.border, tc.bgSurface),
+      )}
+    >
+      <p className="text-[10px] uppercase tracking-wider text-white/35">
+        {label}
+      </p>
+      <p
+        className={cn(
+          "text-sm font-bold tabular-nums",
+          tone === "warm" ? "text-amber-300" : tc.textHighlight,
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function MatchReviewSheet({
+  payment,
+  matches,
+  tc,
+  onClose,
+  onSelect,
+  isPending,
+}: {
+  payment: RecurringPayment;
+  matches: RecurringTransactionMatch[];
+  tc: ReturnType<typeof useThemeClasses>;
+  onClose: () => void;
+  onSelect: (match: RecurringTransactionMatch) => void;
+  isPending: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60">
+      <div
+        className={cn(
+          "w-full max-w-2xl rounded-t-2xl border-t max-h-[72vh] overflow-hidden",
+          tc.bgPage,
+          tc.border,
+        )}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-white truncate">
+              Match {payment.name}
+            </p>
+            <p className="text-xs text-white/40">
+              Choose the transaction that already paid this commitment
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className={cn("p-2 rounded-lg active:scale-95", tc.bgSurface)}
+          >
+            <XIcon className={cn("w-4 h-4", tc.text)} />
+          </button>
+        </div>
+        <div className="p-4 space-y-2 overflow-y-auto">
+          {matches.map((match) => (
+            <button
+              key={match.transaction.id}
+              onClick={() => onSelect(match)}
+              disabled={isPending}
+              className="w-full flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 text-left active:scale-[0.99] transition-all disabled:opacity-50"
+            >
+              <div className="w-14 shrink-0 text-center">
+                <p className="text-xs font-bold text-white/70">
+                  {formatStatusDate(match.transaction.date)}
+                </p>
+                <p className="text-[10px] text-emerald-300">
+                  {match.score}%
+                </p>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white truncate">
+                  {match.transaction.description || "Transaction"}
+                </p>
+                <p className="text-[10px] text-white/35 truncate">
+                  {match.reasons.join(" · ")}
+                </p>
+              </div>
+              <p className={cn("text-sm font-bold tabular-nums", tc.textHighlight)}>
+                ${Math.abs(match.transaction.amount).toFixed(0)}
+              </p>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatStatusDate(date: string) {
+  return format(new Date(`${date}T00:00:00`), "MMM d");
+}
+
 function RecurringSection({
   payments,
   tc,
   currentUserId,
   members,
-  getDueDateInfo,
+  getStatusInfo,
+  matchesByPaymentId,
   onConfirm,
   onEdit,
-  onDelete,
+  onMarkCovered,
+  onReviewMatches,
   onToggle,
   isAutoSection,
 }: {
@@ -1602,15 +1863,18 @@ function RecurringSection({
   tc: ReturnType<typeof useThemeClasses>;
   currentUserId: string | null;
   members: any[];
-  getDueDateInfo: (p: RecurringPayment) => {
-    isDue: boolean;
-    isDueToday: boolean;
-    isOverdue: boolean;
-    formatted: string;
-  };
+  getStatusInfo: (p: RecurringPayment) => CommitmentStatusInfo;
+  matchesByPaymentId: Map<string, RecurringTransactionMatch[]>;
   onConfirm: (p: RecurringPayment) => void;
   onEdit: (p: RecurringPayment) => void;
-  onDelete: (id: string) => void;
+  onMarkCovered: (
+    p: RecurringPayment,
+    match: RecurringTransactionMatch,
+  ) => void;
+  onReviewMatches: (
+    p: RecurringPayment,
+    matches: RecurringTransactionMatch[],
+  ) => void;
   onToggle?: (p: RecurringPayment) => void;
   isAutoSection?: boolean;
 }) {
@@ -1624,7 +1888,9 @@ function RecurringSection({
         <span className="w-8" />
       </div>
       {payments.map((payment) => {
-        const dueDateInfo = getDueDateInfo(payment);
+        const statusInfo = getStatusInfo(payment);
+        const matches = matchesByPaymentId.get(payment.id) ?? [];
+        const bestMatch = matches[0];
         const day =
           payment.recurrence_day ?? new Date(payment.next_due_date).getDate();
         const isManual = (payment.payment_method ?? "manual") === "manual";
@@ -1637,19 +1903,31 @@ function RecurringSection({
           catSlug === "subscription" || catName === "subscription";
         const isAutoSubscription = isAutoSection && isSubscriptionCategory;
         const isAutoBills = isAutoSection && !isAutoSubscription;
+        const statusTone =
+          statusInfo.status === "missed"
+            ? "border-amber-500/35 bg-amber-500/10"
+            : statusInfo.status === "due_this_period"
+              ? cn(tc.bgActive, tc.borderActive)
+              : statusInfo.status === "matched"
+                ? "border-emerald-500/30 bg-emerald-500/10"
+                : "border-transparent hover:bg-white/5";
+        const statusText =
+          statusInfo.status === "covered" && statusInfo.coveredDate
+            ? `Covered ${formatStatusDate(statusInfo.coveredDate)}`
+            : statusInfo.status === "matched" && statusInfo.coveredDate
+              ? "Matched transaction"
+              : statusInfo.status === "missed"
+                ? `Missed ${formatStatusDate(statusInfo.dueDate)}`
+                : statusInfo.status === "upcoming"
+                  ? `Upcoming ${formatStatusDate(statusInfo.dueDate)}`
+                  : statusInfo.label;
 
         return (
           <div
             key={payment.id}
             className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all border",
-              isAutoSubscription
-                ? "border-transparent hover:bg-white/5"
-                : dueDateInfo.isOverdue
-                  ? "border-red-500/40 bg-red-500/5"
-                  : dueDateInfo.isDueToday
-                    ? cn(tc.bgActive, tc.borderActive, "neo-glow")
-                    : "border-transparent hover:bg-white/5",
+              isAutoSubscription ? "border-transparent hover:bg-white/5" : statusTone,
             )}
           >
             {/* Day */}
@@ -1658,9 +1936,9 @@ function RecurringSection({
                 "w-8 text-center text-sm font-bold tabular-nums",
                 isAutoSubscription
                   ? "text-white/60"
-                  : dueDateInfo.isOverdue
-                    ? "text-red-400"
-                    : dueDateInfo.isDueToday
+                  : statusInfo.status === "missed"
+                    ? "text-amber-300"
+                    : statusInfo.status === "due_this_period"
                       ? tc.textHighlight
                       : "text-white/60",
               )}
@@ -1695,9 +1973,42 @@ function RecurringSection({
                 </p>
               )}
               {payment.category && (
+                <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                  <p className="text-[10px] text-white/30 truncate">
+                    {payment.category.name}
+                  </p>
+                  <span
+                    className={cn(
+                      "text-[9px] font-semibold px-1.5 py-0.5 rounded-full border shrink-0",
+                      statusInfo.status === "missed"
+                        ? "border-amber-500/25 text-amber-300"
+                        : statusInfo.status === "matched"
+                          ? "border-emerald-500/25 text-emerald-300"
+                          : statusInfo.status === "covered"
+                            ? "border-white/10 text-white/40"
+                            : tc.borderActive,
+                    )}
+                  >
+                    {isAutoSubscription ? "Monitor" : statusText}
+                  </span>
+                </div>
+              )}
+              {!payment.category && (
                 <p className="text-[10px] text-white/30 truncate">
-                  {payment.category.name}
+                  {isAutoSubscription ? "Monitor" : statusText}
                 </p>
+              )}
+              {statusInfo.status === "matched" && bestMatch && (
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (matches.length > 1) onReviewMatches(payment, matches);
+                    else onMarkCovered(payment, bestMatch);
+                  }}
+                  className="mt-1 text-[10px] font-bold text-emerald-300 hover:text-emerald-200"
+                >
+                  {matches.length > 1 ? "Review matches" : "Mark covered"}
+                </button>
               )}
             </div>
 
@@ -1707,8 +2018,8 @@ function RecurringSection({
                 "w-16 text-right text-sm font-semibold tabular-nums",
                 isAutoSubscription
                   ? tc.textHighlight
-                  : dueDateInfo.isOverdue
-                    ? "text-red-400"
+                  : statusInfo.status === "missed"
+                    ? "text-amber-300"
                     : tc.textHighlight,
               )}
             >
@@ -1722,22 +2033,22 @@ function RecurringSection({
                   onClick={() => onConfirm(payment)}
                   className={cn(
                     "p-1.5 rounded-md active:scale-95 transition-all",
-                    dueDateInfo.isOverdue
-                      ? "bg-red-500/20"
-                      : dueDateInfo.isDueToday
+                    statusInfo.status === "missed"
+                      ? "bg-amber-500/20"
+                      : statusInfo.status === "due_this_period"
                         ? tc.bgActive
                         : tc.bgSurface,
                   )}
                 >
                   <CheckIcon
                     className={cn(
-                      "w-3.5 h-3.5",
-                      dueDateInfo.isOverdue
-                        ? "text-red-400"
-                        : dueDateInfo.isDueToday
-                          ? tc.textHighlight
-                          : tc.text,
-                    )}
+                    "w-3.5 h-3.5",
+                    statusInfo.status === "missed"
+                      ? "text-amber-300"
+                      : statusInfo.status === "due_this_period"
+                        ? tc.textHighlight
+                        : tc.text,
+                  )}
                   />
                 </button>
               ) : isAutoSubscription ? (
@@ -1755,22 +2066,22 @@ function RecurringSection({
                   onClick={() => onConfirm(payment)}
                   className={cn(
                     "p-1.5 rounded-md active:scale-95 transition-all",
-                    dueDateInfo.isOverdue
-                      ? "bg-red-500/20"
-                      : dueDateInfo.isDueToday
+                    statusInfo.status === "missed"
+                      ? "bg-amber-500/20"
+                      : statusInfo.status === "due_this_period"
                         ? tc.bgActive
                         : tc.bgSurface,
                   )}
                 >
                   <CheckIcon
                     className={cn(
-                      "w-3.5 h-3.5",
-                      dueDateInfo.isOverdue
-                        ? "text-red-400"
-                        : dueDateInfo.isDueToday
-                          ? tc.textHighlight
-                          : tc.text,
-                    )}
+                    "w-3.5 h-3.5",
+                    statusInfo.status === "missed"
+                      ? "text-amber-300"
+                      : statusInfo.status === "due_this_period"
+                        ? tc.textHighlight
+                        : tc.text,
+                  )}
                   />
                 </button>
               ) : isOwner ? (

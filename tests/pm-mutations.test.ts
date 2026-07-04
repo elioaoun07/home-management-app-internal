@@ -1,14 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  scanCheckboxes,
-  toggleCheckbox,
-  stripNumPrefix,
+  appendUnderHeading,
+  computeRenumber,
   isNumbered,
   nextPrefix,
-  computeRenumber,
-  sanitizeBaseName,
   resolveInside,
-  appendUnderHeading,
+  sanitizeBaseName,
+  scanCheckboxes,
+  stripNumPrefix,
+  toggleCheckbox,
 } from "../scripts/pm/mutations.mjs";
 
 const FENCED = [
@@ -72,12 +72,18 @@ describe("toggleCheckbox", () => {
   });
 
   it("rejects an out-of-range ordinal", () => {
-    expect(toggleCheckbox(FENCED, 99)).toEqual({ ok: false, reason: "out-of-range" });
+    expect(toggleCheckbox(FENCED, 99)).toEqual({
+      ok: false,
+      reason: "out-of-range",
+    });
   });
 
   it("rejects a stale expected state (drift guard)", () => {
     // cbidx 0 is currently open; claiming it was done means the file drifted
-    expect(toggleCheckbox(FENCED, 0, "done")).toEqual({ ok: false, reason: "drift" });
+    expect(toggleCheckbox(FENCED, 0, "done")).toEqual({
+      ok: false,
+      reason: "drift",
+    });
   });
 
   it("round-trips: toggling twice restores the original text", () => {
@@ -138,13 +144,15 @@ describe("sanitizeBaseName", () => {
 describe("resolveInside", () => {
   const root = process.platform === "win32" ? "C:/pm" : "/pm";
   it("resolves a child path", () => {
-    expect(resolveInside(root, "Budget/4 - Checklist.md").replace(/\\/g, "/")).toBe(
-      root + "/Budget/4 - Checklist.md",
-    );
+    expect(
+      resolveInside(root, "Budget/4 - Checklist.md").replace(/\\/g, "/"),
+    ).toBe(root + "/Budget/4 - Checklist.md");
   });
   it("throws on traversal", () => {
     expect(() => resolveInside(root, "../secret.md")).toThrow(/escapes/);
-    expect(() => resolveInside(root, "Budget/../../secret.md")).toThrow(/escapes/);
+    expect(() => resolveInside(root, "Budget/../../secret.md")).toThrow(
+      /escapes/,
+    );
   });
 });
 
@@ -153,7 +161,9 @@ describe("appendUnderHeading", () => {
   it("inserts at the end of the matched section", () => {
     const out = appendUnderHeading(doc, /^##\s+Now\b/i, "- [ ] fresh");
     const lines = out.split("\n");
-    expect(lines.indexOf("- [ ] fresh")).toBeGreaterThan(lines.indexOf("- [ ] existing"));
+    expect(lines.indexOf("- [ ] fresh")).toBeGreaterThan(
+      lines.indexOf("- [ ] existing"),
+    );
     expect(lines.indexOf("- [ ] fresh")).toBeLessThan(lines.indexOf("## Next"));
   });
   it("falls back to EOF when the heading is absent", () => {

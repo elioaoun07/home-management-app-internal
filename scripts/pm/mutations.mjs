@@ -4,7 +4,7 @@
 // injected verbatim into the browser client (see ui.mjs) so client ordinals and
 // server ordinals can never drift. Keep it import-free and `.toString()`-safe.
 
-import { resolve, relative, isAbsolute } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 
 /**
  * Canonical, fence- and frontmatter-aware scan of real checkboxes (`[ ]`/`[x]`).
@@ -17,14 +17,20 @@ export function scanCheckboxes(raw) {
   var start = 0;
   if (/^---\s*$/.test(lines[0] || "")) {
     for (var j = 1; j < lines.length; j++) {
-      if (/^---\s*$/.test(lines[j])) { start = j + 1; break; }
+      if (/^---\s*$/.test(lines[j])) {
+        start = j + 1;
+        break;
+      }
     }
   }
   var out = [];
   var inFence = false;
   for (var i = start; i < lines.length; i++) {
     var line = lines[i];
-    if (/^\s*(```|~~~)/.test(line)) { inFence = !inFence; continue; }
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
     if (inFence) continue;
     var m = line.match(/^(\s*)(?:[-*]|\d+\.)\s+\[([ xX])\]/);
     if (m) out.push({ line: i, state: /x/i.test(m[2]) ? "done" : "open" });
@@ -88,7 +94,7 @@ export function computeRenumber(orderedBasenames) {
   (orderedBasenames || []).forEach(function (from, idx) {
     var stem = String(from).replace(/\.md$/i, "");
     var title = stripNumPrefix(stem);
-    var to = (idx + 1) + " - " + title + ".md";
+    var to = idx + 1 + " - " + title + ".md";
     if (to !== from) ops.push({ from: from, to: to });
   });
   return ops;
@@ -123,8 +129,13 @@ export function resolveInside(rootDir, relPath) {
 export function fileStub(title) {
   var today = new Date().toISOString().slice(0, 10);
   return (
-    "---\ncreated: " + today + "\nupdated: " + today +
-    "\ntype: note\nstatus: active\n---\n\n# " + title + "\n\n"
+    "---\ncreated: " +
+    today +
+    "\nupdated: " +
+    today +
+    "\ntype: note\nstatus: active\n---\n\n# " +
+    title +
+    "\n\n"
   );
 }
 
@@ -134,10 +145,15 @@ export function fileStub(title) {
  */
 export function appendUnderHeading(raw, headingRe, line) {
   var lines = String(raw).split("\n");
-  var hIdx = -1, hLevel = 0;
+  var hIdx = -1,
+    hLevel = 0;
   for (var i = 0; i < lines.length; i++) {
     var hm = lines[i].match(/^(#{1,6})\s+/);
-    if (hm && headingRe.test(lines[i])) { hIdx = i; hLevel = hm[1].length; break; }
+    if (hm && headingRe.test(lines[i])) {
+      hIdx = i;
+      hLevel = hm[1].length;
+      break;
+    }
   }
   if (hIdx === -1) {
     var trimmed = String(raw).replace(/\s*$/, "");
@@ -146,7 +162,10 @@ export function appendUnderHeading(raw, headingRe, line) {
   var end = lines.length;
   for (var j = hIdx + 1; j < lines.length; j++) {
     var hm2 = lines[j].match(/^(#{1,6})\s+/);
-    if (hm2 && hm2[1].length <= hLevel) { end = j; break; }
+    if (hm2 && hm2[1].length <= hLevel) {
+      end = j;
+      break;
+    }
   }
   var insertAt = end;
   while (insertAt > hIdx + 1 && /^\s*$/.test(lines[insertAt - 1])) insertAt--;

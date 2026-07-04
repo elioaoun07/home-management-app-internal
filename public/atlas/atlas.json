@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-06-26T18:15:44.817Z",
-  "count": 58,
+  "generatedAt": "2026-07-03T18:21:37.574Z",
+  "count": 59,
   "nodes": [
     {
       "slug": "auth-reset",
@@ -377,6 +377,32 @@
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-budget.md"
+    },
+    {
+      "slug": "feature-budget-ai",
+      "title": "Feature · Budget AI (Analysis + Dashboard)",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module",
+        "module/ai-assistant"
+      ],
+      "sections": {
+        "files": "- **Floating chat panel**: `src/components/ai/AIChatAssistant.tsx`\n- **Markdown renderer**: `src/components/ai/ChatMarkdown.tsx` (`react-markdown` + `remark-gfm`)\n- **Dashboard translator**: `src/components/ai/AnalysisDashboard.tsx` (ephemeral, no storage)\n- **Report contract + prompt + fallback**: `src/lib/ai/analysisReport.ts`\n- **Gemini wrapper + budget context**: `src/lib/ai/gemini.ts`",
+        "api_routes": "- `POST /api/ai-chat` → `src/app/api/ai-chat/route.ts` — returns `{ message, report? }`; `report` present for analysis intent or `mode: \"analysis\"`.",
+        "db_tables": "- `ai_messages`, `ai_sessions` (chat history / usage). The report itself is **not** persisted (session-only).",
+        "how_to_get_here": "- Tap the floating **✦ Budget AI** button (bottom-right) on non-standalone pages.\n- Ask an analysis question (\"Analyze my spending last month\", \"Where can I save money?\") → answer shows a **View as Dashboard** button.",
+        "what_it_links_to": "- **Dashboard view**: in-chat opaque overlay (KPIs, donut, trend, insights, recommendations). Closing returns to chat.",
+        "related_vault_doc": "- `ERA Notes/03 - Junction Modules/AI Assistant/Spending Analysis Report.md`\n- `ERA Notes/03 - Junction Modules/AI Assistant/Gemini API Guidelines.md`",
+        "screenshots": "- n/a",
+        "notes": "- Hidden on standalone routes (`/chat`, `/dashboard`, `/reminders`, `/era`, …) and when offline — same as the existing assistant button.\n- Robustness: Gemini `responseSchema` + tolerant Zod + deterministic fallback; each widget renders only when its section has data, so a partial report never breaks the layout.\n- Mobile-first single column; overlay uses opaque `tc.bgPage` (Hard Rule #15)."
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-budget-ai.md"
     },
     {
       "slug": "feature-catalogue",
