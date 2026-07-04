@@ -59,6 +59,7 @@ Each ladders up to a track in the global [3 · Future Vision](<../3 - Future Vis
 
 - _(IMPLEMENTED 2026-07-03)_ Recurring commitments are now current-period commitments on mobile Plan / Recurring: compact header and single rail, commitment chips, custom-billing-month grace for monthly Cash / Manual rows, Wallet-after-unpaid when available, suggested matches to manually logged transactions, and `mark-covered` reconciliation that advances the recurring schedule without duplicate spend. This does not replace the later Recurring -> Schedule bridge.
 - _(IMPLEMENTED 2026-07-04)_ Deleted transfers are excluded from all account balance summary reconstruction paths: daily balance history, six-month archive summaries, and direct transfer lookup now ignore `transfers.deleted_at` rows.
+- _(IMPLEMENTED 2026-07-04)_ Emergency rollback: selected-account balance refresh and app-load reconciliation are read-only/disabled. Hidden automatic balance write-back caused repeated correction deltas and must not be reintroduced without an explicit, reviewed repair workflow.
 - _(IMPLEMENTED 2026-06-29)_ Transfer lifecycle balance-history events are first-class audit rows: create uses `transfer_in` / `transfer_out`, amount-affecting edits use `transfer_updated`, and undo/delete reversals use `transfer_deleted`. The DB constraint, schema snapshot, and balance-history label map all accept these values; transfer audit rows carry `transfer_id` for drawer enrichment. The same constraint now accepts the existing `statement_import` balance-history emitter.
 
 ---

@@ -175,8 +175,10 @@ export async function computeAccountBalance(
   // 2. Get the TRUE anchor: the balance at the last manual reconciliation / initial set.
   //    Since account_balances.balance is now continuously updated, we read the
   //    anchor from balance_history (the new_balance of the last manual_set or initial_set).
-  //    If no history exists, fall back to the current stored balance (first-time case).
-  let anchorBalance = Number(balRow.balance);
+  //    If an older manually-checked account has a checkpoint but no history row, keep
+  //    the stored value as its legacy anchor. Fresh accounts without a checkpoint
+  //    start from zero so stale transfer deltas cannot become the new baseline.
+  let anchorBalance = balanceSetAt ? Number(balRow.balance) : 0;
 
   const { data: lastAnchor } = await admin
     .from("account_balance_history")

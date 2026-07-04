@@ -198,6 +198,9 @@ Implemented 2026-07-04: account balance history surfaces also exclude
 soft-deleted transfers. Daily and archive balance summaries filter
 `transfers.deleted_at IS NULL`, and direct transfer lookup returns 404 for
 deleted rows, so removed transfers do not re-enter reconstructed balance totals.
+Follow-up 2026-07-04: automatic balance write-back from refresh/reconcile paths
+was disabled. Refresh must not create `correction` history rows or mutate
+`account_balances`; polluted stored balances require an explicit repair.
 
 ## Architecture
 

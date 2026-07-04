@@ -23,6 +23,35 @@ CLAUDE.md auto-syncs to `AGENTS.md`, `CODEX.md`, and `.github/copilot-instructio
 
 ---
 
+## Engineer Playbooks (Skills)
+
+Step-by-step playbooks in `.claude/skills/`, written as senior-engineer handoffs so **any agent — including lower-capability models — can execute reliably**. Each contains verified code templates, evidence gates, and STOP conditions. They operationalize the Mandatory Checklist and Hard Rules; when one applies, follow it instead of improvising.
+
+**Start every task with `start-task`; end every task with `finish-task`.**
+
+| Playbook | Use for |
+|---|---|
+| `start-task` | Any new task — restate goal, classify type, read docs in order, verify assumptions before editing |
+| `fix-bug` | Bugs / errors / regressions — evidence-first root-cause with this app's known-cause table |
+| `add-feature` | New behavior in an existing module — vertical slice order (DB → API → types → hooks → UI) |
+| `api-route` | Anything under `src/app/api/` — auth/Zod/household/error-mapping templates + cron variant |
+| `db-migration` | Any DB change — migration runbook first, schema.sql end state, RLS decision tree |
+| `ui-guardrails` | Any component/page/style change — theming, color identity, mobile-first verification |
+| `finish-task` | Definition of done — self-review greps, typecheck/lint/test, docs, Atlas, PM update |
+
+**Domain-invariant skills** — organized by *risk domain*, not per module (module knowledge lives in the vault docs; skills are execution modes). start-task's domain-risk gate routes into these:
+
+| Skill | Use for |
+|---|---|
+| `money-rules` | ANY money logic (accounts, transactions, transfers, recurring, debts, envelopes, drafts) — balance invariants, worked before/after example, test required |
+| `recurrence-safety` | Both recurrence systems (recurring payments + item occurrences) — exactly-once guarantees, skip≠postpone, no new expansion engines |
+| `data-repair` | Production data fixes, cleanup/backfill SQL runbooks, console scripts — inspect→backup→fix→verify→rollback |
+| `skill-factory` | Authoring a skill for a future domain (Healthcare, Diet, …) — decision gate, house template, registration, junior-test QA |
+
+Specialized skills (existing): `new-module` (brand-new module scaffold), `cache-invalidation`, `timezone-handling`, `graphify`.
+
+---
+
 ## Graphify (Dynamic Codebase Exploration)
 
 > ERA Notes = **design intent + hard rules** (always read first).
@@ -75,7 +104,7 @@ Never use graphify as a substitute for ERA Notes — it cannot infer hard rules,
 23. **Atlas must be kept in sync** — every new page (`src/app/.../page.tsx`), new route, new feature module (`src/features/[name]/`), or significant navigation/tab change MUST add/update an entry in `ERA Notes/04 - UI & Design/Page & Feature Atlas/` (copy `_Template.md`, fill all sections, add a row to `_Index.md`). Renaming a feature/route is a breaking change — update or delete the corresponding MD file in the same commit. Stub generator: `node scripts/seed-atlas.mjs` (idempotent). **`public/atlas/atlas.json` is regenerated automatically** via the PostToolUse hook in `.claude/hooks/update-atlas.sh` — no need to run `pnpm atlas` manually after editing `src/app/`, `src/features/`, or `src/components/`.
 24. **DB changes require a migration file** — whenever a DB change is needed (CREATE TABLE, ALTER TABLE, ADD COLUMN, CREATE INDEX, CREATE POLICY, DROP, etc.), you MUST: (1) **first** create `migrations/YYYY-MM-DD_short-description.sql` with the exact SQL to run manually in Supabase SQL Editor, (2) **then** update `migrations/schema.sql` to reflect the final schema state. The migration file is the manual runbook; `schema.sql` is the authoritative end-state snapshot. Never update `schema.sql` without a corresponding migration file in the same session. If multiple unrelated DB changes occur in one session, use a single migration file for all of them. Enforced by `.claude/hooks/check-migration.sh`.
 25. **PM files MUST stay current** — `ERA Notes/10 - Project Management/` is the live command center, not a historical snapshot. You MUST update it in the same session as the code change, before considering the work done — whether that means marking an already-documented point as completed, or adding it (then marking it completed) if it didn't exist yet:
-   - **Story/bug-fix completed:** in the relevant module campaign folder (e.g., `Budget/` and the other per-module folders that use the numbered 1-Feature-State / 2-Vision / 3-Action-Plan layout; the consolidated `Schedule/` folder maps these onto file 1 = Feature State & Pain Inventory, file 2 = Vision/Target Design & Decisions, file 5 = Execution Plan & Build Checklist), mark the item ✅ with the date in the Feature State / Pain Inventory file, check `[x]` in the Execution Plan / Action Plan file, and add an `*(IMPLEMENTED YYYY-MM-DD)*` note in the Target Design / Decisions file.
+   - **Story/bug-fix completed:** in the relevant module campaign folder (`Budget/`, `Schedule/`, `Kitchen/`, `Trips/`, `Hub & ERA/`, `Notifications & Alerts/`) — all now use one **uniform layout**: `1 - Feature State`, `2 - Vision & Roadmap`, `3 - Action Plan`, `4 - Checklist` (+ optional `FABLED/`). Mark the item ✅ with the date in **file 1 (Feature State)**, check `[x]` in **file 4 (Checklist)**, and add an `*(IMPLEMENTED YYYY-MM-DD)*` note in **file 2 (Vision & Roadmap)** where a decision is realized.
    - **New bug surfaces:** add it to the relevant pain cluster or backlog section in file 1 with severity, root cause, and evidence — so it enters the ranked queue, not a separate list.
    - **No orphan fixes** — a fix with no PM trace is invisible to future planning. The PM files are the single source of truth for what hurts, what's been done, and what's next.
    - **Claude Code enforcement:** `.claude/hooks/check-pm-update.sh` (registered as a `Stop` hook) blocks the end of a turn if `src/` or `migrations/` files were edited in the session without a matching edit under `ERA Notes/10 - Project Management/`. It fires once per turn (won't loop) — if the change truly has no PM-trackable story (pure tooling/config/hook edit), state that explicitly and finish. Codex and other agents without a hook engine must still treat this rule as mandatory.

@@ -195,8 +195,9 @@ describe("computeAccountBalance", () => {
     });
   });
 
-  it("adds regular transactions for positive-balance account types", async () => {
+  it("uses the manual anchor for positive-balance account types", async () => {
     mockDb.balanceRow = { balance: 1000, balance_set_at: null };
+    mockDb.lastAnchor = { new_balance: 1000 };
     mockDb.transactions = [
       { amount: 250, is_debt_return: false },
       { amount: 40, is_debt_return: true },
@@ -214,6 +215,19 @@ describe("computeAccountBalance", () => {
     ).resolves.toMatchObject({
       computedBalance: 1290,
       anchorBalance: 1000,
+    });
+  });
+
+  it("does not treat an unchecked stored balance as the recompute anchor", async () => {
+    mockDb.balanceRow = { balance: 30800, balance_set_at: null };
+    mockDb.transactions = [{ amount: 125, is_debt_return: false }];
+    mockDb.transferIn = [{ amount: 500, returned_amount: 0, transfer_type: "self" }];
+
+    await expect(
+      computeAccountBalance("drawer-account", "expense"),
+    ).resolves.toMatchObject({
+      computedBalance: 375,
+      anchorBalance: 0,
     });
   });
 

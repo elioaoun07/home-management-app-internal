@@ -31,6 +31,7 @@ tags:
 
 - [x] **X0i** Transfer undo/edit balance-history constraint fix - widened `account_balance_history.change_type` for `transfer_deleted`, `transfer_updated`, and the existing `statement_import` event; transfer audit rows now carry `transfer_id` for history drawer enrichment, and already-deleted transfers are ignored before reversal to avoid double reversal on retry. Done 2026-06-29. _(blocker - S)_
 - [x] **X0j** Deleted transfers excluded from balance summaries - daily and archive balance reconstruction now filter transfer reads by `deleted_at IS NULL`, and direct transfer lookup hides soft-deleted rows. Done 2026-07-04. _(blocker - S)_
+- [x] **X0k** Emergency rollback for balance auto-correction - selected-account GET is read-only again, `/api/accounts/reconcile` is disabled, and SyncContext no longer schedules automatic balance write-back. Done 2026-07-04. _(blocker - S)_
 
 - [x] **X0f** NFC transfer modal multi-transfer session + mobile sizing — modal stays open after each transfer (green log row, amount reset, auto-advance template), closes only on "Done"; larger touch targets throughout. Done 2026-06-27. _(friction - S)_
 - [x] **X0e** NFC transfer modal partner account visibility — partner couldn't see owner's public accounts in `NfcWalletTransferPrompt`; switched from `useMyAccounts()` to `useAccounts()`. Done 2026-06-27. _(friction - S)_

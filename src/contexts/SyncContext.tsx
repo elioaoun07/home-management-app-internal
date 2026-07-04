@@ -683,7 +683,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (reconciliationDone.current) return;
     if (typeof window === "undefined") return;
-    if (!isReallyOnline()) return;
+    return;
 
     reconciliationDone.current = true;
     // Delay significantly to avoid contending with initial data fetches.

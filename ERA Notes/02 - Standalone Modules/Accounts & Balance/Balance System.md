@@ -42,11 +42,11 @@ Example: Balance set Nov 21 @ 7PM ($40)
 
 ### Key API endpoint
 
-`GET /api/accounts/[id]/balance` — fetches `account_balances` baseline, sums transactions since `balance_set_at::date`, returns calculated balance.
+`GET /api/accounts/[id]/balance` — fetches the stored account balance, subtracts pending drafts, and returns the display balance. It must be read-only.
 
 `POST /api/accounts/[id]/balance` — sets new baseline, stamps `balance_set_at = now()`. Also accepts `balanceSetAt` (override the stamped timestamp) and `restoreHistoryId` (undo path — see Reconciliation Checkpoint below) for the Undo flow on the reconciliation toast.
 
-**Important**: Never manually adjust the balance in transaction API routes. Let the balance API recalculate dynamically.
+**Important**: Transaction and transfer API routes update the stored running balance immediately for responsive reads. GET/refresh paths must never mutate money. Any balance repair must be explicit and user-initiated.
 
 ### Query invalidation
 
@@ -126,7 +126,8 @@ CHECK (change_type IN ('initial_set','manual_set','manual_adjustment',
 
 ## Gotchas
 
-- Balance is always **recalculated on fetch** — there is no stored running balance
+- Balance GET is read-only. Do not write `account_balances` or `account_balance_history` from a refresh path.
+- The former auto-reconciliation path is disabled because hidden write-back on app load/refresh can compound bad balances.
 - Deleting or editing a transaction automatically updates the balance (via query invalidation)
 - When offline, `AccountBalance` reads from localStorage cache and shows a grey gradient + "Cached" label
 - Setting balance creates a clean baseline — all transactions before `balance_set_at::date` are ignored

@@ -25,3 +25,16 @@ onSuccess: () => {
   queryClient.invalidateQueries({ queryKey: qk.transactions() });
 }
 ```
+
+## Other cache layers (React Query is not the only one)
+
+When invalidation "didn't work", check whether the stale data survives OUTSIDE React Query:
+
+| Layer | Where | Trap |
+|---|---|---|
+| localStorage → `initialData` | `analytics-v2*` keys (see `src/lib/queryInvalidation.ts`) | Entries < 10 min old are treated as fresh and **skip the refetch even after invalidation** — that's why `invalidateAccountData` clears them; new features copying this pattern must clear theirs too |
+| localStorage app caches | `LOCAL_STORAGE_KEYS` in `src/lib/queryConfig.ts` (`user_preferences`, `balance_cache_<id>`, theme, view mode) | Written imperatively — invalidating queries never touches these |
+| Persisted query cache | `@tanstack/react-query-persist-client` is in the dependency set | Cached query data can survive a full reload; verify where the persister is configured before concluding a refetch fixed things |
+| IndexedDB offline queue | `src/lib/offlineQueue.ts` | A queued mutation replaying later can overwrite fresher server state |
+
+Cleaning any of these up for users → `data-repair` skill (never `localStorage.clear()`).

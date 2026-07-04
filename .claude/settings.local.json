@@ -78,7 +78,8 @@
       "PowerShell(npx vitest run src/lib/utils/anomalyDetection.test.ts 2>&1 | Select-Object -Last 60)",
       "mcp__ide__getDiagnostics",
       "Bash(cp \"C:/Users/aoune/AppData/Local/Temp/claude/C--Users-aoune-WebApp-budget-app/4f4935e6-01d2-494f-9dd5-b2a0fc0ed1bd/scratchpad/test-join.mjs\" \"C:/Users/aoune/WebApp/budget-app/_test-join.mjs\")",
-      "Bash(rm -f \"C:/Users/aoune/WebApp/budget-app/_test-join.mjs\")"
+      "Bash(rm -f \"C:/Users/aoune/WebApp/budget-app/_test-join.mjs\")",
+      "Bash(pnpm sync:ai)"
     ]
   }
 }

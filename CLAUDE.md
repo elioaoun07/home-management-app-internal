@@ -21,6 +21,35 @@ CLAUDE.md auto-syncs to `AGENTS.md`, `CODEX.md`, and `.github/copilot-instructio
 
 ---
 
+## Engineer Playbooks (Skills)
+
+Step-by-step playbooks in `.claude/skills/`, written as senior-engineer handoffs so **any agent — including lower-capability models — can execute reliably**. Each contains verified code templates, evidence gates, and STOP conditions. They operationalize the Mandatory Checklist and Hard Rules; when one applies, follow it instead of improvising.
+
+**Start every task with `start-task`; end every task with `finish-task`.**
+
+| Playbook | Use for |
+|---|---|
+| `start-task` | Any new task — restate goal, classify type, read docs in order, verify assumptions before editing |
+| `fix-bug` | Bugs / errors / regressions — evidence-first root-cause with this app's known-cause table |
+| `add-feature` | New behavior in an existing module — vertical slice order (DB → API → types → hooks → UI) |
+| `api-route` | Anything under `src/app/api/` — auth/Zod/household/error-mapping templates + cron variant |
+| `db-migration` | Any DB change — migration runbook first, schema.sql end state, RLS decision tree |
+| `ui-guardrails` | Any component/page/style change — theming, color identity, mobile-first verification |
+| `finish-task` | Definition of done — self-review greps, typecheck/lint/test, docs, Atlas, PM update |
+
+**Domain-invariant skills** — organized by *risk domain*, not per module (module knowledge lives in the vault docs; skills are execution modes). start-task's domain-risk gate routes into these:
+
+| Skill | Use for |
+|---|---|
+| `money-rules` | ANY money logic (accounts, transactions, transfers, recurring, debts, envelopes, drafts) — balance invariants, worked before/after example, test required |
+| `recurrence-safety` | Both recurrence systems (recurring payments + item occurrences) — exactly-once guarantees, skip≠postpone, no new expansion engines |
+| `data-repair` | Production data fixes, cleanup/backfill SQL runbooks, console scripts — inspect→backup→fix→verify→rollback |
+| `skill-factory` | Authoring a skill for a future domain (Healthcare, Diet, …) — decision gate, house template, registration, junior-test QA |
+
+Specialized skills (existing): `new-module` (brand-new module scaffold), `cache-invalidation`, `timezone-handling`, `graphify`.
+
+---
+
 ## Graphify (Dynamic Codebase Exploration)
 
 > ERA Notes = **design intent + hard rules** (always read first).
