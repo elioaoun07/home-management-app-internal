@@ -21,7 +21,10 @@ if (process.argv.includes("--hook")) {
   let filePath = "";
 
   try {
-    filePath = JSON.parse(input).file_path ?? "";
+    const payload = JSON.parse(input);
+    // Claude Code PostToolUse hooks deliver the path under tool_input;
+    // keep the legacy top-level fallback for other callers.
+    filePath = payload.tool_input?.file_path ?? payload.file_path ?? "";
   } catch {
     process.exit(0);
   }

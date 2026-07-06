@@ -6,6 +6,17 @@
 
 CLAUDE.md auto-syncs to `AGENTS.md`, `CODEX.md`, and `.github/copilot-instructions.md` via PostToolUse hook.
 
+## Boot Sequence (any agent, any capability tier)
+
+If you read only four things before acting, read these, in order:
+
+1. **This file** — rules, module model, routing tables.
+2. **`.claude/skills/start-task/SKILL.md`** — the operating protocol; it routes you to the right playbook and docs for the task at hand.
+3. **`ERA Notes/01 - Architecture/Feature Map/_index.md`** — user intent → exact source files.
+4. **`ERA Notes/01 - Architecture/Design Doctrine.md`** — how to *decide* when no playbook covers it: the Ten Questions, silent-failure taxonomy, standing decisions, and tradeoff priority order. Mandatory before designing any new feature or resolving an ambiguous tradeoff; skippable for mechanical edits.
+
+Deep-dive state of every cluster lives in the **FABLED 2** layer (verified audits with maturity scores and delta ledgers) — master index at `ERA Notes/00 - Home/FABLED 2 Master Index.md`. Trust it as of its stamp date, then delta with `git log --since=<stamp>`.
+
 ---
 
 ## Before You Code — Mandatory Checklist
@@ -102,7 +113,7 @@ Never use graphify as a substitute for ERA Notes — it cannot infer hard rules,
 23. **Atlas must be kept in sync** — every new page (`src/app/.../page.tsx`), new route, new feature module (`src/features/[name]/`), or significant navigation/tab change MUST add/update an entry in `ERA Notes/04 - UI & Design/Page & Feature Atlas/` (copy `_Template.md`, fill all sections, add a row to `_Index.md`). Renaming a feature/route is a breaking change — update or delete the corresponding MD file in the same commit. Stub generator: `node scripts/seed-atlas.mjs` (idempotent). **`public/atlas/atlas.json` is regenerated automatically** via the PostToolUse hook in `.claude/hooks/update-atlas.sh` — no need to run `pnpm atlas` manually after editing `src/app/`, `src/features/`, or `src/components/`.
 24. **DB changes require a migration file** — whenever a DB change is needed (CREATE TABLE, ALTER TABLE, ADD COLUMN, CREATE INDEX, CREATE POLICY, DROP, etc.), you MUST: (1) **first** create `migrations/YYYY-MM-DD_short-description.sql` with the exact SQL to run manually in Supabase SQL Editor, (2) **then** update `migrations/schema.sql` to reflect the final schema state. The migration file is the manual runbook; `schema.sql` is the authoritative end-state snapshot. Never update `schema.sql` without a corresponding migration file in the same session. If multiple unrelated DB changes occur in one session, use a single migration file for all of them. Enforced by `.claude/hooks/check-migration.sh`.
 25. **PM files MUST stay current** — `ERA Notes/10 - Project Management/` is the live command center, not a historical snapshot. You MUST update it in the same session as the code change, before considering the work done — whether that means marking an already-documented point as completed, or adding it (then marking it completed) if it didn't exist yet:
-   - **Story/bug-fix completed:** in the relevant module campaign folder (`Budget/`, `Schedule/`, `Kitchen/`, `Trips/`, `Hub & ERA/`, `Notifications & Alerts/`) — all now use one **uniform layout**: `1 - Feature State`, `2 - Vision & Roadmap`, `3 - Action Plan`, `4 - Checklist` (+ optional `FABLED/`). Mark the item ✅ with the date in **file 1 (Feature State)**, check `[x]` in **file 4 (Checklist)**, and add an `*(IMPLEMENTED YYYY-MM-DD)*` note in **file 2 (Vision & Roadmap)** where a decision is realized.
+   - **Story/bug-fix completed:** in the relevant module campaign folder (`Budget/`, `Schedule/`, `Kitchen/`, `Trips/`, `Hub & ERA/`, `Notifications & Alerts/`) — all now use one **uniform layout**: `1 - Feature State`, `2 - Vision & Roadmap`, `3 - Action Plan`, `4 - Checklist` (+ `FABLED/` = frozen v1 audit baseline, `FABLED 2/` = the **living** deep-dive layer: scored maturity model, delta ledger, evidence-stamped claims — update its `_index.md` delta section when a campaign ships significant work). Mark the item ✅ with the date in **file 1 (Feature State)**, check `[x]` in **file 4 (Checklist)**, and add an `*(IMPLEMENTED YYYY-MM-DD)*` note in **file 2 (Vision & Roadmap)** where a decision is realized.
    - **New bug surfaces:** add it to the relevant pain cluster or backlog section in file 1 with severity, root cause, and evidence — so it enters the ranked queue, not a separate list.
    - **No orphan fixes** — a fix with no PM trace is invisible to future planning. The PM files are the single source of truth for what hurts, what's been done, and what's next.
    - **Claude Code enforcement:** `.claude/hooks/check-pm-update.sh` (registered as a `Stop` hook) blocks the end of a turn if `src/` or `migrations/` files were edited in the session without a matching edit under `ERA Notes/10 - Project Management/`. It fires once per turn (won't loop) — if the change truly has no PM-trackable story (pure tooling/config/hook edit), state that explicitly and finish. Codex and other agents without a hook engine must still treat this rule as mandatory.
@@ -161,6 +172,7 @@ Bridge between Standalone modules. May import from any standalone feature direct
 
 ## Architecture References
 
+- **Design judgment — the Ten Questions, silent-failure taxonomy, standing decisions, tradeoff priority order**: `ERA Notes/01 - Architecture/Design Doctrine.md` (read before designing any feature)
 - **Data flow, optimistic mutations, ID-only state, Framer Motion + HTML5 drag conflicts**: `ERA Notes/01 - Architecture/Common Patterns.md`
 - **Offline queue, sync engine, IndexedDB vs legacy localStorage queue**: `ERA Notes/01 - Architecture/Sync and Offline.md`
 - **API route pattern** (auth check → zod parse → DB op → error handling): follow `src/app/api/accounts/route.ts`
@@ -214,6 +226,9 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 
 ## Domain Gotchas
 
+- **Two recurrence systems exist** — recurring *payments* (money commitments, `recurring_payments`) and item/schedule *recurrence* (rrule occurrences + exceptions + pauses). They share vocabulary but not engines. Identify which one you're in before editing anything recurring (`recurrence-safety` skill), and never introduce a new expansion path.
+- **The AI layer runs on Gemini** (`src/lib/ai/gemini.ts`) with a fallback model on a separate quota bucket and daily-vs-per-minute 429 discrimination. AI mutations always flow through the drafts/proposal pattern — AI proposes, the human confirms; never let a model write directly to money or schedule state.
+- **Cron scheduling lives outside the repo** — there is no `vercel.json`; the five `src/app/api/cron/*` routes only run if an external scheduler (or Vercel project config) invokes them with `Bearer CRON_SECRET`. Never assume a cron is live without checking a last-run trace; anything time-triggered needs a "how do I know it ran" answer.
 - **Framer Motion + HTML5 drag**: never mix `<motion.div draggable>` with HTML5 drag events — use one or the other (see `COMMON_PATTERNS.md`)
 - **Enum/type updates**: always update DB migration + TypeScript type + API route + UI components + utilities together
 - **Standalone imports**: standalone feature dirs can't import from each other — use `src/components/`, `src/lib/`, `src/types/`

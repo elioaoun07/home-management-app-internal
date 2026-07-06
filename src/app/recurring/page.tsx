@@ -760,13 +760,13 @@ export default function RecurringPage() {
   }
 
   return (
-    <div className={cn("min-h-screen pb-32", tc.bgPage)}>
+    <div className={cn("min-h-screen pt-16 pb-32", tc.bgPage)}>
       <div className="max-w-2xl mx-auto p-4">
         {/* Compact Header */}
         <div
           className={cn(
-            "sticky top-14 z-30 pb-2 mb-3 -mx-4 px-4 pt-2 border-b backdrop-blur-md",
-            "bg-[hsl(var(--header-bg)/0.95)]",
+            "sticky top-16 z-30 pb-2 mb-3 -mx-4 px-4 pt-2 border-b",
+            "bg-[hsl(var(--header-bg))]",
             tc.border,
           )}
         >

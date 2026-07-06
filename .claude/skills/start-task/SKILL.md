@@ -36,6 +36,7 @@ TASK TYPE: <bug | feature-in-existing-module | new-module | api | db | ui | docs
 | Due dates, occurrences, skip/confirm, auto-posting | recurrence-safety | `.claude/skills/recurrence-safety/SKILL.md` |
 | Fix/clean/backfill production data, console scripts | data-repair | `.claude/skills/data-repair/SKILL.md` |
 | Authoring a new skill for a new domain/module | skill-factory | `.claude/skills/skill-factory/SKILL.md` |
+| Designing a feature, weighing a tradeoff, or NO playbook fits | Design Doctrine (not a skill — the judgment layer) | `ERA Notes/01 - Architecture/Design Doctrine.md` |
 
 Most tasks need 2–3 playbooks (e.g. a feature = add-feature + api-route + ui-guardrails). Read all that apply **before** editing.
 
@@ -52,8 +53,9 @@ Do this BEFORE any Glob/Grep/Read of source files:
 3. The module's vault doc (`ERA Notes/02 - Standalone Modules/<Module>/` or `03 - Junction Modules/<Module>/`) — architecture, DB tables, **gotchas**. Read the gotchas section even if you think you don't need it.
 4. `migrations/schema.sql` — ONLY if the task touches the DB. It is authoritative for tables/columns (NOT for RLS/functions — see db-migration skill).
 5. `ERA Notes/01 - Architecture/Common Patterns.md` — ONLY if touching state, mutations, or modals.
+6. `ERA Notes/01 - Architecture/Design Doctrine.md` — ONLY if the task involves *designing* something (new feature shape, tradeoff, ambiguous requirement). Run its **Ten Questions** against your plan before Step 4; they catch the household/offline/undo/exactly-once holes that playbooks can't see at plan time.
 
-> Feature Map = *which files*. Vault doc = *why it's built that way*. Don't substitute one for the other.
+> Feature Map = *which files*. Vault doc = *why it's built that way*. Doctrine = *how to decide*. Don't substitute one for another.
 
 ## Step 4 — Assumption ledger (the anti-guessing gate)
 

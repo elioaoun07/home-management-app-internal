@@ -32,8 +32,12 @@ tags:
 | **Tooling** | 7 | `pnpm pm` live dashboard server + `scripts/pm/` scanner + `tests/pm-mutations.test.ts` (in-flight) — the PM layer is becoming software. |
 | **Overall** | **5.8** | A well-built archive that knows everything and forgets to do the small things. |
 
+## Delta ledger (append-only)
+
+- **2026-07-06:** Move 3 below is **done** — the PM dashboard tooling was committed 2026-07-04 (`6c5bdbb`: `scripts/pm/client.js` +3050, `styles.css` +1803, `pm-server.mjs` +88). Two new mechanical aids for the Freshness=4 dimension shipped this date: a **SessionStart freshness radar** (`.claude/hooks/session-brief.sh` — warns every session when PM files 2/4 go stale) and the vault-wide **[FABLED 2 Master Index](<../../00 - Home/FABLED 2 Master Index.md>)** with the maintenance protocol. The judgment layer above the playbooks now exists too: [Design Doctrine](<../../01 - Architecture/Design Doctrine.md>).
+
 ## The next 3 moves
 
 1. **Adopt the delta-ledger convention** everywhere (every status claim carries its verify date + command — the FABLED 2 format).
 2. **Create the hygiene sweep ritual** — one recurring 90-minute slot that executes the accumulated 15-minute fixes ([file 3 · O2](<3 - FABLED 2 — Optimization Plan.md>)).
-3. **Finish and commit the PM dashboard tooling** — it's uncommitted work-in-progress carrying real value ([file 2 · G6](<2 - FABLED 2 — Gaps & Missing.md>)).
+3. ~~**Finish and commit the PM dashboard tooling**~~ ✅ done 2026-07-04 (`6c5bdbb`) — was uncommitted work-in-progress carrying real value ([file 2 · G6](<2 - FABLED 2 — Gaps & Missing.md>)).

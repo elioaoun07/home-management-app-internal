@@ -38,6 +38,10 @@ Rubric: 0–2 absent · 3–4 fragile · 5–6 works-but-exposed · 7–8 solid 
 
 June 2026 was the cluster's biggest sprint since launch: **spend-number reconciliation to the penny, the two-signal outlier engine, Review v3 interactive analytics, AI budget allocation, the Budget AI analysis engine, public/shared accounts, transfer templates + NFC multi-transfer.** Meanwhile v1's #2 gap (`analytics/debug` shipped to prod) is **still open after 5 weeks**, and the forecast/bridge work didn't start. Full ledger in [file 2](<2 - FABLED 2 — Gaps & Missing.md>).
 
+## Delta ledger (append-only)
+
+- **2026-07-06 (verified `git show --stat 6c5bdbb`):** Recurring redesign **first draft shipped 2026-07-04** (`6c5bdbb` — `src/app/recurring/page.tsx` +553, new `mark-covered` route) and with it the app's **first route/contract tests**: `src/app/api/recurring-payments/[id]/mark-covered/route.test.ts` (192 lines) + `[id]/route.test.ts` (255 lines). The "zero route tests" claim in file 2 is no longer absolute — Test-protection dimension moves 4 → 5 for this cluster. A balance bug was fixed same day (`0e37308`). Recurring UI work continues uncommitted in the working tree (recurring/page.tsx, TabContainer.tsx modified as of this stamp).
+
 ## The next 3 moves
 
 1. **Lock the June math in tests** — the spend-definition contract test ([file 3 · O1](<3 - FABLED 2 — Optimization Plan.md>)). One fixture set, five consumers, permanent.

@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function RecurringLoading() {
   return (
-    <div className="min-h-screen bg-[var(--theme-bg)] pb-32">
+    <div className="min-h-screen bg-[var(--theme-bg)] pt-16 pb-32">
       <div className="max-w-2xl mx-auto p-4 space-y-4">
         {/* Sticky header */}
         <div className="space-y-1">
