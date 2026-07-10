@@ -2,6 +2,7 @@
 // API route for item actions: complete, postpone, cancel, skip
 // Used by offline sync engine for replay
 
+import { syncItemToGoogleCalendar } from "@/lib/gcal/sync";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { subMonths } from "date-fns";
@@ -174,6 +175,9 @@ export async function POST(
           .eq("item_id", itemId)
           .eq("active", true);
 
+        // Completed items are no longer sync-eligible — removes the Google event.
+        await syncItemToGoogleCalendar(adminDb, itemId);
+
         return NextResponse.json({
           success: true,
           type: "item",
@@ -246,6 +250,9 @@ export async function POST(
               .eq("id", alert.id);
           }
         }
+
+        // The due/start time changed — push the new time to Google.
+        await syncItemToGoogleCalendar(adminDb, itemId);
       }
 
       return NextResponse.json({
@@ -310,6 +317,9 @@ export async function POST(
           .eq("item_id", itemId)
           .eq("active", true);
 
+        // Cancelled items are no longer sync-eligible — removes the Google event.
+        await syncItemToGoogleCalendar(adminDb, itemId);
+
         return NextResponse.json({
           success: true,
           type: "item",
@@ -370,6 +380,9 @@ export async function POST(
           .update({ active: false })
           .eq("item_id", itemId)
           .eq("active", true);
+
+        // Skipped one-time items become cancelled — removes the Google event.
+        await syncItemToGoogleCalendar(adminDb, itemId);
 
         return NextResponse.json({
           success: true,

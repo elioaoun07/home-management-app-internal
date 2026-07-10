@@ -22,6 +22,7 @@ tags:
 
 ## Now - Foundation (protect the money)
 
+- [x] **N0a** Fix `/expense` recoverable SSR error by making `MobileExpenseForm` self-providing across both the route-page and tab-shell render paths. Done 2026-07-10. _(blocker - S)_
 - [x] **N1** Finance calculation unit tests - expense/income/saving directions, balance computation/adjustment, reconcile math, canonical spending totals. Done 2026-07-03 (`src/lib/balance-utils.test.ts`, `src/lib/balance.test.ts`, `src/lib/utils/incomeExpense.test.ts`; targeted finance run green). _(blocker - M)_
 - [x] **N2** Recurring next-due + confirm -> transaction tests. Next-due math done 2026-06-10 (`src/lib/recurring.test.ts`); confirm posting covered 2026-07-03 (`src/app/api/recurring-payments/[id]/route.test.ts`) for owner/household authorization, private blocking, balance adjustment, transaction payload, and due-date rollover. _(blocker - M)_
 - [x] **N3** Reconciliation checkpoint - "last checked" date + 7-day stale glow + one-tap match/correct in `BalanceHistoryDrawer` (with Undo). Done 2026-06-16. See [Balance System - Reconciliation Checkpoint](<../../02 - Standalone Modules/Accounts & Balance/Balance System.md>). _(friction - M)_

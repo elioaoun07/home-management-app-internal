@@ -5,10 +5,14 @@
 // NotificationClass taxonomy and the M1 scope fence in ERA Notes).
 //
 // Mirrors the src/lib/pushSender.ts pattern: functions accept the caller's
-// Supabase client (user-context or supabaseAdmin) rather than constructing
-// their own, so the same code works from an authenticated API route or an
-// unauthenticated cron job.
+// Supabase client (user-context or supabaseAdmin) — but ONLY as the access
+// gate (the initial item fetch). Everything after the gate runs on
+// supabaseAdmin(): google_calendar_connections has no user UPDATE policy
+// (bookkeeping writes would silently no-op under RLS), the connection row
+// may belong to the *responsible* user (partner) rather than the caller,
+// and the items bookkeeping columns must update even on partner-owned items.
 
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { buildFullRRuleString } from "@/lib/utils/date";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { calendar_v3 } from "googleapis";
@@ -156,11 +160,14 @@ export async function syncItemToGoogleCalendar(
   itemId: string,
 ): Promise<void> {
   try {
+    // Access gate: fetched with the caller's client — if the caller can't
+    // read the item under RLS, this returns null and the sync no-ops.
     const item = await fetchSyncableItem(supabase, itemId);
     if (!item) return;
 
+    const admin = supabaseAdmin();
     const userId = item.responsible_user_id || item.user_id;
-    const { data: connection } = await supabase
+    const { data: connection } = await admin
       .from("google_calendar_connections")
       .select("refresh_token, google_calendar_id, sync_enabled")
       .eq("user_id", userId)
@@ -182,7 +189,7 @@ export async function syncItemToGoogleCalendar(
           eventId: item.google_event_id,
           requestBody: eventBody,
         });
-        await supabase
+        await admin
           .from("items")
           .update({ google_synced_at: new Date().toISOString() })
           .eq("id", itemId);
@@ -191,7 +198,7 @@ export async function syncItemToGoogleCalendar(
           calendarId: connection.google_calendar_id,
           requestBody: eventBody,
         });
-        await supabase
+        await admin
           .from("items")
           .update({
             google_event_id: created.data.id,
@@ -199,7 +206,7 @@ export async function syncItemToGoogleCalendar(
           })
           .eq("id", itemId);
       }
-      await supabase
+      await admin
         .from("google_calendar_connections")
         .update({ last_synced_at: new Date().toISOString(), sync_error: null })
         .eq("user_id", userId);
@@ -207,12 +214,12 @@ export async function syncItemToGoogleCalendar(
       // The event was deleted directly in Google — clear our stale
       // reference and retry once as a fresh insert.
       if (item.google_event_id && isGoogleNotFoundError(err)) {
-        await supabase.from("items").update({ google_event_id: null }).eq("id", itemId);
+        await admin.from("items").update({ google_event_id: null }).eq("id", itemId);
         await syncItemToGoogleCalendar(supabase, itemId);
         return;
       }
       const message = err instanceof Error ? err.message : "Unknown error";
-      await supabase
+      await admin
         .from("google_calendar_connections")
         .update({ sync_error: message })
         .eq("user_id", userId);
@@ -229,6 +236,7 @@ export async function deleteItemFromGoogleCalendar(
   itemId: string,
 ): Promise<void> {
   try {
+    // Access gate: caller's client — no read access under RLS means no-op.
     const { data: item } = await supabase
       .from("items")
       .select("id, google_event_id, user_id, responsible_user_id")
@@ -236,8 +244,9 @@ export async function deleteItemFromGoogleCalendar(
       .maybeSingle();
     if (!item?.google_event_id) return;
 
+    const admin = supabaseAdmin();
     const userId = item.responsible_user_id || item.user_id;
-    const { data: connection } = await supabase
+    const { data: connection } = await admin
       .from("google_calendar_connections")
       .select("refresh_token, google_calendar_id")
       .eq("user_id", userId)
@@ -255,7 +264,7 @@ export async function deleteItemFromGoogleCalendar(
       }
     }
 
-    await supabase
+    await admin
       .from("items")
       .update({ google_event_id: null, google_synced_at: null })
       .eq("id", itemId);

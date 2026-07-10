@@ -5,10 +5,13 @@
 
 import { google } from "googleapis";
 
-const SCOPES = [
-  "https://www.googleapis.com/auth/calendar.events",
-  "https://www.googleapis.com/auth/calendar.calendarlist",
-];
+// Single granular scope covering the entire API surface we use:
+// calendars.insert (the dedicated "ERA" calendar) + events.insert/patch/delete
+// on app-created calendars. calendar.events + calendar.calendarlist do NOT
+// cover calendars.insert ("insufficient authentication scopes"), and the full
+// calendar scope is sensitive (verification burden) — app.created is the
+// exact, non-sensitive fit.
+const SCOPES = ["https://www.googleapis.com/auth/calendar.app.created"];
 
 export function isGoogleCalendarConfigured(): boolean {
   return Boolean(

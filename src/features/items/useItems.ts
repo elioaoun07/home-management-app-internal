@@ -1,6 +1,10 @@
 // src/features/items/useItems.ts
 // React Query hooks for Items CRUD operations
 
+import {
+  removeFromGcalBeforeDelete,
+  triggerGcalSync,
+} from "@/features/items/gcalSync";
 import { isReallyOnline } from "@/lib/connectivityManager";
 import { addToQueue } from "@/lib/offlineQueue";
 import { safeFetch } from "@/lib/safeFetch";
@@ -516,6 +520,10 @@ export function useCreateReminder() {
         }
       }
 
+      // Online direct-write path never touches /api/items, so the Google
+      // Calendar sync must be triggered from here (fire-and-forget).
+      triggerGcalSync(item.id);
+
       return item as Item;
     },
     onSuccess: (_data, variables) => {
@@ -691,6 +699,10 @@ export function useCreateEvent() {
           (item as Record<string, unknown>).status = "dormant";
         }
       }
+
+      // Online direct-write path never touches /api/items, so the Google
+      // Calendar sync must be triggered from here (fire-and-forget).
+      triggerGcalSync(item.id);
 
       return item as Item;
     },
@@ -890,6 +902,10 @@ export function useCreateTask() {
         }
       }
 
+      // Online direct-write path never touches /api/items, so the Google
+      // Calendar sync must be triggered from here (fire-and-forget).
+      triggerGcalSync(item.id);
+
       return item as Item;
     },
     onSuccess: (_data, variables) => {
@@ -933,6 +949,7 @@ export function useUpdateItem() {
         .single();
 
       if (error) throw error;
+      triggerGcalSync(id);
       return data as Item;
     },
     onSuccess: (data) => {
@@ -1005,6 +1022,7 @@ export function useUpdateReminderDetails() {
         if (detailsError) throw detailsError;
       }
 
+      triggerGcalSync(itemId);
       return itemId;
     },
     onSuccess: (itemId) => {
@@ -1075,6 +1093,7 @@ export function useUpdateEventDetails() {
         if (detailsError) throw detailsError;
       }
 
+      triggerGcalSync(itemId);
       return itemId;
     },
     onSuccess: (itemId) => {
@@ -1101,6 +1120,9 @@ export function useDeleteItem() {
         });
         return id;
       }
+      // Remove the Google Calendar event BEFORE the row disappears — the
+      // hard delete takes google_event_id with it, orphaning the event.
+      await removeFromGcalBeforeDelete(id);
       const supabase = supabaseBrowser();
       const { error } = await supabase.from("items").delete().eq("id", id);
       if (error) throw error;
@@ -1143,6 +1165,8 @@ export function useArchiveItem() {
         .update({ active: false })
         .eq("item_id", id)
         .eq("active", true);
+      // Archived items are no longer sync-eligible — this removes the event.
+      triggerGcalSync(id);
       return id;
     },
     onSuccess: () => {
@@ -1174,6 +1198,8 @@ export function useCompleteReminder() {
         .eq("item_id", id);
       if (detailsError) throw detailsError;
 
+      // Completed items are no longer sync-eligible — this removes the event.
+      triggerGcalSync(id);
       return id;
     },
     onSuccess: () => {
@@ -2555,7 +2581,9 @@ export function useUpdateRecurrenceRule() {
         return data;
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      // The RRULE is part of the pushed Google event body.
+      triggerGcalSync(variables.itemId);
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
     },
     onError: (error) => {

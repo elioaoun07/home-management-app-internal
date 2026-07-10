@@ -1,4 +1,5 @@
 // src/app/api/recycle-bin/restore/route.ts
+import { syncItemToGoogleCalendar } from "@/lib/gcal/sync";
 import { getRecycleBinModule } from "@/lib/recycleBin/registry";
 import { resolveScope } from "@/lib/recycleBin/scope";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -73,6 +74,13 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       console.error("[recycle-bin] onRestore failed", e);
     }
+  }
+
+  // A restored item is sync-eligible again — re-push its Google Calendar
+  // event. Lives here (not in the registry's onRestore) because the registry
+  // is imported by client code and the sync engine must stay server-only.
+  if (module.table === "items") {
+    await syncItemToGoogleCalendar(supabase, parsed.data.id);
   }
 
   return NextResponse.json({ ok: true, id: parsed.data.id });

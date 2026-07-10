@@ -1,6 +1,5 @@
 "use client";
 
-import { ExpenseFormProvider } from "@/components/expense/ExpenseFormContext";
 import ExpenseShell from "@/components/layouts/ExpenseShell";
 import { useTab } from "@/contexts/TabContext";
 import { useViewMode } from "@/hooks/useViewMode";
@@ -35,15 +34,11 @@ export default function ExpenseLayout({
   // No loading state - render immediately
   // viewMode is loaded synchronously from localStorage
 
-  // In watch mode, skip the shell wrapper entirely but still provide context
-  // (in case user is transitioning between modes)
+  // In watch mode, skip the shell wrapper entirely.
+  // MobileExpenseForm owns its form provider at the component boundary.
   if (viewMode === "watch") {
-    return <ExpenseFormProvider>{children}</ExpenseFormProvider>;
+    return children;
   }
 
-  return (
-    <ExpenseFormProvider>
-      <ExpenseShell>{children}</ExpenseShell>
-    </ExpenseFormProvider>
-  );
+  return <ExpenseShell>{children}</ExpenseShell>;
 }

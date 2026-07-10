@@ -8,6 +8,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { GoogleCalendarSetupWizard } from "@/components/settings/GoogleCalendarSetupWizard";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { safeFetch } from "@/lib/safeFetch";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -118,12 +119,11 @@ export function GoogleCalendarSettings() {
       </p>
 
       {!connection ? (
-        <Button asChild className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-medium py-3 rounded-xl">
-          <a href="/api/gcal/connect">
-            <CalendarDays className="w-5 h-5 mr-2" />
-            Connect Google Calendar
-          </a>
-        </Button>
+        <GoogleCalendarSetupWizard
+          onConnectClick={() => {
+            window.location.href = "/api/gcal/connect";
+          }}
+        />
       ) : (
         <div
           className={`p-4 rounded-xl ${themeClasses.bgSurface} ${themeClasses.border} border space-y-3`}

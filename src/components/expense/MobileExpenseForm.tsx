@@ -98,7 +98,10 @@ import {
 } from "react";
 import { toast } from "sonner";
 import AccountBalance from "./AccountBalance";
-import { useExpenseForm } from "./ExpenseFormContext";
+import {
+  ExpenseFormProvider,
+  useExpenseForm,
+} from "./ExpenseFormContext";
 import VoiceEntryButton from "./VoiceEntryButton";
 
 // Lazy-load Calendar and drawers — never visible on initial render.
@@ -198,7 +201,7 @@ function useLongPress(callback: () => void, threshold = 500) {
   };
 }
 
-export default function MobileExpenseForm() {
+function MobileExpenseFormContent() {
   const {
     step,
     setStep,
@@ -2980,5 +2983,17 @@ export default function MobileExpenseForm() {
         </AnimatePresence>
       </>
     </div>
+  );
+}
+
+/**
+ * Keep the form provider at the component boundary so every render path
+ * (route page, tab shell, and SSR) supplies the context before the hook runs.
+ */
+export default function MobileExpenseForm() {
+  return (
+    <ExpenseFormProvider>
+      <MobileExpenseFormContent />
+    </ExpenseFormProvider>
   );
 }
