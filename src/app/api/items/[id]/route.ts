@@ -2,6 +2,7 @@
 // API route for updating and deleting items
 // Used by offline sync engine for replay
 
+import { deleteItemFromGoogleCalendar, syncItemToGoogleCalendar } from "@/lib/gcal/sync";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
@@ -175,6 +176,9 @@ export async function PATCH(
       }
     }
 
+    // Best-effort Google Calendar backup sync (title/time/status changes).
+    await syncItemToGoogleCalendar(supabase, itemId);
+
     return NextResponse.json({ item: data });
   } catch (error) {
     console.error("[items/[id]] Unexpected error:", error);
@@ -251,6 +255,9 @@ export async function DELETE(
       .update({ active: false })
       .eq("item_id", itemId)
       .eq("active", true);
+
+    // Best-effort: remove the Google Calendar backup event too.
+    await deleteItemFromGoogleCalendar(supabase, itemId);
 
     return NextResponse.json({
       success: true,

@@ -128,10 +128,10 @@ export async function GET(request: NextRequest) {
     .or(`expires_at.is.null,expires_at.gt.${now}`)
     .or(`snoozed_until.is.null,snoozed_until.lte.${now}`);
 
-  let { data: notifications, error } = await query;
+  const { data: rawNotifications, error } = await query;
+  let notifications = rawNotifications;
 
   if (error) {
-    console.error("Error fetching notifications:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -312,7 +312,6 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
-    console.error("Error creating notification:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -334,8 +333,7 @@ export async function POST(request: NextRequest) {
       });
 
       await sendPushToUser(adminClient, notificationUserId, payload, notification.id);
-    } catch (pushError) {
-      console.error("[in-app] Error sending push notification:", pushError);
+    } catch {
       // Don't fail the request, notification was still created
     }
   }
@@ -376,7 +374,6 @@ export async function PATCH(request: NextRequest) {
       .in("id", ids);
 
     if (error) {
-      console.error("Error updating notifications:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
@@ -394,9 +391,12 @@ export async function PATCH(request: NextRequest) {
   const updates: Record<string, boolean | string | null> = {};
   if (is_read !== undefined) updates.is_read = is_read;
   if (is_dismissed !== undefined) updates.is_dismissed = is_dismissed;
-  if (action_completed) {
-    updates.action_completed_at = new Date().toISOString();
-    updates.action_taken = true;
+  // Explicit false clears the completed state — required for Undo (the
+  // critical-alert takeover reverses a complete/confirm/dismiss action by
+  // restoring the notification to its pre-action state).
+  if (action_completed !== undefined) {
+    updates.action_completed_at = action_completed ? new Date().toISOString() : null;
+    updates.action_taken = action_completed;
   }
   if (snoozed_until !== undefined) updates.snoozed_until = snoozed_until;
 
@@ -407,7 +407,6 @@ export async function PATCH(request: NextRequest) {
     .eq("user_id", user.id);
 
   if (error) {
-    console.error("Error updating notification:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -442,7 +441,6 @@ export async function DELETE(request: NextRequest) {
     .eq("user_id", user.id);
 
   if (error) {
-    console.error("Error deleting notification:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

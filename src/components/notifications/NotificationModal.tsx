@@ -33,6 +33,7 @@ import {
   type Notification,
   type QuickAction,
 } from "@/hooks/useNotifications";
+import { renderNotificationIcon } from "@/lib/notifications/registry";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import {
@@ -44,21 +45,17 @@ import {
   CheckCircle2,
   CheckSquare,
   Clock,
-  CreditCard,
   Eye,
   ExternalLink,
   FileText,
   Info,
-  MessageCircle,
   MessageSquare,
   MoreHorizontal,
   Send,
   Sparkles,
   SplitSquareHorizontal,
-  Target,
   Wallet,
   X,
-  XCircle,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -358,42 +355,10 @@ export default function NotificationModal({
   };
 
   const getNotificationIcon = (notification: Notification): ReactNode => {
-    // Map notification types to Lucide icons
+    // Type-based icon: single source of truth is the notification registry
+    // (shared with the /alerts page — same icon per type everywhere).
     if (notification.notification_type) {
-      switch (notification.notification_type) {
-        case "daily_reminder":
-          return <FileText className="w-5 h-5 text-cyan-400" />;
-        case "daily_items_summary":
-          return <CheckSquare className="w-5 h-5 text-cyan-400" />;
-        case "budget_warning":
-          return <AlertTriangle className="w-5 h-5 text-amber-400" />;
-        case "budget_exceeded":
-          return <AlertCircle className="w-5 h-5 text-red-400" />;
-        case "bill_due":
-        case "bill_overdue":
-          return <CreditCard className="w-5 h-5 text-blue-400" />;
-        case "item_reminder":
-        case "item_due":
-          return <Clock className="w-5 h-5 text-orange-400" />;
-        case "item_overdue":
-          return <AlertCircle className="w-5 h-5 text-red-400" />;
-        case "goal_milestone":
-        case "goal_completed":
-          return <Target className="w-5 h-5 text-cyan-400" />;
-        case "chat_message":
-        case "chat_mention":
-          return <MessageCircle className="w-5 h-5 text-blue-400" />;
-        case "transaction_pending":
-          return <ArrowLeftRight className="w-5 h-5 text-blue-400" />;
-        case "success":
-          return <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
-        case "warning":
-          return <AlertTriangle className="w-5 h-5 text-amber-400" />;
-        case "error":
-          return <XCircle className="w-5 h-5 text-red-400" />;
-        default:
-          break;
-      }
+      return renderNotificationIcon(notification.notification_type, "w-5 h-5");
     }
 
     // Fallback to icon field mapping

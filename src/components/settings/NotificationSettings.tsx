@@ -5,6 +5,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { GoogleCalendarSettings } from "@/components/settings/GoogleCalendarSettings";
 import {
   useNotificationPreferences,
   useUpdateNotificationPreference,
@@ -407,6 +408,9 @@ export function NotificationSettings() {
 
       {/* In-App Notification Preferences */}
       <InAppNotificationPreferences />
+
+      {/* Google Calendar Backup Sync */}
+      <GoogleCalendarSettings />
     </div>
   );
 }

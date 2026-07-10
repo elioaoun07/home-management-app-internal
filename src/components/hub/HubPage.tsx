@@ -23,9 +23,7 @@ import {
   useBroadcastReceiptUpdate,
   useConfirmTransactions,
   useCreateThread,
-  useDismissAlert,
   useHouseholdRealtimeMessages,
-  useHubAlerts,
   useHubFeed,
   useHubMessages,
   useHubStats,
@@ -36,14 +34,11 @@ import {
   useSnoozeAlert,
   useUpdateNotificationTime,
   useVisibilityRefresh,
-  type HubAlert,
   type HubChatThread,
   type HubFeedItem,
   type HubMessage,
 } from "@/features/hub/hooks";
 import {
-  addDismissedAlert,
-  getDismissedAlerts,
   useCacheSync,
   useHubCacheInit,
   useHubState,
@@ -51,7 +46,23 @@ import {
 import { useItem } from "@/features/items/useItems";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import {
+  getActionRoute,
+  getQuickActions,
+  useDismissNotification,
+  useInAppNotifications,
+  useNotificationNavigation,
+  useNotificationQuickAction,
+  useNotificationsRealtime,
+  type Notification,
+  type QuickAction,
+} from "@/hooks/useNotifications";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import {
+  getNotificationClass,
+  renderNotificationIcon,
+  renderQuickActionIcon,
+} from "@/lib/notifications/registry";
 import { parseMessageForTransaction } from "@/lib/nlp/messageTransactionParser";
 import { useConversationMode } from "@/features/voice-conversation";
 import { safeFetch } from "@/lib/safeFetch";
@@ -61,21 +72,16 @@ import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
-  AlertTriangle,
   ArrowUpRight,
-  BarChart2,
   Bell,
   Bot,
-  Calendar,
   Clock,
   FileText,
   Link as LinkIcon,
-  Lightbulb,
   ListChecks,
   Pin,
   RefreshCw,
   Settings,
-  Sparkles,
   Star,
   Target,
   Trash2,
@@ -5088,6 +5094,24 @@ function FeedView() {
   const { data, isLoading } = useHubFeed();
   const feed = data?.feed || [];
   const currentUserId = data?.current_user_id;
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+
+  const sections = groupItemsByDate(feed);
+  const allCollapsed =
+    sections.length > 0 && sections.every((s) => collapsedSections.has(s.label));
+
+  const toggleSection = (label: string) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setCollapsedSections(allCollapsed ? new Set() : new Set(sections.map((s) => s.label)));
+  };
 
   if (isLoading) {
     return (
@@ -5146,38 +5170,76 @@ function FeedView() {
   };
 
   return (
-    <div className="space-y-3">
-      {feed.map((item: HubFeedItem) => {
-        const isMe = item.user_id === currentUserId;
-        return (
-          <div
-            key={item.id}
-            className="p-4 rounded-xl neo-card bg-bg-card-custom border border-white/5 flex items-start gap-3"
+    <div className="space-y-4">
+      {sections.length > 1 && (
+        <div className="flex justify-end">
+          <button
+            onClick={toggleAll}
+            className="text-xs text-white/40 hover:text-white/70 transition-colors"
           >
-            <div className="text-2xl">{getEmoji(item.activity_type)}</div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-white">
-                <span className="font-semibold">
-                  {isMe ? "You" : "Partner"}
-                </span>
-                <span className="text-white/50">
-                  {" "}
-                  {item.activity_type.replace("_", " ")}
-                </span>
-              </p>
-              <p className="text-sm text-white/70 truncate">
-                {item.title}
-                {item.amount && ` - $${item.amount.toFixed(2)}`}
-              </p>
-              {item.subtitle && (
-                <p className="text-xs text-white/40 truncate">
-                  {item.subtitle}
-                </p>
-              )}
-            </div>
-            <span className="text-xs text-white/40 shrink-0">
-              {formatRelativeTime(item.created_at)}
-            </span>
+            {allCollapsed ? "Expand all" : "Collapse all"}
+          </button>
+        </div>
+      )}
+
+      {sections.map((section) => {
+        const isCollapsed = collapsedSections.has(section.label);
+        return (
+          <div key={section.label} className="space-y-2">
+            <button
+              onClick={() => toggleSection(section.label)}
+              className="w-full flex items-center gap-2 px-1 py-1 text-xs font-semibold text-white/40 uppercase tracking-wide hover:text-white/60 transition-colors"
+            >
+              <ChevronLeftIcon
+                className={cn(
+                  "w-3.5 h-3.5 transition-transform",
+                  isCollapsed ? "rotate-180" : "-rotate-90",
+                )}
+              />
+              {section.label}
+              <span className="text-white/25 normal-case font-normal">
+                ({section.items.length})
+              </span>
+            </button>
+
+            {!isCollapsed && (
+              <div className="space-y-3">
+                {section.items.map((item: HubFeedItem) => {
+                  const isMe = item.user_id === currentUserId;
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-4 rounded-xl neo-card bg-bg-card-custom border border-white/5 flex items-start gap-3"
+                    >
+                      <div className="text-2xl">{getEmoji(item.activity_type)}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white">
+                          <span className="font-semibold">
+                            {isMe ? "You" : "Partner"}
+                          </span>
+                          <span className="text-white/50">
+                            {" "}
+                            {item.activity_type.replace("_", " ")}
+                          </span>
+                        </p>
+                        <p className="text-sm text-white/70 truncate">
+                          {item.title}
+                          {item.amount && ` - $${item.amount.toFixed(2)}`}
+                        </p>
+                        {item.subtitle && (
+                          <p className="text-xs text-white/40 truncate">
+                            {item.subtitle}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-xs text-white/40 shrink-0">
+                        {formatRelativeTime(item.created_at)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
       })}
@@ -5313,14 +5375,22 @@ function LeaderboardRow({
   );
 }
 
-// Alerts View - Smart notifications
+// Alerts View — same data source as the bell (single source of truth),
+// live via realtime, grouped by date, filterable by the system/scheduled
+// taxonomy, actions driven by the notification registry.
 function AlertsView() {
   const { setActiveTab } = useTab();
-  const { data, isLoading } = useHubAlerts();
-  const dismissAlert = useDismissAlert();
+  useNotificationsRealtime();
+  const { data, isLoading } = useInAppNotifications({ limit: 50, includeRead: true });
+  const dismiss = useDismissNotification();
+  const quickAction = useNotificationQuickAction();
+  const navigate = useNotificationNavigation();
   const confirmTransactions = useConfirmTransactions();
   const snoozeAlert = useSnoozeAlert();
   const updateNotificationTime = useUpdateNotificationTime();
+
+  const [filter, setFilter] = useState<"all" | "system" | "scheduled" | "unread">("all");
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [showCelebration, setShowCelebration] = useState<string | null>(null);
   const [showSnoozeMenu, setShowSnoozeMenu] = useState<string | null>(null);
   const [showTimeSettings, setShowTimeSettings] = useState<string | null>(null);
@@ -5343,15 +5413,35 @@ function AlertsView() {
   // Fetch item data when selectedItemId changes
   const { data: itemData } = useItem(selectedItemId || undefined);
 
-  // Track dismissed alerts in localStorage
-  const [dismissedInSession, setDismissedInSession] = useState<Set<string>>(
-    () => getDismissedAlerts(),
-  );
+  const notifications = data?.notifications || [];
 
-  // Filter out alerts that have been dismissed in this session
-  const alerts = (data?.alerts || []).filter(
-    (alert) => !dismissedInSession.has(alert.id),
-  );
+  const filtered = notifications.filter((n) => {
+    if (filter === "unread") return !n.is_read;
+    if (filter === "system") return getNotificationClass(n.notification_type) === "system";
+    if (filter === "scheduled") return getNotificationClass(n.notification_type) === "scheduled";
+    return true;
+  });
+
+  const sections = groupItemsByDate(filtered).map((section) => ({
+    ...section,
+    items: dedupeByGroupKey(section.items),
+  }));
+
+  const allCollapsed =
+    sections.length > 0 && sections.every((s) => collapsedSections.has(s.label));
+
+  const toggleSection = (label: string) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setCollapsedSections(allCollapsed ? new Set() : new Set(sections.map((s) => s.label)));
+  };
 
   // Fetch transaction by ID
   const fetchTransaction = async (transactionId: string) => {
@@ -5371,9 +5461,9 @@ function AlertsView() {
     }
   };
 
-  const handleConfirmTransactions = async (alertId: string) => {
-    setShowCelebration(alertId);
-    await confirmTransactions.mutateAsync(alertId);
+  const handleConfirmTransactions = async (notificationId: string) => {
+    setShowCelebration(notificationId);
+    await confirmTransactions.mutateAsync(notificationId);
     // Let animation play before removing
     setTimeout(() => {
       setShowCelebration(null);
@@ -5381,15 +5471,11 @@ function AlertsView() {
   };
 
   const handleNotYet = () => {
-    // Navigate to add expense
     window.location.href = "/dashboard?action=add-expense";
   };
 
-  const handleSnooze = async (alertId: string, minutes: number) => {
-    await snoozeAlert.mutateAsync({
-      notificationId: alertId,
-      snoozeMinutes: minutes,
-    });
+  const handleSnooze = async (notificationId: string, minutes: number) => {
+    await snoozeAlert.mutateAsync({ notificationId, snoozeMinutes: minutes });
     setShowSnoozeMenu(null);
     toast.success(
       `Snoozed for ${minutes >= 60 ? `${minutes / 60}h` : `${minutes}m`}`,
@@ -5405,87 +5491,68 @@ function AlertsView() {
     toast.success(`Reminder time updated to ${time}`);
   };
 
-  const handleDismiss = (alertId: string, e?: React.MouseEvent) => {
-    e?.stopPropagation(); // Prevent navigation when clicking dismiss
-    // Add to localStorage cache
-    addDismissedAlert(alertId);
-    // Update local state to hide immediately
-    setDismissedInSession((prev) => new Set([...prev, alertId]));
-    // Also dismiss on server
-    dismissAlert.mutate(alertId);
+  const handleDismiss = (notificationId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    dismiss.mutate(notificationId);
   };
 
-  // Navigate to the relevant item/section based on alert type
-  const handleAlertClick = (alert: HubAlert) => {
-    // For item-related notifications, show item detail modal
-    if (alert.item_id) {
-      setSelectedItemId(alert.item_id);
+  // Show item/transaction detail inline, otherwise fall back to the shared
+  // registry-driven route resolution (same logic the bell drawer uses).
+  const handleAlertClick = (notification: Notification) => {
+    if (notification.item_id) {
+      setSelectedItemId(notification.item_id);
       return;
     }
-
-    // For transaction-related notifications, show transaction detail modal
-    if (alert.transaction_id) {
-      fetchTransaction(alert.transaction_id);
+    if (notification.transaction_id) {
+      fetchTransaction(notification.transaction_id);
       return;
     }
-
-    // For recurring payment notifications, navigate to recurring page
-    if (alert.recurring_payment_id) {
+    if (notification.recurring_payment_id) {
       window.location.href = "/recurring";
       return;
     }
-
-    // Fallback navigation based on notification type
-    switch (alert.notification_type) {
-      case "item_reminder":
-      case "item_due":
-      case "item_overdue":
-        setActiveTab("reminder");
-        break;
-      case "daily_items_summary":
-        window.location.href = "/reminders";
-        break;
-      case "transaction_pending":
-      case "daily_reminder":
-        setActiveTab("expense");
-        break;
-      case "budget_warning":
-      case "budget_exceeded":
-        setActiveTab("dashboard");
-        break;
-      case "bill_due":
-      case "bill_overdue":
-        window.location.href = "/recurring";
-        break;
-      case "chat_message":
-      case "chat_mention":
-        // Already in hub, could switch to chat view
-        break;
-      default:
-        // No specific navigation
-        break;
-    }
+    navigate(notification);
   };
 
-  // Check if alert is navigable
-  const isNavigable = (alert: HubAlert) => {
-    return (
-      alert.item_id ||
-      alert.transaction_id ||
-      alert.recurring_payment_id ||
-      [
-        "item_reminder",
-        "item_due",
-        "item_overdue",
-        "transaction_pending",
-        "daily_reminder",
-        "daily_items_summary",
-        "budget_warning",
-        "budget_exceeded",
-        "bill_due",
-        "bill_overdue",
-      ].includes(alert.notification_type || "")
+  const isNavigable = (notification: Notification) =>
+    Boolean(
+      notification.item_id ||
+        notification.transaction_id ||
+        notification.recurring_payment_id ||
+        getActionRoute(notification),
     );
+
+  const handleQuickAction = (notification: Notification, qa: QuickAction) => {
+    switch (qa.id) {
+      case "open":
+      case "log_transaction":
+      case "view_budget":
+      case "open_split_bill":
+      case "reply":
+        handleAlertClick(notification);
+        if (qa.closesNotification) {
+          quickAction.mutate({ notificationId: notification.id, action: "read" });
+        }
+        break;
+      case "complete_task":
+        quickAction.mutate({ notificationId: notification.id, action: "complete_task" });
+        break;
+      case "confirm":
+        quickAction.mutate({ notificationId: notification.id, action: "confirm" });
+        break;
+      case "dismiss":
+        quickAction.mutate({ notificationId: notification.id, action: "dismiss" });
+        break;
+      case "snooze_15m":
+        quickAction.mutate({ notificationId: notification.id, action: "snooze", snoozeMinutes: 15 });
+        break;
+      case "snooze_1h":
+        quickAction.mutate({ notificationId: notification.id, action: "snooze", snoozeMinutes: 60 });
+        break;
+      case "snooze_tomorrow":
+        quickAction.mutate({ notificationId: notification.id, action: "snooze", snoozeMinutes: 60 * 24 });
+        break;
+    }
   };
 
   if (isLoading) {
@@ -5503,7 +5570,7 @@ function AlertsView() {
     );
   }
 
-  if (alerts.length === 0) {
+  if (notifications.length === 0) {
     return (
       <div className="p-8 rounded-2xl neo-card bg-bg-card-custom border border-white/5 text-center">
         <AlertBellIcon className="w-12 h-12 mx-auto mb-3 text-red-400/50" />
@@ -5514,34 +5581,6 @@ function AlertsView() {
       </div>
     );
   }
-
-  const getIcon = (type: string | null | undefined): ReactNode => {
-    switch (type) {
-      case "budget_warning":
-      case "budget_exceeded":
-        return <AlertTriangle className="w-6 h-6 text-amber-400" />;
-      case "goal_milestone":
-      case "goal_completed":
-        return "🎉";
-      case "weekly_summary":
-      case "monthly_summary":
-        return <BarChart2 className="w-6 h-6 text-blue-400" />;
-      case "bill_due":
-      case "bill_overdue":
-        return <Calendar className="w-6 h-6 text-blue-400" />;
-      case "daily_reminder":
-      case "transaction_reminder":
-        return <FileText className="w-6 h-6 text-cyan-400" />;
-      case "daily_items_summary":
-        return <ListChecks className="w-6 h-6 text-cyan-400" />;
-      case "item_reminder":
-      case "item_due":
-      case "item_overdue":
-        return <Clock className="w-6 h-6 text-orange-400" />;
-      default:
-        return <Lightbulb className="w-6 h-6 text-yellow-400" />;
-    }
-  };
 
   const getBorderColor = (severity: string) => {
     switch (severity) {
@@ -5556,192 +5595,284 @@ function AlertsView() {
     }
   };
 
+  const FILTERS: { id: typeof filter; label: string }[] = [
+    { id: "all", label: "All" },
+    { id: "system", label: "System" },
+    { id: "scheduled", label: "Scheduled" },
+    { id: "unread", label: "Unread" },
+  ];
+
   return (
-    <div className="space-y-3">
-      {alerts.map((alert: HubAlert) => {
-        const isCelebrating = showCelebration === alert.id;
-        // Check for transaction reminder type
-        const isTransactionReminder =
-          alert.action_type === "transaction_reminder" ||
-          alert.action_type === "log_transaction" ||
-          alert.notification_type === "daily_reminder";
-
-        // Special UI for transaction reminder
-        if (isTransactionReminder) {
-          const isSnoozeMenuOpen = showSnoozeMenu === alert.id;
-          const isTimeSettingsOpen = showTimeSettings === alert.id;
-
-          return (
-            <div
-              key={alert.id}
+    <div className="space-y-4">
+      {/* Filter chips + global collapse/expand */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex gap-1.5 overflow-x-auto">
+          {FILTERS.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
               className={cn(
-                "p-4 rounded-xl neo-card bg-bg-card-custom border relative overflow-hidden transition-all duration-300",
-                isCelebrating
-                  ? "border-green-500/50 bg-green-500/10"
-                  : "border-cyan-500/30",
+                "px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all",
+                filter === f.id
+                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                  : "bg-white/5 text-white/50 border border-white/5 hover:bg-white/10",
               )}
             >
-              {/* Celebration animation overlay */}
-              {isCelebrating && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-r from-green-500/20 to-cyan-500/20 backdrop-blur-sm z-10">
-                  <div className="text-center animate-bounce">
-                    <div className="text-4xl mb-2">🎉</div>
-                    <p className="text-green-400 font-semibold">Great job!</p>
-                  </div>
-                </div>
-              )}
+              {f.label}
+            </button>
+          ))}
+        </div>
+        {sections.length > 0 && (
+          <button
+            onClick={toggleAll}
+            className="shrink-0 text-xs text-white/40 hover:text-white/70 transition-colors"
+          >
+            {allCollapsed ? "Expand all" : "Collapse all"}
+          </button>
+        )}
+      </div>
 
-              <div className="flex items-start gap-3">
-                <FileText className="w-8 h-8 text-cyan-400/40" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-sm font-semibold text-white">
-                      {alert.title}
-                    </p>
-                  </div>
-                  <p className="text-sm text-white/60">{alert.message}</p>
-                  <p className="text-xs text-white/30 mt-1">
-                    {formatRelativeTime(alert.created_at)}
-                  </p>
+      {filtered.length === 0 && (
+        <div className="p-8 rounded-2xl neo-card bg-bg-card-custom border border-white/5 text-center">
+          <p className="text-sm text-white/50">No alerts in this filter.</p>
+        </div>
+      )}
 
-                  {/* Main Action buttons */}
-                  <div className="flex gap-2 mt-3">
-                    <button
-                      onClick={() => handleConfirmTransactions(alert.id)}
-                      disabled={confirmTransactions.isPending || isCelebrating}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-medium hover:from-green-600 hover:to-emerald-700 transition-all disabled:opacity-50"
-                    >
-                      <CheckIcon className="w-4 h-4" />
-                      All Done
-                    </button>
-                    <button
-                      onClick={handleNotYet}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/10 text-white/80 text-sm font-medium hover:bg-white/20 transition-all"
-                    >
-                      <PlusIcon className="w-4 h-4" />
-                      Log Now
-                    </button>
-                  </div>
+      {sections.map((section) => {
+        const isCollapsed = collapsedSections.has(section.label);
+        return (
+          <div key={section.label} className="space-y-2">
+            <button
+              onClick={() => toggleSection(section.label)}
+              className="w-full flex items-center gap-2 px-1 py-1 text-xs font-semibold text-white/40 uppercase tracking-wide hover:text-white/60 transition-colors"
+            >
+              <ChevronLeftIcon
+                className={cn(
+                  "w-3.5 h-3.5 transition-transform",
+                  isCollapsed ? "rotate-180" : "-rotate-90",
+                )}
+              />
+              {section.label}
+              <span className="text-white/25 normal-case font-normal">
+                ({section.items.length})
+              </span>
+            </button>
 
-                  {/* Secondary actions: Snooze & Settings */}
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      onClick={() =>
-                        setShowSnoozeMenu(isSnoozeMenuOpen ? null : alert.id)
-                      }
-                      className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-white/5 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white/70 transition-all"
-                    >
-                      <Clock className="w-3 h-3" /> Snooze
-                    </button>
-                    <button
-                      onClick={() =>
-                        setShowTimeSettings(
-                          isTimeSettingsOpen ? null : alert.id,
-                        )
-                      }
-                      className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-white/5 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white/70 transition-all"
-                    >
-                      <Settings className="w-3 h-3" /> Change Time
-                    </button>
-                  </div>
+            {!isCollapsed && (
+              <div className="space-y-3">
+                {section.items.map((notification) => {
+                  const isCelebrating = showCelebration === notification.id;
+                  const isTransactionReminder =
+                    notification.notification_type === "daily_reminder" &&
+                    !notification.action_completed_at;
 
-                  {/* Snooze menu */}
-                  {isSnoozeMenuOpen && (
-                    <div className="mt-2 p-2 rounded-lg bg-white/5 border border-white/10">
-                      <p className="text-xs text-white/40 mb-2">Snooze for:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {[
-                          { label: "1h", minutes: 60 },
-                          { label: "3h", minutes: 180 },
-                          { label: "6h", minutes: 360 },
-                          { label: "Tomorrow", minutes: 60 * 24 },
-                        ].map((option) => (
-                          <button
-                            key={option.label}
-                            onClick={() =>
-                              handleSnooze(alert.id, option.minutes)
-                            }
-                            disabled={snoozeAlert.isPending}
-                            className="px-3 py-1 rounded-md bg-white/10 text-white/70 text-xs hover:bg-white/20 transition-all disabled:opacity-50"
-                          >
-                            {option.label}
-                          </button>
-                        ))}
+                  if (isTransactionReminder) {
+                    const isSnoozeMenuOpen = showSnoozeMenu === notification.id;
+                    const isTimeSettingsOpen = showTimeSettings === notification.id;
+
+                    return (
+                      <div
+                        key={notification.id}
+                        className={cn(
+                          "p-4 rounded-xl neo-card bg-bg-card-custom border relative overflow-hidden transition-all duration-300",
+                          isCelebrating
+                            ? "border-green-500/50 bg-green-500/10"
+                            : "border-cyan-500/30",
+                        )}
+                      >
+                        {isCelebrating && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-r from-green-500/20 to-cyan-500/20 backdrop-blur-sm z-10">
+                            <div className="text-center animate-bounce">
+                              <div className="text-4xl mb-2">🎉</div>
+                              <p className="text-green-400 font-semibold">Great job!</p>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-start gap-3">
+                          <FileText className="w-8 h-8 text-cyan-400/40" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="text-sm font-semibold text-white">
+                                {notification.title}
+                              </p>
+                            </div>
+                            <p className="text-sm text-white/60">{notification.message}</p>
+                            <p className="text-xs text-white/30 mt-1">
+                              {formatRelativeTime(notification.created_at)}
+                            </p>
+
+                            <div className="flex gap-2 mt-3">
+                              <button
+                                onClick={() => handleConfirmTransactions(notification.id)}
+                                disabled={confirmTransactions.isPending || isCelebrating}
+                                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-medium hover:from-green-600 hover:to-emerald-700 transition-all disabled:opacity-50"
+                              >
+                                <CheckIcon className="w-4 h-4" />
+                                All Done
+                              </button>
+                              <button
+                                onClick={handleNotYet}
+                                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/10 text-white/80 text-sm font-medium hover:bg-white/20 transition-all"
+                              >
+                                <PlusIcon className="w-4 h-4" />
+                                Log Now
+                              </button>
+                            </div>
+
+                            <div className="flex gap-2 mt-2">
+                              <button
+                                onClick={() =>
+                                  setShowSnoozeMenu(isSnoozeMenuOpen ? null : notification.id)
+                                }
+                                className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-white/5 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white/70 transition-all"
+                              >
+                                <Clock className="w-3 h-3" /> Snooze
+                              </button>
+                              <button
+                                onClick={() =>
+                                  setShowTimeSettings(isTimeSettingsOpen ? null : notification.id)
+                                }
+                                className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-white/5 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white/70 transition-all"
+                              >
+                                <Settings className="w-3 h-3" /> Change Time
+                              </button>
+                            </div>
+
+                            {isSnoozeMenuOpen && (
+                              <div className="mt-2 p-2 rounded-lg bg-white/5 border border-white/10">
+                                <p className="text-xs text-white/40 mb-2">Snooze for:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {[
+                                    { label: "1h", minutes: 60 },
+                                    { label: "3h", minutes: 180 },
+                                    { label: "6h", minutes: 360 },
+                                    { label: "Tomorrow", minutes: 60 * 24 },
+                                  ].map((option) => (
+                                    <button
+                                      key={option.label}
+                                      onClick={() => handleSnooze(notification.id, option.minutes)}
+                                      disabled={snoozeAlert.isPending}
+                                      className="px-3 py-1 rounded-md bg-white/10 text-white/70 text-xs hover:bg-white/20 transition-all disabled:opacity-50"
+                                    >
+                                      {option.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {isTimeSettingsOpen && (
+                              <div className="mt-2 p-2 rounded-lg bg-white/5 border border-white/10">
+                                <p className="text-xs text-white/40 mb-2">Daily reminder time:</p>
+                                <div className="flex gap-2 items-center">
+                                  <input
+                                    type="time"
+                                    value={selectedTime}
+                                    onChange={(e) => setSelectedTime(e.target.value)}
+                                    className="flex-1 px-3 py-1.5 rounded-md bg-white/10 text-white text-sm border border-white/10 focus:outline-none focus:border-cyan-500/50"
+                                  />
+                                  <button
+                                    onClick={() => handleUpdateTime(selectedTime)}
+                                    disabled={updateNotificationTime.isPending}
+                                    className="px-4 py-1.5 rounded-md bg-cyan-500/20 text-cyan-400 text-sm font-medium hover:bg-cyan-500/30 transition-all disabled:opacity-50"
+                                  >
+                                    Save
+                                  </button>
+                                </div>
+                                <p className="text-xs text-white/30 mt-1">
+                                  You&apos;ll be reminded at this time every day
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  }
 
-                  {/* Time settings */}
-                  {isTimeSettingsOpen && (
-                    <div className="mt-2 p-2 rounded-lg bg-white/5 border border-white/10">
-                      <p className="text-xs text-white/40 mb-2">
-                        Daily reminder time:
-                      </p>
-                      <div className="flex gap-2 items-center">
-                        <input
-                          type="time"
-                          value={selectedTime}
-                          onChange={(e) => setSelectedTime(e.target.value)}
-                          className="flex-1 px-3 py-1.5 rounded-md bg-white/10 text-white text-sm border border-white/10 focus:outline-none focus:border-cyan-500/50"
-                        />
+                  const navigable = isNavigable(notification);
+                  const actions = notification.action_completed_at
+                    ? []
+                    : getQuickActions(notification);
+
+                  return (
+                    <div
+                      key={notification.id}
+                      onClick={() => navigable && handleAlertClick(notification)}
+                      className={cn(
+                        "p-4 rounded-xl neo-card bg-bg-card-custom border transition-all",
+                        getBorderColor(notification.severity),
+                        navigable && "cursor-pointer hover:bg-white/5",
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5">
+                          {renderNotificationIcon(notification.notification_type, "w-6 h-6")}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-sm font-semibold text-white truncate">
+                              {notification.title}
+                            </p>
+                            {notification.repeatCount && notification.repeatCount > 1 && (
+                              <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50">
+                                ×{notification.repeatCount}
+                              </span>
+                            )}
+                            {navigable && (
+                              <ChevronLeftIcon className="w-4 h-4 text-white/30 rotate-180 shrink-0" />
+                            )}
+                          </div>
+                          {notification.message && (
+                            <p className="text-sm text-white/60 truncate">
+                              {notification.message}
+                            </p>
+                          )}
+                          <p className="text-xs text-white/30 mt-1">
+                            {formatRelativeTime(notification.created_at)}
+                          </p>
+                        </div>
                         <button
-                          onClick={() => handleUpdateTime(selectedTime)}
-                          disabled={updateNotificationTime.isPending}
-                          className="px-4 py-1.5 rounded-md bg-cyan-500/20 text-cyan-400 text-sm font-medium hover:bg-cyan-500/30 transition-all disabled:opacity-50"
+                          onClick={(e) => handleDismiss(notification.id, e)}
+                          className="text-white/30 hover:text-white/60 text-lg shrink-0"
                         >
-                          Save
+                          ×
                         </button>
                       </div>
-                      <p className="text-xs text-white/30 mt-1">
-                        You&apos;ll be reminded at this time every day
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        }
 
-        // Regular alert UI
-        const navigable = isNavigable(alert);
-        return (
-          <div
-            key={alert.id}
-            onClick={() => navigable && handleAlertClick(alert)}
-            className={cn(
-              "p-4 rounded-xl neo-card bg-bg-card-custom flex items-start gap-3 border transition-all",
-              getBorderColor(alert.severity),
-              navigable && "cursor-pointer hover:bg-white/5",
-            )}
-          >
-            <div className="text-2xl">
-              {getIcon(alert.notification_type || alert.alert_type)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-sm font-semibold text-white truncate">
-                  {alert.title}
-                </p>
-                {navigable && (
-                  <ChevronLeftIcon className="w-4 h-4 text-white/30 rotate-180 flex-shrink-0" />
-                )}
+                      {actions.length > 0 && (
+                        <div
+                          className="flex gap-2 mt-3 pl-9"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {actions.map((qa) => (
+                            <button
+                              key={qa.id}
+                              onClick={() => handleQuickAction(notification, qa)}
+                              className={cn(
+                                "flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                                qa.variant === "primary" &&
+                                  "bg-primary/20 text-primary hover:bg-primary/30",
+                                qa.variant === "success" &&
+                                  "bg-green-500/20 text-green-400 hover:bg-green-500/30",
+                                qa.variant === "neutral" &&
+                                  "bg-blue-500/15 text-blue-300 hover:bg-blue-500/25",
+                                qa.variant === "muted" &&
+                                  "bg-white/5 text-white/60 hover:bg-white/10",
+                              )}
+                            >
+                              {renderQuickActionIcon(qa.icon)}
+                              {qa.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              {alert.message && (
-                <p className="text-sm text-white/60 truncate">
-                  {alert.message}
-                </p>
-              )}
-              <p className="text-xs text-white/30 mt-1">
-                {formatRelativeTime(alert.created_at)}
-              </p>
-            </div>
-            <button
-              onClick={(e) => handleDismiss(alert.id, e)}
-              className="text-white/30 hover:text-white/60 text-lg"
-            >
-              ×
-            </button>
+            )}
           </div>
         );
       })}
@@ -5779,6 +5910,55 @@ function AlertsView() {
       )}
     </div>
   );
+}
+
+// Group any created_at-bearing list into Today / Yesterday / Earlier date
+// sections. Shared by AlertsView and FeedView so both surfaces use one
+// definition of "what date bucket does this belong to."
+function groupItemsByDate<T extends { created_at: string }>(
+  items: T[],
+): { label: "Today" | "Yesterday" | "Earlier"; items: T[] }[] {
+  const todayStr = new Date().toDateString();
+  const yesterdayStr = new Date(Date.now() - 86400000).toDateString();
+  const buckets: Record<"Today" | "Yesterday" | "Earlier", T[]> = {
+    Today: [],
+    Yesterday: [],
+    Earlier: [],
+  };
+
+  for (const item of items) {
+    const d = new Date(item.created_at).toDateString();
+    const label = d === todayStr ? "Today" : d === yesterdayStr ? "Yesterday" : "Earlier";
+    buckets[label].push(item);
+  }
+
+  return (["Today", "Yesterday", "Earlier"] as const)
+    .filter((label) => buckets[label].length > 0)
+    .map((label) => ({ label, items: buckets[label] }));
+}
+
+// Collapse repeats sharing the same group_key (e.g. a snoozed reminder that
+// re-fired) into a single card with a "×N" badge, keeping the most recent.
+function dedupeByGroupKey(
+  notifications: Notification[],
+): (Notification & { repeatCount?: number })[] {
+  const counts = new Map<string, number>();
+  for (const n of notifications) {
+    if (n.group_key) counts.set(n.group_key, (counts.get(n.group_key) || 0) + 1);
+  }
+  const seen = new Set<string>();
+  const result: (Notification & { repeatCount?: number })[] = [];
+  for (const n of notifications) {
+    if (n.group_key) {
+      if (seen.has(n.group_key)) continue;
+      seen.add(n.group_key);
+      const count = counts.get(n.group_key)!;
+      result.push(count > 1 ? { ...n, repeatCount: count } : n);
+    } else {
+      result.push(n);
+    }
+  }
+  return result;
 }
 
 // Helper function

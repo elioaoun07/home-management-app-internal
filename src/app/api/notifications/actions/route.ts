@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
         const { error } = await supabase
           .from("notifications")
           .update({
-            dismissed_at: new Date().toISOString(),
+            is_dismissed: true,
             action_taken: true,
           })
           .eq("id", notification_id);
@@ -72,7 +72,6 @@ export async function POST(req: NextRequest) {
           .from("notifications")
           .update({
             snoozed_until: snoozeUntil.toISOString(),
-            snooze_count: (notification.snooze_count || 0) + 1,
           })
           .eq("id", notification_id);
 
@@ -93,7 +92,7 @@ export async function POST(req: NextRequest) {
           .from("notifications")
           .update({
             action_taken: true,
-            action_taken_at: new Date().toISOString(),
+            action_completed_at: new Date().toISOString(),
           })
           .eq("id", notification_id);
 
@@ -110,8 +109,8 @@ export async function POST(req: NextRequest) {
           .from("notifications")
           .update({
             action_taken: true,
-            action_taken_at: new Date().toISOString(),
-            dismissed_at: new Date().toISOString(),
+            action_completed_at: new Date().toISOString(),
+            is_dismissed: true,
           })
           .eq("id", notification_id);
 
@@ -140,7 +139,7 @@ export async function POST(req: NextRequest) {
         const { error } = await supabase
           .from("notifications")
           .update({
-            read_at: new Date().toISOString(),
+            is_read: true,
           })
           .eq("id", notification_id);
 
@@ -158,7 +157,6 @@ export async function POST(req: NextRequest) {
         );
     }
   } catch (error) {
-    console.error("Notification action error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
@@ -192,7 +190,7 @@ export async function PATCH(req: NextRequest) {
       case "read_all": {
         const { error } = await supabase
           .from("notifications")
-          .update({ read_at: new Date().toISOString() })
+          .update({ is_read: true })
           .eq("user_id", user.id)
           .in("id", notification_ids);
 
@@ -210,7 +208,7 @@ export async function PATCH(req: NextRequest) {
         const { error } = await supabase
           .from("notifications")
           .update({
-            dismissed_at: new Date().toISOString(),
+            is_dismissed: true,
             action_taken: true,
           })
           .eq("user_id", user.id)
@@ -233,7 +231,6 @@ export async function PATCH(req: NextRequest) {
         );
     }
   } catch (error) {
-    console.error("Notification batch action error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }

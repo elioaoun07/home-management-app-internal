@@ -1,6 +1,6 @@
 ---
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-07-10
 type: index
 status: living
 owner: Elio
@@ -18,7 +18,9 @@ tags:
 >
 > **Module type:** **Junction** (per CLAUDE.md) — it bridges **Items** (alerts), **Recurring** (payment reminders), **Budget** (spending alerts) and **Hub** (the alerts feed lives in `HubPage`). A change here can cascade across those standalones; trace them before editing.
 >
-> **Why this set exists:** the notification surface *works* but **feels wrong** — the bell rings perpetually and reads as an alarm, one system notification opens the wrong screen, the drawer is too wordy to glance at, and the alerts page is a wall of text. The ask was deliberate — *map every painful thing first, decide the target design, then run a focused overhaul.* This folder is that map plus the build queue. **Docs-first: nothing here is built yet** (created 2026-06-19).
+> **Why this set exists:** the notification surface *works* but **feels wrong** — the bell rings perpetually and reads as an alarm, one system notification opens the wrong screen, the drawer is too wordy to glance at, and the alerts page is a wall of text. The ask was deliberate — *map every painful thing first, decide the target design, then run a focused overhaul.* This folder is that map plus the build queue.
+>
+> **Status as of 2026-07-10:** the routing 🔴 (fixed 06-19) and the alerts-page/registry/reliability overhaul (fixed 07-10 — see [Checklist Phase 5–6](<4 - Checklist.md>)) are shipped. Still open: bell calm-down (Phase 2), drawer density (Phase 3), cron `console.*` sweep, quiet hours/delivery-policy engine.
 
 | #   | File                                          | Read it when...                                                                                                          |
 | --- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |

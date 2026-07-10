@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { useNotificationsRealtime } from "@/hooks/useNotifications";
 import { useState } from "react";
 import NotificationBell from "./NotificationBell";
 import NotificationModal from "./NotificationModal";
@@ -17,6 +18,7 @@ export default function NotificationCenter({
   className,
 }: NotificationCenterProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  useNotificationsRealtime();
 
   return (
     <>

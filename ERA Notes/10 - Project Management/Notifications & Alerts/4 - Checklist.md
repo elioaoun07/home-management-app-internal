@@ -56,14 +56,25 @@ tags:
 
 ### Phase 5 — Backlog (Should → Could) 🟡
 
-- [ ] **5.1** Group notifications by `group_key`/type in drawer + page (collapse "N reminders", expand on tap). _(M · W5/S1)_
-- [ ] **5.2** Filter segments on the alerts page (All / Budget / Reminders / Household). _(S–M · W6/S2)_
-- [ ] **5.3** Empty / "all caught up" states for drawer + page. _(S · W7/S3)_
-- [ ] **5.4** Strip `console.*` from the notification crons (Hard Rule #22). → `src/app/api/cron/daily-items-reminder/route.ts`, `src/app/api/cron/daily-reminder/route.ts`, `src/app/api/cron/item-reminders/route.ts` _(S · W8/S4)_
-- [ ] **5.5** Unify drawer ↔ alerts-page icon vocabulary + severity treatment. _(M · W9/S5)_
-- [ ] **5.6** Audit Undo on dismiss/snooze across both surfaces (Hard Rule #1). _(S · W10/S6)_
+- [x] **5.1** Group notifications by `group_key`/type in drawer + page (collapse "N reminders", expand on tap). _(M · W5/S1)_ — ✅ 2026-07-10: done on the **alerts page** (`dedupeByGroupKey()` + `×N` badge, date-grouped sections). Drawer (`NotificationModal.tsx`) not touched — still ungrouped.
+- [x] **5.2** Filter segments on the alerts page. _(S–M · W6/S2)_ — ✅ 2026-07-10, but with a **different taxonomy than originally scoped**: user defined System vs Scheduled (not Budget/Reminders/Household) — see [file 2](<2 - Vision & Roadmap.md>) decision update. Chips: All / System / Scheduled / Unread.
+- [ ] **5.3** Empty / "all caught up" states for drawer + page. _(S · W7/S3)_ — page's empty state preserved as-is (not redesigned).
+- [ ] **5.4** Strip `console.*` from the notification crons (Hard Rule #22). → `src/app/api/cron/daily-items-reminder/route.ts`, `src/app/api/cron/daily-reminder/route.ts`, `src/app/api/cron/item-reminders/route.ts` _(S · W8/S4)_ — **still open**; 2026-07-10 instead stripped `console.*` from `/api/notifications/in-app` and `/api/notifications/actions` (touched for other reasons).
+- [x] **5.5** Unify drawer ↔ alerts-page icon vocabulary + severity treatment. _(M · W9/S5)_ — ✅ 2026-07-10: both now call `renderNotificationIcon()` from the new registry (`src/lib/notifications/registry.tsx`).
+- [ ] **5.6** Audit Undo on dismiss/snooze across both surfaces (Hard Rule #1). _(S · W10/S6)_ — still open on the drawer/alerts page (silent optimistic mutations, no toast). The new Critical Alert Gate (below) does have Undo.
 - [ ] **5.7** Quiet hours / DND + per-type mute in Preferences. _(M–H · W11/C-1)_
 - [ ] **5.8** Bulk actions: snooze-all, clear-category. _(M · W12/C-2)_
+
+### Phase 6 — New capabilities shipped 2026-07-10 (not in the original scope)
+
+> User contract: notifications felt weak/missed; asked for a full-screen catch-all view, a Google Calendar backup (one-way, parallel to the existing system), a System-vs-Scheduled alert taxonomy, and a scalable per-type action contract.
+
+- [x] **6.1** Notification Registry — `src/lib/notifications/registry.tsx`, single source of truth per `notification_type` (route/actions/icon/class/calendarSync/takeoverEligible/retention). Prerequisite for 5.1/5.2/5.5 above and for 6.2–6.3.
+- [x] **6.2** Alerts page unified onto `/api/notifications/in-app` (same source as the bell) + `useNotificationsRealtime()` (Supabase realtime, replaces 60s-stale polling) + localStorage dismissal layer deleted.
+- [x] **6.3** Bug fix: `/api/notifications/actions` was writing to non-existent columns — every quick-action button was silently failing. Fixed.
+- [x] **6.4** Critical Alert Gate — full-screen takeover for unacted high/urgent takeover-eligible alerts, on app open/focus regain. `src/components/notifications/CriticalAlertGate.tsx`, mounted in `src/app/layout.tsx`.
+- [x] **6.5** Google Calendar one-way backup sync (scheduled items only, never system alerts) — `src/lib/gcal/`, `/api/gcal/*`, `/api/cron/gcal-reconcile`. Code-complete; **NOT live-verified** — needs user-provided `GOOGLE_CLIENT_ID`/`SECRET`/`REDIRECT_URI` (see `docs/ENV.md`).
+- [ ] **6.6** Live-verify Google Calendar sync end-to-end once credentials are set (connect → event appears → native alarm fires → reconcile heals drift).
 
 ---
 
@@ -80,3 +91,4 @@ tags:
 ## ✅ Implemented fixes log
 
 - [x] **2026-06-19 — Drawer open animation:** removed the `contentReady` / `onAnimationComplete` entrance gate from `NotificationModal.tsx`, so opening is one drawer slide and cached content renders immediately.
+- [x] **2026-07-10 — Notification Registry + alerts page unification + critical-alert gate + Google Calendar sync:** see Phase 5 (5.1, 5.2, 5.5) and Phase 6 above. Full detail in [FABLED 2 index](<FABLED 2/_index.md>) delta section.

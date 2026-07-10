@@ -1,5 +1,6 @@
 // src/app/api/items/[id]/complete/route.ts
 // Server-side item completion endpoint for service worker quick actions
+import { syncItemToGoogleCalendar } from "@/lib/gcal/sync";
 import { resetCompletedPrerequisiteItem } from "@/lib/prerequisites/engine";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -198,6 +199,10 @@ export async function POST(
 
       // If this item has prerequisites, reset it to dormant for next trigger
       const wasReset = await resetCompletedPrerequisiteItem(itemId, adminDb);
+
+      // Best-effort: a completed (non-recurring) item is no longer
+      // sync-eligible, so this removes its Google Calendar backup event.
+      await syncItemToGoogleCalendar(adminDb, itemId);
 
       return NextResponse.json({
         success: true,

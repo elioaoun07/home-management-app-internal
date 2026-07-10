@@ -5,6 +5,7 @@ import { ErrorLogger } from "@/components/ErrorLogger";
 import ConditionalHeader from "@/components/layouts/ConditionalHeader";
 import GuestHeader from "@/components/layouts/GuestHeader";
 import MobileNav from "@/components/layouts/MobileNav";
+import CriticalAlertGate from "@/components/notifications/CriticalAlertGate";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { ServiceWorkerWarmup } from "@/components/ServiceWorkerWarmup";
 import { Toaster } from "@/components/ui/sonner";
@@ -168,6 +169,7 @@ export default async function RootLayout({
               <ServiceWorkerWarmup />
               <DeepLinkHandler />
               <ErrorLogger />
+              {user && <CriticalAlertGate />}
               {/* Conditional header - show user menu when logged in, login button when logged out */}
               {user ? (
                 <ConditionalHeader

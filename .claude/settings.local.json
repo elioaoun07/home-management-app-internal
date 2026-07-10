@@ -85,7 +85,9 @@
       "Bash(tr '\\\\\\\\' '/')",
       "Bash(bash -n .claude/hooks/session-brief.sh)",
       "Bash(bash -n .claude/hooks/check-migration.sh)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git mv *)",
+      "Bash(mv src/lib/notifications/registry.ts src/lib/notifications/registry.tsx)"
     ]
   }
 }

@@ -64,6 +64,7 @@
     "d3-geo": "3.1.1",
     "date-fns": "^4.1.0",
     "framer-motion": "12.23.24",
+    "googleapis": "173.0.0",
     "home-manager": "link:",
     "jszip": "3.10.1",
     "lucide-react": "^0.544.0",

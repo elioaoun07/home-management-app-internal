@@ -10,8 +10,8 @@ tags:
 ---
 # Notifications System
 
-> **Module:** `src/components/notifications/` | **API:** `src/app/api/notifications/`, `src/app/api/cron/`
-> **DB Tables:** `notifications`, `notification_preferences`, `push_subscriptions`, `item_alerts`
+> **Module:** `src/components/notifications/` | **API:** `src/app/api/notifications/`, `src/app/api/cron/`, `src/app/api/gcal/`
+> **DB Tables:** `notifications`, `notification_preferences`, `push_subscriptions`, `item_alerts`, `google_calendar_connections`
 > **Status:** Active
 
 ## Overview
@@ -126,3 +126,47 @@ Set `NEXT_PUBLIC_ENABLE_SW=true` in `.env.local`, then `pnpm build && pnpm start
 ## Implementation Notes
 
 - `NotificationModal.tsx` should open as one Framer Motion drawer transition. Do not gate cached drawer content behind `onAnimationComplete`; show skeleton rows only while the notification query is genuinely loading, otherwise the open reads as a two-step motion.
+
+## Notification Registry *(added 2026-07-10)*
+
+**File:** `src/lib/notifications/registry.tsx` — single source of truth per `notification_type`. Before this, routing lived in `getActionRoute()`, actions in `getQuickActions()`, and icons were hand-duplicated separately in `NotificationModal.tsx` and the alerts page — three places to update per type, guaranteed to drift. `Record<NotificationType, NotificationTypeSpec>` now forces every DB enum value to have a spec (route resolver, quick actions, icon, `class`, `calendarSync`, `takeoverEligible`, `defaultPriority`, `expiresAfterHours`) — a type with no entry cannot compile.
+
+**Two-type taxonomy (user-defined 2026-07-10):**
+- **System alerts** — app-generated prompts (daily reminders, budget/bill/goal nudges, chat, summaries). Never sync to Google Calendar.
+- **Scheduled notifications** — fired from a user-created Reminder/Event (`item_reminder`/`item_due`/`item_overdue`). Eligible for the Google Calendar backup sync.
+
+`useNotifications.ts` re-exports `getActionRoute`, `getQuickActions`, `getNotificationClass`, `renderNotificationIcon`, `isCalendarSyncEligible`, `isTakeoverEligible` from the registry so existing call sites don't churn. **Adding a new notification type = one enum migration + one registry entry — nothing else.**
+
+Known remaining duplication (not closed this pass): `public/sw.js`'s push-notification vibration/action tables are still hand-maintained separately (plain JS service worker file, no build step imports the TS registry). `NotificationModal.tsx` also keeps its own copy of the route-navigation tab-parsing logic (`navigateForNotification`/`handleNotificationClick`) rather than the new `useNotificationNavigation()` hook, to avoid touching its documented animation-timing constraints. Both are candidates for a future consolidation pass.
+
+## Alerts Page — Unified Data Source *(2026-07-10)*
+
+`/alerts` (`AlertsView` in `src/components/hub/HubPage.tsx`) previously read `/api/hub/alerts` (no type/actioned filtering, 60s `staleTime`, no realtime, localStorage-based dismissal) while the bell drawer read `/api/notifications/in-app` — two endpoints, two shapes, could disagree, and the alerts page never felt current. AlertsView now consumes the same `useInAppNotifications()` hook as the drawer, plus a shared `useNotificationsRealtime()` hook (Supabase `postgres_changes` subscription on `notifications`, RLS-scoped, no explicit `user_id` filter needed) mounted in both `NotificationCenter` (bell, global) and `AlertsView` (standalone `/alerts` page, which hides the header). The localStorage dismissal layer (`getDismissedAlerts`/`addDismissedAlert`/`cleanupDismissedAlerts` in `useHubPersistence.ts`) was deleted — dismissal is server state only now.
+
+AlertsView adds: filter chips (All / System / Scheduled / Unread, from the registry's `class`), Today/Yesterday/Earlier collapsible date sections with a global expand/collapse (`groupItemsByDate()` — generic, shared with `FeedView`), and `group_key` repeat-collapsing with a `×N` badge (`dedupeByGroupKey()`). Card actions render from `getQuickActions()` — the same registry-driven action set as the drawer.
+
+`FeedView` (transactions-only feed) got the same date-grouping/collapse treatment, reusing `groupItemsByDate()`.
+
+**Bug fixed in the same pass:** `/api/notifications/actions` (POST/PATCH — powers every quick-action button: Done/Snooze/Confirm/Dismiss) was writing to columns that don't exist on `notifications` (`dismissed_at`, `action_taken_at`, `read_at`, `snooze_count` — the real columns are `is_dismissed`, `action_completed_at`, `is_read`, no snooze counter). Every quick-action click was silently failing. Fixed to use the real column names.
+
+## Critical Alert Gate *(added 2026-07-10)*
+
+**Component:** `src/components/notifications/CriticalAlertGate.tsx`, mounted in `src/app/layout.tsx` behind `{user && ...}`. Full-screen opaque takeover (Hard Rule 15, `z-[9999]`) shown on app open/focus regain when unacted notifications exist with `registry[type].takeoverEligible === true` (currently `item_due`, `item_overdue`, `bill_overdue`, `budget_exceeded`) and `priority` is `high`/`urgent`. This is the third "catch my attention" layer alongside push (`requireInteraction: true`) and Google Calendar's native alarms — a guaranteed catch on every app open even if the push was missed/delayed/offline.
+
+"Later" hides the gate for the current session only (component state, not persisted) — it reappears on next app open if still unacted. Every action shows an Undo toast (Hard Rule 1); Undo PATCHes `/api/notifications/in-app` with `{is_dismissed:false, is_read:false, action_completed:false, snoozed_until:null}`. This required widening that route's PATCH handler: `action_completed` was previously truthy-only (`if (action_completed) {...}`), so there was no way to *clear* `action_completed_at` — now `action_completed !== undefined` lets a client explicitly pass `false` to un-complete.
+
+## Google Calendar One-Way Backup Sync *(added 2026-07-10)*
+
+**Scope fence:** app → Google only, one-way, never reads Google back. System alerts never sync — only `class: "scheduled"` items (Reminders/Events with a due/start time). This supersedes an earlier "ICS-first" note elsewhere in the vault (see `Functional Architecture Review`) — the user explicitly chose the Calendar API over ICS because ICS subscriptions in Google Calendar only refresh every 8–24h, which defeats the "accurate backup timing even if cronjob.com is delayed" goal.
+
+**Files:**
+- `src/lib/gcal/client.ts` — OAuth2 client factory, consent URL, token exchange, per-user authenticated Calendar API client (mirrors `pushSender.ts`'s pattern of accepting a Supabase client from the caller rather than constructing its own).
+- `src/lib/gcal/sync.ts` — `syncItemToGoogleCalendar(supabase, itemId)` (insert/patch, RRULE passthrough via the existing `buildFullRRuleString` — no new recurrence engine per recurrence-safety) and `deleteItemFromGoogleCalendar(supabase, itemId)`. Both are best-effort: every failure is caught internally and recorded on `google_calendar_connections.sync_error`, never thrown into the caller's mutation.
+- `src/app/api/gcal/connect`, `/callback`, `/connection` (GET status / PATCH toggle / DELETE disconnect) — OAuth flow + settings surface (`GoogleCalendarSettings.tsx` in Settings → Notifications tab).
+- `src/app/api/cron/gcal-reconcile` — daily, Bearer `CRON_SECRET`. Two passes per connected user: re-push every currently-eligible item (heals drift), then delete Google events for items that are no longer eligible but still have a stale `google_event_id`.
+
+**DB:** new `google_calendar_connections` table (per-user `refresh_token`, dedicated `google_calendar_id` created on first connect, `sync_enabled`, `last_synced_at`, `sync_error`). Reuses the pre-existing (previously orphaned — no code referenced it) `items.google_event_id` column as the item↔event mapping instead of a new join table; added `items.google_synced_at` for reconcile bookkeeping. Migration: `migrations/2026-07-10_google-calendar-sync.sql`.
+
+**Sync trigger points:** `POST /api/items` (create), `PATCH /api/items/[id]` (update), `DELETE /api/items/[id]` (archive/soft-delete → removes the Google event), `POST /api/items/[id]/complete` non-recurring branch (completion makes the item ineligible → the sync call self-deletes the event). All calls are `await`ed (not fire-and-forget) because Vercel serverless functions can terminate immediately after the response — but errors never propagate since the sync functions swallow them internally.
+
+**Not yet built (documented, not implemented):** requires the user to create a Google Cloud OAuth client and set `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REDIRECT_URI` (see `docs/ENV.md`) before `/api/gcal/connect` will do anything but 503. Without those env vars the whole feature is a safe no-op — nothing else in the app is affected. End-to-end sync (OAuth consent → event appears in Google → native alarm fires) has not been live-tested.

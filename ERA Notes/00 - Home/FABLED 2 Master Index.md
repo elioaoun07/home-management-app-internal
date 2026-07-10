@@ -20,15 +20,15 @@ Scores are each folder's self-assessed **Overall maturity** (0–2 absent · 3�
 
 | Campaign | Overall | Index |
 |---|---|---|
+| Notifications & Alerts | **5.8** *(2026-07-10)* | [Notifications & Alerts/FABLED 2](<../10 - Project Management/Notifications & Alerts/FABLED 2/_index.md>) |
 | Budget | **5.4** | [Budget/FABLED 2](<../10 - Project Management/Budget/FABLED 2/_index.md>) |
 | Schedule | **5.3** | [Schedule/FABLED 2](<../10 - Project Management/Schedule/FABLED 2/_index.md>) |
-| Notifications & Alerts | **4.6** | [Notifications & Alerts/FABLED 2](<../10 - Project Management/Notifications & Alerts/FABLED 2/_index.md>) |
 | Hub & ERA | **4.0** | [Hub & ERA/FABLED 2](<../10 - Project Management/Hub & ERA/FABLED 2/_index.md>) |
 | Kitchen | **3.0** | [Kitchen/FABLED 2](<../10 - Project Management/Kitchen/FABLED 2/_index.md>) |
 | Trips | **2.8** | [Trips/FABLED 2](<../10 - Project Management/Trips/FABLED 2/_index.md>) |
 | PM system itself | **5.8** | [10 - Project Management/FABLED 2](<../10 - Project Management/FABLED 2/_index.md>) |
 
-The shape to notice: the **money core is the strongest and the junction-heavy clusters (Hub & ERA, Trips) are the weakest** — exactly inverted from where the product's identity (proactive assistant, cross-module cascades) needs strength.
+The shape to notice: **Notifications & Alerts moved from weakest-but-one to tied-strongest this session** (registry + unified alerts page + a real bug fix + two new capabilities) — the rest of the ranking still shows the money core strong and the junction-heavy clusters (Hub & ERA, Trips) weakest, exactly inverted from where the product's identity (proactive assistant, cross-module cascades) needs strength.
 
 ## Vault sections (the knowledge system, by folder)
 

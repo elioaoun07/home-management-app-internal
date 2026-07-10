@@ -2,6 +2,7 @@
 // API route for creating items (reminders, events, tasks)
 // Used by offline sync engine for replay
 
+import { syncItemToGoogleCalendar } from "@/lib/gcal/sync";
 import { supabaseServer } from "@/lib/supabase/server";
 import { buildFullRRuleString } from "@/lib/utils/date";
 import { NextRequest, NextResponse } from "next/server";
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
 
     if (itemError) {
       console.error("[items/route] Failed to create item:", itemError);
-      if ((itemError as any).code === "23505") {
+      if (itemError.code === "23505") {
         return NextResponse.json(
           { error: "Item already exists" },
           { status: 409 },
@@ -280,6 +281,11 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+
+    // Best-effort Google Calendar backup sync — awaited so it completes
+    // before the serverless function exits, but any failure is swallowed
+    // inside syncItemToGoogleCalendar and never blocks item creation.
+    await syncItemToGoogleCalendar(supabase, item.id);
 
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {

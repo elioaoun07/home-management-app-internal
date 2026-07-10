@@ -2,13 +2,31 @@
  * Unified Notifications Hooks
  * Provides hooks for fetching and managing notifications (both in-app and push)
  */
+"use client";
+
 import type {
   InAppNotification,
   Notification,
   NotificationType,
 } from "@/app/api/notifications/in-app/route";
 import type { NotificationPreference } from "@/app/api/notifications/preferences/route";
+import {
+  getActionRoute,
+  getNotificationClass,
+  getQuickActions,
+  isCalendarSyncEligible,
+  isTakeoverEligible,
+  renderNotificationIcon,
+  type NotificationClass,
+  type QuickAction,
+  type QuickActionId,
+} from "@/lib/notifications/registry";
+import { useSplitBillModal } from "@/contexts/SplitBillContext";
+import { useTab } from "@/contexts/TabContext";
+import { supabaseBrowser } from "@/lib/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 // Query keys
 export const notificationKeys = {
@@ -119,6 +137,97 @@ export function useUnreadNotificationCount() {
     refetchInterval: 30000, // Poll every 30 seconds
     refetchOnWindowFocus: true,
   });
+}
+
+// Realtime: invalidate notification queries the instant a row changes,
+// instead of waiting for the next poll interval. RLS on `notifications`
+// scopes delivery to the current user, so no explicit user_id filter is
+// needed on the subscription. Mount once per surface that needs instant
+// updates (the bell in NotificationCenter, and the /alerts page).
+export function useNotificationsRealtime() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabaseBrowser()
+      .channel("notifications-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: notificationKeys.list() });
+          queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabaseBrowser().removeChannel(channel);
+    };
+  }, [queryClient]);
+}
+
+// Shared tap-to-navigate resolution: split-bill modal interception, then
+// getActionRoute()'s tab-deep-link parsing. Used by the /alerts page; the
+// bell drawer (NotificationModal.tsx) keeps its own copy for now since it
+// has extra animation-timing constraints around when navigation is allowed
+// to fire (documented in that file's header comment).
+export function useNotificationNavigation() {
+  const router = useRouter();
+  const { setActiveTab } = useTab();
+  const { openSplitBillModal } = useSplitBillModal();
+
+  return (notification: Notification, onBeforeNavigate?: () => void): boolean => {
+    if (
+      notification.notification_type === "transaction_pending" &&
+      notification.action_data
+    ) {
+      const splitData = notification.action_data as {
+        transaction_id?: string;
+        owner_amount?: number;
+        owner_description?: string;
+        category_name?: string;
+      };
+      if (splitData.transaction_id) {
+        onBeforeNavigate?.();
+        openSplitBillModal({
+          transaction_id: splitData.transaction_id,
+          owner_amount: splitData.owner_amount || 0,
+          owner_description: splitData.owner_description || "",
+          category_name: splitData.category_name || "Expense",
+        });
+        return true;
+      }
+    }
+
+    const route = getActionRoute(notification);
+    if (!route) return false;
+
+    onBeforeNavigate?.();
+    try {
+      const url = new URL(route, window.location.origin);
+      const tab = url.searchParams.get("tab");
+      const action = url.searchParams.get("action");
+
+      if (tab === "dashboard") setActiveTab("dashboard");
+      else if (tab === "reminder") setActiveTab("reminder");
+      else if (tab === "hub") router.push("/alerts");
+      else if (route === "/expense" || action === "add-expense")
+        setActiveTab("expense");
+      else if (action === "split-bill") setActiveTab("expense");
+      else if (
+        route.startsWith("/chat") ||
+        route.startsWith("/recurring") ||
+        route.startsWith("/reminders") ||
+        route.startsWith("/focus") ||
+        route.startsWith("/catalogue")
+      )
+        router.push(route);
+      else router.push(route);
+    } catch {
+      router.push(route);
+    }
+    return true;
+  };
 }
 
 // Mark notification as read
@@ -470,87 +579,20 @@ export function getActionButtonText(
   }
 }
 
-// Valid page routes in the app (not tab-based navigation)
-const VALID_PAGE_ROUTES = [
-  "/dashboard",
-  "/expense",
-  "/recurring",
-  "/settings",
-  "/quick-expense",
-  "/chat",
-  "/reminders",
-  "/focus",
-  "/catalogue",
-  "/recipe",
-];
-
-// Helper to get action route
-export function getActionRoute(notification: Notification): string | null {
-  // First check action_url (new unified field)
-  if (notification.action_url) {
-    // Validate the action_url - only allow known valid page routes
-    // Invalid routes like /transactions/[id], /items/[id], /reminders/[id], /hub?...
-    // should fall through to type-based routing
-    const url = notification.action_url;
-
-    // Check if it's a valid page route
-    if (
-      VALID_PAGE_ROUTES.some(
-        (route) => url === route || url.startsWith(route + "/"),
-      )
-    ) {
-      return url;
-    }
-
-    // Also allow tab-based routes with query params (e.g., /expense?action=split-bill)
-    if (url.startsWith("/expense?") || url.startsWith("/dashboard?")) {
-      return url;
-    }
-
-    // Invalid action_url - fall through to type-based routing
-  }
-
-  // Fallback to action_data.route for backward compatibility (with same validation)
-  if (notification.action_data?.route) {
-    const route = notification.action_data.route as string;
-    if (
-      VALID_PAGE_ROUTES.some((r) => route === r || route.startsWith(r + "/"))
-    ) {
-      return route;
-    }
-  }
-
-  // Map notification types to routes
-  switch (notification.notification_type) {
-    case "daily_items_summary":
-      return "/reminders"; // Standalone page
-    case "daily_reminder":
-    case "transaction_pending":
-      return "/expense"; // Tab: expense
-    case "budget_warning":
-    case "budget_exceeded":
-      return "/expense?tab=dashboard"; // Tab: dashboard (via deep link)
-    case "bill_due":
-    case "bill_overdue":
-      return "/recurring"; // Standalone page
-    case "item_reminder":
-    case "item_due":
-    case "item_overdue":
-      return "/expense?tab=reminder"; // Tab: reminder (via deep link)
-    case "goal_milestone":
-    case "goal_completed":
-      return "/expense?tab=hub"; // Tab: hub (via deep link)
-    case "chat_message":
-    case "chat_mention": {
-      // If thread_id is available, go to standalone chat with thread
-      const threadId = (notification.action_data as Record<string, unknown>)
-        ?.thread_id;
-      return threadId ? `/chat?thread=${threadId}` : "/chat";
-    }
-    default:
-      return null;
-  }
-}
+// Route/action/icon resolution now lives in src/lib/notifications/registry.ts
+// (the single source of truth per notification_type — see that file's
+// header comment). Re-exported here so existing call sites don't churn.
+export {
+  getActionRoute,
+  getNotificationClass,
+  getQuickActions,
+  isCalendarSyncEligible,
+  isTakeoverEligible,
+  renderNotificationIcon,
+  type NotificationClass,
+  type QuickAction,
+  type QuickActionId,
+};
 
 // Helper to get priority color
 export function getPriorityColor(priority: string): string {
@@ -581,108 +623,6 @@ export function getPriorityBorderColor(priority: string): string {
       return "border-gray-500/30";
     default:
       return "border-white/10";
-  }
-}
-
-// ============================================
-// QUICK ACTIONS
-// ============================================
-// Multi-action quick buttons shown inline on each notification (in-app modal)
-// and mirroring the Android push notification action buttons.
-
-export type QuickActionId =
-  | "open" // primary navigation to the notification target
-  | "log_transaction" // open expense form / recurring log
-  | "complete_task" // mark item complete (item_reminder)
-  | "confirm" // "already done" — clears notification, no nav
-  | "snooze_15m"
-  | "snooze_1h"
-  | "snooze_tomorrow"
-  | "dismiss"
-  | "view_budget"
-  | "open_split_bill"
-  | "reply"; // open chat thread
-
-export type QuickAction = {
-  id: QuickActionId;
-  label: string;
-  icon: "send" | "check" | "clock" | "x" | "eye" | "wallet" | "split" | "reply";
-  variant: "primary" | "success" | "neutral" | "muted";
-  /** When true, mark the notification action_completed after running. */
-  closesNotification?: boolean;
-};
-
-/**
- * Return 1–3 contextual quick actions for a notification.
- * Order: [primary, secondary, tertiary]. Primary is the most useful action.
- */
-export function getQuickActions(notification: Notification): QuickAction[] {
-  const t = notification.notification_type;
-
-  switch (t) {
-    case "daily_items_summary":
-      return [
-        { id: "open", label: "Open", icon: "eye", variant: "primary" },
-        { id: "dismiss", label: "Dismiss", icon: "x", variant: "muted", closesNotification: true },
-      ];
-
-    case "daily_reminder":
-      return [
-        { id: "log_transaction", label: "Log Now", icon: "send", variant: "primary" },
-        { id: "confirm", label: "Already Done", icon: "check", variant: "success", closesNotification: true },
-        { id: "snooze_1h", label: "Later", icon: "clock", variant: "muted", closesNotification: true },
-      ];
-
-    case "bill_due":
-    case "bill_overdue":
-      return [
-        { id: "log_transaction", label: "Log Now", icon: "wallet", variant: "primary" },
-        { id: "confirm", label: "Already Paid", icon: "check", variant: "success", closesNotification: true },
-        { id: "snooze_1h", label: "Later", icon: "clock", variant: "muted", closesNotification: true },
-      ];
-
-    case "item_reminder":
-    case "item_due":
-    case "item_overdue":
-      return [
-        { id: "complete_task", label: "Done", icon: "check", variant: "success", closesNotification: true },
-        { id: "snooze_15m", label: "Snooze 15m", icon: "clock", variant: "neutral", closesNotification: true },
-        { id: "open", label: "Open", icon: "eye", variant: "muted" },
-      ];
-
-    case "transaction_pending":
-      return [
-        { id: "open_split_bill", label: "Add Amount", icon: "split", variant: "primary" },
-        { id: "dismiss", label: "Dismiss", icon: "x", variant: "muted", closesNotification: true },
-      ];
-
-    case "chat_message":
-    case "chat_mention":
-      return [
-        { id: "reply", label: "Reply", icon: "reply", variant: "primary" },
-        { id: "confirm", label: "Mark Read", icon: "eye", variant: "muted", closesNotification: true },
-      ];
-
-    case "budget_warning":
-    case "budget_exceeded":
-      return [
-        { id: "view_budget", label: "View Budget", icon: "wallet", variant: "primary" },
-        { id: "dismiss", label: "Got It", icon: "check", variant: "muted", closesNotification: true },
-      ];
-
-    case "goal_milestone":
-    case "goal_completed":
-      return [
-        { id: "open", label: "View", icon: "eye", variant: "primary" },
-        { id: "dismiss", label: "Dismiss", icon: "x", variant: "muted", closesNotification: true },
-      ];
-
-    default:
-      // Generic fallback — at minimum always offer "Open" + "Dismiss"
-      return [
-        { id: "open", label: "Open", icon: "eye", variant: "primary" },
-        { id: "dismiss", label: "Dismiss", icon: "x", variant: "muted", closesNotification: true },
-      ];
   }
 }
 

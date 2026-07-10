@@ -79,13 +79,23 @@ Two viable implementations (decide in [3 · Action Plan](<3 - Action Plan.md>) P
 - Unify the visual language with the drawer so one notification reads consistently across both surfaces.
 - Keep the rich, action-first transaction-reminder card, but tighten its copy.
 
-> ✅ **Decision 4 — Alerts page is the detailed-but-skimmable lane.** Card hierarchy + grouping + filters, sharing one design language with the drawer.
+> ✅ **Decision 4 — Alerts page is the detailed-but-skimmable lane.** Card hierarchy + grouping + filters, sharing one design language with the drawer. *(IMPLEMENTED 2026-07-10 — unified onto the bell's data source, realtime, date-grouped + `group_key`-deduped, filter chips, shared icon vocabulary via the registry. The filter taxonomy that shipped is System/Scheduled/Unread, not the originally-sketched Budget/Reminders/Household — the user found per-type filters confusing and defined a simpler two-type split instead; see the new taxonomy decision below.)*
 
 ### Cluster 5 — Hygiene & system polish
 
 - ✅ **Decision 5 — Strip `console.*` from the notification crons** as part of any touch (Hard Rule #22).
 - 💭 **Direction — Quiet hours / DND + per-type mute** surfaced in Preferences (Could-tier; see the MoSCoW backlog below).
 - 💭 **Direction — Bulk actions** (snooze-all, clear-category) once grouping exists.
+
+### Cluster 6 — Alert taxonomy, reliability backup, and full-screen catch-all *(added 2026-07-10)*
+
+User contract (2026-07-10): notifications are missed/delayed/messy; wants (a) a two-type taxonomy so filtering and future automatic type-handling stay simple, (b) a Google Calendar backup channel for reliable timing even if `cronjob.com` is delayed or the device is offline, (c) a full-screen view guaranteed to catch attention on app open.
+
+> ✅ **Decision 6 — Two-type taxonomy: System alerts vs Scheduled notifications.** System = app-generated prompts (log-transaction nudges, overdue summaries, budget/bill/goal alerts, chat, future proactive alerts) — never syncs to Google Calendar. Scheduled = fired from a user-created Reminder/Event (`item_reminder`/`item_due`/`item_overdue`) — the only class eligible for the calendar sync. Encoded as `NotificationClass` in the new registry (`src/lib/notifications/registry.tsx`), not as a DB column — derived per-type. **This is the alerts-page filter taxonomy, superseding the Budget/Reminders/Household sketch in Decision 4/S2.**
+
+> ✅ **Decision 7 — Google Calendar API, one-way, parallel to the existing system.** App → Google only; Google is never read back (no 2-way sync — this is also the M1 scope fence elsewhere in the vault, but that note assumed an ICS feed; the user explicitly chose the **Calendar API over ICS** here because Google only refreshes ICS subscriptions every 8–24h, which fails the "accurate even if delayed/offline" goal a live API push+native-alarm gives). System alerts never sync — see Decision 6. *(IMPLEMENTED 2026-07-10 — code-complete, not live-tested; needs `GOOGLE_CLIENT_ID`/`SECRET`/`REDIRECT_URI`.)*
+
+> ✅ **Decision 8 — Full-screen critical-alert takeover as a third "catch my attention" layer**, alongside push (`requireInteraction`) and Google Calendar's native alarms. Only for `takeoverEligible` types (registry-defined: `item_due`, `item_overdue`, `bill_overdue`, `budget_exceeded`) at high/urgent priority. Session-scoped "Later" dismissal, not permanent. *(IMPLEMENTED 2026-07-10 — `CriticalAlertGate.tsx`.)*
 
 ---
 
@@ -137,11 +147,11 @@ Two viable implementations (decide in [3 · Action Plan](<3 - Action Plan.md>) P
 
 | # | Item | Pain | Principle |
 |---|---|---|---|
-| S1 | **Group notifications** by `group_key`/type in the drawer and page ("3 reminders", expand on tap). | [C3](<1 - Feature State.md>)/[C5](<1 - Feature State.md>) | #5 Group to reduce volume |
-| S2 | **Filter segments** on the alerts page (All / Budget / Reminders / Household). | [C4](<1 - Feature State.md>) | #2 One job per surface |
+| S1 | **Group notifications** by `group_key`/type. ✅ IMPLEMENTED 2026-07-10 on the alerts page (drawer still ungrouped). | [C3](<1 - Feature State.md>)/[C5](<1 - Feature State.md>) | #5 Group to reduce volume |
+| S2 | **Filter segments** on the alerts page. ✅ IMPLEMENTED 2026-07-10 as All/System/Scheduled/Unread (Decision 6). | [C4](<1 - Feature State.md>) | #2 One job per surface |
 | S3 | **Empty / "all caught up" states** for drawer + page. | [C3](<1 - Feature State.md>)/[C4](<1 - Feature State.md>) | #10 Clear empty states |
-| S4 | **Strip `console.*`** from the notification crons (Hard Rule #22). | [C5](<1 - Feature State.md>) | hygiene |
-| S5 | **Unify the visual language** across drawer + alerts page (one icon vocabulary + severity treatment). | [C4](<1 - Feature State.md>) | #8 One visual language |
+| S4 | **Strip `console.*`** from the notification crons (Hard Rule #22). Still open — 2026-07-10 stripped it from `/api/notifications/in-app` and `/api/notifications/actions` instead. | [C5](<1 - Feature State.md>) | hygiene |
+| S5 | **Unify the visual language** across drawer + alerts page. ✅ IMPLEMENTED 2026-07-10 via the shared registry icon renderer. | [C4](<1 - Feature State.md>) | #8 One visual language |
 | S6 | **Audit Undo on dismiss/snooze** (Hard Rule #1) across both surfaces. | [C5](<1 - Feature State.md>) | #3 Reversible |
 
 ### 🟡 Could *(nice, after the core)*
@@ -176,3 +186,4 @@ Two viable implementations (decide in [3 · Action Plan](<3 - Action Plan.md>) P
 ## Implemented decisions log
 
 - ✅ **Drawer open animation — IMPLEMENTED 2026-06-19:** `NotificationModal.tsx` no longer delays cached drawer content until `onAnimationComplete`. The drawer keeps one Framer slide-in motion; skeleton rows are reserved for actual `isLoading` states.
+- ✅ **Notification Registry, alerts-page unification, critical-alert gate, Google Calendar sync — IMPLEMENTED 2026-07-10:** Decisions 4 (partial), 6, 7, 8. Full detail in [FABLED 2 index](<FABLED 2/_index.md>) delta section and the [Notifications module doc](<../../03 - Junction Modules/Notifications/Notifications.md>).

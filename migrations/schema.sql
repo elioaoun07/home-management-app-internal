@@ -440,6 +440,7 @@ CREATE TABLE public.items (
   location_context text CHECK (location_context IS NULL OR (location_context = ANY (ARRAY['home'::text, 'outside'::text, 'anywhere'::text]))),
   location_text text,
   is_chore boolean NOT NULL DEFAULT false,
+  google_synced_at timestamp with time zone,
   CONSTRAINT items_pkey PRIMARY KEY (id),
   CONSTRAINT items_source_catalogue_item_fkey FOREIGN KEY (source_catalogue_item_id) REFERENCES public.catalogue_items(id),
   CONSTRAINT items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
@@ -570,6 +571,20 @@ CREATE TABLE public.push_subscriptions (
   failed_at timestamp with time zone,
   CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id),
   CONSTRAINT push_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.google_calendar_connections (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  refresh_token text NOT NULL,
+  google_calendar_id text NOT NULL,
+  sync_enabled boolean NOT NULL DEFAULT true,
+  last_synced_at timestamp with time zone,
+  sync_error text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT google_calendar_connections_pkey PRIMARY KEY (id),
+  CONSTRAINT google_calendar_connections_user_id_key UNIQUE (user_id),
+  CONSTRAINT google_calendar_connections_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.item_occurrence_actions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
