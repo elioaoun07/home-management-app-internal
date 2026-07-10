@@ -6,6 +6,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { HubChatThread, HubMessage } from "@/features/hub/hooks";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useOfflinePendingStore } from "@/lib/stores/offlinePendingStore";
+import { qk } from "@/lib/queryKeys";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { MealPlanWithRecipe } from "@/types/recipe";
@@ -113,7 +114,6 @@ interface ShoppingItem {
   shoppingGroupId: string | null;
   assignedTo: string | null;
   sortOrder: number | null;
-  hasChat: boolean;
 }
 
 interface ItemGroup {
@@ -710,7 +710,50 @@ export function ShoppingListView({
 
   // ── Item chat ──
   const [chatItem, setChatItem] = useState<{ id: string; content: string } | null>(null);
-  const [itemsWithChat, setItemsWithChat] = useState<Set<string>>(new Set());
+  const [unreadItemChatIds, setUnreadItemChatIds] = useState<Set<string>>(
+    new Set(),
+  );
+
+  useEffect(() => {
+    setUnreadItemChatIds(
+      new Set(
+        messages
+          .filter((message) => (message.unread_reply_count || 0) > 0)
+          .map((message) => message.id),
+      ),
+    );
+  }, [messages]);
+
+  const handleItemChatRead = useCallback(
+    (itemId: string) => {
+      setUnreadItemChatIds((prev) => {
+        if (!prev.has(itemId)) return prev;
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+      queryClient.setQueryData(
+        qk.hubMessages(threadId),
+        (
+          old:
+            | { messages: HubMessage[]; [key: string]: unknown }
+            | undefined,
+        ) => {
+          if (!old) return old;
+          return {
+            ...old,
+            messages: old.messages.map((message) =>
+              message.id === itemId
+                ? { ...message, unread_reply_count: 0 }
+                : message,
+            ),
+          };
+        },
+      );
+      queryClient.invalidateQueries({ queryKey: qk.hubThreads() });
+    },
+    [queryClient, threadId],
+  );
 
   // ── Partner presence + typing (Point 12) ──
   const [partnerOnline, setPartnerOnline] = useState(false);
@@ -762,7 +805,10 @@ export function ShoppingListView({
     staleTime: 30 * 1000,
   });
 
-  const rawShoppingGroups = shoppingGroupsData?.groups || [];
+  const rawShoppingGroups = useMemo(
+    () => shoppingGroupsData?.groups || [],
+    [shoppingGroupsData?.groups],
+  );
 
   // Apply local group order override
   const shoppingGroups = useMemo(() => {
@@ -879,9 +925,16 @@ export function ShoppingListView({
           filter: `thread_id=eq.${threadId}`,
         },
         (payload) => {
-          const msg = payload.new as { parent_item_id?: string | null };
-          if (msg.parent_item_id) {
-            setItemsWithChat((prev) => {
+          const msg = payload.new as {
+            parent_item_id?: string | null;
+            sender_user_id?: string;
+          };
+          if (
+            msg.parent_item_id &&
+            msg.sender_user_id !== currentUserId &&
+            msg.parent_item_id !== chatItem?.id
+          ) {
+            setUnreadItemChatIds((prev) => {
               if (prev.has(msg.parent_item_id!)) return prev;
               const next = new Set(prev);
               next.add(msg.parent_item_id!);
@@ -894,7 +947,7 @@ export function ShoppingListView({
     return () => {
       supabaseBrowser().removeChannel(channel);
     };
-  }, [threadId]);
+  }, [chatItem?.id, currentUserId, threadId]);
 
   // ── Parse messages into shopping items ──
   const items: ShoppingItem[] = messages
@@ -924,8 +977,6 @@ export function ShoppingListView({
       sortOrder:
         ((msg as Record<string, unknown>).item_sort_order as number | null) ??
         null,
-      hasChat:
-        (((msg as Record<string, unknown>).reply_count as number) ?? 0) > 0,
     }))
     .sort((a, b) => {
       if (a.checked !== b.checked) return a.checked ? 1 : -1;
@@ -1609,7 +1660,7 @@ export function ShoppingListView({
     } else {
       parsedItems = lines
         .map((l) => {
-          let cleaned = l
+          const cleaned = l
             .replace(/^[-•*●○■□▪▫★☆✓✗◆◇→⇒]\s*/, "")
             .replace(/^\d+[.)]\s*/, "")
             .replace(/^[a-zA-Z][.)]\s*/, "")
@@ -2144,14 +2195,17 @@ export function ShoppingListView({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!selectionMode) setChatItem({ id: item.id, content: item.content });
+                    if (!selectionMode) {
+                      handleItemChatRead(item.id);
+                      setChatItem({ id: item.id, content: item.content });
+                    }
                   }}
                   className="text-white text-sm break-words flex-1 min-w-0 pt-0.5 text-left relative group/chat"
                   title="Open item chat"
                 >
                   {item.content}
                   {/* Chat badge dot */}
-                  {(item.hasChat || itemsWithChat.has(item.id)) && (
+                  {unreadItemChatIds.has(item.id) && (
                     <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyan-400 ring-1 ring-bg-custom" />
                   )}
                 </button>
@@ -3167,13 +3221,7 @@ export function ShoppingListView({
           threadColor={thread?.color}
           currentUserId={currentUserId}
           onClose={() => setChatItem(null)}
-          onFirstMessage={(itemId) =>
-            setItemsWithChat((prev) => {
-              const next = new Set(prev);
-              next.add(itemId);
-              return next;
-            })
-          }
+          onRead={handleItemChatRead}
         />
       )}
     </div>

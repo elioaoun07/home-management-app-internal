@@ -6,7 +6,7 @@ import { safeFetch } from "@/lib/safeFetch";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { Camera, ChevronLeft, Send } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 
 // ── SVG quick-reply icons ──────────────────────────────
@@ -49,7 +49,7 @@ interface ItemChatSheetProps {
   threadColor?: string;
   currentUserId: string;
   onClose: () => void;
-  onFirstMessage?: (itemId: string) => void;
+  onRead?: (itemId: string) => void;
 }
 
 export function ItemChatSheet({
@@ -58,7 +58,7 @@ export function ItemChatSheet({
   threadColor,
   currentUserId,
   onClose,
-  onFirstMessage,
+  onRead,
 }: ItemChatSheetProps) {
   const { theme } = useTheme();
   const myTheme = theme === "pink" ? "pink" : "blue";
@@ -67,26 +67,26 @@ export function ItemChatSheet({
   const [inputText, setInputText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [firstMessageNotified, setFirstMessageNotified] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const initialFetchDone = useRef(false);
 
   // ── Fetch sub-messages ────────────────────────────────
-  async function fetchMessages() {
+  const fetchMessages = useCallback(async () => {
     const res = await fetch(
-      `/api/hub/messages?thread_id=${threadId}&parent_item_id=${item.id}&mark_read=false`,
+      `/api/hub/messages?thread_id=${threadId}&parent_item_id=${item.id}`,
     );
     if (!res.ok) return;
     const data = await res.json();
     setMessages(data.messages || []);
-  }
+    onRead?.(item.id);
+  }, [item.id, onRead, threadId]);
 
   useEffect(() => {
     fetchMessages();
     initialFetchDone.current = true;
-  }, [item.id, threadId]);
+  }, [fetchMessages]);
 
   // ── Scroll to bottom ──────────────────────────────────
   useEffect(() => {
@@ -111,6 +111,15 @@ export function ItemChatSheet({
             if (prev.some((m) => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
+
+          if (newMsg.sender_user_id !== currentUserId) {
+            void safeFetch("/api/hub/mark-read", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ message_id: newMsg.id }),
+            });
+            onRead?.(item.id);
+          }
         },
       )
       .subscribe();
@@ -118,7 +127,7 @@ export function ItemChatSheet({
     return () => {
       supabaseBrowser().removeChannel(channel);
     };
-  }, [item.id]);
+  }, [currentUserId, item.id, onRead]);
 
   // ── Send message ─────────────────────────────────────
   async function sendMessage(content: string, photoUrl?: string) {
@@ -141,12 +150,6 @@ export function ItemChatSheet({
       if (!res.ok) return;
 
       setInputText("");
-
-      // Notify parent that this item now has a chat (for badge)
-      if (!firstMessageNotified) {
-        setFirstMessageNotified(true);
-        onFirstMessage?.(item.id);
-      }
 
       await fetchMessages();
     } finally {

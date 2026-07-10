@@ -123,3 +123,10 @@ Private chats are **truly private**:
 ---
 
 **Perfect for keeping surprise gifts secret or maintaining personal notes within your household budget app!** 🎁🔒
+
+## Notification Privacy *(implemented 2026-07-10)*
+
+- Messages in a private thread never generate a partner push notification.
+- The immediate message-delivery path and the delayed `chat-notifications` cron fallback both enforce `is_private = false` before notifying the partner.
+- Messages in any public thread purpose are eligible for partner notification; delivery is no longer limited to Budget and Reminder threads.
+- Direct message reads also reject a private thread unless the current user created it.

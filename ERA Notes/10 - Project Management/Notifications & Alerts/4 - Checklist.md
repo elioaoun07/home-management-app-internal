@@ -97,3 +97,4 @@ tags:
 
 - [x] **2026-06-19 — Drawer open animation:** removed the `contentReady` / `onAnimationComplete` entrance gate from `NotificationModal.tsx`, so opening is one drawer slide and cached content renders immediately.
 - [x] **2026-07-10 — Notification Registry + alerts page unification + critical-alert gate + Google Calendar sync:** see Phase 5 (5.1, 5.2, 5.5) and Phase 6 above. Full detail in [FABLED 2 index](<FABLED 2/_index.md>) delta section.
+- [x] **2026-07-10 — Hub chat visibility delivery:** private threads never notify the partner; all public thread purposes do; shopping-item replies now carry receipt-backed unread state.

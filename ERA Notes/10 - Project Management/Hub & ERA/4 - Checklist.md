@@ -46,3 +46,8 @@ tags:
 - [ ] **D2** Voice degrades gracefully with no Azure connection, and the setup is documented.
 - [ ] **D3** ERA's briefing reads at least one of Schedule/Budget proactively (visibly smarter than reactive-only).
 - [ ] **D4** [1 · Feature State](<1 - Feature State.md>) updated to drop the "no tests" / "fragile" notes this work closes.
+
+## ✅ Completed fixes log
+
+- [x] **2026-07-10 — H1:** enforce private/public notification boundaries in immediate and fallback Hub delivery. _(🔴 privacy · S)_
+- [x] **2026-07-10 — H2:** make shopping-item dots receipt-backed unread markers that clear on open and reappear for the next partner reply. _(🟠 friction · M)_

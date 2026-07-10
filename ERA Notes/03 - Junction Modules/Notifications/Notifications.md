@@ -175,3 +175,12 @@ AlertsView adds: filter chips (All / System / Scheduled / Unread, from the regis
 **Client-inside-sync gotcha:** the caller's Supabase client is only the **access gate** (the initial item fetch). All bookkeeping inside `sync.ts` runs on `supabaseAdmin()` — `google_calendar_connections` has no user UPDATE policy (user-context writes to `last_synced_at`/`sync_error` silently no-op under RLS), and the connection row may belong to the *responsible* user (partner), which the caller's RLS can't read.
 
 **Setup + verification state (2026-07-10):** requires a Google Cloud OAuth client and `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REDIRECT_URI` (see `docs/ENV.md` and `docs/GOOGLE-CALENDAR-SETUP.md`); without them the feature is a safe no-op (`/api/gcal/connect` → 503). The OAuth scope is the single granular `calendar.app.created` — `calendar.events` + `calendar.calendarlist` do NOT cover `calendars.insert` and fail with "insufficient authentication scopes". While the consent screen is in Testing status, Google expires refresh tokens after **7 days** — publish to Production (no verification needed for this non-sensitive scope) before relying on it. Live-verified on localhost: connect → ERA calendar created → event insert/patch/delete + DB bookkeeping all confirmed against the real Google account. Still unverified: native alarm firing on the phone, and the reconcile cron (needs the external scheduler).
+
+## Hub Chat Delivery Policy *(implemented 2026-07-10)*
+
+Hub messages use an immediate web-push path in `POST /api/hub/messages` plus `/api/cron/chat-notifications` as the delayed fallback for unread receipts. Both paths now share these semantics:
+
+- Private thread (`is_private = true`) → never notify the partner.
+- Public thread → notify the partner for every thread purpose, including shopping-item replies.
+- If the partner has already read the receipt, immediate push is skipped.
+- Shopping-item child messages participate in `hub_message_receipts`, allowing the item-level unread dot and the thread unread total to clear durably across devices.

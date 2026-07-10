@@ -49,3 +49,9 @@ tags:
 3. **Write the delivery-policy skeleton** — quiet hours + daily push budget; now doubly relevant since the critical-alert gate and Google Calendar sync both add delivery volume. ([file 4 · E1](<4 - FABLED 2 — Future Enhancements.md>)).
 
 **Sibling deep-dives:** [Budget](<../../Budget/FABLED 2/_index.md>) · [Schedule](<../../Schedule/FABLED 2/_index.md>) · [Kitchen](<../../Kitchen/FABLED 2/_index.md>) · [Hub & ERA](<../../Hub & ERA/FABLED 2/_index.md>) · [Trips](<../../Trips/FABLED 2/_index.md>) · [PM system](<../../FABLED 2/_index.md>)
+
+## Delivery-correctness delta — 2026-07-10
+
+- Immediate Hub push now enforces the same private-thread exclusion as the chat-notification cron, closing the owner-only visibility leak.
+- The previous Budget/Reminder purpose allowlist was removed from both paths; all public purposes are eligible, including shopping-item replies.
+- Shopping child-message receipts now provide durable unread/read state across the list dot, item chat, and thread unread total.

@@ -1,11 +1,33 @@
 import { supabaseServer } from "@/lib/supabase/server";
+import {
+  countUnreadItemReplies,
+  shouldNotifyPartner,
+} from "@/features/hub/chatNotificationPolicy";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { sendPushToUser } from "@/lib/pushSender";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
 type HubMessageActionRow = Record<string, unknown>;
+
+const sendMessageSchema = z.object({
+  content: z.string().trim().min(1).max(10_000),
+  thread_id: z.string().min(1),
+  topic_id: z.string().min(1).optional(),
+  item_quantity: z.string().max(120).optional(),
+  shopping_group_id: z.string().min(1).optional(),
+  parent_item_id: z.string().min(1).optional(),
+  item_chat_photo_url: z.string().url().optional(),
+});
+
+const messageQuerySchema = z.object({
+  thread_id: z.string().min(1),
+  parent_item_id: z.string().min(1).optional(),
+  mark_read: z.enum(["true", "false"]).optional(),
+  include_archived: z.enum(["true", "false"]).optional(),
+});
 
 type VerifiedMessageRow = {
   sender_user_id: string;
@@ -39,23 +61,35 @@ export async function GET(request: NextRequest) {
 
   // Get thread_id from query params
   const { searchParams } = new URL(request.url);
-  const threadId = searchParams.get("thread_id");
-  const parentItemId = searchParams.get("parent_item_id");
-  const markAsRead = searchParams.get("mark_read") !== "false"; // default true
-  const includeArchived = searchParams.get("include_archived") === "true"; // default false
-
-  if (!threadId) {
-    return NextResponse.json({ error: "thread_id required" }, { status: 400 });
+  const parsedQuery = messageQuerySchema.safeParse({
+    thread_id: searchParams.get("thread_id") || undefined,
+    parent_item_id: searchParams.get("parent_item_id") || undefined,
+    mark_read: searchParams.get("mark_read") || undefined,
+    include_archived: searchParams.get("include_archived") || undefined,
+  });
+  if (!parsedQuery.success) {
+    return NextResponse.json(
+      { error: parsedQuery.error.flatten() },
+      { status: 400 },
+    );
   }
+  const {
+    thread_id: threadId,
+    parent_item_id: parentItemId,
+    mark_read: markRead,
+    include_archived: includeArchivedParam,
+  } = parsedQuery.data;
+  const markAsRead = markRead !== "false"; // default true
+  const includeArchived = includeArchivedParam === "true"; // default false
 
   // Verify user has access to this thread's household
   const { data: thread } = await supabase
     .from("hub_chat_threads")
-    .select("id, household_id, purpose")
+    .select("id, household_id, purpose, is_private, created_by")
     .eq("id", threadId)
     .maybeSingle();
 
-  if (!thread) {
+  if (!thread || (thread.is_private && thread.created_by !== user.id)) {
     return NextResponse.json({ error: "Thread not found" }, { status: 404 });
   }
 
@@ -77,7 +111,8 @@ export async function GET(request: NextRequest) {
       ? household.partner_user_id
       : household.owner_user_id;
 
-  // ── Item chat sub-messages (short-circuit — no archive logic, no receipts) ──
+  // Item chat sub-messages short-circuit the main archive/action flow, but
+  // still use durable per-user receipts for unread state.
   if (parentItemId) {
     const { data: subMessages, error: subError } = await supabase
       .from("hub_messages")
@@ -90,12 +125,91 @@ export async function GET(request: NextRequest) {
     if (subError) {
       return NextResponse.json({ error: subError.message }, { status: 500 });
     }
+
+    const itemMessages = subMessages || [];
+    const otherUserMessageIds = itemMessages
+      .filter((msg) => msg.sender_user_id !== user.id)
+      .map((msg) => msg.id);
+    const receiptStatusByMessage: Record<string, string> = {};
+
+    if (otherUserMessageIds.length > 0) {
+      const { data: receipts, error: receiptsError } = await supabase
+        .from("hub_message_receipts")
+        .select("message_id, status")
+        .eq("user_id", user.id)
+        .in("message_id", otherUserMessageIds);
+
+      if (receiptsError) {
+        return NextResponse.json(
+          { error: receiptsError.message },
+          { status: 500 },
+        );
+      }
+
+      for (const receipt of receipts || []) {
+        receiptStatusByMessage[receipt.message_id] = receipt.status;
+      }
+    }
+
+    const unreadMessageIds = otherUserMessageIds.filter(
+      (messageId) => receiptStatusByMessage[messageId] !== "read",
+    );
+
+    if (markAsRead && unreadMessageIds.length > 0) {
+      const readAt = new Date().toISOString();
+      const newReceiptIds = unreadMessageIds.filter(
+        (messageId) => !receiptStatusByMessage[messageId],
+      );
+      const existingReceiptIds = unreadMessageIds.filter((messageId) =>
+        Boolean(receiptStatusByMessage[messageId]),
+      );
+
+      if (newReceiptIds.length > 0) {
+        const { error: insertError } = await supabase
+          .from("hub_message_receipts")
+          .insert(
+            newReceiptIds.map((messageId) => ({
+              message_id: messageId,
+              user_id: user.id,
+              status: "read",
+              read_at: readAt,
+            })),
+          );
+        if (insertError) {
+          return NextResponse.json(
+            { error: insertError.message },
+            { status: 500 },
+          );
+        }
+      }
+
+      if (existingReceiptIds.length > 0) {
+        const { error: updateError } = await supabase
+          .from("hub_message_receipts")
+          .update({ status: "read", read_at: readAt })
+          .eq("user_id", user.id)
+          .in("message_id", existingReceiptIds);
+        if (updateError) {
+          return NextResponse.json(
+            { error: updateError.message },
+            { status: 500 },
+          );
+        }
+      }
+    }
+
     return NextResponse.json({
-      messages: (subMessages || []).map((msg) => ({
+      messages: itemMessages.map((msg) => ({
         ...msg,
         is_hidden_by_me: false,
+        is_unread:
+          msg.sender_user_id !== user.id &&
+          receiptStatusByMessage[msg.id] !== "read" &&
+          !markAsRead,
       })),
       current_user_id: user.id,
+      unread_count: markAsRead ? 0 : unreadMessageIds.length,
+      marked_as_read_ids: markAsRead ? unreadMessageIds : [],
     });
   }
 
@@ -234,15 +348,7 @@ export async function GET(request: NextRequest) {
           })
           .in("id", idsToArchive)
           .is("archived_at", null) // guard against double-archive
-          .then(({ error: archiveError }) => {
-            if (archiveError) {
-              console.error("[Auto-archive] Error:", archiveError);
-            } else {
-              console.log(
-                `[Auto-archive] Archived ${idsToArchive.length} ${thread.purpose} messages`,
-              );
-            }
-          });
+          .then(() => undefined);
 
         // Remove newly-archived messages from this response
         const archiveSet = new Set(idsToArchive);
@@ -389,26 +495,50 @@ export async function GET(request: NextRequest) {
   });
 
   // ── Reply counts for shopping threads ──
-  // Attach reply_count to each message so the shopping list can show chat badges.
+  // Attach total and unread reply counts so the shopping list dot means
+  // "new partner replies", not merely "this item has a chat history".
   let finalMessages: typeof transformedMessages = transformedMessages;
   if (thread.purpose === "shopping" && transformedMessages.length > 0) {
     const messageIds = transformedMessages.map((m) => m.id);
-    const { data: replyCounts } = await supabase
+    const { data: replies } = await supabase
       .from("hub_messages")
-      .select("parent_item_id")
+      .select("id, parent_item_id, sender_user_id")
       .in("parent_item_id", messageIds)
       .is("deleted_at", null);
 
     const replyCountMap: Record<string, number> = {};
-    for (const r of replyCounts || []) {
+    for (const r of replies || []) {
       if (r.parent_item_id) {
         replyCountMap[r.parent_item_id] =
           (replyCountMap[r.parent_item_id] || 0) + 1;
       }
     }
+
+    const partnerReplyIds = (replies || [])
+      .filter((reply) => reply.sender_user_id !== user.id)
+      .map((reply) => reply.id);
+    const readReplyIds = new Set<string>();
+    if (partnerReplyIds.length > 0) {
+      const { data: replyReceipts } = await supabase
+        .from("hub_message_receipts")
+        .select("message_id")
+        .eq("user_id", user.id)
+        .eq("status", "read")
+        .in("message_id", partnerReplyIds);
+      for (const receipt of replyReceipts || []) {
+        readReplyIds.add(receipt.message_id);
+      }
+    }
+    const unreadReplyCountMap = countUnreadItemReplies(
+      replies || [],
+      readReplyIds,
+      user.id,
+    );
+
     finalMessages = transformedMessages.map((m) => ({
       ...m,
       reply_count: replyCountMap[m.id] || 0,
+      unread_reply_count: unreadReplyCountMap[m.id] || 0,
     }));
   }
 
@@ -435,7 +565,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json();
+  const parsed = sendMessageSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
   const {
     content,
     thread_id,
@@ -444,27 +580,16 @@ export async function POST(request: NextRequest) {
     shopping_group_id,
     parent_item_id,
     item_chat_photo_url,
-  } = body;
-
-  if (!content?.trim()) {
-    return NextResponse.json(
-      { error: "Message content required" },
-      { status: 400 },
-    );
-  }
-
-  if (!thread_id) {
-    return NextResponse.json({ error: "Thread ID required" }, { status: 400 });
-  }
+  } = parsed.data;
 
   // Get thread and verify access (include title and purpose for notification filtering)
   const { data: thread } = await supabase
     .from("hub_chat_threads")
-    .select("id, household_id, title, purpose")
+    .select("id, household_id, title, purpose, is_private, created_by")
     .eq("id", thread_id)
     .maybeSingle();
 
-  if (!thread) {
+  if (!thread || (thread.is_private && thread.created_by !== user.id)) {
     return NextResponse.json({ error: "Thread not found" }, { status: 404 });
   }
 
@@ -533,12 +658,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Only send push notifications for budget and reminder threads
-  const shouldSendPush =
-    thread?.purpose === "budget" || thread?.purpose === "reminder";
+  // Public threads notify the partner; private threads never leave the owner.
+  const shouldSendPush = shouldNotifyPartner(thread.is_private);
 
   // The database trigger (create_message_receipts) auto-creates the receipt
-  // with push_status='pending' for budget/reminder threads.
+  // with push_status='pending'.
   // We fetch the receipt to check if user already read it (WhatsApp-style behavior).
   let receiptId: string | null = null;
   let receiptStatus: string | null = null;
@@ -560,17 +684,7 @@ export async function POST(request: NextRequest) {
   // WhatsApp-style: Skip push if user already read the message (they're in the chat)
   const userAlreadyRead = receiptStatus === "read";
 
-  // Debug logging
-  console.log("[Chat Push] Debug:", {
-    shouldSendPush,
-    partnerUserId,
-    receiptId,
-    receiptStatus,
-    userAlreadyRead,
-    threadPurpose: thread?.purpose,
-  });
-
-  // Send immediate push notification to partner (only for budget/reminder threads)
+  // Send immediate push notification to the partner for public threads.
   // Skip if user already read the message (WhatsApp-style: they're in the chat)
   if (shouldSendPush && partnerUserId && !userAlreadyRead) {
     try {
@@ -594,6 +708,7 @@ export async function POST(request: NextRequest) {
           type: "chat_message",
           thread_id,
           message_id: message.id,
+          parent_item_id: parent_item_id || null,
           url: `/chat?thread=${thread_id}`,
         },
       });
@@ -615,7 +730,6 @@ export async function POST(request: NextRequest) {
           .eq("id", receiptId);
       }
     } catch (pushError) {
-      console.error("[Chat] Error sending push notification:", pushError);
       // Update receipt with error
       if (receiptId) {
         await supabase
@@ -639,7 +753,6 @@ export async function POST(request: NextRequest) {
         push_error: null,
       })
       .eq("id", receiptId);
-    console.log("[Chat Push] Skipped - user already read message (in chat)");
   } else if (shouldSendPush && receiptId) {
     // VAPID keys not configured - mark as failed
     await supabase
@@ -709,7 +822,6 @@ export async function DELETE(request: NextRequest) {
       .select("id, thread_id");
 
     if (deleteError) {
-      console.error("Delete error:", deleteError);
       return NextResponse.json(
         { error: "Failed to delete messages" },
         { status: 500 },
@@ -727,8 +839,7 @@ export async function DELETE(request: NextRequest) {
       success: true,
       deletedCount: deletedMessages.length,
     });
-  } catch (error) {
-    console.error("DELETE /api/hub/messages error:", error);
+  } catch {
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
@@ -988,7 +1099,6 @@ export async function PATCH(request: NextRequest) {
 
           const { content } = body;
           if (typeof content !== "string") {
-            console.error("Invalid content type:", typeof content, content);
             return NextResponse.json(
               { error: "content must be a string" },
               { status: 400 },
@@ -1017,13 +1127,6 @@ export async function PATCH(request: NextRequest) {
             );
           }
 
-          console.log(
-            "Updating message:",
-            message_id,
-            "with content:",
-            content,
-          );
-
           // Update content only (don't include edited_at as column may not exist)
           const { error: updateError } = await supabase
             .from("hub_messages")
@@ -1031,11 +1134,6 @@ export async function PATCH(request: NextRequest) {
             .eq("id", message_id);
 
           if (updateError) {
-            console.error("Update message error:", {
-              error: updateError,
-              message_id,
-              content_length: content.length,
-            });
             return NextResponse.json(
               {
                 error: "Failed to update message",
@@ -1045,7 +1143,6 @@ export async function PATCH(request: NextRequest) {
             );
           }
 
-          console.log("Message updated successfully:", message_id);
           return NextResponse.json({
             success: true,
             message_id,

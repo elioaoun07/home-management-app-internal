@@ -182,3 +182,4 @@ Do **not** duplicate file-path tables here — they drift. The authoritative cod
 ## Implemented fixes log
 
 - ✅ **2026-06-19 — Notification drawer open animation:** fixed the two-step open caused by `NotificationModal.tsx` gating cached content behind `contentReady` + `onAnimationComplete`. The drawer now has one slide-in motion; skeleton rows appear only for real `isLoading` states.
+- ✅ **2026-07-10 — Hub chat visibility delivery:** immediate and fallback delivery now exclude private threads and cover every public purpose, including shopping-item replies. Child-message receipts clear the item dot and thread unread count when opened.

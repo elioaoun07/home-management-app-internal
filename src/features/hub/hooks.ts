@@ -117,6 +117,7 @@ export type HubMessage = {
   parent_item_id?: string | null; // If set, this is a sub-message for a shopping item
   item_chat_photo_url?: string | null; // Photo URL for item chat messages
   reply_count?: number; // Computed: number of sub-messages for this item
+  unread_reply_count?: number; // Computed: unread partner replies for this item
 };
 
 export type HubFeedItem = {
@@ -290,7 +291,7 @@ export function useHubMessages(threadId: string | null) {
       const data = await res.json();
       return data as {
         messages: HubMessage[];
-        message_actions: any[]; // Actions included in response - no separate API call needed
+        message_actions: Record<string, unknown>[]; // Included in response - no separate API call needed
         thread_id: string;
         household_id: string;
         current_user_id: string;

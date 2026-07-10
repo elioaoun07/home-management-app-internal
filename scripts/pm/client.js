@@ -48,6 +48,8 @@
     pencil:
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
     trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+    undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
     file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
     folderplus:
       '<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v6M9 14h6"/>',
@@ -1517,6 +1519,390 @@
     return out;
   }
 
+  // ---------- Next Up layer ----------
+  // Answers "what do I work on next?" per module. The Checklist file (file 4)
+  // is the queue of record; ordering = section rank (Now → Next → Later →
+  // other → Definition of Done) then document order. "Postpone" is VIEW-STATE
+  // ONLY: stored in localStorage keyed by task text, the markdown file is never
+  // touched, and it survives dashboard regeneration (falls off if the task
+  // text itself is edited, which is the desired behavior).
+  var POSTPONE_KEY = "pm-dash-postponed";
+  function loadPostponed() {
+    try {
+      return JSON.parse(localStorage.getItem(POSTPONE_KEY) || "{}");
+    } catch (e) {
+      return {};
+    }
+  }
+  function setPostponed(key, on) {
+    try {
+      var m = loadPostponed();
+      if (on) m[key] = Date.now();
+      else delete m[key];
+      localStorage.setItem(POSTPONE_KEY, JSON.stringify(m));
+    } catch (e) {}
+  }
+  function taskKey(relPath, text) {
+    return (
+      relPath +
+      "::" +
+      String(text || "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 140)
+    );
+  }
+
+  var TASK_SEV_CLASS = {
+    blocker: "red",
+    friction: "orange",
+    annoyance: "yellow",
+    parked: "gray",
+  };
+  // Pull the "**N4** … _(annoyance - S)_" conventions out of a checklist line.
+  function parseTaskMeta(rest) {
+    var id = null,
+      sev = null,
+      effort = null;
+    var im = rest.match(/^\*\*([^*]{1,8})\*\*\s+/);
+    if (im && /^[A-Za-z]{1,3}\d+[A-Za-z]?$/.test(im[1].trim())) {
+      id = im[1].trim();
+      rest = rest.slice(im[0].length);
+    }
+    var tm = rest.match(/_\(([^()]{1,40})\)_\s*$/);
+    if (tm) {
+      var parts = tm[1].split(/\s*[-–—]\s*/);
+      var s = (parts[0] || "").trim().toLowerCase();
+      if (TASK_SEV_CLASS[s]) {
+        sev = s;
+        effort = (parts[1] || "").trim() || null;
+        rest = rest.slice(0, rest.length - tm[0].length);
+      }
+    }
+    return { id: id, sev: sev, effort: effort, text: cleanInlineText(rest) };
+  }
+  function sectionRank(heading) {
+    if (/definition of done/i.test(heading)) return 4;
+    if (/^now\b/i.test(heading)) return 0;
+    if (/^next\b/i.test(heading)) return 1;
+    if (/^later\b/i.test(heading)) return 2;
+    return 3;
+  }
+  // Every checkbox in a file with section context + parsed meta. cbidx stays
+  // ordinal-identical to scanCheckboxes so toggles hit the right line.
+  function fileTasks(f) {
+    var lines = f.raw.split("\n");
+    var start = 0;
+    if (/^---\s*$/.test(lines[0] || "")) {
+      for (var j = 1; j < lines.length; j++) {
+        if (/^---\s*$/.test(lines[j])) {
+          start = j + 1;
+          break;
+        }
+      }
+    }
+    var pp = loadPostponed();
+    var out = [],
+      inFence = false,
+      heading = "";
+    for (var i = start; i < lines.length; i++) {
+      var line = lines[i];
+      if (/^\s*(```|~~~)/.test(line)) {
+        inFence = !inFence;
+        continue;
+      }
+      if (inFence) continue;
+      var h = line.match(/^(#{1,6})\s+(.*)$/);
+      if (h) {
+        heading = cleanInlineText(h[2]);
+        continue;
+      }
+      var m = line.match(/^(\s*)(?:[-*]|\d+\.)\s+\[([ xX])\]\s*(.*)$/);
+      if (!m) continue;
+      var meta = parseTaskMeta(m[3]);
+      var key = taskKey(f.relPath, cleanInlineText(m[3]));
+      out.push({
+        file: f,
+        cbidx: out.length,
+        state: /x/i.test(m[2]) ? "done" : "open",
+        indent: m[1].length,
+        heading: heading,
+        rank: sectionRank(heading),
+        id: meta.id,
+        sev: meta.sev,
+        effort: meta.effort,
+        text: meta.text,
+        key: key,
+        postponed: !!pp[key],
+        docIdx: out.length,
+      });
+    }
+    return out;
+  }
+  function isChecklistFile(f) {
+    return /checklist/i.test(f.baseName);
+  }
+  function inFabledLayer(f) {
+    return f.segs.some(function (s) {
+      return /^FABLED/i.test(s);
+    });
+  }
+  function buildQueue(pool) {
+    var open = [],
+      postponed = [];
+    pool.forEach(function (f) {
+      fileTasks(f).forEach(function (t) {
+        if (t.state !== "open") return;
+        (t.postponed ? postponed : open).push(t);
+      });
+    });
+    function cmp(a, b) {
+      return a.rank - b.rank || a.file.order - b.file.order || a.docIdx - b.docIdx;
+    }
+    open.sort(cmp);
+    postponed.sort(cmp);
+    return {
+      next: open[0] || null,
+      upcoming: open.slice(1),
+      open: open,
+      postponed: postponed,
+      elsewhereOpen: 0,
+    };
+  }
+  function moduleQueue(name) {
+    var mod = files.filter(function (f) {
+      return f.module === name && !inFabledLayer(f);
+    });
+    var clFiles = mod.filter(isChecklistFile);
+    var q = buildQueue(clFiles.length ? clFiles : mod);
+    if (clFiles.length) {
+      mod.forEach(function (f) {
+        if (isChecklistFile(f)) return;
+        fileTasks(f).forEach(function (t) {
+          if (t.state === "open") q.elsewhereOpen++;
+        });
+      });
+    }
+    return q;
+  }
+
+  function nextUpHTML(q, isModule) {
+    var ppMap = loadPostponed();
+    var html = '<div class="next-up">';
+    html +=
+      '<div class="nu-head">' +
+      icon("checklist", "icon-checklist") +
+      " Next up" +
+      '<span class="count">' +
+      q.open.length +
+      " in queue" +
+      (q.postponed.length ? " · " + q.postponed.length + " postponed" : "") +
+      "</span></div>";
+    var t = q.next;
+    if (!t) {
+      html +=
+        '<p class="empty-note">' +
+        (q.postponed.length
+          ? "Nothing active — everything left is postponed."
+          : "Queue clear. Nothing open.") +
+        "</p>";
+    } else {
+      html +=
+        '<div class="nu-task">' +
+        '<span class="cb nu-cb" role="checkbox" tabindex="0" aria-checked="false" data-file="' +
+        attrEscape(t.file.relPath) +
+        '" data-cbidx="' +
+        t.cbidx +
+        '"></span>' +
+        '<div class="nu-main"><div class="nu-text">' +
+        (t.id ? '<span class="chip chip-id">' + escapeHtml(t.id) + "</span> " : "") +
+        escapeHtml(t.text || "(untitled)") +
+        "</div>" +
+        '<div class="nu-meta">' +
+        escapeHtml(t.heading || t.file.title) +
+        (t.sev
+          ? ' <span class="chip chip-sev ' +
+            TASK_SEV_CLASS[t.sev] +
+            '">' +
+            t.sev +
+            "</span>"
+          : "") +
+        (t.effort
+          ? ' <span class="chip chip-effort">effort ' +
+            escapeHtml(t.effort) +
+            "</span>"
+          : "") +
+        "</div></div></div>";
+      html +=
+        '<div class="nu-actions">' +
+        (CAN_EDIT
+          ? '<button class="nu-btn primary" data-nu-done data-file="' +
+            attrEscape(t.file.relPath) +
+            '" data-cbidx="' +
+            t.cbidx +
+            '">' +
+            icon("check") +
+            " Done</button>"
+          : "") +
+        '<button class="nu-btn" data-postpone-key="' +
+        attrEscape(t.key) +
+        '">' +
+        icon("clock") +
+        " Postpone</button>" +
+        (isModule
+          ? '<button class="nu-btn" data-nav-file="' +
+            attrEscape(t.file.relPath) +
+            '">Open checklist ' +
+            icon("arrow") +
+            "</button>"
+          : "") +
+        "</div>";
+    }
+    if (isModule && q.upcoming.length) {
+      html += '<div class="nu-upnext-h">Then</div>';
+      q.upcoming.slice(0, 4).forEach(function (u) {
+        html +=
+          '<div class="upnext-row">' +
+          '<span class="cb donow-cb" role="checkbox" tabindex="0" data-file="' +
+          attrEscape(u.file.relPath) +
+          '" data-cbidx="' +
+          u.cbidx +
+          '"></span>' +
+          '<div class="un-main" data-nav-file="' +
+          attrEscape(u.file.relPath) +
+          '">' +
+          (u.id ? '<span class="chip chip-id">' + escapeHtml(u.id) + "</span> " : "") +
+          escapeHtml(u.text || "(untitled)") +
+          '<span class="un-meta">' +
+          escapeHtml(u.heading || "") +
+          "</span></div>" +
+          '<button class="row-pp-btn" data-postpone-key="' +
+          attrEscape(u.key) +
+          '" title="Postpone">' +
+          icon("clock") +
+          "</button></div>";
+      });
+      if (q.upcoming.length > 4)
+        html +=
+          '<div class="un-more"' +
+          (t ? ' data-nav-file="' + attrEscape(t.file.relPath) + '"' : "") +
+          ">+" +
+          (q.upcoming.length - 4) +
+          " more in queue</div>";
+    }
+    if (isModule && q.postponed.length) {
+      html +=
+        '<span class="toggle-resolved" data-toggle="nu-pp">Postponed (' +
+        q.postponed.length +
+        ")</span>" +
+        '<div class="resolved-block" id="nu-pp">';
+      q.postponed.forEach(function (p) {
+        var ts = ppMap[p.key];
+        var days = ts ? Math.max(0, Math.round((Date.now() - ts) / 86400000)) : 0;
+        html +=
+          '<div class="upnext-row postponed">' +
+          '<div class="un-main" data-nav-file="' +
+          attrEscape(p.file.relPath) +
+          '">' +
+          (p.id ? '<span class="chip chip-id">' + escapeHtml(p.id) + "</span> " : "") +
+          escapeHtml(p.text || "(untitled)") +
+          '<span class="un-meta">postponed ' +
+          (days ? days + "d ago" : "today") +
+          "</span></div>" +
+          '<button class="row-pp-btn" data-restore-key="' +
+          attrEscape(p.key) +
+          '" title="Bring back into the queue">' +
+          icon("undo") +
+          "</button></div>";
+      });
+      html += "</div>";
+    }
+    if (q.elsewhereOpen) {
+      html +=
+        '<div class="nu-elsewhere">' +
+        icon("alert", "icon-alert") +
+        " " +
+        q.elsewhereOpen +
+        " more open checkbox" +
+        (q.elsewhereOpen > 1 ? "es" : "") +
+        " live in this module's other docs — the Checklist file is the queue of record.</div>";
+    }
+    html += "</div>";
+    return html;
+  }
+
+  var CL_VIEW_KEY = "pm-dash-cl-view";
+  function clView() {
+    try {
+      return localStorage.getItem(CL_VIEW_KEY) || "app";
+    } catch (e) {
+      return "app";
+    }
+  }
+  function setClView(v) {
+    try {
+      localStorage.setItem(CL_VIEW_KEY, v);
+    } catch (e) {}
+  }
+  function viewToggleHTML(active) {
+    return (
+      '<div class="pm-seg view-seg">' +
+      '<button type="button" data-viewmode="app" class="' +
+      (active === "app" ? "active" : "") +
+      '">Checklist</button>' +
+      '<button type="button" data-viewmode="doc" class="' +
+      (active === "doc" ? "active" : "") +
+      '">Document</button></div>'
+    );
+  }
+
+  function wireTaskActions() {
+    function wire(sel, fn) {
+      Array.prototype.forEach.call(els.view.querySelectorAll(sel), fn);
+    }
+    wire("[data-postpone-key]", function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        setPostponed(b.getAttribute("data-postpone-key"), true);
+        toast("Postponed — file untouched, hidden from your queue");
+        renderCurrent();
+      });
+    });
+    wire("[data-restore-key]", function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        setPostponed(b.getAttribute("data-restore-key"), false);
+        toast("Back in the queue", "success");
+        renderCurrent();
+      });
+    });
+    wire("[data-viewmode]", function (b) {
+      b.addEventListener("click", function () {
+        setClView(b.getAttribute("data-viewmode"));
+        renderCurrent();
+      });
+    });
+    wire("[data-nu-done]", function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        doToggle(
+          b.getAttribute("data-file"),
+          parseInt(b.getAttribute("data-cbidx"), 10),
+          b,
+        );
+      });
+    });
+    wire("[data-expand]", function (d) {
+      d.addEventListener("click", function () {
+        var tx = d.querySelector(".tr-text");
+        if (tx) tx.classList.toggle("clamp");
+      });
+    });
+  }
+
   function renderHome() {
     setBreadcrumb([{ label: "Home", go: goHome }]);
     var clAll = sumChecklist(files),
@@ -1580,15 +1966,18 @@
 
     // Do Now
     var todo = [];
+    var ppMap = loadPostponed();
     files.forEach(function (f) {
       if (!f.module || f.inFabled) return;
       actionableInFile(f).forEach(function (t) {
+        var key = taskKey(f.relPath, t.text);
+        if (ppMap[key]) return;
         var rank = /\bnow\b/i.test(t.heading)
           ? 0
           : /\bnext\b/i.test(t.heading)
             ? 1
             : 2;
-        if (rank < 2) todo.push({ t: t, rank: rank });
+        if (rank < 2) todo.push({ t: t, rank: rank, key: key });
       });
     });
     todo.sort(function (a, b) {
@@ -1625,7 +2014,12 @@
         "</span>" +
         "<span>" +
         escapeHtml(o.rank === 0 ? "Now" : "Next") +
-        "</span></div></div></div>";
+        "</span></div></div>" +
+        '<button class="row-pp-btn" data-postpone-key="' +
+        attrEscape(o.key) +
+        '" title="Postpone (view-only, file unchanged)">' +
+        icon("clock") +
+        "</button></div>";
     });
     html += "</div>";
 
@@ -1825,6 +2219,7 @@
       qa.addEventListener("click", function () {
         openQuickAdd();
       });
+    wireTaskActions();
   }
 
   function renderModule(name) {
@@ -1859,6 +2254,7 @@
 
     var html =
       '<div class="pagehead"><h1>' + modIcon(name) + " " + name + "</h1></div>";
+    html += nextUpHTML(moduleQueue(name), true);
     if (cl.total) {
       var pct = Math.round((cl.done / cl.total) * 100);
       html +=
@@ -1907,14 +2303,16 @@
       });
     }
     els.view.innerHTML = html;
+    wireRollupEvents();
     Array.prototype.forEach.call(
-      els.view.querySelectorAll("[data-go-file]"),
-      function (r) {
-        r.addEventListener("click", function () {
-          goFile(r.getAttribute("data-go-file"));
+      els.view.querySelectorAll("[data-nav-file]"),
+      function (a) {
+        a.addEventListener("click", function () {
+          goFile(a.getAttribute("data-nav-file"));
         });
       },
     );
+    wireTaskActions();
   }
   function fileRowHTML(f) {
     var stats = "";
@@ -1976,9 +2374,20 @@
     });
     setBreadcrumb(parts);
 
+    // Checklist files default to the interactive app view — a genuine
+    // checklist UI over the same markdown (preview-only transformation).
+    if (isChecklistFile(f) && clView() !== "doc") {
+      renderChecklistApp(f);
+      return;
+    }
+
     var rendered = renderMarkdown(f.raw, f);
     var html =
-      '<div class="pagehead"><h1>' + escapeHtml(f.title) + "</h1></div>";
+      '<div class="pagehead"><h1>' +
+      escapeHtml(f.title) +
+      "</h1>" +
+      (isChecklistFile(f) ? viewToggleHTML("doc") : "") +
+      "</div>";
 
     var badges = [];
     if (rendered.meta.status)
@@ -2057,6 +2466,161 @@
         });
       },
     );
+    wireTaskActions();
+  }
+
+  // App-style rendering of a Checklist file: Next Up hero, then sections in
+  // document order with open tasks first and completed collapsed. Pure view —
+  // the markdown file is the unchanged source of truth.
+  function taskRowHTML(t, isNext) {
+    var cls = "task-row " + t.state;
+    if (t.postponed) cls += " postponed";
+    if (isNext) cls += " is-next";
+    var chips = "";
+    if (t.sev)
+      chips +=
+        '<span class="chip chip-sev ' +
+        TASK_SEV_CLASS[t.sev] +
+        '">' +
+        t.sev +
+        "</span>";
+    if (t.effort)
+      chips +=
+        '<span class="chip chip-effort">effort ' +
+        escapeHtml(t.effort) +
+        "</span>";
+    var actions = "";
+    if (t.state === "open") {
+      actions = t.postponed
+        ? '<button class="row-pp-btn" data-restore-key="' +
+          attrEscape(t.key) +
+          '" title="Bring back into the queue">' +
+          icon("undo") +
+          "</button>"
+        : '<button class="row-pp-btn" data-postpone-key="' +
+          attrEscape(t.key) +
+          '" title="Postpone (view-only, file unchanged)">' +
+          icon("clock") +
+          "</button>";
+    }
+    return (
+      '<div class="' +
+      cls +
+      '" style="margin-left:' +
+      Math.min(t.indent * 7, 42) +
+      'px">' +
+      '<span class="cb" role="checkbox" tabindex="0" aria-checked="' +
+      (t.state === "done") +
+      '" data-file="' +
+      attrEscape(t.file.relPath) +
+      '" data-cbidx="' +
+      t.cbidx +
+      '"></span>' +
+      '<div class="tr-main"' + (t.state === "done" ? " data-expand='1'" : "") + ">" +
+      '<div class="tr-text' +
+      (t.state === "done" ? " clamp" : "") +
+      '">' +
+      (isNext ? '<span class="chip chip-next">NEXT</span> ' : "") +
+      (t.id ? '<span class="chip chip-id">' + escapeHtml(t.id) + "</span> " : "") +
+      (t.postponed ? '<span class="chip chip-pp">postponed</span> ' : "") +
+      escapeHtml(t.text || "(untitled)") +
+      "</div>" +
+      (chips ? '<div class="tr-chips">' + chips + "</div>" : "") +
+      "</div>" +
+      actions +
+      "</div>"
+    );
+  }
+  function renderChecklistApp(f) {
+    var tasks = fileTasks(f);
+    var q = buildQueue([f]);
+    var html =
+      '<div class="pagehead"><h1>' +
+      escapeHtml(f.title) +
+      "</h1>" +
+      viewToggleHTML("app") +
+      "</div>";
+    var done = 0;
+    tasks.forEach(function (t) {
+      if (t.state === "done") done++;
+    });
+    if (tasks.length) {
+      var pct = Math.round((done / tasks.length) * 100);
+      html +=
+        '<div class="progress-box">' +
+        done +
+        " / " +
+        tasks.length +
+        " done (" +
+        pct +
+        "%)" +
+        (q.postponed.length ? " · " + q.postponed.length + " postponed" : "") +
+        '<div class="progress-bar"><span style="width:' +
+        pct +
+        '%"></span></div></div>';
+    }
+    html += nextUpHTML(q, false);
+    var sections = [],
+      byH = {};
+    tasks.forEach(function (t) {
+      var h = t.heading || "Tasks";
+      if (!byH[h]) {
+        byH[h] = { heading: h, open: "", done: "", doneN: 0, total: 0 };
+        sections.push(byH[h]);
+      }
+      var sec = byH[h];
+      sec.total++;
+      if (t.state === "done") sec.doneN++;
+      var row = taskRowHTML(
+        t,
+        q.next && t.file === q.next.file && t.cbidx === q.next.cbidx,
+      );
+      if (t.state === "open") sec.open += row;
+      else sec.done += row;
+    });
+    if (!sections.length)
+      html += '<p class="empty-note">No checkboxes in this file.</p>';
+    sections.forEach(function (sec, si) {
+      var pct = sec.total ? Math.round((sec.doneN / sec.total) * 100) : 0;
+      html +=
+        '<div class="cl-section"><div class="cl-sec-head">' +
+        escapeHtml(sec.heading) +
+        '<span class="cl-sec-count">' +
+        sec.doneN +
+        "/" +
+        sec.total +
+        "</span></div>" +
+        '<div class="progress-bar cl-sec-bar"><span style="width:' +
+        pct +
+        '%"></span></div>';
+      html += sec.open || '<p class="empty-note">Section clear.</p>';
+      if (sec.done) {
+        var rid = "clsec-" + si;
+        html +=
+          '<span class="toggle-resolved" data-toggle="' +
+          rid +
+          '">Show ' +
+          sec.doneN +
+          " completed</span>" +
+          '<div class="resolved-block" id="' +
+          rid +
+          '">' +
+          sec.done +
+          "</div>";
+      }
+      html += "</div>";
+    });
+    els.view.innerHTML = html;
+    wireRollupEvents();
+    Array.prototype.forEach.call(
+      els.view.querySelectorAll("[data-nav-file]"),
+      function (a) {
+        a.addEventListener("click", function () {
+          goFile(a.getAttribute("data-nav-file"));
+        });
+      },
+    );
+    wireTaskActions();
   }
 
   function renderChecklistRollup() {

@@ -22,6 +22,10 @@ export const qk = {
   // Draft transactions
   drafts: () => ["drafts"] as const,
 
+  // Hub chat
+  hubThreads: () => ["hub", "threads"] as const,
+  hubMessages: (threadId: string) => ["hub", "messages", threadId] as const,
+
   // NFC tags
   nfcTags: () => ["nfc-tags"] as const,
   nfcTag: (slug: string) => ["nfc-tags", { slug }] as const,

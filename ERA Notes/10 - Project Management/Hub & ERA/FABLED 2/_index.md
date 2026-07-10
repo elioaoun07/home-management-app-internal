@@ -43,3 +43,9 @@ tags:
 3. **Extract the ERA action layer from HubPage** *as* the briefing card's substrate — the decomposition that pays for itself ([file 3 · O2](<3 - FABLED 2 — Optimization Plan.md>)).
 
 **Sibling deep-dives:** [Budget](<../../Budget/FABLED 2/_index.md>) · [Schedule](<../../Schedule/FABLED 2/_index.md>) · [Kitchen](<../../Kitchen/FABLED 2/_index.md>) · [Trips](<../../Trips/FABLED 2/_index.md>) · [Notifications & Alerts](<../../Notifications & Alerts/FABLED 2/_index.md>) · [PM system](<../../FABLED 2/_index.md>)
+
+## Delta — 2026-07-10
+
+- Hub notification delivery now treats visibility as the choke point: private threads are excluded from both immediate push and cron fallback; every public purpose is eligible.
+- Shopping child messages now participate in per-user receipts. `unread_reply_count` drives the item dot, opening the item thread marks replies read, and realtime restores the signal only for a newer partner reply.
+- Evidence: `src/features/hub/chatNotificationPolicy.test.ts`, `npm test -- src/features/hub/chatNotificationPolicy.test.ts`, and `npm run typecheck`.

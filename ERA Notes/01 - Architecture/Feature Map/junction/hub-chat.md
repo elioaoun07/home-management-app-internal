@@ -25,6 +25,7 @@ The Hub is the **top-layer primary interface** for household interactions. Chat 
   - `src/features/hub/hooks.ts`
   - `src/features/hub/messageActions.ts` ← see [./message-actions.md](./message-actions.md)
   - `src/features/hub/itemLinksHooks.ts`
+  - `src/features/hub/chatNotificationPolicy.ts`
   - `src/features/hub/useHubPersistence.ts`
   - `src/features/hub/usePartnerId.ts`
 - **API routes**:

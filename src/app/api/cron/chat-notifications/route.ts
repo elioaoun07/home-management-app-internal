@@ -140,7 +140,6 @@ export async function GET(req: NextRequest) {
 
     // Track receipts to mark as "skipped" (won't need push notifications)
     const privateThreadReceiptIds: string[] = [];
-    const wrongPurposeReceiptIds: string[] = [];
 
     for (const receipt of unreadReceipts) {
       const message = messageMap.get(receipt.message_id);
@@ -155,11 +154,6 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Wrong purpose: mark as skipped (only budget/reminder get push)
-      if (thread.purpose !== "budget" && thread.purpose !== "reminder") {
-        wrongPurposeReceiptIds.push(receipt.id);
-        continue;
-      }
       const userId = receipt.user_id;
       const threadId = message.thread_id;
 
@@ -189,17 +183,6 @@ export async function GET(req: NextRequest) {
           push_sent_at: new Date().toISOString(),
         })
         .in("id", privateThreadReceiptIds);
-    }
-
-    // Mark wrong purpose receipts as "skipped" so they don't get reprocessed
-    if (wrongPurposeReceiptIds.length > 0) {
-      await supabase
-        .from("hub_message_receipts")
-        .update({
-          push_status: "skipped",
-          push_sent_at: new Date().toISOString(),
-        })
-        .in("id", wrongPurposeReceiptIds);
     }
 
     // Early return if nothing to process after cleanup

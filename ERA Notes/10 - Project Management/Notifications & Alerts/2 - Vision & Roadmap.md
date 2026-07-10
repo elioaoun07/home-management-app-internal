@@ -187,3 +187,4 @@ User contract (2026-07-10): notifications are missed/delayed/messy; wants (a) a 
 
 - ✅ **Drawer open animation — IMPLEMENTED 2026-06-19:** `NotificationModal.tsx` no longer delays cached drawer content until `onAnimationComplete`. The drawer keeps one Framer slide-in motion; skeleton rows are reserved for actual `isLoading` states.
 - ✅ **Notification Registry, alerts-page unification, critical-alert gate, Google Calendar sync — IMPLEMENTED 2026-07-10:** Decisions 4 (partial), 6, 7, 8. Full detail in [FABLED 2 index](<FABLED 2/_index.md>) delta section and the [Notifications module doc](<../../03 - Junction Modules/Notifications/Notifications.md>).
+- ✅ **Thread visibility as the chat delivery policy — IMPLEMENTED 2026-07-10:** private means owner-only with no partner notification; public means eligible for partner notification regardless of thread purpose. Shopping-item replies use the same receipt-backed lifecycle.

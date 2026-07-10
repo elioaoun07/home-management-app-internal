@@ -81,3 +81,15 @@ Available purposes for `hub_chat_threads`:
 - Checked state is client-side (localStorage) — clears if user clears browser storage or uses a different device. To share checked state across devices, the state would need to be stored in the DB (not currently implemented).
 - No drag-and-drop reordering (removed for simplicity — items sort by creation time)
 - "Clear all completed" is a planned enhancement, not yet implemented
+
+## Item Chat Notifications and Unread State *(implemented 2026-07-10)*
+
+Shopping items can have child messages through `hub_messages.parent_item_id`. These child messages now use `hub_message_receipts`, just like normal Hub messages:
+
+- A partner reply on a public shopping thread triggers the normal Hub chat notification path.
+- The cyan item dot means **there is an unread reply from the partner**, not merely that the item has chat history.
+- Opening the item chat marks all partner replies for that item as read and clears the dot immediately.
+- Replies sent by the current user do not create an unread dot on their own device.
+- A later partner reply creates the dot again through the shopping-thread realtime subscription.
+
+The parent messages response includes `unread_reply_count` per shopping item. The UI clears that field optimistically in the `["hub", "messages", threadId]` cache and invalidates `["hub", "threads"]` so the thread-level unread total also reconciles.
