@@ -71,6 +71,14 @@ Calls `complete_trip(p_trip_id)` RPC which iterates `trip_side_effects` in rever
 ### `trips`
 Core record. Key constraint: `status IN ('draft','upcoming','active','completed','archived')`, `scope IN ('solo','household')`. `account_id` is null until activation.
 
+### Visibility & access (app-layer — no RLS on trips tables)
+No RLS is enabled on `trips`/`trip_places`/`trip_packing_items`/`trip_side_effects`; access is enforced entirely in the API routes via `getAccessibleTrip()` (`src/lib/tripAccess.ts`), mirroring the `is_public` account pattern (`getAccessibleAccount()` in `src/lib/accountAccess.ts`):
+- **Solo-scope trips are private** — only the creator can see or touch them at all (list, detail, places, packing).
+- **Household-scope trips are visible to the active household partner** — `GET /api/trips` includes them (`scope=household AND user_id=partner`), and `GET /api/trips/[id]` + places/packing routes resolve access via `getAccessibleTrip()` instead of a hard `user_id` filter.
+- **Places & packing are collaborative** on an accessible household trip — both partners can read AND write (add/edit/delete places, check off packing items), regardless of which partner created the row. This matches the account `canWrite` precedent for shared resources.
+- **The trip record itself stays owner-only** for PATCH/DELETE/activate/complete/clone — only the creator can edit trip fields, activate, complete, or delete the trip. The partner's detail view hides the edit pencil and activate/complete buttons (`trip.is_owner === false` in `TripDetail.tsx`).
+- Every trip returned by the API carries a computed `is_owner` boolean (not a DB column) so the client can gate owner-only UI without knowing its own user id.
+
 ### `trip_places`
 Saved hotels/activities/restaurants/etc. `priority IN ('mandatory','flexible','wishlist')`. `scheduled_date` + `scheduled_time` place the item in the day-by-day itinerary. Child of `trips` with `ON DELETE CASCADE`. Denormalized `user_id` for direct RLS policy.
 
@@ -111,6 +119,7 @@ Reversal ledger. One row per side effect fired at activation. `previous_value js
 4. **Templates**: `is_template=true` trips are excluded from the default list (pass `?templates=true` to include). Cloning via `POST /api/trips/[id]/clone` strips dates, resets status to `draft`, and clears `is_packed` on packing items.
 5. **Solo trip reassignment**: `responsible_user_id` is flipped to the partner. If there is no partner (no active `household_links`), the solo path has no schedule side effects — only the account is created.
 6. **`trip_side_effects` ledger**: Only actions created by `activate_trip()` are in the ledger. Manual user changes during the trip are NOT tracked. The blind reversal in `complete_trip()` is intentional for simplicity.
+7. **Visibility is app-layer, not RLS**: don't assume `trips`/`trip_places`/`trip_packing_items` are protected at the DB level — every route must call `getAccessibleTrip()` (or filter to `user_id = auth uid` for owner-only routes). A raw Supabase query without that check is an open read/write on any trip ID.
 
 ## Out of scope (deferred)
 

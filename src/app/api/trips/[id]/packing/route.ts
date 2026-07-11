@@ -1,3 +1,4 @@
+import { getAccessibleTrip } from "@/lib/tripAccess";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -23,11 +24,13 @@ export async function GET(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const access = await getAccessibleTrip(supabase, user.id, id);
+  if (!access) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   const { data, error } = await supabase
     .from("trip_packing_items")
     .select("*")
     .eq("trip_id", id)
-    .eq("user_id", user.id)
     .order("position");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -42,6 +45,9 @@ export async function POST(
   const supabase = await supabaseServer(await cookies());
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const access = await getAccessibleTrip(supabase, user.id, id);
+  if (!access) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json();
   const parsed = packingSchema.safeParse(body);

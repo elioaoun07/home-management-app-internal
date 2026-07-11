@@ -1,3 +1,4 @@
+import { getAccessibleTrip } from "@/lib/tripAccess";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -28,6 +29,9 @@ export async function PATCH(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const access = await getAccessibleTrip(supabase, user.id, id);
+  if (!access) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   const body = await req.json();
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -37,7 +41,6 @@ export async function PATCH(
     .update({ ...parsed.data, updated_at: new Date().toISOString() })
     .eq("id", placeId)
     .eq("trip_id", id)
-    .eq("user_id", user.id)
     .select()
     .single();
 
@@ -54,12 +57,14 @@ export async function DELETE(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const access = await getAccessibleTrip(supabase, user.id, id);
+  if (!access) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   const { error } = await supabase
     .from("trip_places")
     .delete()
     .eq("id", placeId)
-    .eq("trip_id", id)
-    .eq("user_id", user.id);
+    .eq("trip_id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return new NextResponse(null, { status: 204 });

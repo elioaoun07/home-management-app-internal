@@ -53,9 +53,11 @@ export function TripDetail({ tripId }: { tripId: string }) {
               <TripStatusBadge status={trip.status} />
             </div>
           </div>
-          <button onClick={() => setEditOpen(true)} className={cn("p-2 rounded-lg", tc.bgHover, tc.textMuted)}>
-            <Pencil className="w-4 h-4" />
-          </button>
+          {trip.is_owner !== false && (
+            <button onClick={() => setEditOpen(true)} className={cn("p-2 rounded-lg", tc.bgHover, tc.textMuted)}>
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Meta row */}
@@ -79,8 +81,8 @@ export function TripDetail({ tripId }: { tripId: string }) {
           </span>
         </div>
 
-        {/* Action button */}
-        {(trip.status === "draft" || trip.status === "upcoming") && (
+        {/* Action button — activation/completion stays owner-only */}
+        {trip.is_owner !== false && (trip.status === "draft" || trip.status === "upcoming") && (
           <Button
             onClick={() => setActivateOpen(true)}
             className={cn("w-full mt-3 border font-semibold", tc.bgSurface, tc.text, tc.border)}
@@ -88,7 +90,7 @@ export function TripDetail({ tripId }: { tripId: string }) {
             Activate trip
           </Button>
         )}
-        {trip.status === "active" && (
+        {trip.is_owner !== false && trip.status === "active" && (
           <Button
             onClick={() => setCompleteOpen(true)}
             className="w-full mt-3 border font-semibold text-emerald-400 bg-emerald-500/15 border-emerald-400/40"

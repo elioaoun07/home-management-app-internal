@@ -1,3 +1,4 @@
+import { getActiveHouseholdPartnerId } from "@/lib/accountAccess";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -14,27 +15,16 @@ export async function GET(req: NextRequest) {
   const includeTemplates = searchParams.get("templates") === "true";
   const own = searchParams.get("own") === "true";
 
-  let userIds: string[] = [user.id];
-  if (!own) {
-    const { data: link } = await supabase
-      .from("household_links")
-      .select("owner_user_id, partner_user_id")
-      .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
-      .eq("active", true)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const partnerId = link
-      ? link.owner_user_id === user.id ? link.partner_user_id : link.owner_user_id
-      : null;
-    if (partnerId) userIds = [user.id, partnerId];
+  // Partner trips are only visible when scope="household" — solo trips stay private.
+  let query = supabase.from("trips").select("*").neq("status", "archived");
+  if (own) {
+    query = query.eq("user_id", user.id);
+  } else {
+    const partnerId = await getActiveHouseholdPartnerId(supabase, user.id);
+    query = partnerId
+      ? query.or(`user_id.eq.${user.id},and(user_id.eq.${partnerId},scope.eq.household)`)
+      : query.eq("user_id", user.id);
   }
-
-  let query = supabase
-    .from("trips")
-    .select("*")
-    .in("user_id", userIds)
-    .neq("status", "archived");
 
   if (!includeTemplates) {
     query = query.eq("is_template", false);
@@ -43,7 +33,12 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query.order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
+  const withOwnership = (data ?? []).map((trip) => ({
+    ...trip,
+    is_owner: trip.user_id === user.id,
+  }));
+
+  return NextResponse.json(withOwnership, { headers: { "Cache-Control": "no-store" } });
 }
 
 const createSchema = z.object({

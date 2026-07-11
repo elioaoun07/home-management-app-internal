@@ -1,3 +1,4 @@
+import { getAccessibleTrip } from "@/lib/tripAccess";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -14,15 +15,10 @@ export async function GET(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data, error } = await supabase
-    .from("trips")
-    .select("*")
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .single();
+  const access = await getAccessibleTrip(supabase, user.id, id);
+  if (!access) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: error.code === "PGRST116" ? 404 : 500 });
-  return NextResponse.json(data);
+  return NextResponse.json({ ...access.trip, is_owner: access.isOwner });
 }
 
 const patchSchema = z.object({

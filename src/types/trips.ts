@@ -9,6 +9,9 @@ export type TripSideEffectType = "chore_skip" | "event_skip" | "recurrence_pause
 export interface Trip {
   id: string;
   user_id: string;
+  /** Computed server-side: true when the current viewer created this trip. Household-scope
+   * trips are also readable/collaborative for the active partner, who gets is_owner=false. */
+  is_owner?: boolean;
   name: string;
   destination_country_code: string | null;
   destination_name: string | null;

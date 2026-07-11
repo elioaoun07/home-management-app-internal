@@ -3,7 +3,7 @@
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { Trip } from "@/types/trips";
-import { Calendar, Globe, MapPin, Plane } from "lucide-react";
+import { Calendar, Globe, MapPin, Plane, Users } from "lucide-react";
 import { TripStatusBadge } from "./TripStatusBadge";
 
 interface TripCardProps {
@@ -56,7 +56,7 @@ export function TripCard({ trip, onClick, className }: TripCardProps) {
         <TripStatusBadge status={trip.status} className="flex-shrink-0" />
       </div>
 
-      {(dateRange || trip.scope === "solo") && (
+      {(dateRange || trip.scope === "solo" || trip.is_owner === false) && (
         <div className={cn("flex items-center gap-4 mt-3 text-xs", tc.textFaint)}>
           {dateRange && (
             <span className="flex items-center gap-1">
@@ -68,6 +68,12 @@ export function TripCard({ trip, onClick, className }: TripCardProps) {
             <span className="flex items-center gap-1">
               <Globe className="w-3 h-3" />
               Solo
+            </span>
+          )}
+          {trip.is_owner === false && (
+            <span className="flex items-center gap-1">
+              <Users className="w-3 h-3" />
+              Partner's trip
             </span>
           )}
           {trip.currency && trip.currency !== "USD" && (

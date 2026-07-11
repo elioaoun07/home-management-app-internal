@@ -26,6 +26,7 @@ tags:
 - [ ] **N2** Manual end-to-end verify — **solo trip.** Confirm the traveler's items reassign to partner (`responsible_user_id` flip), meal planning is untouched, and completion reverses the reassignment. _(🔴 · S–M)_
 - [ ] **N3** Confirm `recurring_payments` are **NOT** paused during a trip (deliberate rule — bills still due while travelling); guard against a future "pause everything" regression. _(🔴 · S)_
 - [x] **N4** Standalone iOS/PWA home-screen icon for Trips — `trips-icon.svg` + generated PNGs, `manifests/trips.webmanifest` (`start_url`/`scope` = `/trips`), `src/app/trips/layout.tsx` metadata (`apple` touch icon, `appleWebApp`). Same pattern as Chat/Budget. ✅ *(2026-07-11)*
+- [x] **N5** Household-scope trip visibility bug fixed — partner could see a trip card in the list (even for `scope=solo`, a privacy leak) but the detail/places/packing routes 404'd because they hard-filtered `user_id = auth.uid()`. Added `getAccessibleTrip()` (`src/lib/tripAccess.ts`, mirrors `getAccessibleAccount()`'s `is_public` pattern): solo trips now stay fully private; `scope=household` trips are visible + collaboratively read/write (places, packing) to the active partner, while trip-record edit/activate/complete/delete/clone stay owner-only. Client gates the edit pencil + activate/complete buttons on a new computed `is_owner` field. ✅ *(2026-07-11)*
 
 ## ⏭️ Next — Make it legible
 
