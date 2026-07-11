@@ -114,7 +114,9 @@
         segs: segs,
         isRoot: isRoot,
         module: isRoot ? null : segs[0],
-        inFabled: segs.indexOf("FABLED") !== -1,
+        inFabled: segs.some(function (s) {
+          return /^FABLED/i.test(s);
+        }),
         fileName: fname,
         baseName: base,
         isIndex: isIndex,
@@ -2670,7 +2672,9 @@
         .forEach(function (f) {
           f.checklist.forEach(function (c) {
             var row =
-              '<div class="rollup-row" data-go-file="' +
+              '<div class="rollup-row' +
+              (f.inFabled ? " rollup-row--fabled" : "") +
+              '" data-go-file="' +
               f.relPath +
               '">' +
               icon(

@@ -913,6 +913,26 @@ body.pv-open #preview {
 .rollup-row:hover {
   border-color: var(--accent);
 }
+.rollup-row--fabled {
+  border-color: #ffd76a;
+  box-shadow:
+    0 0 0 1px rgba(255, 215, 106, 0.35),
+    0 0 10px rgba(255, 215, 106, 0.25);
+  animation: fabled-glow 2.6s ease-in-out infinite;
+}
+@keyframes fabled-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(255, 215, 106, 0.35),
+      0 0 10px rgba(255, 215, 106, 0.25);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(255, 215, 106, 0.6),
+      0 0 16px rgba(255, 215, 106, 0.45);
+  }
+}
 .rollup-row .rr-src {
   font-size: 11px;
   color: var(--muted-2);

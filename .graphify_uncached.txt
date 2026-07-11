@@ -1,0 +1,70 @@
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\ERA Awakening — Master Execution Plan (2026-07-06).md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\FABLE — Final Consultation (2026-07-06).md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\_index.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Budget\FABLED 2\1 - FABLED 2 — Current Implementation.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Budget\FABLED 2\2 - FABLED 2 — Gaps & Missing.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Budget\FABLED 2\3 - FABLED 2 — Optimization Plan.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Budget\FABLED 2\4 - FABLED 2 — Future Enhancements.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Budget\FABLED 2\_index.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Codebase Audit 2026-07-01\00 - Executive Summary.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Codebase Audit 2026-07-01\01 - Security Vulnerabilities.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Codebase Audit 2026-07-01\02 - Functional Vulnerabilities.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Codebase Audit 2026-07-01\03 - Structural Vulnerabilities.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Codebase Audit 2026-07-01\04 - Areas To Enhance.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Codebase Audit 2026-07-01\05 - Strong Areas To Keep As Hard Rules.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Codebase Audit 2026-07-01\06 - Evidence Index.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Codebase Audit 2026-07-01\07 - Remediation Checklist.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Codebase Audit 2026-07-01\_index.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Codebase Audit 2026-07-01\FABLED 2\1 - FABLED 2 — Current Implementation.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Codebase Audit 2026-07-01\FABLED 2\2 - FABLED 2 — Gaps & Missing.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Codebase Audit 2026-07-01\FABLED 2\3 - FABLED 2 — Optimization Plan.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Codebase Audit 2026-07-01\FABLED 2\4 - FABLED 2 — Future Enhancements.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Codebase Audit 2026-07-01\FABLED 2\_index.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\FABLED 2\1 - FABLED 2 — Current Implementation.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\FABLED 2\2 - FABLED 2 — Gaps & Missing.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\FABLED 2\3 - FABLED 2 — Optimization Plan.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\FABLED 2\4 - FABLED 2 — Future Enhancements.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\FABLED 2\_index.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\FAR Execution Checklist\FABLED 2\1 - FABLED 2 — Current Implementation.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\FAR Execution Checklist\FABLED 2\2 - FABLED 2 — Gaps & Missing.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\FAR Execution Checklist\FABLED 2\3 - FABLED 2 — Optimization Plan.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\FAR Execution Checklist\FABLED 2\4 - FABLED 2 — Future Enhancements.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\FAR Execution Checklist\FABLED 2\_index.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Functional Architecture Review\1 - North Star — The Goal Revisited.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Functional Architecture Review\2 - Where the App Stands Strong.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Functional Architecture Review\3 - Enhancement Map — Sharpen What Exists.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Functional Architecture Review\4 - Junction Leverage — Compound Advantages.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Functional Architecture Review\5 - Missed & Forgotten — The Blind Spots.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Functional Architecture Review\6 - Market Lens & Challenge Letter.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Functional Architecture Review\7 - Synthesis — The 90-Day Path.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Functional Architecture Review\_index.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Functional Architecture Review\FABLED 2\1 - FABLED 2 — Current Implementation.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Functional Architecture Review\FABLED 2\2 - FABLED 2 — Gaps & Missing.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Functional Architecture Review\FABLED 2\3 - FABLED 2 — Optimization Plan.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Functional Architecture Review\FABLED 2\4 - FABLED 2 — Future Enhancements.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Functional Architecture Review\FABLED 2\_index.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Hub & ERA\FABLED 2\1 - FABLED 2 — Current Implementation.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Hub & ERA\FABLED 2\2 - FABLED 2 — Gaps & Missing.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Hub & ERA\FABLED 2\3 - FABLED 2 — Optimization Plan.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Hub & ERA\FABLED 2\4 - FABLED 2 — Future Enhancements.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Hub & ERA\FABLED 2\_index.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Kitchen\FABLED 2\1 - FABLED 2 — Current Implementation.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Kitchen\FABLED 2\2 - FABLED 2 — Gaps & Missing.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Kitchen\FABLED 2\3 - FABLED 2 — Optimization Plan.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Kitchen\FABLED 2\4 - FABLED 2 — Future Enhancements.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Kitchen\FABLED 2\_index.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Notifications & Alerts\FABLED 2\1 - FABLED 2 — Current Implementation.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Notifications & Alerts\FABLED 2\2 - FABLED 2 — Gaps & Missing.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Notifications & Alerts\FABLED 2\3 - FABLED 2 — Optimization Plan.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Notifications & Alerts\FABLED 2\4 - FABLED 2 — Future Enhancements.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Notifications & Alerts\FABLED 2\_index.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Schedule\FABLED 2\1 - FABLED 2 — Current Implementation.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Schedule\FABLED 2\2 - FABLED 2 — Gaps & Missing.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Schedule\FABLED 2\3 - FABLED 2 — Optimization Plan.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Schedule\FABLED 2\4 - FABLED 2 — Future Enhancements.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Schedule\FABLED 2\_index.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Trips\FABLED 2\1 - FABLED 2 — Current Implementation.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Trips\FABLED 2\2 - FABLED 2 — Gaps & Missing.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Trips\FABLED 2\3 - FABLED 2 — Optimization Plan.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Trips\FABLED 2\4 - FABLED 2 — Future Enhancements.md
+C:\Users\aoune\WebApp\budget-app\ERA Notes\10 - Project Management\Trips\FABLED 2\_index.md
