@@ -35,4 +35,12 @@ export const qk = {
 
   // Analytics (Review v2, dashboard charts, balance summaries)
   analytics: () => ["analytics"] as const,
+
+  // Merchant → category mappings (learned by Statement Import, reused by manual entry).
+  // No arg = the prefix (use for invalidation — matches both variants);
+  // household distinguishes own-only vs own+partner caches.
+  merchantMappings: (household?: boolean) =>
+    household === undefined
+      ? (["merchant-mappings"] as const)
+      : (["merchant-mappings", { household }] as const),
 };

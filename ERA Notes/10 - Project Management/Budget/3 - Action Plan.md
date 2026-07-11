@@ -49,13 +49,13 @@ surfaces.
 | Cashflow forecast -> ERA             | B     | High   | H      | -                  |
 | 50/30/20 + Dashboard V2 widgets      | A     | High   | M      | -                  |
 | Debt -> Schedule auto-reminder       | B     | Med    | S-M    | -                  |
-| Remove/guard `analytics/debug` route | A     | Low    | S      | -                  |
+| Remove/guard `analytics/debug` route | A     | Low    | S      | done 2026-07-11    |
 
 ---
 
 ## The Sequence
 
-**Now - Foundation.** The highest-stakes calculation layer is covered: balance direction, balance computation/adjustment, canonical spending totals, recurring next-due, and confirm→transaction posting all have unit tests as of 2026-07-03. Targeted finance tests are green; the remaining foundation hygiene item is the quick `analytics/debug` guard/removal, and repo-wide `npm.cmd test` is currently blocked by an unrelated Schedule source-guard failure.
+**Now - Foundation.** The highest-stakes calculation layer is covered: balance direction, balance computation/adjustment, canonical spending totals, recurring next-due, and confirm→transaction posting all have unit tests as of 2026-07-03. Targeted finance tests are green; the `analytics/debug` route was removed 2026-07-11 (unused, deleted outright); repo-wide `npm.cmd test` is currently blocked by an unrelated Schedule source-guard failure.
 
 **Just shipped - Wallet refill shortcut.** `/expense?transfer=salary-wallet`
 opens the mobile expense form with a focused amount prompt and resolves

@@ -12,6 +12,14 @@ export interface MerchantMapping {
   use_count: number;
   created_at: string;
   updated_at: string;
+  // Enrichment added by GET /api/merchant-mappings: the mapped category /
+  // subcategory identity, so clients can resolve a mapping against a DIFFERENT
+  // user's or account's category list by slug/name when the raw ids don't
+  // exist there (cross-user / cross-account matching).
+  category_slug?: string | null;
+  category_name?: string | null;
+  subcategory_slug?: string | null;
+  subcategory_name?: string | null;
 }
 
 // A split portion of a transaction

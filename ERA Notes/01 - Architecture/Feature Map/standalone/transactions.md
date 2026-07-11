@@ -59,6 +59,7 @@ The expense form is the precision tool for logging a spend. Pick an account → 
 - **"Edit voice entry behavior"** → `src/components/expense/VoiceEntryButton.tsx` + the AI assistant module ([../junction/ai-assistant.md](../junction/ai-assistant.md)) for the actual STT/intent flow.
 - **"Edit split-bill math"** → `src/features/transactions/useSplitBill.ts`, UI in `SplitBillModal.tsx`.
 - **"Drafts drawer"** → `src/components/expense/DraftsDrawer.tsx` + `src/features/drafts/useDrafts.ts`.
+- **"Merchant-map category auto-suggest"** → both the Category and Subcategory steps in `MobileExpenseForm.tsx` render the same `MerchantNoteInput` ("What's this for?") directly under the step header, bound to the transaction `description`. Typed text matches against `useMerchantMappings({ household: true })` (`src/hooks/useMerchantMappings.ts` — includes the partner's mappings) via `matchMerchantMapping()` (`src/lib/merchantMatch.ts`); the suggested **category card glows** (`.suggest-glow` in `globals.css`, color-matched via `--suggest-glow-color` CSS vars) and, after the category is picked, the mapped **subcategory card glows** too. Matching is **cross-user and cross-account**: the mapping's category/subcategory is resolved against the currently selected account's list via `resolveCategoryRef()` (id → slug → name); if nothing resolves there, there's simply no glow — no message. Purely visual guidance — nothing auto-selects; the user still taps the card. `selectCategory()` is the shared tap handler (vibrate → skip empty subcategory step → submit).
 
 ## Gotchas
 

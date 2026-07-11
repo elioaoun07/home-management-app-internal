@@ -4,27 +4,20 @@
 import { safeFetch } from "@/lib/safeFetch";
 import { invalidateAccountData } from "@/lib/queryInvalidation";
 import { qk } from "@/lib/queryKeys";
-import { MerchantMapping, ParsedTransaction } from "@/types/statement";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ParsedTransaction } from "@/types/statement";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Query keys
 export const statementKeys = {
   all: ["statement-import"] as const,
-  merchantMappings: () => [...statementKeys.all, "merchant-mappings"] as const,
+  // Shared with Transactions' manual-entry auto-suggest — see src/hooks/useMerchantMappings.ts
+  merchantMappings: qk.merchantMappings,
   imports: () => [...statementKeys.all, "imports"] as const,
 };
 
-// Fetch all merchant mappings
-export function useMerchantMappings() {
-  return useQuery({
-    queryKey: statementKeys.merchantMappings(),
-    queryFn: async (): Promise<MerchantMapping[]> => {
-      const res = await fetch("/api/merchant-mappings");
-      if (!res.ok) throw new Error("Failed to fetch merchant mappings");
-      return res.json();
-    },
-  });
-}
+// Fetch all merchant mappings — re-exported from the shared hook so existing
+// statement-import imports keep working unchanged.
+export { useMerchantMappings } from "@/hooks/useMerchantMappings";
 
 // Save a merchant mapping
 export function useSaveMerchantMapping() {

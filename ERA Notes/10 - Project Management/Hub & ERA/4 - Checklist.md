@@ -37,6 +37,7 @@ tags:
 - [ ] **L3** Richer in-chat faces / widgets (balance, today, low-stock) with fresh cache. _(🟡 · M)_
 - [ ] **L4** Smart notification timing + quiet hours + weekly digest. _(🟡 · M)_
 - [ ] **L5** Kitchen → ERA food nudges; Trips → ERA re-entry briefing (receiving ends of those folders' bridges). _(🟡 · M)_
+- [ ] **L6** Merchant-match in "Add as Transaction" — when a chat message is converted to a transaction (Message Actions), run its text through the shared merchant map (`src/lib/merchantMatch.ts` + `src/hooks/useMerchantMappings.ts`, shipped 2026-07-11 for the expense form) to pre-select Category/Subcategory. Counterpart of [Budget · 4 · Checklist](<../Budget/4 - Checklist.md>) X2b. _(🟡 · S–M)_
 
 ---
 

@@ -60,8 +60,13 @@ import {
   useAddTransaction,
   useDeleteTransaction,
 } from "@/features/transactions/useDashboardTransactions";
+import { useMerchantMappings } from "@/hooks/useMerchantMappings";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { isReallyOnline } from "@/lib/connectivityManager";
+import {
+  matchMerchantMapping,
+  resolveCategoryRef,
+} from "@/lib/merchantMatch";
 import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
@@ -201,6 +206,37 @@ function useLongPress(callback: () => void, threshold = 500) {
   };
 }
 
+/**
+ * Free-text merchant/note input rendered in the SAME position (directly under
+ * the step header) on both the Category and Subcategory steps. It binds to the
+ * transaction description and drives the merchant-map suggestion glow.
+ * Module-level so it isn't remounted (and doesn't lose focus) on every
+ * keystroke re-render of the form.
+ */
+function MerchantNoteInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const themeClasses = useThemeClasses();
+  return (
+    <Input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="What's this for? e.g. Spinneys, Netflix, Uber"
+      suppressHydrationWarning
+      className={cn(
+        "h-10 text-sm",
+        themeClasses.formInput,
+        themeClasses.placeholder,
+      )}
+    />
+  );
+}
+
 function MobileExpenseFormContent() {
   const {
     step,
@@ -324,6 +360,13 @@ function MobileExpenseFormContent() {
   // Also fetch categories with hidden ones for edit mode
   const { data: categoriesWithHidden = [] } =
     useCategoriesWithHidden(selectedAccountId);
+  // Learned merchant -> category map (built by Statement Import), reused here
+  // to auto-suggest a category while the user types a merchant/note.
+  // household:true pulls the partner's mappings too — the suggestion works
+  // cross-user and cross-account (categories resolved by slug/name below).
+  const { data: merchantMappings = [] } = useMerchantMappings({
+    household: true,
+  });
   const addTransactionMutation = useAddTransaction();
   const createDebtMutation = useCreateDebt();
   const createStandaloneDebtMutation = useCreateStandaloneDebt();
@@ -1034,6 +1077,66 @@ function MobileExpenseFormContent() {
     }
     return null;
   };
+
+  // Shared by the category grid button and the merchant-suggestion chip so
+  // both paths advance the form identically (vibrate, skip empty subcategory step, submit).
+  const selectCategory = (category: any) => {
+    if (navigator.vibrate) navigator.vibrate(10);
+    setSelectedCategoryId(category.id);
+    const hasSubcategories =
+      categories.some((c: any) => c.parent_id === category.id) ||
+      (category as any).subcategories?.length > 0;
+    const next = getNextStep({ skipSubcategory: !hasSubcategories });
+    if (next) {
+      setStep(next);
+    } else {
+      handleSubmit();
+    }
+  };
+
+  // Merchant match from the typed note, against the same merchant_mappings
+  // table Statement Import learns from (own + partner mappings). Skipped below
+  // 3 characters to avoid noisy single-letter matches. The mapped category is
+  // resolved against the CURRENT account's category list by id → slug → name,
+  // so a mapping learned on another account (or by the partner) still glows
+  // the equivalent category here; when nothing resolves, there's simply no
+  // glow. Purely visual guidance: nothing auto-selects.
+  const merchantSuggestion = useMemo(() => {
+    const query = description.trim();
+    if (query.length < 3) return null;
+    const mapping = matchMerchantMapping(query, merchantMappings);
+    if (!mapping?.category_id) return null;
+    const category = resolveCategoryRef(
+      {
+        id: mapping.category_id,
+        slug: mapping.category_slug,
+        name: mapping.category_name,
+      },
+      orderedCategories as any[],
+    );
+    if (!category || category.visible === false) return null;
+    return { mapping, category };
+  }, [description, merchantMappings, orderedCategories]);
+
+  // The mapping's subcategory resolved within the selected category's
+  // subcategory list (same id → slug → name fallback). Null when the mapping
+  // has no subcategory or it doesn't exist here — no glow, no message.
+  const suggestedSubcategoryId = useMemo(() => {
+    if (!merchantSuggestion) return null;
+    if (merchantSuggestion.category.id !== selectedCategoryId) return null;
+    const m = merchantSuggestion.mapping;
+    if (!m.subcategory_id) return null;
+    const sub = resolveCategoryRef(
+      {
+        id: m.subcategory_id,
+        slug: m.subcategory_slug,
+        name: m.subcategory_name,
+      },
+      orderedSubcategories as any[],
+    );
+    if (!sub || sub.visible === false) return null;
+    return sub.id;
+  }, [merchantSuggestion, selectedCategoryId, orderedSubcategories]);
 
   const contentAreaBottomPadding = `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_HEIGHT}px)`;
 
@@ -2078,6 +2181,13 @@ function MobileExpenseFormContent() {
                 </p>
               )}
 
+              {!editModeCategory && (
+                <MerchantNoteInput
+                  value={description}
+                  onChange={setDescription}
+                />
+              )}
+
               <div {...categoryLongPress}>
                 {editModeCategory ? (
                   <>
@@ -2259,6 +2369,9 @@ function MobileExpenseFormContent() {
                           (category: any, index: number) => {
                             const active = selectedCategoryId === category.id;
                             const color = category.color || "#22d3ee";
+                            const suggested =
+                              !active &&
+                              merchantSuggestion?.category.id === category.id;
 
                             return (
                               <motion.div
@@ -2274,39 +2387,27 @@ function MobileExpenseFormContent() {
                                 className="relative"
                               >
                                 <button
-                                  onClick={() => {
-                                    if (navigator.vibrate)
-                                      navigator.vibrate(10);
-                                    setSelectedCategoryId(category.id);
-                                    // Compute subcategories from the clicked category directly
-                                    // (can't rely on allSubcategories — state hasn't updated yet)
-                                    const hasSubcategories =
-                                      categories.some(
-                                        (c: any) => c.parent_id === category.id,
-                                      ) ||
-                                      (category as any).subcategories?.length >
-                                        0;
-                                    const next = getNextStep({
-                                      skipSubcategory: !hasSubcategories,
-                                    });
-                                    if (next) {
-                                      setStep(next);
-                                    } else {
-                                      handleSubmit();
-                                    }
-                                  }}
+                                  onClick={() => selectCategory(category)}
                                   disabled={addTransactionMutation.isPending}
                                   style={{
-                                    borderColor: active ? color : undefined,
+                                    borderColor:
+                                      active || suggested ? color : undefined,
                                     backgroundColor: active
                                       ? `${color}20`
                                       : undefined,
                                     boxShadow: active
                                       ? `0 0 15px ${color}40, inset 0 0 0 1px ${color}40`
                                       : undefined,
+                                    ...(suggested
+                                      ? ({
+                                          "--suggest-glow-color": `${color}59`,
+                                          "--suggest-glow-color-strong": `${color}A6`,
+                                        } as CSSProperties)
+                                      : {}),
                                   }}
                                   className={cn(
                                     "w-full p-3 rounded-lg border text-left transition-all min-h-[60px] active:scale-95",
+                                    suggested && "suggest-glow",
                                     active
                                       ? "neo-card neo-glow-sm"
                                       : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} hover:bg-primary/5`,
@@ -2415,6 +2516,13 @@ function MobileExpenseFormContent() {
                       </span>{" "}
                       to hide
                     </p>
+                  )}
+
+                  {!editModeSubcategory && (
+                    <MerchantNoteInput
+                      value={description}
+                      onChange={setDescription}
+                    />
                   )}
 
                   <div {...subcategoryLongPress}>
@@ -2618,6 +2726,8 @@ function MobileExpenseFormContent() {
                             (sub: any, index: number) => {
                               const active = selectedSubcategoryId === sub.id;
                               const color = sub.color || "#22d3ee";
+                              const suggested =
+                                !active && suggestedSubcategoryId === sub.id;
                               return (
                                 <motion.div
                                   key={sub.id}
@@ -2640,16 +2750,26 @@ function MobileExpenseFormContent() {
                                       if (next) setStep(next);
                                     }}
                                     style={{
-                                      borderColor: active ? color : undefined,
+                                      borderColor:
+                                        active || suggested
+                                          ? color
+                                          : undefined,
                                       backgroundColor: active
                                         ? `${color}25`
                                         : undefined,
                                       boxShadow: active
                                         ? `0 0 15px ${color}40`
                                         : undefined,
+                                      ...(suggested
+                                        ? ({
+                                            "--suggest-glow-color": `${color}59`,
+                                            "--suggest-glow-color-strong": `${color}A6`,
+                                          } as CSSProperties)
+                                        : {}),
                                     }}
                                     className={cn(
                                       "w-full p-3 rounded-lg border text-center transition-all min-h-[55px] flex flex-col items-center justify-center gap-1 active:scale-95",
+                                      suggested && "suggest-glow",
                                       active
                                         ? "neo-card neo-glow shadow-lg"
                                         : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`,
@@ -2726,6 +2846,10 @@ function MobileExpenseFormContent() {
                   >
                     Subcategory
                   </p>
+                  <MerchantNoteInput
+                    value={description}
+                    onChange={setDescription}
+                  />
                   <button
                     onClick={() => setShowNewSubcategoryDrawer(true)}
                     className={`w-full p-4 rounded-lg border-2 border-dashed ${themeClasses.dashedBorder} ${themeClasses.dashedBorderHover} text-center transition-all active:scale-95 bg-transparent ${themeClasses.dashedBgHover} flex flex-col items-center justify-center gap-2`}
@@ -2740,30 +2864,6 @@ function MobileExpenseFormContent() {
                   </button>
                 </div>
               )}
-
-              {/* Note field — description for this transaction */}
-              <div>
-                <p
-                  className={cn(
-                    "text-[10px] font-medium uppercase tracking-wider mb-1.5",
-                    themeClasses.textFaint,
-                  )}
-                >
-                  Note (optional)
-                </p>
-                <Input
-                  type="text"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="e.g. Groceries at Carrefour"
-                  suppressHydrationWarning
-                  className={cn(
-                    "h-10 text-sm",
-                    themeClasses.formInput,
-                    themeClasses.placeholder,
-                  )}
-                />
-              </div>
 
               <Button
                 size="lg"

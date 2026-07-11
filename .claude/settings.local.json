@@ -87,7 +87,11 @@
       "Bash(bash -n .claude/hooks/check-migration.sh)",
       "WebSearch",
       "Bash(git mv *)",
-      "Bash(mv src/lib/notifications/registry.ts src/lib/notifications/registry.tsx)"
+      "Bash(mv src/lib/notifications/registry.ts src/lib/notifications/registry.tsx)",
+      "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter 'ProcessId=6748' | Select-Object ProcessId,Name,CommandLine,ExecutablePath\")",
+      "Bash(powershell -Command 'Get-CimInstance Win32_Process | Where-Object { $_.Name -match '\\\\''node'\\\\'' } | Select-Object ProcessId,ParentProcessId,CommandLine')",
+      "Bash(powershell -Command \"\\(Get-Item 'src/components/expense/MobileExpenseForm.tsx'\\).LastWriteTime = Get-Date\")",
+      "Bash(powershell -Command \"\\(Get-Item 'src/components/expense/MobileExpenseForm.tsx'\\).LastWriteTime = Get-Date; \\(Get-Item 'src/app/globals.css'\\).LastWriteTime = Get-Date\")"
     ]
   }
 }

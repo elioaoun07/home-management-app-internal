@@ -22,3 +22,4 @@ tags:
 - CSV/PDF bank statement import
 - Merchant mapping with learning
 - Pre-configured Lebanese merchants
+- `merchant_mappings` is also read by Transactions' manual-entry auto-suggest via a shared hook (`src/hooks/useMerchantMappings.ts`) — see [Feature Map/standalone/statement-import.md](<../../01 - Architecture/Feature Map/standalone/statement-import.md>).

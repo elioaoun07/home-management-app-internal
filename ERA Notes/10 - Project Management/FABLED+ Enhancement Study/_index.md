@@ -33,10 +33,10 @@ Every global or feature folder uses the same FABLED-inspired anatomy:
 
 | # | File | Purpose |
 |---|---|---|
-| 1 | `1 - Current Leverage.md` | Verified implementation footprint, distinctive assets, and the feature's current outcome-loop coverage. |
-| 2 | `2 - Gaps & Risks.md` | Leverage gaps and silent-failure risks through truth, time, partnership, offline, reversibility, and measurement lenses. |
-| 3 | `3 - Enhancement Strategy.md` | A sequenced path from smallest proof to hardened capability, with gates and explicit non-goals. |
-| 4 | `4 - 10x Opportunities.md` | New bets only: wedge, 10× mechanism, smallest experiment, success measure, kill criterion, and invariant. |
+| 1 | `1 - Feature State.md` | Verified implementation footprint, distinctive assets, and the feature's current outcome-loop coverage. |
+| 2 | `2 - Vision & Roadmap.md` | Product feedback, enhancement thesis, business value, and a staged future that complements existing roadmaps. |
+| 3 | `3 - Action Plan.md` | A sequenced path from smallest proof to hardened capability, with gates and explicit non-goals. |
+| 4 | `4 - Checklist.md` | Checkable Now / Next / Later work, including the new 10× bets, success measures, kill criteria, and definition of done. |
 | — | `_index.md` | Verdict, loop-readiness score, evidence boundary, and links. |
 
 ## Scoring model
