@@ -22,6 +22,7 @@ tags:
 | 6 | [Optimized Claude Setup Structure](<6 - Optimized Claude Setup Structure.md>) | You want the target blueprint for the AI setup (instructions/knowledge/hooks/skills/memory/permissions) + the ranked gap list. Audited 2026-06-10. |
 | ★ | [FABLE — Final Consultation](<FABLE — Final Consultation (2026-07-06).md>) | The generational handoff (2026-07-06): honest verdict on the whole product, where it's genuinely innovative, the six systemic optimization frontiers, five enhancement programs, ten platform-level feature ideas with kill criteria, and a 30-day sequence. Read when setting direction. |
 | ★ | [ERA Awakening — Master Execution Plan](<ERA Awakening — Master Execution Plan (2026-07-06).md>) | **The active execution contract (Jul 6 → Oct 4, 2026)** for the proactive era: scheduler truth → briefing heartbeat → tested ERA brain → voice decision → learning loop. Decision-complete (D1–D10), session-packetized (WP-00–23), gated (G0–G4), self-measuring. Feeds file 4 every Monday. Includes the wake-word verdict: both prior vendor paths are dead; one timeboxed openWakeWord spike, then ship-or-park. |
+| ★ | [FABLED+ Enhancement Study](<FABLED+ Enhancement Study/_index.md>) | **Whole-codebase complementary study (2026-07-11):** 40 mapped features plus global analysis, each with Feature State, Vision & Roadmap, Action Plan, and Checklist. Adds closed-loop truth, bounded agency, household governance, attention-return, innovations, kill criteria, and business-plan lenses without superseding FABLED 2. |
 
 ## Per-module PM
 

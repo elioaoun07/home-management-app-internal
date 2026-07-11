@@ -4,7 +4,7 @@ type: enhancement-study-index
 status: current
 owner: Elio
 evidence_cutoff: 2026-07-11
-baseline: FABLED 2 (2026-07-02) plus git delta through 0f33396
+baseline: FABLED 2 (2026-07-02) plus git delta through 0a39c4e
 tags:
   - pm/fabled-plus
   - scope/whole-app
@@ -57,10 +57,10 @@ Each feature receives six scores from 0–5. These are **loop-readiness**, not m
 ## Evidence boundary
 
 - Source graph: **807 code files** plus **70 current strategy/audit documents**, 3,656 nodes and 4,338 edges.
-- Repository inventory: **809 TypeScript/JavaScript source files**, **248,367 LOC**, **187 API routes**, **38 pages**, **87 schema tables**.
-- Protection inventory: **15 test files**; baseline run on 2026-07-11 = **126 passing / 1 failing** (the existing flexible-occurrence view guard).
+- Repository inventory: **811 TypeScript/JavaScript source files**, **248,590 LOC**, **186 API routes**, **38 pages**, **87 schema tables**.
+- Protection inventory: **16 test files**; final run on 2026-07-11 = **136 passing / 1 failing** (the existing flexible-occurrence view guard).
 - Static checks: `npm run typecheck` passed; `npm run docs:check` passed; full lint exceeded the 120-second audit window and is recorded as unmeasured, not green.
-- Delta window: `git log --oneline --since=2026-07-02` through `0f33396` (Recurring redesign, Alerts/Notifications, Google Calendar sync, Hub Chat changes).
+- Delta window: `git log --oneline --since=2026-07-02` through `0a39c4e` (Recurring redesign, Alerts/Notifications, Google Calendar sync, Hub Chat changes, debug-route removal, and shared merchant matching).
 - Live database caveat: repository schema is authoritative for table shape, but not a complete snapshot of live RLS policies or function bodies.
 
 ## Evidence discipline
