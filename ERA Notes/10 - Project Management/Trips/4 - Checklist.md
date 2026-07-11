@@ -25,6 +25,7 @@ tags:
 - [ ] **N1** Manual end-to-end verify — **household trip.** Activate a real household trip; confirm chores skip, recurring events pause via `recurrence_pauses`, one-time events cancel, meal plans skip, and the trip account is created. Then complete it and confirm **every** side-effect in `trip_side_effects` reverses cleanly. → [Trips / Overview](<../../03 - Junction Modules/Trips/Overview.md>). _(🔴 · S–M)_
 - [ ] **N2** Manual end-to-end verify — **solo trip.** Confirm the traveler's items reassign to partner (`responsible_user_id` flip), meal planning is untouched, and completion reverses the reassignment. _(🔴 · S–M)_
 - [ ] **N3** Confirm `recurring_payments` are **NOT** paused during a trip (deliberate rule — bills still due while travelling); guard against a future "pause everything" regression. _(🔴 · S)_
+- [x] **N4** Standalone iOS/PWA home-screen icon for Trips — `trips-icon.svg` + generated PNGs, `manifests/trips.webmanifest` (`start_url`/`scope` = `/trips`), `src/app/trips/layout.tsx` metadata (`apple` touch icon, `appleWebApp`). Same pattern as Chat/Budget. ✅ *(2026-07-11)*
 
 ## ⏭️ Next — Make it legible
 

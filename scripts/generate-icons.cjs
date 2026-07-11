@@ -68,6 +68,14 @@ const aiUsageOutputs = [
   { size: 512, file: "ai-usage-maskable-512.png" },
 ];
 
+// Trips app icon outputs
+const tripsOutputs = [
+  { size: 180, file: "trips-180.png" },
+  { size: 192, file: "trips-192.png" },
+  { size: 512, file: "trips-512.png" },
+  { size: 512, file: "trips-maskable-512.png" },
+];
+
 async function generateIcons(srcSvgPath, outputs, label) {
   if (!fs.existsSync(srcSvgPath)) {
     console.log(
@@ -162,6 +170,13 @@ async function main() {
     path.join(publicDir, "ai-usage-icon.svg"),
     aiUsageOutputs,
     "AI Usage App",
+  );
+
+  // Generate Trips app icons (if SVG exists)
+  await generateIcons(
+    path.join(publicDir, "trips-icon.svg"),
+    tripsOutputs,
+    "Trips App",
   );
 
   console.log("\nIcon generation complete.");
