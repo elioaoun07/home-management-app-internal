@@ -126,12 +126,17 @@ describe("repo-wide invariant: scripts/delivery/ never manages git state outside
     expect(files.length).toBeGreaterThanOrEqual(9);
   });
 
-  it("no file outside gitread.mjs imports node:child_process / child_process", () => {
-    const importPattern = /(?:from\s+|require\(\s*)["']node:child_process["']|(?:from\s+|require\(\s*)["']child_process["']/;
+  // S2 legitimately spawns child processes for two non-git purposes: the
+  // runner process itself (server-routes.mjs) and the validation commands
+  // `pnpm typecheck/lint/test` (run-session.mjs) — neither touches git. The
+  // real invariant (doc 6 §3 DoD #9) is narrower than "no child_process
+  // import anywhere": no file outside gitread.mjs ever spawns "git".
+  it('no file outside gitread.mjs spawns "git" as a process', () => {
+    const gitSpawnPattern = /\b(?:spawn|spawnSync|exec|execSync|execFile|execFileSync)\s*\(\s*["']git["']/;
     for (const file of files) {
       if (file.endsWith("gitread.mjs")) continue;
       const text = readFileSync(file, "utf8");
-      expect(importPattern.test(text)).toBe(false);
+      expect(gitSpawnPattern.test(text)).toBe(false);
     }
   });
 

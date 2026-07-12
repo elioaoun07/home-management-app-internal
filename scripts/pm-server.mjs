@@ -36,11 +36,18 @@ import {
 } from "./pm/mutations.mjs";
 import { collectSources, readSourceFile, walk } from "./pm/scan.mjs";
 import { buildHtml } from "./pm/ui.mjs";
+import {
+  createDeliveryContext,
+  performPendingWritebacks,
+  routeDelivery,
+  sessionIdFromWatchPath,
+} from "./delivery/server-routes.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const PM_REL = join("ERA Notes", "10 - Project Management");
 const PM_DIR = join(ROOT, PM_REL);
+const deliveryCtx = createDeliveryContext({ ROOT, PM_DIR, PM_REL });
 
 // ---- CLI args ----
 const argv = process.argv.slice(2);
@@ -272,6 +279,45 @@ try {
   // recursive watch unsupported on this platform — manual refresh still works.
 }
 
+// ---- Delivery SSE (named `event: delivery` frames on the same connection) ----
+// Second debounced watcher over `.delivery/sessions/`, wrapped in the same
+// try/catch fallback as the PM watcher (doc 2 §6). Deliberately does NOT set
+// `suppressUntil` — the Accept-writeback checkbox tick should trigger the
+// normal PM `data: reload` for every open dashboard.
+const deliveryDirty = new Set();
+let deliveryWatchTimer = null;
+function broadcastDelivery() {
+  try {
+    performPendingWritebacks(deliveryCtx);
+  } catch {
+    // best-effort; a failed writeback attempt is retried on the next tick
+  }
+  const sessionIds = Array.from(deliveryDirty);
+  deliveryDirty.clear();
+  for (const sessionId of sessionIds) {
+    const frame = `event: delivery\ndata: ${JSON.stringify({ sessionId })}\n\n`;
+    for (const res of sseClients) {
+      try {
+        res.write(frame);
+      } catch {
+        sseClients.delete(res);
+      }
+    }
+  }
+}
+try {
+  mkdirSync(deliveryCtx.SESSIONS_DIR, { recursive: true });
+  performPendingWritebacks(deliveryCtx); // catch up on any pending writeback from before a restart
+  watch(deliveryCtx.SESSIONS_DIR, { recursive: true }, (eventType, filename) => {
+    const sessionId = sessionIdFromWatchPath(filename);
+    if (sessionId) deliveryDirty.add(sessionId);
+    clearTimeout(deliveryWatchTimer);
+    deliveryWatchTimer = setTimeout(broadcastDelivery, 250);
+  });
+} catch {
+  // recursive watch unsupported on this platform — delivery UI falls back to manual refresh.
+}
+
 // ---- HTTP plumbing ----
 function sendJson(res, status, obj) {
   const body = JSON.stringify(obj);
@@ -339,6 +385,24 @@ const server = createServer(async (req, res) => {
       sseClients.add(res);
       req.on("close", () => sseClients.delete(res));
       return;
+    }
+
+    if (path.startsWith("/api/delivery/")) {
+      let body = {};
+      if (req.method === "POST") {
+        const raw = await readBody(req);
+        try {
+          body = raw ? JSON.parse(raw) : {};
+        } catch {
+          return sendJson(res, 400, { error: "invalid json" });
+        }
+      }
+      const result = await routeDelivery(
+        { method: req.method, path, query: u.searchParams, body },
+        deliveryCtx,
+      );
+      if (result) return sendJson(res, result.status, result.json);
+      return sendJson(res, 404, { error: "unknown delivery route" });
     }
 
     if (req.method === "POST" && path.startsWith("/api/")) {

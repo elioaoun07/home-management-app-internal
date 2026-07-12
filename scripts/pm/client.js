@@ -53,6 +53,10 @@
     file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
     folderplus:
       '<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v6M9 14h6"/>',
+    bolt: '<path d="M13 2 3 14h7l-1 8 11-14h-7z"/>',
+    robot:
+      '<rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M9 4h6M9 14h.01M15 14h.01M9 18h6"/>',
+    play: '<path d="M6 4l14 8-14 8V4z"/>',
   };
   function icon(name, className, label) {
     return (
@@ -1113,6 +1117,11 @@
       '<a class="qlink" data-route="bugs">' +
       icon("bug", "icon-bug") +
       " Bugs &amp; Gaps</a>";
+    if (CAN_EDIT)
+      html +=
+        '<a class="qlink" data-route="delivery">' +
+        icon("bolt", "icon-bolt") +
+        " Delivery</a>";
     html += "</div>";
 
     html +=
@@ -1307,6 +1316,14 @@
       },
     );
     Array.prototype.forEach.call(
+      els.tree.querySelectorAll('[data-route="delivery"]'),
+      function (a) {
+        a.addEventListener("click", function () {
+          goDelivery();
+        });
+      },
+    );
+    Array.prototype.forEach.call(
       els.tree.querySelectorAll('[data-route="home"]'),
       function (a) {
         a.addEventListener("click", goHome);
@@ -1427,6 +1444,12 @@
     } else if (currentRoute.type === "bugs") {
       var q3 = els.tree.querySelector('[data-route="bugs"]');
       if (q3) q3.classList.add("active");
+    } else if (
+      currentRoute.type === "delivery" ||
+      currentRoute.type === "delivery-session"
+    ) {
+      var q4 = els.tree.querySelector('[data-route="delivery"]');
+      if (q4) q4.classList.add("active");
     }
   }
   function cssEscape(s) {
@@ -1469,6 +1492,23 @@
     currentRoute = { type: "bugs" };
     persistRoute();
     renderBugsRollup();
+    highlightActive();
+    els.view.scrollTop = 0;
+  }
+  function goDelivery() {
+    currentRoute = { type: "delivery" };
+    persistRoute();
+    renderDelivery();
+    highlightActive();
+    els.view.scrollTop = 0;
+  }
+  function goDeliverySession(id) {
+    currentRoute = { type: "delivery-session", id: id };
+    persistRoute();
+    deliverySession = null;
+    deliveryEvents = [];
+    deliveryEventsAfter = 0;
+    renderDeliverySessionRoute(id);
     highlightActive();
     els.view.scrollTop = 0;
   }
@@ -1879,6 +1919,16 @@
         setPostponed(b.getAttribute("data-restore-key"), false);
         toast("Back in the queue", "success");
         renderCurrent();
+      });
+    });
+    wire("[data-deliver-file]", function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        openDeliveryWizardForTask(
+          b.getAttribute("data-deliver-file"),
+          parseInt(b.getAttribute("data-deliver-cbidx"), 10),
+        );
       });
     });
     wire("[data-viewmode]", function (b) {
@@ -2503,6 +2553,15 @@
           attrEscape(t.key) +
           '" title="Postpone (view-only, file unchanged)">' +
           icon("clock") +
+          "</button>";
+      if (CAN_EDIT)
+        actions +=
+          '<button class="row-deliver-btn" data-deliver-file="' +
+          attrEscape(t.file.relPath) +
+          '" data-deliver-cbidx="' +
+          t.cbidx +
+          '" title="Start a delivery session for this item">' +
+          icon("bolt") +
           "</button>";
     }
     return (
@@ -3392,10 +3451,19 @@
       !byRelPath[(currentRoute.relPath || "").toLowerCase()]
     )
       currentRoute = { type: "home" };
+    if (
+      (currentRoute.type === "delivery" ||
+        currentRoute.type === "delivery-session") &&
+      MODE !== "server"
+    )
+      currentRoute = { type: "home" };
     if (currentRoute.type === "module") renderModule(currentRoute.module);
     else if (currentRoute.type === "file") renderFile(currentRoute.relPath);
     else if (currentRoute.type === "checklist") renderChecklistRollup();
     else if (currentRoute.type === "bugs") renderBugsRollup();
+    else if (currentRoute.type === "delivery") renderDelivery();
+    else if (currentRoute.type === "delivery-session")
+      renderDeliverySessionRoute(currentRoute.id);
     else renderHome();
     highlightActive();
   }
@@ -3408,6 +3476,7 @@
     });
   }
   var sseTimer = null;
+  var deliverySseTimer = null;
   function subscribeSSE() {
     try {
       var es = new EventSource("/api/events");
@@ -3415,7 +3484,977 @@
         clearTimeout(sseTimer);
         sseTimer = setTimeout(reload, 150);
       };
+      es.addEventListener("delivery", function (ev) {
+        var payload = null;
+        try {
+          payload = JSON.parse(ev.data);
+        } catch (e) {}
+        clearTimeout(deliverySseTimer);
+        deliverySseTimer = setTimeout(function () {
+          refreshDeliveryRoute(payload && payload.sessionId);
+        }, 150);
+      });
     } catch (e) {}
+  }
+
+  // ============================================================
+  // ---------- Delivery Workspace (Agentic Delivery Sessions) ----------
+  // ============================================================
+  // AGENT_REGISTRY / getAgent / classify / applyCapabilityDrops /
+  // ALWAYS_ON_CAPABILITIES are injected verbatim by ui.mjs (same precedent as
+  // scanCheckboxes above) so this UI can never drift from the server's own
+  // registry + classifier (doc 2 §5).
+  var DELIVERY_TERMINAL = ["SHIPPED", "CANCELLED", "FAILED"];
+  var DELIVERY_STEPPER = [
+    "SELECTED",
+    "DISCOVERY",
+    "SPEC_READY",
+    "PLAN_READY",
+    "BUILDING",
+    "VALIDATING",
+    "REVIEWING",
+    "UAT_READY",
+    "ACCEPTED",
+    "SHIPPED",
+  ];
+  var DELIVERY_GATE_LABEL = {
+    spec: "Spec approval",
+    plan: "Plan approval",
+    uat: "UAT acceptance",
+    question: "Question",
+    blocked: "Blocked",
+    shipped: "Mark shipped",
+  };
+  // Heuristic module->glob table mirroring server-routes.mjs's own copy —
+  // used only to seed the launch-preview classifier input client-side; the
+  // server independently recomputes and is authoritative (doc 2 §5).
+  var DELIVERY_CAMPAIGN_GLOBS = {
+    Budget: [
+      "src/features/accounts/**",
+      "src/features/transactions/**",
+      "src/features/categories/**",
+      "src/features/recurring/**",
+      "src/features/balance/**",
+      "src/features/budget/**",
+    ],
+    Schedule: ["src/features/items/**"],
+    Kitchen: [
+      "src/features/recipes/**",
+      "src/features/catalogue/**",
+      "src/features/inventory/**",
+    ],
+    Trips: ["src/app/trips/**", "src/features/trips/**"],
+    "Hub & ERA": ["src/app/chat/**", "src/features/hub/**", "src/lib/ai/**"],
+    "Notifications & Alerts": [
+      "src/app/api/notifications/**",
+      "src/app/api/cron/**",
+    ],
+  };
+
+  var deliveryData = { sessions: [], buildLockActive: false };
+  var deliverySession = null;
+  var deliveryEvents = [];
+  var deliveryEventsAfter = 0;
+  var deliveryWizard = null;
+
+  function deliveryTopics() {
+    return moduleNames.filter(function (name) {
+      return files.some(function (f) {
+        return f.module === name && !f.inFabled && isChecklistFile(f);
+      });
+    });
+  }
+  function deliveryTasksForTopic(campaign) {
+    var out = [];
+    files
+      .filter(function (f) {
+        return f.module === campaign && !f.inFabled && isChecklistFile(f);
+      })
+      .forEach(function (f) {
+        fileTasks(f).forEach(function (t) {
+          out.push(t);
+        });
+      });
+    out.sort(function (a, b) {
+      return a.rank - b.rank || a.docIdx - b.docIdx;
+    });
+    return out;
+  }
+  function deliveryActiveSessionFor(pmFile, cbidx) {
+    return (deliveryData.sessions || []).filter(function (s) {
+      return (
+        s.item.pmFile === pmFile &&
+        s.item.cbidx === cbidx &&
+        DELIVERY_TERMINAL.indexOf(s.state) === -1
+      );
+    })[0];
+  }
+  function deliveryScopeHintsFor(task) {
+    var text = task.text || "";
+    var keywords = text
+      .toLowerCase()
+      .split(/\s+/)
+      .map(function (w) {
+        return w.replace(/[^\w-]/g, "");
+      })
+      .filter(function (w) {
+        return w.length > 3;
+      });
+    var globs = (DELIVERY_CAMPAIGN_GLOBS[task.file.module] || []).slice();
+    if (/\bapi\b|route|endpoint|cron/i.test(text)) globs.push("src/app/api/**");
+    return {
+      keywords: keywords,
+      globs: globs,
+      modules: task.file.module ? [task.file.module] : [],
+    };
+  }
+  function deliveryComputeWizardCapabilities() {
+    if (!deliveryWizard || !deliveryWizard.task) return;
+    var t = deliveryWizard.task;
+    var item = { text: t.text, campaign: t.file.module };
+    var caps = classify({ item: item, scopeHints: deliveryScopeHintsFor(t) });
+    deliveryWizard.capabilities = caps;
+    deliveryWizard.dropped = deliveryWizard.dropped.filter(function (name) {
+      return (
+        caps.some(function (c) {
+          return c.name === name;
+        }) && ALWAYS_ON_CAPABILITIES.indexOf(name) === -1
+      );
+    });
+  }
+
+  // ---- data loading ----
+  function loadDeliverySessions() {
+    return apiGet("/api/delivery/sessions").then(function (d) {
+      deliveryData = d;
+    });
+  }
+  function loadDeliverySessionDetail(id) {
+    return apiGet("/api/delivery/session?id=" + encodeURIComponent(id)).then(
+      function (d) {
+        deliverySession = d;
+      },
+    );
+  }
+  function loadDeliveryEventsTail(id) {
+    return apiGet(
+      "/api/delivery/events?id=" +
+        encodeURIComponent(id) +
+        "&after=" +
+        deliveryEventsAfter,
+    ).then(function (d) {
+      deliveryEvents = deliveryEvents.concat(d.events);
+      deliveryEventsAfter = d.lastSeq;
+    });
+  }
+
+  // ---- wizard lifecycle ----
+  function openDeliveryWizard(preselect) {
+    deliveryWizard = {
+      campaign: (preselect && preselect.campaign) || null,
+      task: (preselect && preselect.task) || null,
+      provider: "claude",
+      capabilities: null,
+      dropped: [],
+      dirtyAck: false,
+      launching: false,
+      error: null,
+    };
+    if (deliveryWizard.task) deliveryComputeWizardCapabilities();
+    goDelivery();
+  }
+  function openDeliveryWizardForTask(relPath, cbidx) {
+    var f = byRelPath[(relPath || "").toLowerCase()];
+    if (!f) return;
+    var task = fileTasks(f).filter(function (t) {
+      return t.cbidx === cbidx;
+    })[0];
+    if (!task) return;
+    openDeliveryWizard({ campaign: f.module, task: task });
+  }
+
+  // ---- rendering: delivery route ----
+  function renderDelivery() {
+    setBreadcrumb([
+      { label: "Home", go: goHome },
+      { label: "Delivery", go: goDelivery },
+    ]);
+    els.view.innerHTML =
+      '<div class="pagehead"><h1>' +
+      icon("bolt", "icon-bolt") +
+      " Delivery</h1></div>" +
+      '<p class="empty-note">Loading…</p>';
+    loadDeliverySessions()
+      .then(function () {
+        if (currentRoute.type !== "delivery") return;
+        els.view.innerHTML = buildDeliveryHTML();
+        wireDeliveryEvents();
+      })
+      .catch(function (err) {
+        els.view.innerHTML =
+          '<p class="empty-note">Failed to load delivery data: ' +
+          escapeHtml(String((err && err.message) || err)) +
+          "</p>";
+      });
+  }
+
+  function deliveryStateBadgeHTML(state, awaiting) {
+    var cls = "dl-badge";
+    if (state === "BLOCKED") cls += " dl-badge-blocked";
+    else if (state === "NEEDS_DECISION") cls += " dl-badge-question";
+    else if (DELIVERY_TERMINAL.indexOf(state) !== -1) cls += " dl-badge-terminal";
+    else if (awaiting) cls += " dl-badge-gate";
+    return '<span class="' + cls + '">' + escapeHtml(state) + "</span>";
+  }
+
+  function buildDeliveryHTML() {
+    var html =
+      '<div class="pagehead"><h1>' +
+      icon("bolt", "icon-bolt") +
+      " Delivery</h1></div>";
+    if (deliveryData.buildLockActive)
+      html +=
+        '<div class="dl-lock-banner">' +
+        icon("alert") +
+        " A session is already past the plan gate — Plan approval on other sessions will wait for the lock to clear.</div>";
+    html += buildWizardHTML();
+    html += buildSessionsListHTML();
+    html += buildAgentCatalogHTML();
+    return html;
+  }
+
+  function deliveryWizardSelectableTasks(campaign) {
+    return deliveryTasksForTopic(campaign).map(function (t) {
+      var active = deliveryActiveSessionFor(t.file.relPath, t.cbidx);
+      return { task: t, selectable: t.state === "open" && !active, activeSession: active };
+    });
+  }
+
+  function buildWizardHTML() {
+    if (!deliveryWizard) {
+      return (
+        '<div class="dl-section"><button class="pm-btn primary" data-dl-new>' +
+        icon("plus") +
+        " New Delivery Session</button></div>"
+      );
+    }
+    var w = deliveryWizard;
+    var html = '<div class="dl-section dl-wizard"><h2>New Delivery Session</h2>';
+
+    html +=
+      '<div class="dl-step"><div class="dl-step-label">1 · Topic</div><div class="dl-chip-row">';
+    deliveryTopics().forEach(function (name) {
+      html +=
+        '<button class="dl-chip' +
+        (w.campaign === name ? " active" : "") +
+        '" data-dl-topic="' +
+        attrEscape(name) +
+        '">' +
+        escapeHtml(name) +
+        "</button>";
+    });
+    html += "</div></div>";
+
+    if (w.campaign) {
+      var rows = deliveryWizardSelectableTasks(w.campaign);
+      html +=
+        '<div class="dl-step"><div class="dl-step-label">2 · Work item</div>';
+      if (!rows.length)
+        html += '<p class="empty-note">No checklist items in this topic.</p>';
+      rows.forEach(function (r) {
+        var t = r.task;
+        var cls = "dl-item-row";
+        if (!r.selectable) cls += " disabled";
+        if (w.task && w.task.file === t.file && w.task.cbidx === t.cbidx)
+          cls += " active";
+        html +=
+          '<div class="' +
+          cls +
+          '"' +
+          (r.selectable
+            ? ' data-dl-item="' +
+              t.cbidx +
+              '" data-dl-item-file="' +
+              attrEscape(t.file.relPath) +
+              '"'
+            : "") +
+          ">";
+        if (t.id) html += '<span class="chip chip-id">' + escapeHtml(t.id) + "</span> ";
+        if (t.state !== "open") html += '<span class="chip">done</span> ';
+        if (t.postponed) html += '<span class="chip chip-pp">postponed</span> ';
+        if (r.activeSession)
+          html +=
+            '<span class="chip dl-chip-active" data-dl-goto-session="' +
+            attrEscape(r.activeSession.sessionId) +
+            '">in delivery: ' +
+            escapeHtml(r.activeSession.state) +
+            "</span> ";
+        html += escapeHtml(t.text || "(untitled)") + "</div>";
+      });
+      html += "</div>";
+    }
+
+    if (w.task) {
+      html +=
+        '<div class="dl-step"><div class="dl-step-label">3 · Preview</div>' +
+        '<div class="dl-preview"><div class="dl-preview-line">' +
+        escapeHtml(w.task.lineText || w.task.text) +
+        '</div><div class="dl-preview-meta">' +
+        escapeHtml(w.task.file.relPath) +
+        " · heading: " +
+        escapeHtml(w.task.heading || "—") +
+        "</div></div></div>";
+
+      html +=
+        '<div class="dl-step"><div class="dl-step-label">4 · Provider</div><div class="dl-chip-row">';
+      ["claude", "codex"].forEach(function (p) {
+        html +=
+          '<button class="dl-chip' +
+          (w.provider === p ? " active" : "") +
+          '" data-dl-provider="' +
+          p +
+          '">' +
+          (p === "claude" ? "Claude Code" : "Codex") +
+          "</button>";
+      });
+      html += "</div></div>";
+
+      html +=
+        '<div class="dl-step"><div class="dl-step-label">5 · Capabilities</div><div class="dl-chip-row">';
+      (w.capabilities || []).forEach(function (c) {
+        var locked = ALWAYS_ON_CAPABILITIES.indexOf(c.name) !== -1;
+        var dropped = w.dropped.indexOf(c.name) !== -1;
+        var agent = getAgent(c.name);
+        html +=
+          '<span class="dl-chip dl-cap' +
+          (locked ? " locked" : "") +
+          (dropped ? " dropped" : "") +
+          '" title="' +
+          attrEscape((agent && agent.purpose) || c.reason) +
+          '">' +
+          escapeHtml((agent && agent.name) || c.name) +
+          (locked
+            ? " 🔒"
+            : '<button class="dl-cap-drop" data-dl-drop="' +
+              attrEscape(c.name) +
+              '">' +
+              (dropped ? "restore" : "remove") +
+              "</button>") +
+          "</span>";
+      });
+      html += "</div></div>";
+
+      html +=
+        '<div class="dl-step"><label class="dl-check"><input type="checkbox" data-dl-dirty-ack' +
+        (w.dirtyAck ? " checked" : "") +
+        "> I understand agent edits will interleave with any uncommitted changes in my working tree</label></div>";
+
+      if (w.error) html += '<p class="dl-error">' + escapeHtml(w.error) + "</p>";
+      html +=
+        '<div class="dl-step"><button class="pm-btn primary" data-dl-launch' +
+        (w.launching ? " disabled" : "") +
+        ">" +
+        (w.launching ? "Launching…" : "Launch") +
+        "</button> " +
+        '<button class="pm-btn" data-dl-cancel-wizard>Cancel</button></div>';
+    } else {
+      html +=
+        '<div class="dl-step"><button class="pm-btn" data-dl-cancel-wizard>Cancel</button></div>';
+    }
+
+    html += "</div>";
+    return html;
+  }
+
+  function buildSessionsListHTML() {
+    var html = '<div class="dl-section"><h2>Sessions</h2>';
+    var sessions = deliveryData.sessions || [];
+    if (!sessions.length) {
+      html += '<p class="empty-note">No delivery sessions yet.</p></div>';
+      return html;
+    }
+    html += '<div class="dl-sessions">';
+    sessions.forEach(function (s) {
+      var tok = s.usageTotal ? s.usageTotal.input + s.usageTotal.output : 0;
+      html +=
+        '<div class="dl-session-row" data-dl-open-session="' +
+        attrEscape(s.sessionId) +
+        '"><span class="dl-dot ' +
+        (s.runnerAlive ? "dl-dot-alive" : "dl-dot-stale") +
+        '"></span>' +
+        deliveryStateBadgeHTML(s.state, s.awaiting) +
+        '<div class="dl-session-main"><div>' +
+        escapeHtml(s.item.text || "(untitled)") +
+        '</div><div class="rr-src">' +
+        escapeHtml(s.item.campaign || "") +
+        " · " +
+        escapeHtml(s.agent) +
+        "</div></div>" +
+        '<div class="dl-session-meta">' +
+        tok +
+        " tok</div></div>";
+    });
+    html += "</div></div>";
+    return html;
+  }
+
+  function buildAgentCatalogHTML() {
+    var html =
+      '<div class="dl-section"><details class="dl-catalog"><summary>Agent Catalog (' +
+      AGENT_REGISTRY.length +
+      ")</summary><div class=\"dl-catalog-body\">";
+    AGENT_REGISTRY.forEach(function (a) {
+      var planned = a.status === "planned";
+      html +=
+        '<div class="dl-agent-row' +
+        (planned ? " planned" : "") +
+        '"><div class="dl-agent-head"><strong>' +
+        escapeHtml(a.name) +
+        '</strong> <span class="chip">' +
+        escapeHtml(a.executionMode) +
+        '</span> <span class="chip">' +
+        escapeHtml(a.access) +
+        "</span> " +
+        (planned
+          ? '<span class="chip dl-chip-planned">Planned — not yet available</span>'
+          : '<span class="chip dl-chip-enabled">Enabled · ' +
+            escapeHtml(a.phase) +
+            "</span>") +
+        '</div><div class="dl-agent-purpose">' +
+        escapeHtml(a.purpose) +
+        '</div><div class="rr-src">trigger: ' +
+        escapeHtml(a.trigger) +
+        " · blocking: " +
+        escapeHtml(a.blocking) +
+        "</div></div>";
+    });
+    html += "</div></details></div>";
+    return html;
+  }
+
+  function deliveryLaunch() {
+    var w = deliveryWizard;
+    if (!w || !w.task) return;
+    w.launching = true;
+    w.error = null;
+    els.view.innerHTML = buildDeliveryHTML();
+    wireDeliveryEvents();
+    apiPost("delivery/start", {
+      file: w.task.file.relPath,
+      cbidx: w.task.cbidx,
+      expectText: w.task.lineText,
+      agent: w.provider,
+      dirtyAck: w.dirtyAck,
+      options: { capabilitiesDrop: w.dropped },
+    })
+      .then(function (resp) {
+        deliveryWizard = null;
+        goDeliverySession(resp.sessionId);
+      })
+      .catch(function (err) {
+        w.launching = false;
+        w.error = String((err && err.message) || err);
+        els.view.innerHTML = buildDeliveryHTML();
+        wireDeliveryEvents();
+      });
+  }
+
+  function wireDeliveryEvents() {
+    function wire(sel, fn) {
+      Array.prototype.forEach.call(els.view.querySelectorAll(sel), fn);
+    }
+    wire("[data-dl-new]", function (b) {
+      b.addEventListener("click", function () {
+        openDeliveryWizard(null);
+      });
+    });
+    wire("[data-dl-cancel-wizard]", function (b) {
+      b.addEventListener("click", function () {
+        deliveryWizard = null;
+        els.view.innerHTML = buildDeliveryHTML();
+        wireDeliveryEvents();
+      });
+    });
+    wire("[data-dl-topic]", function (b) {
+      b.addEventListener("click", function () {
+        deliveryWizard.campaign = b.getAttribute("data-dl-topic");
+        deliveryWizard.task = null;
+        deliveryWizard.capabilities = null;
+        els.view.innerHTML = buildDeliveryHTML();
+        wireDeliveryEvents();
+      });
+    });
+    wire("[data-dl-item]", function (b) {
+      b.addEventListener("click", function () {
+        var relPath = b.getAttribute("data-dl-item-file");
+        var cbidx = parseInt(b.getAttribute("data-dl-item"), 10);
+        var f = byRelPath[relPath.toLowerCase()];
+        if (!f) return;
+        var task = fileTasks(f).filter(function (t) {
+          return t.cbidx === cbidx;
+        })[0];
+        if (!task) return;
+        deliveryWizard.task = task;
+        deliveryComputeWizardCapabilities();
+        els.view.innerHTML = buildDeliveryHTML();
+        wireDeliveryEvents();
+      });
+    });
+    wire("[data-dl-goto-session]", function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        goDeliverySession(b.getAttribute("data-dl-goto-session"));
+      });
+    });
+    wire("[data-dl-provider]", function (b) {
+      b.addEventListener("click", function () {
+        deliveryWizard.provider = b.getAttribute("data-dl-provider");
+        els.view.innerHTML = buildDeliveryHTML();
+        wireDeliveryEvents();
+      });
+    });
+    wire("[data-dl-drop]", function (b) {
+      b.addEventListener("click", function () {
+        var name = b.getAttribute("data-dl-drop");
+        var idx = deliveryWizard.dropped.indexOf(name);
+        if (idx === -1) deliveryWizard.dropped.push(name);
+        else deliveryWizard.dropped.splice(idx, 1);
+        els.view.innerHTML = buildDeliveryHTML();
+        wireDeliveryEvents();
+      });
+    });
+    wire("[data-dl-dirty-ack]", function (b) {
+      b.addEventListener("change", function () {
+        deliveryWizard.dirtyAck = b.checked;
+      });
+    });
+    wire("[data-dl-launch]", function (b) {
+      b.addEventListener("click", function () {
+        deliveryLaunch();
+      });
+    });
+    wire("[data-dl-open-session]", function (b) {
+      b.addEventListener("click", function () {
+        goDeliverySession(b.getAttribute("data-dl-open-session"));
+      });
+    });
+  }
+
+  // ---- rendering: delivery-session route ----
+  function renderDeliverySessionRoute(id) {
+    setBreadcrumb([
+      { label: "Home", go: goHome },
+      { label: "Delivery", go: goDelivery },
+      {
+        label: id,
+        go: function () {
+          goDeliverySession(id);
+        },
+      },
+    ]);
+    els.view.innerHTML = '<p class="empty-note">Loading…</p>';
+    Promise.all([loadDeliverySessionDetail(id), loadDeliveryEventsTail(id)])
+      .then(function () {
+        if (!(currentRoute.type === "delivery-session" && currentRoute.id === id))
+          return;
+        els.view.innerHTML = buildSessionDetailHTML();
+        wireSessionDetailEvents(id);
+      })
+      .catch(function (err) {
+        els.view.innerHTML =
+          '<p class="empty-note">Failed to load session: ' +
+          escapeHtml(String((err && err.message) || err)) +
+          "</p>";
+      });
+  }
+
+  function refreshDeliveryRoute(sessionId) {
+    if (currentRoute.type === "delivery") {
+      loadDeliverySessions().then(function () {
+        if (currentRoute.type !== "delivery") return;
+        els.view.innerHTML = buildDeliveryHTML();
+        wireDeliveryEvents();
+      });
+    } else if (
+      currentRoute.type === "delivery-session" &&
+      (!sessionId || sessionId === currentRoute.id)
+    ) {
+      var id = currentRoute.id;
+      Promise.all([loadDeliverySessionDetail(id), loadDeliveryEventsTail(id)]).then(
+        function () {
+          if (!(currentRoute.type === "delivery-session" && currentRoute.id === id))
+            return;
+          els.view.innerHTML = buildSessionDetailHTML();
+          wireSessionDetailEvents(id);
+        },
+      );
+    }
+  }
+
+  function deliveryUsageStr(u) {
+    if (!u) return "0 tok";
+    return u.input + u.output + " tok";
+  }
+
+  function buildGatePanelHTML(d) {
+    var gate = d.state.awaiting.gate;
+    var html =
+      '<div class="dl-section dl-gate"><h2>Gate: ' +
+      (DELIVERY_GATE_LABEL[gate] || gate) +
+      "</h2>";
+    var artifactName =
+      gate === "spec"
+        ? "spec.md"
+        : gate === "plan"
+          ? "plan.md"
+          : gate === "uat"
+            ? "uat/summary.md"
+            : null;
+    if (artifactName)
+      html +=
+        '<div class="dl-gate-artifact" data-dl-gate-artifact="' +
+        artifactName +
+        '"><p class="empty-note">Loading ' +
+        artifactName +
+        "…</p></div>";
+    if (gate === "question" && d.state.awaiting.questions) {
+      html += "<ul>";
+      d.state.awaiting.questions.forEach(function (q) {
+        html += "<li>" + escapeHtml(q.text) + "</li>";
+      });
+      html += "</ul>";
+    }
+    if (gate === "blocked" && d.state.lastError)
+      html +=
+        '<p class="dl-error">' +
+        escapeHtml(d.state.lastError.message || "Blocked") +
+        "</p>";
+
+    html += '<div class="dl-gate-actions">';
+    if (gate === "spec" || gate === "plan") {
+      if (gate === "plan")
+        html +=
+          '<input class="dl-confirm-input" data-dl-confirm-text placeholder="Type APPROVE if risk-flagged"> ';
+      html += '<button class="pm-btn primary" data-dl-decide="approve">Approve</button>';
+      html += ' <button class="pm-btn" data-dl-decide="reject">Request changes…</button>';
+    } else if (gate === "uat") {
+      html +=
+        '<label class="dl-check"><input type="checkbox" data-dl-tick-checkbox checked> Tick source checkbox</label> ';
+      html += '<button class="pm-btn primary" data-dl-decide="accept">Accept</button>';
+      html += ' <button class="pm-btn" data-dl-decide="reject">Request changes…</button>';
+    } else if (gate === "question") {
+      html += '<input class="dl-answer-input" data-dl-answer-text placeholder="Your answer"> ';
+      html += '<button class="pm-btn primary" data-dl-decide="answer">Submit answer</button>';
+    } else if (gate === "blocked") {
+      html += '<button class="pm-btn primary" data-dl-decide="retry">Retry</button>';
+    } else if (gate === "shipped") {
+      html += '<button class="pm-btn primary" data-dl-decide="shipped">Mark shipped</button>';
+    }
+    html += "</div></div>";
+    return html;
+  }
+
+  function buildAgentOutputsHTML(d) {
+    var orchestrator = getAgent("delivery-orchestrator");
+    var usage = d.state.usage && d.state.usage.total;
+    var html = '<div class="dl-section"><h2>Agent outputs</h2>';
+    html +=
+      '<details class="dl-agent-card" open><summary>' +
+      escapeHtml(orchestrator.name) +
+      " · " +
+      escapeHtml(d.state.state) +
+      " · " +
+      deliveryUsageStr(usage) +
+      '</summary><div class="dl-agent-card-body">';
+    var artifactList = [
+      { path: "spec.md", label: "Spec" },
+      { path: "plan.md", label: "Plan" },
+      { path: "build-log.md", label: "Build log" },
+      { path: "validation-report.md", label: "Validation report" },
+      { path: "review-self.md", label: "Self review" },
+      { path: "uat/summary.md", label: "UAT summary" },
+    ];
+    var present = (d.artifacts || []).map(function (a) {
+      return a.path;
+    });
+    artifactList.forEach(function (a) {
+      if (present.indexOf(a.path) === -1) return;
+      html +=
+        '<button class="dl-artifact-link-btn" data-dl-artifact-link="' +
+        attrEscape(a.path) +
+        '">' +
+        escapeHtml(a.label) +
+        "</button>";
+    });
+    html += "</div></details></div>";
+    return html;
+  }
+
+  function buildTimelineHTML() {
+    if (!deliveryEvents.length) return '<p class="empty-note">No events yet.</p>';
+    var html = '<div class="dl-events">';
+    deliveryEvents.forEach(function (e) {
+      html +=
+        '<div class="dl-event"><span class="dl-event-time">' +
+        escapeHtml(new Date(e.ts).toLocaleTimeString()) +
+        '</span> <span class="dl-event-type">' +
+        escapeHtml(e.type) +
+        "</span>" +
+        (e.phase ? ' <span class="chip">' + escapeHtml(e.phase) + "</span>" : "") +
+        "</div>";
+    });
+    html += "</div>";
+    return html;
+  }
+
+  function buildArtifactTreeHTML(artifacts) {
+    if (!artifacts || !artifacts.length)
+      return '<p class="empty-note">No artifacts yet.</p>';
+    var html = '<div class="dl-artifact-tree">';
+    artifacts.forEach(function (a) {
+      html +=
+        '<button class="dl-artifact-link-btn" data-dl-artifact-link="' +
+        attrEscape(a.path) +
+        '">' +
+        escapeHtml(a.path) +
+        "</button>";
+    });
+    html += "</div>";
+    return html;
+  }
+
+  function deliveryPrettyJson(text) {
+    try {
+      return JSON.stringify(JSON.parse(text), null, 2);
+    } catch (e) {
+      return text;
+    }
+  }
+  function renderArtifactContentHTML(art) {
+    if (!art) return '<p class="empty-note">(empty)</p>';
+    if (art.lang === "md") {
+      var rendered = renderMarkdown(art.content, {
+        relPath: "__delivery__/" + art.name,
+      });
+      return rendered.html;
+    }
+    if (art.lang === "json")
+      return (
+        '<pre class="dl-artifact-pre">' +
+        escapeHtml(deliveryPrettyJson(art.content)) +
+        "</pre>"
+      );
+    return '<pre class="dl-artifact-pre">' + escapeHtml(art.content) + "</pre>";
+  }
+
+  function buildSessionDetailHTML() {
+    var d = deliverySession;
+    if (!d) return '<p class="empty-note">Session not found.</p>';
+    var packet = d.packet,
+      state = d.state;
+    var html =
+      '<div class="pagehead"><h1>' +
+      icon("bolt", "icon-bolt") +
+      " " +
+      escapeHtml(packet.item.id ? packet.item.id + " — " : "") +
+      escapeHtml(packet.item.text) +
+      "</h1></div>";
+
+    html +=
+      '<div class="dl-detail-header"><span class="chip">' +
+      escapeHtml(packet.item.campaign || "") +
+      '</span> <span class="chip">' +
+      escapeHtml(packet.agent) +
+      "</span> " +
+      deliveryStateBadgeHTML(state.state, state.awaiting) +
+      ' <span class="chip">' +
+      deliveryUsageStr(state.usage && state.usage.total) +
+      '</span> <span class="dl-dot ' +
+      (d.runner.alive ? "dl-dot-alive" : "dl-dot-stale") +
+      '"></span> ' +
+      (d.runner.alive ? "runner alive" : "runner stale") +
+      (!d.runner.alive && DELIVERY_TERMINAL.indexOf(state.state) === -1
+        ? ' <button class="pm-btn" data-dl-resume>Resume</button>'
+        : "") +
+      "</div>";
+
+    html += '<div class="dl-stepper">';
+    if (state.state === "BLOCKED" || state.state === "NEEDS_DECISION") {
+      html +=
+        '<div class="dl-stepper-overlay">' +
+        escapeHtml(state.state) +
+        (state.lastError && state.lastError.message
+          ? ": " + escapeHtml(state.lastError.message)
+          : "") +
+        "</div>";
+    } else if (
+      DELIVERY_TERMINAL.indexOf(state.state) !== -1 &&
+      state.state !== "SHIPPED"
+    ) {
+      html += '<div class="dl-stepper-overlay">' + escapeHtml(state.state) + "</div>";
+    } else {
+      var curIdx = DELIVERY_STEPPER.indexOf(state.state);
+      DELIVERY_STEPPER.forEach(function (s, i) {
+        var cls = "dl-pill";
+        if (i < curIdx) cls += " done";
+        else if (i === curIdx) cls += " current";
+        html += '<span class="' + cls + '">' + s + "</span>";
+      });
+    }
+    html += "</div>";
+
+    if (DELIVERY_TERMINAL.indexOf(state.state) === -1)
+      html +=
+        '<div class="dl-cancel-row"><button class="pm-btn" data-dl-decide="cancel">Cancel session</button></div>';
+
+    if (state.awaiting) html += buildGatePanelHTML(d);
+    html += buildAgentOutputsHTML(d);
+
+    if (DELIVERY_TERMINAL.indexOf(state.state) === -1) {
+      html +=
+        '<div class="dl-section"><h2>Message the orchestrator</h2>' +
+        '<textarea class="dl-composer" data-dl-message-text placeholder="Guidance for the next boundary — never interrupts a running turn"></textarea>' +
+        '<button class="pm-btn" data-dl-message-send>Send</button></div>';
+    }
+
+    html += '<div class="dl-section dl-timeline-artifacts">';
+    html +=
+      '<div class="dl-timeline"><h2>Timeline</h2>' + buildTimelineHTML() + "</div>";
+    html +=
+      '<div class="dl-artifacts"><h2>Artifacts</h2>' +
+      buildArtifactTreeHTML(d.artifacts) +
+      '<div class="dl-artifact-view" data-dl-artifact-view></div></div>';
+    html += "</div>";
+
+    return html;
+  }
+
+  function deliveryDecision(id, gate, decision, extra) {
+    var body = { id: id, gate: gate, decision: decision };
+    if (extra) {
+      for (var k in extra) {
+        if (Object.prototype.hasOwnProperty.call(extra, k)) body[k] = extra[k];
+      }
+    }
+    apiPost("delivery/decision", body)
+      .then(function () {
+        toast("Decision recorded", "success");
+        refreshDeliveryRoute(id);
+      })
+      .catch(function (err) {
+        toast(String((err && err.message) || err), "error");
+      });
+  }
+
+  function wireSessionDetailEvents(id) {
+    function wire(sel, fn) {
+      Array.prototype.forEach.call(els.view.querySelectorAll(sel), fn);
+    }
+    var gateArtifactEl = els.view.querySelector("[data-dl-gate-artifact]");
+    if (gateArtifactEl) {
+      var path = gateArtifactEl.getAttribute("data-dl-gate-artifact");
+      apiGet(
+        "/api/delivery/artifact?id=" +
+          encodeURIComponent(id) +
+          "&path=" +
+          encodeURIComponent(path),
+      )
+        .then(function (a) {
+          gateArtifactEl.innerHTML = renderArtifactContentHTML(a);
+        })
+        .catch(function () {
+          gateArtifactEl.innerHTML = '<p class="empty-note">(not available yet)</p>';
+        });
+    }
+
+    wire("[data-dl-resume]", function (b) {
+      b.addEventListener("click", function () {
+        apiPost("delivery/resume", { id: id })
+          .then(function () {
+            toast("Resume requested", "success");
+            refreshDeliveryRoute(id);
+          })
+          .catch(function (err) {
+            toast(String((err && err.message) || err), "error");
+          });
+      });
+    });
+
+    wire("[data-dl-decide]", function (b) {
+      b.addEventListener("click", function () {
+        var decision = b.getAttribute("data-dl-decide");
+        var gate =
+          deliverySession.state.awaiting && deliverySession.state.awaiting.gate;
+        if (decision === "reject") {
+          openModal({
+            title: "Request changes",
+            bodyHtml:
+              '<div class="pm-field"><label>Note for the orchestrator</label><textarea id="pm-dl-note" rows="4"></textarea></div>',
+            submitLabel: "Send",
+            onSubmit: function () {
+              var note = (document.getElementById("pm-dl-note").value || "").trim();
+              closeModal();
+              deliveryDecision(id, gate, "reject", { note: note });
+            },
+          });
+          return;
+        }
+        var extra = {};
+        if (decision === "approve" && gate === "plan") {
+          var confirmEl = els.view.querySelector("[data-dl-confirm-text]");
+          if (confirmEl) extra.confirmText = confirmEl.value;
+        }
+        if (decision === "accept") {
+          var tickEl = els.view.querySelector("[data-dl-tick-checkbox]");
+          extra.tickCheckbox = tickEl ? tickEl.checked : true;
+        }
+        if (decision === "answer") {
+          var ansEl = els.view.querySelector("[data-dl-answer-text]");
+          extra.answer = ansEl ? ansEl.value : "";
+        }
+        deliveryDecision(id, gate, decision, extra);
+      });
+    });
+
+    wire("[data-dl-message-send]", function (b) {
+      b.addEventListener("click", function () {
+        var ta = els.view.querySelector("[data-dl-message-text]");
+        var text = (ta.value || "").trim();
+        if (!text) return;
+        apiPost("delivery/message", { id: id, text: text })
+          .then(function () {
+            ta.value = "";
+            toast("Message queued — read at the next step", "success");
+            refreshDeliveryRoute(id);
+          })
+          .catch(function (err) {
+            toast(String((err && err.message) || err), "error");
+          });
+      });
+    });
+
+    wire("[data-dl-artifact-link]", function (a) {
+      a.addEventListener("click", function () {
+        var artPath = a.getAttribute("data-dl-artifact-link");
+        var target = els.view.querySelector("[data-dl-artifact-view]");
+        target.innerHTML = '<p class="empty-note">Loading…</p>';
+        apiGet(
+          "/api/delivery/artifact?id=" +
+            encodeURIComponent(id) +
+            "&path=" +
+            encodeURIComponent(artPath),
+        )
+          .then(function (art) {
+            target.innerHTML = renderArtifactContentHTML(art);
+          })
+          .catch(function (err) {
+            target.innerHTML =
+              '<p class="empty-note">Failed: ' +
+              escapeHtml(String((err && err.message) || err)) +
+              "</p>";
+          });
+      });
+    });
   }
 
   // ---------- boot ----------
