@@ -2689,6 +2689,28 @@
       { label: "Home", go: goHome },
       { label: "Checklist Rollup", go: goChecklist },
     ]);
+    // The static dashboard has no delivery data or controls. In server mode,
+    // load the current sessions first so tasks already being delivered never
+    // receive a second launch affordance.
+    if (!CAN_EDIT) {
+      renderChecklistRollupContent();
+      return;
+    }
+    els.view.innerHTML = '<p class="empty-note">Loading delivery availability…</p>';
+    loadDeliverySessions()
+      .then(function () {
+        if (currentRoute.type === "checklist") renderChecklistRollupContent();
+      })
+      .catch(function (err) {
+        if (currentRoute.type !== "checklist") return;
+        els.view.innerHTML =
+          '<p class="empty-note">Failed to load delivery availability: ' +
+          escapeHtml(String((err && err.message) || err)) +
+          "</p>";
+      });
+  }
+
+  function renderChecklistRollupContent() {
     var html =
       '<div class="pagehead"><h1>' +
       icon("checklist", "icon-checklist") +
@@ -2729,7 +2751,30 @@
           return a.order - b.order;
         })
         .forEach(function (f) {
+          // `f.checklist` preserves skipped entries for the rollup, whereas
+          // `fileTasks` owns the cbidx used by the delivery launch flow.
+          // Advance only for real checkboxes so skipped rows cannot shift the
+          // source identity or weaken the server's text-drift check.
+          var tasks = fileTasks(f);
+          var checkboxIndex = 0;
           f.checklist.forEach(function (c) {
+            var task = c.state === "skipped" ? null : tasks[checkboxIndex++];
+            var active =
+              task && deliveryActiveSessionFor(task.file.relPath, task.cbidx);
+            var deliver =
+              CAN_EDIT &&
+              task &&
+              task.state === "open" &&
+              !active &&
+              deliveryTopics().indexOf(task.file.module) !== -1
+                ? '<button class="row-deliver-btn" data-deliver-file="' +
+                  attrEscape(task.file.relPath) +
+                  '" data-deliver-cbidx="' +
+                  task.cbidx +
+                  '" title="Start a delivery session for this item">' +
+                  icon("bolt") +
+                  "</button>"
+                : "";
             var row =
               '<div class="rollup-row' +
               (f.inFabled ? " rollup-row--fabled" : "") +
@@ -2745,10 +2790,15 @@
                 "status-icon " + c.state,
               ) +
               "<div><div>" +
+              (CAN_EDIT && task && task.postponed
+                ? '<span class="chip chip-pp">postponed</span> '
+                : "") +
               escapeHtml(c.text || "(untitled)") +
               '</div><div class="rr-src">' +
               escapeHtml(f.title) +
-              "</div></div></div>";
+              "</div></div>" +
+              deliver +
+              "</div>";
             if (c.state === "open") openRows += row;
             else doneRows += row;
           });
@@ -2767,6 +2817,7 @@
     });
     els.view.innerHTML = html;
     wireRollupEvents();
+    wireTaskActions();
   }
 
   function renderBugsRollup() {
