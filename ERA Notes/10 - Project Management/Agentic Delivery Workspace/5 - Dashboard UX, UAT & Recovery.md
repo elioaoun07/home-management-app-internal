@@ -24,6 +24,7 @@
 2. **Select an open current work item** from that topic — checklist items filtered per the selectability rules below.
 3. **Preview the item and its source** — line text, id/severity/effort, heading context, source file excerpt (existing preview panel).
 4. **Select the provider** — Codex or Claude Code.
+4a. **Model + effort** — two selectors, defaulting from `.delivery/config.json` (provider default model; per-phase effort defaults, doc 4 §5). The owner can override either for the session; the choice is persisted into the packet and mapped to provider-specific fields by the driver (doc 4 §5).
 5. **Classifier minimum capability set** — computed client-side from the injected registry + classifier (doc 2 §5), rendered from the Agent Catalog metadata; always-on rows visibly locked.
 6. **Optional capabilities only are removable** — locked rows have no remove affordance; the server independently rejects locked-row drops.
 7. **Risk flags & warnings** — item-derived risk flags, dirty-working-tree warning (explicit confirm), build-lock banner when active.
@@ -48,7 +49,7 @@ The **Deliver button** on a task row (checklist rollup + file view) opens this f
 
 **Session detail** (`delivery-session` route), stacked regions:
 
-1. **Header** — item id + text, campaign, agent, state badge, elapsed, total tokens, changed-files count.
+1. **Header** — item id + text, campaign, agent, state badge, elapsed, total tokens (shown as a thin progress bar against the configured budget, amber past `warnAtPct`; bar hidden when no `budget.sessionTokens` is set, doc 4 §5), changed-files count.
 2. **Stepper** — SELECTED→…→SHIPPED pills; BLOCKED / NEEDS_DECISION render as an overlay pill with the reason.
 3. **Gate panel** (only when `state.awaiting` is set) — spec/plan/UAT summary rendered inline through the existing md pipeline; Approve / Request-changes-with-note / Cancel; typed `APPROVE` input when risk-flagged; NEEDS_DECISION = question + options + free-text; UAT_READY = summary + artifact links + Accept (with "tick source checkbox" default-on) / Reject-with-note.
 4. **Agent outputs** (§4) — one expandable card per agent.
@@ -100,6 +101,7 @@ Screenshots: not in MVP (needs browser automation) — S6 candidate. The dashboa
 - Every turn's normalized usage accumulates into `state.json.usage.perPhase[phase]` (+ `total`); specialists tracked under a `review:` prefix.
 - Session detail renders the per-phase usage table; the list shows totals; each agent card shows its own tokens.
 - Cost column appears **only if** the owner sets `priceIn`/`priceOut` ($/1M tokens) in `.delivery/config.json` — no hardcoded price table to rot.
+- Session header token total renders against `budget.sessionTokens` when the owner has set one (doc 4 §5); the budget itself ships unset until the CLI-vs-workspace benchmark (doc 6 §1) gives real numbers to baseline it against.
 - `events.ndjson` is the complete audit trace (every agent item, validation run, decision, owner message); `runner.log` catches stray process output; both readable in-dashboard via the artifact endpoint.
 
 ## 7 · Failure recovery & resumption

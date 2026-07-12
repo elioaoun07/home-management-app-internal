@@ -2,6 +2,8 @@
 
 **Stamped:** 2026-07-11 · Covers plan sections: current-state findings with exact file references, confirmed-vs-proposal split
 
+> **Frozen pre-implementation baseline — not the current state.** This doc is a point-in-time snapshot of the repo at `main` @ `b03b2bb` on 2026-07-11, taken **before any delivery code existed**, to justify the plan's design choices against what was actually there. S1 (pure core) and S2 (server + runner + fake-driver dashboard) shipped **2026-07-12** — see `_index.md`'s status line and doc 6 §1 for what exists now (`scripts/delivery/*.mjs`, `server-routes.mjs`, `run-session.mjs`, the full dashboard delivery UI). Every "no … exists" claim below is scoped to the 2026-07-11 stamp, not today. Do not use this file to answer "what's implemented" — use doc 6 §1 (roadmap, marked ✅/IMPLEMENTED with dates) or the Freshness protocol (`git log --since=2026-07-11`) instead.
+
 Verified against the working tree on 2026-07-11 (`main` @ `b03b2bb`). Line numbers are exact as of the stamp; re-verify with the Freshness protocol in `_index.md` before implementing.
 
 ## 1 · The host: pm-server
@@ -56,7 +58,7 @@ The static `_dashboard.html` build runs the same client in `"static"` mode with 
 - Hard Rule 24 (migration pairing) and Hard Rule 25 (PM trace) are enforced for Claude by hooks (`check-migration.sh`, `check-pm-update.sh` Stop hook); `CLAUDE.md` line: "Codex and other agents without a hook engine must still treat this rule as mandatory" — the delivery workflow re-checks both in review (doc 3) and satisfies HR25 via the Accept checkbox tick.
 - `tsconfig.json` includes `**/*.ts`/`**/*.tsx` with only `node_modules` excluded — relevant to any future S6 non-Git isolated copy placed inside the repo (a nested non-dot directory copy would be swept into main-repo typechecking; any such copy must be a dot-dir or live outside the repo entirely — Git worktrees are banned outright, doc 4 §3).
 
-## 6 · Gaps (greenfield — everything below must be created)
+## 6 · Gaps as of the 2026-07-11 baseline (all since addressed by S1/S2 — see doc 6 §1)
 
 1. No session/agent/orchestration code of any kind in the tooling.
 2. No programmatic agent driver — no `openai`, `@openai/*`, or `@anthropic-ai/*` dependency anywhere (`package.json` verified).

@@ -30,14 +30,16 @@ Extend `scripts/pm-server.mjs` (the existing zero-dependency PM Command Center s
 | Dashboard visibility | Every agent (orchestrator + each specialist) gets its own expandable output card — collapsed to one calm line, expanded to its rendered artifact; raw event noise stays in the timeline (doc 5) |
 | Accept trace | Tick the source checkbox (drift-guarded, optional per accept); no extra vault writeback |
 | Delivery mode | Build-to-UAT only; no deploy path exists in the tool; `SHIPPED` is recorded after the owner's own commit |
+| Token governance (added 2026-07-12, owner cost review) | Between-turn session token budget, unset until baselined against real measurements (doc 4 §5); per-phase effort defaults + dashboard model/effort selectors (doc 4 §5, doc 5 §2); configurable specialist model tiers (economy/balanced/strong), no hardcoded model (doc 4 §5); primary-thread reuse by default with defined fresh-thread triggers — long idle, excessive context growth, failed resume, instability (doc 4 §5); S5 specialists keep fresh disposable threads unchanged; a CLI-vs-workspace consumption benchmark (doc 6 §1 exit gate) replaces estimates with measured ratios before any budget default is set |
 
 ## Costs
 
 | Item | Cost | Recurring? |
 |---|---|---|
 | `@openai/codex-sdk` + `@anthropic-ai/claude-agent-sdk` (devDeps, added in S3) | $0 | — |
-| Agent tokens per session | owner's existing Codex/Claude plans; per-phase usage always visible (doc 5) | per session |
+| Agent tokens per session | billed per the provider auth method already configured for that CLI (subscription plan or metered API key — the delivery tool introduces no separate billing path); per-phase usage always visible (doc 5) — actual delivery-session vs CLI-session consumption is unmeasured until the benchmark in doc 6 §1 runs; treat any ratio as unverified until then | per session |
 | Optional cost column | owner-set `priceIn`/`priceOut` in `.delivery/config.json` — no hardcoded price table to rot | — |
+| Session token budget | between-turn enforcement (doc 4 §5), `sessionTokens` unset by default — no arbitrary ceiling until baselined | per session, opt-in |
 
 ## Phase overview
 
@@ -55,7 +57,7 @@ Extend `scripts/pm-server.mjs` (the existing zero-dependency PM Command Center s
 
 ## Reading order
 
-1. [[1 - Current State & Evidence]] — what pm-server, the dashboard, and the agent installs actually are today (evidence-stamped)
+1. [[1 - Current State & Evidence]] — **frozen 2026-07-11 pre-implementation baseline** (what pm-server, the dashboard, and the agent installs were *before* any delivery code existed, evidence-stamped) — for current state, see doc 6 §1 and this file's status line above
 2. [[2 - Architecture & Process Model]] — components, process model, direct-edit workspace, persistence, API + SSE
 3. [[3 - State Machine, Packet & Classifier]] — packet schema, transition table, orchestrator phase contracts, classifier, **agent registry & full catalog roster**
 4. [[4 - Agent Drivers & Security]] — both SDK integrations, git-read-only enforcement, approval boundaries, token strategy

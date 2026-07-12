@@ -54,6 +54,8 @@
 
 **Exit:** one small real checklist item taken end-to-end to UAT_READY, accepted, and committed by the owner — on at least one provider.
 
+**CLI-vs-workspace consumption benchmark (added to the S4 exit gate, 2026-07-12 owner cost review):** before setting any `budget.sessionTokens` default or trusting any cost-ratio claim (doc 4 §5, doc _index Costs table), run the same 2–3 representative tasks from this repository — one S bug fix, one M feature slice, ideally one Budget-campaign item — both as a normal CLI session and as a delivery session, same provider/model/effort for both. Record per-task input/cached-input/output totals from the CLI's own usage reporting and from `state.json.usage`. Deliverables: (1) a measured CLI↔workspace ratio per task class, replacing every qualitative estimate in this plan; (2) data-driven `budget.sessionTokens`/`warnAtPct` defaults; (3) a per-phase breakdown of where the workspace spends more (spec/plan artifacts vs. gate re-priming vs. specialists) to guide any future tuning.
+
 ### Slice S5 — Independent specialists (specialist expansion) · **M · 1d**
 
 | Step | Note |
@@ -115,6 +117,7 @@ Vitest, `tests/delivery/*.test.ts` — matches the existing `tests/**/*.test.ts`
 | Codex sandbox not OS-enforced on Windows | write limits there are detection-only, not prevention | Post-turn changed-file + HEAD/ref guards, network-off, owner diff review at UAT; surfaced honestly as "detection-only" in the session view (doc 4 §4) |
 | Agent reads secrets (`.env*`, keys, auth stores) despite deny rules | secret content enters model context | Claude: `canUseTool` deny + Bash screening (heuristic); Codex: prompt ban only. No delivery task requires secrets; owner reviews every diff. **Residual risk — documented, never claimed enforced** |
 | Fix-loop thrash burns tokens | cost | `maxFixLoops:3`, bounded excerpts, per-phase usage always visible |
+| Session-level token consumption exceeds expectations | cost / burns owner's rate limits faster | Between-turn `budget.sessionTokens` (owner-set after benchmarking, doc 6 §1) → NEEDS_DECISION before it can run away; per-phase effort defaults + dashboard effort/model selectors (doc 4 §5); configurable specialist tiers instead of always using the primary model; thread-reuse policy avoids unnecessary re-priming (doc 4 §5) |
 | Windows file locks break atomic renames | state corruption | tmp+rename with EPERM retry ×3; state advances only after durable artifacts |
 | Two auth surfaces (Codex + Claude) | session can't start | Per-driver preflight turn at session start; failure → BLOCKED with clear reason before any work |
 | Composer message arrives mid-turn and is "ignored" | owner confusion | Explicit "queued — read at next step" UI state + `owner.message.consumed` event |
@@ -131,4 +134,4 @@ Vitest, `tests/delivery/*.test.ts` — matches the existing `tests/**/*.test.ts`
 | LLM-based capability classifier | Non-deterministic, unauditable, costs tokens; the rule table is testable and owner-editable |
 | Full specialist roster in MVP | Owner: document all, ship orchestrator + implementation + validation + UAT first; specialists are additive (S5) behind the same review seam |
 
-**Open decisions (owner, non-blocking):** (a) token prices for the optional cost column; (b) default `model`/`specialistModel` overrides in `.delivery/config.json` or provider defaults; (c) whether S5 should immediately follow the MVP or wait for a few real sessions of experience; (d) whether the Agent Catalog renders as a section of the `delivery` route or its own sub-route (pure UI-layout choice, registry-driven either way).
+**Open decisions (owner, non-blocking):** (a) token prices for the optional cost column; (b) concrete provider models mapped into `specialistTiers.{economy,balanced,strong}` in `.delivery/config.json` (tier mechanism itself is locked, doc 4 §5); (c) whether S5 should immediately follow the MVP or wait for a few real sessions of experience; (d) whether the Agent Catalog renders as a section of the `delivery` route or its own sub-route (pure UI-layout choice, registry-driven either way); (e) `budget.sessionTokens` value and idle/context-growth thresholds for the fresh-thread trigger (doc 4 §5) — deferred until the CLI-vs-workspace benchmark above produces real numbers.

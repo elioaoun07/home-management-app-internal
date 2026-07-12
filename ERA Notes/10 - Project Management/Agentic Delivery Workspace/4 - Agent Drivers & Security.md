@@ -8,11 +8,13 @@
 
 ```
 createDriver(kind) → {
-  startSession({cwd, mode: "build" | "readonly", model?})  → handle        // persist handle.ref immediately
-  resume(ref)                                              → handle
-  runTurn(handle, prompt, {outputSchema?, onEvent})        → {finalText, usage}
+  startSession({cwd, mode: "build" | "readonly", model?, effort?})  → handle   // persist handle.ref immediately
+  resume(ref)                                                       → handle
+  runTurn(handle, prompt, {outputSchema?, onEvent, effort?})        → {finalText, usage}
 }
 ```
+
+`model` and `effort` originate from `packet.agentConfig` (doc 3 §1), itself defaulted from `.delivery/config.json` and overridable at launch (doc 5 §2 step 4a). `effort` is passed per-turn (not just at `startSession`) because the per-phase defaults differ (below) — the runner resolves the phase-appropriate level from `agentConfig.effort` before each `runTurn` call. `model` is fixed for the life of the session, set once at `startSession`.
 
 - **Normalized events:** every provider event becomes `{ts, seq, type: "agent."+kind, phase, agent, data}` appended to `events.ndjson` (command lines truncated to 500 chars, messages to 2000 — full text lives in artifacts).
 - **Normalized usage:** `{input, cachedInput, output, costUsd?}` accumulated per phase into `state.json.usage`.
@@ -25,6 +27,7 @@ createDriver(kind) → {
 | Build mode | `workspace-write` sandbox, network **off**, `approval_policy: "never"` (anything needing approval must surface as NEEDS_DECISION via structured output instead). **Windows caveat:** Codex's OS-level sandbox mechanisms (Landlock/Seatbelt) do not cover Windows — on this machine the sandbox is advisory, and the authoritative controls are the post-turn guards (§3) + changed-file scope check (§4); recorded as residual risk, never claimed as enforced (doc 6 §4) | **Least-permissive workable mode — never `bypassPermissions`.** `permissionMode: "acceptEdits"` + an authoritative `canUseTool` callback that (a) allowlists writable paths to {working tree minus `constraints.forbiddenPaths`, own session dir}, (b) denies reads of secret paths (§4), (c) denies git-mutating Bash by subcommand screening; `disallowedTools` as a second layer. Harness-level enforcement (in-process SDK callback), not OS-level — stated as such in §4 |
 | Read-only mode (discovery/plan/S5 reviews) | read-only sandbox for specialist threads (same Windows caveat); primary-thread analysis turns guarded mechanically (§3) | `allowedTools: ["Read", "Grep", "Glob"]` (no Bash, no Write/Edit) + the same `canUseTool` secret-path read denial |
 | Structured output | `outputSchema` on `run` | schema-constrained final message; parse + validate runner-side |
+| Model / effort | model + reasoning-effort fields on `startThread`/`run` (**pin exact names against installed `.d.ts`** — documented drift risk, same caveat as the rest of this table) | `model` on `query()` options; effort/thinking option on the same call (**pin against installed `.d.ts`**) |
 | Usage | `turn.completed.usage {input_tokens, cached_input_tokens, output_tokens}` | result message `usage` + `total_cost_usd` |
 | Auth | existing `~/.codex/auth.json` (CLI 0.128.0 installed) | existing Claude Code install |
 | Preflight (S3) | one trivial turn at session start proves auth/SDK before any real work | same |
@@ -89,9 +92,26 @@ Enforced in three independent layers — none of which is prompt trust:
 ## 5 · Token & context optimization
 
 - **Artifact-first prompting:** every turn = ~1–2 KB framing + the small packet JSON + **paths** to artifacts ("read `artifacts/spec.md`"), never pasted history — agents read files themselves inside their own context management.
-- **One primary thread, phase-scoped turns:** each phase turn opens with "authoritative state is in the artifacts listed below; disregard prior scratch reasoning"; provider-native compaction handles long threads. Artifacts make threads replaceable — resume can fall back to a fresh thread without loss.
-- **Specialists as fresh threads (S5):** review context stays diff-sized; disposable, never resumed.
+- **Primary thread lifecycle — reuse by default, fresh only on a defined trigger.** Provider-native compaction and prompt caching make a continued thread workable across phases, and continuity has its own value, so the runner does **not** default to discarding the thread at every human gate. It resumes the existing thread unless one of these fires:
+  - **Long idle time** at a gate (owner-configurable threshold — cache has likely gone cold; resuming would re-pay the accumulated history at full price with little benefit),
+  - **Excessive context growth** (thread history has grown well beyond what the artifacts capture),
+  - **Failed resume** (provider `resume()` errors or a lost session ref),
+  - **Instability** (post-turn guard anomalies, degraded output quality).
+
+  On any of these, the runner starts a fresh thread seeded from artifact paths only — "artifacts make threads replaceable" is the enabling mechanism for this fallback, not a mandate to discard threads by default. Each phase turn still opens with "authoritative state is in the artifacts listed below; disregard prior scratch reasoning" so a resumed thread never leans on stale scratch context.
+- **Specialists as fresh threads (S5):** unchanged — review context stays diff-sized; disposable, never resumed, regardless of the primary-thread policy above.
 - **Skill budget:** skills referenced by repo-relative path (committed `.claude/skills/**`), never inlined — cost only if the agent reads them; only the 1–3 classifier-mapped skills per session.
 - **Bounded feedback:** validation failures fed back as last-200-lines-per-command excerpts; review diffs capped at 4000 lines with per-file fallback.
-- **Model choice:** unset by default (provider defaults); `.delivery/config.json` can override `model` (primary) and `specialistModel` (cheaper reviews). No per-phase model switching in MVP.
-- **Visibility:** per-phase usage table always rendered (doc 5 §6) — thrash is visible before it is expensive; `maxFixLoops:3` bounds the worst case.
+- **Model choice:** unset by default (provider defaults). `.delivery/config.json` can override `model` (primary) and exposes **configurable specialist model tiers** — `specialistTiers: {economy, balanced, strong}`, each owner-mapped to a concrete provider model (no model is hardcoded in the tooling). Each registry specialist declares which tier it uses (e.g. UX/lite code review → economy; DB-migration review → balanced; money-domain guardian → strong); an unset tier falls back to the provider default. Spawning a specialist on a cheaper tier — never switching the primary thread's model — is the cache-preserving pattern (doc "Caching for Agents" in the shared skill reference).
+- **Effort control:** the New Delivery Session flow (doc 5 §2) exposes a **model** and an **effort** selector per session, persisted into the packet and mapped per provider (Codex: reasoning-effort thread option; Claude Agent SDK: effort/thinking option — pinned against the installed `.d.ts` in S3, alongside the existing exact-field-name pinning task in §2 above). Recommended per-phase defaults, config-overridable:
+
+  | Phase | Effort | Rationale |
+  |---|---|---|
+  | DISCOVERY / spec | medium | mostly reading + writing one artifact |
+  | PLAN | high | plan quality gates everything downstream |
+  | BUILDING | high (xhigh opt-in per session for hard items) | high is the cost/quality sweet spot; xhigh only when the item warrants it |
+  | Self-review / UAT prep | medium | checklist-shaped work |
+  | S5 specialists | low–medium | verdict-shaped, diff-scoped |
+- **Session token budget:** `.delivery/config.json` supports `budget: {sessionTokens, warnAtPct}`. **`sessionTokens` ships unset (no enforcement)** — no arbitrary default is prescribed; the owner sets a value only after the CLI-vs-workspace benchmark (doc 6 §1) produces real baseline numbers for this repo's task classes. Enforcement is **between turns, not a mid-turn hard limit** — a turn already in flight always completes. After every turn, the runner compares accumulated `state.json.usage.total` against the budget: at `warnAtPct` it emits a `budget.warning` event; at or above 100% it raises `budget.exhausted` → NEEDS_DECISION (doc 3 §2) before composing the next turn, offering "extend budget by N" or "cancel session" — never a silent kill.
+- **Visibility:** per-phase usage table always rendered (doc 5 §6) — thrash is visible before it is expensive; `maxFixLoops:3` bounds the worst case. Session header additionally shows total tokens against the configured budget when one is set (doc 5 §6).
+- **Consumption is measured, not assumed:** no fixed multiplier (e.g. "Nx a CLI session") should be treated as fact for this workspace. Doc 6 §1 defines a benchmark — the same representative tasks run once via CLI and once via a delivery session, same provider/model/effort — whose measured ratios are the only authoritative cost comparison; they supersede any qualitative estimate.

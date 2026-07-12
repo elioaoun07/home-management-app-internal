@@ -59,7 +59,13 @@ Sessions run against the **live working tree at repo root** — no worktree, no 
 ```
 .delivery/
   config.json                      {maxConcurrentSessions:1, maxFixLoops:3, model:null,
-                                    specialistModel:null, priceIn:null, priceOut:null}
+                                    effort:{discovery:"medium", plan:"high", building:"high",
+                                            review:"medium"},
+                                    specialistTiers:{economy:null, balanced:null, strong:null},
+                                    budget:{sessionTokens:null, warnAtPct:70},
+                                    priceIn:null, priceOut:null}
+                                    -- effort/specialistTiers/budget per doc 4 §5; all null/default
+                                    until the CLI-vs-workspace benchmark (doc 6 §1) sets real values
   sessions/<sessionId>/            sessionId = s-<yyyymmdd>-<hhmmss>-<rand4>
     packet.json                    doc 3 §1 (written by pm-server at start; enriched once by runner)
     state.json                     {schemaVersion, sessionId, state, awaiting|null,
@@ -90,7 +96,7 @@ New GET/POST branches are inserted in `pm-server.mjs` **before** the generic `PO
 
 | Method + path | Request → Response | Notes |
 |---|---|---|
-| POST `/api/delivery/start` | `{file, cbidx, expectText, agent:"codex"\|"claude", dirtyAck?, options?:{capabilitiesDrop?:[]}}` → `{sessionId}` | Re-reads the md; validates checkbox open + text match (409 on drift, same pattern as `opToggle`); 409 if the item is already in an active session; 429 on build-lock/concurrency; 400 if tree dirty and no `dirtyAck`; server recomputes the capability set from the registry + classifier and rejects (400) any `capabilitiesDrop` naming a locked always-on row |
+| POST `/api/delivery/start` | `{file, cbidx, expectText, agent:"codex"\|"claude", model?, effort?:{discovery?,plan?,building?,review?}, dirtyAck?, options?:{capabilitiesDrop?:[]}}` → `{sessionId}` | Re-reads the md; validates checkbox open + text match (409 on drift, same pattern as `opToggle`); 409 if the item is already in an active session; 429 on build-lock/concurrency; 400 if tree dirty and no `dirtyAck`; server recomputes the capability set from the registry + classifier and rejects (400) any `capabilitiesDrop` naming a locked always-on row. `model`/`effort` default from `.delivery/config.json` when omitted (doc 4 §5) and are written into `packet.agentConfig` (doc 3 §1) |
 | GET `/api/delivery/sessions` | → `{sessions:[{sessionId, state, awaiting, agent, item:{text,id,campaign,pmFile,cbidx}, updatedAt, usageTotal, runnerAlive}]}` | Reads each `state.json` |
 | GET `/api/delivery/session?id=` | → `{packet, state, artifacts:[{path,size,mtimeMs}], runner:{alive,heartbeatAt}}` | 404 unknown id |
 | GET `/api/delivery/events?id=&after=` | → `{events:[…], lastSeq}` | seq cursor, cap 500 per call |
