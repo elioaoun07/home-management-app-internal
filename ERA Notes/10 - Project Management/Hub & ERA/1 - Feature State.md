@@ -67,9 +67,3 @@ _(Updated 2026-05-30)_
 4. **ERA is strong reactively, shallow proactively.** It parses user messages well but its proactive briefings barely read the household graph — the biggest *felt* upgrade is making it read Schedule + Budget deeply (file 2).
 
 → The growth opportunities are in [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>); the concrete next steps are in [3 · Action Plan](<3 - Action Plan.md>); the checkable list is [4 · Checklist](<4 - Checklist.md>).
-
-## Implemented delta — 2026-07-10
-
-- ✅ **Private/public notification boundary:** private Hub messages no longer notify the partner through either immediate push or the cron fallback; all public thread purposes remain notification-eligible.
-- ✅ **Shopping item unread conversations:** item replies now use durable receipts; the cyan dot represents unread partner replies, clears when the item chat opens, and returns only after a newer partner reply.
-- ✅ Added focused tests for the privacy policy and per-item unread reply counting.

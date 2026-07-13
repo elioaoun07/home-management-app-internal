@@ -49,7 +49,7 @@ export function runGitRead(args, options = {}) {
 
 /** `git status --porcelain` — used for baseline capture and dirty-tree checks. */
 export function gitStatusPorcelain(options = {}) {
-  return runGitRead(["status", "--porcelain"], options);
+  return runGitRead(["status", "--porcelain", "--untracked-files=all"], options);
 }
 
 /** `git rev-parse HEAD`, trimmed. */

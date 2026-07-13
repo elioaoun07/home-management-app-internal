@@ -1,6 +1,6 @@
 ---
 created: 2026-06-20
-updated: 2026-06-20
+updated: 2026-07-13
 type: checklist
 status: active
 owner: Elio
@@ -14,7 +14,7 @@ tags:
 
 > **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
 >
-> **What this file is:** the single flat, checkable surface for Hub & ERA — every actionable item as one checkbox, grouped **Now / Next / Later**, each with an ID, severity, and effort. The narrative *why* is [3 · Action Plan](<3 - Action Plan.md>). ✅ items stay as the record (Hard Rule #25 — no orphan fixes).
+> **What this file is:** the single flat, checkable surface for Hub & ERA — every open actionable item as one checkbox, grouped **Now / Next / Later**, each with an ID, severity, and effort. The narrative *why* is [3 · Action Plan](<3 - Action Plan.md>). Completed items are cleared once done — see git history or [1 - Feature State](<1 - Feature State.md>) for the record.
 >
 > **Legend:** Sev 🔴 blocker · 🟠 friction · 🟡 annoyance · ⚪ parked. Effort S/M/H. Point at a line (e.g. _N1_), a group, or a phase.
 
@@ -47,8 +47,3 @@ tags:
 - [ ] **D2** Voice degrades gracefully with no Azure connection, and the setup is documented.
 - [ ] **D3** ERA's briefing reads at least one of Schedule/Budget proactively (visibly smarter than reactive-only).
 - [ ] **D4** [1 · Feature State](<1 - Feature State.md>) updated to drop the "no tests" / "fragile" notes this work closes.
-
-## ✅ Completed fixes log
-
-- [x] **2026-07-10 — H1:** enforce private/public notification boundaries in immediate and fallback Hub delivery. _(🔴 privacy · S)_
-- [x] **2026-07-10 — H2:** make shopping-item dots receipt-backed unread markers that clear on open and reappear for the next partner reply. _(🟠 friction · M)_

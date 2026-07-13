@@ -258,7 +258,7 @@ function getArtifact(ctx, id, relPath) {
 // ---- POST /api/delivery/start ----
 
 async function startSession(ctx, body) {
-  const { file, cbidx, expectText, agent, dirtyAck, options } = body || {};
+  const { file, cbidx, expectText, agent, model, effort, dirtyAck, options } = body || {};
   if (agent !== "codex" && agent !== "claude") throw fail(400, 'agent must be "codex" or "claude"');
   if (typeof file !== "string" || !file) throw fail(400, "file is required");
   if (typeof cbidx !== "number") throw fail(400, "cbidx is required");
@@ -282,10 +282,10 @@ async function startSession(ctx, body) {
 
   if (isBuildLockActive(ctx)) throw fail(429, "a delivery session is already past the plan gate");
 
-  const statusPorcelain = gitStatusPorcelain({ cwd: ctx.ROOT });
+  const statusPorcelain = ctx.gitStatusPorcelain({ cwd: ctx.ROOT });
   const dirtyAtStart = statusPorcelain.trim().length > 0;
   if (dirtyAtStart && !dirtyAck) throw fail(400, "working tree is dirty; confirm dirtyAck to proceed");
-  const baseHead = gitRevParseHead({ cwd: ctx.ROOT });
+  const baseHead = ctx.gitRevParseHead({ cwd: ctx.ROOT });
 
   const scopeHints = computeScopeHints(item);
   let capabilities = classify({ item, scopeHints });
@@ -308,6 +308,7 @@ async function startSession(ctx, body) {
   const packet = buildPacket({
     sessionId,
     agent,
+    agentConfig: { model, effort },
     item,
     context: { campaignFiles, relatedNotes: [] },
     scopeHints,
@@ -550,12 +551,21 @@ export async function routeDelivery({ method, path, query, body }, ctx) {
  * Build the per-server context object `routeDelivery`/`performPendingWritebacks`
  * expect. Call once at pm-server startup.
  */
-export function createDeliveryContext({ ROOT, PM_DIR, PM_REL, spawnRunner: spawnRunnerOverride }) {
+export function createDeliveryContext({
+  ROOT,
+  PM_DIR,
+  PM_REL,
+  spawnRunner: spawnRunnerOverride,
+  gitStatusPorcelain: gitStatusPorcelainOverride,
+  gitRevParseHead: gitRevParseHeadOverride,
+}) {
   return {
     ROOT,
     PM_DIR,
     PM_REL,
     SESSIONS_DIR: join(ROOT, ".delivery", "sessions"),
+    gitStatusPorcelain: gitStatusPorcelainOverride || gitStatusPorcelain,
+    gitRevParseHead: gitRevParseHeadOverride || gitRevParseHead,
     // Injectable so tests can verify a launch/resume was requested without
     // actually spawning a detached background process against a temp dir
     // that's about to be deleted.

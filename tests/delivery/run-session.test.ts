@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,6 +18,7 @@ function asPacketArgs(partial: object): BuildPacketArgs {
 }
 import {
   advanceSession,
+  checkGitGuard,
   isRunnerAlive,
   runValidationCommands,
   writeHeartbeat,
@@ -34,20 +34,24 @@ afterEach(() => {
   }
 });
 
-function git(args: string[], cwd: string) {
-  execFileSync("git", args, { cwd, encoding: "utf8" });
-}
-
 function setupRepo(): string {
   const root = mkdtempSync(join(tmpdir(), "delivery-runner-"));
   cleanupDirs.push(root);
-  git(["init", "-q"], root);
-  git(["config", "user.email", "test@example.com"], root);
-  git(["config", "user.name", "Test"], root);
   writeFileSync(join(root, "README.md"), "test repo\n");
-  git(["add", "."], root);
-  git(["commit", "-q", "-m", "init"], root);
   return root;
+}
+
+const STABLE_SNAPSHOT = Object.freeze({
+  status: "",
+  head: "fixture-head",
+  refs: "fixture-refs",
+  indexDiff: "",
+  trackedDiff: "",
+  fingerprints: {},
+});
+
+function stableSnapshot() {
+  return { ...STABLE_SNAPSHOT, fingerprints: {} };
 }
 
 function makePacketAndState(root: string) {
@@ -136,8 +140,12 @@ function readEvents(dir: string): Array<Record<string, unknown>> {
     .map((line) => JSON.parse(line));
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function drive(dir: string, driver: any, repoRoot: string, opts: { runValidation?: (...args: unknown[]) => unknown } = {}) {
+async function drive(
+  dir: string,
+  driver: object,
+  repoRoot: string,
+  opts: { runValidation?: (...args: unknown[]) => unknown; takeSnapshot?: () => Record<string, unknown> } = {},
+) {
   let last;
   for (let i = 0; i < 50; i++) {
     const { didWork, state } = await advanceSession({
@@ -147,6 +155,8 @@ async function drive(dir: string, driver: any, repoRoot: string, opts: { runVali
       runValidation: opts.runValidation,
       retryDelayMs: 0,
       sleep: () => {},
+      takeSnapshot: opts.takeSnapshot || stableSnapshot,
+      readHead: () => "fixture-shipped-head",
     });
     last = state;
     if (!didWork) return last;
@@ -360,6 +370,68 @@ describe("advanceSession: resume after a simulated runner crash", () => {
   });
 });
 
+describe("advanceSession: S3 driver setup and structured-output failures", () => {
+  it("persists a new provider ref before the first real turn begins", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = {
+      kind: "persistence-probe",
+      startSession: (opts: { cwd: string; mode: string }) => ({
+        ref: { id: "persist-before-turn", cwd: opts.cwd, mode: opts.mode },
+        cwd: opts.cwd,
+        mode: opts.mode,
+      }),
+      resume: () => {
+        throw new Error("resume should not be called");
+      },
+      runTurn: () => {
+        const stateOnDisk = JSON.parse(readFileSync(join(dir, "state.json"), "utf8"));
+        expect(stateOnDisk.driver.ref.id).toBe("persist-before-turn");
+        return { finalText: SPEC_TEXT, usage: { input: 2, cachedInput: 1, output: 1, costUsd: null } };
+      },
+    };
+
+    const state = await drive(dir, driver, root);
+    expect(state.state).toBe("SPEC_READY");
+    expect(state.driver.ref.id).toBe("persist-before-turn");
+  });
+
+  it("turns a provider preflight failure into a durable BLOCKED session", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = {
+      kind: "preflight-failure",
+      startSession: () => {
+        throw new Error("authentication preflight failed");
+      },
+      resume: () => {
+        throw new Error("resume should not be called");
+      },
+      runTurn: () => {
+        throw new Error("runTurn should not be called");
+      },
+    };
+
+    const state = await drive(dir, driver, root);
+    expect(state.state).toBe("BLOCKED");
+    expect(state.lastError.message).toMatch(/authentication preflight failed/);
+    expect(JSON.parse(readFileSync(join(dir, "state.json"), "utf8")).state).toBe("BLOCKED");
+  });
+
+  it("blocks malformed structured discovery output while retaining its usage", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = createDriver("fake", {
+      script: { turns: [{ finalText: "{}", usage: { input: 7, cachedInput: 2, output: 3, costUsd: null } }] },
+    });
+
+    const state = await drive(dir, driver, root);
+    expect(state.state).toBe("BLOCKED");
+    expect(state.lastError.message).toMatch(/DISCOVERY output field/);
+    expect(state.usage.perPhase.discovery).toMatchObject({ input: 7, cachedInput: 2, output: 3 });
+  });
+});
+
 describe("advanceSession: stale decision handling", () => {
   it("skips a decision whose gate no longer matches the current await, advancing past it", async () => {
     const root = setupRepo();
@@ -406,10 +478,9 @@ describe("advanceSession: owner messages drained at boundaries, not mid-turn", (
 });
 
 describe("advanceSession: git guard BLOCKS on a simulated HEAD change", () => {
-  it("detects a commit made mid-turn and transitions to BLOCKED without reverting anything", async () => {
+  it("detects a simulated commit result and transitions to BLOCKED without running a Git write", async () => {
     const root = setupRepo();
     const { dir } = makePacketAndState(root);
-    const headBefore = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
 
     const violatingDriver = {
       kind: "violator",
@@ -417,26 +488,55 @@ describe("advanceSession: git guard BLOCKS on a simulated HEAD change", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       resume: (ref: any) => ({ ref, cwd: root, mode: "readonly" }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      runTurn: (_handle: any, _prompt: string) => {
-        writeFileSync(join(root, "extra.txt"), "an agent should never do this\n");
-        git(["add", "."], root);
-        git(["commit", "-q", "-m", "agent committed (simulated policy violation)"], root);
-        return { finalText: SPEC_TEXT, usage: { input: 1, cachedInput: 0, output: 1, costUsd: null } };
-      },
+      runTurn: (_handle: any, _prompt: string) => ({
+        finalText: SPEC_TEXT,
+        usage: { input: 1, cachedInput: 0, output: 1, costUsd: null },
+      }),
     };
 
-    const state = await drive(dir, violatingDriver, root, { runValidation: passingValidation });
+    let snapshotCount = 0;
+    const takeSnapshot = () => {
+      snapshotCount += 1;
+      return snapshotCount === 1 ? stableSnapshot() : { ...stableSnapshot(), head: "simulated-new-head" };
+    };
+
+    const state = await drive(dir, violatingDriver, root, { runValidation: passingValidation, takeSnapshot });
     expect(state.state).toBe("BLOCKED");
     expect(state.lastError.gitViolation).toBe(true);
     expect(state.lastError.violations).toContain("HEAD changed");
 
-    const headAfter = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
-    // The tool never reverts anything — the violating commit is left as-is,
-    // it is only detected and surfaced.
-    expect(headAfter).not.toBe(headBefore);
+    expect(snapshotCount).toBeGreaterThanOrEqual(2);
 
     const violation = readEvents(dir).find((e) => e.type === "git.guard.violation");
     expect(violation).toBeTruthy();
+  });
+
+  it("treats analysis-tree drift as a read-only violation", () => {
+    const before = stableSnapshot();
+    const after = {
+      ...stableSnapshot(),
+      status: " M README.md\n",
+      trackedDiff: "simulated diff",
+      fingerprints: { "README.md": "simulated-new-content" },
+    };
+    const result = checkGitGuard(before, "/repo", "readonly", { takeSnapshot: () => after });
+    expect(result.ok).toBe(false);
+    expect(result.violations).toContain("working tree changed during a read-only phase");
+  });
+
+  it("detects a simulated forbidden-path build delta", () => {
+    const before = stableSnapshot();
+    const after = {
+      ...stableSnapshot(),
+      status: " M src/components/ui/button.tsx\n",
+      fingerprints: { "src/components/ui/button.tsx": "simulated-new-content" },
+    };
+    const result = checkGitGuard(before, "/repo", "build", {
+      takeSnapshot: () => after,
+      forbiddenPaths: ["src/components/ui/**"],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.violations).toContain("forbidden paths changed: src/components/ui/button.tsx");
   });
 });
 

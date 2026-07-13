@@ -35,7 +35,8 @@ import {
   toggleCheckbox,
 } from "./pm/mutations.mjs";
 import { collectSources, readSourceFile, walk } from "./pm/scan.mjs";
-import { buildHtml } from "./pm/ui.mjs";
+import { buildHtml, buildHtmlLegacy } from "./pm/ui.mjs";
+import { createBundleWatcher } from "./pm/build.mjs";
 import {
   createDeliveryContext,
   performPendingWritebacks,
@@ -53,6 +54,8 @@ const deliveryCtx = createDeliveryContext({ ROOT, PM_DIR, PM_REL });
 const argv = process.argv.slice(2);
 const noOpen = argv.includes("--no-open");
 const portArg = argv.find((a) => a.startsWith("--port="));
+const uiArg = argv.find((a) => a.startsWith("--ui="));
+const UI_MODE = uiArg?.slice(5) === "old" ? "old" : "new";
 const PORT = parseInt(
   portArg ? portArg.slice(7) : process.env.PM_PORT || "4317",
   10,
@@ -269,6 +272,15 @@ function broadcast() {
     }
   }
 }
+function broadcastUi() {
+  for (const res of sseClients) {
+    try {
+      res.write("event: ui\ndata: rebuild\n\n");
+    } catch {
+      sseClients.delete(res);
+    }
+  }
+}
 try {
   watch(PM_DIR, { recursive: true }, () => {
     if (Date.now() < suppressUntil) return; // ignore our own writes
@@ -277,6 +289,13 @@ try {
   });
 } catch {
   // recursive watch unsupported on this platform — manual refresh still works.
+}
+
+let bundleWatcher;
+try {
+  bundleWatcher = await createBundleWatcher(broadcastUi);
+} catch (error) {
+  throw new Error(`PM UI build failed. Run pnpm install, then retry. ${error.message}`);
 }
 
 // ---- Delivery SSE (named `event: delivery` frames on the same connection) ----
@@ -356,7 +375,10 @@ const server = createServer(async (req, res) => {
     const path = u.pathname;
 
     if (req.method === "GET" && path === "/") {
-      const html = buildHtml({ mode: "server", dataJson: "null" });
+      const requestMode = u.searchParams.get("ui") === "old" ? "old" : UI_MODE;
+      const html = requestMode === "old"
+        ? buildHtmlLegacy({ mode: "server", dataJson: "null" })
+        : buildHtml({ mode: "server", dataJson: "null", bundle: bundleWatcher.current() });
       res.writeHead(200, {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",

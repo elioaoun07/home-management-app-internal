@@ -47,7 +47,8 @@ function packetBlock(packet) {
 }
 
 /**
- * DISCOVERY phase: explore read-only, write artifacts/spec.md.
+ * DISCOVERY phase: explore read-only and return the structured spec payload.
+ * The runner, not the analysis agent, writes artifacts/spec.{json,md}.
  * @param {{packet:object, campaignFilePaths?:string[], skillPaths?:string[], ownerMessages?:string[]}} input
  */
 export function buildDiscoveryPrompt({ packet, campaignFilePaths = [], skillPaths = [], ownerMessages = [] }) {
@@ -55,12 +56,14 @@ export function buildDiscoveryPrompt({ packet, campaignFilePaths = [], skillPath
   return (
     "Phase: DISCOVERY\n" +
     "You are the Delivery Orchestrator investigating one work item read-only. " +
-    "Explore the codebase, then write your findings to artifacts/spec.md.\n" +
+    "Explore the codebase and return only the structured JSON payload requested below. " +
+    "Do not create, edit, or delete any file; the runner writes artifacts/spec.md after validating your JSON.\n" +
     packetBlock(packet) +
     `\nCampaign context files (read by path):\n${inputs}\n` +
     renderSkillPaths(skillPaths) +
-    "\nartifacts/spec.md must contain: problem, current behavior with file:line evidence, " +
-    "proposed behavior, acceptanceCriteria[], affectedPaths[], riskFlags[], openQuestions[]. " +
+    "\nReturn an object with: problem, currentBehavior with file:line evidence, proposedBehavior, " +
+    "acceptanceCriteria[{id,text}], affectedPaths[string], riskFlags[string], " +
+    "openQuestions[{text}]. " +
     "If you have a concrete open question that blocks writing the spec, raise it as a " +
     'question ("question.raised") instead of guessing.\n' +
     renderOwnerMessages(ownerMessages) +
@@ -69,7 +72,8 @@ export function buildDiscoveryPrompt({ packet, campaignFilePaths = [], skillPath
 }
 
 /**
- * PLAN phase: read the approved spec, write artifacts/plan.md.
+ * PLAN phase: read the approved spec and return the structured plan payload.
+ * The runner, not the analysis agent, writes artifacts/plan.{json,md}.
  * @param {{packet:object, specPath?:string, approvalNote?:string, skillPaths?:string[], ownerMessages?:string[]}} input
  */
 export function buildPlanPrompt({
@@ -82,13 +86,13 @@ export function buildPlanPrompt({
   return (
     "Phase: PLAN\n" +
     `Read the approved spec at ${specPath} (path only — do not ask for it inline). ` +
-    "Write your plan to artifacts/plan.md.\n" +
+    "Return only the structured JSON payload requested below. Do not create, edit, or delete any file; " +
+    "the runner writes artifacts/plan.md after validating your JSON.\n" +
     packetBlock(packet) +
     (approvalNote ? `\nOwner's approval note:\n${approvalNote}\n` : "") +
     renderSkillPaths(skillPaths) +
-    "\nartifacts/plan.md must contain: ordered steps [{id, description, paths[], validation hint}], " +
-    "a test plan, riskFlags confirmation, a rollback sketch, and an explicit statement that no new " +
-    "dependencies will be added.\n" +
+    "\nReturn an object with: steps[{id,description,paths[string],validationHint}], testPlan, " +
+    "riskFlags[string], rollbackSketch, and noNewDeps=true.\n" +
     renderOwnerMessages(ownerMessages) +
     `\n${GIT_BAN_TEXT}\n`
   );

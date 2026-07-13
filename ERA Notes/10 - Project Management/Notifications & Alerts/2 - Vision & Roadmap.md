@@ -148,10 +148,8 @@ User contract (2026-07-10): notifications are missed/delayed/messy; wants (a) a 
 | # | Item | Pain | Principle |
 |---|---|---|---|
 | S1 | **Group notifications** by `group_key`/type. ✅ IMPLEMENTED 2026-07-10 on the alerts page (drawer still ungrouped). | [C3](<1 - Feature State.md>)/[C5](<1 - Feature State.md>) | #5 Group to reduce volume |
-| S2 | **Filter segments** on the alerts page. ✅ IMPLEMENTED 2026-07-10 as All/System/Scheduled/Unread (Decision 6). | [C4](<1 - Feature State.md>) | #2 One job per surface |
 | S3 | **Empty / "all caught up" states** for drawer + page. | [C3](<1 - Feature State.md>)/[C4](<1 - Feature State.md>) | #10 Clear empty states |
 | S4 | **Strip `console.*`** from the notification crons (Hard Rule #22). Still open — 2026-07-10 stripped it from `/api/notifications/in-app` and `/api/notifications/actions` instead. | [C5](<1 - Feature State.md>) | hygiene |
-| S5 | **Unify the visual language** across drawer + alerts page. ✅ IMPLEMENTED 2026-07-10 via the shared registry icon renderer. | [C4](<1 - Feature State.md>) | #8 One visual language |
 | S6 | **Audit Undo on dismiss/snooze** (Hard Rule #1) across both surfaces. | [C5](<1 - Feature State.md>) | #3 Reversible |
 
 ### 🟡 Could *(nice, after the core)*
@@ -182,9 +180,3 @@ User contract (2026-07-10): notifications are missed/delayed/messy; wants (a) a 
 - **Notifications ↔ Hub.** The alerts feed lives in `HubPage`; the redesign should keep the feed and alerts tabs coherent.
 
 → What to build, and in what order → [3 · Action Plan](<3 - Action Plan.md>); the checkable list → [4 · Checklist](<4 - Checklist.md>).
-
-## Implemented decisions log
-
-- ✅ **Drawer open animation — IMPLEMENTED 2026-06-19:** `NotificationModal.tsx` no longer delays cached drawer content until `onAnimationComplete`. The drawer keeps one Framer slide-in motion; skeleton rows are reserved for actual `isLoading` states.
-- ✅ **Notification Registry, alerts-page unification, critical-alert gate, Google Calendar sync — IMPLEMENTED 2026-07-10:** Decisions 4 (partial), 6, 7, 8. Full detail in [FABLED 2 index](<FABLED 2/_index.md>) delta section and the [Notifications module doc](<../../03 - Junction Modules/Notifications/Notifications.md>).
-- ✅ **Thread visibility as the chat delivery policy — IMPLEMENTED 2026-07-10:** private means owner-only with no partner notification; public means eligible for partner notification regardless of thread purpose. Shopping-item replies use the same receipt-backed lifecycle.

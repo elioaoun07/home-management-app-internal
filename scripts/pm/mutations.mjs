@@ -5,6 +5,11 @@
 // server ordinals can never drift. Keep it import-free and `.toString()`-safe.
 
 import { isAbsolute, relative, resolve } from "node:path";
+import { scanCheckboxes } from "./shared/md-scan.mjs";
+
+// The implementation now lives in shared/md-scan.mjs; ui.mjs inlines that
+// complete module for the temporary legacy surface instead of using toString().
+export { scanCheckboxes } from "./shared/md-scan.mjs";
 
 /**
  * Canonical, fence- and frontmatter-aware scan of real checkboxes (`[ ]`/`[x]`).
@@ -12,32 +17,6 @@ import { isAbsolute, relative, resolve } from "node:path";
  * Returns [{ line, state }] in document order with ABSOLUTE 0-based line indices.
  * IMPORTANT: must stay byte-identical in behavior to the renderer's list parser.
  */
-export function scanCheckboxes(raw) {
-  var lines = String(raw).split("\n");
-  var start = 0;
-  if (/^---\s*$/.test(lines[0] || "")) {
-    for (var j = 1; j < lines.length; j++) {
-      if (/^---\s*$/.test(lines[j])) {
-        start = j + 1;
-        break;
-      }
-    }
-  }
-  var out = [];
-  var inFence = false;
-  for (var i = start; i < lines.length; i++) {
-    var line = lines[i];
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) continue;
-    var m = line.match(/^(\s*)(?:[-*]|\d+\.)\s+\[([ xX])\]/);
-    if (m) out.push({ line: i, state: /x/i.test(m[2]) ? "done" : "open" });
-  }
-  return out;
-}
-
 /**
  * Flip the cbidx-th checkbox between `[ ]` and `[x]`.
  * @returns {{ok:true, raw, line, state}} | {{ok:false, reason}}

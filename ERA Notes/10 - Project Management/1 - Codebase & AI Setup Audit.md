@@ -59,32 +59,11 @@ You have **a genuinely impressive solo build** — ~767 TS/TSX files, ~40 module
 - **Why it still matters:** this is a _financial_ app. The first safety net catches money/date regressions, but API routes, Supabase integration, transfers, recurring auto-post flows, and UI workflows still need coverage.
 - **Fix status:** initial P0 baseline implemented. See [5 · P0 Automated Tests Implementation Notes](<5 - P0 Automated Tests Implementation Notes.md>) for approach, verification, and follow-up work.
 
-### 🔴 P1 — AI mirrors drifted `[DONE]` _(fixed this pass — see §6)_
-
-- **Finding:** `CLAUDE.md` (27 KB, current) is mirrored to three files that are all different:
-  - `CODEX.md` — 24 KB, **May 4** (auto-mirror, stale)
-  - `AGENTS.md` — 19 KB, **May 9** (a _hand-written, different-format_ file — **never synced**)
-  - `.github/copilot-instructions.md` — 25 KB, **May 10** (auto-mirror, stale)
-- **Root cause:** the active hook `sync-copilot.sh` only writes **CODEX.md + Copilot**, not **AGENTS.md** — and modern Codex CLI reads **AGENTS.md**, not CODEX.md. So your most-current instructions never reached Codex, and Codex/Copilot have been running on weeks-old rules.
-- **Fix applied this pass:** the hook and `scripts/sync-ai-mirrors.sh` now regenerate **all three** (CODEX, AGENTS, Copilot) from CLAUDE.md on every save. AGENTS.md is now an auto-mirror — **stop hand-editing it**; edit `CLAUDE.md` only.
-
 ### 🟠 P1 — Hard Rule 22 is violated 649× and not enforced
 
 - **Finding:** **649 `console.log/warn/error/debug`** calls in `src/` — your CLAUDE.md says "No `console.*` in committed code." Hotspots: `src/app/api` (109 files), `components/web` (11), `components/expense` (9), `components/hub` (5).
 - **Why it matters:** a rule that lives only in a doc is a suggestion. Your `pre-commit` runs ESLint but there's **no `no-console` rule**, so nothing stops new ones.
 - **Fix (phased — do NOT just turn the rule on):** turning on `no-console` today would throw 649 errors and **block every commit** (your hook is `--max-warnings=0`). Instead: (1) sweep the worst offenders out, (2) then add `"no-console": ["error", { allow: ["warn", "error"] }]` or route through a `logger.ts`. Sequence in file 4.
-
-### 🟠 P1 — CLAUDE.md Feature Index is stale (two indexes have drifted) `[DONE]`
-
-- **Finding:** the **Feature Index table** in CLAUDE.md is missing modules that exist and ship: **Chores, Focus, Trips, Dashboard, Recycle Bin, AI Usage**. The **Feature Map** (`_index.md`) _does_ list them. You now maintain two module indexes and they've diverged.
-- **Why it matters:** an agent trusting the CLAUDE.md table will miss those modules entirely.
-- **Fix:** added the missing rows except **AI Usage** (intentionally excluded because it is not part of the application), regenerated AGENTS/CODEX/Copilot from CLAUDE.md, and added `pnpm docs:check` so CLAUDE.md's Feature Index is validated against the Feature Map during mirror sync and pre-commit.
-
-### 🟡 P2 — Continuity gaps: session log & backlog are empty `[CANCELLED]`
-
-- **Finding:** `ERA Notes/08 - Sessions/` has **0 files** despite four templates. `07 - Backlog & Ideas/Ideas.md`, `Feature Optimizations.md` headers, and `Dashboard V2` are mostly empty stubs (only `Feature Optimizations.md` has real content). **Nothing writes session notes**, so the expectation silently fails — exactly what you noticed.
-- **Why it matters:** no continuity between sessions → every session re-derives context → wasted tokens and lost decisions.
-- **Decision (2026-05-30): cancelled.** The session-note habit and the `/session-log` skill idea are **dropped** — not deferred. Continuity comes from git history + this PM set. Don't reintroduce the `08 - Sessions/` expectation.
 
 ### 🟡 P2 — Type-safety erosion: 522 `any` / `as any` / `@ts-ignore`
 
@@ -139,26 +118,12 @@ Ranked by value-for-effort for _your_ workflow (solo, high-velocity, AI-assisted
 | #   | Add                                            | Type          | Why it pays off                                                                                                              | Effort |
 | --- | ---------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 1   | **`no-console` ESLint rule** (after the sweep) | ESLint config | Mechanically enforces Hard Rule 22 forever; pre-commit already runs ESLint                                                   | S      |
-| 2   | ~~**`/session-log` skill**~~ `[CANCELLED]`     | Skill         | **Rejected** — session-note habit dropped (2026-05-30); rely on git + this PM set, not an `08 - Sessions/` folder.        | —      |
-| 3   | **`/new-module` scaffold skill** `[DONE]`      | Skill         | You add ~1 module/2 weeks; auto-create `features/[x]/`, Overview doc, Atlas entry, Feature Map row — so docs never lag code  | M      |
-| 4   | **Vitest + thin money/date suite** `[DONE]`    | Tooling       | The P0 fix; unblocks confident refactoring                                                                                   | M      |
-| 5   | **`schema-drift` check**                       | Hook/script   | Warn when a migration touches a table not reflected in `schema.sql`                                                          | S      |
+| 2   | **`schema-drift` check**                       | Hook/script   | Warn when a migration touches a table not reflected in `schema.sql`                                                          | S      |
 
 > Keep CLAUDE.md lean — these go in _skills/hooks_, not in the instructions file. The instructions file should stay a tight rulebook (token economy), which it currently is.
 
 ---
 
-## 6 · Changelog — what I changed in this pass
-
-- **Implemented the P0 test baseline**: Vitest + 26 unit tests for money/date core, recurring next-due math, and split-bill display logic. Added the implementation note in file 5.
-- **Fixed the mirror sync** so `CLAUDE.md` now propagates to **AGENTS.md + CODEX.md + Copilot** (previously AGENTS.md was orphaned). Regenerated all three from current CLAUDE.md.
-- **Fixed the CLAUDE.md Feature Index**: added Chores / Focus / Trips / Dashboard / Recycle Bin, intentionally excluded AI Usage, regenerated all AI mirrors, and added a docs check to prevent future Feature Map drift. `[DONE]`
-- Created this Project-Management set (files 1–4) under `ERA Notes/10 - Project Management/`.
-
-> I did **not** delete `blink/`, `today/`, or `app/temp/`, and did **not** start the console sweep — those touch app code and should be your call. They're queued in [4 · This Week](<4 - This Week (Action Plan).md>).
-
----
-
-## 7 · Where to go next
+## 6 · Where to go next
 
 → Read [2 · Feature State](<2 - Feature State — Current Reality.md>) for the honest module-by-module status, then [4 · This Week](<4 - This Week (Action Plan).md>) for the concrete plan.

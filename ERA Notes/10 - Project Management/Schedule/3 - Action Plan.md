@@ -31,8 +31,6 @@ Schedule is 🟢 Core and stable, so the danger isn't missing features — it's 
 This mirrors the global theme ("Stabilize, then Connect") at the module level: harden the recurrence core, then connect Schedule outward.
 
 > **Shipped ad-hoc, outside the original sequence:** "Plan My Day" (`/today`, now merged into `/reminders`) — a disrupted-day triage planner (push off / both-direction prepone / ad-hoc tasks / checkpoints), shipped 2026-06-16. Phase 1 only — hourly timeline + mood/energy optimizer deferred. See [2 · Vision](<2 - Vision & Roadmap.md>) Track A and [Plan My Day Overview](<../../03 - Junction Modules/Plan My Day/Overview.md>). Doesn't change the foundation-first call.
->
-> - [x] **Fixed 2026-06-16:** the day-plan header (title/intent/notes/Private-Shared) and checkpoints were firing a full API call on every keystroke/click — worst case a `POST` per Private/Shared toggle. Replaced with a save-gated draft model: an unplanned day shows an editable form with one **Save**; a planned day shows a read-only **preview card** with **Edit**/**Delete**. No API calls during editing, only on Save/Delete (checkpoint done/undone toggle stays live by design). See [Plan My Day Overview](<../../03 - Junction Modules/Plan My Day/Overview.md>) "The save-gated draft model."
 
 ---
 
@@ -42,13 +40,7 @@ This mirrors the global theme ("Stabilize, then Connect") at the module level: h
 
 | # | Work item | From | Sev | Effort | Bounded? | Foundational? |
 |---|---|---|---|---|---|---|
-| ~~W1~~ ✅ | ~~Align PATCH/DELETE auth with household-aware check~~ | C1 | 🔴 | S | ✅ yes | — |
-| ~~W2~~ ✅ | ~~"Pass to partner" / "take it back" reassign actions~~ | C1 | 🔴 | M | ✅ yes | — |
-| ~~W3~~ ✅ | ~~"Assigned out" / "assigned to me" buckets in `/reminders`~~ | C1 | 🟠 | S–M | ✅ yes | — |
-| ~~W4~~ ✅ | ~~Confirm RLS + `get_schedule_bundle` returns partner items~~ | C1/C4 | 🟠 | S | ✅ yes | ✅ unblocks W1–W3 |
-| ~~W5~~ ✅ | ~~Re-export live schema (RPC + RLS) into `schema.sql`~~ | C4 | 🟠 | S | ✅ yes | ✅ stops repo lying |
 | W6 | Decide capture path (A Hub / B form / both) → build it | C3 | 🟠 | M | partly | — |
-| ~~W7~~ ✅ | ~~Focus → per-item mode; retire `/focus`; fold into Week view~~ | C2 | 🟠 | M–H | partly | — |
 | W8 | Reassignment history / audit | C1 | 🟡 | M | ✅ yes | — |
 | W9 | Surface consolidation (`/reminders` role; clarify each job) — *mostly done via Plan My Day merge; residual role open* | C2 | 🟠 | M | partly | — |
 | W10 | Form NL quick-capture box (rule-based; pre-fills structured fields as chips) — *mostly already exists* | C3 | 🟠 | M | partly | — |
@@ -75,22 +67,6 @@ This mirrors the global theme ("Stabilize, then Connect") at the module level: h
 ---
 
 ## 🗓️ Sequenced plan (Now / Next / Later)
-
-### ✅ Shipped — Household co-edit + reassign *(the original first slice)*
-
-- [x] **Step 1 — Verify the ground truth (W4).** *(DONE 2026-06-06)* RPC body captured: returns `user_id = me OR (partner's AND is_public = true)`. W1 alone was enough — RLS policies already grant household co-edit. See [file 1, Cluster 1 myth correction](<1 - Feature State.md>).
-- [x] **Step 2 — Align write auth (W1).** *(DONE 2026-05-31)* `canMutateItem()` helper in [src/app/api/items/[id]/route.ts](<../../../src/app/api/items/[id]/route.ts>) — creator OR responsible OR active partner. Partner can edit/delete shared items; strangers still get 403.
-- [x] **Step 3 — Reassign both ways (W2).** *(DONE 2026-06-06)* `onReassign` prop on [ItemActionsSheet.tsx](<../../../src/components/items/ItemActionsSheet.tsx>); fetches household via `useHouseholdMembers`, "Pass to partner" when I'm responsible, "Take it back" when partner is. Wired with `useUpdateItem` + Undo toast (no dedicated endpoint — RLS covers it).
-- [x] **Step 4 — Make handed-off items findable (W3).** *(DONE 2026-06-06)* "Assigned to me" / "Assigned out" collapsible sections in [StandaloneRemindersPage.tsx](<../../../src/components/reminder/StandaloneRemindersPage.tsx>) with one-tap "Return →" / "← Reclaim".
-- [x] **Step 5 — Stop the repo lying (W5).** *(DONE 2026-06-06)* Table DDL, `get_schedule_bundle` RPC body, and all RLS policies appended to [migrations/schema.sql](<../../../migrations/schema.sql>).
-- [x] **Focus → mode (W7).** *(DONE 2026-06-06)* Retired `/focus` + `FocusPage.tsx` + `FlexibleRoutinesPool.tsx` + `ScheduleRoutineSheet.tsx`. Added `onFocus` + Focus button (crosshair) to `ItemActionsSheet` → `ItemDetailModal`. Week view's "Flexible this week" strip handles routine assignment. Atlas, Feature Index, Routes doc, vault doc updated.
-- [x] **Placement-rule guard test.** Asserts a flexible item is *not* placed via rrule and *is* placed from `item_flexible_schedules`. Prevents the "flexible item shows on activation day" class of bug across all 6+ views. → [Schedule Feature](<../../02 - Standalone Modules/Items & Reminders/Schedule Feature.md>) "Adding a New View" checklist.
-
-### ✅ Now — Recurrence & occurrence-action correctness *(Stage 1 — [file 4](<2 - Vision & Roadmap.md>) — SHIPPED 2026-06-19)*
-
-- [x] **W13 / Stage 1 — kill the "Skip → next occurrence" trap.** *(DONE 2026-06-19)* Removed on **all four** surfaces found (`WebEvents.tsx`, `ItemActionsSheet.tsx`, `WebTabletMissionControl.tsx` — found during implementation, `ItemDetailModal.tsx` quick-action row — found during implementation); real **Skip this occurrence** wired (`handleSkip`/`useSkipItem`; `onSkip` on `ItemActionsSheet` + all 4 callers; Skip control on the calendar modal + tablet mission control); "Cancel" now appears only for one-off items; `calculateNextOccurrence` + the `next_occurrence` postpone type deleted from `useItemActions.ts`.
-- [x] **`/reminders` show/hide-completed toggle** *(DONE 2026-06-19)* + collapsible "Completed (n)" section (default hide; persisted in `localStorage`) — [file 4 §5](<2 - Vision & Roadmap.md>).
-- [x] **Recurrence + occurrence-action unit tests.** *(DONE 2026-06-19)* [dayOccurrences.test.ts](<../../../src/lib/utils/dayOccurrences.test.ts>) covers the skip/complete/move repro + dedup against the engine `/reminders` & Today actually use, plus `isOccurrenceCompleted` per action type. Pure-logic, no Supabase mocks. Full RRULE-edge-case coverage still gated behind Stage 2 (engine unification). **Gates the recurrence-from-text parser (1b.4)** — unblocked for the cases now covered.
 
 ### ⏭️ Next — Foundation + first enhancement
 

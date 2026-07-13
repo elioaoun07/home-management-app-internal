@@ -1,6 +1,6 @@
 ---
 created: 2026-05-30
-updated: 2026-06-29
+updated: 2026-07-13
 type: action-plan
 status: active
 owner: Elio
@@ -37,65 +37,17 @@ surfaces.
 
 ## Candidate Work
 
-| Candidate                            | Track | Impact | Effort | Foundation?        |
-| ------------------------------------ | ----- | ------ | ------ | ------------------ |
-| Finance calculation unit tests       | A     | High   | M      | done 2026-07-03    |
-| Recurring next-due + confirm tests   | A     | High   | M      | done 2026-07-03    |
-| Salary -> Wallet quick refill        | A     | Med    | S      | shipped 2026-06-25 |
-| Public/shared accounts               | A     | High   | M      | shipped 2026-06-26 |
-| Allocation workflow across accounts  | A     | Med    | M      | shipped 2026-07-03 |
-| Recurring -> Schedule due-date unify | B     | High   | H      | -                  |
-| Merchant-map -> manual entry         | A     | Med    | S-M    | -                  |
-| Cashflow forecast -> ERA             | B     | High   | H      | -                  |
-| 50/30/20 + Dashboard V2 widgets      | A     | High   | M      | -                  |
-| Debt -> Schedule auto-reminder       | B     | Med    | S-M    | -                  |
-| Remove/guard `analytics/debug` route | A     | Low    | S      | done 2026-07-11    |
+| Candidate                            | Track | Impact | Effort | Foundation? |
+| ------------------------------------ | ----- | ------ | ------ | ------------ |
+| Recurring -> Schedule due-date unify | B     | High   | H      | -            |
+| Merchant-map -> manual entry         | A     | Med    | S-M    | -            |
+| Cashflow forecast -> ERA             | B     | High   | H      | -            |
+| 50/30/20 + Dashboard V2 widgets      | A     | High   | M      | -            |
+| Debt -> Schedule auto-reminder       | B     | Med    | S-M    | -            |
 
 ---
 
 ## The Sequence
-
-**Now - Foundation.** The highest-stakes calculation layer is covered: balance direction, balance computation/adjustment, canonical spending totals, recurring next-due, and confirm→transaction posting all have unit tests as of 2026-07-03. Targeted finance tests are green; the `analytics/debug` route was removed 2026-07-11 (unused, deleted outright); repo-wide `npm.cmd test` is currently blocked by an unrelated Schedule source-guard failure.
-
-**Just shipped - Wallet refill shortcut.** `/expense?transfer=salary-wallet`
-opens the mobile expense form with a focused amount prompt and resolves
-Salary/Wallet account IDs from the tapping user's own accounts. Follow-up
-2026-06-27: the NFC prompt remains own-account scoped even though the general
-transfer dialog supports shared household accounts.
-
-**Just shipped - Public/shared accounts.** Accounts are private by default, but
-owners can mark visible accounts public so the active household partner can open
-them, post transactions, adjust balances, use categories, and transfer to/from
-them.
-
-**Just shipped - Transfer audit constraint fix.** Transfer undo/delete and
-amount-affecting edits now write accepted balance-history event types
-(`transfer_deleted`, `transfer_updated`) and link those audit rows back to the
-transfer. The same balance-history constraint now accepts the existing
-statement import summary event.
-
-**Just shipped - AI allocation redesign.** `WebBudget` splits Allocate (input)
-from Review (viewing); AI proposes a per-category allocation from
-outlier-cleaned history (with a deterministic estimate fallback so it always
-works), shown inline with per-row Apply and Apply-All, and manual edits always
-win. Backend strips one-off outliers before forecasting and soft-clamps the AI's
-numbers to each category's typical spend.
-
-**Just shipped - Budget AI dashboard hardening.** The structured analysis
-dashboard now treats model category names as display labels instead of unique
-keys: duplicate labels are merged, percentages are recalculated, and chart/list
-rows use generated slice IDs. This closes the repeated `Food` key collision
-without changing the `AnalysisReport` contract. The same report JSON is now
-persisted on `ai_messages.analysis_report`, so history-loaded analysis answers
-can reopen **View as Dashboard** without regenerating through AI.
-
-**Just shipped - Recurring commitments console.** The mobile Plan / Recurring
-surface now treats recurring bills as current-period commitments: compact header,
-commitment chips, Wallet-after-unpaid when Wallet balance is available, monthly
-Cash / Manual grace inside the custom billing period, suggested matches to
-manually logged transactions, and mark-covered reconciliation without duplicate
-spend. Late confirmations advance past the paid date instead of leaving stale
-due dates behind.
 
 **Next - First enhancement.** Merchant-map -> manual entry remains valuable
 after the recurring commitment pass; it is now the sharper remaining Budget

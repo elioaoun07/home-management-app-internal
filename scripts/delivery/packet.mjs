@@ -22,6 +22,16 @@ export const DEFAULT_CONSTRAINTS = Object.freeze({
   approvalGates: Object.freeze(["SPEC_READY", "PLAN_READY", "UAT_READY"]),
 });
 
+export const DEFAULT_AGENT_CONFIG = Object.freeze({
+  model: null,
+  effort: Object.freeze({
+    discovery: "medium",
+    plan: "high",
+    building: "high",
+    review: "medium",
+  }),
+});
+
 const TASK_SEVERITIES = Object.freeze(["blocker", "friction", "annoyance", "parked"]);
 
 export class PacketError extends Error {}
@@ -190,6 +200,7 @@ export function buildPacket({
   createdAt = new Date().toISOString(),
   mode = "uat",
   agent,
+  agentConfig = {},
   item,
   context = { campaignFiles: [], relatedNotes: [] },
   scopeHints = { keywords: [], globs: [], modules: [] },
@@ -212,6 +223,10 @@ export function buildPacket({
     createdAt,
     mode,
     agent,
+    agentConfig: {
+      model: typeof agentConfig.model === "string" && agentConfig.model.trim() ? agentConfig.model.trim() : null,
+      effort: { ...DEFAULT_AGENT_CONFIG.effort, ...(agentConfig.effort || {}) },
+    },
     item,
     context,
     scopeHints,

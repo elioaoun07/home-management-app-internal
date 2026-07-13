@@ -2,10 +2,10 @@
 // Provider-neutral agent driver interface + factory registry.
 // See ERA Notes/10 - Project Management/Agentic Delivery Workspace/4 - Agent Drivers & Security.md §1.
 //
-// This module defines the seam only. Real SDK-backed drivers (`codex.mjs`,
-// `claude.mjs`) are added in a later slice as devDependencies, dynamic-
-// import()ed inside their own driver module only — this file and every other
-// pure module stay zero-dependency. Only `fake.mjs` is registered today.
+// This module defines the seam only. SDK-backed drivers register themselves
+// when their modules are imported by the runner; each driver still dynamic-
+// imports its SDK only when a real session starts, so this registry remains
+// zero-dependency and dashboard startup never performs provider I/O.
 //
 // createDriver(kind) → {
 //   startSession({cwd, mode: "build" | "readonly", model?}) → handle
@@ -27,14 +27,13 @@ export function registerDriver(kind, factory) {
 
 /**
  * Build a driver instance for `kind`. Throws clearly for any kind that has no
- * registered factory — in slice S1 that is every kind except "fake".
+ * registered factory.
  */
 export function createDriver(kind, options = {}) {
   const factory = REGISTRY.get(kind);
   if (!factory) {
     throw new DriverError(
-      `no driver registered for kind "${kind}" — real SDK-backed drivers ` +
-        'arrive in a later slice; only "fake" is available today',
+      `no driver registered for kind "${kind}"`,
     );
   }
   return factory(options);

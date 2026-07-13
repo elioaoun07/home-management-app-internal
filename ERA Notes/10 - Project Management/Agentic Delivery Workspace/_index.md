@@ -1,6 +1,6 @@
 # Agentic Delivery Workspace — Plan Index
 
-**Stamped:** 2026-07-11 · **Revised:** 2026-07-12 (owner feedback round 1) · **Status:** 🚧 IN PROGRESS — S1 (pure core) and S2 (server + runner + fake-driver dashboard) implemented 2026-07-12; S3 (real drivers) not started
+**Stamped:** 2026-07-11 · **Revised:** 2026-07-13 (S3 integration + local acceptance) · **Status:** 🚧 IN PROGRESS — S1 + S2 implemented 2026-07-12; S3 code and mutation-free automated acceptance implemented 2026-07-13 (both real drivers, provider wiring, structured spec/plan, persisted resume refs, usage normalization, strengthened guards). S3's two cost-bearing live DISCOVERY→PLAN runs remain unaccepted because the execution approval boundary denied transmitting this private workspace to OpenAI/Anthropic; explicit owner approval after that disclosure is required (doc 6 §1). S4–S6 have not started.
 **Owner intent:** pick a topic + checklist item in the PM dashboard, launch a delivery session, and have one orchestrator agent (Codex or Claude Code) take it spec → plan → build → validate → review → UAT behind three human gates; Elio UATs in his own running dev app and handles all git personally.
 
 > **Terminology (used consistently across all docs):** **Product Phase 1 = the complete MVP**, implemented through **engineering slices S1–S4**. Product Phase 1 ships the full Agent Catalog (every roster agent visible in the dashboard) but **enables only the standard agent set** (doc 3 §4). **Specialist expansion = S5**; **post-MVP improvements = S6**. "Phase 1" never means engineering slice S1.
@@ -45,10 +45,7 @@ Extend `scripts/pm-server.mjs` (the existing zero-dependency PM Command Center s
 
 | Slice | Scope | Effort |
 |---|---|---|
-| S0 | This plan folder + ★ index row (done with this stamp) | S · 0.5d |
-| S1 ✅ | Pure core modules + vitest suites (state machine, classifier, **agent registry**, packet, events, fsx, prompts, gitread, driver interface + fake driver) + `.gitignore` entry — *(IMPLEMENTED 2026-07-12)* | S/M · 0.5–1d |
-| S2 ✅ | Server routes + runner on the **fake driver** through all states + heartbeat/resume + named SSE + full dashboard UI (list, detail, gates, timeline, composer, agent-output cards, **Agent Catalog**, **New Delivery Session flow**) — *(IMPLEMENTED 2026-07-12)* | M · 1.5d |
-| S3 | **Both real drivers** (SDKs pinned against installed `.d.ts`), real DISCOVERY/SPEC/PLAN turns, no-git-write + no-drift guards, usage capture | M · 1–1.5d |
+| S3 🚧 | **Both real drivers** (SDKs pinned against installed `.d.ts`), real DISCOVERY/SPEC/PLAN turns, no-git-write + no-drift guards, usage capture — *(code + mutation-free automated acceptance IMPLEMENTED 2026-07-13; live provider turns approval-blocked)* | M · 1–1.5d |
 | S4 | BUILDING + VALIDATING + fix loop + self-review + UAT assembly — **MVP complete** | M/L · 1.5–2d |
 | S5 | Independent specialist threads (code/security/db/ux/architecture reviews), risk-flag typed approval, NEEDS_DECISION flow, "in delivery" badges on task rows | M · 1d |
 | S6 (post-MVP) | Isolation upgrade (**non-Git only**: temporary filesystem copy / OS-level sandbox / container-mounted copy / copy-on-write workspace — never worktrees, branches, or tool-managed clones), screenshots in UAT, ship mode (release/rollback prep), archive & cleanup UX | open |

@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -23,19 +22,12 @@ afterEach(() => {
   }
 });
 
-function git(args: string[], cwd: string) {
-  execFileSync("git", args, { cwd, encoding: "utf8" });
-}
-
 const CHECKLIST_LINE = "- [ ] **N1** Fix rounding drift in allocation splits _(blocker - M)_";
 const CHECKLIST_RAW = ["# Checklist", "", "## Now", "", CHECKLIST_LINE, "- [x] Already done item", ""].join("\n");
 
 function setup() {
   const root = mkdtempSync(join(tmpdir(), "delivery-server-"));
   cleanupDirs.push(root);
-  git(["init", "-q"], root);
-  git(["config", "user.email", "test@example.com"], root);
-  git(["config", "user.name", "Test"], root);
 
   const pmRel = join("ERA Notes", "10 - Project Management");
   const pmDir = join(root, pmRel);
@@ -44,14 +36,14 @@ function setup() {
   writeFileSync(join(pmDir, "Budget", "1 - Feature State.md"), "# Feature State\n");
   writeFileSync(join(root, "README.md"), "test repo\n");
   writeFileSync(join(root, ".gitignore"), "/.delivery/\n");
-  git(["add", "."], root);
-  git(["commit", "-q", "-m", "init"], root);
 
   const spawnedRunners: Array<{ sessionId: string; resume: boolean }> = [];
   const ctx = createDeliveryContext({
     ROOT: root,
     PM_DIR: pmDir,
     PM_REL: pmRel,
+    gitStatusPorcelain: () => "",
+    gitRevParseHead: () => "fixture-head",
     spawnRunner: (_ctx: unknown, sessionId: string, opts: { resume?: boolean }) => {
       spawnedRunners.push({ sessionId, resume: !!opts.resume });
     },
@@ -119,8 +111,25 @@ describe("POST /api/delivery/start", () => {
     const state = JSON.parse(readFileSync(join(dir, "state.json"), "utf8"));
     expect(state.state).toBe("SELECTED");
     expect(state.agent).toBe("claude");
+    expect(packet.agentConfig).toEqual({
+      model: null,
+      effort: { discovery: "medium", plan: "high", building: "high", review: "medium" },
+    });
 
     expect(spawnedRunners).toEqual([{ sessionId, resume: false }]);
+  });
+
+  it("persists launch model and per-phase effort overrides into packet.agentConfig", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx, {
+      model: "provider-model",
+      effort: { discovery: "low", plan: "xhigh" },
+    });
+    const packet = JSON.parse(readFileSync(join(ctx.SESSIONS_DIR, sessionId, "packet.json"), "utf8"));
+    expect(packet.agentConfig).toEqual({
+      model: "provider-model",
+      effort: { discovery: "low", plan: "xhigh", building: "high", review: "medium" },
+    });
   });
 
   it("returns 409 on textHash drift (expectText no longer matches the live line)", async () => {
@@ -204,8 +213,8 @@ describe("POST /api/delivery/start", () => {
   });
 
   it("returns 400 when the tree is dirty and dirtyAck is not set, but succeeds with dirtyAck", async () => {
-    const { ctx, root } = setup();
-    writeFileSync(join(root, "untracked.txt"), "dirty\n");
+    const { ctx } = setup();
+    ctx.gitStatusPorcelain = () => "?? untracked.txt\n";
 
     await expectRouteError(
       routeDelivery({ method: "POST", path: "/api/delivery/start", query: q(), body: startBody() }, ctx),

@@ -126,17 +126,7 @@ An AI-assisted repo is steered by six layers. Each has one job, one source of tr
 
 ---
 
-## 2 · What was changed in this pass (2026-06-10)
-
-1. **Restored the Focus row** in CLAUDE.md's Feature Index (accidentally deleted ~Jun 6; broke `docs:check`).
-2. **Re-synced all three AI mirrors** from CLAUDE.md (had drifted since May 30).
-3. **Added the schema.sql caveat** to CLAUDE.md Database section (tables-only export; live DB is truth for RLS/functions).
-4. **Fixed two stale memories** (`user_color_coding` rule number; `project_pm_command_center` structure).
-5. **Created this file** + the per-module **FABLED** deep-dive folders (see §4).
-
----
-
-## 3 · Ranked remaining actions
+## 2 · Ranked remaining actions
 
 | # | Action | Layer | Effort | Why |
 |---|---|---|---|---|
@@ -145,14 +135,14 @@ An AI-assisted repo is steered by six layers. Each has one job, one source of tr
 | 3 | Remove `Bash(Remove-Item *)` + junk entries from `settings.local.json`; re-run `/fewer-permission-prompts` | Permissions | 10 min | Destructive auto-approve is the one genuinely dangerous setting in the setup. |
 | 4 | Console sweep → then `no-console` ESLint rule | Enforcement | M | Hard Rule #22 is still violated ~649× and unenforced (file 1 P1). |
 | 5 | Merge CLAUDE.md Module Model tables into the Feature Index (one table, Type column) | Instructions | 30 min | ~1.5K tokens saved every session; removes a drift surface (3 module lists → 2). |
-| 6 | Write the 5 missing vault Overviews (Dashboard, Chores, Focus, AI Usage, Recycle Bin) | Knowledge | M | Last modules where code is ahead of its map. FABLED docs (§4) now cover the PM-tracked five. |
+| 6 | Write the 5 missing vault Overviews (Dashboard, Chores, Focus, AI Usage, Recycle Bin) | Knowledge | M | Last modules where code is ahead of its map. FABLED docs (§3) now cover the PM-tracked five. |
 | 7 | Merge/archive the two expense-form history memories | Memory | 10 min | Stops point-in-time records aging into misinformation. |
 | 8 | schema-drift hook (migration touches table absent from schema.sql) | Enforcement | S | Closes the last open recommendation from file 1 §5. |
 | 9 | **Stop deleting executed migration files** + snapshot the 3 live RPC bodies into a dated migration | Knowledge | 30 min | The app's most critical logic (trip cascades, schedule bundle) currently has no copy in version control. |
 
 ---
 
-## 4 · The FABLED layer (added 2026-06-10)
+## 3 · The FABLED layer (added 2026-06-10)
 
 Each PM module folder now carries a `FABLED/` sub-folder — the 10× deep-dive that the lighter `1/2/3/4` PM files route into:
 
@@ -176,7 +166,7 @@ Each PM module folder now carries a `FABLED/` sub-folder — the 10× deep-dive 
 
 ---
 
-## 5 · Maintenance rituals
+## 4 · Maintenance rituals
 
 | Cadence | Ritual |
 |---|---|

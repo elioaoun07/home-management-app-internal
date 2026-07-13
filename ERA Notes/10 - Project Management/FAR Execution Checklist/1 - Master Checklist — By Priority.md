@@ -17,13 +17,6 @@ tags:
 
 ---
 
-## ✅ Already done (so the gate is half-closed — don't redo)
-
-- [x] Money-math unit tests: `balance-utils`, recurring next-due, custom-month/date/DST, split-bill (26 tests, Vitest, in pre-commit) — *shipped 2026-05-29, see [file 5](<../5 - P0 Automated Tests Implementation Notes.md>)*
-- [x] `expandOccurrences` schedule tests exist (`src/lib/schedule/expandOccurrences.test.ts`)
-
----
-
 ## 🔴 P0 — Trust & Gates (Phase 1 · W1–W3 · Jun 15 – Jul 5)
 
 *Cheap, unblocking, and mostly decisions. Everything below P0 is built on these.*

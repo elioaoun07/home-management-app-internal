@@ -13,6 +13,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { collectSources, walk } from "./pm/scan.mjs";
 import { buildHtml } from "./pm/ui.mjs";
+import { buildBundle } from "./pm/build.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -38,7 +39,8 @@ const payload = {
 };
 
 const dataJson = JSON.stringify(payload).replace(/<\/script/gi, "<\\/script");
-const html = buildHtml({ mode: "static", dataJson });
+const bundle = await buildBundle({ minify: true });
+const html = buildHtml({ mode: "static", dataJson, bundle });
 writeFileSync(OUT_FILE, html, "utf8");
 
 console.log("PM dashboard written: " + OUT_FILE);

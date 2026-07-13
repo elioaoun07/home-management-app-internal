@@ -1,6 +1,6 @@
 ---
 created: 2026-06-20
-updated: 2026-06-20
+updated: 2026-07-13
 type: checklist
 status: active
 owner: Elio
@@ -14,7 +14,7 @@ tags:
 
 > **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
 >
-> **What this file is:** the single flat, checkable surface for Trips — every actionable item as one checkbox, grouped **Now / Next / Later**, each with an ID, severity, and effort. The narrative *why* is [3 · Action Plan](<3 - Action Plan.md>). ✅ items stay as the record (Hard Rule #25 — no orphan fixes).
+> **What this file is:** the single flat, checkable surface for Trips — every open actionable item as one checkbox, grouped **Now / Next / Later**, each with an ID, severity, and effort. The narrative *why* is [3 · Action Plan](<3 - Action Plan.md>). Completed items are cleared once done — see git history or [1 · Feature State](<1 - Feature State.md>) for the record.
 >
 > **Legend:** Sev 🔴 blocker · 🟠 friction · 🟡 annoyance · ⚪ parked. Effort S/M/H. Point at a line (e.g. _N1_), a group, or a phase.
 
@@ -25,8 +25,6 @@ tags:
 - [ ] **N1** Manual end-to-end verify — **household trip.** Activate a real household trip; confirm chores skip, recurring events pause via `recurrence_pauses`, one-time events cancel, meal plans skip, and the trip account is created. Then complete it and confirm **every** side-effect in `trip_side_effects` reverses cleanly. → [Trips / Overview](<../../03 - Junction Modules/Trips/Overview.md>). _(🔴 · S–M)_
 - [ ] **N2** Manual end-to-end verify — **solo trip.** Confirm the traveler's items reassign to partner (`responsible_user_id` flip), meal planning is untouched, and completion reverses the reassignment. _(🔴 · S–M)_
 - [ ] **N3** Confirm `recurring_payments` are **NOT** paused during a trip (deliberate rule — bills still due while travelling); guard against a future "pause everything" regression. _(🔴 · S)_
-- [x] **N4** Standalone iOS/PWA home-screen icon for Trips — `trips-icon.svg` + generated PNGs, `manifests/trips.webmanifest` (`start_url`/`scope` = `/trips`), `src/app/trips/layout.tsx` metadata (`apple` touch icon, `appleWebApp`). Same pattern as Chat/Budget. ✅ *(2026-07-11)*
-- [x] **N5** Household-scope trip visibility bug fixed — partner could see a trip card in the list (even for `scope=solo`, a privacy leak) but the detail/places/packing routes 404'd because they hard-filtered `user_id = auth.uid()`. Added `getAccessibleTrip()` (`src/lib/tripAccess.ts`, mirrors `getAccessibleAccount()`'s `is_public` pattern): solo trips now stay fully private; `scope=household` trips are visible + collaboratively read/write (places, packing) to the active partner, while trip-record edit/activate/complete/delete/clone stay owner-only. Client gates the edit pencil + activate/complete buttons on a new computed `is_owner` field. ✅ *(2026-07-11)*
 
 ## ⏭️ Next — Make it legible
 

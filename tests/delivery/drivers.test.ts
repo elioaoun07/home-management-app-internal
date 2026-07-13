@@ -8,15 +8,17 @@ import {
 } from "../../scripts/delivery/drivers/driver.mjs";
 // Importing fake.mjs self-registers "fake" into the shared driver registry.
 import "../../scripts/delivery/drivers/fake.mjs";
+import "../../scripts/delivery/drivers/codex.mjs";
+import "../../scripts/delivery/drivers/claude.mjs";
 
 describe("driver registry", () => {
-  it("has fake registered after importing fake.mjs", () => {
-    expect(listRegisteredDrivers()).toContain("fake");
+  it("registers fake and both real providers without loading either SDK", () => {
+    expect(listRegisteredDrivers()).toEqual(expect.arrayContaining(["fake", "codex", "claude"]));
   });
 
   it("throws a clear DriverError for an unregistered kind", () => {
-    expect(() => createDriver("codex")).toThrow(DriverError);
-    expect(() => createDriver("codex")).toThrow(/no driver registered/);
+    expect(() => createDriver("missing-provider")).toThrow(DriverError);
+    expect(() => createDriver("missing-provider")).toThrow(/no driver registered/);
   });
 
   it("registerDriver requires a kind and a factory function", () => {
@@ -121,5 +123,15 @@ describe("fake driver: scripted turn sequencing", () => {
     expect(() => driver.runTurn({}, "go", { outputSchema: {} })).toThrow(/valid JSON/);
     const r = driver.runTurn({}, "go again", { outputSchema: {} });
     expect(r.finalText).toBe('{"ok":true}');
+  });
+
+  it("keeps malformed structured output isolated to the failing scripted turn", () => {
+    const driver = createDriver("fake", {
+      script: { turns: [{ finalText: "{broken" }, { finalText: '{"valid":true}' }] },
+    });
+    driver.startSession({ cwd: "/repo", mode: "build" });
+
+    expect(() => driver.runTurn({}, "draft", { outputSchema: { type: "object" } })).toThrow(/valid JSON/);
+    expect(driver.runTurn({}, "retry", { outputSchema: { type: "object" } }).finalText).toBe('{"valid":true}');
   });
 });

@@ -1,6 +1,6 @@
 # 6 — Roadmap, Testing & Risks
 
-**Stamped:** 2026-07-11 · **Revised:** 2026-07-12 · Covers plan sections: phased implementation slices (17), automated test strategy (18), MVP definition of done (19), risks + rejected alternatives + open decisions (20)
+**Stamped:** 2026-07-11 · **Revised:** 2026-07-13 · Covers plan sections: phased implementation slices (17), automated test strategy (18), MVP definition of done (19), risks + rejected alternatives + open decisions (20)
 
 > **Terminology reminder (`_index.md`):** Product Phase 1 = the complete MVP = engineering slices S1–S4. Specialist expansion = S5. Post-MVP improvements = S6. "Phase 1" never means slice S1.
 
@@ -19,19 +19,6 @@
 
 **Exit:** `pnpm test` green including new suites; every legal/illegal transition and every classifier rule covered.
 
-### Slice S2 — Server + runner + full UI on the fake driver · **M · 1.5d**
-
-| Step | Note |
-|---|---|
-| `server-routes.mjs` + pm-server wiring | All endpoints (doc 2 §5), build-lock, decision/message writes, runner spawn/monitor |
-| `run-session.mjs` | State loop, heartbeat, resume, boundary message intake — against `fake.mjs` |
-| Named SSE channel | Second watcher + `event: delivery` frames; client listener |
-| Dashboard UI complete | New Delivery Session flow (topic → item → preview → provider → capabilities → risks → launch; Deliver-button preselection), Agent Catalog (full roster, planned agents marked unavailable), list, detail, stepper, gate panels, composer, agent-output cards, timeline, artifact viewer |
-
-**Exit:** a fake session driven from the UI through every gate to Accept → source checkbox ticks (drift-guarded); survives killing pm-server AND the runner mid-run; composer message visibly consumed at the next boundary; the Agent Catalog shows the complete registry roster with only Phase-1 agents enabled; the New Delivery flow enforces the selectability rules (doc 5 §2) and launches with topic/item selection as well as via Deliver-button preselection.
-
-**IMPLEMENTED 2026-07-12.** `scripts/delivery/run-session.mjs` (runner: single-unit-of-work `advanceSession()` + long-running `runLoop()`, heartbeat/`isRunnerAlive`, retry-once-then-BLOCK, read-only/build git guards, `runValidationCommands` spawning real `pnpm typecheck/lint/test`) and `scripts/delivery/server-routes.mjs` (all `/api/delivery/*` routes, global build lock, Accept-writeback exactly-once) are new; `scripts/pm-server.mjs`, `scripts/pm/client.js`, `scripts/pm/styles.css`, `scripts/pm/ui.mjs` were extended per doc 2 §7's touch-point list. 47 new tests (16 runner + 31 server-routes) plus a live smoke test against the real dashboard (real HTTP calls through SELECTED → DISCOVERY → SPEC_READY → PLAN_READY → BUILDING → VALIDATING, with real artifact generation, real events.ndjson, real crash detection, and real cancel-with-dead-runner). `agent-registry.mjs` + `classify.mjs` are injected verbatim into the browser via `ui.mjs` (extending the existing `scanCheckboxes` precedent) so the Agent Catalog and launch-preview classifier can never drift from the server. The remaining rollup gap was closed on 2026-07-12: `renderChecklistRollup` now retains the existing skipped-row presentation while resolving real checkbox rows through `fileTasks`, so its Deliver shortcut carries the same `file` + `cbidx` identity, text-drift protection, eligibility rules, styling, and shared wizard handler as the per-file checklist view.
-
 ### Slice S3 — Real drivers · **M · 1–1.5d** *(the two SDK devDependencies are added here, not before)*
 
 | Step | Note |
@@ -41,7 +28,9 @@
 | Real DISCOVERY → SPEC → PLAN | Structured-output artifacts on a toy item, both providers |
 | Guards live | No-git-write (HEAD/refs), clean-analysis-turn, forbidden-paths — simulated violation → BLOCKED |
 
-**Exit:** real spec.md + plan.md from each provider; token usage visible per phase; a deliberately-provoked git commit attempt lands in BLOCKED.
+**Exit:** real spec.md + plan.md from each provider; token usage visible per phase; a simulated post-turn HEAD/ref violation (injected snapshot, no Git write executed) lands in BLOCKED.
+
+**LOCAL IMPLEMENTATION + AUTOMATED ACCEPTANCE COMPLETE 2026-07-13; LIVE EXIT GATE APPROVAL-BLOCKED.** Both SDK surfaces are pinned (`@openai/codex-sdk@0.144.1`, `@anthropic-ai/claude-agent-sdk@0.3.207`); both drivers implement the neutral `startSession`/`resume`/`runTurn` contract, lazy SDK loading, authentication preflight, exact structured-output schema pass-through, normalized events/usage, and provider-native reference reuse. `run-session.mjs` registers both drivers, selects `packet.agent`, forwards model/per-phase effort, persists a new ref before the first real turn, validates the exact spec/plan shapes, and stops at the human gates. Guard snapshots cover provider setup/preflight plus every turn, including HEAD, refs, index diff, tracked diff, and fingerprints of every porcelain path (`--untracked-files=all`); analysis drift and build changes under `constraints.forbiddenPaths` block the session. The tests no longer create temporary Git repositories or commits: HEAD/index/read-only/forbidden violations are injected as snapshots, proving `BLOCKED` without any Git-state change. Evidence on 2026-07-13: `pnpm vitest run tests/delivery` → 14 files / 591 tests pass; `pnpm typecheck` and scoped delivery lint pass. **Still open:** the real Codex and Claude DISCOVERY→PLAN turns. The sandboxed Codex preflight could not complete because outbound access was restricted; escalation was then rejected because the live run would transmit private repo/PM content to an external provider. No successful provider turn or live artifact was produced. Explicit owner approval after this disclosure is required before either provider run. S4–S6 have not started.
 
 ### Slice S4 — Build → validate → UAT · **M/L · 1.5–2d** — **Product Phase 1 (MVP) complete**
 

@@ -84,7 +84,3 @@ If you point the next stretch at Hub & ERA:
 > Resist piling proactive features onto an untested intent router — a confidently-wrong assistant erodes trust faster than a quiet one. Harden, then anticipate.
 
 → This period's concrete actions: [3 · Action Plan](<3 - Action Plan.md>); the checkable list: [4 · Checklist](<4 - Checklist.md>).
-
-## Implemented decisions log
-
-- **Partner-safe chat notifications + receipt-backed shopping-item unread state** *(IMPLEMENTED 2026-07-10)* — notification eligibility follows thread visibility, and the shopping-item dot is now a per-viewer unread signal rather than permanent chat-history decoration.

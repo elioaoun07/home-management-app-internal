@@ -1,34 +1,31 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-
-const client = readFileSync(join(process.cwd(), "scripts", "pm", "client.js"), "utf8");
-const rollup = client.slice(
-  client.indexOf("function renderChecklistRollup()"),
-  client.indexOf("function renderBugsRollup()"),
-);
+import { fileTasks } from "../../scripts/pm/shared/tasks.mjs";
+import { deliverEligibility } from "../../scripts/pm/src/features/delivery/deliveryStore.js";
 
 describe("checklist rollup Deliver shortcut", () => {
-  it("keeps static mode free of delivery data and controls", () => {
-    expect(rollup).toContain("if (!CAN_EDIT) {");
-    expect(rollup).toContain("renderChecklistRollupContent();");
-    expect(rollup).toContain("loadDeliverySessions()");
+  const raw = [
+    "## Now",
+    "- `[_skip]` display-only row",
+    "- [ ] **N4** Open work _(blocker - S)_",
+    "```md",
+    "- [ ] fenced fake",
+    "```",
+    "- [x] completed work",
+  ].join("\n");
+
+  it("derives checkbox identity from the shared scanner without skipped rows", () => {
+    expect(fileTasks(raw).map((task) => [task.cbidx, task.state])).toEqual([[0, "open"], [1, "done"]]);
   });
 
-  it("uses checkbox identity from fileTasks without counting skipped rows", () => {
-    expect(rollup).toContain("var tasks = fileTasks(f);");
-    expect(rollup).toContain('c.state === "skipped" ? null : tasks[checkboxIndex++]');
-    expect(rollup).toContain('data-deliver-file="');
-    expect(rollup).toContain('data-deliver-cbidx="');
-    expect(rollup).toContain("CAN_EDIT && task && task.postponed");
+  it("only exposes delivery for open topic tasks without an active session", () => {
+    const task = { ...fileTasks(raw)[0], file: "Budget/4 - Checklist.md", module: "Budget" };
+    expect(deliverEligibility(task, [], ["Budget"]).eligible).toBe(true);
+    expect(deliverEligibility({ ...task, state: "done" }, [], ["Budget"]).eligible).toBe(false);
+    expect(deliverEligibility(task, [{ sessionId: "s1", state: "BUILDING", item: { pmFile: task.file, cbidx: task.cbidx } }], ["Budget"])).toMatchObject({ eligible: false, sessionId: "s1" });
   });
 
-  it("only exposes the shared shortcut for open, non-active delivery tasks", () => {
-    expect(rollup).toContain('task.state === "open"');
-    expect(rollup).toContain("!active");
-    expect(rollup).toContain("deliveryActiveSessionFor(task.file.relPath, task.cbidx)");
-    expect(rollup).toContain("deliveryTopics().indexOf(task.file.module) !== -1");
-    expect(rollup).toContain('<span class="chip chip-pp">postponed</span>');
-    expect(rollup).toContain("wireTaskActions();");
+  it("keeps non-topic tasks out of Delivery", () => {
+    const task = { ...fileTasks(raw)[0], file: "Notes.md", module: "Command Center" };
+    expect(deliverEligibility(task, [], ["Budget"]).eligible).toBe(false);
   });
 });

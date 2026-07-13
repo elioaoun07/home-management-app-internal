@@ -213,9 +213,27 @@ describe("buildPacket", () => {
     });
     expect(packet.schemaVersion).toBe(SCHEMA_VERSION);
     expect(packet.constraints).toEqual(DEFAULT_CONSTRAINTS);
+    expect(packet.agentConfig).toEqual({
+      model: null,
+      effort: { discovery: "medium", plan: "high", building: "high", review: "medium" },
+    });
     expect(packet.capabilities).toEqual([]);
     expect(packet.skills).toEqual([]);
     expect(packet.acceptanceCriteria).toEqual([]);
+  });
+
+  it("merges model and per-phase effort overrides into the agent config", () => {
+    const packet = buildPacket({
+      sessionId: "s-1",
+      agent: "claude",
+      agentConfig: { model: "claude-sonnet", effort: { discovery: "low", plan: "xhigh" } },
+      item: baseItem,
+      workspace: baseWorkspace,
+    });
+    expect(packet.agentConfig).toEqual({
+      model: "claude-sonnet",
+      effort: { discovery: "low", plan: "xhigh", building: "high", review: "medium" },
+    });
   });
 
   it("lets caller-supplied constraints override defaults without dropping the rest", () => {

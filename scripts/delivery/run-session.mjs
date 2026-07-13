@@ -11,15 +11,18 @@
 // driver + sessionDir + repoRoot directly — no child process required.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { createDriver } from "./drivers/driver.mjs";
 import "./drivers/fake.mjs"; // self-registers "fake"
+import "./drivers/codex.mjs"; // self-registers; SDK import remains lazy
+import "./drivers/claude.mjs"; // self-registers; SDK import remains lazy
 import { TRUNCATE_LIMITS, appendEvent, formatEvent, reduceUsage, truncateField } from "./events.mjs";
 import { atomicWriteJsonSync, readJsonIfExists, readTextIfExists, appendNdjsonLine } from "./fsx.mjs";
-import { gitForEachRef, gitRevParseHead, gitStatusPorcelain } from "./gitread.mjs";
+import { gitDiff, gitForEachRef, gitRevParseHead, gitStatusPorcelain } from "./gitread.mjs";
 import { applyCapabilityDrops } from "./classify.mjs";
 import {
   GATES,
@@ -181,14 +184,219 @@ function accumulateUsage(state, phase, usage) {
   return { perPhase, total };
 }
 
+// ---- structured analysis outputs (S3) ----
+
+const STRING_ARRAY_SCHEMA = Object.freeze({ type: "array", items: { type: "string" } });
+
+export const SPEC_OUTPUT_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "problem",
+    "currentBehavior",
+    "proposedBehavior",
+    "acceptanceCriteria",
+    "affectedPaths",
+    "riskFlags",
+    "openQuestions",
+  ],
+  properties: {
+    problem: { type: "string" },
+    currentBehavior: { type: "string" },
+    proposedBehavior: { type: "string" },
+    acceptanceCriteria: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "text"],
+        properties: { id: { type: "string" }, text: { type: "string" } },
+      },
+    },
+    affectedPaths: STRING_ARRAY_SCHEMA,
+    riskFlags: STRING_ARRAY_SCHEMA,
+    openQuestions: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["text"],
+        properties: { text: { type: "string" } },
+      },
+    },
+  },
+});
+
+export const PLAN_OUTPUT_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["steps", "testPlan", "riskFlags", "rollbackSketch", "noNewDeps"],
+  properties: {
+    steps: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "description", "paths", "validationHint"],
+        properties: {
+          id: { type: "string" },
+          description: { type: "string" },
+          paths: STRING_ARRAY_SCHEMA,
+          validationHint: { type: "string" },
+        },
+      },
+    },
+    testPlan: { type: "string" },
+    riskFlags: STRING_ARRAY_SCHEMA,
+    rollbackSketch: { type: "string" },
+    noNewDeps: { type: "boolean" },
+  },
+});
+
+function requireString(value, field, label) {
+  if (typeof value !== "string") throw new RunnerError(`${label} output field "${field}" must be a string`);
+}
+
+function requireStringArray(value, field, label) {
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+    throw new RunnerError(`${label} output field "${field}" must be an array of strings`);
+  }
+}
+
+function parseJsonObject(text, label) {
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch (err) {
+    throw new RunnerError(`${label} output was not valid JSON: ${err.message}`);
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new RunnerError(`${label} output must be a JSON object`);
+  }
+  return value;
+}
+
+export function parseSpecOutput(text) {
+  const spec = parseJsonObject(text, "DISCOVERY");
+  for (const field of ["problem", "currentBehavior", "proposedBehavior"]) requireString(spec[field], field, "DISCOVERY");
+  for (const field of ["affectedPaths", "riskFlags"]) requireStringArray(spec[field], field, "DISCOVERY");
+  if (
+    !Array.isArray(spec.acceptanceCriteria) ||
+    spec.acceptanceCriteria.some((entry) => !entry || typeof entry.id !== "string" || typeof entry.text !== "string")
+  ) {
+    throw new RunnerError('DISCOVERY output field "acceptanceCriteria" must contain {id,text} objects');
+  }
+  if (
+    !Array.isArray(spec.openQuestions) ||
+    spec.openQuestions.some((entry) => !entry || typeof entry.text !== "string")
+  ) {
+    throw new RunnerError('DISCOVERY output field "openQuestions" must contain {text} objects');
+  }
+  return spec;
+}
+
+export function parsePlanOutput(text) {
+  const plan = parseJsonObject(text, "PLAN");
+  for (const field of ["testPlan", "rollbackSketch"]) requireString(plan[field], field, "PLAN");
+  requireStringArray(plan.riskFlags, "riskFlags", "PLAN");
+  if (typeof plan.noNewDeps !== "boolean") throw new RunnerError('PLAN output field "noNewDeps" must be boolean');
+  if (
+    !Array.isArray(plan.steps) ||
+    plan.steps.some(
+      (step) =>
+        !step ||
+        typeof step.id !== "string" ||
+        typeof step.description !== "string" ||
+        !Array.isArray(step.paths) ||
+        step.paths.some((path) => typeof path !== "string") ||
+        typeof step.validationHint !== "string",
+    )
+  ) {
+    throw new RunnerError('PLAN output field "steps" must contain {id,description,paths[],validationHint} objects');
+  }
+  return plan;
+}
+
 // ---- git guards (doc 4 §3) ----
 
-function snapshotGit(repoRoot) {
+function normalizeStatusPath(rawPath) {
+  let value = String(rawPath || "").trim();
+  if (value.startsWith('"') && value.endsWith('"')) {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      // Keep Git's rendered path if it is not JSON-compatible C quoting.
+    }
+  }
+  return value.replace(/\\/g, "/");
+}
+
+/** Parse repo-relative paths from `git status --porcelain` without mutating Git. */
+export function parsePorcelainPaths(statusText) {
+  const paths = [];
+  for (const record of String(statusText || "").split(/\r?\n|\0/g)) {
+    if (!record || record.length < 4) continue;
+    const rendered = record.slice(3);
+    const parts = rendered.includes(" -> ") ? rendered.split(" -> ") : [rendered];
+    for (const part of parts) {
+      const normalized = normalizeStatusPath(part);
+      if (normalized) paths.push(normalized);
+    }
+  }
+  return [...new Set(paths)].sort();
+}
+
+function fingerprintDirtyPaths(repoRoot, statusText) {
+  const out = {};
+  const root = resolve(repoRoot);
+  for (const rel of parsePorcelainPaths(statusText)) {
+    if (rel === ".delivery" || rel.startsWith(".delivery/")) continue;
+    const abs = resolve(root, ...rel.split("/"));
+    const back = relative(root, abs);
+    if (!back || back.startsWith(`..${sep}`) || back === "..") continue;
+    try {
+      const stat = lstatSync(abs);
+      out[rel] = stat.isFile()
+        ? createHash("sha256").update(readFileSync(abs)).digest("hex")
+        : `${stat.mode}:${stat.size}:${stat.mtimeMs}`;
+    } catch {
+      out[rel] = "<missing>";
+    }
+  }
+  return out;
+}
+
+/** Stronger snapshot: refs + index + tracked diff + dirty-file fingerprints. */
+export function snapshotGit(repoRoot) {
+  const status = gitStatusPorcelain({ cwd: repoRoot });
   return {
-    status: gitStatusPorcelain({ cwd: repoRoot }),
+    status,
     head: gitRevParseHead({ cwd: repoRoot }),
     refs: gitForEachRef({ cwd: repoRoot }),
+    indexDiff: gitDiff(["--cached", "--binary", "--no-ext-diff"], { cwd: repoRoot }),
+    trackedDiff: gitDiff(["--binary", "--no-ext-diff"], { cwd: repoRoot }),
+    fingerprints: fingerprintDirtyPaths(repoRoot, status),
   };
+}
+
+function globToRegExp(glob) {
+  const marker = "\0";
+  const withMarker = String(glob).replace(/\\/g, "/").split("**").join(marker);
+  const escaped = withMarker.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  const withStars = escaped.split("*").join("[^/]*");
+  return new RegExp(`^${withStars.split(marker).join(".*")}$`);
+}
+
+function changedPathsBetween(before, after) {
+  const beforePaths = new Set(parsePorcelainPaths(before.status));
+  const afterPaths = new Set(parsePorcelainPaths(after.status));
+  const all = new Set([...beforePaths, ...afterPaths]);
+  return [...all].filter((path) => {
+    const beforePresent = beforePaths.has(path);
+    const afterPresent = afterPaths.has(path);
+    if (beforePresent !== afterPresent) return true;
+    return (before.fingerprints && before.fingerprints[path]) !== (after.fingerprints && after.fingerprints[path]);
+  });
 }
 
 /**
@@ -197,13 +405,35 @@ function snapshotGit(repoRoot) {
  * not edit the tree); `mode: "build"` allows tree edits but forbids any HEAD
  * or ref change (no commits/branches/checkouts, ever).
  */
-function checkGitGuard(before, repoRoot, mode) {
-  const after = snapshotGit(repoRoot);
+/**
+ * @param {object} before
+ * @param {string} repoRoot
+ * @param {"readonly"|"build"} mode
+ * @param {{takeSnapshot?:Function, forbiddenPaths?:string[]}} [options]
+ */
+export function checkGitGuard(
+  before,
+  repoRoot,
+  mode,
+  { takeSnapshot = snapshotGit, forbiddenPaths = [] } = {},
+) {
+  const after = takeSnapshot(repoRoot);
   const violations = [];
   if (after.head !== before.head) violations.push("HEAD changed");
   if (after.refs !== before.refs) violations.push("refs changed");
-  if (mode === "readonly" && after.status !== before.status) {
+  if ((after.indexDiff || "") !== (before.indexDiff || "")) violations.push("Git index changed");
+  if (
+    mode === "readonly" &&
+    (after.status !== before.status ||
+      (after.trackedDiff || "") !== (before.trackedDiff || "") ||
+      JSON.stringify(after.fingerprints || {}) !== JSON.stringify(before.fingerprints || {}))
+  ) {
     violations.push("working tree changed during a read-only phase");
+  }
+  if (mode === "build" && forbiddenPaths.length) {
+    const matchers = forbiddenPaths.map(globToRegExp);
+    const forbidden = changedPathsBetween(before, after).filter((path) => matchers.some((re) => re.test(path)));
+    if (forbidden.length) violations.push(`forbidden paths changed: ${forbidden.join(", ")}`);
   }
   return { ok: violations.length === 0, violations, after };
 }
@@ -222,14 +452,18 @@ async function runGuardedTurn({
   guardMode,
   retryDelayMs = 30000,
   sleep = defaultSleep,
+  takeSnapshot = snapshotGit,
+  forbiddenPaths = [],
+  effort,
 }) {
-  const before = snapshotGit(repoRoot);
+  const before = takeSnapshot(repoRoot);
   let lastErr = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const result = await Promise.resolve(
         driver.runTurn(handle, prompt, {
           outputSchema,
+          effort,
           onEvent: (e) => {
             const data = { ...((e && e.data) || {}) };
             if (typeof data.command === "string") data.command = truncateField(data.command, TRUNCATE_LIMITS.command);
@@ -243,7 +477,7 @@ async function runGuardedTurn({
           },
         }),
       );
-      const guard = checkGitGuard(before, repoRoot, guardMode);
+      const guard = checkGitGuard(before, repoRoot, guardMode, { takeSnapshot, forbiddenPaths });
       if (!guard.ok) {
         emitEvent(sessionDir, {
           type: "git.guard.violation",
@@ -262,6 +496,16 @@ async function runGuardedTurn({
         agent,
         data: { attempt, message: String((err && err.message) || err) },
       });
+      const guard = checkGitGuard(before, repoRoot, guardMode, { takeSnapshot, forbiddenPaths });
+      if (!guard.ok) {
+        emitEvent(sessionDir, {
+          type: "git.guard.violation",
+          phase,
+          agent,
+          data: { violations: guard.violations },
+        });
+        return { ok: false, gitViolation: true, violations: guard.violations, error: err };
+      }
       if (attempt === 0) {
         sleep(retryDelayMs);
         continue;
@@ -278,17 +522,76 @@ function defaultSleep(ms) {
 
 // ---- driver session handle (persisted ref, resumable) ----
 
-async function getHandle({ driver, state, repoRoot, mode }) {
+function phaseEffort(packet, phase) {
+  return packet.agentConfig && packet.agentConfig.effort
+    ? packet.agentConfig.effort[phase] || null
+    : null;
+}
+
+async function getHandle({ driver, state, packet, repoRoot, mode, phase }) {
   const ref = state.driver && state.driver.ref;
   if (ref) {
     return Promise.resolve(driver.resume(ref));
   }
-  const handle = await Promise.resolve(driver.startSession({ cwd: repoRoot, mode }));
+  const handle = await Promise.resolve(
+    driver.startSession({
+      cwd: repoRoot,
+      mode,
+      model: packet.agentConfig && packet.agentConfig.model,
+      effort: phaseEffort(packet, phase),
+    }),
+  );
   return handle;
+}
+
+async function getGuardedHandle({
+  sessionDir,
+  driver,
+  state,
+  packet,
+  repoRoot,
+  mode,
+  phase,
+  agent,
+  takeSnapshot,
+  forbiddenPaths,
+}) {
+  const before = takeSnapshot(repoRoot);
+  try {
+    const handle = await getHandle({ driver, state, packet, repoRoot, mode, phase });
+    const guard = checkGitGuard(before, repoRoot, mode, { takeSnapshot, forbiddenPaths });
+    if (!guard.ok) {
+      emitEvent(sessionDir, {
+        type: "git.guard.violation",
+        phase: phase.toUpperCase(),
+        agent,
+        data: { stage: "session-setup", violations: guard.violations },
+      });
+      return { ok: false, gitViolation: true, violations: guard.violations };
+    }
+    return { ok: true, handle };
+  } catch (error) {
+    const guard = checkGitGuard(before, repoRoot, mode, { takeSnapshot, forbiddenPaths });
+    if (!guard.ok) {
+      emitEvent(sessionDir, {
+        type: "git.guard.violation",
+        phase: phase.toUpperCase(),
+        agent,
+        data: { stage: "session-setup", violations: guard.violations },
+      });
+      return { ok: false, gitViolation: true, violations: guard.violations, error };
+    }
+    return { ok: false, gitViolation: false, error };
+  }
 }
 
 function withDriverRef(state, handle) {
   return { ...state, driver: { ...(state.driver || {}), ref: handle.ref } };
+}
+
+function persistNewDriverRef(sessionDir, priorState, nextState) {
+  if (priorState.driver && priorState.driver.ref) return nextState;
+  return persistState(sessionDir, nextState);
 }
 
 // ---- validation (runner-native, doc 3 §4 row 5) ----
@@ -506,8 +809,22 @@ async function handleSelected({ sessionDir, state }) {
 }
 
 async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, config }) {
-  const handle = await getHandle({ sessionDir, driver, state, repoRoot, mode: "readonly" });
-  let working = withDriverRef(state, handle);
+  const forbiddenPaths = (packet.constraints && packet.constraints.forbiddenPaths) || [];
+  const setup = await getGuardedHandle({
+    sessionDir,
+    driver,
+    state,
+    packet,
+    repoRoot,
+    mode: "readonly",
+    phase: "discovery",
+    agent: "orchestrator",
+    takeSnapshot: config.takeSnapshot,
+    forbiddenPaths,
+  });
+  if (!setup.ok) return blockFrom(sessionDir, state, "DISCOVERY", setup);
+  const handle = setup.handle;
+  let working = persistNewDriverRef(sessionDir, state, withDriverRef(state, handle));
   const { texts: drainedMessages, lastSeq } = drainMessages(sessionDir, working);
   const pendingGuidance = working.pendingGuidance || [];
   const ownerMessages = [...pendingGuidance, ...drainedMessages];
@@ -526,19 +843,27 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
     prompt,
     phase: "DISCOVERY",
     agent: "orchestrator",
-    outputSchema: true,
+    outputSchema: SPEC_OUTPUT_SCHEMA,
     repoRoot,
     guardMode: "readonly",
+    takeSnapshot: config.takeSnapshot,
+    forbiddenPaths,
+    effort: phaseEffort(packet, "discovery"),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
   });
   working = { ...working, messagesProcessed: lastSeq };
   if (!turn.ok) return blockFrom(sessionDir, working, "DISCOVERY", turn);
 
-  const spec = JSON.parse(turn.finalText);
+  working = { ...working, usage: accumulateUsage(working, "discovery", turn.usage) };
+  let spec;
+  try {
+    spec = parseSpecOutput(turn.finalText);
+  } catch (error) {
+    return blockFrom(sessionDir, working, "DISCOVERY", { error });
+  }
   writeArtifactJson(sessionDir, "spec.json", spec);
   writeArtifactText(sessionDir, "spec.md", renderSpecMd(spec));
-  working = { ...working, usage: accumulateUsage(working, "discovery", turn.usage) };
 
   if ((spec.openQuestions || []).length) {
     const result = smNext(working.state, "question.raised");
@@ -597,8 +922,24 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
   newPacket = { ...newPacket, acceptanceCriteria: spec.acceptanceCriteria || newPacket.acceptanceCriteria || [] };
   atomicWriteJsonSync(sessionPaths(sessionDir).packet, newPacket);
 
-  const handle = await getHandle({ sessionDir, driver, state, repoRoot, mode: "readonly" });
-  let working = withDriverRef(state, handle);
+  const forbiddenPaths = (newPacket.constraints && newPacket.constraints.forbiddenPaths) || [];
+  const setup = await getGuardedHandle({
+    sessionDir,
+    driver,
+    state,
+    packet: newPacket,
+    repoRoot,
+    mode: "readonly",
+    phase: "plan",
+    agent: "orchestrator",
+    takeSnapshot: config.takeSnapshot,
+    forbiddenPaths,
+  });
+  if (!setup.ok) {
+    return { newState: blockFrom(sessionDir, state, "SPEC_READY", setup), newPacket };
+  }
+  const handle = setup.handle;
+  let working = persistNewDriverRef(sessionDir, state, withDriverRef(state, handle));
   const { texts: ownerMessages, lastSeq } = drainMessages(sessionDir, working);
   const prompt = buildPlanPrompt({
     packet: newPacket,
@@ -613,9 +954,12 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
     prompt,
     phase: "PLAN",
     agent: "orchestrator",
-    outputSchema: true,
+    outputSchema: PLAN_OUTPUT_SCHEMA,
     repoRoot,
     guardMode: "readonly",
+    takeSnapshot: config.takeSnapshot,
+    forbiddenPaths,
+    effort: phaseEffort(newPacket, "plan"),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
   });
@@ -623,10 +967,15 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
   emitEvent(sessionDir, { type: "decision.consumed", phase: "SPEC_READY", data: { decision: "approve" } });
   if (!turn.ok) return { newState: blockFrom(sessionDir, working, "SPEC_READY", turn), newPacket };
 
-  const plan = JSON.parse(turn.finalText);
+  working = { ...working, usage: accumulateUsage(working, "plan", turn.usage) };
+  let plan;
+  try {
+    plan = parsePlanOutput(turn.finalText);
+  } catch (error) {
+    return { newState: blockFrom(sessionDir, working, "SPEC_READY", { error }), newPacket };
+  }
   writeArtifactJson(sessionDir, "plan.json", plan);
   writeArtifactText(sessionDir, "plan.md", renderPlanMd(plan));
-  working = { ...working, usage: accumulateUsage(working, "plan", turn.usage) };
 
   const result = smNext(working.state, "decision.approve");
   emitEvent(sessionDir, { type: "phase.transition", phase: "SPEC_READY", data: { to: result.to } });
@@ -663,7 +1012,7 @@ function consumePlanDecision({ sessionDir, state, decision }) {
 
 async function handleBuilding({ sessionDir, state, packet, driver, repoRoot, config }) {
   const build = state.build || { mode: "fix", stepIndex: 0, totalSteps: 1 };
-  const handle = await getHandle({ sessionDir, driver, state, repoRoot, mode: "build" });
+  const handle = await getHandle({ driver, state, packet, repoRoot, mode: "build", phase: "building" });
   let working = withDriverRef(state, handle);
   const { texts: ownerMessages, lastSeq } = drainMessages(sessionDir, working);
 
@@ -698,6 +1047,9 @@ async function handleBuilding({ sessionDir, state, packet, driver, repoRoot, con
     outputSchema: false,
     repoRoot,
     guardMode: "build",
+    takeSnapshot: config.takeSnapshot,
+    forbiddenPaths: (packet.constraints && packet.constraints.forbiddenPaths) || [],
+    effort: phaseEffort(packet, "building"),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
   });
@@ -758,7 +1110,7 @@ function handleValidating({ sessionDir, state, packet, config }) {
 }
 
 async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, config }) {
-  const handle = await getHandle({ sessionDir, driver, state, repoRoot, mode: "readonly" });
+  const handle = await getHandle({ driver, state, packet, repoRoot, mode: "readonly", phase: "review" });
   let working = withDriverRef(state, handle);
   const { texts: ownerMessages, lastSeq } = drainMessages(sessionDir, working);
   const prompt = buildSelfReviewPrompt({ packet, ownerMessages });
@@ -772,6 +1124,9 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
     outputSchema: true,
     repoRoot,
     guardMode: "readonly",
+    takeSnapshot: config.takeSnapshot,
+    forbiddenPaths: (packet.constraints && packet.constraints.forbiddenPaths) || [],
+    effort: phaseEffort(packet, "review"),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
   });
@@ -808,7 +1163,7 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
 
   // PASS / PASS_WITH_NOTES — atomically assemble the UAT package (doc 3 §2: no
   // intermediate state exists between REVIEWING and UAT_READY).
-  const uatHandle = await getHandle({ sessionDir, driver, state: working, repoRoot, mode: "readonly" });
+  const uatHandle = await getHandle({ driver, state: working, packet, repoRoot, mode: "readonly", phase: "review" });
   working = withDriverRef(working, uatHandle);
   const priorArtifactPaths = ["artifacts/spec.md", "artifacts/plan.md", "artifacts/validation-report.md", "artifacts/review-self.md"];
   const uatPrompt = buildUatPrompt({ packet, priorArtifactPaths, ownerMessages: [] });
@@ -822,6 +1177,9 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
     outputSchema: true,
     repoRoot,
     guardMode: "readonly",
+    takeSnapshot: config.takeSnapshot,
+    forbiddenPaths: (packet.constraints && packet.constraints.forbiddenPaths) || [],
+    effort: phaseEffort(packet, "review"),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
   });
@@ -874,9 +1232,9 @@ function consumeUatDecision({ sessionDir, state, decision }) {
   };
 }
 
-function consumeAcceptedDecision({ sessionDir, state, decision, repoRoot }) {
+function consumeAcceptedDecision({ sessionDir, state, decision, repoRoot, readHead }) {
   const result = smNext(state.state, "decision.shipped");
-  const shippedHead = gitRevParseHead({ cwd: repoRoot });
+  const shippedHead = readHead(repoRoot);
   emitEvent(sessionDir, { type: "decision.consumed", phase: "ACCEPTED", data: { decision: "shipped", head: shippedHead } });
   void decision;
   return { ...state, state: result.to, awaiting: null, shippedHead };
@@ -920,7 +1278,7 @@ function consumeCancel({ sessionDir, state }) {
  * Perform exactly one unit of runner work for the session in `sessionDir` and
  * persist the result. Returns `{didWork: boolean, state}`.
  * @param {{sessionDir:string, driver:object, repoRoot:string, runValidation?:Function,
- *   retryDelayMs?:number, sleep?:Function}} options
+ *   retryDelayMs?:number, sleep?:Function, takeSnapshot?:Function, readHead?:Function}} options
  */
 export async function advanceSession(options) {
   const { sessionDir, driver, repoRoot } = options;
@@ -929,6 +1287,8 @@ export async function advanceSession(options) {
     runValidation: options.runValidation,
     retryDelayMs: options.retryDelayMs != null ? options.retryDelayMs : 30000,
     sleep: options.sleep || defaultSleep,
+    takeSnapshot: options.takeSnapshot || snapshotGit,
+    readHead: options.readHead || ((root) => gitRevParseHead({ cwd: root })),
   };
   const state = loadState(sessionDir);
   const packet = loadPacket(sessionDir);
@@ -986,7 +1346,7 @@ export async function advanceSession(options) {
       } else if (state.state === "UAT_READY") {
         newState = consumeUatDecision({ sessionDir, state, decision });
       } else if (state.state === "ACCEPTED") {
-        newState = consumeAcceptedDecision({ sessionDir, state, decision, repoRoot });
+        newState = consumeAcceptedDecision({ sessionDir, state, decision, repoRoot, readHead: config.readHead });
       } else if (state.state === "NEEDS_DECISION") {
         newState = consumeQuestionDecision({ sessionDir, state, decision });
       } else {
@@ -1073,7 +1433,7 @@ function sleepAsync(ms) {
  * Run the session to completion (or until `shouldStop()` returns true).
  * @param {{sessionDir:string, repoRoot:string, driverKind?:string, driverOptions?:object,
  *   runValidation?:Function, pollIntervalMs?:number, heartbeatIntervalMs?:number,
- *   shouldStop?:Function, retryDelayMs?:number, sleep?:Function}} options
+ *   shouldStop?:Function, retryDelayMs?:number, sleep?:Function, takeSnapshot?:Function}} options
  */
 export async function runLoop(options) {
   const {
@@ -1087,6 +1447,7 @@ export async function runLoop(options) {
     shouldStop = () => false,
     retryDelayMs = 30000,
     sleep,
+    takeSnapshot,
   } = options;
 
   const driver = createDriver(driverKind, driverOptions);
@@ -1100,7 +1461,15 @@ export async function runLoop(options) {
       writeHeartbeat(sessionDir);
       return state;
     }
-    const { didWork } = await advanceSession({ sessionDir, driver, repoRoot, runValidation, retryDelayMs, sleep });
+    const { didWork } = await advanceSession({
+      sessionDir,
+      driver,
+      repoRoot,
+      runValidation,
+      retryDelayMs,
+      sleep,
+      takeSnapshot,
+    });
     if (Date.now() - lastHeartbeat >= heartbeatIntervalMs) {
       writeHeartbeat(sessionDir);
       lastHeartbeat = Date.now();
@@ -1180,7 +1549,7 @@ function parseArgv(argv) {
 async function main() {
   const args = parseArgv(process.argv.slice(2));
   if (!args.session) {
-    console.error("usage: node run-session.mjs --session <id> [--resume]");
+    process.stderr.write("usage: node run-session.mjs --session <id> [--resume]\n");
     process.exit(2);
   }
   const sessionDir = join(REPO_ROOT, ".delivery", "sessions", args.session);
@@ -1188,8 +1557,11 @@ async function main() {
   await runLoop({
     sessionDir,
     repoRoot: REPO_ROOT,
-    driverKind: "fake",
-    driverOptions: { script: defaultFakeScript(packet), sessionId: args.session },
+    driverKind: packet.agent,
+    driverOptions: {
+      sessionDir,
+      forbiddenPaths: (packet.constraints && packet.constraints.forbiddenPaths) || [],
+    },
     resumed: args.resume,
   });
 }
@@ -1210,7 +1582,7 @@ if (isMain) {
     } catch {
       /* best-effort logging only */
     }
-    console.error(err);
+    process.stderr.write(`${String((err && err.stack) || err)}\n`);
     process.exitCode = 1;
   });
 }

@@ -69,7 +69,11 @@ describe("read-only helper wrappers", () => {
   it("gitStatusPorcelain", () => {
     const spy = vi.fn().mockReturnValue(" M file.ts\n");
     expect(gitStatusPorcelain({ execFileSync: spy })).toBe(" M file.ts\n");
-    expect(spy).toHaveBeenCalledWith("git", ["status", "--porcelain"], expect.any(Object));
+    expect(spy).toHaveBeenCalledWith(
+      "git",
+      ["status", "--porcelain", "--untracked-files=all"],
+      expect.any(Object),
+    );
   });
 
   it("gitRevParseHead trims the output", () => {

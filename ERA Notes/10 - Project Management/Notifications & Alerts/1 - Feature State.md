@@ -178,8 +178,3 @@ Do **not** duplicate file-path tables here — they drift. The authoritative cod
 
 → Where each pain is *heading* + the best-practice rationale + MoSCoW ordering → [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>).
 → What to actually do, and in what order → [3 · Action Plan](<3 - Action Plan.md>); the checkable list → [4 · Checklist](<4 - Checklist.md>).
-
-## Implemented fixes log
-
-- ✅ **2026-06-19 — Notification drawer open animation:** fixed the two-step open caused by `NotificationModal.tsx` gating cached content behind `contentReady` + `onAnimationComplete`. The drawer now has one slide-in motion; skeleton rows appear only for real `isLoading` states.
-- ✅ **2026-07-10 — Hub chat visibility delivery:** immediate and fallback delivery now exclude private threads and cover every public purpose, including shopping-item replies. Child-message receipts clear the item dot and thread unread count when opened.

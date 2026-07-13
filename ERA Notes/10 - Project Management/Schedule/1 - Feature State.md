@@ -200,12 +200,7 @@ _(Updated 2026-06-19. These are the structural risks behind the module — Pain 
 
 > **✅ Former top live blocker, FIXED 2026-06-19: 🔴 "Skip" duplicates recurring occurrences.** The action labelled "Skip" actually postponed onto the next slot and created a second copy. Real per-occurrence Skip is now wired everywhere (`useSkipItem`/`handleSkip`); the `next_occurrence` postpone path is deleted. New top priority is Stage 2 (engine unification) — see [4 · Recurrence & Occurrence Actions](<2 - Vision & Roadmap.md>) §7. *(Cluster 5)*
 
-1. ✅ ~~**🔴 Partner can't edit shared items (403, creator-only).**~~ *(FIXED 2026-05-31)* Aligned app-level guard via `canMutateItem()`. *(Cluster 1)*
-2. ✅ ~~**🔴 Can't take an item back / reassign in both directions.**~~ *(FIXED 2026-06-06)* "Pass to partner" + "Take it back" one-tap actions in `ItemActionsSheet`. *(Cluster 1)*
-3. ✅ ~~**🟠 Handed-off items vanish — no assigned-out/assigned-to-me view.**~~ *(FIXED 2026-06-06)* Two collapsible sections added to `/reminders`. *(Cluster 1)*
-4. **🟠 Capture is too heavy → I don't log everything.** The habit-killer; both lanes decided, form work largely shipped, Hub-Gemini lane pending. *(Cluster 3 → [file 3](<2 - Vision & Roadmap.md>))*
-5. ✅ ~~**🟠 Surface sprawl + dead Focus page.**~~ *(FIXED 2026-06-06)* Retired `/focus` page; added Focus per-item action to `ItemActionsSheet`; Week view handles routine assignment. *(Cluster 2)*
-6. ✅ ~~**🟠 Schema drift.**~~ *(FIXED 2026-06-06)* Full schema — tables, `get_schedule_bundle` RPC, and all RLS policies — now in `migrations/schema.sql`. *(Cluster 4)*
+1. **🟠 Capture is too heavy → I don't log everything.** The habit-killer; both lanes decided, form work largely shipped, Hub-Gemini lane pending. *(Cluster 3 → [file 3](<2 - Vision & Roadmap.md>))*
 
 → Where each pain is *heading* → [2 · Vision, Target Design & Decisions](<2 - Vision & Roadmap.md>).
 → What to actually do, and in what order → [5 · Execution Plan & Build Checklist](<3 - Action Plan.md>).

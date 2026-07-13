@@ -1,6 +1,6 @@
 ---
 created: 2026-06-20
-updated: 2026-06-20
+updated: 2026-07-13
 type: checklist
 status: active
 owner: Elio
@@ -14,7 +14,7 @@ tags:
 
 > **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
 >
-> **What this file is:** the single flat, checkable surface for Kitchen — every actionable item as one checkbox, grouped **Now / Next / Later**, each with an ID, severity, and effort. The narrative *why* is [3 · Action Plan](<3 - Action Plan.md>). ✅ items stay as the record (Hard Rule #25 — no orphan fixes).
+> **What this file is:** the single flat, checkable surface for Kitchen — every open actionable item as one checkbox, grouped **Now / Next / Later**. Completed items are cleared once done — see git history or [1 · Feature State](<1 - Feature State.md>) for the record.
 >
 > **Legend:** Sev 🔴 blocker · 🟠 friction · 🟡 annoyance · ⚪ parked. Effort S/M/H. Point at a line (e.g. _N1_), a group, or a phase.
 

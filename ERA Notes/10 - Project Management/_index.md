@@ -24,7 +24,14 @@ tags:
 | ★ | [ERA Awakening — Master Execution Plan](<ERA Awakening — Master Execution Plan (2026-07-06).md>) | **The active execution contract (Jul 6 → Oct 4, 2026)** for the proactive era: scheduler truth → briefing heartbeat → tested ERA brain → voice decision → learning loop. Decision-complete (D1–D10), session-packetized (WP-00–23), gated (G0–G4), self-measuring. Feeds file 4 every Monday. Includes the wake-word verdict: both prior vendor paths are dead; one timeboxed openWakeWord spike, then ship-or-park. |
 | ★ | [FABLED+ Enhancement Study](<FABLED+ Enhancement Study/_index.md>) | **Whole-codebase complementary study (2026-07-11):** 40 mapped features plus global analysis, each with Feature State, Vision & Roadmap, Action Plan, and Checklist. Adds closed-loop truth, bounded agency, household governance, attention-return, innovations, kill criteria, and business-plan lenses without superseding FABLED 2. |
 | ★ | [Native App](<Native App/_index.md>) | **Approved native Android + iOS plan (2026-07-11):** two-stage Capacitor architecture (remote shell on an isolated `era-mobile` Vercel deployment → bundled), FCM/APNs push, Play Internal Testing + TestFlight internal (zero-review distribution), phased roadmap P0–P6. Hard constraint: the web/PWA deployment is never touched or impacted (Non-Interference Contract in its doc 2). Status: planned, implementation not started. |
-| ★ | [Agentic Delivery Workspace](<Agentic Delivery Workspace/_index.md>) | **Dev-tooling plan (2026-07-11, revised 2026-07-12 — implementation in progress):** agent-driven delivery sessions launched from this dashboard — one Delivery Orchestrator (Codex or Claude Code behind a provider-neutral SDK driver) per checklist item, direct working-tree edits with **git reads only, permanently** (all git writes stay with Elio; no worktrees ever), artifact-first workflow (spec → plan → build → validate → review → UAT) behind three hard human gates, explicit New Delivery Session flow + task-row shortcut, mid-session message composer, calm per-agent output cards. Full specialist roster lives in a central agent registry rendered as a dashboard Agent Catalog; Product Phase 1 (= slices S1–S4) enables only the standard agent set, specialists land in S5. State in gitignored `.delivery/`; UI + API extend `pm-server.mjs`. Status: **S1 + S2 implemented (2026-07-12)** — pure core modules and the server/runner/dashboard on the fake driver are live; S3 (real Codex + Claude drivers) not started. |
+| ★ | [Agentic Delivery Workspace](<Agentic Delivery Workspace/_index.md>) | **Dev-tooling plan (2026-07-11, revised 2026-07-13 — implementation in progress):** agent-driven delivery sessions launched from this dashboard — one Delivery Orchestrator (Codex or Claude Code behind a provider-neutral SDK driver) per checklist item, direct working-tree edits with **git reads only, permanently** (all git writes stay with Elio; no worktrees ever), artifact-first workflow (spec → plan → build → validate → review → UAT) behind three hard human gates. Status: **S1 + S2 implemented; S3 code + mutation-free automated acceptance implemented 2026-07-13, but the two live provider runs remain approval-blocked because they transmit private workspace context. S4–S6 not started.** |
+
+## PM tooling campaigns
+
+| Campaign | Folder | Current state |
+|---|---|---|
+| **PM Dashboard Refactor** | [PM Dashboard Refactor/](<PM Dashboard Refactor/_index.md>) | Preact/esbuild Command Center is the default; visual/mobile UAT and legacy rollback deletion remain. |
+| **Agentic Delivery Workspace** | [Agentic Delivery Workspace/](<Agentic Delivery Workspace/_index.md>) | Provider-neutral, gated delivery workflow; see its own live status. |
 
 ## Per-module PM
 
@@ -61,6 +68,4 @@ tags:
 
 1. Red **Thin automated test baseline** on a financial app: first money/date tests exist; API and integration coverage still need expansion.
 2. Orange **Hard Rule 22 violated 649x** (`console.*`) and not lint-enforced.
-3. Orange **Docs lag code:** 5-6 shipping modules have no Overview doc; CLAUDE.md index was stale (now patched).
-
-Fixed during the audit: AI mirrors (AGENTS/CODEX/Copilot) now auto-sync from CLAUDE.md; CLAUDE.md Feature Index updated with the 6 missing modules.
+3. Orange **Docs lag code:** 5-6 shipping modules have no Overview doc.
