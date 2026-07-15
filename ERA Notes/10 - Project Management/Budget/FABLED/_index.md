@@ -1,7 +1,8 @@
 ---
 created: 2026-06-10
 type: index
-status: living
+status: baseline-frozen
+superseded: 2026-07-15
 owner: Elio
 tags:
   - pm/fabled
@@ -9,6 +10,8 @@ tags:
 ---
 
 # Budget · FABLED — Index
+
+> ⚠️ **Frozen v1 baseline (2026-06-10)** — superseded by `FABLED 2/`; kept for the generational audit protocol. Do not update.
 
 > **FABLED** = the 10× deep-dive layer of the Budget PM folder. Where files [1](<../1 - Feature State — Current Reality.md>)/[2](<../2 - Future Vision & Roadmap.md>)/[3](<../3 - Current — Action Plan.md>) stay short and current, FABLED holds the depth: how the cluster *actually* works, what's missing, how to optimize it, and where it should go. Re-audit per campaign, not per session. **When FABLED and the code disagree, the code wins — and FABLED gets the correction.**
 >

@@ -55,6 +55,7 @@ If you touched `src/` or `migrations/`, update the module's campaign folder unde
 1. **File `1 - Feature State.md`** — mark the story/bug ✅ with today's date. If it wasn't documented, add it first (bugs: to the relevant pain cluster with severity + root cause + evidence), then mark it.
 2. **File `4 - Checklist.md`** — check the `[x]`.
 3. **File `2 - Vision & Roadmap.md`** — add `*(IMPLEMENTED YYYY-MM-DD)*` where the realized decision is described.
+4. **Grammar:** any checklist line you add or edit follows `ERA Notes/10 - Project Management/_Conventions.md` — `- [ ] **PREFIX-n** outcome _(severity - effort)_` under a Now/Next/Later lane; done-stamps `✅ YYYY-MM-DD` in file 1. If you touched any `4 - Checklist.md`, run **`pnpm pm:lint`** and fix errors before finishing.
 
 Pure tooling/config/hook changes with no PM-trackable story: state that explicitly in your report and finish — the hook fires once and accepts it.
 

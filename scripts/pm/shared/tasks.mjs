@@ -7,7 +7,7 @@ export function sectionRank(section) {
 
 export function parseTaskMeta(rest) {
   const source = String(rest || "");
-  const idMatch = source.match(/(?:^|\s)\*\*([A-Z]{1,5}\d+(?:\.\d+)?)\*\*/i);
+  const idMatch = source.match(/(?:^|\s)\*\*([A-Z]{1,5}-?\d+[a-z]?(?:\.\d+[a-z]?)?)\*\*/i);
   const metaMatch = source.match(/_\(\s*([\w -]+?)\s*-\s*([XSML]|\d+h?)\s*\)_\s*$/i);
   const word = (metaMatch?.[1] || "").trim().toLowerCase();
   const severity = /blocker|critical/.test(word) ? "blocker"

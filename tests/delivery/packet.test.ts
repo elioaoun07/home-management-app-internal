@@ -50,6 +50,14 @@ describe("parseTaskMeta", () => {
     expect(meta.sev).toBeNull();
     expect(meta.effort).toBeNull();
   });
+
+  it("extracts canonical prefixed / hyphenated / lettered IDs (lockstep with the dashboard parser)", () => {
+    expect(parseTaskMeta("**BUD-3** Merchant map _(annoyance - S)_").id).toBe("BUD-3");
+    expect(parseTaskMeta("**SCH-1c.1** Gemini capture _(friction - M)_").id).toBe("SCH-1c.1");
+    expect(parseTaskMeta("**NOTIF-6.6** Verify sync _(friction - M)_").id).toBe("NOTIF-6.6");
+    expect(parseTaskMeta("**SCH-4.3b** Unify _(friction - L)_").id).toBe("SCH-4.3b");
+    expect(parseTaskMeta("**R8.2** Real-device check _(friction - S)_").id).toBe("R8.2");
+  });
 });
 
 describe("sectionRank", () => {

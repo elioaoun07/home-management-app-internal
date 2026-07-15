@@ -1,7 +1,8 @@
 ---
 created: 2026-05-29
 type: implementation-note
-status: implemented
+status: superseded
+superseded: 2026-07-15
 owner: Elio
 tags:
   - pm/audit
@@ -10,6 +11,8 @@ tags:
 ---
 
 # 5 - P0 Automated Tests Implementation Notes
+
+> ⚠️ **ARCHIVED IN PLACE (2026-07-15)** — historical record of the first test baseline; do not treat as current test coverage. Current truth: the FABLED 2 layer ([FABLED 2 Master Index](<../00 - Home/FABLED 2 Master Index.md>)). Router: [_index](<_index.md>).
 
 > Outcome: the repo now has a working Vitest baseline for the highest-risk pure logic: balance direction, date/timezone helpers, recurring next-due calculation, and split-bill display math.
 

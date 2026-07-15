@@ -2,7 +2,8 @@
 created: 2026-05-29
 updated: 2026-07-13
 type: weekly-plan
-status: active
+status: superseded
+superseded: 2026-07-15
 owner: Elio
 week_of: 2026-06-01
 tags:
@@ -11,6 +12,8 @@ tags:
 ---
 
 # 4 · This Week — Action Plan
+
+> ⚠️ **ARCHIVED IN PLACE (2026-07-15)** — the weekly-file ritual is retired. Execution now lives in the campaign `4 - Checklist.md` **Now** lanes, viewed together on the `pnpm pm` Task board. Current truth: the FABLED 2 layer ([FABLED 2 Master Index](<../00 - Home/FABLED 2 Master Index.md>)). Router: [_index](<_index.md>).
 
 > **Command Center:** [1 · Setup Audit](<1 - Codebase & AI Setup Audit.md>) · [2 · Feature State](<2 - Feature State — Current Reality.md>) · [3 · Future Vision](<3 - Future Vision & Roadmap.md>) · [4 · This Week](<4 - This Week (Action Plan).md>)
 >

@@ -1,6 +1,7 @@
 import { computed, signal } from "@preact/signals";
 import { scanCheckboxes } from "../../shared/md-scan.mjs";
 import { extractLinks } from "../../shared/links.mjs";
+import { parseFrontmatter } from "../../shared/frontmatter.mjs";
 import { fileTasks, taskKey } from "../../shared/tasks.mjs";
 import { apiPost, loadData } from "./api.js";
 import { persistedSignal } from "../lib/persistedSignal.js";
@@ -27,8 +28,10 @@ function moduleOf(relPath) { return relPath.includes("/") ? relPath.split("/")[0
 
 export const files = computed(() => (data.value?.files || []).filter((file) => !file.relPath.startsWith(".trash/")).map((file) => {
   const campaign = moduleOf(file.relPath);
+  const status = String(parseFrontmatter(file.raw).meta.status || "");
   return { ...file, title: titleOf(file), module: campaign, folder: file.relPath.split("/").slice(0,-1).join("/"),
-    inFabled: /(^|\/)FABLED(?: 2)?(\/|$)/i.test(file.relPath), tasks: fileTasks(file.raw) };
+    inFabled: /(^|\/)FABLED[^/]*(\/|$)/i.test(file.relPath) || /^(superseded|baseline-frozen|template)$/i.test(status),
+    tasks: fileTasks(file.raw) };
 }));
 export const byRelPath = computed(() => new Map(files.value.map((file) => [file.relPath.toLowerCase(), file])));
 export const moduleNames = computed(() => [...new Set(files.value.map((file) => file.module))].sort((a,b) => a.localeCompare(b)));
@@ -39,7 +42,7 @@ export const moduleStats = computed(() => moduleNames.value.map((module) => {
   const tasks = moduleFiles.flatMap((file) => file.tasks);
   const done = tasks.filter((task) => task.state === "done").length;
   return { module, files: moduleFiles.length, total: tasks.length, done, open: tasks.length - done, progress: tasks.length ? Math.round(done / tasks.length * 100) : 0 };
-}));
+}).filter((stat) => stat.files > 0));
 export const backlinkIndex = computed(() => {
   const result = new Map();
   for (const file of files.value) for (const link of extractLinks(file.raw, file.relPath)) {

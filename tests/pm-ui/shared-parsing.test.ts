@@ -16,6 +16,16 @@ describe("PM shared parsing", () => {
     expect(parseTaskMeta("**N4** Build it _(blocker - S)_").severity).toBe("blocker");
   });
 
+  it("parses canonical prefixed / hyphenated / lettered IDs", () => {
+    expect(parseTaskMeta("**BUD-3** Merchant-match voice drafts _(annoyance - S)_").idChip).toBe("BUD-3");
+    expect(parseTaskMeta("**SCH-1c.1** Wire Gemini capture _(friction - M)_").idChip).toBe("SCH-1C.1");
+    expect(parseTaskMeta("**NOTIF-6.6** Live-verify calendar sync _(friction - M)_").idChip).toBe("NOTIF-6.6");
+    expect(parseTaskMeta("**SCH-4.3b** Engine/UI unification _(friction - L)_").idChip).toBe("SCH-4.3B");
+    // legacy shapes still parse (backward compatible)
+    expect(parseTaskMeta("**R8.2** Real-device check _(friction - S)_").idChip).toBe("R8.2");
+    expect(parseTaskMeta("**X2a** Merchant map _(annoyance - S)_").idChip).toBe("X2A");
+  });
+
   it("resolves angle links and slugs", () => {
     expect(resolveRelativeMd("Budget/4 - Checklist.md", "<1 - Feature State.md>")).toEqual({ relPath: "Budget/1 - Feature State.md", anchor: null });
     expect(extractLinks("[State](<1 - Feature State.md>)", "Budget/_index.md")[0].resolved?.relPath).toBe("Budget/1 - Feature State.md");

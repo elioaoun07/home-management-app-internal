@@ -53,8 +53,8 @@ export function parseTaskMeta(restIn) {
   let id = null;
   let sev = null;
   let effort = null;
-  const im = rest.match(/^\*\*([^*]{1,8})\*\*\s+/);
-  if (im && /^[A-Za-z]{1,3}\d+[A-Za-z]?$/.test(im[1].trim())) {
+  const im = rest.match(/^\*\*([^*]{1,12})\*\*\s+/);
+  if (im && /^[A-Za-z]{1,5}-?\d+[A-Za-z]?(?:\.\d+[A-Za-z]?)?$/.test(im[1].trim())) {
     id = im[1].trim();
     rest = rest.slice(im[0].length);
   }

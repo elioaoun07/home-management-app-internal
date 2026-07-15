@@ -1,71 +1,66 @@
 ---
 created: 2026-05-29
+updated: 2026-07-15
 type: index
 status: living
 tags:
   - pm/index
 ---
 
-# 10 - Project Management - Command Center
+# 10 · Project Management — Command Center
 
-> Your strategic overview. Start here when you're asking "what do I do next?" Audited against `main` on **2026-05-29**. Latest codebase audit pack added **2026-07-01**.
+> **Start here when you ask "what do I do next?"** Three surfaces, one job each:
 >
-> **Scope:** the numbered files below are **whole-app** (cross-cutting). **Per-module PM lives in subfolders** in the same uniform format (see the Per-module PM table below — Budget, Schedule, Kitchen, Trips, Hub & ERA, Notifications & Alerts). Add a sibling folder per module you want to prioritize on its own.
+> 1. **Current truth** — the **FABLED 2** layer (per-campaign `FABLED 2/_index.md`; whole-app [FABLED 2 Master Index](<../00 - Home/FABLED 2 Master Index.md>)). Scored maturity, delta ledgers, evidence-stamped claims. Trust it as of its stamp, then delta with `git log`.
+> 2. **Execution** — each campaign's `4 - Checklist.md`, as **Now / Next / Later** lanes. One item grammar for all of them: [_Conventions](<_Conventions.md>), validated by `pnpm pm:lint`, seeded from [_Templates/](<_Templates/>).
+> 3. **View** — `pnpm pm` opens the consolidated Task board/table: every campaign's items with ID / severity / effort chips, filterable (`m:Budget s:blocker is:open`), click-through to the exact line.
 
-| # | File | Read it when... |
+---
+
+## Campaigns (the execution queues)
+
+| Campaign | ID prefix | Checklist |
 |---|---|---|
-| 1 | [Codebase & AI Setup Audit](<1 - Codebase & AI Setup Audit.md>) | You want to know what's wrong with how the project is built/steered: structure, AI guidance, hooks, tests, hygiene. |
-| 2 | [Feature State - Current Reality](<2 - Feature State — Current Reality.md>) | You want the honest, no-hype status of every module. |
-| 3 | [Future Vision & Roadmap](<3 - Future Vision & Roadmap.md>) | You want to dream: enhancements and net-new modules, prioritized. |
-| 4 | [This Week (Action Plan)](<4 - This Week (Action Plan).md>) | Most days. The synthesis: exactly what to do next, day by day. |
-| 5 | [P0 Automated Tests Implementation Notes](<5 - P0 Automated Tests Implementation Notes.md>) | You want the record of how the first automated test baseline was added. |
-| 6 | [Optimized Claude Setup Structure](<6 - Optimized Claude Setup Structure.md>) | You want the target blueprint for the AI setup (instructions/knowledge/hooks/skills/memory/permissions) + the ranked gap list. Audited 2026-06-10. |
-| ★ | [FABLE — Final Consultation](<FABLE — Final Consultation (2026-07-06).md>) | The generational handoff (2026-07-06): honest verdict on the whole product, where it's genuinely innovative, the six systemic optimization frontiers, five enhancement programs, ten platform-level feature ideas with kill criteria, and a 30-day sequence. Read when setting direction. |
-| ★ | [ERA Awakening — Master Execution Plan](<ERA Awakening — Master Execution Plan (2026-07-06).md>) | **The active execution contract (Jul 6 → Oct 4, 2026)** for the proactive era: scheduler truth → briefing heartbeat → tested ERA brain → voice decision → learning loop. Decision-complete (D1–D10), session-packetized (WP-00–23), gated (G0–G4), self-measuring. Feeds file 4 every Monday. Includes the wake-word verdict: both prior vendor paths are dead; one timeboxed openWakeWord spike, then ship-or-park. |
-| ★ | [FABLED+ Enhancement Study](<FABLED+ Enhancement Study/_index.md>) | **Whole-codebase complementary study (2026-07-11):** 40 mapped features plus global analysis, each with Feature State, Vision & Roadmap, Action Plan, and Checklist. Adds closed-loop truth, bounded agency, household governance, attention-return, innovations, kill criteria, and business-plan lenses without superseding FABLED 2. |
-| ★ | [Native App](<Native App/_index.md>) | **Approved native Android + iOS plan (2026-07-11):** two-stage Capacitor architecture (remote shell on an isolated `era-mobile` Vercel deployment → bundled), FCM/APNs push, Play Internal Testing + TestFlight internal (zero-review distribution), phased roadmap P0–P6. Hard constraint: the web/PWA deployment is never touched or impacted (Non-Interference Contract in its doc 2). Status: planned, implementation not started. |
-| ★ | [Agentic Delivery Workspace](<Agentic Delivery Workspace/_index.md>) | **Dev-tooling plan (2026-07-11, revised 2026-07-13 — implementation in progress):** agent-driven delivery sessions launched from this dashboard — one Delivery Orchestrator (Codex or Claude Code behind a provider-neutral SDK driver) per checklist item, direct working-tree edits with **git reads only, permanently** (all git writes stay with Elio; no worktrees ever), artifact-first workflow (spec → plan → build → validate → review → UAT) behind three hard human gates. Status: **S1 + S2 implemented; S3 code + mutation-free automated acceptance implemented 2026-07-13, but the two live provider runs remain approval-blocked because they transmit private workspace context. S4–S6 not started.** |
+| **Budget** (finance cluster) | `BUD` | [Budget/4](<Budget/4 - Checklist.md>) |
+| **Schedule** (Items & Reminders) | `SCH` | [Schedule/4](<Schedule/4 - Checklist.md>) |
+| **Kitchen** (Recipes · Meal · Inventory · Shopping) | `KIT` | [Kitchen/4](<Kitchen/4 - Checklist.md>) |
+| **Trips** (lifecycle travel junction) | `TRIP` | [Trips/4](<Trips/4 - Checklist.md>) |
+| **Hub & ERA** (Hub Chat · AI · Voice) | `HUB` | [Hub & ERA/4](<Hub & ERA/4 - Checklist.md>) |
+| **Notifications & Alerts** | `NOTIF` | [Notifications & Alerts/4](<Notifications & Alerts/4 - Checklist.md>) |
+| **PM Dashboard Refactor** (tooling) | `R` | [PM Dashboard Refactor/4](<PM Dashboard Refactor/4 - Checklist.md>) |
 
-## PM tooling campaigns
+Each campaign folder holds the uniform set — `_index`, `1 - Feature State`, `2 - Vision & Roadmap`, `3 - Action Plan`, `4 - Checklist` — plus the deep-dive layer **`FABLED 2/`** (current, scored, delta-ledgered) and, where present, the frozen **`FABLED/`** v1 baseline (2026-06-10). Files 1–3 carry reality + strategy + narrative; **file 4 is the live lane list**; FABLED 2 holds the depth.
 
-| Campaign | Folder | Current state |
-|---|---|---|
-| **PM Dashboard Refactor** | [PM Dashboard Refactor/](<PM Dashboard Refactor/_index.md>) | Preact/esbuild Command Center is the default; visual/mobile UAT and legacy rollback deletion remain. |
-| **Agentic Delivery Workspace** | [Agentic Delivery Workspace/](<Agentic Delivery Workspace/_index.md>) | Provider-neutral, gated delivery workflow; see its own live status. |
+## Planning & study layers (read, don't execute from)
 
-## Per-module PM
-
-| Module | Folder |
+| Layer | What it is |
 |---|---|
-| **Schedule** (Items & Reminders) | [Schedule/](<Schedule/_index.md>) |
-| **Budget** (finance cluster) | [Budget/](<Budget/_index.md>) |
-| **Kitchen** (Recipes · Meal · Inventory · Shopping) | [Kitchen/](<Kitchen/_index.md>) |
-| **Trips** (lifecycle travel junction) | [Trips/](<Trips/_index.md>) |
-| **Hub & ERA** (Hub Chat · AI Assistant · Voice) | [Hub & ERA/](<Hub & ERA/_index.md>) |
-| **Notifications & Alerts** (bell · drawer · alerts page · system notifs) | [Notifications & Alerts/](<Notifications & Alerts/_index.md>) |
+| [FABLE — Final Consultation](<FABLE — Final Consultation (2026-07-06).md>) | Generational handoff (2026-07-06): product verdict, optimization frontiers, enhancement programs, 30-day sequence. |
+| [ERA Awakening — Master Execution Plan](<ERA Awakening — Master Execution Plan (2026-07-06).md>) | The proactive-era contract (Jul 6 → Oct 4, 2026): scheduler → briefing → tested ERA brain → voice → learning loop. Feeds campaign Now lanes. |
+| [FABLED+ Enhancement Study](<FABLED+ Enhancement Study/_index.md>) | Whole-codebase study (40 features + global lenses). A study queue, **not** a second execution authority — hidden from the `pnpm pm` board by default. |
+| [Native App](<Native App/_index.md>) | Approved two-stage Capacitor plan (Android + iOS). Planned, not started. |
+| [Agentic Delivery Workspace](<Agentic Delivery Workspace/_index.md>) | Dev-tooling: gated, provider-neutral agent delivery sessions (git reads only). See its own live status. |
+| [Functional Architecture Review](<Functional Architecture Review/_index.md>) · [FAR Execution Checklist](<FAR Execution Checklist/_index.md>) · [Codebase Audit 2026-07-01](<Codebase Audit 2026-07-01/_index.md>) | Whole-app reviews. Each carries a **`FABLED 2/`** delta layer — read the delta before treating the base as current. |
+| [FABLED 2/](<FABLED 2/_index.md>) | The PM machine's own meta-audit (this folder's implementation, gaps, optimization). |
 
-> Each module folder mirrors the same uniform set at module scope: `_index`, `1 - Feature State`, `2 - Vision & Roadmap`, `3 - Action Plan`, `4 - Checklist` — plus the deep-dive layer: **`FABLED 2/`** (current generation, verified 2026-07-02 — scored maturity, delta ledger, X-ray, ranked gaps, optimization plan, enhancements with kill criteria; **all six campaigns have one**) and, where present, `FABLED/` (the frozen v1 baseline from 2026-06-10). Files 1–3 carry the reality + strategy + narrative; **file 4 is the flat, checkable list — the daily driver**; FABLED 2 holds the depth and gets a delta pass per campaign end.
->
-> **PM-system deep-dive:** this folder itself now has a meta-audit — [FABLED 2/](<FABLED 2/_index.md>) (the PM machine's own implementation, gaps, optimization plan, and future). Domain-level FABLED 2 folders also exist under every other ERA Notes directory (Architecture, Standalone/Junction portfolios, UI & Design, Performance, Setup, Backlog, Patterns, Home, Templates).
+## Archived in place (historical — do not update)
 
-## Cross-cutting reviews
+Marked `status: superseded` / `baseline-frozen`; hidden from the `pnpm pm` board.
 
-| Review | Folder | What it is |
-|---|---|---|
-| **Functional Architecture Review** (2026-06-12) | [Functional Architecture Review/](<Functional Architecture Review/_index.md>) | Whole-app review against the Proactive AI Assistant goal: strengths, enhancement map, junction leverage, missed/forgotten features, market lens, ten challenges, and a 90-day path. Start with its file 1 (the maturity verdict) and file 7 (the path). |
-| **FAR Execution Checklist** (2026-06-12) | [FAR Execution Checklist/](<FAR Execution Checklist/_index.md>) | The FAR turned executable: master checklist by priority (P0–P3) + 13-week dated schedule (Jun 15 → Sep 13). **Feeds file 4 every Monday.** When lost on "what next," open this. |
-| **Codebase Audit** (2026-07-01) | [Codebase Audit 2026-07-01/](<Codebase Audit 2026-07-01/_index.md>) | Whole-codebase security, functional, structural, enhancement, and hard-rules audit. Start with its executive summary and remediation checklist. |
+| File | Why / successor |
+|---|---|
+| [1 · Codebase & AI Setup Audit](<1 - Codebase & AI Setup Audit.md>) | 2026-05-29 audit → superseded by FABLED 2 + Codebase Audit 2026-07-01. |
+| [2 · Feature State — Current Reality](<2 - Feature State — Current Reality.md>) | Global feature state → per-campaign `1 - Feature State` + FABLED 2 scores. |
+| [3 · Future Vision & Roadmap](<3 - Future Vision & Roadmap.md>) | Global roadmap → per-campaign `2 - Vision & Roadmap` + FABLE Consultation. |
+| [4 · This Week (Action Plan)](<4 - This Week (Action Plan).md>) | Weekly-file ritual retired → campaign **Now** lanes on the board. |
+| [5 · P0 Automated Tests](<5 - P0 Automated Tests Implementation Notes.md>) | First test-baseline record → FABLED 2 test-protection scores. |
+| [6 · Optimized Claude Setup Structure](<6 - Optimized Claude Setup Structure.md>) | Setup blueprint → largely realized; see `.claude/` + FABLED 2. |
+| 5 × `<Campaign>/FABLED/` | Frozen v1 baselines (2026-06-10), kept for the generational audit protocol. |
 
-> Each review folder now carries a **`FABLED 2/`** living delta layer (added 2026-07-02): the FAR gets a thesis scoreboard + re-sequenced nervous-system plan, the FAR Checklist gets the week-3 plan-vs-reality scoreboard + re-baseline, and the Codebase Audit gets its claims pinned to exact numbers + owner mapping. Read the delta before treating any review as current.
+---
 
 ## How to use this set
 
-- **Daily driver:** file 4. Re-draft it every Monday.
-- **Files 1-3 are living:** update them as the project moves; don't let them rot like the old backlog did.
-- **Files 1-3 set the strategy; file 4 turns it into this week's checklist.**
-
-## Top 3 risks right now (from file 1)
-
-1. Red **Thin automated test baseline** on a financial app: first money/date tests exist; API and integration coverage still need expansion.
-2. Orange **Hard Rule 22 violated 649x** (`console.*`) and not lint-enforced.
-3. Orange **Docs lag code:** 5-6 shipping modules have no Overview doc.
+- **Daily:** open `pnpm pm`, work the **Now** lanes; single item detail is one click away.
+- **Adding an item:** write it in canonical grammar ([_Conventions](<_Conventions.md>)) in the right campaign's `4 - Checklist.md`, then `pnpm pm:lint`.
+- **Setting direction:** read the campaign's `FABLED 2/_index.md` (scored) → `2 - Vision & Roadmap` → drop concrete items into the lanes.

@@ -1,7 +1,8 @@
 ---
 created: 2026-05-29
 type: status
-status: living
+status: superseded
+superseded: 2026-07-15
 owner: Elio
 tags:
   - pm/status
@@ -9,6 +10,8 @@ tags:
 ---
 
 # 2 · Feature State — Current Reality
+
+> ⚠️ **ARCHIVED IN PLACE (2026-07-15)** — historical layer; do not update, do not treat as current. Current truth: the FABLED 2 layer (per-campaign `FABLED 2/_index.md`; whole-app [FABLED 2 Master Index](<../00 - Home/FABLED 2 Master Index.md>)). Execution: the campaign `4 - Checklist.md` lanes. View: `pnpm pm`. Router: [_index](<_index.md>).
 
 > **Command Center:** [1 · Setup Audit](<1 - Codebase & AI Setup Audit.md>) · [2 · Feature State](<2 - Feature State — Current Reality.md>) · [3 · Future Vision](<3 - Future Vision & Roadmap.md>) · [4 · This Week](<4 - This Week (Action Plan).md>)
 >
