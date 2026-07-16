@@ -12,19 +12,20 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { createDriver } from "./drivers/driver.mjs";
+import { DriverAbortedError, createDriver as createDriverDefault } from "./drivers/driver.mjs";
 import "./drivers/fake.mjs"; // self-registers "fake"
 import "./drivers/codex.mjs"; // self-registers; SDK import remains lazy
 import "./drivers/claude.mjs"; // self-registers; SDK import remains lazy
-import { TRUNCATE_LIMITS, appendEvent, formatEvent, reduceUsage, truncateField } from "./events.mjs";
+import { EventsError, TRUNCATE_LIMITS, formatEvent, nextSeq, parseEvents, reduceUsage, truncateField } from "./events.mjs";
 import { atomicWriteJsonSync, readJsonIfExists, readTextIfExists, appendNdjsonLine } from "./fsx.mjs";
 import { gitDiff, gitForEachRef, gitRevParseHead, gitStatusPorcelain } from "./gitread.mjs";
 import { applyCapabilityDrops } from "./classify.mjs";
 import {
+  ACTIVE_STATES,
   GATES,
   StateMachineError,
   isTerminal,
@@ -33,10 +34,38 @@ import {
 import {
   buildBuildingPrompt,
   buildDiscoveryPrompt,
+  buildHandoffVerificationPrompt,
   buildPlanPrompt,
   buildSelfReviewPrompt,
   buildUatPrompt,
 } from "./prompts.mjs";
+import {
+  DEFAULT_MAX_RECORD_BYTES,
+  buildCrashSealEntry,
+  buildRecord,
+  buildTurnEntry,
+  findOrphanedTurnIds,
+  formatRecord,
+  formatTurnEntry,
+  formatTurnId,
+  parseTurnRecords,
+  parseTurns,
+  turnPromptFileName,
+  turnShardFileName,
+} from "./transcript.mjs";
+import { computeOccupancy, estimateCostUsd } from "./usage.mjs";
+import { getDefaultModel, getModelPricing, loadConfig, translateEffort } from "./config.mjs";
+import { isProviderSwitch } from "./controls.mjs";
+import {
+  applyAnswer,
+  applyConfigChange,
+  applyDecision,
+  applyPlan,
+  applyQuestionRaised,
+  applySpec,
+  emptyLedger,
+} from "./memory.mjs";
+import { buildContextPackage, buildMechanicalDigest } from "./context-assembly.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = join(__dirname, "..", "..");
@@ -56,6 +85,15 @@ function sessionPaths(sessionDir) {
     messages: join(sessionDir, "messages"),
     artifacts: join(sessionDir, "artifacts"),
     uat: join(sessionDir, "artifacts", "uat"),
+    controls: join(sessionDir, "controls"),
+    memoryLedger: join(sessionDir, "memory", "ledger.json"),
+    memoryHistory: join(sessionDir, "memory", "history"),
+    contextSnapshots: join(sessionDir, "context", "snapshots"),
+    contextCompactions: join(sessionDir, "context", "compactions"),
+    handoffs: join(sessionDir, "handoffs"),
+    transcript: join(sessionDir, "transcript"),
+    transcriptPrompts: join(sessionDir, "transcript", "prompts"),
+    turns: join(sessionDir, "transcript", "turns.ndjson"),
   };
 }
 
@@ -77,10 +115,38 @@ export function persistState(sessionDir, state, { now = () => new Date() } = {})
   return out;
 }
 
+// In-memory last-used-seq cache, keyed by sessionDir. `emitEvent` used to
+// reparse the entire events.ndjson on every append (O(n²) over a session's
+// lifetime) purely to compute the next seq number. Since this process is the
+// sole writer of events.ndjson for a given session (single-writer discipline,
+// doc 2 §4), the cache only ever needs to be seeded once per process — a
+// crashed/resumed runner is a fresh process anyway, so the first call after
+// `--resume` correctly reseeds from disk.
+const eventSeqCache = new Map();
+
+function nextEventSeq(sessionDir, eventsPath) {
+  if (!eventSeqCache.has(sessionDir)) {
+    const current = readTextIfExists(eventsPath) || "";
+    eventSeqCache.set(sessionDir, nextSeq(parseEvents(current)) - 1);
+  }
+  const seq = eventSeqCache.get(sessionDir) + 1;
+  eventSeqCache.set(sessionDir, seq);
+  return seq;
+}
+
 export function emitEvent(sessionDir, partial) {
   const p = sessionPaths(sessionDir);
-  const current = readTextIfExists(p.events) || "";
-  const { event } = appendEvent(current, partial);
+  if (!partial || !partial.type) {
+    throw new EventsError("event.type is required");
+  }
+  const event = {
+    ts: partial.ts || new Date().toISOString(),
+    seq: nextEventSeq(sessionDir, p.events),
+    type: partial.type,
+    phase: partial.phase != null ? partial.phase : null,
+    agent: partial.agent != null ? partial.agent : null,
+    data: partial.data != null ? partial.data : {},
+  };
   appendNdjsonLine(p.events, formatEvent(event));
   return event;
 }
@@ -90,6 +156,14 @@ function listSeqFiles(dirPath) {
   return readdirSync(dirPath)
     .filter((n) => /^\d+.*\.json$/.test(n))
     .sort();
+}
+
+/** Next 1-based seq for a numbered-file directory (context/snapshots, context/compactions). */
+function nextFileSeq(dirPath) {
+  const names = listSeqFiles(dirPath);
+  if (!names.length) return 1;
+  const nums = names.map((n) => parseInt(n, 10)).filter((n) => Number.isFinite(n));
+  return nums.length ? Math.max(...nums) + 1 : 1;
 }
 
 /** Unread decision files (seq > state.decisionsProcessed), in seq order. */
@@ -118,6 +192,447 @@ function drainMessages(sessionDir, state) {
     emitEvent(sessionDir, { type: "owner.message.consumed", data: { seq: m.seq, text: m.text } });
   }
   return { texts: pending.map((m) => m.text), lastSeq: pending[pending.length - 1].seq };
+}
+
+/** Unread owner controls (seq > state.controlsProcessed), in seq order (DW-4). */
+export function pendingControls(sessionDir, controlsProcessed) {
+  const p = sessionPaths(sessionDir);
+  return listSeqFiles(p.controls)
+    .map((name) => readJsonIfExists(join(p.controls, name)))
+    .filter((c) => c && typeof c.seq === "number" && c.seq > (controlsProcessed || 0))
+    .sort((a, b) => a.seq - b.seq);
+}
+
+/** `state.execution` seeded from the packet — created lazily the first time a control needs it. */
+function defaultExecution(packet) {
+  return {
+    provider: packet.agent,
+    model: (packet.agentConfig && packet.agentConfig.model) || null,
+    effortByPhase: { ...((packet.agentConfig && packet.agentConfig.effort) || {}) },
+    paused: false,
+    pauseRequestedAt: null,
+    pendingConfig: null,
+    configChangedSinceLastTurn: false,
+  };
+}
+
+/**
+ * Apply one control's effect to `state.execution`. `set-config` with a
+ * provider change is a handoff (DW-8) — this DW-4 baseline only handles the
+ * same-provider case (model/effort override); a provider-switch control is
+ * parked in `execution.pendingConfig` until DW-8 lands, so the intent isn't
+ * silently dropped even though nothing yet acts on it.
+ */
+function applyControl(state, packet, control) {
+  const execution = state.execution || defaultExecution(packet);
+  if (control.type === "pause") {
+    return { ...state, execution: { ...execution, paused: true, pauseRequestedAt: control.at } };
+  }
+  if (control.type === "resume-run") {
+    return { ...state, execution: { ...execution, paused: false, pauseRequestedAt: null } };
+  }
+  if (control.type === "set-config") {
+    if (isProviderSwitch(control, execution.provider)) {
+      return { ...state, execution: { ...execution, pendingConfig: control.payload } };
+    }
+    const payload = control.payload || {};
+    const nextExecution = { ...execution, configChangedSinceLastTurn: true };
+    if (payload.model !== undefined) nextExecution.model = payload.model;
+    if (payload.effortByPhase) nextExecution.effortByPhase = { ...execution.effortByPhase, ...payload.effortByPhase };
+    return { ...state, execution: nextExecution };
+  }
+  // rotate/fork/pin/unpin/answer/ask: schema-validated by controls.mjs already;
+  // runner-side consumption ships in DW-5 (answer/ask), DW-7 (rotate/pin/unpin),
+  // DW-9 (fork). Advancing the cursor here without a state effect means they
+  // won't be silently reprocessed once their consumers land.
+  return { ...state, execution };
+}
+
+/**
+ * Drain every pending control in one pass, applying each to `state.execution`
+ * in order and emitting a curated event per control. Mirrors the
+ * decisions/messages numbered-file pattern: nothing here touches the
+ * filesystem beyond `emitEvent` — the caller persists the returned state.
+ */
+// ---- memory ledger (DW-5): durable requirements/decisions/Q&A, versioned ----
+
+function loadLedger(sessionDir) {
+  return readJsonIfExists(sessionPaths(sessionDir).memoryLedger) || emptyLedger();
+}
+
+/** Atomic write + version the prior ledger to memory/history/ledger-VVVV.json first. */
+function writeLedger(sessionDir, nextLedger) {
+  const p = sessionPaths(sessionDir);
+  const prior = readJsonIfExists(p.memoryLedger);
+  if (prior) {
+    atomicWriteJsonSync(join(p.memoryHistory, `ledger-${String(prior.rev).padStart(4, "0")}.json`), prior);
+  }
+  atomicWriteJsonSync(p.memoryLedger, nextLedger);
+}
+
+/** Load, apply a pure memory.mjs updater, and persist (versioning the prior rev). Returns the new ledger. */
+function updateLedger(sessionDir, updater) {
+  const next = updater(loadLedger(sessionDir));
+  writeLedger(sessionDir, next);
+  return next;
+}
+
+async function drainControls(sessionDir, state, packet, runCtx) {
+  const pending = pendingControls(sessionDir, state.controlsProcessed || 0);
+  if (!pending.length) return { didWork: false, state };
+  let working = state;
+  for (const control of pending) {
+    const before = working.execution || defaultExecution(packet);
+    working = applyControl(working, packet, control);
+    working = { ...working, controlsProcessed: control.seq };
+    if (control.type === "pause") {
+      emitEvent(sessionDir, { type: "execution.paused", data: { at: control.at, abortInFlight: !!control.payload.abortInFlight } });
+    } else if (control.type === "resume-run") {
+      emitEvent(sessionDir, { type: "execution.resumed", data: {} });
+    } else if (control.type === "set-config") {
+      if (isProviderSwitch(control, before.provider)) {
+        emitEvent(sessionDir, { type: "handoff.started", data: { from: before.provider, to: control.payload.provider } });
+        working = await performHandoff(sessionDir, working, packet, control.payload, runCtx);
+      } else {
+        updateLedger(sessionDir, (ledger) =>
+          applyConfigChange(ledger, {
+            from: { model: before.model, effortByPhase: before.effortByPhase },
+            to: { model: working.execution.model, effortByPhase: working.execution.effortByPhase },
+            via: `controls:${control.seq}`,
+          }),
+        );
+        emitEvent(sessionDir, {
+          type: "config.changed",
+          data: {
+            from: { model: before.model, effortByPhase: before.effortByPhase },
+            to: { model: working.execution.model, effortByPhase: working.execution.effortByPhase },
+          },
+        });
+      }
+    } else if (control.type === "answer") {
+      try {
+        updateLedger(sessionDir, (ledger) =>
+          applyAnswer(ledger, { questionId: control.payload.questionId, text: control.payload.text, via: `controls:${control.seq}` }),
+        );
+        emitEvent(sessionDir, { type: "question.answered", data: { questionId: control.payload.questionId } });
+      } catch (err) {
+        emitEvent(sessionDir, { type: "control.rejected", data: { type: "answer", reason: String((err && err.message) || err) } });
+      }
+    } else if (control.type === "ask") {
+      const id = `q-owner-${control.seq}`;
+      updateLedger(sessionDir, (ledger) =>
+        applyQuestionRaised(ledger, { id, source: "owner", text: control.payload.text, kind: "advisory" }),
+      );
+      emitEvent(sessionDir, { type: "question.raised", data: { id, text: control.payload.text, kind: "advisory", source: "owner" } });
+    } else if (control.type === "rotate") {
+      working = performRotation(sessionDir, working, packet, "rotate");
+    } else if (control.type === "pin") {
+      const p = sessionPaths(sessionDir);
+      const shardPath = join(p.transcript, turnShardFileName(control.payload.turnId));
+      const records = parseTurnRecords(readTextIfExists(shardPath) || "");
+      const text = records
+        .filter((r) => r.seq >= control.payload.seqFrom && r.seq <= control.payload.seqTo)
+        .map((r) => r.text || r.output || "")
+        .filter(Boolean)
+        .join("\n");
+      const pins = [
+        ...((working.context && working.context.pins) || []),
+        { turnId: control.payload.turnId, seqFrom: control.payload.seqFrom, seqTo: control.payload.seqTo, note: control.payload.note || null, text },
+      ];
+      working = { ...working, context: { ...(working.context || {}), pins } };
+      emitEvent(sessionDir, { type: "context.pinned", data: { turnId: control.payload.turnId, seqFrom: control.payload.seqFrom, seqTo: control.payload.seqTo } });
+    } else if (control.type === "unpin") {
+      const pins = ((working.context && working.context.pins) || []).filter((pin) => pin.turnId !== control.payload.turnId);
+      working = { ...working, context: { ...(working.context || {}), pins } };
+      emitEvent(sessionDir, { type: "context.unpinned", data: { turnId: control.payload.turnId } });
+    } else if (control.type === "fork") {
+      working = performFork(sessionDir, working, packet, control.payload);
+    }
+  }
+  return { didWork: true, state: working };
+}
+
+/**
+ * Rotation (DW-7): mechanical digest of the current phase's turns + a
+ * context-package snapshot, then archive the driver ref so the next
+ * `getHandle` call starts a fresh provider session. Shared by the owner
+ * `rotate` control and (future) automatic threshold-based rotation.
+ */
+function performRotation(sessionDir, state, packet, reason) {
+  const p = sessionPaths(sessionDir);
+  const allTurns = parseTurns(readTextIfExists(p.turns) || "");
+  // `state.state` is frequently a gate ("SPEC_READY") one step past the
+  // phase whose turns we're digesting ("DISCOVERY") — digest the phase the
+  // most recent turn actually ran in, not the current state-machine state.
+  const digestPhase = allTurns.length ? allTurns[allTurns.length - 1].phase : state.state;
+  const currentPhaseTurns = allTurns.filter((t) => t.phase === digestPhase);
+  const digestMd = buildMechanicalDigest({ phase: digestPhase, turns: currentPhaseTurns });
+
+  const compactionSeq = nextFileSeq(p.contextCompactions);
+  const compaction = {
+    v: 1,
+    seq: compactionSeq,
+    at: new Date().toISOString(),
+    scope: { phase: digestPhase },
+    covers: { turns: currentPhaseTurns.map((t) => t.turnId), eventSeq: [] },
+    mode: "mechanical",
+    summaryMd: digestMd,
+    evidence: currentPhaseTurns.map((t) => ({ claim: `turn ${t.turnId} ${t.result}`, turnId: t.turnId, seq: null })),
+  };
+  atomicWriteJsonSync(join(p.contextCompactions, `${String(compactionSeq).padStart(4, "0")}.json`), compaction);
+
+  const ledger = loadLedger(sessionDir);
+  const pkg = buildContextPackage({
+    packet,
+    ledger,
+    digests: [{ summaryMd: digestMd }],
+    pins: (state.context && state.context.pins) || [],
+    nextAction: `Continue phase ${state.state}.`,
+  });
+  const snapshotSeq = nextFileSeq(p.contextSnapshots);
+  const snapshot = {
+    v: 1,
+    seq: snapshotSeq,
+    at: new Date().toISOString(),
+    reason,
+    layers: pkg.layers.map((l) => ({ name: l.name, source: l.source, tokensEst: l.tokensEst })),
+    renderedMd: pkg.renderedMd,
+    tokensEstTotal: pkg.tokenEstimate,
+    pins: (state.context && state.context.pins) || [],
+    forStrategy: "rotate-fresh",
+    provider: (state.execution && state.execution.provider) || packet.agent,
+    model: (state.execution && state.execution.model) || null,
+  };
+  atomicWriteJsonSync(join(p.contextSnapshots, `${String(snapshotSeq).padStart(4, "0")}.json`), snapshot);
+
+  const priorRef = state.driver && state.driver.ref;
+  const priorRefs = (state.driver && state.driver.priorRefs) || [];
+  const nextState = {
+    ...state,
+    driver: {
+      ...(state.driver || {}),
+      ref: null,
+      priorRefs: priorRef ? [...priorRefs, { ref: priorRef, retiredAt: new Date().toISOString(), reason }] : priorRefs,
+    },
+    context: {
+      ...(state.context || {}),
+      rotations: ((state.context && state.context.rotations) || 0) + 1,
+      lastSnapshotSeq: snapshotSeq,
+      lastCompactionSeq: compactionSeq,
+    },
+  };
+  emitEvent(sessionDir, {
+    type: "context.rotated",
+    data: { reason, compactionSeq, snapshotSeq, tokensEstAfterRotation: pkg.tokenEstimate },
+  });
+  return nextState;
+}
+
+/**
+ * Provider handoff (DW-8): rotate (digest + snapshot + archive the old ref,
+ * reusing `performRotation`), start a fresh session on the new provider, and
+ * run a schema-validated verification turn before letting the phase
+ * continue. A malformed response or any reported gap becomes a blocking
+ * question rather than silently continuing — see doc/plan "handoff
+ * verification" flow. Effort is translated via `config.effortMap` when the
+ * owner didn't specify explicit per-phase overrides.
+ */
+async function performHandoff(sessionDir, state, packet, payload, ctx) {
+  const { repoRoot, deliveryConfig, retryDelayMs, sleep, takeSnapshot, abortPollMs, createDriver = createDriverDefault } = ctx;
+  const fromProvider = (state.execution && state.execution.provider) || packet.agent;
+  const toProvider = payload.provider;
+
+  let working = performRotation(sessionDir, state, packet, "handoff");
+
+  const toModel = payload.model !== undefined ? payload.model : getDefaultModel(deliveryConfig, toProvider);
+  const fromEffortByPhase = (working.execution && working.execution.effortByPhase) || {};
+  const toEffortByPhase =
+    payload.effortByPhase ||
+    Object.fromEntries(
+      Object.entries(fromEffortByPhase).map(([phase, effort]) => [phase, translateEffort(deliveryConfig, fromProvider, toProvider, effort)]),
+    );
+
+  let newDriver;
+  let handle;
+  try {
+    newDriver = createDriver(toProvider);
+    handle = await Promise.resolve(newDriver.startSession({ cwd: repoRoot, mode: "readonly", model: toModel, effort: "low" }));
+  } catch (err) {
+    emitEvent(sessionDir, { type: "handoff.failed", data: { from: fromProvider, to: toProvider, message: String((err && err.message) || err) } });
+    return blockFrom(sessionDir, working, working.state, { error: err });
+  }
+
+  const ledger = loadLedger(sessionDir);
+  const pkg = buildContextPackage({
+    packet,
+    ledger,
+    pins: (working.context && working.context.pins) || [],
+    nextAction: `Continue phase ${working.state}.`,
+  });
+  const prompt = buildHandoffVerificationPrompt({ packet, contextPackageMd: pkg.renderedMd, fromProvider, toProvider });
+  const turnId = formatTurnId((working.turnCounter || 0) + 1);
+
+  const turn = await runGuardedTurn({
+    sessionDir,
+    driver: newDriver,
+    handle,
+    prompt,
+    phase: "HANDOFF",
+    agent: "orchestrator",
+    outputSchema: HANDOFF_VERIFICATION_SCHEMA,
+    repoRoot,
+    guardMode: "readonly",
+    takeSnapshot,
+    forbiddenPaths: (packet.constraints && packet.constraints.forbiddenPaths) || [],
+    effort: "low",
+    retryDelayMs,
+    sleep,
+    abortPollMs,
+    controlsProcessed: working.controlsProcessed || 0,
+    turnId,
+    provider: toProvider,
+    model: toModel,
+    strategy: "handoff",
+  });
+  working = { ...working, turnCounter: (working.turnCounter || 0) + 1 };
+
+  if (!turn.ok) {
+    emitEvent(sessionDir, { type: "handoff.failed", data: { from: fromProvider, to: toProvider } });
+    return blockFrom(sessionDir, working, working.state, turn);
+  }
+
+  let verification = null;
+  try {
+    verification = JSON.parse(turn.finalText);
+  } catch {
+    verification = null;
+  }
+  const gaps = (verification && verification.gaps) || [];
+  const hasCriticalGaps = !verification || gaps.length > 0;
+
+  const handoffSeq = nextFileSeq(sessionPaths(sessionDir).handoffs);
+  const handoffRecord = {
+    v: 1,
+    seq: handoffSeq,
+    at: new Date().toISOString(),
+    from: { provider: fromProvider, model: (state.execution && state.execution.model) || null, ref: (state.driver && state.driver.ref) || null },
+    to: { provider: toProvider, model: toModel },
+    snapshotRef: `context/snapshots/${String(working.context.lastSnapshotSeq).padStart(4, "0")}.json`,
+    verification: {
+      ok: !hasCriticalGaps,
+      understandingSummary: (verification && verification.understandingSummary) || null,
+      gaps,
+      usage: turn.usageV2 || null,
+    },
+    outcome: hasCriticalGaps ? "paused" : "continued",
+  };
+  atomicWriteJsonSync(join(sessionPaths(sessionDir).handoffs, `${String(handoffSeq).padStart(4, "0")}.json`), handoffRecord);
+
+  working = {
+    ...working,
+    driver: { ...working.driver, ref: handle.ref },
+    execution: { ...working.execution, provider: toProvider, model: toModel, effortByPhase: toEffortByPhase, pendingConfig: null },
+  };
+
+  if (hasCriticalGaps) {
+    emitEvent(sessionDir, { type: "handoff.gaps", data: { gaps, seq: handoffSeq } });
+    if (!ACTIVE_STATES.includes(working.state)) {
+      // Session is already gated/blocked — the gaps are visible in the
+      // handoff record and timeline; don't force a second, conflicting gate.
+      return working;
+    }
+    const result = smNext(working.state, "question.raised");
+    return {
+      ...working,
+      state: result.to,
+      awaiting: {
+        gate: "question",
+        returnTo: working.state,
+        questions: [{
+          id: `q-handoff-${handoffSeq}`,
+          text: gaps.length
+            ? `Provider handoff to ${toProvider} found gaps: ${gaps.join("; ")}. Continue anyway?`
+            : `Provider handoff to ${toProvider} produced a malformed verification response. Continue anyway?`,
+        }],
+      },
+    };
+  }
+
+  emitEvent(sessionDir, { type: "handoff.completed", data: { from: fromProvider, to: toProvider, seq: handoffSeq } });
+  return working;
+}
+
+/**
+ * Fork (DW-9): branch a new, independent session from the current checkpoint
+ * — a sibling directory under `.delivery/sessions/`, not a mutation of this
+ * one. Copies the durable record (packet identity + ledger + artifacts) and
+ * starts the child at the same state/awaiting the parent is at now; the
+ * child's own transcript/events start empty (artifact-first: the ledger +
+ * artifact paths are what it needs, not a pasted history). The parent is
+ * paused so both lineages never advance the same work item's git state at
+ * once. Starting the child's runner is the existing `/api/delivery/resume`
+ * path (its `runner.json` doesn't exist yet, so it reads as "stale" and
+ * offers Resume) — forking never spawns a process itself.
+ */
+function performFork(sessionDir, state, packet, payload) {
+  const parentSessionId = packet.sessionId;
+  const forkIndex = ((state.forks && state.forks.length) || 0) + 1;
+  const forkSessionId = `${parentSessionId}-f${forkIndex}`;
+  const forkDir = join(dirname(sessionDir), forkSessionId);
+  const now = new Date().toISOString();
+
+  mkdirSync(forkDir, { recursive: true });
+
+  const forkPacket = {
+    ...packet,
+    sessionId: forkSessionId,
+    parentSession: parentSessionId,
+    forkedFrom: { sessionId: parentSessionId, atTurnId: payload.atTurnId || null, at: now },
+  };
+  atomicWriteJsonSync(join(forkDir, "packet.json"), forkPacket);
+
+  const parentArtifacts = sessionPaths(sessionDir).artifacts;
+  if (existsSync(parentArtifacts)) {
+    cpSync(parentArtifacts, join(forkDir, "artifacts"), { recursive: true });
+  }
+
+  const ledger = loadLedger(sessionDir);
+  if (ledger.rev > 0) {
+    atomicWriteJsonSync(join(forkDir, "memory", "ledger.json"), ledger);
+  }
+
+  const forkState = {
+    schemaVersion: 2,
+    sessionId: forkSessionId,
+    state: state.state,
+    awaiting: state.awaiting,
+    phaseHistory: [{ state: state.state, enteredAt: now, exitedAt: null }],
+    agent: (state.execution && state.execution.provider) || packet.agent,
+    driver: { ref: null, specialists: {}, priorRefs: [] },
+    workspace: state.workspace,
+    build: state.build,
+    fixLoop: state.fixLoop || 0,
+    usage: { perPhase: {}, total: { input: 0, cachedInput: 0, output: 0, costUsd: null } },
+    turnCounter: 0,
+    decisionsProcessed: 0,
+    messagesProcessed: 0,
+    controlsProcessed: 0,
+    lastError: null,
+    createdAt: now,
+    updatedAt: now,
+    parentSession: parentSessionId,
+    execution: state.execution ? { ...state.execution, paused: false, pauseRequestedAt: null, pendingConfig: null } : undefined,
+    context: { pins: (state.context && state.context.pins) || [], rotations: 0 },
+  };
+  atomicWriteJsonSync(join(forkDir, "state.json"), forkState);
+  emitEvent(forkDir, { type: "fork.created", phase: state.state, data: { parentSession: parentSessionId } });
+
+  emitEvent(sessionDir, { type: "fork.completed", data: { forkSessionId } });
+  return {
+    ...state,
+    execution: { ...(state.execution || defaultExecution(packet)), paused: true, pauseRequestedAt: now },
+    forks: [...(state.forks || []), forkSessionId],
+  };
 }
 
 function artifactPath(sessionDir, ...parts) {
@@ -182,6 +697,65 @@ function accumulateUsage(state, phase, usage) {
         : (prevTotal.costUsd || 0) + (delta.total.costUsd || 0),
   };
   return { perPhase, total };
+}
+
+// ---- full-fidelity transcript capture (DW-1) ----
+// Full raw-record shards + the turns.ndjson index (transcript.mjs's pure
+// schema); this process is the sole writer, same discipline as events.ndjson.
+// Absent for pre-DW-1 sessions (no `transcript/` dir) — every reader here
+// degrades gracefully rather than assuming the directory exists.
+
+/** v1 `{input, cachedInput, output}` -> v2 token shape, for drivers that only report v1 usage. */
+function fallbackUsageV2FromV1(usageV1) {
+  const u = usageV1 || {};
+  return {
+    input: u.input || 0,
+    cachedRead: u.cachedInput || 0,
+    cacheCreation: 0,
+    output: u.output || 0,
+    reasoningOutput: 0,
+  };
+}
+
+function listPromptTurnIds(sessionDir) {
+  const dir = sessionPaths(sessionDir).transcriptPrompts;
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((name) => /^\d{4,}\.md$/.test(name))
+    .map((name) => name.replace(/\.md$/, ""));
+}
+
+function listClosedTurnIds(sessionDir) {
+  const text = readTextIfExists(sessionPaths(sessionDir).turns);
+  if (!text) return [];
+  return parseTurns(text).map((t) => t.turnId);
+}
+
+/**
+ * Reconcile orphaned turns on `--resume`: a turn whose prompt file was
+ * written but that never got a closing turns.ndjson entry means the runner
+ * crashed mid-turn. Seal it as `result:"crashed"` so it stops looking
+ * "in flight" forever. No-op for sessions with no `transcript/` dir yet.
+ */
+export function reconcileCrashedTurns(sessionDir, { now = () => new Date() } = {}) {
+  const p = sessionPaths(sessionDir);
+  if (!existsSync(p.transcript)) return [];
+  const orphans = findOrphanedTurnIds(listClosedTurnIds(sessionDir), listPromptTurnIds(sessionDir));
+  for (const turnId of orphans) {
+    const entry = buildCrashSealEntry({
+      turnId,
+      phase: null,
+      agent: null,
+      provider: null,
+      model: null,
+      effort: null,
+      promptFile: `transcript/prompts/${turnPromptFileName(turnId)}`,
+      recordsFile: existsSync(join(p.transcript, turnShardFileName(turnId))) ? `transcript/${turnShardFileName(turnId)}` : null,
+      sealedAt: now().toISOString(),
+    });
+    appendNdjsonLine(p.turns, formatTurnEntry(entry));
+  }
+  return orphans;
 }
 
 // ---- structured analysis outputs (S3) ----
@@ -250,6 +824,19 @@ export const PLAN_OUTPUT_SCHEMA = Object.freeze({
     riskFlags: STRING_ARRAY_SCHEMA,
     rollbackSketch: { type: "string" },
     noNewDeps: { type: "boolean" },
+  },
+});
+
+/** DW-8: the new provider's restated understanding after a handoff — see prompts.mjs buildHandoffVerificationPrompt. */
+export const HANDOFF_VERIFICATION_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["understandingSummary", "currentPhase", "nextAction", "gaps"],
+  properties: {
+    understandingSummary: { type: "string" },
+    currentPhase: { type: "string" },
+    nextAction: { type: "string" },
+    gaps: STRING_ARRAY_SCHEMA,
   },
 });
 
@@ -438,6 +1025,32 @@ export function checkGitGuard(
   return { ok: violations.length === 0, violations, after };
 }
 
+// ---- mid-turn abort (DW-10) ----
+
+/**
+ * Poll `controls/` for a NEW `pause {abortInFlight:true}` control while a
+ * turn is in flight and, if one shows up, abort `controller`. `advanceSession`
+ * only drains controls between ticks (a turn is a single await within one
+ * tick), so this is the only way an owner's abort request can reach a turn
+ * that's already running — genuinely concurrent with the turn's own I/O via
+ * the event loop, not a second pass over the same synchronous call.
+ * Returns a `stop()` to clear the poller once the turn settles.
+ */
+function watchForAbort(sessionDir, controlsProcessedAtStart, controller, pollMs) {
+  let stopped = false;
+  const timer = setInterval(() => {
+    if (stopped || controller.signal.aborted) return;
+    const pending = pendingControls(sessionDir, controlsProcessedAtStart);
+    const shouldAbort = pending.some((c) => c.type === "pause" && c.payload && c.payload.abortInFlight === true);
+    if (shouldAbort) controller.abort();
+  }, pollMs);
+  if (typeof timer.unref === "function") timer.unref();
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+  };
+}
+
 // ---- driver turn wrapper: retry-once, then BLOCKED (doc 5 §7) ----
 
 async function runGuardedTurn({
@@ -455,64 +1068,167 @@ async function runGuardedTurn({
   takeSnapshot = snapshotGit,
   forbiddenPaths = [],
   effort,
+  // DW-1: full-fidelity transcript capture + v2 usage/cost. All optional and
+  // additive — omitting `turnId` skips transcript writing entirely, so
+  // pre-DW-1 callers (and every existing test that doesn't pass it) see
+  // byte-identical behavior on the fields they already depend on.
+  turnId,
+  provider,
+  model,
+  strategy = "resume-native",
+  maxRecordBytes = DEFAULT_MAX_RECORD_BYTES,
+  pricing = null,
+  pricingVersion = null,
+  // DW-10: mid-turn abort — `controlsProcessed` is the cursor as of the start
+  // of this turn (controls written after it are new, i.e. an owner action
+  // taken while this turn is running); `abortPollMs` paces the concurrent
+  // poll (small in tests so an abort control is picked up quickly).
+  controlsProcessed = 0,
+  abortPollMs = 300,
 }) {
   const before = takeSnapshot(repoRoot);
-  let lastErr = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const result = await Promise.resolve(
-        driver.runTurn(handle, prompt, {
-          outputSchema,
-          effort,
-          onEvent: (e) => {
-            const data = { ...((e && e.data) || {}) };
-            if (typeof data.command === "string") data.command = truncateField(data.command, TRUNCATE_LIMITS.command);
-            if (typeof data.message === "string") data.message = truncateField(data.message, TRUNCATE_LIMITS.message);
-            emitEvent(sessionDir, {
-              type: e && e.type ? e.type : "agent.event",
-              phase,
-              agent,
-              data,
-            });
-          },
-        }),
-      );
-      const guard = checkGitGuard(before, repoRoot, guardMode, { takeSnapshot, forbiddenPaths });
-      if (!guard.ok) {
+  const startedAt = new Date();
+  const promptFile = turnId ? `transcript/prompts/${turnPromptFileName(turnId)}` : null;
+  const recordsFile = turnId ? `transcript/${turnShardFileName(turnId)}` : null;
+  let recordSeq = 0;
+
+  if (turnId) {
+    atomicWriteTextSync(join(sessionDir, promptFile), prompt);
+    recordSeq += 1;
+    appendNdjsonLine(
+      join(sessionDir, recordsFile),
+      formatRecord(buildRecord({ turnId, seq: recordSeq, kind: "prompt", provider: provider || null, promptFile })),
+    );
+  }
+
+  const onRaw = turnId
+    ? (partial) => {
+        try {
+          recordSeq += 1;
+          const record = buildRecord({ turnId, seq: recordSeq, provider: provider || null, maxRecordBytes, ...partial });
+          appendNdjsonLine(join(sessionDir, recordsFile), formatRecord(record));
+        } catch {
+          // A malformed raw partial from a driver must never break the turn —
+          // the curated events.ndjson path stays authoritative for control flow.
+        }
+      }
+    : undefined;
+
+  function sealTurn(result, usageV2, { workspaceDelta = null } = {}) {
+    if (!turnId) return;
+    const entry = buildTurnEntry({
+      turnId,
+      phase,
+      agent,
+      provider: provider || null,
+      model: model || null,
+      effort: effort || null,
+      startedAt: startedAt.toISOString(),
+      durationMs: Date.now() - startedAt.getTime(),
+      promptFile,
+      recordsFile,
+      records: recordSeq,
+      usage: usageV2,
+      costUsd: null,
+      costEstUsd: estimateCostUsd(usageV2, pricing),
+      pricingVersion,
+      context: computeOccupancy(usageV2, null),
+      result,
+      strategy,
+      workspaceDelta,
+    });
+    appendNdjsonLine(sessionPaths(sessionDir).turns, formatTurnEntry(entry));
+  }
+
+  // DW-10: one AbortController per turn (including retries — controls aren't
+  // drained mid-turn, so the same `controlsProcessed` cursor is still valid
+  // across attempts), watched concurrently with the driver call.
+  const controller = new AbortController();
+  const stopWatch = turnId ? watchForAbort(sessionDir, controlsProcessed, controller, abortPollMs) : null;
+
+  try {
+    let lastErr = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const result = await Promise.resolve(
+          driver.runTurn(handle, prompt, {
+            outputSchema,
+            effort,
+            onRaw,
+            signal: controller.signal,
+            onEvent: (e) => {
+              const data = { ...((e && e.data) || {}) };
+              if (typeof data.command === "string") data.command = truncateField(data.command, TRUNCATE_LIMITS.command);
+              if (typeof data.message === "string") data.message = truncateField(data.message, TRUNCATE_LIMITS.message);
+              emitEvent(sessionDir, {
+                type: e && e.type ? e.type : "agent.event",
+                phase,
+                agent,
+                data,
+              });
+            },
+          }),
+        );
+        const usageV2 = result.usageV2 || fallbackUsageV2FromV1(result.usage);
+        const guard = checkGitGuard(before, repoRoot, guardMode, { takeSnapshot, forbiddenPaths });
+        if (!guard.ok) {
+          emitEvent(sessionDir, {
+            type: "git.guard.violation",
+            phase,
+            agent,
+            data: { violations: guard.violations },
+          });
+          sealTurn("guard-violation", usageV2);
+          return { ok: false, gitViolation: true, violations: guard.violations, turnId, usageV2 };
+        }
+        sealTurn("ok", usageV2);
+        return { ok: true, finalText: result.finalText, usage: result.usage, turnId, usageV2 };
+      } catch (err) {
+        if (err instanceof DriverAbortedError) {
+          // Owner-initiated: the in-flight response is lost outright (never
+          // retried) — but the git-guard + changed-file delta always run so
+          // the owner can see exactly what an aborted BUILD turn touched
+          // before the workspace is (deliberately) left un-rolled-back.
+          const guard = checkGitGuard(before, repoRoot, guardMode, { takeSnapshot, forbiddenPaths });
+          const changedPaths = changedPathsBetween(before, guard.after);
+          emitEvent(sessionDir, {
+            type: "turn.aborted",
+            phase,
+            agent,
+            data: { turnId, changedPaths, gitViolation: !guard.ok, violations: guard.violations },
+          });
+          sealTurn("aborted", fallbackUsageV2FromV1(null), { workspaceDelta: { changedPaths } });
+          return { ok: false, aborted: true, gitViolation: !guard.ok, violations: guard.violations, turnId, changedPaths };
+        }
+        lastErr = err;
         emitEvent(sessionDir, {
-          type: "git.guard.violation",
+          type: "agent.turn.failed",
           phase,
           agent,
-          data: { violations: guard.violations },
+          data: { attempt, message: String((err && err.message) || err) },
         });
-        return { ok: false, gitViolation: true, violations: guard.violations };
-      }
-      return { ok: true, finalText: result.finalText, usage: result.usage };
-    } catch (err) {
-      lastErr = err;
-      emitEvent(sessionDir, {
-        type: "agent.turn.failed",
-        phase,
-        agent,
-        data: { attempt, message: String((err && err.message) || err) },
-      });
-      const guard = checkGitGuard(before, repoRoot, guardMode, { takeSnapshot, forbiddenPaths });
-      if (!guard.ok) {
-        emitEvent(sessionDir, {
-          type: "git.guard.violation",
-          phase,
-          agent,
-          data: { violations: guard.violations },
-        });
-        return { ok: false, gitViolation: true, violations: guard.violations, error: err };
-      }
-      if (attempt === 0) {
-        sleep(retryDelayMs);
-        continue;
+        const guard = checkGitGuard(before, repoRoot, guardMode, { takeSnapshot, forbiddenPaths });
+        if (!guard.ok) {
+          emitEvent(sessionDir, {
+            type: "git.guard.violation",
+            phase,
+            agent,
+            data: { violations: guard.violations },
+          });
+          sealTurn("guard-violation", fallbackUsageV2FromV1(null));
+          return { ok: false, gitViolation: true, violations: guard.violations, error: err, turnId };
+        }
+        if (attempt === 0) {
+          sleep(retryDelayMs);
+          continue;
+        }
       }
     }
+    sealTurn("failed", fallbackUsageV2FromV1(null));
+    return { ok: false, gitViolation: false, error: lastErr, turnId };
+  } finally {
+    if (stopWatch) stopWatch();
   }
-  return { ok: false, gitViolation: false, error: lastErr };
 }
 
 function defaultSleep(ms) {
@@ -522,10 +1238,59 @@ function defaultSleep(ms) {
 
 // ---- driver session handle (persisted ref, resumable) ----
 
-function phaseEffort(packet, phase) {
-  return packet.agentConfig && packet.agentConfig.effort
-    ? packet.agentConfig.effort[phase] || null
-    : null;
+/**
+ * Effort for one phase — `state.execution.effortByPhase` (DW-4: same-provider
+ * config-change controls write here) takes precedence when present, else the
+ * packet's launch-time default. `state` is optional so pre-DW-4 call sites
+ * (none remain, but the fallback keeps this safe for direct unit tests).
+ */
+function phaseEffort(state, packet, phase) {
+  const execution = state && state.execution;
+  if (execution && execution.effortByPhase && execution.effortByPhase[phase]) {
+    return execution.effortByPhase[phase];
+  }
+  return packet.agentConfig && packet.agentConfig.effort ? packet.agentConfig.effort[phase] || null : null;
+}
+
+/**
+ * The DW-1 transcript-capture parameters shared by every `runGuardedTurn`
+ * call site: next turn id (from `state.turnCounter`), provider/model (DW-4:
+ * `state.execution.model` when present, else the packet's launch-time
+ * default), a strategy label (a real driver ref already existing means this
+ * turn resumes it, possibly with overrides when a config change is pending —
+ * the richer strategies like rotate-fresh/handoff/fork are DW-7/DW-8), and
+ * pricing from the owner's `.delivery/config.json` (best-effort; `null` when
+ * the model isn't cataloged).
+ */
+function turnContext({ state, packet, deliveryConfig }) {
+  const turnId = formatTurnId((state.turnCounter || 0) + 1);
+  const execution = state.execution || null;
+  const provider = (execution && execution.provider) || packet.agent;
+  const model = execution ? execution.model || null : (packet.agentConfig && packet.agentConfig.model) || null;
+  const hadRefBeforeThisTurn = !!(state.driver && state.driver.ref);
+  const strategy = !hadRefBeforeThisTurn ? "start" : execution && execution.configChangedSinceLastTurn ? "resume-with-overrides" : "resume-native";
+  const maxRecordBytes =
+    (deliveryConfig && deliveryConfig.transcript && deliveryConfig.transcript.maxRecordBytes) || DEFAULT_MAX_RECORD_BYTES;
+  const pricing = deliveryConfig && model ? getModelPricing(deliveryConfig, provider, model) : null;
+  const pricingVersion = (deliveryConfig && deliveryConfig.pricingVersion) || null;
+  return {
+    turnId,
+    provider,
+    model,
+    strategy,
+    maxRecordBytes,
+    pricing,
+    pricingVersion,
+    // DW-10: the control-file cursor as of *before* this turn starts — see
+    // `watchForAbort`.
+    controlsProcessed: state.controlsProcessed || 0,
+  };
+}
+
+/** Clear the one-shot "next turn should note a config override" flag after a turn consumes it. */
+function clearConfigOverrideFlag(execution) {
+  if (!execution || !execution.configChangedSinceLastTurn) return execution;
+  return { ...execution, configChangedSinceLastTurn: false };
 }
 
 async function getHandle({ driver, state, packet, repoRoot, mode, phase }) {
@@ -533,12 +1298,13 @@ async function getHandle({ driver, state, packet, repoRoot, mode, phase }) {
   if (ref) {
     return Promise.resolve(driver.resume(ref));
   }
+  const execution = state.execution || null;
   const handle = await Promise.resolve(
     driver.startSession({
       cwd: repoRoot,
       mode,
-      model: packet.agentConfig && packet.agentConfig.model,
-      effort: phaseEffort(packet, phase),
+      model: execution ? execution.model : packet.agentConfig && packet.agentConfig.model,
+      effort: phaseEffort(state, packet, phase),
     }),
   );
   return handle;
@@ -836,6 +1602,10 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
     skillPaths: skillPaths(packet),
     ownerMessages,
   });
+  // Strategy reflects whether a driver ref existed BEFORE this handler ran —
+  // `working` already carries the ref getGuardedHandle just established/
+  // resumed this call, so it would always read "resume-native".
+  const tc = turnContext({ state, packet, deliveryConfig: config.deliveryConfig });
   const turn = await runGuardedTurn({
     sessionDir,
     driver,
@@ -848,11 +1618,18 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
     guardMode: "readonly",
     takeSnapshot: config.takeSnapshot,
     forbiddenPaths,
-    effort: phaseEffort(packet, "discovery"),
+    effort: phaseEffort(state, packet, "discovery"),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
+    abortPollMs: config.abortPollMs,
+    ...tc,
   });
-  working = { ...working, messagesProcessed: lastSeq };
+  working = {
+    ...working,
+    messagesProcessed: lastSeq,
+    turnCounter: (working.turnCounter || 0) + 1,
+    execution: clearConfigOverrideFlag(working.execution),
+  };
   if (!turn.ok) return blockFrom(sessionDir, working, "DISCOVERY", turn);
 
   working = { ...working, usage: accumulateUsage(working, "discovery", turn.usage) };
@@ -865,13 +1642,24 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
   writeArtifactJson(sessionDir, "spec.json", spec);
   writeArtifactText(sessionDir, "spec.md", renderSpecMd(spec));
 
+  // DW-5: seed the durable ledger's objective/requirements from the spec,
+  // and raise a ledger-tracked blocking question per openQuestions entry —
+  // the ids returned here are threaded into `awaiting.questions` so the
+  // owner's eventual gate answer can be matched back to these records.
+  const specLedger = applySpec(loadLedger(sessionDir), spec, {
+    itemText: packet.item.text,
+    turnId: turn.turnId,
+  });
+  writeLedger(sessionDir, specLedger.ledger);
+
   if ((spec.openQuestions || []).length) {
     const result = smNext(working.state, "question.raised");
-    emitEvent(sessionDir, { type: "question.raised", phase: "DISCOVERY", data: { questions: spec.openQuestions } });
+    const questions = spec.openQuestions.map((q, i) => ({ text: q.text, id: specLedger.questionIds[i] }));
+    emitEvent(sessionDir, { type: "question.raised", phase: "DISCOVERY", data: { questions } });
     return {
       ...working,
       state: result.to,
-      awaiting: { gate: "question", returnTo: "DISCOVERY", questions: spec.openQuestions },
+      awaiting: { gate: "question", returnTo: "DISCOVERY", questions },
     };
   }
   const result = smNext(working.state, "spec.written");
@@ -879,12 +1667,30 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
   return { ...working, state: result.to, awaiting: { gate: GATES[result.to] || "spec" } };
 }
 
+/**
+ * DW-10: an owner-aborted turn's response is lost outright — say so plainly
+ * (not a generic "error") and, when the aborted turn touched files (a
+ * BUILDING abort), name them: the workspace is never rolled back, so this is
+ * the owner's only signal of what to check before retrying the phase.
+ */
+function describeBlockedTurn(turn) {
+  if (turn.aborted) {
+    const changed = turn.changedPaths || [];
+    const delta = changed.length
+      ? ` The workspace was not rolled back — ${changed.length} file(s) changed before the abort: ${changed.join(", ")}. Review the diff (or run validation) before retrying.`
+      : " No workspace changes were made before the abort.";
+    return `Turn aborted by owner.${delta}`;
+  }
+  return String((turn.error && turn.error.message) || turn.error || "");
+}
+
 function blockFrom(sessionDir, state, fromPhase, turn) {
   const result = smNext(fromPhase, "error.fatal");
+  const message = describeBlockedTurn(turn);
   emitEvent(sessionDir, {
     type: "error.fatal",
     phase: fromPhase,
-    data: { gitViolation: !!turn.gitViolation, violations: turn.violations || [], message: String((turn.error && turn.error.message) || turn.error || "") },
+    data: { gitViolation: !!turn.gitViolation, violations: turn.violations || [], message, aborted: !!turn.aborted },
   });
   return {
     ...state,
@@ -894,7 +1700,8 @@ function blockFrom(sessionDir, state, fromPhase, turn) {
       phase: fromPhase,
       gitViolation: !!turn.gitViolation,
       violations: turn.violations || [],
-      message: String((turn.error && turn.error.message) || turn.error || ""),
+      message,
+      aborted: !!turn.aborted,
     },
   };
 }
@@ -903,6 +1710,9 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
   if (decision.decision === "reject") {
     const result = smNext(state.state, "decision.reject");
     emitEvent(sessionDir, { type: "decision.consumed", phase: "SPEC_READY", data: { decision: "reject", note: decision.note } });
+    updateLedger(sessionDir, (ledger) =>
+      applyDecision(ledger, { id: `d-${decision.seq}`, gate: "spec", decision: "reject", note: decision.note, phase: "SPEC_READY" }),
+    );
     return {
       newState: {
         ...state,
@@ -947,6 +1757,7 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
     skillPaths: skillPaths(newPacket),
     ownerMessages,
   });
+  const tc = turnContext({ state, packet: newPacket, deliveryConfig: config.deliveryConfig });
   const turn = await runGuardedTurn({
     sessionDir,
     driver,
@@ -959,12 +1770,22 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
     guardMode: "readonly",
     takeSnapshot: config.takeSnapshot,
     forbiddenPaths,
-    effort: phaseEffort(newPacket, "plan"),
+    effort: phaseEffort(state, newPacket, "plan"),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
+    abortPollMs: config.abortPollMs,
+    ...tc,
   });
-  working = { ...working, messagesProcessed: lastSeq };
+  working = {
+    ...working,
+    messagesProcessed: lastSeq,
+    turnCounter: (working.turnCounter || 0) + 1,
+    execution: clearConfigOverrideFlag(working.execution),
+  };
   emitEvent(sessionDir, { type: "decision.consumed", phase: "SPEC_READY", data: { decision: "approve" } });
+  updateLedger(sessionDir, (ledger) =>
+    applyDecision(ledger, { id: `d-${decision.seq}`, gate: "spec", decision: "approve", note: decision.note, phase: "SPEC_READY" }),
+  );
   if (!turn.ok) return { newState: blockFrom(sessionDir, working, "SPEC_READY", turn), newPacket };
 
   working = { ...working, usage: accumulateUsage(working, "plan", turn.usage) };
@@ -976,6 +1797,7 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
   }
   writeArtifactJson(sessionDir, "plan.json", plan);
   writeArtifactText(sessionDir, "plan.md", renderPlanMd(plan));
+  updateLedger(sessionDir, (ledger) => applyPlan(ledger, plan));
 
   const result = smNext(working.state, "decision.approve");
   emitEvent(sessionDir, { type: "phase.transition", phase: "SPEC_READY", data: { to: result.to } });
@@ -989,6 +1811,9 @@ function consumePlanDecision({ sessionDir, state, decision }) {
   if (decision.decision === "reject") {
     const result = smNext(state.state, "decision.reject");
     emitEvent(sessionDir, { type: "decision.consumed", phase: "PLAN_READY", data: { decision: "reject", note: decision.note } });
+    updateLedger(sessionDir, (ledger) =>
+      applyDecision(ledger, { id: `d-${decision.seq}`, gate: "plan", decision: "reject", note: decision.note, phase: "PLAN_READY" }),
+    );
     return {
       ...state,
       state: result.to,
@@ -1002,6 +1827,16 @@ function consumePlanDecision({ sessionDir, state, decision }) {
   });
   const plan = readJsonIfExists(artifactPath(sessionDir, "plan.json")) || { steps: [] };
   emitEvent(sessionDir, { type: "decision.consumed", phase: "PLAN_READY", data: { decision: "approve" } });
+  updateLedger(sessionDir, (ledger) =>
+    applyDecision(ledger, {
+      id: `d-${decision.seq}`,
+      gate: "plan",
+      decision: "approve",
+      note: decision.note,
+      typed: !!decision.confirmText,
+      phase: "PLAN_READY",
+    }),
+  );
   return {
     ...state,
     state: result.to,
@@ -1037,6 +1872,7 @@ async function handleBuilding({ sessionDir, state, packet, driver, repoRoot, con
     priorValidationExcerpt,
     ownerMessages,
   });
+  const tc = turnContext({ state, packet, deliveryConfig: config.deliveryConfig });
   const turn = await runGuardedTurn({
     sessionDir,
     driver,
@@ -1049,11 +1885,18 @@ async function handleBuilding({ sessionDir, state, packet, driver, repoRoot, con
     guardMode: "build",
     takeSnapshot: config.takeSnapshot,
     forbiddenPaths: (packet.constraints && packet.constraints.forbiddenPaths) || [],
-    effort: phaseEffort(packet, "building"),
+    effort: phaseEffort(state, packet, "building"),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
+    abortPollMs: config.abortPollMs,
+    ...tc,
   });
-  working = { ...working, messagesProcessed: lastSeq };
+  working = {
+    ...working,
+    messagesProcessed: lastSeq,
+    turnCounter: (working.turnCounter || 0) + 1,
+    execution: clearConfigOverrideFlag(working.execution),
+  };
   if (!turn.ok) return blockFrom(sessionDir, working, "BUILDING", turn);
 
   appendBuildLog(sessionDir, stepId, description, turn.finalText);
@@ -1114,6 +1957,7 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
   let working = withDriverRef(state, handle);
   const { texts: ownerMessages, lastSeq } = drainMessages(sessionDir, working);
   const prompt = buildSelfReviewPrompt({ packet, ownerMessages });
+  const tc = turnContext({ state, packet, deliveryConfig: config.deliveryConfig });
   const turn = await runGuardedTurn({
     sessionDir,
     driver,
@@ -1126,11 +1970,18 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
     guardMode: "readonly",
     takeSnapshot: config.takeSnapshot,
     forbiddenPaths: (packet.constraints && packet.constraints.forbiddenPaths) || [],
-    effort: phaseEffort(packet, "review"),
+    effort: phaseEffort(state, packet, "review"),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
+    abortPollMs: config.abortPollMs,
+    ...tc,
   });
-  working = { ...working, messagesProcessed: lastSeq };
+  working = {
+    ...working,
+    messagesProcessed: lastSeq,
+    turnCounter: (working.turnCounter || 0) + 1,
+    execution: clearConfigOverrideFlag(working.execution),
+  };
   if (!turn.ok) return blockFrom(sessionDir, working, "REVIEWING", turn);
 
   const review = JSON.parse(turn.finalText);
@@ -1167,6 +2018,7 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
   working = withDriverRef(working, uatHandle);
   const priorArtifactPaths = ["artifacts/spec.md", "artifacts/plan.md", "artifacts/validation-report.md", "artifacts/review-self.md"];
   const uatPrompt = buildUatPrompt({ packet, priorArtifactPaths, ownerMessages: [] });
+  const uatTc = turnContext({ state: working, packet, deliveryConfig: config.deliveryConfig });
   const uatTurn = await runGuardedTurn({
     sessionDir,
     driver,
@@ -1179,10 +2031,13 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
     guardMode: "readonly",
     takeSnapshot: config.takeSnapshot,
     forbiddenPaths: (packet.constraints && packet.constraints.forbiddenPaths) || [],
-    effort: phaseEffort(packet, "review"),
+    effort: phaseEffort(working, packet, "review"),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
+    abortPollMs: config.abortPollMs,
+    ...uatTc,
   });
+  working = { ...working, turnCounter: (working.turnCounter || 0) + 1, execution: clearConfigOverrideFlag(working.execution) };
   if (!uatTurn.ok) return blockFrom(sessionDir, working, "REVIEWING", uatTurn);
 
   const uat = JSON.parse(uatTurn.finalText);
@@ -1211,6 +2066,9 @@ function consumeUatDecision({ sessionDir, state, decision }) {
   if (decision.decision === "accept") {
     const result = smNext(state.state, "decision.accept");
     emitEvent(sessionDir, { type: "decision.consumed", phase: "UAT_READY", data: { decision: "accept" } });
+    updateLedger(sessionDir, (ledger) =>
+      applyDecision(ledger, { id: `d-${decision.seq}`, gate: "uat", decision: "accept", note: decision.note, phase: "UAT_READY" }),
+    );
     return {
       ...state,
       state: result.to,
@@ -1223,6 +2081,9 @@ function consumeUatDecision({ sessionDir, state, decision }) {
   }
   const result = smNext(state.state, "decision.reject");
   emitEvent(sessionDir, { type: "decision.consumed", phase: "UAT_READY", data: { decision: "reject", note: decision.note } });
+  updateLedger(sessionDir, (ledger) =>
+    applyDecision(ledger, { id: `d-${decision.seq}`, gate: "uat", decision: "reject", note: decision.note, phase: "UAT_READY" }),
+  );
   return {
     ...state,
     state: result.to,
@@ -1245,6 +2106,21 @@ function consumeQuestionDecision({ sessionDir, state, decision }) {
   const result = smNext(state.state, "decision.answer", { returnTo });
   emitEvent(sessionDir, { type: "decision.consumed", phase: "NEEDS_DECISION", data: { answer: decision.answer } });
   const answerNote = decision.answer ? `Owner's answer to the open question: ${decision.answer}` : null;
+  // DW-5: the same owner answer addresses every question raised in this
+  // batch — record it against each ledger-tracked question id so it persists
+  // as durable context (not just this one prompt's pendingGuidance).
+  const questionIds = ((state.awaiting && state.awaiting.questions) || []).map((q) => q.id).filter(Boolean);
+  if (decision.answer && questionIds.length) {
+    let ledger = loadLedger(sessionDir);
+    for (const questionId of questionIds) {
+      try {
+        ledger = applyAnswer(ledger, { questionId, text: decision.answer, via: "decision:question" });
+      } catch {
+        // already answered / unknown id — never block the state transition on a ledger inconsistency.
+      }
+    }
+    writeLedger(sessionDir, ledger);
+  }
   return {
     ...state,
     state: result.to,
@@ -1278,7 +2154,8 @@ function consumeCancel({ sessionDir, state }) {
  * Perform exactly one unit of runner work for the session in `sessionDir` and
  * persist the result. Returns `{didWork: boolean, state}`.
  * @param {{sessionDir:string, driver:object, repoRoot:string, runValidation?:Function,
- *   retryDelayMs?:number, sleep?:Function, takeSnapshot?:Function, readHead?:Function}} options
+ *   retryDelayMs?:number, sleep?:Function, takeSnapshot?:Function, readHead?:Function,
+ *   deliveryConfig?:object, createDriver?:Function, abortPollMs?:number}} options
  */
 export async function advanceSession(options) {
   const { sessionDir, driver, repoRoot } = options;
@@ -1289,11 +2166,41 @@ export async function advanceSession(options) {
     sleep: options.sleep || defaultSleep,
     takeSnapshot: options.takeSnapshot || snapshotGit,
     readHead: options.readHead || ((root) => gitRevParseHead({ cwd: root })),
+    // DW-1: owner-edited `.delivery/config.json` (model catalog, pricing,
+    // transcript caps) — injectable for tests, else loaded fresh per call
+    // (cheap: one small JSON read, no different from packet/state loads above).
+    deliveryConfig: options.deliveryConfig || loadConfig(repoRoot),
+    // DW-10: how often an in-flight turn re-checks controls/ for a new
+    // abort request — small in tests so an abort lands promptly.
+    abortPollMs: options.abortPollMs != null ? options.abortPollMs : 300,
   };
   const state = loadState(sessionDir);
   const packet = loadPacket(sessionDir);
 
   if (isTerminal(state.state)) return { didWork: false, state };
+
+  // DW-4: drain owner controls (pause/resume-run/set-config/...) before any
+  // other work this tick — mirrors the decisions/messages numbered-file
+  // pattern (persist + return early so the runner loop re-polls promptly).
+  // DW-8: a provider-switching set-config performs a full handoff here too
+  // (digest + snapshot + new-provider verification turn), so this needs the
+  // same run context (repoRoot/takeSnapshot/retry/sleep) as guarded turns.
+  const drained = await drainControls(sessionDir, state, packet, {
+    repoRoot,
+    deliveryConfig: config.deliveryConfig,
+    retryDelayMs: config.retryDelayMs,
+    sleep: config.sleep,
+    takeSnapshot: config.takeSnapshot,
+    abortPollMs: config.abortPollMs,
+    // DW-8 test seam: inject a driver factory for the *new* provider a
+    // handoff switches to, without touching the global driver registry
+    // (which would leak across tests in the same file/worker).
+    createDriver: options.createDriver,
+  });
+  if (drained.didWork) {
+    const persisted = persistState(sessionDir, drained.state);
+    return { didWork: true, state: persisted };
+  }
 
   // Gate / paused states: only advance on a fresh decision.
   const GATE_OF_STATE = {
@@ -1366,6 +2273,13 @@ export async function advanceSession(options) {
     newState = { ...newState, decisionsProcessed: decision.seq };
     const persisted = persistState(sessionDir, newState);
     return { didWork: true, state: persisted };
+  }
+
+  // DW-4: pause is an execution flag, not a state-machine state — gates
+  // (handled above) are unaffected; only phase *work* is skipped. A running
+  // turn always finishes (this check only ever runs between turns).
+  if (state.execution && state.execution.paused) {
+    return { didWork: false, state };
   }
 
   let newState;
@@ -1450,8 +2364,14 @@ export async function runLoop(options) {
     takeSnapshot,
   } = options;
 
-  const driver = createDriver(driverKind, driverOptions);
+  const driver = createDriverDefault(driverKind, driverOptions);
   writeHeartbeat(sessionDir);
+  if (options.resumed) {
+    const sealed = reconcileCrashedTurns(sessionDir);
+    for (const turnId of sealed) {
+      emitEvent(sessionDir, { type: "turn.crashed.sealed", data: { turnId } });
+    }
+  }
   emitEvent(sessionDir, { type: options.resumed ? "runner.resumed" : "runner.started", data: { pid: process.pid } });
   let lastHeartbeat = Date.now();
 

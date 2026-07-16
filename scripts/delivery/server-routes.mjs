@@ -32,6 +32,15 @@ import { buildItemIdentity, buildPacket, makeSessionId } from "./packet.mjs";
 import { TYPED_APPROVAL_RISK_FLAGS, isTerminal, next as smNext } from "./state-machine.mjs";
 import { replayAfter } from "./events.mjs";
 import { emitEvent, isRunnerAlive } from "./run-session.mjs";
+import { createDriver } from "./drivers/driver.mjs";
+import "./drivers/fake.mjs"; // self-registers; SDK import remains lazy
+import "./drivers/codex.mjs"; // self-registers; SDK import remains lazy
+import "./drivers/claude.mjs"; // self-registers; SDK import remains lazy
+import { buildCapabilitiesPayload, getDefaultModel, isKnownEffort, isKnownModel, loadConfig } from "./config.mjs";
+import { buildControl, controlFileName } from "./controls.mjs";
+import { emptyLedger, splitOpenQuestions } from "./memory.mjs";
+import { findMatches, parseTurnRecords, parseTurns } from "./transcript.mjs";
+import { buildContextPackage } from "./context-assembly.mjs";
 
 export class DeliveryRouteError extends Error {
   constructor(status, message) {
@@ -255,6 +264,203 @@ function getArtifact(ctx, id, relPath) {
   return { name: relPath, content, lang: ARTIFACT_EXT_LANG[ext] };
 }
 
+// ---- GET /api/delivery/memory + /api/delivery/questions (DW-5) ----
+
+function loadLedgerForSession(s) {
+  return readJsonIfExists(join(s.dir, "memory", "ledger.json")) || emptyLedger();
+}
+
+function getMemory(ctx, id) {
+  const s = readSession(ctx, id);
+  if (!s) throw fail(404, "unknown session");
+  return { ledger: loadLedgerForSession(s) };
+}
+
+function getQuestions(ctx, id) {
+  const s = readSession(ctx, id);
+  if (!s) throw fail(404, "unknown session");
+  const ledger = loadLedgerForSession(s);
+  const { blocking, advisory } = splitOpenQuestions(ledger);
+  const answered = (ledger.questions || []).filter((q) => q.status === "answered");
+  const dismissed = (ledger.questions || []).filter((q) => q.status === "dismissed" || q.status === "superseded");
+  return { blocking, advisory, answered, dismissed, total: (ledger.questions || []).length };
+}
+
+// ---- GET /api/delivery/turns, /transcript, /prompt, /transcript/search (DW-3) ----
+
+const TURN_ID_RE = /^\d{4,}$/;
+const SEARCH_MATCH_CAP = 200;
+const TRANSCRIPT_RECORDS_CAP = 500;
+
+function getTurns(ctx, id, afterTurn) {
+  const dir = join(sessionsDirOf(ctx), id);
+  if (!existsSync(dir)) throw fail(404, "unknown session");
+  const text = readTextIfExists(join(dir, "transcript", "turns.ndjson")) || "";
+  const all = parseTurns(text).filter((t) => parseInt(t.turnId, 10) > afterTurn);
+  const turns = all.slice(0, 200);
+  const lastTurn = turns.length ? parseInt(turns[turns.length - 1].turnId, 10) : afterTurn;
+  return { turns, lastTurn };
+}
+
+function getTranscript(ctx, id, turnId, afterSeq, limit) {
+  const dir = join(sessionsDirOf(ctx), id);
+  if (!existsSync(dir)) throw fail(404, "unknown session");
+  if (!turnId || !TURN_ID_RE.test(turnId)) throw fail(400, "turn is required and must be a numeric turn id");
+  const shardPath = join(dir, "transcript", `t-${turnId}.ndjson`);
+  const all = parseTurnRecords(readTextIfExists(shardPath) || "");
+  const cap = Math.min(limit && limit > 0 ? limit : 200, TRANSCRIPT_RECORDS_CAP);
+  const records = all.filter((r) => r.seq > (afterSeq || 0)).slice(0, cap);
+  const lastSeq = records.length ? records[records.length - 1].seq : afterSeq || 0;
+  return { turnId, records, lastSeq };
+}
+
+function getPrompt(ctx, id, turnId) {
+  const dir = join(sessionsDirOf(ctx), id);
+  if (!existsSync(dir)) throw fail(404, "unknown session");
+  if (!turnId || !TURN_ID_RE.test(turnId)) throw fail(400, "turn is required and must be a numeric turn id");
+  const promptPath = join(dir, "transcript", "prompts", `${turnId}.md`);
+  if (!existsSync(promptPath)) throw fail(404, "prompt not found for this turn");
+  return { turnId, content: readFileSync(promptPath, "utf8") };
+}
+
+/**
+ * Literal, case-insensitive search across every turn shard (streaming: one
+ * shard file at a time, capped result count) — the multi-shard orchestration
+ * transcript.mjs's own header says belongs here, using its pure `findMatches`
+ * per record. Optional `phase`/`kinds` filters narrow before matching.
+ */
+function searchTranscript(ctx, id, { q: query, kinds, phase, limit }) {
+  const dir = join(sessionsDirOf(ctx), id);
+  if (!existsSync(dir)) throw fail(404, "unknown session");
+  if (typeof query !== "string" || !query.trim()) throw fail(400, "q is required");
+  const transcriptDir = join(dir, "transcript");
+  if (!existsSync(transcriptDir)) return { matches: [], truncated: false };
+
+  const turnPhaseById = new Map(parseTurns(readTextIfExists(join(transcriptDir, "turns.ndjson")) || "").map((t) => [t.turnId, t.phase]));
+  const kindFilter = kinds ? new Set(kinds.split(",").filter(Boolean)) : null;
+  const cap = Math.min(limit && limit > 0 ? limit : 100, SEARCH_MATCH_CAP);
+
+  const shardFiles = readdirSync(transcriptDir).filter((n) => /^t-\d{4,}\.ndjson$/.test(n)).sort();
+  const matches = [];
+  let truncated = false;
+  for (const file of shardFiles) {
+    if (truncated) break;
+    const turnId = file.slice(2, -".ndjson".length);
+    if (phase && turnPhaseById.get(turnId) !== phase) continue;
+    const records = parseTurnRecords(readTextIfExists(join(transcriptDir, file)) || "");
+    for (const record of records) {
+      if (kindFilter && !kindFilter.has(record.kind)) continue;
+      const text = typeof record.text === "string" ? record.text : typeof record.output === "string" ? record.output : "";
+      if (!text) continue;
+      for (const m of findMatches(text, query)) {
+        if (matches.length >= cap) {
+          truncated = true;
+          break;
+        }
+        matches.push({ turnId, seq: record.seq, kind: record.kind, phase: turnPhaseById.get(turnId) || null, snippet: m.snippet });
+      }
+      if (truncated) break;
+    }
+  }
+  return { matches, truncated };
+}
+
+// ---- GET /api/delivery/context, /context/preview, /context/snapshot (DW-7) ----
+
+function readNumberedJson(dir, ext = ".json") {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((n) => new RegExp(`^\\d+${ext.replace(".", "\\.")}$`).test(n))
+    .sort()
+    .map((n) => readJsonIfExists(join(dir, n)))
+    .filter(Boolean);
+}
+
+/** Health heuristics: unresolved blocking questions, git-guard violations, and rotation churn. */
+function computeContextHealth(ledger, sessionState) {
+  const reasons = [];
+  const openBlocking = ((ledger && ledger.questions) || []).filter((q) => q.kind === "blocking" && q.status === "open");
+  if (openBlocking.length) reasons.push(`${openBlocking.length} unresolved blocking question(s)`);
+  const rotations = (sessionState.context && sessionState.context.rotations) || 0;
+  if (rotations >= 3) reasons.push(`context has rotated ${rotations} times — consider whether the phase is stuck`);
+  if (sessionState.lastError) reasons.push(`last error: ${sessionState.lastError.message || sessionState.lastError.phase}`);
+  return { score: reasons.length ? "warning" : "healthy", reasons };
+}
+
+function getContext(ctx, id) {
+  const s = readSession(ctx, id);
+  if (!s) throw fail(404, "unknown session");
+  const ledger = loadLedgerForSession(s);
+  const snapshots = readNumberedJson(join(s.dir, "context", "snapshots")).map((snap) => ({
+    seq: snap.seq, at: snap.at, reason: snap.reason, tokensEstTotal: snap.tokensEstTotal, provider: snap.provider, model: snap.model,
+  }));
+  const compactions = readNumberedJson(join(s.dir, "context", "compactions")).map((c) => ({
+    seq: c.seq, at: c.at, scope: c.scope, mode: c.mode, summaryMd: c.summaryMd,
+  }));
+  const pins = (s.state.context && s.state.context.pins) || [];
+  const rotations = (s.state.context && s.state.context.rotations) || 0;
+  return { snapshots, compactions, pins, rotations, health: computeContextHealth(ledger, s.state) };
+}
+
+function getContextSnapshot(ctx, id, seq) {
+  const s = readSession(ctx, id);
+  if (!s) throw fail(404, "unknown session");
+  if (!Number.isFinite(seq) || seq < 1) throw fail(400, "seq must be a positive number");
+  const path = join(s.dir, "context", "snapshots", `${String(seq).padStart(4, "0")}.json`);
+  const snapshot = readJsonIfExists(path);
+  if (!snapshot) throw fail(404, "snapshot not found");
+  return snapshot;
+}
+
+/** Pure, read-only preview of the context package the next turn would receive right now — no side effects. */
+function getContextPreview(ctx, id) {
+  const s = readSession(ctx, id);
+  if (!s) throw fail(404, "unknown session");
+  const ledger = loadLedgerForSession(s);
+  const artifactPaths = listArtifactsRecursive(join(s.dir, "artifacts")).map((a) => `artifacts/${a.path}`);
+  const pins = (s.state.context && s.state.context.pins) || [];
+  const pkg = buildContextPackage({
+    packet: s.packet,
+    ledger,
+    artifactPaths,
+    pins,
+    nextAction: `Continue phase ${s.state.state}.`,
+  });
+  return pkg;
+}
+
+// ---- GET /api/delivery/capabilities (DW-2) ----
+
+function getCapabilities(ctx) {
+  const manifests = {
+    claude: createDriver("claude").manifest(),
+    codex: createDriver("codex").manifest(),
+  };
+  return buildCapabilitiesPayload(ctx.deliveryConfig, manifests);
+}
+
+/**
+ * Validate `model`/`effort` against the owner's `.delivery/config.json` catalog
+ * (DW-2). Model is only checked when the provider's catalog is non-empty —
+ * an owner who hasn't populated `.delivery/config.json` yet keeps today's
+ * "any string, or null" behavior. Effort is always checked (config.mjs ships
+ * built-in per-provider effort enums even with no config file present).
+ */
+function validateAgentConfig(ctx, agent, { model, effort }) {
+  const config = ctx.deliveryConfig;
+  const providerCfg = config && config.providers && config.providers[agent];
+  if (model != null && providerCfg && providerCfg.models && providerCfg.models.length && !isKnownModel(config, agent, model)) {
+    throw fail(400, `unknown model "${model}" for provider "${agent}"`);
+  }
+  if (effort && typeof effort === "object") {
+    for (const [phase, value] of Object.entries(effort)) {
+      if (value != null && !isKnownEffort(config, agent, value)) {
+        throw fail(400, `unknown effort "${value}" for provider "${agent}" (phase "${phase}")`);
+      }
+    }
+  }
+}
+
 // ---- POST /api/delivery/start ----
 
 async function startSession(ctx, body) {
@@ -262,6 +468,7 @@ async function startSession(ctx, body) {
   if (agent !== "codex" && agent !== "claude") throw fail(400, 'agent must be "codex" or "claude"');
   if (typeof file !== "string" || !file) throw fail(400, "file is required");
   if (typeof cbidx !== "number") throw fail(400, "cbidx is required");
+  validateAgentConfig(ctx, agent, { model, effort });
 
   let abs;
   try {
@@ -303,12 +510,14 @@ async function startSession(ctx, body) {
   const skills = buildSkillRefs(capabilities);
   const campaignFiles = findCampaignFiles(item.campaign, ctx.PM_DIR, ctx.PM_REL);
 
+  const resolvedModel = model != null && model !== "" ? model : getDefaultModel(ctx.deliveryConfig, agent);
+
   const sessionId = makeSessionId();
   const sessionDir = join(sessionsDirOf(ctx), sessionId);
   const packet = buildPacket({
     sessionId,
     agent,
-    agentConfig: { model, effort },
+    agentConfig: { model: resolvedModel, effort },
     item,
     context: { campaignFiles, relatedNotes: [] },
     scopeHints,
@@ -458,6 +667,32 @@ function postMessage(ctx, body) {
   return { ok: true, seq };
 }
 
+// ---- POST /api/delivery/control (DW-4) ----
+
+function postControl(ctx, body) {
+  const { id, type, payload } = body || {};
+  if (typeof id !== "string" || !id) throw fail(400, "id is required");
+  const s = readSession(ctx, id);
+  if (!s) throw fail(404, "unknown session");
+  if (isTerminal(s.state.state)) throw fail(409, "session is terminal");
+
+  const controlsDir = join(s.dir, "controls");
+  mkdirSync(controlsDir, { recursive: true });
+  const seq = nextSeqInDir(controlsDir);
+  let control;
+  try {
+    control = buildControl({ seq, type, payload });
+  } catch (err) {
+    throw fail(400, err.message);
+  }
+  if (type === "set-config") {
+    const targetProvider = (payload && payload.provider) || s.packet.agent;
+    validateAgentConfig(ctx, targetProvider, { model: payload && payload.model, effort: payload && payload.effortByPhase });
+  }
+  atomicWriteJsonSync(join(controlsDir, controlFileName(control)), control);
+  return { ok: true, seq };
+}
+
 // ---- POST /api/delivery/resume ----
 
 function postResume(ctx, body) {
@@ -540,9 +775,42 @@ export async function routeDelivery({ method, path, query, body }, ctx) {
   if (method === "GET" && path === "/api/delivery/artifact") {
     return ok(getArtifact(ctx, query.get("id") || "", query.get("path") || ""));
   }
+  if (method === "GET" && path === "/api/delivery/capabilities") return ok(getCapabilities(ctx));
+  if (method === "GET" && path === "/api/delivery/memory") return ok(getMemory(ctx, query.get("id") || ""));
+  if (method === "GET" && path === "/api/delivery/questions") return ok(getQuestions(ctx, query.get("id") || ""));
+  if (method === "GET" && path === "/api/delivery/turns") {
+    const after = parseInt(query.get("after") || "0", 10);
+    return ok(getTurns(ctx, query.get("id") || "", Number.isFinite(after) ? after : 0));
+  }
+  if (method === "GET" && path === "/api/delivery/transcript") {
+    const after = parseInt(query.get("after") || "0", 10);
+    const limit = parseInt(query.get("limit") || "0", 10);
+    return ok(getTranscript(ctx, query.get("id") || "", query.get("turn") || "", Number.isFinite(after) ? after : 0, limit));
+  }
+  if (method === "GET" && path === "/api/delivery/prompt") {
+    return ok(getPrompt(ctx, query.get("id") || "", query.get("turn") || ""));
+  }
+  if (method === "GET" && path === "/api/delivery/transcript/search") {
+    const limit = parseInt(query.get("limit") || "0", 10);
+    return ok(
+      searchTranscript(ctx, query.get("id") || "", {
+        q: query.get("q") || "",
+        kinds: query.get("kinds") || "",
+        phase: query.get("phase") || "",
+        limit,
+      }),
+    );
+  }
+  if (method === "GET" && path === "/api/delivery/context") return ok(getContext(ctx, query.get("id") || ""));
+  if (method === "GET" && path === "/api/delivery/context/preview") return ok(getContextPreview(ctx, query.get("id") || ""));
+  if (method === "GET" && path === "/api/delivery/context/snapshot") {
+    const seq = parseInt(query.get("seq") || "", 10);
+    return ok(getContextSnapshot(ctx, query.get("id") || "", seq));
+  }
   if (method === "POST" && path === "/api/delivery/start") return ok(await startSession(ctx, body));
   if (method === "POST" && path === "/api/delivery/decision") return ok(await postDecision(ctx, body));
   if (method === "POST" && path === "/api/delivery/message") return ok(postMessage(ctx, body));
+  if (method === "POST" && path === "/api/delivery/control") return ok(postControl(ctx, body));
   if (method === "POST" && path === "/api/delivery/resume") return ok(postResume(ctx, body));
   return null;
 }
@@ -550,6 +818,8 @@ export async function routeDelivery({ method, path, query, body }, ctx) {
 /**
  * Build the per-server context object `routeDelivery`/`performPendingWritebacks`
  * expect. Call once at pm-server startup.
+ * @param {{ROOT:string, PM_DIR:string, PM_REL:string, spawnRunner?:Function,
+ *   gitStatusPorcelain?:Function, gitRevParseHead?:Function, deliveryConfig?:object}} fields
  */
 export function createDeliveryContext({
   ROOT,
@@ -558,6 +828,7 @@ export function createDeliveryContext({
   spawnRunner: spawnRunnerOverride,
   gitStatusPorcelain: gitStatusPorcelainOverride,
   gitRevParseHead: gitRevParseHeadOverride,
+  deliveryConfig: deliveryConfigOverride,
 }) {
   return {
     ROOT,
@@ -570,6 +841,10 @@ export function createDeliveryContext({
     // actually spawning a detached background process against a temp dir
     // that's about to be deleted.
     spawnRunner: spawnRunnerOverride || defaultSpawnRunner,
+    // DW-2: owner-edited model/pricing catalog, loaded once at context
+    // creation (pm-server long-lived process — a hand-edited config only
+    // needs a server restart to take effect, matching other settings files).
+    deliveryConfig: deliveryConfigOverride || loadConfig(ROOT),
   };
 }
 

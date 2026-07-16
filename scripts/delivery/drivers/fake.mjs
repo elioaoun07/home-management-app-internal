@@ -1,13 +1,18 @@
 // scripts/delivery/drivers/fake.mjs
-// Scripted, fully deterministic driver implementation for tests (and, in a
-// later slice, the S2 runner/dashboard smoke path). Never touches a real SDK,
-// a real process, or the filesystem.
-// See ERA Notes/10 - Project Management/Agentic Delivery Workspace/4 - Agent Drivers & Security.md §1.
+// Scripted, fully deterministic driver implementation for tests (and the
+// runner/dashboard smoke path). Never touches a real SDK, a real process, or
+// the filesystem. Extended in DW-1 (Delivery Workspace enhancement) to also
+// support the seam v2 shape — an `onRaw` full-fidelity record feed, v2 usage
+// passthrough, per-turn model/effort tracking, and `turnMeta` — so every
+// slice downstream of the flight recorder is testable without a live SDK.
+// See ERA Notes/10 - Project Management/Agentic Delivery Workspace/4 - Agent Drivers & Security.md §1
+// and ERA Notes/10 - Project Management/Delivery Workspace/ for the v2 seam.
 
-import { DriverError, registerDriver } from "./driver.mjs";
+import { DriverAbortedError, DriverError, registerDriver } from "./driver.mjs";
 
 /**
- * @typedef {{finalText?:string, usage?:object, events?:object[], throws?:string}} ScriptedTurn
+ * @typedef {{finalText?:string, usage?:object, usageV2?:object, events?:object[],
+ *   rawRecords?:object[], turnMeta?:object, throws?:string, delayMs?:number}} ScriptedTurn
  */
 
 /**
@@ -19,6 +24,21 @@ export function createFakeDriver(options = {}) {
   let turnIndex = 0;
   let started = false;
   let currentRef = null;
+
+  /** Pure-data capability manifest (seam v2) — see driver.mjs header. */
+  function manifest() {
+    return {
+      provider: "fake",
+      efforts: ["low", "medium", "high"],
+      effortDefault: "medium",
+      supportsPerTurnModel: true,
+      supportsPerTurnEffort: true,
+      supportsAbort: true,
+      supportsNativeFork: false,
+      usage: { cacheCreation: true, reasoning: true, costReported: true },
+      sandbox: "fake",
+    };
+  }
 
   function startSession({ cwd, mode, model } = {}) {
     if (started) {
@@ -41,7 +61,7 @@ export function createFakeDriver(options = {}) {
     return { ref: currentRef, cwd: ref.cwd, mode: ref.mode };
   }
 
-  function runTurn(handle, prompt, { outputSchema, onEvent } = {}) {
+  function runTurn(handle, prompt, { outputSchema, onEvent, onRaw, effort, model, signal } = {}) {
     if (!started) {
       throw new DriverError("fake driver: cannot run a turn before startSession/resume");
     }
@@ -54,8 +74,19 @@ export function createFakeDriver(options = {}) {
     const turn = turns[turnIndex];
     turnIndex += 1;
 
+    // Real drivers rebuild their per-turn options (incl. model/effort) on
+    // every call — mirror that so resume-with-overrides is testable here too.
+    if (currentRef) {
+      if (model) currentRef.model = model;
+      if (effort) currentRef.effort = effort;
+    }
+
     for (const event of turn.events || []) {
       if (typeof onEvent === "function") onEvent(event);
+    }
+
+    for (const record of turn.rawRecords || []) {
+      if (typeof onRaw === "function") onRaw(record);
     }
 
     if (turn.throws) {
@@ -70,14 +101,52 @@ export function createFakeDriver(options = {}) {
       }
     }
 
-    return {
+    const result = {
       finalText: turn.finalText != null ? turn.finalText : "",
       usage: turn.usage || { input: 0, cachedInput: 0, output: 0, costUsd: null },
+      // v2 usage (cacheCreation/reasoningOutput) is only present when a test
+      // scripts it explicitly — `usage` stays the v1 shape real drivers
+      // always return, matching the seam v2 contract (runGuardedTurn falls
+      // back to deriving v2 from v1 when this is absent).
+      usageV2: turn.usageV2 || null,
+      turnMeta: turn.turnMeta || {
+        modelUsed: (currentRef && currentRef.model) || model || null,
+        numTurns: 1,
+        durationMs: turn.durationMs != null ? turn.durationMs : 0,
+        compactBoundaries: turn.compactBoundaries || [],
+      },
     };
+
+    // DW-10: scripted turns only become abortable when the test opts in via
+    // `delayMs` (a real turn's driver call takes real wall-clock time; a
+    // synchronous scripted turn never gives an in-flight abort a chance to
+    // land, so every existing test — none of which sets delayMs — keeps its
+    // original synchronous return value unchanged).
+    if (!turn.delayMs) return result;
+    return new Promise((resolve, reject) => {
+      if (signal && signal.aborted) {
+        reject(new DriverAbortedError("fake driver: turn aborted"));
+        return;
+      }
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve(result);
+      }, turn.delayMs);
+      function onAbort() {
+        clearTimeout(timer);
+        cleanup();
+        reject(new DriverAbortedError("fake driver: turn aborted"));
+      }
+      function cleanup() {
+        if (signal) signal.removeEventListener("abort", onAbort);
+      }
+      if (signal) signal.addEventListener("abort", onAbort, { once: true });
+    });
   }
 
   return {
     kind: "fake",
+    manifest,
     startSession,
     resume,
     runTurn,

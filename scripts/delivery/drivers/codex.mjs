@@ -1,7 +1,7 @@
 // Codex SDK-backed delivery driver. The SDK is dynamically imported only when a
 // driver is used, so dashboard and pure delivery modules remain dependency-free.
 
-import { DriverError, registerDriver } from "./driver.mjs";
+import { DriverAbortedError, DriverError, registerDriver } from "./driver.mjs";
 import { agentEventType, normalizeUsage } from "../events.mjs";
 
 const SDK_MODULE_SPECIFIER = "@openai/codex-sdk";
@@ -33,6 +33,11 @@ export function toTurnOptions(outputSchema) {
         ? outputSchema
         : PERMISSIVE_JSON_SCHEMA,
   };
+}
+
+/** DW-10: TurnOptions.signal (dist/index.d.ts :167-172) — passed straight through, no bridging needed. */
+export function withAbortSignal(turnOptions, signal) {
+  return signal ? { ...turnOptions, signal } : turnOptions;
 }
 
 /** Normalize Codex's thread events into the delivery event vocabulary. */
@@ -99,6 +104,27 @@ export function mapCodexEventToEvents(event) {
   return [];
 }
 
+// ---- capability manifest (DW-2: pure data, no SDK import — verified against
+// the installed @openai/codex-sdk 0.144.1 dist/index.d.ts) ----
+
+/**
+ * Pure-data capability manifest for the launch wizard / capabilities API.
+ * Never imports the SDK — safe to call at dashboard startup.
+ */
+export function manifest() {
+  return {
+    provider: "codex",
+    efforts: ["minimal", "low", "medium", "high", "xhigh"],
+    effortDefault: "medium",
+    supportsPerTurnModel: true,
+    supportsPerTurnEffort: true,
+    supportsAbort: true,
+    supportsNativeFork: false,
+    usage: { cacheCreation: false, reasoning: true, costReported: false },
+    sandbox: "sandboxMode workspace-write/read-only + approvalPolicy never + network off",
+  };
+}
+
 function preflightError(err) {
   return new DriverError(`codex driver: authentication preflight failed — ${(err && err.message) || err}`);
 }
@@ -160,7 +186,7 @@ export function createCodexDriver(options = {}) {
     return { ref: currentRef, cwd: ref.cwd, mode: ref.mode };
   }
 
-  async function runTurn(handle, prompt, { outputSchema, onEvent, effort } = {}) {
+  async function runTurn(handle, prompt, { outputSchema, onEvent, effort, signal } = {}) {
     void handle;
     if (!started || !thread || !currentRef) throw new DriverError("codex driver: cannot run a turn before startSession/resume");
     if (typeof prompt !== "string" || !prompt.trim()) throw new DriverError("codex driver: prompt must be a non-empty string");
@@ -174,7 +200,7 @@ export function createCodexDriver(options = {}) {
     let usage = null;
     let failure = null;
     try {
-      const { events } = await thread.runStreamed(prompt, toTurnOptions(outputSchema));
+      const { events } = await thread.runStreamed(prompt, withAbortSignal(toTurnOptions(outputSchema), signal));
       for await (const event of events) {
         if (event.type === "thread.started" && event.thread_id) currentRef.id = event.thread_id;
         if (event.type === "item.completed" && event.item && event.item.type === "agent_message") finalText = event.item.text || "";
@@ -186,14 +212,20 @@ export function createCodexDriver(options = {}) {
         }
       }
     } catch (err) {
+      if (signal && signal.aborted) {
+        throw new DriverAbortedError("codex driver: turn aborted by owner");
+      }
       throw new DriverError(`codex driver: stream failed — ${(err && err.message) || err}`);
+    }
+    if (signal && signal.aborted) {
+      throw new DriverAbortedError("codex driver: turn aborted by owner");
     }
     if (failure) throw new DriverError(`codex driver: turn failed — ${failure}`);
     if (!usage) throw new DriverError("codex driver: stream ended without a turn.completed event");
     return { finalText, usage };
   }
 
-  return { kind: "codex", startSession, resume, runTurn };
+  return { kind: "codex", manifest, startSession, resume, runTurn };
 }
 
 registerDriver("codex", createCodexDriver);

@@ -112,6 +112,7 @@ IDs are per-campaign, so always name the campaign — `L1` alone is ambiguous ac
 | `Hub & ERA/` | `HUB` |
 | `Notifications & Alerts/` | `NOTIF` |
 | `PM Dashboard Refactor/` | `R` (grandfathered) |
+| `Delivery Workspace/` | `DW` |
 
 ---
 

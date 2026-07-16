@@ -1,6 +1,8 @@
 # Agentic Delivery Workspace — Plan Index
 
 **Stamped:** 2026-07-11 · **Revised:** 2026-07-13 (S3 integration + local acceptance) · **Status:** 🚧 IN PROGRESS — S1 + S2 implemented 2026-07-12; S3 code and mutation-free automated acceptance implemented 2026-07-13 (both real drivers, provider wiring, structured spec/plan, persisted resume refs, usage normalization, strengthened guards). S3's two cost-bearing live DISCOVERY→PLAN runs remain unaccepted because the execution approval boundary denied transmitting this private workspace to OpenAI/Anthropic; explicit owner approval after that disclosure is required (doc 6 §1). S4–S6 have not started.
+>
+> **Durable-memory enhancement layered on top of this plan:** [Delivery Workspace](<../Delivery Workspace/_index.md>) (own campaign, prefix `DW`) — full transcript capture, provider-neutral memory, Q&A, timeline, pause/resume, model/provider switching, compaction. DW-1 (flight recorder) shipped 2026-07-16 on top of this base architecture without changing any state-machine transition. Read that campaign's Feature State for current status; this folder stays authoritative for the base state machine, packet, drivers, and dashboard UX it extends.
 **Owner intent:** pick a topic + checklist item in the PM dashboard, launch a delivery session, and have one orchestrator agent (Codex or Claude Code) take it spec → plan → build → validate → review → UAT behind three human gates; Elio UATs in his own running dev app and handles all git personally.
 
 > **Terminology (used consistently across all docs):** **Product Phase 1 = the complete MVP**, implemented through **engineering slices S1–S4**. Product Phase 1 ships the full Agent Catalog (every roster agent visible in the dashboard) but **enables only the standard agent set** (doc 3 §4). **Specialist expansion = S5**; **post-MVP improvements = S6**. "Phase 1" never means engineering slice S1.
@@ -69,6 +71,7 @@ Extend `scripts/pm-server.mjs` (the existing zero-dependency PM Command Center s
 - `docs/WEAR_OS_NATIVE_APP_IMPLEMENTATION.md` — precedent "implementation brief for Codex" format
 - `tests/pm-mutations.test.ts` — house pattern for testing tooling modules with vitest
 - [Native App](<../Native App/_index.md>) — the plan-folder format precedent this folder follows
+- [Delivery Workspace](<../Delivery Workspace/_index.md>) — durable-memory enhancement campaign; DW-1 added `scripts/delivery/{transcript,usage,config}.mjs` and extended `run-session.mjs`/`drivers/fake.mjs` — all additive, no state-machine changes
 
 ## Freshness protocol
 

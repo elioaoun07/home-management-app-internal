@@ -6,6 +6,7 @@ import {
   GIT_BAN_TEXT,
   buildBuildingPrompt,
   buildDiscoveryPrompt,
+  buildHandoffVerificationPrompt,
   buildPlanPrompt,
   buildSelfReviewPrompt,
   buildUatPrompt,
@@ -123,6 +124,20 @@ describe("buildUatPrompt", () => {
     expect(p).toContain("artifacts/spec.md");
     expect(p).toContain("artifacts/plan.md");
     expect(p).toContain("artifacts/uat/");
+    expect(p).toContain(GIT_BAN_TEXT);
+  });
+});
+
+describe("buildHandoffVerificationPrompt (DW-8)", () => {
+  it("names both providers, embeds the context package, and never mentions the old session transferring", () => {
+    const p = buildHandoffVerificationPrompt({
+      packet, contextPackageMd: "## objective\nFix rounding drift.", fromProvider: "claude", toProvider: "codex",
+    });
+    expect(p).toContain("Phase: HANDOFF VERIFICATION");
+    expect(p).toContain("running on claude");
+    expect(p).toContain("switched to you (codex)");
+    expect(p).toContain("## objective\nFix rounding drift.");
+    expect(p).toMatch(/never transfers between providers/);
     expect(p).toContain(GIT_BAN_TEXT);
   });
 });

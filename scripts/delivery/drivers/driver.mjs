@@ -15,6 +15,11 @@
 
 export class DriverError extends Error {}
 
+/** Thrown by a driver's `runTurn` when the turn was stopped via the `signal`
+ * passed in (DW-10: owner-initiated mid-turn abort) rather than failing on
+ * its own — `runGuardedTurn` treats this as a distinct, non-retried outcome. */
+export class DriverAbortedError extends DriverError {}
+
 const REGISTRY = new Map();
 
 /** Register a driver factory under `kind` (e.g. "fake", later "codex"/"claude"). */

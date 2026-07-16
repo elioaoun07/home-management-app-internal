@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  DriverAbortedError,
   DriverError,
   createDriver,
   listRegisteredDrivers,
@@ -133,5 +134,105 @@ describe("fake driver: scripted turn sequencing", () => {
 
     expect(() => driver.runTurn({}, "draft", { outputSchema: { type: "object" } })).toThrow(/valid JSON/);
     expect(driver.runTurn({}, "retry", { outputSchema: { type: "object" } }).finalText).toBe('{"valid":true}');
+  });
+});
+
+describe("fake driver: seam v2 (manifest, onRaw, turnMeta, per-turn overrides)", () => {
+  it("exposes a pure-data manifest", () => {
+    const driver = createDriver("fake", { script: { turns: [] } });
+    const manifest = driver.manifest();
+    expect(manifest.provider).toBe("fake");
+    expect(manifest.supportsPerTurnModel).toBe(true);
+    expect(manifest.supportsPerTurnEffort).toBe(true);
+    expect(manifest.supportsAbort).toBe(true);
+    expect(manifest.usage).toEqual({ cacheCreation: true, reasoning: true, costReported: true });
+  });
+
+  it("invokes onRaw for every scripted raw record, in order", () => {
+    const rawRecords = [
+      { kind: "prompt", text: "assembled prompt" },
+      { kind: "assistant.text", text: "hi" },
+      { kind: "tool.use", tool: "Read" },
+    ];
+    const driver = createDriver("fake", { script: { turns: [{ finalText: "done", rawRecords }] } });
+    driver.startSession({ cwd: "/repo", mode: "build" });
+    const seen: unknown[] = [];
+    driver.runTurn({}, "go", { onRaw: (r: unknown) => seen.push(r) });
+    expect(seen).toEqual(rawRecords);
+  });
+
+  it("does not require onRaw — rawRecords are simply skipped when absent", () => {
+    const driver = createDriver("fake", {
+      script: { turns: [{ finalText: "done", rawRecords: [{ kind: "prompt", text: "x" }] }] },
+    });
+    driver.startSession({ cwd: "/repo", mode: "build" });
+    expect(() => driver.runTurn({}, "go")).not.toThrow();
+  });
+
+  it("returns a default turnMeta with modelUsed/numTurns/durationMs/compactBoundaries", () => {
+    const driver = createDriver("fake", { script: { turns: [{ finalText: "done" }] } });
+    driver.startSession({ cwd: "/repo", mode: "build" });
+    const result = driver.runTurn({}, "go", { model: "fake-model-x" });
+    expect(result.turnMeta).toEqual({ modelUsed: "fake-model-x", numTurns: 1, durationMs: 0, compactBoundaries: [] });
+  });
+
+  it("honors a scripted turnMeta override", () => {
+    const driver = createDriver("fake", {
+      script: { turns: [{ finalText: "done", turnMeta: { modelUsed: "override", numTurns: 3, durationMs: 999, compactBoundaries: [{ trigger: "auto" }] } }] },
+    });
+    driver.startSession({ cwd: "/repo", mode: "build" });
+    expect(driver.runTurn({}, "go").turnMeta.numTurns).toBe(3);
+  });
+
+  it("tracks per-turn model/effort overrides onto the current ref (resume-with-overrides)", () => {
+    const driver = createDriver("fake", { script: { turns: [{ finalText: "a" }, { finalText: "b" }] } });
+    const handle = driver.startSession({ cwd: "/repo", mode: "build", model: "model-1" });
+    expect(handle.ref.model).toBe("model-1");
+    driver.runTurn({}, "go", { model: "model-2", effort: "high" });
+    expect(handle.ref.model).toBe("model-2");
+    expect(handle.ref.effort).toBe("high");
+  });
+
+  it("passes v2-shaped usage straight through unchanged", () => {
+    const usageV2 = { input: 10, cachedRead: 2, cacheCreation: 1, output: 5, reasoningOutput: 3, costUsd: null };
+    const driver = createDriver("fake", { script: { turns: [{ finalText: "done", usage: usageV2 }] } });
+    driver.startSession({ cwd: "/repo", mode: "build" });
+    expect(driver.runTurn({}, "go").usage).toEqual(usageV2);
+  });
+});
+
+describe("fake driver: mid-turn abort (DW-10)", () => {
+  it("a synchronous scripted turn (no delayMs) is returned as a plain object, ignoring signal entirely", () => {
+    const driver = createDriver("fake", { script: { turns: [{ finalText: "done" }] } });
+    driver.startSession({ cwd: "/repo", mode: "build" });
+    const controller = new AbortController();
+    controller.abort(); // already aborted — must not affect a turn that never opted into delayMs
+    const result = driver.runTurn({}, "go", { signal: controller.signal });
+    expect(result).not.toBeInstanceOf(Promise);
+    expect((result as { finalText: string }).finalText).toBe("done");
+  });
+
+  it("a delayed turn resolves normally when never aborted", async () => {
+    const driver = createDriver("fake", { script: { turns: [{ finalText: "done", delayMs: 5 }] } });
+    driver.startSession({ cwd: "/repo", mode: "build" });
+    const result = await driver.runTurn({}, "go", {});
+    expect(result.finalText).toBe("done");
+  });
+
+  it("rejects with DriverAbortedError when the signal fires before the delay elapses", async () => {
+    const driver = createDriver("fake", { script: { turns: [{ finalText: "done", delayMs: 200 }] } });
+    driver.startSession({ cwd: "/repo", mode: "build" });
+    const controller = new AbortController();
+    const pending = driver.runTurn({}, "go", { signal: controller.signal });
+    setTimeout(() => controller.abort(), 5);
+    await expect(pending).rejects.toThrow(DriverAbortedError);
+  });
+
+  it("rejects immediately with DriverAbortedError when the signal is already aborted", async () => {
+    const driver = createDriver("fake", { script: { turns: [{ finalText: "done", delayMs: 200 }] } });
+    driver.startSession({ cwd: "/repo", mode: "build" });
+    const controller = new AbortController();
+    controller.abort();
+    await expect(driver.runTurn({}, "go", { signal: controller.signal })).rejects.toThrow(DriverAbortedError);
   });
 });

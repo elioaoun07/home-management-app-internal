@@ -23,7 +23,7 @@ tags:
 
 ## Now
 
-> Nothing in flight — the finance core is stable and tested. Promote a Next item here when a cycle opens.
+- [ ] **BUD-11** [TEST] Verify queryConfig cache timings align with API response patterns _(annoyance - S)_
 
 ## Next
 

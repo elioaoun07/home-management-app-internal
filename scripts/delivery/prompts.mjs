@@ -146,6 +146,30 @@ export function buildSelfReviewPrompt({
 }
 
 /**
+ * Provider handoff verification (DW-8): the new provider reads the durable
+ * context package (never the old provider's native session — that never
+ * transfers) and restates its understanding before the runner lets it
+ * continue the phase. Readonly, cheap-effort turn.
+ * @param {{packet:object, contextPackageMd:string, fromProvider:string, toProvider:string}} input
+ */
+export function buildHandoffVerificationPrompt({ packet, contextPackageMd, fromProvider, toProvider }) {
+  return (
+    "Phase: HANDOFF VERIFICATION\n" +
+    `This Delivery was running on ${fromProvider} and has just switched to you (${toProvider}). ` +
+    "The provider session/thread never transfers between providers — everything you need is in the " +
+    "context package below, which is this Delivery's durable, provider-neutral memory. " +
+    "Do not create, edit, or delete any file.\n" +
+    packetBlock(packet) +
+    `\nContext package:\n${contextPackageMd}\n` +
+    "\nReturn an object with: understandingSummary (a few sentences restating the objective and where " +
+    "this Delivery currently stands), currentPhase, nextAction, and gaps[string] — anything the context " +
+    "package left ambiguous, contradictory, or missing that you would need clarified before continuing " +
+    "(empty array if none).\n" +
+    `\n${GIT_BAN_TEXT}\n`
+  );
+}
+
+/**
  * UAT prep: assemble the artifacts/uat/** package from prior artifacts.
  * @param {{packet:object, priorArtifactPaths?:string[], ownerMessages?:string[]}} input
  */

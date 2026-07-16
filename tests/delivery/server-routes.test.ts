@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -25,7 +25,7 @@ afterEach(() => {
 const CHECKLIST_LINE = "- [ ] **N1** Fix rounding drift in allocation splits _(blocker - M)_";
 const CHECKLIST_RAW = ["# Checklist", "", "## Now", "", CHECKLIST_LINE, "- [x] Already done item", ""].join("\n");
 
-function setup() {
+function setup({ deliveryConfig }: { deliveryConfig?: object } = {}) {
   const root = mkdtempSync(join(tmpdir(), "delivery-server-"));
   cleanupDirs.push(root);
 
@@ -36,6 +36,10 @@ function setup() {
   writeFileSync(join(pmDir, "Budget", "1 - Feature State.md"), "# Feature State\n");
   writeFileSync(join(root, "README.md"), "test repo\n");
   writeFileSync(join(root, ".gitignore"), "/.delivery/\n");
+  if (deliveryConfig) {
+    mkdirSync(join(root, ".delivery"), { recursive: true });
+    writeFileSync(join(root, ".delivery", "config.json"), JSON.stringify(deliveryConfig));
+  }
 
   const spawnedRunners: Array<{ sessionId: string; resume: boolean }> = [];
   const ctx = createDeliveryContext({
@@ -258,6 +262,87 @@ describe("POST /api/delivery/start", () => {
       ),
       400,
     );
+  });
+
+  it("(DW-2) rejects an unknown effort value with 400", async () => {
+    const { ctx } = setup();
+    await expectRouteError(
+      routeDelivery(
+        { method: "POST", path: "/api/delivery/start", query: q(), body: startBody({ effort: { discovery: "bogus" } }) },
+        ctx,
+      ),
+      400,
+      /unknown effort/,
+    );
+  });
+
+  it("(DW-2) rejects an unknown model when the provider's catalog is populated", async () => {
+    const { ctx } = setup({
+      deliveryConfig: {
+        providers: { claude: { defaultModel: "claude-sonnet-5", efforts: ["low", "medium", "high", "xhigh", "max"], models: [{ id: "claude-sonnet-5" }] } },
+      },
+    });
+    await expectRouteError(
+      routeDelivery(
+        { method: "POST", path: "/api/delivery/start", query: q(), body: startBody({ model: "does-not-exist" }) },
+        ctx,
+      ),
+      400,
+      /unknown model/,
+    );
+  });
+
+  it("(DW-2) accepts any model string when the provider's catalog is empty (no config.json yet)", async () => {
+    const { ctx } = setup();
+    const result = await routeDelivery(
+      { method: "POST", path: "/api/delivery/start", query: q(), body: startBody({ model: "whatever-not-cataloged", dirtyAck: false }) },
+      ctx,
+    );
+    expect(result?.status).toBe(200);
+  });
+
+  it("(DW-2) defaults agentConfig.model from the provider's configured defaultModel when omitted", async () => {
+    const { ctx } = setup({
+      deliveryConfig: { providers: { claude: { defaultModel: "claude-sonnet-5", efforts: ["low", "medium", "high", "xhigh", "max"], models: [] } } },
+    });
+    const result = await routeDelivery(
+      { method: "POST", path: "/api/delivery/start", query: q(), body: startBody() },
+      ctx,
+    );
+    const dir = join(ctx.SESSIONS_DIR, (result!.json as { sessionId: string }).sessionId);
+    const packet = JSON.parse(readFileSync(join(dir, "packet.json"), "utf8"));
+    expect(packet.agentConfig.model).toBe("claude-sonnet-5");
+  });
+});
+
+describe("GET /api/delivery/capabilities", () => {
+  it("(DW-2) merges pure driver manifests with the owner's model/pricing catalog", async () => {
+    const { ctx } = setup({
+      deliveryConfig: {
+        providers: {
+          claude: { defaultModel: "claude-sonnet-5", efforts: ["low", "medium", "high", "xhigh", "max"], models: [{ id: "claude-sonnet-5" }] },
+        },
+      },
+    });
+    const result = await routeDelivery({ method: "GET", path: "/api/delivery/capabilities", query: q(), body: {} }, ctx);
+    expect(result?.status).toBe(200);
+    const payload = result!.json as {
+      providers: Record<string, { manifest: { provider: string }; defaultModel: string | null; models: unknown[] }>;
+      config: { routing: Record<string, { effort: string }> };
+    };
+    expect(payload.providers.claude.manifest.provider).toBe("claude");
+    expect(payload.providers.claude.defaultModel).toBe("claude-sonnet-5");
+    expect(payload.providers.codex.manifest.provider).toBe("codex");
+    expect(payload.config.routing.plan.effort).toBe("high");
+  });
+
+  it("(DW-2) never touches either SDK (manifest() is pure data)", async () => {
+    const { ctx } = setup();
+    // No importSdk override is wired through routeDelivery's manifest path —
+    // if this ever imported a real SDK it would throw in this sandboxed test
+    // environment. Reaching 200 proves manifest() stayed SDK-free.
+    const result = await routeDelivery({ method: "GET", path: "/api/delivery/capabilities", query: q(), body: {} }, ctx);
+    expect(result?.status).toBe(200);
   });
 });
 
@@ -546,6 +631,303 @@ describe("GET /api/delivery/sessions and /api/delivery/session", () => {
     expect(json.state).toBeTruthy();
     expect(json.artifacts.some((a) => a.path === "spec.md")).toBe(true);
     expect(json.runner.alive).toBe(false);
+  });
+});
+
+describe("(DW-4) POST /api/delivery/control", () => {
+  it("writes a numbered control file and returns its seq", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    const result = await routeDelivery(
+      { method: "POST", path: "/api/delivery/control", query: q(), body: { id: sessionId, type: "pause", payload: {} } },
+      ctx,
+    );
+    expect(result?.status).toBe(200);
+    expect((result!.json as { seq: number }).seq).toBe(1);
+    const files = readdirSync(join(ctx.SESSIONS_DIR, sessionId, "controls"));
+    expect(files).toContain("0001-pause.json");
+  });
+
+  it("returns 404 for an unknown session", async () => {
+    const { ctx } = setup();
+    await expectRouteError(
+      routeDelivery({ method: "POST", path: "/api/delivery/control", query: q(), body: { id: "nope", type: "pause" } }, ctx),
+      404,
+    );
+  });
+
+  it("returns 400 for an invalid control type or malformed payload", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    await expectRouteError(
+      routeDelivery({ method: "POST", path: "/api/delivery/control", query: q(), body: { id: sessionId, type: "bogus" } }, ctx),
+      400,
+    );
+    await expectRouteError(
+      routeDelivery({ method: "POST", path: "/api/delivery/control", query: q(), body: { id: sessionId, type: "set-config", payload: {} } }, ctx),
+      400,
+    );
+  });
+
+  it("validates a set-config model against the owner's catalog when populated", async () => {
+    const { ctx } = setup({
+      deliveryConfig: { providers: { claude: { defaultModel: "claude-sonnet-5", efforts: ["low", "medium", "high", "xhigh", "max"], models: [{ id: "claude-sonnet-5" }] } } },
+    });
+    const sessionId = await startSession(ctx);
+    await expectRouteError(
+      routeDelivery(
+        { method: "POST", path: "/api/delivery/control", query: q(), body: { id: sessionId, type: "set-config", payload: { model: "unknown-model" } } },
+        ctx,
+      ),
+      400,
+      /unknown model/,
+    );
+  });
+});
+
+describe("(DW-5) GET /api/delivery/memory + /api/delivery/questions", () => {
+  it("returns an empty ledger for a fresh session", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    const result = await routeDelivery({ method: "GET", path: "/api/delivery/memory", query: q({ id: sessionId }), body: {} }, ctx);
+    expect(result?.status).toBe(200);
+    const json = result!.json as { ledger: { rev: number; questions: unknown[] } };
+    expect(json.ledger.rev).toBe(0);
+    expect(json.ledger.questions).toEqual([]);
+  });
+
+  it("404s for an unknown session on both routes", async () => {
+    const { ctx } = setup();
+    await expectRouteError(routeDelivery({ method: "GET", path: "/api/delivery/memory", query: q({ id: "nope" }), body: {} }, ctx), 404);
+    await expectRouteError(routeDelivery({ method: "GET", path: "/api/delivery/questions", query: q({ id: "nope" }), body: {} }, ctx), 404);
+  });
+
+  it("splits questions into blocking/advisory/answered once the runner has written a ledger", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    const dir = join(ctx.SESSIONS_DIR, sessionId);
+    mkdirSync(join(dir, "memory"), { recursive: true });
+    atomicWriteJsonSync(join(dir, "memory", "ledger.json"), {
+      v: 1, rev: 2, updatedAt: new Date().toISOString(),
+      objective: { itemText: null, problem: null, proposedBehavior: null },
+      requirements: [], constraints: [], decisions: [],
+      questions: [
+        { id: "q-1", askedAt: "x", phase: "DISCOVERY", source: "agent", text: "blocking", kind: "blocking", status: "open", answer: null, evidence: null },
+        { id: "q-2", askedAt: "x", phase: null, source: "owner", text: "advisory", kind: "advisory", status: "open", answer: null, evidence: null },
+        { id: "q-3", askedAt: "x", phase: "DISCOVERY", source: "agent", text: "done", kind: "blocking", status: "answered", answer: { text: "yes", at: "x", via: null }, evidence: null },
+      ],
+      rejectedApproaches: [], fileIndex: [], testResults: [], risks: [], configHistory: [], workspace: null,
+    });
+    const result = await routeDelivery({ method: "GET", path: "/api/delivery/questions", query: q({ id: sessionId }), body: {} }, ctx);
+    const json = result!.json as { blocking: unknown[]; advisory: unknown[]; answered: unknown[]; total: number };
+    expect(json.blocking).toHaveLength(1);
+    expect(json.advisory).toHaveLength(1);
+    expect(json.answered).toHaveLength(1);
+    expect(json.total).toBe(3);
+  });
+});
+
+describe("(DW-3) GET /api/delivery/turns, /transcript, /prompt, /transcript/search", () => {
+  function writeTranscriptFixture(dir: string) {
+    mkdirSync(join(dir, "transcript", "prompts"), { recursive: true });
+    writeFileSync(join(dir, "transcript", "prompts", "0001.md"), "Discovery prompt: investigate rounding drift.");
+    writeFileSync(
+      join(dir, "transcript", "t-0001.ndjson"),
+      [
+        JSON.stringify({ v: 1, turnId: "0001", seq: 1, ts: "t", kind: "prompt", provider: "claude", promptFile: "transcript/prompts/0001.md" }),
+        JSON.stringify({ v: 1, turnId: "0001", seq: 2, ts: "t", kind: "assistant.text", provider: "claude", text: "Found a rounding drift in allocation splits." }),
+      ].join("\n") + "\n",
+    );
+    writeFileSync(join(dir, "transcript", "prompts", "0002.md"), "Plan prompt.");
+    writeFileSync(
+      join(dir, "transcript", "t-0002.ndjson"),
+      [JSON.stringify({ v: 1, turnId: "0002", seq: 1, ts: "t", kind: "prompt", provider: "claude", promptFile: "transcript/prompts/0002.md" })].join("\n") + "\n",
+    );
+    writeFileSync(
+      join(dir, "transcript", "turns.ndjson"),
+      [
+        JSON.stringify({ v: 1, turnId: "0001", phase: "DISCOVERY", agent: "orchestrator", provider: "claude", model: "claude-sonnet-5", effort: "medium", startedAt: "t", durationMs: 10, promptFile: "transcript/prompts/0001.md", recordsFile: "transcript/t-0001.ndjson", records: 2, usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 }, costUsd: null, costEstUsd: null, pricingVersion: null, context: { occupancyTokens: 1, windowTokens: null, pctUsed: null }, result: "ok", strategy: "start", snapshotRef: null, configChangeRef: null, compactBoundaries: null }),
+        JSON.stringify({ v: 1, turnId: "0002", phase: "PLAN", agent: "orchestrator", provider: "claude", model: "claude-sonnet-5", effort: "high", startedAt: "t", durationMs: 10, promptFile: "transcript/prompts/0002.md", recordsFile: "transcript/t-0002.ndjson", records: 1, usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 }, costUsd: null, costEstUsd: null, pricingVersion: null, context: { occupancyTokens: 1, windowTokens: null, pctUsed: null }, result: "ok", strategy: "resume-native", snapshotRef: null, configChangeRef: null, compactBoundaries: null }),
+      ].join("\n") + "\n",
+    );
+  }
+
+  it("getTurns returns turns after a numeric cursor", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    writeTranscriptFixture(join(ctx.SESSIONS_DIR, sessionId));
+    const result = await routeDelivery({ method: "GET", path: "/api/delivery/turns", query: q({ id: sessionId, after: "1" }), body: {} }, ctx);
+    const json = result!.json as { turns: Array<{ turnId: string }>; lastTurn: number };
+    expect(json.turns.map((t) => t.turnId)).toEqual(["0002"]);
+    expect(json.lastTurn).toBe(2);
+  });
+
+  it("getTranscript returns a turn's records, sandboxed to a numeric turn id", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    writeTranscriptFixture(join(ctx.SESSIONS_DIR, sessionId));
+    const result = await routeDelivery({ method: "GET", path: "/api/delivery/transcript", query: q({ id: sessionId, turn: "0001" }), body: {} }, ctx);
+    const json = result!.json as { records: Array<{ kind: string }>; lastSeq: number };
+    expect(json.records).toHaveLength(2);
+    expect(json.records[1].kind).toBe("assistant.text");
+    expect(json.lastSeq).toBe(2);
+  });
+
+  it("getTranscript rejects a non-numeric turn id (path-traversal guard)", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    writeTranscriptFixture(join(ctx.SESSIONS_DIR, sessionId));
+    await expectRouteError(
+      routeDelivery({ method: "GET", path: "/api/delivery/transcript", query: q({ id: sessionId, turn: "../../etc" }), body: {} }, ctx),
+      400,
+    );
+  });
+
+  it("getPrompt returns the exact assembled prompt text", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    writeTranscriptFixture(join(ctx.SESSIONS_DIR, sessionId));
+    const result = await routeDelivery({ method: "GET", path: "/api/delivery/prompt", query: q({ id: sessionId, turn: "0002" }), body: {} }, ctx);
+    expect((result!.json as { content: string }).content).toBe("Plan prompt.");
+  });
+
+  it("getPrompt 404s for a turn with no prompt file", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    writeTranscriptFixture(join(ctx.SESSIONS_DIR, sessionId));
+    await expectRouteError(
+      routeDelivery({ method: "GET", path: "/api/delivery/prompt", query: q({ id: sessionId, turn: "9999" }), body: {} }, ctx),
+      404,
+    );
+  });
+
+  it("searchTranscript finds matches with highlighted snippets, honoring phase/kind filters", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    writeTranscriptFixture(join(ctx.SESSIONS_DIR, sessionId));
+    const result = await routeDelivery(
+      { method: "GET", path: "/api/delivery/transcript/search", query: q({ id: sessionId, q: "rounding drift" }), body: {} },
+      ctx,
+    );
+    const json = result!.json as { matches: Array<{ turnId: string; kind: string; phase: string; snippet: string }>; truncated: boolean };
+    expect(json.matches).toHaveLength(1);
+    expect(json.matches[0]).toMatchObject({ turnId: "0001", kind: "assistant.text", phase: "DISCOVERY" });
+    expect(json.matches[0].snippet).toContain("rounding drift");
+    expect(json.truncated).toBe(false);
+  });
+
+  it("searchTranscript phase filter excludes non-matching turns", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    writeTranscriptFixture(join(ctx.SESSIONS_DIR, sessionId));
+    const result = await routeDelivery(
+      { method: "GET", path: "/api/delivery/transcript/search", query: q({ id: sessionId, q: "prompt", phase: "PLAN" }), body: {} },
+      ctx,
+    );
+    const json = result!.json as { matches: Array<{ turnId: string }> };
+    expect(json.matches.every((m) => m.turnId === "0002")).toBe(true);
+  });
+
+  it("searchTranscript requires a non-empty query", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    writeTranscriptFixture(join(ctx.SESSIONS_DIR, sessionId));
+    await expectRouteError(
+      routeDelivery({ method: "GET", path: "/api/delivery/transcript/search", query: q({ id: sessionId, q: "" }), body: {} }, ctx),
+      400,
+    );
+  });
+
+  it("searchTranscript returns empty results (not an error) for a pre-DW-1 session with no transcript/ dir", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    const result = await routeDelivery(
+      { method: "GET", path: "/api/delivery/transcript/search", query: q({ id: sessionId, q: "anything" }), body: {} },
+      ctx,
+    );
+    expect((result!.json as { matches: unknown[] }).matches).toEqual([]);
+  });
+});
+
+describe("(DW-7) GET /api/delivery/context, /context/preview, /context/snapshot", () => {
+  it("returns empty snapshots/compactions/pins with healthy status for a fresh session", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    const result = await routeDelivery({ method: "GET", path: "/api/delivery/context", query: q({ id: sessionId }), body: {} }, ctx);
+    const json = result!.json as { snapshots: unknown[]; compactions: unknown[]; pins: unknown[]; rotations: number; health: { score: string; reasons: string[] } };
+    expect(json.snapshots).toEqual([]);
+    expect(json.compactions).toEqual([]);
+    expect(json.pins).toEqual([]);
+    expect(json.rotations).toBe(0);
+    expect(json.health).toEqual({ score: "healthy", reasons: [] });
+  });
+
+  it("lists written snapshots/compactions and reports a warning health status for open blocking questions", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    const dir = join(ctx.SESSIONS_DIR, sessionId);
+    mkdirSync(join(dir, "context", "snapshots"), { recursive: true });
+    mkdirSync(join(dir, "context", "compactions"), { recursive: true });
+    mkdirSync(join(dir, "memory"), { recursive: true });
+    atomicWriteJsonSync(join(dir, "context", "snapshots", "0001.json"), {
+      v: 1, seq: 1, at: "t", reason: "rotate", layers: [], renderedMd: "", tokensEstTotal: 42, pins: [], forStrategy: "rotate-fresh", provider: "claude", model: "claude-sonnet-5",
+    });
+    atomicWriteJsonSync(join(dir, "context", "compactions", "0001.json"), {
+      v: 1, seq: 1, at: "t", scope: { phase: "DISCOVERY" }, covers: { turns: [], eventSeq: [] }, mode: "mechanical", summaryMd: "digest", evidence: [],
+    });
+    atomicWriteJsonSync(join(dir, "memory", "ledger.json"), {
+      v: 1, rev: 1, updatedAt: "t",
+      objective: { itemText: null, problem: null, proposedBehavior: null },
+      requirements: [], constraints: [], decisions: [],
+      questions: [{ id: "q-1", askedAt: "t", phase: "DISCOVERY", source: "agent", text: "open blocker", kind: "blocking", status: "open", answer: null, evidence: null }],
+      rejectedApproaches: [], fileIndex: [], testResults: [], risks: [], configHistory: [], workspace: null,
+    });
+
+    const result = await routeDelivery({ method: "GET", path: "/api/delivery/context", query: q({ id: sessionId }), body: {} }, ctx);
+    const json = result!.json as { snapshots: Array<{ seq: number; tokensEstTotal: number }>; compactions: Array<{ seq: number }>; health: { score: string; reasons: string[] } };
+    expect(json.snapshots).toEqual([{ seq: 1, at: "t", reason: "rotate", tokensEstTotal: 42, provider: "claude", model: "claude-sonnet-5" }]);
+    expect(json.compactions[0].seq).toBe(1);
+    expect(json.health.score).toBe("warning");
+    expect(json.health.reasons[0]).toMatch(/unresolved blocking question/);
+  });
+
+  it("context/snapshot returns a specific snapshot by seq, 404 if missing", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    const dir = join(ctx.SESSIONS_DIR, sessionId);
+    mkdirSync(join(dir, "context", "snapshots"), { recursive: true });
+    atomicWriteJsonSync(join(dir, "context", "snapshots", "0001.json"), { v: 1, seq: 1, renderedMd: "full content" });
+    const result = await routeDelivery({ method: "GET", path: "/api/delivery/context/snapshot", query: q({ id: sessionId, seq: "1" }), body: {} }, ctx);
+    expect((result!.json as { renderedMd: string }).renderedMd).toBe("full content");
+    await expectRouteError(
+      routeDelivery({ method: "GET", path: "/api/delivery/context/snapshot", query: q({ id: sessionId, seq: "9" }), body: {} }, ctx),
+      404,
+    );
+  });
+
+  it("context/preview is a pure read-only computation reflecting the current ledger + artifacts, with no side effects", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    const dir = join(ctx.SESSIONS_DIR, sessionId);
+    mkdirSync(join(dir, "artifacts"), { recursive: true });
+    writeFileSync(join(dir, "artifacts", "spec.md"), "# Spec\n");
+
+    const result = await routeDelivery({ method: "GET", path: "/api/delivery/context/preview", query: q({ id: sessionId }), body: {} }, ctx);
+    const json = result!.json as { layers: Array<{ name: string; text: string }>; tokenEstimate: number; renderedMd: string };
+    const artifactsLayer = json.layers.find((l) => l.name === "artifacts");
+    expect(artifactsLayer?.text).toContain("artifacts/spec.md");
+    expect(json.tokenEstimate).toBeGreaterThan(0);
+
+    // no snapshot/compaction files were written by merely previewing
+    expect(existsSync(join(dir, "context", "snapshots"))).toBe(false);
+    expect(existsSync(join(dir, "context", "compactions"))).toBe(false);
+  });
+
+  it("404s for an unknown session on all three routes", async () => {
+    const { ctx } = setup();
+    await expectRouteError(routeDelivery({ method: "GET", path: "/api/delivery/context", query: q({ id: "nope" }), body: {} }, ctx), 404);
+    await expectRouteError(routeDelivery({ method: "GET", path: "/api/delivery/context/preview", query: q({ id: "nope" }), body: {} }, ctx), 404);
+    await expectRouteError(routeDelivery({ method: "GET", path: "/api/delivery/context/snapshot", query: q({ id: "nope", seq: "1" }), body: {} }, ctx), 404);
   });
 });
 

@@ -1,14 +1,49 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { DriverError } from "../../scripts/delivery/drivers/driver.mjs";
+import { DriverAbortedError, DriverError } from "../../scripts/delivery/drivers/driver.mjs";
 import {
   buildThreadOptions,
   createCodexDriver,
+  manifest,
   mapCodexEventToEvents,
   toTurnOptions,
+  withAbortSignal,
 } from "../../scripts/delivery/drivers/codex.mjs";
 
 const CWD = "/repo";
+
+describe("manifest (DW-2, pure data, no SDK import)", () => {
+  it("declares the codex capability surface", () => {
+    const m = manifest();
+    expect(m.provider).toBe("codex");
+    expect(m.efforts).toEqual(["minimal", "low", "medium", "high", "xhigh"]);
+    expect(m.supportsNativeFork).toBe(false);
+    expect(m.usage).toEqual({ cacheCreation: false, reasoning: true, costReported: false });
+  });
+
+  it("is exposed on the driver instance without touching the SDK", () => {
+    const driver = createCodexDriver({ importSdk: async () => { throw new Error("must not be called"); } });
+    expect(driver.manifest()).toEqual(manifest());
+  });
+
+  it("declares abort support (DW-10)", () => {
+    expect(manifest().supportsAbort).toBe(true);
+  });
+});
+
+describe("withAbortSignal (DW-10)", () => {
+  it("passes the signal through unchanged (TurnOptions.signal)", () => {
+    const controller = new AbortController();
+    expect(withAbortSignal({ outputSchema: { type: "object" } }, controller.signal)).toEqual({
+      outputSchema: { type: "object" },
+      signal: controller.signal,
+    });
+  });
+
+  it("leaves options untouched when no signal is given", () => {
+    expect(withAbortSignal({ outputSchema: { type: "object" } }, undefined)).toEqual({ outputSchema: { type: "object" } });
+  });
+});
 
 async function* stream(events: object[]) {
   yield* events;
@@ -194,5 +229,19 @@ describe("createCodexDriver", () => {
     const handle = await driver.startSession({ cwd: CWD, mode: "build" });
 
     await expect(driver.runTurn(handle, "go")).rejects.toThrow(/stream failed.*connection reset/);
+  });
+
+  it("DW-10: forwards signal into TurnOptions and throws DriverAbortedError when the stream fails post-abort", async () => {
+    const controller = new AbortController();
+    const runStreamed = vi.fn().mockImplementation(() => {
+      controller.abort(); // simulate the SDK reacting to the signal mid-call
+      return Promise.reject(new Error("aborted by signal"));
+    });
+    const thread = { id: "thread-1", run: vi.fn().mockResolvedValue({ finalResponse: "OK" }), runStreamed };
+    const driver = createCodexDriver({ importSdk: async () => createSdk({ startThread: vi.fn().mockReturnValue(thread) }) });
+    const handle = await driver.startSession({ cwd: CWD, mode: "build" });
+
+    await expect(driver.runTurn(handle, "go", { signal: controller.signal })).rejects.toThrow(DriverAbortedError);
+    expect(runStreamed).toHaveBeenCalledWith("go", { signal: controller.signal });
   });
 });

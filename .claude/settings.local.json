@@ -92,7 +92,22 @@
       "Bash(powershell -Command 'Get-CimInstance Win32_Process | Where-Object { $_.Name -match '\\\\''node'\\\\'' } | Select-Object ProcessId,ParentProcessId,CommandLine')",
       "Bash(powershell -Command \"\\(Get-Item 'src/components/expense/MobileExpenseForm.tsx'\\).LastWriteTime = Get-Date\")",
       "Bash(powershell -Command \"\\(Get-Item 'src/components/expense/MobileExpenseForm.tsx'\\).LastWriteTime = Get-Date; \\(Get-Item 'src/app/globals.css'\\).LastWriteTime = Get-Date\")",
-      "Bash(awk '/-- Trips/,0' migrations/schema.sql)"
+      "Bash(awk '/-- Trips/,0' migrations/schema.sql)",
+      "Bash(pnpm pm:lint)",
+      "Bash(pnpm pm:build-ui)",
+      "Bash(rm \".delivery/sessions/s-20260715-214421-hvfk/controls/0001-ask.json\")",
+      "Bash(rmdir \".delivery/sessions/s-20260715-214421-hvfk/controls\")",
+      "Bash(tasklist //FI \"IMAGENAME eq node.exe\")",
+      "Bash(taskkill //F //FI \"WINDOWTITLE eq*pm-server*\")",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //F //PID 29500)",
+      "Bash(rm -f pmserver_browser.log)",
+      "Bash(nohup node scripts/pm-server.mjs --port=43181 --no-open)",
+      "Bash(disown)",
+      "Bash(taskkill //F //PID 25680)",
+      "Bash(rm -f pmserver_ctx.log)",
+      "Bash(taskkill //F //PID 22744)",
+      "Bash(rm -f pmserver_dw8.log)"
     ]
   }
 }

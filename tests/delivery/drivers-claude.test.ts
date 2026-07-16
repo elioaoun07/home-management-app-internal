@@ -1,9 +1,10 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { DriverError, createDriver, listRegisteredDrivers } from "../../scripts/delivery/drivers/driver.mjs";
+import { DriverAbortedError, DriverError, createDriver, listRegisteredDrivers } from "../../scripts/delivery/drivers/driver.mjs";
 // Importing claude.mjs self-registers "claude" into the shared driver registry.
 import {
+  bridgeAbortSignal,
   buildCanUseTool,
   buildSessionOptions,
   assertNeverBypass,
@@ -17,12 +18,55 @@ import {
   isSecretFilename,
   isSecretPath,
   isWithinAllowedRoots,
+  manifest,
   mapSdkMessageToEvents,
   withOutputSchema,
   withSessionIdentity,
 } from "../../scripts/delivery/drivers/claude.mjs";
 
 const CWD = "/repo";
+
+describe("manifest (DW-2, pure data, no SDK import)", () => {
+  it("declares the claude capability surface", () => {
+    const m = manifest();
+    expect(m.provider).toBe("claude");
+    expect(m.efforts).toEqual(["low", "medium", "high", "xhigh", "max"]);
+    expect(m.supportsPerTurnModel).toBe(true);
+    expect(m.supportsNativeFork).toBe(true);
+    expect(m.usage).toEqual({ cacheCreation: true, reasoning: false, costReported: true });
+  });
+
+  it("is exposed on the driver instance without touching the SDK", () => {
+    const driver = createClaudeDriver({ importSdk: async () => { throw new Error("must not be called"); } });
+    expect(driver.manifest()).toEqual(manifest());
+  });
+
+  it("declares abort support (DW-10)", () => {
+    expect(manifest().supportsAbort).toBe(true);
+  });
+});
+
+describe("bridgeAbortSignal (DW-10)", () => {
+  it("returns a fresh, unaborted controller when no signal is given", () => {
+    const controller = bridgeAbortSignal(undefined);
+    expect(controller.signal.aborted).toBe(false);
+  });
+
+  it("aborts the local controller immediately if the incoming signal is already aborted", () => {
+    const external = new AbortController();
+    external.abort();
+    const controller = bridgeAbortSignal(external.signal);
+    expect(controller.signal.aborted).toBe(true);
+  });
+
+  it("forwards a later abort on the incoming signal to the local controller", () => {
+    const external = new AbortController();
+    const controller = bridgeAbortSignal(external.signal);
+    expect(controller.signal.aborted).toBe(false);
+    external.abort();
+    expect(controller.signal.aborted).toBe(true);
+  });
+});
 const SESSION_DIR = "/repo/.delivery/sessions/abc123";
 
 function asyncGen(items: unknown[]) {
@@ -582,5 +626,26 @@ describe("createClaudeDriver: turn mechanics (sessionId vs resume, events, usage
     const driver = createClaudeDriver({ importSdk: async () => ({ query }) });
     const handle = await driver.startSession({ cwd: CWD, mode: "build" });
     await expect(driver.runTurn(handle, "go")).rejects.toThrow(/query failed/);
+  });
+
+  it("DW-10: wires signal onto Options.abortController and throws DriverAbortedError when it fires mid-turn", async () => {
+    const externalController = new AbortController();
+    let seenAbortController: AbortController | undefined;
+    const query = vi
+      .fn()
+      .mockReturnValueOnce(asyncGen([resultSuccess()]))
+      .mockImplementationOnce((call: { options: { abortController: AbortController } }) => {
+        seenAbortController = call.options.abortController;
+        return (async function* () {
+          yield SYSTEM_INIT;
+          externalController.abort(); // owner requests abort mid-stream
+          if (seenAbortController?.signal.aborted) throw new Error("aborted");
+          yield resultSuccess();
+        })();
+      });
+    const driver = createClaudeDriver({ importSdk: async () => ({ query }) });
+    const handle = await driver.startSession({ cwd: CWD, mode: "build" });
+    await expect(driver.runTurn(handle, "go", { signal: externalController.signal })).rejects.toThrow(DriverAbortedError);
+    expect(seenAbortController).toBeInstanceOf(AbortController);
   });
 });
