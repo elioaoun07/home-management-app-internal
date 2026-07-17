@@ -1,8 +1,11 @@
 import { allTasks, files, moduleStats } from "../../app/store.js";
 import { Card, Chip, ProgressBar, StatTile } from "../../components/Primitives.jsx";
 import { Icon } from "../../components/Icon.jsx";
+import { isCompact } from "../../lib/media.js";
+import { MobileHome } from "./MobileHome.jsx";
 
 export function HomeView() {
+  if (isCompact.value) return <MobileHome/>;
   const open = allTasks.value.filter((task) => task.state === "open" && !task.inFabled);
   const done = allTasks.value.filter((task) => task.state === "done" && !task.inFabled).length;
   const blockers = open.filter((task) => task.severity === "blocker").length;

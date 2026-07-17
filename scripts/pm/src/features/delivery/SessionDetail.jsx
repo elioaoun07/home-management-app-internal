@@ -19,7 +19,7 @@ const TAB_LABEL={overview:"Overview",timeline:"Timeline",conversation:"Conversat
 
 export function SessionDetail(){
   const id=route.value.id;const [artifact,setArtifact]=useState(null);const [artifactError,setArtifactError]=useState("");const [configOpen,setConfigOpen]=useState(false);const [abortOpen,setAbortOpen]=useState(false);const [tab,setTab]=useState("overview");
-  useEffect(()=>{loadDeliverySession(id,{reset:true}).catch((error)=>showToast(error.message,{type:"error"}));loadDeliveryCapabilities();loadDeliveryQuestions(id);setTab("overview");},[id]);
+  useEffect(()=>{loadDeliverySession(id,{reset:true}).catch((error)=>showToast(error.message,{type:"error"}));loadDeliveryCapabilities();loadDeliveryQuestions(id);const requested=route.value.query.get("tab");setTab(TABS.includes(requested)?requested:"overview");},[id]);
   const detail=deliverySession.value;if(!detail)return <div class="empty">Loading session…</div>;
   const {packet,state,artifacts,runner}=detail;const current=steps.indexOf(state.state);const usage=state.usage?.total||{};
   const openArtifact=async(path)=>{setArtifact({name:path,content:"Loading…"});setArtifactError("");try{setArtifact(await apiGet(`/api/delivery/artifact?id=${encodeURIComponent(id)}&path=${encodeURIComponent(path)}`));}catch(error){setArtifactError(error.message);}};
@@ -33,12 +33,12 @@ export function SessionDetail(){
     <div class="stepper">{steps.map((step,index)=><div class={`step-node ${index<current?"done":index===current?"current":""}`}>{step}</div>)}</div>
     {state.awaiting&&<GatePanel id={id} state={state} openArtifact={openArtifact}/>}
     <div class="delivery-tabs" style={{marginTop:18}}>{TABS.map((t)=><button class={`button ${tab===t?"primary":""}`} onClick={()=>setTab(t)}>{t==="questions"?`Q&A${openCount?` (${openCount})`:""}`:TAB_LABEL[t]}</button>)}</div>
-    {tab==="overview"&&<div class="delivery-grid" style={{marginTop:12}}><div>{!terminal.has(state.state)&&<MessageComposer id={id}/>}</div><aside><UsageMeter usage={state.usage}/></aside></div>}
+    {tab==="overview"&&<div class="delivery-grid" style={{marginTop:12}}><div>{!terminal.has(state.state)&&<MessageComposer id={id}/>}</div><aside><UsageMeter usage={state.usage} budgets={deliveryCapabilities.value?.config?.budgets}/></aside></div>}
     {tab==="timeline"&&<div style={{marginTop:12}}><TimelineView/></div>}
     {tab==="conversation"&&<div style={{marginTop:12}}><ConversationView id={id}/></div>}
     {tab==="questions"&&<div style={{marginTop:12}}><QuestionsCard id={id} questions={questions} terminal={terminal.has(state.state)}/></div>}
     {tab==="context"&&<div style={{marginTop:12}}><ContextView id={id} terminal={terminal.has(state.state)}/></div>}
-    {tab==="usage"&&<div style={{marginTop:12}}><UsageView id={id} legacyUsage={state.usage}/></div>}
+    {tab==="usage"&&<div style={{marginTop:12}}><UsageView id={id} legacyUsage={state.usage} budgets={deliveryCapabilities.value?.config?.budgets}/></div>}
     {tab==="artifacts"&&<div style={{marginTop:12}}><section class="card"><h2>Artifacts</h2>{artifacts.length?artifacts.map((entry)=><button class="nav-link" onClick={()=>openArtifact(entry.path)}>{entry.path}<span class="count">{entry.size} B</span></button>):<div class="empty">No artifacts yet.</div>}</section></div>}
     {artifact&&<div class="modal-backdrop" onMouseDown={(event)=>event.target===event.currentTarget&&setArtifact(null)}><section class="modal artifact-viewer" style={{width:"min(1000px,96vw)"}}><div class="page-head"><h2>{artifact.name}</h2><button class="icon-button" onClick={()=>setArtifact(null)}>×</button></div>{artifactError?<div class="empty">{artifactError}</div>:<pre><code>{artifact.lang==="json"?pretty(artifact.content):artifact.content}</code></pre>}</section></div>}
     {configOpen&&<ConfigDialog id={id} packet={packet} state={state} onClose={()=>setConfigOpen(false)}/>}
@@ -102,19 +102,52 @@ function ConfigDialog({id,packet,state,onClose}){
     {models.length>0&&<div class="field"><label>Model</label><select value={model} onChange={(event)=>setModel(event.currentTarget.value)}><option value="">Default{providerCaps?.defaultModel?` (${providerCaps.defaultModel})`:""}</option>{models.map((m)=><option value={m.id}>{m.label||m.id}</option>)}</select></div>}
     {efforts.length>0&&<div class="field"><label>Effort per phase</label><div class="chip-row">{EFFORT_PHASES.map((phase)=><label style={{display:"flex",flexDirection:"column",gap:2,fontSize:10}}><span class="muted">{phase}</span><select value={effort[phase]||""} onChange={(event)=>setEffort({...effort,[phase]:event.currentTarget.value||undefined})}><option value="">{isProviderSwitch?"translate automatically":"unchanged"}</option>{efforts.map((e)=><option value={e}>{e}</option>)}</select></label>)}</div></div>}
     {cacheCold&&!isProviderSwitch&&<p class="verdict-block" style={{marginTop:8}}>Changing the model invalidates the provider's prompt cache — the next turn re-sends its full context uncached.</p>}
-    <button class="button primary" onClick={apply} disabled={isProviderSwitch&&switchConfirm!=="SWITCH"} style={{marginTop:12}}>{isProviderSwitch?"Switch provider":"Apply"}</button>
+    <button class="button primary button-submit" onClick={apply} disabled={isProviderSwitch&&switchConfirm!=="SWITCH"} style={{marginTop:12}}>{isProviderSwitch?"Switch provider":"Apply"}</button>
   </Modal>;
 }
 
+// Slice C/A: BLOCKED reasons that mean "don't just mash Retry" — each maps to
+// a heading + a note shown above the generic lastError.message. Unlisted /
+// absent reasons (the original plain "Session is blocked" case) render
+// nothing extra, so existing sessions blocked before these reasons existed
+// are unaffected.
+const BLOCKED_REASON_INFO = {
+  "provider-quota": { heading: "Blocked — provider allowance exhausted", note: "The provider (Claude/Codex) reported a session limit or rate limit — retrying immediately will very likely fail the same way. Wait for the reset time in the message below, then Retry." },
+  "budget-exceeded": { heading: "Blocked — session budget exceeded", note: "This session's token/cost usage crossed the cap configured in .delivery/config.json (budgets). Raise the cap there if this session genuinely needs more, then Retry — or Cancel if the spend looks runaway." },
+  "phase-turn-limit": { heading: "Blocked — phase turn limit reached", note: "A single phase has run more turns than budgets.maxTurnsPerPhase allows without converging — each further turn should be treated as diminishing returns. Add owner guidance below, or raise the limit, before retrying." },
+  "pre-existing-failure": { heading: "Blocked — pre-existing validation failure", note: "Validation failed on something that was already broken before this session started (the workspace was dirty at launch). This session made zero fix-loop attempts on it. Fix it outside this delivery, then Retry." },
+};
+
 function GatePanel({id,state,openArtifact}){
-  const gate=state.awaiting.gate;const [note,setNote]=useState("");const [confirmText,setConfirmText]=useState("");const [answer,setAnswer]=useState("");const [tick,setTick]=useState(true);
+  const gate=state.awaiting.gate;const reason=state.awaiting.reason;const reasonInfo=reason&&BLOCKED_REASON_INFO[reason];const [note,setNote]=useState("");const [confirmText,setConfirmText]=useState("");const [answer,setAnswer]=useState("");const [tick,setTick]=useState(true);
   useEffect(()=>{if(gateArtifact[gate])openArtifact(gateArtifact[gate]);},[gate]);
   const decide=async(decision)=>{const body={id,gate,decision,note:note||null};if(gate==="plan"&&decision==="approve")body.confirmText=confirmText;if(gate==="uat"&&decision==="accept")body.tickCheckbox=tick;if(gate==="question")body.answer=answer;await deliveryPost("decision",body,"Decision recorded");await loadDeliverySession(id);};
-  return <section class="card" style={{marginTop:18,borderColor:"var(--era-border-active)"}}><div class="eyebrow">Owner gate</div><h2>{gate}</h2>{gate==="question"&&state.awaiting.questions&&<ul>{state.awaiting.questions.map((question)=><li>{question.text}</li>)}</ul>}{gate==="blocked"&&<p class="verdict-block">{state.lastError?.message||"Session is blocked."}</p>}{["spec","plan","uat"].includes(gate)&&<button class="button" onClick={()=>openArtifact(gateArtifact[gate])}>Open {gateArtifact[gate]}</button>}{gate==="plan"&&<div class="field"><label>Typed approval when risk-flagged</label><input value={confirmText} onInput={(event)=>setConfirmText(event.currentTarget.value)} placeholder="APPROVE"/></div>}{gate==="question"&&<div class="field"><label>Answer</label><textarea value={answer} onInput={(event)=>setAnswer(event.currentTarget.value)}/></div>}{["spec","plan","uat"].includes(gate)&&<div class="field"><label>Owner note / requested change</label><textarea value={note} onInput={(event)=>setNote(event.currentTarget.value)}/></div>}{gate==="uat"&&<label class="button"><input type="checkbox" checked={tick} onChange={(event)=>setTick(event.currentTarget.checked)}/>Tick source checkbox on accept</label>}<div class="chip-row" style={{marginTop:12}}>{["spec","plan"].includes(gate)&&<><button class="button primary" onClick={()=>decide("approve")}>Approve</button><button class="button" onClick={()=>decide("reject")}>Request changes</button></>}{gate==="uat"&&<><button class="button primary" onClick={()=>decide("accept")}>Accept</button><button class="button" onClick={()=>decide("reject")}>Request changes</button></>}{gate==="question"&&<button class="button primary" onClick={()=>decide("answer")}>Submit answer</button>}{gate==="blocked"&&<button class="button primary" onClick={()=>decide("retry")}>Retry</button>}{gate==="shipped"&&<button class="button primary" onClick={()=>decide("shipped")}>Mark shipped</button>}<button class="button ghost" onClick={()=>deliveryPost("decision",{id,gate,decision:"cancel",note},"Session cancelled").then(()=>loadDeliverySession(id))}>Cancel session</button></div></section>;
+  return <section class="card" style={{marginTop:18,borderColor:"var(--era-border-active)"}}><div class="eyebrow">Owner gate</div><h2>{gate==="blocked"&&reasonInfo?reasonInfo.heading:gate}</h2>{gate==="question"&&state.awaiting.questions&&<ul>{state.awaiting.questions.map((question)=><li>{question.text}</li>)}</ul>}{gate==="blocked"&&reasonInfo&&<p class="verdict-block" style={{borderColor:"var(--era-danger,#e05252)"}}>{reasonInfo.note}</p>}{gate==="blocked"&&<p class="verdict-block">{state.lastError?.message||"Session is blocked."}</p>}{["spec","plan","uat"].includes(gate)&&<button class="button" onClick={()=>openArtifact(gateArtifact[gate])}>Open {gateArtifact[gate]}</button>}{gate==="plan"&&<div class="field"><label>Typed approval when risk-flagged</label><input value={confirmText} onInput={(event)=>setConfirmText(event.currentTarget.value)} placeholder="APPROVE"/></div>}{gate==="question"&&<div class="field"><label>Answer</label><textarea value={answer} onInput={(event)=>setAnswer(event.currentTarget.value)}/></div>}{["spec","plan","uat"].includes(gate)&&<div class="field"><label>Owner note / requested change</label><textarea value={note} onInput={(event)=>setNote(event.currentTarget.value)}/></div>}{gate==="uat"&&<label class="button"><input type="checkbox" checked={tick} onChange={(event)=>setTick(event.currentTarget.checked)}/>Tick source checkbox on accept</label>}<div class="chip-row gate-actions" style={{marginTop:12}}>{["spec","plan"].includes(gate)&&<><button class="button primary" onClick={()=>decide("approve")}>Approve</button><button class="button" onClick={()=>decide("reject")}>Request changes</button></>}{gate==="uat"&&<><button class="button primary" onClick={()=>decide("accept")}>Accept</button><button class="button" onClick={()=>decide("reject")}>Request changes</button></>}{gate==="question"&&<button class="button primary" onClick={()=>decide("answer")}>Submit answer</button>}{gate==="blocked"&&<button class="button primary" onClick={()=>decide("retry")}>Retry</button>}{gate==="shipped"&&<button class="button primary" onClick={()=>decide("shipped")}>Mark shipped</button>}<button class="button ghost" onClick={()=>deliveryPost("decision",{id,gate,decision:"cancel",note},"Session cancelled").then(()=>loadDeliverySession(id))}>Cancel session</button></div></section>;
 }
 
 function MessageComposer({id}){const [text,setText]=useState("");const send=async()=>{if(!text.trim())return;await deliveryPost("message",{id,text:text.trim()},"Message queued for the next boundary");setText("");};return <section class="card" style={{marginTop:18}}><h2>Message the orchestrator</h2><div class="field"><textarea rows="4" value={text} onInput={(event)=>setText(event.currentTarget.value)} placeholder="Guidance is read at the next step boundary."/></div><button class="button" onClick={send}>Queue message</button></section>;}
 
-function UsageMeter({usage={}}){const phases=Object.entries(usage.perPhase||{});return <section class="card" style={{marginTop:18}}><h2>Usage</h2><div class="stat-value">{(usage.total?.input||0)+(usage.total?.output||0)}</div><div class="muted">total tokens</div>{phases.length>0&&<table class="usage-table"><thead><tr><th>Phase</th><th>Input</th><th>Output</th></tr></thead><tbody>{phases.map(([phase,row])=><tr><td>{phase}</td><td>{row.input||0}</td><td>{row.output||0}</td></tr>)}</tbody></table>}</section>;}
+// Slice C: processed tokens = input + cachedInput + output — the same total
+// checked against budgets.{warn,max}SessionTokens in budgets.mjs, so this bar
+// reads the same number that can trip a BLOCKED(budget-exceeded) gate.
+function UsageMeter({usage={},budgets={}}){
+  const phases=Object.entries(usage.perPhase||{});
+  const total=usage.total||{};
+  const processedTokens=(total.input||0)+(total.cachedInput||0)+(total.output||0);
+  const maxTokens=budgets?.maxSessionTokens;const warnTokens=budgets?.warnSessionTokens;
+  const pct=typeof maxTokens==="number"&&maxTokens>0?Math.min(1,processedTokens/maxTokens):null;
+  const over=typeof maxTokens==="number"&&processedTokens>=maxTokens;
+  const warn=!over&&typeof warnTokens==="number"&&processedTokens>=warnTokens;
+  const barColor=over?"var(--era-danger,#e05252)":warn?"var(--era-amber,#e0a852)":"var(--era-accent,#4a9eff)";
+  return <section class="card" style={{marginTop:18}}><h2>Usage</h2><div class="stat-value">{processedTokens}</div><div class="muted">total processed tokens (input+cached+output)</div>
+    {pct!=null&&<div style={{marginTop:8}}>
+      <div style={{height:6,borderRadius:3,background:"var(--era-border,#333)",overflow:"hidden"}}><div style={{height:"100%",width:`${Math.round(pct*100)}%`,background:barColor}}/></div>
+      <div class="muted" style={{fontSize:11,marginTop:4}}>{processedTokens.toLocaleString()} / {maxTokens.toLocaleString()} session budget{typeof total.costUsd==="number"?` · est. $${total.costUsd.toFixed(2)}`:""}</div>
+      {over&&<div style={{fontSize:11,color:"var(--era-danger,#e05252)",marginTop:2}}>Over budget — further turns will be blocked</div>}
+      {warn&&<div style={{fontSize:11,color:"var(--era-amber,#e0a852)",marginTop:2}}>Approaching the session budget</div>}
+    </div>}
+    {phases.length>0&&<table class="usage-table"><thead><tr><th>Phase</th><th>Input</th><th>Output</th></tr></thead><tbody>{phases.map(([phase,row])=><tr><td>{phase}</td><td>{row.input||0}</td><td>{row.output||0}</td></tr>)}</tbody></table>}
+  </section>;
+}
 function pretty(text){try{return JSON.stringify(JSON.parse(text),null,2);}catch{return text;}}
 

@@ -4,6 +4,11 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  IngredientAllergenFlag,
+  RecipeAllergenBanner,
+  useRecipeAllergenMatches,
+} from "@/components/web/RecipeAllergenWarning";
 import RecipeCookingMode from "@/components/web/RecipeCookingMode";
 import RecipeVersionCompare from "@/components/web/RecipeVersionCompare";
 import {
@@ -66,6 +71,8 @@ export default function RecipeDetailView({
 
   const totalTime =
     (recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0);
+
+  const allergenMatches = useRecipeAllergenMatches(recipe.ingredients);
 
   const toggleStep = (stepNum: number) => {
     setCompletedSteps((prev) => {
@@ -271,6 +278,10 @@ export default function RecipeDetailView({
                     {recipe.servings} servings
                   </span>
                 </div>
+                <RecipeAllergenBanner
+                  ingredients={recipe.ingredients}
+                  className="mb-4"
+                />
                 <ul className="space-y-3">
                   {recipe.ingredients.map((ing, index) => (
                     <li
@@ -289,6 +300,9 @@ export default function RecipeDetailView({
                         {ing.notes && (
                           <span className="text-white/50"> ({ing.notes})</span>
                         )}
+                        <IngredientAllergenFlag
+                          hits={allergenMatches.perIngredient[index] ?? []}
+                        />
                       </span>
                     </li>
                   ))}

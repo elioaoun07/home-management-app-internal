@@ -6,6 +6,7 @@ import {
   createCodexDriver,
   manifest,
   mapCodexEventToEvents,
+  mapCodexEventToRawRecords,
   toTurnOptions,
   withAbortSignal,
 } from "../../scripts/delivery/drivers/codex.mjs";
@@ -117,6 +118,53 @@ describe("mapCodexEventToEvents", () => {
   });
 });
 
+// DW-1 flight recorder, wired to the real driver here (previously only
+// fake.mjs ever fed onRaw — real Codex runs' assistant text, reasoning, tool
+// calls and results only ever reached the truncated events.ndjson, never the
+// full-fidelity transcript shard).
+describe("mapCodexEventToRawRecords (DW-1 full-fidelity transcript)", () => {
+  it("normalizes session, message, reasoning, command, file-change, mcp, and completion events", () => {
+    expect(mapCodexEventToRawRecords({ type: "thread.started", thread_id: "thread-1" })).toEqual([
+      { kind: "system.init", threadId: "thread-1" },
+    ]);
+    expect(mapCodexEventToRawRecords({ type: "item.completed", item: { type: "agent_message", text: "hello" } })).toEqual([
+      { kind: "assistant.text", text: "hello" },
+    ]);
+    expect(mapCodexEventToRawRecords({ type: "item.completed", item: { type: "reasoning", text: "thinking it through" } })).toEqual([
+      { kind: "assistant.reasoning", text: "thinking it through" },
+    ]);
+    expect(
+      mapCodexEventToRawRecords({
+        type: "item.completed",
+        item: { type: "command_execution", command: "pnpm test", aggregated_output: "ok", status: "completed", exit_code: 0 },
+      }),
+    ).toEqual([{ kind: "command", command: "pnpm test", output: "ok", status: "completed", exitCode: 0 }]);
+    expect(
+      mapCodexEventToRawRecords({
+        type: "item.completed",
+        item: { type: "file_change", status: "completed", changes: [{ path: "a.ts", kind: "update" }] },
+      }),
+    ).toEqual([{ kind: "file.change", status: "completed", changes: [{ path: "a.ts", kind: "update" }] }]);
+    expect(
+      mapCodexEventToRawRecords({
+        type: "item.completed",
+        item: { type: "mcp_tool_call", server: "linear", tool: "create_issue", status: "completed" },
+      }),
+    ).toEqual([{ kind: "tool.use", tool: "linear.create_issue", status: "completed" }]);
+    expect(
+      mapCodexEventToRawRecords({ type: "turn.completed", usage: { input_tokens: 4, cached_input_tokens: 1, output_tokens: 2 } }),
+    ).toEqual([{ kind: "turn.result", usage: { input: 4, cachedInput: 1, output: 2, costUsd: null } }]);
+    expect(mapCodexEventToRawRecords({ type: "turn.failed", error: { message: "no auth" } })).toEqual([
+      { kind: "error", text: "no auth" },
+    ]);
+  });
+
+  it("ignores unrecognized events", () => {
+    expect(mapCodexEventToRawRecords({ type: "session.status_running" })).toEqual([]);
+    expect(mapCodexEventToRawRecords(null as never)).toEqual([]);
+  });
+});
+
 describe("createCodexDriver", () => {
   it("runs an authentication preflight and persists the SDK thread id", async () => {
     const thread = { id: "thread-1", run: vi.fn().mockResolvedValue({ finalResponse: "OK" }), runStreamed: vi.fn() };
@@ -163,6 +211,19 @@ describe("createCodexDriver", () => {
     expect(handle.ref.id).toBe("thread-old");
   });
 
+  it("resume with a mode override switches sandboxMode without mutating the ref (BUD-11 root cause #1)", async () => {
+    const thread = { run: vi.fn(), runStreamed: vi.fn() };
+    const resumeThread = vi.fn().mockReturnValue(thread);
+    const driver = createCodexDriver({ importSdk: async () => createSdk({ resumeThread }) });
+    const ref = { id: "thread-old", cwd: CWD, mode: "readonly", model: null, effort: null };
+
+    const handle = await driver.resume(ref, { mode: "build" });
+
+    expect(resumeThread).toHaveBeenCalledWith("thread-old", expect.objectContaining({ sandboxMode: "workspace-write" }));
+    expect(handle.mode).toBe("build");
+    expect(ref.mode).toBe("readonly"); // the persisted ref itself is never mutated
+  });
+
   it("streams normalized events, structured output, final text, and normalized usage", async () => {
     const thread = {
       id: "thread-1",
@@ -188,6 +249,29 @@ describe("createCodexDriver", () => {
       { type: "agent.turn.result", data: { usage: { input: 11, cachedInput: 3, output: 5, costUsd: null } } },
     ]);
     expect(result).toEqual({ finalText: '{"ok":true}', usage: { input: 11, cachedInput: 3, output: 5, costUsd: null } });
+  });
+
+  it("feeds onRaw with full-fidelity records alongside onEvent (DW-1)", async () => {
+    const thread = {
+      id: "thread-1",
+      run: vi.fn().mockResolvedValue({ finalResponse: "OK" }),
+      runStreamed: vi.fn().mockResolvedValue({
+        events: stream([
+          { type: "item.completed", item: { type: "agent_message", text: "hello" } },
+          { type: "turn.completed", usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1 } },
+        ]),
+      }),
+    };
+    const driver = createCodexDriver({ importSdk: async () => createSdk({ startThread: vi.fn().mockReturnValue(thread) }) });
+    const handle = await driver.startSession({ cwd: CWD, mode: "readonly" });
+
+    const rawRecords: unknown[] = [];
+    await driver.runTurn(handle, "say hello", { onRaw: (r: unknown) => rawRecords.push(r) });
+
+    expect(rawRecords).toEqual([
+      { kind: "assistant.text", text: "hello" },
+      { kind: "turn.result", usage: { input: 1, cachedInput: 0, output: 1, costUsd: null } },
+    ]);
   });
 
   it("resumes the thread with a per-turn effort override", async () => {

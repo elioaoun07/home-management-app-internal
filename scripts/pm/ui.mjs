@@ -11,12 +11,22 @@ function escapeScript(value) {
 /** @param {{mode?: string, dataJson?: string, bundle?: {js: string, css: string}}} options */
 export function buildHtml({ mode = "static", dataJson = "null", bundle } = {}) {
   if (!bundle?.js || bundle.css == null) throw new Error("buildHtml requires a compiled PM UI bundle");
+  // PWA identity only in server mode — the static _dashboard.html is opened
+  // from file:// where root-absolute asset links would 404.
+  const pwaHead = mode === "server" ? `
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/assets/pm-icon.svg">
+<link rel="apple-touch-icon" href="/assets/pm-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PM Center">` : "";
   return `<!doctype html>
 <html lang="en" data-theme="blue">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0a1628">
+<meta name="theme-color" content="#0a1628">${pwaHead}
 <title>PM Command Center</title>
 <style>${bundle.css}</style>
 </head>

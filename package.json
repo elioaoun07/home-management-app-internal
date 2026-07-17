@@ -22,6 +22,7 @@
     "pm": "node scripts/pm-server.mjs",
     "pm:lint": "node scripts/pm/lint.mjs",
     "pm:build-ui": "node scripts/pm/build.mjs",
+    "pm:icons": "node scripts/pm/generate-icons.mjs",
     "pm:dashboard": "node scripts/build-pm-dashboard.mjs",
     "prepare": "husky install"
   },

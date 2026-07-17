@@ -9,6 +9,11 @@ import { persistedSignal } from "../lib/persistedSignal.js";
 export const data = signal(null);
 export const loading = signal(true);
 export const loadError = signal(null);
+// Set when the last /api/data load came from the service worker's offline
+// cache rather than a live laptop — { cachedAt } | null. Drives the "you're
+// viewing a snapshot" banner and blocks mutations with a clear message
+// instead of letting them fail on a raw network error.
+export const offlineSnapshot = signal(null);
 export const menuOpen = signal(false);
 export const paletteOpen = signal(false);
 export const sourcePreview = signal(null);
@@ -60,7 +65,12 @@ export function showToast(message, { type = "success", action = null, duration =
 export function dismissToast(id) { toasts.value = toasts.value.filter((entry) => entry.id !== id); }
 
 export async function reloadData() {
-  try { const next = await loadData(); data.value = next; loadError.value = null; }
+  try {
+    const { _offline, _cachedAt, ...next } = await loadData();
+    data.value = next;
+    offlineSnapshot.value = _offline ? { cachedAt: _cachedAt } : null;
+    loadError.value = null;
+  }
   catch (error) { loadError.value = error; throw error; }
   finally { loading.value = false; }
 }
@@ -75,6 +85,7 @@ function localToggle(raw, cbidx) {
 
 export async function toggleTask(relPath, cbidx, { quiet = false } = {}) {
   const file = byRelPath.value.get(relPath.toLowerCase()); if (!file || globalThis.PM_MODE !== "server") return;
+  if (offlineSnapshot.value) { showToast("Viewing an offline snapshot — reconnect to your laptop to make changes.", { type: "error" }); return; }
   const expected = scanCheckboxes(file.raw)[cbidx]?.state; if (!expected) return;
   const previous = file.raw; replaceRaw(relPath, localToggle(previous, cbidx));
   try {
@@ -89,6 +100,7 @@ export async function toggleTask(relPath, cbidx, { quiet = false } = {}) {
 }
 
 export async function runMutation(op, body, success, undo = null) {
+  if (offlineSnapshot.value) { showToast("Viewing an offline snapshot — reconnect to your laptop to make changes.", { type: "error" }); throw new Error("offline"); }
   try {
     const result = await apiPost(op, body); await reloadData();
     showToast(success, undo ? { action: { label: "Undo", run: () => undo(result) } } : {}); return result;

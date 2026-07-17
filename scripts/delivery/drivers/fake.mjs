@@ -52,13 +52,16 @@ export function createFakeDriver(options = {}) {
     return { ref: currentRef, cwd, mode };
   }
 
-  function resume(ref) {
+  // Mirrors the real drivers' `overrides.mode` seam so tests can assert a
+  // resumed session actually switches modes across phases (see claude.mjs).
+  function resume(ref, overrides = {}) {
     if (!ref || !ref.id) {
       throw new DriverError("fake driver: resume requires a ref with an id");
     }
     started = true;
     currentRef = ref;
-    return { ref: currentRef, cwd: ref.cwd, mode: ref.mode };
+    const mode = (overrides && overrides.mode) || ref.mode;
+    return { ref: currentRef, cwd: ref.cwd, mode };
   }
 
   function runTurn(handle, prompt, { outputSchema, onEvent, onRaw, effort, model, signal } = {}) {

@@ -11,11 +11,16 @@ function add(target, turn) {
 }
 function fmtCost(v) { return v == null ? "—" : `$${v.toFixed(4)}`; }
 
-export function UsageView({ id, legacyUsage }) {
+export function UsageView({ id, legacyUsage, budgets = {} }) {
   useEffect(() => { loadDeliveryTurns(id, { reset: true }); }, [id]);
   const turns = deliveryTurns.value;
 
   const total = useMemo(() => { const t = emptyTotals(); for (const turn of turns) add(t, turn); return t; }, [turns]);
+  const processedTokens = total.input + total.cachedRead + total.cacheCreation + total.output;
+  const maxTokens = budgets?.maxSessionTokens;
+  const warnTokens = budgets?.warnSessionTokens;
+  const overBudget = typeof maxTokens === "number" && processedTokens >= maxTokens;
+  const warnBudget = !overBudget && typeof warnTokens === "number" && processedTokens >= warnTokens;
   const byPhase = useMemo(() => {
     const map = new Map();
     for (const turn of turns) {
@@ -45,6 +50,10 @@ export function UsageView({ id, legacyUsage }) {
           <td>{fmtCost(total.costUsd)}</td><td>{fmtCost(total.costEstUsd)}</td>
         </tr></tbody>
       </table>
+      {typeof maxTokens === "number" && <div class="muted" style={{ fontSize: 12, marginTop: 8, color: overBudget ? "var(--era-danger,#e05252)" : warnBudget ? "var(--era-amber,#e0a852)" : undefined }}>
+        {processedTokens.toLocaleString()} / {maxTokens.toLocaleString()} processed-token session budget
+        {overBudget ? " — exceeded; further turns are blocked" : warnBudget ? " — approaching cap" : ""}
+      </div>}
     </section>
 
     <section class="card" style={{ marginTop: 12 }}>

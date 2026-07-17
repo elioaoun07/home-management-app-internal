@@ -54,6 +54,9 @@ import {
   turnShardFileName,
 } from "./transcript.mjs";
 import { computeOccupancy, estimateCostUsd } from "./usage.mjs";
+import { classifyTurnError } from "./quota.mjs";
+import { classifyValidationFailure } from "./validation-baseline.mjs";
+import { checkSessionBudget, isDiscoveryTurnLimitReached, isPlanStepCountOverCap } from "./budgets.mjs";
 import { getDefaultModel, getModelPricing, loadConfig, translateEffort } from "./config.mjs";
 import { isProviderSwitch } from "./controls.mjs";
 import {
@@ -493,6 +496,8 @@ async function performHandoff(sessionDir, state, packet, payload, ctx) {
     provider: toProvider,
     model: toModel,
     strategy: "handoff",
+    sessionUsage: (working.usage && working.usage.total) || null,
+    budgets: (deliveryConfig && deliveryConfig.budgets) || null,
   });
   working = { ...working, turnCounter: (working.turnCounter || 0) + 1 };
 
@@ -1085,7 +1090,35 @@ async function runGuardedTurn({
   // poll (small in tests so an abort control is picked up quickly).
   controlsProcessed = 0,
   abortPollMs = 300,
+  // Session-level token/cost budget (budgets.mjs): checked BEFORE anything
+  // else so an already-exceeded hard cap skips the turn entirely — no
+  // snapshot, no prompt file, no driver call, zero additional spend. Both
+  // args are optional so every pre-existing caller/test that omits them
+  // keeps running unbounded, matching prior behavior exactly.
+  sessionUsage = null,
+  budgets = null,
 }) {
+  if (sessionUsage && budgets) {
+    const budgetVerdict = checkSessionBudget(sessionUsage, budgets);
+    if (budgetVerdict.status === "exceeded") {
+      emitEvent(sessionDir, {
+        type: "budget.exceeded",
+        phase,
+        agent,
+        data: { totalTokens: budgetVerdict.totalTokens, costUsd: budgetVerdict.costUsd, reason: budgetVerdict.reason },
+      });
+      return { ok: false, gitViolation: false, error: new Error(budgetVerdict.reason), turnId, errorKind: "budget-exceeded" };
+    }
+    if (budgetVerdict.status === "warn") {
+      emitEvent(sessionDir, {
+        type: "budget.warning",
+        phase,
+        agent,
+        data: { totalTokens: budgetVerdict.totalTokens, costUsd: budgetVerdict.costUsd },
+      });
+    }
+  }
+
   const before = takeSnapshot(repoRoot);
   const startedAt = new Date();
   const promptFile = turnId ? `transcript/prompts/${turnPromptFileName(turnId)}` : null;
@@ -1201,11 +1234,17 @@ async function runGuardedTurn({
           return { ok: false, aborted: true, gitViolation: !guard.ok, violations: guard.violations, turnId, changedPaths };
         }
         lastErr = err;
+        const classification = classifyTurnError(err);
         emitEvent(sessionDir, {
           type: "agent.turn.failed",
           phase,
           agent,
-          data: { attempt, message: String((err && err.message) || err) },
+          data: {
+            attempt,
+            message: String((err && err.message) || err),
+            errorKind: classification.kind,
+            ...(classification.resetsAt ? { resetsAt: classification.resetsAt } : {}),
+          },
         });
         const guard = checkGitGuard(before, repoRoot, guardMode, { takeSnapshot, forbiddenPaths });
         if (!guard.ok) {
@@ -1217,6 +1256,24 @@ async function runGuardedTurn({
           });
           sealTurn("guard-violation", fallbackUsageV2FromV1(null));
           return { ok: false, gitViolation: true, violations: guard.violations, error: err, turnId };
+        }
+        // A quota/rate-limit error is never worth retrying — the provider
+        // allowance is exhausted, not the individual request, so a second
+        // attempt (or a later owner-triggered runner restart hitting the
+        // same code path) fails the same way. Go straight to BLOCKED
+        // instead of spending a second failed session-establish (BUD-11:
+        // this loop spun up 5 fresh sessions in 2 minutes against an
+        // already-exhausted subscription allowance).
+        if (!classification.retryable) {
+          sealTurn("failed", fallbackUsageV2FromV1(null));
+          return {
+            ok: false,
+            gitViolation: false,
+            error: lastErr,
+            turnId,
+            errorKind: classification.kind,
+            resetsAt: classification.resetsAt,
+          };
         }
         if (attempt === 0) {
           sleep(retryDelayMs);
@@ -1296,7 +1353,11 @@ function clearConfigOverrideFlag(execution) {
 async function getHandle({ driver, state, packet, repoRoot, mode, phase }) {
   const ref = state.driver && state.driver.ref;
   if (ref) {
-    return Promise.resolve(driver.resume(ref));
+    // The ref's SDK conversation may have been established under a
+    // different phase mode (e.g. readonly during DISCOVERY); pass this
+    // call's actual mode as an override so BUILDING always resumes with
+    // write access instead of silently inheriting the frozen ref.mode.
+    return Promise.resolve(driver.resume(ref, { mode }));
   }
   const execution = state.execution || null;
   const handle = await Promise.resolve(
@@ -1567,9 +1628,26 @@ function renderNotesMd(uat, packet) {
 
 // ---- phase handlers: each performs ONE advanceSession unit of work ----
 
-async function handleSelected({ sessionDir, state }) {
-  const result = smNext(state.state, "baseline.captured");
-  const newState = { ...state, state: result.to, awaiting: null };
+/**
+ * When the workspace is already dirty at session start (uncommitted changes
+ * this session didn't make — e.g. other in-progress work), capture one
+ * validation run before DISCOVERY begins so VALIDATING can later tell a
+ * failure this session caused apart from one that was already broken (see
+ * validation-baseline.mjs). Skipped on a clean tree — there's nothing to
+ * baseline against, and every failure is attributable by construction.
+ */
+async function handleSelected({ sessionDir, state, config }) {
+  let working = state;
+  const dirtyAtStart = !!(state.workspace && state.workspace.dirtyAtStart);
+  if (dirtyAtStart && !(state.workspace && state.workspace.baselineValidation)) {
+    const runValidation = (config && config.runValidation) || runValidationCommands;
+    const baseline = runValidation({ cwd: config.repoRoot });
+    writeArtifactJson(sessionDir, "validation-baseline.json", baseline);
+    emitEvent(sessionDir, { type: "validation.baseline.captured", phase: "SELECTED", data: { ok: baseline.ok } });
+    working = { ...state, workspace: { ...state.workspace, baselineValidation: baseline } };
+  }
+  const result = smNext(working.state, "baseline.captured");
+  const newState = { ...working, state: result.to, awaiting: null };
   emitEvent(sessionDir, { type: "phase.transition", phase: "SELECTED", data: { to: result.to } });
   return newState;
 }
@@ -1589,6 +1667,20 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
     forbiddenPaths,
   });
   if (!setup.ok) return blockFrom(sessionDir, state, "DISCOVERY", setup);
+
+  // DISCOVERY is the one phase with no existing turn-count backstop
+  // (BUILDING/REVIEWING already cap via maxFixLoops) — a chain of
+  // question-raised round-trips could otherwise re-enter it indefinitely.
+  const discoveryTurnCount = state.discoveryTurnCount || 0;
+  if (isDiscoveryTurnLimitReached(discoveryTurnCount, (config.deliveryConfig && config.deliveryConfig.budgets) || {})) {
+    return blockFrom(sessionDir, state, "DISCOVERY", {
+      error: new Error(
+        `DISCOVERY has run ${discoveryTurnCount} turns without reaching a written spec — this usually means questions keep getting raised faster than they converge. Raise budgets.maxTurnsPerPhase.discovery in .delivery/config.json if this is genuinely expected, or add owner guidance to steer it, then Retry.`,
+      ),
+      errorKind: "phase-turn-limit",
+    });
+  }
+
   const handle = setup.handle;
   let working = persistNewDriverRef(sessionDir, state, withDriverRef(state, handle));
   const { texts: drainedMessages, lastSeq } = drainMessages(sessionDir, working);
@@ -1622,12 +1714,15 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
+    sessionUsage: (state.usage && state.usage.total) || null,
+    budgets: (config.deliveryConfig && config.deliveryConfig.budgets) || null,
     ...tc,
   });
   working = {
     ...working,
     messagesProcessed: lastSeq,
     turnCounter: (working.turnCounter || 0) + 1,
+    discoveryTurnCount: discoveryTurnCount + 1,
     execution: clearConfigOverrideFlag(working.execution),
   };
   if (!turn.ok) return blockFrom(sessionDir, working, "DISCOVERY", turn);
@@ -1684,24 +1779,49 @@ function describeBlockedTurn(turn) {
   return String((turn.error && turn.error.message) || turn.error || "");
 }
 
+// Maps a machine-readable `turn.errorKind` to the `awaiting.reason` the gate
+// UI/decision handling uses to distinguish "never worth an immediate Retry"
+// blocks (quota exhaustion, a budget cap, a runaway-phase turn limit) from an
+// ordinary blocked turn. Unlisted/absent kinds omit `reason` entirely, so
+// existing callers that assert the plain `{gate, returnTo}` shape (from
+// before any of these kinds existed) are unaffected.
+const BLOCK_REASON_BY_ERROR_KIND = Object.freeze({
+  quota: "provider-quota",
+  "budget-exceeded": "budget-exceeded",
+  "phase-turn-limit": "phase-turn-limit",
+  "pre-existing-failure": "pre-existing-failure",
+});
+
 function blockFrom(sessionDir, state, fromPhase, turn) {
   const result = smNext(fromPhase, "error.fatal");
   const message = describeBlockedTurn(turn);
+  const errorKind = turn.errorKind || null;
+  const resetsAt = turn.resetsAt || null;
+  const reason = errorKind ? BLOCK_REASON_BY_ERROR_KIND[errorKind] || null : null;
   emitEvent(sessionDir, {
     type: "error.fatal",
     phase: fromPhase,
-    data: { gitViolation: !!turn.gitViolation, violations: turn.violations || [], message, aborted: !!turn.aborted },
+    data: {
+      gitViolation: !!turn.gitViolation,
+      violations: turn.violations || [],
+      message,
+      aborted: !!turn.aborted,
+      ...(errorKind ? { errorKind } : {}),
+      ...(resetsAt ? { resetsAt } : {}),
+    },
   });
   return {
     ...state,
     state: result.to,
-    awaiting: { gate: "blocked", returnTo: fromPhase },
+    awaiting: reason ? { gate: "blocked", returnTo: fromPhase, reason } : { gate: "blocked", returnTo: fromPhase },
     lastError: {
       phase: fromPhase,
       gitViolation: !!turn.gitViolation,
       violations: turn.violations || [],
       message,
       aborted: !!turn.aborted,
+      errorKind,
+      resetsAt,
     },
   };
 }
@@ -1774,6 +1894,8 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
+    sessionUsage: (state.usage && state.usage.total) || null,
+    budgets: (config.deliveryConfig && config.deliveryConfig.budgets) || null,
     ...tc,
   });
   working = {
@@ -1798,6 +1920,19 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
   writeArtifactJson(sessionDir, "plan.json", plan);
   writeArtifactText(sessionDir, "plan.md", renderPlanMd(plan));
   updateLedger(sessionDir, (ledger) => applyPlan(ledger, plan));
+
+  // Advisory only (BUD-11: a 1-file test task was decomposed into 10 build
+  // steps, multiplying full-context turn establishes for no benefit) — each
+  // step is still a separate BUILDING turn, so this doesn't block the plan,
+  // it just gives the owner visibility at the plan gate.
+  const stepCount = (plan.steps || []).length;
+  if (isPlanStepCountOverCap(stepCount, (config.deliveryConfig && config.deliveryConfig.budgets) || {})) {
+    emitEvent(sessionDir, {
+      type: "plan.step_count.warning",
+      phase: "SPEC_READY",
+      data: { stepCount, maxPlanSteps: config.deliveryConfig.budgets.maxPlanSteps },
+    });
+  }
 
   const result = smNext(working.state, "decision.approve");
   emitEvent(sessionDir, { type: "phase.transition", phase: "SPEC_READY", data: { to: result.to } });
@@ -1889,6 +2024,8 @@ async function handleBuilding({ sessionDir, state, packet, driver, repoRoot, con
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
+    sessionUsage: (state.usage && state.usage.total) || null,
+    budgets: (config.deliveryConfig && config.deliveryConfig.budgets) || null,
     ...tc,
   });
   working = {
@@ -1930,6 +2067,37 @@ function handleValidating({ sessionDir, state, packet, config }) {
     const result = smNext(state.state, "validation.pass");
     return { ...state, state: result.to, awaiting: null };
   }
+
+  // BUD-11 root cause #5: a dirty-at-start workspace can fail validation on
+  // something this session never touched — sending the failure through the
+  // fix loop then wastes every attempt asking the agent to fix a file it
+  // didn't break (and, if BUILDING is still readonly, can't fix at all). When
+  // the baseline shows every currently-failing file was already failing
+  // before this session started, skip the fix loop entirely and block with a
+  // reason the owner can act on (the fix belongs to whoever else's dirty
+  // change caused it, not to this delivery).
+  const baseline = state.workspace && state.workspace.baselineValidation;
+  if (baseline) {
+    const verdict = classifyValidationFailure(validation, baseline);
+    if (!verdict.attributable) {
+      emitEvent(sessionDir, {
+        type: "error.fatal",
+        phase: "VALIDATING",
+        data: { reason: "pre-existing failure", preExistingCommands: verdict.preExistingCommands },
+      });
+      return {
+        ...state,
+        state: "BLOCKED",
+        awaiting: { gate: "blocked", returnTo: "BUILDING", reason: "pre-existing-failure" },
+        lastError: {
+          phase: "VALIDATING",
+          message: `Validation failed on ${verdict.preExistingCommands.join(", ")}, but the same failure was already present before this session started (dirty working tree). This session made no fix-loop attempts on it — resolve it outside this delivery, then Retry.`,
+          errorKind: "pre-existing-failure",
+        },
+      };
+    }
+  }
+
   const result = smNext(state.state, "validation.fail", {
     loopCount: state.fixLoop || 0,
     maxFixLoops: (packet.constraints && packet.constraints.maxFixLoops) || 3,
@@ -1974,6 +2142,8 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
+    sessionUsage: (state.usage && state.usage.total) || null,
+    budgets: (config.deliveryConfig && config.deliveryConfig.budgets) || null,
     ...tc,
   });
   working = {
@@ -2035,6 +2205,8 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
+    sessionUsage: (working.usage && working.usage.total) || null,
+    budgets: (config.deliveryConfig && config.deliveryConfig.budgets) || null,
     ...uatTc,
   });
   working = { ...working, turnCounter: (working.turnCounter || 0) + 1, execution: clearConfigOverrideFlag(working.execution) };
@@ -2284,7 +2456,7 @@ export async function advanceSession(options) {
 
   let newState;
   if (state.state === "SELECTED") {
-    newState = await handleSelected({ sessionDir, state });
+    newState = await handleSelected({ sessionDir, state, config });
   } else if (state.state === "DISCOVERY") {
     newState = await handleDiscovery({ sessionDir, state, packet, driver, repoRoot, config });
   } else if (state.state === "BUILDING") {

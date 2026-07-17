@@ -61,6 +61,25 @@ export const DEFAULT_CONFIG = Object.freeze({
   budgets: Object.freeze({
     warnSessionUsd: 10,
     maxTurnBudgetUsd: null,
+    // Token budgets are primary — Claude Code subscription sessions have no
+    // real per-token USD meter, so `maxSessionUsd` only bites when the owner
+    // has populated real pricing in the model catalog (see DW-2 gap).
+    // Defaults sized off the BUD-11 forensics: that session's actual spend
+    // was ~3M processed tokens (1,434 input + 2,991,876 cached + 43,447
+    // output) for a task that should have needed a small fraction of that.
+    warnSessionTokens: 1_500_000,
+    maxSessionTokens: 4_000_000,
+    maxSessionUsd: null,
+    // DISCOVERY is the one phase with no existing turn-count backstop
+    // (BUILDING/REVIEWING already cap via maxFixLoops; PLAN/UAT are
+    // single-shot) — repeated question-raised round-trips could otherwise
+    // re-enter it indefinitely.
+    maxTurnsPerPhase: Object.freeze({ discovery: 6 }),
+    // A plan that decomposes a small task into many trivial steps multiplies
+    // full-context turn establishes for no benefit (BUD-11: 10 build steps
+    // for what amounted to one test file). Advisory only — see PLAN_READY
+    // handling in run-session.mjs.
+    maxPlanSteps: 5,
   }),
 });
 

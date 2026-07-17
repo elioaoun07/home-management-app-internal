@@ -2,7 +2,8 @@
 // Live, interactive PM Command Center server (zero dependencies — Node built-ins).
 //   pnpm pm            -> start + open browser at http://127.0.0.1:4317
 //   pnpm pm --no-open  -> start without opening a browser
-//   PM_PORT=5000 pnpm pm  (or --port=5000)
+//   pnpm pm --lan      -> also listen on the LAN (phone access; trusted Wi-Fi only)
+//   PM_PORT=5000 pnpm pm  (or --port=5000, --host=0.0.0.0, PM_HOST=…)
 //
 // Serves the same UI as the static build, but reads the PM markdown LIVE from disk
 // and exposes a small REST API so checkboxes, moves, renames, reorders, creates and
@@ -20,7 +21,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:http";
-import { basename, dirname, join, relative } from "node:path";
+import { networkInterfaces } from "node:os";
+import { basename, dirname, extname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
@@ -34,6 +36,7 @@ import {
   stripNumPrefix,
   toggleCheckbox,
 } from "./pm/mutations.mjs";
+import { hostAllowed } from "./pm/net.mjs";
 import { collectSources, readSourceFile, walk } from "./pm/scan.mjs";
 import { buildHtml, buildHtmlLegacy } from "./pm/ui.mjs";
 import { createBundleWatcher } from "./pm/build.mjs";
@@ -48,6 +51,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const PM_REL = join("ERA Notes", "10 - Project Management");
 const PM_DIR = join(ROOT, PM_REL);
+const ASSET_DIR = join(__dirname, "pm", "assets");
+const ASSET_TYPES = {
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webmanifest": "application/manifest+json",
+  ".js": "text/javascript; charset=utf-8",
+};
 const deliveryCtx = createDeliveryContext({ ROOT, PM_DIR, PM_REL });
 
 // ---- CLI args ----
@@ -60,6 +70,11 @@ const PORT = parseInt(
   portArg ? portArg.slice(7) : process.env.PM_PORT || "4317",
   10,
 );
+const hostArg = argv.find((a) => a.startsWith("--host="));
+const HOST = hostArg
+  ? hostArg.slice(7)
+  : process.env.PM_HOST || (argv.includes("--lan") ? "0.0.0.0" : "127.0.0.1");
+const LAN_MODE = HOST !== "127.0.0.1" && HOST !== "localhost";
 
 // ---- helpers ----
 function pmRel(abs) {
@@ -366,9 +381,8 @@ function readBody(req) {
 
 const server = createServer(async (req, res) => {
   try {
-    // DNS-rebinding guard: only accept localhost Host headers.
-    const host = (req.headers.host || "").split(":")[0];
-    if (host && !["127.0.0.1", "localhost", "[::1]", "::1"].includes(host)) {
+    // DNS-rebinding guard: localhost always; private LAN hosts only with --lan.
+    if (!hostAllowed(req.headers.host, { lan: LAN_MODE })) {
       return sendJson(res, 403, { error: "forbidden host" });
     }
     const u = new URL(req.url, "http://127.0.0.1");
@@ -384,6 +398,29 @@ const server = createServer(async (req, res) => {
         "Cache-Control": "no-store",
       });
       return res.end(html);
+    }
+
+    if (
+      req.method === "GET" &&
+      (path.startsWith("/assets/") || path === "/sw.js" || path === "/manifest.webmanifest")
+    ) {
+      const rel =
+        path === "/sw.js" ? "sw.js"
+        : path === "/manifest.webmanifest" ? "pm.webmanifest"
+        : path.slice("/assets/".length);
+      let abs;
+      try {
+        abs = resolveInside(ASSET_DIR, rel);
+      } catch {
+        return sendJson(res, 400, { error: "bad path" });
+      }
+      if (!existsSync(abs) || !statSync(abs).isFile())
+        return sendJson(res, 404, { error: "not found" });
+      res.writeHead(200, {
+        "Content-Type": ASSET_TYPES[extname(abs).toLowerCase()] || "application/octet-stream",
+        "Cache-Control": "no-store",
+      });
+      return res.end(readFileSync(abs));
     }
 
     if (req.method === "GET" && path === "/api/data") {
@@ -444,6 +481,11 @@ const server = createServer(async (req, res) => {
     }
 
     if (path === "/favicon.ico") {
+      const icon = join(ASSET_DIR, "pm-192.png");
+      if (existsSync(icon)) {
+        res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store" });
+        return res.end(readFileSync(icon));
+      }
       res.writeHead(204);
       return res.end();
     }
@@ -474,9 +516,20 @@ function listen(port, attemptsLeft) {
       process.exit(1);
     }
   });
-  server.listen(port, "127.0.0.1", () => {
+  server.listen(port, HOST, () => {
     const url = "http://127.0.0.1:" + port + "/";
     console.log("PM Command Center  →  " + url);
+    if (LAN_MODE) {
+      for (const addrs of Object.values(networkInterfaces())) {
+        for (const a of addrs || []) {
+          if (a.family === "IPv4" && !a.internal)
+            console.log("      on your LAN  →  http://" + a.address + ":" + port + "/");
+        }
+      }
+      console.log(
+        "  ⚠ LAN mode: the write API and delivery controls are reachable by any device on this network. Use only on trusted Wi-Fi.",
+      );
+    }
     console.log("Watching: " + PM_DIR);
     console.log("Press Ctrl+C to stop.");
     if (!noOpen) openBrowser(url);

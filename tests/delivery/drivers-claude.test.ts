@@ -20,6 +20,7 @@ import {
   isWithinAllowedRoots,
   manifest,
   mapSdkMessageToEvents,
+  mapSdkMessageToRawRecords,
   withOutputSchema,
   withSessionIdentity,
 } from "../../scripts/delivery/drivers/claude.mjs";
@@ -189,6 +190,44 @@ describe("isWithinAllowedRoots", () => {
 
   it("denies paths escaping both roots", () => {
     expect(isWithinAllowedRoots("/etc/passwd", { cwd: CWD, sessionDir: SESSION_DIR })).toBe(false);
+  });
+});
+
+// BUD-11 root cause #7: on win32, a POSIX-shaped absolute path emitted by the
+// SDK (e.g. "/home/<user>/WebApp/budget-app/ERA Notes/...") is not a real
+// Windows-absolute path, but Node's win32 path.isAbsolute() treated the
+// leading "/" as absolute and resolve() re-rooted it onto the current drive
+// as "C:\home\<user>\..." — never matching any allowed root. These tests only
+// exercise the win32 branch; skip on POSIX CI runners where the bug (and its
+// fix) doesn't apply.
+const itWin32 = process.platform === "win32" ? it : it.skip;
+
+describe("isWithinAllowedRoots: POSIX-shaped absolute paths on win32 (BUD-11 path-guard bug)", () => {
+  itWin32("re-anchors a POSIX-absolute path at cwd's own trailing segments instead of denying it", () => {
+    // CWD is "/repo" (single segment "repo") — a POSIX-style absolute path
+    // that contains "repo" as a segment, followed by an in-repo relative
+    // path, is the exact shape observed in BUD-11 session forensics
+    // ("/home/<user>/WebApp/budget-app/ERA Notes/..." echoing cwd under a
+    // different root prefix).
+    expect(
+      isWithinAllowedRoots("/home/someone/repo/ERA Notes/10 - Project Management/Budget/1 - Feature State.md", {
+        cwd: CWD,
+      }),
+    ).toBe(true);
+  });
+
+  itWin32("does not double up cwd when re-anchoring (regression: naive strip-and-append)", () => {
+    const abs = isSecretPath("/home/someone/repo/src/app/page.tsx", { cwd: CWD }); // reuses toAbsolute internally
+    expect(abs).toBe(false); // an ordinary file, not a secret — proves resolution didn't produce a bogus/duplicated path
+    expect(isWithinAllowedRoots("/home/someone/repo/src/app/page.tsx", { cwd: CWD })).toBe(true);
+  });
+
+  itWin32("still denies a POSIX path with no recognizable overlap with cwd (fail-closed)", () => {
+    expect(isWithinAllowedRoots("/etc/passwd", { cwd: CWD })).toBe(false);
+  });
+
+  itWin32("still allows an ordinary Windows-absolute path unaffected by the reinterpretation", () => {
+    expect(isWithinAllowedRoots("C:\\repo\\src\\app\\page.tsx", { cwd: CWD })).toBe(true);
   });
 });
 
@@ -439,6 +478,53 @@ describe("mapSdkMessageToEvents", () => {
   });
 });
 
+// DW-1 flight recorder, wired to the real driver here (previously only
+// fake.mjs ever fed onRaw — real Claude runs' assistant text, thinking, tool
+// inputs and tool results only ever reached the 500/2000-char-truncated
+// events.ndjson, never the full-fidelity transcript shard).
+describe("mapSdkMessageToRawRecords (DW-1 full-fidelity transcript)", () => {
+  it("maps system/init to a system.init record", () => {
+    expect(mapSdkMessageToRawRecords(SYSTEM_INIT)).toEqual([
+      { kind: "system.init", model: "claude-opus-4-8", permissionMode: "acceptEdits", tools: ["Read", "Write", "Bash"] },
+    ]);
+  });
+
+  it("maps assistant text to an untruncated assistant.text record", () => {
+    expect(mapSdkMessageToRawRecords(assistantText("hello, full fidelity"))).toEqual([
+      { kind: "assistant.text", text: "hello, full fidelity" },
+    ]);
+  });
+
+  it("maps a thinking block to an assistant.reasoning record", () => {
+    const message = { type: "assistant", message: { content: [{ type: "thinking", thinking: "working through it" }] } };
+    expect(mapSdkMessageToRawRecords(message)).toEqual([{ kind: "assistant.reasoning", text: "working through it" }]);
+  });
+
+  it("maps tool_use to a tool.use record with the full (untruncated) input object", () => {
+    expect(mapSdkMessageToRawRecords(assistantToolUse("Read", { file_path: "a.ts" }))).toEqual([
+      { kind: "tool.use", tool: "Read", input: { file_path: "a.ts" } },
+    ]);
+  });
+
+  it("maps user tool_result to a tool.result record", () => {
+    expect(mapSdkMessageToRawRecords(userToolResult("42"))).toEqual([{ kind: "tool.result", isError: false, output: "42" }]);
+    expect(mapSdkMessageToRawRecords(userToolResult("boom", true))).toEqual([
+      { kind: "tool.result", isError: true, output: "boom" },
+    ]);
+  });
+
+  it("maps result to a turn.result record", () => {
+    expect(mapSdkMessageToRawRecords(resultSuccess())).toEqual([
+      { kind: "turn.result", subtype: "success", numTurns: 1, isError: false },
+    ]);
+  });
+
+  it("ignores unrecognized message types", () => {
+    expect(mapSdkMessageToRawRecords({ type: "rate_limit_event" })).toEqual([]);
+    expect(mapSdkMessageToRawRecords(null as never)).toEqual([]);
+  });
+});
+
 describe("interpretResultMessage", () => {
   it("parses a success result", () => {
     const verdict = interpretResultMessage(resultSuccess({ result: '{"a":1}' }));
@@ -535,6 +621,28 @@ describe("createClaudeDriver: session lifecycle against a fake SDK", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+  it("resume with a mode override switches the effective mode without mutating the ref (BUD-11 root cause #1)", async () => {
+    const query = vi
+      .fn()
+      .mockReturnValueOnce(asyncGen([resultSuccess()])); // the one runTurn call below
+    const driver = createClaudeDriver({ importSdk: async () => ({ query }) });
+    const ref = { id: "prior-id", cwd: CWD, mode: "readonly", established: true };
+    const handle = driver.resume(ref, { mode: "build" });
+    expect(handle.mode).toBe("build");
+    expect(ref.mode).toBe("readonly"); // the persisted ref itself is never mutated
+
+    await driver.runTurn(handle, "do the build step", {});
+    const turnCall = query.mock.calls[0][0];
+    expect(turnCall.options.permissionMode).toBe("acceptEdits"); // build mode, not the ref's stale readonly
+    expect(turnCall.options.disallowedTools).toEqual([]);
+  });
+
+  it("resume without an override falls back to the ref's own mode", () => {
+    const driver = createClaudeDriver({ importSdk: async () => ({ query: vi.fn() }) });
+    const handle = driver.resume({ id: "prior-id", cwd: CWD, mode: "readonly", established: true });
+    expect(handle.mode).toBe("readonly");
+  });
+
   it("rejects an empty resume id before touching the SDK", () => {
     const query = vi.fn();
     const driver = createClaudeDriver({ importSdk: async () => ({ query }) });
@@ -591,6 +699,34 @@ describe("createClaudeDriver: turn mechanics (sessionId vs resume, events, usage
     const turn2Call = query.mock.calls[2][0];
     expect(turn2Call.options.resume).toBe(handle.ref.id);
     expect(turn2Call.options.sessionId).toBeUndefined();
+  });
+
+  it("feeds onRaw with full-fidelity records alongside onEvent (DW-1)", async () => {
+    const query = vi
+      .fn()
+      .mockReturnValueOnce(asyncGen([resultSuccess()]))
+      .mockReturnValueOnce(
+        asyncGen([
+          SYSTEM_INIT,
+          assistantText("working"),
+          assistantToolUse("Read", { file_path: "a.ts" }),
+          userToolResult("file contents"),
+          resultSuccess({ result: "done" }),
+        ]),
+      );
+    const driver = createClaudeDriver({ importSdk: async () => ({ query }) });
+    const handle = await driver.startSession({ cwd: CWD, mode: "readonly" });
+
+    const rawRecords: unknown[] = [];
+    await driver.runTurn(handle, "go read a.ts", { onRaw: (r: unknown) => rawRecords.push(r) });
+
+    expect(rawRecords).toEqual([
+      { kind: "system.init", model: "claude-opus-4-8", permissionMode: "acceptEdits", tools: ["Read", "Write", "Bash"] },
+      { kind: "assistant.text", text: "working" },
+      { kind: "tool.use", tool: "Read", input: { file_path: "a.ts" } },
+      { kind: "tool.result", isError: false, output: "file contents" },
+      { kind: "turn.result", subtype: "success", numTurns: 1, isError: false },
+    ]);
   });
 
   it("requests structured JSON output when outputSchema is truthy", async () => {

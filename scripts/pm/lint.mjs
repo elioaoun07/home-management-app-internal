@@ -22,6 +22,8 @@ export const CAMPAIGNS = Object.freeze({
   "Notifications & Alerts": "NOTIF",
   "PM Dashboard Refactor": "R",
   "Delivery Workspace": "DW",
+  "Outfits": "OUT",
+  "Healthcare": "HLTH",
 });
 
 const LANES = ["Now", "Next", "Later"];

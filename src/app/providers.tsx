@@ -34,6 +34,9 @@ const STABLE_KEYS = new Set([
   "user-preferences",
   "onboarding",
   "recurring-payments",
+  // Household allergen feed — tiny payload; persisted so recipe allergen
+  // warnings still render offline after an app restart.
+  "household-allergens",
 ]);
 
 /**

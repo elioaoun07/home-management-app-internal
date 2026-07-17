@@ -107,7 +107,29 @@
       "Bash(taskkill //F //PID 25680)",
       "Bash(rm -f pmserver_ctx.log)",
       "Bash(taskkill //F //PID 22744)",
-      "Bash(rm -f pmserver_dw8.log)"
+      "Bash(rm -f pmserver_dw8.log)",
+      "Bash(taskkill //F //IM node.exe //FI \"WINDOWTITLE eq *pm*\")",
+      "PowerShell(node scripts/pm/generate-icons.mjs)",
+      "PowerShell(pnpm vitest run tests/pm-server-net.test.ts tests/pm-mutations.test.ts 2>$null)",
+      "PowerShell(node scripts/pm-server.mjs --no-open --port=4390)",
+      "PowerShell(node scripts/pm/build.mjs 2>&1)",
+      "PowerShell(node scripts/pm-server.mjs --no-open --port=4391)",
+      "PowerShell(pnpm pm:lint 2>&1)",
+      "PowerShell(pnpm vitest run tests/pm-mutations.test.ts tests/pm-server-net.test.ts tests/delivery/server-routes.test.ts tests/delivery/drivers-claude.test.ts tests/delivery/drivers-codex.test.ts tests/delivery/run-session.test.ts 2>&1)",
+      "PowerShell(node scripts/build-pm-dashboard.mjs 2>&1)",
+      "Bash(python3 -c ' *)",
+      "PowerShell(node scripts/pm-server.mjs --no-open --port=4392)",
+      "PowerShell(pnpm pm:lint)",
+      "PowerShell(node scripts/new-module.mjs --name health --title \"Healthcare\" --type standalone --table health_profiles --one-liner \"Family health profiles: allergies, conditions, vaccines, medications\" --intent '\"allergies\" / \"vaccines\" / \"medical history\" / \"medication\"' --dry-run)",
+      "PowerShell(node scripts/new-module.mjs --name health --title \"Healthcare\" --type standalone --table health_profiles --one-liner \"Family health profiles: allergies, conditions, vaccines, medications\" --intent 'allergies / vaccines / medical history / medication' --dry-run)",
+      "PowerShell(node scripts/new-module.mjs --name healthcare --title \"Healthcare\" --type standalone --table health_profiles --one-liner \"Family health profiles: allergies, conditions, vaccines, medications\" --intent 'allergies / vaccines / medical history / medication' --dry-run)",
+      "PowerShell($c = Get-Content migrations\\\\schema.sql; $c.Count; $c[-15..-1])",
+      "PowerShell(pnpm vitest run src/lib/health/allergenMatch.test.ts)",
+      "PowerShell(pnpm typecheck)",
+      "PowerShell(npx eslint src/features/healthcare src/app/api/healthcare src/app/healthcare src/lib/health src/hooks/useHouseholdAllergens.ts src/components/web/RecipeAllergenWarning.tsx src/components/web/RecipeDetailView.tsx src/app/providers.tsx)",
+      "PowerShell(pnpm vitest run src)",
+      "PowerShell(node scripts/check-feature-index.mjs)",
+      "PowerShell(pnpm sync:ai)"
     ]
   }
 }

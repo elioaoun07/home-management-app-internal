@@ -276,6 +276,7 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Dashboard                | `src/app/dashboard/`, `src/components/web/WebDashboard.tsx`       | `ERA Notes/02 - Standalone Modules/Dashboard/`                      | Standalone |
 | Recycle Bin              | `src/app/recycle-bin/`, `src/features/recycle-bin/`              | `ERA Notes/02 - Standalone Modules/Recycle Bin/`                    | Standalone |
 | Plan My Day              | `src/app/reminders/` (Focus tab), `src/app/today/` (redirect), `src/components/planner/`, `src/features/day-plan/` | `ERA Notes/03 - Junction Modules/Plan My Day/`                 | Junction   |
+| Healthcare               | `src/features/healthcare/`                                        | `ERA Notes/02 - Standalone Modules/Healthcare/`         | Standalone |
 
 > **Note:** this table is validated against the **Feature Map** (`ERA Notes/01 - Architecture/Feature Map/_index.md`) by `pnpm docs:check`, which runs during `pnpm sync:ai` and pre-commit. **AI Usage is intentionally excluded** from this Feature Index because it is not part of the application.
 

@@ -1,6 +1,6 @@
 ---
 created: 2026-07-16
-updated: 2026-07-16
+updated: 2026-07-17
 type: vision
 status: living
 owner: Elio
@@ -31,10 +31,15 @@ Three layers, never conflated:
 
 *(IMPLEMENTED 2026-07-16)* **PM tracking: new `Delivery Workspace` campaign, prefix `DW`**, cross-linked from `Agentic Delivery Workspace/` rather than folded into its roadmap doc — this enhancement is large enough to want its own checkable queue.
 
+*(IMPLEMENTED 2026-07-17)* **BUD-11 root-cause fixed at the source, not just backstopped.** The instinct after a 3M-token runaway session is "add budgets" — that alone would have stopped the bleed but not delivered BUD-11's actual task. Ranked and shipped in this order: (1) DW-11's four correctness bugs (per-phase driver mode, path-guard normalization, quota-error classification, transcript completeness) — these are what actually caused both the token burn *and* the non-delivery; (2) DW-12's validation baselining (stop fixing pre-existing bugs the session didn't cause); (3) DW-12's token/cost budgets as the backstop; (4) DW-13's model/effort recommendation as ongoing cost hygiene. BUD-11 ran on `claude-haiku-4-5` (the cheapest model) the whole time — expensive-model selection was never the cause, volume was.
+
+*(IMPLEMENTED 2026-07-17)* **Model/effort recommendation is always opt-in, never auto-applied.** DW-13's `recommendAgentConfig()` pre-fills the launch wizard's model/effort selects via an explicit "Use recommendation" button; the owner's manual choice always wins, with only a passive delta note if it diverges. No mid-session auto-override was built — see the deferred mid-session-advisory note in file 1.
+
 ## Decisions still open (recommendations carried in the plan, not yet re-confirmed)
 
 - **Transcript retention:** warn-only (`warnSessionMB:200`) vs. auto-archival of terminal sessions. Recommendation: warn-only in v1. Shipped as designed (DW-1); still open whether auto-archival is ever wanted.
-- **Pricing ownership:** owner hand-maintains `.delivery/config.json` model/price entries; no auto-fetch (network + staleness risk). Shipped as designed (DW-1/DW-2); the catalog itself still needs the owner to hand-populate real entries.
+- **Pricing ownership:** owner hand-maintains `.delivery/config.json` model/price entries; no auto-fetch (network + staleness risk). Shipped as designed (DW-1/DW-2). *(IMPLEMENTED 2026-07-17)* Claude catalog populated (DW-13: haiku-4-5/sonnet-5/opus-4-8, real per-Mtok pricing, tiered economy/standard/premium); Codex catalog still empty, left for the owner to fill in rather than fabricated.
+- **Recommendation history lookback:** DW-13 shipped with a static per-tier token/cost estimate only — median-of-past-same-tier-sessions was designed but not wired, because `state.usage.total`'s v1 shape doesn't match the v2 shape the estimator expects (see file 1's Known gaps). Open until a shape-translation or turns.ndjson-reduction path is built.
 - **Q&A → PM markdown writeback:** should an answered *blocking* question append to a campaign decision log (HR25-style), or stay session-local? Shipped session-local (DW-5) as recommended; writeback remains a later explicit opt-in, not built.
 - **Default thresholds:** `rotateAtTokens:150k`, `hardCeilingPct:0.85`, `recentTailTurns:3`, `forkAfterPhaseRetries:2`, `warnSessionUsd:10`, `maxTurnBudgetUsd` unset. DW-7 shipped the owner-commanded `rotate` control only — these thresholds are defined in `config.mjs` but not yet wired to an automatic trigger, so they remain unconfirmed in practice.
 - *(IMPLEMENTED 2026-07-16)* **Pause as an execution flag, not a state-machine state** (composes with existing gates without touching the pure transition table) — shipped in DW-4 exactly as designed; DW-10's abort reuses the same flag (`abortInFlight` on the `pause` control) rather than introducing a second mechanism.

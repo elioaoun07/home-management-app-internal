@@ -1,6 +1,6 @@
 ---
 created: 2026-07-16
-updated: 2026-07-16
+updated: 2026-07-17
 type: action-plan
 status: living
 owner: Elio
@@ -47,8 +47,11 @@ No slice changes state-machine transition semantics or gate behavior, so none of
 | **DW-8** | Provider handoff | DW-4, DW-7 | 3d | switch providers mid-Delivery |
 | **DW-9** | Fork + lineage | DW-7 | 3d | branching, replayability |
 | **DW-10** | Mid-turn abort (gated) | DW-4 | 1–2d | within-phase pause |
+| **DW-11** | BUD-11 root-cause fixes (per-phase mode, path guard, quota classification, transcript `onRaw`) | DW-1 | 2d | stop the actual BUD-11 causal chain, not just its symptom |
+| **DW-12** | Validation baselining + token/cost budgets | DW-11 | 2d | never fix pre-existing bugs; hard backstop on runaway spend |
+| **DW-13** | Model/effort recommendation engine | DW-2 | 2d | cost-aware model choice, opt-in only |
 
-Full acceptance criteria per slice, the data model for every new file, the API surface, and the risk register live in the approved enhancement plan (kickoff session, 2026-07-16) — this doc tracks sequencing and status; [4 · Checklist](<4 - Checklist.md>) tracks the checkable queue.
+Full acceptance criteria per slice, the data model for every new file, the API surface, and the risk register live in the approved enhancement plan (kickoff session, 2026-07-16) — this doc tracks sequencing and status; [4 · Checklist](<4 - Checklist.md>) tracks the checkable queue. DW-11 → DW-13 come from a separate follow-up plan (approved 2026-07-17, triggered by the BUD-11 incident) — see file 1 for the incident forensics and file 2 for the ranked-fix ordering decision.
 
 ## Program status: all ten slices shipped 2026-07-16
 
@@ -66,3 +69,9 @@ Every acceptance criterion in the table above was met; full per-slice evidence l
 - **DW-10** — `pause{abortInFlight:true}` genuinely aborts a turn already in flight via a concurrent controls poller + `AbortController`; sealed `result:"aborted"`, never retried; git-guard + workspace delta always run; explicit lost-turn UI copy.
 
 No slice changed state-machine transition semantics or gate behavior at any point. Final verification: 810/810 `tests/delivery` (28 files) + all `tests/pm-ui` passing, `pnpm typecheck` and `pnpm lint` clean, live-browser smoke-tested per slice against disposable fixture sessions (none left behind in `.delivery/sessions/`).
+
+## Follow-up program status: DW-11 → DW-13 shipped 2026-07-17
+
+Triggered by the BUD-11 incident (`s-20260715-214421-hvfk`), root-caused by direct session-file forensics before any code changed. Sequenced as **A (P0 fixes) → E (transcript wiring, folded into DW-11) → B (validation baseline) → C (budgets, folded into DW-12) → F (dashboard UX, folded into DW-11/12) → D (recommendation engine, DW-13)** per the approved plan — correctness fixes first because they were the actual cause, the recommendation engine last because it's cost hygiene for future sessions, not a fix for this one. Full per-slice evidence in [1 · Feature State](<1 - Feature State.md>). Final verification: 879/879 `tests/delivery` passing, `pnpm typecheck`/`pnpm lint` clean, BUD-11 itself re-verified live in the dashboard post-fix (`UsageMeter` budget bar, `GatePanel` reason-based variants, all pre-DW-1 fallbacks still graceful).
+
+Deliberately not built this round (see file 1's "Not started" for the full list, not silently dropped): DW-13's historical token/cost lookback (static per-tier estimate only), mid-session recommendation-update advisories, DW-12's automatic context-rotation wiring, and an optional `backfill-turns.mjs` for pre-DW-1 sessions.

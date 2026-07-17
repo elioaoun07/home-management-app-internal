@@ -111,8 +111,10 @@ IDs are per-campaign, so always name the campaign — `L1` alone is ambiguous ac
 | `Trips/` | `TRIP` |
 | `Hub & ERA/` | `HUB` |
 | `Notifications & Alerts/` | `NOTIF` |
+| `Healthcare/` | `HLTH` |
 | `PM Dashboard Refactor/` | `R` (grandfathered) |
 | `Delivery Workspace/` | `DW` |
+| `Outfits/` | `OUT` |
 
 ---
 

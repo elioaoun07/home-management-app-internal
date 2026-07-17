@@ -13,6 +13,7 @@ tags: [pm/checklist, tooling/pm-dashboard]
 
 ## Now
 
+- [ ] **R15** Serve `--lan` mode over HTTPS (self-signed cert, one-time phone trust) so the offline-snapshot service worker can actually register on a phone — plain LAN HTTP is not a secure context and service workers refuse to register there. _(friction - M)_
 - [ ] **R6** Complete desktop + 390 px visual UAT, fake-driver walkthrough, then delete the temporary legacy rollback branch/files. _(blocker - M)_
 - [ ] **R10** Canonical item grammar spec + templates — `_Conventions.md` + `_Templates/`, one `- [ ] **PREFIX-n** … _(severity - effort)_` shape under Now/Next/Later. → `[_Conventions.md](<../_Conventions.md>)` _(friction - S)_
 - [ ] **R11** Parser extensions + FABLED+/archived hide + parser tests — hyphenated/lettered IDs, one hidden-layer flag. → `` `scripts/pm/shared/tasks.mjs` ``, `` `scripts/delivery/packet.mjs` ``, `` `scripts/pm/src/app/store.js` `` _(friction - M)_

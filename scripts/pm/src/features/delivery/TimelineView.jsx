@@ -12,6 +12,11 @@ const CARD_TYPES = new Set([
   "validation.result", "error.fatal", "git.guard.violation", "turn.crashed.sealed",
   "runner.started", "runner.resumed", "decision.stale", "decision.rejected",
   "handoff.started", "handoff.completed", "handoff.failed", "handoff.gaps", "context.rotated",
+  // Slice C (token/cost budgets, phase-turn limits, plan-step cap, validation
+  // baseline) — surfaced as their own cards rather than folded into noise, so
+  // an owner watching a session can see a runaway-spend warning as it
+  // happens instead of only after the session blocks.
+  "budget.warning", "budget.exceeded", "validation.baseline.captured", "plan.step_count.warning",
 ]);
 
 const CATEGORY = {
@@ -23,6 +28,8 @@ const CATEGORY = {
   "turn.crashed.sealed": "blockers", "runner.started": "config", "runner.resumed": "config",
   "handoff.started": "config", "handoff.completed": "config", "handoff.failed": "blockers",
   "handoff.gaps": "questions", "context.rotated": "config",
+  "budget.warning": "config", "budget.exceeded": "blockers",
+  "validation.baseline.captured": "phase", "plan.step_count.warning": "decisions",
 };
 
 const FILTERS = [
@@ -34,7 +41,7 @@ const FILTERS = [
   { key: "phase", label: "Phases" },
 ];
 
-function isBlocking(type) { return type === "error.fatal" || type === "git.guard.violation" || type === "turn.crashed.sealed" || type === "handoff.failed"; }
+function isBlocking(type) { return type === "error.fatal" || type === "git.guard.violation" || type === "turn.crashed.sealed" || type === "handoff.failed" || type === "budget.exceeded"; }
 
 function fmtTime(ts) { try { return new Date(ts).toLocaleTimeString(); } catch { return ts; } }
 
@@ -66,6 +73,10 @@ function summarize(event) {
     case "handoff.failed": return `Provider handoff failed: ${d.from} → ${d.to}${d.message ? ` — ${d.message}` : ""}`;
     case "handoff.gaps": return `Handoff verification found gaps: ${(d.gaps || []).join("; ") || "malformed response"}`;
     case "context.rotated": return `Context rotated (${d.reason}) — ~${d.tokensEstAfterRotation} tok after rotation`;
+    case "budget.warning": return `Budget warning: ${d.totalTokens} tokens processed${d.costUsd != null ? ` (~$${d.costUsd.toFixed(2)})` : ""} — approaching the configured cap`;
+    case "budget.exceeded": return `Budget exceeded: ${d.reason || `${d.totalTokens} tokens processed`}`;
+    case "validation.baseline.captured": return `Validation baseline captured on a dirty workspace (${d.ok ? "passing" : "already failing"}) — later failures matching it won't spend fix-loop turns`;
+    case "plan.step_count.warning": return `Plan has ${d.stepCount} steps (cap: ${d.maxPlanSteps}) — consider consolidating before approving`;
     default: return event.type;
   }
 }

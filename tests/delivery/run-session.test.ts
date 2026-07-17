@@ -271,6 +271,110 @@ describe("advanceSession: happy path SELECTED -> SHIPPED", () => {
   });
 });
 
+function preExistingFailingValidation() {
+  return {
+    ok: false,
+    results: {
+      typecheck: {
+        ok: false,
+        ms: 1,
+        excerpt: "tests/pm-ui/lint-rules.test.ts(10,33): error TS2353: bogus, unrelated to this session\n",
+      },
+    },
+  };
+}
+
+describe("advanceSession: pre-existing validation failure skips the fix loop (BUD-11 root cause #5)", () => {
+  it("captures a baseline on a dirty-at-start workspace and blocks immediately (0 fix-loop turns) when validation keeps failing on the exact same pre-existing error", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    // Simulate the BUD-11 workspace: uncommitted changes unrelated to this
+    // delivery were already present when the session started.
+    const stateFile = join(dir, "state.json");
+    const seededState = JSON.parse(readFileSync(stateFile, "utf8"));
+    seededState.workspace.dirtyAtStart = true;
+    atomicWriteJsonSync(stateFile, seededState);
+
+    const driver = createDriver("fake", {
+      script: { turns: [{ finalText: SPEC_TEXT }, { finalText: PLAN_TEXT }, { finalText: "build attempt 1" }] },
+    });
+
+    let state = await drive(dir, driver, root, { runValidation: preExistingFailingValidation });
+    expect(state.state).toBe("SPEC_READY");
+    expect(state.workspace.baselineValidation).toBeTruthy(); // captured once, during SELECTED
+    expect(existsSync(join(dir, "artifacts", "validation-baseline.json"))).toBe(true);
+
+    writeDecision(dir, 1, "spec", "approve");
+    state = await drive(dir, driver, root, { runValidation: preExistingFailingValidation });
+    expect(state.state).toBe("PLAN_READY");
+
+    writeDecision(dir, 2, "plan", "approve");
+    state = await drive(dir, driver, root, { runValidation: preExistingFailingValidation });
+
+    expect(state.state).toBe("BLOCKED");
+    expect(state.awaiting).toEqual({ gate: "blocked", returnTo: "BUILDING", reason: "pre-existing-failure" });
+    // Not one fix-loop attempt was spent — the very first validation
+    // failure was already recognized as pre-existing and blocked directly.
+    expect(state.fixLoop).toBe(0);
+    expect(state.lastError.errorKind).toBe("pre-existing-failure");
+  });
+
+  it("still runs the normal fix loop when validation fails on a file the baseline did NOT already have failing", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const stateFile = join(dir, "state.json");
+    const seededState = JSON.parse(readFileSync(stateFile, "utf8"));
+    seededState.workspace.dirtyAtStart = true;
+    atomicWriteJsonSync(stateFile, seededState);
+
+    const driver = createDriver("fake", {
+      script: {
+        turns: [
+          { finalText: SPEC_TEXT },
+          { finalText: PLAN_TEXT },
+          { finalText: "build attempt 1" },
+          { finalText: "fix attempt 1" },
+        ],
+      },
+    });
+
+    let state = await drive(dir, driver, root, { runValidation: preExistingFailingValidation });
+    writeDecision(dir, 1, "spec", "approve");
+    state = await drive(dir, driver, root, { runValidation: preExistingFailingValidation });
+    writeDecision(dir, 2, "plan", "approve");
+
+    // Baseline was captured with the pre-existing failure; a fresh, different
+    // failure now shows up (a file this session's build step could plausibly
+    // have broken) — this must go through the ordinary fix loop, not be
+    // waved through as "pre-existing". Drive tick-by-tick (rather than the
+    // auto-looping `drive()` helper, which would keep re-entering BUILDING
+    // past the single scripted fix turn and exhaust the fake driver's
+    // script) and stop as soon as the fix loop has armed once.
+    const newFailure = () => ({
+      ok: false,
+      results: { typecheck: { ok: false, ms: 1, excerpt: "src/lib/queryConfig.ts(4,1): error TS1005: new failure\n" } },
+    });
+    for (let i = 0; i < 50; i++) {
+      const tick = await advanceSession({
+        sessionDir: dir,
+        driver,
+        repoRoot: root,
+        runValidation: newFailure,
+        retryDelayMs: 0,
+        sleep: () => {},
+        takeSnapshot: stableSnapshot,
+        readHead: () => "fixture-shipped-head",
+      });
+      state = tick.state;
+      if (state.state === "BUILDING" && state.fixLoop === 1) break;
+      if (!tick.didWork) break;
+    }
+
+    expect(state.state).toBe("BUILDING"); // the fix loop re-entered BUILDING for a genuine, attributable failure
+    expect(state.fixLoop).toBe(1);
+  });
+});
+
 describe("advanceSession: validation-fail loop exhaustion -> BLOCKED", () => {
   it("loops through BUILDING exactly maxFixLoops times before blocking", async () => {
     const root = setupRepo();
@@ -339,6 +443,199 @@ describe("advanceSession: validation-fail loop exhaustion -> BLOCKED", () => {
   });
 });
 
+describe("advanceSession: session token budget hard cap short-circuits to BLOCKED (Slice C backstop)", () => {
+  it("skips the BUILDING turn entirely (no driver call) once total processed tokens already reach the configured cap", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = createDriver("fake", {
+      script: { turns: [{ finalText: SPEC_TEXT }, { finalText: PLAN_TEXT }, { finalText: "should never run" }] },
+    });
+
+    let state = await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 1, "spec", "approve");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("PLAN_READY");
+    writeDecision(dir, 2, "plan", "approve");
+
+    // Seed the session's accumulated usage as if it had already burned
+    // through a huge amount of (mostly cached) tokens — the exact BUD-11
+    // shape — before the BUILDING turn that would otherwise run next.
+    const stateFile = join(dir, "state.json");
+    const seeded = JSON.parse(readFileSync(stateFile, "utf8"));
+    seeded.usage = {
+      perPhase: seeded.usage.perPhase,
+      total: { input: 1434, cachedInput: 2_991_876, output: 43_447, costUsd: 2.5 },
+    };
+    atomicWriteJsonSync(stateFile, seeded);
+
+    let last;
+    for (let i = 0; i < 10; i++) {
+      const tick = await advanceSession({
+        sessionDir: dir,
+        driver,
+        repoRoot: root,
+        runValidation: passingValidation,
+        retryDelayMs: 0,
+        sleep: () => {},
+        takeSnapshot: stableSnapshot,
+        readHead: () => "fixture-shipped-head",
+        deliveryConfig: { budgets: { maxSessionTokens: 2_000_000 } },
+      });
+      last = tick.state;
+      if (!tick.didWork) break;
+    }
+    state = last;
+
+    expect(state.state).toBe("BLOCKED");
+    expect(state.awaiting).toEqual({ gate: "blocked", returnTo: "BUILDING", reason: "budget-exceeded" });
+    expect(state.lastError.errorKind).toBe("budget-exceeded");
+
+    // The fake driver's script still has an unconsumed "should never run"
+    // turn — proves the BUILDING turn was skipped outright, not merely
+    // attempted and failed.
+    expect(readEvents(dir).some((e) => e.type === "budget.exceeded")).toBe(true);
+  });
+
+  it("emits a one-time-per-tick budget.warning event when crossing the warn threshold, without blocking", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = createDriver("fake", {
+      script: { turns: [{ finalText: SPEC_TEXT }, { finalText: PLAN_TEXT }, { finalText: "did the change" }] },
+    });
+
+    let state = await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 1, "spec", "approve");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 2, "plan", "approve");
+
+    const stateFile = join(dir, "state.json");
+    const seeded = JSON.parse(readFileSync(stateFile, "utf8"));
+    seeded.usage = { perPhase: seeded.usage.perPhase, total: { input: 100, cachedInput: 1_600_000, output: 100, costUsd: null } };
+    atomicWriteJsonSync(stateFile, seeded);
+
+    // Stop as soon as the warning fires (don't let the fake driver's script
+    // run out on later phases the seeded usage has nothing to do with).
+    let last;
+    for (let i = 0; i < 10; i++) {
+      const tick = await advanceSession({
+        sessionDir: dir,
+        driver,
+        repoRoot: root,
+        runValidation: passingValidation,
+        retryDelayMs: 0,
+        sleep: () => {},
+        takeSnapshot: stableSnapshot,
+        readHead: () => "fixture-shipped-head",
+        deliveryConfig: { budgets: { warnSessionTokens: 1_500_000, maxSessionTokens: 4_000_000 } },
+      });
+      last = tick.state;
+      if (readEvents(dir).some((e) => e.type === "budget.warning")) break;
+      if (!tick.didWork) break;
+    }
+    state = last;
+
+    expect(state.state).not.toBe("BLOCKED"); // warn never blocks
+    expect(readEvents(dir).some((e) => e.type === "budget.warning")).toBe(true);
+  });
+});
+
+describe("advanceSession: DISCOVERY phase turn-count limit (Slice C backstop)", () => {
+  it("blocks with reason phase-turn-limit instead of looping DISCOVERY forever on repeated questions", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const questionSpecText = JSON.stringify({
+      problem: "p",
+      currentBehavior: "c",
+      proposedBehavior: "pb",
+      acceptanceCriteria: [],
+      affectedPaths: [],
+      riskFlags: [],
+      openQuestions: [{ text: "still unsure" }],
+    });
+    const driver = createDriver("fake", {
+      script: { turns: [{ finalText: questionSpecText }, { finalText: questionSpecText }] },
+    });
+
+    let last;
+    for (let i = 0; i < 10; i++) {
+      const tick = await advanceSession({
+        sessionDir: dir,
+        driver,
+        repoRoot: root,
+        runValidation: passingValidation,
+        retryDelayMs: 0,
+        sleep: () => {},
+        takeSnapshot: stableSnapshot,
+        readHead: () => "fixture-shipped-head",
+        deliveryConfig: { budgets: { maxTurnsPerPhase: { discovery: 1 } } },
+      });
+      last = tick.state;
+      if (last.state === "NEEDS_DECISION") {
+        // Answer the question so DISCOVERY re-enters — the second entry
+        // should hit the 1-turn cap instead of spending another turn.
+        writeDecision(dir, tick.state.decisionsProcessed + 1, "question", "answer", { answer: "still unsure, try again" });
+      }
+      if (!tick.didWork && last.state !== "NEEDS_DECISION") break;
+    }
+    const state = last;
+
+    expect(state.state).toBe("BLOCKED");
+    expect(state.awaiting).toEqual({ gate: "blocked", returnTo: "DISCOVERY", reason: "phase-turn-limit" });
+  });
+});
+
+describe("advanceSession: quota/rate-limit turn errors short-circuit to BLOCKED without retrying (BUD-11 root cause #6)", () => {
+  it("never sleeps for a retry and blocks after exactly one attempt when the driver throws a session-limit error", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = createDriver("fake", {
+      script: {
+        turns: [
+          { finalText: SPEC_TEXT },
+          { finalText: PLAN_TEXT },
+          {
+            throws:
+              "claude driver: query failed — Claude Code returned an error result: You've hit your session limit · resets 12:30am (Asia/Beirut)",
+          },
+        ],
+      },
+    });
+
+    let state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("SPEC_READY");
+    writeDecision(dir, 1, "spec", "approve");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("PLAN_READY");
+    writeDecision(dir, 2, "plan", "approve");
+
+    const sleepCalls: number[] = [];
+    let last;
+    for (let i = 0; i < 50; i++) {
+      const tick = await advanceSession({
+        sessionDir: dir,
+        driver,
+        repoRoot: root,
+        retryDelayMs: 30000,
+        sleep: (ms: number) => sleepCalls.push(ms),
+        takeSnapshot: stableSnapshot,
+        readHead: () => "fixture-shipped-head",
+      });
+      last = tick.state;
+      if (!tick.didWork) break;
+    }
+    state = last;
+
+    expect(sleepCalls).toEqual([]); // no 30s retry-delay sleep — a quota error is never retried
+    expect(state.state).toBe("BLOCKED");
+    expect(state.awaiting).toEqual({ gate: "blocked", returnTo: "BUILDING", reason: "provider-quota" });
+    expect(state.lastError.errorKind).toBe("quota");
+    expect(state.lastError.resetsAt).toBe("12:30am (Asia/Beirut)");
+
+    const failedEvents = readEvents(dir).filter((e) => e.type === "agent.turn.failed");
+    expect(failedEvents).toHaveLength(1); // exactly one attempt, not the usual two
+  });
+});
+
 describe("advanceSession: resume after a simulated runner crash", () => {
   it("continues correctly when a fresh driver instance resumes the persisted ref", async () => {
     const root = setupRepo();
@@ -367,6 +664,47 @@ describe("advanceSession: resume after a simulated runner crash", () => {
 
     expect(state.state).toBe("UAT_READY");
     expect(state.driver.ref).toEqual(refBeforeCrash);
+  });
+});
+
+describe("advanceSession: per-phase driver mode override (BUD-11 root cause #1)", () => {
+  it("resumes BUILDING with mode=build even though the ref was established readonly in DISCOVERY, without ever mutating the persisted ref's mode", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = createDriver("fake", { script: happyPathScript() });
+
+    // Spy on resume() to capture the override each phase actually asked for,
+    // while still delegating to the real fake-driver behavior.
+    const resumeCalls: Array<{ refMode: string; overrideMode: string | undefined }> = [];
+    const originalResume = driver.resume.bind(driver);
+    driver.resume = (ref: { mode: string }, overrides: { mode?: string } = {}) => {
+      resumeCalls.push({ refMode: ref.mode, overrideMode: overrides.mode });
+      return originalResume(ref, overrides);
+    };
+
+    let state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("SPEC_READY");
+    expect(state.driver.ref.mode).toBe("readonly"); // DISCOVERY establishes readonly
+
+    writeDecision(dir, 1, "spec", "approve");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("PLAN_READY");
+
+    writeDecision(dir, 2, "plan", "approve");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("UAT_READY");
+
+    // The persisted ref's mode never changes from its original DISCOVERY value...
+    expect(state.driver.ref.mode).toBe("readonly");
+    // ...but BUILDING must have resumed with an explicit "build" override, or
+    // the write-capable tools would never have been offered to the agent
+    // (the exact BUD-11 failure: 10 "build steps" that could only write
+    // prose because the session was frozen in readonly mode).
+    const buildOverrides = resumeCalls.filter((c) => c.overrideMode === "build");
+    expect(buildOverrides.length).toBeGreaterThan(0);
+    for (const call of buildOverrides) {
+      expect(call.refMode).toBe("readonly");
+    }
   });
 });
 

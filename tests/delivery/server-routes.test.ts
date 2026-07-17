@@ -346,6 +346,64 @@ describe("GET /api/delivery/capabilities", () => {
   });
 });
 
+describe("GET /api/delivery/recommendation", () => {
+  const CATALOG = {
+    providers: {
+      claude: {
+        defaultModel: "claude-sonnet-5",
+        efforts: ["low", "medium", "high", "xhigh", "max"],
+        models: [
+          { id: "claude-haiku-4-5", tier: "economy", pricing: { inPerMTok: 1, outPerMTok: 5, cachedReadPerMTok: 0.1, cacheWritePerMTok: 1.25 } },
+          { id: "claude-sonnet-5", tier: "standard", pricing: { inPerMTok: 3, outPerMTok: 15, cachedReadPerMTok: 0.3, cacheWritePerMTok: 3.75 } },
+          { id: "claude-opus-4-8", tier: "premium", pricing: { inPerMTok: 5, outPerMTok: 25, cachedReadPerMTok: 0.5, cacheWritePerMTok: 6.25 } },
+        ],
+      },
+    },
+  };
+
+  it("recommends premium/opus for the fixture's M-effort blocker item (also flags money-domain via 'allocation splits')", async () => {
+    // CHECKLIST_LINE is "_(blocker - M)_" in campaign Budget with text "...allocation splits..."
+    // -> score 1(M) + 1(blocker) + 1(money-domain, matched by classify.mjs's MONEY_KEYWORD_RE) = 3 -> premium.
+    const { ctx } = setup({ deliveryConfig: CATALOG });
+    const result = await routeDelivery(
+      { method: "GET", path: "/api/delivery/recommendation", query: q({ file: "Budget/4 - Checklist.md", cbidx: "0", provider: "claude" }), body: {} },
+      ctx,
+    );
+    expect(result?.status).toBe(200);
+    const { recommendation } = result!.json as { recommendation: { tier: string; model: string; estCostUsd: number | null } | null };
+    expect(recommendation).not.toBeNull();
+    expect(recommendation!.tier).toBe("premium");
+    expect(recommendation!.model).toBe("claude-opus-4-8");
+    expect(recommendation!.estCostUsd).toBeGreaterThan(0);
+  });
+
+  it("returns { recommendation: null } when the catalog has no models for the provider (today's default)", async () => {
+    const { ctx } = setup();
+    const result = await routeDelivery(
+      { method: "GET", path: "/api/delivery/recommendation", query: q({ file: "Budget/4 - Checklist.md", cbidx: "0", provider: "claude" }), body: {} },
+      ctx,
+    );
+    expect(result?.status).toBe(200);
+    expect((result!.json as { recommendation: unknown }).recommendation).toBeNull();
+  });
+
+  it("404s on a file that doesn't exist", async () => {
+    const { ctx } = setup({ deliveryConfig: CATALOG });
+    await expectRouteError(
+      routeDelivery({ method: "GET", path: "/api/delivery/recommendation", query: q({ file: "Budget/nope.md", cbidx: "0", provider: "claude" }), body: {} }, ctx),
+      404,
+    );
+  });
+
+  it("400s when cbidx is missing", async () => {
+    const { ctx } = setup({ deliveryConfig: CATALOG });
+    await expectRouteError(
+      routeDelivery({ method: "GET", path: "/api/delivery/recommendation", query: q({ file: "Budget/4 - Checklist.md", provider: "claude" }), body: {} }, ctx),
+      400,
+    );
+  });
+});
+
 describe("POST /api/delivery/decision", () => {
   it("returns 409 when gate doesn't match state.awaiting.gate", async () => {
     const { ctx } = setup();

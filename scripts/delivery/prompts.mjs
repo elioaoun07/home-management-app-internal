@@ -59,7 +59,7 @@ export function buildDiscoveryPrompt({ packet, campaignFilePaths = [], skillPath
     "Explore the codebase and return only the structured JSON payload requested below. " +
     "Do not create, edit, or delete any file; the runner writes artifacts/spec.md after validating your JSON.\n" +
     packetBlock(packet) +
-    `\nCampaign context files (read by path):\n${inputs}\n` +
+    `\nCampaign context files (read by path, relative to the repository root — pass them to your Read tool exactly as written, do not turn them into absolute paths):\n${inputs}\n` +
     renderSkillPaths(skillPaths) +
     "\nReturn an object with: problem, currentBehavior with file:line evidence, proposedBehavior, " +
     "acceptanceCriteria[{id,text}], affectedPaths[string], riskFlags[string], " +

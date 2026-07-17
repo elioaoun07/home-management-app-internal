@@ -37,6 +37,7 @@ import "./drivers/fake.mjs"; // self-registers; SDK import remains lazy
 import "./drivers/codex.mjs"; // self-registers; SDK import remains lazy
 import "./drivers/claude.mjs"; // self-registers; SDK import remains lazy
 import { buildCapabilitiesPayload, getDefaultModel, isKnownEffort, isKnownModel, loadConfig } from "./config.mjs";
+import { recommendAgentConfig } from "./recommendation.mjs";
 import { buildControl, controlFileName } from "./controls.mjs";
 import { emptyLedger, splitOpenQuestions } from "./memory.mjs";
 import { findMatches, parseTurnRecords, parseTurns } from "./transcript.mjs";
@@ -439,6 +440,40 @@ function getCapabilities(ctx) {
   return buildCapabilitiesPayload(ctx.deliveryConfig, manifests);
 }
 
+// ---- GET /api/delivery/recommendation (Slice D) ----
+
+/**
+ * Read-only preview of `recommendAgentConfig` for a not-yet-launched item —
+ * same item-identity + classify path as `startSession`, minus every
+ * session-creating side effect. Returns `{recommendation: null}` (not an
+ * error) whenever the provider's catalog has no models for the matched tier,
+ * so the wizard can just hide the card.
+ */
+function getRecommendation(ctx, { file, cbidx, provider }) {
+  if (typeof file !== "string" || !file) throw fail(400, "file is required");
+  if (cbidx == null || cbidx === "") throw fail(400, "cbidx is required");
+  const cbidxNum = Number(cbidx);
+  if (!Number.isFinite(cbidxNum)) throw fail(400, "cbidx is required");
+  const agent = provider === "codex" ? "codex" : "claude";
+
+  let abs;
+  try {
+    abs = resolveInside(ctx.PM_DIR, file);
+  } catch {
+    throw fail(400, "path escapes the PM directory");
+  }
+  if (!existsSync(abs)) throw fail(404, "file not found");
+  const raw = readFileSync(abs, "utf8");
+  const idResult = buildItemIdentity(raw, cbidxNum, file);
+  if (!idResult.ok) throw fail(409, idResult.reason);
+  const item = idResult.item;
+
+  const scopeHints = computeScopeHints(item);
+  const capabilities = classify({ item, scopeHints });
+  const recommendation = recommendAgentConfig({ item, capabilities, provider: agent, config: ctx.deliveryConfig });
+  return { recommendation };
+}
+
 /**
  * Validate `model`/`effort` against the owner's `.delivery/config.json` catalog
  * (DW-2). Model is only checked when the provider's catalog is non-empty —
@@ -776,6 +811,9 @@ export async function routeDelivery({ method, path, query, body }, ctx) {
     return ok(getArtifact(ctx, query.get("id") || "", query.get("path") || ""));
   }
   if (method === "GET" && path === "/api/delivery/capabilities") return ok(getCapabilities(ctx));
+  if (method === "GET" && path === "/api/delivery/recommendation") {
+    return ok(getRecommendation(ctx, { file: query.get("file") || "", cbidx: query.get("cbidx"), provider: query.get("provider") || "claude" }));
+  }
   if (method === "GET" && path === "/api/delivery/memory") return ok(getMemory(ctx, query.get("id") || ""));
   if (method === "GET" && path === "/api/delivery/questions") return ok(getQuestions(ctx, query.get("id") || ""));
   if (method === "GET" && path === "/api/delivery/turns") {

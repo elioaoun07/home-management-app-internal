@@ -104,6 +104,77 @@ export function mapCodexEventToEvents(event) {
   return [];
 }
 
+/**
+ * Map one Codex SDK stream event to zero or more full-fidelity transcript
+ * records (DW-1 `transcript/t-NNNN.ndjson`, `kind` one of `RECORD_KINDS`).
+ * Mirrors `mapCodexEventToEvents` (which feeds the curated, truncated
+ * events.ndjson timeline) but is untruncated at this layer — per-record byte
+ * capping happens downstream in `buildRecord` (transcript.mjs). `runTurn`
+ * below wires this to the driver's `onRaw` callback so live Codex runs get
+ * the same full-fidelity capture the fake driver already exercised in tests
+ * (previously only `fake.mjs` ever called `onRaw` — real runs only reached
+ * the truncated events.ndjson).
+ */
+export function mapCodexEventToRawRecords(event) {
+  if (!event || typeof event !== "object") return [];
+
+  if (event.type === "thread.started") {
+    return [{ kind: "system.init", threadId: event.thread_id }];
+  }
+  if (event.type === "turn.completed") {
+    return [{ kind: "turn.result", usage: normalizeUsage(event.usage, "codex") }];
+  }
+  if (event.type === "turn.failed") {
+    return [{ kind: "error", text: (event.error && event.error.message) || "turn failed" }];
+  }
+  if (event.type === "error") {
+    return [{ kind: "error", text: event.message || "SDK stream error" }];
+  }
+  if (!event.type.startsWith("item.") || !event.item) return [];
+
+  const { item } = event;
+  if (item.type === "agent_message") {
+    return item.text ? [{ kind: "assistant.text", text: item.text }] : [];
+  }
+  if (item.type === "reasoning") {
+    return item.text ? [{ kind: "assistant.reasoning", text: item.text }] : [];
+  }
+  if (item.type === "command_execution") {
+    return [
+      {
+        kind: "command",
+        command: item.command,
+        output: item.aggregated_output,
+        status: item.status,
+        ...(item.exit_code == null ? {} : { exitCode: item.exit_code }),
+      },
+    ];
+  }
+  if (item.type === "file_change") {
+    return [{ kind: "file.change", status: item.status, changes: item.changes || [] }];
+  }
+  if (item.type === "mcp_tool_call") {
+    return [
+      {
+        kind: "tool.use",
+        tool: item.server && item.tool ? `${item.server}.${item.tool}` : item.tool || item.server,
+        status: item.status,
+        ...(item.error ? { error: item.error.message } : {}),
+      },
+    ];
+  }
+  if (item.type === "web_search") {
+    return [{ kind: "web.search", query: item.query }];
+  }
+  if (item.type === "todo_list") {
+    return [{ kind: "todo", items: item.items || [] }];
+  }
+  if (item.type === "error") {
+    return [{ kind: "error", text: item.message || "agent item failed" }];
+  }
+  return [];
+}
+
 // ---- capability manifest (DW-2: pure data, no SDK import — verified against
 // the installed @openai/codex-sdk 0.144.1 dist/index.d.ts) ----
 
@@ -177,16 +248,21 @@ export function createCodexDriver(options = {}) {
     return { ref: currentRef, cwd, mode };
   }
 
-  async function resume(ref) {
+  // `overrides.mode` lets the runner resume the thread under a different
+  // phase mode than it was first established with (e.g. readonly → build) —
+  // see the matching comment in drivers/claude.mjs. `ref` itself is never
+  // mutated, so the historical mode persisted in state.json is untouched.
+  async function resume(ref, overrides = {}) {
     if (!ref || !ref.id) throw new DriverError("codex driver: resume requires a ref with an id");
-    currentOptions = buildThreadOptions({ cwd: ref.cwd, mode: ref.mode, model: ref.model, effort: ref.effort });
+    const mode = (overrides && overrides.mode) || ref.mode;
+    currentOptions = buildThreadOptions({ cwd: ref.cwd, mode, model: ref.model, effort: ref.effort });
     thread = await createThread({ ref });
     started = true;
     currentRef = ref;
-    return { ref: currentRef, cwd: ref.cwd, mode: ref.mode };
+    return { ref: currentRef, cwd: ref.cwd, mode };
   }
 
-  async function runTurn(handle, prompt, { outputSchema, onEvent, effort, signal } = {}) {
+  async function runTurn(handle, prompt, { outputSchema, onEvent, onRaw, effort, signal } = {}) {
     void handle;
     if (!started || !thread || !currentRef) throw new DriverError("codex driver: cannot run a turn before startSession/resume");
     if (typeof prompt !== "string" || !prompt.trim()) throw new DriverError("codex driver: prompt must be a non-empty string");
@@ -209,6 +285,9 @@ export function createCodexDriver(options = {}) {
         if (event.type === "error") failure = event.message || "SDK stream error";
         for (const normalized of mapCodexEventToEvents(event)) {
           if (typeof onEvent === "function") onEvent(normalized);
+        }
+        if (typeof onRaw === "function") {
+          for (const record of mapCodexEventToRawRecords(event)) onRaw(record);
         }
       }
     } catch (err) {

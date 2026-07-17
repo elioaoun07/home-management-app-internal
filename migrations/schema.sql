@@ -1651,3 +1651,99 @@ CREATE POLICY day_plans_select ON public.day_plans AS PERMISSIVE FOR SELECT USIN
 CREATE POLICY day_plans_insert ON public.day_plans AS PERMISSIVE FOR INSERT WITH CHECK ((user_id = auth.uid()));
 CREATE POLICY day_plans_update ON public.day_plans AS PERMISSIVE FOR UPDATE USING ((user_id = auth.uid()));
 CREATE POLICY day_plans_delete ON public.day_plans AS PERMISSIVE FOR DELETE USING ((user_id = auth.uid()));
+
+-- ── Healthcare module (Phase 1: 2026-07-17_healthcare-core.sql) ─────────────
+-- Owner-only RLS on all four tables (managing_user_id = auth.uid()); household
+-- visibility is resolved inside SECURITY DEFINER RPCs get_health_bundle() /
+-- get_household_allergens() (not captured here — schema.sql is tables-only).
+
+CREATE TABLE public.health_profiles (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  managing_user_id uuid NOT NULL,
+  user_id uuid,
+  name text NOT NULL,
+  date_of_birth date,
+  blood_type text,
+  notes text,
+  shared_with_household boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  deleted_at timestamp with time zone,
+  CONSTRAINT health_profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT health_profiles_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id),
+  CONSTRAINT health_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT health_profiles_blood_type_check CHECK (blood_type IS NULL OR blood_type IN ('A+','A-','B+','B-','AB+','AB-','O+','O-'))
+);
+CREATE INDEX health_profiles_managing_user_id_idx ON public.health_profiles USING btree (managing_user_id);
+
+CREATE TABLE public.health_allergies (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  profile_id uuid NOT NULL,
+  managing_user_id uuid NOT NULL,
+  allergen text NOT NULL,
+  severity text NOT NULL DEFAULT 'moderate',
+  reaction_notes text,
+  keywords text[] NOT NULL DEFAULT '{}',
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT health_allergies_pkey PRIMARY KEY (id),
+  CONSTRAINT health_allergies_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.health_profiles(id) ON DELETE CASCADE,
+  CONSTRAINT health_allergies_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id),
+  CONSTRAINT health_allergies_severity_check CHECK (severity IN ('mild','moderate','severe','anaphylaxis'))
+);
+CREATE INDEX health_allergies_profile_id_idx ON public.health_allergies USING btree (profile_id);
+CREATE INDEX health_allergies_managing_user_id_idx ON public.health_allergies USING btree (managing_user_id);
+
+CREATE TABLE public.health_conditions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  profile_id uuid NOT NULL,
+  managing_user_id uuid NOT NULL,
+  kind text NOT NULL DEFAULT 'condition',
+  title text NOT NULL,
+  notes text,
+  occurred_on date,
+  status text NOT NULL DEFAULT 'active',
+  catalogue_item_id uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT health_conditions_pkey PRIMARY KEY (id),
+  CONSTRAINT health_conditions_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.health_profiles(id) ON DELETE CASCADE,
+  CONSTRAINT health_conditions_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id),
+  CONSTRAINT health_conditions_catalogue_item_id_fkey FOREIGN KEY (catalogue_item_id) REFERENCES public.catalogue_items(id) ON DELETE SET NULL,
+  CONSTRAINT health_conditions_kind_check CHECK (kind IN ('condition','surgery','doctor_visit')),
+  CONSTRAINT health_conditions_status_check CHECK (status IN ('active','resolved'))
+);
+CREATE INDEX health_conditions_profile_id_idx ON public.health_conditions USING btree (profile_id);
+CREATE INDEX health_conditions_managing_user_id_idx ON public.health_conditions USING btree (managing_user_id);
+
+CREATE TABLE public.health_vaccines (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  profile_id uuid NOT NULL,
+  managing_user_id uuid NOT NULL,
+  vaccine_name text NOT NULL,
+  dose_label text,
+  administered_on date,
+  next_due_on date,
+  provider text,
+  lot_number text,
+  notes text,
+  catalogue_item_id uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT health_vaccines_pkey PRIMARY KEY (id),
+  CONSTRAINT health_vaccines_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.health_profiles(id) ON DELETE CASCADE,
+  CONSTRAINT health_vaccines_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id),
+  CONSTRAINT health_vaccines_catalogue_item_id_fkey FOREIGN KEY (catalogue_item_id) REFERENCES public.catalogue_items(id) ON DELETE SET NULL
+);
+CREATE INDEX health_vaccines_profile_id_idx ON public.health_vaccines USING btree (profile_id);
+CREATE INDEX health_vaccines_managing_user_id_idx ON public.health_vaccines USING btree (managing_user_id);
+
+ALTER TABLE public.health_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.health_allergies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.health_conditions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.health_vaccines ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY health_profiles_owner_all ON public.health_profiles AS PERMISSIVE FOR ALL USING ((managing_user_id = auth.uid())) WITH CHECK ((managing_user_id = auth.uid()));
+CREATE POLICY health_allergies_owner_all ON public.health_allergies AS PERMISSIVE FOR ALL USING ((managing_user_id = auth.uid())) WITH CHECK ((managing_user_id = auth.uid()));
+CREATE POLICY health_conditions_owner_all ON public.health_conditions AS PERMISSIVE FOR ALL USING ((managing_user_id = auth.uid())) WITH CHECK ((managing_user_id = auth.uid()));
+CREATE POLICY health_vaccines_owner_all ON public.health_vaccines AS PERMISSIVE FOR ALL USING ((managing_user_id = auth.uid())) WITH CHECK ((managing_user_id = auth.uid()));

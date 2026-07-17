@@ -10,6 +10,8 @@ export const deliveryLoading = signal(false);
 export const activeDeliveryId = signal(null);
 // DW-2: provider/model/effort capability manifests + owner catalog for the launch wizard.
 export const deliveryCapabilities = signal(null);
+// Slice D: model/effort recommendation preview for the launch wizard (null hides the card).
+export const deliveryRecommendation = signal(null);
 // DW-5: the durable Q&A ledger for the active session.
 export const deliveryQuestions = signal(null);
 // DW-3: conversation viewer — turn index, per-turn record cache, search state.
@@ -38,6 +40,14 @@ export async function loadDeliveryCapabilities() {
   if (deliveryCapabilities.value) return; // static per server process; fetch once
   try { deliveryCapabilities.value = await apiGet("/api/delivery/capabilities"); }
   catch { /* wizard falls back to provider-only selection if this fails */ }
+}
+export async function loadDeliveryRecommendation(file, cbidx, provider) {
+  if (globalThis.PM_MODE !== "server" || !file || cbidx == null) { deliveryRecommendation.value = null; return; }
+  try {
+    const params = new URLSearchParams({ file, cbidx: String(cbidx), provider });
+    const result = await apiGet(`/api/delivery/recommendation?${params.toString()}`);
+    deliveryRecommendation.value = result.recommendation;
+  } catch { deliveryRecommendation.value = null; } // wizard just hides the card
 }
 export async function loadDeliveryQuestions(id) {
   if (globalThis.PM_MODE !== "server" || !id) return;

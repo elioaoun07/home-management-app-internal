@@ -39,6 +39,7 @@ tags:
 | `/recurring` | Recurring Payments | `CalendarClockIcon`        | Theme-based                       |
 | `/trips`     | Trips              | `Plane` (lucide)           | `from-cyan-400 to-sky-500`        |
 | `/today`     | Plan My Day        | `CalendarOff` (lucide)     | `from-pink-400 to-amber-400`      |
+| `/healthcare` | Health            | `HeartPulse` (lucide)      | `from-rose-400 to-pink-500`       |
 
 ---
 

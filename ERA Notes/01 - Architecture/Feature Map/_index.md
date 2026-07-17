@@ -32,6 +32,7 @@ If the user says…                                              | Open
 "focus page" / "flexible routines"                             | [standalone/focus.md](standalone/focus.md)
 "the dashboard" / "today view" / "main landing"                | [standalone/dashboard.md](standalone/dashboard.md)
 "the recycle bin"                                              | [standalone/recycle-bin.md](standalone/recycle-bin.md)
+allergies / vaccines / medical history / medication           | [standalone/healthcare.md](standalone/healthcare.md)
 ---                                                            | ---
 "plan my day" / "disrupted day" / "wedding this Saturday" / "push off" / "prepone" | [junction/plan-my-day.md](junction/plan-my-day.md)
 "trips" / "travel" / "activate trip" / "packing list"          | [junction/trips.md](junction/trips.md)
@@ -81,6 +82,7 @@ If the user says…                                              | Open
 | Focus              | Flexible routines / focus page.                                                        | [standalone/focus.md](standalone/focus.md)                                        |
 | Dashboard          | Main landing page after login — KPI cards, recent transactions.                        | [standalone/dashboard.md](standalone/dashboard.md)                                |
 | Recycle Bin        | Soft-deleted items with restore.                                                       | [standalone/recycle-bin.md](standalone/recycle-bin.md)                            |
+| Healthcare        | Family health profiles: allergies, conditions, vaccines, medications                  | [standalone/healthcare.md](standalone/healthcare.md)                       |
 
 ## Junction modules (bridge two or more standalones)
 
