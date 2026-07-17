@@ -77,6 +77,7 @@ tags:
 | `recycle-bin`   | `/recycle-bin`   | [[recycle-bin]]   |
 | `atlas`         | `/atlas`         | [[atlas]]         |
 | `offline`       | `/offline`       | [[offline]]       |
+| `pm`            | `/pm`            | [[pm]]            |
 
 ## Feature Modules (Standalone)
 

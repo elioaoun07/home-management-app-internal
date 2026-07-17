@@ -12,6 +12,14 @@ const nextConfig: NextConfig = {
     return config;
   },
 
+  async rewrites() {
+    // Serve the generated read-only PM Command Center (public/pm.html, built by
+    // `pnpm pm:public` / prebuild) at a clean /pm URL. A rewrite (not redirect)
+    // keeps the browser URL as /pm so the pm.webmanifest scope "/pm" matches and
+    // the installed PWA launches correctly.
+    return [{ source: "/pm", destination: "/pm.html" }];
+  },
+
   async headers() {
     // Security headers applied to all routes
     // Note: Adjust CSP connect-src/script-src to include any third-party domains you intentionally use.

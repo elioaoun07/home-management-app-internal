@@ -1,6 +1,6 @@
 ---
 created: 2026-07-13
-updated: 2026-07-13
+updated: 2026-07-18
 type: checklist
 status: active
 owner: Elio
@@ -13,7 +13,8 @@ tags: [pm/checklist, tooling/pm-dashboard]
 
 ## Now
 
-- [ ] **R15** Serve `--lan` mode over HTTPS (self-signed cert, one-time phone trust) so the offline-snapshot service worker can actually register on a phone — plain LAN HTTP is not a secure context and service workers refuse to register there. _(friction - M)_
+- [x] **R16** Ship the read-only PM Console as a first-class page of the deployed app at `/pm` — own `pm.webmanifest`/icons, installable on a phone, offline via the app service worker, laptop off. Snapshot rebuilt from PM markdown by `pnpm pm:public` in `prebuild`. Gated behind the app's Supabase login (`src/middleware.ts`, matches `/pm` + `/pm.html`; unauth → `/login?redirect=/pm`). _(friction - M)_ ✅ 2026-07-18
+- [x] **R15** ~~Serve `--lan` mode over HTTPS~~ — **superseded by R16.** The phone-offline goal is met by hosting the console inside the already-HTTPS deployed app, so no self-signed-cert LAN path is needed. The local `pnpm pm` server stays HTTP-on-localhost for the interactive editor. _(friction - M)_ ✅ 2026-07-18
 - [ ] **R6** Complete desktop + 390 px visual UAT, fake-driver walkthrough, then delete the temporary legacy rollback branch/files. _(blocker - M)_
 - [ ] **R10** Canonical item grammar spec + templates — `_Conventions.md` + `_Templates/`, one `- [ ] **PREFIX-n** … _(severity - effort)_` shape under Now/Next/Later. → `[_Conventions.md](<../_Conventions.md>)` _(friction - S)_
 - [ ] **R11** Parser extensions + FABLED+/archived hide + parser tests — hyphenated/lettered IDs, one hidden-layer flag. → `` `scripts/pm/shared/tasks.mjs` ``, `` `scripts/delivery/packet.mjs` ``, `` `scripts/pm/src/app/store.js` `` _(friction - M)_

@@ -49,3 +49,7 @@ nul
 
 # Agentic Delivery Workspace — local session store (packet/state/events/artifacts), never committed
 /.delivery/
+
+# Generated read-only PM Command Center page (rebuilt from ERA Notes markdown by
+# `pnpm pm:public` / prebuild on every deploy) — large, churns; never committed.
+/public/pm.html

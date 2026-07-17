@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-07-03T18:21:37.574Z",
-  "count": 59,
+  "generatedAt": "2026-07-17T21:44:49.574Z",
+  "count": 76,
   "nodes": [
     {
       "slug": "auth-reset",
@@ -457,6 +457,32 @@
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-categories.md"
     },
     {
+      "slug": "feature-chores",
+      "title": "Feature · Chores",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/chores/`",
+        "hooks": "- See files in `src/features/chores/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/chores/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/chores`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Chores/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-chores.md"
+    },
+    {
       "slug": "feature-dashboard",
       "title": "Feature · Dashboard",
       "category": "feature",
@@ -481,6 +507,32 @@
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-dashboard.md"
+    },
+    {
+      "slug": "feature-day-plan",
+      "title": "Feature · Day Plan",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/day-plan/`",
+        "hooks": "- See files in `src/features/day-plan/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/day-plan/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/day-plan`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Day Plan/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-day-plan.md"
     },
     {
       "slug": "feature-debts",
@@ -535,6 +587,32 @@
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-drafts.md"
     },
     {
+      "slug": "feature-era",
+      "title": "Feature · Era",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/era/`",
+        "hooks": "- See files in `src/features/era/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/era/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/era`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Era/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-era.md"
+    },
+    {
       "slug": "feature-future-purchases",
       "title": "Feature · Future Purchases",
       "category": "feature",
@@ -559,6 +637,32 @@
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-future-purchases.md"
+    },
+    {
+      "slug": "feature-healthcare",
+      "title": "Feature · Healthcare",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/healthcare/`",
+        "hooks": "- See files in `src/features/healthcare/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/healthcare/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/healthcare`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Healthcare/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-healthcare.md"
     },
     {
       "slug": "feature-hub",
@@ -637,6 +741,58 @@
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-items.md"
+    },
+    {
+      "slug": "feature-meal-planning",
+      "title": "Feature · Meal Planning",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/meal-planning/`",
+        "hooks": "- See files in `src/features/meal-planning/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/meal-planning/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/meal-planning`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Meal Planning/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-meal-planning.md"
+    },
+    {
+      "slug": "feature-memories",
+      "title": "Feature · Memories",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/memories/`",
+        "hooks": "- See files in `src/features/memories/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/memories/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/memories`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Memories/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-memories.md"
     },
     {
       "slug": "feature-navigation",
@@ -769,6 +925,32 @@
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-recurring.md"
     },
     {
+      "slug": "feature-recycle-bin",
+      "title": "Feature · Recycle Bin",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/recycle-bin/`",
+        "hooks": "- See files in `src/features/recycle-bin/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/recycle-bin/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/recycle-bin`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Recycle Bin/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-recycle-bin.md"
+    },
+    {
       "slug": "feature-reminders",
       "title": "Feature · Reminders",
       "category": "feature",
@@ -845,6 +1027,58 @@
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-transactions.md"
+    },
+    {
+      "slug": "feature-trips",
+      "title": "Feature · Trips",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/trips/`",
+        "hooks": "- See files in `src/features/trips/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/trips/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/trips`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Trips/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-trips.md"
+    },
+    {
+      "slug": "feature-voice-conversation",
+      "title": "Feature · Voice Conversation",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/voice-conversation/`",
+        "hooks": "- See files in `src/features/voice-conversation/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/voice-conversation/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/voice-conversation`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Voice Conversation/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-voice-conversation.md"
     },
     {
       "slug": "era",
@@ -1166,6 +1400,54 @@
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/g-tag.md"
     },
     {
+      "slug": "healthcare",
+      "title": "Healthcare",
+      "category": "standalone-page",
+      "route": "/healthcare",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/healthcare/page.tsx`\n- **Main component**: `src/app/healthcare/HealthcareClient.tsx`\n- **Sub-components**: TODO",
+        "hooks": "- `src/features/healthcare/hooks`",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/healthcare`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `healthcare-mobile.png`\n- `healthcare-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/healthcare.md"
+    },
+    {
+      "slug": "meal-plan",
+      "title": "Meal Plan",
+      "category": "standalone-page",
+      "route": "/meal-plan",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/meal-plan/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/meal-plan`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `meal-plan-mobile.png`\n- `meal-plan-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/meal-plan.md"
+    },
+    {
       "slug": "meal-plan",
       "title": "Meal Planning",
       "category": "standalone-page",
@@ -1241,6 +1523,30 @@
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/nfc-tag.md"
     },
     {
+      "slug": "receipts",
+      "title": "Receipts",
+      "category": "standalone-page",
+      "route": "/receipts",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/receipts/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- `/api/receipts/export`",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/receipts`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `receipts-mobile.png`\n- `receipts-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/receipts.md"
+    },
+    {
       "slug": "recipe",
       "title": "Recipe",
       "category": "standalone-page",
@@ -1287,6 +1593,102 @@
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/settings.md"
+    },
+    {
+      "slug": "today",
+      "title": "Today",
+      "category": "standalone-page",
+      "route": "/today",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/today/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/today`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `today-mobile.png`\n- `today-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/today.md"
+    },
+    {
+      "slug": "trips",
+      "title": "Trips",
+      "category": "standalone-page",
+      "route": "/trips",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/trips/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/trips`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `trips-mobile.png`\n- `trips-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/trips.md"
+    },
+    {
+      "slug": "trips-id",
+      "title": "Trips Id",
+      "category": "standalone-page",
+      "route": "/trips/[id]",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/trips/[id]/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/trips/[id]`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `trips-id-mobile.png`\n- `trips-id-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/trips-id.md"
+    },
+    {
+      "slug": "watch",
+      "title": "Watch",
+      "category": "standalone-page",
+      "route": "/watch",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/watch/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/watch`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `watch-mobile.png`\n- `watch-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/watch.md"
     },
     {
       "slug": "ai-usage",
@@ -1385,6 +1787,33 @@
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/offline.md"
+    },
+    {
+      "slug": "pm",
+      "title": "PM Command Center (hosted)",
+      "category": "utility",
+      "route": "/pm",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "tooling/pm-dashboard",
+        "pwa"
+      ],
+      "sections": {
+        "files": "- **Served page**: `public/pm.html` — generated (gitignored); rebuilt from PM markdown by `pnpm pm:public` (`scripts/build-pm-dashboard.mjs --public`), which runs in `prebuild` on every deploy.\n- **HTML builder**: `scripts/pm/ui.mjs` (`buildHtml({ mode: \"static\", pwa: true })`) — emits the installable head + `/sw.js` registration.\n- **UI bundle** (shared with `pnpm pm`): `scripts/pm/src/` (Preact), built by `scripts/pm/build.mjs`.\n- **Route rewrite**: `next.config.ts` → `rewrites()` maps `/pm` → `/pm.html`.\n- **Auth gate**: `src/middleware.ts` (matcher `['/pm', '/pm.html']`) — Supabase `getUser()`; unauthenticated → `307 /login?redirect=/pm`.\n- **Manifest**: `public/pm.webmanifest` (`id`/`start_url`/`scope` = `/pm`).\n- **Icons**: `public/pm-192.png`, `public/pm-512.png`, `public/pm-maskable-512.png`, `public/pm-180.png` (apple-touch), `public/pm-icon.svg`.\n- **Offline**: reuses the existing app service worker (`public/sw.js`, unchanged) — its nav/image handlers cache `/pm` and the icons on first (online) open; the page registers `/sw.js` itself for cold direct-opens.",
+        "hooks": "- _(none — self-contained static page; data is inlined as `globalThis.PM_DATA`)_",
+        "api_routes": "- _(none in the deployed app — read-only.)_ The interactive `/api/data`, `/api/toggle`, SSE, etc. exist only on the local `pnpm pm` server (`scripts/pm-server.mjs`).",
+        "db_tables": "- _(none — the source of truth is the `ERA Notes/10 - Project Management/` markdown, embedded at build time.)_",
+        "how_to_get_here": "- Direct URL: `/pm` on the deployed app (requires being logged in — same Supabase session as the rest of the app; unauthenticated visits redirect to `/login` and back)\n- Install: open `/pm` on a phone → Add to Home Screen → \"PM Center\" icon (separate from the Budget app icon). On iOS, an installed PWA has its own cookie jar, so you log in once inside the PM PWA.",
+        "what_it_links_to": "- Everything is internal hash routing within the page (`/pm#/tasks`, `/pm#/checklist`, `/pm#/bugs`, `/pm#/module/...`, `/pm#/doc/...`) — no server navigation.",
+        "related_vault_doc": "- `ERA Notes/10 - Project Management/PM Dashboard Refactor/` (see file 1 Feature State, R16)",
+        "screenshots": "- `pm-mobile.png`\n- `pm-desktop.png`",
+        "notes": "- **Read-only by design.** All mutations, SSE, and the Delivery surface gate on `PM_MODE === \"server\"`; the hosted page runs `PM_MODE === \"static\"`, so edit affordances are hidden. Editing checkboxes / moving files happens on the laptop via `pnpm pm`.\n- **Freshness = last deploy.** The snapshot is rebuilt from the committed PM markdown during `prebuild`. It cannot be live because the laptop is the only writer — when it's off there is no live source.\n- **Distinct PWA identity.** `pm.webmanifest` uses its own `id`/`start_url`/`scope` of `/pm`, so the phone installs it as a separate app from the Budget PWA (`public/manifest.json`).\n- **Login-gated.** `src/middleware.ts` is the app's only middleware; its matcher is scoped to `/pm` + `/pm.html` so it never touches other routes. Because the page's data is embedded in the static HTML (not fetched from an authenticated API), this gate is the sole thing preventing public read of all PM docs — do not widen the static exposure without it.\n- Do not confuse with the standalone `pnpm pm` server's own PWA head (server mode, `scripts/pm/assets/pm.webmanifest`, localhost only)."
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/pm.md"
     },
     {
       "slug": "qr-expense",

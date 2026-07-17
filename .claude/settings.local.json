@@ -129,7 +129,11 @@
       "PowerShell(npx eslint src/features/healthcare src/app/api/healthcare src/app/healthcare src/lib/health src/hooks/useHouseholdAllergens.ts src/components/web/RecipeAllergenWarning.tsx src/components/web/RecipeDetailView.tsx src/app/providers.tsx)",
       "PowerShell(pnpm vitest run src)",
       "PowerShell(node scripts/check-feature-index.mjs)",
-      "PowerShell(pnpm sync:ai)"
+      "PowerShell(pnpm sync:ai)",
+      "Bash(export MSYS_NO_PATHCONV=1)",
+      "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process -Filter \"name='\\\\''node.exe'\\\\''\" | Where-Object { $_.CommandLine -like '\\\\''*next*3999*'\\\\'' -or $_.CommandLine -like '\\\\''*dev*3999*'\\\\'' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }')",
+      "Bash(pnpm prebuild *)",
+      "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process -Filter \"name='\\\\''node.exe'\\\\''\" | Where-Object { $_.CommandLine -like '\\\\''*3999*'\\\\'' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }')"
     ]
   }
 }

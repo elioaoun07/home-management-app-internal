@@ -17,13 +17,14 @@
     "atlas:seed": "node scripts/seed-atlas.mjs && node scripts/build-atlas.mjs",
     "docs:check": "node scripts/check-feature-index.mjs",
     "new:module": "node scripts/new-module.mjs",
-    "prebuild": "node scripts/build-atlas.mjs",
+    "prebuild": "node scripts/build-atlas.mjs && node scripts/build-pm-dashboard.mjs --public",
     "sync:ai": "node scripts/sync-ai-mirrors.mjs",
     "pm": "node scripts/pm-server.mjs",
     "pm:lint": "node scripts/pm/lint.mjs",
     "pm:build-ui": "node scripts/pm/build.mjs",
     "pm:icons": "node scripts/pm/generate-icons.mjs",
     "pm:dashboard": "node scripts/build-pm-dashboard.mjs",
+    "pm:public": "node scripts/build-pm-dashboard.mjs --public",
     "prepare": "husky install"
   },
   "dependencies": {
