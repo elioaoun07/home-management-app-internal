@@ -26,6 +26,8 @@ Hub & ERA is the app's **brain and front door** — the interaction model says t
 
 **The vision in one line:** *Turn ERA from a chat box that answers into a household brain that anticipates — reading the full time + money graph and speaking first, at the right moment, with the right context.*
 
+> **Design study:** [ERA Top View — Design Study (2026-07-17)](<../ERA Top View — Design Study (2026-07-17).md>) — the Hub's L-0 glance surface as the *pull* mouth of the Awakening briefing brain (shared signal registry, single `get_era_topview_bundle()` RPC, drafts-only actions). Packets WP-T1..T5 slot behind Awakening WP-03/04/11; the heartbeat always wins.
+
 ---
 
 ## Track A — Internal enhancements (within the module)

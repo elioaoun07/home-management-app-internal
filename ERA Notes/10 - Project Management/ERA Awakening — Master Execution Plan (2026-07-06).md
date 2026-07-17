@@ -321,3 +321,4 @@ Sources: [Microsoft Learn — SpeechRecognizer (JS)](https://learn.microsoft.com
 ## 14 · Delta ledger (append-only)
 
 - **2026-07-06** — Plan created. Wake-word double-dead-end verified (Azure JS SDK gap — §2.3). Awaiting WP-00 answers: Q-VERCEL, Q-WIP.
+- **2026-07-17** — [ERA Top View — Design Study](<ERA Top View — Design Study (2026-07-17).md>) created on owner request as a *companion* consumer of this plan's signal engine (pull mouth of the same brain). Its packets WP-T1..T5 slot behind WP-03/04/11; heartbeat priority unchanged — if a session must choose, WP-04 wins. No WP ticked as of this date.
