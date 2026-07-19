@@ -76,6 +76,30 @@ const tripsOutputs = [
   { size: 512, file: "trips-maskable-512.png" },
 ];
 
+// Outfits app icon outputs
+const outfitsOutputs = [
+  { size: 180, file: "outfits-180.png" },
+  { size: 192, file: "outfits-192.png" },
+  { size: 512, file: "outfits-512.png" },
+  { size: 512, file: "outfits-maskable-512.png" },
+];
+
+// Healthcare app icon outputs
+const healthcareOutputs = [
+  { size: 180, file: "healthcare-180.png" },
+  { size: 192, file: "healthcare-192.png" },
+  { size: 512, file: "healthcare-512.png" },
+  { size: 512, file: "healthcare-maskable-512.png" },
+];
+
+// ERA app icon outputs
+const eraOutputs = [
+  { size: 180, file: "era-180.png" },
+  { size: 192, file: "era-192.png" },
+  { size: 512, file: "era-512.png" },
+  { size: 512, file: "era-maskable-512.png" },
+];
+
 async function generateIcons(srcSvgPath, outputs, label) {
   if (!fs.existsSync(srcSvgPath)) {
     console.log(
@@ -177,6 +201,27 @@ async function main() {
     path.join(publicDir, "trips-icon.svg"),
     tripsOutputs,
     "Trips App",
+  );
+
+  // Generate Outfits app icons (if SVG exists)
+  await generateIcons(
+    path.join(publicDir, "outfits-icon.svg"),
+    outfitsOutputs,
+    "Outfits App",
+  );
+
+  // Generate Healthcare app icons (if SVG exists)
+  await generateIcons(
+    path.join(publicDir, "healthcare-icon.svg"),
+    healthcareOutputs,
+    "Healthcare App",
+  );
+
+  // Generate ERA app icons (if SVG exists)
+  await generateIcons(
+    path.join(publicDir, "era-icon.svg"),
+    eraOutputs,
+    "ERA App",
   );
 
   console.log("\nIcon generation complete.");

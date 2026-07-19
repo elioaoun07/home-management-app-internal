@@ -131,6 +131,7 @@ export default function MobileNav() {
     "/trips",
     "/today",
     "/outfits",
+    "/healthcare",
   ];
 
   // Prefetch all tabs on initial mount for instant switching

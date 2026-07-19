@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Outfits App Icon">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#1a1030"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#e879f9"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="42%" r="58%">
+      <stop offset="0%" stop-color="#a855f7" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#0a1628" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="g" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="9" result="b"/>
+      <feFlood flood-color="#a855f7" flood-opacity="0.4"/>
+      <feComposite in2="b" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+  <rect x="10" y="10" width="492" height="492" rx="104" fill="none" stroke="url(#accent)" stroke-width="1.5" opacity="0.22"/>
+
+  <!-- Hanger + shirt glyph -->
+  <g filter="url(#g)" transform="translate(256,150)" fill="none" stroke="url(#accent)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <!-- hook -->
+    <path d="M0,10 a18,18 0 1 1 18,18"/>
+    <!-- hanger bar -->
+    <path d="M0,28 L-150,120 a10,10 0 0 0 6,18 h288 a10,10 0 0 0 6,-18 Z" fill="#140b26"/>
+  </g>
+
+  <!-- Shirt body -->
+  <g filter="url(#g)" transform="translate(256,300)">
+    <path d="M-120,-30 l60,-40 a60,55 0 0 0 120,0 l60,40 -40,60 -30,-18 v130 a16,16 0 0 1 -16,16 h-88 a16,16 0 0 1 -16,-16 v-130 l-30,18 Z"
+          fill="#160c2a" stroke="url(#accent)" stroke-width="10" stroke-linejoin="round"/>
+    <rect x="-30" y="30" width="60" height="10" rx="5" fill="url(#accent)" opacity="0.55"/>
+    <rect x="-30" y="60" width="42" height="10" rx="5" fill="url(#accent)" opacity="0.35"/>
+  </g>
+</svg>

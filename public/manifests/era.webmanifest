@@ -1,0 +1,37 @@
+{
+  "id": "/era-app",
+  "name": "ERA • Home Manager",
+  "short_name": "ERA",
+  "description": "Your ERA assistant and memory hub",
+  "start_url": "/era",
+  "scope": "/era",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#0a1628",
+  "theme_color": "#6366f1",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/era-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/era-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/era-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [],
+  "screenshots": [],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

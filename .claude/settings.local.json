@@ -135,7 +135,8 @@
       "Bash(pnpm prebuild *)",
       "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process -Filter \"name='\\\\''node.exe'\\\\''\" | Where-Object { $_.CommandLine -like '\\\\''*3999*'\\\\'' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }')",
       "WebFetch(domain:developer.chrome.com)",
-      "WebFetch(domain:web.dev)"
+      "WebFetch(domain:web.dev)",
+      "Bash(pnpm -s typecheck)"
     ]
   }
 }

@@ -1,0 +1,37 @@
+{
+  "id": "/outfits-app",
+  "name": "Outfits • Home Manager",
+  "short_name": "Outfits",
+  "description": "Your wardrobe studio — catalogue clothing and build outfits with the paper-doll designer",
+  "start_url": "/outfits",
+  "scope": "/outfits",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#0a1628",
+  "theme_color": "#a855f7",
+  "categories": ["lifestyle", "shopping", "productivity"],
+  "icons": [
+    {
+      "src": "/outfits-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/outfits-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/outfits-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [],
+  "screenshots": [],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

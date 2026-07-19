@@ -83,6 +83,11 @@ const STANDALONE_APPS: Record<
     role: "Wardrobe Studio",
     color: "from-violet-400 to-fuchsia-500",
   },
+  "/healthcare": {
+    title: "Healthcare",
+    role: "Health Records",
+    color: "from-emerald-400 to-teal-500",
+  },
 };
 
 type Props = {
