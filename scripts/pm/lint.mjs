@@ -38,6 +38,8 @@ const MD_LINK_RE = /\[[^\]]+\]\((<[^>]+>|[^)]+)\)/g;
  * so the core stays pure/testable:
  *   resolveMd(href)  -> true|false|null   (null = not a checkable .md link)
  *   resolveCode(tok) -> true|false|null   (null = not a checkable repo path)
+ * @param {string} raw
+ * @param {{ campaign?: string, resolveMd?: (href: string) => boolean|null, resolveCode?: (tok: string) => boolean|null }} [opts]
  */
 export function lintChecklist(raw, { campaign, resolveMd = () => null, resolveCode = () => null } = {}) {
   const out = [];

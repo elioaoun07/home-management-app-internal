@@ -1,7 +1,8 @@
 ---
 created: 2026-07-06
 type: index
-status: living
+status: superseded
+superseded: 2026-07-18
 owner: Elio (authored by Claude Fable 5, final session)
 tags:
   - pm/fabled2
@@ -9,6 +10,9 @@ tags:
 ---
 
 # FABLED 2 — Master Index (the whole X-ray on one page)
+
+> ⚠️ **Superseded 2026-07-18** by [FABLED 3 Master Index](<FABLED 3 Master Index.md>) (model-generation handoff). This page remains the generation-2 score record. Do not update.
+
 
 > **FABLED** is this repo's generational audit layer: deep-dives written by AI against the *verified* working tree, in four standard files per scope — `1 Current Implementation` · `2 Gaps & Missing` · `3 Optimization Plan` · `4 Future Enhancements`. **FABLED v1** (2026-06-10) is frozen as the historical baseline; **FABLED 2** (stamped 2026-07-02) is the living generation: scored maturity model, delta ledger vs v1, evidence commands on claims, kill criteria on enhancements.
 >

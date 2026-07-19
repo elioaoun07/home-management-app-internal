@@ -33,10 +33,10 @@ tags:
 
 | Sub-feature | Tier | Reality / known gaps | Next step |
 | --- | --- | --- | --- |
-| **Wardrobe catalog** (photo → cutout → tags → grid) | ⚫ Unbuilt | Design complete (Overview §5, §7). Image pipeline is ~80% template-clone from receipts/catalogue; net-new = `@imgly/background-removal` (client-side) + WebP/alpha compressor. | Phase 1 — OUT-1…OUT-6 |
-| **Sizing profile** (height/weight/sizes/fit notes) | ⚫ Unbuilt | Own `wardrobe_profiles` table (not `user_preferences`); decimal inputs per Hard Rule 19. | Phase 1 — OUT-2, OUT-6 |
-| **AI auto-tag** (Gemini vision → pre-filled tags) | ⚫ Unbuilt | Requires a small non-breaking `inlineData` widening in `src/lib/ai/gemini.ts`; manual tagging is the primary path, AI is an accelerator. | Phase 2 — OUT-7, OUT-8 |
-| **Outfit builder** (2D paper doll, per-slot swipe) | ⚫ Unbuilt | `outfits` + `outfit_items` junction (denormalized `user_id`, one garment per slot). No precedent component in-repo — the `SlotSwiper` stack is the only truly novel UI. | Phase 3 — OUT-9…OUT-11 |
+| **Wardrobe catalog** (photo → cutout → tags → grid) | 🟡 New / Thin | ✅ 2026-07-18 (OUT-1…OUT-6). Full loop shipped: capture → WebP compress (`wardrobeImage.ts`) → on-device cutout (`backgroundRemoval.ts`, lazy imgly) → approve/Keep-original → manual tags → private `wardrobe` bucket + batch signed URLs (50-min client cache). Migration `2026-07-18_outfits-catalog-and-builder.sql` **must be run manually in Supabase before the routes work.** Not yet verified on a real phone (D2 acceptance pending). | Phone acceptance test; then Phase 2 |
+| **Sizing profile** (height/weight/sizes/fit notes) | 🟡 New / Thin | ✅ 2026-07-18 (OUT-2, OUT-6). `wardrobe_profiles` + `SizingProfileSheet` (decimal text inputs per Hard Rule 19), PUT upsert. | — |
+| **AI auto-tag** (Gemini vision → pre-filled tags) | ⚫ Unbuilt | Requires a small non-breaking `inlineData` widening in `src/lib/ai/gemini.ts`; manual tagging is the primary path, AI is an accelerator. A disabled "Auto-tag — coming soon" affordance already sits in `AddGarmentSheet` where the button lands. | Phase 2 — OUT-7, OUT-8 |
+| **Outfit builder** (2D paper doll, per-slot swipe) | 🟡 New / Thin | ✅ 2026-07-18 (OUT-9…OUT-11). **Built ahead of Phase 2 by owner decision (2026-07-18)** — catalog + builder shipped together as the Fable foundation session; AI-tag deliberately deferred. `SlotSwiper` = native CSS snap-scroll + framer scale/opacity parallax off one shared `scrollX` motion value (no re-renders during scroll), haptic tick on snap, reduced-motion safe; shared spring presets in **`src/lib/motion.ts`** (new app-wide module, first consumer). Outerwear/accessory overlays crossfade behind a decode-before-swap guard. "Used in N outfits" warning wired in `GarmentDetailSheet`. | Phone acceptance; multi-accessory + `fullbody` slot stay backlog |
 | **Weekly planner** (drag outfit → day) | ⚫ Unbuilt | Direct clone of `WebMealPlanCalendar.tsx` reduced to one slot/day; upsert-by-date. | Phase 4 — OUT-12, OUT-13 |
 | **Wear / event log + no-repeat warning** | ⚫ Unbuilt | `outfit_plans` with `status='worn'` IS the log; reversible `set_outfit_plan_worn` RPC keeps Undo honest; amber banner on ≤14-day or same-event repeat. | Phase 4 — OUT-13, OUT-14 |
 
@@ -44,7 +44,10 @@ tags:
 
 ## Pain / gap ledger
 
-- ⚫ Entire module is design-only as of 2026-07-17 — the ranked build queue is [4 · Checklist](<4 - Checklist.md>); no bugs can exist yet.
+- 🟠 **Migration not yet run** (2026-07-18): `migrations/2026-07-18_outfits-catalog-and-builder.sql` must be executed manually in the Supabase SQL Editor — all `/api/outfits/*` routes 500 until then. _(blocker until run)_
+- 🟡 **D2 phone acceptance pending** (2026-07-18): photo → cutout → grid flow not yet verified on a real device; the ~40 MB first-use model download UX needs a real-network test.
+- 🟡 **Garment hard-delete Undo is partial by design** (2026-07-18): Undo recreates the row (tags) but photos are gone (storage removed server-side); the delete button warns first, archive is the soft path. Documented in Overview reality-delta terms here on purpose.
+- Note: outfit `PATCH` composition replacement is delete-then-insert (PostgREST has no cross-call transaction); a mid-flight failure leaves the outfit empty until re-saved — surfaced as an error so the user re-saves. Low risk single-user; revisit only if it ever bites.
 
 ## Related code (single source of truth)
 

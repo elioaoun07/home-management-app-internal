@@ -23,9 +23,9 @@ A game-style avatar screen for your real wardrobe: photograph clothes once, then
 
 ## Locked v1 decisions (owner-approved 2026-07-17 — see Overview §2 for full rationale)
 
-- **D1 — 2D paper doll**, not 3D avatar, not AI-try-on-as-core. Cutouts stacked in slots; per-slot swipe.
-- **D2 — Sizing profile only** (height/weight/sizes/fit notes); no body rendering.
-- **D3 — V1 = catalog → builder → planner → wear log**, phased in that order.
+- **D1 — 2D paper doll**, not 3D avatar, not AI-try-on-as-core. Cutouts stacked in slots; per-slot swipe. *(IMPLEMENTED 2026-07-18 — `OutfitBuilder` + `SlotSwiper`, native snap-scroll + shared `src/lib/motion.ts` springs)*
+- **D2 — Sizing profile only** (height/weight/sizes/fit notes); no body rendering. *(IMPLEMENTED 2026-07-18 — `wardrobe_profiles` + `SizingProfileSheet`)*
+- **D3 — V1 = catalog → builder → planner → wear log**, phased in that order. *(AMENDED 2026-07-18 by owner: catalog + builder shipped together in the Fable foundation session; AI-tag (Phase 2) deferred behind them; planner unchanged as Phase 4)*
 - **D4 — Personal per user**; no household sharing (deliberate Hard-Rule-13 deviation).
 - **D5 — Free tools; small images** (client WebP compression, on-device background removal, paths-not-base64, private bucket).
 - **D6 — No offline write queue in v1.**

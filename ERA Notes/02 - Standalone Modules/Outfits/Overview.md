@@ -1,7 +1,7 @@
 ---
 created: 2026-07-17
 type: feature-doc
-status: design
+status: active
 owner: Elio
 tags:
   - module/outfits
@@ -11,7 +11,9 @@ tags:
 
 # Outfits / Wardrobe — Design Study & Implementation Handover
 
-> **Status: DESIGN — nothing is implemented yet.** This is a Fable-authored, execution-ready handover: every design decision is already made and justified so that any agent (including lower-capability models) can implement it phase-by-phase without design judgment. The execution queue lives in [Outfits · 4 · Checklist](<../../10 - Project Management/Outfits/4 - Checklist.md>); the phase narrative in [Outfits · 3 · Action Plan](<../../10 - Project Management/Outfits/3 - Action Plan.md>).
+> **Status: PHASES 1 + 3 BUILT (2026-07-18); Phases 2 + 4 remain.** Originally a Fable-authored, execution-ready handover; the Fable foundation session then shipped the wardrobe catalog AND the paper-doll builder together (owner-approved amendment to D3's phase order — AI-tag deferred behind the builder). Reality deltas + what's pending live in [1 · Feature State](<../../10 - Project Management/Outfits/1 - Feature State.md>). ⚠️ The migration `migrations/2026-07-18_outfits-catalog-and-builder.sql` must be run manually in Supabase before any `/api/outfits/*` route works. The execution queue lives in [Outfits · 4 · Checklist](<../../10 - Project Management/Outfits/4 - Checklist.md>); the phase narrative in [Outfits · 3 · Action Plan](<../../10 - Project Management/Outfits/3 - Action Plan.md>).
+>
+> **Implementation notes (2026-07-18, verify in code):** feature dir `src/features/outfits/` (`types` · `queryKeys` · `hooks` · `useSignedUrls`); components `src/components/outfits/` (`OutfitsPage`, `WardrobeGrid`, `AddGarmentSheet`, `GarmentDetailSheet`, `SizingProfileSheet`, `OutfitBuilder`, `SlotSwiper`, `SaveOutfitSheet`, `OutfitsGallery`, shared `OutfitSheet` shell); libs `src/lib/wardrobeImage.ts`, `src/lib/backgroundRemoval.ts`, and **`src/lib/motion.ts` — a NEW app-wide spring/easing preset module (outfits is its first consumer; future modules should import it instead of inlining spring numbers)**. Routes exactly as §7 minus `tag-garment` and `plans` (unbuilt).
 >
 > **Implementers: do not re-litigate the Locked Decisions below.** If something here conflicts with reality when you build it, STOP, record the conflict in the PM campaign, and ask the owner.
 

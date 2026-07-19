@@ -41,3 +41,4 @@ tags: [pm/status, tooling/pm-dashboard]
 - `pnpm pm:build-ui`: minified IIFE and CSS built.
 - Live HTTP probe: both roots returned 200; new root included mount + fonts; `/api/data` returned 358 docs and 237 source keys.
 - 2026-07-17 PWA/mobile pass: `pnpm vitest run tests/pm-mutations.test.ts tests/pm-server-net.test.ts tests/delivery/server-routes.test.ts` — 23 new net-guard tests + existing suites all green; `pnpm pm:build-ui` bundle OK; manual browser pass on `pnpm pm` confirmed manifest/icons/service-worker registration, the DNS-rebind guard (localhost/LAN allow, arbitrary Host reject), checklist lane rendering, and Delivery's `awaiting` chip against real session data.
+- 2026-07-18 (R26): `lintChecklist` JSDoc typing fixed in `scripts/pm/lint.mjs` — `pnpm typecheck` green again repo-wide (was broken since ~07-13 by the untyped options bag); `npx vitest run tests/pm-ui/lint-rules.test.ts` 6/6 green.

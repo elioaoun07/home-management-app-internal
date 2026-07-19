@@ -33,6 +33,7 @@ If the user says…                                              | Open
 "the dashboard" / "today view" / "main landing"                | [standalone/dashboard.md](standalone/dashboard.md)
 "the recycle bin"                                              | [standalone/recycle-bin.md](standalone/recycle-bin.md)
 allergies / vaccines / medical history / medication           | [standalone/healthcare.md](standalone/healthcare.md)
+"what should I wear" / "add a shirt to my wardrobe"            | [standalone/outfits.md](standalone/outfits.md)
 ---                                                            | ---
 "plan my day" / "disrupted day" / "wedding this Saturday" / "push off" / "prepone" | [junction/plan-my-day.md](junction/plan-my-day.md)
 "trips" / "travel" / "activate trip" / "packing list"          | [junction/trips.md](junction/trips.md)
@@ -83,6 +84,7 @@ allergies / vaccines / medical history / medication           | [standalone/heal
 | Dashboard          | Main landing page after login — KPI cards, recent transactions.                        | [standalone/dashboard.md](standalone/dashboard.md)                                |
 | Recycle Bin        | Soft-deleted items with restore.                                                       | [standalone/recycle-bin.md](standalone/recycle-bin.md)                            |
 | Healthcare        | Family health profiles: allergies, conditions, vaccines, medications                  | [standalone/healthcare.md](standalone/healthcare.md)                       |
+| Outfits            | Wardrobe catalog, paper-doll outfit builder, weekly outfit planner and wear log.       | [standalone/outfits.md](standalone/outfits.md)                            |
 
 ## Junction modules (bridge two or more standalones)
 

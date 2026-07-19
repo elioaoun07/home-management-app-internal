@@ -1,7 +1,8 @@
 ---
 created: 2026-07-02
 type: index
-status: living
+status: baseline-frozen
+superseded: 2026-07-18
 owner: Elio
 tags:
   - pm/fabled2
@@ -9,6 +10,9 @@ tags:
 ---
 
 # Junction Modules · FABLED 2 — Index
+
+> ⚠️ **Frozen v2 baseline (2026-07-02)** — superseded 2026-07-18 by [`FABLED 3/`](<../FABLED 3/_index.md>) (model-generation handoff). Do not update; new history goes to the FABLED 3 delta ledger.
+
 
 > The deep-dive over the **junction layer as a whole** — the bridges between standalones, which the FAR correctly identified as where this app's compound advantage lives. Verified against the working tree **2026-07-02**. Per-junction depth: [Hub & ERA](<../../10 - Project Management/Hub & ERA/FABLED 2/_index.md>), [Trips](<../../10 - Project Management/Trips/FABLED 2/_index.md>), [Notifications](<../../10 - Project Management/Notifications & Alerts/FABLED 2/_index.md>), Kitchen's Shopping List ([Kitchen FABLED 2](<../../10 - Project Management/Kitchen/FABLED 2/_index.md>)).
 

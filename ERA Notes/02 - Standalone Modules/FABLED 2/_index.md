@@ -1,7 +1,8 @@
 ---
 created: 2026-07-02
 type: index
-status: living
+status: baseline-frozen
+superseded: 2026-07-18
 owner: Elio
 tags:
   - pm/fabled2
@@ -9,6 +10,9 @@ tags:
 ---
 
 # Standalone Modules · FABLED 2 — Index
+
+> ⚠️ **Frozen v2 baseline (2026-07-02)** — superseded 2026-07-18 by [`FABLED 3/`](<../FABLED 3/_index.md>) (model-generation handoff). Do not update; new history goes to the FABLED 3 delta ledger.
+
 
 > The **portfolio-level** deep-dive over all standalone modules — the view no single module doc gives: coverage, health distribution, orphans, and where the portfolio itself (not any one module) needs work. Verified against the working tree **2026-07-02**. Per-module depth lives in each module's vault doc and, for campaign-covered clusters, in the PM FABLED 2 folders.
 

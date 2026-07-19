@@ -1,6 +1,6 @@
 ---
 created: 2026-07-17
-updated: 2026-07-17
+updated: 2026-07-18
 type: checklist
 status: active
 owner: Elio
@@ -24,12 +24,12 @@ tags:
 
 **Phase 1 — Wardrobe catalog** — the whole loop: photo → cutout → tagged garment → grid. Carries all infrastructure.
 
-- [ ] **OUT-1** (Phase 1) Scaffold the `outfits` standalone module (six index surfaces: feature dir, API route, page, Feature Map, vault doc row, Atlas) via dry-run-first `node scripts/new-module.mjs --name outfits --type standalone` → `scripts/new-module.mjs` _(blocker - S)_
-- [ ] **OUT-2** (Phase 1) Migration A — `wardrobe_items` + `wardrobe_profiles` with flat `user_id = auth.uid()` RLS, paired `schema.sql` end state; DDL verbatim from [Overview §4](<../../02 - Standalone Modules/Outfits/Overview.md>) → `migrations/schema.sql` _(blocker - S)_
-- [ ] **OUT-3** (Phase 1) New WebP/alpha-preserving compressor **wardrobeImage.ts** in src/lib (clone the quality-ladder shape only — NEVER reuse the JPEG receipt compressor, it flattens alpha) → `src/lib/receiptUtils.ts` _(blocker - M)_
-- [ ] **OUT-4** (Phase 1) New **backgroundRemoval.ts** in src/lib — lazy `await import("@imgly/background-removal")` (never top-level), webp-alpha output re-compressed to 800px; add the runtime dependency → `package.json` _(blocker - M)_
-- [ ] **OUT-5** (Phase 1) Garment + profile CRUD routes, images upload route (2 MB cap, private `wardrobe` bucket, paths-in-DB, rollback) cloned from the catalogue template, plus batch signed-URLs endpoint (≤100 paths, owner-only, bulk `createSignedUrls`) → `src/app/api/catalogue/items/[id]/document-image/route.ts` _(blocker - M)_
-- [ ] **OUT-6** (Phase 1) Wardrobe UI — feature dir (queryKeys/hooks/useSignedUrls w/ 50-min cache), WardrobeGrid + filters, 3-step AddGarmentSheet (capture cloned from receipt sheet; flat-lay guidance; cutout approve / "Keep original" fallback; manual tags), GarmentDetailSheet, SizingProfileSheet (decimal text inputs) → `src/components/expense/ReceiptSheet.tsx` _(blocker - L)_
+- [x] **OUT-1** (Phase 1) Scaffold the `outfits` standalone module (six index surfaces: feature dir, API route, page, Feature Map, vault doc row, Atlas) via dry-run-first `node scripts/new-module.mjs --name outfits --type standalone` → `scripts/new-module.mjs` _(blocker - S)_
+- [x] **OUT-2** (Phase 1) Migration A — `wardrobe_items` + `wardrobe_profiles` with flat `user_id = auth.uid()` RLS, paired `schema.sql` end state; DDL verbatim from [Overview §4](<../../02 - Standalone Modules/Outfits/Overview.md>) → `migrations/schema.sql` _(blocker - S)_
+- [x] **OUT-3** (Phase 1) New WebP/alpha-preserving compressor **wardrobeImage.ts** in src/lib (clone the quality-ladder shape only — NEVER reuse the JPEG receipt compressor, it flattens alpha) → `src/lib/receiptUtils.ts` _(blocker - M)_
+- [x] **OUT-4** (Phase 1) New **backgroundRemoval.ts** in src/lib — lazy `await import("@imgly/background-removal")` (never top-level), webp-alpha output re-compressed to 800px; add the runtime dependency → `package.json` _(blocker - M)_
+- [x] **OUT-5** (Phase 1) Garment + profile CRUD routes, images upload route (2 MB cap, private `wardrobe` bucket, paths-in-DB, rollback) cloned from the catalogue template, plus batch signed-URLs endpoint (≤100 paths, owner-only, bulk `createSignedUrls`) → `src/app/api/catalogue/items/[id]/document-image/route.ts` _(blocker - M)_
+- [x] **OUT-6** (Phase 1) Wardrobe UI — feature dir (queryKeys/hooks/useSignedUrls w/ 50-min cache), WardrobeGrid + filters, 3-step AddGarmentSheet (capture cloned from receipt sheet; flat-lay guidance; cutout approve / "Keep original" fallback; manual tags), GarmentDetailSheet, SizingProfileSheet (decimal text inputs) → `src/components/expense/ReceiptSheet.tsx` _(blocker - L)_
 
 ## Next
 
@@ -40,9 +40,9 @@ tags:
 
 **Phase 3 — Outfit builder** — the paper doll.
 
-- [ ] **OUT-9** (Phase 3) Migration B — `outfits` + `outfit_items` junction (denormalized `user_id`, `UNIQUE(outfit_id, slot)`), paired `schema.sql`; DDL verbatim from [Overview §4](<../../02 - Standalone Modules/Outfits/Overview.md>) _(blocker - S)_
-- [ ] **OUT-10** (Phase 3) Outfits CRUD with `outfit_items(*)` embed + OutfitBuilder (stacked SlotSwiper snap-scroll rows, outerwear/accessory overlays) + SaveOutfitSheet + OutfitsGallery (mini composed stacks) _(blocker - L)_
-- [ ] **OUT-11** (Phase 3) Garment archive/delete shows "used in N outfits" warning via the junction reverse lookup _(friction - S)_
+- [x] **OUT-9** (Phase 3) Migration B — `outfits` + `outfit_items` junction (denormalized `user_id`, `UNIQUE(outfit_id, slot)`), paired `schema.sql`; DDL verbatim from [Overview §4](<../../02 - Standalone Modules/Outfits/Overview.md>) _(blocker - S)_
+- [x] **OUT-10** (Phase 3) Outfits CRUD with `outfit_items(*)` embed + OutfitBuilder (stacked SlotSwiper snap-scroll rows, outerwear/accessory overlays) + SaveOutfitSheet + OutfitsGallery (mini composed stacks) _(blocker - L)_
+- [x] **OUT-11** (Phase 3) Garment archive/delete shows "used in N outfits" warning via the junction reverse lookup _(friction - S)_
 
 ## Later
 

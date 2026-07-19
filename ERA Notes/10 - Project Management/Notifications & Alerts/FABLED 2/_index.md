@@ -1,7 +1,8 @@
 ---
 created: 2026-07-02
 type: index
-status: living
+status: baseline-frozen
+superseded: 2026-07-18
 owner: Elio
 tags:
   - pm/fabled2
@@ -9,6 +10,9 @@ tags:
 ---
 
 # Notifications & Alerts · FABLED 2 — Index
+
+> ⚠️ **Frozen v2 baseline (2026-07-02)** — superseded 2026-07-18 by [`FABLED 3/`](<../FABLED 3/_index.md>) (model-generation handoff). Do not update; new history goes to the FABLED 3 delta ledger.
+
 
 > This campaign never had a FABLED v1 — FABLED 2 is its **first** deep-dive layer, built to the second-generation standard directly (verified against the working tree **2026-07-02**; scored, evidence-linked, kill-criteria'd). The campaign's own [Feature State](<../1 - Feature State.md>) (2026-06-19) carries the full pain inventory; this folder holds the architecture X-ray, the ranked technical gaps, the hardening plan, and the enhancement ladder.
 

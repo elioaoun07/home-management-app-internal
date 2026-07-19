@@ -1,7 +1,8 @@
 ---
 created: 2026-07-02
 type: index
-status: living
+status: baseline-frozen
+superseded: 2026-07-18
 owner: Elio
 tags:
   - pm/fabled2
@@ -9,6 +10,9 @@ tags:
 ---
 
 # Project Management · FABLED 2 — Index
+
+> ⚠️ **Frozen v2 baseline (2026-07-02)** — superseded 2026-07-18 by [`FABLED 3/`](<../FABLED 3/_index.md>) (model-generation handoff). Do not update; new history goes to the FABLED 3 delta ledger.
+
 
 > The deep-dive layer for the **PM system itself** — the command center, campaign folders, FABLED layer, reviews, dashboard, and the enforcement machinery around them. No v1 existed at this scope; this is its first X-ray, built to the FABLED 2 standard (verified against the working tree **2026-07-02**).
 >

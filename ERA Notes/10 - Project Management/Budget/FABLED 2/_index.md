@@ -1,7 +1,8 @@
 ---
 created: 2026-07-02
 type: index
-status: living
+status: baseline-frozen
+superseded: 2026-07-18
 owner: Elio
 tags:
   - pm/fabled2
@@ -9,6 +10,9 @@ tags:
 ---
 
 # Budget · FABLED 2 — Index
+
+> ⚠️ **Frozen v2 baseline (2026-07-02)** — superseded 2026-07-18 by [`FABLED 3/`](<../FABLED 3/_index.md>) (model-generation handoff). Do not update; new history goes to the FABLED 3 delta ledger.
+
 
 > **FABLED 2** is the second-generation deep-dive layer — the successor to [FABLED v1](<../FABLED/_index.md>) (2026-06-10). v1 stays frozen as the historical baseline; **this folder is the living one**. Everything here was re-verified against the working tree on **2026-07-02** (tests run, routes listed, LOC counted, hygiene grepped). When FABLED 2 and the code disagree, the code wins — and FABLED 2 gets the correction.
 >

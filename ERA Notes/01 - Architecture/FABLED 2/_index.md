@@ -1,7 +1,8 @@
 ---
 created: 2026-07-02
 type: index
-status: living
+status: baseline-frozen
+superseded: 2026-07-18
 owner: Elio
 tags:
   - pm/fabled2
@@ -9,6 +10,9 @@ tags:
 ---
 
 # Architecture · FABLED 2 — Index
+
+> ⚠️ **Frozen v2 baseline (2026-07-02)** — superseded 2026-07-18 by [`FABLED 3/`](<../FABLED 3/_index.md>) (model-generation handoff). Do not update; new history goes to the FABLED 3 delta ledger.
+
 
 > The deep-dive audit of the app's **architecture itself** — the patterns, boundaries, and invariants this directory documents. First FABLED at this scope, built to the second-generation standard (verified against the working tree **2026-07-02**). The directory's docs (Common Patterns, Sync & Offline, Cache Invalidation, Timezone Handling, Color Identity, Feature Map) remain the rulebooks; this folder judges how the *architecture is holding* under the rules.
 

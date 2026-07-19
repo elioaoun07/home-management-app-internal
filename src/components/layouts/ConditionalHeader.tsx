@@ -78,6 +78,11 @@ const STANDALONE_APPS: Record<
     role: "Disrupted-Day Planner",
     color: "from-pink-400 to-amber-400",
   },
+  "/outfits": {
+    title: "Outfits",
+    role: "Wardrobe Studio",
+    color: "from-violet-400 to-fuchsia-500",
+  },
 };
 
 type Props = {

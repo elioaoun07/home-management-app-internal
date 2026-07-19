@@ -17,7 +17,7 @@ If you read only four things before acting, read these, in order:
 3. **`ERA Notes/01 - Architecture/Feature Map/_index.md`** — user intent → exact source files.
 4. **`ERA Notes/01 - Architecture/Design Doctrine.md`** — how to *decide* when no playbook covers it: the Ten Questions, silent-failure taxonomy, standing decisions, and tradeoff priority order. Mandatory before designing any new feature or resolving an ambiguous tradeoff; skippable for mechanical edits.
 
-Deep-dive state of every cluster lives in the **FABLED 2** layer (verified audits with maturity scores and delta ledgers) — master index at `ERA Notes/00 - Home/FABLED 2 Master Index.md`. Trust it as of its stamp date, then delta with `git log --since=<stamp>`.
+Deep-dive state of every cluster lives in the **FABLED 3** layer (verified audits with maturity scores, delta ledgers, and per-cluster **Successor Briefings** with task-tier maps) — master index at `ERA Notes/00 - Home/FABLED 3 Master Index.md`. Trust it as of its stamp date (2026-07-18), then delta with `git log --since=<stamp>`. Before working any cluster, read its `FABLED 3/5 - … Successor Briefing.md`. The farewell operating manual for AI sessions is `ERA Notes/10 - Project Management/FABLE — Testament (2026-07-18).md`.
 
 ---
 
@@ -279,6 +279,7 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Recycle Bin              | `src/app/recycle-bin/`, `src/features/recycle-bin/`              | `ERA Notes/02 - Standalone Modules/Recycle Bin/`                    | Standalone |
 | Plan My Day              | `src/app/reminders/` (Focus tab), `src/app/today/` (redirect), `src/components/planner/`, `src/features/day-plan/` | `ERA Notes/03 - Junction Modules/Plan My Day/`                 | Junction   |
 | Healthcare               | `src/features/healthcare/`                                        | `ERA Notes/02 - Standalone Modules/Healthcare/`         | Standalone |
+| Outfits                  | `src/features/outfits/`, `src/app/outfits/`, `src/components/outfits/` | `ERA Notes/02 - Standalone Modules/Outfits/`       | Standalone |
 
 > **Note:** this table is validated against the **Feature Map** (`ERA Notes/01 - Architecture/Feature Map/_index.md`) by `pnpm docs:check`, which runs during `pnpm sync:ai` and pre-commit. **AI Usage is intentionally excluded** from this Feature Index because it is not part of the application.
 

@@ -11,7 +11,7 @@ tags:
 
 > **Start here when you ask "what do I do next?"** Three surfaces, one job each:
 >
-> 1. **Current truth** — the **FABLED 2** layer (per-campaign `FABLED 2/_index.md`; whole-app [FABLED 2 Master Index](<../00 - Home/FABLED 2 Master Index.md>)). Scored maturity, delta ledgers, evidence-stamped claims. Trust it as of its stamp, then delta with `git log`.
+> 1. **Current truth** — the **FABLED 3** layer (per-campaign `FABLED 3/_index.md`; whole-app [FABLED 3 Master Index](<../00 - Home/FABLED 3 Master Index.md>)). Scored maturity, inherited delta ledgers, evidence-stamped claims, and per-cluster Successor Briefings (task-tier maps for AI sessions). Trust it as of its stamp (2026-07-18), then delta with `git log`. FABLED 2 is frozen baseline history.
 > 2. **Execution** — each campaign's `4 - Checklist.md`, as **Now / Next / Later** lanes. One item grammar for all of them: [_Conventions](<_Conventions.md>), validated by `pnpm pm:lint`, seeded from [_Templates/](<_Templates/>).
 > 3. **View** — `pnpm pm` opens the consolidated Task board/table: every campaign's items with ID / severity / effort chips, filterable (`m:Budget s:blocker is:open`), click-through to the exact line.
 

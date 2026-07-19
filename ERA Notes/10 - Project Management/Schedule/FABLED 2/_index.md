@@ -1,7 +1,8 @@
 ---
 created: 2026-07-02
 type: index
-status: living
+status: baseline-frozen
+superseded: 2026-07-18
 owner: Elio
 tags:
   - pm/fabled2
@@ -9,6 +10,9 @@ tags:
 ---
 
 # Schedule · FABLED 2 — Index
+
+> ⚠️ **Frozen v2 baseline (2026-07-02)** — superseded 2026-07-18 by [`FABLED 3/`](<../FABLED 3/_index.md>) (model-generation handoff). Do not update; new history goes to the FABLED 3 delta ledger.
+
 
 > Second-generation deep-dive, superseding [FABLED v1](<../FABLED/_index.md>) (2026-06-10). Re-verified against the working tree **2026-07-02** — tests run, engines traced, dead code re-checked. v1 stays as the frozen baseline; this folder is the living one. v1's links to the pre-uniformization campaign file names were already broken — everything here points at the current names.
 

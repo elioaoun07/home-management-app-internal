@@ -1747,3 +1747,83 @@ CREATE POLICY health_profiles_owner_all ON public.health_profiles AS PERMISSIVE 
 CREATE POLICY health_allergies_owner_all ON public.health_allergies AS PERMISSIVE FOR ALL USING ((managing_user_id = auth.uid())) WITH CHECK ((managing_user_id = auth.uid()));
 CREATE POLICY health_conditions_owner_all ON public.health_conditions AS PERMISSIVE FOR ALL USING ((managing_user_id = auth.uid())) WITH CHECK ((managing_user_id = auth.uid()));
 CREATE POLICY health_vaccines_owner_all ON public.health_vaccines AS PERMISSIVE FOR ALL USING ((managing_user_id = auth.uid())) WITH CHECK ((managing_user_id = auth.uid()));
+
+-- ── Outfits / Wardrobe (personal per user — NO household sharing by locked design D4) ──
+
+CREATE TABLE public.wardrobe_profiles (
+  user_id uuid NOT NULL,
+  height_cm numeric,
+  weight_kg numeric,
+  sizes jsonb NOT NULL DEFAULT '{}'::jsonb,
+  notes text,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT wardrobe_profiles_pkey PRIMARY KEY (user_id),
+  CONSTRAINT wardrobe_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+
+CREATE TABLE public.wardrobe_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  name text NOT NULL,
+  slot text NOT NULL CHECK (slot IN ('top','bottom','shoes','outerwear','accessory','headwear')),
+  subcategory text,
+  colors text[] NOT NULL DEFAULT '{}',
+  brand text,
+  size text,
+  season text[] NOT NULL DEFAULT '{}',
+  formality text CHECK (formality IN ('casual','smart-casual','business','formal','athletic') OR formality IS NULL),
+  style_tags text[] NOT NULL DEFAULT '{}',
+  image_path text,
+  cutout_path text,
+  fit_note text,
+  times_worn integer NOT NULL DEFAULT 0,
+  last_worn_at timestamp with time zone,
+  ai_tagged boolean NOT NULL DEFAULT false,
+  ai_confidence numeric,
+  archived_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT wardrobe_items_pkey PRIMARY KEY (id),
+  CONSTRAINT wardrobe_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE INDEX wardrobe_items_user_slot_idx ON public.wardrobe_items USING btree (user_id, slot) WHERE archived_at IS NULL;
+
+CREATE TABLE public.outfits (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  name text NOT NULL,
+  occasion_hint text,
+  notes text,
+  times_worn integer NOT NULL DEFAULT 0,
+  last_worn_at timestamp with time zone,
+  archived_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT outfits_pkey PRIMARY KEY (id),
+  CONSTRAINT outfits_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+
+CREATE TABLE public.outfit_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,  -- denormalized from outfits for flat RLS (Hard Rule 20); server sets it on insert
+  outfit_id uuid NOT NULL,
+  item_id uuid NOT NULL,
+  slot text NOT NULL CHECK (slot IN ('top','bottom','shoes','outerwear','accessory','headwear')),
+  CONSTRAINT outfit_items_pkey PRIMARY KEY (id),
+  CONSTRAINT outfit_items_outfit_slot_key UNIQUE (outfit_id, slot),
+  CONSTRAINT outfit_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT outfit_items_outfit_id_fkey FOREIGN KEY (outfit_id) REFERENCES public.outfits(id) ON DELETE CASCADE,
+  CONSTRAINT outfit_items_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.wardrobe_items(id) ON DELETE CASCADE
+);
+CREATE INDEX outfit_items_outfit_idx ON public.outfit_items USING btree (outfit_id);
+CREATE INDEX outfit_items_item_idx ON public.outfit_items USING btree (item_id);
+
+ALTER TABLE public.wardrobe_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wardrobe_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.outfits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.outfit_items ENABLE ROW LEVEL SECURITY;
+
+-- One policy per verb on each table, all flat user_id = auth.uid() (no EXISTS subqueries):
+-- {table}_select_own / {table}_insert_own / {table}_update_own / {table}_delete_own
+-- for each of: wardrobe_profiles, wardrobe_items, outfits, outfit_items.
+-- Full CREATE POLICY statements: migrations/2026-07-18_outfits-catalog-and-builder.sql

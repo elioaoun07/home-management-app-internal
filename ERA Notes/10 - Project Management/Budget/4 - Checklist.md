@@ -37,6 +37,7 @@ tags:
 - [ ] **BUD-5** 50/30/20 budgeting templates + Dashboard V2 widgets. _(annoyance - M)_
 - [ ] **BUD-6** Allocation auto-suggest from recurring commitments. Fold into the allocation workflow redesign if it becomes part of that. _(annoyance - M)_
 - [ ] **BUD-7** Future Purchase → Transaction auto-complete on linked purchase. _(annoyance - M)_
+- [x] **BUD-12** Delete the remaining debug/diagnostic routes (`env-check`, `supabase-check` — the latter an unauthenticated `listUsers` probe) after verifying zero callers. Done 2026-07-18 (FABLED 3 handoff session; typecheck green after). _(friction - S)_
 - [ ] **BUD-8** Debt → Schedule auto-reminder on collection date. _(annoyance - M)_
 - [ ] **BUD-9** Split the expense + recurring mega-forms into testable units (only when next touched). _(parked - M)_
 - [ ] **BUD-10** Statement Import → Inventory/Catalogue price pre-fill. _(parked - M)_

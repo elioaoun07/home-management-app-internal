@@ -35,7 +35,7 @@ warn_stale_body() { # $1=file  $2=threshold-days  $3=label — matches "Updated 
 # Freshness now tracks the LIVING execution queues (the campaign checklists),
 # not the archived root files. Warn only if the newest of them has gone stale.
 newest=""
-for c in "Budget" "Schedule" "Kitchen" "Trips" "Hub & ERA" "Notifications & Alerts"; do
+for c in "Budget" "Schedule" "Kitchen" "Trips" "Hub & ERA" "Notifications & Alerts" "Healthcare" "Outfits"; do
   f="$pm/$c/4 - Checklist.md"
   [ -f "$f" ] || continue
   s=$(grep -m1 "^updated:" "$f" | sed 's/updated:[[:space:]]*//' | tr -d '\r"' | cut -c1-10)
@@ -54,6 +54,6 @@ fi
 if [ -n "$out" ]; then
   echo "PM FRESHNESS RADAR (SessionStart hook):"
   echo "$out"
-  echo "Current cluster truth lives in the FABLED 2 layer — start at 'ERA Notes/00 - Home/FABLED 2 Master Index.md', then delta with git log --since=<its stamp>. Execution = the campaign 4 - Checklist.md Now/Next/Later lanes (grammar in _Conventions.md, viewed via 'pnpm pm'). If this session ships work, update the campaign PM files (Hard Rule 25)."
+  echo "Current cluster truth lives in the FABLED 3 layer — start at 'ERA Notes/00 - Home/FABLED 3 Master Index.md', then delta with git log --since=2026-07-18. Before working a cluster, read its 'FABLED 3/5 - FABLED 3 — Successor Briefing.md' (task-tier map + traps). Execution = the campaign 4 - Checklist.md Now/Next/Later lanes (grammar in _Conventions.md, viewed via 'pnpm pm'). If this session ships work, update the campaign PM files (Hard Rule 25) and append the cluster's FABLED 3 delta ledger."
 fi
 exit 0
