@@ -32,11 +32,25 @@ const nextConfig: NextConfig = {
     // it's a CSP block; only the browser's own CSP violation console log
     // (separate from the thrown error) names connect-src as the culprit.
     const connectSrc = ["'self'", "https:", "wss:", "blob:"];
-    // blob: + 'wasm-unsafe-eval' are required by the same WASM backend: its
-    // dynamic import() of the blob: glue module is governed by script-src
-    // (not worker-src) — without these it fails with "no available backend
-    // found" instead.
-    const scriptSrc = ["'self'", "'unsafe-inline'", "blob:", "'wasm-unsafe-eval'"];
+    // The garment-cutout pipeline (@imgly/background-removal) needs three
+    // script-src grants:
+    //   • blob:              — dynamic import() of ORT's blob: glue module
+    //                          (governed by script-src, not worker-src)
+    //   • 'wasm-unsafe-eval' — compiling the ONNX WASM binary
+    //   • 'unsafe-eval'      — the library bundles `ndarray`, which generates
+    //                          optimized array accessors at runtime via
+    //                          `new Function(...)` (CSP treats that as eval).
+    //                          This is baked into a transitive dep — no flag,
+    //                          config, or header avoids it. Accepted as an
+    //                          owner decision (2026-07-19): marginal risk is
+    //                          modest since 'unsafe-inline' is already present.
+    const scriptSrc = [
+      "'self'",
+      "'unsafe-inline'",
+      "'unsafe-eval'",
+      "blob:",
+      "'wasm-unsafe-eval'",
+    ];
     const styleSrc = ["'self'", "'unsafe-inline'", "https:"];
     const mediaSrc = ["'self'", "blob:", "data:"];
 
