@@ -29,33 +29,12 @@ export class BackgroundRemovalError extends Error {
  * Returns the cutout as a compressed WebP-with-alpha File (max 800 px).
  * The input should already be the compressed original from
  * compressWardrobeImage — feeding the raw camera file wastes decode time.
+ *
+ * Requires the page to be cross-origin isolated (COOP+COEP response headers,
+ * see next.config.ts): the only WASM build this library ships unconditionally
+ * allocates a `WebAssembly.Memory({shared: true})`, which needs
+ * SharedArrayBuffer — there is no non-shared fallback build to opt into.
  */
-/**
- * onnxruntime-web (used internally by @imgly/background-removal) always sets
- * `numThreads = navigator.hardwareConcurrency`, forcing the multi-threaded WASM
- * build — which needs SharedArrayBuffer, only available on cross-origin-isolated
- * pages (COOP+COEP headers). This app doesn't set those site-wide (COOP:
- * same-origin risks breaking the Google Calendar OAuth popup's window.opener),
- * so instead we shadow hardwareConcurrency to 1 for the duration of this call —
- * forces ORT onto the single-threaded path, sidestepping the isolation
- * requirement entirely. Slower per-cutout, but has zero blast radius elsewhere.
- */
-async function withSingleThreadedWasm<T>(fn: () => Promise<T>): Promise<T> {
-  const original = navigator.hardwareConcurrency;
-  Object.defineProperty(navigator, "hardwareConcurrency", {
-    value: 1,
-    configurable: true,
-  });
-  try {
-    return await fn();
-  } finally {
-    Object.defineProperty(navigator, "hardwareConcurrency", {
-      value: original,
-      configurable: true,
-    });
-  }
-}
-
 export async function removeGarmentBackground(
   source: File,
   onProgress?: (p: BgRemovalProgress) => void,
@@ -63,12 +42,10 @@ export async function removeGarmentBackground(
   let blob: Blob;
   try {
     const { removeBackground } = await import("@imgly/background-removal");
-    blob = await withSingleThreadedWasm(() =>
-      removeBackground(source, {
-        output: { format: "image/webp", quality: 0.8 },
-        progress: (key, current, total) => onProgress?.({ key, current, total }),
-      }),
-    );
+    blob = await removeBackground(source, {
+      output: { format: "image/webp", quality: 0.8 },
+      progress: (key, current, total) => onProgress?.({ key, current, total }),
+    });
   } catch (err) {
     throw new BackgroundRemovalError(
       err instanceof Error ? err.message : "Background removal failed",

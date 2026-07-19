@@ -73,6 +73,14 @@ const nextConfig: NextConfig = {
       },
       { key: "Permissions-Policy", value: "interest-cohort=()" },
       { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+      // "credentialless" (not "require-corp") enables crossOriginIsolated —
+      // required for SharedArrayBuffer, which the on-device garment cutout
+      // WASM (@imgly/background-removal) needs unconditionally — without
+      // blocking cross-origin resources that lack CORP headers (Supabase
+      // Storage images, Google Fonts). No popup+window.opener flow exists in
+      // this app (Google Calendar OAuth is a redirect, not a popup), so COOP:
+      // same-origin above is safe too.
+      { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
       { key: "Cross-Origin-Resource-Policy", value: "same-site" },
     ];
 
