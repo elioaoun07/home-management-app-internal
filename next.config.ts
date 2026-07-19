@@ -25,7 +25,12 @@ const nextConfig: NextConfig = {
     // Note: Adjust CSP connect-src/script-src to include any third-party domains you intentionally use.
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const connectSrc = ["'self'", "https:", "wss:"];
-    const scriptSrc = ["'self'", "'unsafe-inline'"];
+    // blob: + 'wasm-unsafe-eval' are required by onnxruntime-web (used by
+    // @imgly/background-removal for on-device garment cutouts): its WASM
+    // backend does a dynamic import() of a blob: module, which is governed
+    // by script-src (not worker-src) — without these it fails with
+    // "no available backend found" on every attempt.
+    const scriptSrc = ["'self'", "'unsafe-inline'", "blob:", "'wasm-unsafe-eval'"];
     const styleSrc = ["'self'", "'unsafe-inline'", "https:"];
     const mediaSrc = ["'self'", "blob:", "data:"];
 
