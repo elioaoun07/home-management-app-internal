@@ -71,6 +71,7 @@ export default function AddGarmentSheet({ open, onClose }: Props) {
   const [cutoutUrl, setCutoutUrl] = useState<string | null>(null);
   const [progress, setProgress] = useState<BgRemovalProgress | null>(null);
   const [removalFailed, setRemovalFailed] = useState(false);
+  const [removalErrorDetail, setRemovalErrorDetail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
 
@@ -99,6 +100,7 @@ export default function AddGarmentSheet({ open, onClose }: Props) {
     setUseCutout(true);
     setProgress(null);
     setRemovalFailed(false);
+    setRemovalErrorDetail(null);
     setError(null);
     setPendingItemId(null);
     setName("");
@@ -147,11 +149,12 @@ export default function AddGarmentSheet({ open, onClose }: Props) {
           return URL.createObjectURL(cut);
         });
         setUseCutout(true);
-      } catch {
+      } catch (err) {
         setCutout(null);
         setCutoutUrl(null);
         setUseCutout(false);
         setRemovalFailed(true);
+        setRemovalErrorDetail(err instanceof Error ? err.message : String(err));
       }
       setStep("approve");
     } catch {
@@ -297,6 +300,11 @@ export default function AddGarmentSheet({ open, onClose }: Props) {
             {removalFailed && (
               <p className="text-xs text-amber-300/80 bg-amber-500/10 rounded-xl px-3 py-2 text-center">
                 Couldn&apos;t cut this one out — you can keep the original photo.
+                {removalErrorDetail && (
+                  <span className="block mt-1 text-[10px] text-amber-300/50 break-words">
+                    {removalErrorDetail}
+                  </span>
+                )}
               </p>
             )}
             <div className="grid grid-cols-2 gap-2">
