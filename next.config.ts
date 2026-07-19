@@ -24,12 +24,18 @@ const nextConfig: NextConfig = {
     // Security headers applied to all routes
     // Note: Adjust CSP connect-src/script-src to include any third-party domains you intentionally use.
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const connectSrc = ["'self'", "https:", "wss:"];
-    // blob: + 'wasm-unsafe-eval' are required by onnxruntime-web (used by
-    // @imgly/background-removal for on-device garment cutouts): its WASM
-    // backend does a dynamic import() of a blob: module, which is governed
-    // by script-src (not worker-src) — without these it fails with
-    // "no available backend found" on every attempt.
+    // blob: is required by onnxruntime-web (used by @imgly/background-removal
+    // for on-device garment cutouts): it wraps the fetched WASM binary in a
+    // blob: URL and then fetch()es that URL to feed the streaming compiler —
+    // that fetch is governed by connect-src, not script-src. Without it the
+    // failure is a generic "TypeError: Failed to fetch" with no indication
+    // it's a CSP block; only the browser's own CSP violation console log
+    // (separate from the thrown error) names connect-src as the culprit.
+    const connectSrc = ["'self'", "https:", "wss:", "blob:"];
+    // blob: + 'wasm-unsafe-eval' are required by the same WASM backend: its
+    // dynamic import() of the blob: glue module is governed by script-src
+    // (not worker-src) — without these it fails with "no available backend
+    // found" instead.
     const scriptSrc = ["'self'", "'unsafe-inline'", "blob:", "'wasm-unsafe-eval'"];
     const styleSrc = ["'self'", "'unsafe-inline'", "https:"];
     const mediaSrc = ["'self'", "blob:", "data:"];
