@@ -23,6 +23,21 @@ export type AccessibleAccount = {
 
 type SupabaseLike = Pick<SupabaseClient, "from">;
 
+/**
+ * Shared accounts are normally public-only. A household transfer is the one
+ * deliberate exception: its destination picker includes every visible partner
+ * account, so the API must be able to authorize that specific destination.
+ */
+export function isPartnerAccountAccessible(
+  account: Pick<AccessibleAccount, "visible" | "is_public">,
+  options: { allowPrivatePartner?: boolean } = {},
+): boolean {
+  return (
+    account.visible !== false &&
+    (account.is_public === true || options.allowPrivatePartner === true)
+  );
+}
+
 export async function getActiveHouseholdPartnerId(
   supabase: SupabaseLike,
   userId: string,
@@ -46,7 +61,7 @@ export async function getAccessibleAccount(
   supabase: SupabaseLike,
   userId: string,
   accountId: string,
-  options: { includeHidden?: boolean } = {},
+  options: { includeHidden?: boolean; allowPrivatePartner?: boolean } = {},
 ): Promise<AccessibleAccount | null> {
   const { data: account, error } = await supabase
     .from("accounts")
@@ -57,10 +72,8 @@ export async function getAccessibleAccount(
   if (error || !account) return null;
 
   const isOwner = account.user_id === userId;
-  const isVisible = account.visible !== false;
-
   if (isOwner) {
-    if (!options.includeHidden && !isVisible) return null;
+    if (!options.includeHidden && account.visible === false) return null;
     return {
       ...account,
       isOwner: true,
@@ -69,7 +82,7 @@ export async function getAccessibleAccount(
     };
   }
 
-  if (!isVisible || account.is_public !== true) return null;
+  if (!isPartnerAccountAccessible(account, options)) return null;
 
   const partnerId = await getActiveHouseholdPartnerId(supabase, userId);
   if (!partnerId || account.user_id !== partnerId) return null;

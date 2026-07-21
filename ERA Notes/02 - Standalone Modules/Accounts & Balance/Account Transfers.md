@@ -138,6 +138,7 @@ Implemented 2026-06-26: accounts can be private or public.
 - Private accounts are the default and behave like the original owner-only account model.
 - Public accounts are visible to the active household partner when the account is also visible.
 - Both household users can open a public account, adjust its balance, add/deduct transactions against it, and transfer to or from it.
+- A **household transfer destination** may also be any visible partner account, including a private one. This is deliberately narrower than ordinary account access: private partner accounts remain unavailable for direct adjustments and transactions.
 - The account row remains owned by the creator (`accounts.user_id`); partner writes are authorized through `src/lib/accountAccess.ts` and balance rows continue to belong to the account owner.
 - Partner access does not make private transactions visible. Partner reads still filter out transactions where `transactions.is_private=true`.
 - Exception: `/expense?transfer=salary-wallet` stays own-account scoped even in a

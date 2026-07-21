@@ -241,6 +241,7 @@ export async function POST(req: NextRequest) {
       supabase,
       user.id,
       to_account_id,
+      { allowPrivatePartner: transfer_type === "household" },
     );
 
     if (!fromAccount?.canWrite || !toAccount?.canWrite) {

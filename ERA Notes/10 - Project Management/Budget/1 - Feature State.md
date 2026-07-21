@@ -69,5 +69,6 @@ _(Updated 2026-07-13)_
 
 1. **Two mega-files are change-risk hotspots.** `MobileExpenseForm` (~2,890 LOC) and `recurring/page.tsx` (~2,772 LOC). Don't refactor for its own sake; split when next touched.
 2. **Bridges are mostly one-directional.** Recurring due-dates, debt collection dates, and future-purchase completions are facts that _also_ live (or should) in Schedule / Transactions — see file 2.
+3. ✅ 2026-07-21 (`src/lib/accountAccess.test.ts`) Household transfers now authorize a visible private partner account only as the destination of an explicit household transfer; ordinary partner account writes remain public-only.
 
 → The growth opportunities are in [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>); the concrete next steps are in [3 · Action Plan](<3 - Action Plan.md>); the checkable list is [4 · Checklist](<4 - Checklist.md>).
