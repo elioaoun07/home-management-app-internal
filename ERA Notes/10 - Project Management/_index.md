@@ -1,6 +1,6 @@
 ---
 created: 2026-05-29
-updated: 2026-07-15
+updated: 2026-07-22
 type: index
 status: living
 tags:
@@ -64,5 +64,6 @@ Marked `status: superseded` / `baseline-frozen`; hidden from the `pnpm pm` board
 ## How to use this set
 
 - **Daily:** open `pnpm pm`, work the **Now** lanes; single item detail is one click away.
+- **Capturing a raw thought:** drop it in [0 - Inbox](<0 - Inbox.md>) (or the 💡 capture button in the dashboard topbar) — then run `/triage-inbox` in Claude Code to elaborate it, answer its questions, and have it filed as a canonical item ([_Conventions](<_Conventions.md>) §7).
 - **Adding an item:** write it in canonical grammar ([_Conventions](<_Conventions.md>)) in the right campaign's `4 - Checklist.md`, then `pnpm pm:lint`.
 - **Setting direction:** read the campaign's `FABLED 2/_index.md` (scored) → `2 - Vision & Roadmap` → drop concrete items into the lanes.

@@ -21,6 +21,7 @@ import {
   manifest,
   mapSdkMessageToEvents,
   mapSdkMessageToRawRecords,
+  PREFLIGHT_TIMEOUT_MS,
   withOutputSchema,
   withSessionIdentity,
 } from "../../scripts/delivery/drivers/claude.mjs";
@@ -603,6 +604,28 @@ describe("createClaudeDriver: session lifecycle against a fake SDK", () => {
     const driver = createClaudeDriver({ importSdk: async () => ({ query }) });
 
     await expect(driver.startSession({ cwd: CWD, mode: "build" })).rejects.toThrow(/authentication preflight failed.*authentication unavailable/);
+  });
+
+  it("times out a hung preflight query instead of blocking forever, and aborts the SDK call", async () => {
+    vi.useFakeTimers();
+    try {
+      const query = vi.fn().mockImplementation(
+        () =>
+          (async function* () {
+            await new Promise(() => {}); // never resolves — simulates a hung SDK call
+          })(),
+      );
+      const driver = createClaudeDriver({ importSdk: async () => ({ query }) });
+
+      const pending = driver.startSession({ cwd: CWD, mode: "build" });
+      const assertion = expect(pending).rejects.toThrow(/authentication preflight failed/);
+      await vi.advanceTimersByTimeAsync(PREFLIGHT_TIMEOUT_MS);
+      await assertion;
+      const call = query.mock.calls[0][0];
+      expect(call.options.abortController.signal.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects starting twice", async () => {

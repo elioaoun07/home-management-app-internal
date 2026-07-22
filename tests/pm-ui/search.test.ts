@@ -16,5 +16,10 @@ describe("PM search index", () => {
     service.remove("Budget/4 - Checklist.md");
     expect(service.search("R2")).toHaveLength(0);
   });
-});
 
+  it("indexes documents with duplicate heading text", () => {
+    const service = createSearchService();
+    expect(() => service.build([file("# Runbook\n\n## One-time setup\n\n## One-time setup")])).not.toThrow();
+    expect(service.search("one-time setup").filter((result) => result.type === "heading")).toHaveLength(2);
+  });
+});

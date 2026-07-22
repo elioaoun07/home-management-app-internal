@@ -56,7 +56,7 @@ tags:
 
 - [ ] **OUT-15** AI try-on — photorealistic "me wearing this outfit" via Gemini image generation (sizing profile + cutouts as inputs) _(parked - L)_
 - [ ] **OUT-16** AI outfit suggestions + weather-aware planning _(parked - L)_
-- [x] **OUT-18** Standalone installable PWA — own manifest (`/manifests/outfits.webmanifest`, id `/outfits-app`, scope `/outfits`), icons generated from new `outfits-icon.svg`, layout manifest/apple metadata; wired into `scripts/generate-icons.cjs` → `src/app/outfits/layout.tsx` _(annoyance - S)_ *(IMPLEMENTED 2026-07-19 — same pass added Healthcare + ERA manifests/icons/layouts + nav-hide wiring. NOTE: these three plus PM cannot install on-device until the root `manifest.json` `scope:"/"` collision is resolved.)*
+- [x] **OUT-18** Standalone installable PWA — own manifest (`/manifests/outfits.webmanifest`, id `/outfits-app`, scope `/outfits`), icons generated from new `outfits-icon.svg`, layout manifest/apple metadata; wired into `scripts/generate-icons.cjs` → `src/app/outfits/layout.tsx` *(IMPLEMENTED 2026-07-19 — same pass added Healthcare + ERA manifests/icons/layouts + nav-hide wiring. NOTE: these three plus PM cannot install on-device until the root `manifest.json` `scope:"/"` collision is resolved.)* _(annoyance - S)_
 - [ ] **OUT-17** Trips packing-list bridge + cost-per-wear analytics bridge to Budget _(parked - M)_
 
 ## Definition of Done

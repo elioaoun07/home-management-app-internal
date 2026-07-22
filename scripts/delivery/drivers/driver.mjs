@@ -49,6 +49,32 @@ export function listRegisteredDrivers() {
   return Array.from(REGISTRY.keys());
 }
 
+/**
+ * Race `promise` against a `ms` timeout. On timeout, calls `onTimeout()` (e.g.
+ * abort the in-flight SDK call so it doesn't keep running orphaned) and
+ * rejects with a `DriverError` instead of hanging forever.
+ *
+ * Preflight calls in claude.mjs/codex.mjs are the one driver-boundary
+ * operation that used to run with no timeout and no abort wiring at all —
+ * unlike real turns (which are abortable mid-flight via the owner's Pause
+ * control), a hang here previously left the runner process alive but stuck
+ * forever in the SELECTED state, unrecoverable by Pause/Resume.
+ * @param {Promise<any>} promise
+ * @param {number} ms
+ * @param {() => void} [onTimeout]
+ */
+export function withTimeout(promise, ms, onTimeout) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      if (typeof onTimeout === "function") onTimeout();
+      reject(new DriverError(`operation timed out after ${ms}ms`));
+    }, ms);
+    if (timer && typeof timer.unref === "function") timer.unref();
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /** Remove a registered driver (test isolation helper). */
 export function unregisterDriver(kind) {
   REGISTRY.delete(kind);

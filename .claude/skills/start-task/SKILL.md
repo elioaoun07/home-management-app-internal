@@ -36,6 +36,8 @@ TASK TYPE: <bug | feature-in-existing-module | new-module | api | db | ui | docs
 | Due dates, occurrences, skip/confirm, auto-posting | recurrence-safety | `.claude/skills/recurrence-safety/SKILL.md` |
 | Fix/clean/backfill production data, console scripts | data-repair | `.claude/skills/data-repair/SKILL.md` |
 | Authoring a new skill for a new domain/module | skill-factory | `.claude/skills/skill-factory/SKILL.md` |
+| Triage raw ideas/bugs from the PM Idea Inbox (`0 - Inbox.md`) | triage-inbox | `.claude/skills/triage-inbox/SKILL.md` |
+| Setup/install/debug session needing owner-run steps + verification (external accounts, SDK installs, hardware) | wizard | `.claude/skills/wizard/SKILL.md` |
 | Designing a feature, weighing a tradeoff, or NO playbook fits | Design Doctrine (not a skill — the judgment layer) | `ERA Notes/01 - Architecture/Design Doctrine.md` |
 
 Most tasks need 2–3 playbooks (e.g. a feature = add-feature + api-route + ui-guardrails). Read all that apply **before** editing.

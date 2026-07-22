@@ -6,6 +6,7 @@ const paths = {
   folder: <path d="M3 6h7l2 2h9v11H3z"/>,
   bug: <><path d="M8 8h8v9a4 4 0 0 1-8 0zM9 4l2 2M15 4l-2 2M4 12h4M16 12h4M5 18l3-2M19 18l-3-2"/></>,
   bolt: <path d="m13 2-8 12h7l-1 8 8-12h-7z"/>,
+  bulb: <><path d="M12 3a6 6 0 0 0-4 10.5c.7.6 1 1.5 1 2.5h6c0-1 .3-1.9 1-2.5A6 6 0 0 0 12 3z"/><path d="M9.5 19h5M10.5 22h3"/></>,
   sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></>,
   menu: <path d="M4 7h16M4 12h16M4 17h16"/>,
   close: <path d="m6 6 12 12M18 6 6 18"/>,

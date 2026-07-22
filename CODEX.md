@@ -59,7 +59,7 @@ Step-by-step playbooks in `.claude/skills/`, written as senior-engineer handoffs
 | `data-repair` | Production data fixes, cleanup/backfill SQL runbooks, console scripts — inspect→backup→fix→verify→rollback |
 | `skill-factory` | Authoring a skill for a future domain (Healthcare, Diet, …) — decision gate, house template, registration, junior-test QA |
 
-Specialized skills (existing): `new-module` (brand-new module scaffold), `cache-invalidation`, `timezone-handling`, `graphify`.
+Specialized skills (existing): `new-module` (brand-new module scaffold), `cache-invalidation`, `timezone-handling`, `graphify`, `triage-inbox` (file raw entries from the PM Idea Inbox `0 - Inbox.md` into canonical checklist items/docs — never implements), `wizard` (interleaved AI/owner setup or debug sessions — shared MD checklist, steps split `[AI]`/`[OWNER]`, progression gated on the owner's pasted verification output).
 
 ---
 
@@ -302,7 +302,7 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Performance                  | `ERA Notes/05 - Performance/`                               |
 | Setup/env                    | `ERA Notes/06 - Setup & Onboarding/`                        |
 | Ideas/pending                | `ERA Notes/07 - Backlog & Ideas/`                           |
-| Session notes (personal)     | `ERA Notes/08 - Sessions/{Features\|Bug Fixes\|Refactors}/` |
+| Session notes (personal)     | `ERA Notes/08 - Sessions/{Features\|Bug Fixes\|Refactors\|Wizards}/` |
 | Reusable patterns (personal) | `ERA Notes/09 - Patterns & Lessons/`                        |
 | Page & Feature Atlas entry   | `ERA Notes/04 - UI & Design/Page & Feature Atlas/`          |
 | Root-level only              | `CLAUDE.md`, `README.md`                                    |

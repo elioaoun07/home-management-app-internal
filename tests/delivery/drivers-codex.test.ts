@@ -7,6 +7,7 @@ import {
   manifest,
   mapCodexEventToEvents,
   mapCodexEventToRawRecords,
+  PREFLIGHT_TIMEOUT_MS,
   toTurnOptions,
   withAbortSignal,
 } from "../../scripts/delivery/drivers/codex.mjs";
@@ -173,7 +174,7 @@ describe("createCodexDriver", () => {
 
     const handle = await driver.startSession({ cwd: CWD, mode: "build" });
 
-    expect(thread.run).toHaveBeenCalledWith("Reply with exactly: OK");
+    expect(thread.run).toHaveBeenCalledWith("Reply with exactly: OK", { signal: expect.any(AbortSignal) });
     expect(startThread).toHaveBeenCalledWith(expect.objectContaining({ sandboxMode: "workspace-write", approvalPolicy: "never", networkAccessEnabled: false }));
     expect(handle.ref).toMatchObject({ id: "thread-1", cwd: CWD, mode: "build" });
   });
@@ -190,6 +191,30 @@ describe("createCodexDriver", () => {
 
     await expect(driver.startSession({ cwd: CWD, mode: "build" })).rejects.toThrow(/did not establish a thread id/);
     expect(thread.run).toHaveBeenCalledOnce();
+  });
+
+  it("times out a hung preflight run instead of blocking forever, and aborts the SDK call", async () => {
+    vi.useFakeTimers();
+    try {
+      let capturedSignal: AbortSignal | undefined;
+      const thread = {
+        id: "thread-1",
+        run: vi.fn((_input, opts) => {
+          capturedSignal = opts && opts.signal;
+          return new Promise(() => {}); // never resolves — simulates a hung SDK call
+        }),
+        runStreamed: vi.fn(),
+      };
+      const driver = createCodexDriver({ importSdk: async () => createSdk({ startThread: vi.fn().mockReturnValue(thread) }) });
+
+      const pending = driver.startSession({ cwd: CWD, mode: "build" });
+      const assertion = expect(pending).rejects.toThrow(/authentication preflight failed/);
+      await vi.advanceTimersByTimeAsync(PREFLIGHT_TIMEOUT_MS);
+      await assertion;
+      expect(capturedSignal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects an invalid resume reference before touching the SDK", async () => {

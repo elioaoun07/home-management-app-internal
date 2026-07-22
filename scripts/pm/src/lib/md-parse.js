@@ -4,11 +4,16 @@ import { slugify } from "../../shared/links.mjs";
 export function parseMarkdown(raw) {
   const source = scanLines(raw).lines;
   const blocks = [];
+  const headingSlugCounts = new Map();
   for (let index = 0; index < source.length;) {
     const line = source[index];
     if (["fm", "blank"].includes(line.type)) { index += 1; continue; }
     if (line.type === "heading") {
-      blocks.push({ type: "heading", level: line.level, text: line.text, slug: slugify(line.text), line: line.line });
+      const baseSlug = slugify(line.text);
+      const count = headingSlugCounts.get(baseSlug) || 0;
+      headingSlugCounts.set(baseSlug, count + 1);
+      const slug = count ? `${baseSlug}-${count + 1}` : baseSlug;
+      blocks.push({ type: "heading", level: line.level, text: line.text, slug, line: line.line });
       index += 1; continue;
     }
     if (line.type === "fence-delim") {
@@ -62,4 +67,3 @@ export function markdownCheckboxes(raw) {
     ? block.items.filter((item) => item.checkbox).map((item) => item.checkbox)
     : []);
 }
-

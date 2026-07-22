@@ -1,6 +1,6 @@
 ---
 created: 2026-07-13
-updated: 2026-07-18
+updated: 2026-07-22
 type: checklist
 status: active
 owner: Elio
@@ -13,6 +13,7 @@ tags: [pm/checklist, tooling/pm-dashboard]
 
 ## Now
 
+- [x] **R27** Idea Inbox — `0 - Inbox.md` capture surface (New/Processed), 💡 topbar quick-capture in the dashboard (`QuickCapture.jsx`, reuses the `append` mutation, no server changes), `/triage-inbox` skill to elaborate/file entries, `_Conventions.md` §7 grammar. Done 2026-07-22. → `` `scripts/pm/src/features/inbox/QuickCapture.jsx` `` _(friction - S)_
 - [x] **R26** Fix `lintChecklist` JSDoc typing in `` `scripts/pm/lint.mjs` `` — `campaign` + resolver return types were uninferable, breaking `pnpm typecheck` for 5 days; `tests/pm-ui/lint-rules.test.ts` 6/6 green after. Done 2026-07-18 (FABLED 3 handoff session). _(friction - S)_
 - [x] **R16** Ship the read-only PM Console as a first-class page of the deployed app at `/pm` — own `pm.webmanifest`/icons, installable on a phone, offline via the app service worker, laptop off. Snapshot rebuilt from PM markdown by `pnpm pm:public` in `prebuild`. Gated behind the app's Supabase login (`src/middleware.ts`, matches `/pm` + `/pm.html`; unauth → `/login?redirect=/pm`). Done 2026-07-18. _(friction - M)_
 - [x] **R15** ~~Serve `--lan` mode over HTTPS~~ — **superseded by R16.** The phone-offline goal is met by hosting the console inside the already-HTTPS deployed app, so no self-signed-cert LAN path is needed. The local `pnpm pm` server stays HTTP-on-localhost for the interactive editor. Done 2026-07-18. _(friction - M)_

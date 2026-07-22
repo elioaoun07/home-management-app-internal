@@ -32,6 +32,12 @@ describe("PM shared parsing", () => {
     expect(slugify("Now & Next")).toBe("now-next");
   });
 
+  it("assigns unique anchors to duplicate headings", () => {
+    const headings = parseMarkdown("## One-time setup\n\n## One-time setup")
+      .filter((block) => block.type === "heading");
+    expect(headings.map((heading) => heading.slug)).toEqual(["one-time-setup", "one-time-setup-2"]);
+  });
+
   it("parses filters, routes, and fuzzy matches", () => {
     expect(parseQuery("m:Budget is:open N4")).toEqual({ filters: { m: "Budget", is: "open" }, text: "N4" });
     expect(parseRoute("#/doc/Budget/4%20-%20Checklist.md?cb=2")).toMatchObject({ name: "doc", relPath: "Budget/4 - Checklist.md" });

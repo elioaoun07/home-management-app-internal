@@ -1,6 +1,6 @@
 ---
 created: 2026-07-15
-updated: 2026-07-15
+updated: 2026-07-22
 type: reference
 status: living
 owner: Elio
@@ -123,3 +123,22 @@ IDs are per-campaign, so always name the campaign — `L1` alone is ambiguous ac
 - **`pnpm pm:lint`** — validates the seven checklists above: grammar, lanes, ID prefix + uniqueness, and that every `→` link resolves. Run it after editing any `4 - Checklist.md` (finish-task Gate E).
 - **`pnpm pm`** — the consolidated Task board / table. Every parseable item shows with ID / severity / effort chips, filterable (`m:Budget s:blocker is:open`), click-through to the exact doc line.
 - **Hidden layers** — `FABLED/`, `FABLED 2/`, `FABLED+ Enhancement Study/`, and any doc with frontmatter `status: superseded | baseline-frozen | template` are hidden from the board's default view (toggle "FABLED / archived" to reveal). They are reference/audit layers, not execution queues.
+
+---
+
+## 7. Idea Inbox (`0 - Inbox.md`)
+
+The capture surface for raw, not-yet-canonical thoughts — ideas, bugs, checklist candidates in the owner's own words. **Exempt from `pnpm pm:lint`** (it is not a `4 - Checklist.md`); its grammar is deliberately loose:
+
+```
+## New
+- [ ] YYYY-MM-DD — raw text in the owner's own words
+
+## Processed
+- YYYY-MM-DD — original text → **BUD-15** in [Budget/4](<Budget/4 - Checklist.md>) (+ Feature State 🟠) (triaged YYYY-MM-DD)
+```
+
+- **New** entries are checkboxes so they surface chip-less in the `pnpm pm` Task table — the visible untriaged queue. They never appear on the Task board (board = `4 - Checklist.md` files only).
+- Capture paths: write the line by hand, or the 💡 button in the dashboard topbar (server mode).
+- **Triage** is done by the `/triage-inbox` Claude Code skill (`.claude/skills/triage-inbox/SKILL.md`): it elaborates each entry (clarifying questions for bugs), files a canonical §1 item in the right campaign, adds a Feature State pain bullet for bugs, and moves the entry to **Processed** as a **plain bullet** (no checkbox — drops out of task views) keeping the original wording plus a `→` pointer to where it landed.
+- Processed is swept (deleted) past ~20 bullets, **only with owner approval** — git is the archive.

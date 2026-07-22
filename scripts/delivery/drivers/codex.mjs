@@ -1,11 +1,15 @@
 // Codex SDK-backed delivery driver. The SDK is dynamically imported only when a
 // driver is used, so dashboard and pure delivery modules remain dependency-free.
 
-import { DriverAbortedError, DriverError, registerDriver } from "./driver.mjs";
+import { DriverAbortedError, DriverError, registerDriver, withTimeout } from "./driver.mjs";
 import { agentEventType, normalizeUsage } from "../events.mjs";
 
 const SDK_MODULE_SPECIFIER = "@openai/codex-sdk";
 const PERMISSIVE_JSON_SCHEMA = Object.freeze({ type: "object" });
+
+// A hung preflight run (auth/network/subprocess issue) previously blocked the
+// runner forever with no way for Pause/Resume to recover it — see startSession() below.
+export const PREFLIGHT_TIMEOUT_MS = 30000;
 
 /** Build the exact SDK ThreadOptions for a delivery session. */
 export function buildThreadOptions({ cwd, mode, model, effort } = {}) {
@@ -234,8 +238,16 @@ export function createCodexDriver(options = {}) {
     currentOptions = buildThreadOptions({ cwd, mode, model, effort });
     thread = await createThread();
 
+    // Local AbortController (not a caller's turn signal — preflight runs
+    // before any turn exists) so a timeout can actually stop the in-flight
+    // SDK run instead of merely giving up on awaiting it.
+    const abortController = new AbortController();
     try {
-      await thread.run("Reply with exactly: OK");
+      await withTimeout(
+        thread.run("Reply with exactly: OK", { signal: abortController.signal }),
+        PREFLIGHT_TIMEOUT_MS,
+        () => abortController.abort(),
+      );
     } catch (err) {
       throw preflightError(err);
     }
