@@ -80,6 +80,14 @@ export const DEFAULT_CONFIG = Object.freeze({
     // for what amounted to one test file). Advisory only — see PLAN_READY
     // handling in run-session.mjs.
     maxPlanSteps: 5,
+    // Default per-command hard bound for the validation baseline (SELECTED)
+    // and the post-build validation run (VALIDATING) before a command is
+    // killed and recorded `timedOut`. This is only the FALLBACK — commands
+    // with a known-long real cost carry their own `timeoutMs` in
+    // VALIDATION_COMMANDS (run-session.mjs): lint 900s (~11 min measured on
+    // this repo), test 600s. 240s here effectively bounds typecheck.
+    // Validation runs async so the heartbeat is unaffected regardless.
+    validationTimeoutMs: 240_000,
   }),
 });
 

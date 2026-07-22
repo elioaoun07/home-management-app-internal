@@ -10,7 +10,7 @@
 // In-process usage (tests): import { advanceSession, runLoop } and inject a
 // driver + sessionDir + repoRoot directly — no child process required.
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -1119,7 +1119,19 @@ async function runGuardedTurn({
     }
   }
 
-  const before = takeSnapshot(repoRoot);
+  // Same containment as getGuardedHandle: a snapshot failure must fail the
+  // turn (→ BLOCKED with the git error visible), never crash the runner.
+  let before;
+  try {
+    before = takeSnapshot(repoRoot);
+  } catch {
+    await sleepAsync(1000);
+    try {
+      before = takeSnapshot(repoRoot);
+    } catch (error) {
+      return { ok: false, gitViolation: false, error, turnId };
+    }
+  }
   const startedAt = new Date();
   const promptFile = turnId ? `transcript/prompts/${turnPromptFileName(turnId)}` : null;
   const recordsFile = turnId ? `transcript/${turnShardFileName(turnId)}` : null;
@@ -1383,7 +1395,23 @@ async function getGuardedHandle({
   takeSnapshot,
   forbiddenPaths,
 }) {
-  const before = takeSnapshot(repoRoot);
+  // The pre-turn snapshot itself can fail (a transient git error — e.g. the
+  // validation timeout's `taskkill /T` racing a freshly spawned git.exe, or a
+  // concurrent git process). An uncaught throw here killed the whole runner
+  // with the session left silently "running" (s-20260722-221533-wous) — so
+  // retry once, then fail like any other setup error: the caller blocks the
+  // session with the git error visible at the gate instead of crashing.
+  let before;
+  try {
+    before = takeSnapshot(repoRoot);
+  } catch {
+    await sleepAsync(1000);
+    try {
+      before = takeSnapshot(repoRoot);
+    } catch (error) {
+      return { ok: false, gitViolation: false, error };
+    }
+  }
   try {
     const handle = await getHandle({ driver, state, packet, repoRoot, mode, phase });
     const guard = checkGitGuard(before, repoRoot, mode, { takeSnapshot, forbiddenPaths });
@@ -1423,12 +1451,27 @@ function persistNewDriverRef(sessionDir, priorState, nextState) {
 
 // ---- validation (runner-native, doc 3 §4 row 5) ----
 
+// Per-command `timeoutMs` overrides the caller/config default — this repo's
+// full `pnpm lint` really takes ~11 min and the whole vitest suite several,
+// so the 240s default (fine for typecheck) would guarantee a `timedOut`
+// failure on every single validation run for those two.
 const VALIDATION_COMMANDS = [
   { key: "typecheck", cmd: "pnpm", args: ["typecheck"] },
-  { key: "lint", cmd: "pnpm", args: ["lint"] },
-  { key: "test", cmd: "pnpm", args: ["test"] },
+  { key: "lint", cmd: "pnpm", args: ["lint"], timeoutMs: 900_000 },
+  { key: "test", cmd: "pnpm", args: ["test"], timeoutMs: 600_000 },
 ];
 const EXCERPT_LINES = 200;
+// Per-command safety bound. Validation used to run via `spawnSync`, which
+// blocks the entire Node event loop for the full duration of `pnpm
+// typecheck`+`pnpm lint`+`pnpm test` — on a large repo that is minutes (this
+// repo's `pnpm lint` alone was measured at ~11 min). A blocked event loop
+// freezes the runner heartbeat, so the dashboard reports the session "stale",
+// the owner clicks Resume, a second runner spawns and runs the same suite
+// again — the exact death spiral that made a launched session look silently
+// stuck. Validation now runs as a real async child process (heartbeat keeps
+// beating) and any single command that exceeds this bound is killed and
+// recorded `timedOut` rather than stalling the phase forever.
+const VALIDATION_TIMEOUT_MS = 240_000;
 
 function tailLines(text, n) {
   const lines = String(text || "").split("\n");
@@ -1436,25 +1479,108 @@ function tailLines(text, n) {
 }
 
 /**
- * Default real validation runner: spawns pnpm typecheck/lint/test at repoRoot.
- * @param {{cwd: string, spawn?: (cmd: string, args: string[], opts: object) => {status: number|null, stdout?: string, stderr?: string}}} options
- * @returns {{ok: boolean, results: Object<string, {ok: boolean, ms: number, excerpt: string}>}}
+ * Kill a child process AND its descendants. A plain `child.kill()` only signals
+ * the immediate child, which on Windows is the `cmd.exe`/`pnpm` shell wrapper —
+ * the real worker (`tsc`/`eslint`/`vitest`) is a grandchild that keeps running
+ * and holds the stdio pipes open, so `close` never fires and the timeout does
+ * not actually stop the work (measured: a 3 s timeout still took ~11.7 s to
+ * return because tsc ran to completion). `taskkill /T` (Windows) or a
+ * process-group SIGKILL (POSIX, requires the `detached` spawn below) tears down
+ * the whole tree.
  */
-export function runValidationCommands({ cwd, spawn = spawnSync } = {}) {
-  /** @type {Object<string, {ok: boolean, ms: number, excerpt: string}>} */
+function killProcessTree(child) {
+  if (!child || child.pid == null) return;
+  if (process.platform === "win32") {
+    try {
+      spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+    } catch {
+      /* best-effort */
+    }
+    return;
+  }
+  try {
+    process.kill(-child.pid, "SIGKILL"); // negative pid = process group (detached leader)
+  } catch {
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      /* already exited */
+    }
+  }
+}
+
+/**
+ * Run one validation command as an async child process, capturing stdout/stderr
+ * and enforcing a hard timeout (the whole process tree is killed on expiry).
+ * Never rejects — a spawn error or timeout resolves to a non-zero/`timedOut`
+ * result so the caller records it like any other failing command.
+ * @returns {Promise<{status:number|null, stdout:string, stderr:string, ms:number, timedOut:boolean}>}
+ */
+function runValidationCommand(cmd, args, { cwd, timeoutMs }) {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    let child;
+    try {
+      child = spawn(cmd, args, {
+        cwd,
+        shell: process.platform === "win32",
+        // POSIX: own process group so killProcessTree can SIGKILL the group.
+        // Windows: taskkill /T handles the tree, and detached would pop a console.
+        detached: process.platform !== "win32",
+      });
+    } catch (err) {
+      resolve({ status: null, stdout: "", stderr: String((err && err.message) || err), ms: Date.now() - started, timedOut: false });
+      return;
+    }
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killProcessTree(child);
+    }, timeoutMs);
+    if (typeof timer.unref === "function") timer.unref();
+    if (child.stdout) child.stdout.on("data", (d) => { stdout += d.toString(); });
+    if (child.stderr) child.stderr.on("data", (d) => { stderr += d.toString(); });
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      resolve({ status: null, stdout, stderr: `${stderr}${(err && err.message) || err}`, ms: Date.now() - started, timedOut });
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({ status: code, stdout, stderr, ms: Date.now() - started, timedOut });
+    });
+  });
+}
+
+/**
+ * Default real validation runner: runs pnpm typecheck/lint/test at repoRoot as
+ * async child processes (never blocks the event loop) with a per-command
+ * timeout. `run` is a test seam (inject a fake async command runner).
+ * @param {{cwd: string, timeoutMs?: number, run?: Function}} options
+ * @returns {Promise<{ok: boolean, results: Object<string, {ok: boolean, ms: number, timedOut: boolean, excerpt: string}>}>}
+ */
+export async function runValidationCommands({ cwd, timeoutMs = VALIDATION_TIMEOUT_MS, run = runValidationCommand, onEvent = null } = {}) {
   const results = {};
   let ok = true;
-  for (const { key, cmd, args } of VALIDATION_COMMANDS) {
-    const started = Date.now();
-    const r = spawn(cmd, args, { cwd, encoding: "utf8", shell: process.platform === "win32" });
-    const ms = Date.now() - started;
-    const passed = r.status === 0;
+  for (const { key, cmd, args, timeoutMs: perCommandTimeoutMs } of VALIDATION_COMMANDS) {
+    const effectiveTimeoutMs = perCommandTimeoutMs != null ? perCommandTimeoutMs : timeoutMs;
+    // Progress events so a multi-minute suite reads as "lint running" on the
+    // dashboard timeline instead of a session that looks silently stuck.
+    if (onEvent) onEvent({ type: "validation.command.started", data: { command: key, timeoutMs: effectiveTimeoutMs } });
+    const r = await run(cmd, args, { cwd, timeoutMs: effectiveTimeoutMs });
+    const passed = r.status === 0 && !r.timedOut;
     if (!passed) ok = false;
     results[key] = {
       ok: passed,
-      ms,
-      excerpt: tailLines(`${r.stdout || ""}\n${r.stderr || ""}`, EXCERPT_LINES),
+      ms: r.ms,
+      timedOut: !!r.timedOut,
+      excerpt: tailLines(
+        `${r.stdout || ""}\n${r.stderr || ""}${r.timedOut ? `\n[validation "${key}" exceeded ${effectiveTimeoutMs}ms and was terminated]` : ""}`,
+        EXCERPT_LINES,
+      ),
     };
+    if (onEvent) onEvent({ type: "validation.command.finished", data: { command: key, ok: passed, ms: r.ms, timedOut: !!r.timedOut } });
     if (!passed) break; // don't burn time on later commands once one has failed
   }
   return { ok, results };
@@ -1641,7 +1767,15 @@ async function handleSelected({ sessionDir, state, config }) {
   const dirtyAtStart = !!(state.workspace && state.workspace.dirtyAtStart);
   if (dirtyAtStart && !(state.workspace && state.workspace.baselineValidation)) {
     const runValidation = (config && config.runValidation) || runValidationCommands;
-    const baseline = runValidation({ cwd: config.repoRoot });
+    const timeoutMs = config.deliveryConfig && config.deliveryConfig.budgets && config.deliveryConfig.budgets.validationTimeoutMs;
+    // Surfaced so the timeline explains the (possibly multi-minute) wait — the
+    // tree was dirty at launch, so the baseline validation runs before DISCOVERY.
+    emitEvent(sessionDir, { type: "validation.baseline.started", phase: "SELECTED", data: {} });
+    const baseline = await runValidation({
+      cwd: config.repoRoot,
+      timeoutMs,
+      onEvent: (e) => emitEvent(sessionDir, { ...e, phase: "SELECTED" }),
+    });
     writeArtifactJson(sessionDir, "validation-baseline.json", baseline);
     emitEvent(sessionDir, { type: "validation.baseline.captured", phase: "SELECTED", data: { ok: baseline.ok } });
     working = { ...state, workspace: { ...state.workspace, baselineValidation: baseline } };
@@ -2056,9 +2190,14 @@ function excerptFromValidation(validation) {
   return failing ? `${failing[0]}:\n${failing[1].excerpt}` : "";
 }
 
-function handleValidating({ sessionDir, state, packet, config }) {
+async function handleValidating({ sessionDir, state, packet, config }) {
   const runValidation = config.runValidation || runValidationCommands;
-  const validation = runValidation({ cwd: config.repoRoot });
+  const timeoutMs = config.deliveryConfig && config.deliveryConfig.budgets && config.deliveryConfig.budgets.validationTimeoutMs;
+  const validation = await runValidation({
+    cwd: config.repoRoot,
+    timeoutMs,
+    onEvent: (e) => emitEvent(sessionDir, { ...e, phase: "VALIDATING" }),
+  });
   writeArtifactJson(sessionDir, "validation.json", validation);
   writeArtifactText(sessionDir, "validation-report.md", renderValidationReportMd(validation));
   emitEvent(sessionDir, { type: "validation.result", phase: "VALIDATING", data: { ok: validation.ok } });
@@ -2374,6 +2513,22 @@ export async function advanceSession(options) {
     return { didWork: true, state: persisted };
   }
 
+  // Cancel is legal from any non-terminal state (NON_TERMINAL_STATES in
+  // state-machine.mjs), not just the six gate states handled below — and it
+  // must apply even while paused. Before this check existed, a cancel written
+  // while the session sat in a non-gate active state (DISCOVERY/BUILDING/...)
+  // only took effect once the phase happened to reach a gate on its own; if
+  // the session was paused at the time, that gate was never reached, so the
+  // cancel silently sat unconsumed forever — the owner's "abort now" had no
+  // effect. Checking here, before the pause short-circuit below, makes cancel
+  // truly immediate regardless of phase or pause state.
+  const pendingCancel = pendingDecisions(sessionDir, state.decisionsProcessed || 0).find((d) => d.decision === "cancel");
+  if (pendingCancel) {
+    const newState = { ...consumeCancel({ sessionDir, state }), decisionsProcessed: pendingCancel.seq };
+    const persisted = persistState(sessionDir, newState);
+    return { didWork: true, state: persisted };
+  }
+
   // Gate / paused states: only advance on a fresh decision.
   const GATE_OF_STATE = {
     SPEC_READY: "spec",
@@ -2386,17 +2541,14 @@ export async function advanceSession(options) {
   if (Object.prototype.hasOwnProperty.call(GATE_OF_STATE, state.state)) {
     const expectedGate = GATE_OF_STATE[state.state];
     const pending = pendingDecisions(sessionDir, state.decisionsProcessed || 0);
-    // Cancel takes priority over whatever gate is awaited; anything else whose
-    // `gate` doesn't match what's currently awaited is stale (doc 5 §7) —
-    // skip it (advancing the seq cursor so it is never reprocessed) and keep
-    // looking for one that does apply.
+    // A pending "cancel" is already intercepted unconditionally above, before
+    // this block runs — so every decision reaching this loop is a real gate
+    // decision. Anything whose `gate` doesn't match what's currently awaited
+    // is stale (doc 5 §7) — skip it (advancing the seq cursor so it is never
+    // reprocessed) and keep looking for one that does apply.
     let decision = null;
     let skippedThrough = state.decisionsProcessed || 0;
     for (const d of pending) {
-      if (d.decision === "cancel") {
-        decision = d;
-        break;
-      }
       if (d.gate && d.gate !== expectedGate) {
         emitEvent(sessionDir, { type: "decision.stale", phase: state.state, data: { gate: d.gate, expectedGate, seq: d.seq } });
         skippedThrough = d.seq;
@@ -2415,9 +2567,7 @@ export async function advanceSession(options) {
 
     let newState;
     try {
-      if (decision.decision === "cancel") {
-        newState = consumeCancel({ sessionDir, state });
-      } else if (state.state === "SPEC_READY") {
+      if (state.state === "SPEC_READY") {
         const r = await consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot, decision, config });
         newState = r.newState;
       } else if (state.state === "PLAN_READY") {
@@ -2462,7 +2612,7 @@ export async function advanceSession(options) {
   } else if (state.state === "BUILDING") {
     newState = await handleBuilding({ sessionDir, state, packet, driver, repoRoot, config });
   } else if (state.state === "VALIDATING") {
-    newState = handleValidating({ sessionDir, state, packet, config });
+    newState = await handleValidating({ sessionDir, state, packet, config });
   } else if (state.state === "REVIEWING") {
     newState = await handleReviewing({ sessionDir, state, packet, driver, repoRoot, config });
   } else {
@@ -2516,6 +2666,52 @@ function sleepAsync(ms) {
 }
 
 /**
+ * Contain an unexpected `advanceSession` throw: record it (runner.log +
+ * `runner.error` event) and, when the session is in an active phase, park it
+ * BLOCKED via the universal `error.fatal` transition so the dashboard shows
+ * the cause and offers Retry. Returns the persisted state, or null when the
+ * session can't legally block from its current state (caller rethrows and the
+ * process dies as before — but with the error now on the event record).
+ */
+function parkSessionOnCrash(sessionDir, staleState, err) {
+  const message = String((err && err.message) || err);
+  // The handler may have persisted newer state before throwing (driver refs,
+  // message cursors) — re-read from disk so parking doesn't clobber it.
+  let state = staleState;
+  try {
+    state = loadState(sessionDir);
+  } catch {
+    /* fall back to the loop's copy */
+  }
+  try {
+    appendNdjsonLine(join(sessionDir, "runner.log"), String((err && err.stack) || err));
+    emitEvent(sessionDir, {
+      type: "runner.error",
+      phase: state.state,
+      data: { message: truncateField(message, TRUNCATE_LIMITS.message) },
+    });
+  } catch {
+    /* best-effort recording — containment below still matters more */
+  }
+  if (!ACTIVE_STATES.includes(state.state)) return null;
+  try {
+    const result = smNext(state.state, "error.fatal");
+    return persistState(sessionDir, {
+      ...state,
+      state: result.to,
+      awaiting: { gate: "blocked", returnTo: state.state },
+      lastError: {
+        phase: state.state,
+        message: `The runner hit an unexpected error and parked the session: ${message}. Full stack in runner.log. Retry re-runs the ${state.state} phase.`,
+        errorKind: "runner-crash",
+      },
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Run the session to completion (or until `shouldStop()` returns true).
  * @param {{sessionDir:string, repoRoot:string, driverKind?:string, driverOptions?:object,
  *   runValidation?:Function, pollIntervalMs?:number, heartbeatIntervalMs?:number,
@@ -2545,31 +2741,59 @@ export async function runLoop(options) {
     }
   }
   emitEvent(sessionDir, { type: options.resumed ? "runner.resumed" : "runner.started", data: { pid: process.pid } });
-  let lastHeartbeat = Date.now();
 
-  for (;;) {
-    const state = loadState(sessionDir);
-    if (isTerminal(state.state)) {
+  // Independent heartbeat: a single advanceSession tick can legitimately take
+  // minutes (the validation baseline runs a real test/lint suite). Writing the
+  // heartbeat only *between* ticks left it stale for the whole duration, so the
+  // dashboard falsely reported the runner dead and a Resume click spawned a
+  // second runner. A timer-driven heartbeat keeps beating throughout any tick
+  // now that validation is async (event loop is free), so `isRunnerAlive` sees
+  // a fresh heartbeat and the resume guard correctly refuses a duplicate runner.
+  const heartbeatTimer = setInterval(() => {
+    try {
       writeHeartbeat(sessionDir);
-      return state;
+    } catch {
+      /* best-effort — a transient write failure must not kill the loop */
     }
-    const { didWork } = await advanceSession({
-      sessionDir,
-      driver,
-      repoRoot,
-      runValidation,
-      retryDelayMs,
-      sleep,
-      takeSnapshot,
-    });
-    if (Date.now() - lastHeartbeat >= heartbeatIntervalMs) {
-      writeHeartbeat(sessionDir);
-      lastHeartbeat = Date.now();
+  }, heartbeatIntervalMs);
+  if (typeof heartbeatTimer.unref === "function") heartbeatTimer.unref();
+
+  try {
+    for (;;) {
+      const state = loadState(sessionDir);
+      if (isTerminal(state.state)) {
+        writeHeartbeat(sessionDir);
+        return state;
+      }
+      let didWork;
+      try {
+        ({ didWork } = await advanceSession({
+          sessionDir,
+          driver,
+          repoRoot,
+          runValidation,
+          retryDelayMs,
+          sleep,
+          takeSnapshot,
+        }));
+      } catch (err) {
+        // Last-resort containment: an unexpected throw from any phase handler
+        // used to kill the runner process outright, leaving the session
+        // frozen mid-phase with `lastError: null` and the only trace buried
+        // in runner.log. Park the session BLOCKED instead (owner sees the
+        // error at the gate and can Retry); only rethrow when the state
+        // machine has no legal way to block from here.
+        const parked = parkSessionOnCrash(sessionDir, state, err);
+        if (!parked) throw err;
+        didWork = true;
+      }
+      if (!didWork) {
+        if (shouldStop()) return loadState(sessionDir);
+        await sleepAsync(pollIntervalMs);
+      }
     }
-    if (!didWork) {
-      if (shouldStop()) return loadState(sessionDir);
-      await sleepAsync(pollIntervalMs);
-    }
+  } finally {
+    clearInterval(heartbeatTimer);
   }
 }
 

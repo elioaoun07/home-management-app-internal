@@ -232,7 +232,10 @@ function getSession(ctx, id) {
   if (!s) throw fail(404, "unknown session");
   const artifacts = listArtifactsRecursive(join(s.dir, "artifacts"));
   const runner = isRunnerAlive(s.dir);
-  return { packet: s.packet, state: s.state, artifacts, runner };
+  // runner.log carries the runner process's stderr + crash stacks — surface
+  // its tail so a dead runner's cause is readable in the UI, not only on disk.
+  const log = readTextIfExists(join(s.dir, "runner.log"));
+  return { packet: s.packet, state: s.state, artifacts, runner: { ...runner, logTail: log ? log.slice(-4000) : null } };
 }
 
 function getEvents(ctx, id, afterSeq) {

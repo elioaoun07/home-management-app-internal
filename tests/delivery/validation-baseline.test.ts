@@ -48,6 +48,23 @@ describe("classifyValidationFailure (BUD-11 counterfactual)", () => {
     expect(verdict.attributableCommands).toEqual(["typecheck"]);
   });
 
+  it("treats a timeout as pre-existing when the baseline run of the same command also timed out", () => {
+    const timedOutResult = { ok: false, timedOut: true, excerpt: '[validation "lint" exceeded 900000ms and was terminated]' };
+    const validation = { ok: false, results: { lint: { ...timedOutResult } } };
+    const baseline = { ok: false, results: { lint: { ...timedOutResult } } };
+    const verdict = classifyValidationFailure(validation, baseline);
+    expect(verdict.attributable).toBe(false);
+    expect(verdict.preExistingCommands).toEqual(["lint"]);
+  });
+
+  it("treats a timeout as attributable when the baseline run of the same command failed WITHOUT timing out", () => {
+    const validation = { ok: false, results: { lint: { ok: false, timedOut: true, excerpt: "[terminated]" } } };
+    const baseline = { ok: false, results: { lint: { ok: false, timedOut: false, excerpt: TSC_EXCERPT } } };
+    const verdict = classifyValidationFailure(validation, baseline);
+    expect(verdict.attributable).toBe(true);
+    expect(verdict.attributableCommands).toEqual(["lint"]);
+  });
+
   it("treats a failure as attributable when the baseline passed that command", () => {
     const validation = { ok: false, results: { typecheck: { ok: false, excerpt: TSC_EXCERPT } } };
     const baseline = { ok: true, results: { typecheck: { ok: true, excerpt: "" } } };

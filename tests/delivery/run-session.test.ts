@@ -20,6 +20,7 @@ import {
   advanceSession,
   checkGitGuard,
   isRunnerAlive,
+  runLoop,
   runValidationCommands,
   writeHeartbeat,
 } from "../../scripts/delivery/run-session.mjs";
@@ -956,19 +957,59 @@ describe("writeHeartbeat + isRunnerAlive", () => {
     cleanupDirs.push(root);
     expect(isRunnerAlive(join(root, "sessions", "nope")).alive).toBe(false);
   });
+
+  // Regression: a single advanceSession tick can take minutes (the validation
+  // baseline runs a real test/lint suite). The old runLoop only wrote the
+  // heartbeat *between* ticks, so it went stale during a long tick, the
+  // dashboard reported the runner dead, and a Resume click spawned a duplicate
+  // runner. runLoop now drives an interval-based heartbeat that beats
+  // regardless of tick progress.
+  it("beats the heartbeat on an interval independent of per-tick work", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    // Park the session at a gate so every tick is a no-op (didWork:false) —
+    // this isolates the interval heartbeat from any handler/driver work.
+    const st = JSON.parse(readFileSync(join(dir, "state.json"), "utf8"));
+    st.state = "SPEC_READY";
+    atomicWriteJsonSync(join(dir, "state.json"), st);
+
+    const seen = new Set<string>();
+    let ticks = 0;
+    await runLoop({
+      sessionDir: dir,
+      repoRoot: root,
+      driverKind: "fake",
+      heartbeatIntervalMs: 10,
+      pollIntervalMs: 10,
+      retryDelayMs: 0,
+      shouldStop: () => {
+        try {
+          seen.add(JSON.parse(readFileSync(join(dir, "runner.json"), "utf8")).heartbeatAt);
+        } catch {
+          /* runner.json not written yet */
+        }
+        ticks += 1;
+        return seen.size >= 3 || ticks > 500;
+      },
+    });
+
+    // The heartbeat advanced multiple times while the loop sat at a gate doing
+    // no tick work — proof the dashboard would keep seeing a live runner.
+    expect(seen.size).toBeGreaterThanOrEqual(2);
+  });
 });
 
 describe("runValidationCommands", () => {
-  it("stops at the first failing command and captures its excerpt; later commands don't run", () => {
+  it("stops at the first failing command and captures its excerpt; later commands don't run", async () => {
     const calls: string[] = [];
-    const spawn = (_cmd: string, args: string[]) => {
+    const run = async (_cmd: string, args: string[]) => {
       calls.push(args[0]);
-      if (args[0] === "typecheck") return { status: 0, stdout: "ok\n", stderr: "" };
-      if (args[0] === "lint") return { status: 1, stdout: "", stderr: "lint error\n" };
-      return { status: 0, stdout: "", stderr: "" };
+      if (args[0] === "typecheck") return { status: 0, stdout: "ok\n", stderr: "", ms: 1, timedOut: false };
+      if (args[0] === "lint") return { status: 1, stdout: "", stderr: "lint error\n", ms: 1, timedOut: false };
+      return { status: 0, stdout: "", stderr: "", ms: 1, timedOut: false };
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = runValidationCommands({ cwd: "/repo", spawn: spawn as any });
+    const result = await runValidationCommands({ cwd: "/repo", run: run as any });
     expect(result.ok).toBe(false);
     expect(calls).toEqual(["typecheck", "lint"]);
     expect(result.results.lint.ok).toBe(false);
@@ -976,21 +1017,60 @@ describe("runValidationCommands", () => {
     expect(result.results.test).toBeUndefined();
   });
 
-  it("passes when every command exits 0", () => {
-    const spawn = () => ({ status: 0, stdout: "", stderr: "" });
+  it("passes when every command exits 0", async () => {
+    const run = async () => ({ status: 0, stdout: "", stderr: "", ms: 1, timedOut: false });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = runValidationCommands({ cwd: "/repo", spawn: spawn as any });
+    const result = await runValidationCommands({ cwd: "/repo", run: run as any });
     expect(result.ok).toBe(true);
     expect(result.results.typecheck.ok).toBe(true);
     expect(result.results.lint.ok).toBe(true);
     expect(result.results.test.ok).toBe(true);
   });
 
-  it("truncates output to the last 200 lines", () => {
-    const bigOutput = Array.from({ length: 500 }, (_, i) => `line ${i}`).join("\n");
-    const spawn = () => ({ status: 1, stdout: bigOutput, stderr: "" });
+  it("treats a timed-out command as a failure and annotates the excerpt with the effective (per-command) timeout", async () => {
+    const seenTimeouts: Record<string, number> = {};
+    const run = async (_cmd: string, args: string[], opts: { timeoutMs: number }) => {
+      seenTimeouts[args[0]] = opts.timeoutMs;
+      return args[0] === "lint"
+        ? { status: null, stdout: "", stderr: "", ms: 900_000, timedOut: true }
+        : { status: 0, stdout: "", stderr: "", ms: 1, timedOut: false };
+    };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = runValidationCommands({ cwd: "/repo", spawn: spawn as any });
+    const result = await runValidationCommands({ cwd: "/repo", timeoutMs: 240_000, run: run as any });
+    expect(result.ok).toBe(false);
+    expect(result.results.lint.ok).toBe(false);
+    expect(result.results.lint.timedOut).toBe(true);
+    // lint carries its own 900s bound (real cost ~11 min); the caller's 240s
+    // stays the fallback for commands without one (typecheck).
+    expect(seenTimeouts.typecheck).toBe(240_000);
+    expect(seenTimeouts.lint).toBe(900_000);
+    expect(result.results.lint.excerpt).toContain("exceeded 900000ms");
+    expect(result.results.test).toBeUndefined();
+  });
+
+  it("emits per-command progress events via onEvent", async () => {
+    const run = async (_cmd: string, args: string[]) =>
+      args[0] === "lint"
+        ? { status: 1, stdout: "lint error", stderr: "", ms: 5, timedOut: false }
+        : { status: 0, stdout: "", stderr: "", ms: 1, timedOut: false };
+    const events: Array<{ type: string; data: Record<string, unknown> }> = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await runValidationCommands({ cwd: "/repo", run: run as any, onEvent: (e: any) => events.push(e) });
+    expect(events.map((e) => `${e.type}:${e.data.command}`)).toEqual([
+      "validation.command.started:typecheck",
+      "validation.command.finished:typecheck",
+      "validation.command.started:lint",
+      "validation.command.finished:lint",
+    ]);
+    expect(events[1].data.ok).toBe(true);
+    expect(events[3].data.ok).toBe(false);
+  });
+
+  it("truncates output to the last 200 lines", async () => {
+    const bigOutput = Array.from({ length: 500 }, (_, i) => `line ${i}`).join("\n");
+    const run = async () => ({ status: 1, stdout: bigOutput, stderr: "", ms: 1, timedOut: false });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await runValidationCommands({ cwd: "/repo", run: run as any });
     const lineCount = result.results.typecheck.excerpt.split("\n").length;
     expect(lineCount).toBeLessThanOrEqual(200);
     expect(result.results.typecheck.excerpt).toContain("line 499");

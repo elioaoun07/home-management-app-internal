@@ -196,3 +196,35 @@ describe("DW-4: same-provider set-config (model/effort override)", () => {
 
 // Provider-switch set-config now performs a full handoff (DW-8) — see
 // tests/delivery/run-session-handoff.test.ts.
+
+// Regression: cancel is legal from any non-terminal state (state-machine.mjs
+// NON_TERMINAL_STATES), but before this fix a cancel decision was only ever
+// consumed inside the gate-state branch of advanceSession. A session paused
+// in a non-gate state (SELECTED/DISCOVERY/BUILDING/...) never reaches a gate
+// on its own while paused, so the pending cancel sat unconsumed forever —
+// the owner's "cancel this stuck delivery" had no effect. advanceSession now
+// checks for a pending cancel before the pause short-circuit.
+describe("cancel is immediate even while paused in a non-gate state", () => {
+  it("cancels a session paused at SELECTED without it ever reaching DISCOVERY", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = createDriver("fake", { script: { turns: [{ finalText: SPEC_TEXT }] } });
+
+    writeControl(dir, 1, "pause");
+    await advanceOnce(dir, driver, root); // consumes the pause control
+    const stillPaused = await advanceOnce(dir, driver, root);
+    expect(stillPaused.state.state).toBe("SELECTED"); // paused before ever leaving SELECTED
+    expect(stillPaused.didWork).toBe(false);
+
+    const decisionsDir = join(dir, "decisions");
+    mkdirSync(decisionsDir, { recursive: true });
+    atomicWriteJsonSync(join(decisionsDir, "0001-cancel.json"), {
+      seq: 1, gate: null, decision: "cancel", note: null, confirmText: null, tickCheckbox: true, answer: null,
+      capabilitiesDrop: null, at: new Date().toISOString(),
+    });
+
+    const cancelled = await advanceOnce(dir, driver, root);
+    expect(cancelled.didWork).toBe(true);
+    expect(cancelled.state.state).toBe("CANCELLED");
+  });
+});

@@ -136,7 +136,10 @@
       "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process -Filter \"name='\\\\''node.exe'\\\\''\" | Where-Object { $_.CommandLine -like '\\\\''*3999*'\\\\'' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }')",
       "WebFetch(domain:developer.chrome.com)",
       "WebFetch(domain:web.dev)",
-      "Bash(pnpm -s typecheck)"
+      "Bash(pnpm -s typecheck)",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(Invoke-RestMethod -Method Post -Uri \"http://127.0.0.1:4317/api/delivery/resume\" -ContentType \"application/json\" -Body '{\"id\":\"s-20260722-221533-wous\"}' | ConvertTo-Json -Depth 4)",
+      "PowerShell($r = Invoke-RestMethod -Uri \"http://127.0.0.1:4317/api/delivery/session?id=s-20260722-221533-wous\"; \"state=$\\($r.state.state\\) alive=$\\($r.runner.alive\\) logTailPresent=$\\($null -ne $r.runner.logTail\\)\")"
     ]
   }
 }

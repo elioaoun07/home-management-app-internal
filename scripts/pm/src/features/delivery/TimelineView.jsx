@@ -17,6 +17,10 @@ const CARD_TYPES = new Set([
   // an owner watching a session can see a runaway-spend warning as it
   // happens instead of only after the session blocks.
   "budget.warning", "budget.exceeded", "validation.baseline.captured", "plan.step_count.warning",
+  // Liveness/observability: per-command validation progress (a multi-minute
+  // lint/test run must read as "running", not a stuck session) and runner
+  // crash containment.
+  "validation.baseline.started", "validation.command.started", "validation.command.finished", "runner.error",
 ]);
 
 const CATEGORY = {
@@ -30,6 +34,8 @@ const CATEGORY = {
   "handoff.gaps": "questions", "context.rotated": "config",
   "budget.warning": "config", "budget.exceeded": "blockers",
   "validation.baseline.captured": "phase", "plan.step_count.warning": "decisions",
+  "validation.baseline.started": "phase", "validation.command.started": "phase",
+  "validation.command.finished": "phase", "runner.error": "blockers",
 };
 
 const FILTERS = [
@@ -41,7 +47,7 @@ const FILTERS = [
   { key: "phase", label: "Phases" },
 ];
 
-function isBlocking(type) { return type === "error.fatal" || type === "git.guard.violation" || type === "turn.crashed.sealed" || type === "handoff.failed" || type === "budget.exceeded"; }
+function isBlocking(type) { return type === "error.fatal" || type === "git.guard.violation" || type === "turn.crashed.sealed" || type === "handoff.failed" || type === "budget.exceeded" || type === "runner.error"; }
 
 function fmtTime(ts) { try { return new Date(ts).toLocaleTimeString(); } catch { return ts; } }
 
@@ -77,6 +83,10 @@ function summarize(event) {
     case "budget.exceeded": return `Budget exceeded: ${d.reason || `${d.totalTokens} tokens processed`}`;
     case "validation.baseline.captured": return `Validation baseline captured on a dirty workspace (${d.ok ? "passing" : "already failing"}) — later failures matching it won't spend fix-loop turns`;
     case "plan.step_count.warning": return `Plan has ${d.stepCount} steps (cap: ${d.maxPlanSteps}) — consider consolidating before approving`;
+    case "validation.baseline.started": return "Workspace was dirty at launch — running the full validation suite once to baseline pre-existing failures (can take several minutes)";
+    case "validation.command.started": return `Running pnpm ${d.command}… (up to ${Math.round((d.timeoutMs || 0) / 60000)} min)`;
+    case "validation.command.finished": return `pnpm ${d.command} ${d.timedOut ? `timed out after ${Math.round((d.ms || 0) / 1000)}s` : d.ok ? `passed in ${Math.round((d.ms || 0) / 1000)}s` : `failed in ${Math.round((d.ms || 0) / 1000)}s`}`;
+    case "runner.error": return `Runner error — session parked for retry: ${d.message || "see runner.log"}`;
     default: return event.type;
   }
 }

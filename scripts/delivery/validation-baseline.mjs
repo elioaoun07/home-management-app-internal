@@ -76,6 +76,15 @@ export function classifyValidationFailure(validation, baseline = null) {
       attributableCommands.push(key);
       continue;
     }
+    // Both runs hit the hard time cap on the same command: the suite is
+    // slower than the configured bound — environmental, not something this
+    // session's edits caused. (A timeout excerpt names no failing files, so
+    // the file-matching path below would mislabel it attributable and burn
+    // every fix loop on a failure no agent turn can fix.)
+    if (result.timedOut && baselineResult.timedOut) {
+      preExistingCommands.push(key);
+      continue;
+    }
     const currentFiles = extractFailingFiles(result.excerpt);
     const baselineFiles = new Set(extractFailingFiles(baselineResult.excerpt));
     const allPreExisting = currentFiles.length > 0 && currentFiles.every((f) => baselineFiles.has(f));

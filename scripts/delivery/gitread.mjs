@@ -41,10 +41,24 @@ export function runGitRead(args, options = {}) {
   }
   const exec = options.execFileSync || execFileSync;
   const cwd = options.cwd || process.cwd();
-  return exec("git", args, {
-    cwd,
-    encoding: options.encoding || "utf8",
-  });
+  try {
+    return exec("git", args, {
+      cwd,
+      encoding: options.encoding || "utf8",
+    });
+  } catch (err) {
+    // execFileSync's generic "Command failed: git …" message drops the part
+    // that says WHY (git's stderr + exit code / killing signal). Re-throw with
+    // both attached so a crash log or BLOCKED gate names the actual failure
+    // (s-20260722-221533-wous died on a bare "Command failed: git status").
+    const stderr = err && err.stderr ? String(err.stderr).trim() : "";
+    const exit = err && err.status != null ? `exit ${err.status}` : err && err.signal ? `signal ${err.signal}` : "unknown exit";
+    const wrapped = new GitReadError(
+      `git ${args.join(" ")} failed (${exit})${stderr ? `: ${stderr.slice(0, 2000)}` : ""}`,
+    );
+    wrapped.cause = err;
+    throw wrapped;
+  }
 }
 
 /** `git status --porcelain` — used for baseline capture and dirty-tree checks. */

@@ -54,6 +54,25 @@ describe("runGitRead: allowlist invariant", () => {
     expect(() => runGitRead(undefined as unknown as string[])).toThrow(GitReadError);
   });
 
+  it("re-throws an exec failure with git's stderr and exit code in the message", () => {
+    const execError = Object.assign(new Error("Command failed: git status --porcelain"), {
+      status: 128,
+      stderr: "fatal: Unable to create '.git/index.lock': File exists.\n",
+    });
+    const spy = vi.fn(() => {
+      throw execError;
+    });
+    expect(() => runGitRead(["status", "--porcelain"], { execFileSync: spy })).toThrow(
+      /git status --porcelain failed \(exit 128\): fatal: Unable to create/,
+    );
+    try {
+      runGitRead(["status", "--porcelain"], { execFileSync: spy });
+    } catch (err) {
+      expect(err).toBeInstanceOf(GitReadError);
+      expect((err as Error & { cause?: unknown }).cause).toBe(execError);
+    }
+  });
+
   it("invokes git only for allowed subcommands, forwarding cwd and args", () => {
     const spy = vi.fn().mockReturnValue("output");
     const out = runGitRead(["status", "--porcelain"], { execFileSync: spy, cwd: "/repo" });
