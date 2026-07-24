@@ -38,4 +38,5 @@ tags: [pm/index, tooling/delivery]
 
 - **Up one level:** the global command center → [10 - Project Management/_index.md](<../_index.md>).
 - **Base architecture (read first if unfamiliar with Delivery):** [Agentic Delivery Workspace/_index.md](<../Agentic Delivery Workspace/_index.md>).
+- **Next layer up:** [Delivery 10x/_index.md](<../Delivery 10x/_index.md>) — governance & truthful-finish campaign (prefix `DLV`, 2026-07-24), triggered by the second BUD-11 incident (`s-20260722-225601-whdv`); its resume/salvage items (DLV-13) build on this campaign's fork/handoff machinery.
 - **Grammar:** [_Conventions](<../_Conventions.md>) — prefix `DW` registered in §5.

@@ -24,6 +24,17 @@ const QUOTA_PATTERNS = [
   /insufficient_quota/i,
   /\b429\b/,
   /too many requests/i,
+  /spend limit/i,
+  /monthly.*limit/i,
+  /\bcredit(?:s)?\b/i,
+];
+
+const AUTH_PATTERNS = [
+  /authentication(?:_failed| failed)?/i,
+  /\bauth(?:entication)?\b.*(?:fail|invalid|expired|required|unavailable)/i,
+  /(?:invalid|expired)\s+(?:access\s+)?token/i,
+  /\bunauthori[sz]ed\b/i,
+  /\b401\b/,
 ];
 
 // Matches a trailing "resets <time>" fragment as seen in Claude Code's own
@@ -34,13 +45,18 @@ const RESET_TIME_RE = /resets\s+([^,;]+?)(?:$|[.\n])/i;
 
 /**
  * @param {unknown} err
- * @returns {{kind:"quota"|"transient", retryable:boolean, resetsAt:(string|null)}}
+ * @param {{extraQuotaPatterns?:string[]}} [options]
+ * @returns {{kind:"quota"|"auth"|"transient", retryable:boolean, resetsAt:(string|null)}}
  */
-export function classifyTurnError(err) {
+export function classifyTurnError(err, options = {}) {
   const message = String((err && err.message) || err || "");
-  if (QUOTA_PATTERNS.some((re) => re.test(message))) {
+  const extraPatterns = (options.extraQuotaPatterns || []).flatMap((source) => {
+    try { return [new RegExp(source, "i")]; } catch { return []; }
+  });
+  if ([...QUOTA_PATTERNS, ...extraPatterns].some((re) => re.test(message))) {
     const resetsMatch = message.match(RESET_TIME_RE);
     return { kind: "quota", retryable: false, resetsAt: resetsMatch ? resetsMatch[1].trim() : null };
   }
+  if (AUTH_PATTERNS.some((re) => re.test(message))) return { kind: "auth", retryable: false, resetsAt: null };
   return { kind: "transient", retryable: true, resetsAt: null };
 }

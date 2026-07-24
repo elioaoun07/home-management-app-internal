@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { classifyValidationFailure, extractFailingFiles } from "../../scripts/delivery/validation-baseline.mjs";
+import {
+  classifyChangeOwnership,
+  classifyValidationFailure,
+  countValidationFailures,
+  extractFailingFiles,
+} from "../../scripts/delivery/validation-baseline.mjs";
 
 const TSC_EXCERPT = [
   "> tsc --noEmit -p .",
@@ -89,6 +94,84 @@ describe("classifyValidationFailure (BUD-11 counterfactual)", () => {
     expect(verdict.attributableCommands).toEqual(["typecheck"]);
   });
 
+  it("passes when the failure count improves and no new failure lands in a touched file", () => {
+    const baseline = {
+      ok: false,
+      results: {
+        typecheck: {
+          ok: false,
+          excerpt:
+            "src/existing.ts(1,1): error TS1: first\nsrc/existing.ts(2,1): error TS2: second",
+        },
+      },
+    };
+    const validation = {
+      ok: false,
+      results: {
+        typecheck: {
+          ok: false,
+          excerpt: "src/other.ts(1,1): error TS3: replacement",
+        },
+      },
+    };
+    const verdict = classifyValidationFailure(validation, baseline, {
+      touchedFiles: ["src/session.ts"],
+    });
+    expect(verdict.passesDelta).toBe(true);
+    expect(verdict.commandDeltas.typecheck).toMatchObject({
+      baselineFailures: 2,
+      currentFailures: 1,
+    });
+  });
+
+  it("fails when a new diagnostic appears in a session-touched file even at the same total count", () => {
+    const baseline = {
+      ok: false,
+      results: {
+        typecheck: {
+          ok: false,
+          excerpt: "src/existing.ts(1,1): error TS1: old failure",
+        },
+      },
+    };
+    const validation = {
+      ok: false,
+      results: {
+        typecheck: {
+          ok: false,
+          excerpt: "src/session.ts(20,4): error TS2: new failure",
+        },
+      },
+    };
+    const verdict = classifyValidationFailure(validation, baseline, {
+      touchedFiles: ["src/session.ts"],
+    });
+    expect(verdict.passesDelta).toBe(false);
+    expect(verdict.commandDeltas.typecheck.newTouchedFailures).toEqual([
+      { file: "src/session.ts", signature: "error TS2: new failure" },
+    ]);
+  });
+
+  it("fails when the same baseline file gains an additional diagnostic", () => {
+    const baselineResult = {
+      ok: false,
+      excerpt: "src/existing.ts(1,1): error TS1: old failure",
+    };
+    const validationResult = {
+      ok: false,
+      excerpt:
+        `${baselineResult.excerpt}\nsrc/existing.ts(2,1): error TS2: added failure`,
+    };
+    expect(countValidationFailures(baselineResult)).toBe(1);
+    expect(countValidationFailures(validationResult)).toBe(2);
+    const verdict = classifyValidationFailure(
+      { ok: false, results: { typecheck: validationResult } },
+      { ok: false, results: { typecheck: baselineResult } },
+      { touchedFiles: [] },
+    );
+    expect(verdict.passesDelta).toBe(false);
+  });
+
   it("mixes pre-existing and attributable commands correctly", () => {
     const validation = {
       ok: false,
@@ -118,5 +201,20 @@ describe("classifyValidationFailure (BUD-11 counterfactual)", () => {
     const verdict = classifyValidationFailure(validation, null);
     expect(verdict.preExistingCommands).toEqual([]);
     expect(verdict.attributableCommands).toEqual(["lint"]);
+  });
+});
+
+describe("classifyChangeOwnership", () => {
+  it("keeps pre-existing edits separate and marks session writes to them as shared", () => {
+    expect(
+      classifyChangeOwnership(
+        ["src/pre-existing.ts", "src/shared.ts"],
+        ["src/shared.ts", "src/session.ts"],
+      ),
+    ).toEqual([
+      { path: "src/pre-existing.ts", ownership: "not-session-owned" },
+      { path: "src/session.ts", ownership: "session-owned" },
+      { path: "src/shared.ts", ownership: "shared" },
+    ]);
   });
 });

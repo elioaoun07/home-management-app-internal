@@ -1,99 +1,187 @@
 // scripts/delivery/validation-baseline.mjs
-// Distinguishes a validation failure this session actually caused from one
-// that was already broken before the session started.
-//
-// Root cause (BUD-11 session forensics, s-20260715-214421-hvfk): the
-// workspace was dirty at session start (`dirtyAtStart: true`) with an
-// unrelated pre-existing typecheck error in `tests/pm-ui/lint-rules.test.ts`.
-// `handleValidating` runs `pnpm typecheck/lint/test` repo-wide with no
-// baseline to compare against, so every validation cycle failed on that same
-// pre-existing error — and the fix loop spent all 3 attempts (each a full
-// guarded turn) asking a (readonly, per root cause #1) agent to fix a file it
-// never touched and didn't break, before exhausting and blocking. None of
-// that turn spend was ever attributable to the session's own work.
-//
-// Pure string/data functions only — the runner (run-session.mjs) supplies the
-// actual `runValidationCommands` output; this module never spawns anything.
+// Pure baseline, delta, and change-ownership semantics. The runner supplies
+// command output and git snapshots; this module never spawns processes.
 
-/**
- * Extract plausible source-file paths from a validation command's tail-
- * truncated stdout/stderr excerpt. Best-effort across the three tools this
- * runner shells out to — not a full parser, just enough to tell "same file
- * failing as before" from "a new file started failing":
- *  - tsc:     "path/to/file.ts(10,5): error TS2353: ..."
- *  - vitest:  " FAIL  path/to/file.test.ts" / "✗ path/to/file.test.ts"
- *  - eslint:  a bare file path alone on its own line (stylish formatter)
- * @param {string} excerpt
- * @returns {string[]} de-duplicated, order-preserving
- */
-export function extractFailingFiles(excerpt) {
-  const text = String(excerpt == null ? "" : excerpt);
-  const found = [];
-  const seen = new Set();
-  const add = (path) => {
-    const p = path.trim().replace(/\\/g, "/");
-    if (p && !seen.has(p)) {
-      seen.add(p);
-      found.push(p);
-    }
-  };
+export const DIRTY_TREE_ACK = "DIRTY TREE";
+export const RED_BASELINE_ACK = "RED BASELINE";
 
-  const tscRe = /^([^\s(][^\n():]*\.(?:ts|tsx|mts|cts))\(\d+,\d+\):\s*error/gm;
-  for (const m of text.matchAll(tscRe)) add(m[1]);
+function normalizePath(path) {
+  return String(path == null ? "" : path)
+    .trim()
+    .replace(/\\/g, "/");
+}
 
-  const vitestRe = /^\s*(?:FAIL|✗|×)\s+([^\s].*?\.(?:ts|tsx|js|jsx|mjs|cjs))\b/gm;
-  for (const m of text.matchAll(vitestRe)) add(m[1]);
+function normalizeSignature(text) {
+  return String(text == null ? "" : text)
+    .trim()
+    .replace(/\s+/g, " ");
+}
 
-  // eslint "stylish": a bare relative/absolute path alone on its own line,
-  // immediately followed by one or more indented "line:col  error/warning" rows.
-  const eslintRe = /^([^\s].*?\.(?:ts|tsx|js|jsx|mjs|cjs))\s*$\n(?:\s+\d+:\d+\s+(?:error|warning)\b)/gm;
-  for (const m of text.matchAll(eslintRe)) add(m[1]);
-
-  return found;
+function addFailure(records, file, signature) {
+  const normalizedFile = normalizePath(file);
+  if (!normalizedFile) return;
+  records.push({ file: normalizedFile, signature: normalizeSignature(signature) });
 }
 
 /**
- * Classify a failed validation run against an optional baseline (captured
- * once at session start when the workspace was already dirty — see
- * `handleSelected`). A command's failure is treated as pre-existing only when
- * every file it names as failing was *also* failing, by name, in the
- * baseline run of the same command — i.e. this session provably changed
- * nothing about that failure. Anything we can't positively match against the
- * baseline (no baseline, unparseable excerpt, a file that wasn't failing
- * before) is treated as attributable — fail toward spending a fix turn, not
- * toward silently skipping one.
+ * Extract comparable diagnostics. Locations are intentionally excluded from
+ * signatures: moving a pre-existing error does not create a new failure.
+ * @param {string} excerpt
+ * @returns {{file:string, signature:string}[]}
+ */
+export function extractValidationFailures(excerpt) {
+  const text = String(excerpt == null ? "" : excerpt);
+  const records = [];
+
+  const tscRe = /^([^\s(][^\n():]*\.(?:ts|tsx|mts|cts))\(\d+,\d+\):\s*(error\s+TS\d+:\s*.*)$/gm;
+  for (const match of text.matchAll(tscRe)) addFailure(records, match[1], match[2]);
+
+  const vitestRe = /^\s*(?:FAIL|[^\s]+)\s+([^\s].*?\.(?:ts|tsx|js|jsx|mjs|cjs))\b(.*)$/gm;
+  for (const match of text.matchAll(vitestRe)) addFailure(records, match[1], match[2] || "test failure");
+
+  const lines = text.split(/\r?\n/);
+  let eslintFile = null;
+  for (const line of lines) {
+    const fileMatch = line.match(/^([^\s].*?\.(?:ts|tsx|js|jsx|mjs|cjs))\s*$/);
+    if (fileMatch) {
+      eslintFile = fileMatch[1];
+      continue;
+    }
+    const diagnostic = eslintFile && line.match(/^\s+\d+:\d+\s+(error|warning)\s+(.*)$/);
+    if (diagnostic) {
+      addFailure(records, eslintFile, `${diagnostic[1]} ${diagnostic[2]}`);
+      continue;
+    }
+    if (line.trim()) eslintFile = null;
+  }
+
+  return records;
+}
+
+/**
+ * Extract source paths from a validation excerpt, de-duplicated in encounter
+ * order.
+ * @param {string} excerpt
+ * @returns {string[]}
+ */
+export function extractFailingFiles(excerpt) {
+  const found = [];
+  const seen = new Set();
+  for (const failure of extractValidationFailures(excerpt)) {
+    if (!seen.has(failure.file)) {
+      seen.add(failure.file);
+      found.push(failure.file);
+    }
+  }
+  return found;
+}
+
+/** Best-effort diagnostic count used by the delta gate. */
+export function countValidationFailures(result) {
+  if (!result || result.ok) return 0;
+  if (Number.isInteger(result.failureCount) && result.failureCount >= 0) return result.failureCount;
+  const records = extractValidationFailures(result.excerpt);
+  if (records.length) return records.length;
+  const summary = String(result.excerpt || "").match(/\b(\d+)\s+(?:errors?|failed|failures?|problems?)\b/i);
+  return summary ? Number(summary[1]) : null;
+}
+
+function multiset(records) {
+  const counts = new Map();
+  for (const record of records) {
+    const key = `${record.file}\0${record.signature}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return counts;
+}
+
+function newFailuresAgainstBaseline(current, baseline) {
+  const remaining = multiset(baseline);
+  const added = [];
+  for (const record of current) {
+    const key = `${record.file}\0${record.signature}`;
+    const count = remaining.get(key) || 0;
+    if (count > 0) remaining.set(key, count - 1);
+    else added.push(record);
+  }
+  return added;
+}
+
+/**
+ * Build the ownership vocabulary consumed by DLV-12's finish manifest.
+ * A file dirty before launch is never session-owned; if a build turn also
+ * touches it, ownership becomes shared.
+ */
+export function classifyChangeOwnership(preExistingFiles = [], sessionTouchedFiles = []) {
+  const preExisting = new Set(preExistingFiles.map(normalizePath).filter(Boolean));
+  const touched = new Set(sessionTouchedFiles.map(normalizePath).filter(Boolean));
+  const all = [...new Set([...preExisting, ...touched])].sort();
+  return all.map((path) => ({
+    path,
+    ownership: preExisting.has(path) ? (touched.has(path) ? "shared" : "not-session-owned") : "session-owned",
+  }));
+}
+
+/**
+ * Classify a validation run against its launch baseline.
+ *
+ * A failing command passes on delta only when it has the same-or-fewer
+ * failures and introduces no new diagnostic in a session-touched file.
+ * Unknown output fails conservatively unless it is identical to the baseline
+ * or both runs timed out.
+ *
  * @param {{ok:boolean, results:Object<string,{ok:boolean, excerpt:string}>}} validation
  * @param {{ok:boolean, results:Object<string,{ok:boolean, excerpt:string}>}|null} [baseline]
- * @returns {{attributable:boolean, preExistingCommands:string[], attributableCommands:string[]}}
+ * @param {{touchedFiles?:string[]}} [options]
  */
-export function classifyValidationFailure(validation, baseline = null) {
+export function classifyValidationFailure(validation, baseline = null, options = {}) {
   const preExistingCommands = [];
   const attributableCommands = [];
+  const commandDeltas = {};
+  const touched = new Set((options.touchedFiles || []).map(normalizePath).filter(Boolean));
+
   for (const [key, result] of Object.entries((validation && validation.results) || {})) {
     if (!result || result.ok) continue;
     const baselineResult = baseline && baseline.results ? baseline.results[key] : null;
     if (!baselineResult || baselineResult.ok) {
       attributableCommands.push(key);
+      commandDeltas[key] = { status: "regressed", reason: "command passed or was absent in baseline" };
       continue;
     }
-    // Both runs hit the hard time cap on the same command: the suite is
-    // slower than the configured bound — environmental, not something this
-    // session's edits caused. (A timeout excerpt names no failing files, so
-    // the file-matching path below would mislabel it attributable and burn
-    // every fix loop on a failure no agent turn can fix.)
     if (result.timedOut && baselineResult.timedOut) {
       preExistingCommands.push(key);
+      commandDeltas[key] = { status: "baseline-equivalent", reason: "same timeout" };
       continue;
     }
-    const currentFiles = extractFailingFiles(result.excerpt);
-    const baselineFiles = new Set(extractFailingFiles(baselineResult.excerpt));
-    const allPreExisting = currentFiles.length > 0 && currentFiles.every((f) => baselineFiles.has(f));
-    if (allPreExisting) preExistingCommands.push(key);
+
+    const currentFailures = extractValidationFailures(result.excerpt);
+    const baselineFailures = extractValidationFailures(baselineResult.excerpt);
+    const currentCount = countValidationFailures(result);
+    const baselineCount = countValidationFailures(baselineResult);
+    const newFailures = newFailuresAgainstBaseline(currentFailures, baselineFailures);
+    const newTouchedFailures = newFailures.filter((failure) => touched.has(failure.file));
+    const exactFallback =
+      currentCount == null &&
+      baselineCount == null &&
+      normalizeSignature(result.excerpt) === normalizeSignature(baselineResult.excerpt);
+    const sameOrFewer = exactFallback || (currentCount != null && baselineCount != null && currentCount <= baselineCount);
+    const passes = sameOrFewer && newTouchedFailures.length === 0;
+
+    commandDeltas[key] = {
+      status: passes ? "baseline-equivalent" : "regressed",
+      baselineFailures: baselineCount,
+      currentFailures: currentCount,
+      newTouchedFailures,
+    };
+    if (passes) preExistingCommands.push(key);
     else attributableCommands.push(key);
   }
+
   return {
     attributable: attributableCommands.length > 0,
+    passesDelta: attributableCommands.length === 0,
     preExistingCommands,
     attributableCommands,
+    commandDeltas,
   };
 }

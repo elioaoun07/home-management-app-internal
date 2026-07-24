@@ -1,0 +1,112 @@
+## Verdict
+
+- **Not totally off**
+- **Strong postmortem and reliability plan**
+- **Too reactive to one failed session**
+- **More “Delivery repair” than “Delivery 10x”**
+
+## Priority 0 — Fix the Roadmap First
+
+- Collapse 14 items into 4 outcome milestones
+- Move Budget Controls to **Now**
+- Move Scope Tripwire to **Now**
+- Move Model/Effort Guard to **Now**
+- Move PM Trace below execution safety
+- Keep Analytics for Later
+- Avoid locking exact files/functions too early
+- Replace universal validation with risk-based validation
+
+## Priority 1 — Biggest Missing Capabilities
+
+- AUTO / FAST / DEEP Delivery Lanes
+- Strict Lane-Specific Phase Enforcement
+- Selective Context Loading
+- Per-Phase Context Budgets
+- Loaded-Context Manifest
+- Preflight Delivery Summary
+- Scope Lock
+- Automatic Task Decomposition
+- Clean-Start / Change-Ownership Policy
+- Lane-Specific Definition of Done
+
+## Priority 2 — Reliability Gaps Still Missing
+
+- End-to-End Orchestrator Test Suite
+- Failure-Injection Testing
+- Crash-Recovery Testing
+- Retry-Storm Testing
+- Quota-Failure Testing
+- Idempotent State Transitions
+- Duplicate Side-Effect Prevention
+- Safe Cancellation and Cleanup
+- Stalled-Session Watchdog
+- Provider Fallback Strategy
+
+## Priority 3 — Truthful Completion
+
+- Acceptance-Criteria Coverage Matrix
+- Targeted Validation Strategy
+- Evidence-Backed Completion
+- Changed-File Ownership Manifest
+- Remaining-Work Package
+- Exact Recovery / Revert Instructions
+- Partial-Success State
+- Unresolved-Risk Register
+
+## Priority 4 — User Experience
+
+- Launch Recommendation Screen
+- Live “What Is Happening” Summary
+- Live “What You Need to Do” Panel
+- Conversation Search and Highlighting
+- Dedicated Questions and Answers
+- Cleaner Phase Timeline
+- Pause / Resume / Cancel Controls
+- Mid-Session Model and Effort Switching
+- Mid-Session Provider Switching
+- Remote Decision Controls
+
+## Priority 5 — Proving It Is Actually 10x Better
+
+- Small / Medium / Large Task Benchmark
+- Delivery vs Direct CLI Comparison
+- Cost per Completed Task
+- Time to Accepted Result
+- First-Pass Validation Rate
+- Human Intervention Rate
+- Scope-Estimate Accuracy
+- Model Recommendation Accuracy
+- Fast-Lane Success Rate
+
+### Milestone 1 — Safe Start
+
+- Config Hardening
+- Error Classification
+- Retry Limits
+- Budget Cutoffs
+- Baseline Gate
+- Preflight
+
+### Milestone 2 — Right-Sized Delivery
+
+- FAST / DEEP Lanes
+- Scope Tripwire
+- Context Resolver
+- Model Recommendation
+- Task Decomposition
+
+### Milestone 3 — Truthful Finish
+
+- Acceptance-Criteria Tracking
+- Validation Contract
+- Evidence Gate
+- Resume and Salvage
+- Recovery Package
+
+### Milestone 4 — Operability
+
+- Session UX
+- Notifications
+- Transcript Integrity
+- Analytics
+- Benchmarking

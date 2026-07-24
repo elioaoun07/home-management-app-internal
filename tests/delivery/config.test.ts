@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   ConfigError,
   DEFAULT_CONFIG,
   buildCapabilitiesPayload,
   getDefaultModel,
+  getConfigStatus,
   getModelInfo,
   getModelPricing,
   getProviderConfig,
@@ -73,9 +77,11 @@ describe("loadConfig", () => {
     expect(config.providers.claude.efforts).toEqual(["low"]);
   });
 
-  it("throws ConfigError on a schemaVersion mismatch", () => {
+  it("falls back to safe defaults on a schemaVersion mismatch", () => {
     const fs = fakeFsWith({ schemaVersion: 2 });
-    expect(() => loadConfig("/root", { fs })).toThrow(ConfigError);
+    const config = loadConfig("/root", { fs });
+    expect(config).toBe(DEFAULT_CONFIG);
+    expect(getConfigStatus(config)).toMatchObject({ healthy: false, source: "defaults" });
   });
 
   it("accepts a matching schemaVersion", () => {
@@ -84,10 +90,51 @@ describe("loadConfig", () => {
     expect(config.pricingVersion).toBe("2026-07-16");
   });
 
+  it("validates retry escalation settings", () => {
+    const config = loadTestConfig("/root", { fs: fakeFsWith({ errors: { maxAutoRetries: 3, extraQuotaPatterns: ["allowance exhausted"] } }) });
+    expect((config as TestConfig & { errors: { maxAutoRetries: number } }).errors.maxAutoRetries).toBe(3);
+    expect(getConfigStatus(loadConfig("/root", { fs: fakeFsWith({ errors: { maxAutoRetries: -1 } }) })).healthy).toBe(false);
+  });
+
+  it("provides validated lane budget defaults for the launch envelope", () => {
+    expect(DEFAULT_CONFIG.budgets.laneDefaults.standard).toEqual({
+      maxUsd: 2,
+      maxTokens: 2_000_000,
+      warnPct: 0.8,
+    });
+    const configured = loadTestConfig("/root", {
+      fs: fakeFsWith({ budgets: { laneDefaults: { standard: { maxUsd: 3, maxTokens: 3_000_000, warnPct: 0.75 } } } }),
+    });
+    expect((configured.budgets as { laneDefaults: { standard: object } }).laneDefaults.standard).toMatchObject({
+      maxUsd: 3,
+      maxTokens: 3_000_000,
+      warnPct: 0.75,
+    });
+    expect(getConfigStatus(loadConfig("/root", { fs: fakeFsWith({ budgets: { laneDefaults: { standard: { warnPct: 1 } } } }) })).healthy).toBe(false);
+  });
+
   it("uses configPath override when given", () => {
     const fs = fakeFsWith({ pricingVersion: "custom" });
     const config = loadTestConfig("/root", { fs, configPath: "/somewhere/else.json" });
     expect(config.pricingVersion).toBe("custom");
+  });
+
+  it("uses an atomically persisted last-known-good config when the owner file becomes malformed", () => {
+    const root = mkdtempSync(join(tmpdir(), "delivery-config-"));
+    try {
+      const deliveryDir = join(root, ".delivery");
+      mkdirSync(deliveryDir, { recursive: true });
+      const configPath = join(deliveryDir, "config.json");
+      writeFileSync(configPath, JSON.stringify({ providers: { claude: { defaultModel: "claude-sonnet-5" } } }));
+      expect(loadConfig(root).providers.claude.defaultModel).toBe("claude-sonnet-5");
+      writeFileSync(configPath, '{"providers":{"claude":{"models":[{"id":7}]}}}');
+      const fallback = loadConfig(root);
+      expect(fallback.providers.claude.defaultModel).toBe("claude-sonnet-5");
+      expect(getConfigStatus(fallback)).toMatchObject({ healthy: false, source: "last-known-good" });
+      expect(buildCapabilitiesPayload(fallback).config.status).toMatchObject({ healthy: false, source: "last-known-good" });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

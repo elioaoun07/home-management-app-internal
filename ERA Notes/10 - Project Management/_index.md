@@ -29,6 +29,7 @@ tags:
 | **Notifications & Alerts** | `NOTIF` | [Notifications & Alerts/4](<Notifications & Alerts/4 - Checklist.md>) |
 | **PM Dashboard Refactor** (tooling) | `R` | [PM Dashboard Refactor/4](<PM Dashboard Refactor/4 - Checklist.md>) |
 | **Delivery Workspace** (tooling — durable Delivery memory) | `DW` | [Delivery Workspace/4](<Delivery Workspace/4 - Checklist.md>) |
+| **Delivery 10x** (tooling — Delivery governance & truthful finish) | `DLV` | [Delivery 10x/4](<Delivery 10x/4 - Checklist.md>) |
 
 Each campaign folder holds the uniform set — `_index`, `1 - Feature State`, `2 - Vision & Roadmap`, `3 - Action Plan`, `4 - Checklist` — plus the deep-dive layer **`FABLED 2/`** (current, scored, delta-ledgered) and, where present, the frozen **`FABLED/`** v1 baseline (2026-06-10). Files 1–3 carry reality + strategy + narrative; **file 4 is the live lane list**; FABLED 2 holds the depth.
 
@@ -42,6 +43,7 @@ Each campaign folder holds the uniform set — `_index`, `1 - Feature State`, `2
 | [Native App](<Native App/_index.md>) | Approved two-stage Capacitor plan (Android + iOS). Planned, not started. |
 | [Agentic Delivery Workspace](<Agentic Delivery Workspace/_index.md>) | Dev-tooling: gated, provider-neutral agent delivery sessions (git reads only). See its own live status. |
 | [Delivery Workspace](<Delivery Workspace/_index.md>) | Durable-memory enhancement on top of the above: full transcript, Q&A, timeline, pause/handoff/compaction. Own campaign + checklist (`DW`), not a study — see its Feature State for shipped slices. |
+| [Delivery 10x](<Delivery 10x/_index.md>) | Governance layer on both of the above (`DLV`): budget envelopes, preflight flight-check, lanes, scope contract, AC matrix, finish packages. Born from the `s-20260722-225601-whdv` postmortem (BUD-11 #2) — see its file 5 for the evidence. |
 | [Functional Architecture Review](<Functional Architecture Review/_index.md>) · [FAR Execution Checklist](<FAR Execution Checklist/_index.md>) · [Codebase Audit 2026-07-01](<Codebase Audit 2026-07-01/_index.md>) | Whole-app reviews. Each carries a **`FABLED 2/`** delta layer — read the delta before treating the base as current. |
 | [FABLED 2/](<FABLED 2/_index.md>) | The PM machine's own meta-audit (this folder's implementation, gaps, optimization). |
 

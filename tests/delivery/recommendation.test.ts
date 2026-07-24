@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  assessRecommendationMismatch,
   effortForTier,
+  laneForTier,
   recommendAgentConfig,
   scoreComplexity,
   tierForScore,
@@ -61,6 +63,17 @@ describe("scoreComplexity", () => {
     expect(score).toBe(0);
     expect(rationale).toEqual([]);
   });
+
+  it("raises an S-item with a broad launch glob set out of the economy tier", () => {
+    const { score, rationale } = scoreComplexity({
+      item: { effort: "S", sev: "annoyance", campaign: "Budget" },
+      capabilities: [],
+      scopeHints: { globs: ["one/**", "two/**", "three/**", "four/**"] },
+    });
+    expect(score).toBe(2);
+    expect(rationale).toContain("broad launch scope (4 globs, +2)");
+    expect(tierForScore(score)).toBe("standard");
+  });
 });
 
 describe("tierForScore", () => {
@@ -83,6 +96,33 @@ describe("effortForTier", () => {
 
   it("premium is high-effort across discovery/plan/building", () => {
     expect(effortForTier("premium")).toEqual({ discovery: "high", plan: "high", building: "high", review: "medium" });
+  });
+});
+
+describe("Flight-Check recommendation fit", () => {
+  it("maps recommendation tiers to the launch lanes", () => {
+    expect(laneForTier("economy")).toBe("FAST");
+    expect(laneForTier("standard")).toBe("STANDARD");
+    expect(laneForTier("premium")).toBe("DEEP");
+  });
+
+  it("makes an economy-model + broad-scope mismatch explicit", () => {
+    const recommendation = recommendAgentConfig({
+      item: { effort: "S", sev: "annoyance", campaign: "Budget" },
+      capabilities: [],
+      scopeHints: { globs: ["one/**", "two/**", "three/**", "four/**"] },
+      provider: "claude",
+      config: CATALOG_CONFIG,
+    });
+    expect(recommendation!.tier).toBe("standard");
+    expect(
+      assessRecommendationMismatch({
+        recommendation,
+        selectedModel: "claude-haiku-4-5",
+        selectedModelTier: "economy",
+        selectedLane: "FAST",
+      }).map((warning) => warning.code),
+    ).toEqual(["model-below-recommended-tier", "lane-differs-from-recommendation"]);
   });
 });
 

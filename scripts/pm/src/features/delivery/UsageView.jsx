@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "preact/hooks";
-import { deliveryTurns, loadDeliveryTurns } from "./deliveryStore.js";
+import { deliverySession, deliveryTurns, loadDeliveryTurns } from "./deliveryStore.js";
 
 function emptyTotals() { return { input: 0, cachedRead: 0, cacheCreation: 0, output: 0, reasoningOutput: 0, costUsd: null, costEstUsd: null }; }
 function add(target, turn) {
@@ -16,9 +16,11 @@ export function UsageView({ id, legacyUsage, budgets = {} }) {
   const turns = deliveryTurns.value;
 
   const total = useMemo(() => { const t = emptyTotals(); for (const turn of turns) add(t, turn); return t; }, [turns]);
-  const processedTokens = total.input + total.cachedRead + total.cacheCreation + total.output;
-  const maxTokens = budgets?.maxSessionTokens;
-  const warnTokens = budgets?.warnSessionTokens;
+  const envelope=deliverySession.value?.state?.budget?.current||deliverySession.value?.packet?.budget||budgets;
+  const processedTokens = total.input + total.cachedRead + total.output;
+  const maxTokens = envelope?.maxTokens??envelope?.maxSessionTokens;
+  const warnTokens = envelope?.warnTokens??envelope?.warnSessionTokens??(typeof maxTokens==="number"&&typeof envelope?.warnPct==="number"?maxTokens*envelope.warnPct:null);
+  const authoritativeCost=legacyUsage?.total?.costUsd;
   const overBudget = typeof maxTokens === "number" && processedTokens >= maxTokens;
   const warnBudget = !overBudget && typeof warnTokens === "number" && processedTokens >= warnTokens;
   const byPhase = useMemo(() => {
@@ -37,6 +39,7 @@ export function UsageView({ id, legacyUsage, budgets = {} }) {
     return <section class="card"><h2>Usage</h2>
       <div class="stat-value">{(legacy.input || 0) + (legacy.output || 0)}</div>
       <div class="muted">total tokens (pre-DW-1 session — no per-turn breakdown captured)</div>
+      <BudgetSummary envelope={envelope} processedTokens={(legacy.input||0)+(legacy.cachedInput||0)+(legacy.output||0)} costUsd={legacy.costUsd}/>
     </section>;
   }
 
@@ -52,8 +55,9 @@ export function UsageView({ id, legacyUsage, budgets = {} }) {
       </table>
       {typeof maxTokens === "number" && <div class="muted" style={{ fontSize: 12, marginTop: 8, color: overBudget ? "var(--era-danger,#e05252)" : warnBudget ? "var(--era-amber,#e0a852)" : undefined }}>
         {processedTokens.toLocaleString()} / {maxTokens.toLocaleString()} processed-token session budget
-        {overBudget ? " — exceeded; further turns are blocked" : warnBudget ? " — approaching cap" : ""}
+        {overBudget ? " — exhausted; session pauses at the turn boundary" : warnBudget ? " — approaching cap" : ""}
       </div>}
+      <BudgetSummary envelope={envelope} processedTokens={processedTokens} costUsd={authoritativeCost}/>
     </section>
 
     <section class="card" style={{ marginTop: 12 }}>
@@ -84,5 +88,16 @@ export function UsageView({ id, legacyUsage, budgets = {} }) {
         </tr>)}</tbody>
       </table>
     </section>
+  </div>;
+}
+
+function BudgetSummary({envelope,processedTokens,costUsd}){
+  if(!envelope)return null;
+  const uncapped=envelope.authorization==="no-cap";
+  return <div class="muted" style={{fontSize:12,marginTop:8}}>
+    Authorized envelope: {uncapped?"NO CAP":[typeof envelope.maxTokens==="number"?`${envelope.maxTokens.toLocaleString()} tokens`:null,typeof envelope.maxUsd==="number"?`$${envelope.maxUsd.toFixed(2)}`:null].filter(Boolean).join(" · ")}
+    {!uncapped&&typeof envelope.warnPct==="number"?` · warning at ${Math.round(envelope.warnPct*100)}%`:""}
+    {typeof envelope.maxUsd==="number"?` · recorded $${typeof costUsd==="number"?costUsd.toFixed(4):"—"} / $${envelope.maxUsd.toFixed(2)}`:""}
+    {typeof processedTokens==="number"?` · ${processedTokens.toLocaleString()} processed`:""}
   </div>;
 }

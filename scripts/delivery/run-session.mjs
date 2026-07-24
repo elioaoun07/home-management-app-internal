@@ -55,9 +55,19 @@ import {
 } from "./transcript.mjs";
 import { computeOccupancy, estimateCostUsd } from "./usage.mjs";
 import { classifyTurnError } from "./quota.mjs";
-import { classifyValidationFailure } from "./validation-baseline.mjs";
-import { checkSessionBudget, isDiscoveryTurnLimitReached, isPlanStepCountOverCap } from "./budgets.mjs";
-import { getDefaultModel, getModelPricing, loadConfig, translateEffort } from "./config.mjs";
+import {
+  classifyChangeOwnership,
+  classifyValidationFailure,
+  countValidationFailures,
+} from "./validation-baseline.mjs";
+import {
+  checkSessionBudget,
+  isDiscoveryTurnLimitReached,
+  isPlanStepCountOverCap,
+  legacyBudgetEnvelope,
+  raiseBudgetEnvelope,
+} from "./budgets.mjs";
+import { getConfigStatus, getDefaultModel, getModelPricing, loadConfig, translateEffort } from "./config.mjs";
 import { isProviderSwitch } from "./controls.mjs";
 import {
   applyAnswer,
@@ -84,6 +94,7 @@ function sessionPaths(sessionDir) {
     state: join(sessionDir, "state.json"),
     events: join(sessionDir, "events.ndjson"),
     runner: join(sessionDir, "runner.json"),
+    crashMarker: join(sessionDir, "runner-crash.json"),
     decisions: join(sessionDir, "decisions"),
     messages: join(sessionDir, "messages"),
     artifacts: join(sessionDir, "artifacts"),
@@ -98,6 +109,64 @@ function sessionPaths(sessionDir) {
     transcriptPrompts: join(sessionDir, "transcript", "prompts"),
     turns: join(sessionDir, "transcript", "turns.ndjson"),
   };
+}
+
+const STARTUP_CRASH_WINDOW_MS = 60_000;
+const STARTUP_CRASH_LIMIT = 3;
+const STARTUP_CRASH_BACKOFF_MS = 60_000;
+
+/**
+ * Record a runner failure that happened before the loop could contain it.
+ * Identical rapid failures are counted in an atomic marker so independent
+ * detached processes cannot endlessly re-crash a session.
+ */
+export function recordStartupCrash(sessionDir, err, { now = () => new Date() } = {}) {
+  const p = sessionPaths(sessionDir);
+  const at = now().toISOString();
+  const message = String((err && err.message) || err);
+  const fingerprint = createHash("sha256").update(message).digest("hex");
+  const previous = readJsonIfExists(p.crashMarker) || {};
+  const cutoff = now().getTime() - STARTUP_CRASH_WINDOW_MS;
+  const timestamps = previous.fingerprint === fingerprint
+    ? (previous.timestamps || []).filter((ts) => new Date(ts).getTime() >= cutoff)
+    : [];
+  timestamps.push(at);
+  const tripped = timestamps.length >= STARTUP_CRASH_LIMIT;
+  const marker = {
+    fingerprint,
+    timestamps,
+    lastMessage: truncateField(message, TRUNCATE_LIMITS.message),
+    retryAfter: tripped ? new Date(now().getTime() + STARTUP_CRASH_BACKOFF_MS).toISOString() : null,
+  };
+  atomicWriteJsonSync(p.crashMarker, marker);
+  if (!tripped) return { tripped: false, marker };
+
+  try {
+    const state = loadState(sessionDir);
+    if (ACTIVE_STATES.includes(state.state)) {
+      const result = smNext(state.state, "error.fatal");
+      persistState(sessionDir, {
+        ...state,
+        state: result.to,
+        awaiting: { gate: "blocked", reason: "runner-crash", returnTo: state.state },
+        lastError: {
+          phase: state.state,
+          errorKind: "runner-crash",
+          message: `Runner startup crashed ${timestamps.length} times with the same error. Automatic restarts are paused until ${marker.retryAfter}. ${message}`,
+        },
+      });
+      emitEvent(sessionDir, { type: "runner.crash-loop", phase: state.state, data: { count: timestamps.length, retryAfter: marker.retryAfter } });
+    }
+  } catch {
+    // The marker is still useful even when the packet/state itself is damaged.
+  }
+  return { tripped: true, marker };
+}
+
+export function getStartupCrashBackoff(sessionDir, { now = () => new Date() } = {}) {
+  const marker = readJsonIfExists(sessionPaths(sessionDir).crashMarker);
+  if (!marker || !marker.retryAfter || new Date(marker.retryAfter).getTime() <= now().getTime()) return null;
+  return marker;
 }
 
 export function loadPacket(sessionDir) {
@@ -244,6 +313,30 @@ function applyControl(state, packet, control) {
     if (payload.effortByPhase) nextExecution.effortByPhase = { ...execution.effortByPhase, ...payload.effortByPhase };
     return { ...state, execution: nextExecution };
   }
+  if (control.type === "set-budget") {
+    const current = (state.budget && state.budget.current) || packet.budget;
+    const raised = raiseBudgetEnvelope(current, control.payload);
+    const phase = String(state.state || "").toLowerCase();
+    const verdict = checkSessionBudget((state.usage && state.usage.total) || {}, raised, {
+      phase,
+      phaseUsage: state.usage && state.usage.perPhase && state.usage.perPhase[phase],
+    });
+    const canResume = verdict.status !== "exceeded";
+    return {
+      ...state,
+      budget: {
+        ...(state.budget || {}),
+        current: raised,
+        warned: [],
+        exhaustedAt: canResume ? null : (state.budget && state.budget.exhaustedAt) || null,
+      },
+      execution: { ...execution, paused: canResume ? false : execution.paused },
+      awaiting:
+        canResume && state.awaiting && state.awaiting.reason === "budget-exhausted"
+          ? null
+          : state.awaiting,
+    };
+  }
   // rotate/fork/pin/unpin/answer/ask: schema-validated by controls.mjs already;
   // runner-side consumption ships in DW-5 (answer/ask), DW-7 (rotate/pin/unpin),
   // DW-9 (fork). Advancing the cursor here without a state effect means they
@@ -312,6 +405,16 @@ async function drainControls(sessionDir, state, packet, runCtx) {
           },
         });
       }
+    } else if (control.type === "set-budget") {
+      emitEvent(sessionDir, {
+        type: "budget.raised",
+        phase: working.state,
+        data: {
+          controlSeq: control.seq,
+          to: working.budget.current,
+          reason: control.payload.reason,
+        },
+      });
     } else if (control.type === "answer") {
       try {
         updateLedger(sessionDir, (ledger) =>
@@ -496,8 +599,7 @@ async function performHandoff(sessionDir, state, packet, payload, ctx) {
     provider: toProvider,
     model: toModel,
     strategy: "handoff",
-    sessionUsage: (working.usage && working.usage.total) || null,
-    budgets: (deliveryConfig && deliveryConfig.budgets) || null,
+    ...errorRetryOptions(deliveryConfig),
   });
   working = { ...working, turnCounter: (working.turnCounter || 0) + 1 };
 
@@ -672,6 +774,96 @@ function writeArtifactText(sessionDir, relName, text) {
 
 function writeArtifactJson(sessionDir, relName, value) {
   atomicWriteJsonSync(artifactPath(sessionDir, relName), value);
+}
+
+function effectiveBudgetEnvelope(packet, state, deliveryConfig) {
+  if (state.budget && state.budget.current) return state.budget.current;
+  if (packet.budget) return packet.budget;
+  return legacyBudgetEnvelope((deliveryConfig && deliveryConfig.budgets) || {});
+}
+
+function writeBudgetFinishPackage(sessionDir, state, envelope, verdict, at) {
+  const snapshot = {
+    schemaVersion: 1,
+    reason: "budget-exhausted",
+    at,
+    phase: state.state,
+    envelope,
+    usage: state.usage || { perPhase: {}, total: {} },
+    verdict,
+    changedFiles: (state.workspace && state.workspace.changedFiles) || [],
+    nextAction: "Raise the authorized cap with a reason, or cancel the session.",
+  };
+  writeArtifactJson(sessionDir, join("finish", "budget.json"), snapshot);
+  writeArtifactText(
+    sessionDir,
+    join("finish", "summary.md"),
+    [
+      "# Session paused â€” budget exhausted",
+      "",
+      verdict.reason,
+      "",
+      `- Phase: ${state.state}`,
+      `- Processed tokens: ${verdict.totalTokens}`,
+      `- Recorded cost: ${verdict.costUsd == null ? "unavailable" : `$${verdict.costUsd.toFixed(4)}`}`,
+      `- Changed files recorded: ${snapshot.changedFiles.length}`,
+      "",
+      "The completed turn and all artifacts remain on disk. Raise the packet-authorized envelope with an audited reason to resume, or cancel the session.",
+      "",
+    ].join("\n"),
+  );
+}
+
+/**
+ * Enforce the packet-authorized envelope at a turn boundary. Returns null
+ * when work may proceed, otherwise a state that must be persisted and yielded
+ * before another unit of work can start.
+ */
+function enforceBudgetBoundary(sessionDir, state, packet, deliveryConfig) {
+  const envelope = effectiveBudgetEnvelope(packet, state, deliveryConfig);
+  const phase = String(state.state || "").toLowerCase();
+  const verdict = checkSessionBudget((state.usage && state.usage.total) || {}, envelope, {
+    phase,
+    phaseUsage: state.usage && state.usage.perPhase && state.usage.perPhase[phase],
+  });
+  const budgetState = state.budget || { current: envelope, warned: [], exhaustedAt: null };
+  if (verdict.status === "warn") {
+    const warned = new Set(budgetState.warned || []);
+    if (warned.has(verdict.dimension)) return null;
+    warned.add(verdict.dimension);
+    emitEvent(sessionDir, {
+      type: "budget.warning",
+      phase: state.state,
+      data: { dimension: verdict.dimension, totalTokens: verdict.totalTokens, costUsd: verdict.costUsd, envelope },
+    });
+    emitEvent(sessionDir, {
+      type: "notification.requested",
+      phase: state.state,
+      data: { reason: "budget-warning", dimension: verdict.dimension, totalTokens: verdict.totalTokens, costUsd: verdict.costUsd },
+    });
+    return { ...state, budget: { ...budgetState, current: envelope, warned: [...warned] } };
+  }
+  if (verdict.status !== "exceeded") return null;
+  if (budgetState.exhaustedAt && state.awaiting && state.awaiting.reason === "budget-exhausted") return state;
+
+  const at = new Date().toISOString();
+  writeBudgetFinishPackage(sessionDir, state, envelope, verdict, at);
+  emitEvent(sessionDir, {
+    type: "budget.exhausted",
+    phase: state.state,
+    data: { dimension: verdict.dimension, totalTokens: verdict.totalTokens, costUsd: verdict.costUsd, reason: verdict.reason },
+  });
+  emitEvent(sessionDir, {
+    type: "notification.requested",
+    phase: state.state,
+    data: { reason: "budget-exhausted", returnTo: state.state, finishPackage: "artifacts/finish/budget.json" },
+  });
+  return {
+    ...state,
+    awaiting: { gate: "budget", returnTo: state.state, reason: "budget-exhausted" },
+    execution: { ...(state.execution || defaultExecution(packet)), paused: true, pauseRequestedAt: at },
+    budget: { ...budgetState, current: envelope, exhaustedAt: at },
+  };
 }
 
 // ---- usage accounting ----
@@ -938,7 +1130,7 @@ export function parsePorcelainPaths(statusText) {
   return [...new Set(paths)].sort();
 }
 
-function fingerprintDirtyPaths(repoRoot, statusText) {
+export function fingerprintDirtyPaths(repoRoot, statusText) {
   const out = {};
   const root = resolve(repoRoot);
   for (const rel of parsePorcelainPaths(statusText)) {
@@ -1090,35 +1282,9 @@ async function runGuardedTurn({
   // poll (small in tests so an abort control is picked up quickly).
   controlsProcessed = 0,
   abortPollMs = 300,
-  // Session-level token/cost budget (budgets.mjs): checked BEFORE anything
-  // else so an already-exceeded hard cap skips the turn entirely — no
-  // snapshot, no prompt file, no driver call, zero additional spend. Both
-  // args are optional so every pre-existing caller/test that omits them
-  // keeps running unbounded, matching prior behavior exactly.
-  sessionUsage = null,
-  budgets = null,
+  maxAutoRetries = 2,
+  extraQuotaPatterns = [],
 }) {
-  if (sessionUsage && budgets) {
-    const budgetVerdict = checkSessionBudget(sessionUsage, budgets);
-    if (budgetVerdict.status === "exceeded") {
-      emitEvent(sessionDir, {
-        type: "budget.exceeded",
-        phase,
-        agent,
-        data: { totalTokens: budgetVerdict.totalTokens, costUsd: budgetVerdict.costUsd, reason: budgetVerdict.reason },
-      });
-      return { ok: false, gitViolation: false, error: new Error(budgetVerdict.reason), turnId, errorKind: "budget-exceeded" };
-    }
-    if (budgetVerdict.status === "warn") {
-      emitEvent(sessionDir, {
-        type: "budget.warning",
-        phase,
-        agent,
-        data: { totalTokens: budgetVerdict.totalTokens, costUsd: budgetVerdict.costUsd },
-      });
-    }
-  }
-
   // Same containment as getGuardedHandle: a snapshot failure must fail the
   // turn (→ BLOCKED with the git error visible), never crash the runner.
   let before;
@@ -1159,7 +1325,7 @@ async function runGuardedTurn({
       }
     : undefined;
 
-  function sealTurn(result, usageV2, { workspaceDelta = null } = {}) {
+  function sealTurn(result, usageV2, { workspaceDelta = null, costUsd = null } = {}) {
     if (!turnId) return;
     const entry = buildTurnEntry({
       turnId,
@@ -1174,7 +1340,7 @@ async function runGuardedTurn({
       recordsFile,
       records: recordSeq,
       usage: usageV2,
-      costUsd: null,
+      costUsd,
       costEstUsd: estimateCostUsd(usageV2, pricing),
       pricingVersion,
       context: computeOccupancy(usageV2, null),
@@ -1193,7 +1359,9 @@ async function runGuardedTurn({
 
   try {
     let lastErr = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    let autoRetries = 0;
+    let retrySignature = null;
+    for (let attempt = 0; ; attempt++) {
       try {
         const result = await Promise.resolve(
           driver.runTurn(handle, prompt, {
@@ -1215,7 +1383,16 @@ async function runGuardedTurn({
           }),
         );
         const usageV2 = result.usageV2 || fallbackUsageV2FromV1(result.usage);
+        const reportedCostUsd =
+          typeof (result.usage && result.usage.costUsd) === "number"
+            ? result.usage.costUsd
+            : typeof usageV2.costUsd === "number"
+              ? usageV2.costUsd
+              : null;
+        const estimatedCostUsd = estimateCostUsd(usageV2, pricing);
+        const budgetCostUsd = reportedCostUsd ?? estimatedCostUsd;
         const guard = checkGitGuard(before, repoRoot, guardMode, { takeSnapshot, forbiddenPaths });
+        const changedPaths = changedPathsBetween(before, guard.after);
         if (!guard.ok) {
           emitEvent(sessionDir, {
             type: "git.guard.violation",
@@ -1223,11 +1400,18 @@ async function runGuardedTurn({
             agent,
             data: { violations: guard.violations },
           });
-          sealTurn("guard-violation", usageV2);
-          return { ok: false, gitViolation: true, violations: guard.violations, turnId, usageV2 };
+          sealTurn("guard-violation", usageV2, { workspaceDelta: { changedPaths }, costUsd: reportedCostUsd });
+          return { ok: false, gitViolation: true, violations: guard.violations, changedPaths, turnId, usageV2 };
         }
-        sealTurn("ok", usageV2);
-        return { ok: true, finalText: result.finalText, usage: result.usage, turnId, usageV2 };
+        sealTurn("ok", usageV2, { workspaceDelta: { changedPaths }, costUsd: reportedCostUsd });
+        return {
+          ok: true,
+          finalText: result.finalText,
+          usage: { ...(result.usage || {}), costUsd: budgetCostUsd },
+          changedPaths,
+          turnId,
+          usageV2,
+        };
       } catch (err) {
         if (err instanceof DriverAbortedError) {
           // Owner-initiated: the in-flight response is lost outright (never
@@ -1246,19 +1430,21 @@ async function runGuardedTurn({
           return { ok: false, aborted: true, gitViolation: !guard.ok, violations: guard.violations, turnId, changedPaths };
         }
         lastErr = err;
-        const classification = classifyTurnError(err);
+        const classification = classifyTurnError(err, { extraQuotaPatterns });
+        const message = String((err && err.message) || err);
         emitEvent(sessionDir, {
           type: "agent.turn.failed",
           phase,
           agent,
           data: {
             attempt,
-            message: String((err && err.message) || err),
+            message,
             errorKind: classification.kind,
             ...(classification.resetsAt ? { resetsAt: classification.resetsAt } : {}),
           },
         });
         const guard = checkGitGuard(before, repoRoot, guardMode, { takeSnapshot, forbiddenPaths });
+        const changedPaths = changedPathsBetween(before, guard.after);
         if (!guard.ok) {
           emitEvent(sessionDir, {
             type: "git.guard.violation",
@@ -1266,8 +1452,8 @@ async function runGuardedTurn({
             agent,
             data: { violations: guard.violations },
           });
-          sealTurn("guard-violation", fallbackUsageV2FromV1(null));
-          return { ok: false, gitViolation: true, violations: guard.violations, error: err, turnId };
+          sealTurn("guard-violation", fallbackUsageV2FromV1(null), { workspaceDelta: { changedPaths } });
+          return { ok: false, gitViolation: true, violations: guard.violations, changedPaths, error: err, turnId };
         }
         // A quota/rate-limit error is never worth retrying — the provider
         // allowance is exhausted, not the individual request, so a second
@@ -1277,24 +1463,34 @@ async function runGuardedTurn({
         // this loop spun up 5 fresh sessions in 2 minutes against an
         // already-exhausted subscription allowance).
         if (!classification.retryable) {
-          sealTurn("failed", fallbackUsageV2FromV1(null));
+          sealTurn("failed", fallbackUsageV2FromV1(null), { workspaceDelta: { changedPaths } });
           return {
             ok: false,
             gitViolation: false,
             error: lastErr,
+            changedPaths,
             turnId,
             errorKind: classification.kind,
             resetsAt: classification.resetsAt,
           };
         }
-        if (attempt === 0) {
+        const signature = `${classification.kind}:${message}`;
+        autoRetries = signature === retrySignature ? autoRetries + 1 : 0;
+        retrySignature = signature;
+        if (autoRetries < maxAutoRetries && attempt < maxAutoRetries) {
+          emitEvent(sessionDir, {
+            type: "retry.automatic",
+            phase,
+            agent,
+            data: { attempt: autoRetries + 1, maxAutoRetries, reason: `retryable ${classification.kind} error: ${message}` },
+          });
           sleep(retryDelayMs);
           continue;
         }
+        sealTurn("failed", fallbackUsageV2FromV1(null), { workspaceDelta: { changedPaths } });
+        return { ok: false, gitViolation: false, error: lastErr, changedPaths, turnId, errorKind: "retry-exhausted", retryCount: autoRetries };
       }
     }
-    sealTurn("failed", fallbackUsageV2FromV1(null));
-    return { ok: false, gitViolation: false, error: lastErr, turnId };
   } finally {
     if (stopWatch) stopWatch();
   }
@@ -1353,6 +1549,14 @@ function turnContext({ state, packet, deliveryConfig }) {
     // DW-10: the control-file cursor as of *before* this turn starts — see
     // `watchForAbort`.
     controlsProcessed: state.controlsProcessed || 0,
+  };
+}
+
+function errorRetryOptions(deliveryConfig) {
+  const errors = (deliveryConfig && deliveryConfig.errors) || {};
+  return {
+    maxAutoRetries: errors.maxAutoRetries != null ? errors.maxAutoRetries : 2,
+    extraQuotaPatterns: errors.extraQuotaPatterns || [],
   };
 }
 
@@ -1571,14 +1775,16 @@ export async function runValidationCommands({ cwd, timeoutMs = VALIDATION_TIMEOU
     const r = await run(cmd, args, { cwd, timeoutMs: effectiveTimeoutMs });
     const passed = r.status === 0 && !r.timedOut;
     if (!passed) ok = false;
+    const excerpt = tailLines(
+      `${r.stdout || ""}\n${r.stderr || ""}${r.timedOut ? `\n[validation "${key}" exceeded ${effectiveTimeoutMs}ms and was terminated]` : ""}`,
+      EXCERPT_LINES,
+    );
     results[key] = {
       ok: passed,
       ms: r.ms,
       timedOut: !!r.timedOut,
-      excerpt: tailLines(
-        `${r.stdout || ""}\n${r.stderr || ""}${r.timedOut ? `\n[validation "${key}" exceeded ${effectiveTimeoutMs}ms and was terminated]` : ""}`,
-        EXCERPT_LINES,
-      ),
+      excerpt,
+      failureCount: passed ? 0 : countValidationFailures({ ok: false, excerpt }),
     };
     if (onEvent) onEvent({ type: "validation.command.finished", data: { command: key, ok: passed, ms: r.ms, timedOut: !!r.timedOut } });
     if (!passed) break; // don't burn time on later commands once one has failed
@@ -1662,14 +1868,24 @@ function renderReviewMd(review) {
   return lines.join("\n");
 }
 
-function renderValidationReportMd(validation) {
+function renderValidationReportMd(validation, delta = null) {
   const lines = [
     "# Validation report",
+    "",
+    `Overall: ${validation.ok || (delta && delta.passesDelta) ? "PASS" : "FAIL"}${
+      !validation.ok && delta && delta.passesDelta ? " (delta vs acknowledged baseline)" : ""
+    }`,
     "",
     ...VALIDATION_COMMANDS.map(({ key }) => {
       const r = validation.results[key];
       if (!r) return `## ${key}\n(skipped)`;
-      return `## ${key}\n${r.ok ? "PASS" : "FAIL"} (${r.ms} ms)\n\n${BT3}\n${r.excerpt}\n${BT3}`;
+      const commandDelta = delta && delta.commandDeltas && delta.commandDeltas[key];
+      const label = r.ok
+        ? "PASS"
+        : commandDelta && commandDelta.status === "baseline-equivalent"
+          ? "PASS ON DELTA"
+          : "FAIL";
+      return `## ${key}\n${label} (${r.ms} ms)\n\n${BT3}\n${r.excerpt}\n${BT3}`;
     }),
     "",
   ];
@@ -1848,8 +2064,7 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
-    sessionUsage: (state.usage && state.usage.total) || null,
-    budgets: (config.deliveryConfig && config.deliveryConfig.budgets) || null,
+    ...errorRetryOptions(config.deliveryConfig),
     ...tc,
   });
   working = {
@@ -1920,16 +2135,18 @@ function describeBlockedTurn(turn) {
 // existing callers that assert the plain `{gate, returnTo}` shape (from
 // before any of these kinds existed) are unaffected.
 const BLOCK_REASON_BY_ERROR_KIND = Object.freeze({
-  quota: "provider-quota",
+  quota: "quota-paused",
+  auth: "quota-paused",
   "budget-exceeded": "budget-exceeded",
   "phase-turn-limit": "phase-turn-limit",
   "pre-existing-failure": "pre-existing-failure",
 });
 
 function blockFrom(sessionDir, state, fromPhase, turn) {
-  const result = smNext(fromPhase, "error.fatal");
-  const message = describeBlockedTurn(turn);
   const errorKind = turn.errorKind || null;
+  const escalated = errorKind === "retry-exhausted";
+  const result = smNext(fromPhase, escalated ? "question.raised" : "error.fatal");
+  const message = describeBlockedTurn(turn);
   const resetsAt = turn.resetsAt || null;
   const reason = errorKind ? BLOCK_REASON_BY_ERROR_KIND[errorKind] || null : null;
   emitEvent(sessionDir, {
@@ -1944,6 +2161,24 @@ function blockFrom(sessionDir, state, fromPhase, turn) {
       ...(resetsAt ? { resetsAt } : {}),
     },
   });
+  if (escalated) {
+    emitEvent(sessionDir, {
+      type: "notification.requested",
+      phase: fromPhase,
+      data: { reason: "retry-exhausted", returnTo: fromPhase, retryCount: turn.retryCount || 0, message },
+    });
+    return {
+      ...state,
+      state: result.to,
+      awaiting: {
+        gate: "question",
+        returnTo: fromPhase,
+        reason: "retry-exhausted",
+        questions: [{ id: "retry-escalation", text: "Automatic retries are exhausted. Provide the next-step decision before this phase can continue." }],
+      },
+      lastError: { phase: fromPhase, gitViolation: !!turn.gitViolation, violations: turn.violations || [], message, aborted: !!turn.aborted, errorKind, resetsAt },
+    };
+  }
   return {
     ...state,
     state: result.to,
@@ -2028,8 +2263,7 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
-    sessionUsage: (state.usage && state.usage.total) || null,
-    budgets: (config.deliveryConfig && config.deliveryConfig.budgets) || null,
+    ...errorRetryOptions(config.deliveryConfig),
     ...tc,
   });
   working = {
@@ -2158,8 +2392,7 @@ async function handleBuilding({ sessionDir, state, packet, driver, repoRoot, con
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
-    sessionUsage: (state.usage && state.usage.total) || null,
-    budgets: (config.deliveryConfig && config.deliveryConfig.budgets) || null,
+    ...errorRetryOptions(config.deliveryConfig),
     ...tc,
   });
   working = {
@@ -2168,6 +2401,7 @@ async function handleBuilding({ sessionDir, state, packet, driver, repoRoot, con
     turnCounter: (working.turnCounter || 0) + 1,
     execution: clearConfigOverrideFlag(working.execution),
   };
+  working = withRecordedWorkspaceChanges(working, turn.changedPaths || []);
   if (!turn.ok) return blockFrom(sessionDir, working, "BUILDING", turn);
 
   appendBuildLog(sessionDir, stepId, description, turn.finalText);
@@ -2190,6 +2424,23 @@ function excerptFromValidation(validation) {
   return failing ? `${failing[0]}:\n${failing[1].excerpt}` : "";
 }
 
+function withRecordedWorkspaceChanges(state, changedPaths = []) {
+  if (!changedPaths.length) return state;
+  const existing = (state.workspace && state.workspace.changedFiles) || [];
+  const changedFiles = [...new Set([...existing, ...changedPaths])].sort();
+  const preExisting = ((state.workspace && state.workspace.preExistingChanges) || []).map((entry) =>
+    typeof entry === "string" ? entry : entry.path,
+  );
+  return {
+    ...state,
+    workspace: {
+      ...state.workspace,
+      changedFiles,
+      changeOwnership: classifyChangeOwnership(preExisting, changedFiles),
+    },
+  };
+}
+
 async function handleValidating({ sessionDir, state, packet, config }) {
   const runValidation = config.runValidation || runValidationCommands;
   const timeoutMs = config.deliveryConfig && config.deliveryConfig.budgets && config.deliveryConfig.budgets.validationTimeoutMs;
@@ -2198,43 +2449,31 @@ async function handleValidating({ sessionDir, state, packet, config }) {
     timeoutMs,
     onEvent: (e) => emitEvent(sessionDir, { ...e, phase: "VALIDATING" }),
   });
-  writeArtifactJson(sessionDir, "validation.json", validation);
-  writeArtifactText(sessionDir, "validation-report.md", renderValidationReportMd(validation));
-  emitEvent(sessionDir, { type: "validation.result", phase: "VALIDATING", data: { ok: validation.ok } });
+  const baseline = state.workspace && state.workspace.baselineValidation;
+  const verdict = baseline
+    ? classifyValidationFailure(validation, baseline, {
+        touchedFiles: (state.workspace && state.workspace.changedFiles) || [],
+      })
+    : null;
+  const passes = validation.ok || !!(verdict && verdict.passesDelta);
+  writeArtifactJson(sessionDir, "validation.json", { ...validation, delta: verdict, passes });
+  writeArtifactText(sessionDir, "validation-report.md", renderValidationReportMd(validation, verdict));
+  emitEvent(sessionDir, {
+    type: "validation.result",
+    phase: "VALIDATING",
+    data: { ok: validation.ok, passes, delta: verdict ? verdict.commandDeltas : null },
+  });
 
-  if (validation.ok) {
+  if (passes) {
+    if (!validation.ok) {
+      emitEvent(sessionDir, {
+        type: "validation.delta.pass",
+        phase: "VALIDATING",
+        data: { preExistingCommands: verdict.preExistingCommands },
+      });
+    }
     const result = smNext(state.state, "validation.pass");
     return { ...state, state: result.to, awaiting: null };
-  }
-
-  // BUD-11 root cause #5: a dirty-at-start workspace can fail validation on
-  // something this session never touched — sending the failure through the
-  // fix loop then wastes every attempt asking the agent to fix a file it
-  // didn't break (and, if BUILDING is still readonly, can't fix at all). When
-  // the baseline shows every currently-failing file was already failing
-  // before this session started, skip the fix loop entirely and block with a
-  // reason the owner can act on (the fix belongs to whoever else's dirty
-  // change caused it, not to this delivery).
-  const baseline = state.workspace && state.workspace.baselineValidation;
-  if (baseline) {
-    const verdict = classifyValidationFailure(validation, baseline);
-    if (!verdict.attributable) {
-      emitEvent(sessionDir, {
-        type: "error.fatal",
-        phase: "VALIDATING",
-        data: { reason: "pre-existing failure", preExistingCommands: verdict.preExistingCommands },
-      });
-      return {
-        ...state,
-        state: "BLOCKED",
-        awaiting: { gate: "blocked", returnTo: "BUILDING", reason: "pre-existing-failure" },
-        lastError: {
-          phase: "VALIDATING",
-          message: `Validation failed on ${verdict.preExistingCommands.join(", ")}, but the same failure was already present before this session started (dirty working tree). This session made no fix-loop attempts on it — resolve it outside this delivery, then Retry.`,
-          errorKind: "pre-existing-failure",
-        },
-      };
-    }
   }
 
   const result = smNext(state.state, "validation.fail", {
@@ -2281,8 +2520,7 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
-    sessionUsage: (state.usage && state.usage.total) || null,
-    budgets: (config.deliveryConfig && config.deliveryConfig.budgets) || null,
+    ...errorRetryOptions(config.deliveryConfig),
     ...tc,
   });
   working = {
@@ -2344,8 +2582,7 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
-    sessionUsage: (working.usage && working.usage.total) || null,
-    budgets: (config.deliveryConfig && config.deliveryConfig.budgets) || null,
+    ...errorRetryOptions(config.deliveryConfig),
     ...uatTc,
   });
   working = { ...working, turnCounter: (working.turnCounter || 0) + 1, execution: clearConfigOverrideFlag(working.execution) };
@@ -2440,15 +2677,23 @@ function consumeQuestionDecision({ sessionDir, state, decision }) {
   };
 }
 
-function consumeBlockedDecision({ sessionDir, state }) {
+function consumeBlockedDecision({ sessionDir, state, decision }) {
   const returnTo = (state.awaiting && state.awaiting.returnTo) || "DISCOVERY";
   const result = smNext(state.state, "decision.retry", { returnTo });
-  emitEvent(sessionDir, { type: "decision.consumed", phase: "BLOCKED", data: { retryTo: returnTo } });
+  const quotaPaused = state.awaiting && state.awaiting.reason === "quota-paused";
+  emitEvent(sessionDir, { type: "decision.consumed", phase: "BLOCKED", data: { retryTo: returnTo, note: decision.note, preflight: quotaPaused } });
   // Gate states are re-armed with their awaiting gate restored (the owner
   // approves again to retry); runner-executable states are left with
   // awaiting:null so the next poll tick re-enters the phase automatically.
   const awaiting = GATES[returnTo] ? { gate: GATES[returnTo] } : null;
-  const base = { ...state, state: result.to, awaiting, fixLoop: 0, lastError: null };
+  const base = {
+    ...state,
+    state: result.to,
+    awaiting,
+    fixLoop: 0,
+    lastError: null,
+    ...(quotaPaused ? { driver: { ...(state.driver || {}), ref: null } } : {}),
+  };
   if (returnTo === "BUILDING") return { ...base, build: { mode: "fix", stepIndex: 0, totalSteps: 1 } };
   return base;
 }
@@ -2485,8 +2730,17 @@ export async function advanceSession(options) {
     // abort request — small in tests so an abort lands promptly.
     abortPollMs: options.abortPollMs != null ? options.abortPollMs : 300,
   };
-  const state = loadState(sessionDir);
+  let state = loadState(sessionDir);
   const packet = loadPacket(sessionDir);
+
+  // A malformed owner config must be visible in the session timeline as well
+  // as the dashboard banner. Record each distinct failure once while safely
+  // continuing with loadConfig's last-known-good/default fallback.
+  const configStatus = getConfigStatus(config.deliveryConfig);
+  if (!configStatus.healthy && state.configNotice !== configStatus.message) {
+    emitEvent(sessionDir, { type: "config-invalid", phase: state.state, data: { source: configStatus.source, message: configStatus.message } });
+    state = persistState(sessionDir, { ...state, configNotice: configStatus.message });
+  }
 
   if (isTerminal(state.state)) return { didWork: false, state };
 
@@ -2526,6 +2780,17 @@ export async function advanceSession(options) {
   if (pendingCancel) {
     const newState = { ...consumeCancel({ sessionDir, state }), decisionsProcessed: pendingCancel.seq };
     const persisted = persistState(sessionDir, newState);
+    return { didWork: true, state: persisted };
+  }
+
+  // DLV-1: a completed turn's usage is persisted before the next tick, so
+  // this boundary is the single enforcement point. Controls drain first,
+  // allowing an audited cap raise to resume a paused session without a
+  // special runner path; cancel remains immediate even when the cap is hit.
+  const budgetBoundaryState = enforceBudgetBoundary(sessionDir, state, packet, config.deliveryConfig);
+  if (budgetBoundaryState) {
+    if (budgetBoundaryState === state) return { didWork: false, state };
+    const persisted = persistState(sessionDir, budgetBoundaryState);
     return { didWork: true, state: persisted };
   }
 
@@ -2895,6 +3160,7 @@ if (isMain) {
     try {
       const sessionDir = join(REPO_ROOT, ".delivery", "sessions", parseArgv(process.argv.slice(2)).session || "");
       appendNdjsonLine(join(sessionDir, "runner.log"), String((err && err.stack) || err));
+      recordStartupCrash(sessionDir, err);
     } catch {
       /* best-effort logging only */
     }

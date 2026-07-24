@@ -10,8 +10,10 @@ export const deliveryLoading = signal(false);
 export const activeDeliveryId = signal(null);
 // DW-2: provider/model/effort capability manifests + owner catalog for the launch wizard.
 export const deliveryCapabilities = signal(null);
-// Slice D: model/effort recommendation preview for the launch wizard (null hides the card).
+// DLV-2: authoritative item/recommendation/context preview for the launch Flight-Check.
 export const deliveryRecommendation = signal(null);
+// DLV-5: authoritative workspace + validation snapshot shown before launch.
+export const deliveryPreflight = signal({ loading: false, data: null, error: null });
 // DW-5: the durable Q&A ledger for the active session.
 export const deliveryQuestions = signal(null);
 // DW-3: conversation viewer — turn index, per-turn record cache, search state.
@@ -43,11 +45,25 @@ export async function loadDeliveryCapabilities() {
 }
 export async function loadDeliveryRecommendation(file, cbidx, provider) {
   if (globalThis.PM_MODE !== "server" || !file || cbidx == null) { deliveryRecommendation.value = null; return; }
+  deliveryRecommendation.value = null;
   try {
     const params = new URLSearchParams({ file, cbidx: String(cbidx), provider });
     const result = await apiGet(`/api/delivery/recommendation?${params.toString()}`);
-    deliveryRecommendation.value = result.recommendation;
+    deliveryRecommendation.value = result;
   } catch { deliveryRecommendation.value = null; } // wizard just hides the card
+}
+export async function loadDeliveryPreflight() {
+  if (globalThis.PM_MODE !== "server") {
+    deliveryPreflight.value = { loading: false, data: null, error: "Delivery preflight requires server mode." };
+    return;
+  }
+  deliveryPreflight.value = { loading: true, data: null, error: null };
+  try {
+    const data = await apiPost("delivery/preflight", {});
+    deliveryPreflight.value = { loading: false, data, error: null };
+  } catch (error) {
+    deliveryPreflight.value = { loading: false, data: null, error: error.message };
+  }
 }
 export async function loadDeliveryQuestions(id) {
   if (globalThis.PM_MODE !== "server" || !id) return;
@@ -96,4 +112,3 @@ export async function deliveryPost(op, body, message) {
   try { const result = await apiPost(`delivery/${op}`, body); if (message) showToast(message); return result; }
   catch (error) { showToast(error.message, { type: "error" }); throw error; }
 }
-

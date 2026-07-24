@@ -25,7 +25,13 @@ afterEach(() => {
 const CHECKLIST_LINE = "- [ ] **N1** Fix rounding drift in allocation splits _(blocker - M)_";
 const CHECKLIST_RAW = ["# Checklist", "", "## Now", "", CHECKLIST_LINE, "- [x] Already done item", ""].join("\n");
 
-function setup({ deliveryConfig }: { deliveryConfig?: object } = {}) {
+function setup({
+  deliveryConfig,
+  baselineValidation = { ok: true, results: {} },
+}: {
+  deliveryConfig?: object;
+  baselineValidation?: object;
+} = {}) {
   const root = mkdtempSync(join(tmpdir(), "delivery-server-"));
   cleanupDirs.push(root);
 
@@ -34,6 +40,10 @@ function setup({ deliveryConfig }: { deliveryConfig?: object } = {}) {
   mkdirSync(join(pmDir, "Budget"), { recursive: true });
   writeFileSync(join(pmDir, "Budget", "4 - Checklist.md"), CHECKLIST_RAW);
   writeFileSync(join(pmDir, "Budget", "1 - Feature State.md"), "# Feature State\n");
+  writeFileSync(
+    join(pmDir, "Budget", "3 - Action Plan.md"),
+    "# Action Plan\n\n### N1 · Rounding drift\n\n- **Acceptance:** allocation splits remain exact after validation.\n",
+  );
   writeFileSync(join(root, "README.md"), "test repo\n");
   writeFileSync(join(root, ".gitignore"), "/.delivery/\n");
   if (deliveryConfig) {
@@ -48,6 +58,7 @@ function setup({ deliveryConfig }: { deliveryConfig?: object } = {}) {
     PM_REL: pmRel,
     gitStatusPorcelain: () => "",
     gitRevParseHead: () => "fixture-head",
+    runValidation: async () => baselineValidation,
     spawnRunner: (_ctx: unknown, sessionId: string, opts: { resume?: boolean }) => {
       spawnedRunners.push({ sessionId, resume: !!opts.resume });
     },
@@ -65,6 +76,8 @@ function startBody(overrides: Record<string, unknown> = {}) {
     cbidx: 0,
     expectText: CHECKLIST_LINE,
     agent: "claude",
+    budget: { maxUsd: 2, maxTokens: 2_000_000, warnPct: 0.8 },
+    flightCheck: { reviewed: true, lane: "STANDARD" },
     ...overrides,
   };
 }
@@ -119,8 +132,80 @@ describe("POST /api/delivery/start", () => {
       model: null,
       effort: { discovery: "medium", plan: "high", building: "high", review: "medium" },
     });
+    expect(packet.budget).toMatchObject({
+      maxUsd: 2,
+      maxTokens: 2_000_000,
+      warnPct: 0.8,
+      authorization: "capped",
+    });
+    expect(state.budget.current).toEqual(packet.budget);
+    expect(packet.acceptanceCriteria).toEqual([
+      { id: "PRE1", text: "allocation splits remain exact after validation." },
+    ]);
+    expect(packet.flightCheck).toMatchObject({
+      schemaVersion: 1,
+      lane: { selected: "STANDARD", recommended: "STANDARD" },
+      acceptanceCriteriaStatus: "campaign-action-plan",
+      baseline: { validationOk: true, dirtyAtStart: false },
+    });
+    expect(packet.flightCheck.contextManifest.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "item", delivery: "embedded-in-packet" }),
+        expect.objectContaining({ kind: "campaign", phases: ["DISCOVERY"] }),
+      ]),
+    );
 
     expect(spawnedRunners).toEqual([{ sessionId, resume: false }]);
+  });
+
+  it("requires the owner-reviewed Flight-Check marker and a valid lane", async () => {
+    const { ctx } = setup();
+    await expectRouteError(
+      routeDelivery(
+        { method: "POST", path: "/api/delivery/start", query: q(), body: startBody({ flightCheck: undefined }) },
+        ctx,
+      ),
+      400,
+      /Flight-Check review is required/,
+    );
+    await expectRouteError(
+      routeDelivery(
+        {
+          method: "POST",
+          path: "/api/delivery/start",
+          query: q(),
+          body: startBody({ flightCheck: { reviewed: true, lane: "AUTO" } }),
+        },
+        ctx,
+      ),
+      400,
+      /FAST, STANDARD, DEEP/,
+    );
+  });
+
+  it("requires an explicit capped envelope or typed NO CAP authorization", async () => {
+    const { ctx } = setup();
+    await expectRouteError(
+      routeDelivery(
+        { method: "POST", path: "/api/delivery/start", query: q(), body: startBody({ budget: undefined }) },
+        ctx,
+      ),
+      400,
+      /budget is required/i,
+    );
+    await expectRouteError(
+      routeDelivery(
+        { method: "POST", path: "/api/delivery/start", query: q(), body: startBody({ budget: { maxUsd: null, maxTokens: null, warnPct: 0.8 } }) },
+        ctx,
+      ),
+      400,
+      /NO CAP/,
+    );
+    const sessionId = await startSession(ctx, {
+      budget: { maxUsd: null, maxTokens: null, warnPct: 0.8, noCapConfirm: "NO CAP" },
+    });
+    const packet = JSON.parse(readFileSync(join(ctx.SESSIONS_DIR, sessionId, "packet.json"), "utf8"));
+    expect(packet.budget.authorization).toBe("no-cap");
   });
 
   it("persists launch model and per-phase effort overrides into packet.agentConfig", async () => {
@@ -216,7 +301,7 @@ describe("POST /api/delivery/start", () => {
     expect(result?.status).toBe(200);
   });
 
-  it("returns 400 when the tree is dirty and dirtyAck is not set, but succeeds with dirtyAck", async () => {
+  it("requires a typed dirty-tree acknowledgment and records pre-existing files as not session-owned", async () => {
     const { ctx } = setup();
     ctx.gitStatusPorcelain = () => "?? untracked.txt\n";
 
@@ -227,13 +312,80 @@ describe("POST /api/delivery/start", () => {
     );
 
     const result = await routeDelivery(
-      { method: "POST", path: "/api/delivery/start", query: q(), body: startBody({ dirtyAck: true }) },
+      {
+        method: "POST",
+        path: "/api/delivery/start",
+        query: q(),
+        body: startBody({ dirtyAck: "DIRTY TREE" }),
+      },
       ctx,
     );
     expect(result?.status).toBe(200);
     const dir = join(ctx.SESSIONS_DIR, (result!.json as { sessionId: string }).sessionId);
     const packet = JSON.parse(readFileSync(join(dir, "packet.json"), "utf8"));
     expect(packet.workspace.dirtyAtStart).toBe(true);
+    expect(packet.workspace.preExistingChanges).toEqual([
+      { path: "untracked.txt", ownership: "not-session-owned" },
+    ]);
+    expect(packet.workspace.acknowledgments.dirtyTree.phrase).toBe("DIRTY TREE");
+  });
+
+  it("requires a typed red-baseline acknowledgment and persists the authorized baseline", async () => {
+    const baselineValidation = {
+      ok: false,
+      results: {
+        typecheck: {
+          ok: false,
+          excerpt: "tests/existing.test.ts(1,1): error TS1: existing failure",
+        },
+      },
+    };
+    const { ctx } = setup({ baselineValidation });
+
+    await expectRouteError(
+      routeDelivery(
+        { method: "POST", path: "/api/delivery/start", query: q(), body: startBody() },
+        ctx,
+      ),
+      400,
+      /RED BASELINE/,
+    );
+
+    const sessionId = await startSession(ctx, { redBaselineAck: "RED BASELINE" });
+    const packet = JSON.parse(
+      readFileSync(join(ctx.SESSIONS_DIR, sessionId, "packet.json"), "utf8"),
+    );
+    expect(packet.workspace.baselineValidation).toEqual(baselineValidation);
+    expect(packet.workspace.acknowledgments.redBaseline.phrase).toBe("RED BASELINE");
+  });
+
+  it("rejects a stale preflight when dirty-file contents change before launch", async () => {
+    const { root, ctx } = setup();
+    const dirtyPath = join(root, "dirty.txt");
+    writeFileSync(dirtyPath, "before");
+    ctx.gitStatusPorcelain = () => "?? dirty.txt\n";
+    const preview = await routeDelivery(
+      { method: "POST", path: "/api/delivery/preflight", query: q(), body: {} },
+      ctx,
+    );
+    writeFileSync(dirtyPath, "after");
+
+    await expectRouteError(
+      routeDelivery(
+        {
+          method: "POST",
+          path: "/api/delivery/start",
+          query: q(),
+          body: startBody({
+            preflightId: (preview!.json as { preflightId: string }).preflightId,
+            dirtyAck: "DIRTY TREE",
+          }),
+        },
+        ctx,
+      ),
+      409,
+      /workspace changed after preflight/,
+    );
   });
 
   it("rejects an attempt to drop a locked always-on capability with 400", async () => {
@@ -370,11 +522,24 @@ describe("GET /api/delivery/recommendation", () => {
       ctx,
     );
     expect(result?.status).toBe(200);
-    const { recommendation } = result!.json as { recommendation: { tier: string; model: string; estCostUsd: number | null } | null };
+    const { recommendation, preview } = result!.json as {
+      recommendation: { tier: string; model: string; estCostUsd: number | null } | null;
+      preview: {
+        recommendedLane: string;
+        acceptanceCriteria: Array<{ id: string; text: string }>;
+        contextManifest: { estimatedTokens: number; entries: unknown[] };
+      };
+    };
     expect(recommendation).not.toBeNull();
     expect(recommendation!.tier).toBe("premium");
     expect(recommendation!.model).toBe("claude-opus-4-8");
     expect(recommendation!.estCostUsd).toBeGreaterThan(0);
+    expect(preview.recommendedLane).toBe("DEEP");
+    expect(preview.acceptanceCriteria).toEqual([
+      { id: "PRE1", text: "allocation splits remain exact after validation." },
+    ]);
+    expect(preview.contextManifest.estimatedTokens).toBeGreaterThan(0);
+    expect(preview.contextManifest.entries.length).toBeGreaterThan(1);
   });
 
   it("returns { recommendation: null } when the catalog has no models for the provider (today's default)", async () => {
@@ -724,6 +889,33 @@ describe("(DW-4) POST /api/delivery/control", () => {
     await expectRouteError(
       routeDelivery({ method: "POST", path: "/api/delivery/control", query: q(), body: { id: sessionId, type: "set-config", payload: {} } }, ctx),
       400,
+    );
+  });
+
+  it("accepts only reasoned, raise-only budget controls", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx);
+    await expectRouteError(
+      routeDelivery(
+        { method: "POST", path: "/api/delivery/control", query: q(), body: { id: sessionId, type: "set-budget", payload: { maxTokens: 1_000_000, reason: "lower it" } } },
+        ctx,
+      ),
+      400,
+      /only increase/i,
+    );
+    const result = await routeDelivery(
+      { method: "POST", path: "/api/delivery/control", query: q(), body: { id: sessionId, type: "set-budget", payload: { maxTokens: 3_000_000, reason: "approved larger build slice" } } },
+      ctx,
+    );
+    expect(result?.status).toBe(200);
+    expect(readdirSync(join(ctx.SESSIONS_DIR, sessionId, "controls"))).toContain("0001-set-budget.json");
+    await expectRouteError(
+      routeDelivery(
+        { method: "POST", path: "/api/delivery/control", query: q(), body: { id: sessionId, type: "set-budget", payload: { maxTokens: 2_500_000, reason: "stale second request" } } },
+        ctx,
+      ),
+      400,
+      /only increase/i,
     );
   });
 

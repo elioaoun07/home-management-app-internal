@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   checkSessionBudget,
+  createBudgetEnvelope,
   isDiscoveryTurnLimitReached,
   isPlanStepCountOverCap,
+  raiseBudgetEnvelope,
   totalProcessedTokens,
 } from "../../scripts/delivery/budgets.mjs";
 
@@ -23,7 +25,7 @@ describe("checkSessionBudget", () => {
       { input: 1000, cachedInput: 2000, output: 500, costUsd: 0.05 },
       { warnSessionTokens: 1_500_000, maxSessionTokens: 4_000_000, warnSessionUsd: 10, maxSessionUsd: 25 },
     );
-    expect(verdict).toEqual({ status: "ok", totalTokens: 3500, costUsd: 0.05, reason: null });
+    expect(verdict).toMatchObject({ status: "ok", totalTokens: 3500, costUsd: 0.05, reason: null });
   });
 
   it("warns once the token total crosses warnSessionTokens but stays under the hard cap", () => {
@@ -41,13 +43,13 @@ describe("checkSessionBudget", () => {
     );
     expect(verdict.status).toBe("exceeded");
     expect(verdict.totalTokens).toBe(1434 + 2_991_876 + 43_447);
-    expect(verdict.reason).toMatch(/token budget exceeded/i);
+    expect(verdict.reason).toMatch(/token budget exhausted/i);
   });
 
   it("reports exceeded on a cost cap even when the token cap isn't configured", () => {
     const verdict = checkSessionBudget({ input: 10, cachedInput: 10, output: 10, costUsd: 12.5 }, { maxSessionUsd: 10 });
     expect(verdict.status).toBe("exceeded");
-    expect(verdict.reason).toMatch(/cost budget exceeded/i);
+    expect(verdict.reason).toMatch(/cost budget exhausted/i);
   });
 
   it("never reports exceeded/warn when no budgets are configured (default: unbounded)", () => {
@@ -58,6 +60,45 @@ describe("checkSessionBudget", () => {
   it("ignores a null/missing costUsd for the cost thresholds without throwing", () => {
     const verdict = checkSessionBudget({ input: 1, cachedInput: 1, output: 1, costUsd: null }, { maxSessionUsd: 1 });
     expect(verdict.status).toBe("ok");
+  });
+});
+
+describe("packet budget envelopes", () => {
+  it("normalizes a capped envelope and derives the 80% warning threshold", () => {
+    const envelope = createBudgetEnvelope(
+      { maxTokens: 100_000, maxUsd: 2, warnPct: 0.8 },
+      { authorizedAt: "2026-07-24T00:00:00.000Z" },
+    );
+    expect(envelope).toMatchObject({ maxTokens: 100_000, maxUsd: 2, warnPct: 0.8, authorization: "capped" });
+    expect(checkSessionBudget({ input: 20_000, cachedInput: 59_999, output: 0, costUsd: 1.59 }, envelope).status).toBe("ok");
+    expect(checkSessionBudget({ input: 20_000, cachedInput: 60_000, output: 0, costUsd: 1.59 }, envelope).status).toBe("warn");
+    expect(checkSessionBudget({ input: 20_000, cachedInput: 80_000, output: 0, costUsd: 1.59 }, envelope).status).toBe("exceeded");
+  });
+
+  it("requires typed NO CAP and records that authorization", () => {
+    expect(() => createBudgetEnvelope({ maxTokens: null, maxUsd: null, warnPct: 0.8 })).toThrow(/NO CAP/);
+    expect(createBudgetEnvelope({ maxTokens: null, maxUsd: null, warnPct: 0.8, noCapConfirm: "NO CAP" })).toMatchObject({
+      authorization: "no-cap",
+      maxTokens: null,
+      maxUsd: null,
+    });
+  });
+
+  it("enforces optional per-phase caps and allows only reasoned raises", () => {
+    const envelope = createBudgetEnvelope({
+      maxTokens: 1_000_000,
+      warnPct: 0.8,
+      perPhase: { building: { maxTokens: 100_000 } },
+    });
+    expect(
+      checkSessionBudget(
+        { input: 10, cachedInput: 10, output: 10 },
+        envelope,
+        { phase: "BUILDING", phaseUsage: { input: 20_000, cachedInput: 80_000, output: 0 } },
+      ),
+    ).toMatchObject({ status: "exceeded", dimension: "building-tokens" });
+    expect(() => raiseBudgetEnvelope(envelope, { maxTokens: 900_000, reason: "lower" })).toThrow(/only increase/);
+    expect(raiseBudgetEnvelope(envelope, { maxTokens: 1_500_000, reason: "approved" }).maxTokens).toBe(1_500_000);
   });
 });
 

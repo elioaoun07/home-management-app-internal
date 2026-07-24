@@ -31,17 +31,38 @@ import { gitRevParseHead, gitStatusPorcelain } from "./gitread.mjs";
 import { buildItemIdentity, buildPacket, makeSessionId } from "./packet.mjs";
 import { TYPED_APPROVAL_RISK_FLAGS, isTerminal, next as smNext } from "./state-machine.mjs";
 import { replayAfter } from "./events.mjs";
-import { emitEvent, isRunnerAlive } from "./run-session.mjs";
+import {
+  emitEvent,
+  fingerprintDirtyPaths,
+  getStartupCrashBackoff,
+  isRunnerAlive,
+  parsePorcelainPaths,
+  runValidationCommands,
+} from "./run-session.mjs";
 import { createDriver } from "./drivers/driver.mjs";
 import "./drivers/fake.mjs"; // self-registers; SDK import remains lazy
 import "./drivers/codex.mjs"; // self-registers; SDK import remains lazy
 import "./drivers/claude.mjs"; // self-registers; SDK import remains lazy
-import { buildCapabilitiesPayload, getDefaultModel, isKnownEffort, isKnownModel, loadConfig } from "./config.mjs";
-import { recommendAgentConfig } from "./recommendation.mjs";
+import {
+  buildCapabilitiesPayload,
+  getDefaultModel,
+  getModelInfo,
+  isKnownEffort,
+  isKnownModel,
+  loadConfig,
+} from "./config.mjs";
+import {
+  DELIVERY_LANES,
+  assessRecommendationMismatch,
+  laneForTier,
+  recommendAgentConfig,
+} from "./recommendation.mjs";
 import { buildControl, controlFileName } from "./controls.mjs";
+import { createBudgetEnvelope, raiseBudgetEnvelope } from "./budgets.mjs";
 import { emptyLedger, splitOpenQuestions } from "./memory.mjs";
 import { findMatches, parseTurnRecords, parseTurns } from "./transcript.mjs";
-import { buildContextPackage } from "./context-assembly.mjs";
+import { buildContextPackage, estimateTokens } from "./context-assembly.mjs";
+import { DIRTY_TREE_ACK, RED_BASELINE_ACK } from "./validation-baseline.mjs";
 
 export class DeliveryRouteError extends Error {
   constructor(status, message) {
@@ -115,6 +136,103 @@ function findCampaignFiles(campaign, PM_DIR, PM_REL) {
     .map((n) => `${PM_REL}/${campaign}/${n}`.replace(/\\/g, "/"));
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function findPreLaunchAcceptanceCriteria(item, PM_DIR) {
+  if (!item.id || !item.campaign) return [];
+  const actionPlanPath = join(PM_DIR, item.campaign, "3 - Action Plan.md");
+  if (!existsSync(actionPlanPath)) return [];
+  const raw = readFileSync(actionPlanPath, "utf8");
+  const heading = new RegExp(`^###\\s+${escapeRegExp(item.id)}(?:\\s|Â·|·|$).*?$`, "m");
+  const match = heading.exec(raw);
+  if (!match) return [];
+  const tail = raw.slice(match.index + match[0].length);
+  const nextHeading = tail.search(/^###\s+/m);
+  const section = nextHeading === -1 ? tail : tail.slice(0, nextHeading);
+  const criteria = [];
+  for (const line of section.split("\n")) {
+    const acceptance = line.match(/^\s*-\s+\*\*Acceptance:\*\*\s*(.+?)\s*$/i);
+    if (acceptance) criteria.push({ id: `PRE${criteria.length + 1}`, text: acceptance[1].trim() });
+  }
+  return criteria;
+}
+
+function contextEntry(ctx, { kind, path, phases, text }) {
+  let content = text;
+  if (content == null && path) {
+    try {
+      content = readFileSync(resolveInside(ctx.ROOT, path), "utf8");
+    } catch {
+      content = "";
+    }
+  }
+  return {
+    kind,
+    path: path || null,
+    phases,
+    delivery: kind === "item" ? "embedded-in-packet" : "read-by-path",
+    estimatedTokens: estimateTokens(content),
+  };
+}
+
+function buildLaunchContextManifest(ctx, { item, campaignFiles, skills }) {
+  const entries = [
+    contextEntry(ctx, {
+      kind: "item",
+      path: item.pmFile,
+      phases: ["DISCOVERY", "PLAN", "BUILDING", "REVIEWING", "UAT"],
+      text: JSON.stringify(item),
+    }),
+    ...campaignFiles.map((path) =>
+      contextEntry(ctx, { kind: "campaign", path, phases: ["DISCOVERY"] }),
+    ),
+    ...skills.map(({ path }) =>
+      contextEntry(ctx, { kind: "skill", path, phases: ["DISCOVERY", "PLAN"] }),
+    ),
+  ];
+  return {
+    entries,
+    estimatedTokens: entries.reduce((sum, entry) => sum + entry.estimatedTokens, 0),
+    estimateMethod: "rough chars/4 if every read-by-path input is loaded",
+    note: "DLV-8 will add per-phase context budgets and record the files actually loaded.",
+  };
+}
+
+function buildLaunchPreview(ctx, {
+  item,
+  scopeHints,
+  capabilities,
+  skills,
+  campaignFiles,
+  recommendation,
+}) {
+  const acceptanceCriteria = findPreLaunchAcceptanceCriteria(item, ctx.PM_DIR);
+  return {
+    item: {
+      id: item.id,
+      text: item.text,
+      pmFile: item.pmFile,
+      cbidx: item.cbidx,
+      effort: item.effort,
+      severity: item.sev,
+    },
+    acceptanceCriteria,
+    acceptanceCriteriaStatus: acceptanceCriteria.length
+      ? "campaign-action-plan"
+      : "authored-at-spec",
+    recommendedLane: laneForTier(recommendation?.tier),
+    scopeHints,
+    capabilities,
+    riskFlags: capabilities
+      .filter((capability) => !ALWAYS_ON_CAPABILITIES.includes(capability.name))
+      .map(({ name, reason, blocking }) => ({ name, reason, blocking })),
+    skills,
+    contextManifest: buildLaunchContextManifest(ctx, { item, campaignFiles, skills }),
+  };
+}
+
 // ---- session directory scanning ----
 
 function sessionsDirOf(ctx) {
@@ -168,6 +286,8 @@ function findActiveSessionForItem(ctx, item) {
 /** Real implementation — spawns `node run-session.mjs --session <id> [--resume]` detached. */
 function defaultSpawnRunner(ctx, sessionId, { resume = false } = {}) {
   const sessionDir = join(sessionsDirOf(ctx), sessionId);
+  const backoff = getStartupCrashBackoff(sessionDir);
+  if (backoff) throw fail(429, `runner restart backoff is active until ${backoff.retryAfter}`);
   const logFd = openSync(join(sessionDir, "runner.log"), "a");
   const scriptPath = join(ctx.ROOT, "scripts", "delivery", "run-session.mjs");
   const args = [scriptPath, "--session", sessionId];
@@ -473,8 +593,26 @@ function getRecommendation(ctx, { file, cbidx, provider }) {
 
   const scopeHints = computeScopeHints(item);
   const capabilities = classify({ item, scopeHints });
-  const recommendation = recommendAgentConfig({ item, capabilities, provider: agent, config: ctx.deliveryConfig });
-  return { recommendation };
+  const skills = buildSkillRefs(capabilities);
+  const campaignFiles = findCampaignFiles(item.campaign, ctx.PM_DIR, ctx.PM_REL);
+  const recommendation = recommendAgentConfig({
+    item,
+    capabilities,
+    scopeHints,
+    provider: agent,
+    config: ctx.deliveryConfig,
+  });
+  return {
+    recommendation,
+    preview: buildLaunchPreview(ctx, {
+      item,
+      scopeHints,
+      capabilities,
+      skills,
+      campaignFiles,
+      recommendation,
+    }),
+  };
 }
 
 /**
@@ -499,13 +637,92 @@ function validateAgentConfig(ctx, agent, { model, effort }) {
   }
 }
 
+const PREFLIGHT_MAX_AGE_MS = 15 * 60 * 1000;
+
+function workspaceFingerprint(ctx, statusPorcelain, baseHead) {
+  const fingerprints = fingerprintDirtyPaths(ctx.ROOT, statusPorcelain);
+  return sha1(JSON.stringify({ baseHead, statusPorcelain, fingerprints }));
+}
+
+async function captureWorkspacePreflight(ctx, seed = {}) {
+  const statusPorcelain =
+    seed.statusPorcelain != null ? seed.statusPorcelain : ctx.gitStatusPorcelain({ cwd: ctx.ROOT });
+  const baseHead = seed.baseHead != null ? seed.baseHead : ctx.gitRevParseHead({ cwd: ctx.ROOT });
+  const validation = await ctx.runValidation({
+    cwd: ctx.ROOT,
+    timeoutMs:
+      ctx.deliveryConfig &&
+      ctx.deliveryConfig.budgets &&
+      ctx.deliveryConfig.budgets.validationTimeoutMs,
+  });
+  const capturedAt = new Date().toISOString();
+  const record = {
+    schemaVersion: 1,
+    capturedAt,
+    baseHead,
+    workspaceFingerprint: workspaceFingerprint(ctx, statusPorcelain, baseHead),
+    baselineStatusHash: sha1(statusPorcelain),
+    dirtyAtStart: statusPorcelain.trim().length > 0,
+    changedFiles: parsePorcelainPaths(statusPorcelain),
+    baselineValidation: validation,
+    baselineValidationHash: sha1(JSON.stringify(validation)),
+  };
+  const preflightId = `p-${sha1(JSON.stringify(record)).slice(0, 20)}`;
+  const dir = join(ctx.ROOT, ".delivery", "preflights");
+  mkdirSync(dir, { recursive: true });
+  atomicWriteJsonSync(join(dir, `${preflightId}.json`), { ...record, preflightId });
+  return { ...record, preflightId };
+}
+
+function readWorkspacePreflight(ctx, preflightId) {
+  if (!/^p-[a-f0-9]{20}$/.test(String(preflightId || ""))) {
+    throw fail(400, "invalid preflightId");
+  }
+  const record = readJsonIfExists(join(ctx.ROOT, ".delivery", "preflights", `${preflightId}.json`));
+  if (!record) throw fail(409, "workspace preflight not found; refresh the flight-check");
+  if (Date.now() - new Date(record.capturedAt).getTime() > PREFLIGHT_MAX_AGE_MS) {
+    throw fail(409, "workspace preflight expired; refresh the flight-check");
+  }
+  return record;
+}
+
+function assertWorkspacePreflightCurrent(ctx, preflight, statusPorcelain, baseHead) {
+  const current = workspaceFingerprint(ctx, statusPorcelain, baseHead);
+  if (current !== preflight.workspaceFingerprint) {
+    throw fail(409, "workspace changed after preflight; refresh the flight-check");
+  }
+}
+
+async function getWorkspacePreflight(ctx) {
+  return captureWorkspacePreflight(ctx);
+}
+
 // ---- POST /api/delivery/start ----
 
 async function startSession(ctx, body) {
-  const { file, cbidx, expectText, agent, model, effort, dirtyAck, options } = body || {};
+  const {
+    file,
+    cbidx,
+    expectText,
+    agent,
+    model,
+    effort,
+    preflightId,
+    dirtyAck,
+    redBaselineAck,
+    options,
+    budget: budgetInput,
+    flightCheck: flightCheckInput,
+  } = body || {};
   if (agent !== "codex" && agent !== "claude") throw fail(400, 'agent must be "codex" or "claude"');
   if (typeof file !== "string" || !file) throw fail(400, "file is required");
   if (typeof cbidx !== "number") throw fail(400, "cbidx is required");
+  if (!flightCheckInput || flightCheckInput.reviewed !== true) {
+    throw fail(400, "Flight-Check review is required before launch");
+  }
+  if (!DELIVERY_LANES.includes(flightCheckInput.lane)) {
+    throw fail(400, `Flight-Check lane must be one of ${DELIVERY_LANES.join(", ")}`);
+  }
   validateAgentConfig(ctx, agent, { model, effort });
 
   let abs;
@@ -528,12 +745,21 @@ async function startSession(ctx, body) {
   if (isBuildLockActive(ctx)) throw fail(429, "a delivery session is already past the plan gate");
 
   const statusPorcelain = ctx.gitStatusPorcelain({ cwd: ctx.ROOT });
-  const dirtyAtStart = statusPorcelain.trim().length > 0;
-  if (dirtyAtStart && !dirtyAck) throw fail(400, "working tree is dirty; confirm dirtyAck to proceed");
   const baseHead = ctx.gitRevParseHead({ cwd: ctx.ROOT });
+  const preflight = preflightId
+    ? readWorkspacePreflight(ctx, preflightId)
+    : await captureWorkspacePreflight(ctx, { statusPorcelain, baseHead });
+  assertWorkspacePreflightCurrent(ctx, preflight, statusPorcelain, baseHead);
+  if (preflight.dirtyAtStart && dirtyAck !== DIRTY_TREE_ACK) {
+    throw fail(400, `working tree is dirty; type ${DIRTY_TREE_ACK} to acknowledge pre-existing edits`);
+  }
+  if (!preflight.baselineValidation.ok && redBaselineAck !== RED_BASELINE_ACK) {
+    throw fail(400, `baseline validation is red; type ${RED_BASELINE_ACK} to authorize delta-based validation`);
+  }
 
   const scopeHints = computeScopeHints(item);
-  let capabilities = classify({ item, scopeHints });
+  const classifiedCapabilities = classify({ item, scopeHints });
+  let capabilities = classifiedCapabilities;
   const drops = (options && options.capabilitiesDrop) || [];
   if (drops.length) {
     for (const name of drops) {
@@ -549,9 +775,97 @@ async function startSession(ctx, body) {
   const campaignFiles = findCampaignFiles(item.campaign, ctx.PM_DIR, ctx.PM_REL);
 
   const resolvedModel = model != null && model !== "" ? model : getDefaultModel(ctx.deliveryConfig, agent);
+  const recommendation = recommendAgentConfig({
+    item,
+    capabilities: classifiedCapabilities,
+    scopeHints,
+    provider: agent,
+    config: ctx.deliveryConfig,
+  });
+  const launchPreview = buildLaunchPreview(ctx, {
+    item,
+    scopeHints,
+    capabilities: classifiedCapabilities,
+    skills,
+    campaignFiles,
+    recommendation,
+  });
+  const selectedModelTier = resolvedModel
+    ? getModelInfo(ctx.deliveryConfig, agent, resolvedModel)?.tier || null
+    : null;
+  const mismatchWarnings = assessRecommendationMismatch({
+    recommendation,
+    selectedModel: resolvedModel,
+    selectedModelTier,
+    selectedLane: flightCheckInput.lane,
+  });
+  let budget;
+  try {
+    budget = createBudgetEnvelope(budgetInput);
+  } catch (err) {
+    throw fail(400, err.message);
+  }
 
   const sessionId = makeSessionId();
   const sessionDir = join(sessionsDirOf(ctx), sessionId);
+  const acknowledgedAt = new Date().toISOString();
+  const workspace = {
+    baseHead,
+    preflightId: preflight.preflightId,
+    baselineCapturedAt: preflight.capturedAt,
+    dirtyAtStart: preflight.dirtyAtStart,
+    baselineStatusHash: preflight.baselineStatusHash,
+    baselineWorkspaceHash: preflight.workspaceFingerprint,
+    baselineValidationHash: preflight.baselineValidationHash,
+    baselineValidation: preflight.baselineValidation,
+    preExistingChanges: preflight.changedFiles.map((path) => ({
+      path,
+      ownership: "not-session-owned",
+    })),
+    changedFiles: [],
+    changeOwnership: preflight.changedFiles.map((path) => ({
+      path,
+      ownership: "not-session-owned",
+    })),
+    acknowledgments: {
+      dirtyTree: preflight.dirtyAtStart
+        ? { phrase: DIRTY_TREE_ACK, acknowledgedAt }
+        : null,
+      redBaseline: !preflight.baselineValidation.ok
+        ? { phrase: RED_BASELINE_ACK, acknowledgedAt }
+        : null,
+    },
+  };
+  const flightCheck = {
+    schemaVersion: 1,
+    reviewedAt: acknowledgedAt,
+    ...launchPreview,
+    lane: {
+      selected: flightCheckInput.lane,
+      recommended: launchPreview.recommendedLane,
+    },
+    selection: {
+      agent,
+      model: resolvedModel,
+      modelTier: selectedModelTier,
+      effortOverrides: effort || {},
+      capabilityDrops: drops,
+    },
+    recommendation,
+    mismatchWarnings,
+    budget,
+    baseline: {
+      preflightId: preflight.preflightId,
+      capturedAt: preflight.capturedAt,
+      dirtyAtStart: preflight.dirtyAtStart,
+      changedFiles: preflight.changedFiles,
+      validationOk: preflight.baselineValidation.ok,
+      failedCommands: Object.entries(preflight.baselineValidation.results || {})
+        .filter(([, result]) => !result.ok)
+        .map(([command]) => command),
+      acknowledgments: workspace.acknowledgments,
+    },
+  };
   const packet = buildPacket({
     sessionId,
     agent,
@@ -562,8 +876,10 @@ async function startSession(ctx, body) {
     capabilities,
     constraints: {},
     skills,
-    acceptanceCriteria: [],
-    workspace: { baseHead, dirtyAtStart, baselineStatusHash: sha1(statusPorcelain), changedFiles: [] },
+    acceptanceCriteria: launchPreview.acceptanceCriteria,
+    workspace,
+    budget,
+    flightCheck,
   });
 
   mkdirSync(sessionDir, { recursive: true });
@@ -581,6 +897,7 @@ async function startSession(ctx, body) {
     build: null,
     fixLoop: 0,
     usage: { perPhase: {}, total: { input: 0, cachedInput: 0, output: 0, costUsd: null } },
+    budget: { current: budget, warned: [], exhaustedAt: null },
     decisionsProcessed: 0,
     messagesProcessed: 0,
     lastError: null,
@@ -629,6 +946,12 @@ async function postDecision(ctx, body) {
     }
     const allowed = VALID_DECISIONS_FOR_GATE[gate];
     if (!allowed || !allowed.has(decision)) throw fail(400, `decision "${decision}" is not valid for gate "${gate}"`);
+    if (gate === "blocked" && decision === "retry" && (typeof note !== "string" || !note.trim())) {
+      throw fail(400, "a reason note is required before retrying a blocked session");
+    }
+    if (gate === "question" && s.state.awaiting && s.state.awaiting.reason === "retry-exhausted" && (typeof answer !== "string" || !answer.trim())) {
+      throw fail(400, "a next-step decision is required after automatic retries are exhausted");
+    }
     if (gate === "plan" && decision === "approve") {
       const planPath = join(s.dir, "artifacts", "plan.json");
       const plan = readJsonIfExists(planPath);
@@ -727,6 +1050,24 @@ function postControl(ctx, body) {
     const targetProvider = (payload && payload.provider) || s.packet.agent;
     validateAgentConfig(ctx, targetProvider, { model: payload && payload.model, effort: payload && payload.effortByPhase });
   }
+  if (type === "set-budget") {
+    let current = (s.state.budget && s.state.budget.current) || s.packet.budget;
+    try {
+      for (const name of readdirSync(controlsDir).sort()) {
+        const queued = readJsonIfExists(join(controlsDir, name));
+        if (
+          queued &&
+          queued.type === "set-budget" &&
+          queued.seq > (s.state.controlsProcessed || 0)
+        ) {
+          current = raiseBudgetEnvelope(current, queued.payload);
+        }
+      }
+      raiseBudgetEnvelope(current, payload);
+    } catch (err) {
+      throw fail(400, err.message);
+    }
+  }
   atomicWriteJsonSync(join(controlsDir, controlFileName(control)), control);
   return { ok: true, seq };
 }
@@ -739,6 +1080,8 @@ function postResume(ctx, body) {
   const s = readSession(ctx, id);
   if (!s) throw fail(404, "unknown session");
   if (isRunnerAlive(s.dir).alive) throw fail(409, "runner heartbeat is fresh");
+  const backoff = getStartupCrashBackoff(s.dir);
+  if (backoff) throw fail(429, `runner restart backoff is active until ${backoff.retryAfter}`);
   if (isTerminal(s.state.state)) throw fail(409, "session is terminal");
   spawnRunner(ctx, id, { resume: true });
   return { ok: true };
@@ -814,6 +1157,7 @@ export async function routeDelivery({ method, path, query, body }, ctx) {
     return ok(getArtifact(ctx, query.get("id") || "", query.get("path") || ""));
   }
   if (method === "GET" && path === "/api/delivery/capabilities") return ok(getCapabilities(ctx));
+  if (method === "POST" && path === "/api/delivery/preflight") return ok(await getWorkspacePreflight(ctx));
   if (method === "GET" && path === "/api/delivery/recommendation") {
     return ok(getRecommendation(ctx, { file: query.get("file") || "", cbidx: query.get("cbidx"), provider: query.get("provider") || "claude" }));
   }
@@ -860,7 +1204,8 @@ export async function routeDelivery({ method, path, query, body }, ctx) {
  * Build the per-server context object `routeDelivery`/`performPendingWritebacks`
  * expect. Call once at pm-server startup.
  * @param {{ROOT:string, PM_DIR:string, PM_REL:string, spawnRunner?:Function,
- *   gitStatusPorcelain?:Function, gitRevParseHead?:Function, deliveryConfig?:object}} fields
+ *   gitStatusPorcelain?:Function, gitRevParseHead?:Function, runValidation?:Function,
+ *   deliveryConfig?:object}} fields
  */
 export function createDeliveryContext({
   ROOT,
@@ -869,6 +1214,7 @@ export function createDeliveryContext({
   spawnRunner: spawnRunnerOverride,
   gitStatusPorcelain: gitStatusPorcelainOverride,
   gitRevParseHead: gitRevParseHeadOverride,
+  runValidation: runValidationOverride,
   deliveryConfig: deliveryConfigOverride,
 }) {
   return {
@@ -878,6 +1224,7 @@ export function createDeliveryContext({
     SESSIONS_DIR: join(ROOT, ".delivery", "sessions"),
     gitStatusPorcelain: gitStatusPorcelainOverride || gitStatusPorcelain,
     gitRevParseHead: gitRevParseHeadOverride || gitRevParseHead,
+    runValidation: runValidationOverride || runValidationCommands,
     // Injectable so tests can verify a launch/resume was requested without
     // actually spawning a detached background process against a temp dir
     // that's about to be deleted.

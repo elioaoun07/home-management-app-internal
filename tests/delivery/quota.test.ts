@@ -21,6 +21,16 @@ describe("classifyTurnError", () => {
     expect(classifyTurnError(new Error("rate_limit_exceeded")).kind).toBe("quota");
   });
 
+  it("classifies monthly spend-limit wording and owner-configured provider wording as quota", () => {
+    expect(classifyTurnError(new Error("You've hit your monthly spend limit")).kind).toBe("quota");
+    expect(classifyTurnError(new Error("provider allowance exhausted"), { extraQuotaPatterns: ["allowance exhausted"] }).kind).toBe("quota");
+  });
+
+  it("classifies authentication failures as non-retryable", () => {
+    const verdict = classifyTurnError(new Error("authentication_failed: access token expired"));
+    expect(verdict).toMatchObject({ kind: "auth", retryable: false, resetsAt: null });
+  });
+
   it("treats an unrelated failure as transient/retryable", () => {
     const verdict = classifyTurnError(new Error("claude driver: query failed — network exploded"));
     expect(verdict.kind).toBe("transient");

@@ -19,6 +19,7 @@ export const CONTROL_TYPES = Object.freeze([
   "pause",
   "resume-run",
   "set-config",
+  "set-budget",
   "rotate",
   "fork",
   "pin",
@@ -76,6 +77,23 @@ export function validateControlPayload(type, payload) {
       }
       if (p.provider == null && p.model == null && p.effortByPhase == null) {
         throw new ControlsError("set-config.payload must set at least one of provider/model/effortByPhase");
+      }
+      return;
+    case "set-budget":
+      if (p.maxUsd == null && p.maxTokens == null) {
+        throw new ControlsError("set-budget.payload must set maxUsd and/or maxTokens");
+      }
+      if (p.maxUsd != null && (typeof p.maxUsd !== "number" || !Number.isFinite(p.maxUsd) || p.maxUsd <= 0)) {
+        throw new ControlsError("set-budget.payload.maxUsd must be a positive number when present");
+      }
+      if (
+        p.maxTokens != null &&
+        (typeof p.maxTokens !== "number" || !Number.isInteger(p.maxTokens) || p.maxTokens <= 0)
+      ) {
+        throw new ControlsError("set-budget.payload.maxTokens must be a positive integer when present");
+      }
+      if (typeof p.reason !== "string" || !p.reason.trim()) {
+        throw new ControlsError("set-budget.payload.reason is required");
       }
       return;
     case "rotate":

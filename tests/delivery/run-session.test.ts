@@ -55,7 +55,7 @@ function stableSnapshot() {
   return { ...STABLE_SNAPSHOT, fingerprints: {} };
 }
 
-function makePacketAndState(root: string) {
+function makePacketAndState(root: string, budget: Record<string, unknown> | null = null) {
   const raw = ["# Now", "", "- [ ] **N1** Fix rounding drift _(blocker - M)_", ""].join("\n");
   const pmFile = "Budget/4 - Checklist.md";
   const idResult = buildItemIdentity(raw, 0, pmFile);
@@ -79,6 +79,7 @@ function makePacketAndState(root: string) {
       skills: [],
       acceptanceCriteria: [],
       workspace: { baseHead: "HEAD", dirtyAtStart: false, baselineStatusHash: "x", changedFiles: [] },
+      budget,
     }),
   );
   atomicWriteJsonSync(join(dir, "packet.json"), packet);
@@ -95,6 +96,7 @@ function makePacketAndState(root: string) {
     build: null,
     fixLoop: 0,
     usage: { perPhase: {}, total: { input: 0, cachedInput: 0, output: 0, costUsd: null } },
+    ...(budget ? { budget: { current: budget, warned: [], exhaustedAt: null } } : {}),
     decisionsProcessed: 0,
     messagesProcessed: 0,
     lastError: null,
@@ -128,6 +130,16 @@ function writeMessage(dir: string, seq: number, text: string) {
   atomicWriteJsonSync(join(messagesDir, `${String(seq).padStart(4, "0")}.json`), {
     seq,
     text,
+    at: new Date().toISOString(),
+  });
+}
+function writeControl(dir: string, seq: number, type: string, payload: Record<string, unknown>) {
+  const controlsDir = join(dir, "controls");
+  mkdirSync(controlsDir, { recursive: true });
+  atomicWriteJsonSync(join(controlsDir, `${String(seq).padStart(4, "0")}-${type}.json`), {
+    seq,
+    type,
+    payload,
     at: new Date().toISOString(),
   });
 }
@@ -285,8 +297,8 @@ function preExistingFailingValidation() {
   };
 }
 
-describe("advanceSession: pre-existing validation failure skips the fix loop (BUD-11 root cause #5)", () => {
-  it("captures a baseline on a dirty-at-start workspace and blocks immediately (0 fix-loop turns) when validation keeps failing on the exact same pre-existing error", async () => {
+describe("advanceSession: validation delta vs acknowledged baseline", () => {
+  it("captures a baseline on a dirty-at-start workspace and passes validation when the same pre-existing error remains", async () => {
     const root = setupRepo();
     const { dir } = makePacketAndState(root);
     // Simulate the BUD-11 workspace: uncommitted changes unrelated to this
@@ -310,14 +322,27 @@ describe("advanceSession: pre-existing validation failure skips the fix loop (BU
     expect(state.state).toBe("PLAN_READY");
 
     writeDecision(dir, 2, "plan", "approve");
-    state = await drive(dir, driver, root, { runValidation: preExistingFailingValidation });
+    for (let i = 0; i < 20; i++) {
+      const tick = await advanceSession({
+        sessionDir: dir,
+        driver,
+        repoRoot: root,
+        runValidation: preExistingFailingValidation,
+        retryDelayMs: 0,
+        sleep: () => {},
+        takeSnapshot: stableSnapshot,
+        readHead: () => "fixture-shipped-head",
+      });
+      state = tick.state;
+      if (state.state === "REVIEWING" || !tick.didWork) break;
+    }
 
-    expect(state.state).toBe("BLOCKED");
-    expect(state.awaiting).toEqual({ gate: "blocked", returnTo: "BUILDING", reason: "pre-existing-failure" });
+    expect(state.state).toBe("REVIEWING");
+    expect(state.awaiting).toBeNull();
     // Not one fix-loop attempt was spent — the very first validation
-    // failure was already recognized as pre-existing and blocked directly.
+    // failure is accepted on delta without spending a fix-loop attempt.
     expect(state.fixLoop).toBe(0);
-    expect(state.lastError.errorKind).toBe("pre-existing-failure");
+    expect(readEvents(dir).some((event) => event.type === "validation.delta.pass")).toBe(true);
   });
 
   it("still runs the normal fix loop when validation fails on a file the baseline did NOT already have failing", async () => {
@@ -343,6 +368,9 @@ describe("advanceSession: pre-existing validation failure skips the fix loop (BU
     writeDecision(dir, 1, "spec", "approve");
     state = await drive(dir, driver, root, { runValidation: preExistingFailingValidation });
     writeDecision(dir, 2, "plan", "approve");
+    const planReadyState = JSON.parse(readFileSync(stateFile, "utf8"));
+    planReadyState.workspace.changedFiles = ["src/lib/queryConfig.ts"];
+    atomicWriteJsonSync(stateFile, planReadyState);
 
     // Baseline was captured with the pre-existing failure; a fresh, different
     // failure now shows up (a file this session's build step could plausibly
@@ -373,6 +401,59 @@ describe("advanceSession: pre-existing validation failure skips the fix loop (BU
 
     expect(state.state).toBe("BUILDING"); // the fix loop re-entered BUILDING for a genuine, attributable failure
     expect(state.fixLoop).toBe(1);
+  });
+});
+
+describe("advanceSession: change ownership", () => {
+  it("records build-turn file deltas and marks writes to pre-dirty files as shared", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const stateFile = join(dir, "state.json");
+    const seeded = JSON.parse(readFileSync(stateFile, "utf8"));
+    seeded.state = "BUILDING";
+    seeded.build = { mode: "fix", stepIndex: 0, totalSteps: 1 };
+    seeded.workspace.preExistingChanges = [
+      { path: "shared.ts", ownership: "not-session-owned" },
+    ];
+    atomicWriteJsonSync(stateFile, seeded);
+
+    const before = {
+      status: " M shared.ts\n",
+      head: "fixture-head",
+      refs: "fixture-refs",
+      indexDiff: "",
+      trackedDiff: "before",
+      fingerprints: { "shared.ts": "before" },
+    };
+    const after = {
+      status: " M shared.ts\n?? new.ts\n",
+      head: "fixture-head",
+      refs: "fixture-refs",
+      indexDiff: "",
+      trackedDiff: "after",
+      fingerprints: { "shared.ts": "after", "new.ts": "created" },
+    };
+    let snapshots = 0;
+    const driver = createDriver("fake", {
+      script: { turns: [{ finalText: "updated shared.ts and created new.ts" }] },
+    });
+    const tick = await advanceSession({
+      sessionDir: dir,
+      driver,
+      repoRoot: root,
+      runValidation: passingValidation,
+      retryDelayMs: 0,
+      sleep: () => {},
+      takeSnapshot: () => (snapshots++ === 0 ? before : after),
+      readHead: () => "fixture-head",
+    });
+
+    expect(tick.state.state).toBe("VALIDATING");
+    expect(tick.state.workspace.changedFiles).toEqual(["new.ts", "shared.ts"]);
+    expect(tick.state.workspace.changeOwnership).toEqual([
+      { path: "new.ts", ownership: "session-owned" },
+      { path: "shared.ts", ownership: "shared" },
+    ]);
   });
 });
 
@@ -444,10 +525,18 @@ describe("advanceSession: validation-fail loop exhaustion -> BLOCKED", () => {
   });
 });
 
-describe("advanceSession: session token budget hard cap short-circuits to BLOCKED (Slice C backstop)", () => {
-  it("skips the BUILDING turn entirely (no driver call) once total processed tokens already reach the configured cap", async () => {
+describe("advanceSession: governed packet budget", () => {
+  it("pauses gracefully between turns, writes a finish package, and never starts the next BUILDING turn", async () => {
     const root = setupRepo();
-    const { dir } = makePacketAndState(root);
+    const budget = {
+      maxUsd: 2,
+      maxTokens: 2_000_000,
+      warnPct: 0.8,
+      perPhase: {},
+      authorization: "capped",
+      authorizedAt: "2026-07-24T00:00:00.000Z",
+    };
+    const { dir } = makePacketAndState(root, budget);
     const driver = createDriver("fake", {
       script: { turns: [{ finalText: SPEC_TEXT }, { finalText: PLAN_TEXT }, { finalText: "should never run" }] },
     });
@@ -457,6 +546,17 @@ describe("advanceSession: session token budget hard cap short-circuits to BLOCKE
     state = await drive(dir, driver, root, { runValidation: passingValidation });
     expect(state.state).toBe("PLAN_READY");
     writeDecision(dir, 2, "plan", "approve");
+    const enteredBuilding = await advanceSession({
+      sessionDir: dir,
+      driver,
+      repoRoot: root,
+      runValidation: passingValidation,
+      retryDelayMs: 0,
+      sleep: () => {},
+      takeSnapshot: stableSnapshot,
+      readHead: () => "fixture-shipped-head",
+    });
+    expect(enteredBuilding.state.state).toBe("BUILDING");
 
     // Seed the session's accumulated usage as if it had already burned
     // through a huge amount of (mostly cached) tokens — the exact BUD-11
@@ -480,26 +580,37 @@ describe("advanceSession: session token budget hard cap short-circuits to BLOCKE
         sleep: () => {},
         takeSnapshot: stableSnapshot,
         readHead: () => "fixture-shipped-head",
-        deliveryConfig: { budgets: { maxSessionTokens: 2_000_000 } },
       });
       last = tick.state;
       if (!tick.didWork) break;
     }
     state = last;
 
-    expect(state.state).toBe("BLOCKED");
-    expect(state.awaiting).toEqual({ gate: "blocked", returnTo: "BUILDING", reason: "budget-exceeded" });
-    expect(state.lastError.errorKind).toBe("budget-exceeded");
+    expect(state.state).toBe("BUILDING");
+    expect(state.execution.paused).toBe(true);
+    expect(state.awaiting).toEqual({ gate: "budget", returnTo: "BUILDING", reason: "budget-exhausted" });
+    expect(state.lastError).toBeNull();
+    expect(existsSync(join(dir, "artifacts", "finish", "budget.json"))).toBe(true);
+    expect(existsSync(join(dir, "artifacts", "finish", "summary.md"))).toBe(true);
 
     // The fake driver's script still has an unconsumed "should never run"
     // turn — proves the BUILDING turn was skipped outright, not merely
     // attempted and failed.
-    expect(readEvents(dir).some((e) => e.type === "budget.exceeded")).toBe(true);
+    expect(readEvents(dir).filter((e) => e.type === "budget.exhausted")).toHaveLength(1);
+    expect(readEvents(dir).filter((e) => e.type === "notification.requested")).toHaveLength(1);
   });
 
-  it("emits a one-time-per-tick budget.warning event when crossing the warn threshold, without blocking", async () => {
+  it("emits the warning exactly once after crossing warnPct and continues", async () => {
     const root = setupRepo();
-    const { dir } = makePacketAndState(root);
+    const budget = {
+      maxUsd: null,
+      maxTokens: 4_000_000,
+      warnPct: 0.375,
+      perPhase: {},
+      authorization: "capped",
+      authorizedAt: "2026-07-24T00:00:00.000Z",
+    };
+    const { dir } = makePacketAndState(root, budget);
     const driver = createDriver("fake", {
       script: { turns: [{ finalText: SPEC_TEXT }, { finalText: PLAN_TEXT }, { finalText: "did the change" }] },
     });
@@ -527,16 +638,62 @@ describe("advanceSession: session token budget hard cap short-circuits to BLOCKE
         sleep: () => {},
         takeSnapshot: stableSnapshot,
         readHead: () => "fixture-shipped-head",
-        deliveryConfig: { budgets: { warnSessionTokens: 1_500_000, maxSessionTokens: 4_000_000 } },
       });
       last = tick.state;
-      if (readEvents(dir).some((e) => e.type === "budget.warning")) break;
+      if (readEvents(dir).some((e) => e.type === "budget.warning")) {
+        await advanceSession({
+          sessionDir: dir,
+          driver,
+          repoRoot: root,
+          runValidation: passingValidation,
+          retryDelayMs: 0,
+          sleep: () => {},
+          takeSnapshot: stableSnapshot,
+          readHead: () => "fixture-shipped-head",
+        });
+        break;
+      }
       if (!tick.didWork) break;
     }
     state = last;
 
     expect(state.state).not.toBe("BLOCKED"); // warn never blocks
-    expect(readEvents(dir).some((e) => e.type === "budget.warning")).toBe(true);
+    expect(readEvents(dir).filter((e) => e.type === "budget.warning")).toHaveLength(1);
+  });
+
+  it("consumes an audited raise-only control and resumes from the same phase", async () => {
+    const root = setupRepo();
+    const budget = {
+      maxUsd: null,
+      maxTokens: 100,
+      warnPct: 0.8,
+      perPhase: {},
+      authorization: "capped",
+      authorizedAt: "2026-07-24T00:00:00.000Z",
+    };
+    const { dir } = makePacketAndState(root, budget);
+    const stateFile = join(dir, "state.json");
+    const seeded = JSON.parse(readFileSync(stateFile, "utf8"));
+    seeded.usage.total = { input: 25, cachedInput: 75, output: 0, costUsd: null };
+    atomicWriteJsonSync(stateFile, seeded);
+    const driver = createDriver("fake", { script: { turns: [{ finalText: SPEC_TEXT }] } });
+
+    let tick = await advanceSession({
+      sessionDir: dir, driver, repoRoot: root, runValidation: passingValidation,
+      retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot, readHead: () => "fixture-head",
+    });
+    expect(tick.state.awaiting?.reason).toBe("budget-exhausted");
+
+    writeControl(dir, 1, "set-budget", { maxTokens: 200, reason: "owner approved one more discovery turn" });
+    tick = await advanceSession({
+      sessionDir: dir, driver, repoRoot: root, runValidation: passingValidation,
+      retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot, readHead: () => "fixture-head",
+    });
+    expect(tick.state.state).toBe("SELECTED");
+    expect(tick.state.execution.paused).toBe(false);
+    expect(tick.state.awaiting).toBeNull();
+    expect(tick.state.budget.current.maxTokens).toBe(200);
+    expect(readEvents(dir).filter((e) => e.type === "budget.raised")).toHaveLength(1);
   });
 });
 
@@ -628,12 +785,46 @@ describe("advanceSession: quota/rate-limit turn errors short-circuit to BLOCKED 
 
     expect(sleepCalls).toEqual([]); // no 30s retry-delay sleep — a quota error is never retried
     expect(state.state).toBe("BLOCKED");
-    expect(state.awaiting).toEqual({ gate: "blocked", returnTo: "BUILDING", reason: "provider-quota" });
+    expect(state.awaiting).toEqual({ gate: "blocked", returnTo: "BUILDING", reason: "quota-paused" });
     expect(state.lastError.errorKind).toBe("quota");
     expect(state.lastError.resetsAt).toBe("12:30am (Asia/Beirut)");
 
     const failedEvents = readEvents(dir).filter((e) => e.type === "agent.turn.failed");
     expect(failedEvents).toHaveLength(1); // exactly one attempt, not the usual two
+
+    writeDecision(dir, 3, "blocked", "retry", { note: "Provider allowance has reset." });
+    const resumed = await advanceSession({ sessionDir: dir, driver, repoRoot: root, retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot });
+    expect(resumed.state.state).toBe("BUILDING");
+    expect(resumed.state.driver.ref).toBeNull(); // resume requires a fresh provider preflight/session
+  });
+
+  it("escalates identical transient failures after the configured automatic retry limit", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = createDriver("fake", {
+      script: { turns: [{ finalText: SPEC_TEXT }, { finalText: PLAN_TEXT }, { throws: "network exploded" }, { throws: "network exploded" }, { throws: "network exploded" }] },
+    });
+    await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 1, "spec", "approve");
+    await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 2, "plan", "approve");
+
+    await advanceSession({
+      sessionDir: dir, driver, repoRoot: root, retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot,
+      deliveryConfig: { errors: { maxAutoRetries: 2 } },
+    });
+    const tick = await advanceSession({
+      sessionDir: dir, driver, repoRoot: root, retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot,
+      deliveryConfig: { errors: { maxAutoRetries: 2 } },
+    });
+    expect(tick.state.state).toBe("NEEDS_DECISION");
+    expect(tick.state.awaiting).toMatchObject({ gate: "question", returnTo: "BUILDING", reason: "retry-exhausted" });
+    expect(readEvents(dir).filter((event) => event.type === "retry.automatic")).toHaveLength(2);
+    expect(readEvents(dir).filter((event) => event.type === "notification.requested")).toHaveLength(1);
+
+    writeDecision(dir, 3, "question", "answer", { answer: "Investigate the provider outage before continuing." });
+    const resumed = await advanceSession({ sessionDir: dir, driver, repoRoot: root, retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot });
+    expect(resumed.state.state).toBe("BUILDING");
   });
 });
 

@@ -25,9 +25,9 @@ describe("buildControl / controlFileName", () => {
     expect(controlFileName(control)).toBe("0007-resume-run.json");
   });
 
-  it("CONTROL_TYPES lists all nine channel types", () => {
+  it("CONTROL_TYPES lists all ten channel types", () => {
     expect(CONTROL_TYPES).toEqual([
-      "pause", "resume-run", "set-config", "rotate", "fork", "pin", "unpin", "answer", "ask",
+      "pause", "resume-run", "set-config", "set-budget", "rotate", "fork", "pin", "unpin", "answer", "ask",
     ]);
   });
 });
@@ -66,6 +66,15 @@ describe("validateControlPayload: set-config", () => {
   it("rejects a non-string model or non-object effortByPhase", () => {
     expect(() => validateControlPayload("set-config", { model: 123 })).toThrow(ControlsError);
     expect(() => validateControlPayload("set-config", { effortByPhase: "high" })).toThrow(ControlsError);
+  });
+});
+
+describe("validateControlPayload: set-budget", () => {
+  it("requires a positive cap and an audit reason", () => {
+    expect(() => validateControlPayload("set-budget", { maxTokens: 3_000_000, reason: "scope approved" })).not.toThrow();
+    expect(() => validateControlPayload("set-budget", { maxUsd: 3, reason: "scope approved" })).not.toThrow();
+    expect(() => validateControlPayload("set-budget", { maxTokens: 3_000_000 })).toThrow(ControlsError);
+    expect(() => validateControlPayload("set-budget", { maxTokens: -1, reason: "x" })).toThrow(ControlsError);
   });
 });
 

@@ -72,6 +72,7 @@ Extend `scripts/pm-server.mjs` (the existing zero-dependency PM Command Center s
 - `tests/pm-mutations.test.ts` — house pattern for testing tooling modules with vitest
 - [Native App](<../Native App/_index.md>) — the plan-folder format precedent this folder follows
 - [Delivery Workspace](<../Delivery Workspace/_index.md>) — durable-memory enhancement campaign; DW-1 added `scripts/delivery/{transcript,usage,config}.mjs` and extended `run-session.mjs`/`drivers/fake.mjs` — all additive, no state-machine changes
+- [Delivery 10x](<../Delivery 10x/_index.md>) — governance & truthful-finish campaign (prefix `DLV`, created 2026-07-24 from the `s-20260722-225601-whdv` postmortem): budget envelopes, flight-check, lanes, scope contract, AC matrix, finish packages — layered on this base architecture; note it revokes the "token budgets unset until baselined" stance (its file 6)
 
 ## Freshness protocol
 

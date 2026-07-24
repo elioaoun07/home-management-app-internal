@@ -209,6 +209,8 @@ export function buildPacket({
   skills = [],
   acceptanceCriteria = [],
   workspace,
+  budget = null,
+  flightCheck = null,
 }) {
   if (!sessionId) throw new PacketError("sessionId is required");
   if (agent !== "codex" && agent !== "claude") {
@@ -235,5 +237,7 @@ export function buildPacket({
     skills,
     acceptanceCriteria,
     workspace,
+    ...(budget ? { budget } : {}),
+    ...(flightCheck ? { flightCheck } : {}),
   };
 }

@@ -139,7 +139,8 @@
       "Bash(pnpm -s typecheck)",
       "PowerShell(Stop-Process *)",
       "PowerShell(Invoke-RestMethod -Method Post -Uri \"http://127.0.0.1:4317/api/delivery/resume\" -ContentType \"application/json\" -Body '{\"id\":\"s-20260722-221533-wous\"}' | ConvertTo-Json -Depth 4)",
-      "PowerShell($r = Invoke-RestMethod -Uri \"http://127.0.0.1:4317/api/delivery/session?id=s-20260722-221533-wous\"; \"state=$\\($r.state.state\\) alive=$\\($r.runner.alive\\) logTailPresent=$\\($null -ne $r.runner.logTail\\)\")"
+      "PowerShell($r = Invoke-RestMethod -Uri \"http://127.0.0.1:4317/api/delivery/session?id=s-20260722-221533-wous\"; \"state=$\\($r.state.state\\) alive=$\\($r.runner.alive\\) logTailPresent=$\\($null -ne $r.runner.logTail\\)\")",
+      "Bash(kill %bnq6e6n11)"
     ]
   }
 }

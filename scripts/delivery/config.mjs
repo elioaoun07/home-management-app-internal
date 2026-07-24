@@ -10,7 +10,7 @@
 // Agentic Delivery Workspace/2 - Architecture & Process Model.md §4.
 
 import { join } from "node:path";
-import { readJsonIfExists } from "./fsx.mjs";
+import { atomicWriteJsonSync, readJsonIfExists } from "./fsx.mjs";
 
 export class ConfigError extends Error {}
 
@@ -58,7 +58,16 @@ export const DEFAULT_CONFIG = Object.freeze({
     maxRecordBytes: 65536,
     warnSessionMB: 200,
   }),
+  errors: Object.freeze({
+    maxAutoRetries: 2,
+    extraQuotaPatterns: Object.freeze([]),
+  }),
   budgets: Object.freeze({
+    laneDefaults: Object.freeze({
+      fast: Object.freeze({ maxUsd: 0.5, maxTokens: 500_000, warnPct: 0.8 }),
+      standard: Object.freeze({ maxUsd: 2, maxTokens: 2_000_000, warnPct: 0.8 }),
+      deep: Object.freeze({ maxUsd: 5, maxTokens: 5_000_000, warnPct: 0.8 }),
+    }),
     warnSessionUsd: 10,
     maxTurnBudgetUsd: null,
     // Token budgets are primary — Claude Code subscription sessions have no
@@ -106,6 +115,136 @@ function mergeDeep(base, override) {
   return out;
 }
 
+const ROOT_KEYS = new Set(["schemaVersion", "pricingVersion", "providers", "effortMap", "routing", "context", "transcript", "errors", "budgets"]);
+const PROVIDER_KEYS = new Set(["defaultModel", "efforts", "models"]);
+const MODEL_KEYS = new Set(["id", "label", "tier", "contextWindow", "pricing"]);
+const PRICING_KEYS = new Set(["inPerMTok", "cachedReadPerMTok", "cacheWritePerMTok", "outPerMTok"]);
+const BUDGET_KEYS = new Set([
+  "laneDefaults",
+  "warnSessionUsd",
+  "maxTurnBudgetUsd",
+  "warnSessionTokens",
+  "maxSessionTokens",
+  "maxSessionUsd",
+  "maxTurnsPerPhase",
+  "maxPlanSteps",
+  "validationTimeoutMs",
+]);
+const BUDGET_LANES = new Set(["fast", "standard", "deep"]);
+const BUDGET_ENVELOPE_KEYS = new Set(["maxUsd", "maxTokens", "warnPct"]);
+
+function validationError(path, message) {
+  return new ConfigError(`invalid .delivery/config.json at ${path}: ${message}`);
+}
+
+function assertPlainObject(value, path) {
+  if (!isPlainObject(value)) throw validationError(path, "must be an object");
+}
+
+function assertKnownKeys(value, keys, path) {
+  for (const key of Object.keys(value)) {
+    if (!keys.has(key)) throw validationError(`${path}.${key}`, "is not a supported setting");
+  }
+}
+
+function assertOptionalString(value, path, { nullable = false } = {}) {
+  if (value !== undefined && typeof value !== "string" && !(nullable && value === null)) {
+    throw validationError(path, nullable ? "must be a string or null" : "must be a string");
+  }
+}
+
+function assertOptionalNumber(value, path, { nullable = false, integer = false } = {}) {
+  if (value === undefined || (nullable && value === null)) return;
+  if (typeof value !== "number" || !Number.isFinite(value) || (integer && !Number.isInteger(value))) {
+    throw validationError(path, nullable ? "must be a finite number or null" : "must be a finite number");
+  }
+}
+
+/** Validate the owner-editable partial config before it is merged with defaults. */
+export function validateConfig(raw) {
+  assertPlainObject(raw, "$");
+  assertKnownKeys(raw, ROOT_KEYS, "$");
+  if (raw.schemaVersion !== undefined && raw.schemaVersion !== SCHEMA_VERSION) {
+    throw new ConfigError(`unsupported .delivery/config.json schemaVersion ${raw.schemaVersion} (expected ${SCHEMA_VERSION})`);
+  }
+  assertOptionalString(raw.pricingVersion, "$.pricingVersion", { nullable: true });
+
+  if (raw.providers !== undefined) {
+    assertPlainObject(raw.providers, "$.providers");
+    for (const [provider, config] of Object.entries(raw.providers)) {
+      if (!(provider in DEFAULT_CONFIG.providers)) throw validationError(`$.providers.${provider}`, "is not a supported provider");
+      assertPlainObject(config, `$.providers.${provider}`);
+      assertKnownKeys(config, PROVIDER_KEYS, `$.providers.${provider}`);
+      assertOptionalString(config.defaultModel, `$.providers.${provider}.defaultModel`, { nullable: true });
+      if (config.efforts !== undefined && (!Array.isArray(config.efforts) || config.efforts.some((v) => typeof v !== "string" || !v))) {
+        throw validationError(`$.providers.${provider}.efforts`, "must be an array of non-empty strings");
+      }
+      if (config.models !== undefined) {
+        if (!Array.isArray(config.models)) throw validationError(`$.providers.${provider}.models`, "must be an array");
+        for (const [index, model] of config.models.entries()) {
+          const path = `$.providers.${provider}.models[${index}]`;
+          assertPlainObject(model, path); assertKnownKeys(model, MODEL_KEYS, path);
+          if (typeof model.id !== "string" || !model.id) throw validationError(`${path}.id`, "is required and must be a non-empty string");
+          assertOptionalString(model.label, `${path}.label`); assertOptionalString(model.tier, `${path}.tier`);
+          assertOptionalNumber(model.contextWindow, `${path}.contextWindow`, { integer: true });
+          if (model.pricing !== undefined) {
+            assertPlainObject(model.pricing, `${path}.pricing`); assertKnownKeys(model.pricing, PRICING_KEYS, `${path}.pricing`);
+            for (const key of PRICING_KEYS) assertOptionalNumber(model.pricing[key], `${path}.pricing.${key}`);
+          }
+        }
+      }
+    }
+  }
+  for (const section of ["effortMap", "routing", "context", "transcript", "budgets"]) {
+    if (raw[section] !== undefined) assertPlainObject(raw[section], `$.${section}`);
+  }
+  if (raw.budgets !== undefined) {
+    assertKnownKeys(raw.budgets, BUDGET_KEYS, "$.budgets");
+    if (raw.budgets.laneDefaults !== undefined) {
+      assertPlainObject(raw.budgets.laneDefaults, "$.budgets.laneDefaults");
+      assertKnownKeys(raw.budgets.laneDefaults, BUDGET_LANES, "$.budgets.laneDefaults");
+      for (const [lane, envelope] of Object.entries(raw.budgets.laneDefaults)) {
+        const path = `$.budgets.laneDefaults.${lane}`;
+        assertPlainObject(envelope, path);
+        assertKnownKeys(envelope, BUDGET_ENVELOPE_KEYS, path);
+        assertOptionalNumber(envelope.maxUsd, `${path}.maxUsd`, { nullable: true });
+        assertOptionalNumber(envelope.maxTokens, `${path}.maxTokens`, { nullable: true, integer: true });
+        assertOptionalNumber(envelope.warnPct, `${path}.warnPct`);
+        if (envelope.maxUsd != null && envelope.maxUsd <= 0) throw validationError(`${path}.maxUsd`, "must be positive");
+        if (envelope.maxTokens != null && envelope.maxTokens <= 0) throw validationError(`${path}.maxTokens`, "must be positive");
+        if (envelope.warnPct != null && (envelope.warnPct <= 0 || envelope.warnPct >= 1)) {
+          throw validationError(`${path}.warnPct`, "must be greater than 0 and less than 1");
+        }
+      }
+    }
+  }
+  if (raw.errors !== undefined) {
+    assertPlainObject(raw.errors, "$.errors");
+    assertKnownKeys(raw.errors, new Set(["maxAutoRetries", "extraQuotaPatterns"]), "$.errors");
+    assertOptionalNumber(raw.errors.maxAutoRetries, "$.errors.maxAutoRetries", { integer: true });
+    if (raw.errors.maxAutoRetries !== undefined && raw.errors.maxAutoRetries < 0) throw validationError("$.errors.maxAutoRetries", "must be zero or greater");
+    if (raw.errors.extraQuotaPatterns !== undefined) {
+      if (!Array.isArray(raw.errors.extraQuotaPatterns) || raw.errors.extraQuotaPatterns.some((value) => typeof value !== "string" || !value)) throw validationError("$.errors.extraQuotaPatterns", "must be an array of non-empty regular-expression strings");
+      for (const [index, source] of raw.errors.extraQuotaPatterns.entries()) {
+        try { new RegExp(source, "i"); } catch { throw validationError(`$.errors.extraQuotaPatterns[${index}]`, "must be a valid regular expression"); }
+      }
+    }
+  }
+  return raw;
+}
+
+const configStatuses = new WeakMap();
+
+function withConfigStatus(config, status) {
+  configStatuses.set(config, Object.freeze(status));
+  return config;
+}
+
+/** Read the process-local health metadata carried by loadConfig's return value. */
+export function getConfigStatus(config) {
+  return (config && configStatuses.get(config)) || { healthy: true, source: "defaults", message: null };
+}
+
 /**
  * Load `.delivery/config.json` from under `rootDir`, deep-merged over
  * `DEFAULT_CONFIG` (owner values win; missing sections/keys fall back to
@@ -116,14 +255,28 @@ function mergeDeep(base, override) {
  */
 export function loadConfig(rootDir, options = {}) {
   const path = options.configPath || join(rootDir, ".delivery", "config.json");
-  const raw = readJsonIfExists(path, options);
-  if (raw == null) return DEFAULT_CONFIG;
-  if (raw.schemaVersion != null && raw.schemaVersion !== SCHEMA_VERSION) {
-    throw new ConfigError(
-      `unsupported .delivery/config.json schemaVersion ${raw.schemaVersion} (expected ${SCHEMA_VERSION})`,
-    );
+  const snapshotPath = options.snapshotPath || join(rootDir, ".delivery", "config.last-known-good.json");
+  const persistSnapshot = options.persistSnapshot !== undefined ? options.persistSnapshot : !options.fs;
+  let raw;
+  try {
+    raw = readJsonIfExists(path, options);
+    if (raw == null) return withConfigStatus(DEFAULT_CONFIG, { healthy: true, source: "defaults", message: null });
+    validateConfig(raw);
+    if (persistSnapshot) atomicWriteJsonSync(snapshotPath, raw, options);
+    return withConfigStatus(mergeDeep(DEFAULT_CONFIG, raw), { healthy: true, source: "config", message: null });
+  } catch (err) {
+    const message = String((err && err.message) || err);
+    try {
+      const snapshot = readJsonIfExists(snapshotPath, options);
+      if (snapshot != null) {
+        validateConfig(snapshot);
+        return withConfigStatus(mergeDeep(DEFAULT_CONFIG, snapshot), { healthy: false, source: "last-known-good", message });
+      }
+    } catch {
+      // A damaged snapshot is not a reason to crash the runner; defaults remain safe.
+    }
+    return withConfigStatus(DEFAULT_CONFIG, { healthy: false, source: "defaults", message });
   }
-  return mergeDeep(DEFAULT_CONFIG, raw);
 }
 
 // ---- lookup helpers ----
@@ -203,8 +356,10 @@ export function buildCapabilitiesPayload(config, driverManifests = {}) {
     config: {
       routing: config.routing,
       context: config.context,
+      errors: config.errors,
       budgets: config.budgets,
       pricingVersion: config.pricingVersion || null,
+      status: getConfigStatus(config),
     },
   };
 }

@@ -244,6 +244,42 @@ describe("buildPacket", () => {
     });
   });
 
+  it("persists the immutable owner-authorized budget envelope", () => {
+    const budget = {
+      maxUsd: 2,
+      maxTokens: 2_000_000,
+      warnPct: 0.8,
+      perPhase: {},
+      authorization: "capped" as const,
+      authorizedAt: "2026-07-24T00:00:00.000Z",
+    };
+    const packet = buildPacket({
+      sessionId: "s-1",
+      agent: "claude",
+      item: baseItem,
+      workspace: baseWorkspace,
+      budget,
+    });
+    expect(packet.budget).toEqual(budget);
+  });
+
+  it("persists the auditable pre-launch Flight-Check snapshot", () => {
+    const flightCheck = {
+      schemaVersion: 1,
+      reviewedAt: "2026-07-24T10:00:00.000Z",
+      lane: { selected: "STANDARD", recommended: "STANDARD" },
+      mismatchWarnings: [],
+    };
+    const packet = buildPacket({
+      sessionId: "s-1",
+      agent: "claude",
+      item: baseItem,
+      workspace: baseWorkspace,
+      flightCheck,
+    });
+    expect(packet.flightCheck).toEqual(flightCheck);
+  });
+
   it("lets caller-supplied constraints override defaults without dropping the rest", () => {
     const packet = buildPacket({
       sessionId: "s-1",
