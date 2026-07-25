@@ -1,112 +1,17 @@
-## Verdict
+All six phases are implemented and verified. Summary of what shipped:
 
-- **Not totally off**
-- **Strong postmortem and reliability plan**
-- **Too reactive to one failed session**
-- **More “Delivery repair” than “Delivery 10x”**
+Data plane — migrations/2026-07-25_pm-mobile-relay.sql (+ schema.sql): pm_live / pm_commands tables, flat RLS (no EXISTS subqueries), Realtime enabled.
 
-## Priority 0 — Fix the Roadmap First
+Laptop bridge — scripts/pm/bridge.mjs, started via pnpm pm --bridge. Outbound-only: publishes checklist tasks (~40–80KB, not 7MB), delivery session state, and a fleet rollup; drains phone commands through the same routeDelivery() the desktop UI uses. Split into two Supabase-free pure cores (createCommandExecutor, createTasksSnapshotBuilder) for testability.
 
-- Collapse 14 items into 4 outcome milestones
-- Move Budget Controls to **Now**
-- Move Scope Tripwire to **Now**
-- Move Model/Effort Guard to **Now**
-- Move PM Trace below execution safety
-- Keep Analytics for Later
-- Avoid locking exact files/functions too early
-- Replace universal validation with risk-based validation
+Push — src/app/api/pm/notify/route.ts, the first-ever consumer of the notification.requested event that's been emitted and discarded since DLV-1.
 
-## Priority 1 — Biggest Missing Capabilities
+Mobile UI — /pm/live: Checklist tab (tick round-trips to the real .md), Delivery tab (pause/abort/resume/cancel, gate-aware cards, inline Q&A), Launch flow (mandatory envelope, refuses on dirty/red), Usage tab, bridge-liveness chip.
 
-- AUTO / FAST / DEEP Delivery Lanes
-- Strict Lane-Specific Phase Enforcement
-- Selective Context Loading
-- Per-Phase Context Budgets
-- Loaded-Context Manifest
-- Preflight Delivery Summary
-- Scope Lock
-- Automatic Task Decomposition
-- Clean-Start / Change-Ownership Policy
-- Lane-Specific Definition of Done
+Tests — tests/pm-bridge.test.ts, 12/12 passing: allowlist enforcement, gate-approval refusal, launch guardrails, tick drift detection, payload-size budget.
 
-## Priority 2 — Reliability Gaps Still Missing
+Docs — PM Dashboard Refactor and Delivery 10x checklists/feature-state updated (DLV-20/21/22, R29), and a full amendment recorded in Delivery 10x/6 - Design Debates & Rejected Ideas.md explaining why this doesn't reopen the "remote decision controls" rejection — plus a new Atlas entry.
 
-- End-to-End Orchestrator Test Suite
-- Failure-Injection Testing
-- Crash-Recovery Testing
-- Retry-Storm Testing
-- Quota-Failure Testing
-- Idempotent State Transitions
-- Duplicate Side-Effect Prevention
-- Safe Cancellation and Cleanup
-- Stalled-Session Watchdog
-- Provider Fallback Strategy
+Verification: pnpm pm:lint 0 errors, pnpm typecheck/pnpm test show zero regressions against the pre-existing baseline, pnpm build succeeds with both new routes compiled, pnpm docs:check passes.
 
-## Priority 3 — Truthful Completion
-
-- Acceptance-Criteria Coverage Matrix
-- Targeted Validation Strategy
-- Evidence-Backed Completion
-- Changed-File Ownership Manifest
-- Remaining-Work Package
-- Exact Recovery / Revert Instructions
-- Partial-Success State
-- Unresolved-Risk Register
-
-## Priority 4 — User Experience
-
-- Launch Recommendation Screen
-- Live “What Is Happening” Summary
-- Live “What You Need to Do” Panel
-- Conversation Search and Highlighting
-- Dedicated Questions and Answers
-- Cleaner Phase Timeline
-- Pause / Resume / Cancel Controls
-- Mid-Session Model and Effort Switching
-- Mid-Session Provider Switching
-- Remote Decision Controls
-
-## Priority 5 — Proving It Is Actually 10x Better
-
-- Small / Medium / Large Task Benchmark
-- Delivery vs Direct CLI Comparison
-- Cost per Completed Task
-- Time to Accepted Result
-- First-Pass Validation Rate
-- Human Intervention Rate
-- Scope-Estimate Accuracy
-- Model Recommendation Accuracy
-- Fast-Lane Success Rate
-
-### Milestone 1 — Safe Start
-
-- Config Hardening
-- Error Classification
-- Retry Limits
-- Budget Cutoffs
-- Baseline Gate
-- Preflight
-
-### Milestone 2 — Right-Sized Delivery
-
-- FAST / DEEP Lanes
-- Scope Tripwire
-- Context Resolver
-- Model Recommendation
-- Task Decomposition
-
-### Milestone 3 — Truthful Finish
-
-- Acceptance-Criteria Tracking
-- Validation Contract
-- Evidence Gate
-- Resume and Salvage
-- Recovery Package
-
-### Milestone 4 — Operability
-
-- Session UX
-- Notifications
-- Transcript Integrity
-- Analytics
-- Benchmarking
+Not yet done (needs you, not me): run migrations/2026-07-25_pm-mobile-relay.sql in the Supabase SQL Editor, then set PM_OWNER_USER_ID in .env and start with pnpm pm --bridge to actually try it on your phone.

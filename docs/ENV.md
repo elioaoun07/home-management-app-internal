@@ -45,3 +45,13 @@ NEXT_PUBLIC_APP_URL=               # app root URL (used in push notification lin
 NEXT_PUBLIC_ENABLE_SW=             # set to "false" to disable service worker during debugging
 DEV_USER_ID=                       # override auth user in local development
 ```
+
+## PM Mobile Relay (`pnpm pm` bridge, optional)
+
+```env
+PM_BRIDGE=                         # set to "1" to start the laptop bridge alongside `pnpm pm` (also: --no-bridge flag)
+PM_OWNER_USER_ID=                  # the Supabase auth user id /pm/live commands and snapshots are scoped to (RLS: user_id = auth.uid())
+PM_NOTIFY_URL=                     # optional override for the push endpoint; defaults to `${NEXT_PUBLIC_SITE_URL}/api/pm/notify`
+```
+
+Reuses `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_SUPABASE_SERVICE_ROLE_KEY` / `CRON_SECRET` already above. Outbound-only: the bridge makes calls out to Supabase and to `/api/pm/notify`; it never opens a listening port, so `pnpm pm`'s `127.0.0.1` binding is unaffected. See `migrations/2026-07-25_pm-mobile-relay.sql`.

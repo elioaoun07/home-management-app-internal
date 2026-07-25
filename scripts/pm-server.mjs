@@ -4,6 +4,9 @@
 //   pnpm pm --no-open  -> start without opening a browser
 //   pnpm pm --lan      -> also listen on the LAN (phone access; trusted Wi-Fi only)
 //   PM_PORT=5000 pnpm pm  (or --port=5000, --host=0.0.0.0, PM_HOST=…)
+//   pnpm pm --bridge (or PM_BRIDGE=1)  -> also start the outbound-only Supabase
+//     relay bridge for /pm/live (mobile checklist + delivery command surface).
+//     Never widens this server's own 127.0.0.1 binding — see scripts/pm/bridge.mjs.
 //
 // Serves the same UI as the static build, but reads the PM markdown LIVE from disk
 // and exposes a small REST API so checkboxes, moves, renames, reorders, creates and
@@ -24,6 +27,7 @@ import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { config as loadDotenv } from "dotenv";
 
 import {
   appendUnderHeading,
@@ -40,12 +44,15 @@ import { hostAllowed } from "./pm/net.mjs";
 import { collectSources, readSourceFile, walk } from "./pm/scan.mjs";
 import { buildHtml, buildHtmlLegacy } from "./pm/ui.mjs";
 import { createBundleWatcher } from "./pm/build.mjs";
+import { createBridge } from "./pm/bridge.mjs";
 import {
   createDeliveryContext,
   performPendingWritebacks,
   routeDelivery,
   sessionIdFromWatchPath,
 } from "./delivery/server-routes.mjs";
+
+loadDotenv({ path: ".env" });
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -75,6 +82,8 @@ const HOST = hostArg
   ? hostArg.slice(7)
   : process.env.PM_HOST || (argv.includes("--lan") ? "0.0.0.0" : "127.0.0.1");
 const LAN_MODE = HOST !== "127.0.0.1" && HOST !== "localhost";
+const BRIDGE_ENABLED = (process.env.PM_BRIDGE === "1" || argv.includes("--bridge")) && !argv.includes("--no-bridge");
+const bridge = BRIDGE_ENABLED ? createBridge({ PM_DIR, deliveryCtx }) : null;
 
 // ---- helpers ----
 function pmRel(abs) {
@@ -286,6 +295,7 @@ function broadcast() {
       sseClients.delete(res);
     }
   }
+  if (bridge) bridge.publishTasks();
 }
 function broadcastUi() {
   for (const res of sseClients) {
@@ -337,7 +347,9 @@ function broadcastDelivery() {
         sseClients.delete(res);
       }
     }
+    if (bridge) bridge.publishSession(sessionId);
   }
+  if (bridge && sessionIds.length) bridge.publishFleet();
 }
 try {
   mkdirSync(deliveryCtx.SESSIONS_DIR, { recursive: true });
@@ -532,6 +544,8 @@ function listen(port, attemptsLeft) {
     }
     console.log("Watching: " + PM_DIR);
     console.log("Press Ctrl+C to stop.");
+    if (bridge) bridge.start();
+    else if (process.env.PM_BRIDGE === "1") console.log("[pm-bridge] disabled by --no-bridge");
     if (!noOpen) openBrowser(url);
   });
 }

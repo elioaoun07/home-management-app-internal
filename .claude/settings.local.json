@@ -140,7 +140,15 @@
       "PowerShell(Stop-Process *)",
       "PowerShell(Invoke-RestMethod -Method Post -Uri \"http://127.0.0.1:4317/api/delivery/resume\" -ContentType \"application/json\" -Body '{\"id\":\"s-20260722-221533-wous\"}' | ConvertTo-Json -Depth 4)",
       "PowerShell($r = Invoke-RestMethod -Uri \"http://127.0.0.1:4317/api/delivery/session?id=s-20260722-221533-wous\"; \"state=$\\($r.state.state\\) alive=$\\($r.runner.alive\\) logTailPresent=$\\($null -ne $r.runner.logTail\\)\")",
-      "Bash(kill %bnq6e6n11)"
+      "Bash(kill %bnq6e6n11)",
+      "Bash(cd *)",
+      "Bash(node scripts/pm-server.mjs --no-open --port=43299)",
+      "Bash(wait)",
+      "Bash(pnpm build *)",
+      "Bash(pnpm atlas *)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__list_tables",
+      "PowerShell($env:NODE_OPTIONS=\"--max-old-space-size=8192\"; npm run build 2>&1 | Select-String -Pattern \"pm/live|Compiled|Failed|error|✓\" | Select-Object -First 12)"
     ]
   }
 }

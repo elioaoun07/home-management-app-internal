@@ -10,9 +10,12 @@ export function parseRoute(hash = "") {
   if (parts[0] === "module" && parts[1]) return { name: "module", module: parts.slice(1).join("/"), path, query };
   if (parts[0] === "doc" && parts[1]) return { name: "doc", relPath: parts.slice(1).join("/"), path, query };
   if (parts[0] === "tasks") return { name: "tasks", mode: parts[1] === "table" ? "table" : "board", path, query };
-  if (["checklist", "bugs", "search", "delivery"].includes(parts[0])) {
-    return { name: parts[0] === "delivery" && parts[1] === "session" ? "delivery-session" : parts[0], id: parts[2] || null, path, query };
+  if (parts[0] === "delivery") {
+    if (parts[1] === "session") return { name: "delivery-session", id: parts[2] || null, path, query };
+    if (parts[1] === "new") return { name: "delivery-new", path, query };
+    return { name: "delivery", path, query };
   }
+  if (["checklist", "bugs", "search"].includes(parts[0])) return { name: parts[0], path, query };
   return { name: "not-found", path, query };
 }
 

@@ -1827,3 +1827,49 @@ ALTER TABLE public.outfit_items ENABLE ROW LEVEL SECURITY;
 -- {table}_select_own / {table}_insert_own / {table}_update_own / {table}_delete_own
 -- for each of: wardrobe_profiles, wardrobe_items, outfits, outfit_items.
 -- Full CREATE POLICY statements: migrations/2026-07-18_outfits-catalog-and-builder.sql
+
+-- ── PM mobile relay (/pm/live — laptop bridge <-> phone, outbound-only from laptop) ──
+-- id: 'tasks' | 'bridge' | 'fleet' | 'session:<sessionId>'. pm_commands.type CHECK is a
+-- second line of defence only; the bridge's in-code allowlist is authoritative and
+-- excludes set-budget/set-config/rotate/fork and any spec/plan/uat/blocked gate decision.
+-- 'tick' was removed 2026-07-25 (migrations/2026-07-25_pm-commands-drop-tick.sql): the
+-- phone cannot mark a checklist item done at all — it launches delivery sessions instead.
+CREATE TABLE public.pm_live (
+  id text NOT NULL,
+  user_id uuid NOT NULL,
+  kind text NOT NULL,
+  payload jsonb NOT NULL,
+  rev bigint NOT NULL DEFAULT 0,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT pm_live_pkey PRIMARY KEY (id),
+  CONSTRAINT pm_live_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE INDEX pm_live_user_idx ON public.pm_live USING btree (user_id);
+
+CREATE TABLE public.pm_commands (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL DEFAULT auth.uid(),
+  type text NOT NULL CHECK (type IN (
+    'capture', 'undo', 'preflight', 'launch',
+    'pause', 'abort-turn', 'resume', 'cancel', 'answer', 'ask',
+    'legacy-tick'  -- historical rows only; 'tick' was dropped 2026-07-25, never executed again
+  )),
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'claimed', 'done', 'failed', 'expired')),
+  result jsonb,
+  error text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  claimed_at timestamp with time zone,
+  completed_at timestamp with time zone,
+  CONSTRAINT pm_commands_pkey PRIMARY KEY (id),
+  CONSTRAINT pm_commands_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE INDEX pm_commands_pending_idx ON public.pm_commands USING btree (user_id, status, created_at);
+
+ALTER TABLE public.pm_live ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pm_commands ENABLE ROW LEVEL SECURITY;
+
+-- One policy per verb on each table, all flat user_id = auth.uid() (no EXISTS subqueries):
+-- {table}_select_own / {table}_insert_own / {table}_update_own / {table}_delete_own
+-- for each of: pm_live, pm_commands. Both added to the supabase_realtime publication.
+-- Full CREATE POLICY / ALTER PUBLICATION statements: migrations/2026-07-25_pm-mobile-relay.sql

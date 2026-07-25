@@ -79,6 +79,7 @@ tags:
 | `atlas`         | `/atlas`         | [[atlas]]         |
 | `offline`       | `/offline`       | [[offline]]       |
 | `pm`            | `/pm`            | [[pm]]            |
+| `pm-live`       | `/pm/live`       | [[pm-live]]       |
 
 ## Feature Modules (Standalone)
 

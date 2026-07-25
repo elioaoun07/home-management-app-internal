@@ -46,6 +46,7 @@ Nothing starts until the owner has seen, on a single screen:
 
 ### Reliability floor (supporting, not headline)
 
+- **Unknown cost is explicit:** a provider may report token usage without a USD price. PM Live renders this as unavailable rather than treating it as $0.00 or crashing, including its gate notifications. *(IMPLEMENTED 2026-07-25)*
 - **Config hardening:** schema-validate `.delivery/config.json` on load with a precise error surfaced as a session event + dashboard banner; atomic temp+rename writes; crash-loop backoff in the runner (`N` rapid identical crashes → stop respawning, mark session `awaiting.reason: "runner-crash"`, notify). *(IMPLEMENTED 2026-07-24)*
 - **Error taxonomy:** extend `quota.mjs` patterns (the "monthly spend limit" gap) and make the classification *sticky and visible* — quota/spend/auth errors are never retried, carry `resetsAt` when parseable, and produce a paused-not-dead state with one-click resume. *(IMPLEMENTED 2026-07-24)*
 - **Retry escalation:** max N identical auto-retries per gate (config), then `NEEDS_DECISION` + notification. A retry storm is a bug signal, not a strategy. *(IMPLEMENTED 2026-07-24)*

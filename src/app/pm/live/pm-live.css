@@ -1,0 +1,145 @@
+/* src/app/pm/live/pm-live.css
+ *
+ * Token layer for /pm/live. This surface is deliberately OUTSIDE the app's
+ * blue/pink/frost/calm theme system: it renders its own layout (excluded from
+ * ConditionalHeader and MobileNav) and is a laptop-bridge dev tool, not a
+ * household screen. Hard Rule 10's "never hardcode a background" is satisfied
+ * the same way the theme system satisfies it — every surface here resolves
+ * through a variable — the variables are just scoped to [data-pm-live] instead
+ * of :root[data-theme], so nothing here can leak into the themed app.
+ *
+ * If this page ever needs to follow the app themes, only this block changes.
+ */
+
+[data-pm-live] {
+  --pm-bg: #0a1628;
+  /* Opaque, for anything that floats above content (Hard Rule 15). Never glass. */
+  --pm-panel: #12203a;
+  /* In-flow card fills — translucent is fine here, nothing renders behind them. */
+  --pm-surface: rgb(255 255 255 / 4%);
+  --pm-surface-hover: rgb(255 255 255 / 7%);
+  --pm-surface-strong: rgb(255 255 255 / 9%);
+
+  --pm-border: rgb(255 255 255 / 8%);
+  --pm-border-strong: rgb(255 255 255 / 16%);
+
+  --pm-fg-1: rgb(255 255 255 / 92%);
+  --pm-fg-2: rgb(255 255 255 / 60%);
+  --pm-fg-3: rgb(255 255 255 / 38%);
+
+  --pm-accent: #22d3ee;
+  --pm-accent-soft: rgb(34 211 238 / 14%);
+  --pm-accent-border: rgb(34 211 238 / 30%);
+  --pm-accent-ink: #0a1628;
+
+  --pm-warn: #fbbf24;
+  --pm-warn-soft: rgb(251 191 36 / 12%);
+  --pm-ok: #34d399;
+
+  /* Ordinal severity ramp — see src/features/pm-live/chartTheme.ts for the
+   * validator run and why this is an ordinal/status scale, not categorical. */
+  --pm-sev-blocker: #fbbf24;
+  --pm-sev-friction: #d97706;
+  --pm-sev-annoyance: #94a3b8;
+  --pm-sev-parked: #64748b;
+
+  --pm-grid: rgb(255 255 255 / 6%);
+
+  background-color: var(--pm-bg);
+  color: var(--pm-fg-1);
+}
+
+/* ---- primitives ---------------------------------------------------------- */
+
+.pm-card {
+  background-color: var(--pm-surface);
+  border: 1px solid var(--pm-border);
+  border-radius: 0.875rem;
+}
+
+/* Opaque floating surface: dropdowns, sheets, popovers (Hard Rule 15). */
+.pm-panel {
+  background-color: var(--pm-panel);
+  border: 1px solid var(--pm-border-strong);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 45%);
+}
+
+.pm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  padding: 0.3125rem 0.6875rem;
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--pm-fg-2);
+  background-color: var(--pm-surface);
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.pm-chip[data-active="true"] {
+  color: var(--pm-fg-1);
+  background-color: var(--pm-surface-strong);
+  border-color: var(--pm-border-strong);
+}
+
+.pm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: 0.625rem;
+  padding: 0.5rem 0.875rem;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--pm-fg-2);
+  background-color: var(--pm-surface);
+  /* Rule 11: touch targets stay thumb-sized on a phone. */
+  min-height: 40px;
+}
+
+.pm-btn:disabled {
+  opacity: 0.4;
+}
+
+.pm-btn[data-variant="primary"] {
+  background-color: var(--pm-accent);
+  color: var(--pm-accent-ink);
+  font-weight: 600;
+}
+
+.pm-btn[data-variant="warn"] {
+  background-color: var(--pm-warn-soft);
+  color: var(--pm-warn);
+}
+
+.pm-input {
+  width: 100%;
+  border-radius: 0.625rem;
+  background-color: var(--pm-surface);
+  border: 1px solid var(--pm-border);
+  padding: 0.5rem 0.75rem;
+  font-size: 13.5px;
+  color: var(--pm-fg-1);
+}
+
+.pm-input::placeholder {
+  color: var(--pm-fg-3);
+}
+
+.pm-input:focus {
+  outline: none;
+  border-color: var(--pm-accent-border);
+}
+
+/* Recessive axes/grid — the data is the subject, not the frame. */
+.pm-chart .recharts-cartesian-axis-line,
+.pm-chart .recharts-cartesian-axis-tick-line {
+  display: none;
+}
+
+.pm-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}

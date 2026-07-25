@@ -612,6 +612,13 @@ self.addEventListener("push", (event) => {
       { action: "snooze", title: "⏰ Snooze", icon: "/appicon-192.png" },
       { action: "dismiss", title: "✓ Dismiss", icon: "/appicon-192.png" },
     ];
+  } else if (notifType === "pm_delivery") {
+    // PM mobile relay: delivery gate/budget/error/runner-death notice → gentle vibration
+    options.vibrate = [200, 100, 200];
+    options.actions = [
+      { action: "open_pm_live", title: "👁️ Open", icon: "/appicon-192.png" },
+      { action: "dismiss", title: "✓ Dismiss", icon: "/appicon-192.png" },
+    ];
   } else if (notifType === "test") {
     // Test notification → gentle, no actions
     options.vibrate = [200, 100, 200];
@@ -755,6 +762,10 @@ self.addEventListener("notificationclick", (event) => {
     event.waitUntil(openApp({ ...data, url: "/expense?tab=dashboard" }));
     return;
   }
+  if (action === "open_pm_live") {
+    event.waitUntil(openApp({ ...data, url: data.url || "/pm/live" }));
+    return;
+  }
   if (action === "settings") {
     event.waitUntil(openApp({ ...data, url: "/settings" }));
     return;
@@ -806,6 +817,9 @@ self.addEventListener("notificationclick", (event) => {
   } else if (notifType === "goal_milestone" || notifType === "goal_completed") {
     // Open hub tab
     event.waitUntil(openApp({ ...data, url: "/expense?tab=hub" }));
+  } else if (notifType === "pm_delivery") {
+    // PM mobile relay → open /pm/live (or the specific URL the bridge sent)
+    event.waitUntil(openApp({ ...data, url: data.url || "/pm/live" }));
   } else if (notifType === "test") {
     // Test notification → just open the app
     event.waitUntil(openApp({ ...data, url: "/expense" }));

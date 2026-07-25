@@ -5,14 +5,19 @@ import { NextResponse, type NextRequest } from "next/server";
 // of the app. The console is served as a static page (public/pm.html, exposed at
 // /pm via the next.config rewrite) with all its data embedded in the HTML — so
 // without this anyone who knew the URL could read every PM doc without logging
-// in. The matcher below is scoped to /pm only; no other route runs through
-// middleware, so this has zero effect on the rest of the app.
+// in. The matcher below is scoped to /pm, /pm.html, and /pm/live; no other
+// route runs through middleware, so this has zero effect on the rest of the app.
 //
 // Both /pm and the raw /pm.html are matched: /pm.html is a real static file, so
-// gating only /pm would leave the file itself as an open bypass.
+// gating only /pm would leave the file itself as an open bypass. /pm/live (the
+// mobile checklist + delivery command surface, migrations/2026-07-25_pm-mobile-
+// relay.sql) is a real Next.js route, not a static snapshot — its data is
+// fetched from Supabase at runtime (RLS-scoped to auth.uid()), so this gate is
+// belt-and-suspenders there, not the only thing standing between a stranger
+// and the data the way it is for /pm.html's embedded payload.
 //
 // Offline still works: when the phone is offline the service worker serves the
-// last cached /pm response (captured during an authenticated online visit) and
+// last cached response (captured during an authenticated online visit) and
 // middleware never runs.
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next({ request });
@@ -42,10 +47,11 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    const attempted = request.nextUrl.pathname;
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
-    url.searchParams.set("redirect", "/pm");
+    url.searchParams.set("redirect", attempted);
     return NextResponse.redirect(url);
   }
 
@@ -53,5 +59,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/pm", "/pm.html"],
+  matcher: ["/pm", "/pm.html", "/pm/live"],
 };

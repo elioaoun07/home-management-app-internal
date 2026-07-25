@@ -4,8 +4,9 @@ import { ALWAYS_ON_CAPABILITIES } from "../../../../delivery/classify.mjs";
 import { DIRTY_TREE_ACK, RED_BASELINE_ACK } from "../../../../delivery/validation-baseline.mjs";
 import { scanCheckboxes } from "../../../shared/md-scan.mjs";
 import { allTasks, byRelPath, files } from "../../app/store.js";
-import { route } from "../../app/router.js";
-import { Chip, EmptyState, Modal } from "../../components/Primitives.jsx";
+import { navigate, route } from "../../app/router.js";
+import { Chip, EmptyState } from "../../components/Primitives.jsx";
+import { Breadcrumbs } from "../nav/Breadcrumbs.jsx";
 import { Icon } from "../../components/Icon.jsx";
 import {
   deliveryCapabilities,
@@ -29,28 +30,9 @@ const checklist = (path) => /(?:^|\/)4\s*-\s*Checklist\.md$/i.test(path);
 
 export function DeliveryHome() {
   const [tab, setTab] = useState("sessions");
-  const [wizard, setWizard] = useState(null);
   useEffect(() => {
     loadDeliverySessions();
     loadDeliveryCapabilities();
-    const file = route.value.query.get("file"),
-      cb = Number(route.value.query.get("cb"));
-    if (file && Number.isInteger(cb)) {
-      const task = allTasks.value.find((entry) => entry.file === file && entry.cbidx === cb);
-      if (task)
-        setWizard({
-          campaign: task.module,
-          task,
-          provider: "claude",
-          model: null,
-          lane: null,
-          effort: {},
-          dropped: [],
-          dirtyAck: "",
-          redBaselineAck: "",
-          budget: null,
-        });
-    }
   }, []);
   const configStatus = deliveryCapabilities.value?.config?.status;
   return (
@@ -61,23 +43,7 @@ export function DeliveryHome() {
           <h1>Delivery</h1>
           <p>Launch, gate, and inspect implementation sessions while the server remains authoritative.</p>
         </div>
-        <button
-          class="button primary"
-          onClick={() =>
-            setWizard({
-              campaign: null,
-              task: null,
-              provider: "claude",
-              model: null,
-              lane: null,
-              effort: {},
-              dropped: [],
-              dirtyAck: "",
-              redBaselineAck: "",
-              budget: null,
-            })
-          }
-        >
+        <button class="button primary" onClick={() => navigate("/delivery/new")}>
           <Icon name="plus" />
           New delivery
         </button>
@@ -97,7 +63,6 @@ export function DeliveryHome() {
         </button>
       </div>
       {tab === "sessions" ? <SessionsList /> : <AgentCatalog />}
-      {wizard && <Wizard value={wizard} setValue={setWizard} onClose={() => setWizard(null)} />}
     </>
   );
 }
@@ -273,11 +238,21 @@ function Wizard({ value, setValue, onClose }) {
       },
       "Delivery session launched",
     );
-    onClose();
     location.hash = `/delivery/session/${result.sessionId}`;
   };
   return (
-    <Modal title="New delivery session" onClose={onClose}>
+    <>
+      <Breadcrumbs items={[{ label: "Delivery", href: "/delivery" }, { label: "New session" }]} />
+      <header class="page-head" style={{ marginTop: 18 }}>
+        <div>
+          <div class="eyebrow">Supervised agent workflow</div>
+          <h1>New delivery session</h1>
+          <p>Pick a topic and work item, then authorize the launch envelope.</p>
+        </div>
+        <button class="button" onClick={onClose}>
+          Cancel
+        </button>
+      </header>
       <div class="wizard-steps">
         <div class={`wizard-step ${!value.campaign ? "active" : ""}`}>
           <div class="eyebrow">1 · Topic</div>
@@ -598,6 +573,27 @@ function Wizard({ value, setValue, onClose }) {
           </div>
         )}
       </div>
-    </Modal>
+    </>
   );
+}
+
+export function DeliveryWizardPage() {
+  const [value, setValue] = useState(() => {
+    const file = route.value.query.get("file"),
+      cb = Number(route.value.query.get("cb"));
+    const task = file && Number.isInteger(cb) ? allTasks.value.find((entry) => entry.file === file && entry.cbidx === cb) : null;
+    return {
+      campaign: task?.module || null,
+      task: task || null,
+      provider: "claude",
+      model: null,
+      lane: null,
+      effort: {},
+      dropped: [],
+      dirtyAck: "",
+      redBaselineAck: "",
+      budget: null,
+    };
+  });
+  return <Wizard value={value} setValue={setValue} onClose={() => navigate("/delivery")} />;
 }
