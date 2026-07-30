@@ -180,7 +180,7 @@ function conversationalRewrite(text: string): string {
  */
 export function briefingToSpeech(rawText: string): string {
   // Step 1: Conversational rewrites on the full text
-  let text = conversationalRewrite(rawText);
+  const text = conversationalRewrite(rawText);
 
   // Step 2: Split into lines and process, collapsing lists into sentences
   const lines = text.split("\n");

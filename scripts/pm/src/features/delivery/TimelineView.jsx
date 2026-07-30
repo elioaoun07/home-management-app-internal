@@ -1,6 +1,23 @@
 import { useMemo, useState } from "preact/hooks";
 import { Chip } from "../../components/Primitives.jsx";
+import { Icon } from "../../components/Icon.jsx";
+import { phaseStyle } from "./roleColors.js";
 import { deliveryEvents } from "./deliveryStore.js";
+
+// D12/DLV-40: icon + color + label, never color-only. `event.phase` also
+// carries gate-state labels ("SPEC_READY", "BLOCKED", ...) that aren't a
+// turn-producing role at all -- those render as a plain Chip, unchanged.
+function PhaseChip({ phase }) {
+  if (!phase) return null;
+  const style = phaseStyle(phase);
+  if (!style) return <Chip>{phase}</Chip>;
+  return (
+    <span class="chip" style={{ display: "inline-flex", alignItems: "center", gap: 4, borderColor: style.color, color: style.color }}>
+      <Icon name={style.icon} size={12} />
+      {phase}
+    </span>
+  );
+}
 
 // DW-6: outcome-oriented timeline. Only these event types render as their
 // own card — everything else (tool calls, raw messages, turn-result noise)
@@ -129,7 +146,7 @@ export function TimelineView() {
       {visible.length === 0 && <div class="empty">No {filter || "timeline"} events yet.</div>}
       {visible.map((event) => <div class="event" style={{ borderLeft: isBlocking(event.type) ? "3px solid var(--era-danger,#e05252)" : "3px solid transparent", paddingLeft: 8, marginBottom: 6 }}>
         <span class="mono muted" style={{ fontSize: 11 }}>{fmtTime(event.ts)}</span>{" "}
-        {event.phase && <Chip>{event.phase}</Chip>}{" "}
+        <PhaseChip phase={event.phase} />{" "}
         <span style={isBlocking(event.type) ? { color: "var(--era-danger,#e05252)", fontWeight: 600 } : {}}>{summarize(event)}</span>
       </div>)}
     </section>

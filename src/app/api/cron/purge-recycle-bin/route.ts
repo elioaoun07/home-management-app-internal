@@ -30,23 +30,23 @@ export async function GET(req: NextRequest) {
   const supabase = supabaseAdmin();
   const summary: Record<string, number> = {};
 
-  for (const module of RECYCLE_BIN_MODULES) {
+  for (const binModule of RECYCLE_BIN_MODULES) {
     let query = supabase
-      .from(module.table)
+      .from(binModule.table)
       .delete({ count: "exact" })
-      .not(module.deletedAtColumn, "is", null)
-      .lt(module.deletedAtColumn, cutoff);
+      .not(binModule.deletedAtColumn, "is", null)
+      .lt(binModule.deletedAtColumn, cutoff);
 
-    if (module.baseFilter) {
-      query = module.baseFilter(query as any) as any;
+    if (binModule.baseFilter) {
+      query = binModule.baseFilter(query as any) as any;
     }
 
     const { error, count } = await query;
     if (error) {
-      console.error(`[cron purge] ${module.id} failed`, error);
-      summary[module.id] = -1;
+      console.error(`[cron purge] ${binModule.id} failed`, error);
+      summary[binModule.id] = -1;
     } else {
-      summary[module.id] = count ?? 0;
+      summary[binModule.id] = count ?? 0;
     }
   }
 

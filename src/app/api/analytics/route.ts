@@ -154,7 +154,7 @@ export async function GET(req: NextRequest) {
     );
 
     // --- Fetch recurring payments ---
-    let recurringQuery = supabase
+    const recurringQuery = supabase
       .from("recurring_payments")
       .select(
         "id, name, amount, recurrence_type, account_id, category_id, is_active",
@@ -165,7 +165,7 @@ export async function GET(req: NextRequest) {
     const { data: recurringPayments } = await recurringQuery;
 
     // --- Fetch debts ---
-    let debtsQuery = supabase
+    const debtsQuery = supabase
       .from("debts")
       .select(
         "id, debtor_name, original_amount, returned_amount, status, direction",

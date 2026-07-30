@@ -1820,7 +1820,7 @@ export default function WebTabletMissionControl({
   const stats = useMemo(() => {
     let completed = 0;
     let pending = 0;
-    let overdue = overdueTasks.length;
+    const overdue = overdueTasks.length;
 
     weekOccurrences.forEach((occs) => {
       for (const occ of occs) {

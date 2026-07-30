@@ -2,7 +2,7 @@
 // boundary (spec, plan, decisions, Q&A) as sessions drive through
 // run-session.mjs's state machine. Mirrors the fixture pattern in the other
 // run-session-*.test.ts files.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -105,6 +105,43 @@ async function advanceOnce(dir: string, driver: object, repoRoot: string) {
   });
 }
 
+// Loops advanceSession until a tick does no work (mirrors run-session.test.ts's
+// drive() — needed here too so a single writeDecision can carry the session
+// through several automatic states, e.g. PLAN_READY -> ... -> UAT_READY.
+async function drive(dir: string, driver: object, repoRoot: string, runValidation?: (...args: unknown[]) => unknown) {
+  let last;
+  for (let i = 0; i < 50; i++) {
+    const { didWork, state } = await advanceSession({
+      sessionDir: dir, driver, repoRoot, runValidation, retryDelayMs: 0, sleep: () => {},
+      takeSnapshot: stableSnapshot, readHead: () => "fixture-shipped-head",
+    });
+    last = state;
+    if (!didWork) return last;
+  }
+  throw new Error("drive() exceeded iteration budget — likely an infinite loop");
+}
+
+function passingValidation() {
+  // DLV-10: `test` and `lint` are listed here, not just `typecheck`, because
+  // UAT_TEXT below claims AC1 is met with `evidence: "tests"` — and the runner
+  // now only honours a validation-rung evidence pointer when that rung actually
+  // ran and passed in this session. A fixture that claims the test suite proves
+  // something while never running the test suite is exactly the claim DLV-10
+  // exists to reject, so the fixture is what was wrong here, not the rule.
+  return {
+    ok: true,
+    results: {
+      typecheck: { ok: true, ms: 1, excerpt: "" },
+      lint: { ok: true, ms: 1, excerpt: "" },
+      test: { ok: true, ms: 1, excerpt: "" },
+    },
+  };
+}
+
+function readPrompt(dir: string, turnId: string): string {
+  return readFileSync(join(dir, "transcript", "prompts", `${turnId}.md`), "utf8");
+}
+
 const SPEC_TEXT = JSON.stringify({
   problem: "rounding drifts by a cent", currentBehavior: "c", proposedBehavior: "round consistently",
   acceptanceCriteria: [{ id: "AC1", text: "allocation splits sum exactly" }],
@@ -113,6 +150,11 @@ const SPEC_TEXT = JSON.stringify({
 const PLAN_TEXT = JSON.stringify({
   steps: [{ id: "S1", description: "d", paths: [], validationHint: "pnpm test" }],
   testPlan: "t", riskFlags: ["db-migration"], rollbackSketch: "r", noNewDeps: true,
+});
+const PASS_REVIEW_TEXT = JSON.stringify({ verdict: "PASS", findings: [] });
+const UAT_TEXT = JSON.stringify({
+  summary: "done", acceptanceCriteria: [{ id: "AC1", status: "met", evidence: "tests" }],
+  manualSteps: [{ action: "a", expected: "e" }], deviations: [], followUps: [],
 });
 
 describe("DW-5: ledger seeded from the DISCOVERY spec", () => {
@@ -170,6 +212,163 @@ describe("DW-5: blocking question round-trip via the existing gate flow", () => 
     const ledgerAfter = readLedger(dir);
     expect(ledgerAfter.questions[0]).toMatchObject({ status: "answered" });
     expect(ledgerAfter.questions[0].answer.text).toBe("Yes, include LBP.");
+  });
+});
+
+// DLV-32: PLAN could previously only guess or plan around a genuine blocking
+// ambiguity, never stop and ask (PLAN_OUTPUT_SCHEMA had no openQuestions
+// field at all). Verifies both halves of the fix: raising the question
+// doesn't strand the session (SPEC_READY is a GATE state, unlike DISCOVERY —
+// landing there with awaiting:null would be the exact DLV-29 failure shape),
+// and the owner's answer actually reaches the retried PLAN turn's prompt.
+describe("DW-5/DLV-32: PLAN raises a blocking question", () => {
+  it("re-arms the SPEC gate (does not strand the session) and the answer reaches the retried PLAN turn's prompt", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const planWithQuestion = JSON.stringify({
+      steps: [{ id: "S1", description: "d", paths: [], validationHint: "pnpm test" }],
+      testPlan: "t", riskFlags: [], rollbackSketch: "r", noNewDeps: true,
+      openQuestions: [{ text: "Should this migration be reversible?" }],
+    });
+    const driver = createDriver("fake", {
+      script: {
+        turns: [
+          { finalText: SPEC_TEXT, usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+          { finalText: planWithQuestion, usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+          { finalText: PLAN_TEXT, usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+        ],
+      },
+    });
+
+    await advanceOnce(dir, driver, root); // SELECTED -> DISCOVERY
+    await advanceOnce(dir, driver, root); // DISCOVERY turn -> SPEC_READY
+
+    writeDecision(dir, 1, "spec", "approve");
+    const raised = await advanceOnce(dir, driver, root); // approve -> PLAN turn -> NEEDS_DECISION
+    expect(raised.state.state).toBe("NEEDS_DECISION");
+    expect(raised.state.awaiting).toMatchObject({ gate: "question", returnTo: "SPEC_READY" });
+    const questionId = (raised.state.awaiting.questions[0] as { id: string }).id;
+
+    const ledger = readLedger(dir);
+    expect(ledger.questions[0]).toMatchObject({ id: questionId, phase: "PLAN", kind: "blocking", status: "open" });
+
+    writeDecision(dir, 2, "question", "answer", { answer: "Yes, reversible via a down-migration." });
+    const answered = await advanceOnce(dir, driver, root);
+    // Before this fix, this landed at SPEC_READY with awaiting:null —
+    // state says "gate" but no gate panel renders, the exact DLV-29 shape.
+    expect(answered.state.state).toBe("SPEC_READY");
+    expect(answered.state.awaiting).toEqual({ gate: "spec" });
+
+    writeDecision(dir, 3, "spec", "approve");
+    const result = await advanceOnce(dir, driver, root); // re-approve -> PLAN turn (retry) -> PLAN_READY
+    expect(result.state.state).toBe("PLAN_READY");
+
+    // The owner's answer actually reached the retried PLAN turn's prompt —
+    // not just cleared from pendingGuidance without ever being shown.
+    const retryPrompt = readPrompt(dir, "0003");
+    expect(retryPrompt).toContain("Yes, reversible via a down-migration.");
+  });
+});
+
+// DLV-32: BUILDING has no structured output contract to add a question
+// field to — verifies the BLOCKING QUESTION marker sentinel instead: the
+// same step is retried (not skipped) once answered, and the answer reaches
+// the retry's prompt.
+describe("DW-5/DLV-32: BUILDING raises a blocking question via the marker sentinel", () => {
+  it("does not advance the step, and the answer reaches the retried BUILDING prompt", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = createDriver("fake", {
+      script: {
+        turns: [
+          { finalText: SPEC_TEXT, usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+          { finalText: PLAN_TEXT, usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+          {
+            finalText: "BLOCKING QUESTION: Should the rounding helper round half-up or half-even?",
+            usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 },
+          },
+          { finalText: "Implemented rounding using half-even per the answer.", usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+        ],
+      },
+    });
+
+    await advanceOnce(dir, driver, root); // SELECTED -> DISCOVERY
+    await advanceOnce(dir, driver, root); // DISCOVERY turn -> SPEC_READY
+    writeDecision(dir, 1, "spec", "approve");
+    await advanceOnce(dir, driver, root); // approve -> PLAN turn -> PLAN_READY
+
+    // PLAN_TEXT carries riskFlags:["db-migration"], which requires typed
+    // APPROVE confirmation (TYPED_APPROVAL_RISK_FLAGS) — omitting it parks
+    // the decision silently back at PLAN_READY instead of advancing.
+    writeDecision(dir, 2, "plan", "approve", { confirmText: "APPROVE" });
+    await advanceOnce(dir, driver, root); // approve -> BUILDING (dispatched state; the turn itself is a separate tick)
+    const raised = await advanceOnce(dir, driver, root); // BUILDING turn -> NEEDS_DECISION
+    expect(raised.state.state).toBe("NEEDS_DECISION");
+    expect(raised.state.awaiting).toMatchObject({ gate: "question", returnTo: "BUILDING" });
+    // The step was NOT advanced or logged — this turn asked instead of guessing.
+    expect(existsSync(join(dir, "artifacts", "build-log.md"))).toBe(false);
+    expect(raised.state.build).toMatchObject({ stepIndex: 0 });
+
+    writeDecision(dir, 3, "question", "answer", { answer: "Half-even (banker's rounding)." });
+    await advanceOnce(dir, driver, root); // answer -> BUILDING (dispatched; the retry turn is a separate tick)
+    const result = await advanceOnce(dir, driver, root); // BUILDING retry (same step) -> next state
+    expect(result.state.state).not.toBe("NEEDS_DECISION");
+    expect(existsSync(join(dir, "artifacts", "build-log.md"))).toBe(true);
+
+    const retryPrompt = readPrompt(dir, "0004");
+    expect(retryPrompt).toContain("Half-even (banker's rounding).");
+  });
+});
+
+// DLV-32's flagship example: "owner-visible as 'I answered and it ignored
+// me'" — a UAT rejection note landed only in the ledger, never reaching the
+// fix-loop BUILDING prompt that follows.
+describe("DW-5/DLV-32: UAT rejection guidance reaches the next BUILDING prompt", () => {
+  it("the rejection note appears in the fix-loop BUILDING turn's prompt, not just the ledger", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = createDriver("fake", {
+      script: {
+        turns: [
+          { finalText: SPEC_TEXT, usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+          { finalText: PLAN_TEXT, usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+          { finalText: "Implemented the core change.", usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+          { finalText: PASS_REVIEW_TEXT, usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+          { finalText: UAT_TEXT, usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+          // fix-loop BUILDING turn, after the UAT rejection below
+          { finalText: "Fixed per the owner's UAT feedback.", usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+        ],
+      },
+    });
+
+    await advanceOnce(dir, driver, root); // SELECTED -> DISCOVERY
+    await drive(dir, driver, root, passingValidation); // DISCOVERY turn -> SPEC_READY (drive: harmless no-op loop here)
+    writeDecision(dir, 1, "spec", "approve");
+    let state = await drive(dir, driver, root, passingValidation);
+    expect(state.state).toBe("PLAN_READY");
+
+    // PLAN_TEXT carries riskFlags:["db-migration"], which requires typed
+    // APPROVE confirmation (TYPED_APPROVAL_RISK_FLAGS) — omitting it parks
+    // the decision silently back at PLAN_READY instead of advancing.
+    writeDecision(dir, 2, "plan", "approve", { confirmText: "APPROVE" });
+    state = await drive(dir, driver, root, passingValidation); // -> BUILDING -> VALIDATING -> REVIEWING -> UAT_READY
+    expect(state.state).toBe("UAT_READY");
+
+    writeDecision(dir, 3, "uat", "reject", { note: "The negative-balance edge case still rounds the wrong way." });
+    state = await drive(dir, driver, root, passingValidation); // reject -> fix-loop BUILDING turn
+    expect(state.fixLoop).toBeGreaterThan(0);
+    expect(existsSync(join(dir, "artifacts", "build-log.md"))).toBe(true);
+    const buildLog = readFileSync(join(dir, "artifacts", "build-log.md"), "utf8");
+    expect(buildLog).toContain("Fixed per the owner's UAT feedback.");
+
+    // The actual proof: the rejection note reached the MODEL, not just the
+    // ledger — find whichever transcript prompt file mentions the rejection.
+    const promptsDir = join(dir, "transcript", "prompts");
+    const promptFiles = existsSync(promptsDir) ? readdirSync(promptsDir) : [];
+    const matching = promptFiles
+      .map((f: string) => readFileSync(join(promptsDir, f), "utf8"))
+      .filter((text: string) => text.includes("negative-balance edge case"));
+    expect(matching.length).toBeGreaterThan(0);
   });
 });
 

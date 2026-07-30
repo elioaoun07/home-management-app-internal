@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { Chip } from "../../components/Primitives.jsx";
+import { Icon } from "../../components/Icon.jsx";
+import { roleStyle } from "./roleColors.js";
 import {
   deliverySearchQuery,
   deliverySearchResults,
@@ -9,6 +11,18 @@ import {
   loadDeliveryTurns,
   searchDeliveryTranscript,
 } from "./deliveryStore.js";
+
+// D12/DLV-40: icon + color + label, always together -- never color-only.
+function RoleChip({ role }) {
+  if (!role) return null;
+  const { color, icon } = roleStyle(role);
+  return (
+    <span class="chip" style={{ display: "inline-flex", alignItems: "center", gap: 4, borderColor: color, color }}>
+      <Icon name={icon} size={12} />
+      {role}
+    </span>
+  );
+}
 
 const RECORD_KIND_LABEL = {
   "prompt": "Prompt", "assistant.text": "Message", "assistant.reasoning": "Reasoning",
@@ -95,7 +109,10 @@ export function ConversationView({ id }) {
     {grouped.length === 0 && <div class="empty" style={{ marginTop: 12 }}>No turns captured yet for this session{turns.length === 0 ? " (pre-DW-1 sessions have no transcript)." : "."}</div>}
 
     {grouped.map(([phase, phaseTurns]) => <section class="card" style={{ marginTop: 12 }}>
-      <h2>{phase}</h2>
+      <div class="chip-row" style={{ alignItems: "center" }}>
+        <h2 style={{ margin: 0 }}>{phase}</h2>
+        <RoleChip role={phaseTurns[0]?.role} />
+      </div>
       {phaseTurns.map((turn) => <TurnCard key={turn.turnId} id={id} turn={turn} expanded={!!expanded[turn.turnId]} onToggle={() => toggle(turn.turnId)} />)}
     </section>)}
   </div>;
@@ -121,6 +138,7 @@ function TurnCard({ id, turn, expanded, onToggle }) {
     <button class="nav-link" style={{ width: "100%", textAlign: "left" }} onClick={onToggle}>
       <span class="chip-row" style={{ display: "inline-flex" }}>
         <strong>{expanded ? "▾" : "▸"} Turn {turn.turnId}</strong>
+        <RoleChip role={turn.role} />
         <Chip>{turn.agent}</Chip>
         <Chip>{turn.provider}{turn.model ? ` · ${turn.model}` : ""}{turn.effort ? ` · ${turn.effort}` : ""}</Chip>
         <Chip tone={resultTone(turn.result)}>{turn.result}</Chip>

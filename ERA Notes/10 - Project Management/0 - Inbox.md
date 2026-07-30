@@ -16,6 +16,13 @@ tags:
 > Entries under New show chip-less in the Task table — that's the untriaged queue, on purpose.
 
 ## New
+- [ ] NFC Checklist - probably should be a standalone Campaign? not sure, you could challenge it.
+
+Work on the NFC When leaving the house or going back to the house.
+I want to enhance it and optimize it
+
+The UI wasn't tested enough, and it might be too dull or too useful. But check areas of growing it
+- [ ] Add approval for some transactions that requires both comments
 
 ## Processed
 - 2026-07-22 — Create a skill for 'wizard' approach → clarified as a new `/wizard` Claude Code skill for interleaved AI/owner setup-debug sessions (step-by-step MD checklist, AI does its steps, owner runs verification commands and pastes output back for AI to validate before unlocking next steps). Owner decision: no PM checklist item (dev-tooling, not an app feature) — routed straight to `skill-factory` to author it now (triaged 2026-07-22)

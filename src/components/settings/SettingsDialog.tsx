@@ -48,6 +48,7 @@ import {
 } from "@dnd-kit/sortable";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Clock, CreditCard } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -785,16 +786,33 @@ function HouseholdPanel() {
   );
 }
 
+// DLV-52 — see the note inside StatementImportPanel. `ssr: false` matches the
+// original require()'s behaviour: it only ever ran in the browser, since this
+// panel is inside a client-only settings dialog.
+const StatementImportDialog = dynamic(
+  () => import("@/components/statement-import/StatementImportDialog").then((m) => m.StatementImportDialog),
+  { ssr: false },
+);
+const MerchantMappingsManager = dynamic(
+  () => import("@/components/statement-import/MerchantMappingsManager").then((m) => m.MerchantMappingsManager),
+  { ssr: false },
+);
+
 function StatementImportPanel() {
   const themeClasses = useThemeClasses();
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showMappingsDialog, setShowMappingsDialog] = useState(false);
 
-  // Dynamically import the dialogs to avoid circular dependencies
-  const StatementImportDialog =
-    require("@/components/statement-import/StatementImportDialog").StatementImportDialog;
-  const MerchantMappingsManager =
-    require("@/components/statement-import/MerchantMappingsManager").MerchantMappingsManager;
+  // DLV-52: these were two synchronous `require()` calls in the render body,
+  // commented "to avoid circular dependencies". There is no cycle — neither
+  // statement-import module imports anything from settings/ — so the comment
+  // was stale, and the require ran on every render of this panel. The lazy
+  // loading it was reaching for is what `next/dynamic` actually provides, and
+  // it keeps the statement-import bundle out of the settings chunk.
+  //
+  // Declared at module scope (below), not here: a `dynamic()` call inside a
+  // component body creates a new component type on every render, which
+  // remounts the dialog and throws away its state.
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">

@@ -26,11 +26,11 @@ const PAGE_SIZE = 50;
 
 function applyFilters(
   query: any,
-  module: ReturnType<typeof getRecycleBinModule>,
+  binModule: ReturnType<typeof getRecycleBinModule>,
   rawFilters: Record<string, unknown>,
 ) {
-  if (!module) return query;
-  for (const field of module.filterFields) {
+  if (!binModule) return query;
+  for (const field of binModule.filterFields) {
     const v = rawFilters[field.key];
     if (v == null || v === "") continue;
     if (field.kind === "enum" || field.kind === "text") {
@@ -69,8 +69,8 @@ export async function GET(req: NextRequest) {
   if (!moduleId)
     return NextResponse.json({ error: "module is required" }, { status: 400 });
 
-  const module = getRecycleBinModule(moduleId);
-  if (!module)
+  const binModule = getRecycleBinModule(moduleId);
+  if (!binModule)
     return NextResponse.json(
       { error: `Unknown module: ${moduleId}` },
       { status: 400 },
@@ -98,39 +98,39 @@ export async function GET(req: NextRequest) {
   const scope = await resolveScope(supabase, user.id, ownOnly);
 
   let query = supabase
-    .from(module.table)
-    .select(module.selectColumns, { count: "exact" })
-    .not(module.deletedAtColumn, "is", null);
+    .from(binModule.table)
+    .select(binModule.selectColumns, { count: "exact" })
+    .not(binModule.deletedAtColumn, "is", null);
 
-  if (module.scope === "user") {
+  if (binModule.scope === "user") {
     query = query.in("user_id", scope.userIds);
-  } else if (module.scope === "household") {
+  } else if (binModule.scope === "household") {
     if (!scope.householdId) {
       return NextResponse.json({ rows: [], total: 0, hasMore: false });
     }
     query = query.eq("household_id", scope.householdId);
   }
 
-  if (module.baseFilter) {
-    query = module.baseFilter(query as any) as any;
+  if (binModule.baseFilter) {
+    query = binModule.baseFilter(query as any) as any;
   }
 
-  if (q.length > 0 && module.searchColumns.length > 0) {
-    const orExpr = module.searchColumns
+  if (q.length > 0 && binModule.searchColumns.length > 0) {
+    const orExpr = binModule.searchColumns
       .map((c) => `${c}.ilike.%${q.replace(/[(),]/g, "")}%`)
       .join(",");
     query = query.or(orExpr);
   }
 
-  if (deletedFrom) query = query.gte(module.deletedAtColumn, deletedFrom);
-  if (deletedTo) query = query.lte(module.deletedAtColumn, deletedTo);
+  if (deletedFrom) query = query.gte(binModule.deletedAtColumn, deletedFrom);
+  if (deletedTo) query = query.lte(binModule.deletedAtColumn, deletedTo);
 
-  query = applyFilters(query, module, filters);
+  query = applyFilters(query, binModule, filters);
 
   const from = page * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
   query = query
-    .order(module.deletedAtColumn, { ascending: false })
+    .order(binModule.deletedAtColumn, { ascending: false })
     .range(from, to);
 
   const { data, error, count } = await query;
@@ -140,8 +140,8 @@ export async function GET(req: NextRequest) {
   }
 
   const rows = (data || []).map((r) => ({
-    moduleId: module.id,
-    ...module.formatRow(r as never),
+    moduleId: binModule.id,
+    ...binModule.formatRow(r as never),
   }));
 
   return NextResponse.json({
@@ -167,8 +167,8 @@ export async function DELETE(req: NextRequest) {
       { status: 400 },
     );
 
-  const module = getRecycleBinModule(moduleId);
-  if (!module)
+  const binModule = getRecycleBinModule(moduleId);
+  if (!binModule)
     return NextResponse.json(
       { error: `Unknown module: ${moduleId}` },
       { status: 400 },
@@ -178,13 +178,13 @@ export async function DELETE(req: NextRequest) {
 
   // Fetch the row first so onPurge can run side-effects.
   let fetchQuery = supabase
-    .from(module.table)
-    .select(module.selectColumns)
+    .from(binModule.table)
+    .select(binModule.selectColumns)
     .eq("id", id)
-    .not(module.deletedAtColumn, "is", null);
-  if (module.scope === "user") {
+    .not(binModule.deletedAtColumn, "is", null);
+  if (binModule.scope === "user") {
     fetchQuery = fetchQuery.in("user_id", scope.userIds);
-  } else if (module.scope === "household" && scope.householdId) {
+  } else if (binModule.scope === "household" && scope.householdId) {
     fetchQuery = fetchQuery.eq("household_id", scope.householdId);
   }
   const { data: row, error: fetchErr } = await fetchQuery.maybeSingle();
@@ -196,9 +196,9 @@ export async function DELETE(req: NextRequest) {
   }
 
   const admin = supabaseAdmin();
-  if (module.onPurge) {
+  if (binModule.onPurge) {
     try {
-      await module.onPurge({
+      await binModule.onPurge({
         row: row as never,
         supabase: supabase as never,
         admin: admin as never,
@@ -210,7 +210,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   const { error: delErr } = await admin
-    .from(module.table)
+    .from(binModule.table)
     .delete()
     .eq("id", id);
   if (delErr) {

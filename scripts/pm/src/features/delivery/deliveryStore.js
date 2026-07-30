@@ -95,12 +95,70 @@ export async function searchDeliveryTranscript(id, { q: query, kinds, phase } = 
     deliverySearchResults.value = await apiGet(`/api/delivery/transcript/search?${params.toString()}`);
   } catch (error) { showToast(error.message, { type: "error" }); }
 }
+// DLV-16 — the dashboard half of notifications. DLV-22 shipped the web-push
+// half by consuming `notification.requested` in the bridge; the same events
+// never surfaced on `pnpm pm` itself, so an owner sitting in front of the
+// dashboard learned about a cap-hit or a gate only by noticing the page had
+// changed.
+//
+// Kept deliberately narrow: the runner already emits exactly one
+// `notification.requested` per state change worth interrupting for (that is
+// why the DLV-12 finish package pointedly does NOT emit its own — see the
+// comment on `writeFinishPackage`), so this consumes that one event rather
+// than inventing a second, differently-shaped notion of "important".
+const NOTIFICATION_COPY = {
+  "budget-warning": { message: "Delivery is approaching its authorized budget", type: "warn" },
+  "budget-exhausted": { message: "Delivery paused — authorized budget exhausted", type: "error" },
+  "retry-exhausted": { message: "Delivery needs a decision — automatic retries are exhausted", type: "error" },
+  "max-turns": { message: "Delivery hit the lane's internal-turn ceiling — a decision is needed", type: "error" },
+};
+const notifiedEventKeys = new Set();
+
+function toastForNotifications(sessionId, events) {
+  for (const event of events) {
+    if (event.type !== "notification.requested") continue;
+    const key = `${sessionId}:${event.seq}`;
+    if (notifiedEventKeys.has(key)) continue;
+    notifiedEventKeys.add(key);
+    const reason = event.data?.reason || "notification";
+    const copy = NOTIFICATION_COPY[reason] || { message: `Delivery: ${reason}`, type: "warn" };
+    showToast(copy.message, { type: copy.type });
+  }
+}
+
+// Gate transitions are not `notification.requested` events — a gate is a
+// normal, expected stop — but they are the single thing an owner most needs to
+// know about, so they get the same treatment as in the bridge: toast on the
+// TRANSITION only, never on every poll of a session already sitting at a gate.
+const lastAwaitingGate = new Map();
+const GATE_COPY = {
+  spec: "Spec is ready for your approval",
+  plan: "Plan is ready for your approval",
+  uat: "UAT package is ready for you to accept",
+  question: "Delivery is asking you a question",
+  blocked: "Delivery is blocked and needs you",
+  budget: "Delivery paused at its budget cap",
+  shipped: "Delivery is accepted — mark it shipped when you've committed",
+};
+
+function toastForGate(sessionId, awaiting) {
+  const gate = awaiting?.gate || null;
+  const previous = lastAwaitingGate.get(sessionId);
+  lastAwaitingGate.set(sessionId, gate);
+  // `undefined` means this session has not been seen before in this page
+  // session: staying silent avoids a toast storm on first load / navigation.
+  if (previous === undefined || gate === previous || !gate) return;
+  showToast(GATE_COPY[gate] || `Delivery is waiting at the ${gate} gate`, { type: gate === "blocked" ? "error" : "warn" });
+}
+
 export async function loadDeliverySession(id, { reset = false } = {}) {
-  if (!id) return; activeDeliveryId.value = id; if (reset) { deliveryEvents.value = []; deliveryCursor.value = 0; }
+  if (!id) return; activeDeliveryId.value = id; if (reset) { deliveryEvents.value = []; deliveryCursor.value = 0; lastAwaitingGate.delete(id); }
   const [detail, tail] = await Promise.all([
     apiGet(`/api/delivery/session?id=${encodeURIComponent(id)}`),
     apiGet(`/api/delivery/events?id=${encodeURIComponent(id)}&after=${deliveryCursor.value}`),
   ]);
+  toastForNotifications(id, tail.events);
+  toastForGate(id, detail.state?.awaiting);
   deliverySession.value = detail;
   deliveryEvents.value = [...deliveryEvents.value, ...tail.events]; deliveryCursor.value = tail.lastSeq;
 }

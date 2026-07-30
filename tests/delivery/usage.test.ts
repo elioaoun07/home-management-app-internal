@@ -11,6 +11,8 @@ import {
   reduceUsageByPhase,
   reduceUsageByProvider,
   reduceUsageTotal,
+  addUsageV2,
+  toUsageTotalsV2,
 } from "../../scripts/delivery/usage.mjs";
 
 describe("normalizeUsageV2", () => {
@@ -41,6 +43,8 @@ describe("normalizeUsageV2", () => {
       output: 80,
       reasoningOutput: 0,
       costUsd: 0.02,
+      // DLV-61: null, not {0,0} — this raw shape reported no TTL breakdown.
+      cacheCreationTtl: null,
     });
   });
 
@@ -67,6 +71,43 @@ describe("normalizeUsageV2", () => {
 
   it("throws for an unknown provider", () => {
     expect(() => normalizeUsageV2({}, "bogus" as unknown as "codex")).toThrow(UsageError);
+  });
+
+  // DLV-61 — cache writes were 87.4% of the s-20260730-104900-9mfu bill, and
+  // whether that is priced right turns on the TTL (1h = 2x input, 5m = 1.25x).
+  it("records the claude cache-creation TTL split when the provider reports it", () => {
+    const raw = {
+      input_tokens: 9,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 5582,
+      output_tokens: 423,
+      cache_creation: { ephemeral_1h_input_tokens: 5582, ephemeral_5m_input_tokens: 0 },
+    };
+    // The real turn-0002 opening call: 100% 1-hour, which is what makes
+    // `cacheWritePerMTok: 2` the correct rate rather than an over-estimate.
+    expect(normalizeUsageV2(raw, "claude").cacheCreationTtl).toEqual({ ephemeral1h: 5582, ephemeral5m: 0 });
+  });
+
+  it("distinguishes 'no breakdown reported' (null) from 'reported, genuinely zero'", () => {
+    expect(normalizeUsageV2({ input_tokens: 1 }, "claude").cacheCreationTtl).toBeNull();
+    expect(normalizeUsageV2({ cache_creation: {} }, "claude").cacheCreationTtl).toBeNull();
+    expect(
+      normalizeUsageV2({ cache_creation: { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 0 } }, "claude")
+        .cacheCreationTtl,
+    ).toEqual({ ephemeral1h: 0, ephemeral5m: 0 });
+  });
+
+  it("keeps the TTL split out of budget math (diagnostic only)", () => {
+    const raw = {
+      input_tokens: 10,
+      cache_creation_input_tokens: 100,
+      cache_creation: { ephemeral_1h_input_tokens: 100, ephemeral_5m_input_tokens: 0 },
+    };
+    const usage = normalizeUsageV2(raw, "claude");
+    // toUsageTotalsV2 builds named keys explicitly and never spreads, so the
+    // diagnostic can never leak into a cap comparison (the DLV-43 NaN lesson).
+    expect(toUsageTotalsV2(usage)).not.toHaveProperty("cacheCreationTtl");
+    expect(computeOccupancy(usage).occupancyTokens).toBe(110);
   });
 });
 
@@ -151,5 +192,39 @@ describe("reduceTurnUsage / grouped reducers", () => {
 
   it("returns zeroed totals for an empty turn list", () => {
     expect(reduceTurnUsage([], (t) => t)).toEqual({ groups: {}, total: emptyUsageV2() });
+  });
+});
+
+// Regression for the NaN-poisoning found while wiring DLV-43: a running total
+// created before DLV-37 (legacy `{input, cachedInput, output, costUsd}`) has no
+// cachedRead/cacheCreation/reasoningOutput keys, so the old `{...prevTotals}`
+// spread left them undefined and the next `+=` produced NaN — after which every
+// budget comparison silently returns false and no cap can ever trip again.
+describe("addUsageV2: legacy-shaped running totals (DLV-37 back-compat)", () => {
+  it("carries a legacy total forward without producing NaN, mapping cachedInput -> cachedRead", () => {
+    // Deliberately the pre-DLV-37 shape, which is exactly what makes this a
+    // regression test — the cast is the point, not a workaround.
+    const legacyTotal = { input: 100, cachedInput: 2000, output: 50, costUsd: 0.02 } as unknown as Parameters<
+      typeof addUsageV2
+    >[0];
+    const next = addUsageV2(legacyTotal, { input: 10, cachedRead: 300, cacheCreation: 400, output: 5, reasoningOutput: 0 }, 0.01);
+
+    expect(next).toEqual({
+      input: 110,
+      cachedRead: 2300,
+      cacheCreation: 400,
+      output: 55,
+      reasoningOutput: 0,
+      costUsd: 0.03,
+      costEstUsd: null,
+    });
+    for (const value of Object.values(next)) {
+      expect(Number.isNaN(value as number)).toBe(false);
+    }
+  });
+
+  it("toUsageTotalsV2 zero-fills a totally absent total rather than throwing", () => {
+    expect(toUsageTotalsV2(null)).toEqual(emptyUsageV2());
+    expect(toUsageTotalsV2(undefined)).toEqual(emptyUsageV2());
   });
 });

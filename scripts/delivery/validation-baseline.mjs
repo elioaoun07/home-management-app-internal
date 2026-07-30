@@ -4,6 +4,19 @@
 
 export const DIRTY_TREE_ACK = "DIRTY TREE";
 export const RED_BASELINE_ACK = "RED BASELINE";
+// D11/DLV-39: typed override for the hard triage gate — refuses to launch an
+// S-effort, zero-risk-flag item through the full pipeline without an explicit
+// owner acknowledgment that they mean to anyway (same house pattern as the
+// two acks above; this refuses *entry*, it never reduces oversight once a
+// session is running).
+export const TRIAGE_OVERRIDE_ACK = "LAUNCH ANYWAY";
+// DLV-7: typed acknowledgment for a scope mismatch at the SPEC gate — the owner
+// has seen that DISCOVERY measured a larger change than the item was filed as,
+// and is choosing to build all of it rather than take a decomposition slice.
+// Same house pattern as the three above, and the same reason for being typed:
+// this is the moment BUD-11's S-item-turned-25-file-program could have been
+// caught for free, so it must cost a deliberate keystroke, not a reflex click.
+export const SCOPE_MISMATCH_ACK = "FULL SCOPE";
 
 function normalizePath(path) {
   return String(path == null ? "" : path)
@@ -133,6 +146,10 @@ export function classifyChangeOwnership(preExistingFiles = [], sessionTouchedFil
  * @param {{ok:boolean, results:Object<string,{ok:boolean, excerpt:string}>}} validation
  * @param {{ok:boolean, results:Object<string,{ok:boolean, excerpt:string}>}|null} [baseline]
  * @param {{touchedFiles?:string[]}} [options]
+ * @returns {{attributable:boolean, passesDelta:boolean, preExistingCommands:string[],
+ *   attributableCommands:string[],
+ *   commandDeltas:Object<string,{status:string, reason?:string, baselineFailures?:number,
+ *     currentFailures?:number, newTouchedFailures?:{file:string, signature:string}[]}>}}
  */
 export function classifyValidationFailure(validation, baseline = null, options = {}) {
   const preExistingCommands = [];

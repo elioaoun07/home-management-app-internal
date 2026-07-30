@@ -7,10 +7,39 @@ import { atomicWriteJsonSync } from "../../scripts/delivery/fsx.mjs";
 import {
   DeliveryRouteError,
   createDeliveryContext,
+  explicitPathsInText,
   performPendingWritebacks,
   routeDelivery,
   sessionIdFromWatchPath,
 } from "../../scripts/delivery/server-routes.mjs";
+
+// DLV-42: the item text almost always names its own target in this repo's
+// checklist grammar. Discarding it in favour of the campaign glob table was the
+// upstream cause of a DEEP lane recommendation for a one-token chip edit.
+describe("explicitPathsInText (DLV-42)", () => {
+  it("extracts a backticked path with a line suffix from real checklist grammar", () => {
+    expect(
+      explicitPathsInText(
+        "[TEST] Mobile expense form quick-amount chip: replace the $25 preset with $20 → `src/components/expense/MobileExpenseForm.tsx:1144`",
+      ),
+    ).toEqual(["src/components/expense/MobileExpenseForm.tsx"]);
+  });
+
+  it("extracts several paths, de-duplicated, in first-appearance order", () => {
+    expect(explicitPathsInText("Touch src/b.ts then scripts/a.mjs then src/b.ts again")).toEqual([
+      "src/b.ts",
+      "scripts/a.mjs",
+    ]);
+  });
+
+  it("returns nothing for an item that only describes its target in prose", () => {
+    expect(explicitPathsInText("Fix rounding drift on the accounts screen")).toEqual([]);
+  });
+
+  it("does not mistake prose punctuation or bare directories for file paths", () => {
+    expect(explicitPathsInText("Update src/features/accounts and the docs")).toEqual([]);
+  });
+});
 
 // ---- fixtures ----
 
@@ -128,9 +157,17 @@ describe("POST /api/delivery/start", () => {
     const state = JSON.parse(readFileSync(join(dir, "state.json"), "utf8"));
     expect(state.state).toBe("SELECTED");
     expect(state.agent).toBe("claude");
+    // D9/DLV-6: no explicit `effort` in startBody() -> the STANDARD lane's own
+    // tier-derived default (EFFORT_BY_TIER.standard), not the old static
+    // packet.mjs default (which had building:"high").
     expect(packet.agentConfig).toEqual({
       model: null,
-      effort: { discovery: "medium", plan: "high", building: "high", review: "medium" },
+      effort: { discovery: "medium", plan: "high", building: "medium", review: "medium" },
+    });
+    expect(packet.lanePolicy).toMatchObject({
+      lane: "STANDARD",
+      tier: "standard",
+      maxInternalTurns: 20,
     });
     expect(packet.budget).toMatchObject({
       maxUsd: 2,
@@ -156,6 +193,89 @@ describe("POST /api/delivery/start", () => {
     );
 
     expect(spawnedRunners).toEqual([{ sessionId, resume: false }]);
+  });
+
+  it("D11/DLV-39: refuses an S-effort, zero-risk-flag item without a typed override -- the real DLV-28 profile", async () => {
+    const { ctx, pmDir } = setup();
+    // "Delivery 10x" is not in CAMPAIGN_MODULE_GLOBS, so this item gets no
+    // frontend/backend/money capability at all -- the real DLV-28 item's
+    // actual campaign, reused deliberately for authenticity.
+    mkdirSync(join(pmDir, "Delivery 10x"), { recursive: true });
+    const trivialLine = "- [ ] **DLV-28** Add a Smoke Tests log entry to the campaign index _(annoyance - S)_";
+    writeFileSync(join(pmDir, "Delivery 10x", "4 - Checklist.md"), ["# Checklist", "", "## Now", "", trivialLine, ""].join("\n"));
+
+    await expectRouteError(
+      routeDelivery(
+        {
+          method: "POST",
+          path: "/api/delivery/start",
+          query: q(),
+          body: startBody({ file: "Delivery 10x/4 - Checklist.md", expectText: trivialLine }),
+        },
+        ctx,
+      ),
+      400,
+      /LAUNCH ANYWAY/,
+    );
+  });
+
+  it("D11/DLV-39: launches with the typed triage override, recording it in the packet for audit", async () => {
+    const { ctx, pmDir } = setup();
+    mkdirSync(join(pmDir, "Delivery 10x"), { recursive: true });
+    const trivialLine = "- [ ] **DLV-28** Add a Smoke Tests log entry to the campaign index _(annoyance - S)_";
+    writeFileSync(join(pmDir, "Delivery 10x", "4 - Checklist.md"), ["# Checklist", "", "## Now", "", trivialLine, ""].join("\n"));
+
+    const sessionId = await startSession(ctx, {
+      file: "Delivery 10x/4 - Checklist.md",
+      expectText: trivialLine,
+      triageAck: "LAUNCH ANYWAY",
+    });
+    const packet = JSON.parse(readFileSync(join(ctx.SESSIONS_DIR, sessionId, "packet.json"), "utf8"));
+    expect(packet.workspace.acknowledgments.triage).toMatchObject({ phrase: "LAUNCH ANYWAY" });
+    expect(packet.flightCheck.baseline.acknowledgments.triage).toMatchObject({ phrase: "LAUNCH ANYWAY" });
+  });
+
+  it("D11/DLV-39: never refuses an M-effort item, even with no risk flags", async () => {
+    const { ctx, pmDir } = setup();
+    mkdirSync(join(pmDir, "Delivery 10x"), { recursive: true });
+    const line = "- [ ] **N9** A genuinely medium-effort change to campaign tooling _(annoyance - M)_";
+    writeFileSync(join(pmDir, "Delivery 10x", "4 - Checklist.md"), ["# Checklist", "", "## Now", "", line, ""].join("\n"));
+
+    const sessionId = await startSession(ctx, { file: "Delivery 10x/4 - Checklist.md", expectText: line });
+    expect(sessionId).toMatch(/^s-/);
+  });
+
+  it("D9/DLV-6: FAST lane resolves to economy effort + a tighter maxInternalTurns, recorded in the packet", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx, { flightCheck: { reviewed: true, lane: "FAST" } });
+    const packet = JSON.parse(readFileSync(join(ctx.SESSIONS_DIR, sessionId, "packet.json"), "utf8"));
+    expect(packet.agentConfig.effort).toEqual({ discovery: "low", plan: "low", building: "medium", review: "low" });
+    expect(packet.lanePolicy).toEqual({
+      lane: "FAST",
+      tier: "economy",
+      effortByPhase: { discovery: "low", plan: "low", building: "medium", review: "low" },
+      budget: { maxUsd: 0.5, maxTokens: 500_000, warnPct: 0.8 },
+      maxInternalTurns: 12, // DLV-45: raised from 8 (FAST could not finish DISCOVERY at 8)
+      validationLadder: { rungs: ["typecheck", "test"], targetedTest: true },
+      // DLV-62: this fixture's item names no explicit path, so it is NOT
+      // eligible for the merged DISCOVERY+PLAN turn — and the policy records
+      // why, rather than just recording false.
+      mergedDiscoveryPlan: false,
+      mergedDiscoveryPlanReason: "the item names no explicit file paths, so its scope is not known to be single-file",
+    });
+  });
+
+  it("D9/DLV-6: a per-phase owner effort override wins for that phase; other phases still get the lane default", async () => {
+    const { ctx } = setup();
+    const sessionId = await startSession(ctx, { effort: { building: "xhigh" } });
+    const packet = JSON.parse(readFileSync(join(ctx.SESSIONS_DIR, sessionId, "packet.json"), "utf8"));
+    // STANDARD lane's own default is {discovery:"medium", plan:"high", building:"medium", review:"medium"} --
+    // only `building` was overridden; discovery/plan/review still come from the lane, not the old static default.
+    expect(packet.agentConfig.effort).toEqual({ discovery: "medium", plan: "high", building: "xhigh", review: "medium" });
+    // lanePolicy still records what the lane itself would have defaulted to,
+    // separate from the owner's override (see flightCheck.selection.effortOverrides).
+    expect(packet.lanePolicy.effortByPhase.building).toBe("medium");
+    expect(packet.flightCheck.selection.effortOverrides).toEqual({ building: "xhigh" });
   });
 
   it("requires the owner-reviewed Flight-Check marker and a valid lane", async () => {
@@ -215,9 +335,12 @@ describe("POST /api/delivery/start", () => {
       effort: { discovery: "low", plan: "xhigh" },
     });
     const packet = JSON.parse(readFileSync(join(ctx.SESSIONS_DIR, sessionId, "packet.json"), "utf8"));
+    // D9/DLV-6: building/review weren't overridden, so they come from the
+    // STANDARD lane's default (EFFORT_BY_TIER.standard), not the old static
+    // packet.mjs default (building:"high").
     expect(packet.agentConfig).toEqual({
       model: "provider-model",
-      effort: { discovery: "low", plan: "xhigh", building: "high", review: "medium" },
+      effort: { discovery: "low", plan: "xhigh", building: "medium", review: "medium" },
     });
   });
 
@@ -567,6 +690,75 @@ describe("GET /api/delivery/recommendation", () => {
       400,
     );
   });
+
+  it("D8: forecast is informed by completed same-tier session history once >=3 samples exist", async () => {
+    const { ctx, pmDir } = setup({ deliveryConfig: CATALOG });
+    // A second item, S-effort/annoyance with no money operation named -> score 2
+    // purely from the four source paths the item itself names (DLV-42: only
+    // item-derived scope counts; the campaign glob table no longer inflates it)
+    // -> standard tier, distinct from cbidx 0's premium-tier fixture above.
+    writeFileSync(
+      join(pmDir, "Budget", "4 - Checklist.md"),
+      CHECKLIST_RAW.replace(
+        "- [x] Already done item",
+        "- [x] Already done item\n- [ ] **N2** Update label copy → src/a/one.tsx, src/a/two.tsx, src/a/three.tsx, src/a/four.tsx _(annoyance - S)_",
+      ),
+    );
+
+    // 3 sessions that reached ACCEPTED, each recording a real end-to-end usage
+    // total far above the static standard fallback (900,000) -- modeled on the
+    // real xdl9 session's recorded total (Cost Anatomy doc).
+    for (let i = 0; i < 3; i++) {
+      const id = `s-fixture-history-${i}`;
+      const dir = join(ctx.SESSIONS_DIR, id);
+      mkdirSync(dir, { recursive: true });
+      atomicWriteJsonSync(join(dir, "packet.json"), {
+        item: { pmFile: "Budget/4 - Checklist.md", cbidx: 0 },
+        flightCheck: { recommendation: { tier: "standard" } },
+      });
+      atomicWriteJsonSync(join(dir, "state.json"), {
+        state: "ACCEPTED",
+        updatedAt: new Date().toISOString(),
+        usage: {
+          perPhase: {},
+          total: { input: 200_000, cachedRead: 1_950_438, cacheCreation: 200_000, output: 36_033, costUsd: 2.4, costEstUsd: 2.4 },
+        },
+      });
+    }
+
+    const result = await routeDelivery(
+      { method: "GET", path: "/api/delivery/recommendation", query: q({ file: "Budget/4 - Checklist.md", cbidx: "2", provider: "claude" }), body: {} },
+      ctx,
+    );
+    expect(result?.status).toBe(200);
+    const { recommendation } = result!.json as {
+      recommendation: {
+        tier: string;
+        estTokens: number;
+        legacySessionEstimate: { estTokens: number };
+        phaseForecast: { phases: { phase: string }[]; assumptions: { priorSource: string } };
+      } | null;
+    };
+    expect(recommendation).not.toBeNull();
+    expect(recommendation!.tier).toBe("standard");
+    // Median of the 3 fixture sessions (2,386,471), not the static standard
+    // fallback (900,000) -- proves `history` reached `recommendAgentConfig`.
+    // DLV-56 moved this per-session number off the headline; it is asserted on
+    // `legacySessionEstimate`, which is what every already-launched session's
+    // forecast-vs-actual is still measured against.
+    expect(recommendation!.legacySessionEstimate.estTokens).toBe(2_386_471);
+    // The headline is the per-phase-traversal sum. These fixtures record an
+    // empty `perPhase`, so it falls back to the static per-phase shape rather
+    // than inventing medians from nothing.
+    expect(recommendation!.phaseForecast.phases.map((p) => p.phase)).toEqual([
+      "discovery", "plan", "building", "reviewing", "uat",
+    ]);
+    expect(recommendation!.phaseForecast.assumptions.priorSource).toBe("static-estimate");
+    expect(recommendation!.estTokens).toBe(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (recommendation!.phaseForecast as any).phases.reduce((s: number, p: { tokens: number }) => s + p.tokens, 0),
+    );
+  });
 });
 
 describe("POST /api/delivery/decision", () => {
@@ -619,6 +811,130 @@ describe("POST /api/delivery/decision", () => {
       ctx,
     );
     expect(result?.status).toBe(200);
+  });
+
+  // DLV-7: enforcement of the scope tripwire lives here rather than in the
+  // runner, for the same reason the dirty-tree / red-baseline / triage
+  // acknowledgments do — a runner that refuses an already-written decision
+  // parks the session at a gate with nothing left to answer it (DLV-53).
+  describe("DLV-7: scope mismatch at the spec gate", () => {
+    async function sessionAtScopeMismatch(ctx: Parameters<typeof routeDelivery>[1], slices = 2) {
+      const sessionId = await startSession(ctx);
+      const dir = join(ctx.SESSIONS_DIR, sessionId);
+      const state = JSON.parse(readFileSync(join(dir, "state.json"), "utf8"));
+      state.state = "SPEC_READY";
+      state.awaiting = {
+        gate: "spec",
+        scope: {
+          mismatch: true,
+          sizeClass: "L",
+          itemSizeClass: "S",
+          reason: "The work item is filed as S-effort, but DISCOVERY measured L-sized scope (25 file(s)).",
+          decomposition: Array.from({ length: slices }, (_, i) => ({
+            title: `Slice ${i + 1}`, rationale: null, acceptanceCriteriaIds: [`AC${i + 1}`],
+          })),
+        },
+      };
+      atomicWriteJsonSync(join(dir, "state.json"), state);
+      return { sessionId, dir };
+    }
+
+    it("refuses a bare approve and names both ways past it", async () => {
+      const { ctx } = setup();
+      const { sessionId } = await sessionAtScopeMismatch(ctx);
+      await expectRouteError(
+        routeDelivery(
+          { method: "POST", path: "/api/delivery/decision", query: q(), body: { id: sessionId, gate: "spec", decision: "approve" } },
+          ctx,
+        ),
+        400,
+        /scopeSlice: 1-2[\s\S]*FULL SCOPE/,
+      );
+    });
+
+    it("accepts a decomposition slice and records it on the decision", async () => {
+      const { ctx } = setup();
+      const { sessionId, dir } = await sessionAtScopeMismatch(ctx);
+      const result = await routeDelivery(
+        {
+          method: "POST", path: "/api/delivery/decision", query: q(),
+          body: { id: sessionId, gate: "spec", decision: "approve", scopeSlice: 2 },
+        },
+        ctx,
+      );
+      expect(result?.status).toBe(200);
+      const record = JSON.parse(readFileSync(join(dir, "decisions", "0001-spec.json"), "utf8"));
+      expect(record.scopeSlice).toBe(2);
+      expect(record.scopeAck).toBeNull();
+    });
+
+    it("accepts the typed full-scope acknowledgment", async () => {
+      const { ctx } = setup();
+      const { sessionId, dir } = await sessionAtScopeMismatch(ctx);
+      const result = await routeDelivery(
+        {
+          method: "POST", path: "/api/delivery/decision", query: q(),
+          body: { id: sessionId, gate: "spec", decision: "approve", scopeAck: "FULL SCOPE" },
+        },
+        ctx,
+      );
+      expect(result?.status).toBe(200);
+      expect(JSON.parse(readFileSync(join(dir, "decisions", "0001-spec.json"), "utf8")).scopeAck).toBe("FULL SCOPE");
+    });
+
+    it("rejects an out-of-range slice rather than falling back to full scope", async () => {
+      const { ctx } = setup();
+      const { sessionId } = await sessionAtScopeMismatch(ctx);
+      await expectRouteError(
+        routeDelivery(
+          {
+            method: "POST", path: "/api/delivery/decision", query: q(),
+            body: { id: sessionId, gate: "spec", decision: "approve", scopeSlice: 7 },
+          },
+          ctx,
+        ),
+        400,
+        /between 1 and 2/,
+      );
+    });
+
+    it("lets an ordinary spec approval through untouched when there is no mismatch", async () => {
+      const { ctx } = setup();
+      const sessionId = await startSession(ctx);
+      const dir = join(ctx.SESSIONS_DIR, sessionId);
+      const state = JSON.parse(readFileSync(join(dir, "state.json"), "utf8"));
+      state.state = "SPEC_READY";
+      state.awaiting = { gate: "spec" };
+      atomicWriteJsonSync(join(dir, "state.json"), state);
+
+      const result = await routeDelivery(
+        { method: "POST", path: "/api/delivery/decision", query: q(), body: { id: sessionId, gate: "spec", decision: "approve" } },
+        ctx,
+      );
+      expect(result?.status).toBe(200);
+    });
+
+    it("refuses a scopeSlice sent when no mismatch is being reported", async () => {
+      const { ctx } = setup();
+      const sessionId = await startSession(ctx);
+      const dir = join(ctx.SESSIONS_DIR, sessionId);
+      const state = JSON.parse(readFileSync(join(dir, "state.json"), "utf8"));
+      state.state = "SPEC_READY";
+      state.awaiting = { gate: "spec" };
+      atomicWriteJsonSync(join(dir, "state.json"), state);
+
+      await expectRouteError(
+        routeDelivery(
+          {
+            method: "POST", path: "/api/delivery/decision", query: q(),
+            body: { id: sessionId, gate: "spec", decision: "approve", scopeSlice: 1 },
+          },
+          ctx,
+        ),
+        400,
+        /only valid when/,
+      );
+    });
   });
 
   it("returns 409 for a decision on a terminal session", async () => {
@@ -854,6 +1170,56 @@ describe("GET /api/delivery/sessions and /api/delivery/session", () => {
     expect(json.state).toBeTruthy();
     expect(json.artifacts.some((a) => a.path === "spec.md")).toBe(true);
     expect(json.runner.alive).toBe(false);
+  });
+
+  it("D8: exposes forecastActual derived from packet.recommendation vs state.usage.total", async () => {
+    const CATALOG = {
+      providers: {
+        claude: {
+          defaultModel: "claude-sonnet-5",
+          efforts: ["low", "medium", "high", "xhigh", "max"],
+          models: [
+            { id: "claude-opus-4-8", tier: "premium", pricing: { inPerMTok: 5, outPerMTok: 25, cachedReadPerMTok: 0.5, cacheWritePerMTok: 6.25 } },
+          ],
+        },
+      },
+    };
+    const { ctx } = setup({ deliveryConfig: CATALOG });
+    // CHECKLIST_LINE ("_(blocker - M)_", "allocation splits") scores premium tier.
+    const sessionId = await startSession(ctx);
+    const dir = join(ctx.SESSIONS_DIR, sessionId);
+    const state = JSON.parse(readFileSync(join(dir, "state.json"), "utf8"));
+    state.usage.total = { input: 400_000, cachedRead: 3_000_000, cacheCreation: 200_000, output: 61_412, costUsd: 6.8, costEstUsd: 6.8 };
+    atomicWriteJsonSync(join(dir, "state.json"), state);
+
+    const result = await routeDelivery(
+      { method: "GET", path: "/api/delivery/session", query: q({ id: sessionId }), body: {} },
+      ctx,
+    );
+    expect(result?.status).toBe(200);
+    const json = result!.json as {
+      forecastActual: { tier: string; estTokens: number; actualTokens: number; actualCostUsd: number; tokenRatio: number } | null;
+    };
+    expect(json.forecastActual).not.toBeNull();
+    expect(json.forecastActual!.tier).toBe("premium");
+    expect(json.forecastActual!.actualTokens).toBe(3_661_412);
+    expect(json.forecastActual!.actualCostUsd).toBe(6.8);
+    expect(json.forecastActual!.tokenRatio).toBeCloseTo(3_661_412 / json.forecastActual!.estTokens, 5);
+  });
+
+  it("forecastActual is null when the session has no recorded usage yet", async () => {
+    const { ctx } = setup({
+      deliveryConfig: {
+        providers: { claude: { defaultModel: "claude-sonnet-5", efforts: ["low", "medium", "high"], models: [{ id: "claude-sonnet-5", tier: "standard", pricing: { inPerMTok: 3, outPerMTok: 15, cachedReadPerMTok: 0.3, cacheWritePerMTok: 3.75 } }] } },
+      },
+    });
+    const sessionId = await startSession(ctx);
+    const result = await routeDelivery(
+      { method: "GET", path: "/api/delivery/session", query: q({ id: sessionId }), body: {} },
+      ctx,
+    );
+    const json = result!.json as { forecastActual: unknown };
+    expect(json.forecastActual).toBeNull();
   });
 });
 

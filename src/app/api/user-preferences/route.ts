@@ -193,7 +193,7 @@ export async function PATCH(_req: NextRequest) {
     if (!("theme" in insertPayload) || insertPayload.theme === undefined) {
       insertPayload.theme = "system"; // allowed by your CHECK
     }
-    let { error: insErr } = await supabase
+    const { error: insErr } = await supabase
       .from("user_preferences")
       .insert(insertPayload);
     if (insErr) {

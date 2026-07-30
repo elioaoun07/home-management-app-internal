@@ -1,8 +1,9 @@
 // Codex SDK-backed delivery driver. The SDK is dynamically imported only when a
 // driver is used, so dashboard and pure delivery modules remain dependency-free.
 
-import { DriverAbortedError, DriverError, registerDriver, withTimeout } from "./driver.mjs";
+import { DriverAbortedError, DriverError, registerDriver, withObservedUsage, withTimeout } from "./driver.mjs";
 import { agentEventType, normalizeUsage } from "../events.mjs";
+import { normalizeUsageV2 } from "../usage.mjs";
 
 const SDK_MODULE_SPECIFIER = "@openai/codex-sdk";
 const PERMISSIVE_JSON_SCHEMA = Object.freeze({ type: "object" });
@@ -274,7 +275,31 @@ export function createCodexDriver(options = {}) {
     return { ref: currentRef, cwd: ref.cwd, mode };
   }
 
-  async function runTurn(handle, prompt, { outputSchema, onEvent, onRaw, effort, signal } = {}) {
+  // DLV-31: see the matching comment in drivers/claude.mjs — the runner
+  // reuses one driver instance per process, so a rotation/quota-retry that
+  // nulls `state.driver.ref` must also reset this instance's local
+  // `started` flag before the next `startSession`, or it throws forever.
+  function reset() {
+    started = false;
+    currentRef = null;
+    thread = null;
+    currentOptions = null;
+  }
+
+  // `maxTurns` (D9/DLV-6) is accepted for interface parity with the claude
+  // driver's runTurn(), but is NOT forwarded to the Codex SDK:
+  // `@openai/codex-sdk`'s TurnOptions has no verified equivalent to
+  // Options.maxTurns, and every observed real delivery session used the claude
+  // provider (Cost Anatomy §5), so guessing at an unverified codex field risks
+  // a silent no-op or a hard SDK error for zero verified benefit. Revisit if a
+  // real codex session shows the same internal-turn-amplification pattern.
+  //
+  // Two traps this directive has already fallen into, hence its exact form:
+  // this repo's flat config enables the TS-aware rule (not core
+  // `no-unused-vars`), and `disable-next-line` must be the LAST comment line —
+  // in a multi-line `//` block, "next line" is the block's own next line.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async function runTurn(handle, prompt, { outputSchema, onEvent, onRaw, effort, maxTurns, signal } = {}) {
     void handle;
     if (!started || !thread || !currentRef) throw new DriverError("codex driver: cannot run a turn before startSession/resume");
     if (typeof prompt !== "string" || !prompt.trim()) throw new DriverError("codex driver: prompt must be a non-empty string");
@@ -286,13 +311,17 @@ export function createCodexDriver(options = {}) {
 
     let finalText = "";
     let usage = null;
+    let usageV2 = null;
     let failure = null;
     try {
       const { events } = await thread.runStreamed(prompt, withAbortSignal(toTurnOptions(outputSchema), signal));
       for await (const event of events) {
         if (event.type === "thread.started" && event.thread_id) currentRef.id = event.thread_id;
         if (event.type === "item.completed" && event.item && event.item.type === "agent_message") finalText = event.item.text || "";
-        if (event.type === "turn.completed") usage = normalizeUsage(event.usage, "codex");
+        if (event.type === "turn.completed") {
+          usage = normalizeUsage(event.usage, "codex");
+          usageV2 = normalizeUsageV2(event.usage, "codex");
+        }
         if (event.type === "turn.failed") failure = (event.error && event.error.message) || "turn failed";
         if (event.type === "error") failure = event.message || "SDK stream error";
         for (const normalized of mapCodexEventToEvents(event)) {
@@ -306,17 +335,28 @@ export function createCodexDriver(options = {}) {
       if (signal && signal.aborted) {
         throw new DriverAbortedError("codex driver: turn aborted by owner");
       }
-      throw new DriverError(`codex driver: stream failed — ${(err && err.message) || err}`);
+      // DLV-43: bank whatever a dying stream already spent — see
+      // `withObservedUsage`. A `turn.completed` event may well have arrived
+      // before the stream broke.
+      throw withObservedUsage(
+        new DriverError(`codex driver: stream failed — ${(err && err.message) || err}`),
+        usage || usageV2 ? { usage, usageV2 } : null,
+      );
     }
     if (signal && signal.aborted) {
       throw new DriverAbortedError("codex driver: turn aborted by owner");
     }
-    if (failure) throw new DriverError(`codex driver: turn failed — ${failure}`);
+    if (failure) {
+      throw withObservedUsage(
+        new DriverError(`codex driver: turn failed — ${failure}`),
+        usage || usageV2 ? { usage, usageV2 } : null,
+      );
+    }
     if (!usage) throw new DriverError("codex driver: stream ended without a turn.completed event");
-    return { finalText, usage };
+    return { finalText, usage, usageV2 };
   }
 
-  return { kind: "codex", manifest, startSession, resume, runTurn };
+  return { kind: "codex", manifest, startSession, resume, runTurn, reset };
 }
 
 registerDriver("codex", createCodexDriver);

@@ -19,33 +19,33 @@ export async function GET(req: NextRequest) {
   const scope = await resolveScope(supabase, user.id, ownOnly);
 
   const counts: Record<string, number> = {};
-  for (const module of RECYCLE_BIN_MODULES) {
+  for (const binModule of RECYCLE_BIN_MODULES) {
     let query = supabase
-      .from(module.table)
+      .from(binModule.table)
       .select("id", { count: "exact", head: true })
-      .not(module.deletedAtColumn, "is", null);
+      .not(binModule.deletedAtColumn, "is", null);
 
-    if (module.scope === "user") {
+    if (binModule.scope === "user") {
       query = query.in("user_id", scope.userIds);
-    } else if (module.scope === "household") {
+    } else if (binModule.scope === "household") {
       if (!scope.householdId) {
-        counts[module.id] = 0;
+        counts[binModule.id] = 0;
         continue;
       }
       query = query.eq("household_id", scope.householdId);
     }
 
-    if (module.baseFilter) {
-      query = module.baseFilter(query as any) as any;
+    if (binModule.baseFilter) {
+      query = binModule.baseFilter(query as any) as any;
     }
 
     const { count, error } = await query;
     if (error) {
-      console.error(`[recycle-bin] count failed for ${module.id}`, error);
-      counts[module.id] = 0;
+      console.error(`[recycle-bin] count failed for ${binModule.id}`, error);
+      counts[binModule.id] = 0;
       continue;
     }
-    counts[module.id] = count ?? 0;
+    counts[binModule.id] = count ?? 0;
   }
 
   return NextResponse.json({ counts });

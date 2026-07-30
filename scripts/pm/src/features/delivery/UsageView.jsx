@@ -17,7 +17,10 @@ export function UsageView({ id, legacyUsage, budgets = {} }) {
 
   const total = useMemo(() => { const t = emptyTotals(); for (const turn of turns) add(t, turn); return t; }, [turns]);
   const envelope=deliverySession.value?.state?.budget?.current||deliverySession.value?.packet?.budget||budgets;
-  const processedTokens = total.input + total.cachedRead + total.output;
+  // DLV-37: cache-CREATION tokens were previously dropped here — the usage
+  // panel under-reported real processed volume (Cost Anatomy §4: recorded
+  // 300,645 vs actual 571,419 on one session, a 1.9x gap).
+  const processedTokens = total.input + total.cachedRead + total.cacheCreation + total.output;
   const maxTokens = envelope?.maxTokens??envelope?.maxSessionTokens;
   const warnTokens = envelope?.warnTokens??envelope?.warnSessionTokens??(typeof maxTokens==="number"&&typeof envelope?.warnPct==="number"?maxTokens*envelope.warnPct:null);
   const authoritativeCost=legacyUsage?.total?.costUsd;
@@ -36,10 +39,12 @@ export function UsageView({ id, legacyUsage, budgets = {} }) {
   if (!turns.length) {
     // v1 sessions have no per-turn transcript — fall back to the legacy session-level total.
     const legacy = legacyUsage?.total || {};
+    const legacyCachedRead = legacy.cachedRead != null ? legacy.cachedRead : legacy.cachedInput || 0;
+    const legacyProcessed = (legacy.input || 0) + legacyCachedRead + (legacy.cacheCreation || 0) + (legacy.output || 0);
     return <section class="card"><h2>Usage</h2>
-      <div class="stat-value">{(legacy.input || 0) + (legacy.output || 0)}</div>
+      <div class="stat-value">{legacyProcessed}</div>
       <div class="muted">total tokens (pre-DW-1 session — no per-turn breakdown captured)</div>
-      <BudgetSummary envelope={envelope} processedTokens={(legacy.input||0)+(legacy.cachedInput||0)+(legacy.output||0)} costUsd={legacy.costUsd}/>
+      <BudgetSummary envelope={envelope} processedTokens={legacyProcessed} costUsd={legacy.costUsd}/>
     </section>;
   }
 

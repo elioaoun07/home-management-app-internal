@@ -11,7 +11,18 @@
 //   startSession({cwd, mode: "build" | "readonly", model?}) → handle
 //   resume(ref)                                             → handle
 //   runTurn(handle, prompt, {outputSchema?, onEvent})        → {finalText, usage}
+//   reset()                                                  → void
 // }
+//
+// `reset()` (DLV-31): the runner creates one driver instance per process and
+// reuses it across every tick (see run-session.mjs's runLoop). A driver's
+// `startSession` refuses to run twice — that guard is real and should stay —
+// but a rotation or a quota-paused retry nulls `state.driver.ref` to force
+// the *next* `getHandle` call to start fresh, without the driver instance
+// ever being told its previous logical session ended. `getHandle` calls
+// `driver.reset()` right before any `startSession`, so implementations must
+// clear whatever internal state makes `startSession` throw "already
+// started" (idempotent — safe to call even when never started).
 
 export class DriverError extends Error {}
 
@@ -73,6 +84,47 @@ export function withTimeout(promise, ms, onTimeout) {
     if (timer && typeof timer.unref === "function") timer.unref();
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * DLV-43: tag a driver error with the usage its dead turn had already spent.
+ *
+ * A turn that ends in a provider error rather than a clean result is not a
+ * free turn — `s-20260729-121840-pdhx` recorded $0.00 / 0 tokens for a
+ * DISCOVERY phase whose raw SDK transcript shows 512,752 processed tokens
+ * (~$0.34 at Haiku 4.5 pricing), already past that lane's own 500,000-token
+ * cap. `enforceBudgetBoundary` only ever saw usage from turns that completed,
+ * so a runaway or crashing phase — precisely the scenario a hard cap exists
+ * for — was invisible to it.
+ *
+ * Attached as non-enumerable properties so the error still serializes and
+ * prints exactly as before (nothing that logs or compares error shapes
+ * changes behavior); `readObservedUsage` is the only intended reader.
+ * @param {Error} error
+ * @param {{usage?:object, usageV2?:object}|null} observed - normalized usage the driver saw before failing
+ */
+export function withObservedUsage(error, observed) {
+  if (!error || !observed) return error;
+  const { usage = null, usageV2 = null } = observed;
+  if (!usage && !usageV2) return error;
+  Object.defineProperty(error, "observedUsage", { value: usage, enumerable: false, configurable: true });
+  Object.defineProperty(error, "observedUsageV2", { value: usageV2, enumerable: false, configurable: true });
+  return error;
+}
+
+/**
+ * Read back whatever `withObservedUsage` attached, for a caller that must bank
+ * a failed turn's spend. Returns `null` when the error carries no usage (an
+ * error thrown before the provider was ever reached genuinely cost nothing).
+ * @param {unknown} error
+ * @returns {{usage:({costUsd?:(number|null)}|null), usageV2:({costUsd?:(number|null)}|null)}|null}
+ */
+export function readObservedUsage(error) {
+  if (!error || typeof error !== "object") return null;
+  const usage = error.observedUsage || null;
+  const usageV2 = error.observedUsageV2 || null;
+  if (!usage && !usageV2) return null;
+  return { usage, usageV2 };
 }
 
 /** Remove a registered driver (test isolation helper). */

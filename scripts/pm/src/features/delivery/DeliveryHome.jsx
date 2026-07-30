@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { AGENT_REGISTRY, getAgent } from "../../../../delivery/agent-registry.mjs";
-import { ALWAYS_ON_CAPABILITIES } from "../../../../delivery/classify.mjs";
-import { DIRTY_TREE_ACK, RED_BASELINE_ACK } from "../../../../delivery/validation-baseline.mjs";
+import { ALWAYS_ON_CAPABILITIES, isTrivialLaunchCandidate } from "../../../../delivery/classify.mjs";
+import { DIRTY_TREE_ACK, RED_BASELINE_ACK, TRIAGE_OVERRIDE_ACK } from "../../../../delivery/validation-baseline.mjs";
 import { scanCheckboxes } from "../../../shared/md-scan.mjs";
 import { allTasks, byRelPath, files } from "../../app/store.js";
 import { navigate, route } from "../../app/router.js";
@@ -62,8 +62,69 @@ export function DeliveryHome() {
           Agent catalog
         </button>
       </div>
-      {tab === "sessions" ? <SessionsList /> : <AgentCatalog />}
+      {tab === "sessions" ? (
+        <>
+          <FleetMetrics metrics={deliveryData.value.metrics} />
+          <SessionsList />
+        </>
+      ) : (
+        <AgentCatalog />
+      )}
     </>
+  );
+}
+
+/**
+ * DLV-19 — the honest mirror. Computed server-side from the session directories
+ * (see `computeFleetMetrics`), so nothing here is a new persisted number.
+ *
+ * Every figure is deliberately one that can look bad. `costPerShippedItem` in
+ * particular divides *total* fleet spend by shipped sessions rather than
+ * averaging the shipped ones: work that never shipped was still paid for, and
+ * this campaign started from seven cancelled sessions and one blocked one.
+ */
+function FleetMetrics({ metrics }) {
+  if (!metrics || !metrics.total) return null;
+  const money = (value) => (typeof value === "number" ? `$${value.toFixed(2)}` : "—");
+  const pct = (value) => (typeof value === "number" ? `${Math.round(value * 100)}%` : "—");
+  const ratio = (value) => (typeof value === "number" ? `${value.toFixed(1)}x` : "—");
+  const outcomes = Object.entries(metrics.outcomes).sort((a, b) => b[1] - a[1]);
+  return (
+    <section class="card" style={{ marginTop: 14 }}>
+      <h2>Fleet</h2>
+      <div class="chip-row" style={{ marginTop: 6 }}>
+        {outcomes.map(([state, count]) => (
+          <Chip key={state} tone={state === "SHIPPED" ? "" : state === "CANCELLED" || state === "FAILED" || state === "BLOCKED" ? "blocker" : ""}>
+            {state}: {count}
+          </Chip>
+        ))}
+      </div>
+      <div class="grid stats" style={{ marginTop: 12 }}>
+        <div>
+          <div class="stat-value">{money(metrics.costPerShippedItem)}</div>
+          <div class="muted" style={{ fontSize: 11 }}>
+            cost per shipped item — all fleet spend ({money(metrics.totalCostUsd)}) over {metrics.shippedCount} shipped
+          </div>
+        </div>
+        <div>
+          <div class="stat-value">{ratio(metrics.interventionsPerSession)}</div>
+          <div class="muted" style={{ fontSize: 11 }}>owner decisions per session</div>
+        </div>
+        <div>
+          <div class="stat-value">{pct(metrics.firstPassValidationRate)}</div>
+          <div class="muted" style={{ fontSize: 11 }}>validated first pass, no fix loop</div>
+        </div>
+        <div>
+          <div class="stat-value">{ratio(metrics.scopeEstimateAccuracy)}</div>
+          <div class="muted" style={{ fontSize: 11 }}>files changed vs files estimated (1.0x = accurate)</div>
+        </div>
+      </div>
+      {metrics.costBasis === "unavailable" && (
+        <p class="muted" style={{ fontSize: 11, marginTop: 8 }}>
+          No provider cost has been recorded for any session — populate model pricing in <code>.delivery/config.json</code> for real figures.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -81,7 +142,16 @@ function SessionsList() {
   return (
     <div class="session-list">
       {sessions.map((session) => {
-        const usage = session.usageTotal ? (session.usageTotal.input || 0) + (session.usageTotal.output || 0) : 0;
+        // DLV-37: include cached-read + cache-creation, not just input/output —
+        // the fleet list previously under-reported the same way the session
+        // header chip did (Cost Anatomy §4).
+        const usageTotal = session.usageTotal;
+        const usage = usageTotal
+          ? (usageTotal.input || 0) +
+            (usageTotal.cachedRead != null ? usageTotal.cachedRead : usageTotal.cachedInput || 0) +
+            (usageTotal.cacheCreation || 0) +
+            (usageTotal.output || 0)
+          : 0;
         const cancellable = !TERMINAL_STATES.has(session.state);
         return (
           <a class="session-row" href={`#/delivery/session/${session.sessionId}${session.awaiting?.gate === "question" ? "?tab=questions" : ""}`} style={{ color: "inherit" }}>
@@ -158,19 +228,6 @@ function Wizard({ value, setValue, onClose }) {
   const providerCaps = deliveryCapabilities.value?.providers?.[value.provider];
   const models = providerCaps?.models || [];
   const efforts = providerCaps?.efforts || providerCaps?.manifest?.efforts || [];
-  const budgetDefault = deliveryCapabilities.value?.config?.budgets?.laneDefaults?.standard || { maxUsd: 2, maxTokens: 2000000, warnPct: 0.8 };
-  const budget = value.budget || {
-    maxUsd: String(budgetDefault.maxUsd ?? ""),
-    maxTokens: String(budgetDefault.maxTokens ?? ""),
-    warnPct: String(Math.round((budgetDefault.warnPct ?? 0.8) * 100)),
-    noCap: false,
-    noCapConfirm: "",
-  };
-  const updateBudget = (patch) => update({ budget: { ...budget, ...patch } });
-  const maxUsd = budget.maxUsd === "" ? null : Number(budget.maxUsd);
-  const maxTokens = budget.maxTokens === "" ? null : Number(budget.maxTokens);
-  const warnPct = Number(budget.warnPct) / 100;
-  const budgetValid = budget.noCap ? budget.noCapConfirm === "NO CAP" : ((Number.isFinite(maxUsd) && maxUsd > 0) || (Number.isInteger(maxTokens) && maxTokens > 0)) && Number.isFinite(warnPct) && warnPct > 0 && warnPct < 1;
   useEffect(() => {
     if (value.task) loadDeliveryRecommendation(value.task.file, value.task.cbidx, value.provider);
     else deliveryRecommendation.value = null;
@@ -184,6 +241,23 @@ function Wizard({ value, setValue, onClose }) {
   const launchPreview = recommendationPayload?.preview;
   const capabilities = launchPreview?.capabilities || [];
   const selectedLane = value.lane || launchPreview?.recommendedLane || "STANDARD";
+  // D9/DLV-6: was hardcoded to laneDefaults.standard regardless of the lane
+  // the owner actually selected -- a FAST launch pre-filled the STANDARD
+  // envelope ($2/2M) instead of FAST's ($0.50/500K).
+  const budgetDefault =
+    deliveryCapabilities.value?.config?.budgets?.laneDefaults?.[selectedLane.toLowerCase()] || { maxUsd: 2, maxTokens: 2000000, warnPct: 0.8 };
+  const budget = value.budget || {
+    maxUsd: String(budgetDefault.maxUsd ?? ""),
+    maxTokens: String(budgetDefault.maxTokens ?? ""),
+    warnPct: String(Math.round((budgetDefault.warnPct ?? 0.8) * 100)),
+    noCap: false,
+    noCapConfirm: "",
+  };
+  const updateBudget = (patch) => update({ budget: { ...budget, ...patch } });
+  const maxUsd = budget.maxUsd === "" ? null : Number(budget.maxUsd);
+  const maxTokens = budget.maxTokens === "" ? null : Number(budget.maxTokens);
+  const warnPct = Number(budget.warnPct) / 100;
+  const budgetValid = budget.noCap ? budget.noCapConfirm === "NO CAP" : ((Number.isFinite(maxUsd) && maxUsd > 0) || (Number.isInteger(maxTokens) && maxTokens > 0)) && Number.isFinite(warnPct) && warnPct > 0 && warnPct < 1;
   const selectedModelId = value.model || providerCaps?.defaultModel || null;
   const selectedModel = models.find((model) => model.id === selectedModelId);
   const mismatchWarnings = [];
@@ -201,11 +275,18 @@ function Wizard({ value, setValue, onClose }) {
   const redBaselineAcknowledged =
     preflight.data?.baselineValidation?.ok !== false ||
     value.redBaselineAck === RED_BASELINE_ACK;
+  // D11/DLV-39: hard triage gate -- refuses launch entry for an item this
+  // trivial rather than reducing oversight once a session is running. Same
+  // classifier the server itself gates on (isTrivialLaunchCandidate), so the
+  // UI can never drift from what the server will actually enforce.
+  const isTrivialLaunch = !!launchPreview && isTrivialLaunchCandidate(launchPreview.item, launchPreview.riskFlags);
+  const triageAcknowledged = !isTrivialLaunch || value.triageAck === TRIAGE_OVERRIDE_ACK;
   const preflightValid =
     !!preflight.data &&
     !preflight.loading &&
     dirtyAcknowledged &&
-    redBaselineAcknowledged;
+    redBaselineAcknowledged &&
+    triageAcknowledged;
   const flightCheckReady = preflightValid && budgetValid && !!launchPreview;
   const launch = async () => {
     const file = byRelPath.value.get(value.task.file.toLowerCase());
@@ -232,6 +313,7 @@ function Wizard({ value, setValue, onClose }) {
         preflightId: preflight.data.preflightId,
         dirtyAck: value.dirtyAck,
         redBaselineAck: value.redBaselineAck,
+        triageAck: value.triageAck,
         budget: budgetPayload,
         flightCheck: { reviewed: true, lane: selectedLane },
         options: { capabilitiesDrop: value.dropped },
@@ -258,7 +340,7 @@ function Wizard({ value, setValue, onClose }) {
           <div class="eyebrow">1 · Topic</div>
           <div class="chip-row">
             {topics.map((topic) => (
-              <button class={`button ${value.campaign === topic ? "primary" : ""}`} onClick={() => update({ campaign: topic, task: null, lane: null, dropped: [], dirtyAck: "", redBaselineAck: "" })}>
+              <button class={`button ${value.campaign === topic ? "primary" : ""}`} onClick={() => update({ campaign: topic, task: null, lane: null, dropped: [], dirtyAck: "", redBaselineAck: "", triageAck: "" })}>
                 {topic}
               </button>
             ))}
@@ -271,7 +353,7 @@ function Wizard({ value, setValue, onClose }) {
               {candidates.map((task) => {
                 const eligibility = deliverEligibility(task, deliveryData.value.sessions, topics);
                 return (
-                  <button class={`palette-result ${value.task?.key === task.key ? "selected" : ""}`} disabled={!eligibility.eligible} title={eligibility.reason || ""} onClick={() => update({ task, lane: null, dropped: [], dirtyAck: "", redBaselineAck: "" })}>
+                  <button class={`palette-result ${value.task?.key === task.key ? "selected" : ""}`} disabled={!eligibility.eligible} title={eligibility.reason || ""} onClick={() => update({ task, lane: null, dropped: [], dirtyAck: "", redBaselineAck: "", triageAck: "" })}>
                     <span class="palette-result-main">
                       <strong>
                         {task.idChip ? `${task.idChip} · ` : ""}
@@ -559,6 +641,24 @@ function Wizard({ value, setValue, onClose }) {
                       />
                     </div>
                   )}
+                  {isTrivialLaunch && (
+                    <>
+                      <p class="verdict-block">
+                        This item is S-effort with no risk flags — too trivial to be worth the pipeline's own
+                        overhead; a change this small cannot fail in an interesting way.
+                        {rec ? ` Pipeline forecast: ~$${(rec.estCostUsd ?? 0).toFixed(2)} / ~${rec.estTokens.toLocaleString()} tokens.` : ""}{" "}
+                        Consider making the edit directly instead.
+                      </p>
+                      <div class="field">
+                        <label>Type {TRIAGE_OVERRIDE_ACK} to launch through the pipeline anyway</label>
+                        <input
+                          value={value.triageAck}
+                          onInput={(event) => update({ triageAck: event.currentTarget.value })}
+                          placeholder={TRIAGE_OVERRIDE_ACK}
+                        />
+                      </div>
+                    </>
+                  )}
                   <button type="button" class="button" onClick={loadDeliveryPreflight}>
                     Refresh baseline
                   </button>
@@ -592,6 +692,7 @@ export function DeliveryWizardPage() {
       dropped: [],
       dirtyAck: "",
       redBaselineAck: "",
+      triageAck: "",
       budget: null,
     };
   });

@@ -7,6 +7,7 @@ import {
   applyCapabilityDrops,
   assertClassifierKeysInRegistry,
   classify,
+  isTrivialLaunchCandidate,
 } from "../../scripts/delivery/classify.mjs";
 
 type PacketOverrides = {
@@ -156,18 +157,64 @@ describe("classify: frontend-impl", () => {
 });
 
 describe("classify: money-domain", () => {
-  it("triggers for a Budget-campaign item with a money keyword", () => {
+  it("triggers when a money-logic path is actually in scope", () => {
     const caps = classify(
       packet({
         item: {
           text: "long enough item text to skip the vague rule entirely here",
           campaign: "Budget",
         },
-        scopeHints: { keywords: ["transfer"] },
+        scopeHints: { globs: ["src/features/transfers/useTransfer.ts"] },
       }),
     );
     const cap = caps.find((c) => c.name === "money-domain");
     expect(cap?.blocking).toBe(true);
+    expect(cap?.reason).toMatch(/money-logic path in scope/);
+  });
+
+  it("triggers when the item names a money operation", () => {
+    const caps = classify(
+      packet({
+        item: {
+          text: "Partner transfer posts the wrong balance on the receiving account after a rounding fix",
+          campaign: "Budget",
+        },
+        scopeHints: { globs: ["src/components/expense/MobileExpenseForm.tsx"] },
+      }),
+    );
+    expect(caps.find((c) => c.name === "money-domain")?.reason).toMatch(/money operation named in item/);
+  });
+
+  // DLV-42: the exact false positive that defeated the DLV-39 triage gate.
+  // "quick-amount chip" is a UI noun; changing which preset a chip offers
+  // touches no money math, and flagging it blocked the one gate built to keep
+  // work this trivial out of the pipeline entirely.
+  it("does NOT trigger on a money word embedded in a UI noun (DLV-42)", () => {
+    const caps = classify(
+      packet({
+        item: {
+          text: "[TEST] Mobile expense form quick-amount chip: replace the $25 preset with $20 → src/components/expense/MobileExpenseForm.tsx:1144",
+          campaign: "Budget",
+        },
+        scopeHints: {
+          keywords: ["mobile", "expense", "form", "quick-amount", "chip", "preset"],
+          globs: ["src/components/expense/MobileExpenseForm.tsx"],
+        },
+      }),
+    );
+    expect(caps.map((c) => c.name)).not.toContain("money-domain");
+  });
+
+  it("does not let scope-hint keywords re-admit a prose-only match (DLV-42)", () => {
+    // keywords are a mechanical split of the item's own words, so folding them
+    // into the haystack would resurrect the substring rule this replaced.
+    const caps = classify(
+      packet({
+        item: { text: "Tighten the amount input padding on small screens for the entry form", campaign: "Budget" },
+        scopeHints: { keywords: ["amount", "transaction"], globs: ["src/components/expense/AmountInput.tsx"] },
+      }),
+    );
+    expect(caps.map((c) => c.name)).not.toContain("money-domain");
   });
 
   it("does not trigger for a Budget item with no money keyword", () => {
@@ -216,5 +263,71 @@ describe("applyCapabilityDrops", () => {
 
   it("is a no-op with an empty drop list", () => {
     expect(applyCapabilityDrops(caps, [])).toEqual(caps);
+  });
+});
+
+describe("isTrivialLaunchCandidate (D11/DLV-39 hard triage gate)", () => {
+  it("fires for an S-effort item with zero risk flags -- the DLV-28 smoke-test profile", () => {
+    expect(isTrivialLaunchCandidate({ effort: "S" }, [])).toBe(true);
+  });
+
+  it("never fires for M/L-effort items, regardless of risk flags", () => {
+    expect(isTrivialLaunchCandidate({ effort: "M" }, [])).toBe(false);
+    expect(isTrivialLaunchCandidate({ effort: "L" }, [])).toBe(false);
+  });
+
+  it("never fires when a veto flag is present, even at S-effort", () => {
+    // money-domain (registry `blocking`) and product-ba-refinement (fires
+    // *because* the item is too vague to act on) both veto a refusal outright.
+    const oneFile = { globs: ["src/a.tsx"], scopeSource: "item-paths" };
+    expect(isTrivialLaunchCandidate({ effort: "S" }, [{ name: "money-domain" }], oneFile)).toBe(false);
+    expect(isTrivialLaunchCandidate({ effort: "S" }, [{ name: "product-ba-refinement" }], oneFile)).toBe(false);
+  });
+
+  // DLV-59. The old rule was `riskFlags.length === 0`, which could never be true
+  // for a UI item: every S-effort UI tweak in this repo carries `frontend-impl`.
+  // BUD-14 (a one-character preset change) therefore launched and spent $0.5317
+  // without writing a line of code. `frontend-impl`/`backend-impl` are routing
+  // signals — the registry declares neither blocking nor advisory, and their
+  // reasons are literally "frontend glob"/"api glob", i.e. where a file lives.
+  describe("routing-only flags no longer defeat the gate (DLV-59)", () => {
+    const bud14Scope = { globs: ["src/components/expense/MobileExpenseForm.tsx"], scopeSource: "item-paths" };
+
+    it("fires for BUD-14's real profile: S-effort, one named file, only frontend-impl", () => {
+      expect(isTrivialLaunchCandidate({ effort: "S" }, [{ name: "frontend-impl" }], bud14Scope)).toBe(true);
+    });
+
+    it("fires for a backend-impl-only item that names one file", () => {
+      expect(
+        isTrivialLaunchCandidate({ effort: "S" }, [{ name: "backend-impl" }], { globs: ["src/app/api/x/route.ts"], scopeSource: "item-paths" }),
+      ).toBe(true);
+    });
+
+    it("does NOT fire when the item names several files — not knowably single-file", () => {
+      expect(
+        isTrivialLaunchCandidate({ effort: "S" }, [{ name: "frontend-impl" }], { globs: ["src/a.tsx", "src/b.tsx"], scopeSource: "item-paths" }),
+      ).toBe(false);
+    });
+
+    it("does NOT fire when scope came from the campaign glob table, not the item", () => {
+      // Silence is not evidence: campaign-table scope says nothing about this
+      // item, so a flagged item with no named path is never refused.
+      expect(
+        isTrivialLaunchCandidate({ effort: "S" }, [{ name: "frontend-impl" }], { globs: ["src/features/budget/**"] }),
+      ).toBe(false);
+    });
+
+    it("keeps the original zero-flag rule, which one-named-file cannot replace", () => {
+      // The DLV-28 profile: a campaign with no glob table, so no optional
+      // capability fires at all and no path is named. Narrowing the gate to
+      // "exactly one named file" alone silently stopped refusing this.
+      expect(isTrivialLaunchCandidate({ effort: "S" }, [], { globs: [], modules: ["Delivery 10x"] })).toBe(true);
+    });
+  });
+
+  it("handles missing/malformed input without throwing", () => {
+    expect(isTrivialLaunchCandidate(null, [])).toBe(false);
+    expect(isTrivialLaunchCandidate({}, [])).toBe(false);
+    expect(isTrivialLaunchCandidate({ effort: "S" })).toBe(true); // riskFlags defaults to []
   });
 });

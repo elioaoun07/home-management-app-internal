@@ -9,14 +9,24 @@ import { ContextView } from "./ContextView.jsx";
 import { ConversationView } from "./ConversationView.jsx";
 import { TimelineView } from "./TimelineView.jsx";
 import { UsageView } from "./UsageView.jsx";
-import { deliveryCapabilities, deliveryPost, deliveryQuestions, deliverySession, loadDeliveryCapabilities, loadDeliveryQuestions, loadDeliverySession } from "./deliveryStore.js";
+import { deliveryCapabilities, deliveryEvents, deliveryPost, deliveryQuestions, deliverySession, loadDeliveryCapabilities, loadDeliveryQuestions, loadDeliverySession } from "./deliveryStore.js";
 
 const steps=["SELECTED","DISCOVERY","SPEC_READY","PLAN_READY","BUILDING","VALIDATING","REVIEWING","UAT_READY","ACCEPTED","SHIPPED"];
 const terminal=new Set(["SHIPPED","CANCELLED","FAILED"]);
 const gateArtifact={spec:"spec.md",plan:"plan.md",uat:"uat/summary.md"};
 const EFFORT_PHASES=["discovery","plan","building","review"];
 const TABS=["overview","timeline","conversation","questions","context","usage","artifacts"];
-const TAB_LABEL={overview:"Overview",timeline:"Timeline",conversation:"Conversation",context:"Context",usage:"Usage",artifacts:"Artifacts"};
+const TAB_LABEL={overview:"Overview",timeline:"Timeline",conversation:"Conversation",questions:"Q&A",context:"Context",usage:"Usage",artifacts:"Artifacts"};
+
+// DLV-37: processed tokens = input + cached-read + cache-CREATION + output.
+// Cache creation was previously dropped everywhere it mattered (this header
+// chip, UsageMeter, the budget enforcement it's meant to mirror) — it was
+// the majority of real session cost (Cost Anatomy §3-4). `cachedInput`
+// fallback keeps old v1-shaped sessions from under-reporting to zero.
+function processedTokensOf(total={}){
+  const cachedRead=total.cachedRead!=null?total.cachedRead:(total.cachedInput||0);
+  return (total.input||0)+cachedRead+(total.cacheCreation||0)+(total.output||0);
+}
 
 export function SessionDetail(){
   const id=route.value.id;const [artifact,setArtifact]=useState(null);const [artifactError,setArtifactError]=useState("");const [configOpen,setConfigOpen]=useState(false);const [abortOpen,setAbortOpen]=useState(false);const [cancelOpen,setCancelOpen]=useState(false);const [tab,setTab]=useState("overview");
@@ -30,8 +40,9 @@ export function SessionDetail(){
   const fork=async()=>{await deliveryPost("control",{id,type:"fork",payload:{}},"Fork queued — a new session branches at the next boundary and this one pauses");await loadDeliverySession(id);};
   const currentProvider=state.execution?.provider||packet.agent;
   const supportsAbort=!!deliveryCapabilities.value?.providers?.[currentProvider]?.manifest?.supportsAbort;
-  return <><Breadcrumbs items={[{label:"Delivery",href:"/delivery"},{label:id}]}/><header class="page-head" style={{marginTop:18}}><div><div class="eyebrow">{packet.item.campaign} · {packet.agent}{state.execution?.model?` · ${state.execution.model}`:""}</div><h1>{packet.item.id?`${packet.item.id} — `:""}{packet.item.text}</h1>{(packet.parentSession||state.forks?.length)&&<div class="chip-row" style={{marginTop:4}}>{packet.parentSession&&<a class="nav-link" href={`#/delivery/session/${packet.parentSession}`}>← forked from {packet.parentSession}</a>}{state.forks?.map((forkId)=><a class="nav-link" href={`#/delivery/session/${forkId}`}>→ fork {forkId}</a>)}</div>}<div class="chip-row"><Chip>{state.state}</Chip><Chip>{runner.alive?"runner alive":"runner stale"}</Chip>{paused&&<Chip tone="blocker">paused</Chip>}<Chip>{(usage.input||0)+(usage.output||0)} tok</Chip>{openCount>0&&<Chip tone={questions.blocking.length?"blocker":""}>Questions: {openCount} open{questions.blocking.length?` · ${questions.blocking.length} blocking`:""}</Chip>}{!runner.alive&&!terminal.has(state.state)&&<button class="button" onClick={()=>deliveryPost("resume",{id},"Resume requested").then(()=>loadDeliverySession(id))}>Resume runner</button>}{!terminal.has(state.state)&&<button class="button" onClick={togglePause}>{paused?"Resume run":"Pause"}</button>}{!terminal.has(state.state)&&!paused&&supportsAbort&&<button class="button" onClick={()=>setAbortOpen(true)} title="Immediately stop a turn that's currently running">Abort turn…</button>}{!terminal.has(state.state)&&<button class="button" onClick={()=>setConfigOpen(true)}>Change model…</button>}{!terminal.has(state.state)&&<button class="button" onClick={fork} title="Branch a new independent session from here; this one pauses">Fork</button>}{!terminal.has(state.state)&&<button class="button" onClick={()=>setCancelOpen(true)} title="Abort the whole delivery session — takes effect immediately, even if paused or blocked" style={{color:"var(--era-danger,#e05252)"}}>Cancel session</button>}</div></div></header>
+  return <><Breadcrumbs items={[{label:"Delivery",href:"/delivery"},{label:id}]}/><header class="page-head" style={{marginTop:18}}><div><div class="eyebrow">{packet.item.campaign} · {packet.agent}{state.execution?.model?` · ${state.execution.model}`:""}</div><h1>{packet.item.id?`${packet.item.id} — `:""}{packet.item.text}</h1>{(packet.parentSession||state.forks?.length)&&<div class="chip-row" style={{marginTop:4}}>{packet.parentSession&&<a class="nav-link" href={`#/delivery/session/${packet.parentSession}`}>← forked from {packet.parentSession}</a>}{state.forks?.map((forkId)=><a class="nav-link" href={`#/delivery/session/${forkId}`}>→ fork {forkId}</a>)}</div>}<div class="chip-row"><Chip>{state.state}</Chip><Chip>{runner.alive?"runner alive":"runner stale"}</Chip>{paused&&<Chip tone="blocker">paused</Chip>}<Chip>{processedTokensOf(usage)} tok</Chip>{openCount>0&&<Chip tone={questions.blocking.length?"blocker":""}>Questions: {openCount} open{questions.blocking.length?` · ${questions.blocking.length} blocking`:""}</Chip>}{!runner.alive&&!terminal.has(state.state)&&<button class="button" onClick={()=>deliveryPost("resume",{id},"Resume requested").then(()=>loadDeliverySession(id))}>Resume runner</button>}{!terminal.has(state.state)&&<button class="button" onClick={togglePause}>{paused?"Resume run":"Pause"}</button>}{!terminal.has(state.state)&&!paused&&supportsAbort&&<button class="button" onClick={()=>setAbortOpen(true)} title="Immediately stop a turn that's currently running">Abort turn…</button>}{!terminal.has(state.state)&&<button class="button" onClick={()=>setConfigOpen(true)}>Change model…</button>}{!terminal.has(state.state)&&<button class="button" onClick={fork} title="Branch a new independent session from here; this one pauses">Fork</button>}{!terminal.has(state.state)&&<button class="button" onClick={()=>setCancelOpen(true)} title="Abort the whole delivery session — takes effect immediately, even if paused or blocked" style={{color:"var(--era-danger,#e05252)"}}>Cancel session</button>}</div></div></header>
     <div class="stepper">{steps.map((step,index)=><div class={`step-node ${index<current?"done":index===current?"current":""}`}>{step}</div>)}</div>
+    <StatusHeader state={state} runner={runner} paused={paused} questions={questions} onGoTo={setTab}/>
     {!runner.alive&&!terminal.has(state.state)&&<RunnerOfflinePanel id={id} state={state} runner={runner}/>}
     {state.awaiting&&<GatePanel id={id} state={state} openArtifact={openArtifact}/>}
     <div class="delivery-tabs" style={{marginTop:18}}>{TABS.map((t)=><button class={`button ${tab===t?"primary":""}`} onClick={()=>setTab(t)}>{t==="questions"?`Q&A${openCount?` (${openCount})`:""}`:TAB_LABEL[t]}</button>)}</div>
@@ -46,6 +57,93 @@ export function SessionDetail(){
     {configOpen&&<ConfigDialog id={id} packet={packet} state={state} onClose={()=>setConfigOpen(false)}/>}
     {abortOpen&&<AbortDialog id={id} onClose={()=>setAbortOpen(false)}/>}
     {cancelOpen&&<CancelSessionDialog id={id} label={packet.item.id||packet.item.text} onClose={()=>setCancelOpen(false)} onDone={()=>loadDeliverySession(id)}/>}</>;
+}
+
+// DLV-15: what each awaiting-gate actually asks of the owner, in the second
+// person. The gate panel below already renders the controls; this line exists
+// so the answer to "what does it want from me" is legible without scrolling to
+// find out, which is the specific complaint the item records.
+const GATE_ASK={
+  spec:"Review the spec and approve it, or request changes.",
+  plan:"Review the plan and approve it, or request changes.",
+  uat:"Run the UAT package and accept it, or send it back.",
+  question:"Answer the question below before this can continue.",
+  blocked:"Read the error, then retry with a reason — or cancel.",
+  budget:"Raise the authorized budget with a reason, or cancel.",
+  shipped:"Mark it shipped once you have committed the change.",
+};
+
+// Event types worth showing as "what's happening right now". Everything else in
+// the stream is bookkeeping; surfacing all of it would make the line noise.
+const ACTIVITY_LABEL={
+  "phase.transition":(e)=>`Entered ${e.data?.to||"the next phase"}`,
+  "turn.started":(e)=>`Running a ${(e.phase||"").toLowerCase()||"agent"} turn`,
+  "turn.completed":(e)=>`Finished a ${(e.phase||"").toLowerCase()||"agent"} turn`,
+  "validation.command.started":(e)=>`Running validation: ${e.data?.command||"…"}`,
+  "validation.result":(e)=>`Validation ${e.data?.passes?"passed":"failed"}`,
+  "validation.baseline.started":()=>"Capturing the validation baseline (this can take minutes)",
+  "build.step.done":(e)=>`Build step ${e.data?.stepId||""} done`,
+  "question.raised":()=>"Raised a question and stopped",
+  "scope.mismatch":()=>"Measured a larger scope than the item was filed as",
+  "scope.expanded":()=>"Wrote outside the approved plan scope and stopped",
+  "acceptance.incomplete":()=>"Acceptance criteria could not be evidenced",
+  "budget.warning":()=>"Approaching the authorized budget",
+  "budget.exhausted":()=>"Budget exhausted — paused",
+  "context.rotated":()=>"Rotated context at a phase boundary",
+  "error.fatal":(e)=>`Error: ${e.data?.message||"the phase failed"}`,
+  "finish.package.written":()=>"Wrote the finish package",
+};
+
+function latestActivity(events){
+  for(let i=events.length-1;i>=0;i--){
+    const event=events[i];const render=ACTIVITY_LABEL[event.type];
+    if(render)return {text:render(event),at:event.at};
+  }
+  return null;
+}
+
+/**
+ * DLV-15 — the persistent "what's happening / what do you need from me" header.
+ *
+ * Both questions used to require scrolling and inference: the phase was in a
+ * stepper, the live activity was buried in the Timeline tab, and whether the
+ * session wanted anything was only discoverable by finding the gate panel. This
+ * answers both in two lines, and every pending owner action is one click away.
+ */
+function StatusHeader({state,runner,paused,questions,onGoTo}){
+  const events=deliveryEvents.value||[];
+  const activity=latestActivity(events);
+  const gate=state.awaiting?.gate||null;
+  const isTerminal=terminal.has(state.state);
+  const openQuestions=(questions?.blocking?.length||0)+(questions?.advisory?.length||0);
+
+  const happening=isTerminal
+    ?`This session is finished (${state.state}). Nothing is running.`
+    :paused
+      ?"Paused. The current turn finished; nothing new will start until you resume."
+      :!runner.alive
+        ?"The runner process is not running. The session is parked exactly where it stopped."
+        :gate
+          ?`Waiting for you at the ${gate} gate. No work is running.`
+          :activity
+            ?activity.text
+            :`Working in ${state.state}.`;
+
+  const needed=[];
+  if(gate)needed.push({label:GATE_ASK[gate]||`Respond at the ${gate} gate.`,action:null});
+  if(!runner.alive&&!isTerminal)needed.push({label:"Resume the runner so work can continue.",action:null});
+  if(questions?.blocking?.length)needed.push({label:`${questions.blocking.length} blocking question${questions.blocking.length===1?"":"s"} on the record.`,action:"questions"});
+  if(!gate&&questions?.advisory?.length)needed.push({label:`${questions.advisory.length} advisory question${questions.advisory.length===1?"":"s"} you can answer at any time.`,action:"questions"});
+
+  return <section class="card" style={{marginTop:14,borderColor:needed.length?"var(--era-border-active)":undefined}}>
+    <div class="eyebrow">What's happening</div>
+    <p style={{margin:"2px 0 0"}}>{happening}</p>
+    {activity?.at&&!gate&&!isTerminal&&<div class="muted" style={{fontSize:11}}>last event {new Date(activity.at).toLocaleTimeString()}</div>}
+    <div class="eyebrow" style={{marginTop:12}}>What it needs from you</div>
+    {needed.length
+      ?<ul style={{margin:"2px 0 0",paddingLeft:18}}>{needed.map((n)=><li key={n.label}>{n.label}{n.action&&<>{" "}<button class="nav-link" style={{display:"inline"}} onClick={()=>onGoTo(n.action)}>Open Q&amp;A →</button></>}</li>)}</ul>
+      :<p class="muted" style={{margin:"2px 0 0"}}>{isTerminal?"Nothing — this session is closed.":openQuestions?"Nothing blocking.":"Nothing right now. It will stop and ask when it needs you."}</p>}
+  </section>;
 }
 
 /**
@@ -178,19 +276,21 @@ function BudgetRaisePanel({id,state}){
 
 function MessageComposer({id}){const [text,setText]=useState("");const send=async()=>{if(!text.trim())return;await deliveryPost("message",{id,text:text.trim()},"Message queued for the next boundary");setText("");};return <section class="card" style={{marginTop:18}}><h2>Message the orchestrator</h2><div class="field"><textarea rows="4" value={text} onInput={(event)=>setText(event.currentTarget.value)} placeholder="Guidance is read at the next step boundary."/></div><button class="button" onClick={send}>Queue message</button></section>;}
 
-// DLV-1: processed tokens = input + cachedInput + output, matching the
-// packet-envelope verdict in budgets.mjs.
+// DLV-1/DLV-37: processed tokens = input + cached-read + cache-creation +
+// output, matching the packet-envelope verdict in budgets.mjs. Cache
+// creation used to be silently dropped here (v1-shaped `cachedInput` only) —
+// see Cost Anatomy §4: it was the majority of real session cost.
 function UsageMeter({usage={},budgets={}}){
   const phases=Object.entries(usage.perPhase||{});
   const total=usage.total||{};
-  const processedTokens=(total.input||0)+(total.cachedInput||0)+(total.output||0);
+  const processedTokens=processedTokensOf(total);
   const envelope=deliverySession.value?.state?.budget?.current||deliverySession.value?.packet?.budget||budgets;
   const maxTokens=envelope?.maxTokens??envelope?.maxSessionTokens;const warnTokens=envelope?.warnTokens??envelope?.warnSessionTokens??(typeof maxTokens==="number"&&typeof envelope?.warnPct==="number"?maxTokens*envelope.warnPct:null);
   const pct=typeof maxTokens==="number"&&maxTokens>0?Math.min(1,processedTokens/maxTokens):null;
   const over=typeof maxTokens==="number"&&processedTokens>=maxTokens;
   const warn=!over&&typeof warnTokens==="number"&&processedTokens>=warnTokens;
   const barColor=over?"var(--era-danger,#e05252)":warn?"var(--era-amber,#e0a852)":"var(--era-accent,#4a9eff)";
-  return <section class="card" style={{marginTop:18}}><h2>Usage</h2><div class="stat-value">{processedTokens}</div><div class="muted">total processed tokens (input+cached+output)</div>
+  return <section class="card" style={{marginTop:18}}><h2>Usage</h2><div class="stat-value">{processedTokens}</div><div class="muted">total processed tokens (input+cached-read+cache-write+output)</div>
     {pct!=null&&<div style={{marginTop:8}}>
       <div style={{height:6,borderRadius:3,background:"var(--era-border,#333)",overflow:"hidden"}}><div style={{height:"100%",width:`${Math.round(pct*100)}%`,background:barColor}}/></div>
       <div class="muted" style={{fontSize:11,marginTop:4}}>{processedTokens.toLocaleString()} / {maxTokens.toLocaleString()} session budget{typeof total.costUsd==="number"?` · est. $${total.costUsd.toFixed(2)}`:""}</div>

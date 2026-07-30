@@ -158,7 +158,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
   // Higher urgency = save more in early months, less in later months
 
   let recommendedMonthlySavings = baseMonthlySavings;
-  let monthlyAllocationPlan: Array<{ month: number; amount: number }> = [];
+  const monthlyAllocationPlan: Array<{ month: number; amount: number }> = [];
 
   if (purchase.urgency >= 4) {
     // HIGH/CRITICAL urgency: Front-load 60-70% in first half

@@ -84,6 +84,11 @@ function writeControl(dir: string, seq: number, type: string, payload: object = 
   atomicWriteJsonSync(join(controlsDir, controlFileName(control)), control);
 }
 
+function readEvents(dir: string): Array<Record<string, unknown>> {
+  const text = readFileSync(join(dir, "events.ndjson"), "utf8");
+  return text.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+}
+
 async function advanceOnce(dir: string, driver: object, repoRoot: string) {
   return advanceSession({
     sessionDir: dir, driver, repoRoot, retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot,
@@ -131,11 +136,31 @@ describe("DW-7: owner-triggered rotation", () => {
   it("a rotated session still resumes work correctly (fresh ref established on next turn)", async () => {
     const root = setupRepo();
     const { dir } = makePacketAndState(root);
-    const driver = createDriver("fake", { script: { turns: [{ finalText: SPEC_TEXT, usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } }] } });
-    await advanceOnce(dir, driver, root);
-    await advanceOnce(dir, driver, root);
+    // DLV-31 regression: the SAME driver instance must survive a rotation.
+    // A prior version of this test built a brand-new `planDriver` for the
+    // post-rotation turn — a fresh instance naturally has its internal
+    // `started` flag false, which passed regardless of whether the runner
+    // ever reset the reused instance. The runner creates exactly one driver
+    // per process (runLoop) and reuses it for the whole session, so that is
+    // the case that actually exercises the bug: `startSession` threw
+    // "session already started" on this very instance because nothing told
+    // it the SDK-side session had been archived.
+    const planText = JSON.stringify({
+      steps: [{ id: "S1", description: "d", paths: [], validationHint: "pnpm test" }],
+      testPlan: "t", riskFlags: [], rollbackSketch: "r", noNewDeps: true,
+    });
+    const driver = createDriver("fake", {
+      script: {
+        turns: [
+          { finalText: SPEC_TEXT, usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+          { finalText: planText, usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+        ],
+      },
+    });
+    await advanceOnce(dir, driver, root); // SELECTED -> DISCOVERY
+    await advanceOnce(dir, driver, root); // DISCOVERY turn -> SPEC_READY
     writeControl(dir, 1, "rotate");
-    await advanceOnce(dir, driver, root);
+    await advanceOnce(dir, driver, root); // rotate: archives the ref, does NOT reset the driver instance itself
 
     const decisionsDir = join(dir, "decisions");
     mkdirSync(decisionsDir, { recursive: true });
@@ -143,12 +168,110 @@ describe("DW-7: owner-triggered rotation", () => {
       seq: 1, gate: "spec", decision: "approve", note: null, confirmText: null, tickCheckbox: true, answer: null,
       capabilitiesDrop: null, at: new Date().toISOString(),
     });
-    const planDriver = createDriver("fake", {
-      script: { turns: [{ finalText: JSON.stringify({ steps: [{ id: "S1", description: "d", paths: [], validationHint: "pnpm test" }], testPlan: "t", riskFlags: [], rollbackSketch: "r", noNewDeps: true }), usage: { input: 1, cachedRead: 0, cacheCreation: 0, output: 1, reasoningOutput: 0 } }] },
-    });
-    const result = await advanceOnce(dir, planDriver, root);
+    // Before DLV-31's fix, this call's getHandle would invoke startSession on
+    // the same still-`started` driver instance and throw — the session would
+    // never reach PLAN_READY.
+    const result = await advanceOnce(dir, driver, root);
     expect(result.state.state).toBe("PLAN_READY");
     expect(result.state.driver.ref).toBeTruthy(); // a brand-new ref was established post-rotation
+  });
+});
+
+describe("DLV-30: automatic phase-boundary rotation", () => {
+  it("a short session with small occupancy makes zero automatic rotations, but still evaluates and records the decision every turn", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const planText = JSON.stringify({
+      steps: [{ id: "S1", description: "d", paths: [], validationHint: "pnpm test" }],
+      testPlan: "t", riskFlags: [], rollbackSketch: "r", noNewDeps: true,
+    });
+    const driver = createDriver("fake", {
+      script: {
+        turns: [
+          { finalText: SPEC_TEXT, usageV2: { input: 1, cachedRead: 100, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+          { finalText: planText, usageV2: { input: 1, cachedRead: 100, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+        ],
+      },
+    });
+    await advanceOnce(dir, driver, root); // SELECTED -> DISCOVERY
+    await advanceOnce(dir, driver, root); // DISCOVERY turn -> SPEC_READY
+
+    const decisionsDir = join(dir, "decisions");
+    mkdirSync(decisionsDir, { recursive: true });
+    atomicWriteJsonSync(join(decisionsDir, "0001-spec.json"), {
+      seq: 1, gate: "spec", decision: "approve", note: null, confirmText: null, tickCheckbox: true, answer: null,
+      capabilitiesDrop: null, at: new Date().toISOString(),
+    });
+    const result = await advanceOnce(dir, driver, root); // approve -> PLAN turn -> PLAN_READY
+
+    expect(result.state.state).toBe("PLAN_READY");
+    expect(result.state.context.rotations || 0).toBe(0);
+    expect(result.state.driver.priorRefs || []).toHaveLength(0);
+
+    // Every decideContextStrategy call is recorded, even the ones that
+    // decide not to act — the DISCOVERY->PLAN transition IS a phase
+    // boundary, it just doesn't cross rotateAtTokens (config default
+    // 150,000) at these tiny occupancy numbers.
+    const strategyEvents = readEvents(dir).filter((e) => e.type === "context.strategy");
+    expect(strategyEvents.length).toBeGreaterThanOrEqual(2);
+    expect(strategyEvents.every((e) => (e.data as { strategy: string }).strategy === "resume-native")).toBe(true);
+    const planBoundaryEvent = strategyEvents.find((e) => e.phase === "PLAN");
+    expect((planBoundaryEvent!.data as { isPhaseBoundary: boolean }).isPhaseBoundary).toBe(true);
+  });
+
+  it("occupancy crossing rotateAtTokens at a phase boundary triggers an automatic rotation, and the rotated session still completes the next phase", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const planText = JSON.stringify({
+      steps: [{ id: "S1", description: "d", paths: [], validationHint: "pnpm test" }],
+      testPlan: "t", riskFlags: [], rollbackSketch: "r", noNewDeps: true,
+    });
+    const driver = createDriver("fake", {
+      script: {
+        turns: [
+          // config default rotateAtTokens is 150,000 — this DISCOVERY turn's
+          // occupancy (input+cachedRead+cacheCreation) clears it comfortably.
+          { finalText: SPEC_TEXT, usageV2: { input: 1000, cachedRead: 200000, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+          { finalText: planText, usageV2: { input: 1, cachedRead: 100, cacheCreation: 0, output: 1, reasoningOutput: 0 } },
+        ],
+      },
+    });
+    await advanceOnce(dir, driver, root); // SELECTED -> DISCOVERY
+    const discoveryTick = await advanceOnce(dir, driver, root); // DISCOVERY turn -> SPEC_READY
+    const refBeforeRotation = discoveryTick.state.driver.ref!.id;
+
+    const decisionsDir = join(dir, "decisions");
+    mkdirSync(decisionsDir, { recursive: true });
+    atomicWriteJsonSync(join(decisionsDir, "0001-spec.json"), {
+      seq: 1, gate: "spec", decision: "approve", note: null, confirmText: null, tickCheckbox: true, answer: null,
+      capabilitiesDrop: null, at: new Date().toISOString(),
+    });
+    // Before DLV-30's fix, decideContextStrategy was never called by the
+    // runner at all (rotateAtTokens was dead config) — this same-sized
+    // packet+conversation would have resumed the same ever-growing SDK
+    // session straight through PLAN, REVIEWING, and UAT.
+    const result = await advanceOnce(dir, driver, root); // approve -> auto-rotate -> PLAN turn -> PLAN_READY
+
+    expect(result.state.state).toBe("PLAN_READY");
+    expect(result.state.context.rotations).toBe(1);
+    expect(result.state.driver.priorRefs).toHaveLength(1);
+    expect(result.state.driver.priorRefs[0].reason).toBe("auto-phase-boundary");
+    expect(result.state.driver.priorRefs[0].ref.id).toBe(refBeforeRotation);
+    // A brand-new ref was established post-rotation for PLAN, not the
+    // DISCOVERY turn's ref (D2's driver.reset() fix is what lets this
+    // startSession succeed at all on the one reused driver instance).
+    expect(result.state.driver.ref!.id).not.toBe(refBeforeRotation);
+
+    const strategyEvents = readEvents(dir).filter((e) => e.type === "context.strategy");
+    const rotateEvent = strategyEvents.find((e) => (e.data as { strategy: string }).strategy === "rotate-fresh");
+    expect(rotateEvent).toBeTruthy();
+    expect(rotateEvent!.phase).toBe("PLAN");
+    expect((rotateEvent!.data as { reasons: string[] }).reasons[0]).toMatch(/occupancy \d+ tokens >= rotateAtTokens 150000/);
+
+    // The compaction + snapshot artifacts performRotation always writes are
+    // present, same as the owner-triggered rotate control (DW-7).
+    const compaction = JSON.parse(readFileSync(join(dir, "context", "compactions", "0001.json"), "utf8"));
+    expect(compaction.scope.phase).toBe("DISCOVERY");
   });
 });
 

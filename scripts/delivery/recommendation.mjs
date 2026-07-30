@@ -15,7 +15,7 @@
 // fire would be dead code.
 
 import { estimateCostUsd } from "./usage.mjs";
-import { getModelPricing, getProviderConfig } from "./config.mjs";
+import { getModelInfo, getModelPricing, getProviderConfig } from "./config.mjs";
 
 export const TIERS = Object.freeze(["economy", "standard", "premium"]);
 export const DELIVERY_LANES = Object.freeze(["FAST", "STANDARD", "DEEP"]);
@@ -33,8 +33,16 @@ const BROAD_SCOPE_GLOB_THRESHOLD = 4;
 // Modules table) — cross-module cascades tend to need more plan/build care.
 const JUNCTION_CAMPAIGNS = Object.freeze(["Hub & ERA", "Notifications & Alerts", "Trips"]);
 
+// DLV-57: economy's `plan` was `medium`, and on a one-line string replacement
+// that PLAN turn cost **$0.1857** — more than the DISCOVERY turn that had to
+// actually locate the code, and more than the whole session's $0.175 forecast.
+// The economy tier exists for work the classifier scored at complexity 0; a
+// phase that only has to say "edit this line" does not need medium reasoning.
+// `building` stays `medium`: it is the phase that writes the code, and buying
+// reasoning there is the difference between a correct edit and a plausible one.
+// STANDARD/DEEP keep medium/high — they exist precisely for when you want it.
 const EFFORT_BY_TIER = Object.freeze({
-  economy: Object.freeze({ discovery: "low", plan: "medium", building: "medium", review: "low" }),
+  economy: Object.freeze({ discovery: "low", plan: "low", building: "medium", review: "low" }),
   standard: Object.freeze({ discovery: "medium", plan: "high", building: "medium", review: "medium" }),
   premium: Object.freeze({ discovery: "high", plan: "high", building: "high", review: "medium" }),
 });
@@ -49,6 +57,150 @@ const STATIC_USAGE_BY_TIER = Object.freeze({
   premium: Object.freeze({ input: 80_000, cachedRead: 1_600_000, cacheCreation: 40_000, output: 80_000 }),
 });
 
+// ---- DLV-56: per-phase-traversal forecasting ----
+//
+// The problem with `STATIC_USAGE_BY_TIER` is not that its numbers were wrong.
+// It is that it models the wrong *unit*: one shape per **session**, when real
+// spend is incurred per **phase traversal**. A session that runs DISCOVERY,
+// PLAN, then five BUILDING steps costs roughly seven traversals, and no amount
+// of better per-session priors can express that — which is why DLV-38's forecast
+// said $0.175 for a session that had spent $0.5317 before writing a line.
+//
+// The per-phase numbers below are anchored on real measurements from this
+// campaign's own sessions, all economy tier:
+//   - DISCOVERY post-DLV-45: 149,760 processed tokens for $0.1048
+//   - PLAN at `medium`:      $0.1857 (DLV-57 moved economy's plan to `low`)
+//   - s-20260730-104900-9mfu: 4 turns / $0.5302 total
+// Standard and premium are scaled from economy rather than measured — no
+// completed session on either tier exists yet, and inventing precision we do
+// not have would be worse than a stated multiplier. Once three same-tier
+// sessions complete, `estPhaseUsage` uses their real medians instead.
+const STATIC_PHASE_USAGE_ECONOMY = Object.freeze({
+  discovery: Object.freeze({ input: 100, cachedRead: 105_000, cacheCreation: 42_000, output: 2_000 }),
+  plan: Object.freeze({ input: 100, cachedRead: 90_000, cacheCreation: 35_000, output: 2_500 }),
+  building: Object.freeze({ input: 100, cachedRead: 110_000, cacheCreation: 45_000, output: 4_000 }),
+  reviewing: Object.freeze({ input: 100, cachedRead: 80_000, cacheCreation: 30_000, output: 2_000 }),
+  uat: Object.freeze({ input: 100, cachedRead: 80_000, cacheCreation: 30_000, output: 3_000 }),
+});
+const PHASE_TIER_MULTIPLIER = Object.freeze({ economy: 1, standard: 1.6, premium: 2.5 });
+
+/** Phases that produce a turn, in traversal order. */
+export const FORECAST_PHASES = Object.freeze(["discovery", "plan", "building", "reviewing", "uat"]);
+
+/** Expected BUILDING traversals — one per plan step, and plan size tracks item effort. */
+const BUILDING_STEPS_BY_EFFORT = Object.freeze({ S: 1, M: 3, L: 5 });
+
+function scaleUsage(usage, factor) {
+  return {
+    input: Math.round((usage.input || 0) * factor),
+    cachedRead: Math.round((usage.cachedRead || 0) * factor),
+    cacheCreation: Math.round((usage.cacheCreation || 0) * factor),
+    output: Math.round((usage.output || 0) * factor),
+  };
+}
+
+function medianOf(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+/**
+ * Per-phase usage prior: the median across >=3 same-tier completed sessions'
+ * own `usage.perPhase[phase]`, or the static shape above. Same threshold and
+ * same reasoning as `estUsageForTier` — two samples is an anecdote.
+ * @param {string} tier
+ * @param {string} phase
+ * @param {{tier:string, perPhase?:object}[]} [history]
+ */
+export function estPhaseUsage(tier, phase, history = []) {
+  const samples = (history || [])
+    .filter((h) => h && h.tier === tier && h.perPhase && h.perPhase[phase])
+    .map((h) => h.perPhase[phase]);
+  if (samples.length >= 3) {
+    return {
+      input: medianOf(samples.map((s) => s.input || 0)),
+      cachedRead: medianOf(samples.map((s) => s.cachedRead || 0)),
+      cacheCreation: medianOf(samples.map((s) => s.cacheCreation || 0)),
+      output: medianOf(samples.map((s) => s.output || 0)),
+    };
+  }
+  const base = STATIC_PHASE_USAGE_ECONOMY[phase] || STATIC_PHASE_USAGE_ECONOMY.discovery;
+  return scaleUsage(base, PHASE_TIER_MULTIPLIER[tier] ?? 1);
+}
+
+/**
+ * Whether `estPhaseUsage` will actually use medians for this phase — the same
+ * predicate, so the reported provenance can never disagree with what was used.
+ *
+ * Worth its own function rather than an inline count: an earlier version
+ * counted sessions with *any* `perPhase` object, which reported
+ * "measured-median" for a fleet whose `perPhase` was `{}` — a forecast labelled
+ * as measured while being entirely static is worse than an honest estimate,
+ * because it invites the owner to trust it.
+ */
+function phaseHasMeasuredPrior(tier, phase, history = []) {
+  return (history || []).filter((h) => h && h.tier === tier && h.perPhase && h.perPhase[phase]).length >= 3;
+}
+
+/**
+ * DLV-56 — forecast the session as a sum over phase traversals, and return the
+ * breakdown, not just the total. The breakdown is the point: a total the owner
+ * cannot interrogate is a number they cannot set a cap against, and the whole
+ * reason to forecast at the Flight-Check is to choose an envelope.
+ *
+ * Fix loops are deliberately excluded from the base figure and reported
+ * separately as `perFixLoop`: their number is genuinely unknowable at launch,
+ * and folding a guess into the headline would make the forecast wrong in the
+ * one direction that matters (too low) while looking more precise.
+ *
+ * @param {{tier:string, itemEffort?:(string|null), maxPlanSteps?:(number|null),
+ *   history?:object[], pricing?:(object|null)}} args
+ */
+export function forecastByPhase({ tier, itemEffort = null, maxPlanSteps = null, history = [], pricing = null }) {
+  const letter = String(itemEffort || "").trim().toUpperCase();
+  let buildingSteps = BUILDING_STEPS_BY_EFFORT[letter] ?? 2;
+  if (maxPlanSteps && buildingSteps > maxPlanSteps) buildingSteps = maxPlanSteps;
+
+  const traversalsByPhase = { discovery: 1, plan: 1, building: buildingSteps, reviewing: 1, uat: 1 };
+  const phases = FORECAST_PHASES.map((phase) => {
+    const perTraversal = estPhaseUsage(tier, phase, history);
+    const traversals = traversalsByPhase[phase];
+    const usage = scaleUsage(perTraversal, traversals);
+    return {
+      phase,
+      traversals,
+      usage,
+      tokens: totalUsageTokens(usage),
+      costUsd: pricing ? estimateCostUsd(usage, pricing) : null,
+      priorSource: phaseHasMeasuredPrior(tier, phase, history) ? "measured-median" : "static-estimate",
+    };
+  });
+  const measuredPhases = phases.filter((p) => p.priorSource === "measured-median").length;
+
+  const estTokens = phases.reduce((sum, p) => sum + p.tokens, 0);
+  const estCostUsd = pricing ? phases.reduce((sum, p) => sum + (p.costUsd || 0), 0) : null;
+
+  // One fix loop = one more BUILDING traversal (VALIDATING costs no model call).
+  const fixLoopUsage = estPhaseUsage(tier, "building", history);
+  return {
+    phases,
+    estTokens,
+    estCostUsd,
+    assumptions: {
+      buildingSteps,
+      buildingStepsBasis: letter
+        ? `${letter}-effort item (${BUILDING_STEPS_BY_EFFORT[letter] ?? 2} plan steps assumed)${maxPlanSteps && BUILDING_STEPS_BY_EFFORT[letter] > maxPlanSteps ? `, capped at the ${maxPlanSteps}-step budget` : ""}`
+        : "no effort recorded on the item — 2 plan steps assumed",
+      excludesFixLoops: true,
+      perFixLoop: { tokens: totalUsageTokens(fixLoopUsage), costUsd: pricing ? estimateCostUsd(fixLoopUsage, pricing) : null },
+      // Reported from what each phase actually used, never from a proxy for it.
+      priorSource:
+        measuredPhases === phases.length ? "measured-median" : measuredPhases === 0 ? "static-estimate" : "mixed",
+      measuredPhases,
+    },
+  };
+}
+
 function totalUsageTokens(usage) {
   const u = usage || {};
   return (u.input || 0) + (u.cachedRead || 0) + (u.cacheCreation || 0) + (u.output || 0);
@@ -56,7 +208,12 @@ function totalUsageTokens(usage) {
 
 /**
  * Complexity score (0+) and the human-readable contributing factors.
- * @param {{item:{effort?:(string|null), sev?:(string|null), campaign?:(string|null)}, capabilities?:{name:string}[]}} args
+ * `scopeHints.scopeSource` is what distinguishes item-derived scope from
+ * campaign-table boilerplate (DLV-42) — it was accepted by the implementation
+ * but missing from this signature, so no caller could pass it type-safely.
+ * @param {{item:{effort?:(string|null), sev?:(string|null), campaign?:(string|null)},
+ *   capabilities?:{name:string}[],
+ *   scopeHints?:{globs?:string[], keywords?:string[], modules?:string[], scopeSource?:string}}} args
  * @returns {{score:number, rationale:string[]}}
  */
 export function scoreComplexity({ item = {}, capabilities = [], scopeHints = {} }) {
@@ -86,10 +243,17 @@ export function scoreComplexity({ item = {}, capabilities = [], scopeHints = {} 
     rationale.push(`junction-module campaign "${item.campaign}" (+1)`);
   }
 
+  // DLV-42: only *item-derived* scope counts toward complexity. When scope
+  // hints fall back to the campaign glob table (`computeScopeHints`), the count
+  // describes the campaign's size, not the work's — Budget's 6-entry constant
+  // handed +2 to every Budget item ever launched, including a one-token chip
+  // edit that then scored 3 and drew a DEEP recommendation. A constant cannot
+  // be evidence about a specific item.
   const globCount = Array.isArray(scopeHints.globs) ? scopeHints.globs.length : 0;
-  if (globCount >= BROAD_SCOPE_GLOB_THRESHOLD) {
+  const scopeIsItemDerived = scopeHints.scopeSource === "item-paths";
+  if (scopeIsItemDerived && globCount >= BROAD_SCOPE_GLOB_THRESHOLD) {
     score += 2;
-    rationale.push(`broad launch scope (${globCount} globs, +2)`);
+    rationale.push(`broad launch scope (${globCount} paths named in item, +2)`);
   }
 
   return { score, rationale };
@@ -111,6 +275,86 @@ export function effortForTier(tier) {
 /** Recommended informational lane for the launch Flight-Check (DLV-6 applies policy bundles later). */
 export function laneForTier(tier) {
   return LANE_BY_TIER[tier] || LANE_BY_TIER.standard;
+}
+
+const TIER_BY_LANE = Object.freeze({ FAST: "economy", STANDARD: "standard", DEEP: "premium" });
+
+/** Reverse of `laneForTier` — the tier a given (owner-selected) lane implies. */
+export function tierForLane(lane) {
+  return TIER_BY_LANE[lane] || TIER_BY_LANE.STANDARD;
+}
+
+/**
+ * Resolve a delivery lane into a concrete, packet-recordable policy bundle
+ * (D9/DLV-6) — before this, the lane travelled launch form -> packet ->
+ * disk and the runner never read it (`grep -i lane run-session.mjs` was 0
+ * matches); FAST/STANDARD/DEEP differed only in a cosmetic mismatch warning.
+ * Effort-per-phase and the budget envelope (incl. `maxInternalTurns`, mapped
+ * by the runner onto the SDK's own `Options.maxTurns` so one runner turn can
+ * no longer silently become ~40 model calls) now derive from the lane the
+ * owner actually picked. Pure and deterministic: same lane + config always
+ * yields the same policy, so it is safe to snapshot into the packet and
+ * re-derive identically later for audit.
+ * Also resolves the lane's validation ladder (D10/DLV-11) — which of
+ * typecheck/lint/test actually run for this lane, and whether "test" runs
+ * targeted (`vitest related <changed files>`) instead of the full suite.
+ * Missing/unset config falls back to the full ladder (today's unconditional
+ * behavior) — an owner who hasn't opted into a lighter FAST ladder never
+ * gets one by accident.
+ * @param {string} lane - one of DELIVERY_LANES
+ * @param {object} config - loadConfig() result
+ * @returns {{lane:string, tier:string,
+ *   effortByPhase:{discovery:string, plan:string, building:string, review:string},
+ *   budget:({maxUsd:(number|null), maxTokens:(number|null), warnPct:(number|null)}|null),
+ *   maxInternalTurns:(number|null),
+ *   validationLadder:{rungs:string[], targetedTest:boolean}}}
+ */
+/**
+ * DLV-62: is this launch eligible for the merged DISCOVERY+PLAN turn?
+ *
+ * Three conditions, all necessary:
+ *  - the lane is FAST (the only lane whose purpose is trivial work),
+ *  - the owner has not switched the behaviour off in config, and
+ *  - the item names **exactly one file** — knowable since DLV-42, which made
+ *    `scopeHints` derive from the paths the item's own text names rather than
+ *    from a campaign glob table.
+ *
+ * The single-file rule is the safety rail, not a convenience: a change confined
+ * to one named file is one whose spec and plan cannot meaningfully diverge, so
+ * producing them in a single turn loses nothing. The moment scope is broader
+ * than that, the separate PLAN turn is doing real work and stays.
+ *
+ * @param {{lane:string, scopeHints?:object, config?:object}} args
+ * @returns {{merged:boolean, reason:string}}
+ */
+export function resolveMergedDiscoveryPlan({ lane, scopeHints = {}, config = null }) {
+  const enabled = !(config && config.pipeline && config.pipeline.mergeDiscoveryPlanOnFastSingleFile === false);
+  if (!enabled) return { merged: false, reason: "disabled in .delivery/config.json" };
+  if (lane !== "FAST") return { merged: false, reason: `lane is ${lane}, not FAST` };
+  if (scopeHints.scopeSource !== "item-paths") {
+    return { merged: false, reason: "the item names no explicit file paths, so its scope is not known to be single-file" };
+  }
+  const globs = scopeHints.globs || [];
+  if (globs.length !== 1) return { merged: false, reason: `the item names ${globs.length} paths, not exactly one` };
+  return { merged: true, reason: `FAST lane and the item names exactly one file (${globs[0]})` };
+}
+
+export function resolveLanePolicy(lane, config) {
+  const tier = tierForLane(lane);
+  const laneKey = String(lane || "").toLowerCase();
+  const envelope = (config && config.budgets && config.budgets.laneDefaults && config.budgets.laneDefaults[laneKey]) || null;
+  const ladder = (config && config.validation && config.validation.laneLadder && config.validation.laneLadder[laneKey]) || null;
+  return {
+    lane,
+    tier,
+    effortByPhase: effortForTier(tier),
+    budget: envelope ? { maxUsd: envelope.maxUsd, maxTokens: envelope.maxTokens, warnPct: envelope.warnPct } : null,
+    maxInternalTurns: envelope && envelope.maxInternalTurns != null ? envelope.maxInternalTurns : null,
+    validationLadder: {
+      rungs: ladder && Array.isArray(ladder.rungs) && ladder.rungs.length ? [...ladder.rungs] : ["typecheck", "lint", "test"],
+      targetedTest: !!(ladder && ladder.targetedTest),
+    },
+  };
 }
 
 /**
@@ -149,6 +393,79 @@ export function assessRecommendationMismatch({
     });
   }
   return warnings;
+}
+
+/**
+ * DLV-9 — the fit guard, re-run *after* DISCOVERY against measured scope.
+ *
+ * `recommendAgentConfig` runs once, at launch, from unmeasured signals: the
+ * item's own effort letter, its severity, and whatever paths its text happened
+ * to name. That is the best available guess before anyone has looked at the
+ * code — and it is exactly the guess BUD-11 got wrong, accepting Haiku/low for
+ * what DISCOVERY then measured as a 25-file, 72-occurrence refactor. The
+ * measurement existed; nothing ever compared it back to the model choice.
+ *
+ * This re-scores the same item with the *measured* size class standing in for
+ * the declared effort, and reports only the direction that costs something: a
+ * measured scope needing a richer tier than the one actually running. Never
+ * applied automatically — the owner switches model mid-session via the existing
+ * `set-config` control, or acknowledges and continues. Both are audited.
+ *
+ * @param {{item:object, capabilities?:object[], scopeHints?:object, provider:string,
+ *   config:object, measuredSizeClass:(string|null), currentModel:(string|null)}} args
+ * @returns {{mismatch:boolean, recommendedTier:(string|null), recommendedModel:(string|null),
+ *   currentTier:(string|null), measuredSizeClass:(string|null), message:(string|null)}}
+ */
+export function reassessFitAfterDiscovery({
+  item,
+  capabilities = [],
+  scopeHints = {},
+  provider,
+  config,
+  measuredSizeClass,
+  currentModel,
+}) {
+  const none = {
+    mismatch: false,
+    recommendedTier: null,
+    recommendedModel: null,
+    currentTier: null,
+    measuredSizeClass: measuredSizeClass || null,
+    message: null,
+  };
+  if (!measuredSizeClass || EFFORT_SCORE_BY_LETTER[measuredSizeClass] === undefined) return none;
+
+  // The measured size class replaces the declared effort — everything else
+  // (severity, money-domain, junction campaign, item-derived scope breadth)
+  // is unchanged, so the delta this reports is attributable to scope alone.
+  const { score } = scoreComplexity({ item: { ...(item || {}), effort: measuredSizeClass }, capabilities, scopeHints });
+  const recommendedTier = tierForScore(score);
+  const recommendedModel = pickModelForTier(config, provider, recommendedTier);
+
+  const currentInfo = currentModel ? getModelInfo(config, provider, currentModel) : null;
+  const currentTier = (currentInfo && currentInfo.tier) || null;
+  // An uncatalogued model has no tier to compare against. Saying nothing is
+  // right here: a warning derived from an unknown baseline would be noise, and
+  // the owner already sees the measured scope on the same gate panel.
+  if (!currentTier || TIER_RANK[currentTier] == null || TIER_RANK[recommendedTier] == null) {
+    return { ...none, recommendedTier, recommendedModel, currentTier };
+  }
+  if (TIER_RANK[recommendedTier] <= TIER_RANK[currentTier]) {
+    return { ...none, recommendedTier, recommendedModel, currentTier };
+  }
+  return {
+    mismatch: true,
+    recommendedTier,
+    recommendedModel,
+    currentTier,
+    measuredSizeClass,
+    message:
+      `DISCOVERY measured ${measuredSizeClass}-sized scope, which scores as ${recommendedTier} tier — ` +
+      `this session is running ${currentModel} (${currentTier} tier). ` +
+      (recommendedModel
+        ? `Switch to ${recommendedModel} from the session controls, or approve to continue on the current model.`
+        : "Consider switching model from the session controls, or approve to continue on the current one."),
+  };
 }
 
 function pickModelForTier(config, provider, tier) {
@@ -193,10 +510,13 @@ function estUsageForTier(tier, history = []) {
  * @param {object} args
  * @param {object} args.item - packet-shaped item ({effort, sev, campaign})
  * @param {{name:string}[]} [args.capabilities] - classify.mjs output
+ * @param {{globs?:string[], keywords?:string[], modules?:string[], scopeSource?:string}} [args.scopeHints]
  * @param {"claude"|"codex"} args.provider
  * @param {object} args.config - loadConfig() result
- * @param {{tier:string, usage:object}[]} [args.history] - past completed sessions' totals, same-tier only used
- * @returns {{model:string, effortByPhase:object, tier:string, rationale:string[], estTokens:number, estCostUsd:(number|null)}|null}
+ * @param {{tier:string, usage:object, perPhase?:object}[]} [args.history] - past completed sessions' totals, same-tier only used
+ * @returns {{model:string, effortByPhase:object, tier:string, rationale:string[],
+ *   estTokens:number, estCostUsd:(number|null), phaseForecast:object,
+ *   legacySessionEstimate:{estTokens:number, estCostUsd:(number|null)}}|null}
  */
 export function recommendAgentConfig({ item, capabilities = [], scopeHints = {}, provider, config, history = [] }) {
   const { score, rationale } = scoreComplexity({ item, capabilities, scopeHints });
@@ -204,16 +524,34 @@ export function recommendAgentConfig({ item, capabilities = [], scopeHints = {},
   const model = pickModelForTier(config, provider, tier);
   if (!model) return null;
 
-  const usage = estUsageForTier(tier, history);
   const pricing = getModelPricing(config, provider, model);
-  const estCostUsd = pricing ? estimateCostUsd(usage, pricing) : null;
+
+  // DLV-56: the headline forecast is now the per-phase sum. The old per-session
+  // shape is kept alongside it as `legacySessionEstimate` rather than deleted —
+  // every session already on disk was launched against it, so the forecast-vs-
+  // actual comparisons in `computeForecastActual` would otherwise be comparing
+  // two different units and silently reporting nonsense for the whole existing
+  // fleet.
+  const phaseForecast = forecastByPhase({
+    tier,
+    itemEffort: item && item.effort,
+    maxPlanSteps: (config && config.budgets && config.budgets.maxPlanSteps) || null,
+    history,
+    pricing,
+  });
+  const legacyUsage = estUsageForTier(tier, history);
 
   return {
     model,
     effortByPhase: effortForTier(tier),
     tier,
     rationale,
-    estTokens: totalUsageTokens(usage),
-    estCostUsd,
+    estTokens: phaseForecast.estTokens,
+    estCostUsd: phaseForecast.estCostUsd,
+    phaseForecast,
+    legacySessionEstimate: {
+      estTokens: totalUsageTokens(legacyUsage),
+      estCostUsd: pricing ? estimateCostUsd(legacyUsage, pricing) : null,
+    },
   };
 }

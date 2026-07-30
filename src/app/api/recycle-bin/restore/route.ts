@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const module = getRecycleBinModule(parsed.data.module);
-  if (!module) {
+  const binModule = getRecycleBinModule(parsed.data.module);
+  if (!binModule) {
     return NextResponse.json({ error: "Unknown module" }, { status: 400 });
   }
 
@@ -41,13 +41,13 @@ export async function POST(req: NextRequest) {
 
   // Confirm the row is in scope and currently trashed.
   let fetchQuery = supabase
-    .from(module.table)
-    .select(module.selectColumns)
+    .from(binModule.table)
+    .select(binModule.selectColumns)
     .eq("id", parsed.data.id)
-    .not(module.deletedAtColumn, "is", null);
-  if (module.scope === "user") {
+    .not(binModule.deletedAtColumn, "is", null);
+  if (binModule.scope === "user") {
     fetchQuery = fetchQuery.in("user_id", scope.userIds);
-  } else if (module.scope === "household" && scope.householdId) {
+  } else if (binModule.scope === "household" && scope.householdId) {
     fetchQuery = fetchQuery.eq("household_id", scope.householdId);
   }
   const { data: row, error: fetchErr } = await fetchQuery.maybeSingle();
@@ -56,16 +56,16 @@ export async function POST(req: NextRequest) {
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const { error: updateErr } = await supabase
-    .from(module.table)
-    .update({ [module.deletedAtColumn]: null })
+    .from(binModule.table)
+    .update({ [binModule.deletedAtColumn]: null })
     .eq("id", parsed.data.id);
   if (updateErr) {
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
 
-  if (module.onRestore) {
+  if (binModule.onRestore) {
     try {
-      await module.onRestore({
+      await binModule.onRestore({
         row: row as never,
         supabase: supabase as never,
         admin: supabaseAdmin() as never,
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
   // A restored item is sync-eligible again — re-push its Google Calendar
   // event. Lives here (not in the registry's onRestore) because the registry
   // is imported by client code and the sync engine must stay server-only.
-  if (module.table === "items") {
+  if (binModule.table === "items") {
     await syncItemToGoogleCalendar(supabase, parsed.data.id);
   }
 

@@ -273,7 +273,13 @@ describe("createCodexDriver", () => {
       { type: "agent.message", data: { message: '{"ok":true}' } },
       { type: "agent.turn.result", data: { usage: { input: 11, cachedInput: 3, output: 5, costUsd: null } } },
     ]);
-    expect(result).toEqual({ finalText: '{"ok":true}', usage: { input: 11, cachedInput: 3, output: 5, costUsd: null } });
+    expect(result).toEqual({
+      finalText: '{"ok":true}',
+      usage: { input: 11, cachedInput: 3, output: 5, costUsd: null },
+      // DLV-37: codex driver now also reports v2 usage (cache-creation is
+      // always 0 for Codex — it has no cache-write concept).
+      usageV2: { input: 11, cachedRead: 3, cacheCreation: 0, output: 5, reasoningOutput: 0, costUsd: null },
+    });
   });
 
   it("feeds onRaw with full-fidelity records alongside onEvent (DW-1)", async () => {

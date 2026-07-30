@@ -284,7 +284,7 @@ export default function ExpenseForm() {
     <div className="space-y-6">
       {/* Avoid hydration mismatch by rendering date label after mount */}
       {/** Track client mount state */}
-      {/* eslint-disable react-hooks/rules-of-hooks */}
+      { }
       {(() => {
         /* This IIFE is only to keep related state near usage; it runs once per render. */
         return null;

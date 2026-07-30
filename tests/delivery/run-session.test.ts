@@ -55,7 +55,7 @@ function stableSnapshot() {
   return { ...STABLE_SNAPSHOT, fingerprints: {} };
 }
 
-function makePacketAndState(root: string, budget: Record<string, unknown> | null = null) {
+function makePacketAndState(root: string, budget: Record<string, unknown> | null = null, lanePolicy: Record<string, unknown> | null = null) {
   const raw = ["# Now", "", "- [ ] **N1** Fix rounding drift _(blocker - M)_", ""].join("\n");
   const pmFile = "Budget/4 - Checklist.md";
   const idResult = buildItemIdentity(raw, 0, pmFile);
@@ -80,6 +80,7 @@ function makePacketAndState(root: string, budget: Record<string, unknown> | null
       acceptanceCriteria: [],
       workspace: { baseHead: "HEAD", dirtyAtStart: false, baselineStatusHash: "x", changedFiles: [] },
       budget,
+      lanePolicy,
     }),
   );
   atomicWriteJsonSync(join(dir, "packet.json"), packet);
@@ -253,7 +254,13 @@ describe("advanceSession: happy path SELECTED -> SHIPPED", () => {
     writeDecision(dir, 2, "plan", "approve");
     state = await drive(dir, driver, root, { runValidation: passingValidation });
     expect(state.state).toBe("UAT_READY");
-    expect(state.awaiting).toEqual({ gate: "uat" });
+    // DLV-10: the UAT gate now also carries the AC coverage summary. AC1's
+    // claim cites `tests`, and this fixture's validation ran and passed the
+    // test rung, so the runner confirms it as met rather than taking the
+    // agent's word for it.
+    expect(state.awaiting).toEqual({ gate: "uat", acceptance: { total: 1, met: 1, waived: 0, unmet: 0, failed: 0 } });
+    expect(existsSync(join(dir, "artifacts", "acceptance.json"))).toBe(true);
+    expect(readFileSync(join(dir, "artifacts", "acceptance.md"), "utf8")).toContain("| AC1 | MET |");
     expect(existsSync(join(dir, "artifacts", "build-log.md"))).toBe(true);
     expect(existsSync(join(dir, "artifacts", "validation.json"))).toBe(true);
     expect(existsSync(join(dir, "artifacts", "review-self.md"))).toBe(true);
@@ -281,6 +288,128 @@ describe("advanceSession: happy path SELECTED -> SHIPPED", () => {
     // seq is strictly monotonic
     const seqs = events.map((e) => e.seq as number);
     for (let i = 1; i < seqs.length; i++) expect(seqs[i]).toBe(seqs[i - 1] + 1);
+  });
+});
+
+describe("advanceSession: D12/DLV-17 transcript integrity + raw SDK linkage", () => {
+  it("reports a zero-gap transcript.gap.checked event and a rawTranscript pointer at SHIPPED", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = createDriver("fake", { script: happyPathScript() });
+
+    let state = await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 1, "spec", "approve");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 2, "plan", "approve");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 3, "uat", "accept");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 4, "shipped", "shipped");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("SHIPPED");
+
+    const gapEvents = readEvents(dir).filter((e) => e.type === "transcript.gap.checked");
+    expect(gapEvents.length).toBe(1);
+    expect(gapEvents[0].data).toMatchObject({ gapCount: 0, missingTurnIds: [] });
+
+    // packet.agent is "claude" in this fixture -- the pointer is always
+    // attempted, and safely resolves exists:false against the *real*
+    // homedir() for a fake test session id that was never really written
+    // by Claude Code (no test seam threaded through advanceSession itself;
+    // computeRawTranscriptPointer's own homeDir seam is unit-tested directly
+    // in drivers-claude.test.ts).
+    expect(state.driver.rawTranscript).toMatchObject({ exists: false, sizeBytes: null, sha256: null });
+    expect(state.driver.rawTranscript.path).toContain(`${state.driver.ref.id}.jsonl`);
+  });
+
+  it("reports the missing turn ids when turns are silently dropped between phases (the whdv failure shape)", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = createDriver("fake", { script: happyPathScript() });
+
+    let state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("SPEC_READY");
+    expect(state.turnCounter).toBe(1);
+
+    // Simulate 2 turn ids allocated with nothing ever written for them --
+    // the exact whdv shape (turnCounter reached 23, but 0013-0018/0021 had
+    // no trace at all). The next real turn (PLAN) will compute turn 0004,
+    // leaving 0002/0003 as a genuine, silent gap.
+    const statePath = join(dir, "state.json");
+    const onDisk = JSON.parse(readFileSync(statePath, "utf8"));
+    atomicWriteJsonSync(statePath, { ...onDisk, turnCounter: 3 });
+
+    writeDecision(dir, 1, "spec", "approve");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 2, "plan", "approve");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 3, "uat", "accept");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 4, "shipped", "shipped");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("SHIPPED");
+
+    const gapEvents = readEvents(dir).filter((e) => e.type === "transcript.gap.checked");
+    expect(gapEvents.length).toBe(1);
+    expect(gapEvents[0].data).toMatchObject({ gapCount: 2, missingTurnIds: ["0002", "0003"] });
+  });
+
+  it("does not attempt raw-transcript linkage for a codex-agent session", async () => {
+    const root = setupRepo();
+    const raw = ["# Now", "", "- [ ] **N1** Fix rounding drift _(blocker - M)_", ""].join("\n");
+    const pmFile = "Budget/4 - Checklist.md";
+    const idResult = buildItemIdentity(raw, 0, pmFile);
+    if (!idResult.ok) throw new Error("fixture setup failed");
+    const item = (idResult as { ok: true; item: Record<string, unknown> }).item;
+    const sessionId = makeSessionId(new Date(2026, 0, 1), () => 0.42);
+    const sessionDir = join(root, ".delivery", "sessions", sessionId);
+    mkdirSync(sessionDir, { recursive: true });
+    const packet = buildPacket(
+      asPacketArgs({
+        sessionId,
+        agent: "codex",
+        item,
+        context: { campaignFiles: [], relatedNotes: [] },
+        scopeHints: { keywords: [], globs: [], modules: [] },
+        capabilities: [],
+        skills: [],
+        acceptanceCriteria: [],
+        workspace: { baseHead: "HEAD", dirtyAtStart: false, baselineStatusHash: "x", changedFiles: [] },
+        budget: null,
+      }),
+    );
+    atomicWriteJsonSync(join(sessionDir, "packet.json"), packet);
+    const now = new Date().toISOString();
+    atomicWriteJsonSync(join(sessionDir, "state.json"), {
+      schemaVersion: 1,
+      sessionId,
+      state: "SPEC_READY",
+      awaiting: { gate: "spec" },
+      phaseHistory: [{ state: "SELECTED", enteredAt: now, exitedAt: null }],
+      agent: "codex",
+      driver: { ref: { id: "codex-thread-1" }, specialists: {} },
+      workspace: packet.workspace,
+      build: null,
+      fixLoop: 0,
+      usage: { perPhase: {}, total: { input: 0, cachedInput: 0, output: 0, costUsd: null } },
+      decisionsProcessed: 0,
+      messagesProcessed: 0,
+      turnCounter: 1,
+    });
+
+    writeDecision(sessionDir, 1, "cancel", "cancel");
+    const { state: tickState } = await advanceSession({
+      sessionDir,
+      driver: createDriver("codex"),
+      repoRoot: root,
+      runValidation: passingValidation,
+      retryDelayMs: 0,
+      sleep: () => {},
+      takeSnapshot: stableSnapshot,
+      readHead: () => "fixture-shipped-head",
+    });
+    expect(tickState.state).toBe("CANCELLED");
+    expect(tickState.driver.rawTranscript).toBeUndefined();
   });
 });
 
@@ -588,7 +717,7 @@ describe("advanceSession: governed packet budget", () => {
 
     expect(state.state).toBe("BUILDING");
     expect(state.execution.paused).toBe(true);
-    expect(state.awaiting).toEqual({ gate: "budget", returnTo: "BUILDING", reason: "budget-exhausted" });
+    expect(state.awaiting).toEqual({ gate: "budget", returnTo: "BUILDING", reason: "budget-exhausted", priorAwaiting: null });
     expect(state.lastError).toBeNull();
     expect(existsSync(join(dir, "artifacts", "finish", "budget.json"))).toBe(true);
     expect(existsSync(join(dir, "artifacts", "finish", "summary.md"))).toBe(true);
@@ -694,6 +823,68 @@ describe("advanceSession: governed packet budget", () => {
     expect(tick.state.awaiting).toBeNull();
     expect(tick.state.budget.current.maxTokens).toBe(200);
     expect(readEvents(dir).filter((e) => e.type === "budget.raised")).toHaveLength(1);
+  });
+
+  // DLV-29 regression: a budget-exhausted pause landing on the same tick as
+  // entering a manual gate (here, PLAN_READY right after spec approval) used
+  // to permanently overwrite that gate's `awaiting` with the budget pause's,
+  // and the resume path only knew how to clear it to `null` — the session
+  // became unresponsive to the plan decision forever, even after an
+  // owner-authorized raise. See Delivery 10x/1 - Feature State.md Cluster B.
+  it("restores the manual gate awaiting after a budget-exhausted pause collides with it", async () => {
+    const root = setupRepo();
+    const budget = {
+      maxUsd: null,
+      maxTokens: 4_000_000,
+      warnPct: 0.8,
+      perPhase: {},
+      authorization: "capped",
+      authorizedAt: "2026-07-24T00:00:00.000Z",
+    };
+    const { dir } = makePacketAndState(root, budget);
+    const driver = createDriver("fake", {
+      script: { turns: [{ finalText: SPEC_TEXT }, { finalText: PLAN_TEXT }, { finalText: "did the change" }] },
+    });
+
+    let state = await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 1, "spec", "approve");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("PLAN_READY");
+    expect(state.awaiting).toEqual({ gate: "plan" });
+
+    // Simulate the budget boundary tripping on the very next tick, exactly
+    // as it did for real in s-20260725-151324-23aw — before the owner's
+    // plan decision has been consumed.
+    const stateFile = join(dir, "state.json");
+    const seeded = JSON.parse(readFileSync(stateFile, "utf8"));
+    seeded.usage = { perPhase: seeded.usage.perPhase, total: { input: 0, cachedInput: 5_000_000, output: 0, costUsd: null } };
+    atomicWriteJsonSync(stateFile, seeded);
+
+    let tick = await advanceSession({
+      sessionDir: dir, driver, repoRoot: root, runValidation: passingValidation,
+      retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot, readHead: () => "fixture-head",
+    });
+    expect(tick.state.state).toBe("PLAN_READY");
+    expect(tick.state.awaiting).toEqual({ gate: "budget", returnTo: "PLAN_READY", reason: "budget-exhausted", priorAwaiting: { gate: "plan" } });
+
+    writeControl(dir, 1, "set-budget", { maxTokens: 8_000_000, reason: "owner-authorized raise to finish the smoke test" });
+    tick = await advanceSession({
+      sessionDir: dir, driver, repoRoot: root, runValidation: passingValidation,
+      retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot, readHead: () => "fixture-head",
+    });
+    expect(tick.state.state).toBe("PLAN_READY");
+    // The bug: this used to be `null` here, permanently — no UI panel, and
+    // POST /api/delivery/decision would 409 with "awaiting nothing" forever.
+    expect(tick.state.awaiting).toEqual({ gate: "plan" });
+
+    // Prove the session is actually unblocked, not just cosmetically fixed:
+    // the plan decision the owner was always trying to submit now succeeds.
+    writeDecision(dir, 2, "plan", "approve");
+    const enteredBuilding = await advanceSession({
+      sessionDir: dir, driver, repoRoot: root, runValidation: passingValidation,
+      retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot, readHead: () => "fixture-head",
+    });
+    expect(enteredBuilding.state.state).toBe("BUILDING");
   });
 });
 
@@ -826,6 +1017,112 @@ describe("advanceSession: quota/rate-limit turn errors short-circuit to BLOCKED 
     const resumed = await advanceSession({ sessionDir: dir, driver, repoRoot: root, retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot });
     expect(resumed.state.state).toBe("BUILDING");
   });
+
+  // DLV-44: hitting the lane's own maxInternalTurns ceiling is a sizing verdict,
+  // not a transient fault. Retrying the same prompt into the same ceiling can
+  // only fail identically, so the two automatic retries were pure waste — and in
+  // the real session they also triggered the sessionId-collision crash loop.
+  it("escalates a maxInternalTurns ceiling straight to the owner without retrying (DLV-44)", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = createDriver("fake", {
+      script: {
+        turns: [
+          { throws: "claude driver: query failed — Claude Code returned an error result: Reached maximum number of turns (8)" },
+        ],
+      },
+    });
+
+    // SELECTED -> DISCOVERY (validation baseline), then the doomed turn.
+    await advanceSession({
+      sessionDir: dir, driver, repoRoot: root, runValidation: passingValidation,
+      retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot,
+    });
+    const tick = await advanceSession({
+      sessionDir: dir, driver, repoRoot: root, runValidation: passingValidation,
+      retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot,
+      deliveryConfig: { errors: { maxAutoRetries: 2 } },
+    });
+
+    expect(tick.state.state).toBe("NEEDS_DECISION");
+    expect(tick.state.awaiting).toMatchObject({ gate: "question", returnTo: "DISCOVERY", reason: "max-turns" });
+    expect(tick.state.lastError.errorKind).toBe("max-turns");
+    // The whole point: zero wasted retries, and the owner gets an actionable ask.
+    expect(readEvents(dir).filter((e) => e.type === "retry.automatic")).toHaveLength(0);
+    expect(readEvents(dir).filter((e) => e.type === "agent.turn.failed")).toHaveLength(1);
+    expect(tick.state.awaiting.questions[0].text).toMatch(/maxInternalTurns/);
+  });
+
+  // DLV-43: the session that exposed this recorded $0.00 / 0 tokens for a
+  // DISCOVERY phase whose raw SDK transcript showed 512,752 processed tokens
+  // (~$0.34) — already past that lane's own 500,000-token cap. A hard cap that
+  // cannot see spend from a phase that FAILS is not a cap.
+  it("banks a failed turn's spend into state.usage so budget caps can see it (DLV-43)", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = createDriver("fake", {
+      script: {
+        turns: [
+          {
+            throws: "claude driver: query failed — Claude Code returned an error result: Reached maximum number of turns (8)",
+            throwsUsage: {
+              usage: { input: 7794, cachedInput: 368131, output: 7010, costUsd: 0.3393 },
+              usageV2: { input: 7794, cachedRead: 368131, cacheCreation: 129817, output: 7010, reasoningOutput: 0 },
+            },
+          },
+        ],
+      },
+    });
+
+    await advanceSession({
+      sessionDir: dir, driver, repoRoot: root, runValidation: passingValidation,
+      retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot,
+    });
+    const tick = await advanceSession({
+      sessionDir: dir, driver, repoRoot: root, runValidation: passingValidation,
+      retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot,
+      deliveryConfig: { errors: { maxAutoRetries: 2 } },
+    });
+
+    expect(tick.state.state).toBe("NEEDS_DECISION");
+    expect(tick.state.usage.total).toMatchObject({
+      input: 7794,
+      cachedRead: 368131,
+      cacheCreation: 129817,
+      output: 7010,
+    });
+    expect(tick.state.usage.total.costUsd).toBeCloseTo(0.3393, 4);
+    // Attributed to the phase that spent it, in the same bucket a successful
+    // turn would have used — not a parallel key nothing else reads.
+    expect(tick.state.usage.perPhase.discovery).toMatchObject({ cacheCreation: 129817 });
+  });
+
+  it("sums spend across every failed retry attempt, not just the last one (DLV-43)", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const attempt = {
+      throws: "network exploded",
+      throwsUsage: {
+        usage: { input: 100, cachedInput: 1000, output: 50, costUsd: 0.01 },
+        usageV2: { input: 100, cachedRead: 1000, cacheCreation: 500, output: 50, reasoningOutput: 0 },
+      },
+    };
+    const driver = createDriver("fake", { script: { turns: [attempt, attempt, attempt] } });
+
+    await advanceSession({
+      sessionDir: dir, driver, repoRoot: root, runValidation: passingValidation,
+      retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot,
+    });
+    const tick = await advanceSession({
+      sessionDir: dir, driver, repoRoot: root, runValidation: passingValidation,
+      retryDelayMs: 0, sleep: () => {}, takeSnapshot: stableSnapshot,
+      deliveryConfig: { errors: { maxAutoRetries: 2 } },
+    });
+
+    expect(readEvents(dir).filter((e) => e.type === "retry.automatic")).toHaveLength(2);
+    expect(tick.state.usage.total).toMatchObject({ input: 300, cachedRead: 3000, cacheCreation: 1500, output: 150 });
+    expect(tick.state.usage.total.costUsd).toBeCloseTo(0.03, 4);
+  });
 });
 
 describe("advanceSession: resume after a simulated runner crash", () => {
@@ -900,6 +1197,247 @@ describe("advanceSession: per-phase driver mode override (BUD-11 root cause #1)"
   });
 });
 
+describe("advanceSession: D10/DLV-11 lane-resolved validation ladder reaches handleValidating", () => {
+  it("threads packet.lanePolicy.validationLadder's rungs and targeted changed files into the VALIDATING run", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root, null, {
+      lane: "FAST",
+      tier: "economy",
+      effortByPhase: { discovery: "low", plan: "medium", building: "medium", review: "low" },
+      budget: { maxUsd: 0.5, maxTokens: 500_000, warnPct: 0.8 },
+      maxInternalTurns: 8,
+      validationLadder: { rungs: ["typecheck", "test"], targetedTest: true },
+    });
+    const driver = createDriver("fake", { script: happyPathScript() });
+    const calls: Array<{ rungs: string[] | null; targetedFiles: string[] | null }> = [];
+    const capturingValidation = async (...args: unknown[]) => {
+      const opts = args[0] as { rungs: string[] | null; targetedFiles: string[] | null };
+      calls.push({ rungs: opts.rungs, targetedFiles: opts.targetedFiles });
+      const full = passingValidation();
+      if (!opts.rungs) return full;
+      // Mirror runValidationCommands' own skip-recording so this fixture is a
+      // faithful double, not just a value that happens to satisfy the assertion.
+      const results: Record<string, unknown> = {};
+      for (const key of Object.keys(full.results)) {
+        results[key] = opts.rungs.includes(key)
+          ? full.results[key as keyof typeof full.results]
+          : { ok: true, skipped: true, reason: "not in this lane's validation ladder" };
+      }
+      return { ...full, results };
+    };
+
+    let state = await drive(dir, driver, root, { runValidation: capturingValidation });
+    expect(state.state).toBe("SPEC_READY");
+    writeDecision(dir, 1, "spec", "approve");
+    state = await drive(dir, driver, root, { runValidation: capturingValidation });
+    expect(state.state).toBe("PLAN_READY");
+
+    writeDecision(dir, 2, "plan", "approve");
+    // BUILDING -> VALIDATING -> REVIEWING -> UAT_READY happens inside this one drive() call.
+    state = await drive(dir, driver, root, { runValidation: capturingValidation });
+    expect(state.state).toBe("UAT_READY");
+
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) {
+      expect(call.rungs).toEqual(["typecheck", "test"]);
+    }
+    const validation = JSON.parse(readFileSync(join(dir, "artifacts", "validation.json"), "utf8"));
+    // lint was never in the FAST ladder -- recorded as a governed skip, not silently absent.
+    expect(validation.results.lint).toEqual({ ok: true, skipped: true, reason: "not in this lane's validation ladder" });
+    const report = readFileSync(join(dir, "artifacts", "validation-report.md"), "utf8");
+    expect(report).toContain("## lint\nSKIPPED — not in this lane's validation ladder");
+  });
+
+  it("omits rungs/targetedFiles entirely for a pre-D9 packet with no lanePolicy (unchanged: run everything)", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root); // no lanePolicy
+    const driver = createDriver("fake", { script: happyPathScript() });
+    const calls: Array<{ rungs: string[] | null }> = [];
+    const capturingValidation = async (...args: unknown[]) => {
+      const opts = args[0] as { rungs: string[] | null };
+      calls.push({ rungs: opts.rungs });
+      return passingValidation();
+    };
+
+    let state = await drive(dir, driver, root, { runValidation: capturingValidation });
+    writeDecision(dir, 1, "spec", "approve");
+    state = await drive(dir, driver, root, { runValidation: capturingValidation });
+    writeDecision(dir, 2, "plan", "approve");
+    state = await drive(dir, driver, root, { runValidation: capturingValidation });
+    expect(state.state).toBe("UAT_READY");
+
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) expect(call.rungs).toBeNull();
+  });
+});
+
+describe("advanceSession: D9/DLV-6 lane-resolved maxInternalTurns reaches the driver", () => {
+  it("threads packet.lanePolicy.maxInternalTurns onto the SDK-facing turn options via the driver ref", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root, null, {
+      lane: "FAST",
+      tier: "economy",
+      effortByPhase: { discovery: "low", plan: "medium", building: "medium", review: "low" },
+      budget: { maxUsd: 0.5, maxTokens: 500_000, warnPct: 0.8 },
+      maxInternalTurns: 8,
+    });
+    const driver = createDriver("fake", { script: happyPathScript() });
+
+    const state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("SPEC_READY");
+    // fake.mjs stamps a per-turn maxTurns onto currentRef (mirrors model/effort
+    // override tracking) -- proves the value travelled packet -> runGuardedTurn
+    // -> driver.runTurn, not just that resolveLanePolicy computes it correctly.
+    expect(state.driver.ref.maxTurns).toBe(8);
+  });
+
+  it("omits maxTurns entirely for a pre-D9 packet with no lanePolicy recorded (uncapped, unchanged behavior)", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root); // no lanePolicy
+    const driver = createDriver("fake", { script: happyPathScript() });
+
+    const state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("SPEC_READY");
+    expect(state.driver.ref.maxTurns).toBeUndefined();
+  });
+
+  // DLV-45. The bug this guards: FAST differed from STANDARD in its turn cap
+  // but not in what it asked the agent to read, so its own (tighter) cap was
+  // spent on ceremony and DISCOVERY could never finish. Asserting on the real
+  // prompt that reached the driver, not on the policy that computes it.
+  describe("DLV-45: FAST narrows the mandated reading list", () => {
+    /** Give the packet a realistic campaign-doc + skill payload for one lane. */
+    function withContextPayload(dir: string, lane: string | null) {
+      const packetPath = join(dir, "packet.json");
+      const packet = JSON.parse(readFileSync(packetPath, "utf8"));
+      packet.context = {
+        campaignFiles: [
+          "ERA Notes/10 - Project Management/Budget/1 - Feature State.md",
+          "ERA Notes/10 - Project Management/Budget/2 - Vision & Roadmap.md",
+          "ERA Notes/10 - Project Management/Budget/3 - Action Plan.md",
+          "ERA Notes/10 - Project Management/Budget/4 - Checklist.md",
+        ],
+        relatedNotes: [],
+      };
+      packet.skills = [
+        { capability: "code-review", path: ".claude/skills/finish-task/SKILL.md" },
+        { capability: "frontend-impl", path: ".claude/skills/ui-guardrails/SKILL.md" },
+      ];
+      if (lane) {
+        packet.lanePolicy = {
+          lane,
+          tier: lane === "FAST" ? "economy" : "standard",
+          effortByPhase: { discovery: "low", plan: "medium", building: "medium", review: "low" },
+          budget: { maxUsd: 0.5, maxTokens: 500_000, warnPct: 0.8 },
+          maxInternalTurns: 12,
+        };
+      }
+      atomicWriteJsonSync(packetPath, packet);
+    }
+
+    function discoveryPrompt(dir: string) {
+      return readFileSync(join(dir, "transcript", "prompts", "0001.md"), "utf8");
+    }
+
+    it("drops campaign docs, the always-on skill, and the doctrine re-read on FAST", async () => {
+      const root = setupRepo();
+      const { dir } = makePacketAndState(root);
+      withContextPayload(dir, "FAST");
+      const driver = createDriver("fake", { script: happyPathScript() });
+
+      await drive(dir, driver, root, { runValidation: passingValidation });
+      const prompt = discoveryPrompt(dir);
+
+      expect(prompt).not.toContain("Budget/1 - Feature State.md");
+      expect(prompt).not.toContain("Budget/2 - Vision & Roadmap.md");
+      expect(prompt).not.toContain("Budget/3 - Action Plan.md");
+      expect(prompt).not.toContain("Campaign context files");
+      // The item's own pmFile ("Budget/4 - Checklist.md") IS still in the packet
+      // header — that is the work item, not campaign strategy reading.
+      expect(prompt).toContain("Budget/4 - Checklist.md");
+      // The always-on code-review row's skill belongs to REVIEWING, which reads
+      // it by its own path — listing it here just read it a phase early.
+      expect(prompt).not.toContain("finish-task/SKILL.md");
+      // The risk-flag skill is exactly what must survive: it carries the UI hard rules.
+      expect(prompt).toContain("ui-guardrails/SKILL.md");
+      expect(prompt).not.toContain("read CLAUDE.md at the repository root");
+      expect(prompt).toContain("FAST-lane session");
+    });
+
+    it("leaves STANDARD's reading list completely untouched", async () => {
+      const root = setupRepo();
+      const { dir } = makePacketAndState(root);
+      withContextPayload(dir, "STANDARD");
+      const driver = createDriver("fake", { script: happyPathScript() });
+
+      await drive(dir, driver, root, { runValidation: passingValidation });
+      const prompt = discoveryPrompt(dir);
+
+      expect(prompt).toContain("1 - Feature State.md");
+      expect(prompt).toContain("4 - Checklist.md");
+      expect(prompt).toContain("finish-task/SKILL.md");
+      expect(prompt).toContain("ui-guardrails/SKILL.md");
+      expect(prompt).toContain("read CLAUDE.md at the repository root");
+    });
+
+    it("treats a pre-D9 packet with no lanePolicy as full-context (unchanged behavior)", async () => {
+      const root = setupRepo();
+      const { dir } = makePacketAndState(root);
+      withContextPayload(dir, null);
+      const driver = createDriver("fake", { script: happyPathScript() });
+
+      await drive(dir, driver, root, { runValidation: passingValidation });
+      expect(discoveryPrompt(dir)).toContain("1 - Feature State.md");
+    });
+  });
+});
+
+// DLV-53: a rejected plan used to be routed to DISCOVERY, whose prompt asks for
+// a spec. The owner's re-plan instruction reached a phase that cannot produce a
+// plan, the spec was needlessly re-authored, and the plan was never revised.
+describe("advanceSession: rejecting a plan returns to the SPEC gate (DLV-53)", () => {
+  it("re-arms the spec gate, keeps the approved spec, and carries the note into the next PLAN turn", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const driver = createDriver("fake", {
+      script: {
+        turns: [
+          { finalText: SPEC_TEXT },
+          { finalText: PLAN_TEXT },
+          // The re-plan turn after the owner rejects. If the runner wrongly sent
+          // this to DISCOVERY it would demand SPEC-shaped JSON and this
+          // plan-shaped payload would fail to parse.
+          { finalText: PLAN_TEXT },
+        ],
+      },
+    });
+
+    await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 1, "spec", "approve");
+    let state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("PLAN_READY");
+    const specBefore = readFileSync(join(dir, "artifacts", "spec.md"), "utf8");
+
+    writeDecision(dir, 2, "plan", "reject", { note: "Too many steps — re-plan with exactly one." });
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+
+    // Back on the SPEC gate, armed and labelled — not parked with awaiting: null,
+    // and not thrown back into DISCOVERY.
+    expect(state.state).toBe("SPEC_READY");
+    expect(state.awaiting).toMatchObject({ gate: "spec", reason: "plan-rejected" });
+    // The approved spec is untouched: rejecting a plan says nothing about the spec.
+    expect(readFileSync(join(dir, "artifacts", "spec.md"), "utf8")).toBe(specBefore);
+    // The rejection note must reach the turn that re-plans, or the owner's
+    // instruction is silently dropped (the DLV-32 failure mode).
+    expect(state.pendingGuidance).toContain("Too many steps — re-plan with exactly one.");
+
+    // Approving again runs a fresh PLAN turn, which is what "revise the plan" means.
+    writeDecision(dir, 3, "spec", "approve");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("PLAN_READY");
+  });
+});
+
 describe("advanceSession: S3 driver setup and structured-output failures", () => {
   it("persists a new provider ref before the first real turn begins", async () => {
     const root = setupRepo();
@@ -958,7 +1496,9 @@ describe("advanceSession: S3 driver setup and structured-output failures", () =>
     const state = await drive(dir, driver, root);
     expect(state.state).toBe("BLOCKED");
     expect(state.lastError.message).toMatch(/DISCOVERY output field/);
-    expect(state.usage.perPhase.discovery).toMatchObject({ input: 7, cachedInput: 2, output: 3 });
+    // DLV-37: state.usage is v2-shaped (cachedRead/cacheCreation), fed here
+    // via fallbackUsageV2FromV1 since the fake driver only supplied v1 usage.
+    expect(state.usage.perPhase.discovery).toMatchObject({ input: 7, cachedRead: 2, cacheCreation: 0, output: 3 });
   });
 });
 
@@ -1205,7 +1745,9 @@ describe("runValidationCommands", () => {
     expect(calls).toEqual(["typecheck", "lint"]);
     expect(result.results.lint.ok).toBe(false);
     expect(result.results.lint.excerpt).toContain("lint error");
-    expect(result.results.test).toBeUndefined();
+    // D10/DLV-11: never silently absent -- a fail-fast-skipped rung is a
+    // structured, recorded skip, not a missing key.
+    expect(result.results.test).toEqual({ ok: true, skipped: true, reason: "not run — an earlier validation command failed" });
   });
 
   it("passes when every command exits 0", async () => {
@@ -1236,7 +1778,7 @@ describe("runValidationCommands", () => {
     expect(seenTimeouts.typecheck).toBe(240_000);
     expect(seenTimeouts.lint).toBe(900_000);
     expect(result.results.lint.excerpt).toContain("exceeded 900000ms");
-    expect(result.results.test).toBeUndefined();
+    expect(result.results.test).toEqual({ ok: true, skipped: true, reason: "not run — an earlier validation command failed" });
   });
 
   it("emits per-command progress events via onEvent", async () => {
@@ -1252,6 +1794,7 @@ describe("runValidationCommands", () => {
       "validation.command.finished:typecheck",
       "validation.command.started:lint",
       "validation.command.finished:lint",
+      "validation.command.skipped:test",
     ]);
     expect(events[1].data.ok).toBe(true);
     expect(events[3].data.ok).toBe(false);
@@ -1262,9 +1805,63 @@ describe("runValidationCommands", () => {
     const run = async () => ({ status: 1, stdout: bigOutput, stderr: "", ms: 1, timedOut: false });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await runValidationCommands({ cwd: "/repo", run: run as any });
-    const lineCount = result.results.typecheck.excerpt.split("\n").length;
+    const excerpt = result.results.typecheck.excerpt as string; // typecheck always runs (no rungs filter) in this test
+    const lineCount = excerpt.split("\n").length;
     expect(lineCount).toBeLessThanOrEqual(200);
-    expect(result.results.typecheck.excerpt).toContain("line 499");
-    expect(result.results.typecheck.excerpt).not.toContain("line 0\n");
+    expect(excerpt).toContain("line 499");
+    expect(excerpt).not.toContain("line 0\n");
+  });
+
+  it("D10/DLV-11: a lane-ladder rung skip is recorded before any command runs, and never fails the overall result", async () => {
+    const calls: string[] = [];
+    const run = async (_cmd: string, args: string[]) => {
+      calls.push(args[0]);
+      return { status: 0, stdout: "", stderr: "", ms: 1, timedOut: false };
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await runValidationCommands({ cwd: "/repo", run: run as any, rungs: ["typecheck", "test"] });
+    expect(result.ok).toBe(true);
+    expect(calls).toEqual(["typecheck", "test"]); // lint never invoked at all
+    expect(result.results.lint).toEqual({ ok: true, skipped: true, reason: "not in this lane's validation ladder" });
+    expect(result.results.typecheck.ok).toBe(true);
+    expect(result.results.test.ok).toBe(true);
+  });
+
+  it("D10/DLV-11: runs `vitest related <changed files>` for the test rung when targetedFiles is given", async () => {
+    const invocations: Array<{ cmd: string; args: string[] }> = [];
+    const run = async (cmd: string, args: string[]) => {
+      invocations.push({ cmd, args });
+      return { status: 0, stdout: "", stderr: "", ms: 1, timedOut: false };
+    };
+    const result = await runValidationCommands({
+      cwd: "/repo",
+      // Narrowing the real spawn signature would pull the whole child_process
+      // surface into a test that only records cmd/args. (Directive must be a
+      // single line — a multi-line // block makes "next line" the comment's own
+      // second line, which is how this ended up reported as unused.)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      run: run as any,
+      rungs: ["typecheck", "test"],
+      targetedFiles: ["scripts/delivery/recommendation.mjs"],
+    });
+    expect(result.results.test.targeted).toBe(true);
+    const testInvocation = invocations.find((i) => i.args.includes("related"));
+    expect(testInvocation).toEqual({
+      cmd: "pnpm",
+      args: ["exec", "vitest", "related", "scripts/delivery/recommendation.mjs", "--passWithNoTests"],
+    });
+    // typecheck is untouched by targeting -- only the "test" rung changes shape.
+    expect(invocations[0]).toEqual({ cmd: "pnpm", args: ["typecheck"] });
+  });
+
+  it("D10/DLV-11: falls back to the full untargeted test command when targetedFiles is empty/omitted", async () => {
+    const invocations: Array<{ cmd: string; args: string[] }> = [];
+    const run = async (cmd: string, args: string[]) => {
+      invocations.push({ cmd, args });
+      return { status: 0, stdout: "", stderr: "", ms: 1, timedOut: false };
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await runValidationCommands({ cwd: "/repo", run: run as any, rungs: ["typecheck", "test"], targetedFiles: [] });
+    expect(invocations.find((i) => i.args[0] === "test")).toEqual({ cmd: "pnpm", args: ["test"] });
   });
 });

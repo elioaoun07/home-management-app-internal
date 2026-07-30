@@ -109,7 +109,7 @@ export class SupabaseTransactionService implements TransactionService {
     const accountIds = [
       ...new Set((rawRows || []).map((r: any) => r.account_id).filter(Boolean)),
     ];
-    let accountMap: Record<
+    const accountMap: Record<
       string,
       { name: string; user_id: string; is_public?: boolean | null }
     > = {};
@@ -142,7 +142,7 @@ export class SupabaseTransactionService implements TransactionService {
         (rawRows || []).map((r: any) => r.subcategory_id).filter(Boolean),
       ),
     ];
-    let categoryNamesMap: Record<string, { name: string; color?: string }> = {};
+    const categoryNamesMap: Record<string, { name: string; color?: string }> = {};
 
     if (categoryIds.length > 0 || subcategoryIds.length > 0) {
       const allCatIds = [...categoryIds, ...subcategoryIds];

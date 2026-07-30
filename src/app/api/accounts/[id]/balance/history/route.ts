@@ -101,7 +101,7 @@ export async function GET(
     .filter(Boolean);
 
   // Fetch transaction details
-  let transactionsMap: Record<string, any> = {};
+  const transactionsMap: Record<string, any> = {};
   if (transactionIds.length > 0) {
     const { data: transactions } = await admin
       .from("transactions")
@@ -129,7 +129,7 @@ export async function GET(
   }
 
   // Fetch transfer details
-  let transfersMap: Record<string, any> = {};
+  const transfersMap: Record<string, any> = {};
   if (transferIds.length > 0) {
     const { data: transfers } = await admin
       .from("transfers")

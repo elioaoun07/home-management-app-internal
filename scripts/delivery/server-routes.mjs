@@ -25,7 +25,7 @@ import {
 import { join } from "node:path";
 
 import { resolveInside, toggleCheckbox } from "../pm/mutations.mjs";
-import { applyCapabilityDrops, classify, ALWAYS_ON_CAPABILITIES } from "./classify.mjs";
+import { applyCapabilityDrops, classify, isTrivialLaunchCandidate, ALWAYS_ON_CAPABILITIES } from "./classify.mjs";
 import { atomicWriteJsonSync, readJsonIfExists, readTextIfExists } from "./fsx.mjs";
 import { gitRevParseHead, gitStatusPorcelain } from "./gitread.mjs";
 import { buildItemIdentity, buildPacket, makeSessionId } from "./packet.mjs";
@@ -56,13 +56,17 @@ import {
   assessRecommendationMismatch,
   laneForTier,
   recommendAgentConfig,
+  resolveLanePolicy,
+  resolveMergedDiscoveryPlan,
 } from "./recommendation.mjs";
 import { buildControl, controlFileName } from "./controls.mjs";
-import { createBudgetEnvelope, raiseBudgetEnvelope } from "./budgets.mjs";
+import { createBudgetEnvelope, raiseBudgetEnvelope, totalProcessedTokens } from "./budgets.mjs";
 import { emptyLedger, splitOpenQuestions } from "./memory.mjs";
 import { findMatches, parseTurnRecords, parseTurns } from "./transcript.mjs";
 import { buildContextPackage, estimateTokens } from "./context-assembly.mjs";
-import { DIRTY_TREE_ACK, RED_BASELINE_ACK } from "./validation-baseline.mjs";
+import { applyContextBudget } from "./context-budget.mjs";
+import { DIRTY_TREE_ACK, RED_BASELINE_ACK, SCOPE_MISMATCH_ACK, TRIAGE_OVERRIDE_ACK } from "./validation-baseline.mjs";
+import { emptyUsageV2 } from "./usage.mjs";
 
 export class DeliveryRouteError extends Error {
   constructor(status, message) {
@@ -106,15 +110,57 @@ const SKILL_PATH_FOR_CAPABILITY = {
   "code-review": ".claude/skills/finish-task/SKILL.md",
 };
 
+// DLV-42: this repo's checklist grammar routinely names the exact target —
+// "… replace the $25 preset with $20 → `src/components/expense/MobileExpenseForm.tsx:1144`".
+// Matches repo-relative source paths, with an optional `:line` suffix and
+// optional surrounding backticks.
+const EXPLICIT_PATH_RE = /(?:^|[\s`(<→])((?:src|scripts|migrations|tests|public)\/[\w./-]*[\w-]\.\w{1,5})(?::\d+)?/g;
+
+/**
+ * Repo-relative source paths the item text names outright, de-duplicated in
+ * first-appearance order. Empty when the item only describes its target in prose.
+ */
+export function explicitPathsInText(text) {
+  const out = [];
+  for (const match of String(text || "").matchAll(EXPLICIT_PATH_RE)) {
+    const path = match[1];
+    if (!out.includes(path)) out.push(path);
+  }
+  return out;
+}
+
+/**
+ * DLV-42 — scope hints used to *discard* the item's own file pointer and
+ * substitute every glob of its campaign. For BUD-14 that turned a one-line,
+ * one-file edit in `src/components/expense/` into six `src/features/**` globs,
+ * with three compounding consequences:
+ *
+ *   1. `scoreComplexity`'s "broad launch scope (>=4 globs, +2)" fired — as it
+ *      would for *every* Budget item, since the count came from a constant
+ *      table rather than from the item. Combined with the money false positive
+ *      that pushed a trivial `annoyance - S` chip edit to score 3, i.e. a
+ *      **DEEP** lane recommendation for changing "25" to "20".
+ *   2. `frontend-impl` was attributed to `src/features/budget/**`, a directory
+ *      the change never touches.
+ *   3. DISCOVERY was pointed at six irrelevant feature directories.
+ *
+ * When the item names real paths, those are the scope. The campaign table stays
+ * as the fallback for items that only describe their target in prose — it is a
+ * reasonable prior when nothing better exists, and a bad one when something
+ * better was sitting in the item text all along.
+ */
 function computeScopeHints(item) {
   const text = item.text || "";
   const keywords = text
     .split(/\s+/)
     .map((w) => w.toLowerCase().replace(/[^\w-]/g, ""))
     .filter((w) => w.length > 3);
-  const globs = [...(CAMPAIGN_MODULE_GLOBS[item.campaign] || [])];
-  if (/\bapi\b|route|endpoint|cron/i.test(text)) globs.push("src/app/api/**");
-  return { keywords, globs, modules: item.campaign ? [item.campaign] : [] };
+  const explicitPaths = explicitPathsInText(text);
+  const globs = explicitPaths.length > 0 ? [...explicitPaths] : [...(CAMPAIGN_MODULE_GLOBS[item.campaign] || [])];
+  // An explicit path list is already precise; widening it with the API glob on
+  // a keyword match would re-introduce exactly the imprecision above.
+  if (explicitPaths.length === 0 && /\bapi\b|route|endpoint|cron/i.test(text)) globs.push("src/app/api/**");
+  return { keywords, globs, modules: item.campaign ? [item.campaign] : [], ...(explicitPaths.length > 0 ? { scopeSource: "item-paths" } : {}) };
 }
 
 function buildSkillRefs(capabilities) {
@@ -177,7 +223,22 @@ function contextEntry(ctx, { kind, path, phases, text }) {
   };
 }
 
-function buildLaunchContextManifest(ctx, { item, campaignFiles, skills }) {
+/**
+ * DLV-8: the Flight-Check's context preview, now budget-aware.
+ *
+ * `lane` matters here because the lane decides both the editorial narrowing
+ * (FAST reads no campaign docs — DLV-45) and the token budget, so a preview
+ * computed without it was describing a session nobody was about to launch.
+ * `perPhase` shows what each phase would actually be handed, including anything
+ * the budget would drop, so the owner sees the real reading list at the one
+ * moment they can still change lane for free.
+ */
+function buildLaunchContextManifest(ctx, { item, campaignFiles, skills, lane = null, riskFlagSkills = null }) {
+  const laneKey = String(lane || "").toLowerCase();
+  const isFast = laneKey === "fast";
+  const laneSkills = isFast && riskFlagSkills ? riskFlagSkills : skills;
+  const laneCampaignFiles = isFast ? [] : campaignFiles;
+
   const entries = [
     contextEntry(ctx, {
       kind: "item",
@@ -185,18 +246,37 @@ function buildLaunchContextManifest(ctx, { item, campaignFiles, skills }) {
       phases: ["DISCOVERY", "PLAN", "BUILDING", "REVIEWING", "UAT"],
       text: JSON.stringify(item),
     }),
-    ...campaignFiles.map((path) =>
-      contextEntry(ctx, { kind: "campaign", path, phases: ["DISCOVERY"] }),
-    ),
-    ...skills.map(({ path }) =>
-      contextEntry(ctx, { kind: "skill", path, phases: ["DISCOVERY", "PLAN"] }),
-    ),
+    ...laneCampaignFiles.map((path) => contextEntry(ctx, { kind: "campaign", path, phases: ["DISCOVERY"] })),
+    ...laneSkills.map(({ path }) => contextEntry(ctx, { kind: "skill", path, phases: ["DISCOVERY", "PLAN"] })),
   ];
+
+  const laneBudgets = (ctx.deliveryConfig && ctx.deliveryConfig.context && ctx.deliveryConfig.context.laneBudgets) || {};
+  const phaseBudgets = laneBudgets[laneKey] || {};
+  const budgetable = entries.filter((e) => e.kind !== "item");
+  const perPhase = {};
+  for (const phase of ["discovery", "plan", "building", "review"]) {
+    const budgetTokens = typeof phaseBudgets[phase] === "number" ? phaseBudgets[phase] : null;
+    const { kept, dropped } = applyContextBudget({
+      sources: budgetable.map((e) => ({ kind: e.kind, path: e.path, tokensEst: e.estimatedTokens })),
+      budgetTokens,
+    });
+    perPhase[phase] = {
+      budgetTokens,
+      loadedTokensEst: kept.reduce((sum, s) => sum + s.tokensEst, 0),
+      loaded: kept.map((s) => s.path),
+      dropped: dropped.map((s) => ({ path: s.path, kind: s.kind, tokensEst: s.tokensEst, reason: s.reason })),
+    };
+  }
+
   return {
     entries,
+    lane,
+    perPhase,
     estimatedTokens: entries.reduce((sum, entry) => sum + entry.estimatedTokens, 0),
     estimateMethod: "rough chars/4 if every read-by-path input is loaded",
-    note: "DLV-8 will add per-phase context budgets and record the files actually loaded.",
+    // The packet is referenced by path, never embedded (DLV-8's first half), so
+    // it is deliberately absent from the totals above.
+    note: "Per-phase figures apply this lane's narrowing and token budget. The packet itself is referenced by path, not embedded, so it is not counted here.",
   };
 }
 
@@ -207,8 +287,18 @@ function buildLaunchPreview(ctx, {
   skills,
   campaignFiles,
   recommendation,
+  // DLV-8: the lane the owner has actually selected in the Flight-Check, so the
+  // context preview describes the session about to be launched rather than a
+  // hypothetical unnarrowed one. Falls back to the recommended lane when the
+  // preview is being fetched before a lane is chosen.
+  lane = null,
 }) {
   const acceptanceCriteria = findPreLaunchAcceptanceCriteria(item, ctx.PM_DIR);
+  const recommendedLane = laneForTier(recommendation?.tier);
+  // On FAST the runner keeps only skills a *risk flag* implicates (DLV-45), so
+  // the preview must apply the same rule or it would promise reading the
+  // session will never do.
+  const riskFlagSkills = skills.filter((s) => !ALWAYS_ON_CAPABILITIES.includes(s.capability));
   return {
     item: {
       id: item.id,
@@ -222,14 +312,20 @@ function buildLaunchPreview(ctx, {
     acceptanceCriteriaStatus: acceptanceCriteria.length
       ? "campaign-action-plan"
       : "authored-at-spec",
-    recommendedLane: laneForTier(recommendation?.tier),
+    recommendedLane,
     scopeHints,
     capabilities,
     riskFlags: capabilities
       .filter((capability) => !ALWAYS_ON_CAPABILITIES.includes(capability.name))
       .map(({ name, reason, blocking }) => ({ name, reason, blocking })),
     skills,
-    contextManifest: buildLaunchContextManifest(ctx, { item, campaignFiles, skills }),
+    contextManifest: buildLaunchContextManifest(ctx, {
+      item,
+      campaignFiles,
+      skills,
+      lane: lane || recommendedLane,
+      riskFlagSkills,
+    }),
   };
 }
 
@@ -253,8 +349,71 @@ function readSession(ctx, id) {
   return { dir, packet, state };
 }
 
-function isBuildLockActive(ctx) {
+// Sessions that reached ACCEPTED/SHIPPED ran a real end-to-end build, so their
+// recorded usage reflects a genuine per-tier cost. A session killed early by a
+// quota/budget/git-guard stop (CANCELLED, BLOCKED, still in flight) would skew
+// the median down toward "how much a session costs before it dies," not "how
+// much a session costs to actually finish" — the number the forecast needs.
+const HISTORY_ELIGIBLE_STATES = new Set(["ACCEPTED", "SHIPPED"]);
+
+/**
+ * Completed sessions' `{tier, usage}` samples for `recommendAgentConfig`'s
+ * history-informed forecast (D8) — previously always called with no `history`
+ * argument, so `estUsageForTier`'s median-of-past-sessions path was dead code
+ * regardless of how many sessions had actually completed.
+ */
+function loadRecommendationHistory(ctx) {
+  const history = [];
   for (const id of listSessionIds(ctx)) {
+    const s = readSession(ctx, id);
+    if (!s) continue;
+    if (!HISTORY_ELIGIBLE_STATES.has(s.state.state)) continue;
+    const tier = s.packet && s.packet.flightCheck && s.packet.flightCheck.recommendation && s.packet.flightCheck.recommendation.tier;
+    const usage = s.state && s.state.usage && s.state.usage.total;
+    if (!tier || !usage) continue;
+    // DLV-56: `perPhase` is what the per-phase-traversal forecast learns from.
+    // It has been recorded on every session since DLV-37 — it simply was never
+    // read, because the forecast was modelling whole sessions.
+    history.push({ tier, usage, perPhase: (s.state.usage && s.state.usage.perPhase) || null });
+  }
+  return history;
+}
+
+/**
+ * Forecast-vs-actual (D8) — derived on read from data already recorded
+ * (the packet's `recommendation` snapshot taken at launch, and `state.usage.total`
+ * accumulated since), not a new persisted field. `null` until the session has
+ * both a recommendation snapshot and at least one turn's usage.
+ */
+function computeForecastActual(packet, state) {
+  const rec = packet && packet.flightCheck && packet.flightCheck.recommendation;
+  const usage = state && state.usage && state.usage.total;
+  if (!rec || !usage) return null;
+  const actualTokens = totalProcessedTokens(usage);
+  if (!actualTokens) return null;
+  const actualCostUsd = usage.costUsd != null ? usage.costUsd : usage.costEstUsd != null ? usage.costEstUsd : null;
+  return {
+    tier: rec.tier,
+    estTokens: rec.estTokens != null ? rec.estTokens : null,
+    estCostUsd: rec.estCostUsd != null ? rec.estCostUsd : null,
+    actualTokens,
+    actualCostUsd,
+    tokenRatio: rec.estTokens ? actualTokens / rec.estTokens : null,
+  };
+}
+
+/**
+ * @param {object} ctx
+ * @param {(string|null)} [exceptSessionId] - DLV-13: the predecessor a salvage
+ *   relaunch is replacing. It holds the build lock precisely because it stopped
+ *   past the plan gate — which is the whole reason it needs salvaging — so
+ *   counting it would make every stopped session permanently unsalvageable.
+ *   Safe because the successor is about to supersede it and its runner is
+ *   already verified dead by the caller.
+ */
+function isBuildLockActive(ctx, exceptSessionId = null) {
+  for (const id of listSessionIds(ctx)) {
+    if (exceptSessionId && id === exceptSessionId) continue;
     const s = readSession(ctx, id);
     if (!s) continue;
     if (BUILD_LOCK_STATES.has(s.state.state)) return true;
@@ -306,6 +465,90 @@ function spawnRunner(ctx, sessionId, opts) {
 
 // ---- GET handlers ----
 
+/**
+ * DLV-19 — fleet metrics, computed from the session directories at request
+ * time. No new store and no new persisted field: every input already exists on
+ * disk, it has simply never been added up.
+ *
+ * The intent of this panel is to be an honest mirror, so it deliberately reports
+ * the numbers that look bad: how many sessions ended in something other than
+ * SHIPPED, what the cost per shipped item actually is (including everything
+ * spent on the ones that shipped nothing), and how often a human had to
+ * intervene. A dashboard that only showed successes would have shown nothing at
+ * all for this campaign's first eight sessions.
+ */
+function computeFleetMetrics(rows) {
+  const outcomes = {};
+  let totalCostUsd = 0;
+  let costKnown = false;
+  let shippedCostUsd = 0;
+  let shippedCount = 0;
+  let interventions = 0;
+  let interventionSessions = 0;
+  let firstPassValidation = 0;
+  let validationSessions = 0;
+  const scopeAccuracy = [];
+
+  for (const row of rows) {
+    outcomes[row.state] = (outcomes[row.state] || 0) + 1;
+    const cost = row.usageTotal && (row.usageTotal.costUsd != null ? row.usageTotal.costUsd : row.usageTotal.costEstUsd);
+    if (typeof cost === "number" && Number.isFinite(cost)) {
+      totalCostUsd += cost;
+      costKnown = true;
+      if (row.state === "SHIPPED") shippedCostUsd += cost;
+    }
+    if (row.state === "SHIPPED") shippedCount += 1;
+    if (row.decisionCount != null) {
+      interventions += row.decisionCount;
+      interventionSessions += 1;
+    }
+    if (row.firstValidationPassed != null) {
+      validationSessions += 1;
+      if (row.firstValidationPassed) firstPassValidation += 1;
+    }
+    if (row.scopeAccuracy != null) scopeAccuracy.push(row.scopeAccuracy);
+  }
+
+  return {
+    total: rows.length,
+    outcomes,
+    // Total spend divided by SHIPPED sessions — not "average cost of a shipped
+    // session". The difference is the whole point: work that never shipped was
+    // still paid for, and hiding it in a per-session average would flatter the
+    // pipeline exactly where it has been weakest.
+    costPerShippedItem: shippedCount && costKnown ? totalCostUsd / shippedCount : null,
+    totalCostUsd: costKnown ? totalCostUsd : null,
+    shippedCostUsd: costKnown ? shippedCostUsd : null,
+    shippedCount,
+    interventionsPerSession: interventionSessions ? interventions / interventionSessions : null,
+    firstPassValidationRate: validationSessions ? firstPassValidation / validationSessions : null,
+    scopeEstimateAccuracy: scopeAccuracy.length
+      ? scopeAccuracy.reduce((sum, v) => sum + v, 0) / scopeAccuracy.length
+      : null,
+    costBasis: costKnown ? "recorded" : "unavailable",
+  };
+}
+
+/** Per-session metric inputs, read from artifacts the runner already writes. */
+function sessionMetricInputs(s) {
+  const decisionsDir = join(s.dir, "decisions");
+  const decisionCount = existsSync(decisionsDir) ? readdirSync(decisionsDir).filter((n) => n.endsWith(".json")).length : null;
+
+  // "First-pass validation" = the session reached VALIDATING and passed without
+  // ever entering a fix loop. `fixLoop` is the runner's own counter.
+  const validation = readJsonIfExists(join(s.dir, "artifacts", "validation.json"));
+  const firstValidationPassed = validation ? !!validation.passes && !(s.state.fixLoop > 0) : null;
+
+  // Scope accuracy: what DISCOVERY measured vs what the session actually
+  // changed. Ratio of 1 is a perfect estimate; >1 means it under-estimated.
+  const scope = readJsonIfExists(join(s.dir, "artifacts", "scope.json"));
+  const estimatedFiles = scope && scope.estimate && scope.estimate.files;
+  const actualFiles = ((s.state.workspace && s.state.workspace.changedFiles) || []).length;
+  const scopeAccuracy = estimatedFiles && actualFiles ? actualFiles / estimatedFiles : null;
+
+  return { decisionCount, firstValidationPassed, scopeAccuracy };
+}
+
 function listSessions(ctx) {
   const sessions = listSessionIds(ctx)
     .map((id) => {
@@ -327,11 +570,13 @@ function listSessions(ctx) {
         updatedAt: s.state.updatedAt,
         usageTotal: (s.state.usage && s.state.usage.total) || null,
         runnerAlive: liveness.alive,
+        supersededBy: s.state.supersededBy || null,
+        ...sessionMetricInputs(s),
       };
     })
     .filter(Boolean)
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-  return { sessions, buildLockActive: isBuildLockActive(ctx) };
+  return { sessions, buildLockActive: isBuildLockActive(ctx), metrics: computeFleetMetrics(sessions) };
 }
 
 function listArtifactsRecursive(dir, prefix = "") {
@@ -355,7 +600,13 @@ function getSession(ctx, id) {
   // runner.log carries the runner process's stderr + crash stacks — surface
   // its tail so a dead runner's cause is readable in the UI, not only on disk.
   const log = readTextIfExists(join(s.dir, "runner.log"));
-  return { packet: s.packet, state: s.state, artifacts, runner: { ...runner, logTail: log ? log.slice(-4000) : null } };
+  return {
+    packet: s.packet,
+    state: s.state,
+    artifacts,
+    runner: { ...runner, logTail: log ? log.slice(-4000) : null },
+    forecastActual: computeForecastActual(s.packet, s.state),
+  };
 }
 
 function getEvents(ctx, id, afterSeq) {
@@ -572,7 +823,10 @@ function getCapabilities(ctx) {
  * error) whenever the provider's catalog has no models for the matched tier,
  * so the wizard can just hide the card.
  */
-function getRecommendation(ctx, { file, cbidx, provider }) {
+// DLV-8: `lane` is optional and lets the Flight-Check re-fetch the context
+// preview as the owner changes lane, so the reading list on screen always
+// matches the lane about to be launched. Omitted → the recommended lane.
+function getRecommendation(ctx, { file, cbidx, provider, lane = null }) {
   if (typeof file !== "string" || !file) throw fail(400, "file is required");
   if (cbidx == null || cbidx === "") throw fail(400, "cbidx is required");
   const cbidxNum = Number(cbidx);
@@ -601,6 +855,7 @@ function getRecommendation(ctx, { file, cbidx, provider }) {
     scopeHints,
     provider: agent,
     config: ctx.deliveryConfig,
+    history: loadRecommendationHistory(ctx),
   });
   return {
     recommendation,
@@ -611,6 +866,7 @@ function getRecommendation(ctx, { file, cbidx, provider }) {
       skills,
       campaignFiles,
       recommendation,
+      lane: DELIVERY_LANES.includes(lane) ? lane : null,
     }),
   };
 }
@@ -699,6 +955,84 @@ async function getWorkspacePreflight(ctx) {
 
 // ---- POST /api/delivery/start ----
 
+/**
+ * DLV-13 — salvage a stopped session into a right-sized successor.
+ *
+ * Today a BLOCKED or paused session offers exactly two things: retry it as-is,
+ * or abandon it. BUD-11's two dead sessions were unsalvageable by any route
+ * except a human reading transcripts and re-typing the remainder by hand — and
+ * the remainder was real work: a partial migration and 67 unconverted
+ * occurrences, all of it already analysed and paid for.
+ *
+ * This reads the predecessor's own `finish/remaining-work.json` (DLV-12) and
+ * returns a pre-filled launch payload. It deliberately does NOT launch: the
+ * successor goes through the ordinary Flight-Check with a *fresh* budget, lane
+ * and model, because the reason a session needed salvaging is usually that one
+ * of those three was wrong, and silently inheriting them would reproduce it.
+ */
+function getSalvage(ctx, id) {
+  const s = readSession(ctx, id);
+  if (!s) throw fail(404, "unknown session");
+  // A session with a live runner is not finished, and salvaging it would mean
+  // two lineages advancing the same work item's git state at once.
+  if (isRunnerAlive(s.dir).alive) {
+    throw fail(409, "this session's runner is still alive — pause or cancel it before salvaging");
+  }
+  const remaining = readJsonIfExists(join(s.dir, "artifacts", "finish", "remaining-work.json"));
+  if (!remaining) {
+    throw fail(409, "this session has no finish package to salvage from (it exited before one was written)");
+  }
+  const manifest = readJsonIfExists(join(s.dir, "artifacts", "finish", "manifest.json"));
+  const nothingLeft = !(remaining.acceptanceCriteria || []).length && !(remaining.planSteps || []).length;
+  return {
+    predecessor: {
+      sessionId: s.packet.sessionId,
+      state: s.state.state,
+      reason: (s.state.awaiting && s.state.awaiting.reason) || null,
+      lastError: s.state.lastError || null,
+      usage: (s.state.usage && s.state.usage.total) || null,
+      changedFiles: (manifest && manifest.files) || [],
+      supersededBy: (s.state.supersededBy || null),
+    },
+    item: {
+      pmFile: s.packet.item.pmFile,
+      cbidx: s.packet.item.cbidx,
+      lineText: s.packet.item.lineText,
+      id: s.packet.item.id,
+      text: s.packet.item.text,
+      effort: s.packet.item.effort,
+    },
+    remainingWork: remaining,
+    // The predecessor's own lane/model, shown so the owner can see what was
+    // tried — never pre-selected. Choosing again is the point.
+    previousSelection: {
+      lane: (s.packet.lanePolicy && s.packet.lanePolicy.lane) || null,
+      model: (s.packet.agentConfig && s.packet.agentConfig.model) || null,
+      budget: s.packet.budget || null,
+    },
+    salvageable: !nothingLeft,
+    ...(nothingLeft ? { note: "The finish package records nothing remaining — there may be nothing to salvage." } : {}),
+  };
+}
+
+/** Mark a predecessor superseded once its successor is on disk. Never touches a live session. */
+function markSuperseded(ctx, predecessorId, successorId) {
+  const p = readSession(ctx, predecessorId);
+  if (!p) return;
+  if (isRunnerAlive(p.dir).alive) return;
+  const at = new Date().toISOString();
+  atomicWriteJsonSync(join(p.dir, "state.json"), {
+    ...p.state,
+    supersededBy: { sessionId: successorId, at },
+    // The phase state is left exactly as it was — superseding is a note about
+    // lineage, not a state transition, and rewriting a terminal state here
+    // would corrupt the one record of how the session actually ended.
+    awaiting: p.state.awaiting ? { ...p.state.awaiting, reason: "superseded" } : { gate: "none", reason: "superseded" },
+    updatedAt: at,
+  });
+  emitEvent(p.dir, { type: "session.superseded", phase: p.state.state, data: { successorId } });
+}
+
 async function startSession(ctx, body) {
   const {
     file,
@@ -710,9 +1044,13 @@ async function startSession(ctx, body) {
     preflightId,
     dirtyAck,
     redBaselineAck,
+    triageAck,
     options,
     budget: budgetInput,
     flightCheck: flightCheckInput,
+    // DLV-13: salvage relaunch — narrows this session to the predecessor's
+    // remaining work and links the two.
+    continuationOf,
   } = body || {};
   if (agent !== "codex" && agent !== "claude") throw fail(400, 'agent must be "codex" or "claude"');
   if (typeof file !== "string" || !file) throw fail(400, "file is required");
@@ -723,7 +1061,15 @@ async function startSession(ctx, body) {
   if (!DELIVERY_LANES.includes(flightCheckInput.lane)) {
     throw fail(400, `Flight-Check lane must be one of ${DELIVERY_LANES.join(", ")}`);
   }
-  validateAgentConfig(ctx, agent, { model, effort });
+  const lanePolicy = resolveLanePolicy(flightCheckInput.lane, ctx.deliveryConfig);
+  // D9/DLV-6: the lane always supplies the effort default now, per phase —
+  // before this, an omitted `effort` fell straight through to the SDK's own
+  // default with zero lane influence (`grep -i lane run-session.mjs` was 0
+  // matches). A per-phase owner override in the request always wins for that
+  // phase; any phase the owner didn't touch still gets the lane's default
+  // rather than silently falling back to the old static packet.mjs default.
+  const resolvedEffort = { ...lanePolicy.effortByPhase, ...(effort && typeof effort === "object" ? effort : {}) };
+  validateAgentConfig(ctx, agent, { model, effort: resolvedEffort });
 
   let abs;
   try {
@@ -739,10 +1085,35 @@ async function startSession(ctx, body) {
   const item = idResult.item;
   if (!item.campaign) throw fail(400, "item is not inside a campaign folder");
 
-  const active = findActiveSessionForItem(ctx, item);
-  if (active) throw fail(409, `item already has an active delivery session: ${active.sessionId}`);
+  // DLV-13: resolve the predecessor first — its remaining work narrows this
+  // session's acceptance criteria, and its very existence is what makes the
+  // "item already has a session" check below survivable for a relaunch.
+  let continuation = null;
+  if (continuationOf) {
+    if (typeof continuationOf !== "string") throw fail(400, "continuationOf must be a session id");
+    const prior = readSession(ctx, continuationOf);
+    if (!prior) throw fail(404, `unknown predecessor session: ${continuationOf}`);
+    if (isRunnerAlive(prior.dir).alive) {
+      throw fail(409, "the predecessor session's runner is still alive — pause or cancel it before salvaging");
+    }
+    if (prior.packet.item.pmFile !== file || prior.packet.item.cbidx !== cbidx) {
+      throw fail(400, "continuationOf refers to a session for a different work item");
+    }
+    const remaining = readJsonIfExists(join(prior.dir, "artifacts", "finish", "remaining-work.json"));
+    if (!remaining) throw fail(409, "the predecessor session has no finish package to salvage from");
+    continuation = { predecessorSessionId: continuationOf, remainingWork: remaining, salvagedAt: new Date().toISOString() };
+  }
 
-  if (isBuildLockActive(ctx)) throw fail(429, "a delivery session is already past the plan gate");
+  const active = findActiveSessionForItem(ctx, item);
+  // A salvage relaunch legitimately targets an item that already has a
+  // (stopped) session; only a genuinely *other* live session should block it.
+  if (active && (!continuation || active.sessionId !== continuationOf)) {
+    throw fail(409, `item already has an active delivery session: ${active.sessionId}`);
+  }
+
+  if (isBuildLockActive(ctx, continuation ? continuationOf : null)) {
+    throw fail(429, "a delivery session is already past the plan gate");
+  }
 
   const statusPorcelain = ctx.gitStatusPorcelain({ cwd: ctx.ROOT });
   const baseHead = ctx.gitRevParseHead({ cwd: ctx.ROOT });
@@ -758,6 +1129,12 @@ async function startSession(ctx, body) {
   }
 
   const scopeHints = computeScopeHints(item);
+  // DLV-62: recorded onto the resolved lane policy so the runner reads one
+  // packet field rather than re-deriving the rule, and so the audit trail shows
+  // whether a given session ran merged and exactly why.
+  const merge = resolveMergedDiscoveryPlan({ lane: flightCheckInput.lane, scopeHints, config: ctx.deliveryConfig });
+  lanePolicy.mergedDiscoveryPlan = merge.merged;
+  lanePolicy.mergedDiscoveryPlanReason = merge.reason;
   const classifiedCapabilities = classify({ item, scopeHints });
   let capabilities = classifiedCapabilities;
   const drops = (options && options.capabilitiesDrop) || [];
@@ -781,6 +1158,7 @@ async function startSession(ctx, body) {
     scopeHints,
     provider: agent,
     config: ctx.deliveryConfig,
+    history: loadRecommendationHistory(ctx),
   });
   const launchPreview = buildLaunchPreview(ctx, {
     item,
@@ -789,7 +1167,35 @@ async function startSession(ctx, body) {
     skills,
     campaignFiles,
     recommendation,
+    lane: flightCheckInput.lane,
   });
+  // D11/DLV-39: hard triage gate. Refuses entry for an item this trivial
+  // rather than reducing oversight once a session is running (gates are
+  // never touched). A typed override behaves exactly like DIRTY_TREE_ACK/
+  // RED_BASELINE_ACK: refuse silently doing nothing, refuse silently
+  // proceeding, require the owner to type an explicit phrase either way.
+  // DLV-59: scopeHints are passed so the gate can use "the item names exactly
+  // one file" — knowable since DLV-42 — instead of counting capability flags,
+  // which could never reach zero for a UI item.
+  // A salvage relaunch is never triage-refused: the predecessor's finish
+  // package is direct evidence that this item was NOT too trivial to need the
+  // pipeline — it already consumed one and did not finish.
+  const isTrivialLaunch = !continuation && isTrivialLaunchCandidate(item, launchPreview.riskFlags, scopeHints);
+  if (isTrivialLaunch && triageAck !== TRIAGE_OVERRIDE_ACK) {
+    const est = recommendation
+      ? ` The pipeline forecast for this item: ~$${(recommendation.estCostUsd ?? 0).toFixed(2)} / ~${recommendation.estTokens.toLocaleString()} tokens.`
+      : "";
+    const onlyPath = scopeHints.scopeSource === "item-paths" ? (scopeHints.globs || [])[0] : null;
+    const why = onlyPath ? `names exactly one file (${onlyPath})` : "has no risk flags at all";
+    throw fail(
+      400,
+      `This item is S-effort and ${why}, with no money or vagueness flags -- ` +
+        `too small to be worth the pipeline's own overhead; a change this size cannot fail in an interesting way.${est} ` +
+        `For reference, the last such item measured (BUD-14) spent $0.53 across DISCOVERY and PLAN and never reached ` +
+        `BUILDING, against roughly a cent to make the edit by hand. ` +
+        `Make the edit directly, or type "${TRIAGE_OVERRIDE_ACK}" to launch anyway.`,
+    );
+  }
   const selectedModelTier = resolvedModel
     ? getModelInfo(ctx.deliveryConfig, agent, resolvedModel)?.tier || null
     : null;
@@ -834,6 +1240,9 @@ async function startSession(ctx, body) {
       redBaseline: !preflight.baselineValidation.ok
         ? { phrase: RED_BASELINE_ACK, acknowledgedAt }
         : null,
+      triage: isTrivialLaunch
+        ? { phrase: TRIAGE_OVERRIDE_ACK, acknowledgedAt }
+        : null,
     },
   };
   const flightCheck = {
@@ -848,6 +1257,10 @@ async function startSession(ctx, body) {
       agent,
       model: resolvedModel,
       modelTier: selectedModelTier,
+      // The owner's explicit override only (empty when the lane default was
+      // used unmodified) -- `lanePolicy.effortByPhase` below is what actually
+      // ran when this is empty, kept separate so the audit trail can tell
+      // "owner chose this" from "the lane defaulted to this" at a glance.
       effortOverrides: effort || {},
       capabilityDrops: drops,
     },
@@ -866,24 +1279,43 @@ async function startSession(ctx, body) {
       acknowledgments: workspace.acknowledgments,
     },
   };
+  // DLV-13: a continuation starts from what is actually left, not from the
+  // whole item again. Falling back to the full list when the predecessor
+  // recorded no remaining ACs is deliberate — "nothing remaining" is a reason
+  // to question the salvage, not a reason to launch a session with an empty
+  // acceptance contract that can never fail.
+  const remainingAcs = continuation ? continuation.remainingWork.acceptanceCriteria || [] : [];
   const packet = buildPacket({
     sessionId,
     agent,
-    agentConfig: { model: resolvedModel, effort },
+    agentConfig: { model: resolvedModel, effort: resolvedEffort },
     item,
     context: { campaignFiles, relatedNotes: [] },
     scopeHints,
     capabilities,
     constraints: {},
     skills,
-    acceptanceCriteria: launchPreview.acceptanceCriteria,
+    acceptanceCriteria: remainingAcs.length
+      ? remainingAcs.map((ac) => ({ id: ac.id, text: ac.text }))
+      : launchPreview.acceptanceCriteria,
     workspace,
     budget,
     flightCheck,
+    lanePolicy,
+    continuation,
   });
 
   mkdirSync(sessionDir, { recursive: true });
   atomicWriteJsonSync(join(sessionDir, "packet.json"), packet);
+  if (continuation) {
+    // Carry the durable ledger across, same artifact-first reasoning as the
+    // fork path: the successor inherits what was *learned* (objective,
+    // requirements, answered questions) without inheriting a transcript.
+    const priorLedger = readJsonIfExists(join(sessionsDirOf(ctx), continuationOf, "memory", "ledger.json"));
+    if (priorLedger && priorLedger.rev > 0) {
+      atomicWriteJsonSync(join(sessionDir, "memory", "ledger.json"), priorLedger);
+    }
+  }
   const now = new Date().toISOString();
   const state = {
     schemaVersion: 1,
@@ -896,7 +1328,7 @@ async function startSession(ctx, body) {
     workspace: packet.workspace,
     build: null,
     fixLoop: 0,
-    usage: { perPhase: {}, total: { input: 0, cachedInput: 0, output: 0, costUsd: null } },
+    usage: { perPhase: {}, total: emptyUsageV2() },
     budget: { current: budget, warned: [], exhaustedAt: null },
     decisionsProcessed: 0,
     messagesProcessed: 0,
@@ -905,8 +1337,12 @@ async function startSession(ctx, body) {
     updatedAt: now,
   };
   atomicWriteJsonSync(join(sessionDir, "state.json"), state);
+  // Marked only after the successor is fully on disk: if anything above threw,
+  // the predecessor must stay exactly as it was rather than be labelled
+  // superseded by a session that does not exist.
+  if (continuation) markSuperseded(ctx, continuationOf, sessionId);
   spawnRunner(ctx, sessionId);
-  return { sessionId };
+  return { sessionId, ...(continuation ? { continuationOf } : {}) };
 }
 
 function sha1(text) {
@@ -933,7 +1369,7 @@ const VALID_DECISIONS_FOR_GATE = {
 };
 
 async function postDecision(ctx, body) {
-  const { id, gate, decision, note, confirmText, tickCheckbox, answer, capabilitiesDrop } = body || {};
+  const { id, gate, decision, note, confirmText, tickCheckbox, answer, capabilitiesDrop, scopeSlice, scopeAck } = body || {};
   if (typeof id !== "string" || !id) throw fail(400, "id is required");
   const s = readSession(ctx, id);
   if (!s) throw fail(404, "unknown session");
@@ -951,6 +1387,37 @@ async function postDecision(ctx, body) {
     }
     if (gate === "question" && s.state.awaiting && s.state.awaiting.reason === "retry-exhausted" && (typeof answer !== "string" || !answer.trim())) {
       throw fail(400, "a next-step decision is required after automatic retries are exhausted");
+    }
+    // DLV-7: the scope tripwire is enforced here, at the same layer as the
+    // dirty-tree / red-baseline / triage acknowledgments, and for the same
+    // reason: a runner that refuses an already-written decision parks the
+    // session at a gate with nothing left to answer it (the DLV-53 shape).
+    // The owner has exactly two ways past a mismatch, and both are recorded.
+    if (gate === "spec" && decision === "approve") {
+      const scope = (s.state.awaiting && s.state.awaiting.scope) || null;
+      if (scope && scope.mismatch) {
+        const slices = scope.decomposition || [];
+        const sliceOk = Number.isInteger(scopeSlice) && scopeSlice >= 1 && scopeSlice <= slices.length;
+        // A slice number that was *sent but wrong* is answered precisely, and
+        // before the general "you must choose" message — otherwise a typo'd
+        // slice reads as if no choice had been made at all.
+        if (Number.isInteger(scopeSlice) && !sliceOk) {
+          throw fail(
+            400,
+            slices.length
+              ? `scopeSlice must be between 1 and ${slices.length}`
+              : "this spec gate reports no decomposition to slice",
+          );
+        }
+        if (!sliceOk && scopeAck !== SCOPE_MISMATCH_ACK) {
+          const options = slices.length
+            ? `Pick a decomposition slice (scopeSlice: 1-${slices.length}), or type "${SCOPE_MISMATCH_ACK}" to build the full measured scope.`
+            : `Type "${SCOPE_MISMATCH_ACK}" to build the full measured scope.`;
+          throw fail(400, `${scope.reason} ${options}`);
+        }
+      } else if (Number.isInteger(scopeSlice)) {
+        throw fail(400, "scopeSlice is only valid when the spec gate reports a scope mismatch");
+      }
     }
     if (gate === "plan" && decision === "approve") {
       const planPath = join(s.dir, "artifacts", "plan.json");
@@ -982,6 +1449,10 @@ async function postDecision(ctx, body) {
     tickCheckbox: tickCheckbox !== false,
     answer: answer || null,
     capabilitiesDrop: capabilitiesDrop || null,
+    // DLV-7 — how the owner answered a scope mismatch, on the decision record
+    // itself so the audit trail shows the choice next to the approval it gated.
+    scopeSlice: Number.isInteger(scopeSlice) ? scopeSlice : null,
+    scopeAck: scopeAck === SCOPE_MISMATCH_ACK ? SCOPE_MISMATCH_ACK : null,
     at: new Date().toISOString(),
   };
   const name = `${String(seq).padStart(4, "0")}-${gate || "cancel"}.json`;
@@ -1096,7 +1567,137 @@ function postResume(ctx, body) {
  * write the marker. Deliberately does not set the caller's `suppressUntil` —
  * the tick should trigger the normal PM `data: reload` (doc 2 §6).
  */
+/**
+ * DLV-14 — the PM trace as a state-machine exit effect rather than an agent step.
+ *
+ * The trace used to be something the agent was asked to do, which meant it was
+ * something the agent could skip — and did: BUD-11 burned two full sessions and
+ * left **zero** PM trace behind, so as far as the command centre was concerned
+ * the work had never been attempted. A fix with no PM trace is invisible to
+ * future planning (Hard Rule #25), and "invisible" here cost the owner a repeat
+ * of the same launch.
+ *
+ * ACCEPTED keeps the existing checkbox tick. Every other resting state gets a
+ * dated progress bullet appended to the campaign's `1 - Feature State.md`, so
+ * the honest outcome ("this was attempted, it blocked here, the finish package
+ * is at X") lands in the same file the owner plans from.
+ *
+ * Three deliberate properties:
+ *  - **Append-only.** It adds a bullet under its own heading and never edits a
+ *    line it did not write. Nothing the owner has authored can be clobbered.
+ *  - **Drift-guarded.** The item's checklist line is re-hashed before writing;
+ *    if the line has changed since launch, the trace records that instead of
+ *    pretending it still matches.
+ *  - **Idempotent.** A marker file per session, plus a session-id check in the
+ *    file itself, so a re-run or a restart cannot double-append.
+ */
+const DELIVERY_LOG_HEADING = "## Delivery session log";
+
+/** Terminal/paused states that deserve a progress bullet (ACCEPTED is handled by the tick path). */
+const TRACEABLE_EXIT_STATES = Object.freeze({
+  SHIPPED: "shipped",
+  CANCELLED: "cancelled",
+  FAILED: "failed",
+  BLOCKED: "blocked",
+  NEEDS_DECISION: "paused — needs a decision",
+});
+
+function renderTraceBullet(session, outcome, driftReason) {
+  const item = session.packet.item || {};
+  const date = new Date().toISOString().slice(0, 10);
+  const finish = existsSync(join(session.dir, "artifacts", "finish", "summary.md"))
+    ? ` · finish package: \`.delivery/sessions/${session.packet.sessionId}/artifacts/finish/summary.md\``
+    : "";
+  const changed = ((session.state.workspace && session.state.workspace.changedFiles) || []).length;
+  const acceptance = (session.state.acceptance || []).length
+    ? ` · ACs ${session.state.acceptance.filter((r) => r.status === "met" || r.status === "waived").length}/${session.state.acceptance.length} satisfied`
+    : "";
+  const drift = driftReason ? ` · ⚠ checklist line has changed since launch (${driftReason}) — verify this still refers to the same item` : "";
+  return (
+    `- ${date} — **${item.id || "(no id)"}** delivery session \`${session.packet.sessionId}\` ended **${outcome}** ` +
+    `at ${session.state.state}. ${changed} file(s) changed${acceptance}.${finish}${drift}`
+  );
+}
+
+/** Append `bullet` under the delivery-log heading, creating the heading if absent. */
+function appendUnderHeading(raw, bullet) {
+  const lines = raw.split("\n");
+  const headingIndex = lines.findIndex((l) => l.trim() === DELIVERY_LOG_HEADING);
+  if (headingIndex === -1) {
+    const trimmed = raw.replace(/\s+$/, "");
+    return `${trimmed}\n\n${DELIVERY_LOG_HEADING}\n\n> Appended automatically by the delivery runner on every session exit (DLV-14). Append-only — nothing above is ever edited.\n\n${bullet}\n`;
+  }
+  // Insert at the end of that section (just before the next heading, or EOF),
+  // so entries read chronologically.
+  let end = lines.length;
+  for (let i = headingIndex + 1; i < lines.length; i++) {
+    if (/^##\s/.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  let insertAt = end;
+  while (insertAt > headingIndex + 1 && lines[insertAt - 1].trim() === "") insertAt -= 1;
+  return [...lines.slice(0, insertAt), bullet, ...lines.slice(insertAt)].join("\n");
+}
+
+function writePmTrace(ctx, session) {
+  const outcome = TRACEABLE_EXIT_STATES[session.state.state];
+  if (!outcome) return null;
+  const campaign = session.packet.item && session.packet.item.campaign;
+  if (!campaign) return { skipped: "no campaign recorded on the packet" };
+
+  const relPath = `${campaign}/1 - Feature State.md`;
+  let abs;
+  try {
+    abs = resolveInside(ctx.PM_DIR, relPath);
+  } catch (err) {
+    return { error: String((err && err.message) || err) };
+  }
+  if (!existsSync(abs)) return { skipped: `${relPath} does not exist` };
+
+  // Drift guard: re-derive the checklist line's identity and note (never
+  // refuse on) a mismatch. A drifted line still deserves a trace — the whole
+  // point is that the attempt becomes visible — it just deserves a caveat.
+  let driftReason = null;
+  try {
+    const checklistAbs = resolveInside(ctx.PM_DIR, session.packet.item.pmFile);
+    const checklistRaw = readFileSync(checklistAbs, "utf8");
+    const idCheck = buildItemIdentity(checklistRaw, session.packet.item.cbidx, session.packet.item.pmFile, {
+      expectText: session.packet.item.lineText,
+    });
+    if (!idCheck.ok) driftReason = idCheck.reason;
+  } catch {
+    driftReason = "checklist file unreadable";
+  }
+
+  const raw = readFileSync(abs, "utf8");
+  // Second idempotency guard, independent of the marker file: if this session
+  // id is already named in the document, a previous run got there first.
+  if (raw.includes(session.packet.sessionId)) return { alreadyPresent: true, file: relPath };
+
+  writeFileSync(abs, appendUnderHeading(raw, renderTraceBullet(session, outcome, driftReason)), "utf8");
+  return { appended: true, file: relPath, outcome, driftReason };
+}
+
 export function performPendingWritebacks(ctx) {
+  // DLV-14: every resting state gets a trace, not only ACCEPTED. Its own marker
+  // file, so it is independent of the checkbox tick's lifecycle — a SHIPPED
+  // session performs both, in order, and neither can re-run.
+  for (const id of listSessionIds(ctx)) {
+    const s = readSession(ctx, id);
+    if (!s || !TRACEABLE_EXIT_STATES[s.state.state]) continue;
+    const traceMarker = join(s.dir, "pm-trace.done");
+    if (existsSync(traceMarker)) continue;
+    let result;
+    try {
+      result = writePmTrace(ctx, s) || { skipped: "state not traceable" };
+    } catch (err) {
+      result = { error: String((err && err.message) || err) };
+    }
+    atomicWriteJsonSync(traceMarker, { at: new Date().toISOString(), ...result });
+  }
+
   for (const id of listSessionIds(ctx)) {
     const s = readSession(ctx, id);
     if (!s || s.state.state !== "ACCEPTED") continue;
@@ -1159,8 +1760,16 @@ export async function routeDelivery({ method, path, query, body }, ctx) {
   if (method === "GET" && path === "/api/delivery/capabilities") return ok(getCapabilities(ctx));
   if (method === "POST" && path === "/api/delivery/preflight") return ok(await getWorkspacePreflight(ctx));
   if (method === "GET" && path === "/api/delivery/recommendation") {
-    return ok(getRecommendation(ctx, { file: query.get("file") || "", cbidx: query.get("cbidx"), provider: query.get("provider") || "claude" }));
+    return ok(
+      getRecommendation(ctx, {
+        file: query.get("file") || "",
+        cbidx: query.get("cbidx"),
+        provider: query.get("provider") || "claude",
+        lane: query.get("lane") || null,
+      }),
+    );
   }
+  if (method === "GET" && path === "/api/delivery/salvage") return ok(getSalvage(ctx, query.get("id") || ""));
   if (method === "GET" && path === "/api/delivery/memory") return ok(getMemory(ctx, query.get("id") || ""));
   if (method === "GET" && path === "/api/delivery/questions") return ok(getQuestions(ctx, query.get("id") || ""));
   if (method === "GET" && path === "/api/delivery/turns") {

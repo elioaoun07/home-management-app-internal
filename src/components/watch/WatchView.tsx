@@ -67,12 +67,17 @@ export default function WatchView() {
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     // Use cached balance for instant UI
-    placeholderData: cachedBalance
-      ? {
-          account_id: defaultAccount?.id!,
-          balance: cachedBalance.balance,
-        }
-      : undefined,
+    // The placeholder is only meaningful once we know WHICH account it is
+    // for. `defaultAccount?.id!` asserted that away, so a cached balance could
+    // be shown against `account_id: undefined` during the render before the
+    // account loads — the exact case the optional chain existed to express.
+    placeholderData:
+      cachedBalance && defaultAccount?.id
+        ? {
+            account_id: defaultAccount.id,
+            balance: cachedBalance.balance,
+          }
+        : undefined,
   });
 
   // Fetch today's transactions

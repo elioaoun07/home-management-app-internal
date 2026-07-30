@@ -9,11 +9,14 @@
 //
 // Pure functions only; run-session.mjs decides what to do with the verdict
 // (emit an event, skip the turn and block, etc). Token/cost figures here are
-// always the running SESSION TOTAL processed so far (input + cachedInput +
-// output, and the reported/estimated cost) — not a single turn's usage.
+// always the running SESSION TOTAL processed so far (input + cached-read +
+// cache-creation + output, and the reported/estimated cost) — not a single
+// turn's usage. See DLV-37: cache-creation used to be silently excluded here.
 
 /**
- * @typedef {{input?:number, cachedInput?:number, output?:number, costUsd?:(number|null)}} UsageTotals
+ * @typedef {{input?:number, cachedRead?:number, cacheCreation?:number, output?:number, reasoningOutput?:number,
+ *   cachedInput?:number, costUsd?:(number|null)}} UsageTotals - `cachedRead`/`cacheCreation` are the current (v2)
+ *   fields; `cachedInput` is accepted for legacy v1-shaped sessions (see `totalProcessedTokens`).
  * @typedef {{maxUsd:(number|null), maxTokens:(number|null), warnPct:number,
  *   perPhase?:Object<string,{maxUsd?:(number|null),maxTokens?:(number|null)}>,
  *   authorization?:"capped"|"no-cap", authorizedAt?:string}} BudgetEnvelope
@@ -108,15 +111,28 @@ export function legacyBudgetEnvelope(config = {}) {
   };
 }
 
-/** Sum the three token fields of a usage-totals object into one "processed tokens" figure. */
+/**
+ * Sum a usage-totals object into one "processed tokens" figure.
+ * DLV-37: cache-CREATION tokens are now included — they were previously the
+ * majority of real session cost (Cost Anatomy §3) and silently excluded, so
+ * every budget cap was roughly 2x looser than the owner authorized. Accepts
+ * both the current v2 shape (`cachedRead`/`cacheCreation`) and the legacy v1
+ * shape (`cachedInput`, no creation bucket) so old on-disk sessions and
+ * pre-DLV-37 packets don't crash when re-read.
+ */
 export function totalProcessedTokens(usage) {
   const u = usage || {};
-  return (u.input || 0) + (u.cachedInput || 0) + (u.output || 0);
+  const cachedRead = u.cachedRead != null ? u.cachedRead : u.cachedInput || 0;
+  return (u.input || 0) + cachedRead + (u.cacheCreation || 0) + (u.output || 0);
 }
 
 /**
  * @param {UsageTotals} usageTotals - the session's running total so far (state.usage.total)
  * @param {BudgetEnvelope|BudgetsConfig} [budgets]
+ * @param {{phase?:(string|null), phaseUsage?:(UsageTotals|null)}} [scope] - the
+ *   phase being entered and its own running total, for the per-phase sub-cap.
+ *   Previously undocumented, so both fields inferred as `null|undefined` and any
+ *   real call site type-errored.
  * @returns {{status:"ok"|"warn"|"exceeded", totalTokens:number, costUsd:(number|null), reason:(string|null)}}
  */
 export function checkSessionBudget(usageTotals, budgets = {}, { phase = null, phaseUsage = null } = {}) {

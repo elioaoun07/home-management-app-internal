@@ -194,11 +194,30 @@ export function makeSessionId(now = new Date(), rand = Math.random) {
 /**
  * Assemble the full packet.json object (doc 3 §1). Pure composition — capability
  * classification is `classify.mjs`'s job; this only shapes the envelope.
+ *
+ * The `@param` block is not decoration: without it TS infers each field from its
+ * default, so every `= null` field (`budget`, `flightCheck`, `lanePolicy`) typed
+ * as `null|undefined` and passing a real value was an error at the call site.
+ * @param {{sessionId:string, createdAt?:string, deliveryMode?:string, agent:string,
+ *   agentConfig?:object, item:object, context?:object, scopeHints?:object,
+ *   capabilities?:object[], constraints?:object, skills?:object[],
+ *   acceptanceCriteria?:object[], workspace:object, budget?:(object|null),
+ *   flightCheck?:(object|null), lanePolicy?:(object|null), continuation?:(object|null)}} input
  */
 export function buildPacket({
   sessionId,
   createdAt = new Date().toISOString(),
-  mode = "uat",
+  // DLV-54: this was `mode`, defaulting to the bare string `"uat"` — a field
+  // name that means "session delivery mode" carrying a value that reads as a
+  // phase name. Every phase prompt points the agent at `packet.json` by path
+  // (DLV-8), so the agent reads this field, and on
+  // s-20260730-104900-9mfu it reasoned verbatim: *"I see — the mode is 'uat',
+  // which means I'm now in the UAT phase, not PLAN"* — then emitted UAT-shaped
+  // output during a spec turn. Nothing in the runner, the routes or the PM UI
+  // ever read this field (it was write-only), so renaming it is free, and the
+  // value is now unambiguous about what it describes. A field whose value looks
+  // like an instruction will keep being followed as one.
+  deliveryMode = "uat-gated",
   agent,
   agentConfig = {},
   item,
@@ -211,6 +230,12 @@ export function buildPacket({
   workspace,
   budget = null,
   flightCheck = null,
+  lanePolicy = null,
+  // DLV-13: set only on a salvage relaunch — identifies the predecessor session
+  // and carries the remaining-work package the new session was narrowed to, so
+  // the lineage is readable from the packet alone rather than inferred from
+  // matching item ids across two session directories.
+  continuation = null,
 }) {
   if (!sessionId) throw new PacketError("sessionId is required");
   if (agent !== "codex" && agent !== "claude") {
@@ -223,7 +248,7 @@ export function buildPacket({
     schemaVersion: SCHEMA_VERSION,
     sessionId,
     createdAt,
-    mode,
+    deliveryMode,
     agent,
     agentConfig: {
       model: typeof agentConfig.model === "string" && agentConfig.model.trim() ? agentConfig.model.trim() : null,
@@ -239,5 +264,11 @@ export function buildPacket({
     workspace,
     ...(budget ? { budget } : {}),
     ...(flightCheck ? { flightCheck } : {}),
+    // D9/DLV-6: the resolved policy bundle for the launch-time lane (effort
+    // per phase, budget envelope, maxInternalTurns) — recorded so the lane's
+    // actual runtime effect is auditable from the packet alone, not only
+    // inferable from a "lane-differs-from-recommendation" warning.
+    ...(lanePolicy ? { lanePolicy } : {}),
+    ...(continuation ? { continuation } : {}),
   };
 }

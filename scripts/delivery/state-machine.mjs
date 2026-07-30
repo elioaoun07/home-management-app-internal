@@ -113,7 +113,21 @@ const PRIMARY = {
       }
       return { to: "BUILDING", effects: ["startBuilding"] };
     },
-    "decision.reject": () => ({ to: "DISCOVERY", effects: ["revisePlan"] }),
+    // DLV-53: this returned to DISCOVERY, whose prompt asks for a **spec** —
+    // so the effect said `revisePlan` while the destination could only produce
+    // a spec. Observed on s-20260730-104900-9mfu: the owner's "re-plan with
+    // exactly one step" note was handed to the spec phase, the agent tried to
+    // comply anyway ("I'm re-entering PLAN phase"), its plan-shaped output was
+    // rejected by SPEC_OUTPUT_SCHEMA, and it then mis-inferred its phase from
+    // `packet.mode` (DLV-54) and emitted a third shape. Cost $0.1683, revised
+    // nothing, and needlessly re-authored an already-approved spec.
+    //
+    // SPEC_READY is the correct destination: the spec stays approved (rejecting
+    // a plan says nothing about the spec) and it is the one state whose
+    // `decision.approve` runs a fresh PLAN turn — which is exactly what
+    // "revise the plan" means. Rejecting the *spec* still returns to DISCOVERY
+    // above, because there the phase and the artifact do line up.
+    "decision.reject": () => ({ to: "SPEC_READY", effects: ["revisePlan", "awaitGate:spec"] }),
   },
   BUILDING: {
     "build.step.done": () => ({ to: "BUILDING", effects: ["appendBuildLog"] }),

@@ -16,11 +16,15 @@ import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, re
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { DriverAbortedError, createDriver as createDriverDefault } from "./drivers/driver.mjs";
+import { DriverAbortedError, createDriver as createDriverDefault, readObservedUsage } from "./drivers/driver.mjs";
 import "./drivers/fake.mjs"; // self-registers "fake"
 import "./drivers/codex.mjs"; // self-registers; SDK import remains lazy
 import "./drivers/claude.mjs"; // self-registers; SDK import remains lazy
-import { EventsError, TRUNCATE_LIMITS, formatEvent, nextSeq, parseEvents, reduceUsage, truncateField } from "./events.mjs";
+// D12/DLV-17: pure, SDK-free (the driver's dynamic-import discipline for the
+// real SDK is unaffected -- this only touches the local ~/.claude/projects/
+// filesystem convention, never the SDK itself).
+import { computeRawTranscriptPointer } from "./drivers/claude.mjs";
+import { EventsError, TRUNCATE_LIMITS, formatEvent, nextSeq, parseEvents, truncateField } from "./events.mjs";
 import { atomicWriteJsonSync, readJsonIfExists, readTextIfExists, appendNdjsonLine } from "./fsx.mjs";
 import { gitDiff, gitForEachRef, gitRevParseHead, gitStatusPorcelain } from "./gitread.mjs";
 import { applyCapabilityDrops } from "./classify.mjs";
@@ -32,6 +36,7 @@ import {
   next as smNext,
 } from "./state-machine.mjs";
 import {
+  BLOCKING_QUESTION_MARKER,
   buildBuildingPrompt,
   buildDiscoveryPrompt,
   buildHandoffVerificationPrompt,
@@ -44,16 +49,18 @@ import {
   buildCrashSealEntry,
   buildRecord,
   buildTurnEntry,
+  findMissingTurnIds,
   findOrphanedTurnIds,
   formatRecord,
   formatTurnEntry,
   formatTurnId,
   parseTurnRecords,
   parseTurns,
+  roleForPhase,
   turnPromptFileName,
   turnShardFileName,
 } from "./transcript.mjs";
-import { computeOccupancy, estimateCostUsd } from "./usage.mjs";
+import { addUsageV2, computeOccupancy, emptyUsageV2, estimateCostUsd } from "./usage.mjs";
 import { classifyTurnError } from "./quota.mjs";
 import {
   classifyChangeOwnership,
@@ -67,7 +74,7 @@ import {
   legacyBudgetEnvelope,
   raiseBudgetEnvelope,
 } from "./budgets.mjs";
-import { getConfigStatus, getDefaultModel, getModelPricing, loadConfig, translateEffort } from "./config.mjs";
+import { getConfigStatus, getDefaultModel, getModelInfo, getModelPricing, loadConfig, translateEffort } from "./config.mjs";
 import { isProviderSwitch } from "./controls.mjs";
 import {
   applyAnswer,
@@ -78,7 +85,27 @@ import {
   applySpec,
   emptyLedger,
 } from "./memory.mjs";
-import { buildContextPackage, buildMechanicalDigest } from "./context-assembly.mjs";
+import { buildContextPackage, buildMechanicalDigest, estimateTokens } from "./context-assembly.mjs";
+import { decideContextStrategy } from "./context-policy.mjs";
+import {
+  buildScopeLock,
+  buildScopeVerdict,
+  normalizeDecomposition,
+  normalizeScopeEstimate,
+  pathsOutsideScope,
+} from "./scope.mjs";
+import { reassessFitAfterDiscovery } from "./recommendation.mjs";
+import { buildFinishPackage } from "./finish-package.mjs";
+import { applyContextBudget, boundReplayedOutput, buildContextManifest, tokensForBytes } from "./context-budget.mjs";
+import {
+  initAcceptance,
+  isAcceptanceComplete,
+  reconcileAcceptance,
+  renderAcceptanceMd,
+  summarizeAcceptance,
+  unsatisfiedAcceptance,
+  waiveAcceptance,
+} from "./acceptance.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = join(__dirname, "..", "..");
@@ -331,9 +358,12 @@ function applyControl(state, packet, control) {
         exhaustedAt: canResume ? null : (state.budget && state.budget.exhaustedAt) || null,
       },
       execution: { ...execution, paused: canResume ? false : execution.paused },
+      // DLV-29: restore whatever gate the budget pause interrupted (if any)
+      // instead of dropping it — see the comment at the budget-exhausted
+      // `awaiting` assignment above.
       awaiting:
         canResume && state.awaiting && state.awaiting.reason === "budget-exhausted"
-          ? null
+          ? state.awaiting.priorAwaiting || null
           : state.awaiting,
     };
   }
@@ -535,6 +565,76 @@ function performRotation(sessionDir, state, packet, reason) {
 }
 
 /**
+ * DLV-30: evaluate `decideContextStrategy` at this phase's turn boundary and
+ * rotate if it says to — the piece that was missing since `context-policy.mjs`
+ * shipped: the module was imported by nothing but its own unit test, so
+ * `config.context.rotateAtTokens` was dead code and one SDK session spanned
+ * every phase of a delivery run, paying an ever-growing prefix on every turn
+ * (Cost Anatomy §5: "the REVIEWING turn alone read 870,008 cached tokens").
+ *
+ * Called once per phase-producing handler, before that handler's own
+ * `getHandle`/`getGuardedHandle` call, so a rotation's `ref: null` is already
+ * in the state that call sees (mirrors how the owner `rotate` control already
+ * works — `performRotation` archives the ref, `getHandle` starts fresh next
+ * time, `D2`'s `driver.reset()` fix lets the same driver instance survive it).
+ *
+ * `isPhaseBoundary` is true only on the FIRST turn of a phase — `phase` here
+ * uses the same canonical keys as `accumulateUsage`'s (discovery/plan/
+ * building/reviewing/uat), so a BUILDING step 2+ or a fix-loop re-entry that
+ * lands back in the *same* phase is correctly NOT a boundary (rotating away
+ * mid-plan-execution or mid-fix would lose the context the agent needs to
+ * finish what it's doing). Every evaluation — including "no rotation needed"
+ * — is emitted as `context.strategy`, so the decision is auditable even when
+ * it's a no-op.
+ *
+ * `forkAfterPhaseRetries`'s `suggested: true` verdict is deliberately NOT
+ * auto-acted on here — see the comment at its use below.
+ */
+function maybeRotateAtPhaseBoundary({ sessionDir, state, packet, deliveryConfig, phase }) {
+  const hasRef = !!(state.driver && state.driver.ref);
+  const contextConfig = (deliveryConfig && deliveryConfig.context) || {};
+  const lastPhase = state.context && state.context.lastTurnPhase;
+  const isPhaseBoundary = hasRef && lastPhase != null && lastPhase !== phase;
+  const decision = decideContextStrategy({
+    hasEstablishedRef: hasRef,
+    isPhaseBoundary,
+    occupancyTokens: (state.context && state.context.lastOccupancyTokens) || 0,
+    windowTokens: (state.context && state.context.lastWindowTokens) || null,
+    rotateAtTokens: typeof contextConfig.rotateAtTokens === "number" ? contextConfig.rotateAtTokens : null,
+    hardCeilingPct: typeof contextConfig.hardCeilingPct === "number" ? contextConfig.hardCeilingPct : null,
+    sameStateReentryCount: state.fixLoop || 0,
+    forkAfterPhaseRetries: typeof contextConfig.forkAfterPhaseRetries === "number" ? contextConfig.forkAfterPhaseRetries : null,
+  });
+  emitEvent(sessionDir, {
+    type: "context.strategy",
+    phase: phase.toUpperCase(),
+    data: { strategy: decision.strategy, reasons: decision.reasons, suggested: !!decision.suggested, isPhaseBoundary },
+  });
+  if (decision.strategy !== "rotate-fresh" || !hasRef) return state;
+  // The fork-after-retries branch is advisory ("suggested"), not a command —
+  // auto-rotating out from under a session that's stuck for a reason
+  // rotation won't fix (e.g. a genuinely hard bug, not a poisoned context)
+  // would silently discard the very history an owner needs to diagnose it.
+  // Leave it to a future owner-facing surface (DLV-9-adjacent), not this fix.
+  if (decision.suggested) return state;
+  return performRotation(sessionDir, state, packet, "auto-phase-boundary");
+}
+
+/** Update `state.context`'s rotation-decision inputs after a turn is sealed — see `maybeRotateAtPhaseBoundary`. */
+function withContextOccupancy(state, phase, usageV2, windowTokens) {
+  const occupancy = computeOccupancy(usageV2, windowTokens);
+  return {
+    ...state,
+    context: {
+      ...(state.context || {}),
+      lastTurnPhase: phase,
+      lastOccupancyTokens: occupancy.occupancyTokens,
+      lastWindowTokens: windowTokens,
+    },
+  };
+}
+
+/**
  * Provider handoff (DW-8): rotate (digest + snapshot + archive the old ref,
  * reusing `performRotation`), start a fresh session on the new provider, and
  * run a schema-validated verification turn before letting the phase
@@ -544,7 +644,7 @@ function performRotation(sessionDir, state, packet, reason) {
  * owner didn't specify explicit per-phase overrides.
  */
 async function performHandoff(sessionDir, state, packet, payload, ctx) {
-  const { repoRoot, deliveryConfig, retryDelayMs, sleep, takeSnapshot, abortPollMs, createDriver = createDriverDefault } = ctx;
+  const { repoRoot, deliveryConfig, retryDelayMs, sleep, takeSnapshot, abortPollMs, createDriver = createDriverDefault, providerDriverCache = null } = ctx;
   const fromProvider = (state.execution && state.execution.provider) || packet.agent;
   const toProvider = payload.provider;
 
@@ -561,7 +661,14 @@ async function performHandoff(sessionDir, state, packet, payload, ctx) {
   let newDriver;
   let handle;
   try {
-    newDriver = createDriver(toProvider);
+    // DLV-34: the instance built here is the one that owns the ref this handoff
+    // is about to write into `state.driver.ref`, so it must (a) be built with
+    // the same guard options every other provider driver gets — it was created
+    // bare, silently dropping `forbiddenPaths` and the `sessionDir` the claude
+    // driver needs for raw-transcript linkage — and (b) be published into the
+    // runner's per-provider cache, so the *next* tick resumes the new ref on
+    // this same instance instead of on the outgoing provider's driver.
+    newDriver = createDriver(toProvider, providerDriverOptions(packet, sessionDir));
     handle = await Promise.resolve(newDriver.startSession({ cwd: repoRoot, mode: "readonly", model: toModel, effort: "low" }));
   } catch (err) {
     emitEvent(sessionDir, { type: "handoff.failed", data: { from: fromProvider, to: toProvider, message: String((err && err.message) || err) } });
@@ -634,6 +741,13 @@ async function performHandoff(sessionDir, state, packet, payload, ctx) {
     outcome: hasCriticalGaps ? "paused" : "continued",
   };
   atomicWriteJsonSync(join(sessionPaths(sessionDir).handoffs, `${String(handoffSeq).padStart(4, "0")}.json`), handoffRecord);
+
+  // DLV-34: the provider switch is now real, so the instance that owns
+  // `handle.ref` becomes the runner's driver for `toProvider`. Published only
+  // on this path — a handoff that failed before here leaves `execution.provider`
+  // untouched, so caching its half-built driver would be caching a provider the
+  // session never actually moved to.
+  if (providerDriverCache) providerDriverCache.set(toProvider, newDriver);
 
   working = {
     ...working,
@@ -719,7 +833,7 @@ function performFork(sessionDir, state, packet, payload) {
     workspace: state.workspace,
     build: state.build,
     fixLoop: state.fixLoop || 0,
-    usage: { perPhase: {}, total: { input: 0, cachedInput: 0, output: 0, costUsd: null } },
+    usage: { perPhase: {}, total: emptyUsageV2() },
     turnCounter: 0,
     decisionsProcessed: 0,
     messagesProcessed: 0,
@@ -780,6 +894,54 @@ function effectiveBudgetEnvelope(packet, state, deliveryConfig) {
   if (state.budget && state.budget.current) return state.budget.current;
   if (packet.budget) return packet.budget;
   return legacyBudgetEnvelope((deliveryConfig && deliveryConfig.budgets) || {});
+}
+
+/**
+ * DLV-12: write `artifacts/finish/` for this exit. Invoked from EVERY path that
+ * lands the session in a terminal, blocked, or paused state — that exhaustiveness
+ * is the point, because the exits nobody instrumented are exactly the ones that
+ * left BUD-11's true result buried in a build log.
+ *
+ * Never throws: a finish package that fails to write must not turn a graceful
+ * pause into a crash. The exit itself is what matters; this is its record.
+ */
+function writeFinishPackage(sessionDir, state, packet, reason) {
+  try {
+    const pkg = buildFinishPackage({
+      state,
+      packet,
+      reason,
+      spec: readJsonIfExists(artifactPath(sessionDir, "spec.json")),
+      plan: readJsonIfExists(artifactPath(sessionDir, "plan.json")),
+      validation: readJsonIfExists(artifactPath(sessionDir, "validation.json")),
+      review: readJsonIfExists(artifactPath(sessionDir, "review-self.json")),
+    });
+    for (const file of pkg.files) {
+      if (file.json !== undefined) writeArtifactJson(sessionDir, join("finish", file.name), file.json);
+      else writeArtifactText(sessionDir, join("finish", file.name), file.text);
+    }
+    // Deliberately NOT a `notification.requested`. Every exit that reaches
+    // here already emits its own notification for the state change that caused
+    // it (budget.exhausted, the retry/max-turns escalation, and so on), and a
+    // second "your finish package is ready" for the same event is exactly the
+    // duplicate DLV-16's contract rules out ("exactly one notification per
+    // state change"). Those notifications carry the finish-package pointer
+    // instead. Owner-initiated terminal exits (Accept, Cancel) notify nobody
+    // by design — the owner just performed the action.
+    emitEvent(sessionDir, { type: "finish.package.written", phase: state.state, data: pkg.summary });
+    return pkg.summary;
+  } catch (err) {
+    try {
+      emitEvent(sessionDir, {
+        type: "finish.package.failed",
+        phase: state.state,
+        data: { message: truncateField(String((err && err.message) || err), TRUNCATE_LIMITS.message) },
+      });
+    } catch {
+      /* best-effort only */
+    }
+    return null;
+  }
 }
 
 function writeBudgetFinishPackage(sessionDir, state, envelope, verdict, at) {
@@ -848,6 +1010,12 @@ function enforceBudgetBoundary(sessionDir, state, packet, deliveryConfig) {
 
   const at = new Date().toISOString();
   writeBudgetFinishPackage(sessionDir, state, envelope, verdict, at);
+  // DLV-12: the budget pause predates the finish package and had its own
+  // one-file summary (`finish/budget.json`, above). It now also gets the full
+  // package — the ownership manifest and remaining-work file are exactly what
+  // an owner needs at a cap-hit, which is the one pause where "what did I get
+  // for my money, and what is left" is the entire question.
+  writeFinishPackage(sessionDir, state, packet, "budget-exhausted");
   emitEvent(sessionDir, {
     type: "budget.exhausted",
     phase: state.state,
@@ -860,7 +1028,16 @@ function enforceBudgetBoundary(sessionDir, state, packet, deliveryConfig) {
   });
   return {
     ...state,
-    awaiting: { gate: "budget", returnTo: state.state, reason: "budget-exhausted" },
+    // DLV-29: a budget check can land on the same tick as entering a manual
+    // gate phase (SPEC_READY/PLAN_READY/UAT_READY/NEEDS_DECISION/...), which
+    // had already set `awaiting` to that gate. Overwriting it outright here
+    // permanently lost the gate — the `set-budget` resume path only knew how
+    // to clear a budget-reason `awaiting`, not restore what it replaced, so
+    // the session became unresponsive to every UI action and API call after
+    // an owner-authorized raise. Carry the prior `awaiting` through so resume
+    // can hand it back verbatim (including gate-specific payloads like
+    // NEEDS_DECISION's `questions`).
+    awaiting: { gate: "budget", returnTo: state.state, reason: "budget-exhausted", priorAwaiting: state.awaiting || null },
     execution: { ...(state.execution || defaultExecution(packet)), paused: true, pauseRequestedAt: at },
     budget: { ...budgetState, current: envelope, exhaustedAt: at },
   };
@@ -868,32 +1045,40 @@ function enforceBudgetBoundary(sessionDir, state, packet, deliveryConfig) {
 
 // ---- usage accounting ----
 
-function accumulateUsage(state, phase, usage) {
-  const records = [{ phase, usage }];
-  const delta = reduceUsage(records);
-  const perPhase = { ...(state.usage && state.usage.perPhase) };
-  const prevPhase = perPhase[phase] || { input: 0, cachedInput: 0, output: 0, costUsd: null };
-  const addPhase = delta.perPhase[phase];
-  perPhase[phase] = {
-    input: prevPhase.input + addPhase.input,
-    cachedInput: prevPhase.cachedInput + addPhase.cachedInput,
-    output: prevPhase.output + addPhase.output,
-    costUsd:
-      addPhase.costUsd == null && prevPhase.costUsd == null
-        ? null
-        : (prevPhase.costUsd || 0) + (addPhase.costUsd || 0),
-  };
-  const prevTotal = (state.usage && state.usage.total) || { input: 0, cachedInput: 0, output: 0, costUsd: null };
-  const total = {
-    input: prevTotal.input + delta.total.input,
-    cachedInput: prevTotal.cachedInput + delta.total.cachedInput,
-    output: prevTotal.output + delta.total.output,
-    costUsd:
-      delta.total.costUsd == null && prevTotal.costUsd == null
-        ? null
-        : (prevTotal.costUsd || 0) + (delta.total.costUsd || 0),
-  };
+// DLV-37: state.usage now carries the v2 token shape end-to-end
+// ({input, cachedRead, cacheCreation, output, reasoningOutput, costUsd,
+// costEstUsd}), so `cacheCreation` — previously the majority of real
+// session cost (Cost Anatomy §3) — is finally part of the running total
+// that budgets.mjs enforces against, not just the per-turn transcript
+// display. `usageV2`/`costUsd` here are `turn.usageV2` / `turn.usage.costUsd`
+// from runTurnAndSeal's return (the latter already resolves to
+// reported-cost-or-estimate — "budgetCostUsd" — so this needs no separate
+// cost computation). Math reused verbatim from usage.mjs's accumulator.
+function accumulateUsage(state, phase, usageV2, costUsd) {
+  const prevPhase = (state.usage && state.usage.perPhase && state.usage.perPhase[phase]) || emptyUsageV2();
+  const perPhase = { ...(state.usage && state.usage.perPhase), [phase]: addUsageV2(prevPhase, usageV2, costUsd) };
+  const prevTotal = (state.usage && state.usage.total) || emptyUsageV2();
+  const total = addUsageV2(prevTotal, usageV2, costUsd);
   return { perPhase, total };
+}
+
+// DLV-43: `blockFrom` knows the *state* a failed turn was blocked from
+// ("SPEC_READY" is where the PLAN turn runs), while `accumulateUsage`'s
+// perPhase keys are the phase names the success paths use. This maps one onto
+// the other so a failed turn's spend lands in the same bucket a successful one
+// would have, instead of inventing a parallel set of keys nothing else reads.
+const USAGE_PHASE_KEY_BY_STATE = Object.freeze({
+  DISCOVERY: "discovery",
+  SPEC_READY: "plan",
+  PLAN_READY: "building",
+  BUILDING: "building",
+  VALIDATING: "building",
+  REVIEWING: "reviewing",
+  UAT_READY: "uat",
+});
+
+function canonicalPhaseKey(fromPhase) {
+  return USAGE_PHASE_KEY_BY_STATE[String(fromPhase || "").toUpperCase()] || String(fromPhase || "unknown").toLowerCase();
 }
 
 // ---- full-fidelity transcript capture (DW-1) ----
@@ -926,6 +1111,45 @@ function listClosedTurnIds(sessionDir) {
   const text = readTextIfExists(sessionPaths(sessionDir).turns);
   if (!text) return [];
   return parseTurns(text).map((t) => t.turnId);
+}
+
+/**
+ * D12/DLV-17 transcript integrity — run once a session reaches a terminal
+ * state (SHIPPED/CANCELLED), comparing `state.turnCounter` (every turn id
+ * ever allocated) against what actually exists on disk. Always emits an
+ * event, including the "zero gaps" case (auditable proof the check ran, not
+ * only a report when something's wrong — same philosophy as D5's
+ * `context.strategy` events). Never throws: a missing `transcript/` dir
+ * (a session that died before DISCOVERY ever wrote one) is zero turns, zero
+ * gaps, not an error.
+ */
+/**
+ * D12/DLV-17 raw SDK linkage — run once a session reaches a terminal state,
+ * same boundary as the transcript gap check. Claude-only: Codex has no
+ * `~/.claude/projects/` equivalent, and a session that never established a
+ * driver ref (died before its first turn) has no SDK session id to resolve.
+ * Persists the pointer onto `state.driver.rawTranscript` (the runner's own
+ * write, same single-writer discipline as every other state.json field) so
+ * it survives past this tick for the session-detail view to surface, without
+ * ever copying the file itself.
+ */
+function withRawTranscriptLinkage(state, packet, repoRoot) {
+  if (packet.agent !== "claude") return state;
+  const sessionId = state.driver && state.driver.ref && state.driver.ref.id;
+  if (!sessionId) return state;
+  const pointer = computeRawTranscriptPointer(repoRoot, sessionId);
+  return { ...state, driver: { ...state.driver, rawTranscript: pointer } };
+}
+
+function runTranscriptGapCheck(sessionDir, state) {
+  const closedTurnIds = listClosedTurnIds(sessionDir);
+  const promptTurnIds = listPromptTurnIds(sessionDir);
+  const missingTurnIds = findMissingTurnIds(state.turnCounter || 0, closedTurnIds, promptTurnIds);
+  emitEvent(sessionDir, {
+    type: "transcript.gap.checked",
+    phase: state.state,
+    data: { turnCounter: state.turnCounter || 0, missingTurnIds, gapCount: missingTurnIds.length },
+  });
 }
 
 /**
@@ -962,6 +1186,12 @@ const STRING_ARRAY_SCHEMA = Object.freeze({ type: "array", items: { type: "strin
 export const SPEC_OUTPUT_SCHEMA = Object.freeze({
   type: "object",
   additionalProperties: false,
+  // DLV-7: `scopeEstimate` is required *of the generation* — the provider's
+  // structured-output enforcement is what guarantees a real session always
+  // measures its scope. `parseSpecOutput` deliberately does NOT require it (see
+  // there): 35 spec fixtures across 13 test files predate the field, and the
+  // DLV-32 precedent is that breaking every existing fixture to add a field is
+  // the wrong trade when the schema already binds real turns.
   required: [
     "problem",
     "currentBehavior",
@@ -970,11 +1200,38 @@ export const SPEC_OUTPUT_SCHEMA = Object.freeze({
     "affectedPaths",
     "riskFlags",
     "openQuestions",
+    "scopeEstimate",
   ],
   properties: {
     problem: { type: "string" },
     currentBehavior: { type: "string" },
     proposedBehavior: { type: "string" },
+    scopeEstimate: {
+      type: "object",
+      additionalProperties: false,
+      required: ["files", "occurrences", "modules"],
+      properties: {
+        files: { type: "integer" },
+        occurrences: { type: "integer" },
+        modules: { type: "integer" },
+        note: { type: "string" },
+      },
+    },
+    // Only expected when the measured scope exceeds the item's declared
+    // effort; 2-4 slices, each self-contained enough to ship on its own.
+    decomposition: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title"],
+        properties: {
+          title: { type: "string" },
+          rationale: { type: "string" },
+          acceptanceCriteriaIds: STRING_ARRAY_SCHEMA,
+        },
+      },
+    },
     acceptanceCriteria: {
       type: "array",
       items: {
@@ -998,9 +1255,15 @@ export const SPEC_OUTPUT_SCHEMA = Object.freeze({
   },
 });
 
+// DLV-32: `openQuestions` — the agent could previously stop and ask only
+// during DISCOVERY; PLAN could only guess or produce a plan around a genuine
+// blocking ambiguity. Same shape and required-ness as SPEC_OUTPUT_SCHEMA's.
 export const PLAN_OUTPUT_SCHEMA = Object.freeze({
   type: "object",
   additionalProperties: false,
+  // openQuestions is intentionally NOT required, unlike SPEC_OUTPUT_SCHEMA's —
+  // making it required would fail validation for every plan turn (fixture
+  // or real) that predates this field. parsePlanOutput defaults it to [].
   required: ["steps", "testPlan", "riskFlags", "rollbackSketch", "noNewDeps"],
   properties: {
     steps: {
@@ -1021,10 +1284,38 @@ export const PLAN_OUTPUT_SCHEMA = Object.freeze({
     riskFlags: STRING_ARRAY_SCHEMA,
     rollbackSketch: { type: "string" },
     noNewDeps: { type: "boolean" },
+    openQuestions: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["text"],
+        properties: { text: { type: "string" } },
+      },
+    },
   },
 });
 
 /** DW-8: the new provider's restated understanding after a handoff — see prompts.mjs buildHandoffVerificationPrompt. */
+/**
+ * DLV-62: the merged DISCOVERY+PLAN payload for a FAST, single-file item.
+ *
+ * Deliberately built by *composing* the two existing schemas rather than
+ * restating their fields: a merged turn that could drift from the unmerged
+ * contract would be a second, subtly different definition of a spec — and the
+ * spec is what the SPEC gate approves. Both artifacts come out identical to
+ * what the two-turn path produces, which is what lets the gates be unchanged.
+ */
+export const MERGED_SPEC_PLAN_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: [...SPEC_OUTPUT_SCHEMA.required, "plan"],
+  properties: {
+    ...SPEC_OUTPUT_SCHEMA.properties,
+    plan: PLAN_OUTPUT_SCHEMA,
+  },
+});
+
 export const HANDOFF_VERIFICATION_SCHEMA = Object.freeze({
   type: "object",
   additionalProperties: false,
@@ -1076,11 +1367,30 @@ export function parseSpecOutput(text) {
   ) {
     throw new RunnerError('DISCOVERY output field "openQuestions" must contain {text} objects');
   }
+  // DLV-7: absent is tolerated (legacy/fixture specs, and any turn that predates
+  // the schema field) and lands as `scopeEstimate: null` — recorded as "not
+  // reported" at the gate rather than silently inferred as zero. Present but
+  // malformed is a hard error: a scope contract computed from `files: "lots"`
+  // would be worse than none, because it would look measured.
+  if (spec.scopeEstimate !== undefined && spec.scopeEstimate !== null) {
+    if (normalizeScopeEstimate(spec.scopeEstimate) == null) {
+      throw new RunnerError(
+        'DISCOVERY output field "scopeEstimate" must be an object with non-negative integer files/occurrences/modules',
+      );
+    }
+  }
+  if (spec.decomposition !== undefined && spec.decomposition !== null) {
+    if (normalizeDecomposition(spec.decomposition) == null) {
+      throw new RunnerError(
+        'DISCOVERY output field "decomposition" must be 2-4 entries, each with a non-empty title',
+      );
+    }
+  }
   return spec;
 }
 
 export function parsePlanOutput(text) {
-  const plan = parseJsonObject(text, "PLAN");
+  let plan = parseJsonObject(text, "PLAN");
   for (const field of ["testPlan", "rollbackSketch"]) requireString(plan[field], field, "PLAN");
   requireStringArray(plan.riskFlags, "riskFlags", "PLAN");
   if (typeof plan.noNewDeps !== "boolean") throw new RunnerError('PLAN output field "noNewDeps" must be boolean');
@@ -1097,6 +1407,14 @@ export function parsePlanOutput(text) {
     )
   ) {
     throw new RunnerError('PLAN output field "steps" must contain {id,description,paths[],validationHint} objects');
+  }
+  if (plan.openQuestions === undefined) {
+    plan = { ...plan, openQuestions: [] };
+  } else if (
+    !Array.isArray(plan.openQuestions) ||
+    plan.openQuestions.some((entry) => !entry || typeof entry.text !== "string")
+  ) {
+    throw new RunnerError('PLAN output field "openQuestions" must contain {text} objects');
   }
   return plan;
 }
@@ -1265,6 +1583,10 @@ async function runGuardedTurn({
   takeSnapshot = snapshotGit,
   forbiddenPaths = [],
   effort,
+  // D9/DLV-6: the lane's resolved maxInternalTurns (or null for an uncapped
+  // turn, matching pre-D9 behavior) -- see packetMaxInternalTurns and the
+  // driver's own doc comment for how this maps onto the SDK's Options.maxTurns.
+  maxTurns = null,
   // DW-1: full-fidelity transcript capture + v2 usage/cost. All optional and
   // additive — omitting `turnId` skips transcript writing entirely, so
   // pre-DW-1 callers (and every existing test that doesn't pass it) see
@@ -1276,6 +1598,7 @@ async function runGuardedTurn({
   maxRecordBytes = DEFAULT_MAX_RECORD_BYTES,
   pricing = null,
   pricingVersion = null,
+  windowTokens = null,
   // DW-10: mid-turn abort — `controlsProcessed` is the cursor as of the start
   // of this turn (controls written after it are new, i.e. an owner action
   // taken while this turn is running); `abortPollMs` paces the concurrent
@@ -1302,13 +1625,19 @@ async function runGuardedTurn({
   const promptFile = turnId ? `transcript/prompts/${turnPromptFileName(turnId)}` : null;
   const recordsFile = turnId ? `transcript/${turnShardFileName(turnId)}` : null;
   let recordSeq = 0;
+  // D12/DLV-40: role attribution. Raw records used to carry `provider` only
+  // -- nothing distinguished a DISCOVERY record from a REVIEWING one at the
+  // record level (only the turn entry had `phase`, and even that had no role
+  // label). `roleForPhase` is the single source of truth this and the UI's
+  // ROLE_COLORS map both read from.
+  const role = roleForPhase(phase);
 
   if (turnId) {
     atomicWriteTextSync(join(sessionDir, promptFile), prompt);
     recordSeq += 1;
     appendNdjsonLine(
       join(sessionDir, recordsFile),
-      formatRecord(buildRecord({ turnId, seq: recordSeq, kind: "prompt", provider: provider || null, promptFile })),
+      formatRecord(buildRecord({ turnId, seq: recordSeq, kind: "prompt", provider: provider || null, role, promptFile })),
     );
   }
 
@@ -1316,7 +1645,7 @@ async function runGuardedTurn({
     ? (partial) => {
         try {
           recordSeq += 1;
-          const record = buildRecord({ turnId, seq: recordSeq, provider: provider || null, maxRecordBytes, ...partial });
+          const record = buildRecord({ turnId, seq: recordSeq, provider: provider || null, role, maxRecordBytes, ...partial });
           appendNdjsonLine(join(sessionDir, recordsFile), formatRecord(record));
         } catch {
           // A malformed raw partial from a driver must never break the turn —
@@ -1330,6 +1659,7 @@ async function runGuardedTurn({
     const entry = buildTurnEntry({
       turnId,
       phase,
+      role,
       agent,
       provider: provider || null,
       model: model || null,
@@ -1343,7 +1673,7 @@ async function runGuardedTurn({
       costUsd,
       costEstUsd: estimateCostUsd(usageV2, pricing),
       pricingVersion,
-      context: computeOccupancy(usageV2, null),
+      context: computeOccupancy(usageV2, windowTokens),
       result,
       strategy,
       workspaceDelta,
@@ -1361,12 +1691,38 @@ async function runGuardedTurn({
     let lastErr = null;
     let autoRetries = 0;
     let retrySignature = null;
+    // DLV-43: spend accumulated by attempts that FAILED. Every retry is its
+    // own real provider call, so this sums across attempts rather than
+    // reporting only the last one — the session that exposed this bug burned
+    // three DISCOVERY attempts and recorded zero for all of them.
+    let failedUsageV2 = null;
+    let failedCostUsd = null;
+    /** Fold one dead attempt's observed usage into the running failed-turn total. */
+    function bankFailedAttempt(err) {
+      const observed = readObservedUsage(err);
+      if (!observed) return;
+      const attemptUsageV2 = observed.usageV2 || fallbackUsageV2FromV1(observed.usage);
+      const attemptCostUsd =
+        typeof (observed.usage && observed.usage.costUsd) === "number"
+          ? observed.usage.costUsd
+          : typeof attemptUsageV2.costUsd === "number"
+            ? attemptUsageV2.costUsd
+            : estimateCostUsd(attemptUsageV2, pricing);
+      failedUsageV2 = addUsageV2(failedUsageV2 || emptyUsageV2(), attemptUsageV2, attemptCostUsd);
+      if (typeof attemptCostUsd === "number") failedCostUsd = (failedCostUsd || 0) + attemptCostUsd;
+    }
+    /** The `{usageV2, usage}` fields a failed-turn return carries, or `{}` when nothing was spent. */
+    function failedUsageFields() {
+      if (!failedUsageV2) return {};
+      return { usageV2: failedUsageV2, usage: { costUsd: failedCostUsd } };
+    }
     for (let attempt = 0; ; attempt++) {
       try {
         const result = await Promise.resolve(
           driver.runTurn(handle, prompt, {
             outputSchema,
             effort,
+            maxTurns,
             onRaw,
             signal: controller.signal,
             onEvent: (e) => {
@@ -1430,6 +1786,7 @@ async function runGuardedTurn({
           return { ok: false, aborted: true, gitViolation: !guard.ok, violations: guard.violations, turnId, changedPaths };
         }
         lastErr = err;
+        bankFailedAttempt(err);
         const classification = classifyTurnError(err, { extraQuotaPatterns });
         const message = String((err && err.message) || err);
         emitEvent(sessionDir, {
@@ -1452,8 +1809,11 @@ async function runGuardedTurn({
             agent,
             data: { violations: guard.violations },
           });
-          sealTurn("guard-violation", fallbackUsageV2FromV1(null), { workspaceDelta: { changedPaths } });
-          return { ok: false, gitViolation: true, violations: guard.violations, changedPaths, error: err, turnId };
+          sealTurn("guard-violation", failedUsageV2 || fallbackUsageV2FromV1(null), {
+            workspaceDelta: { changedPaths },
+            costUsd: failedCostUsd,
+          });
+          return { ok: false, gitViolation: true, violations: guard.violations, changedPaths, error: err, turnId, ...failedUsageFields() };
         }
         // A quota/rate-limit error is never worth retrying — the provider
         // allowance is exhausted, not the individual request, so a second
@@ -1463,7 +1823,10 @@ async function runGuardedTurn({
         // this loop spun up 5 fresh sessions in 2 minutes against an
         // already-exhausted subscription allowance).
         if (!classification.retryable) {
-          sealTurn("failed", fallbackUsageV2FromV1(null), { workspaceDelta: { changedPaths } });
+          sealTurn("failed", failedUsageV2 || fallbackUsageV2FromV1(null), {
+            workspaceDelta: { changedPaths },
+            costUsd: failedCostUsd,
+          });
           return {
             ok: false,
             gitViolation: false,
@@ -1472,6 +1835,7 @@ async function runGuardedTurn({
             turnId,
             errorKind: classification.kind,
             resetsAt: classification.resetsAt,
+            ...failedUsageFields(),
           };
         }
         const signature = `${classification.kind}:${message}`;
@@ -1487,8 +1851,20 @@ async function runGuardedTurn({
           sleep(retryDelayMs);
           continue;
         }
-        sealTurn("failed", fallbackUsageV2FromV1(null), { workspaceDelta: { changedPaths } });
-        return { ok: false, gitViolation: false, error: lastErr, changedPaths, turnId, errorKind: "retry-exhausted", retryCount: autoRetries };
+        sealTurn("failed", failedUsageV2 || fallbackUsageV2FromV1(null), {
+          workspaceDelta: { changedPaths },
+          costUsd: failedCostUsd,
+        });
+        return {
+          ok: false,
+          gitViolation: false,
+          error: lastErr,
+          changedPaths,
+          turnId,
+          errorKind: "retry-exhausted",
+          retryCount: autoRetries,
+          ...failedUsageFields(),
+        };
       }
     }
   } finally {
@@ -1518,6 +1894,19 @@ function phaseEffort(state, packet, phase) {
 }
 
 /**
+ * D9/DLV-6: the lane's resolved `maxInternalTurns`, mapped by the driver onto
+ * the SDK's own `Options.maxTurns` — caps how many internal assistant<->tool
+ * round-trips *one* runner turn's `query()` call may take before the SDK ends
+ * it itself. Without this, one runner turn was observed becoming ~40 model
+ * calls (Cost Anatomy §5). `null` for pre-D9 packets (no `lanePolicy`
+ * recorded) or an unset lane default — the driver simply omits the option in
+ * that case, matching today's uncapped behavior exactly.
+ */
+function packetMaxInternalTurns(packet) {
+  return (packet.lanePolicy && packet.lanePolicy.maxInternalTurns) || null;
+}
+
+/**
  * The DW-1 transcript-capture parameters shared by every `runGuardedTurn`
  * call site: next turn id (from `state.turnCounter`), provider/model (DW-4:
  * `state.execution.model` when present, else the packet's launch-time
@@ -1538,6 +1927,14 @@ function turnContext({ state, packet, deliveryConfig }) {
     (deliveryConfig && deliveryConfig.transcript && deliveryConfig.transcript.maxRecordBytes) || DEFAULT_MAX_RECORD_BYTES;
   const pricing = deliveryConfig && model ? getModelPricing(deliveryConfig, provider, model) : null;
   const pricingVersion = (deliveryConfig && deliveryConfig.pricingVersion) || null;
+  // DLV-30: previously always hardcoded null in sealTurn's computeOccupancy
+  // call, which permanently disabled decideContextStrategy's mid-phase
+  // hard-ceiling branch (it requires a known window size). The model catalog
+  // already carries this (config.mjs ModelEntry.contextWindow) — just wasn't
+  // looked up.
+  const windowTokens =
+    (deliveryConfig && model && getModelInfo(deliveryConfig, provider, model) && getModelInfo(deliveryConfig, provider, model).contextWindow) ||
+    null;
   return {
     turnId,
     provider,
@@ -1546,6 +1943,7 @@ function turnContext({ state, packet, deliveryConfig }) {
     maxRecordBytes,
     pricing,
     pricingVersion,
+    windowTokens,
     // DW-10: the control-file cursor as of *before* this turn starts — see
     // `watchForAbort`.
     controlsProcessed: state.controlsProcessed || 0,
@@ -1576,6 +1974,13 @@ async function getHandle({ driver, state, packet, repoRoot, mode, phase }) {
     return Promise.resolve(driver.resume(ref, { mode }));
   }
   const execution = state.execution || null;
+  // DLV-31: a rotation or quota-paused retry nulls `state.driver.ref` to
+  // force a fresh session, but the runner's single long-lived driver
+  // instance (one per process — see runLoop) still remembers it was already
+  // started, so `startSession` would throw "session already started" here
+  // forever after. `reset()` is idempotent — harmless on a driver that was
+  // never started (the normal first-tick case).
+  if (typeof driver.reset === "function") driver.reset();
   const handle = await Promise.resolve(
     driver.startSession({
       cwd: repoRoot,
@@ -1642,6 +2047,54 @@ async function getGuardedHandle({
     }
     return { ok: false, gitViolation: false, error };
   }
+}
+
+/**
+ * Real provider kinds. Anything else (`fake`, a test stub) is a stand-in for
+ * whatever the packet names and must never be swapped for an SDK-backed driver
+ * — that would turn an offline test into a live provider call.
+ */
+const PROVIDER_DRIVER_KINDS = Object.freeze(new Set(["claude", "codex"]));
+
+/** Driver-factory options every provider driver needs to enforce its own git/tool guard. */
+function providerDriverOptions(packet, sessionDir) {
+  return {
+    sessionDir,
+    forbiddenPaths: (packet && packet.constraints && packet.constraints.forbiddenPaths) || [],
+  };
+}
+
+/**
+ * DLV-34: pick the driver instance that actually owns `state.driver.ref`.
+ *
+ * `runLoop` creates exactly one driver, from `packet.agent`, and hands it to
+ * every `advanceSession` tick. A handoff (DW-8) switches
+ * `state.execution.provider` and writes the **new** provider's ref into
+ * `state.driver.ref` — but nothing ever replaced that one long-lived instance,
+ * so the very next phase turn called `claudeDriver.resume(codexRef)`: the old
+ * provider's SDK, resuming a session id it never created. `performHandoff`
+ * built the right instance locally and then threw it away, returning only its
+ * ref, which is exactly why the verification turn always looked fine and the
+ * *following* turn was the one that broke.
+ *
+ * Resolution is by driver kind rather than by a flag on state, so it is correct
+ * no matter how the provider changed (handoff control, a resumed session whose
+ * `execution.provider` was already switched in a previous process, a future
+ * path that sets it some other way).
+ *
+ * @param {{driver:object, state:object, packet:object, sessionDir:string,
+ *   createDriver?:Function, cache?:(Map|null)}} args
+ */
+export function resolveProviderDriver({ driver, state, packet, sessionDir, createDriver = createDriverDefault, cache = null }) {
+  const wanted = (state && state.execution && state.execution.provider) || (packet && packet.agent) || null;
+  if (!wanted || !driver) return driver;
+  const have = driver.kind || null;
+  if (have === wanted) return driver;
+  if (!PROVIDER_DRIVER_KINDS.has(have)) return driver;
+  if (cache && cache.has(wanted)) return cache.get(wanted);
+  const created = createDriver(wanted, providerDriverOptions(packet, sessionDir));
+  if (cache) cache.set(wanted, created);
+  return created;
 }
 
 function withDriverRef(state, handle) {
@@ -1757,22 +2210,63 @@ function runValidationCommand(cmd, args, { cwd, timeoutMs }) {
   });
 }
 
+/** D10/DLV-11: `vitest related <files>` instead of the full `pnpm test` suite. */
+function targetedTestCommand(targetedFiles) {
+  return { cmd: "pnpm", args: ["exec", "vitest", "related", ...targetedFiles, "--passWithNoTests"] };
+}
+
 /**
  * Default real validation runner: runs pnpm typecheck/lint/test at repoRoot as
  * async child processes (never blocks the event loop) with a per-command
  * timeout. `run` is a test seam (inject a fake async command runner).
- * @param {{cwd: string, timeoutMs?: number, run?: Function}} options
- * @returns {Promise<{ok: boolean, results: Object<string, {ok: boolean, ms: number, timedOut: boolean, excerpt: string}>}>}
+ *
+ * D10/DLV-11: every one of `VALIDATION_COMMANDS` always appears in `results`,
+ * never silently absent — a rung outside the lane's `rungs` list is recorded
+ * as `{skipped:true, reason:"not in this lane's validation ladder"}` before
+ * any command runs, and a rung the fail-fast short-circuit never reached is
+ * recorded as `{skipped:true, reason:"not run — an earlier command failed"}`.
+ * This is the fix for the whdv postmortem's "lint (skipped)" / "test
+ * (skipped)" appearing only as the *agent's own* unverified prose under a
+ * "✅ COMPLETED" build-log claim — the runner's own validation-report.md is
+ * now the one place a skip can never go unrecorded.
+ * @param {{cwd: string, timeoutMs?: number, run?: Function, onEvent?: Function,
+ *   rungs?: (string[]|null), targetedFiles?: (string[]|null)}} options
+ * @returns {Promise<{ok: boolean, results: Object<string, {ok: boolean, skipped?: boolean,
+ *   reason?: string, ms?: number, timedOut?: boolean, excerpt?: string, targeted?: boolean}>}>}
  */
-export async function runValidationCommands({ cwd, timeoutMs = VALIDATION_TIMEOUT_MS, run = runValidationCommand, onEvent = null } = {}) {
+export async function runValidationCommands({
+  cwd,
+  timeoutMs = VALIDATION_TIMEOUT_MS,
+  run = runValidationCommand,
+  onEvent = null,
+  rungs = null,
+  targetedFiles = null,
+} = {}) {
   const results = {};
   let ok = true;
-  for (const { key, cmd, args, timeoutMs: perCommandTimeoutMs } of VALIDATION_COMMANDS) {
+  let fastFailed = false;
+  const hasTargets = Array.isArray(targetedFiles) && targetedFiles.length > 0;
+  for (const spec of VALIDATION_COMMANDS) {
+    const { key, cmd, args, timeoutMs: perCommandTimeoutMs } = spec;
+    if (rungs && !rungs.includes(key)) {
+      const reason = "not in this lane's validation ladder";
+      results[key] = { ok: true, skipped: true, reason };
+      if (onEvent) onEvent({ type: "validation.command.skipped", data: { command: key, reason } });
+      continue;
+    }
+    if (fastFailed) {
+      const reason = "not run — an earlier validation command failed";
+      results[key] = { ok: true, skipped: true, reason };
+      if (onEvent) onEvent({ type: "validation.command.skipped", data: { command: key, reason } });
+      continue;
+    }
     const effectiveTimeoutMs = perCommandTimeoutMs != null ? perCommandTimeoutMs : timeoutMs;
+    const targeted = key === "test" && hasTargets;
+    const { cmd: runCmd, args: runArgs } = targeted ? targetedTestCommand(targetedFiles) : { cmd, args };
     // Progress events so a multi-minute suite reads as "lint running" on the
     // dashboard timeline instead of a session that looks silently stuck.
-    if (onEvent) onEvent({ type: "validation.command.started", data: { command: key, timeoutMs: effectiveTimeoutMs } });
-    const r = await run(cmd, args, { cwd, timeoutMs: effectiveTimeoutMs });
+    if (onEvent) onEvent({ type: "validation.command.started", data: { command: key, timeoutMs: effectiveTimeoutMs, targeted } });
+    const r = await run(runCmd, runArgs, { cwd, timeoutMs: effectiveTimeoutMs });
     const passed = r.status === 0 && !r.timedOut;
     if (!passed) ok = false;
     const excerpt = tailLines(
@@ -1785,9 +2279,10 @@ export async function runValidationCommands({ cwd, timeoutMs = VALIDATION_TIMEOU
       timedOut: !!r.timedOut,
       excerpt,
       failureCount: passed ? 0 : countValidationFailures({ ok: false, excerpt }),
+      ...(targeted ? { targeted: true } : {}),
     };
     if (onEvent) onEvent({ type: "validation.command.finished", data: { command: key, ok: passed, ms: r.ms, timedOut: !!r.timedOut } });
-    if (!passed) break; // don't burn time on later commands once one has failed
+    if (!passed) fastFailed = true; // don't burn time on later commands once one has failed
   }
   return { ok, results };
 }
@@ -1798,7 +2293,184 @@ function skillPaths(packet) {
   return (packet.skills || []).map((s) => s.path);
 }
 
+/**
+ * DLV-45 — FAST's context ceremony, and why it had to shrink.
+ *
+ * FAST was a lane in name only where *context* was concerned: every lane sent
+ * DISCOVERY the same mandated reading list — all four campaign docs
+ * ("read by path"), every skill the classifier attached ("do not skip"), and
+ * CLAUDE.md ("Do not skip it because it wasn't force-loaded"). On BUD-14 that
+ * was ~8 tool calls and ~55K tokens of doctrine before the agent was allowed to
+ * look at the one line it had been asked to change — against FAST's own
+ * `maxInternalTurns: 8`. The phase could not physically finish: the real
+ * session was cut off at internal turn 9, in the exact turn where it had
+ * already found `QUICK_AMOUNTS` at line 1144. FAST wasn't expensive *and*
+ * broken by coincidence; it was broken *because* it was expensive.
+ *
+ * So on FAST the reading list is scoped to what a small, already-located change
+ * actually needs:
+ *   - campaign strategy docs: dropped. A one-file change does not need the
+ *     campaign's Feature State / Vision / Action Plan / Checklist; the item
+ *     itself (with its file:line pointer) is in the packet header already.
+ *   - skills: only those attached by a *risk flag* (an optional capability).
+ *     The always-on `code-review` row's `finish-task` skill is dropped here
+ *     because REVIEWING reads it by its own path anyway (`dodSkillPath`), so
+ *     nothing is lost — it was simply being read twice, a phase early.
+ *   - CLAUDE.md: dropped in DISCOVERY/PLAN, which produce prose, and **kept in
+ *     BUILDING**, which writes code. House rules bind where edits happen; a
+ *     read-only scoping pass does not need the full rule set re-read, and any
+ *     UI/money hard rules that do matter arrive via the retained risk-flag
+ *     skills.
+ * STANDARD and DEEP are untouched — a lane that trades context for speed is
+ * exactly what FAST is for, and the other two exist for when you don't want it.
+ */
+const ALWAYS_ON_SKILL_CAPABILITIES = Object.freeze(new Set(["automated-testing", "code-review", "uat-generation"]));
+
+function packetLane(packet) {
+  return (packet.lanePolicy && packet.lanePolicy.lane) || null;
+}
+
+function isFastLane(packet) {
+  return packetLane(packet) === "FAST";
+}
+
+/** DLV-62: did this launch resolve to the merged DISCOVERY+PLAN shape? */
+function isMergedDiscoveryPlan(packet) {
+  return !!(packet.lanePolicy && packet.lanePolicy.mergedDiscoveryPlan);
+}
+
+/** Skills attached by a risk flag (optional capability), not by an always-on row. */
+function riskFlagSkillPaths(packet) {
+  return (packet.skills || [])
+    .filter((s) => !ALWAYS_ON_SKILL_CAPABILITIES.has(s.capability))
+    .map((s) => s.path);
+}
+
+/** Size a read-by-path source without reading it — a stat, never a load. */
+function sourceTokensEst(repoRoot, relPath) {
+  try {
+    const stat = lstatSync(join(repoRoot, relPath));
+    return tokensForBytes(stat.size);
+  } catch {
+    // A path that cannot be sized (missing, or outside the repo) is treated as
+    // free rather than as infinite: refusing to load a file because we failed
+    // to stat it would be a worse failure than loading it unbudgeted.
+    return 0;
+  }
+}
+
+/** The configured token budget for this lane/phase, or null when unbudgeted. */
+function contextBudgetFor(packet, phase, deliveryConfig) {
+  const lane = String(packetLane(packet) || "").toLowerCase();
+  const budgets = (deliveryConfig && deliveryConfig.context && deliveryConfig.context.laneBudgets) || null;
+  const laneBudgets = budgets && budgets[lane];
+  if (!laneBudgets) return null;
+  const value = laneBudgets[phase];
+  return typeof value === "number" && value > 0 ? value : null;
+}
+
+/**
+ * The mandated reading list for one phase: narrowed by lane (DLV-45), then
+ * budgeted by token cost with the drops recorded (DLV-8).
+ *
+ * The two are deliberately separate steps. The lane rule is editorial — "a FAST
+ * session has no business reading campaign strategy docs" — and applies however
+ * small those docs happen to be. The budget is arithmetic, and catches the case
+ * the editorial rule cannot see: a STANDARD session whose skills and campaign
+ * docs have quietly grown past what a phase can afford.
+ *
+ * @param {object} packet
+ * @param {string} phase - discovery | plan | building | review
+ * @param {{repoRoot?:string, deliveryConfig?:object}} [opts]
+ */
+function phaseContextPolicy(packet, phase, { repoRoot = null, deliveryConfig = null } = {}) {
+  const fast = isFastLane(packet);
+  const campaignFilePaths = fast ? [] : (packet.context && packet.context.campaignFiles) || [];
+  const skills = fast ? riskFlagSkillPaths(packet) : skillPaths(packet);
+  const includeDoctrine = fast ? phase === "building" : true;
+
+  const budgetTokens = contextBudgetFor(packet, phase, deliveryConfig);
+  if (!budgetTokens || !repoRoot) {
+    return { campaignFilePaths, skillPaths: skills, includeDoctrine, drops: [], budgetTokens: budgetTokens || null };
+  }
+
+  const sources = [
+    ...skills.map((path) => ({ kind: "skill", path, tokensEst: sourceTokensEst(repoRoot, path) })),
+    ...campaignFilePaths.map((path) => ({ kind: "campaign", path, tokensEst: sourceTokensEst(repoRoot, path) })),
+  ];
+  const { kept, dropped } = applyContextBudget({ sources, budgetTokens });
+  const keptPaths = new Set(kept.map((s) => s.path));
+  return {
+    campaignFilePaths: campaignFilePaths.filter((p) => keptPaths.has(p)),
+    skillPaths: skills.filter((p) => keptPaths.has(p)),
+    includeDoctrine,
+    drops: dropped,
+    budgetTokens,
+  };
+}
+
+/**
+ * DLV-8: persist what this turn was actually told to read, next to the prompt
+ * it was told it in. Written per turn under `transcript/context/` so a turn's
+ * context can be audited against its own usage record rather than re-derived
+ * from config months later.
+ */
+function recordContextManifest(sessionDir, packet, phase, policy, turnId, promptText) {
+  const manifest = buildContextManifest({
+    turnId,
+    phase,
+    lane: packetLane(packet),
+    packetPath: `.delivery/sessions/${packet.sessionId}/packet.json`,
+    kept: [
+      ...policy.skillPaths.map((path) => ({ kind: "skill", path, tokensEst: 0 })),
+      ...policy.campaignFilePaths.map((path) => ({ kind: "campaign", path, tokensEst: 0 })),
+      ...(policy.includeDoctrine ? [{ kind: "doctrine", path: "CLAUDE.md", tokensEst: 0 }] : []),
+    ],
+    dropped: policy.drops || [],
+    budgetTokens: policy.budgetTokens || null,
+    promptTokensEst: estimateTokens(promptText || ""),
+  });
+  try {
+    atomicWriteJsonSync(join(sessionPaths(sessionDir).transcript, "context", `${turnId || "unknown"}.json`), manifest);
+  } catch {
+    /* the manifest is a record, never a precondition for running the turn */
+  }
+  if ((policy.drops || []).length) {
+    emitEvent(sessionDir, {
+      type: "context.dropped",
+      phase: phase.toUpperCase(),
+      data: { budgetTokens: policy.budgetTokens, dropped: policy.drops.map((d) => ({ kind: d.kind, path: d.path, tokensEst: d.tokensEst })) },
+    });
+  }
+  return manifest;
+}
+
 // ---- artifact templates ----
+
+/** DLV-7: the measured scope block, rendered only when DISCOVERY reported one. */
+function renderScopeSection(spec) {
+  const estimate = normalizeScopeEstimate(spec.scopeEstimate);
+  if (!estimate) return [];
+  const decomposition = normalizeDecomposition(spec.decomposition);
+  return [
+    "## Measured scope",
+    `- Files: ${estimate.files == null ? "(not reported)" : estimate.files}`,
+    `- Occurrences: ${estimate.occurrences == null ? "(not reported)" : estimate.occurrences}`,
+    `- Modules: ${estimate.modules == null ? "(not reported)" : estimate.modules}`,
+    ...(estimate.note ? [`- Note: ${estimate.note}`] : []),
+    "",
+    ...(decomposition
+      ? [
+          "## Proposed decomposition",
+          ...decomposition.flatMap((slice, i) => [
+            `${i + 1}. **${slice.title}**${slice.rationale ? ` — ${slice.rationale}` : ""}`,
+            ...(slice.acceptanceCriteriaIds.length ? [`   - covers: ${slice.acceptanceCriteriaIds.join(", ")}`] : []),
+          ]),
+          "",
+        ]
+      : []),
+  ];
+}
 
 function renderSpecMd(spec) {
   const lines = [
@@ -1819,6 +2491,7 @@ function renderSpecMd(spec) {
     "## Affected paths",
     ...(spec.affectedPaths || []).map((p) => `- ${p}`),
     "",
+    ...renderScopeSection(spec),
     "## Risk flags",
     (spec.riskFlags || []).length ? (spec.riskFlags || []).map((f) => `- ${f}`).join("\n") : "(none)",
     "",
@@ -1878,10 +2551,17 @@ function renderValidationReportMd(validation, delta = null) {
     "",
     ...VALIDATION_COMMANDS.map(({ key }) => {
       const r = validation.results[key];
-      if (!r) return `## ${key}\n(skipped)`;
+      // D10/DLV-11: a rung with no result at all (legacy validation.json
+      // predating the always-record-every-rung fix) is rendered exactly like
+      // a governed skip, never as if it simply didn't exist.
+      if (!r || r.skipped) {
+        return `## ${key}\nSKIPPED${r && r.reason ? ` — ${r.reason}` : ""}`;
+      }
       const commandDelta = delta && delta.commandDeltas && delta.commandDeltas[key];
       const label = r.ok
-        ? "PASS"
+        ? r.targeted
+          ? "PASS (targeted)"
+          : "PASS"
         : commandDelta && commandDelta.status === "baseline-equivalent"
           ? "PASS ON DELTA"
           : "FAIL";
@@ -2003,6 +2683,7 @@ async function handleSelected({ sessionDir, state, config }) {
 }
 
 async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, config }) {
+  state = maybeRotateAtPhaseBoundary({ sessionDir, state, packet, deliveryConfig: config.deliveryConfig, phase: "discovery" });
   const forbiddenPaths = (packet.constraints && packet.constraints.forbiddenPaths) || [];
   const setup = await getGuardedHandle({
     sessionDir,
@@ -2037,13 +2718,21 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
   const pendingGuidance = working.pendingGuidance || [];
   const ownerMessages = [...pendingGuidance, ...drainedMessages];
   working = { ...working, pendingGuidance: [] };
-  const campaignFilePaths = (packet.context && packet.context.campaignFiles) || [];
+  // DLV-45 lane narrowing + DLV-8 token budget — see phaseContextPolicy.
+  const discoveryContext = phaseContextPolicy(packet, "discovery", { repoRoot, deliveryConfig: config.deliveryConfig });
+  // DLV-62: on FAST with a single named file, this turn also produces the plan.
+  const merged = isMergedDiscoveryPlan(packet);
+  const maxPlanSteps = (config.deliveryConfig && config.deliveryConfig.budgets && config.deliveryConfig.budgets.maxPlanSteps) || null;
   const prompt = buildDiscoveryPrompt({
     packet,
-    campaignFilePaths,
-    skillPaths: skillPaths(packet),
+    campaignFilePaths: discoveryContext.campaignFilePaths,
+    skillPaths: discoveryContext.skillPaths,
+    includeDoctrine: discoveryContext.includeDoctrine,
     ownerMessages,
+    includePlan: merged,
+    maxPlanSteps: merged ? maxPlanSteps : null,
   });
+  recordContextManifest(sessionDir, packet, "discovery", discoveryContext, formatTurnId((working.turnCounter || 0) + 1), prompt);
   // Strategy reflects whether a driver ref existed BEFORE this handler ran —
   // `working` already carries the ref getGuardedHandle just established/
   // resumed this call, so it would always read "resume-native".
@@ -2055,12 +2744,13 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
     prompt,
     phase: "DISCOVERY",
     agent: "orchestrator",
-    outputSchema: SPEC_OUTPUT_SCHEMA,
+    outputSchema: merged ? MERGED_SPEC_PLAN_SCHEMA : SPEC_OUTPUT_SCHEMA,
     repoRoot,
     guardMode: "readonly",
     takeSnapshot: config.takeSnapshot,
     forbiddenPaths,
     effort: phaseEffort(state, packet, "discovery"),
+    maxTurns: packetMaxInternalTurns(packet),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
@@ -2076,10 +2766,20 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
   };
   if (!turn.ok) return blockFrom(sessionDir, working, "DISCOVERY", turn);
 
-  working = { ...working, usage: accumulateUsage(working, "discovery", turn.usage) };
+  working = { ...working, usage: accumulateUsage(working, "discovery", turn.usageV2, turn.usage.costUsd) };
+  working = withContextOccupancy(working, "discovery", turn.usageV2, tc.windowTokens);
   let spec;
+  let mergedPlan = null;
   try {
     spec = parseSpecOutput(turn.finalText);
+    if (merged) {
+      // Validated through `parsePlanOutput`, the same function the two-turn
+      // path uses — a merged plan that skipped that check would be a second,
+      // weaker contract for the artifact the PLAN gate approves.
+      const raw = JSON.parse(turn.finalText);
+      if (!raw.plan) throw new RunnerError("merged DISCOVERY+PLAN output is missing the required `plan` object");
+      mergedPlan = parsePlanOutput(JSON.stringify(raw.plan));
+    }
   } catch (error) {
     return blockFrom(sessionDir, working, "DISCOVERY", { error });
   }
@@ -2106,9 +2806,104 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
       awaiting: { gate: "question", returnTo: "DISCOVERY", questions },
     };
   }
+  // DLV-7: the scope tripwire. Computed here — at the one moment the session
+  // has a *measured* scope and has not yet spent a build turn on it — and
+  // stamped onto `awaiting` so it is on the panel the owner is already looking
+  // at. BUD-11's spec measured 72 occurrences across 25 files on an item filed
+  // as S and nothing anywhere objected.
+  const scopeVerdict = buildScopeVerdict({
+    estimate: spec.scopeEstimate,
+    itemEffort: packet.item && packet.item.effort,
+    thresholds: (config.deliveryConfig && config.deliveryConfig.scope && config.deliveryConfig.scope.thresholds) || undefined,
+    lane: packetLane(packet),
+  });
+  const decomposition = scopeVerdict.mismatch ? normalizeDecomposition(spec.decomposition) : null;
+
+  // DLV-9: the same measurement, applied to the *other* launch-time guess —
+  // the model. Both guards read the one number DISCOVERY just produced, so they
+  // are computed together and land on the same gate.
+  const fit = reassessFitAfterDiscovery({
+    item: packet.item,
+    capabilities: packet.capabilities,
+    scopeHints: packet.scopeHints,
+    provider: (working.execution && working.execution.provider) || packet.agent,
+    config: config.deliveryConfig,
+    measuredSizeClass: scopeVerdict.sizeClass,
+    currentModel: (working.execution && working.execution.model) || (packet.agentConfig && packet.agentConfig.model) || null,
+  });
+  if (fit.mismatch) {
+    emitEvent(sessionDir, {
+      type: "recommendation.updated",
+      phase: "DISCOVERY",
+      data: {
+        measuredSizeClass: fit.measuredSizeClass,
+        currentTier: fit.currentTier,
+        recommendedTier: fit.recommendedTier,
+        recommendedModel: fit.recommendedModel,
+      },
+    });
+  }
+
+  const scope = {
+    ...scopeVerdict,
+    decomposition,
+    fit,
+    source: "discovery",
+    turnId: turn.turnId || null,
+    acknowledged: false,
+    acknowledgedAt: null,
+    selectedSlice: null,
+  };
+  writeArtifactJson(sessionDir, "scope.json", scope);
+  emitEvent(sessionDir, {
+    type: scopeVerdict.mismatch ? "scope.mismatch" : "scope.measured",
+    phase: "DISCOVERY",
+    data: {
+      sizeClass: scopeVerdict.sizeClass,
+      itemSizeClass: scopeVerdict.itemSizeClass,
+      estimate: scopeVerdict.estimate,
+      decompositionSlices: decomposition ? decomposition.length : 0,
+    },
+  });
+
+  // DLV-62: the plan is persisted only once the spec is actually going to the
+  // gate. A discovery turn that ends in open questions will be re-run, and a
+  // plan written from a superseded spec is worse than no plan at all.
+  if (mergedPlan) {
+    writeArtifactJson(sessionDir, "plan.json", mergedPlan);
+    writeArtifactText(sessionDir, "plan.md", renderPlanMd(mergedPlan));
+    const planLedger = applyPlan(loadLedger(sessionDir), mergedPlan, { turnId: turn.turnId });
+    writeLedger(sessionDir, planLedger.ledger);
+    emitEvent(sessionDir, {
+      type: "plan.merged",
+      phase: "DISCOVERY",
+      data: { steps: (mergedPlan.steps || []).length, reason: (packet.lanePolicy && packet.lanePolicy.mergedDiscoveryPlanReason) || null },
+    });
+  }
+
   const result = smNext(working.state, "spec.written");
   emitEvent(sessionDir, { type: "phase.transition", phase: "DISCOVERY", data: { to: result.to } });
-  return { ...working, state: result.to, awaiting: { gate: GATES[result.to] || "spec" } };
+  return {
+    ...working,
+    scope,
+    // Consumed by `consumeSpecDecision` to skip the separate PLAN turn exactly
+    // once. Cleared on a plan rejection so "revise the plan" runs a real PLAN
+    // turn rather than re-approving the same merged plan forever (DLV-53).
+    ...(mergedPlan ? { mergedPlanPending: true } : {}),
+    state: result.to,
+    awaiting: {
+      gate: GATES[result.to] || "spec",
+      // Attached only when DISCOVERY actually measured something. `scopeEstimate`
+      // is required by SPEC_OUTPUT_SCHEMA, so every real turn reports it — but a
+      // spec that predates the field (or any fixture) would otherwise put a
+      // wholly uninformative "not reported" block on the gate, and `state.scope`
+      // + `artifacts/scope.json` already record the absence for the audit trail.
+      ...(scope.sizeClass || scope.mismatch ? { scope } : {}),
+      ...(scopeVerdict.mismatch || fit.mismatch
+        ? { warnings: [scopeVerdict.mismatch ? scopeVerdict.reason : null, fit.message].filter(Boolean) }
+        : {}),
+    },
+  };
 }
 
 /**
@@ -2142,13 +2937,38 @@ const BLOCK_REASON_BY_ERROR_KIND = Object.freeze({
   "pre-existing-failure": "pre-existing-failure",
 });
 
+// DLV-44: error kinds that must reach the owner as a *decision* rather than
+// dead-end in BLOCKED, because the fix is an owner choice the runner cannot
+// make for itself. `retry-exhausted` was the only member; `max-turns` joins it
+// because hitting the lane's internal-turn ceiling is a sizing verdict (raise
+// the cap, or narrow the mandated reading), not a fault to wait out.
+const ESCALATING_ERROR_KINDS = Object.freeze(new Set(["retry-exhausted", "max-turns"]));
+
+const ESCALATION_QUESTION_BY_ERROR_KIND = Object.freeze({
+  "retry-exhausted": "Automatic retries are exhausted. Provide the next-step decision before this phase can continue.",
+  "max-turns":
+    "This phase hit the lane's internal-turn ceiling (maxInternalTurns) before it finished. Retrying as-is will hit the same ceiling. " +
+    "Either raise the lane's maxInternalTurns in .delivery/config.json, or reply with guidance that narrows what this phase must read/do, then Retry.",
+});
+
 function blockFrom(sessionDir, state, fromPhase, turn) {
   const errorKind = turn.errorKind || null;
-  const escalated = errorKind === "retry-exhausted";
+  const escalated = ESCALATING_ERROR_KINDS.has(errorKind);
   const result = smNext(fromPhase, escalated ? "question.raised" : "error.fatal");
   const message = describeBlockedTurn(turn);
   const resetsAt = turn.resetsAt || null;
   const reason = errorKind ? BLOCK_REASON_BY_ERROR_KIND[errorKind] || null : null;
+  // DLV-43: the single choke point every phase handler funnels a failed turn
+  // through, and therefore the one place that has to bank what that failed
+  // turn spent. Doing it here rather than in each handler's `if (!turn.ok)`
+  // line is what makes the accounting exhaustive by construction — the whole
+  // bug was that spend was recorded only on the success path.
+  const base = turn.usageV2
+    ? {
+        ...state,
+        usage: accumulateUsage(state, canonicalPhaseKey(fromPhase), turn.usageV2, turn.usage ? turn.usage.costUsd : null),
+      }
+    : state;
   emitEvent(sessionDir, {
     type: "error.fatal",
     phase: fromPhase,
@@ -2165,22 +2985,36 @@ function blockFrom(sessionDir, state, fromPhase, turn) {
     emitEvent(sessionDir, {
       type: "notification.requested",
       phase: fromPhase,
-      data: { reason: "retry-exhausted", returnTo: fromPhase, retryCount: turn.retryCount || 0, message },
+      data: {
+        reason: errorKind,
+        returnTo: fromPhase,
+        retryCount: turn.retryCount || 0,
+        message,
+        finishPackage: "artifacts/finish/summary.md",
+      },
     });
+    // DLV-12: an escalation is a paused exit — the owner is now the only thing
+    // that can move it — so it gets the same finish package a terminal exit does.
+    writeFinishPackage(sessionDir, { ...base, state: result.to }, loadPacket(sessionDir), "needs-decision");
     return {
-      ...state,
+      ...base,
       state: result.to,
       awaiting: {
         gate: "question",
         returnTo: fromPhase,
-        reason: "retry-exhausted",
-        questions: [{ id: "retry-escalation", text: "Automatic retries are exhausted. Provide the next-step decision before this phase can continue." }],
+        reason: errorKind,
+        questions: [
+          {
+            id: errorKind === "max-turns" ? "max-turns-escalation" : "retry-escalation",
+            text: ESCALATION_QUESTION_BY_ERROR_KIND[errorKind] || ESCALATION_QUESTION_BY_ERROR_KIND["retry-exhausted"],
+          },
+        ],
       },
       lastError: { phase: fromPhase, gitViolation: !!turn.gitViolation, violations: turn.violations || [], message, aborted: !!turn.aborted, errorKind, resetsAt },
     };
   }
-  return {
-    ...state,
+  const blocked = {
+    ...base,
     state: result.to,
     awaiting: reason ? { gate: "blocked", returnTo: fromPhase, reason } : { gate: "blocked", returnTo: fromPhase },
     lastError: {
@@ -2193,6 +3027,153 @@ function blockFrom(sessionDir, state, fromPhase, turn) {
       resetsAt,
     },
   };
+  writeFinishPackage(sessionDir, blocked, loadPacket(sessionDir), reason === "budget-exceeded" ? "budget-exhausted" : "blocked");
+  return blocked;
+}
+
+/** DLV-10: the matrix in both machine- and human-readable form, rewritten on every reconciliation. */
+function writeAcceptanceArtifacts(sessionDir, matrix) {
+  writeArtifactJson(sessionDir, "acceptance.json", matrix || []);
+  writeArtifactText(sessionDir, "acceptance.md", renderAcceptanceMd(matrix || []));
+}
+
+/**
+ * DLV-10: the facts the runner owns, against which an agent's AC claims are
+ * checked. Deliberately assembled from artifacts the runner itself wrote
+ * (`validation.json`) and state it itself tracked (`workspace.changedFiles`) —
+ * never from anything the agent said in the same breath as the claim.
+ */
+function acceptanceFacts(sessionDir, state, repoRoot, turnId) {
+  const validation = readJsonIfExists(artifactPath(sessionDir, "validation.json"));
+  const results = (validation && validation.results) || {};
+  const passingRungs = Object.entries(results)
+    .filter(([, r]) => r && r.ok && !r.skipped)
+    .map(([key]) => key);
+  // `passes` (not `ok`) is the right gate: a red *baseline* that the delta
+  // check cleared is a pass for this session's purposes (DLV-5), and treating
+  // it as a failure would make every session on a red baseline unable to
+  // evidence a single AC.
+  const validationPassed = validation ? !!validation.passes : undefined;
+  return {
+    turnId: turnId || null,
+    validationPassed,
+    passingRungs,
+    changedFiles: (state.workspace && state.workspace.changedFiles) || [],
+    fileExists: (p) => {
+      if (!p || p.includes("..")) return false;
+      try {
+        return existsSync(join(repoRoot, p)) || existsSync(join(sessionDir, p));
+      } catch {
+        return false;
+      }
+    },
+  };
+}
+
+/**
+ * Apply a turn's AC claims and persist the result. Returns the updated state.
+ * Emits one event per downgrade, because a downgrade is the interesting thing:
+ * it is the exact moment an agent's "✅ done" was checked and found wanting.
+ */
+function withReconciledAcceptance(sessionDir, state, claims, repoRoot, turnId, phase) {
+  if (!state.acceptance || !state.acceptance.length) return state;
+  const { matrix, downgraded } = reconcileAcceptance(
+    state.acceptance,
+    claims,
+    acceptanceFacts(sessionDir, state, repoRoot, turnId),
+  );
+  writeAcceptanceArtifacts(sessionDir, matrix);
+  for (const d of downgraded) {
+    emitEvent(sessionDir, {
+      type: "acceptance.claim.rejected",
+      phase,
+      data: { id: d.id, claimed: d.claimed, actual: d.actual, reason: d.reason },
+    });
+  }
+  emitEvent(sessionDir, { type: "acceptance.updated", phase, data: summarizeAcceptance(matrix) });
+  return { ...state, acceptance: matrix };
+}
+
+/**
+ * DLV-7: apply the owner's answer to a scope mismatch when the spec gate is
+ * approved. Returns the (possibly narrowed) AC list plus the updated scope
+ * record. Never throws and never refuses — the *server* is the enforcement
+ * point for "you must answer the mismatch before approving" (same shape as the
+ * dirty-tree / red-baseline / triage acknowledgments), because a runner that
+ * refuses an already-written decision strands the session at a gate with no way
+ * forward, which is exactly the DLV-53 failure.
+ */
+function resolveScopeAtSpecGate({ sessionDir, state, spec, decision, acceptanceCriteria }) {
+  let scope = state.scope || readJsonIfExists(artifactPath(sessionDir, "scope.json")) || null;
+  if (!scope) return { acceptanceCriteria, scope };
+
+  const at = new Date().toISOString();
+
+  // DLV-9: approving the spec while a model-fit warning is showing IS the
+  // acknowledgment — the warning is on that panel, and there is no other way
+  // past it. Recorded rather than merely dismissed, so a session that overran
+  // on an under-powered model can be traced to the moment it was allowed to.
+  if (scope.fit && scope.fit.mismatch && !scope.fitAcknowledgedAt) {
+    emitEvent(sessionDir, {
+      type: "recommendation.acknowledged",
+      phase: "SPEC_READY",
+      data: { currentTier: scope.fit.currentTier, recommendedTier: scope.fit.recommendedTier },
+    });
+    scope = { ...scope, fitAcknowledgedAt: at };
+    writeArtifactJson(sessionDir, "scope.json", scope);
+  }
+
+  if (!scope.mismatch) return { acceptanceCriteria, scope };
+  const slices = scope.decomposition || [];
+  const sliceIndex = Number.isInteger(decision.scopeSlice) ? decision.scopeSlice : null;
+  const slice = sliceIndex != null && sliceIndex >= 1 && sliceIndex <= slices.length ? slices[sliceIndex - 1] : null;
+
+  if (!slice) {
+    // Proceed at full measured scope, on the record.
+    emitEvent(sessionDir, {
+      type: "scope.mismatch.acknowledged",
+      phase: "SPEC_READY",
+      data: { sizeClass: scope.sizeClass, itemSizeClass: scope.itemSizeClass, slice: null },
+    });
+    const resolved = { ...scope, acknowledged: true, acknowledgedAt: at, selectedSlice: null };
+    writeArtifactJson(sessionDir, "scope.json", resolved);
+    return { acceptanceCriteria, scope: resolved };
+  }
+
+  // Narrow this session to the chosen slice. Unmatched ids are dropped from the
+  // narrowing rather than silently widening it back to everything — a slice
+  // naming an AC that does not exist is a spec bug, and building the whole
+  // thing "because the filter matched nothing" is the failure mode to avoid.
+  const wanted = new Set(slice.acceptanceCriteriaIds || []);
+  const narrowed = wanted.size ? acceptanceCriteria.filter((ac) => ac && wanted.has(ac.id)) : acceptanceCriteria;
+  const deferred = slices.filter((_, i) => i !== sliceIndex - 1);
+
+  writeArtifactJson(sessionDir, "decomposition-proposal.json", {
+    v: 1,
+    at,
+    campaign: (state.workspace && state.workspace.campaign) || null,
+    measured: { sizeClass: scope.sizeClass, itemSizeClass: scope.itemSizeClass, estimate: scope.estimate },
+    selected: { index: sliceIndex, title: slice.title, acceptanceCriteriaIds: [...wanted] },
+    // These are *candidates*, not filed items: the owner files them (or not)
+    // from the Inbox. The runner never writes PM markdown — see DLV-14 for the
+    // one governed writeback path that does.
+    deferred: deferred.map((s) => ({ title: s.title, rationale: s.rationale, acceptanceCriteriaIds: s.acceptanceCriteriaIds })),
+    fullAcceptanceCriteria: acceptanceCriteria,
+  });
+  emitEvent(sessionDir, {
+    type: "scope.decomposed",
+    phase: "SPEC_READY",
+    data: { slice: sliceIndex, title: slice.title, keptAcs: narrowed.length, deferredSlices: deferred.length },
+  });
+
+  const resolved = {
+    ...scope,
+    acknowledged: true,
+    acknowledgedAt: at,
+    selectedSlice: { index: sliceIndex, title: slice.title },
+  };
+  writeArtifactJson(sessionDir, "scope.json", resolved);
+  return { acceptanceCriteria: narrowed, scope: resolved };
 }
 
 async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot, decision, config }) {
@@ -2218,9 +3199,76 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
     newPacket = { ...packet, capabilities: applyCapabilityDrops(packet.capabilities, decision.capabilitiesDrop) };
   }
   const spec = readJsonIfExists(artifactPath(sessionDir, "spec.json")) || {};
-  newPacket = { ...newPacket, acceptanceCriteria: spec.acceptanceCriteria || newPacket.acceptanceCriteria || [] };
+  let acceptanceCriteria = spec.acceptanceCriteria || newPacket.acceptanceCriteria || [];
+
+  // DLV-7: resolve the scope contract at the moment of approval. Two owner
+  // answers are possible and both are audited: take one decomposition slice
+  // (this session narrows to it, the rest become proposed follow-up items), or
+  // acknowledge the mismatch and build the whole measured scope as specified.
+  const scopeResolution = resolveScopeAtSpecGate({ sessionDir, state, spec, decision, acceptanceCriteria });
+  acceptanceCriteria = scopeResolution.acceptanceCriteria;
+  state = { ...state, scope: scopeResolution.scope };
+
+  newPacket = { ...newPacket, acceptanceCriteria };
   atomicWriteJsonSync(sessionPaths(sessionDir).packet, newPacket);
 
+  // DLV-10: seed the AC coverage matrix here — the one moment the AC list is
+  // final (the spec is approved, and DLV-7's narrowing has already applied).
+  // Every AC starts `unmet`: nothing is presumed done, and the only way out of
+  // `unmet` is evidence the runner itself can confirm.
+  state = { ...state, acceptance: initAcceptance(acceptanceCriteria) };
+  writeAcceptanceArtifacts(sessionDir, state.acceptance);
+
+  // DLV-62: on a merged FAST session the plan already exists — it was produced
+  // by the same turn as the spec — so approving the spec advances straight to
+  // the PLAN gate instead of paying for a second full-context turn to
+  // re-derive it. The gate itself is untouched: the owner still approves the
+  // plan, and still approves the UAT package after that.
+  if (state.mergedPlanPending) {
+    const existingPlan = readJsonIfExists(artifactPath(sessionDir, "plan.json"));
+    if (existingPlan) {
+      emitEvent(sessionDir, { type: "decision.consumed", phase: "SPEC_READY", data: { decision: "approve", mergedPlan: true } });
+      updateLedger(sessionDir, (ledger) =>
+        applyDecision(ledger, { id: `d-${decision.seq}`, gate: "spec", decision: "approve", note: decision.note, phase: "SPEC_READY" }),
+      );
+      const stepCount = (existingPlan.steps || []).length;
+      const overCap = isPlanStepCountOverCap(stepCount, (config.deliveryConfig && config.deliveryConfig.budgets) || {});
+      if (overCap) {
+        emitEvent(sessionDir, {
+          type: "plan.step_count.warning",
+          phase: "SPEC_READY",
+          data: { stepCount, maxPlanSteps: config.deliveryConfig.budgets.maxPlanSteps },
+        });
+      }
+      const approved = smNext(state.state, "decision.approve");
+      emitEvent(sessionDir, { type: "phase.transition", phase: "SPEC_READY", data: { to: approved.to } });
+      return {
+        newState: {
+          ...state,
+          mergedPlanPending: false,
+          state: approved.to,
+          awaiting: {
+            gate: GATES[approved.to] || "plan",
+            ...(overCap
+              ? {
+                  warnings: [
+                    `This plan has ${stepCount} steps against a budget of ${config.deliveryConfig.budgets.maxPlanSteps}. ` +
+                      `Each step is a separate full-context agent turn, so this is the largest single driver of session cost.`,
+                  ],
+                }
+              : {}),
+          },
+        },
+        newPacket,
+      };
+    }
+    // The flag said a merged plan existed and the artifact does not. Fall
+    // through to a normal PLAN turn rather than trusting the flag — a missing
+    // artifact is a reason to do the work, not to skip it.
+    state = { ...state, mergedPlanPending: false };
+  }
+
+  state = maybeRotateAtPhaseBoundary({ sessionDir, state, packet: newPacket, deliveryConfig: config.deliveryConfig, phase: "plan" });
   const forbiddenPaths = (newPacket.constraints && newPacket.constraints.forbiddenPaths) || [];
   const setup = await getGuardedHandle({
     sessionDir,
@@ -2239,13 +3287,25 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
   }
   const handle = setup.handle;
   let working = persistNewDriverRef(sessionDir, state, withDriverRef(state, handle));
-  const { texts: ownerMessages, lastSeq } = drainMessages(sessionDir, working);
+  const { texts: drainedMessages, lastSeq } = drainMessages(sessionDir, working);
+  // DLV-32: PLAN can now raise its own question (returnTo:"SPEC_READY",
+  // above) — the owner's answer must reach the RETRY of this exact turn
+  // when SPEC_READY is re-approved, or answering it would be dropped the
+  // same way BUILDING/REVIEWING's answers used to be.
+  const ownerMessages = [...(working.pendingGuidance || []), ...drainedMessages];
+  working = { ...working, pendingGuidance: [] };
+  const planContext = phaseContextPolicy(newPacket, "plan", { repoRoot, deliveryConfig: config.deliveryConfig });
   const prompt = buildPlanPrompt({
     packet: newPacket,
     approvalNote: decision.note || "",
-    skillPaths: skillPaths(newPacket),
+    skillPaths: planContext.skillPaths,
+    includeDoctrine: planContext.includeDoctrine,
+    // DLV-55: state the ceiling to the planner instead of only warning about it
+    // after the plan is already written and the money already committed.
+    maxPlanSteps: (config.deliveryConfig && config.deliveryConfig.budgets && config.deliveryConfig.budgets.maxPlanSteps) || null,
     ownerMessages,
   });
+  recordContextManifest(sessionDir, newPacket, "plan", planContext, formatTurnId((working.turnCounter || 0) + 1), prompt);
   const tc = turnContext({ state, packet: newPacket, deliveryConfig: config.deliveryConfig });
   const turn = await runGuardedTurn({
     sessionDir,
@@ -2260,6 +3320,7 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
     takeSnapshot: config.takeSnapshot,
     forbiddenPaths,
     effort: phaseEffort(state, newPacket, "plan"),
+    maxTurns: packetMaxInternalTurns(newPacket),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
@@ -2278,7 +3339,8 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
   );
   if (!turn.ok) return { newState: blockFrom(sessionDir, working, "SPEC_READY", turn), newPacket };
 
-  working = { ...working, usage: accumulateUsage(working, "plan", turn.usage) };
+  working = { ...working, usage: accumulateUsage(working, "plan", turn.usageV2, turn.usage.costUsd) };
+  working = withContextOccupancy(working, "plan", turn.usageV2, tc.windowTokens);
   let plan;
   try {
     plan = parsePlanOutput(turn.finalText);
@@ -2287,14 +3349,38 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
   }
   writeArtifactJson(sessionDir, "plan.json", plan);
   writeArtifactText(sessionDir, "plan.md", renderPlanMd(plan));
-  updateLedger(sessionDir, (ledger) => applyPlan(ledger, plan));
+  // DLV-32: applyPlan also raises a ledger-tracked question per
+  // plan.openQuestions entry now — direct call (not updateLedger) so the
+  // returned questionIds can be threaded into awaiting.questions below,
+  // matching how DISCOVERY's applySpec call already works.
+  const planLedger = applyPlan(loadLedger(sessionDir), plan, { turnId: turn.turnId });
+  writeLedger(sessionDir, planLedger.ledger);
 
-  // Advisory only (BUD-11: a 1-file test task was decomposed into 10 build
-  // steps, multiplying full-context turn establishes for no benefit) — each
-  // step is still a separate BUILDING turn, so this doesn't block the plan,
-  // it just gives the owner visibility at the plan gate.
+  if ((plan.openQuestions || []).length) {
+    const result = smNext(working.state, "question.raised");
+    const questions = plan.openQuestions.map((q, i) => ({ text: q.text, id: planLedger.questionIds[i] }));
+    emitEvent(sessionDir, { type: "question.raised", phase: "SPEC_READY", data: { questions } });
+    // returnTo: SPEC_READY, not "PLAN" — there is no bare PLAN state; the
+    // plan turn runs inside consuming a SPEC_READY "approve" decision, so
+    // resuming means landing back on that same gate (re-armed below by
+    // consumeQuestionDecision's GATES lookup) for the owner to approve
+    // again with the answer now available via pendingGuidance.
+    return {
+      newState: { ...working, state: result.to, awaiting: { gate: "question", returnTo: "SPEC_READY", questions } },
+      newPacket,
+    };
+  }
+
+  // Backstop for the step budget now stated in the PLAN prompt itself (DLV-55's
+  // `renderPlanStepBudget`) — each step is a separate full-context BUILDING
+  // turn, so an over-budget plan is the single biggest predictor of a session
+  // overrunning its cap. Still not a hard block: the owner may legitimately
+  // want a long plan, and blocking would strand the session. But it no longer
+  // lives only in the event log — it rides on `awaiting` so it is unmissable at
+  // the plan gate, which is the last moment it can be acted on for free.
   const stepCount = (plan.steps || []).length;
-  if (isPlanStepCountOverCap(stepCount, (config.deliveryConfig && config.deliveryConfig.budgets) || {})) {
+  const overStepCap = isPlanStepCountOverCap(stepCount, (config.deliveryConfig && config.deliveryConfig.budgets) || {});
+  if (overStepCap) {
     emitEvent(sessionDir, {
       type: "plan.step_count.warning",
       phase: "SPEC_READY",
@@ -2305,7 +3391,25 @@ async function consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot
   const result = smNext(working.state, "decision.approve");
   emitEvent(sessionDir, { type: "phase.transition", phase: "SPEC_READY", data: { to: result.to } });
   return {
-    newState: { ...working, state: result.to, awaiting: { gate: GATES[result.to] || "plan" } },
+    newState: {
+      ...working,
+      state: result.to,
+      awaiting: {
+        gate: GATES[result.to] || "plan",
+        // DLV-55: surfaced on the gate the owner is actually looking at, not
+        // buried in events.ndjson.
+        ...(overStepCap
+          ? {
+              warnings: [
+                `This plan has ${stepCount} steps against a budget of ${config.deliveryConfig.budgets.maxPlanSteps}. ` +
+                  `Each step is a separate full-context agent turn (~$0.10-0.19 measured), so this is the largest ` +
+                  `single driver of session cost. Reject and ask for fewer steps if any of them only re-verify the ` +
+                  `spec or describe manual checks.`,
+              ],
+            }
+          : {}),
+      },
+    },
     newPacket,
   };
 }
@@ -2320,7 +3424,13 @@ function consumePlanDecision({ sessionDir, state, decision }) {
     return {
       ...state,
       state: result.to,
-      awaiting: null,
+      // DLV-53: a rejected plan now lands back on the SPEC gate (see
+      // state-machine.mjs), so the gate has to be re-armed rather than cleared —
+      // `awaiting: null` on a gate state leaves the session parked with nothing
+      // asking the owner for anything. Approving here runs a fresh PLAN turn,
+      // which is what "revise the plan" means; the rejection note rides along as
+      // guidance so that turn actually sees why the last plan was refused.
+      awaiting: GATES[result.to] ? { gate: GATES[result.to], reason: "plan-rejected" } : null,
       pendingGuidance: [...(state.pendingGuidance || []), decision.note].filter(Boolean),
     };
   }
@@ -2340,19 +3450,39 @@ function consumePlanDecision({ sessionDir, state, decision }) {
       phase: "PLAN_READY",
     }),
   );
+  // DLV-7: scope lock. What the owner just approved — the AC list and the union
+  // of every step's declared paths — is frozen here, and BUILDING is checked
+  // against it. Without this, the plan is a document the build phase is free to
+  // ignore in either direction: BUD-11 both sprawled past it (25 files) and
+  // silently descoped inside it (5 hooks of the 72 occurrences), and neither
+  // showed up until a human read the build log.
+  const scopeLock = buildScopeLock({ plan, spec: readJsonIfExists(artifactPath(sessionDir, "spec.json")) });
+  emitEvent(sessionDir, {
+    type: "scope.locked",
+    phase: "PLAN_READY",
+    data: { paths: scopeLock.paths.length, acs: scopeLock.acceptanceCriteriaIds.length, steps: scopeLock.stepIds.length },
+  });
+
   return {
     ...state,
     state: result.to,
     awaiting: null,
+    scopeLock,
     build: { mode: "plan", stepIndex: 0, totalSteps: (plan.steps || []).length },
   };
 }
 
 async function handleBuilding({ sessionDir, state, packet, driver, repoRoot, config }) {
+  state = maybeRotateAtPhaseBoundary({ sessionDir, state, packet, deliveryConfig: config.deliveryConfig, phase: "building" });
   const build = state.build || { mode: "fix", stepIndex: 0, totalSteps: 1 };
   const handle = await getHandle({ driver, state, packet, repoRoot, mode: "build", phase: "building" });
   let working = withDriverRef(state, handle);
-  const { texts: ownerMessages, lastSeq } = drainMessages(sessionDir, working);
+  const { texts: drainedMessages, lastSeq } = drainMessages(sessionDir, working);
+  // DLV-32: pendingGuidance used to be read only by handleDiscovery — an
+  // answer to a question raised during BUILDING (or, since D6, a UAT
+  // rejection note) was written but never reached the next BUILDING prompt.
+  const ownerMessages = [...(working.pendingGuidance || []), ...drainedMessages];
+  working = { ...working, pendingGuidance: [] };
 
   let stepId;
   let description = "";
@@ -2365,16 +3495,29 @@ async function handleBuilding({ sessionDir, state, packet, driver, repoRoot, con
     stepId = `fix-${working.fixLoop || 0}`;
   }
 
+  // DLV-8: the one piece of replayed tool output the runner itself injects. A
+  // 48-error typecheck dump is not merely long — it is re-sent to the model on
+  // every internal turn that follows it, so its cost is multiplied by the whole
+  // fix turn. Bounded head-and-tail, with a pointer to the full report.
   const priorValidationExcerpt =
     build.mode === "fix"
-      ? excerptFromValidation(readJsonIfExists(artifactPath(sessionDir, "validation.json")))
+      ? boundReplayedOutput(
+          excerptFromValidation(readJsonIfExists(artifactPath(sessionDir, "validation.json"))),
+          (config.deliveryConfig && config.deliveryConfig.context && config.deliveryConfig.context.maxReplayedOutputChars) || undefined,
+        )
       : "";
+  const buildingContext = phaseContextPolicy(packet, "building", { repoRoot, deliveryConfig: config.deliveryConfig });
   const prompt = buildBuildingPrompt({
     packet,
     stepId,
     priorValidationExcerpt,
+    // Always true today (BUILDING writes code, so house rules bind here in
+    // every lane) — passed explicitly so the one phase that must never lose
+    // the doctrine pointer says so at the call site rather than by omission.
+    includeDoctrine: buildingContext.includeDoctrine,
     ownerMessages,
   });
+  recordContextManifest(sessionDir, packet, "building", buildingContext, formatTurnId((working.turnCounter || 0) + 1), prompt);
   const tc = turnContext({ state, packet, deliveryConfig: config.deliveryConfig });
   const turn = await runGuardedTurn({
     sessionDir,
@@ -2389,6 +3532,7 @@ async function handleBuilding({ sessionDir, state, packet, driver, repoRoot, con
     takeSnapshot: config.takeSnapshot,
     forbiddenPaths: (packet.constraints && packet.constraints.forbiddenPaths) || [],
     effort: phaseEffort(state, packet, "building"),
+    maxTurns: packetMaxInternalTurns(packet),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
@@ -2404,8 +3548,74 @@ async function handleBuilding({ sessionDir, state, packet, driver, repoRoot, con
   working = withRecordedWorkspaceChanges(working, turn.changedPaths || []);
   if (!turn.ok) return blockFrom(sessionDir, working, "BUILDING", turn);
 
+  working = { ...working, usage: accumulateUsage(working, "building", turn.usageV2, turn.usage.costUsd) };
+  working = withContextOccupancy(working, "building", turn.usageV2, tc.windowTokens);
+
+  // DLV-7: scope expansion is an owner decision, not a build-time liberty.
+  // Only ever evaluated against a lock that actually declared paths — a plan
+  // whose steps named none has nothing to expand beyond, and inventing a
+  // boundary from an empty list would block every such session.
+  const escaped = pathsOutsideScope(turn.changedPaths || [], working.scopeLock);
+  if (escaped.length) {
+    const result = smNext(working.state, "question.raised");
+    const id = `q-scope-${turn.turnId || "building"}`;
+    const questionText =
+      `This step wrote ${escaped.length} file(s) outside the scope the approved plan declared: ${escaped.join(", ")}. ` +
+      `The plan locked: ${(working.scopeLock.paths || []).join(", ")}. ` +
+      "Approve the expansion (answer to continue, the files stay as written), or cancel and re-plan with the real scope. " +
+      "The workspace is NOT rolled back either way.";
+    const ledger = applyQuestionRaised(loadLedger(sessionDir), {
+      id,
+      phase: "BUILDING",
+      source: "runner",
+      text: questionText,
+      kind: "blocking",
+      evidence: { turnId: turn.turnId, seq: null },
+    });
+    writeLedger(sessionDir, ledger);
+    emitEvent(sessionDir, {
+      type: "scope.expanded",
+      phase: "BUILDING",
+      data: { outside: escaped, locked: working.scopeLock.paths || [], stepId },
+    });
+    appendBuildLog(sessionDir, stepId, description, turn.finalText);
+    return {
+      ...working,
+      state: result.to,
+      // The step is NOT advanced: answering returns to this same step, which
+      // has already written its files, so re-running it is idempotent-ish and
+      // re-doing the work is the agent's own call from the build log.
+      awaiting: { gate: "question", returnTo: "BUILDING", reason: "scope-expanded", questions: [{ text: questionText, id }] },
+    };
+  }
+
+  // DLV-32: BUILDING has no structured output contract to add an
+  // openQuestions field to (buildBuildingPrompt's doc comment on
+  // BLOCKING_QUESTION_MARKER explains why) — a required-format sentinel
+  // line is the lower-risk equivalent. `state.build` (stepIndex etc.) is
+  // deliberately left untouched: returnTo:"BUILDING" resumes the SAME step
+  // once answered, with the answer now available via pendingGuidance,
+  // rather than skipping ahead as if the step had completed.
+  const trimmedFinal = (turn.finalText || "").trim();
+  if (trimmedFinal.startsWith(BLOCKING_QUESTION_MARKER)) {
+    const questionText = trimmedFinal.slice(BLOCKING_QUESTION_MARKER.length).trim() || "(no question text provided)";
+    const result = smNext(working.state, "question.raised");
+    const id = `q-${turn.turnId || "building"}-0`;
+    const ledger = applyQuestionRaised(loadLedger(sessionDir), {
+      id,
+      phase: "BUILDING",
+      source: "agent",
+      text: questionText,
+      kind: "blocking",
+      evidence: { turnId: turn.turnId, seq: null },
+    });
+    writeLedger(sessionDir, ledger);
+    const questions = [{ text: questionText, id }];
+    emitEvent(sessionDir, { type: "question.raised", phase: "BUILDING", data: { questions } });
+    return { ...working, state: result.to, awaiting: { gate: "question", returnTo: "BUILDING", questions } };
+  }
+
   appendBuildLog(sessionDir, stepId, description, turn.finalText);
-  working = { ...working, usage: accumulateUsage(working, "building", turn.usage) };
 
   const isLastStep = build.mode === "fix" || build.stepIndex + 1 >= build.totalSteps;
   if (!isLastStep) {
@@ -2444,9 +3654,17 @@ function withRecordedWorkspaceChanges(state, changedPaths = []) {
 async function handleValidating({ sessionDir, state, packet, config }) {
   const runValidation = config.runValidation || runValidationCommands;
   const timeoutMs = config.deliveryConfig && config.deliveryConfig.budgets && config.deliveryConfig.budgets.validationTimeoutMs;
+  // D10/DLV-11: the lane's resolved validation ladder governs which rungs run
+  // and whether "test" runs targeted. Pre-D9 packets carry no `lanePolicy` at
+  // all -- rungs stays null (runValidationCommands' own "run everything"
+  // default), matching every session's behavior before this existed.
+  const ladder = packet.lanePolicy && packet.lanePolicy.validationLadder;
+  const changedFiles = (state.workspace && state.workspace.changedFiles) || [];
   const validation = await runValidation({
     cwd: config.repoRoot,
     timeoutMs,
+    rungs: ladder ? ladder.rungs : null,
+    targetedFiles: ladder && ladder.targetedTest && changedFiles.length ? changedFiles : null,
     onEvent: (e) => emitEvent(sessionDir, { ...e, phase: "VALIDATING" }),
   });
   const baseline = state.workspace && state.workspace.baselineValidation;
@@ -2463,6 +3681,21 @@ async function handleValidating({ sessionDir, state, packet, config }) {
     phase: "VALIDATING",
     data: { ok: validation.ok, passes, delta: verdict ? verdict.commandDeltas : null },
   });
+
+  // DLV-10: VALIDATING is where claims are confirmed or reverted. Re-feeding
+  // the *existing* rows as claims re-runs each one against the validation
+  // result that just landed — so an AC marked `met` on the strength of a
+  // passing test suite is demoted the moment that suite goes red, instead of
+  // staying green because it was green once. This is the BUD-11 shape exactly:
+  // "✅ COMPLETED" in the build log over a red typecheck.
+  state = withReconciledAcceptance(
+    sessionDir,
+    state,
+    (state.acceptance || []).map((row) => ({ id: row.id, status: row.status, evidence: row.evidence })),
+    config.repoRoot,
+    null,
+    "VALIDATING",
+  );
 
   if (passes) {
     if (!validation.ok) {
@@ -2482,12 +3715,14 @@ async function handleValidating({ sessionDir, state, packet, config }) {
   });
   if (result.to === "BLOCKED") {
     emitEvent(sessionDir, { type: "error.fatal", phase: "VALIDATING", data: { reason: "fix loop exhausted" } });
-    return {
+    const blocked = {
       ...state,
       state: result.to,
       awaiting: { gate: "blocked", returnTo: "BUILDING" },
       lastError: { phase: "VALIDATING", message: "fix loop exhausted" },
     };
+    writeFinishPackage(sessionDir, blocked, packet, "fix-loop-exhausted");
+    return blocked;
   }
   return {
     ...state,
@@ -2499,9 +3734,13 @@ async function handleValidating({ sessionDir, state, packet, config }) {
 }
 
 async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, config }) {
+  state = maybeRotateAtPhaseBoundary({ sessionDir, state, packet, deliveryConfig: config.deliveryConfig, phase: "reviewing" });
   const handle = await getHandle({ driver, state, packet, repoRoot, mode: "readonly", phase: "review" });
   let working = withDriverRef(state, handle);
-  const { texts: ownerMessages, lastSeq } = drainMessages(sessionDir, working);
+  const { texts: drainedMessages, lastSeq } = drainMessages(sessionDir, working);
+  // DLV-32: see the matching comment in handleBuilding.
+  const ownerMessages = [...(working.pendingGuidance || []), ...drainedMessages];
+  working = { ...working, pendingGuidance: [] };
   const prompt = buildSelfReviewPrompt({ packet, ownerMessages });
   const tc = turnContext({ state, packet, deliveryConfig: config.deliveryConfig });
   const turn = await runGuardedTurn({
@@ -2517,6 +3756,7 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
     takeSnapshot: config.takeSnapshot,
     forbiddenPaths: (packet.constraints && packet.constraints.forbiddenPaths) || [],
     effort: phaseEffort(state, packet, "review"),
+    maxTurns: packetMaxInternalTurns(packet),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
@@ -2534,7 +3774,40 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
   const review = JSON.parse(turn.finalText);
   writeArtifactJson(sessionDir, "review-self.json", review);
   writeArtifactText(sessionDir, "review-self.md", renderReviewMd(review));
-  working = { ...working, usage: accumulateUsage(working, "reviewing", turn.usage) };
+  working = { ...working, usage: accumulateUsage(working, "reviewing", turn.usageV2, turn.usage.costUsd) };
+  working = withContextOccupancy(working, "reviewing", turn.usageV2, tc.windowTokens);
+  // DLV-10: the review turn may claim AC coverage (its output schema is
+  // permissive, so this is a voluntary field the prompt asks for). Claims are
+  // reconciled here on exactly the same terms as everywhere else.
+  if ((review.acceptanceCriteria || []).length) {
+    working = withReconciledAcceptance(sessionDir, working, review.acceptanceCriteria, repoRoot, turn.turnId, "REVIEWING");
+  }
+
+  // DLV-32: REVIEWING's output schema is permissive ({type:"object"}, no
+  // required fields) — an openQuestions array is a voluntary extra field the
+  // prompt now asks for, not a schema addition. REVIEWING is a
+  // runner-dispatched state (in the phase-dispatch table below), not a
+  // gate, so returnTo:"REVIEWING" needs no gate re-arming — same as
+  // DISCOVERY's existing question flow.
+  if ((review.openQuestions || []).length) {
+    const result = smNext(working.state, "question.raised");
+    let ledger = loadLedger(sessionDir);
+    const questions = review.openQuestions.map((q, i) => {
+      const id = `q-${turn.turnId || ledger.rev}-${i}`;
+      ledger = applyQuestionRaised(ledger, {
+        id,
+        phase: "REVIEWING",
+        source: "agent",
+        text: q.text,
+        kind: "blocking",
+        evidence: { turnId: turn.turnId, seq: null },
+      });
+      return { text: q.text, id };
+    });
+    writeLedger(sessionDir, ledger);
+    emitEvent(sessionDir, { type: "question.raised", phase: "REVIEWING", data: { questions } });
+    return { ...working, state: result.to, awaiting: { gate: "question", returnTo: "REVIEWING", questions } };
+  }
 
   if (review.verdict === "BLOCK") {
     const result = smNext(working.state, "reviews.blocking", {
@@ -2543,12 +3816,14 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
     });
     if (result.to === "BLOCKED") {
       emitEvent(sessionDir, { type: "error.fatal", phase: "REVIEWING", data: { reason: "review fix loop exhausted" } });
-      return {
+      const blocked = {
         ...working,
         state: result.to,
         awaiting: { gate: "blocked", returnTo: "BUILDING" },
         lastError: { phase: "REVIEWING", message: "review fix loop exhausted" },
       };
+      writeFinishPackage(sessionDir, blocked, packet, "fix-loop-exhausted");
+      return blocked;
     }
     return {
       ...working,
@@ -2561,10 +3836,20 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
 
   // PASS / PASS_WITH_NOTES — atomically assemble the UAT package (doc 3 §2: no
   // intermediate state exists between REVIEWING and UAT_READY).
+  working = maybeRotateAtPhaseBoundary({ sessionDir, state: working, packet, deliveryConfig: config.deliveryConfig, phase: "uat" });
   const uatHandle = await getHandle({ driver, state: working, packet, repoRoot, mode: "readonly", phase: "review" });
   working = withDriverRef(working, uatHandle);
-  const priorArtifactPaths = ["artifacts/spec.md", "artifacts/plan.md", "artifacts/validation-report.md", "artifacts/review-self.md"];
-  const uatPrompt = buildUatPrompt({ packet, priorArtifactPaths, ownerMessages: [] });
+  // DLV-32: this second turn within the same handler call used to hardcode
+  // ownerMessages:[] — any owner message or leftover guidance was silently
+  // dropped rather than merely rare. Drain fresh (cursor already advanced by
+  // the review turn above) and carry through any pendingGuidance, matching
+  // every other turn-producing site.
+  const { texts: uatDrainedMessages, lastSeq: uatLastSeq } = drainMessages(sessionDir, working);
+  const uatOwnerMessages = [...(working.pendingGuidance || []), ...uatDrainedMessages];
+  working = { ...working, pendingGuidance: [], messagesProcessed: uatLastSeq };
+  // DLV-8: buildUatPrompt derives session-relative artifact paths from
+  // `packet` itself when priorArtifactPaths is omitted — see prompts.mjs.
+  const uatPrompt = buildUatPrompt({ packet, ownerMessages: uatOwnerMessages });
   const uatTc = turnContext({ state: working, packet, deliveryConfig: config.deliveryConfig });
   const uatTurn = await runGuardedTurn({
     sessionDir,
@@ -2579,6 +3864,7 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
     takeSnapshot: config.takeSnapshot,
     forbiddenPaths: (packet.constraints && packet.constraints.forbiddenPaths) || [],
     effort: phaseEffort(working, packet, "review"),
+    maxTurns: packetMaxInternalTurns(packet),
     retryDelayMs: config.retryDelayMs,
     sleep: config.sleep,
     abortPollMs: config.abortPollMs,
@@ -2589,12 +3875,67 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
   if (!uatTurn.ok) return blockFrom(sessionDir, working, "REVIEWING", uatTurn);
 
   const uat = JSON.parse(uatTurn.finalText);
+  working = { ...working, usage: accumulateUsage(working, "uat", uatTurn.usageV2, uatTurn.usage.costUsd) };
+  working = withContextOccupancy(working, "uat", uatTurn.usageV2, uatTc.windowTokens);
+
+  // DLV-10: the UAT package's own per-AC claims are the last and most
+  // consequential ones — they are what the owner reads when deciding to accept.
+  working = withReconciledAcceptance(sessionDir, working, uat.acceptanceCriteria || [], repoRoot, uatTurn.turnId, "UAT_PREP");
   assembleUatPackage(sessionDir, uat, packet, working);
-  working = { ...working, usage: accumulateUsage(working, "uat", uatTurn.usage) };
+
+  // The UAT_READY precondition: every AC met or waived. This is additive — no
+  // new state, just a check on an existing transition (doc 3 §2). An unmet AC
+  // becomes an owner decision rather than a silent pass, which is precisely
+  // what BUD-11 lacked: ACs 6/7/8 unmet, UAT assembled anyway, nothing said.
+  const unsatisfied = unsatisfiedAcceptance(working.acceptance);
+  if (unsatisfied.length) {
+    const smResult = smNext(working.state, "question.raised");
+    const id = `q-acceptance-${uatTurn.turnId || "uat"}`;
+    const rows = (working.acceptance || []).filter((r) => unsatisfied.includes(r.id));
+    const questionText =
+      `${unsatisfied.length} acceptance criteria are not met and cannot be evidenced: ` +
+      `${rows.map((r) => `${r.id} (${r.status})`).join(", ")}. ` +
+      `See .delivery/sessions/${packet.sessionId}/artifacts/acceptance.md for the full matrix. ` +
+      'Answer "waive" to waive them and proceed to UAT, or send the session back to BUILDING to finish them.';
+    const ledger = applyQuestionRaised(loadLedger(sessionDir), {
+      id,
+      phase: "UAT_PREP",
+      source: "runner",
+      text: questionText,
+      kind: "blocking",
+      evidence: { turnId: uatTurn.turnId, seq: null },
+    });
+    writeLedger(sessionDir, ledger);
+    emitEvent(sessionDir, {
+      type: "acceptance.incomplete",
+      phase: "REVIEWING",
+      data: { unsatisfied, summary: summarizeAcceptance(working.acceptance) },
+    });
+    return {
+      ...working,
+      state: smResult.to,
+      awaiting: {
+        gate: "question",
+        returnTo: "REVIEWING",
+        reason: "acceptance-incomplete",
+        unsatisfiedAcceptance: unsatisfied,
+        questions: [{ text: questionText, id }],
+      },
+    };
+  }
 
   const result = smNext(working.state, "reviews.pass");
   emitEvent(sessionDir, { type: "phase.transition", phase: "REVIEWING", data: { to: result.to } });
-  return { ...working, state: result.to, awaiting: { gate: GATES[result.to] || "uat" } };
+  return {
+    ...working,
+    state: result.to,
+    awaiting: {
+      gate: GATES[result.to] || "uat",
+      // Attached only when a matrix exists (see the matching note on the spec
+      // gate): a session whose spec declared no ACs has nothing to summarize.
+      ...((working.acceptance || []).length ? { acceptance: summarizeAcceptance(working.acceptance) } : {}),
+    },
+  };
 }
 
 function assembleUatPackage(sessionDir, uat, packet, state) {
@@ -2638,19 +3979,42 @@ function consumeUatDecision({ sessionDir, state, decision }) {
     awaiting: null,
     fixLoop: (state.fixLoop || 0) + 1,
     build: { mode: "fix", stepIndex: 0, totalSteps: 1 },
+    // DLV-32: a UAT rejection note used to land only in the ledger — the
+    // fix-loop BUILDING prompt that follows carried the prior validation
+    // excerpt but never the owner's actual reason for rejecting. Same
+    // pendingGuidance mechanism the spec/plan reject paths already use.
+    pendingGuidance: [...(state.pendingGuidance || []), decision.note ? `Owner rejected UAT: ${decision.note}` : null].filter(Boolean),
   };
 }
 
-function consumeAcceptedDecision({ sessionDir, state, decision, repoRoot, readHead }) {
+function consumeAcceptedDecision({ sessionDir, state, decision, packet, repoRoot, readHead }) {
   const result = smNext(state.state, "decision.shipped");
   const shippedHead = readHead(repoRoot);
   emitEvent(sessionDir, { type: "decision.consumed", phase: "ACCEPTED", data: { decision: "shipped", head: shippedHead } });
   void decision;
-  return { ...state, state: result.to, awaiting: null, shippedHead };
+  let next = { ...state, state: result.to, awaiting: null, shippedHead };
+  if (isTerminal(next.state)) {
+    runTranscriptGapCheck(sessionDir, next);
+    next = withRawTranscriptLinkage(next, packet, repoRoot);
+    writeFinishPackage(sessionDir, next, packet, "shipped");
+  }
+  return next;
 }
 
 function consumeQuestionDecision({ sessionDir, state, decision }) {
-  const returnTo = (state.awaiting && state.awaiting.returnTo) || "DISCOVERY";
+  // DLV-10: waiving the acceptance gate resumes at UAT_READY, not at the
+  // REVIEWING that raised it. The UAT package was already assembled before the
+  // check ran, so returning to REVIEWING would re-run a review turn AND a UAT
+  // turn — two full-context turns (~$0.10-0.19 each, measured) to re-produce
+  // artifacts that already exist on disk — purely to get past a decision the
+  // owner has just made. Any answer other than "waive" keeps the original
+  // returnTo, which is the "go and finish them" branch.
+  const wantsWaiver =
+    !!state.awaiting &&
+    state.awaiting.reason === "acceptance-incomplete" &&
+    typeof decision.answer === "string" &&
+    /^\s*waive\b/i.test(decision.answer);
+  const returnTo = wantsWaiver ? "UAT_READY" : (state.awaiting && state.awaiting.returnTo) || "DISCOVERY";
   const result = smNext(state.state, "decision.answer", { returnTo });
   emitEvent(sessionDir, { type: "decision.consumed", phase: "NEEDS_DECISION", data: { answer: decision.answer } });
   const answerNote = decision.answer ? `Owner's answer to the open question: ${decision.answer}` : null;
@@ -2669,10 +4033,36 @@ function consumeQuestionDecision({ sessionDir, state, decision }) {
     }
     writeLedger(sessionDir, ledger);
   }
+  // DLV-32: PLAN can now raise a question too (returnTo: "SPEC_READY"), and
+  // SPEC_READY is a GATE state, not a runner-dispatched one — landing there
+  // with awaiting:null would strand the session with no visible gate panel,
+  // the exact DLV-29 failure shape. Re-arm the gate exactly like
+  // consumeBlockedDecision already does for its own returnTo; DISCOVERY
+  // (the only other returnTo today) isn't in GATES, so this is a no-op for
+  // every pre-existing question flow.
+  const awaiting = GATES[returnTo] ? { gate: GATES[returnTo] } : null;
+
+  // DLV-10: the audited waiver itself. Recorded against the owner
+  // (`updatedBy: "owner"`), never against a turn, so the matrix always shows
+  // who let an unmet criterion through.
+  let acceptance = state.acceptance;
+  if (wantsWaiver) {
+    acceptance = waiveAcceptance(state.acceptance, state.awaiting.unsatisfiedAcceptance || null, {
+      note: decision.answer,
+    });
+    writeAcceptanceArtifacts(sessionDir, acceptance);
+    emitEvent(sessionDir, {
+      type: "acceptance.waived",
+      phase: "NEEDS_DECISION",
+      data: { ids: state.awaiting.unsatisfiedAcceptance || [], summary: summarizeAcceptance(acceptance) },
+    });
+  }
+
   return {
     ...state,
     state: result.to,
-    awaiting: null,
+    awaiting,
+    ...(acceptance ? { acceptance } : {}),
     pendingGuidance: [...(state.pendingGuidance || []), answerNote].filter(Boolean),
   };
 }
@@ -2698,10 +4088,16 @@ function consumeBlockedDecision({ sessionDir, state, decision }) {
   return base;
 }
 
-function consumeCancel({ sessionDir, state }) {
+function consumeCancel({ sessionDir, state, packet, repoRoot }) {
   const result = smNext(state.state, "decision.cancel");
   emitEvent(sessionDir, { type: "decision.consumed", phase: state.state, data: { decision: "cancel" } });
-  return { ...state, state: result.to, awaiting: null };
+  let next = { ...state, state: result.to, awaiting: null };
+  if (isTerminal(next.state)) {
+    runTranscriptGapCheck(sessionDir, next);
+    next = withRawTranscriptLinkage(next, packet, repoRoot);
+    writeFinishPackage(sessionDir, next, packet, "cancelled");
+  }
+  return next;
 }
 
 // ---- the single-unit-of-work step (exported for tests) ----
@@ -2711,7 +4107,8 @@ function consumeCancel({ sessionDir, state }) {
  * persist the result. Returns `{didWork: boolean, state}`.
  * @param {{sessionDir:string, driver:object, repoRoot:string, runValidation?:Function,
  *   retryDelayMs?:number, sleep?:Function, takeSnapshot?:Function, readHead?:Function,
- *   deliveryConfig?:object, createDriver?:Function, abortPollMs?:number}} options
+ *   deliveryConfig?:object, createDriver?:Function, abortPollMs?:number,
+ *   providerDriverCache?:(Map|null)}} options
  */
 export async function advanceSession(options) {
   const { sessionDir, driver, repoRoot } = options;
@@ -2732,6 +4129,18 @@ export async function advanceSession(options) {
   };
   let state = loadState(sessionDir);
   const packet = loadPacket(sessionDir);
+
+  // DLV-34: every phase turn below must run on the driver that owns
+  // `state.driver.ref`. After a handoff that is no longer the process-level
+  // driver `runLoop` built from `packet.agent`.
+  const activeDriver = resolveProviderDriver({
+    driver,
+    state,
+    packet,
+    sessionDir,
+    createDriver: options.createDriver,
+    cache: options.providerDriverCache || null,
+  });
 
   // A malformed owner config must be visible in the session timeline as well
   // as the dashboard banner. Record each distinct failure once while safely
@@ -2761,6 +4170,7 @@ export async function advanceSession(options) {
     // handoff switches to, without touching the global driver registry
     // (which would leak across tests in the same file/worker).
     createDriver: options.createDriver,
+    providerDriverCache: options.providerDriverCache || null,
   });
   if (drained.didWork) {
     const persisted = persistState(sessionDir, drained.state);
@@ -2778,7 +4188,7 @@ export async function advanceSession(options) {
   // truly immediate regardless of phase or pause state.
   const pendingCancel = pendingDecisions(sessionDir, state.decisionsProcessed || 0).find((d) => d.decision === "cancel");
   if (pendingCancel) {
-    const newState = { ...consumeCancel({ sessionDir, state }), decisionsProcessed: pendingCancel.seq };
+    const newState = { ...consumeCancel({ sessionDir, state, packet, repoRoot }), decisionsProcessed: pendingCancel.seq };
     const persisted = persistState(sessionDir, newState);
     return { didWork: true, state: persisted };
   }
@@ -2833,14 +4243,14 @@ export async function advanceSession(options) {
     let newState;
     try {
       if (state.state === "SPEC_READY") {
-        const r = await consumeSpecDecision({ sessionDir, state, packet, driver, repoRoot, decision, config });
+        const r = await consumeSpecDecision({ sessionDir, state, packet, driver: activeDriver, repoRoot, decision, config });
         newState = r.newState;
       } else if (state.state === "PLAN_READY") {
         newState = consumePlanDecision({ sessionDir, state, decision });
       } else if (state.state === "UAT_READY") {
         newState = consumeUatDecision({ sessionDir, state, decision });
       } else if (state.state === "ACCEPTED") {
-        newState = consumeAcceptedDecision({ sessionDir, state, decision, repoRoot, readHead: config.readHead });
+        newState = consumeAcceptedDecision({ sessionDir, state, decision, packet, repoRoot, readHead: config.readHead });
       } else if (state.state === "NEEDS_DECISION") {
         newState = consumeQuestionDecision({ sessionDir, state, decision });
       } else {
@@ -2873,13 +4283,13 @@ export async function advanceSession(options) {
   if (state.state === "SELECTED") {
     newState = await handleSelected({ sessionDir, state, config });
   } else if (state.state === "DISCOVERY") {
-    newState = await handleDiscovery({ sessionDir, state, packet, driver, repoRoot, config });
+    newState = await handleDiscovery({ sessionDir, state, packet, driver: activeDriver, repoRoot, config });
   } else if (state.state === "BUILDING") {
-    newState = await handleBuilding({ sessionDir, state, packet, driver, repoRoot, config });
+    newState = await handleBuilding({ sessionDir, state, packet, driver: activeDriver, repoRoot, config });
   } else if (state.state === "VALIDATING") {
     newState = await handleValidating({ sessionDir, state, packet, config });
   } else if (state.state === "REVIEWING") {
-    newState = await handleReviewing({ sessionDir, state, packet, driver, repoRoot, config });
+    newState = await handleReviewing({ sessionDir, state, packet, driver: activeDriver, repoRoot, config });
   } else {
     throw new RunnerError(`advanceSession: no handler for state "${state.state}"`);
   }
@@ -2961,7 +4371,7 @@ function parkSessionOnCrash(sessionDir, staleState, err) {
   if (!ACTIVE_STATES.includes(state.state)) return null;
   try {
     const result = smNext(state.state, "error.fatal");
-    return persistState(sessionDir, {
+    const parked = {
       ...state,
       state: result.to,
       awaiting: { gate: "blocked", returnTo: state.state },
@@ -2970,7 +4380,17 @@ function parkSessionOnCrash(sessionDir, staleState, err) {
         message: `The runner hit an unexpected error and parked the session: ${message}. Full stack in runner.log. Retry re-runs the ${state.state} phase.`,
         errorKind: "runner-crash",
       },
-    });
+    };
+    // DLV-12: the crash path is the one most likely to leave a half-written
+    // workspace with no explanation, so it is the one that most needs the
+    // ownership manifest and recovery guidance. `writeFinishPackage` swallows
+    // its own errors, so it cannot turn a contained crash into an uncontained one.
+    try {
+      writeFinishPackage(sessionDir, parked, loadPacket(sessionDir), "runner-crash");
+    } catch {
+      /* the packet may itself be unreadable — parking still matters more */
+    }
+    return persistState(sessionDir, parked);
   } catch {
     return null;
   }
@@ -2998,6 +4418,13 @@ export async function runLoop(options) {
   } = options;
 
   const driver = createDriverDefault(driverKind, driverOptions);
+  // DLV-34: one instance per provider, for this process's lifetime. Before a
+  // handoff this holds only `driverKind`; after one it also holds the provider
+  // the session moved to, so `advanceSession` keeps resuming each ref on the
+  // driver that created it rather than rebuilding one per tick (which would
+  // discard the SDK-side conversation identity `resume` depends on).
+  const providerDriverCache = new Map();
+  if (driver && driver.kind) providerDriverCache.set(driver.kind, driver);
   writeHeartbeat(sessionDir);
   if (options.resumed) {
     const sealed = reconcileCrashedTurns(sessionDir);
@@ -3040,6 +4467,7 @@ export async function runLoop(options) {
           retryDelayMs,
           sleep,
           takeSnapshot,
+          providerDriverCache,
         }));
       } catch (err) {
         // Last-resort containment: an unexpected throw from any phase handler
@@ -3094,6 +4522,7 @@ export function defaultFakeScript(packet) {
       riskFlags: [],
       rollbackSketch: "git checkout -- <changed files>",
       noNewDeps: true,
+      openQuestions: [],
     }),
     usage: { input: 600, cachedInput: 0, output: 500, costUsd: null },
   };

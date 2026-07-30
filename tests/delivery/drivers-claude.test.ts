@@ -1,13 +1,23 @@
-import { homedir } from "node:os";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
-import { DriverAbortedError, DriverError, createDriver, listRegisteredDrivers } from "../../scripts/delivery/drivers/driver.mjs";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  DriverAbortedError,
+  DriverError,
+  createDriver,
+  listRegisteredDrivers,
+  readObservedUsage,
+} from "../../scripts/delivery/drivers/driver.mjs";
 // Importing claude.mjs self-registers "claude" into the shared driver registry.
 import {
   bridgeAbortSignal,
   buildCanUseTool,
   buildSessionOptions,
   assertNeverBypass,
+  computeRawTranscriptPointer,
+  containsDbWriteEscape,
   containsSecretReference,
   createClaudeDriver,
   extractUsage,
@@ -22,6 +32,7 @@ import {
   mapSdkMessageToEvents,
   mapSdkMessageToRawRecords,
   PREFLIGHT_TIMEOUT_MS,
+  resolveRawTranscriptPath,
   withOutputSchema,
   withSessionIdentity,
 } from "../../scripts/delivery/drivers/claude.mjs";
@@ -298,6 +309,38 @@ describe("containsSecretReference", () => {
   });
 });
 
+describe("containsDbWriteEscape (D7, Hard Rule #26 — no back door to the live Supabase project)", () => {
+  it("flags the supabase CLI", () => {
+    expect(containsDbWriteEscape("supabase db push")).toBe(true);
+    expect(containsDbWriteEscape("npx supabase migration up")).toBe(true);
+  });
+
+  it("flags psql", () => {
+    expect(containsDbWriteEscape("psql $DATABASE_URL -c 'select 1'")).toBe(true);
+  });
+
+  it("flags curl/wget against a Supabase REST/RPC endpoint", () => {
+    expect(containsDbWriteEscape("curl https://abcd.supabase.co/rest/v1/accounts")).toBe(true);
+    expect(containsDbWriteEscape("wget https://abcd.supabase.co/rpc/some_fn")).toBe(true);
+  });
+
+  it("does not flag curl against an unrelated URL", () => {
+    expect(containsDbWriteEscape("curl https://example.com/health")).toBe(false);
+  });
+
+  it("flags references to the service-role key or supabaseAdmin()", () => {
+    expect(containsDbWriteEscape("echo $SUPABASE_SERVICE_ROLE_KEY")).toBe(true);
+    expect(containsDbWriteEscape("echo $NEXT_SUPABASE_SERVICE_ROLE_KEY")).toBe(true);
+    expect(containsDbWriteEscape("node -e \"require('./admin').supabaseAdmin()\"")).toBe(true);
+  });
+
+  it("does not flag ordinary commands", () => {
+    expect(containsDbWriteEscape("pnpm test")).toBe(false);
+    expect(containsDbWriteEscape("git status")).toBe(false);
+    expect(containsDbWriteEscape("npx tsc --noEmit")).toBe(false);
+  });
+});
+
 describe("buildCanUseTool", () => {
   it("denies a git-mutating Bash command", async () => {
     const canUseTool = buildCanUseTool({ cwd: CWD, sessionDir: SESSION_DIR });
@@ -340,6 +383,18 @@ describe("buildCanUseTool", () => {
     const result = await canUseTool("Write", { file_path: "src/features/accounts/index.ts" }, {});
     expect(result.behavior).toBe("allow");
   });
+
+  it("denies a Bash command that reaches the live Supabase project (D7)", async () => {
+    const canUseTool = buildCanUseTool({ cwd: CWD, sessionDir: SESSION_DIR });
+    const result = await canUseTool("Bash", { command: "supabase db push" }, {});
+    expect(result.behavior).toBe("deny");
+  });
+
+  it("allows an ordinary Bash command", async () => {
+    const canUseTool = buildCanUseTool({ cwd: CWD, sessionDir: SESSION_DIR });
+    const result = await canUseTool("Bash", { command: "pnpm test" }, {});
+    expect(result.behavior).toBe("allow");
+  });
 });
 
 describe("assertNeverBypass", () => {
@@ -357,11 +412,14 @@ describe("buildSessionOptions", () => {
     expect(() => buildSessionOptions({ mode: "bogus", cwd: CWD })).toThrow(DriverError);
   });
 
-  it("build mode: acceptEdits, full toolset, canUseTool present, never bypass", () => {
+  it("build mode: acceptEdits, write-capable allowlist, canUseTool present, never bypass", () => {
     const options = buildSessionOptions({ mode: "build", cwd: CWD });
     expect(options.permissionMode).toBe("acceptEdits");
-    expect(options.tools).toBeUndefined();
-    expect(options.disallowedTools).toEqual([]);
+    // DLV-33: the build branch is allowlisted now — an unbounded toolset cost
+    // definition tokens on every model call for tools BUILDING never uses.
+    expect(options.tools).toEqual(expect.arrayContaining(["Read", "Grep", "Glob", "Edit", "Write", "Bash"]));
+    expect(options.tools).not.toContain("WebSearch");
+    expect(options.tools).not.toContain("Task");
     expect(typeof options.canUseTool).toBe("function");
     expect(options.permissionMode).not.toBe("bypassPermissions");
   });
@@ -371,6 +429,36 @@ describe("buildSessionOptions", () => {
     expect(options.permissionMode).toBe("default");
     expect(options.tools).toEqual(["Read", "Grep", "Glob"]);
     expect(options.disallowedTools).toEqual(expect.arrayContaining(["Write", "Edit", "Bash", "NotebookEdit"]));
+  });
+
+  // DLV-33: `options.tools` is the built-in allowlist only and never filtered
+  // MCP tools — a readonly DISCOVERY turn still carried 16 Gmail tools it could
+  // not use. Both modes must refuse MCP at the config layer and the call layer.
+  it("both modes: MCP servers are not loaded and MCP tools cannot be called", () => {
+    for (const mode of ["build", "readonly"] as const) {
+      const options = buildSessionOptions({ mode, cwd: CWD });
+      expect(options.strictMcpConfig).toBe(true);
+      expect(options.disallowedTools).toContain("mcp__*");
+    }
+  });
+
+  it("both modes: skill descriptions are kept out of the system prompt", () => {
+    for (const mode of ["build", "readonly"] as const) {
+      // Prompts reference skills by path, so an empty list drops the injected
+      // descriptions without dropping the agent's ability to read the files.
+      expect(buildSessionOptions({ mode, cwd: CWD }).skills).toEqual([]);
+    }
+  });
+
+  // DLV-36: settingSources:[] disables filesystem settings loading, which is
+  // also the only way to stop the SDK auto-loading CLAUDE.md (the SDK
+  // requires 'project' in this list to load it at all) — prompts.mjs's
+  // DOCTRINE_POINTER references it by path instead so house-rule awareness
+  // survives without the ~10.2K-token forced load on every model call.
+  it("both modes: filesystem settings (incl. CLAUDE.md auto-load) are not loaded", () => {
+    for (const mode of ["build", "readonly"] as const) {
+      expect(buildSessionOptions({ mode, cwd: CWD }).settingSources).toEqual([]);
+    }
   });
 
   it("passes model and effort through when given", () => {
@@ -383,6 +471,17 @@ describe("buildSessionOptions", () => {
     const options = buildSessionOptions({ mode: "build", cwd: CWD });
     expect(options.model).toBeUndefined();
     expect(options.effort).toBeUndefined();
+  });
+
+  it("D9/DLV-6: passes maxTurns through when given a positive number", () => {
+    const options = buildSessionOptions({ mode: "build", cwd: CWD, maxTurns: 8 });
+    expect(options.maxTurns).toBe(8);
+  });
+
+  it("D9/DLV-6: omits maxTurns when not given, or given a non-positive/non-numeric value", () => {
+    expect(buildSessionOptions({ mode: "build", cwd: CWD }).maxTurns).toBeUndefined();
+    expect(buildSessionOptions({ mode: "build", cwd: CWD, maxTurns: 0 }).maxTurns).toBeUndefined();
+    expect(buildSessionOptions({ mode: "build", cwd: CWD, maxTurns: null }).maxTurns).toBeUndefined();
   });
 });
 
@@ -419,6 +518,56 @@ describe("withSessionIdentity", () => {
 
   it("throws without a ref id", () => {
     expect(() => withSessionIdentity({}, { id: "" })).toThrow(DriverError);
+  });
+});
+
+describe("resolveRawTranscriptPath / computeRawTranscriptPointer (D12/DLV-17 raw SDK linkage)", () => {
+  const cleanupDirs: string[] = [];
+  afterEach(() => {
+    while (cleanupDirs.length) {
+      const dir = cleanupDirs.pop();
+      if (dir) rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("slugifies cwd the same way Claude Code's own ~/.claude/projects/ layout does", () => {
+    // Empirically confirmed against this machine's real layout before wiring
+    // this in: drive-letter colon and every path separator become "-".
+    const path = resolveRawTranscriptPath("C:\\Users\\me\\project", "sess-1", { homeDir: "C:\\Users\\me" });
+    expect(path).toBe(join("C:\\Users\\me", ".claude", "projects", "C--Users-me-project", "sess-1.jsonl"));
+  });
+
+  it("resolves exists:false, no size/hash, when the file is not on disk (aged out or never existed)", () => {
+    const homeDir = mkdtempSync(join(tmpdir(), "claude-home-"));
+    cleanupDirs.push(homeDir);
+    const pointer = computeRawTranscriptPointer("/repo", "sess-missing", { homeDir });
+    expect(pointer.exists).toBe(false);
+    expect(pointer.sizeBytes).toBeNull();
+    expect(pointer.sha256).toBeNull();
+    expect(pointer.path).toContain("sess-missing.jsonl");
+  });
+
+  it("resolves exists:true with a real size and sha256 when the file is present", () => {
+    const homeDir = mkdtempSync(join(tmpdir(), "claude-home-"));
+    cleanupDirs.push(homeDir);
+    const slugDir = join(homeDir, ".claude", "projects", "-repo");
+    mkdirSync(slugDir, { recursive: true });
+    const content = '{"type":"assistant"}\n{"type":"user"}\n';
+    writeFileSync(join(slugDir, "sess-1.jsonl"), content);
+
+    const pointer = computeRawTranscriptPointer("/repo", "sess-1", { homeDir });
+    expect(pointer.exists).toBe(true);
+    expect(pointer.sizeBytes).toBe(Buffer.byteLength(content));
+    expect(pointer.sha256).toBe(createHash("sha256").update(content).digest("hex"));
+  });
+
+  it("resolves exists:false without a sessionId, never throws", () => {
+    const pointer = computeRawTranscriptPointer("/repo", null as unknown as string);
+    expect(pointer.exists).toBe(false);
+  });
+
+  it("uses the real homedir() by default (not hardcoded to the test seam)", () => {
+    expect(resolveRawTranscriptPath("/repo", "sess-1")).toBe(join(homedir(), ".claude", "projects", "-repo", "sess-1.jsonl"));
   });
 });
 
@@ -492,25 +641,27 @@ describe("mapSdkMessageToRawRecords (DW-1 full-fidelity transcript)", () => {
 
   it("maps assistant text to an untruncated assistant.text record", () => {
     expect(mapSdkMessageToRawRecords(assistantText("hello, full fidelity"))).toEqual([
-      { kind: "assistant.text", text: "hello, full fidelity" },
+      { kind: "assistant.text", text: "hello, full fidelity", parentToolUseId: null },
     ]);
   });
 
   it("maps a thinking block to an assistant.reasoning record", () => {
-    const message = { type: "assistant", message: { content: [{ type: "thinking", thinking: "working through it" }] } };
-    expect(mapSdkMessageToRawRecords(message)).toEqual([{ kind: "assistant.reasoning", text: "working through it" }]);
+    const message = { type: "assistant", message: { content: [{ type: "thinking", thinking: "working through it" }] }, parent_tool_use_id: null };
+    expect(mapSdkMessageToRawRecords(message)).toEqual([{ kind: "assistant.reasoning", text: "working through it", parentToolUseId: null }]);
   });
 
   it("maps tool_use to a tool.use record with the full (untruncated) input object", () => {
     expect(mapSdkMessageToRawRecords(assistantToolUse("Read", { file_path: "a.ts" }))).toEqual([
-      { kind: "tool.use", tool: "Read", input: { file_path: "a.ts" } },
+      { kind: "tool.use", tool: "Read", input: { file_path: "a.ts" }, parentToolUseId: null },
     ]);
   });
 
   it("maps user tool_result to a tool.result record", () => {
-    expect(mapSdkMessageToRawRecords(userToolResult("42"))).toEqual([{ kind: "tool.result", isError: false, output: "42" }]);
+    expect(mapSdkMessageToRawRecords(userToolResult("42"))).toEqual([
+      { kind: "tool.result", isError: false, output: "42", parentToolUseId: null },
+    ]);
     expect(mapSdkMessageToRawRecords(userToolResult("boom", true))).toEqual([
-      { kind: "tool.result", isError: true, output: "boom" },
+      { kind: "tool.result", isError: true, output: "boom", parentToolUseId: null },
     ]);
   });
 
@@ -523,6 +674,29 @@ describe("mapSdkMessageToRawRecords (DW-1 full-fidelity transcript)", () => {
   it("ignores unrecognized message types", () => {
     expect(mapSdkMessageToRawRecords({ type: "rate_limit_event" })).toEqual([]);
     expect(mapSdkMessageToRawRecords(null as never)).toEqual([]);
+  });
+
+  // D12/DLV-40: Task stays banned, but parent_tool_use_id is recorded
+  // unconditionally anyway -- cheap insurance that a future subagent is
+  // traceable by construction rather than retrofitted after the fact.
+  it("D12/DLV-40: propagates a real parent_tool_use_id onto every record it emits", () => {
+    const assistant = {
+      type: "assistant",
+      message: { content: [{ type: "text", text: "sub-agent text" }] },
+      parent_tool_use_id: "toolu_abc123",
+    };
+    expect(mapSdkMessageToRawRecords(assistant)).toEqual([
+      { kind: "assistant.text", text: "sub-agent text", parentToolUseId: "toolu_abc123" },
+    ]);
+
+    const user = {
+      type: "user",
+      message: { content: [{ type: "tool_result", content: "sub-agent result", is_error: false }] },
+      parent_tool_use_id: "toolu_abc123",
+    };
+    expect(mapSdkMessageToRawRecords(user)).toEqual([
+      { kind: "tool.result", isError: false, output: "sub-agent result", parentToolUseId: "toolu_abc123" },
+    ]);
   });
 });
 
@@ -657,7 +831,10 @@ describe("createClaudeDriver: session lifecycle against a fake SDK", () => {
     await driver.runTurn(handle, "do the build step", {});
     const turnCall = query.mock.calls[0][0];
     expect(turnCall.options.permissionMode).toBe("acceptEdits"); // build mode, not the ref's stale readonly
-    expect(turnCall.options.disallowedTools).toEqual([]);
+    // Write/Edit stay permitted — under the ref's stale readonly they would be disallowed.
+    expect(turnCall.options.disallowedTools).not.toContain("Write");
+    expect(turnCall.options.disallowedTools).not.toContain("Edit");
+    expect(turnCall.options.tools).toContain("Write");
   });
 
   it("resume without an override falls back to the ref's own mode", () => {
@@ -745,9 +922,9 @@ describe("createClaudeDriver: turn mechanics (sessionId vs resume, events, usage
 
     expect(rawRecords).toEqual([
       { kind: "system.init", model: "claude-opus-4-8", permissionMode: "acceptEdits", tools: ["Read", "Write", "Bash"] },
-      { kind: "assistant.text", text: "working" },
-      { kind: "tool.use", tool: "Read", input: { file_path: "a.ts" } },
-      { kind: "tool.result", isError: false, output: "file contents" },
+      { kind: "assistant.text", text: "working", parentToolUseId: null },
+      { kind: "tool.use", tool: "Read", input: { file_path: "a.ts" }, parentToolUseId: null },
+      { kind: "tool.result", isError: false, output: "file contents", parentToolUseId: null },
       { kind: "turn.result", subtype: "success", numTurns: 1, isError: false },
     ]);
   });
@@ -774,6 +951,89 @@ describe("createClaudeDriver: turn mechanics (sessionId vs resume, events, usage
     const seen: unknown[] = [];
     await expect(driver.runTurn(handle, "go", { onEvent: (e: unknown) => seen.push(e) })).rejects.toThrow(/turn failed/);
     expect(seen.length).toBeGreaterThan(0);
+  });
+
+  // DLV-44 regression. The real failure: `error_max_turns` makes the SDK throw
+  // from INSIDE the message loop, so an `established = true` assignment placed
+  // after the loop never ran — and the next attempt therefore re-sent
+  // `sessionId` for a session Claude Code had already written to disk, which
+  // the CLI rejects ("Session ID <uuid> is already in use." -> exit 1) on every
+  // retry forever. Asserting the flag alone would be too weak: this asserts the
+  // *next* call's identity actually switches to `resume`.
+  it("marks the ref established as soon as init is seen, even when the turn then fails (DLV-44)", async () => {
+    const maxTurnsThrow = (async function* () {
+      yield SYSTEM_INIT;
+      yield assistantText("reading docs");
+      throw new Error("Claude Code returned an error result: Reached maximum number of turns (8)");
+    })();
+    const query = vi
+      .fn()
+      .mockReturnValueOnce(asyncGen([resultSuccess()]))
+      .mockReturnValueOnce(maxTurnsThrow)
+      .mockReturnValueOnce(asyncGen([SYSTEM_INIT, resultSuccess({ result: "recovered" })]));
+    const driver = createClaudeDriver({ importSdk: async () => ({ query }) });
+    const handle = await driver.startSession({ cwd: CWD, mode: "readonly" });
+    expect(handle.ref.established).toBe(false);
+
+    await expect(driver.runTurn(handle, "discover")).rejects.toThrow(/maximum number of turns/);
+    expect(handle.ref.established).toBe(true);
+
+    // The retry must CONTINUE the session, never try to create it again.
+    const retry = await driver.runTurn(handle, "discover again");
+    expect(retry.finalText).toBe("recovered");
+    const retryCall = query.mock.calls[2][0];
+    expect(retryCall.options.resume).toBe(handle.ref.id);
+    expect(retryCall.options.sessionId).toBeUndefined();
+  });
+
+  // DLV-43 regression: a turn that dies after the provider answered is not free.
+  it("attaches observed usage to the error when the result subtype is an error (DLV-43)", async () => {
+    const query = vi
+      .fn()
+      .mockReturnValueOnce(asyncGen([resultSuccess()]))
+      .mockReturnValueOnce(
+        asyncGen([
+          SYSTEM_INIT,
+          resultError({
+            total_cost_usd: 0.34,
+            usage: {
+              input_tokens: 7794,
+              output_tokens: 7010,
+              cache_read_input_tokens: 368131,
+              cache_creation_input_tokens: 129817,
+            },
+          }),
+        ]),
+      );
+    const driver = createClaudeDriver({ importSdk: async () => ({ query }) });
+    const handle = await driver.startSession({ cwd: CWD, mode: "readonly" });
+
+    const err = await driver.runTurn(handle, "go").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(DriverError);
+    const observed = readObservedUsage(err);
+    expect(observed).not.toBeNull();
+    expect(observed!.usageV2).toMatchObject({
+      input: 7794,
+      cachedRead: 368131,
+      cacheCreation: 129817,
+      output: 7010,
+    });
+    expect(observed!.usage!.costUsd).toBe(0.34);
+  });
+
+  it("attaches no usage when the query dies before the provider ever answered (DLV-43)", async () => {
+    const query = vi.fn().mockReturnValueOnce(asyncGen([resultSuccess()])).mockReturnValueOnce(
+      (async function* () {
+        throw new Error("Claude Code process exited with code 1");
+      })(),
+    );
+    const driver = createClaudeDriver({ importSdk: async () => ({ query }) });
+    const handle = await driver.startSession({ cwd: CWD, mode: "readonly" });
+
+    const err = await driver.runTurn(handle, "go").catch((e: unknown) => e);
+    // "unknown spend" and "zero spend" must stay distinguishable — a crash
+    // before the first response really did cost nothing.
+    expect(readObservedUsage(err)).toBeNull();
   });
 
   it("wraps a query() iteration failure as a DriverError", async () => {

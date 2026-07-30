@@ -47,28 +47,28 @@ export async function POST(req: NextRequest) {
 
   let totalDeleted = 0;
   const admin = supabaseAdmin();
-  for (const module of targetModules) {
-    if (!module) continue;
+  for (const binModule of targetModules) {
+    if (!binModule) continue;
 
     let query = admin
-      .from(module.table)
+      .from(binModule.table)
       .delete({ count: "exact" })
-      .not(module.deletedAtColumn, "is", null);
+      .not(binModule.deletedAtColumn, "is", null);
 
-    if (module.scope === "user") {
+    if (binModule.scope === "user") {
       query = query.in("user_id", scope.userIds);
-    } else if (module.scope === "household") {
+    } else if (binModule.scope === "household") {
       if (!scope.householdId) continue;
       query = query.eq("household_id", scope.householdId);
     }
 
-    if (module.baseFilter) {
-      query = module.baseFilter(query as any) as any;
+    if (binModule.baseFilter) {
+      query = binModule.baseFilter(query as any) as any;
     }
 
     const { error, count } = await query;
     if (error) {
-      console.error(`[recycle-bin] empty failed for ${module.id}`, error);
+      console.error(`[recycle-bin] empty failed for ${binModule.id}`, error);
       continue;
     }
     totalDeleted += count ?? 0;

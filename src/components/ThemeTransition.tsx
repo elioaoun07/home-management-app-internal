@@ -246,7 +246,7 @@ export default function ThemeTransition({
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    let startTime = performance.now();
+    const startTime = performance.now();
 
     const animate = (currentTime: number) => {
       const elapsed = (currentTime - startTime) / 1000;

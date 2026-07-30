@@ -193,6 +193,14 @@ describe("fake driver: seam v2 (manifest, onRaw, turnMeta, per-turn overrides)",
     expect(handle.ref.effort).toBe("high");
   });
 
+  it("D9/DLV-6: tracks a per-turn maxTurns onto the current ref", () => {
+    const driver = createDriver("fake", { script: { turns: [{ finalText: "a" }] } });
+    const handle = driver.startSession({ cwd: "/repo", mode: "build" });
+    expect(handle.ref.maxTurns).toBeUndefined();
+    driver.runTurn({}, "go", { maxTurns: 8 });
+    expect(handle.ref.maxTurns).toBe(8);
+  });
+
   it("passes v2-shaped usage straight through unchanged", () => {
     const usageV2 = { input: 10, cachedRead: 2, cacheCreation: 1, output: 5, reasoningOutput: 3, costUsd: null };
     const driver = createDriver("fake", { script: { turns: [{ finalText: "done", usage: usageV2 }] } });

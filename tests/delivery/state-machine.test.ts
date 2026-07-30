@@ -138,7 +138,27 @@ describe("gate transitions carry the documented effects", () => {
   });
 
   it("SPEC_READY -> decision.reject -> DISCOVERY (revision loop)", () => {
+    // Rejecting the SPEC does belong in DISCOVERY: there the phase and the
+    // artifact line up — DISCOVERY produces specs.
     expect(next("SPEC_READY", "decision.reject").to).toBe("DISCOVERY");
+  });
+
+  // DLV-53: this used to also return to DISCOVERY, whose prompt asks for a
+  // *spec*, so the effect said `revisePlan` while the destination could only
+  // produce a spec. On s-20260730-104900-9mfu the owner's "re-plan with one
+  // step" note reached the spec phase, the agent's plan-shaped output was
+  // rejected by SPEC_OUTPUT_SCHEMA, and $0.1683 bought nothing — the plan was
+  // never revised and an already-approved spec was needlessly re-authored.
+  it("PLAN_READY -> decision.reject -> SPEC_READY, re-arming the gate that re-runs PLAN (DLV-53)", () => {
+    const r = next("PLAN_READY", "decision.reject");
+    expect(r.to).toBe("SPEC_READY");
+    expect(r.effects).toContain("revisePlan");
+    // Approving from SPEC_READY is what runs a fresh PLAN turn, so the gate has
+    // to be armed or the session parks with nothing asking the owner anything.
+    expect(r.effects).toContain("awaitGate:spec");
+    // The spec is not in question: a rejected plan must never send the session
+    // back to re-author a spec the owner already approved.
+    expect(r.to).not.toBe("DISCOVERY");
   });
 
   it("REVIEWING -> reviews.pass -> UAT_READY opens the uat gate", () => {

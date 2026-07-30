@@ -26,7 +26,7 @@ type ConnectivityState = {
   lastOffline: number;
 };
 
-let state: ConnectivityState = {
+const state: ConnectivityState = {
   online: typeof navigator !== "undefined" ? navigator.onLine : true,
   lastOnline: Date.now(),
   lastOffline: 0,

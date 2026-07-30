@@ -101,6 +101,7 @@ describe("loadConfig", () => {
       maxUsd: 2,
       maxTokens: 2_000_000,
       warnPct: 0.8,
+      maxInternalTurns: 20,
     });
     const configured = loadTestConfig("/root", {
       fs: fakeFsWith({ budgets: { laneDefaults: { standard: { maxUsd: 3, maxTokens: 3_000_000, warnPct: 0.75 } } } }),

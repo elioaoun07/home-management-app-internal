@@ -524,9 +524,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     for (const op of opsToProcess) {
       try {
         // Build the API request based on operation type
-        let url = "/api/hub/messages";
+        const url = "/api/hub/messages";
         let method = "PATCH";
-        let body: Record<string, unknown> = { ...op.payload };
+        const body: Record<string, unknown> = { ...op.payload };
 
         switch (op.type) {
           case "toggle_check":

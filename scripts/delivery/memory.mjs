@@ -17,7 +17,13 @@ export class MemoryError extends Error {}
 
 export const QUESTION_KINDS = Object.freeze(["blocking", "advisory"]);
 export const QUESTION_STATUSES = Object.freeze(["open", "answered", "dismissed", "superseded"]);
-export const QUESTION_SOURCES = Object.freeze(["agent", "owner"]);
+// DLV-7 adds "runner": a question raised by the governance layer itself rather
+// than by the model or the owner — today, the scope-lock expansion check. Worth
+// its own value rather than being filed as "agent": the ledger's whole point is
+// that a future reader can tell who said what, and "the agent asked whether it
+// was allowed to write outside the plan" would be a false account of a check
+// the agent had no part in.
+export const QUESTION_SOURCES = Object.freeze(["agent", "owner", "runner"]);
 
 /**
  * @typedef {{id:string, askedAt:string, phase:(string|null), source:string, text:string,
@@ -101,14 +107,37 @@ export function applySpec(ledger, spec, { itemText, turnId = null, phase = "DISC
 }
 
 /**
- * Record a PLAN phase's risk flags into the ledger's `risks` list.
+ * Record a PLAN phase's risk flags into the ledger's `risks` list, and raise
+ * a blocking question per `plan.openQuestions` entry (DLV-32 — PLAN could
+ * previously only guess or plan around a genuine blocking ambiguity, never
+ * stop and ask; same id scheme + evidence linkage as `applySpec`'s).
+ * Deliberately does NOT touch `ledger.requirements` (unlike `applySpec`) —
+ * a plan has no `acceptanceCriteria` of its own, and overwriting DISCOVERY's
+ * already-seeded requirements with an empty list here would silently wipe
+ * them.
  * @param {Ledger} ledger
- * @param {{riskFlags?:string[]}} plan
- * @returns {Ledger}
+ * @param {{riskFlags?:string[], openQuestions?:{text:string}[]}} plan
+ * @param {{turnId?:string, now?:()=>Date}} [ctx]
+ * @returns {{ledger:Ledger, questionIds:string[]}}
  */
-export function applyPlan(ledger, plan, { now = () => new Date() } = {}) {
+export function applyPlan(ledger, plan, { turnId = null, now = () => new Date() } = {}) {
   const risks = (plan.riskFlags || []).map((flag) => ({ flag, status: "open" }));
-  return bump(ledger, { risks }, { now });
+  const questionIds = [];
+  const newQuestions = (plan.openQuestions || []).map((entry, i) => {
+    const id = `q-${turnId || ledger.rev}-${i}`;
+    questionIds.push(id);
+    return buildQuestion({
+      id,
+      askedAt: now().toISOString(),
+      phase: "PLAN",
+      source: "agent",
+      text: entry.text,
+      kind: "blocking",
+      evidence: turnId ? { turnId, seq: null } : null,
+    });
+  });
+  const nextLedger = bump(ledger, { risks, questions: [...ledger.questions, ...newQuestions] }, { now });
+  return { ledger: nextLedger, questionIds };
 }
 
 /**

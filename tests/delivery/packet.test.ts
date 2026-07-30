@@ -280,6 +280,35 @@ describe("buildPacket", () => {
     expect(packet.flightCheck).toEqual(flightCheck);
   });
 
+  it("D9/DLV-6: persists the resolved lane policy when supplied, omits the key when not", () => {
+    const lanePolicy = {
+      lane: "FAST",
+      tier: "economy",
+      effortByPhase: { discovery: "low", plan: "medium", building: "medium", review: "low" },
+      budget: { maxUsd: 0.5, maxTokens: 500_000, warnPct: 0.8 },
+      maxInternalTurns: 8,
+    };
+    const withPolicy = buildPacket({
+      sessionId: "s-1",
+      agent: "claude",
+      item: baseItem,
+      workspace: baseWorkspace,
+      // buildPacket has no JSDoc @param, so TS infers `lanePolicy`'s type from
+      // its `= null` default alone -- same pre-existing quirk `budget`/
+      // `flightCheck` already hit above; cast through unknown like they would.
+      lanePolicy: lanePolicy as unknown as null,
+    });
+    expect(withPolicy.lanePolicy).toEqual(lanePolicy);
+
+    const withoutPolicy = buildPacket({
+      sessionId: "s-1",
+      agent: "claude",
+      item: baseItem,
+      workspace: baseWorkspace,
+    });
+    expect(withoutPolicy).not.toHaveProperty("lanePolicy");
+  });
+
   it("lets caller-supplied constraints override defaults without dropping the rest", () => {
     const packet = buildPacket({
       sessionId: "s-1",
@@ -290,5 +319,29 @@ describe("buildPacket", () => {
     });
     expect(packet.constraints.maxFixLoops).toBe(1);
     expect(packet.constraints.gitPolicy).toBe("read-only");
+  });
+  // DLV-54: this field was `mode`, defaulting to the bare string "uat" — a name
+  // meaning "session delivery mode" carrying a value that reads as a phase name.
+  // Every phase prompt points the agent at packet.json by path (DLV-8), and on
+  // s-20260730-104900-9mfu the agent reasoned verbatim: "the mode is 'uat',
+  // which means I'm now in the UAT phase, not PLAN" — then emitted UAT-shaped
+  // output during a spec turn. Nothing ever read the field.
+  it("records deliveryMode with a value that cannot be mistaken for a phase (DLV-54)", () => {
+    const packet = buildPacket({
+      sessionId: "s-1",
+      agent: "claude",
+      item: baseItem,
+      workspace: baseWorkspace,
+    });
+    expect(packet.deliveryMode).toBe("uat-gated");
+    // The old field name must be gone, not merely shadowed.
+    expect(packet).not.toHaveProperty("mode");
+    // No field the agent can read may hold a bare phase name as its value.
+    const phaseNames = ["uat", "plan", "spec", "discovery", "building", "reviewing"];
+    for (const [key, value] of Object.entries(packet)) {
+      if (typeof value === "string") {
+        expect(phaseNames, `packet.${key} = "${value}" reads as a phase name`).not.toContain(value.toLowerCase());
+      }
+    }
   });
 });

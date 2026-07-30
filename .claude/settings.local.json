@@ -148,7 +148,17 @@
       "Bash(pnpm atlas *)",
       "mcp__claude_ai_Supabase__list_projects",
       "mcp__claude_ai_Supabase__list_tables",
-      "PowerShell($env:NODE_OPTIONS=\"--max-old-space-size=8192\"; npm run build 2>&1 | Select-String -Pattern \"pm/live|Compiled|Failed|error|✓\" | Select-Object -First 12)"
+      "PowerShell($env:NODE_OPTIONS=\"--max-old-space-size=8192\"; npm run build 2>&1 | Select-String -Pattern \"pm/live|Compiled|Failed|error|✓\" | Select-Object -First 12)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{for\\(const l of d.trim\\(\\).split\\('\\\\n'\\)\\){const t=JSON.parse\\(l\\);console.log\\(t.turnId,t.phase,t.strategy,t.result,'usage=',JSON.stringify\\(t.usage\\),'ctx=',JSON.stringify\\(t.context\\)\\);}}\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(python -c ' *)",
+      "Bash(sort -u -t: -k3)",
+      "Bash(python -)",
+      "Bash(awk 'NR>=93 && NR<=102 {printf \"%d: %s\\\\n\", NR, substr\\($0,1,120\\)}' \"ERA Notes/10 - Project Management/Delivery 10x/4 - Checklist.md\")",
+      "Bash(python \"C:/Users/aoune/AppData/Local/Temp/claude/C--Users-aoune-WebApp-budget-app/9fc69fb8-4324-4df0-bd2f-1b7e69457dbe/scratchpad/pm_update2.py\")",
+      "Bash(python \"C:/Users/aoune/AppData/Local/Temp/claude/C--Users-aoune-WebApp-budget-app/9fc69fb8-4324-4df0-bd2f-1b7e69457dbe/scratchpad/pm_update3.py\")",
+      "Bash(awk 'NR>=102 && NR<=105 {printf \"%d: %s\\\\n\", NR, substr\\($0,1,90\\)}' \"ERA Notes/10 - Project Management/Delivery 10x/1 - Feature State.md\")"
     ]
   }
 }

@@ -29,6 +29,22 @@ const QUOTA_PATTERNS = [
   /\bcredit(?:s)?\b/i,
 ];
 
+// DLV-44: the lane's own `maxInternalTurns` ceiling (D9/DLV-6), hit from
+// inside the SDK. This is emphatically NOT transient — the next attempt sends
+// the same prompt into the same ceiling and dies at the same place, so the
+// generic retry bucket burned two guaranteed-doomed attempts before escalating
+// (s-20260729-121840-pdhx: FAST's cap of 8 against a DISCOVERY prompt whose
+// own mandated reading list is ~8 tool calls before any real work begins).
+// It is also not a provider fault the owner can only wait out, like quota —
+// it is a *sizing* verdict with two real owner actions (raise the lane's cap,
+// or narrow the prompt's mandated reading), which is why it escalates to a
+// decision rather than dead-ending in BLOCKED.
+const MAX_TURNS_PATTERNS = [
+  /maximum number of turns/i,
+  /\bmax_turns\b/i,
+  /\berror_max_turns\b/i,
+];
+
 const AUTH_PATTERNS = [
   /authentication(?:_failed| failed)?/i,
   /\bauth(?:entication)?\b.*(?:fail|invalid|expired|required|unavailable)/i,
@@ -46,7 +62,7 @@ const RESET_TIME_RE = /resets\s+([^,;]+?)(?:$|[.\n])/i;
 /**
  * @param {unknown} err
  * @param {{extraQuotaPatterns?:string[]}} [options]
- * @returns {{kind:"quota"|"auth"|"transient", retryable:boolean, resetsAt:(string|null)}}
+ * @returns {{kind:"quota"|"auth"|"max-turns"|"transient", retryable:boolean, resetsAt:(string|null)}}
  */
 export function classifyTurnError(err, options = {}) {
   const message = String((err && err.message) || err || "");
@@ -58,5 +74,6 @@ export function classifyTurnError(err, options = {}) {
     return { kind: "quota", retryable: false, resetsAt: resetsMatch ? resetsMatch[1].trim() : null };
   }
   if (AUTH_PATTERNS.some((re) => re.test(message))) return { kind: "auth", retryable: false, resetsAt: null };
+  if (MAX_TURNS_PATTERNS.some((re) => re.test(message))) return { kind: "max-turns", retryable: false, resetsAt: null };
   return { kind: "transient", retryable: true, resetsAt: null };
 }

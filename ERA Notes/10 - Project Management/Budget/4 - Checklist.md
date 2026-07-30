@@ -24,6 +24,7 @@ tags:
 ## Now
 
 - [ ] **BUD-11** [TEST] Verify queryConfig cache timings align with API response patterns _(annoyance - S)_
+- [ ] **BUD-14** [TEST] Mobile expense form quick-amount chip: replace the $25 preset with $20 → `src/components/expense/MobileExpenseForm.tsx:1144` _(annoyance - S)_
 
 ## Next
 

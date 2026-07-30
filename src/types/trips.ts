@@ -115,7 +115,10 @@ export interface CreateTripPlaceInput {
   position?: number;
 }
 
-export interface UpdateTripPlaceInput extends Partial<CreateTripPlaceInput> {}
+// An interface that only extends and adds nothing is exactly a type alias, and
+// declaring it as one says so (the interface form also silently allowed
+// declaration merging to widen it from anywhere).
+export type UpdateTripPlaceInput = Partial<CreateTripPlaceInput>;
 
 export interface CreateTripPackingItemInput {
   name: string;

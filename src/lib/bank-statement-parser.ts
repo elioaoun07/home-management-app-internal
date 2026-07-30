@@ -304,7 +304,7 @@ export function parsePDFText(text: string): RawTransaction[] {
 
       if (date) {
         // Get the rest of the line after the date
-        let content = line.substring(dateMatch[0].length).trim();
+        const content = line.substring(dateMatch[0].length).trim();
 
         // Sometimes the description spans multiple lines
         // Collect until we find the numbers

@@ -49,6 +49,28 @@ export const TURN_STRATEGIES = Object.freeze([
   "fork",
 ]);
 
+// D12/DLV-40: role attribution. There are no subagents (Task stays banned),
+// but the orchestrator plays a different *role* in each phase, and neither
+// raw records nor turn entries said which — every turn carried `provider`/
+// `model`/`effort` but nothing distinguishing a DISCOVERY turn from a
+// REVIEWING one at the record level (only `phase`, and only on turn entries,
+// not raw records). One map is the single source of truth, consumed by both
+// the runner (stamping records/turns) and the UI (ConversationView.jsx,
+// TimelineView.jsx, /pm/live) for a consistent color/icon/label everywhere.
+export const PHASE_ROLES = Object.freeze({
+  DISCOVERY: "Discovery",
+  PLAN: "Planner",
+  BUILDING: "Builder",
+  REVIEWING: "Reviewer",
+  UAT_PREP: "UAT",
+  HANDOFF: "Handoff-verifier",
+});
+
+/** The role label for a runGuardedTurn `phase` string, or `null` for an unrecognized/future phase. */
+export function roleForPhase(phase) {
+  return PHASE_ROLES[phase] || null;
+}
+
 // ---- turn id / file naming ----
 
 /** Zero-padded 4-digit turn id from a 1-based counter, e.g. 7 -> "0007". */
@@ -186,7 +208,7 @@ export function appendRecordText(currentNdjson, record) {
 /**
  * Build one turns.ndjson entry (the per-turn usage/strategy/outcome record —
  * the atomic source of truth for usage aggregation, see usage.mjs).
- * @param {{turnId:string, phase?:(string|null), agent?:(string|null), provider?:(string|null),
+ * @param {{turnId:string, phase?:(string|null), role?:(string|null), agent?:(string|null), provider?:(string|null),
  *   model?:(string|null), effort?:(string|null), startedAt:string, durationMs?:(number|null),
  *   promptFile:string, recordsFile:string, records?:number, usage?:(object|null),
  *   costUsd?:(number|null), costEstUsd?:(number|null), pricingVersion?:(string|null),
@@ -197,6 +219,7 @@ export function appendRecordText(currentNdjson, record) {
 export function buildTurnEntry({
   turnId,
   phase = null,
+  role = null,
   agent = null,
   provider = null,
   model = null,
@@ -228,6 +251,7 @@ export function buildTurnEntry({
     v: 1,
     turnId,
     phase,
+    role,
     agent,
     provider,
     model,
@@ -293,6 +317,30 @@ export function appendTurnEntryText(currentNdjson, entry) {
 export function findOrphanedTurnIds(closedTurnIds, promptTurnIds) {
   const closed = new Set(closedTurnIds || []);
   return (promptTurnIds || []).filter((id) => !closed.has(id)).sort();
+}
+
+/**
+ * D12/DLV-17 transcript integrity: which allocated turn ids have **no trace
+ * at all** — neither a closed turns.ndjson entry nor even a prompt file.
+ * Different from `findOrphanedTurnIds` (a prompt exists but the turn never
+ * closed — a runner crash mid-turn, reconciled on `--resume`): this catches
+ * the whdv postmortem's actual failure shape, where `turnCounter` reached 23
+ * but turns 0013–0018 and 0021 had nothing on disk whatsoever — a silent
+ * gap `findOrphanedTurnIds` cannot see, because it can only compare against
+ * files that exist.
+ * @param {number} turnCounter - state.turnCounter (highest allocated turn id)
+ * @param {string[]} closedTurnIds
+ * @param {string[]} promptTurnIds
+ * @returns {string[]} sorted missing turn ids, e.g. ["0013","0014",...]
+ */
+export function findMissingTurnIds(turnCounter, closedTurnIds, promptTurnIds) {
+  const known = new Set([...(closedTurnIds || []), ...(promptTurnIds || [])]);
+  const missing = [];
+  for (let i = 1; i <= (turnCounter || 0); i++) {
+    const id = formatTurnId(i);
+    if (!known.has(id)) missing.push(id);
+  }
+  return missing;
 }
 
 /** Build the `result:"crashed"` seal entry for an orphaned turn on resume. */

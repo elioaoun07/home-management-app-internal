@@ -61,8 +61,30 @@ describe("applySpec", () => {
 
 describe("applyPlan", () => {
   it("records risk flags as open risks", () => {
-    const ledger = applyPlan(emptyLedger(), { riskFlags: ["db-migration", "security"] }, { now: FIXED_NOW });
+    const { ledger } = applyPlan(emptyLedger(), { riskFlags: ["db-migration", "security"] }, { now: FIXED_NOW });
     expect(ledger.risks).toEqual([{ flag: "db-migration", status: "open" }, { flag: "security", status: "open" }]);
+  });
+
+  // DLV-32: PLAN could previously only guess or plan around a genuine
+  // blocking ambiguity, never stop and ask — same mechanism as applySpec's.
+  it("raises a blocking question per openQuestions entry with a deterministic id, phased PLAN", () => {
+    const { ledger, questionIds } = applyPlan(
+      emptyLedger(),
+      { riskFlags: [], openQuestions: [{ text: "Should the migration be backward-compatible?" }] },
+      { turnId: "0005", now: FIXED_NOW },
+    );
+    expect(questionIds).toEqual(["q-0005-0"]);
+    expect(ledger.questions).toHaveLength(1);
+    expect(ledger.questions[0]).toMatchObject({
+      id: "q-0005-0", text: "Should the migration be backward-compatible?", kind: "blocking", source: "agent",
+      status: "open", phase: "PLAN", evidence: { turnId: "0005", seq: null },
+    });
+  });
+
+  it("never touches ledger.requirements (unlike applySpec — a plan has no acceptanceCriteria of its own)", () => {
+    const seeded = applySpec(emptyLedger(), { acceptanceCriteria: [{ id: "AC1", text: "works" }] }, { now: FIXED_NOW }).ledger;
+    const { ledger } = applyPlan(seeded, { riskFlags: [] }, { now: FIXED_NOW });
+    expect(ledger.requirements).toEqual([{ id: "AC1", text: "works", source: { artifact: "spec.json" } }]);
   });
 });
 

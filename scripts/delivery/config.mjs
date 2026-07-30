@@ -19,6 +19,14 @@ export const SCHEMA_VERSION = 1;
 /** @typedef {{inPerMTok:number, cachedReadPerMTok:number, cacheWritePerMTok:number, outPerMTok:number}} ModelPricing */
 /** @typedef {{id:string, label?:string, contextWindow?:number, pricing?:ModelPricing}} ModelEntry */
 /** @typedef {{defaultModel:(string|null), efforts:string[], models:ModelEntry[]}} ProviderConfig */
+/**
+ * The resolved delivery config — owner `.delivery/config.json` deep-merged over
+ * `DEFAULT_CONFIG`, so it always has the full default shape. Derived from the
+ * defaults object rather than restated by hand, which keeps it correct as
+ * sections are added (`loadConfig` previously returned a bare `object`, so every
+ * consumer that read `.providers` / `.budgets` off it type-errored).
+ * @typedef {typeof DEFAULT_CONFIG} DeliveryConfig
+ */
 
 export const DEFAULT_CONFIG = Object.freeze({
   schemaVersion: SCHEMA_VERSION,
@@ -53,6 +61,23 @@ export const DEFAULT_CONFIG = Object.freeze({
     recentTailTurns: 3,
     digestMode: "mechanical",
     forkAfterPhaseRetries: 2,
+    // DLV-8: per-lane, per-phase budgets for the *mandated reading list* the
+    // runner hands a turn (campaign docs + skills + the doctrine pointer).
+    // `null` on any phase means "no budget" and keeps today's behaviour, which
+    // is why STANDARD/DEEP are null throughout: a lane that exists to be
+    // thorough should not be silently thinned. FAST is budgeted because that is
+    // what FAST is for — and the numbers come from the measurement in DLV-45,
+    // where DISCOVERY's mandated reading alone was ~33,151 tokens before the
+    // agent could look at the one line it was asked to change.
+    laneBudgets: Object.freeze({
+      fast: Object.freeze({ discovery: 12_000, plan: 8_000, building: 12_000, review: 8_000 }),
+      standard: Object.freeze({ discovery: null, plan: null, building: null, review: null }),
+      deep: Object.freeze({ discovery: null, plan: null, building: null, review: null }),
+    }),
+    // Bound on replayed tool output the runner itself injects (today: the prior
+    // validation excerpt on a fix-loop BUILDING turn). Unbounded, a 48-error
+    // typecheck dump is re-sent on every internal turn that follows it.
+    maxReplayedOutputChars: 8000,
   }),
   transcript: Object.freeze({
     maxRecordBytes: 65536,
@@ -62,11 +87,98 @@ export const DEFAULT_CONFIG = Object.freeze({
     maxAutoRetries: 2,
     extraQuotaPatterns: Object.freeze([]),
   }),
+  // D10/DLV-11: risk-based validation ladder — which validation commands
+  // (VALIDATION_COMMANDS in run-session.mjs) actually run for a given lane,
+  // and whether the "test" rung runs the full suite or a targeted subset
+  // (`vitest related <changed files>`, via --passWithNoTests so a docs-only
+  // change with zero related tests still passes rather than reads as a
+  // failure). A rung not in a lane's `rungs` list is never silently absent —
+  // `runValidationCommands` records it as an explicit `skipped: true` result,
+  // and `renderValidationReportMd` labels it SKIPPED, distinct from PASS/FAIL,
+  // so an agent's own free-text build-log narrative can never contradict the
+  // runner's own record the way it did in the whdv postmortem ("lint
+  // (skipped)" under a "✅ COMPLETED" claim, with no governed trace of why).
+  // STANDARD/DEEP keep today's unconditional full ladder; FAST is the only
+  // lane that actually trades rigor for speed, and only for lint + full-suite
+  // test — typecheck always runs in every lane, it is cheap and correctness-
+  // critical enough that skipping it is never worth the saved time.
+  validation: Object.freeze({
+    laneLadder: Object.freeze({
+      fast: Object.freeze({ rungs: Object.freeze(["typecheck", "test"]), targetedTest: true }),
+      standard: Object.freeze({ rungs: Object.freeze(["typecheck", "lint", "test"]), targetedTest: false }),
+      deep: Object.freeze({ rungs: Object.freeze(["typecheck", "lint", "test"]), targetedTest: false }),
+    }),
+  }),
+  // DLV-7: the scope contract. `thresholds` turn the spec's own *measured*
+  // scope estimate into a size class the runner computes (never one the agent
+  // asserts about itself), so a packet whose owner-declared effort is S can be
+  // caught the moment DISCOVERY measures an L-sized change — the tripwire BUD-11
+  // never had, where an S "verify" item became a 25-file / 72-occurrence program
+  // at SPEC time with nothing objecting.
+  //
+  // Read as upper bounds, inclusive: a change is S while it stays within S's
+  // limits on EVERY axis, M while within M's, otherwise L. Sized off the two
+  // real sessions on record — BUD-14 (1 file, 1 occurrence, 1 module) is
+  // unambiguously S; BUD-11's measured 25 files / 72 occurrences is
+  // unambiguously L.
+  scope: Object.freeze({
+    thresholds: Object.freeze({
+      S: Object.freeze({ files: 2, occurrences: 5, modules: 1 }),
+      M: Object.freeze({ files: 8, occurrences: 25, modules: 3 }),
+    }),
+    // Advisory by default, exactly like maxPlanSteps: a mismatch renders a
+    // decomposition proposal at the SPEC gate where the owner can act on it for
+    // free, but never hard-blocks — a legitimately large item wrongly filed as S
+    // should cost one acknowledgment, not a stranded session.
+    requireAcknowledgment: true,
+  }),
+  // DLV-62: the pipeline's *shape*, as distinct from its cost dials.
+  //
+  // FAST changes five dials — model, per-phase effort, budget cap, context
+  // reading list, validation ladder — and changes nothing about the shape: a
+  // one-line change carries the same three always-on capabilities and the same
+  // three approval gates a DEEP multi-file refactor does. For BUD-14 the
+  // pipeline *was* the cost: $0.5302 across four turns produced a spec and a
+  // rejected plan and zero lines of code.
+  //
+  // The owner's decision (2026-07-30) was options (a)+(b): keep DLV-59's triage
+  // gate refusing trivial items entry, and on FAST merge DISCOVERY and PLAN
+  // into ONE turn when the item names a single file. Option (c) — collapsing
+  // the SPEC and PLAN approvals into one — was NOT authorized, because it is
+  // the one option the standing "3 gates always" rule forbids without amending
+  // that rule in writing.
+  //
+  // So: **all three gates still fire, in every lane, always.** This halves the
+  // *traversals* (two full-context turns become one), never the oversight. The
+  // single-file condition is the safety rail: a change confined to one file the
+  // item itself names is one whose spec and plan cannot meaningfully diverge.
+  pipeline: Object.freeze({
+    mergeDiscoveryPlanOnFastSingleFile: true,
+  }),
   budgets: Object.freeze({
+    // maxInternalTurns (D9/DLV-6) caps the SDK's own `Options.maxTurns` — the
+    // number of internal assistant<->tool round-trips *one* `query()` call may
+    // take before the SDK ends it itself. Without a cap this is unbounded, which
+    // is how a single BUILDING runner-turn silently became ~40 model calls
+    // (Cost Anatomy §5). Advisory defaults, tunable per lane in this file —
+    // FAST is deliberately tight (a trivial change should not need 20+ internal
+    // round-trips), DEEP deliberately loose (a real multi-file build needs room
+    // to edit/test/re-edit without hitting the ceiling mid-fix).
+    // DLV-45: FAST was 8, and that number was set against a DISCOVERY prompt
+    // whose own mandated reading list (4 campaign docs + every attached skill +
+    // CLAUDE.md) already cost ~8 tool calls before any real work — so the lane
+    // could not finish its first phase. Measured on the s-20260729-121840-pdhx
+    // forensics: the phase needed 13 tool calls, of which 7 were ceremony now
+    // dropped for this lane (see run-session.mjs's phaseContextPolicy), leaving
+    // ~6 for the actual work. 12 keeps FAST meaningfully tighter than STANDARD's
+    // 20 while giving the worst phase ~2x headroom instead of a guaranteed
+    // ceiling hit — and a ceiling hit is now a clean owner decision rather than
+    // a crash loop (DLV-44), so this is a cost/latency knob again, not a
+    // correctness cliff.
     laneDefaults: Object.freeze({
-      fast: Object.freeze({ maxUsd: 0.5, maxTokens: 500_000, warnPct: 0.8 }),
-      standard: Object.freeze({ maxUsd: 2, maxTokens: 2_000_000, warnPct: 0.8 }),
-      deep: Object.freeze({ maxUsd: 5, maxTokens: 5_000_000, warnPct: 0.8 }),
+      fast: Object.freeze({ maxUsd: 0.5, maxTokens: 500_000, warnPct: 0.8, maxInternalTurns: 12 }),
+      standard: Object.freeze({ maxUsd: 2, maxTokens: 2_000_000, warnPct: 0.8, maxInternalTurns: 20 }),
+      deep: Object.freeze({ maxUsd: 5, maxTokens: 5_000_000, warnPct: 0.8, maxInternalTurns: 40 }),
     }),
     warnSessionUsd: 10,
     maxTurnBudgetUsd: null,
@@ -115,7 +227,28 @@ function mergeDeep(base, override) {
   return out;
 }
 
-const ROOT_KEYS = new Set(["schemaVersion", "pricingVersion", "providers", "effortMap", "routing", "context", "transcript", "errors", "budgets"]);
+const ROOT_KEYS = new Set(["schemaVersion", "pricingVersion", "providers", "effortMap", "routing", "context", "transcript", "errors", "budgets", "validation", "scope", "pipeline"]);
+const PIPELINE_KEYS = new Set(["mergeDiscoveryPlanOnFastSingleFile"]);
+const CONTEXT_KEYS = new Set([
+  "rotateAtTokens",
+  "hardCeilingPct",
+  "recentTailTurns",
+  "digestMode",
+  "forkAfterPhaseRetries",
+  "laneBudgets",
+  "maxReplayedOutputChars",
+]);
+const CONTEXT_PHASE_KEYS = new Set(["discovery", "plan", "building", "review"]);
+const SCOPE_KEYS = new Set(["thresholds", "requireAcknowledgment"]);
+const SCOPE_CLASS_KEYS = new Set(["S", "M"]);
+const SCOPE_AXIS_KEYS = new Set(["files", "occurrences", "modules"]);
+// Mirrors run-session.mjs's VALIDATION_COMMANDS keys. Duplicated rather than
+// imported — config.mjs must stay import-free of run-session.mjs, which
+// already imports config.mjs (would-be circular), and this vocabulary is
+// small and stable enough that duplication is cheaper than a shared module.
+const VALIDATION_RUNG_KEYS = new Set(["typecheck", "lint", "test"]);
+const VALIDATION_LANES = new Set(["fast", "standard", "deep"]);
+const VALIDATION_LANE_KEYS = new Set(["rungs", "targetedTest"]);
 const PROVIDER_KEYS = new Set(["defaultModel", "efforts", "models"]);
 const MODEL_KEYS = new Set(["id", "label", "tier", "contextWindow", "pricing"]);
 const PRICING_KEYS = new Set(["inPerMTok", "cachedReadPerMTok", "cacheWritePerMTok", "outPerMTok"]);
@@ -131,7 +264,7 @@ const BUDGET_KEYS = new Set([
   "validationTimeoutMs",
 ]);
 const BUDGET_LANES = new Set(["fast", "standard", "deep"]);
-const BUDGET_ENVELOPE_KEYS = new Set(["maxUsd", "maxTokens", "warnPct"]);
+const BUDGET_ENVELOPE_KEYS = new Set(["maxUsd", "maxTokens", "warnPct", "maxInternalTurns"]);
 
 function validationError(path, message) {
   return new ConfigError(`invalid .delivery/config.json at ${path}: ${message}`);
@@ -195,8 +328,78 @@ export function validateConfig(raw) {
       }
     }
   }
-  for (const section of ["effortMap", "routing", "context", "transcript", "budgets"]) {
+  for (const section of ["effortMap", "routing", "context", "transcript", "budgets", "validation", "scope", "pipeline"]) {
     if (raw[section] !== undefined) assertPlainObject(raw[section], `$.${section}`);
+  }
+  if (raw.pipeline !== undefined) {
+    assertKnownKeys(raw.pipeline, PIPELINE_KEYS, "$.pipeline");
+    if (
+      raw.pipeline.mergeDiscoveryPlanOnFastSingleFile !== undefined &&
+      typeof raw.pipeline.mergeDiscoveryPlanOnFastSingleFile !== "boolean"
+    ) {
+      throw validationError("$.pipeline.mergeDiscoveryPlanOnFastSingleFile", "must be a boolean");
+    }
+  }
+  if (raw.context !== undefined) {
+    assertKnownKeys(raw.context, CONTEXT_KEYS, "$.context");
+    assertOptionalNumber(raw.context.maxReplayedOutputChars, "$.context.maxReplayedOutputChars", { integer: true });
+    if (raw.context.laneBudgets !== undefined) {
+      assertPlainObject(raw.context.laneBudgets, "$.context.laneBudgets");
+      assertKnownKeys(raw.context.laneBudgets, BUDGET_LANES, "$.context.laneBudgets");
+      for (const [lane, phases] of Object.entries(raw.context.laneBudgets)) {
+        const path = `$.context.laneBudgets.${lane}`;
+        assertPlainObject(phases, path);
+        assertKnownKeys(phases, CONTEXT_PHASE_KEYS, path);
+        for (const phase of CONTEXT_PHASE_KEYS) {
+          assertOptionalNumber(phases[phase], `${path}.${phase}`, { nullable: true, integer: true });
+          if (phases[phase] != null && phases[phase] <= 0) throw validationError(`${path}.${phase}`, "must be positive or null");
+        }
+      }
+    }
+  }
+  if (raw.scope !== undefined) {
+    assertKnownKeys(raw.scope, SCOPE_KEYS, "$.scope");
+    if (raw.scope.requireAcknowledgment !== undefined && typeof raw.scope.requireAcknowledgment !== "boolean") {
+      throw validationError("$.scope.requireAcknowledgment", "must be a boolean");
+    }
+    if (raw.scope.thresholds !== undefined) {
+      assertPlainObject(raw.scope.thresholds, "$.scope.thresholds");
+      assertKnownKeys(raw.scope.thresholds, SCOPE_CLASS_KEYS, "$.scope.thresholds");
+      for (const [sizeClass, limits] of Object.entries(raw.scope.thresholds)) {
+        const path = `$.scope.thresholds.${sizeClass}`;
+        assertPlainObject(limits, path);
+        assertKnownKeys(limits, SCOPE_AXIS_KEYS, path);
+        for (const axis of SCOPE_AXIS_KEYS) {
+          assertOptionalNumber(limits[axis], `${path}.${axis}`, { integer: true });
+          if (limits[axis] != null && limits[axis] <= 0) throw validationError(`${path}.${axis}`, "must be positive");
+        }
+      }
+    }
+  }
+  if (raw.validation !== undefined) {
+    assertKnownKeys(raw.validation, new Set(["laneLadder"]), "$.validation");
+    if (raw.validation.laneLadder !== undefined) {
+      assertPlainObject(raw.validation.laneLadder, "$.validation.laneLadder");
+      assertKnownKeys(raw.validation.laneLadder, VALIDATION_LANES, "$.validation.laneLadder");
+      for (const [lane, ladder] of Object.entries(raw.validation.laneLadder)) {
+        const path = `$.validation.laneLadder.${lane}`;
+        assertPlainObject(ladder, path);
+        assertKnownKeys(ladder, VALIDATION_LANE_KEYS, path);
+        if (ladder.rungs !== undefined) {
+          if (!Array.isArray(ladder.rungs) || ladder.rungs.length === 0) {
+            throw validationError(`${path}.rungs`, "must be a non-empty array");
+          }
+          for (const [index, rung] of ladder.rungs.entries()) {
+            if (!VALIDATION_RUNG_KEYS.has(rung)) {
+              throw validationError(`${path}.rungs[${index}]`, `must be one of ${[...VALIDATION_RUNG_KEYS].join(", ")}`);
+            }
+          }
+        }
+        if (ladder.targetedTest !== undefined && typeof ladder.targetedTest !== "boolean") {
+          throw validationError(`${path}.targetedTest`, "must be a boolean");
+        }
+      }
+    }
   }
   if (raw.budgets !== undefined) {
     assertKnownKeys(raw.budgets, BUDGET_KEYS, "$.budgets");
@@ -210,10 +413,14 @@ export function validateConfig(raw) {
         assertOptionalNumber(envelope.maxUsd, `${path}.maxUsd`, { nullable: true });
         assertOptionalNumber(envelope.maxTokens, `${path}.maxTokens`, { nullable: true, integer: true });
         assertOptionalNumber(envelope.warnPct, `${path}.warnPct`);
+        assertOptionalNumber(envelope.maxInternalTurns, `${path}.maxInternalTurns`, { nullable: true, integer: true });
         if (envelope.maxUsd != null && envelope.maxUsd <= 0) throw validationError(`${path}.maxUsd`, "must be positive");
         if (envelope.maxTokens != null && envelope.maxTokens <= 0) throw validationError(`${path}.maxTokens`, "must be positive");
         if (envelope.warnPct != null && (envelope.warnPct <= 0 || envelope.warnPct >= 1)) {
           throw validationError(`${path}.warnPct`, "must be greater than 0 and less than 1");
+        }
+        if (envelope.maxInternalTurns != null && envelope.maxInternalTurns <= 0) {
+          throw validationError(`${path}.maxInternalTurns`, "must be positive");
         }
       }
     }
@@ -251,7 +458,7 @@ export function getConfigStatus(config) {
  * defaults). Returns `DEFAULT_CONFIG` unchanged when the file is absent.
  * @param {string} rootDir
  * @param {{configPath?:string, fs?:object}} [options]
- * @returns {object}
+ * @returns {DeliveryConfig}
  */
 export function loadConfig(rootDir, options = {}) {
   const path = options.configPath || join(rootDir, ".delivery", "config.json");
