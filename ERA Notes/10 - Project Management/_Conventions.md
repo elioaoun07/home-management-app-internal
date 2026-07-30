@@ -1,6 +1,6 @@
 ---
 created: 2026-07-15
-updated: 2026-07-22
+updated: 2026-07-30
 type: reference
 status: living
 owner: Elio
@@ -12,6 +12,8 @@ tags:
 # PM Command Center — Item Conventions
 
 > **What this file is:** the single grammar every campaign checklist item and done-stamp follows, so the `pnpm pm` Task board can show all campaigns in one consolidated view and you can jump item → item. **Enforced by `pnpm pm:lint`.** The parser homes are `scripts/pm/shared/tasks.mjs` (dashboard) and `scripts/delivery/packet.mjs` (delivery) — change both in lockstep if the grammar ever moves.
+>
+> **Campaign layout (2026-07-30):** every campaign folder holds exactly two files — `<Campaign> — Master Book.md` (state, shipped log, pains, vision, acceptance criteria, successor briefing) and `4 - Checklist.md` (the working queue). Everything superseded lives in `_Archive/`, which no PM tool scans.
 
 ---
 
@@ -74,18 +76,28 @@ Exactly one each, H2, this exact text, in this order:
 
 - **No headings inside a lane.** Any heading resets the board's section, so phase/round context is written as a **bold paragraph** (`**Phase 4 — foundational hardening** *(carried)*`) or a `> ⚠️ …` blockquote, never as `###`.
 - **Definition of Done** items use `**D1**, **D2**, …` (prefix-exempt; they stay off the board by design).
-- **No `## Done` lane.** Sweep instead: tick `[x]`; at the next touch, move the record to `1 - Feature State.md` with a dated stamp (§3) and delete the checklist line. Git history + `1 - Feature State.md` are the archive.
+- **No `## Done` lane.** Sweep instead: tick `[x]`; at the next touch, move the record to the campaign's **Master Book › Shipped Log** with a dated stamp (§3) and delete the checklist line. Git history + the Shipped Log are the archive.
 
 ---
 
-## 3. Feature State stamp (in `1 - Feature State.md`)
+## 3. Shipped Log stamp (in `<Campaign> — Master Book.md`)
 
 ```
 ✅ YYYY-MM-DD
 ✅ YYYY-MM-DD (`src/lib/balance.test.ts`)     ← with evidence
 ```
 
-One space after `✅`, ISO date, optional backticked evidence path in parentheses. Pain / gap bullets keep the **emoji** severity lead (`🔴 |🟠 |🟡 |⚪ ` at line start) — the dashboard Rollups reads those. In `2 - Vision & Roadmap.md`, a realized decision is marked `*(IMPLEMENTED YYYY-MM-DD)*` (Hard Rule 25).
+One space after `✅`, ISO date, optional backticked evidence path in parentheses. Shipped Log lines carry the ID chip too — `- ✅ 2026-07-18 — **BUD-12** deleted the debug routes` — so the burndown can attribute them.
+
+Three formats in a Master Book are **parser-load-bearing**, so keep them exactly:
+
+| Section | Format | Read by |
+|---|---|---|
+| `## Shipped Log` | `- ✅ YYYY-MM-DD — **ID** text` | the completion-history snapshot (velocity / burndown) |
+| `## Pain Inventory` | bullets with an **emoji** severity lead (`🔴 🟠 🟡 ⚪`) at line start | the Bugs view + per-campaign rollups |
+| `## Acceptance Criteria Index` | `### <ID>` followed by `- **Acceptance:** …` bullets | the delivery flight check's pre-launch criteria |
+
+In the Master Book's **Vision & Decisions** section, a realized decision is marked `*(IMPLEMENTED YYYY-MM-DD)*` (Hard Rule 25).
 
 ---
 
@@ -112,18 +124,24 @@ IDs are per-campaign, so always name the campaign — `L1` alone is ambiguous ac
 | `Hub & ERA/` | `HUB` |
 | `Notifications & Alerts/` | `NOTIF` |
 | `Healthcare/` | `HLTH` |
-| `PM Dashboard Refactor/` | `R` (grandfathered) |
-| `Delivery Workspace/` | `DW` |
-| `Delivery 10x/` | `DLV` |
+| `PM Tooling/` | `R` (grandfathered) |
+| `Delivery/` | `DLV` |
 | `Outfits/` | `OUT` |
+
+`Native App/` is a plan pack with no checklist and no prefix yet — register `NAT` here, add it to `CAMPAIGNS` in `scripts/pm/lint.mjs`, and create the checklist from `_Templates/` when work starts.
+
+**Retired prefixes (never reused):** `DW` (Delivery Workspace — merged into `Delivery`, 2026-07-30).
+
+The prefix table and `CAMPAIGNS` in `scripts/pm/lint.mjs` must agree. Renaming a campaign folder means editing both **and** every relative link that points into it, in the same pass.
 
 ---
 
 ## 6. Enforcement & tooling
 
-- **`pnpm pm:lint`** — validates the seven checklists above: grammar, lanes, ID prefix + uniqueness, and that every `→` link resolves. Run it after editing any `4 - Checklist.md` (finish-task Gate E).
+- **`pnpm pm:lint`** — validates the ten checklists above: grammar, lanes, ID prefix + uniqueness, and that every `→` link resolves. Run it after editing any `4 - Checklist.md` (finish-task Gate E).
 - **`pnpm pm`** — the consolidated Task board / table. Every parseable item shows with ID / severity / effort chips, filterable (`m:Budget s:blocker is:open`), click-through to the exact doc line.
-- **Hidden layers** — `FABLED/`, `FABLED 2/`, `FABLED+ Enhancement Study/`, and any doc with frontmatter `status: superseded | baseline-frozen | template` are hidden from the board's default view (toggle "FABLED / archived" to reveal). They are reference/audit layers, not execution queues.
+- **`_Archive/` is never scanned by any PM tool.** The skip lives in `scripts/pm/scan.mjs`, so the server, the static build, the bridge and the linter all inherit it. Archived docs stay in git for history and `rg`, and are reachable by opening the file directly — they are simply not part of the corpus the tools see. Move a doc there when it is superseded rather than deleting it.
+- **Hidden layers** — any doc with frontmatter `status: superseded | baseline-frozen | template` is hidden from the board's default view (toggle "archived docs" to reveal). They are reference layers, not execution queues.
 
 ---
 

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { appendUnderHeading } from "../../scripts/pm/mutations.mjs";
 import { fileTasks } from "../../scripts/pm/shared/tasks.mjs";
+import { parseInbox } from "../../scripts/pm/src/features/inbox/InboxView.jsx";
 
 const inboxRaw = readFileSync(
   join(__dirname, "../../ERA Notes/10 - Project Management/0 - Inbox.md"),
@@ -38,5 +39,47 @@ describe("PM Idea Inbox", () => {
   it("starter inbox file has both sections and no leftover tasks", () => {
     expect(inboxRaw).toContain("## New");
     expect(inboxRaw).toContain("## Processed");
+  });
+});
+
+describe("inbox view parser", () => {
+  it("splits New from Processed and keeps continuation prose with its entry", () => {
+    const raw = [
+      "---", "type: inbox", "---", "", "# 0 · Idea Inbox", "",
+      "> Drop raw thoughts here — this blockquote is guidance, not an entry.", "",
+      "## New",
+      "- [ ] NFC checklist — probably its own campaign?",
+      "",
+      "Work on the NFC when leaving the house.",
+      "The UI wasn't tested enough.",
+      "- [ ] Add approval for transactions requiring both comments",
+      "",
+      "## Processed",
+      "- 2026-07-22 — wizard skill → routed to `skill-factory` (triaged 2026-07-22)",
+      "",
+      "<!-- Triaged entries land here as plain bullets -->",
+      "",
+    ].join("\n");
+
+    const { new: fresh, processed } = parseInbox(raw);
+    expect(fresh).toHaveLength(2);
+    expect(fresh[0].text).toBe("NFC checklist — probably its own campaign?");
+    expect(fresh[0].detail).toEqual(["Work on the NFC when leaving the house.", "The UI wasn't tested enough."]);
+    expect(fresh[1].detail).toEqual([]);
+    expect(processed).toHaveLength(1);
+    expect(processed[0].text).toContain("wizard skill");
+  });
+
+  it("ignores fenced blocks and comments so an example line is never an entry", () => {
+    const raw = "## New\n\n```\n- [ ] not a real entry\n```\n\n- [ ] a real entry\n\n## Processed\n<!-- - 2026-01-01 — a comment -->\n";
+    const { new: fresh, processed } = parseInbox(raw);
+    expect(fresh.map((entry) => entry.text)).toEqual(["a real entry"]);
+    expect(processed).toHaveLength(0);
+  });
+
+  it("parses the live inbox file without throwing", () => {
+    const parsed = parseInbox(inboxRaw);
+    expect(Array.isArray(parsed.new)).toBe(true);
+    expect(Array.isArray(parsed.processed)).toBe(true);
   });
 });

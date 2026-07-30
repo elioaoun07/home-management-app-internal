@@ -20,6 +20,7 @@ import { CampaignsView } from "./views/CampaignsView";
 import { DeliveryView } from "./views/DeliveryView";
 import { OverviewView } from "./views/OverviewView";
 import { UsageView } from "./views/UsageView";
+import { SessionDetailView } from "./session/SessionDetailView";
 import { usePmLoading } from "@/features/pm-live/store";
 import { usePmCommand, usePmLiveConnection } from "@/features/pm-live/usePmLive";
 import { useViewState, useViewStateUrlSync } from "@/features/pm-live/viewState";
@@ -30,6 +31,7 @@ export function PmLiveApp() {
   useViewStateUrlSync();
   const sendCommand = usePmCommand();
   const view = useViewState((s) => s.view);
+  const session = useViewState((s) => s.session);
   const loading = usePmLoading();
 
   const scrollRef = useRef<HTMLElement>(null);
@@ -62,7 +64,11 @@ export function PmLiveApp() {
           ) : view === "board" ? (
             <BoardView scrollRef={scrollRef} onOpenTask={setDetailTask} onLaunch={openLaunch} />
           ) : view === "delivery" ? (
-            <DeliveryView sendCommand={sendCommand} onOpenLaunch={() => openLaunch(null)} />
+            session ? (
+              <SessionDetailView sessionId={session} sendCommand={sendCommand} />
+            ) : (
+              <DeliveryView sendCommand={sendCommand} onOpenLaunch={() => openLaunch(null)} />
+            )
           ) : view === "usage" ? (
             <UsageView />
           ) : (

@@ -12,9 +12,9 @@ tags:
 
 # Trips · 4 — Checklist
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Campaign:** [Trips — Master Book](<Trips — Master Book.md>) · [4 · Checklist](<4 - Checklist.md>)
 >
-> **What this file is:** the single flat, checkable surface for Trips — every open actionable item under **Now / Next / Later**. Grammar: [_Conventions](<../_Conventions.md>) (validated by `pnpm pm:lint`). The narrative *why* is [3 · Action Plan](<3 - Action Plan.md>). Completed items are cleared once done — see git history or [1 · Feature State](<1 - Feature State.md>) for the record.
+> **What this file is:** the single flat, checkable surface for Trips — every open actionable item under **Now / Next / Later**. Grammar: [_Conventions](<../_Conventions.md>) (validated by `pnpm pm:lint`). The narrative *why* is [Trips — Master Book](<Trips — Master Book.md>). Completed items are swept into the Master Book's Shipped Log and the line deleted — git history is the rest of the archive.
 >
 > **Legend:** Sev blocker / friction / annoyance / parked. Effort S / M / L.
 > **ID migration (2026-07-15):** N1–N3→TRIP-1–TRIP-3, X1→TRIP-4, L1–L5→TRIP-5–TRIP-9.
@@ -43,4 +43,4 @@ tags:
 
 - [ ] **D1** A household trip and a solo trip have each been activated and completed with **every** cascade verified to fire and reverse.
 - [ ] **D2** Confirmed `recurring_payments` stay active during a trip.
-- [ ] **D3** [1 · Feature State](<1 - Feature State.md>) updated to drop the "cascades unverified" note once the round-trips pass.
+- [ ] **D3** [Trips — Master Book](<Trips — Master Book.md>) updated to drop the "cascades unverified" note once the round-trips pass.

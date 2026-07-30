@@ -24,20 +24,22 @@ Trust a FABLED 3 file **as of its stamp** (2026-07-18, evidence cutoff `f0a8e19`
 
 ## Module campaigns (scores 2026-07-18)
 
+> **Moved 2026-07-30.** Each campaign's FABLED 3 audit was merged into its consolidated **Master Book** — the scores, delta ledger and Successor Briefing now live in that one file, and the originals are in `10 - Project Management/_Archive/`. The links below point at the books.
+
 | Campaign | Overall | Δ vs gen 2 | Handoff readiness | Index |
 |---|---|---|---|---|
-| PM system | **6.6** | +0.8 | 6 | [→](<../10 - Project Management/FABLED 3/_index.md>) |
-| Budget | **5.8** | +0.4 | 5 | [→](<../10 - Project Management/Budget/FABLED 3/_index.md>) |
-| Notifications & Alerts | **5.8** | = | 6 | [→](<../10 - Project Management/Notifications & Alerts/FABLED 3/_index.md>) |
-| Schedule | **5.5** | +0.2 | 4 | [→](<../10 - Project Management/Schedule/FABLED 3/_index.md>) |
-| Healthcare *(first generation)* | **4.8** | new | 5 | [→](<../10 - Project Management/Healthcare/FABLED 3/_index.md>) |
-| Hub & ERA | **4.2** | +0.2 | 3 | [→](<../10 - Project Management/Hub & ERA/FABLED 3/_index.md>) |
-| Kitchen | **3.0** | = | 4 | [→](<../10 - Project Management/Kitchen/FABLED 3/_index.md>) |
-| Trips | **2.8** | = | 2 | [→](<../10 - Project Management/Trips/FABLED 3/_index.md>) |
+| PM system | **6.6** | +0.8 | 6 | [→](<../10 - Project Management/PM Tooling/PM Tooling — Master Book.md>) |
+| Budget | **5.8** | +0.4 | 5 | [→](<../10 - Project Management/Budget/Budget — Master Book.md>) |
+| Notifications & Alerts | **5.8** | = | 6 | [→](<../10 - Project Management/Notifications & Alerts/Notifications & Alerts — Master Book.md>) |
+| Schedule | **5.5** | +0.2 | 4 | [→](<../10 - Project Management/Schedule/Schedule — Master Book.md>) |
+| Healthcare *(first generation)* | **4.8** | new | 5 | [→](<../10 - Project Management/Healthcare/Healthcare — Master Book.md>) |
+| Hub & ERA | **4.2** | +0.2 | 3 | [→](<../10 - Project Management/Hub & ERA/Hub & ERA — Master Book.md>) |
+| Kitchen | **3.0** | = | 4 | [→](<../10 - Project Management/Kitchen/Kitchen — Master Book.md>) |
+| Trips | **2.8** | = | 2 | [→](<../10 - Project Management/Trips/Trips — Master Book.md>) |
 
 **Handoff-readiness rubric:** 0–2 human/top-tier only · 3–4 mid-tier with skills open · 5–6 any model for scoped tasks · 7+ any model, most tasks. Evidence inputs: test census, skill/playbook coverage, trap documentation, blast radius (FABLED+ loop-readiness scores feed this).
 
-**Outfits** has no FABLED folder: docs-only, no code (`Overview.md` 2026-07-17). It receives its first generation when code ships — never audit vapor.
+**Outfits** and **Delivery** were never part of the FABLED layer; both now carry the same Current State / Pain Inventory / Successor Briefing sections in their own Master Books.
 
 ## Vault sections (delta/affirmation generation — thin by design)
 
@@ -56,17 +58,17 @@ Trust a FABLED 3 file **as of its stamp** (2026-07-18, evidence cutoff `f0a8e19`
 
 ## Adjacent layers (unchanged by this generation)
 
-- **[FABLED+ Enhancement Study](<../10 - Project Management/FABLED+ Enhancement Study/_index.md>)** — `status: current`. A different lens (loop-readiness 0–5×6, NOT comparable to the 0–10 maturity scores). Its scores feed Handoff readiness; it keeps its own freshness rules.
-- **Review companions** (Codebase Audit 2026-07-01, Functional Architecture Review, FAR Checklist) — audit events, not state; unscored, untouched.
-- **[FABLE — Final Consultation (2026-07-06)](<../10 - Project Management/FABLE — Final Consultation (2026-07-06).md>)** — the *why* (frozen). **[FABLE — Testament (2026-07-18)](<../10 - Project Management/FABLE — Testament (2026-07-18).md>)** — the *how*: the operating manual for successor models.
+- **FABLED+ Enhancement Study** — archived 2026-07-30 to `10 - Project Management/_Archive/FABLED+ Enhancement Study/`. It was a study queue rather than an execution authority; its loop-readiness lens fed Handoff readiness and is preserved in git.
+- **Review companions** (Codebase Audit 2026-07-01, Functional Architecture Review, FAR Checklist) — audit events, not state; archived 2026-07-30 to `10 - Project Management/_Archive/`.
+- **FABLE — Final Consultation (2026-07-06)** — the *why* (frozen; archived to `10 - Project Management/_Archive/`). **[FABLE — Testament (2026-07-18)](<../10 - Project Management/FABLE — Testament (2026-07-18).md>)** — the *how*: the operating manual for successor models.
 
 ## Successor reading paths
 
-- **"I'm a smaller model and was asked to do X in cluster Y"** → Y's file 5 (Successor Briefing) → its task-tier row → the skill it names. If your task is human-first, say so and stop.
-- **"Is this audit claim still true?"** → the cluster's file 5 verification manifest → run the command.
-- **"What should Elio work on next?"** → campaign scores above (lowest Overall + the `_index` "next 3 moves") → the campaign's `4 - Checklist.md` (`pnpm pm`).
-- **"What's the 10× idea here?"** → the cluster's file 4 — respect the kill criteria.
-- **"Why does this repo document more than it ships?"** → Design Doctrine §6 + PM system [3.2 Gap #2](<../10 - Project Management/FABLED 3/2 - FABLED 3 — Gaps & Missing.md>) — read before creating ANY new document.
+- **"I'm a smaller model and was asked to do X in campaign Y"** → Y's Master Book → its **Successor Briefing** → the task-tier row → the skill it names. If your task is human-first, say so and stop.
+- **"Is this audit claim still true?"** → the Master Book's verification manifest → run the command.
+- **"What should Elio work on next?"** → campaign scores above (lowest Overall) → that book's Pain Inventory and "the bets" → the campaign's `4 - Checklist.md` (`pnpm pm`).
+- **"What's the 10× idea here?"** → the book's Vision & Decisions — respect the kill criteria.
+- **"Why does this repo document more than it ships?"** → Design Doctrine §6 + the [PM Tooling Master Book](<../10 - Project Management/PM Tooling/PM Tooling — Master Book.md>) Pain Inventory (meta-work outweighing product work) — read before creating ANY new document.
 - **"How do I behave in general?"** → the Testament. All of it. It's short on purpose.
 
 ## Maintenance protocol

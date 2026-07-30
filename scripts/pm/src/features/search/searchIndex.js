@@ -6,7 +6,9 @@ import { parseQuery, matchesFilters } from "./queryLang.js";
 
 const options = {
   fields: ["title", "headings", "body", "idChip", "text"],
-  storeFields: ["type", "title", "text", "relPath", "file", "module", "cbidx", "section", "severity", "state", "slug"],
+  // `idChip` and `effort` are stored, not just indexed: the `id:` and `e:` filters
+  // read them off the result, and MiniSearch only hands back stored fields.
+  storeFields: ["type", "title", "text", "relPath", "file", "module", "cbidx", "section", "severity", "effort", "state", "slug", "idChip"],
   searchOptions: { boost: { title: 3, headings: 2, idChip: 4 }, prefix: true, fuzzy: 0.2 },
 };
 
@@ -24,7 +26,7 @@ export function createSearchService() {
       text: heading.text, body: "", headings: "", relPath: file.relPath, module: file.module, slug: heading.slug }));
     file.tasks.forEach((task) => records.push({ id: `task:${file.relPath}::${task.cbidx}`, type: "task", title: task.idChip || task.text,
       text: task.text, idChip: task.idChip || "", body: task.text, headings: task.section, file: file.relPath, relPath: file.relPath,
-      module: file.module, cbidx: task.cbidx, section: task.section, severity: task.severity, state: task.state }));
+      module: file.module, cbidx: task.cbidx, section: task.section, severity: task.severity, effort: task.effort, state: task.state }));
     severityItems(file.raw).forEach((bug) => records.push({ id: `bug:${file.relPath}:${bug.line}`, type: "bug", title: bug.text, text: bug.text,
       body: bug.text, headings: "", relPath: file.relPath, file: file.relPath, module: file.module, severity: bug.severity }));
     return records;

@@ -12,9 +12,9 @@ tags:
 
 # Healthcare · 4 — Checklist
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Campaign:** [Healthcare — Master Book](<Healthcare — Master Book.md>) · [4 · Checklist](<4 - Checklist.md>)
 >
-> **What this file is:** the single flat, checkable queue for the Healthcare build. Grammar: [_Conventions](<../_Conventions.md>) (validated by `pnpm pm:lint`). Phases are PR-sized vertical slices from the approved 2026-07-17 plan — stamp [1 · Feature State](<1 - Feature State.md>) when a phase ships.
+> **What this file is:** the single flat, checkable queue for the Healthcare build. Grammar: [_Conventions](<../_Conventions.md>) (validated by `pnpm pm:lint`). Phases are PR-sized vertical slices from the approved 2026-07-17 plan — stamp [Healthcare — Master Book](<Healthcare — Master Book.md>) when a phase ships.
 >
 > **Legend:** Sev blocker / friction / annoyance / parked. Effort S / M / L.
 
@@ -22,7 +22,7 @@ tags:
 
 ## Now
 
-**Phase 1 — Core module + allergies** — profiles, allergies, conditions, vaccines; recipe allergen warnings. HLTH-1…6 shipped 2026-07-17 → swept to [1 · Feature State](<1 - Feature State.md>).
+**Phase 1 — Core module + allergies** — profiles, allergies, conditions, vaccines; recipe allergen warnings. HLTH-1…6 shipped 2026-07-17 → swept to [Healthcare — Master Book](<Healthcare — Master Book.md>).
 
 - [ ] **HLTH-7** (Phase 1) Run core migration in Supabase SQL Editor, then verify mobile viewport + both-accounts allergen warning + privacy (partner cannot see unshared condition) _(blocker - S)_
 

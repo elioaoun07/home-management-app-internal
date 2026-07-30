@@ -1,10 +1,11 @@
-import { useState } from "preact/hooks";
+import { useMemo, useState } from "preact/hooks";
 import { severityItems } from "../../../shared/tasks.mjs";
 import { allTasks, files, hideCompleted, toggleTask } from "../../app/store.js";
+import { parseRoute, route } from "../../app/router.js";
+import { matchesFilters, parseQuery } from "../search/queryLang.js";
+import { BoardToolbar } from "../tasks/BoardToolbar.jsx";
+import { boardHash, groupTasks, readBoardState, sortTasks } from "../tasks/boardState.js";
 import { Chip, EmptyState, StatTile } from "../../components/Primitives.jsx";
-
-const SEV_ORDER = { blocker: 0, friction: 1, annoyance: 2, parked: 3 };
-const LANES = [["Now", 0], ["Next", 1], ["Later", 2], ["Other", 3]];
 
 // Shared readable checkbox row: chips on one line, the full item text wrapped
 // on its own line below. Used by the Checklist rollup and the mobile home.
@@ -19,20 +20,50 @@ export function TaskCard({ task, showModule = true }) {
 }
 
 export function ChecklistRollup() {
-  const [campaign, setCampaign] = useState(null);
-  const tasks = allTasks.value.filter((task) => !task.inFabled);
-  const campaigns = [...new Set(tasks.map((task) => task.module))].sort((a, b) => a.localeCompare(b));
-  const visible = tasks.filter((task) => (!campaign || task.module === campaign) && (!hideCompleted.value || task.state === "open"));
-  const laneSort = (a, b) => (a.state === "open" ? 0 : 1) - (b.state === "open" ? 0 : 1) || (SEV_ORDER[a.severity] ?? 9) - (SEV_ORDER[b.severity] ?? 9) || a.module.localeCompare(b.module);
+  const state = readBoardState(route.value.query);
+  const update = (next) => { const hash = boardHash("/checklist", next); history.replaceState(null, "", hash); route.value = parseRoute(hash); };
+
+  const pool = allTasks.value.filter((task) => !task.inFabled);
+  const filtered = useMemo(() => {
+    const parsed = parseQuery(state.query);
+    return pool.filter((task) => (!hideCompleted.value || task.state === "open")
+      && matchesFilters(task, parsed.filters)
+      && (!parsed.text || `${task.idChip || ""} ${task.text}`.toLowerCase().includes(parsed.text.toLowerCase())));
+  }, [pool, state.query, hideCompleted.value]);
+  const groups = useMemo(() => groupTasks(sortTasks(filtered, state.sortBy), state.groupBy), [filtered, state.sortBy, state.groupBy]);
+  const singleCampaign = new Set(filtered.map((task) => task.module)).size === 1;
+
   return <><header class="page-head"><div><div class="eyebrow">Cross-campaign rollup</div><h1>Checklist</h1><p>Every active checkbox, with canonical ordinals shared with server mutations.</p></div></header>
-    <div class="grid stats"><StatTile label="Total" value={tasks.length}/><StatTile label="Open" value={tasks.filter((t) => t.state === "open").length}/><StatTile label="Done" value={tasks.filter((t) => t.state === "done").length}/><StatTile label="Blockers" value={tasks.filter((t) => t.state === "open" && t.severity === "blocker").length}/></div>
-    <div class="chip-row" style={{marginTop:20}}><button class={`button ${!campaign ? "primary" : ""}`} onClick={() => setCampaign(null)}>All</button>{campaigns.map((name) => <button class={`button ${campaign === name ? "primary" : ""}`} key={name} onClick={() => setCampaign(campaign === name ? null : name)}>{name}</button>)}</div>
-    {LANES.map(([label, rank]) => { const lane = visible.filter((task) => task.sectionRank === rank).sort(laneSort); return lane.length ? <details class="task-lane" open={rank < 2} key={label}><summary><span class="eyebrow">{label}</span><span class="count">{lane.filter((t) => t.state === "open").length} open · {lane.length} total</span></summary><div class="task-lane-list">{lane.map((task) => <TaskCard task={task} showModule={!campaign} key={task.key}/>)}</div></details> : null; })}
-    {!visible.length && <EmptyState icon="check" title="Nothing to show">Every matching checkbox is swept or filtered out.</EmptyState>}
+    <div class="grid stats"><StatTile label="Total" value={pool.length}/><StatTile label="Open" value={pool.filter((t) => t.state === "open").length}/><StatTile label="Done" value={pool.filter((t) => t.state === "done").length}/><StatTile label="Blockers" value={pool.filter((t) => t.state === "open" && t.severity === "blocker").length}/></div>
+
+    <BoardToolbar state={state} onChange={update} shown={filtered.length} total={pool.length}/>
+
+    {!filtered.length
+      ? <EmptyState icon="check" title="Nothing to show">{state.query ? <button class="button" onClick={() => update({ ...state, query: "" })}>Clear filters</button> : "Every matching checkbox is swept or filtered out."}</EmptyState>
+      : groups.map((group, index) => group.items.length
+          ? <details class="task-lane" open={index < 2} key={group.key}>
+              <summary><span class="eyebrow">{group.label}</span><span class="count">{group.items.filter((t) => t.state === "open").length} open · {group.items.length} total</span></summary>
+              <div class="task-lane-list">{group.items.map((task) => <TaskCard task={task} showModule={!singleCampaign} key={task.key}/>)}</div>
+            </details>
+          : null)}
   </>;
 }
 
 export function BugsRollup() {
-  const bugs=files.value.filter((file)=>!file.inFabled).flatMap((file)=>severityItems(file.raw).map((bug)=>({...bug,file:file.relPath,module:file.module})));
-  return <><header class="page-head"><div><div class="eyebrow">Pain inventory</div><h1>Bugs & friction</h1><p>Severity rows from the live PM corpus. Individual rows stay calm; aggregate blocker counts carry the alert signal.</p></div></header>{!bugs.length?<EmptyState icon="bug" title="No severity rows found"/>:<><div class="grid stats"><StatTile label="Blockers" value={bugs.filter((b)=>b.severity==="blocker").length}/><StatTile label="Friction" value={bugs.filter((b)=>b.severity==="friction").length}/><StatTile label="Annoyances" value={bugs.filter((b)=>b.severity==="annoyance").length}/><StatTile label="Parked" value={bugs.filter((b)=>b.severity==="parked").length}/></div><div class="search-list" style={{marginTop:24}}>{bugs.map((bug)=><a class="search-hit" href={`#/doc/${encodeURI(bug.file)}`} style={{color:"inherit"}}><Chip tone={bug.severity}>{bug.severity}</Chip> {bug.text}<div class="muted" style={{fontSize:11,marginTop:6}}>{bug.module} · {bug.file}</div></a>)}</div></>}</>;
+  const [query, setQuery] = useState("");
+  const bugs = files.value.filter((file) => !file.inFabled).flatMap((file) => severityItems(file.raw).map((bug) => ({ ...bug, file: file.relPath, module: file.module })));
+  const parsed = parseQuery(query);
+  const shown = bugs.filter((bug) => matchesFilters({ ...bug, type: "bug" }, parsed.filters) && (!parsed.text || bug.text.toLowerCase().includes(parsed.text.toLowerCase())));
+  return <><header class="page-head"><div><div class="eyebrow">Pain inventory</div><h1>Bugs &amp; friction</h1><p>Severity rows from every campaign's Master Book. Individual rows stay calm; aggregate blocker counts carry the alert signal.</p></div></header>
+    {!bugs.length ? <EmptyState icon="bug" title="No severity rows found"/> : <>
+      <div class="grid stats">{["blocker", "friction", "annoyance", "parked"].map((severity) => <StatTile key={severity} label={severity[0].toUpperCase() + severity.slice(1) + (severity === "friction" ? "" : "s")} value={bugs.filter((bug) => bug.severity === severity).length}/>)}</div>
+      <div class="board-toolbar" style={{marginTop:18}}>
+        <div class="board-search"><input value={query} onInput={(event) => setQuery(event.currentTarget.value)} placeholder="Filter pains — or m:Schedule s:blocker" aria-label="Filter pains"/></div>
+        <div class="board-chips">{["blocker", "friction", "annoyance", "parked"].map((severity) => <button class="chip toggle" key={severity} data-active={String(parsed.filters.s === severity)} onClick={() => setQuery(parsed.filters.s === severity ? "" : `s:${severity}`)}>{severity}</button>)}</div>
+        <p class="board-count">{shown.length === bugs.length ? `${bugs.length} shown` : `${shown.length} of ${bugs.length}`}</p>
+      </div>
+      {!shown.length
+        ? <EmptyState icon="bug" title="No matching pains"><button class="button" onClick={() => setQuery("")}>Clear filters</button></EmptyState>
+        : <div class="search-list" style={{marginTop:18}}>{shown.map((bug) => <a class="search-hit" href={`#/doc/${encodeURI(bug.file)}`} key={`${bug.file}:${bug.line}`} style={{color:"inherit"}}><Chip tone={bug.severity}>{bug.severity}</Chip> {bug.text}<div class="muted" style={{fontSize:11,marginTop:6}}>{bug.module} · {bug.file}</div></a>)}</div>}
+    </>}</>;
 }

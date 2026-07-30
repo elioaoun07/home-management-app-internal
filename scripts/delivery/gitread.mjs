@@ -3,7 +3,7 @@
 // git. Enforces the owner's permanent hard constraint ("no git-state-changing
 // action, ever") by construction: an allowlist of read-only subcommands, not a
 // blocklist. Anything not explicitly listed throws, with no exceptions.
-// See ERA Notes/10 - Project Management/Agentic Delivery Workspace/4 - Agent Drivers & Security.md §3.
+// See ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md.
 //
 // Zero-dependency: node:child_process builtin only. No other module under
 // scripts/delivery/ may import node:child_process for git — grep-tested.

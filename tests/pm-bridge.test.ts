@@ -7,13 +7,15 @@
 // (see tests/delivery/server-routes.test.ts for that layer's own coverage);
 // these tests verify the bridge's allowlist and refusals sit correctly in
 // front of it, not that routeDelivery itself works.
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   ALLOWED_TYPES,
+  buildSessionExtras,
+  capSessionSnapshot,
   createCommandExecutor,
   createHistorySnapshotBuilder,
   createRollupsSnapshotBuilder,
@@ -122,6 +124,21 @@ describe("answer — only the question gate is reachable from mobile", () => {
       expect(outcome.ok).toBe(false);
       expect(outcome.error).toMatch(/approve on the laptop/i);
     }
+  });
+
+  it("routes a questionId to the ledger control instead of the gate, so an advisory question is answerable at any time", async () => {
+    const { deliveryCtx, executeCommand } = setup();
+    const sessionId = "s-ledger";
+    // No question gate at all: the session is mid-build. A ledger answer is
+    // non-blocking by construction, so it must not be refused for that.
+    seedSession(deliveryCtx, sessionId, "BUILDING", null);
+    const outcome = await executeCommand({ type: "answer", payload: { sessionId, questionId: "q-0001-0", text: "it applies to everyone" } });
+    expect(outcome.ok).toBe(true);
+    const controls = readdirSync(join(deliveryCtx.SESSIONS_DIR, sessionId, "controls"));
+    expect(controls).toHaveLength(1);
+    const control = JSON.parse(readFileSync(join(deliveryCtx.SESSIONS_DIR, sessionId, "controls", controls[0]), "utf8"));
+    expect(control.type).toBe("answer");
+    expect(control.payload).toMatchObject({ questionId: "q-0001-0", text: "it applies to everyone" });
   });
 
   it("answers when the session is awaiting a question gate", async () => {
@@ -376,16 +393,18 @@ describe("campaign rollups snapshot", () => {
 describe("completion history snapshot", () => {
   it("parses prose done-stamps, table done-stamps, and aggregates by day", () => {
     const pmDir = seedPmDir({
-      "Delivery Workspace/4 - Checklist.md": VALID_CHECKLIST,
-      "Delivery Workspace/1 - Feature State.md": [
-        "# Feature State",
+      "Delivery/4 - Checklist.md": VALID_CHECKLIST,
+      "Delivery/Delivery — Master Book.md": [
+        "# Delivery — Master Book",
         "",
-        "✅ 2026-07-16 — **DW-1: Flight recorder foundation.** Full-fidelity transcript capture.",
-        "✅ 2026-07-17 — **DW-11: BUD-11 root-cause fixes.** Fixed at the source.",
+        "## Shipped Log",
+        "",
+        "✅ 2026-07-16 — **DLV-1: Flight recorder foundation.** Full-fidelity transcript capture.",
+        "✅ 2026-07-17 — **DLV-11: BUD-11 root-cause fixes.** Fixed at the source.",
         "",
       ].join("\n"),
       "Healthcare/4 - Checklist.md": VALID_CHECKLIST,
-      "Healthcare/1 - Feature State.md": [
+      "Healthcare/Healthcare — Master Book.md": [
         "# Feature State",
         "",
         "| ID | Outcome | Status | Evidence |",
@@ -398,7 +417,7 @@ describe("completion history snapshot", () => {
     const { completions, completedByDay } = createHistorySnapshotBuilder({ PM_DIR: pmDir }).buildHistorySnapshot();
 
     expect(completions).toHaveLength(3);
-    expect(completions[0]).toMatchObject({ date: "2026-07-16", campaign: "Delivery Workspace", idChip: "DW-1" });
+    expect(completions[0]).toMatchObject({ date: "2026-07-16", campaign: "Delivery", idChip: "DLV-1" });
     expect(completions[0].text).toContain("Flight recorder foundation");
 
     const table = completions.find((c) => c.idChip === "HLTH-1");
@@ -406,8 +425,8 @@ describe("completion history snapshot", () => {
     expect(table?.text).toBe("Module scaffold");
 
     expect(completedByDay).toEqual([
-      { date: "2026-07-16", count: 1, byCampaign: { "Delivery Workspace": 1 } },
-      { date: "2026-07-17", count: 2, byCampaign: { "Delivery Workspace": 1, Healthcare: 1 } },
+      { date: "2026-07-16", count: 1, byCampaign: { Delivery: 1 } },
+      { date: "2026-07-17", count: 2, byCampaign: { Delivery: 1, Healthcare: 1 } },
     ]);
   });
 
@@ -434,5 +453,137 @@ describe("spendByDay", () => {
       { date: "2026-07-24", costUsd: 1.75, sessions: 2 },
       { date: "2026-07-25", costUsd: 0, sessions: 1 },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Session detail (DLV-64): everything the phone needs to *read* a session.
+// ---------------------------------------------------------------------------
+
+function seedSessionDir(files: Record<string, string>) {
+  const root = mkdtempSync(join(tmpdir(), "pm-bridge-session-"));
+  cleanupDirs.push(root);
+  for (const [rel, body] of Object.entries(files)) {
+    const abs = join(root, rel);
+    mkdirSync(join(abs, ".."), { recursive: true });
+    writeFileSync(abs, body);
+  }
+  return root;
+}
+
+const turn = (over: Record<string, unknown> = {}) =>
+  JSON.stringify({ v: 1, turnId: "0001", phase: "DISCOVERY", role: "Discovery", provider: "claude", model: "claude-haiku-4-5",
+    effort: "low", startedAt: "2026-07-30T07:49:14.116Z", durationMs: 28510, costUsd: 0.1,
+    context: { occupancyTokens: 147952, windowTokens: 200000, pctUsed: 0.74 }, result: "ok", records: 21, ...over });
+
+describe("buildSessionExtras", () => {
+  it("returns an empty object for a directory that does not exist", () => {
+    expect(buildSessionExtras(join(tmpdir(), "definitely-not-a-session"))).toEqual({});
+  });
+
+  it("splits the ledger into open-first and answered, and counts dismissals", () => {
+    const dir = seedSessionDir({
+      "memory/ledger.json": JSON.stringify({
+        questions: [
+          { id: "q1", text: "advisory one", kind: "advisory", status: "open" },
+          { id: "q2", text: "blocking one", kind: "blocking", status: "open" },
+          { id: "q3", text: "asked", kind: "blocking", status: "answered", answer: { text: "answered", at: "2026-07-30T08:00:00Z" } },
+          { id: "q4", text: "gone", status: "dismissed" },
+        ],
+      }),
+    });
+    const { qa } = buildSessionExtras(dir);
+    expect(qa?.open.map((q: { id: string }) => q.id)).toEqual(["q2", "q1"]); // blocking first — that's what stopped the session
+    expect(qa?.answered.map((q: { id: string }) => q.id)).toEqual(["q3"]);
+    expect(qa?.answered[0].answer?.text).toBe("answered");
+    expect(qa?.dismissedCount).toBe(1);
+    expect(qa?.total).toBe(4);
+  });
+
+  it("truncates long question text rather than shipping a wall of it", () => {
+    const dir = seedSessionDir({
+      "memory/ledger.json": JSON.stringify({ questions: [{ id: "q1", text: "x".repeat(900), kind: "blocking", status: "open" }] }),
+    });
+    const text = buildSessionExtras(dir).qa!.open[0].text;
+    expect(text.length).toBeLessThan(450);
+    expect(text.endsWith("…")).toBe(true);
+  });
+
+  it("attaches an excerpt only to the most recent turns", () => {
+    const turns = Array.from({ length: 20 }, (_, i) => turn({ turnId: String(i + 1).padStart(4, "0") })).join("\n");
+    const shards: Record<string, string> = { "transcript/turns.ndjson": turns };
+    for (let i = 1; i <= 20; i += 1) {
+      const id = String(i).padStart(4, "0");
+      shards[`transcript/t-${id}.ndjson`] = JSON.stringify({ kind: "assistant.text", text: `result of turn ${i}` });
+    }
+    const extras = buildSessionExtras(seedSessionDir(shards));
+    expect(extras.turnsTotal).toBe(20);
+    const tail = extras.turnsTail!;
+    expect(tail).toHaveLength(20);
+    expect(tail.filter((t) => t.excerpt)).toHaveLength(12);
+    expect(tail.at(-1)!.excerpt).toContain("result of turn 20");
+  });
+
+  it("falls back to reasoning when a turn produced no assistant text", () => {
+    const dir = seedSessionDir({
+      "transcript/turns.ndjson": turn(),
+      "transcript/t-0001.ndjson": JSON.stringify({ kind: "assistant.reasoning", reasoning: "thinking about it" }),
+    });
+    expect(buildSessionExtras(dir).turnsTail![0]).toMatchObject({ excerptKind: "reasoning" });
+  });
+
+  it("sums cost by phase and by model across every turn, not just the tail", () => {
+    const dir = seedSessionDir({
+      "transcript/turns.ndjson": [
+        turn({ turnId: "0001", phase: "DISCOVERY", costUsd: 0.3 }),
+        turn({ turnId: "0002", phase: "PLAN", costUsd: 0.2, model: "claude-sonnet-5" }),
+        turn({ turnId: "0003", phase: "DISCOVERY", costUsd: 0.1 }),
+      ].join("\n"),
+    });
+    const { costDetail } = buildSessionExtras(dir);
+    expect(costDetail!.byPhase).toEqual([
+      { key: "DISCOVERY", costUsd: 0.4, turns: 2 },
+      { key: "PLAN", costUsd: 0.2, turns: 1 },
+    ]);
+    expect(costDetail!.byModel[0].key).toContain("haiku");
+    expect(costDetail!.context).toMatchObject({ windowTokens: 200000 });
+  });
+
+  it("lists only the artifacts that exist, with excerpts", () => {
+    const dir = seedSessionDir({ "artifacts/spec.md": "# Spec\n\nfive acceptance criteria" });
+    const artifacts = buildSessionExtras(dir).artifacts!;
+    expect(artifacts.map((a) => a.key)).toEqual(["spec"]);
+    expect(artifacts[0].excerpt).toContain("acceptance criteria");
+    expect(artifacts[0].truncated).toBe(false);
+  });
+});
+
+describe("capSessionSnapshot", () => {
+  const bigSnapshot = () => ({
+    sessionId: "s-1",
+    eventsTail: Array.from({ length: 40 }, (_, i) => ({ seq: i, type: "event.type.that.is.long" })),
+    turnsTail: Array.from({ length: 40 }, (_, i) => ({ turnId: String(i), excerpt: "x".repeat(280), excerptKind: "text" })),
+    qa: { open: [{ id: "q1", text: "open" }], answered: Array.from({ length: 20 }, (_, i) => ({ id: `a${i}`, text: "y".repeat(400) })), dismissedCount: 0, total: 21 },
+    artifacts: [{ key: "spec", label: "Spec", exists: true, bytes: 10, excerpt: "z".repeat(1200), truncated: false }],
+  });
+
+  it("leaves a snapshot under budget completely alone", () => {
+    const snapshot = { sessionId: "s-1", turnsTail: [] };
+    expect(capSessionSnapshot(snapshot, 200_000)).toBe(snapshot);
+    expect(snapshot).not.toHaveProperty("truncated");
+  });
+
+  it("drops excerpts before turns, and answered questions before events", () => {
+    const capped = capSessionSnapshot(bigSnapshot(), 12_000);
+    expect(capped.truncated?.[0]).toBe("turn excerpts");
+    expect(capped.turnsTail!.every((t: { excerpt: string | null }) => t.excerpt === null)).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(capped))).toBeLessThanOrEqual(12_000);
+  });
+
+  it("keeps open questions even at the smallest budget — they are the point of the view", () => {
+    const capped = capSessionSnapshot(bigSnapshot(), 500);
+    expect(capped.qa!.open).toHaveLength(1);
+    expect(capped.qa!.answered).toEqual([]);
+    expect(capped.truncated).toContain("artifact excerpts");
   });
 });

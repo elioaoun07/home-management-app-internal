@@ -1,6 +1,6 @@
 // scripts/delivery/drivers/driver.mjs
 // Provider-neutral agent driver interface + factory registry.
-// See ERA Notes/10 - Project Management/Agentic Delivery Workspace/4 - Agent Drivers & Security.md §1.
+// See ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md.
 //
 // This module defines the seam only. SDK-backed drivers register themselves
 // when their modules are imported by the runner; each driver still dynamic-

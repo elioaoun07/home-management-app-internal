@@ -52,9 +52,9 @@ On failure: fix the cause. Never suppress with `any`-casts, eslint-disable, `--n
 
 If you touched `src/` or `migrations/`, update the module's campaign folder under `ERA Notes/10 - Project Management/` (`Budget/`, `Schedule/`, `Kitchen/`, `Trips/`, `Hub & ERA/`, `Notifications & Alerts/`) **in this same session**:
 
-1. **File `1 - Feature State.md`** — mark the story/bug ✅ with today's date. If it wasn't documented, add it first (bugs: to the relevant pain cluster with severity + root cause + evidence), then mark it.
+1. **The campaign Master Book** — add a `- ✅ YYYY-MM-DD — **ID** …` line to its **Shipped Log**. If the work was a bug that was never logged, add it to the **Pain Inventory** first (emoji severity + root cause + evidence), then move it to the Shipped Log.
 2. **File `4 - Checklist.md`** — check the `[x]`.
-3. **File `2 - Vision & Roadmap.md`** — add `*(IMPLEMENTED YYYY-MM-DD)*` where the realized decision is described.
+3. **The Master Book's Vision & Decisions section** — add `*(IMPLEMENTED YYYY-MM-DD)*` where the realized decision is described.
 4. **Grammar:** any checklist line you add or edit follows `ERA Notes/10 - Project Management/_Conventions.md` — `- [ ] **PREFIX-n** outcome _(severity - effort)_` under a Now/Next/Later lane; done-stamps `✅ YYYY-MM-DD` in file 1. If you touched any `4 - Checklist.md`, run **`pnpm pm:lint`** and fix errors before finishing.
 
 Pure tooling/config/hook changes with no PM-trackable story: state that explicitly in your report and finish — the hook fires once and accepts it.

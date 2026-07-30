@@ -2,7 +2,7 @@
 // Deterministic capability classifier over packet text + spec-declared affected
 // paths (keywords, globs, campaign) → capability keys defined in agent-registry.mjs.
 // The classifier owns the *rules*; the registry owns the *definitions*.
-// See ERA Notes/10 - Project Management/Agentic Delivery Workspace/3 - State Machine, Packet & Classifier.md §5.
+// See ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md.
 //
 // Zero-dependency: only imports agent-registry.mjs (itself zero-dependency).
 

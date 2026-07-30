@@ -1,7 +1,7 @@
 // scripts/delivery/usage.mjs
 // v2 usage normalization + cost estimation + multi-level aggregation.
-// See ERA Notes/10 - Project Management/Delivery Workspace/ (DW-1) and
-// Agentic Delivery Workspace/4 - Agent Drivers & Security.md §1 for the v1
+// See ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md (DW-1, retired prefix) and
+// Delivery/Delivery — Master Book.md for the v1
 // baseline this extends.
 //
 // events.mjs's `normalizeUsage`/`reduceUsage` (the v1 {input, cachedInput,

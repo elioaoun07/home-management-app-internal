@@ -1,6 +1,6 @@
 // scripts/delivery/packet.mjs
 // Work-item packet builder (packet.json, schemaVersion 1).
-// See ERA Notes/10 - Project Management/Agentic Delivery Workspace/3 - State Machine, Packet & Classifier.md §1.
+// See ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md.
 //
 // Reuses `scanCheckboxes` (scripts/pm/mutations.mjs) so packet cbidx ordinals
 // can never drift from the PM dashboard's own checkbox ordinals. The heading /

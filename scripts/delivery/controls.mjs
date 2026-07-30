@@ -5,7 +5,7 @@
 // (see run-session.mjs's `pendingDecisions`/`pendingMessages`), just for
 // commands that aren't tied to a specific approval gate: pause/resume-run,
 // same-provider model/effort change, rotate, fork, pin/unpin, and owner-side
-// Q&A (`answer`/`ask`). See ERA Notes/10 - Project Management/Delivery Workspace/
+// Q&A (`answer`/`ask`). See ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md
 // (DW-4 introduces this channel for pause + set-config; DW-5/DW-7/DW-9 reuse
 // it for answer/ask, rotate/pin/unpin, and fork).
 //

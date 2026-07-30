@@ -10,7 +10,9 @@ tags:
 
 # <Campaign> · 4 — Checklist
 
-> **Template.** Copy to `<Campaign>/4 - Checklist.md`, set frontmatter `type: checklist`, `status: active`, `updated:`, and swap `<PREFIX>` for the campaign prefix (see [_Conventions §5](<../_Conventions.md>)). Grammar: [_Conventions](<../_Conventions.md>). Validate with `pnpm pm:lint`.
+> **Template.** Copy to `<Campaign>/4 - Checklist.md`, set frontmatter `type: checklist`, `status: active`, `updated:`, and swap `<PREFIX>` for the campaign prefix (see [_Conventions §5](<../_Conventions.md>)). Grammar: [_Conventions](<../_Conventions.md>). Validate with `pnpm pm:lint`. The campaign's other (and only other) file is its Master Book — copy [Campaign Master Book](<Campaign Master Book.md>) for that.
+>
+> Header line to keep at the top: `> **Campaign:** [<Campaign> — Master Book](<<Campaign> — Master Book.md>) · [4 · Checklist](<4 - Checklist.md>)`
 >
 > **Legend:** Sev blocker / friction / annoyance / parked. Effort S / M / L.
 

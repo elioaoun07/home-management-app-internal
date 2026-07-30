@@ -50,7 +50,7 @@ tags:
 
 ## Related vault doc
 
-- `ERA Notes/10 - Project Management/PM Dashboard Refactor/` (see file 1 Feature State, R16)
+- `ERA Notes/10 - Project Management/PM Tooling/PM Tooling — Master Book.md` (Shipped Log, R16)
 
 ## Screenshots
 

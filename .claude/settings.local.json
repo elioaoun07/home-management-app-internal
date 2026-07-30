@@ -158,7 +158,28 @@
       "Bash(awk 'NR>=93 && NR<=102 {printf \"%d: %s\\\\n\", NR, substr\\($0,1,120\\)}' \"ERA Notes/10 - Project Management/Delivery 10x/4 - Checklist.md\")",
       "Bash(python \"C:/Users/aoune/AppData/Local/Temp/claude/C--Users-aoune-WebApp-budget-app/9fc69fb8-4324-4df0-bd2f-1b7e69457dbe/scratchpad/pm_update2.py\")",
       "Bash(python \"C:/Users/aoune/AppData/Local/Temp/claude/C--Users-aoune-WebApp-budget-app/9fc69fb8-4324-4df0-bd2f-1b7e69457dbe/scratchpad/pm_update3.py\")",
-      "Bash(awk 'NR>=102 && NR<=105 {printf \"%d: %s\\\\n\", NR, substr\\($0,1,90\\)}' \"ERA Notes/10 - Project Management/Delivery 10x/1 - Feature State.md\")"
+      "Bash(awk 'NR>=102 && NR<=105 {printf \"%d: %s\\\\n\", NR, substr\\($0,1,90\\)}' \"ERA Notes/10 - Project Management/Delivery 10x/1 - Feature State.md\")",
+      "Bash(mkdir -p _Archive)",
+      "Bash(mv \"FABLED+ Enhancement Study\" \"FAR Execution Checklist\" \"Functional Architecture Review\" \"Codebase Audit 2026-07-01\" _Archive/)",
+      "Bash(mv \"1 - Codebase & AI Setup Audit.md\" \"2 - Feature State — Current Reality.md\" \"3 - Future Vision & Roadmap.md\" \"4 - This Week \\(Action Plan\\).md\" \"5 - P0 Automated Tests Implementation Notes.md\" \"6 - Optimized Claude Setup Structure.md\" \"FABLE — Final Consultation \\(2026-07-06\\).md\" _Archive/)",
+      "Bash(mv \"FABLED 2\" \"FABLED 3\" _Archive/)",
+      "Bash(python \"C:/Users/aoune/AppData/Local/Temp/claude/C--Users-aoune-WebApp-budget-app/ac0a2fa2-be1d-45ba-93a0-4509198aabba/scratchpad/consolidate.py\" \"Trips\")",
+      "Bash(sed -n 13,200p __TRACKED_VAR__/_index.md)",
+      "Bash(sed -n 13,200p '__TRACKED_VAR__/5 - FABLED 3 — Successor Briefing.md')",
+      "Bash(sed -n 15,55p '__TRACKED_VAR__/1 - FABLED 3 — Current Implementation.md')",
+      "Bash(sed -n 15,50p '__TRACKED_VAR__/2 - FABLED 3 — Gaps & Missing.md')",
+      "Bash(sed -n 15,50p '__TRACKED_VAR__/3 - FABLED 3 — Optimization Plan.md')",
+      "Bash(python \"C:/Users/aoune/AppData/Local/Temp/claude/C--Users-aoune-WebApp-budget-app/ac0a2fa2-be1d-45ba-93a0-4509198aabba/scratchpad/consolidate.py\" \"Outfits\")",
+      "Bash(python \"C:/Users/aoune/AppData/Local/Temp/claude/C--Users-aoune-WebApp-budget-app/ac0a2fa2-be1d-45ba-93a0-4509198aabba/scratchpad/consolidate.py\" \"Native App\")",
+      "PowerShell(Get-ChildItem *)",
+      "Bash(sed -n 13,70p '__TRACKED_VAR__/2 - FABLED 3 — Gaps & Missing.md')",
+      "Bash(sed -n 13,60p '__TRACKED_VAR__/3 - FABLED 3 — Optimization Plan.md')",
+      "Bash(sed -n 13,120p '__TRACKED_VAR__/5 - FABLED 3 — Successor Briefing.md')",
+      "Bash(rg -n \"Delivery Workspace|Agentic Delivery Workspace|Delivery 10x|PM Dashboard Refactor\" scripts/delivery/*.mjs scripts/delivery/drivers/*.mjs scripts/pm/*.mjs)",
+      "Bash(awk '{print $5/1024/1024 \" MB \" $9}')",
+      "Bash(python /tmp/inbox-styles.py)",
+      "Bash(npx --yes ripgrep --version)",
+      "Bash(awk '{print $1}')"
     ]
   }
 }

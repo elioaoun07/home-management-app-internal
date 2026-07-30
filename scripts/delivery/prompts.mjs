@@ -14,7 +14,7 @@
 // wrong place. This was a real, previously undocumented bug (see
 // `sessionDirRel`'s doc comment).
 //
-// See ERA Notes/10 - Project Management/Agentic Delivery Workspace/4 - Agent Drivers & Security.md §5.
+// See ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md.
 //
 // Zero-dependency: pure string templates, no imports.
 

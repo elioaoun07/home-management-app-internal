@@ -1,5 +1,5 @@
 import { resolveRelativeMd } from "../../../shared/links.mjs";
-import { toggleTask, sourcePreview } from "../../app/store.js";
+import { hideCompleted, toggleTask, sourcePreview } from "../../app/store.js";
 import { parseMarkdown } from "../../lib/md-parse.js";
 
 const tokenRe = /(\[([^\]]+)\]\((<[^>]+>|[^)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|~~([^~]+)~~|_([^_]+)_)/g;
@@ -31,8 +31,35 @@ export function Markdown({ raw, file }) {
     if (block.type === "quote") return <blockquote key={index}><Inline text={block.text} file={file}/></blockquote>;
     if (block.type === "hr") return <hr key={index}/>;
     if (block.type === "table") return <table key={index}><thead><tr>{block.head.map((cell)=><th>{<Inline text={cell} file={file}/>}</th>)}</tr></thead><tbody>{block.rows.map((row)=><tr>{row.map((cell)=><td><Inline text={cell} file={file}/></td>)}</tr>)}</tbody></table>;
-    if (block.type === "list") return <ul key={index}>{block.items.map((item, itemIndex) => item.checkbox ? <li class={`md-task ${item.checkbox.state}`} data-cbidx={item.checkbox.cbidx} key={itemIndex} style={{marginLeft:item.indent}}><button class={`checkbox ${item.checkbox.state === "done" ? "checked" : ""}`} onClick={() => toggleTask(file, item.checkbox.cbidx)} disabled={globalThis.PM_MODE !== "server"} aria-label={item.checkbox.state === "done" ? "Reopen task" : "Complete task"}>{item.checkbox.state === "done" ? "✓" : ""}</button><Inline text={item.text} file={file}/></li> : <li key={itemIndex}><Inline text={item.text} file={file}/></li>)}</ul>;
+    if (block.type === "list") return <List block={block} file={file} key={index}/>;
     return null;
   })}</div>;
+}
+
+function TaskItem({ item, file }) {
+  const done = item.checkbox.state === "done";
+  return <li class={`md-task ${item.checkbox.state}`} data-cbidx={item.checkbox.cbidx} style={{marginLeft:item.indent}}>
+    <button class={`checkbox ${done ? "checked" : ""}`} onClick={() => toggleTask(file, item.checkbox.cbidx)} disabled={globalThis.PM_MODE !== "server"} aria-label={done ? "Reopen task" : "Complete task"}>{done ? "✓" : ""}</button>
+    <Inline text={item.text} file={file}/>
+  </li>;
+}
+
+/**
+ * A markdown list, with the hide-completed rule applied *per list* rather than
+ * per document: each list keeps its own "N completed hidden" pill so the lane it
+ * belongs to still reports how much has shipped. Clicking the pill turns the
+ * global toggle off — it is the only affordance that reveals them, so it must
+ * lead somewhere rather than just informing.
+ */
+function List({ block, file }) {
+  const hiding = hideCompleted.value;
+  const visible = hiding ? block.items.filter((item) => !item.checkbox || item.checkbox.state !== "done") : block.items;
+  const hidden = block.items.length - visible.length;
+  return <ul>
+    {visible.map((item, itemIndex) => item.checkbox
+      ? <TaskItem item={item} file={file} key={item.checkbox.cbidx}/>
+      : <li key={`p${itemIndex}`}><Inline text={item.text} file={file}/></li>)}
+    {hidden > 0 && <li class="md-hidden-pill"><button onClick={() => { hideCompleted.value = false; }}>{hidden} completed hidden — show</button></li>}
+  </ul>;
 }
 

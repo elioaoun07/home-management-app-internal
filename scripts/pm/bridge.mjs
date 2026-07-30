@@ -13,11 +13,12 @@
 //
 // Outbound-only by construction: this module never opens a listening socket
 // and never widens pm-server's 127.0.0.1 binding (scripts/pm/net.mjs is
-// untouched). See migrations/2026-07-25_pm-mobile-relay.sql and
-// "ERA Notes/10 - Project Management/Delivery 10x/6 - Design Debates &
-// Rejected Ideas.md" (amendment row, 2026-07-25) for why this threads rather
-// than reopens the rejected "remote decision controls" idea: gate approval
-// (spec/plan/uat/blocked) is never reachable from this module.
+// untouched). See migrations/2026-07-25_pm-mobile-relay.sql and the mobile
+// command-tiers amendment (2026-07-25) in
+// "ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md"
+// §Vision & Decisions, for why this threads rather than reopens the rejected
+// "remote decision controls" idea: gate approval (spec/plan/uat/blocked) is
+// never reachable from this module.
 //
 // Started from pm-server.mjs only when PM_BRIDGE=1 is set (env) and
 // --no-bridge was not passed. Requires PM_OWNER_USER_ID plus the existing
@@ -34,7 +35,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFil
 import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
-import { CAMPAIGNS, lintChecklist } from "./lint.mjs";
+import { CAMPAIGNS, lintChecklist, masterBookName } from "./lint.mjs";
 import { fileTasks, severityItems, sumSeverity } from "./shared/tasks.mjs";
 import { parseFrontmatter } from "./shared/frontmatter.mjs";
 import { scanLines } from "./shared/md-scan.mjs";
@@ -49,9 +50,27 @@ const HEARTBEAT_INTERVAL_MS = 10_000;
 const RUNNER_DEAD_DEBOUNCE_MS = 60_000;
 const POLL_FALLBACK_MS = 5_000;
 const EVENTS_TAIL_LINES = 40;
+// Session detail budget. Everything below is derived from files that already
+// exist on disk; the caps exist because a realtime row has to stay small enough
+// to arrive, and a long session's transcript does not.
+const TURNS_TAIL = 40;
+const TURNS_WITH_EXCERPT = 12;
+const EXCERPT_CHARS = 280;
+const QA_CAP = 30;
+const QA_TEXT_CHARS = 400;
+const ARTIFACT_EXCERPTS = [
+  { key: "spec", label: "Spec", path: ["artifacts", "spec.md"], chars: 1200 },
+  { key: "plan", label: "Plan", path: ["artifacts", "plan.md"], chars: 1200 },
+  { key: "summary", label: "Finish summary", path: ["artifacts", "finish", "summary.md"], chars: 2000 },
+  { key: "remaining", label: "Remaining work", path: ["artifacts", "finish", "remaining-work.json"], chars: 800 },
+  { key: "recovery", label: "Recovery", path: ["artifacts", "finish", "recovery.md"], chars: 800 },
+];
+const SESSION_SNAPSHOT_MAX_BYTES = 200_000;
 const INBOX_FILE = "0 - Inbox.md";
 const CHECKLIST_FILE = "4 - Checklist.md";
-const FEATURE_STATE_FILE = "1 - Feature State.md";
+// Pre-consolidation state file. Campaigns now keep everything in their Master Book;
+// this is only still read for a campaign whose book has not been written yet.
+const LEGACY_FEATURE_STATE_FILE = "1 - Feature State.md";
 const LANES = ["Now", "Next", "Later"];
 const SEVERITIES = ["blocker", "friction", "annoyance", "parked"];
 // A finished session's `session:<id>` row is only useful while it is still on
@@ -60,12 +79,25 @@ const SEVERITIES = ["blocker", "friction", "annoyance", "parked"];
 const SESSION_ROW_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const TERMINAL_SESSION_STATES = new Set(["SHIPPED", "CANCELLED"]);
 
+/**
+ * Absolute path to a campaign's consolidated Master Book — the home of its
+ * Shipped Log (✅ stamps) and Pain Inventory (emoji bullets). Falls back to the
+ * legacy `1 - Feature State.md` for any campaign not yet consolidated.
+ * Returns null when neither exists.
+ */
+function campaignBookPath(PM_DIR, campaign) {
+  const book = join(PM_DIR, campaign, masterBookName(campaign));
+  if (existsSync(book)) return book;
+  const legacy = join(PM_DIR, campaign, LEGACY_FEATURE_STATE_FILE);
+  return existsSync(legacy) ? legacy : null;
+}
+
 // The only command types the phone may ever issue. This is a second line of
 // defence — the DB CHECK constraint on pm_commands.type is the first — but
 // THIS list, and the gate/type refusals inside each exec* function below, are
 // authoritative. Deliberately absent: set-budget, set-config, rotate, fork,
 // and any decision on the spec/plan/uat/blocked gates. Those stay
-// laptop-only (Delivery 10x/6, amendment row).
+// laptop-only (Delivery Master Book, mobile command tiers amendment).
 export const ALLOWED_TYPES = new Set([
   "capture",
   "undo",
@@ -181,7 +213,7 @@ function emptyCounts(keys) {
  *
  * Distributions (byLane / bySeverity / byEffort) count OPEN items only — a
  * done item still sitting in a lane is a lint W1 anomaly awaiting a sweep to
- * `1 - Feature State.md`, not part of the working queue. `total`/`done` are
+ * the campaign's Master Book Shipped Log, not part of the working queue. `total`/`done` are
  * reported alongside so the anomaly is still visible.
  *
  * @param {{PM_DIR:string}} deps
@@ -227,7 +259,8 @@ export function createRollupsSnapshotBuilder({ PM_DIR }) {
     for (const [campaign, prefix] of Object.entries(CAMPAIGNS)) {
       const checklist = readIfExists(campaign, CHECKLIST_FILE);
       if (!checklist) continue;
-      const featureState = readIfExists(campaign, FEATURE_STATE_FILE);
+      const bookAbs = campaignBookPath(PM_DIR, campaign);
+      const featureState = bookAbs ? { abs: bookAbs, raw: readFileSync(bookAbs, "utf8") } : null;
       let mtimeMs = 0;
       try {
         mtimeMs = statSync(checklist.abs).mtimeMs;
@@ -274,7 +307,7 @@ const BOLD_ID_RE = /\*\*([A-Z]{1,5}-?\d+[a-z]?(?:\.\d+[a-z]?)?)[:.\s*]/;
 const CELL_ID_RE = /^\s*\|\s*\*{0,2}([A-Z]{1,5}-?\d+[a-z]?(?:\.\d+[a-z]?)?)\*{0,2}\s*\|/;
 
 /**
- * Completion history parsed from each campaign's `1 - Feature State.md`
+ * Completion history parsed from each campaign's Master Book Shipped Log
  * done-stamps. Two shapes are in use across the vault and both are supported:
  *
  *   prose:  ✅ 2026-07-16 — **DW-1: Flight recorder foundation.** …
@@ -310,8 +343,8 @@ export function createHistorySnapshotBuilder({ PM_DIR }) {
   function buildHistorySnapshot() {
     const completions = [];
     for (const campaign of Object.keys(CAMPAIGNS)) {
-      const abs = join(PM_DIR, campaign, FEATURE_STATE_FILE);
-      if (!existsSync(abs)) continue;
+      const abs = campaignBookPath(PM_DIR, campaign);
+      if (!abs) continue;
       completions.push(...completionsForCampaign(campaign, readFileSync(abs, "utf8")));
     }
     completions.sort((a, b) => a.date.localeCompare(b.date));
@@ -349,7 +382,179 @@ export function spendByDay(sessions) {
 }
 
 // ============================================================================
-// Pure core 4: command execution (Supabase-free — takes a plain {type,payload})
+// Pure core 4: session detail (Supabase-free — reads a session dir from disk)
+// ============================================================================
+
+function trunc(value, limit) {
+  const text = String(value == null ? "" : value);
+  return text.length > limit ? `${text.slice(0, limit)}…` : text;
+}
+
+function readTextIfExists(abs, limit) {
+  if (!existsSync(abs)) return null;
+  try {
+    const raw = readFileSync(abs, "utf8");
+    return { bytes: Buffer.byteLength(raw), excerpt: trunc(raw.trim(), limit), truncated: raw.trim().length > limit };
+  } catch {
+    return null;
+  }
+}
+
+/** The Q&A ledger, split the way the owner reads it: what needs an answer, then what got one. */
+function readQa(dir) {
+  const abs = join(dir, "memory", "ledger.json");
+  if (!existsSync(abs)) return null;
+  let ledger;
+  try { ledger = JSON.parse(readFileSync(abs, "utf8")); } catch { return null; }
+  const all = Array.isArray(ledger.questions) ? ledger.questions : [];
+  const shape = (question) => ({
+    id: question.id,
+    text: trunc(question.text, QA_TEXT_CHARS),
+    kind: question.kind || null,
+    status: question.status || null,
+    source: question.source || null,
+    phase: question.phase || null,
+    askedAt: question.askedAt || null,
+    answer: question.answer ? { text: trunc(question.answer.text, QA_TEXT_CHARS), at: question.answer.at || null } : null,
+  });
+  // Blocking questions first: those are the ones the session is stopped on.
+  const open = all.filter((q) => q.status === "open").sort((a, b) => (a.kind === "blocking" ? 0 : 1) - (b.kind === "blocking" ? 0 : 1));
+  const answered = all.filter((q) => q.status === "answered").slice(-Math.max(0, QA_CAP - open.length));
+  return {
+    open: open.slice(0, QA_CAP).map(shape),
+    answered: answered.map(shape),
+    dismissedCount: all.filter((q) => q.status === "dismissed").length,
+    total: all.length,
+  };
+}
+
+/** The last assistant sentence of a turn — enough to tell what happened without shipping the transcript. */
+function turnExcerpt(dir, turnId) {
+  const abs = join(dir, "transcript", `t-${turnId}.ndjson`);
+  const records = readJsonl(abs);
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    const record = records[index];
+    if (record.kind === "assistant.text" && record.text) return { excerpt: trunc(record.text.trim(), EXCERPT_CHARS), excerptKind: "text" };
+    if (record.kind === "assistant.reasoning" && record.reasoning) return { excerpt: trunc(String(record.reasoning).trim(), EXCERPT_CHARS), excerptKind: "reasoning" };
+  }
+  return { excerpt: null, excerptKind: null };
+}
+
+function readTurns(dir) {
+  const all = readJsonl(join(dir, "transcript", "turns.ndjson"));
+  const tail = all.slice(-TURNS_TAIL);
+  const excerptFrom = Math.max(0, tail.length - TURNS_WITH_EXCERPT);
+  return {
+    all,
+    tail: tail.map((turn, index) => ({
+      turnId: turn.turnId,
+      phase: turn.phase || null,
+      role: turn.role || null,
+      provider: turn.provider || null,
+      model: turn.model || null,
+      effort: turn.effort || null,
+      startedAt: turn.startedAt || null,
+      durationMs: turn.durationMs ?? null,
+      costUsd: turn.costUsd ?? (turn.usage && turn.usage.costUsd) ?? null,
+      result: turn.result || null,
+      records: turn.records ?? null,
+      ...(index >= excerptFrom ? turnExcerpt(dir, turn.turnId) : { excerpt: null, excerptKind: null }),
+    })),
+    truncated: all.length > tail.length,
+  };
+}
+
+/** Where the money went, by phase and by model — derived from every turn, not just the tail. */
+function costDetailFrom(turns) {
+  const add = (map, key, turn) => {
+    const row = map.get(key) || { key, costUsd: 0, turns: 0 };
+    row.costUsd += Number(turn.costUsd ?? (turn.usage && turn.usage.costUsd) ?? 0) || 0;
+    row.turns += 1;
+    map.set(key, row);
+  };
+  const byPhase = new Map();
+  const byModel = new Map();
+  for (const turn of turns) {
+    add(byPhase, turn.phase || "unknown", turn);
+    add(byModel, [turn.provider, turn.model].filter(Boolean).join(" · ") || "unknown", turn);
+  }
+  const last = turns[turns.length - 1];
+  return {
+    byPhase: [...byPhase.values()].sort((a, b) => b.costUsd - a.costUsd),
+    byModel: [...byModel.values()].sort((a, b) => b.costUsd - a.costUsd),
+    perTurn: turns.slice(-TURNS_TAIL).map((turn) => ({ turnId: turn.turnId, phase: turn.phase || null, costUsd: Number(turn.costUsd ?? 0) || 0 })),
+    context: last && last.context ? { occupancyTokens: last.context.occupancyTokens ?? null, windowTokens: last.context.windowTokens ?? null, pctUsed: last.context.pctUsed ?? null } : null,
+  };
+}
+
+/**
+ * Everything the phone needs to *read* a session — the Q&A ledger, a compact
+ * conversation tail, artifact excerpts and the cost breakdown. All of it already
+ * exists under `.delivery/sessions/<id>/`; none of it was ever relayed.
+ *
+ * Pure and Supabase-free so the shapes and the size ladder are testable without
+ * a network. New fields ride the existing `(id, kind, payload jsonb)` row — no
+ * migration, by design.
+ *
+ * @param {string} sessionDir absolute path to the session directory
+ */
+export function buildSessionExtras(sessionDir) {
+  if (!sessionDir || !existsSync(sessionDir)) return {};
+  const turns = readTurns(sessionDir);
+  const artifacts = ARTIFACT_EXCERPTS.map((spec) => {
+    const found = readTextIfExists(join(sessionDir, ...spec.path), spec.chars);
+    return { key: spec.key, label: spec.label, exists: Boolean(found), bytes: found ? found.bytes : 0, excerpt: found ? found.excerpt : null, truncated: found ? found.truncated : false };
+  }).filter((artifact) => artifact.exists);
+
+  return {
+    qa: readQa(sessionDir),
+    turnsTail: turns.tail,
+    turnsTotal: turns.all.length,
+    artifacts,
+    costDetail: turns.all.length ? costDetailFrom(turns.all) : null,
+  };
+}
+
+/**
+ * Shrink a session row until it fits the realtime payload budget, dropping the
+ * cheapest information first and *saying so* — a silently truncated detail view
+ * is worse than a short one, because the owner cannot tell which they are
+ * looking at. Returns the snapshot (mutated) either way.
+ */
+export function capSessionSnapshot(snapshot, maxBytes = SESSION_SNAPSHOT_MAX_BYTES) {
+  const size = () => Buffer.byteLength(JSON.stringify(snapshot));
+  if (size() <= maxBytes) return snapshot;
+  const dropped = [];
+
+  if (snapshot.turnsTail?.some((turn) => turn.excerpt)) {
+    snapshot.turnsTail = snapshot.turnsTail.map((turn) => ({ ...turn, excerpt: null, excerptKind: null }));
+    dropped.push("turn excerpts");
+    if (size() <= maxBytes) return Object.assign(snapshot, { truncated: dropped });
+  }
+  if ((snapshot.turnsTail?.length ?? 0) > 15) {
+    snapshot.turnsTail = snapshot.turnsTail.slice(-15);
+    dropped.push("older turns");
+    if (size() <= maxBytes) return Object.assign(snapshot, { truncated: dropped });
+  }
+  if (snapshot.qa?.answered?.length) {
+    snapshot.qa = { ...snapshot.qa, answered: [] };
+    dropped.push("answered questions");
+    if (size() <= maxBytes) return Object.assign(snapshot, { truncated: dropped });
+  }
+  if ((snapshot.eventsTail?.length ?? 0) > 20) {
+    snapshot.eventsTail = snapshot.eventsTail.slice(-20);
+    dropped.push("older events");
+    if (size() <= maxBytes) return Object.assign(snapshot, { truncated: dropped });
+  }
+  if (snapshot.artifacts?.length) {
+    snapshot.artifacts = snapshot.artifacts.map((artifact) => ({ ...artifact, excerpt: null, truncated: true }));
+    dropped.push("artifact excerpts");
+  }
+  return Object.assign(snapshot, { truncated: dropped });
+}
+
+// ============================================================================
+// Pure core 5: command execution (Supabase-free — takes a plain {type,payload})
 // ============================================================================
 
 /** @param {{PM_DIR:string, deliveryCtx:object}} deps */
@@ -504,9 +709,24 @@ export function createCommandExecutor({ PM_DIR, deliveryCtx }) {
    * not gate approval (it doesn't authorize a spec/plan/UAT), it just answers
    * a clarifying question so the agent isn't stuck while the owner is away.
    */
-  async function execAnswer(sessionId, text) {
+  /**
+   * Two kinds of answer, one command type.
+   *
+   * With a `questionId` this is a *ledger* answer — an advisory question the
+   * agent logged and carried on past. It is non-blocking by construction, so it
+   * needs no gate and is safe from the phone at any time; it routes through the
+   * same `answer` control the desktop Q&A card uses.
+   *
+   * Without one it is a *gate* answer: the session is stopped waiting for it,
+   * so the gate is re-verified server-side before the reply is sent — the UI
+   * hiding the box is not a guarantee.
+   */
+  async function execAnswer(sessionId, text, questionId) {
     if (!sessionId) return { ok: false, error: "sessionId is required" };
     if (typeof text !== "string" || !text.trim()) return { ok: false, error: "text is required" };
+    if (typeof questionId === "string" && questionId.trim()) {
+      return execControl(sessionId, "answer", { questionId: questionId.trim(), text });
+    }
     let session;
     try {
       const result = await routeDelivery(
@@ -576,7 +796,7 @@ export function createCommandExecutor({ PM_DIR, deliveryCtx }) {
       case "cancel":
         return execCancel(p.sessionId);
       case "answer":
-        return execAnswer(p.sessionId, p.text);
+        return execAnswer(p.sessionId, p.text, p.questionId);
       case "ask":
         return execAsk(p.sessionId, p.text);
       default:
@@ -661,21 +881,23 @@ export function createBridge({ PM_DIR, deliveryCtx }) {
     }
     if (!session) return null;
     const { packet, state, runner } = session;
-    const eventsPath = join(deliveryCtx.SESSIONS_DIR, sessionId, "events.ndjson");
-    return {
+    const sessionDir = join(deliveryCtx.SESSIONS_DIR, sessionId);
+    return capSessionSnapshot({
       sessionId,
       state: state.state,
       awaiting: state.awaiting,
       agent: packet.agent,
       item: { text: packet.item.text, id: packet.item.id, campaign: packet.item.campaign },
+      lane: packet.lane || null,
       usageTotal: (state.usage && state.usage.total) || null,
       budgetCurrent: (state.budget && state.budget.current) || packet.budget || null,
       build: state.build || null,
       lastError: state.lastError || null,
       updatedAt: state.updatedAt,
       runner: { alive: runner.alive, heartbeatAt: runner.heartbeatAt || null },
-      eventsTail: readJsonl(eventsPath, EVENTS_TAIL_LINES),
-    };
+      eventsTail: readJsonl(join(sessionDir, "events.ndjson"), EVENTS_TAIL_LINES),
+      ...buildSessionExtras(sessionDir),
+    });
   }
 
   async function publishSession(sessionId) {
@@ -732,6 +954,11 @@ export function createBridge({ PM_DIR, deliveryCtx }) {
 
   // ---- push notification hook (Phase 3 consumer) -------------------------
 
+  // A gate notification is about ONE session; landing on the fleet list makes
+  // the owner find it again by hand. `?view=delivery&session=<id>` is read by
+  // the phone app's view state and opens that session's detail directly.
+  const sessionUrl = (sessionId) => `/pm/live?view=delivery&session=${encodeURIComponent(sessionId)}`;
+
   async function sendPush(title, body, url, tag) {
     const notifyUrl = process.env.PM_NOTIFY_URL || `${process.env.NEXT_PUBLIC_SITE_URL || ""}`.replace(/\/$/, "") + "/api/pm/notify";
     const secret = process.env.CRON_SECRET;
@@ -760,7 +987,7 @@ export function createBridge({ PM_DIR, deliveryCtx }) {
       if (pushedNotificationSeqs.has(key)) continue;
       pushedNotificationSeqs.add(key);
       const reason = (evt.data && evt.data.reason) || "notification";
-      await sendPush(`Delivery: ${reason}`, snapshot.item.text || sessionId, "/pm/live", `pm-${sessionId}`);
+      await sendPush(`Delivery: ${reason}`, snapshot.item.text || sessionId, sessionUrl(sessionId), `pm-${sessionId}`);
     }
 
     const prevGate = lastAwaitingGate.get(sessionId);
@@ -768,19 +995,19 @@ export function createBridge({ PM_DIR, deliveryCtx }) {
     if (curGate && curGate !== prevGate) {
       const costUsd = snapshot.usageTotal?.costUsd;
       const spend = typeof costUsd === "number" && Number.isFinite(costUsd) ? `$${costUsd.toFixed(2)} spent` : "Cost unavailable";
-      await sendPush(`Delivery gate: ${curGate}`, `${spend} — ${snapshot.item.text || sessionId}`, "/pm/live", `pm-${sessionId}`);
+      await sendPush(`Delivery gate: ${curGate}`, `${spend} — ${snapshot.item.text || sessionId}`, sessionUrl(sessionId), `pm-${sessionId}`);
     }
     lastAwaitingGate.set(sessionId, curGate || null);
 
     if (lastError && lastError.message) {
-      await sendPush("Delivery error", lastError.message, "/pm/live", `pm-${sessionId}-error`);
+      await sendPush("Delivery error", lastError.message, sessionUrl(sessionId), `pm-${sessionId}-error`);
     }
 
     if (!snapshot.runner.alive && (state === "BUILDING" || state === "VALIDATING" || state === "REVIEWING")) {
       const now = Date.now();
       if (now - lastRunnerDeadPush > RUNNER_DEAD_DEBOUNCE_MS) {
         lastRunnerDeadPush = now;
-        await sendPush("Delivery runner stopped", snapshot.item.text || sessionId, "/pm/live", `pm-${sessionId}-dead`);
+        await sendPush("Delivery runner stopped", snapshot.item.text || sessionId, sessionUrl(sessionId), `pm-${sessionId}-dead`);
       }
     }
   }

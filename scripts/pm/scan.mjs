@@ -5,8 +5,10 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join, relative, resolve } from "node:path";
 
-// Directories never walked (trash + anything hidden).
-const SKIP_DIR = /^\./;
+// Directories never walked (trash, anything hidden, and the PM archive).
+// `_Archive/` holds superseded PM docs (frozen FABLED layers, retired audits). It stays in
+// git for history/grep but is invisible to every PM tool: board, static build, bridge, lint.
+const SKIP_DIR = /^\.|^_Archive$/;
 
 /**
  * Recursively collect every .md file under `dir`.
@@ -23,7 +25,7 @@ export function walk(dir, base = "") {
       continue;
     }
     if (st.isDirectory()) {
-      if (SKIP_DIR.test(entry)) continue; // skip .trash, .git, etc.
+      if (SKIP_DIR.test(entry)) continue; // skip .trash, .git, _Archive, etc.
       out.push(...walk(full, base + entry + "/"));
     } else if (/\.md$/i.test(entry)) {
       out.push({

@@ -1,6 +1,6 @@
 ---
 created: 2026-05-29
-updated: 2026-07-22
+updated: 2026-07-30
 type: index
 status: living
 tags:
@@ -9,63 +9,49 @@ tags:
 
 # 10 · Project Management — Command Center
 
-> **Start here when you ask "what do I do next?"** Three surfaces, one job each:
+> **Start here when you ask "what do I do next?"** Two files per campaign, one job each:
 >
-> 1. **Current truth** — the **FABLED 3** layer (per-campaign `FABLED 3/_index.md`; whole-app [FABLED 3 Master Index](<../00 - Home/FABLED 3 Master Index.md>)). Scored maturity, inherited delta ledgers, evidence-stamped claims, and per-cluster Successor Briefings (task-tier maps for AI sessions). Trust it as of its stamp (2026-07-18), then delta with `git log`. FABLED 2 is frozen baseline history.
-> 2. **Execution** — each campaign's `4 - Checklist.md`, as **Now / Next / Later** lanes. One item grammar for all of them: [_Conventions](<_Conventions.md>), validated by `pnpm pm:lint`, seeded from [_Templates/](<_Templates/>).
-> 3. **View** — `pnpm pm` opens the consolidated Task board/table: every campaign's items with ID / severity / effort chips, filterable (`m:Budget s:blocker is:open`), click-through to the exact line.
+> 1. **Truth & direction** — `<Campaign> — Master Book.md`: current state with a scored maturity read, the shipped log, the pain inventory, the locked decisions, the acceptance criteria, and a **Successor Briefing** (task-tier map, trap registry, verification manifest) for AI sessions. Trust it as of its `updated:` stamp, then delta with `git log`.
+> 2. **Execution** — `4 - Checklist.md`, as **Now / Next / Later** lanes. One item grammar for all of them: [_Conventions](<_Conventions.md>), validated by `pnpm pm:lint`, seeded from [_Templates/](<_Templates/>).
+>
+> **View:** `pnpm pm` opens the consolidated Task board/table — every campaign's items with ID / severity / effort chips, filterable (`m:Budget s:blocker is:open`), click-through to the exact line.
 
 ---
 
-## Campaigns (the execution queues)
+## Campaigns
 
-| Campaign | ID prefix | Checklist |
-|---|---|---|
-| **Budget** (finance cluster) | `BUD` | [Budget/4](<Budget/4 - Checklist.md>) |
-| **Schedule** (Items & Reminders) | `SCH` | [Schedule/4](<Schedule/4 - Checklist.md>) |
-| **Kitchen** (Recipes · Meal · Inventory · Shopping) | `KIT` | [Kitchen/4](<Kitchen/4 - Checklist.md>) |
-| **Trips** (lifecycle travel junction) | `TRIP` | [Trips/4](<Trips/4 - Checklist.md>) |
-| **Hub & ERA** (Hub Chat · AI · Voice) | `HUB` | [Hub & ERA/4](<Hub & ERA/4 - Checklist.md>) |
-| **Notifications & Alerts** | `NOTIF` | [Notifications & Alerts/4](<Notifications & Alerts/4 - Checklist.md>) |
-| **PM Dashboard Refactor** (tooling) | `R` | [PM Dashboard Refactor/4](<PM Dashboard Refactor/4 - Checklist.md>) |
-| **Delivery Workspace** (tooling — durable Delivery memory) | `DW` | [Delivery Workspace/4](<Delivery Workspace/4 - Checklist.md>) |
-| **Delivery 10x** (tooling — Delivery governance & truthful finish) | `DLV` | [Delivery 10x/4](<Delivery 10x/4 - Checklist.md>) |
+| Campaign | Prefix | Book | Queue |
+|---|---|---|---|
+| **Budget** (finance cluster) | `BUD` | [Master Book](<Budget/Budget — Master Book.md>) | [Checklist](<Budget/4 - Checklist.md>) |
+| **Schedule** (Items & Reminders) | `SCH` | [Master Book](<Schedule/Schedule — Master Book.md>) | [Checklist](<Schedule/4 - Checklist.md>) |
+| **Kitchen** (Recipes · Meal · Inventory · Shopping) | `KIT` | [Master Book](<Kitchen/Kitchen — Master Book.md>) | [Checklist](<Kitchen/4 - Checklist.md>) |
+| **Trips** (lifecycle travel junction) | `TRIP` | [Master Book](<Trips/Trips — Master Book.md>) | [Checklist](<Trips/4 - Checklist.md>) |
+| **Hub & ERA** (Hub Chat · AI · Voice) | `HUB` | [Master Book](<Hub & ERA/Hub & ERA — Master Book.md>) | [Checklist](<Hub & ERA/4 - Checklist.md>) |
+| **Notifications & Alerts** | `NOTIF` | [Master Book](<Notifications & Alerts/Notifications & Alerts — Master Book.md>) | [Checklist](<Notifications & Alerts/4 - Checklist.md>) |
+| **Healthcare** | `HLTH` | [Master Book](<Healthcare/Healthcare — Master Book.md>) | [Checklist](<Healthcare/4 - Checklist.md>) |
+| **Outfits** (wardrobe) | `OUT` | [Master Book](<Outfits/Outfits — Master Book.md>) | [Checklist](<Outfits/4 - Checklist.md>) |
+| **PM Tooling** (the command centre itself) | `R` | [Master Book](<PM Tooling/PM Tooling — Master Book.md>) | [Checklist](<PM Tooling/4 - Checklist.md>) |
+| **Delivery** (agentic delivery sessions) | `DLV` | [Master Book](<Delivery/Delivery — Master Book.md>) | [Checklist](<Delivery/4 - Checklist.md>) |
+| **Native App** (Capacitor plan, not started) | — | [Master Book](<Native App/Native App — Master Book.md>) | *(no checklist yet — register `NAT` first)* |
 
-Each campaign folder holds the uniform set — `_index`, `1 - Feature State`, `2 - Vision & Roadmap`, `3 - Action Plan`, `4 - Checklist` — plus the deep-dive layer **`FABLED 2/`** (current, scored, delta-ledgered) and, where present, the frozen **`FABLED/`** v1 baseline (2026-06-10). Files 1–3 carry reality + strategy + narrative; **file 4 is the live lane list**; FABLED 2 holds the depth.
+**Every campaign folder holds exactly two files:** the Master Book and the checklist. Nothing else. Superseded material lives in [_Archive/](<_Archive/_index.md>), which **no PM tool scans**.
 
-## Planning & study layers (read, don't execute from)
+## Standing plans (read, don't execute from)
 
-| Layer | What it is |
+| Doc | What it is |
 |---|---|
-| [FABLE — Final Consultation](<FABLE — Final Consultation (2026-07-06).md>) | Generational handoff (2026-07-06): product verdict, optimization frontiers, enhancement programs, 30-day sequence. |
-| [ERA Awakening — Master Execution Plan](<ERA Awakening — Master Execution Plan (2026-07-06).md>) | The proactive-era contract (Jul 6 → Oct 4, 2026): scheduler → briefing → tested ERA brain → voice → learning loop. Feeds campaign Now lanes. |
-| [FABLED+ Enhancement Study](<FABLED+ Enhancement Study/_index.md>) | Whole-codebase study (40 features + global lenses). A study queue, **not** a second execution authority — hidden from the `pnpm pm` board by default. |
-| [Native App](<Native App/_index.md>) | Approved two-stage Capacitor plan (Android + iOS). Planned, not started. |
-| [Agentic Delivery Workspace](<Agentic Delivery Workspace/_index.md>) | Dev-tooling: gated, provider-neutral agent delivery sessions (git reads only). See its own live status. |
-| [Delivery Workspace](<Delivery Workspace/_index.md>) | Durable-memory enhancement on top of the above: full transcript, Q&A, timeline, pause/handoff/compaction. Own campaign + checklist (`DW`), not a study — see its Feature State for shipped slices. |
-| [Delivery 10x](<Delivery 10x/_index.md>) | Governance layer on both of the above (`DLV`): budget envelopes, preflight flight-check, lanes, scope contract, AC matrix, finish packages. Born from the `s-20260722-225601-whdv` postmortem (BUD-11 #2) — see its file 5 for the evidence. |
-| [Functional Architecture Review](<Functional Architecture Review/_index.md>) · [FAR Execution Checklist](<FAR Execution Checklist/_index.md>) · [Codebase Audit 2026-07-01](<Codebase Audit 2026-07-01/_index.md>) | Whole-app reviews. Each carries a **`FABLED 2/`** delta layer — read the delta before treating the base as current. |
-| [FABLED 2/](<FABLED 2/_index.md>) | The PM machine's own meta-audit (this folder's implementation, gaps, optimization). |
-
-## Archived in place (historical — do not update)
-
-Marked `status: superseded` / `baseline-frozen`; hidden from the `pnpm pm` board.
-
-| File | Why / successor |
-|---|---|
-| [1 · Codebase & AI Setup Audit](<1 - Codebase & AI Setup Audit.md>) | 2026-05-29 audit → superseded by FABLED 2 + Codebase Audit 2026-07-01. |
-| [2 · Feature State — Current Reality](<2 - Feature State — Current Reality.md>) | Global feature state → per-campaign `1 - Feature State` + FABLED 2 scores. |
-| [3 · Future Vision & Roadmap](<3 - Future Vision & Roadmap.md>) | Global roadmap → per-campaign `2 - Vision & Roadmap` + FABLE Consultation. |
-| [4 · This Week (Action Plan)](<4 - This Week (Action Plan).md>) | Weekly-file ritual retired → campaign **Now** lanes on the board. |
-| [5 · P0 Automated Tests](<5 - P0 Automated Tests Implementation Notes.md>) | First test-baseline record → FABLED 2 test-protection scores. |
-| [6 · Optimized Claude Setup Structure](<6 - Optimized Claude Setup Structure.md>) | Setup blueprint → largely realized; see `.claude/` + FABLED 2. |
-| 5 × `<Campaign>/FABLED/` | Frozen v1 baselines (2026-06-10), kept for the generational audit protocol. |
+| [ERA Awakening — Master Execution Plan](<ERA Awakening — Master Execution Plan (2026-07-06).md>) | The proactive-era contract (Jul 6 → Oct 4, 2026): scheduler → briefing → tested ERA brain → voice → learning loop. Feeds campaign Now lanes. **The active execution contract** — execute its WP queue, don't re-plan it. |
+| [ERA Top View — Design Study](<ERA Top View — Design Study (2026-07-17).md>) | The Hub L-0 glance surface as the pull mouth of the briefing brain. Sequenced *behind* the Awakening work packets. |
+| [FABLE — Testament](<FABLE — Testament (2026-07-18).md>) | The operating doctrine for AI sessions: how to start, what to trust, what to hand on. |
+| [0 - Inbox](<0 - Inbox.md>) | Raw capture. Triaged into canonical items by `/triage-inbox`. |
 
 ---
 
 ## How to use this set
 
-- **Daily:** open `pnpm pm`, work the **Now** lanes; single item detail is one click away.
-- **Capturing a raw thought:** drop it in [0 - Inbox](<0 - Inbox.md>) (or the 💡 capture button in the dashboard topbar) — then run `/triage-inbox` in Claude Code to elaborate it, answer its questions, and have it filed as a canonical item ([_Conventions](<_Conventions.md>) §7).
+- **Daily:** open `pnpm pm`, work the **Now** lanes; item detail is one click away.
+- **Capturing a raw thought:** drop it in [0 - Inbox](<0 - Inbox.md>) (or the 💡 capture button in the dashboard topbar), then run `/triage-inbox` to elaborate it and have it filed as a canonical item.
 - **Adding an item:** write it in canonical grammar ([_Conventions](<_Conventions.md>)) in the right campaign's `4 - Checklist.md`, then `pnpm pm:lint`.
-- **Setting direction:** read the campaign's `FABLED 2/_index.md` (scored) → `2 - Vision & Roadmap` → drop concrete items into the lanes.
+- **Finishing an item:** tick `[x]`; at the next touch sweep it into the Master Book's **Shipped Log** with a dated stamp and delete the line (Hard Rule 25).
+- **Setting direction:** read the campaign's Master Book — *Current State* for where it is, *Pain Inventory* for what hurts, *Vision & Decisions* for what's already been decided (don't re-litigate) — then drop concrete items into the lanes.
+- **Starting a session as an AI model:** read the campaign's **Successor Briefing** section first. It tells you which tasks are safe at your tier, which traps are live, and how to verify the book is still true.

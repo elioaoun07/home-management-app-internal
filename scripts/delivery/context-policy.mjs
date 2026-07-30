@@ -4,7 +4,7 @@
 // existing session as-is, resume with a model/effort override, rotate to a
 // fresh thread, hand off to a different provider, or fork. Every decision
 // carries `reasons` so the timeline/inspector can explain *why* (auditability
-// by construction) — see ERA Notes/10 - Project Management/Delivery Workspace/.
+// by construction) — see ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md.
 //
 // Pure function, no I/O. Callers (run-session.mjs) gather the inputs from
 // state.execution / usage.mjs occupancy / config.mjs thresholds.

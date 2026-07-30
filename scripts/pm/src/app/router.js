@@ -15,7 +15,7 @@ export function parseRoute(hash = "") {
     if (parts[1] === "new") return { name: "delivery-new", path, query };
     return { name: "delivery", path, query };
   }
-  if (["checklist", "bugs", "search"].includes(parts[0])) return { name: parts[0], path, query };
+  if (["checklist", "bugs", "search", "inbox"].includes(parts[0])) return { name: parts[0], path, query };
   return { name: "not-found", path, query };
 }
 

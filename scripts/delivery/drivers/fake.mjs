@@ -1,12 +1,12 @@
 // scripts/delivery/drivers/fake.mjs
 // Scripted, fully deterministic driver implementation for tests (and the
 // runner/dashboard smoke path). Never touches a real SDK, a real process, or
-// the filesystem. Extended in DW-1 (Delivery Workspace enhancement) to also
+// the filesystem. Extended in DW-1 (the durable-memory campaign, now merged into Delivery) to also
 // support the seam v2 shape — an `onRaw` full-fidelity record feed, v2 usage
 // passthrough, per-turn model/effort tracking, and `turnMeta` — so every
 // slice downstream of the flight recorder is testable without a live SDK.
-// See ERA Notes/10 - Project Management/Agentic Delivery Workspace/4 - Agent Drivers & Security.md §1
-// and ERA Notes/10 - Project Management/Delivery Workspace/ for the v2 seam.
+// See ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md
+// and ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md for the v2 seam.
 
 import { DriverAbortedError, DriverError, registerDriver, withObservedUsage } from "./driver.mjs";
 

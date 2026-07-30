@@ -4,7 +4,7 @@
 // curated, truncated events.ndjson (doc "4 - Agent Drivers & Security.md")
 // was never meant to be — everything a driver streams for a turn is kept
 // here, bounded per record instead of silently dropped.
-// See ERA Notes/10 - Project Management/Delivery Workspace/ (DW-1).
+// See ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md (DW-1, retired prefix).
 //
 // Pure string/array operations only, mirroring events.mjs's split between
 // "pure ndjson mutation" (here) and "actual file I/O" (fsx.mjs, called from

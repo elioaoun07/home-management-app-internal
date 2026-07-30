@@ -19,7 +19,7 @@ description: "Safety rules for BOTH recurrence systems — recurring payments (b
 
 ## ⚠️ Read the PM docs first — this area is mid-redesign
 
-Before ANY change to occurrence actions (skip/postpone/edit-one/delete-one) or expansion logic, read `ERA Notes/10 - Project Management/Schedule/1 - Feature State.md` and `2 - Vision & Roadmap.md`. Documented history you must not re-learn the hard way:
+Before ANY change to occurrence actions (skip/postpone/edit-one/delete-one) or expansion logic, read `ERA Notes/10 - Project Management/Schedule/Schedule — Master Book.md` — its Pain Inventory and the staged recurrence refactor in Vision & Decisions. Documented history you must not re-learn the hard way:
 
 - "Skip" was once wired to *postpone-next-occurrence* → produced **duplicates**. Skip and postpone are different operations: skip = this occurrence never happens; postpone = this occurrence moves.
 - Item recurrence has **diverging expansion engines** (the same rule expanded in more than one code path can disagree). **Never add another expansion path** — find and reuse the one the surface you're editing already uses; if two paths disagree, that's the bug, and unifying beats patching one side.

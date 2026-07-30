@@ -2,7 +2,7 @@
 // Central agent registry — the single source of truth for the Agent Catalog,
 // classifier capability definitions, launch capability preview, session
 // agent-output cards, phase availability, and blocking/advisory metadata.
-// See ERA Notes/10 - Project Management/Agentic Delivery Workspace/3 - State Machine, Packet & Classifier.md §4.
+// See ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md.
 //
 // Zero-dependency pure data module — no imports, no fs, no child_process.
 

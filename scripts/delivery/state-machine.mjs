@@ -1,6 +1,6 @@
 // scripts/delivery/state-machine.mjs
 // Pure delivery-session transition table.
-// See ERA Notes/10 - Project Management/Agentic Delivery Workspace/3 - State Machine, Packet & Classifier.md §2.
+// See ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md.
 //
 // Zero-dependency: `next(state, event, context)` is a pure function that either
 // returns `{to, effects}` (effects are opaque string tokens for the runner to

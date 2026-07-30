@@ -27,7 +27,7 @@ REPRO: <steps, or "not reproducible — evidence is X">
 
 1. `ERA Notes/01 - Architecture/Feature Map/_index.md` → module file → **exact source paths**.
 2. Read the module's vault doc, **gotchas section first** — a large share of "bugs" here are documented gotchas or known-issue areas. If the gotcha explains the bug, your job shrinks to applying the documented remedy.
-3. Check `ERA Notes/10 - Project Management/<Campaign>/1 - Feature State.md` for the module — the bug may already be logged with a root cause, or the area may be mid-refactor (e.g. recurrence/occurrence actions). **Never "fix" something that PM docs say is being redesigned** without flagging it.
+3. Check `ERA Notes/10 - Project Management/<Campaign>/<Campaign> — Master Book.md` — the bug may already be in its Pain Inventory with a root cause, or the area may be mid-refactor (e.g. recurrence/occurrence actions) per its Vision & Decisions. **Never "fix" something the book says is being redesigned** without flagging it.
 
 ## Phase 3 — Trace the data path (write it down)
 
@@ -85,5 +85,5 @@ If you need runtime evidence, add temporary logging — and remove it before fin
 ## Phase 7 — Close out
 
 Run `.claude/skills/finish-task/SKILL.md`. PM specifics for bugs (Hard Rule 25):
-- If the bug wasn't already logged: add it to the relevant pain cluster in the campaign's `1 - Feature State.md` (severity, root cause, evidence) — then mark it fixed ✅ with today's date, and check `[x]` in `4 - Checklist.md`.
+- If the bug wasn't already logged: add it to the campaign Master Book's **Pain Inventory** (emoji severity lead, root cause, evidence). When fixed, move it to the **Shipped Log** as `- ✅ YYYY-MM-DD — **ID** …` and tick `[x]` in `4 - Checklist.md`.
 - Report format: root cause → fix → how verified → what you did NOT verify.

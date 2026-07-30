@@ -12,9 +12,9 @@ tags:
 
 # Notifications & Alerts · 4 — Checklist
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Campaign:** [Notifications & Alerts — Master Book](<Notifications & Alerts — Master Book.md>) · [4 · Checklist](<4 - Checklist.md>)
 >
-> **What this file is:** the single flat, checkable surface for Notifications & Alerts — every open actionable item under **Now / Next / Later**. Grammar: [_Conventions](<../_Conventions.md>) (validated by `pnpm pm:lint`). The narrative *why + order* is [3 · Action Plan](<3 - Action Plan.md>). Completed items are cleared once done — see git history or [1 · Feature State](<1 - Feature State.md>) for the record.
+> **What this file is:** the single flat, checkable surface for Notifications & Alerts — every open actionable item under **Now / Next / Later**. Grammar: [_Conventions](<../_Conventions.md>) (validated by `pnpm pm:lint`). The narrative *why + order* is [Notifications & Alerts — Master Book](<Notifications & Alerts — Master Book.md>). Completed items are swept into the Master Book's Shipped Log and the line deleted — git history is the rest of the archive.
 >
 > **Legend:** Sev blocker / friction / annoyance / parked. Effort S / M / L.
 > **ID migration (2026-07-15):** old phase IDs `1.x/2.x/3.x/4.x/5.x/6.6` → `NOTIF-1.x/…/NOTIF-6.6`; phases map to lanes (Phase 1 → Now; Phases 2–3 + 6.6 → Next; Phases 4–5 → Later).
@@ -75,7 +75,7 @@ tags:
 
 ## Definition of Done
 
-- [ ] **D1** *(Phase 1)* Tapping the daily items summary (push **and** in-app) lands on `/reminders`; the budget reminder still opens the expense form; `/items` no longer referenced; [1 · Feature State](<1 - Feature State.md>) Cluster 2 marked resolved.
+- [ ] **D1** *(Phase 1)* Tapping the daily items summary (push **and** in-app) lands on `/reminders`; the budget reminder still opens the expense form; `/items` no longer referenced; [Notifications & Alerts — Master Book](<Notifications & Alerts — Master Book.md>) Cluster 2 marked resolved.
 - [ ] **D2** *(Phase 2)* The bell no longer animates perpetually (finite-on-arrival only), respects `prefers-reduced-motion`, and the unread signal is calm but unambiguous.
 - [ ] **D3** *(Phase 3)* Drawer rows are one tier with icon/compact actions; Undo intact; verified on mobile.
 - [ ] **D4** *(Phase 4)* The alerts page reads as scannable cards with clear hierarchy; no red on individual rows; verified on mobile.

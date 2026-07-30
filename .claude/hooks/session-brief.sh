@@ -54,6 +54,6 @@ fi
 if [ -n "$out" ]; then
   echo "PM FRESHNESS RADAR (SessionStart hook):"
   echo "$out"
-  echo "Current cluster truth lives in the FABLED 3 layer — start at 'ERA Notes/00 - Home/FABLED 3 Master Index.md', then delta with git log --since=2026-07-18. Before working a cluster, read its 'FABLED 3/5 - FABLED 3 — Successor Briefing.md' (task-tier map + traps). Execution = the campaign 4 - Checklist.md Now/Next/Later lanes (grammar in _Conventions.md, viewed via 'pnpm pm'). If this session ships work, update the campaign PM files (Hard Rule 25) and append the cluster's FABLED 3 delta ledger."
+  echo "Each PM campaign is exactly two files: '<Campaign> — Master Book.md' (state, shipped log, pains, decisions, Successor Briefing with its task-tier map and traps) and '4 - Checklist.md' (the Now/Next/Later queue, grammar in _Conventions.md, viewed via 'pnpm pm'). Read the Master Book before working a campaign, then delta with git log --since its updated: stamp. Vault sections keep their own FABLED 3 audits; superseded PM material lives in _Archive/ and is invisible to every PM tool. If this session ships work, tick the checklist and sweep the record into the Master Book's Shipped Log (Hard Rule 25)."
 fi
 exit 0

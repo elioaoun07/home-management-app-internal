@@ -4,7 +4,7 @@
 // the `pnpm pm` board stays a coherent, consolidated view. Zero dependencies.
 //
 // Pure core: lintChecklist(raw, opts) -> [{ line, rule, level, message }]  (testable)
-// CLI: `node scripts/pm/lint.mjs` — lints the seven mapped checklists, exit 1 on any error.
+// CLI: `node scripts/pm/lint.mjs` — lints the ten mapped checklists, exit 1 on any error.
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -12,7 +12,9 @@ import { fileURLToPath } from "node:url";
 import { scanLines } from "./shared/md-scan.mjs";
 import { parseFrontmatter } from "./shared/frontmatter.mjs";
 
-// Campaign folder -> required ID prefix. Only these files are linted; FABLED*/archived are excluded by construction.
+// Campaign folder -> required ID prefix. Only these files are linted; `_Archive/` is excluded by
+// construction (see the SKIP_DIR rule in scan.mjs). Renaming a campaign folder means editing this
+// map AND every relative link that points into it, in the same pass.
 export const CAMPAIGNS = Object.freeze({
   "Budget": "BUD",
   "Schedule": "SCH",
@@ -20,12 +22,21 @@ export const CAMPAIGNS = Object.freeze({
   "Trips": "TRIP",
   "Hub & ERA": "HUB",
   "Notifications & Alerts": "NOTIF",
-  "PM Dashboard Refactor": "R",
-  "Delivery Workspace": "DW",
-  "Delivery 10x": "DLV",
+  "PM Tooling": "R",
+  "Delivery": "DLV",
   "Outfits": "OUT",
   "Healthcare": "HLTH",
 });
+
+/**
+ * The consolidated per-campaign doc: `<Campaign>/<Campaign> — Master Book.md`.
+ * Single source of truth for state, shipped log, pains, vision and acceptance criteria —
+ * everything that used to live in `1 - Feature State.md` … `3 - Action Plan.md`.
+ * The only other file in a campaign folder is `4 - Checklist.md` (the working queue).
+ */
+export function masterBookName(campaign) {
+  return `${campaign} — Master Book.md`;
+}
 
 const LANES = ["Now", "Next", "Later"];
 const DOD = "Definition of Done";
@@ -105,7 +116,7 @@ export function lintChecklist(raw, { campaign, resolveMd = () => null, resolveCo
 
     // Now / Next / Later — full grammar
     if (ln.state === "open") laneOpenCount.set(lane, (laneOpenCount.get(lane) || 0) + 1);
-    else add(lineNo, "warn", "W1", `completed item still in a lane — sweep it to 1 - Feature State and delete the line`);
+    else add(lineNo, "warn", "W1", `completed item still in a lane — sweep it to the Master Book's Shipped Log and delete the line`);
 
     if (!id) { add(lineNo, "error", "E3", "item is missing a **PREFIX-n** ID chip"); }
     else {

@@ -94,10 +94,24 @@ export interface HistorySnapshot {
 
 // ---- delivery --------------------------------------------------------------
 
+export interface AwaitingQuestion {
+  id?: string | null;
+  text: string;
+}
+
 export interface DeliveryAwaiting {
   gate: "spec" | "plan" | "uat" | "question" | "blocked" | "budget" | "shipped" | null;
   reason?: string | null;
   returnTo?: string | null;
+  /**
+   * What the agent actually asked, when `gate === "question"`. The runner has
+   * always written this and the bridge has always published `awaiting` verbatim —
+   * it was dropped here, which is why the phone showed a reply box with no
+   * question in it.
+   */
+  questions?: AwaitingQuestion[];
+  /** Set when a budget pause suspended a phase gate; restored on an authorized raise. */
+  priorAwaiting?: { gate?: string | null } | null;
 }
 
 export interface UsageTotal {
@@ -123,6 +137,57 @@ export interface DeliveryEvent {
   ts?: string;
 }
 
+export interface LedgerQuestion {
+  id: string;
+  text: string;
+  kind: "blocking" | "advisory" | string | null;
+  status: "open" | "answered" | "dismissed" | string | null;
+  source: "agent" | "owner" | "runner" | string | null;
+  phase: string | null;
+  askedAt: string | null;
+  answer: { text: string; at: string | null } | null;
+}
+
+export interface SessionQa {
+  open: LedgerQuestion[];
+  answered: LedgerQuestion[];
+  dismissedCount: number;
+  total: number;
+}
+
+export interface SessionTurn {
+  turnId: string;
+  phase: string | null;
+  role: string | null;
+  provider: string | null;
+  model: string | null;
+  effort: string | null;
+  startedAt: string | null;
+  durationMs: number | null;
+  costUsd: number | null;
+  result: string | null;
+  records: number | null;
+  /** Present only on the most recent turns — the rest carry metadata alone. */
+  excerpt: string | null;
+  excerptKind: "text" | "reasoning" | null;
+}
+
+export interface SessionArtifact {
+  key: string;
+  label: string;
+  exists: boolean;
+  bytes: number;
+  excerpt: string | null;
+  truncated: boolean;
+}
+
+export interface SessionCostDetail {
+  byPhase: { key: string; costUsd: number; turns: number }[];
+  byModel: { key: string; costUsd: number; turns: number }[];
+  perTurn: { turnId: string; phase: string | null; costUsd: number }[];
+  context: { occupancyTokens: number | null; windowTokens: number | null; pctUsed: number | null } | null;
+}
+
 export interface SessionSnapshot {
   sessionId: string;
   state: string;
@@ -136,6 +201,16 @@ export interface SessionSnapshot {
   updatedAt: string;
   runner: { alive: boolean; heartbeatAt: string | null };
   eventsTail: DeliveryEvent[];
+  // ---- session detail. All optional: a laptop running an older bridge simply
+  // publishes a row without them, and the detail view degrades to what it has.
+  lane?: string | null;
+  qa?: SessionQa | null;
+  turnsTail?: SessionTurn[];
+  turnsTotal?: number;
+  artifacts?: SessionArtifact[];
+  costDetail?: SessionCostDetail | null;
+  /** Names of the things the size cap dropped, so the UI can say so out loud. */
+  truncated?: string[];
 }
 
 export interface FleetSessionRow {

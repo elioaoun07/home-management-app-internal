@@ -1,13 +1,13 @@
 // scripts/delivery/config.mjs
 // `.delivery/config.json` loader + defaults + validation.
-// See ERA Notes/10 - Project Management/Delivery Workspace/ (DW-1) and
+// See ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md (DW-1, retired prefix) and
 // AgenticIdeas.MD's "no hardcoded price table" guidance — model catalogs and
 // prices live only in this owner-edited file, never in source. The file is
 // optional: when absent, `loadConfig` returns built-in defaults that keep
 // today's behavior (no model/pricing catalog, today's per-phase effort
 // routing). Neither pm-server nor the runner ever write this file — it is
 // hand-maintained, matching the single-writer discipline documented in
-// Agentic Delivery Workspace/2 - Architecture & Process Model.md §4.
+// Delivery/Delivery — Master Book.md.
 
 import { join } from "node:path";
 import { atomicWriteJsonSync, readJsonIfExists } from "./fsx.mjs";

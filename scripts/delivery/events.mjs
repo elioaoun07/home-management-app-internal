@@ -1,6 +1,6 @@
 // scripts/delivery/events.mjs
 // Append-only ndjson event log format + usage reducer.
-// See ERA Notes/10 - Project Management/Agentic Delivery Workspace/2 - Architecture & Process Model.md §4
+// See ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md
 // and 4 - Agent Drivers & Security.md §1.
 //
 // Pure string/array operations only — actual file I/O (appendFileSync) is

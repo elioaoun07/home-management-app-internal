@@ -1,6 +1,6 @@
 // scripts/delivery/fsx.mjs
 // Atomic filesystem helpers for the `.delivery/` session store.
-// See ERA Notes/10 - Project Management/Agentic Delivery Workspace/2 - Architecture & Process Model.md §4.
+// See ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md.
 //
 // Writes go to `<name>.tmp` then `renameSync` (same-volume rename is effectively
 // atomic on NTFS) with EPERM retry — Windows occasionally holds a transient lock

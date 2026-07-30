@@ -25,6 +25,7 @@ import {
 import { join } from "node:path";
 
 import { resolveInside, toggleCheckbox } from "../pm/mutations.mjs";
+import { masterBookName } from "../pm/lint.mjs";
 import { applyCapabilityDrops, classify, isTrivialLaunchCandidate, ALWAYS_ON_CAPABILITIES } from "./classify.mjs";
 import { atomicWriteJsonSync, readJsonIfExists, readTextIfExists } from "./fsx.mjs";
 import { gitRevParseHead, gitStatusPorcelain } from "./gitread.mjs";
@@ -176,8 +177,11 @@ function findCampaignFiles(campaign, PM_DIR, PM_REL) {
   if (!campaign) return [];
   const campaignDir = join(PM_DIR, campaign);
   if (!existsSync(campaignDir)) return [];
+  // Post-consolidation a campaign holds exactly two docs: its Master Book and
+  // `4 - Checklist.md`. The `^[1-4] -` shape is the pre-consolidation layout,
+  // still matched so an unconverted campaign keeps its context.
   return readdirSync(campaignDir)
-    .filter((n) => /^[1-4]\s*-/.test(n) && /\.md$/i.test(n))
+    .filter((n) => /\.md$/i.test(n) && (/— Master Book\.md$/i.test(n) || /^[1-4]\s*-/.test(n)))
     .sort()
     .map((n) => `${PM_REL}/${campaign}/${n}`.replace(/\\/g, "/"));
 }
@@ -188,9 +192,13 @@ function escapeRegExp(value) {
 
 function findPreLaunchAcceptanceCriteria(item, PM_DIR) {
   if (!item.id || !item.campaign) return [];
-  const actionPlanPath = join(PM_DIR, item.campaign, "3 - Action Plan.md");
-  if (!existsSync(actionPlanPath)) return [];
-  const raw = readFileSync(actionPlanPath, "utf8");
+  // `### <ID>` acceptance blocks live in the Master Book's Acceptance Criteria
+  // Index; `3 - Action Plan.md` is the pre-consolidation home, kept as a fallback.
+  const bookPath = join(PM_DIR, item.campaign, masterBookName(item.campaign));
+  const legacyPath = join(PM_DIR, item.campaign, "3 - Action Plan.md");
+  const criteriaPath = existsSync(bookPath) ? bookPath : legacyPath;
+  if (!existsSync(criteriaPath)) return [];
+  const raw = readFileSync(criteriaPath, "utf8");
   const heading = new RegExp(`^###\\s+${escapeRegExp(item.id)}(?:\\s|Â·|·|$).*?$`, "m");
   const match = heading.exec(raw);
   if (!match) return [];
@@ -1578,7 +1586,7 @@ function postResume(ctx, body) {
  * of the same launch.
  *
  * ACCEPTED keeps the existing checkbox tick. Every other resting state gets a
- * dated progress bullet appended to the campaign's `1 - Feature State.md`, so
+ * dated progress bullet appended to the campaign's Master Book, so
  * the honest outcome ("this was attempted, it blocked here, the finish package
  * is at X") lands in the same file the owner plans from.
  *
@@ -1647,10 +1655,19 @@ function writePmTrace(ctx, session) {
   const campaign = session.packet.item && session.packet.item.campaign;
   if (!campaign) return { skipped: "no campaign recorded on the packet" };
 
-  const relPath = `${campaign}/1 - Feature State.md`;
+  let relPath = `${campaign}/${masterBookName(campaign)}`;
   let abs;
   try {
     abs = resolveInside(ctx.PM_DIR, relPath);
+    if (!existsSync(abs)) {
+      // campaign not consolidated yet — fall back to the legacy state file
+      const legacyRel = `${campaign}/1 - Feature State.md`;
+      const legacyAbs = resolveInside(ctx.PM_DIR, legacyRel);
+      if (existsSync(legacyAbs)) {
+        relPath = legacyRel;
+        abs = legacyAbs;
+      }
+    }
   } catch (err) {
     return { error: String((err && err.message) || err) };
   }

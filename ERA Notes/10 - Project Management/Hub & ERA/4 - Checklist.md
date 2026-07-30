@@ -12,9 +12,9 @@ tags:
 
 # Hub & ERA · 4 — Checklist
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Campaign:** [Hub & ERA — Master Book](<Hub & ERA — Master Book.md>) · [4 · Checklist](<4 - Checklist.md>)
 >
-> **What this file is:** the single flat, checkable surface for Hub & ERA — every open actionable item under **Now / Next / Later**. Grammar: [_Conventions](<../_Conventions.md>) (validated by `pnpm pm:lint`). The narrative *why* is [3 · Action Plan](<3 - Action Plan.md>). Completed items are cleared once done — see git history or [1 · Feature State](<1 - Feature State.md>) for the record.
+> **What this file is:** the single flat, checkable surface for Hub & ERA — every open actionable item under **Now / Next / Later**. Grammar: [_Conventions](<../_Conventions.md>) (validated by `pnpm pm:lint`). The narrative *why* is [Hub & ERA — Master Book](<Hub & ERA — Master Book.md>). Completed items are swept into the Master Book's Shipped Log and the line deleted — git history is the rest of the archive.
 >
 > **Legend:** Sev blocker / friction / annoyance / parked. Effort S / M / L.
 > **ID migration (2026-07-15):** N1–N2→HUB-1–HUB-2, X1–X2→HUB-3–HUB-4, L1–L6→HUB-5–HUB-10.
@@ -29,7 +29,7 @@ tags:
 ## Next
 
 - [ ] **HUB-3** Briefing enrichment ← Schedule — feed the whole week's shape into ERA's proactive briefing. Coordinate with [Schedule · 4 · Checklist](<../Schedule/4 - Checklist.md>). _(friction - M)_
-- [ ] **HUB-4** Briefing enrichment ← Budget (cashflow) — warn before a recurring payment overdraws. Coordinate with [Budget · 3 · Action Plan](<../Budget/3 - Action Plan.md>). _(friction - M)_
+- [ ] **HUB-4** Briefing enrichment ← Budget (cashflow) — warn before a recurring payment overdraws. Coordinate with [Hub & ERA — Master Book](<Hub & ERA — Master Book.md>). _(friction - M)_
 
 ## Later
 
@@ -45,4 +45,4 @@ tags:
 - [ ] **D1** Intent routing has test coverage; a misrecognized intent clarifies instead of mis-acting; `pnpm test` green.
 - [ ] **D2** Voice degrades gracefully with no Azure connection, and the setup is documented.
 - [ ] **D3** ERA's briefing reads at least one of Schedule/Budget proactively (visibly smarter than reactive-only).
-- [ ] **D4** [1 · Feature State](<1 - Feature State.md>) updated to drop the "no tests" / "fragile" notes this work closes.
+- [ ] **D4** [Hub & ERA — Master Book](<Hub & ERA — Master Book.md>) updated to drop the "no tests" / "fragile" notes this work closes.

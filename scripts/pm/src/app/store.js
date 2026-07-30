@@ -48,6 +48,13 @@ export const moduleStats = computed(() => moduleNames.value.map((module) => {
   const done = tasks.filter((task) => task.state === "done").length;
   return { module, files: moduleFiles.length, total: tasks.length, done, open: tasks.length - done, progress: tasks.length ? Math.round(done / tasks.length * 100) : 0 };
 }).filter((stat) => stat.files > 0));
+// Untriaged inbox entries — the open checkboxes under `## New` in `0 - Inbox.md`.
+// Drives the sidebar badge so the queue is visible without navigating to it.
+export const inboxCount = computed(() => {
+  const inbox = byRelPath.value.get("0 - inbox.md");
+  if (!inbox) return 0;
+  return inbox.tasks.filter((task) => task.section === "New" && task.state !== "done").length;
+});
 export const backlinkIndex = computed(() => {
   const result = new Map();
   for (const file of files.value) for (const link of extractLinks(file.raw, file.relPath)) {

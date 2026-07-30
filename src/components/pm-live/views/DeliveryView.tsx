@@ -3,14 +3,18 @@
 // gate approvals (spec/plan/uat/blocked), set-budget, rotate and fork are NOT
 // reachable from here and are refused by the bridge regardless — the phone may
 // only pause, resume, cancel, answer an open question, or send guidance.
-// See "Delivery 10x/6 - Design Debates & Rejected Ideas.md" (2026-07-25).
+// See the Delivery Master Book's mobile command-tiers amendment (2026-07-25).
+//
+// Tapping a card opens the session detail (Questions / Conversation / Artifacts
+// / Cost); the quick actions stay on the card so a pause is always one tap.
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import { formatUsd } from "@/features/pm-live/chartTheme";
 import { TERMINAL_STATES, useActiveSessions, useRecentSessions } from "@/features/pm-live/selectors";
 import { useFleet, useSessions } from "@/features/pm-live/store";
+import { useViewState } from "@/features/pm-live/viewState";
 import type { CommandType, FleetSessionRow, SendCommand, SessionSnapshot } from "@/features/pm-live/types";
 
 const STATE_STYLE: Record<string, { color: string; background: string }> = {
@@ -35,7 +39,7 @@ function SessionCard({
   detail: SessionSnapshot | undefined;
   sendCommand: SendCommand;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const openSession = useViewState((s) => s.setSession);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [answerText, setAnswerText] = useState("");
@@ -64,7 +68,7 @@ function SessionCard({
 
   return (
     <div className="pm-card p-3">
-      <button className="w-full flex items-start justify-between gap-2 text-left" onClick={() => setExpanded((e) => !e)}>
+      <button className="w-full flex items-start justify-between gap-2 text-left" onClick={() => openSession(row.sessionId)} aria-label={`Open ${row.item.id || row.sessionId}`}>
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded" style={stateStyle}>
@@ -94,10 +98,7 @@ function SessionCard({
               {formatUsd(usage.costUsd)}
             </span>
           )}
-          <ChevronDown
-            size={14}
-            style={{ color: "var(--pm-fg-3)", transform: expanded ? "rotate(180deg)" : undefined }}
-          />
+          <ChevronRight size={14} style={{ color: "var(--pm-fg-3)" }} />
         </span>
       </button>
 
@@ -118,6 +119,15 @@ function SessionCard({
 
       {gate === "question" && (
         <div className="mt-2 space-y-1.5">
+          {(detail?.awaiting?.questions ?? []).map((question, index) => (
+            <p
+              key={question.id ?? index}
+              className="text-[13px] leading-snug rounded-lg px-2.5 py-2"
+              style={{ color: "var(--pm-fg-1)", backgroundColor: "var(--pm-surface-strong)" }}
+            >
+              {question.text}
+            </p>
+          ))}
           <textarea
             value={answerText}
             onChange={(e) => setAnswerText(e.target.value)}
@@ -205,22 +215,6 @@ function SessionCard({
         </>
       )}
 
-      {expanded && (
-        <div className="mt-3 pt-3 border-t space-y-1 max-h-56 overflow-y-auto" style={{ borderColor: "var(--pm-border)" }}>
-          {detail?.eventsTail?.length ? (
-            [...detail.eventsTail].reverse().map((evt) => (
-              <p key={evt.seq} className="text-[11px] font-mono truncate" style={{ color: "var(--pm-fg-3)" }}>
-                <span className="tabular-nums">{evt.seq}</span> {evt.type}
-                {evt.phase ? ` · ${evt.phase}` : ""}
-              </p>
-            ))
-          ) : (
-            <p className="text-[11.5px]" style={{ color: "var(--pm-fg-3)" }}>
-              No events published for this session yet.
-            </p>
-          )}
-        </div>
-      )}
     </div>
   );
 }

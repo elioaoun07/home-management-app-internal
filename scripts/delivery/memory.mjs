@@ -2,7 +2,7 @@
 // The Delivery-owned memory ledger: durable requirements, constraints,
 // decisions, and Q&A — independent of any provider's chat history. This is
 // the L1 "structured Delivery memory" half of DW-1's transcript work (raw
-// history) — see ERA Notes/10 - Project Management/Delivery Workspace/ (DW-5).
+// history) — see ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md (DW-5, retired prefix).
 //
 // Pure schema + updater functions only. File I/O (versioned writes to
 // memory/ledger.json + memory/history/ledger-VVVV.json) lives in

@@ -12,9 +12,9 @@ tags:
 
 # Schedule · 4 — Checklist
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Campaign:** [Schedule — Master Book](<Schedule — Master Book.md>) · [4 · Checklist](<4 - Checklist.md>)
 >
-> **What this file is:** the single flat, checkable surface for Schedule — every open actionable item under **Now / Next / Later**. Grammar: [_Conventions](<../_Conventions.md>) (validated by `pnpm pm:lint`). The narrative *why + round-by-round history* lives in [3 · Action Plan](<3 - Action Plan.md>); completed items are cleared once done — see git history or [1 · Feature State](<1 - Feature State.md>) for the record.
+> **What this file is:** the single flat, checkable surface for Schedule — every open actionable item under **Now / Next / Later**. Grammar: [_Conventions](<../_Conventions.md>) (validated by `pnpm pm:lint`). The narrative *why*, the recurrence audit and the shipped history live in the Master Book; completed items are swept into its Shipped Log and the line deleted.
 >
 > **Legend:** Sev blocker / friction / annoyance / parked. Effort S / M / L.
 > **ID migration (2026-07-15):** phase IDs collapsed to `SCH-*`; the six carried "real-device check + Undo + console.error" round items (R3.5/R4.6/R6.7/R7.5/R8.2/5.5) merged into **SCH-5.5**; the "retire `task` type" note became a real item **SCH-6.1**.
@@ -23,8 +23,8 @@ tags:
 
 ## Now
 
-- [ ] **SCH-4.2** (Phase 4) Universal placement-rule **guard test** — a forgotten skip+inject breaks flexible items everywhere. A first placement-rule test shipped; this is the broader per-view guard, which has a known gap against [WebTodayView.tsx](<../../../src/components/web/WebTodayView.tsx>) (see [1 · Feature State](<1 - Feature State.md>) Cluster 5). _(friction - M)_
-- [ ] **SCH-4.3b** (Phase 4) Engine/UI recurrence unification — Stages 2–3 (one expansion engine + one occurrence-action sheet across all surfaces). → [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) _(friction - L)_
+- [ ] **SCH-4.2** (Phase 4) Universal placement-rule **guard test** — a forgotten skip+inject breaks flexible items everywhere. A first placement-rule test shipped; this is the broader per-view guard, which has a known gap against [WebTodayView.tsx](<../../../src/components/web/WebTodayView.tsx>) (see [Master Book](<Schedule — Master Book.md>) › Pain Inventory). _(friction - M)_
+- [ ] **SCH-4.3b** (Phase 4) Engine/UI recurrence unification — Stages 2–3 (one expansion engine + one occurrence-action sheet across all surfaces). → [Master Book](<Schedule — Master Book.md>) _(friction - L)_
 - [ ] **SCH-5.5** (Phase 5) Mobile-form cleanup carried from the R3–R8 rounds: add **Undo** to success toasts (Hard Rule #1), remove the stray `console.error` in the submit/speech handler (Hard Rule #22), drop the unused `missingFieldType` state, and do the real-device visual check across themes. → [MobileReminderForm.tsx](<../../../src/components/reminder/MobileReminderForm.tsx>) _(friction - S)_
 
 > **⚠️ Reality note (2026-06-06):** the live mobile capture form is **[MobileReminderForm.tsx](<../../../src/components/reminder/MobileReminderForm.tsx>)** (mounted in TabContainer under the `reminder` tab) — **not** `MobileItemForm.tsx`, which is dead code (retire under SCH-5.3 below). Most of the old 1a/1b scope already existed; only the docs debt below remains from that slice.
@@ -59,7 +59,7 @@ tags:
 
 **Phase 5 — Surface consolidation & assignments** *(the "seven doors for one module" cleanup — mostly decisions before code)*
 
-- [ ] **SCH-5.2** Give each surface **one job** per the surface map (Month / Week / Today / Form). → [1 · Feature State](<1 - Feature State.md>) _(friction - M)_
+- [ ] **SCH-5.2** Give each surface **one job** per the surface map (Month / Week / Today / Form). → [Master Book](<Schedule — Master Book.md>) _(friction - M)_
 - [ ] **SCH-5.3** Investigate the [MobileReminderForm.tsx](<../../../src/components/reminder/MobileReminderForm.tsx>) vs [MobileItemForm.tsx](<../../../src/components/items/MobileItemForm.tsx>) **duplication** — decide keep/merge/retire. **No deletion without a decision.** _(friction - S)_
 - [ ] **SCH-5.4** Reassignment **history / audit** trail — "who had it when" (W8). _(friction - M)_
 
