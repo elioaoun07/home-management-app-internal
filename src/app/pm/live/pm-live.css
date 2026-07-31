@@ -9,31 +9,47 @@
  * of :root[data-theme], so nothing here can leak into the themed app.
  *
  * If this page ever needs to follow the app themes, only this block changes.
+ *
+ * Phone-only rebuild (2026-07-31, PM Tooling): the previous version topped out
+ * at 13.5px body text with a near-invisible 4%-opacity card fill — smaller and
+ * flatter than every other mobile surface in this app. The type scale below
+ * has a 12px floor (was ~10px) and .pm-card now carries the same elevation
+ * grammar as the app's own neo-card (gradient fill + inset ring + glow), just
+ * on this surface's own palette.
  */
 
 [data-pm-live] {
   --pm-bg: #0a1628;
   /* Opaque, for anything that floats above content (Hard Rule 15). Never glass. */
   --pm-panel: #12203a;
-  /* In-flow card fills — translucent is fine here, nothing renders behind them. */
-  --pm-surface: rgb(255 255 255 / 4%);
-  --pm-surface-hover: rgb(255 255 255 / 7%);
-  --pm-surface-strong: rgb(255 255 255 / 9%);
 
-  --pm-border: rgb(255 255 255 / 8%);
-  --pm-border-strong: rgb(255 255 255 / 16%);
+  /* Elevation — mirrors neo-card's gradient + inset ring + glow grammar. */
+  --pm-card-a: rgb(255 255 255 / 7%);
+  --pm-card-b: rgb(255 255 255 / 2.5%);
+  --pm-card-a-hover: rgb(255 255 255 / 10%);
+  --pm-card-b-hover: rgb(255 255 255 / 4%);
 
-  --pm-fg-1: rgb(255 255 255 / 92%);
-  --pm-fg-2: rgb(255 255 255 / 60%);
-  --pm-fg-3: rgb(255 255 255 / 38%);
+  --pm-surface: rgb(255 255 255 / 5%);
+  --pm-surface-hover: rgb(255 255 255 / 8%);
+  --pm-surface-strong: rgb(255 255 255 / 11%);
+
+  --pm-border: rgb(255 255 255 / 9%);
+  --pm-border-strong: rgb(255 255 255 / 18%);
+  --pm-ring: rgb(255 255 255 / 6%);
+
+  --pm-fg-1: rgb(255 255 255 / 94%);
+  --pm-fg-2: rgb(255 255 255 / 66%);
+  --pm-fg-3: rgb(255 255 255 / 42%);
 
   --pm-accent: #22d3ee;
-  --pm-accent-soft: rgb(34 211 238 / 14%);
-  --pm-accent-border: rgb(34 211 238 / 30%);
+  --pm-accent-soft: rgb(34 211 238 / 15%);
+  --pm-accent-border: rgb(34 211 238 / 32%);
   --pm-accent-ink: #0a1628;
+  --pm-accent-glow: rgb(34 211 238 / 20%);
 
   --pm-warn: #fbbf24;
-  --pm-warn-soft: rgb(251 191 36 / 12%);
+  --pm-warn-soft: rgb(251 191 36 / 13%);
+  --pm-warn-glow: rgb(251 191 36 / 18%);
   --pm-ok: #34d399;
 
   /* Ordinal severity ramp — see src/features/pm-live/chartTheme.ts for the
@@ -45,6 +61,17 @@
 
   --pm-grid: rgb(255 255 255 / 6%);
 
+  /* Type scale — 12px floor for anything read as content (labels, meta,
+   * chips). Compact numeric badges (nav badge counts, tab pane counts) are a
+   * documented exception at 10px, matching the rest of the app's own badge
+   * convention (see MobileNav's FAB/tab labels). */
+  --pm-t-display: 30px;
+  --pm-t-title: 18px;
+  --pm-t-card: 15px;
+  --pm-t-body: 15px;
+  --pm-t-sub: 13px;
+  --pm-t-meta: 12px;
+
   background-color: var(--pm-bg);
   color: var(--pm-fg-1);
 }
@@ -52,9 +79,30 @@
 /* ---- primitives ---------------------------------------------------------- */
 
 .pm-card {
-  background-color: var(--pm-surface);
+  background-image: linear-gradient(135deg, var(--pm-card-a) 0%, var(--pm-card-b) 100%);
   border: 1px solid var(--pm-border);
-  border-radius: 0.875rem;
+  border-radius: 1rem;
+  box-shadow:
+    0 0 0 1px var(--pm-ring) inset,
+    0 4px 12px rgb(0 0 0 / 25%);
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Opt-in glow for a card representing something currently running. */
+.pm-card[data-live="true"] {
+  border-color: var(--pm-accent-border);
+  box-shadow:
+    0 0 0 1px var(--pm-ring) inset,
+    0 4px 12px rgb(0 0 0 / 25%),
+    0 0 20px var(--pm-accent-glow);
+}
+
+.pm-card[data-warn="true"] {
+  border-color: rgb(251 191 36 / 35%);
+  box-shadow:
+    0 0 0 1px var(--pm-ring) inset,
+    0 4px 12px rgb(0 0 0 / 25%),
+    0 0 20px var(--pm-warn-glow);
 }
 
 /* Opaque floating surface: dropdowns, sheets, popovers (Hard Rule 15). */
@@ -69,8 +117,9 @@
   align-items: center;
   gap: 0.375rem;
   border-radius: 9999px;
-  padding: 0.3125rem 0.6875rem;
-  font-size: 12px;
+  padding: 0.375rem 0.75rem;
+  font-size: var(--pm-t-meta);
+  font-weight: 500;
   line-height: 1.2;
   color: var(--pm-fg-2);
   background-color: var(--pm-surface);
@@ -89,14 +138,18 @@
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
-  border-radius: 0.625rem;
-  padding: 0.5rem 0.875rem;
-  font-size: 12.5px;
+  border-radius: 0.75rem;
+  padding: 0.5rem 1rem;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--pm-fg-2);
   background-color: var(--pm-surface);
   /* Rule 11: touch targets stay thumb-sized on a phone. */
-  min-height: 40px;
+  min-height: 44px;
+}
+
+.pm-btn:active {
+  transform: scale(0.97);
 }
 
 .pm-btn:disabled {
@@ -116,11 +169,11 @@
 
 .pm-input {
   width: 100%;
-  border-radius: 0.625rem;
+  border-radius: 0.75rem;
   background-color: var(--pm-surface);
   border: 1px solid var(--pm-border);
-  padding: 0.5rem 0.75rem;
-  font-size: 13.5px;
+  padding: 0.625rem 0.875rem;
+  font-size: var(--pm-t-body);
   color: var(--pm-fg-1);
 }
 
@@ -142,4 +195,10 @@
 .pm-scroll-x {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Edge-bleed chip/card rails inside a px-3/px-4 container — same idiom as
+ * WardrobeGrid's "-mx-4 px-4 scrollbar-hide" filter rail. */
+.pm-scroll-x::-webkit-scrollbar {
+  display: none;
 }

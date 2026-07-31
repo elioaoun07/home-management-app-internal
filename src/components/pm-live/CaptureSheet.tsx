@@ -57,16 +57,16 @@ export function CaptureSheet({ onClose, sendCommand }: { onClose: () => void; se
           if ((e.metaKey || e.ctrlKey) && e.key === "Enter") submit();
         }}
       />
-      <p className="mt-2 text-[11.5px]" style={{ color: "var(--pm-fg-3)" }}>
+      <p className="mt-2 text-[12.5px]" style={{ color: "var(--pm-fg-3)" }}>
         Saved as an unchecked line under <span className="font-mono">## New</span>. Revertible from the Undo strip.
       </p>
       {!bridgeLive && (
-        <p className="mt-2 text-[12px]" style={{ color: "var(--pm-warn)" }}>
+        <p className="mt-2 text-[13px]" style={{ color: "var(--pm-warn)" }}>
           The laptop bridge is offline — this will time out until `pnpm pm --bridge` is running.
         </p>
       )}
       {error && (
-        <p className="mt-2 text-[12px]" style={{ color: "var(--pm-warn)" }}>
+        <p className="mt-2 text-[13px]" style={{ color: "var(--pm-warn)" }}>
           {error}
         </p>
       )}

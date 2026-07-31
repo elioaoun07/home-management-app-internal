@@ -23,7 +23,7 @@ const roleColor = (role: string | null) => (role && ROLE_COLOR[role]) || "var(--
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="py-6 text-center text-[12.5px]" style={{ color: "var(--pm-fg-3)" }}>
+    <p className="py-6 text-center text-[13px]" style={{ color: "var(--pm-fg-3)" }}>
       {children}
     </p>
   );
@@ -73,7 +73,7 @@ function QuestionCard({ question, children }: { question: LedgerQuestion; childr
     <div className="pm-card p-3">
       <div className="flex items-center gap-2 flex-wrap mb-1.5">
         <span
-          className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded"
+          className="text-[12px] font-semibold px-1.5 py-0.5 rounded"
           style={blocking
             ? { color: "var(--pm-warn)", backgroundColor: "var(--pm-warn-soft)" }
             : { color: "var(--pm-fg-2)", backgroundColor: "var(--pm-surface-strong)" }}
@@ -81,21 +81,21 @@ function QuestionCard({ question, children }: { question: LedgerQuestion; childr
           {blocking ? "blocking" : question.kind || "question"}
         </span>
         {question.phase && (
-          <span className="text-[11px] font-mono" style={{ color: "var(--pm-fg-3)" }}>
+          <span className="text-[12px] font-mono" style={{ color: "var(--pm-fg-3)" }}>
             {question.phase}
           </span>
         )}
         {question.source && question.source !== "agent" && (
-          <span className="text-[11px]" style={{ color: "var(--pm-fg-3)" }}>
+          <span className="text-[12px]" style={{ color: "var(--pm-fg-3)" }}>
             asked by {question.source}
           </span>
         )}
       </div>
-      <p className="text-[13px] leading-snug" style={{ color: "var(--pm-fg-1)" }}>
+      <p className="text-[15px] leading-snug" style={{ color: "var(--pm-fg-1)" }}>
         {question.text}
       </p>
       {question.answer && (
-        <p className="mt-2 pl-2.5 text-[12.5px] leading-snug border-l-2" style={{ color: "var(--pm-fg-2)", borderColor: "var(--pm-accent)" }}>
+        <p className="mt-2 pl-2.5 text-[14px] leading-snug border-l-2" style={{ color: "var(--pm-fg-2)", borderColor: "var(--pm-accent)" }}>
           {question.answer.text}
         </p>
       )}
@@ -130,18 +130,18 @@ export function QuestionsPane({
   return (
     <div className="space-y-3">
       {msg && (
-        <p className="text-[12px]" style={{ color: "var(--pm-warn)" }}>
+        <p className="text-[13px]" style={{ color: "var(--pm-warn)" }}>
           {msg}
         </p>
       )}
 
       {gateQuestions.length > 0 && (
-        <div className="pm-card p-3" style={{ borderColor: "var(--pm-warn)" }}>
-          <p className="text-[10.5px] font-semibold mb-1.5" style={{ color: "var(--pm-warn)" }}>
+        <div className="pm-card p-3" data-warn="true">
+          <p className="text-[12px] font-semibold mb-1.5" style={{ color: "var(--pm-warn)" }}>
             THE SESSION IS WAITING ON THIS
           </p>
           {gateQuestions.map((question, index) => (
-            <p key={question.id ?? index} className="text-[13px] leading-snug mb-1" style={{ color: "var(--pm-fg-1)" }}>
+            <p key={question.id ?? index} className="text-[15px] leading-snug mb-1" style={{ color: "var(--pm-fg-1)" }}>
               {question.text}
             </p>
           ))}
@@ -157,7 +157,7 @@ export function QuestionsPane({
 
       {answered.length > 0 && (
         <details>
-          <summary className="text-[12px] py-1 cursor-pointer" style={{ color: "var(--pm-fg-3)" }}>
+          <summary className="text-[13px] py-1.5 cursor-pointer" style={{ color: "var(--pm-fg-3)" }}>
             Answered ({answered.length}
             {session.qa?.dismissedCount ? ` · ${session.qa.dismissedCount} dismissed` : ""})
           </summary>
@@ -185,12 +185,12 @@ export function ConversationPane({ session }: { session: SessionSnapshot }) {
         return (
           <div key={turn.turnId}>
             {newPhase && turn.phase && (
-              <p className="text-[10.5px] font-semibold tracking-wide mt-3 mb-1.5" style={{ color: roleColor(turn.role) }}>
+              <p className="text-[12px] font-semibold tracking-wide mt-3 mb-1.5" style={{ color: roleColor(turn.role) }}>
                 {turn.phase}
               </p>
             )}
-            <div className="pm-card p-2.5 border-l-2" style={{ borderLeftColor: roleColor(turn.role) }}>
-              <div className="flex items-center gap-2 flex-wrap text-[11px]" style={{ color: "var(--pm-fg-3)" }}>
+            <div className="pm-card p-3 border-l-2" style={{ borderLeftColor: roleColor(turn.role) }}>
+              <div className="flex items-center gap-2 flex-wrap text-[12px]" style={{ color: "var(--pm-fg-3)" }}>
                 <span className="font-mono">#{turn.turnId}</span>
                 {turn.role && <span style={{ color: roleColor(turn.role) }}>{turn.role}</span>}
                 {turn.model && <span>{turn.model}</span>}
@@ -200,7 +200,7 @@ export function ConversationPane({ session }: { session: SessionSnapshot }) {
                 {turn.result && turn.result !== "ok" && <span style={{ color: "var(--pm-warn)" }}>{turn.result}</span>}
               </div>
               {turn.excerpt && (
-                <p className="mt-1.5 text-[12.5px] leading-snug whitespace-pre-wrap" style={{ color: "var(--pm-fg-2)" }}>
+                <p className="mt-1.5 text-[14px] leading-snug whitespace-pre-wrap" style={{ color: "var(--pm-fg-2)" }}>
                   {turn.excerpt}
                 </p>
               )}
@@ -209,7 +209,7 @@ export function ConversationPane({ session }: { session: SessionSnapshot }) {
         );
       })}
       {(session.turnsTotal ?? turns.length) > turns.length && (
-        <p className="pt-2 text-[11.5px]" style={{ color: "var(--pm-fg-3)" }}>
+        <p className="pt-2 text-[12.5px]" style={{ color: "var(--pm-fg-3)" }}>
           Showing the last {turns.length} of {session.turnsTotal} turns — the full transcript is on the laptop.
         </p>
       )}
@@ -230,13 +230,13 @@ export function ArtifactsPane({ session }: { session: SessionSnapshot }) {
         >
           {artifact.excerpt ? (
             <div
-              className="max-h-64 overflow-y-auto rounded-lg p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap font-mono"
+              className="max-h-64 overflow-y-auto rounded-lg p-3 text-[13px] leading-relaxed whitespace-pre-wrap font-mono"
               style={{ backgroundColor: "var(--pm-surface)", color: "var(--pm-fg-2)" }}
             >
               {artifact.excerpt}
             </div>
           ) : (
-            <p className="text-[12.5px]" style={{ color: "var(--pm-fg-3)" }}>
+            <p className="text-[13px]" style={{ color: "var(--pm-fg-3)" }}>
               Too large to relay — read it on the laptop.
             </p>
           )}
@@ -260,10 +260,10 @@ export function CostPane({ session }: { session: SessionSnapshot }) {
     <div className="space-y-3">
       <WidgetCard title="Envelope">
         <div className="flex items-baseline justify-between">
-          <span className="text-[19px] font-semibold tabular-nums" style={{ color: "var(--pm-fg-1)" }}>
+          <span className="text-[22px] font-bold tabular-nums" style={{ color: "var(--pm-fg-1)" }}>
             {formatUsd(spent)}
           </span>
-          <span className="text-[12px] tabular-nums" style={{ color: "var(--pm-fg-3)" }}>
+          <span className="text-[13px] tabular-nums" style={{ color: "var(--pm-fg-3)" }}>
             {budget?.maxUsd != null ? `of ${formatUsd(budget.maxUsd)}` : "no cap authorized"}
           </span>
         </div>
@@ -295,10 +295,10 @@ export function CostPane({ session }: { session: SessionSnapshot }) {
       {context?.pctUsed != null && (
         <WidgetCard title="Context window" subtitle="at the last turn">
           <div className="flex items-baseline justify-between">
-            <span className="text-[15px] font-semibold tabular-nums" style={{ color: "var(--pm-fg-1)" }}>
+            <span className="text-[17px] font-semibold tabular-nums" style={{ color: "var(--pm-fg-1)" }}>
               {Math.round(context.pctUsed * 100)}%
             </span>
-            <span className="text-[12px] tabular-nums" style={{ color: "var(--pm-fg-3)" }}>
+            <span className="text-[13px] tabular-nums" style={{ color: "var(--pm-fg-3)" }}>
               {context.occupancyTokens?.toLocaleString()} / {context.windowTokens?.toLocaleString()}
             </span>
           </div>

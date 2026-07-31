@@ -24,31 +24,31 @@ export function BarList({ rows, formatValue = (v: number) => String(v) }: { rows
 
   if (!rows.length) {
     return (
-      <p className="py-4 text-[12.5px]" style={{ color: "var(--pm-fg-3)" }}>
+      <p className="py-4 text-[13px]" style={{ color: "var(--pm-fg-3)" }}>
         Nothing to show.
       </p>
     );
   }
 
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-2.5">
       {rows.map((row) => {
         const content = (
           <>
             <span className="flex items-baseline gap-2">
-              <span className="flex-1 min-w-0 truncate text-[12.5px]" style={{ color: "var(--pm-fg-2)" }}>
+              <span className="flex-1 min-w-0 truncate text-[13.5px]" style={{ color: "var(--pm-fg-2)" }}>
                 {row.label}
               </span>
               {row.note && (
-                <span className="text-[11px] tabular-nums shrink-0" style={{ color: "var(--pm-fg-3)" }}>
+                <span className="text-[12px] tabular-nums shrink-0" style={{ color: "var(--pm-fg-3)" }}>
                   {row.note}
                 </span>
               )}
-              <span className="text-[12.5px] tabular-nums font-medium shrink-0" style={{ color: "var(--pm-fg-1)" }}>
+              <span className="text-[13.5px] tabular-nums font-medium shrink-0" style={{ color: "var(--pm-fg-1)" }}>
                 {formatValue(row.value)}
               </span>
             </span>
-            <span className="mt-1 block h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "var(--pm-surface-strong)" }}>
+            <span className="mt-1.5 block h-2 rounded-full overflow-hidden" style={{ backgroundColor: "var(--pm-surface-strong)" }}>
               <span
                 className="block h-full rounded-full"
                 style={{ width: `${(row.value / max) * 100}%`, backgroundColor: row.color || CHART.accent }}

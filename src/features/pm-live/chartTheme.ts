@@ -8,7 +8,7 @@ import type { TaskSeverity } from "./types";
 export const CHART = {
   surface: "#0a1628",
   grid: "rgba(255,255,255,0.06)",
-  axis: "rgba(255,255,255,0.38)",
+  axis: "rgba(255,255,255,0.42)",
   accent: "#22d3ee",
   warn: "#fbbf24",
   ok: "#34d399",

@@ -11,6 +11,7 @@ export function WidgetCard({
   children,
   className = "",
   noPadding = false,
+  live = false,
 }: {
   title?: string;
   subtitle?: string;
@@ -18,22 +19,24 @@ export function WidgetCard({
   children: React.ReactNode;
   className?: string;
   noPadding?: boolean;
+  /** Adds the accent glow used for cards representing something currently running. */
+  live?: boolean;
 }) {
   return (
-    <section className={`pm-card overflow-hidden ${className}`}>
+    <section className={`pm-card overflow-hidden ${className}`} data-live={live || undefined}>
       {(title || action) && (
-        <div className="flex items-start gap-3 px-3.5 pt-3 pb-2">
+        <div className="flex items-start gap-3 px-4 pt-3.5 pb-2.5">
           <div className="min-w-0 flex-1">
             {title && (
               <h3
-                className="text-[11px] font-medium uppercase tracking-wider"
-                style={{ color: "var(--pm-fg-3)" }}
+                className="text-[15px] font-semibold"
+                style={{ color: "var(--pm-fg-1)" }}
               >
                 {title}
               </h3>
             )}
             {subtitle && (
-              <p className="text-[12px] mt-0.5" style={{ color: "var(--pm-fg-3)" }}>
+              <p className="text-[13px] mt-0.5" style={{ color: "var(--pm-fg-3)" }}>
                 {subtitle}
               </p>
             )}
@@ -41,7 +44,7 @@ export function WidgetCard({
           {action}
         </div>
       )}
-      <div className={noPadding ? "" : "px-3.5 pb-3.5"}>{children}</div>
+      <div className={noPadding ? "" : "px-4 pb-4"}>{children}</div>
     </section>
   );
 }
@@ -49,7 +52,7 @@ export function WidgetCard({
 /** Shown when a snapshot row hasn't arrived — an older bridge, or a cold offline open. */
 export function WidgetEmpty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="py-6 text-center text-[12.5px]" style={{ color: "var(--pm-fg-3)" }}>
+    <p className="py-6 text-center text-[13px]" style={{ color: "var(--pm-fg-3)" }}>
       {children}
     </p>
   );

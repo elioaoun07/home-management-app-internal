@@ -24,15 +24,15 @@ export function StatTile({
     <>
       <span className="flex items-center gap-1.5">
         {toneColor && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: toneColor }} aria-hidden />}
-        <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--pm-fg-3)" }}>
+        <span className="text-[12px] font-medium uppercase tracking-wider" style={{ color: "var(--pm-fg-3)" }}>
           {label}
         </span>
       </span>
-      <span className="block mt-1 text-[22px] font-semibold tabular-nums leading-none" style={{ color: "var(--pm-fg-1)" }}>
+      <span className="block mt-1.5 text-[30px] font-bold tabular-nums leading-none" style={{ color: "var(--pm-fg-1)" }}>
         {value}
       </span>
       {hint && (
-        <span className="block mt-1 text-[11.5px]" style={{ color: "var(--pm-fg-3)" }}>
+        <span className="block mt-1.5 text-[13px]" style={{ color: "var(--pm-fg-3)" }}>
           {hint}
         </span>
       )}
@@ -41,10 +41,10 @@ export function StatTile({
 
   if (onClick) {
     return (
-      <button onClick={onClick} className="pm-card px-3.5 py-3 text-left w-full">
+      <button onClick={onClick} className="pm-card px-4 py-4 text-left w-full active:scale-[0.98] transition-transform">
         {body}
       </button>
     );
   }
-  return <div className="pm-card px-3.5 py-3">{body}</div>;
+  return <div className="pm-card px-4 py-4">{body}</div>;
 }

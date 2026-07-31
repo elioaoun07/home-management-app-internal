@@ -7,12 +7,26 @@
 // `data-pm-live` scopes pm-live.css's token block to this subtree, so every
 // surface below still resolves through a variable rather than a literal — the
 // same contract as the themed app, just with its own palette.
-import type { Viewport } from "next";
+import type { Metadata, Viewport } from "next";
 import "./pm-live.css";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "PM Live • ERA",
   description: "Checklist, delivery and campaign command surface",
+  icons: {
+    icon: [
+      { url: "/pm-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/pm-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/pm-180.png", sizes: "180x180", type: "image/png" }],
+    shortcut: [{ url: "/pm-192.png", sizes: "192x192", type: "image/png" }],
+  },
+  manifest: "/manifests/pm-live.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "PM Live",
+  },
 };
 
 export const viewport: Viewport = {

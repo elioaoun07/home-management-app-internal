@@ -25,7 +25,7 @@ export function SeverityBar({ data, onSelect }: { data: SeveritySlice[]; onSelec
 
   if (!total) {
     return (
-      <p className="py-4 text-[12.5px]" style={{ color: "var(--pm-fg-3)" }}>
+      <p className="py-4 text-[13px]" style={{ color: "var(--pm-fg-3)" }}>
         Nothing open.
       </p>
     );
@@ -33,7 +33,7 @@ export function SeverityBar({ data, onSelect }: { data: SeveritySlice[]; onSelec
 
   return (
     <div>
-      <div className="flex h-2.5 rounded-full overflow-hidden" style={{ gap: "2px" }} role="img" aria-label={`Severity mix of ${total} open items`}>
+      <div className="flex h-3 rounded-full overflow-hidden" style={{ gap: "2px" }} role="img" aria-label={`Severity mix of ${total} open items`}>
         {ordered.map((d) => (
           <div
             key={d.severity}
@@ -42,12 +42,12 @@ export function SeverityBar({ data, onSelect }: { data: SeveritySlice[]; onSelec
         ))}
       </div>
 
-      <ul className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5">
+      <ul className="mt-3.5 grid grid-cols-2 gap-x-3 gap-y-2">
         {ordered.map((d) => {
           const label = (
             <>
               <span
-                className="w-2 h-2 rounded-full shrink-0"
+                className="w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: SEVERITY_COLOR[d.severity as keyof typeof SEVERITY_COLOR] }}
                 aria-hidden
               />
@@ -60,7 +60,7 @@ export function SeverityBar({ data, onSelect }: { data: SeveritySlice[]; onSelec
             </>
           );
           return (
-            <li key={d.severity} className="text-[12px]">
+            <li key={d.severity} className="text-[13px]">
               {onSelect && d.severity !== "unrated" ? (
                 <button onClick={() => onSelect(d.severity)} className="w-full flex items-center gap-1.5 text-left">
                   {label}

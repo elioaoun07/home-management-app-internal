@@ -4,16 +4,17 @@
 "use client";
 
 import { SEVERITY_DOT } from "@/features/pm-live/chartTheme";
+import { displayText } from "@/features/pm-live/derive";
 import type { PmTask } from "@/features/pm-live/types";
 import { Sheet } from "./Sheet";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="py-2 border-b last:border-b-0" style={{ borderColor: "var(--pm-border)" }}>
-      <dt className="text-[11px] uppercase tracking-wider" style={{ color: "var(--pm-fg-3)" }}>
+    <div className="py-2.5 border-b last:border-b-0" style={{ borderColor: "var(--pm-border)" }}>
+      <dt className="text-[12px] uppercase tracking-wider" style={{ color: "var(--pm-fg-3)" }}>
         {label}
       </dt>
-      <dd className="mt-0.5 text-[13px] break-words" style={{ color: "var(--pm-fg-1)" }}>
+      <dd className="mt-0.5 text-[14px] break-words" style={{ color: "var(--pm-fg-1)" }}>
         {children}
       </dd>
     </div>
@@ -42,7 +43,7 @@ export function TaskDetailSheet({
             Deliver this item
           </button>
         ) : (
-          <p className="text-[12px] text-center" style={{ color: "var(--pm-fg-3)" }}>
+          <p className="text-[13px] text-center" style={{ color: "var(--pm-fg-3)" }}>
             {task.state === "done"
               ? "Already done — sweep it to Feature State on the laptop."
               : "No ID chip, so there is nothing to key a delivery session to."}
@@ -50,8 +51,8 @@ export function TaskDetailSheet({
         )
       }
     >
-      <p className="text-[14px] leading-relaxed mb-3" style={{ color: "var(--pm-fg-1)" }}>
-        {task.text}
+      <p className="text-[16px] leading-relaxed mb-3.5" style={{ color: "var(--pm-fg-1)" }}>
+        {displayText(task)}
       </p>
 
       <dl>
@@ -68,19 +69,19 @@ export function TaskDetailSheet({
         <Field label="Effort">{task.effort || <span style={{ color: "var(--pm-fg-3)" }}>unsized</span>}</Field>
         <Field label="Lane">{task.section}</Field>
         <Field label="File">
-          <span className="font-mono text-[12px]">
+          <span className="font-mono text-[13px]">
             {task.file}
             <span style={{ color: "var(--pm-fg-3)" }}> · #{task.cbidx}</span>
           </span>
         </Field>
         <Field label="Source line">
-          <code className="block text-[11.5px] font-mono whitespace-pre-wrap" style={{ color: "var(--pm-fg-2)" }}>
+          <code className="block text-[12.5px] font-mono whitespace-pre-wrap" style={{ color: "var(--pm-fg-2)" }}>
             {task.lineText}
           </code>
         </Field>
       </dl>
 
-      <p className="mt-3 text-[11.5px]" style={{ color: "var(--pm-fg-3)" }}>
+      <p className="mt-3.5 text-[12.5px]" style={{ color: "var(--pm-fg-3)" }}>
         Checklist items are read-only here. Ticking one is the outcome of a delivery session, or a laptop edit.
       </p>
     </Sheet>

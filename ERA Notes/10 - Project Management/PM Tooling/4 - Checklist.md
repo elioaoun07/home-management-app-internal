@@ -1,6 +1,6 @@
 ---
 created: 2026-07-13
-updated: 2026-07-30
+updated: 2026-07-31
 type: checklist
 status: active
 owner: Elio
@@ -21,6 +21,8 @@ tags: [pm/checklist, tooling/pm]
 
 ## Next
 
+- [ ] **R41** Fix the stripping order in `cleanInlineText()` so `_(severity - effort)_` actually matches and strips — swap the emphasis-strip and the meta-strip regex order (or strip the meta suffix first) → `scripts/pm/shared/text.mjs:12` _(friction - S)_
+- [ ] **R42** Live-verify `/pm/live`'s mobile rebuild on a real phone: confirm the `SegmentedPanes` swipe (not just the tap) reliably advances panes — the tap path is known-flaky against `scroll-snap-mandatory` + `scrollTo({behavior:"smooth"})` in at least one automated-browser environment; also confirm haptics, safe-area insets, and the new `pm-live.webmanifest` install → `src/components/pm-live/session/SegmentedPanes.tsx` _(friction - S)_
 - [ ] **R34** Make the hygiene sweep a scheduled ritual rather than a generational event — a recurring line here plus the freshness radar printing the oldest open S-effort item every session. No new tooling → `.claude/hooks/session-brief.sh` _(friction - S)_
 - [ ] **R35** Meta-work budget rule in the conventions: a session that only touches `ERA Notes/` or `scripts/pm/` must state which product-code item it unblocks, and two consecutive such sessions require a product session between them → [_Conventions](<../_Conventions.md>) _(friction - S)_
 - [ ] **R7** Verify SSE data and UI rebuild frames in a browser, including external edits and 409 drift recovery _(friction - S)_

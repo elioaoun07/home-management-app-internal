@@ -179,7 +179,9 @@
       "Bash(awk '{print $5/1024/1024 \" MB \" $9}')",
       "Bash(python /tmp/inbox-styles.py)",
       "Bash(npx --yes ripgrep --version)",
-      "Bash(awk '{print $1}')"
+      "Bash(awk '{print $1}')",
+      "Bash(pnpm ls *)",
+      "Bash(sort -t R -k2 -n -u)"
     ]
   }
 }

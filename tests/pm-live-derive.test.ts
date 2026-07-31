@@ -11,6 +11,7 @@ import {
   computeSeverityMix,
   computeTokenTotals,
   computeVelocity,
+  displayText,
   filterTasks,
   groupTasks,
   sortCampaigns,
@@ -51,6 +52,31 @@ const BOARD: PmTask[] = [
   task({ idChip: "KIT-1", module: "Kitchen", section: "Next", sectionRank: 1, severity: null, effort: null, cbidx: 0, file: "Kitchen/4 - Checklist.md" }),
   task({ idChip: "BUD-3", module: "Budget", section: "Now", sectionRank: 0, severity: "blocker", effort: "S", cbidx: 3, state: "done" }),
 ];
+
+describe("displayText", () => {
+  it("strips the leading ID chip and trailing (severity - effort) suffix", () => {
+    const t = task({
+      idChip: "BUD-11",
+      text: "BUD-11 [TEST] Verify queryConfig cache timings align with API response patterns (annoyance - S)",
+    });
+    expect(displayText(t)).toBe("[TEST] Verify queryConfig cache timings align with API response patterns");
+  });
+
+  it("handles a dotted sub-item ID and an uppercase X effort", () => {
+    const t = task({ idChip: "SCH-1c.1", text: "SCH-1c.1 Guard the placement rule (blocker - X)" });
+    expect(displayText(t)).toBe("Guard the placement rule");
+  });
+
+  it("is a no-op when the text has neither an ID chip nor a meta suffix", () => {
+    const t = task({ idChip: null, text: "A plain bullet with no chip" });
+    expect(displayText(t)).toBe("A plain bullet with no chip");
+  });
+
+  it("does not touch ordinary prose with no leading ID pattern", () => {
+    const t = task({ idChip: null, text: "Improving UX for the whole team" });
+    expect(displayText(t)).toBe("Improving UX for the whole team");
+  });
+});
 
 describe("filterTasks", () => {
   it("hides done items by default — the board is a queue, not an archive", () => {

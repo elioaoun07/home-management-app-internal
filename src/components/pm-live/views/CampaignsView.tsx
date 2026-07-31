@@ -22,14 +22,14 @@ function LaneStrip({ campaign }: { campaign: CampaignRollup }) {
     <ul className="flex gap-3">
       {lanes.map((lane) => (
         <li key={lane.key} className="flex-1">
-          <span className="block text-[10.5px] uppercase tracking-wider" style={{ color: "var(--pm-fg-3)" }}>
+          <span className="block text-[12px] uppercase tracking-wider" style={{ color: "var(--pm-fg-3)" }}>
             {lane.key}
           </span>
-          <span className="block text-[17px] font-semibold tabular-nums leading-tight" style={{ color: "var(--pm-fg-1)" }}>
+          <span className="block text-[19px] font-bold tabular-nums leading-tight" style={{ color: "var(--pm-fg-1)" }}>
             {lane.value}
           </span>
           <span
-            className="mt-1 block h-1 rounded-full"
+            className="mt-1 block h-1.5 rounded-full"
             style={{
               backgroundColor: "var(--pm-accent)",
               opacity: open ? 0.25 + 0.75 * (lane.value / Math.max(1, open)) : 0.2,
@@ -55,23 +55,23 @@ function CampaignCard({ campaign }: { campaign: CampaignRollup }) {
 
   return (
     <WidgetCard>
-      <div className="flex items-start gap-2 mb-3">
+      <div className="flex items-start gap-2 mb-3.5">
         <div className="min-w-0 flex-1">
           <button onClick={() => openOnBoard()} className="text-left">
-            <h3 className="text-[14px] font-semibold truncate" style={{ color: "var(--pm-fg-1)" }}>
+            <h3 className="text-[16px] font-semibold truncate" style={{ color: "var(--pm-fg-1)" }}>
               {campaign.campaign}
             </h3>
           </button>
-          <p className="text-[11px] mt-0.5" style={{ color: "var(--pm-fg-3)" }}>
+          <p className="text-[12px] mt-0.5" style={{ color: "var(--pm-fg-3)" }}>
             <span className="font-mono">{campaign.prefix}</span>
             {campaign.updated ? ` · updated ${campaign.updated}` : " · no updated stamp"}
           </p>
         </div>
         <span className="shrink-0 text-right">
-          <span className="block text-[19px] font-semibold tabular-nums leading-none" style={{ color: "var(--pm-fg-1)" }}>
+          <span className="block text-[26px] font-bold tabular-nums leading-none" style={{ color: "var(--pm-fg-1)" }}>
             {checklist.open}
           </span>
-          <span className="block text-[10.5px] uppercase tracking-wider" style={{ color: "var(--pm-fg-3)" }}>
+          <span className="block text-[12px] uppercase tracking-wider" style={{ color: "var(--pm-fg-3)" }}>
             open
           </span>
         </span>
@@ -79,7 +79,7 @@ function CampaignCard({ campaign }: { campaign: CampaignRollup }) {
 
       <LaneStrip campaign={campaign} />
 
-      <div className="mt-3.5">
+      <div className="mt-4">
         <SeverityBar
           data={[
             ...(["blocker", "friction", "annoyance", "parked"] as const).map((severity) => ({
@@ -92,7 +92,7 @@ function CampaignCard({ campaign }: { campaign: CampaignRollup }) {
         />
       </div>
 
-      <dl className="mt-3.5 pt-3 border-t grid grid-cols-3 gap-2 text-[11.5px]" style={{ borderColor: "var(--pm-border)" }}>
+      <dl className="mt-4 pt-3.5 border-t grid grid-cols-3 gap-2 text-[12.5px]" style={{ borderColor: "var(--pm-border)" }}>
         <div>
           <dt style={{ color: "var(--pm-fg-3)" }}>Swept</dt>
           <dd className="tabular-nums" style={{ color: "var(--pm-fg-1)" }}>
@@ -136,7 +136,7 @@ export function CampaignsView() {
 
   if (!campaigns.length) {
     return (
-      <div className="p-3 lg:p-5">
+      <div className="p-4">
         <WidgetCard title="Campaigns">
           <WidgetEmpty>
             No campaign rollups published yet. Restart the laptop bridge with <span className="font-mono">pnpm pm --bridge</span>.
@@ -147,12 +147,10 @@ export function CampaignsView() {
   }
 
   return (
-    <div className="p-3 lg:p-5 pb-24 lg:pb-8 max-w-[1400px] mx-auto">
-      <div className="grid gap-3 lg:gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {campaigns.map((campaign) => (
-          <CampaignCard key={campaign.campaign} campaign={campaign} />
-        ))}
-      </div>
+    <div className="p-4 pb-28 space-y-3">
+      {campaigns.map((campaign) => (
+        <CampaignCard key={campaign.campaign} campaign={campaign} />
+      ))}
     </div>
   );
 }

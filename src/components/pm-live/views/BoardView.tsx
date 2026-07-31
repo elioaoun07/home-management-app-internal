@@ -15,8 +15,8 @@ import type { PmTask } from "@/features/pm-live/types";
 
 type Row = { kind: "header"; key: string; label: string; count: number } | { kind: "task"; key: string; task: PmTask };
 
-const HEADER_HEIGHT = 34;
-const TASK_HEIGHT = 62;
+const HEADER_HEIGHT = 36;
+const TASK_HEIGHT = 76;
 
 export function BoardView({
   scrollRef,
@@ -81,7 +81,7 @@ export function BoardView({
     <>
       <BoardToolbar shown={filtered.length} total={totalOpen} />
 
-      <div className="px-3 lg:px-5 pb-24 lg:pb-8">
+      <div className="px-4 pb-28">
         {!rows.length ? (
           <p className="py-10 text-center text-[13px]" style={{ color: "var(--pm-fg-3)" }}>
             Nothing matches. Clear the filters to see the whole board.

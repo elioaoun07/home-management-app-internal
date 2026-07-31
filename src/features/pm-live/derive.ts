@@ -50,6 +50,29 @@ const GROUP_ORDER: Partial<Record<GroupBy, readonly string[]>> = {
 
 export const pmTaskKey = (task: PmTask) => `${task.file}::${task.cbidx}`;
 
+const LEADING_ID_RE = /^[A-Z]{1,5}-?\d+[a-z]?(?:\.\d+[a-z]?)?\s+/i;
+const TRAILING_META_RE = /\s*\(\s*(?:blocker|friction|annoyance|parked)\s*-\s*[SMLX]\s*\)\s*$/i;
+
+/**
+ * Display text with the ID chip and the (severity - effort) suffix removed.
+ *
+ * `PmTask.text` still carries both — `cleanInlineText()` in
+ * scripts/pm/shared/text.mjs strips markdown emphasis characters (`_`, `*`)
+ * one line before the regex that needs an intact `_(severity - effort)_` to
+ * match, so the meta-strip never fires. Every row that renders the ID chip
+ * and severity/effort as their own affordances next to `task.text` was
+ * printing both twice.
+ *
+ * `task.text` itself stays untouched — it's the raw corpus `query.ts` free-text
+ * search matches against, and fixing it at the source (scripts/pm/shared/text.mjs)
+ * has a wider blast radius (lint.mjs, the desktop Preact app, the bridge) than
+ * this UI-only refactor takes on. This is the display-layer fix; the upstream
+ * one is a separate PM item.
+ */
+export function displayText(task: PmTask): string {
+  return task.text.replace(LEADING_ID_RE, "").replace(TRAILING_META_RE, "").trim();
+}
+
 /**
  * The board is a working queue, so done items are hidden unless the query asks
  * for them explicitly (`is:done` / `is:open`). A done item only sits in a lane

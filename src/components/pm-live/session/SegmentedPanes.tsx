@@ -67,7 +67,7 @@ export function SegmentedPanes<K extends string>({
   return (
     <div className="flex flex-col min-h-0 flex-1">
       <div
-        className="sticky top-0 z-10 px-3 lg:px-5 pt-2.5 pb-2 border-b"
+        className="sticky top-0 z-10 px-4 pt-2.5 pb-2 border-b"
         style={{ backgroundColor: "var(--pm-bg)", borderColor: "var(--pm-border)" }}
       >
         <div
@@ -93,13 +93,13 @@ export function SegmentedPanes<K extends string>({
                 role="tab"
                 aria-selected={selected}
                 onClick={() => onChange(pane.key)}
-                className="relative z-[1] flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[12px] font-medium"
+                className="relative z-[1] flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-medium"
                 style={{ color: selected ? "var(--pm-fg-1)" : "var(--pm-fg-3)" }}
               >
                 {pane.icon}
-                <span className="hidden min-[420px]:inline">{pane.label}</span>
+                <span>{pane.label}</span>
                 {pane.badge != null && pane.badge !== "" && (
-                  <span className="text-[10.5px] tabular-nums px-1 rounded" style={{ backgroundColor: "var(--pm-bg)", color: "var(--pm-fg-2)" }}>
+                  <span className="text-[11px] tabular-nums px-1 rounded" style={{ backgroundColor: "var(--pm-bg)", color: "var(--pm-fg-2)" }}>
                     {pane.badge}
                   </span>
                 )}
@@ -120,7 +120,7 @@ export function SegmentedPanes<K extends string>({
             key={pane.key}
             role="tabpanel"
             aria-label={pane.label}
-            className="w-full shrink-0 snap-center overflow-y-auto px-3 lg:px-5 py-3"
+            className="w-full shrink-0 snap-center overflow-y-auto px-4 py-3"
           >
             {pane.content}
           </section>

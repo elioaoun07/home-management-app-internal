@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Sheet } from "./Sheet";
+import { displayText } from "@/features/pm-live/derive";
 import { useFleet, useTasks } from "@/features/pm-live/store";
 import type { LaneDefault, PmTask, SendCommand } from "@/features/pm-live/types";
 
@@ -34,7 +35,7 @@ function Spinner({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center justify-center h-40 gap-3">
       <span className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: "var(--pm-border-strong)", borderTopColor: "transparent" }} />
-      <p className="text-[13px]" style={{ color: "var(--pm-fg-2)" }}>
+      <p className="text-[14px]" style={{ color: "var(--pm-fg-2)" }}>
         {label}
       </p>
     </div>
@@ -45,10 +46,10 @@ function Notice({ tone, title, children }: { tone: "warn" | "ok"; title: string;
   const color = tone === "warn" ? "var(--pm-warn)" : "var(--pm-accent)";
   return (
     <div className="rounded-xl p-3.5" style={{ backgroundColor: tone === "warn" ? "var(--pm-warn-soft)" : "var(--pm-accent-soft)" }}>
-      <p className="text-[13.5px] font-medium mb-1" style={{ color }}>
+      <p className="text-[14.5px] font-medium mb-1" style={{ color }}>
         {title}
       </p>
-      <div className="text-[13px]" style={{ color: "var(--pm-fg-2)" }}>
+      <div className="text-[13.5px]" style={{ color: "var(--pm-fg-2)" }}>
         {children}
       </div>
     </div>
@@ -165,21 +166,21 @@ export function LaunchSheet({
     >
       {step === "pick" && (
         <div className="space-y-2">
-          <p className="text-[13px] mb-3" style={{ color: "var(--pm-fg-2)" }}>
+          <p className="text-[14px] mb-3" style={{ color: "var(--pm-fg-2)" }}>
             Pick an item to deliver.
           </p>
           {eligible.map((t) => (
-            <button key={`${t.file}::${t.cbidx}`} onClick={() => pick(t)} className="pm-card w-full text-left px-3 py-2.5">
-              <span className="text-[11px] font-mono" style={{ color: "var(--pm-fg-3)" }}>
+            <button key={`${t.file}::${t.cbidx}`} onClick={() => pick(t)} className="pm-card w-full text-left px-3.5 py-3">
+              <span className="text-[12px] font-mono" style={{ color: "var(--pm-fg-3)" }}>
                 {t.idChip} · {t.module}
               </span>
-              <span className="block text-[13.5px]" style={{ color: "var(--pm-fg-1)" }}>
-                {t.text}
+              <span className="block text-[14.5px] mt-0.5" style={{ color: "var(--pm-fg-1)" }}>
+                {displayText(t)}
               </span>
             </button>
           ))}
           {!eligible.length && (
-            <p className="text-[13px]" style={{ color: "var(--pm-fg-3)" }}>
+            <p className="text-[14px]" style={{ color: "var(--pm-fg-3)" }}>
               No open, ID-tagged items found.
             </p>
           )}
@@ -200,29 +201,29 @@ export function LaunchSheet({
       {step === "configure" && selected && preflight && (
         <div className="space-y-5">
           <div>
-            <span className="text-[11px] font-mono" style={{ color: "var(--pm-fg-3)" }}>
+            <span className="text-[12px] font-mono" style={{ color: "var(--pm-fg-3)" }}>
               {selected.idChip} · {selected.module}
             </span>
-            <p className="text-[13.5px]" style={{ color: "var(--pm-fg-1)" }}>
-              {selected.text}
+            <p className="text-[14.5px] mt-0.5" style={{ color: "var(--pm-fg-1)" }}>
+              {displayText(selected)}
             </p>
           </div>
 
           {preflight.recommendation?.recommendation && (
-            <p className="text-[12px]" style={{ color: "var(--pm-fg-2)" }}>
+            <p className="text-[13px]" style={{ color: "var(--pm-fg-2)" }}>
               Recommended: {preflight.recommendation.recommendation.tier} · {preflight.recommendation.recommendation.model}
               {preflight.recommendation.recommendation.estCostUsd != null &&
                 ` · ~$${preflight.recommendation.recommendation.estCostUsd.toFixed(2)}`}
             </p>
           )}
           {!!preflight.recommendation?.preview?.riskFlags?.length && (
-            <p className="text-[12px]" style={{ color: "var(--pm-warn)" }}>
+            <p className="text-[13px]" style={{ color: "var(--pm-warn)" }}>
               Risk: {preflight.recommendation.preview.riskFlags.join(", ")}
             </p>
           )}
 
           <div>
-            <p className="text-[12px] mb-1.5" style={{ color: "var(--pm-fg-2)" }}>
+            <p className="text-[13px] mb-1.5" style={{ color: "var(--pm-fg-2)" }}>
               Lane
             </p>
             <div className="flex gap-2">
@@ -233,7 +234,7 @@ export function LaunchSheet({
                     setLane(l);
                     setEnvelope(String(laneUsd[l]));
                   }}
-                  className="flex-1 py-2 rounded-lg text-[12.5px] font-medium border"
+                  className="flex-1 py-2.5 rounded-lg text-[13px] font-medium border"
                   style={
                     lane === l
                       ? { backgroundColor: "var(--pm-accent-soft)", color: "var(--pm-accent)", borderColor: "var(--pm-accent-border)" }
@@ -248,7 +249,7 @@ export function LaunchSheet({
           </div>
 
           <div>
-            <p className="text-[12px] mb-1.5" style={{ color: "var(--pm-fg-2)" }}>
+            <p className="text-[13px] mb-1.5" style={{ color: "var(--pm-fg-2)" }}>
               Budget envelope ($, required)
             </p>
             {/* Hard Rule 19: never type="number" on a money field. */}
@@ -257,13 +258,13 @@ export function LaunchSheet({
               inputMode="decimal"
               value={envelope}
               onChange={(e) => setEnvelope(e.target.value)}
-              className="pm-input text-[15px]"
+              className="pm-input text-[16px]"
               placeholder="2.00"
             />
           </div>
 
           {errorMsg && (
-            <p className="text-[12px]" style={{ color: "var(--pm-warn)" }}>
+            <p className="text-[13px]" style={{ color: "var(--pm-warn)" }}>
               {errorMsg}
             </p>
           )}
@@ -272,8 +273,8 @@ export function LaunchSheet({
 
       {step === "launched" && (
         <Notice tone="ok" title="Launched">
-          {sessionId && <p className="font-mono text-[12px]">{sessionId}</p>}
-          <button onClick={onClose} className="mt-3 text-[13px] underline" style={{ color: "var(--pm-fg-2)" }}>
+          {sessionId && <p className="font-mono text-[13px]">{sessionId}</p>}
+          <button onClick={onClose} className="mt-3 text-[14px] underline" style={{ color: "var(--pm-fg-2)" }}>
             Done
           </button>
         </Notice>
@@ -282,7 +283,7 @@ export function LaunchSheet({
       {step === "error" && (
         <Notice tone="warn" title="Couldn't launch">
           <p>{errorMsg}</p>
-          <button onClick={() => setStep("pick")} className="mt-3 text-[13px] underline" style={{ color: "var(--pm-fg-2)" }}>
+          <button onClick={() => setStep("pick")} className="mt-3 text-[14px] underline" style={{ color: "var(--pm-fg-2)" }}>
             Back
           </button>
         </Notice>

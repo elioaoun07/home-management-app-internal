@@ -40,8 +40,8 @@ export function UsageView() {
     .filter((entry) => entry.maxUsd != null);
 
   return (
-    <div className="p-3 lg:p-5 pb-24 lg:pb-8 space-y-3 lg:space-y-4 max-w-[1400px] mx-auto">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 lg:gap-3">
+    <div className="p-4 pb-28 space-y-4">
+      <div className="grid grid-cols-2 gap-3">
         <StatTile label="Fleet spend" value={formatUsd(fleet.totalSpendUsd)} hint={`${fleet.sessions.length} sessions`} />
         <StatTile label="Tokens" value={formatTokens(totalTokens)} hint="in + cached + out" />
         <StatTile
@@ -55,7 +55,7 @@ export function UsageView() {
         />
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-3 lg:gap-4">
+      <div className="space-y-3">
         <WidgetCard title="Spend by day" subtitle="Bucketed by each session's last update">
           {spendByDay.length ? (
             <div className="pm-chart" style={{ height: 170 }}>
