@@ -198,7 +198,15 @@
       "Bash(perl -i -pe 'if \\(m{^      \"src/}\\) { s/\\\\[/\\\\\\\\\\\\\\\\[/g; s/\\\\]/\\\\\\\\\\\\\\\\]/g; }' eslint.config.mjs)",
       "Bash(perl -i -pe 'if \\(m{^      \"src/}\\) { s/\\\\\\\\\\\\[/\\\\\\\\\\\\\\\\[/g; s/\\\\\\\\\\\\]/\\\\\\\\\\\\\\\\]/g; }' eslint.config.mjs)",
       "Bash(git checkout *)",
-      "PowerShell($s=\"$env:TEMP\\\\claude\\\\C--Users-aoune-WebApp-budget-app\\\\4ea54fe9-5ad6-4e93-9840-0f9dfb63b11a\\\\scratchpad\"; node \"$s\\\\gen-debt.mjs\"; node \"$s\\\\write-config.mjs\"; Select-String -Path eslint.config.mjs -Pattern 'debts/' | Select-Object -First 2)"
+      "PowerShell($s=\"$env:TEMP\\\\claude\\\\C--Users-aoune-WebApp-budget-app\\\\4ea54fe9-5ad6-4e93-9840-0f9dfb63b11a\\\\scratchpad\"; node \"$s\\\\gen-debt.mjs\"; node \"$s\\\\write-config.mjs\"; Select-String -Path eslint.config.mjs -Pattern 'debts/' | Select-Object -First 2)",
+      "Bash(claude --version)",
+      "Bash(jq -r '.projects[\"C:\\\\\\\\Users\\\\\\\\aoune\\\\\\\\WebApp\\\\\\\\budget-app\"].disabledMcpServers // \"none\"' 'C:\\\\Users\\\\aoune/.claude.json')",
+      "Bash(exit 1)",
+      "Bash(awk -F'__' '{print $2}')",
+      "Bash(jq -r '.hooks // {} | to_entries[] | .key as $e | .value[]? | \\($e + \" | matcher=\" + \\(.matcher // \"*\"\\) + \" | \" + \\(\\(.hooks//[]\\) | map\\(\\(.command // \"?\"\\) + \" \\(timeout=\" + \\(\\(.timeout // \"default\"\\)|tostring\\) + \"\\)\"\\) | join\\(\" ;; \"\\)\\)\\)' /c/Users/aoune/WebApp/budget-app/.claude/settings.json)",
+      "Bash(jq -r '.projects[\"C:\\\\\\\\Users\\\\\\\\aoune\\\\\\\\WebApp\\\\\\\\budget-app\"] | keys | map\\(select\\(test\\(\"mcp|onnector\";\"i\"\\)\\)\\)' 'C:\\\\Users\\\\aoune/.claude.json')",
+      "Bash(jq -r '.projects[\"C:\\\\\\\\Users\\\\\\\\aoune\\\\\\\\WebApp\\\\\\\\budget-app\"] | {mcpServers: \\(.mcpServers|keys?\\), disabledMcpServers, enabledMcpjsonServers, disabledMcpjsonServers}' 'C:\\\\Users\\\\aoune/.claude.json')",
+      "Bash(awk '/^## Pain Inventory/,/^## /' \"PM Tooling — Master Book.md\")"
     ]
   }
 }
