@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/errors";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
@@ -31,8 +32,8 @@ export default function WelcomeClient() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed");
       window.location.href = "/dashboard";
-    } catch (e: any) {
-      setError(e?.message || "Failed to continue");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Failed to continue"));
     } finally {
       setSubmitting(false);
     }
@@ -50,8 +51,8 @@ export default function WelcomeClient() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to generate");
       setGeneratedCode(data?.code || null);
-    } catch (e: any) {
-      setError(e?.message || "Failed to generate code");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Failed to generate code"));
     } finally {
       setSubmitting(false);
     }
@@ -77,8 +78,8 @@ export default function WelcomeClient() {
       const d2 = await res2.json().catch(() => ({}));
       if (!res2.ok) throw new Error(d2?.error || "Failed to finalize");
       window.location.href = "/dashboard";
-    } catch (e: any) {
-      setError(e?.message || "Failed to link");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Failed to link"));
     } finally {
       setSubmitting(false);
     }

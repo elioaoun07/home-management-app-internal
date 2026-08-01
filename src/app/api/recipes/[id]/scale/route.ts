@@ -3,6 +3,7 @@
 // e.g., "4 slices of ham" stays the same for 3-4 servings, but becomes 7-8 for 10
 
 import { generateContentWithFallback } from "@/lib/ai/gemini";
+import { getErrorMessage } from "@/lib/errors";
 import {
   checkUserRateLimit,
   generateRequestHash,
@@ -172,8 +173,8 @@ IMPORTANT: Preserve the "section" field from the input ingredients exactly as-is
       ...result,
       tokensUsed: usage?.totalTokenCount ?? null,
     });
-  } catch (err: any) {
-    console.error("[recipe-scale] Error:", err.message);
+  } catch (err: unknown) {
+    console.error("[recipe-scale] Error:", getErrorMessage(err));
     if (err instanceof SyntaxError) {
       return NextResponse.json(
         { error: "AI returned invalid data. Please try again." },
@@ -181,7 +182,7 @@ IMPORTANT: Preserve the "section" field from the input ingredients exactly as-is
       );
     }
     return NextResponse.json(
-      { error: err.message || "Failed to scale recipe" },
+      { error: getErrorMessage(err, "Failed to scale recipe") },
       { status: 500 },
     );
   }

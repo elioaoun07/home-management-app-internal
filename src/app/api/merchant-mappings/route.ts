@@ -1,5 +1,6 @@
 // src/app/api/merchant-mappings/route.ts
 import { getActiveHouseholdPartnerId } from "@/lib/accountAccess";
+import { getErrorCode } from "@/lib/errors";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
@@ -147,7 +148,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data);
   } catch (error) {
     console.error("Failed to save merchant mapping:", error);
-    if ((error as any).code === "23505") {
+    if (getErrorCode(error) === "23505") {
       return NextResponse.json({ error: "Merchant mapping already exists" }, { status: 409 });
     }
     return NextResponse.json(

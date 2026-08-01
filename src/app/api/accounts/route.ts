@@ -2,6 +2,7 @@ import {
   DEFAULT_ACCOUNTS,
   DEFAULT_CATEGORIES,
 } from "@/constants/defaultCategories";
+import { getErrorCode, getErrorMessage } from "@/lib/errors";
 import {
   ACCOUNT_SELECT,
   getActiveHouseholdPartnerId,
@@ -108,8 +109,8 @@ export async function GET(req: NextRequest) {
       includeHidden,
       allHousehold,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 
   // Check if current user has any accounts (partner might have accounts but we need to seed for new users)
@@ -132,7 +133,7 @@ export async function GET(req: NextRequest) {
           .single();
 
         if (accErr) {
-          if ((accErr as any).code === "23505") {
+          if (getErrorCode(accErr) === "23505") {
             const { data: existing } = await supabase
               .from("accounts")
               .select("id")
@@ -278,7 +279,7 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       // 👍 handle unique violation
-      if ((error as any).code === "23505") {
+      if (getErrorCode(error) === "23505") {
         return NextResponse.json(
           { error: "Account name already exists" },
           { status: 409 },

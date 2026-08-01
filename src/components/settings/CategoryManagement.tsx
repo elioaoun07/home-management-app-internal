@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/errors";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -409,9 +410,9 @@ export function CategoryManagement() {
           },
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Delete category error:", error);
-      toast.error(error.message || "Failed to delete category");
+      toast.error(getErrorMessage(error, "Failed to delete category"));
     }
   }
 

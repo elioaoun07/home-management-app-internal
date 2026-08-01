@@ -1,5 +1,6 @@
 "use client";
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/errors";
 import {
   Dialog,
   DialogContent,
@@ -67,8 +68,8 @@ export default function TemplateDialog({
         description: description || null,
       });
       onOpenChange(false);
-    } catch (err: any) {
-      const msg = err?.message || "Failed to save template";
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, "Failed to save template");
       toast.error(msg);
     } finally {
       setSaving(false);

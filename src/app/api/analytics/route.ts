@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
+import { getErrorMessage } from "@/lib/errors";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -414,9 +415,9 @@ export async function GET(req: NextRequest) {
       hasPartner: !!partnerId,
       currentUserId: user.id,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: "Failed to fetch analytics", detail: error?.message },
+      { error: "Failed to fetch analytics", detail: getErrorMessage(error) },
       { status: 500 },
     );
   }

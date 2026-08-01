@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
+import { getErrorMessage } from "@/lib/errors";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -134,10 +135,10 @@ export async function GET(req: NextRequest) {
       subcategory_id: subcategoryId,
       source,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error matching fields:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to match fields" },
+      { error: getErrorMessage(error, "Failed to match fields") },
       { status: 500 },
     );
   }

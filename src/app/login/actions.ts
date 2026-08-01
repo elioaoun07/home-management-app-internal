@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseServer } from "@/lib/supabase/server";
+import { getErrorMessage } from "@/lib/errors";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -26,12 +27,12 @@ export async function loginAction(
     });
     data = result.data;
     error = result.error;
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("Login error (catch):", e);
     return {
       error:
         "Unable to connect to authentication service. Please try again later.",
-      details: e.message,
+      details: getErrorMessage(e),
     };
   }
 

@@ -13,6 +13,7 @@ import {
   PlusIcon,
   XIcon,
 } from "@/components/icons/FuturisticIcons";
+import { getErrorMessage } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
@@ -700,8 +701,8 @@ function MobileExpenseFormContent() {
           );
         }
         setDeleteConfirm(null);
-      } catch (error: any) {
-        toast.error(error.message || "Failed to hide", {
+      } catch (error: unknown) {
+        toast.error(getErrorMessage(error, "Failed to hide"), {
           icon: ToastIcons.error,
         });
       } finally {
@@ -1923,10 +1924,9 @@ function MobileExpenseFormContent() {
                                         },
                                       },
                                     );
-                                  } catch (error: any) {
+                                  } catch (error: unknown) {
                                     toast.error(
-                                      error.message ||
-                                        "Failed to update visibility",
+                                      getErrorMessage(error, "Failed to update visibility"),
                                       { icon: ToastIcons.error },
                                     );
                                   }
@@ -2009,9 +2009,9 @@ function MobileExpenseFormContent() {
                                       toast.success("Account restored", {
                                         icon: ToastIcons.create,
                                       });
-                                    } catch (error: any) {
+                                    } catch (error: unknown) {
                                       toast.error(
-                                        error.message || "Failed to restore",
+                                        getErrorMessage(error, "Failed to restore"),
                                         { icon: ToastIcons.error },
                                       );
                                     }
@@ -2318,9 +2318,9 @@ function MobileExpenseFormContent() {
                                         toast.success("Category restored", {
                                           icon: ToastIcons.create,
                                         });
-                                      } catch (error: any) {
+                                      } catch (error: unknown) {
                                         toast.error(
-                                          error.message || "Failed to restore",
+                                          getErrorMessage(error, "Failed to restore"),
                                           { icon: ToastIcons.error },
                                         );
                                       }
@@ -2653,10 +2653,9 @@ function MobileExpenseFormContent() {
                                               "Subcategory restored",
                                               { icon: ToastIcons.create },
                                             );
-                                          } catch (error: any) {
+                                          } catch (error: unknown) {
                                             toast.error(
-                                              error.message ||
-                                                "Failed to restore",
+                                              getErrorMessage(error, "Failed to restore"),
                                               { icon: ToastIcons.error },
                                             );
                                           }

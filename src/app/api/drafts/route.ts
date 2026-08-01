@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
+import { getErrorMessage } from "@/lib/errors";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -43,10 +44,10 @@ export async function GET(request: Request) {
     if (error) throw error;
 
     return NextResponse.json({ drafts: drafts || [] });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error fetching drafts:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to fetch drafts" },
+      { error: getErrorMessage(error, "Failed to fetch drafts") },
       { status: 500 },
     );
   }
@@ -111,10 +112,10 @@ export async function POST(request: Request) {
     if (error) throw error;
 
     return NextResponse.json({ draft }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error creating draft:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create draft" },
+      { error: getErrorMessage(error, "Failed to create draft") },
       { status: 500 },
     );
   }

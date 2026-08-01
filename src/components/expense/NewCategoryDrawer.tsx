@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/errors";
 import {
   Drawer,
   DrawerClose,
@@ -171,8 +172,8 @@ export default function NewCategoryDrawer({
       resetForm();
       onOpenChange(false);
       onCategoryCreated?.(category.id);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to create category", {
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to create category"), {
         icon: ToastIcons.error,
       });
     }

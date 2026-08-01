@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
+import { getErrorCode } from "@/lib/errors";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) {
-    if ((error as any).code === "23505") {
+    if (getErrorCode(error) === "23505") {
       return NextResponse.json(
         { error: "A category with this name already exists for this account." },
         { status: 409 }

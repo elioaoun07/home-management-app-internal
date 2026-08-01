@@ -7,6 +7,7 @@ import {
   SmartphoneIcon,
   WatchIcon,
 } from "@/components/icons/FuturisticIcons";
+import { getErrorMessage } from "@/lib/errors";
 import { CategoryManagement } from "@/components/settings/CategoryManagement";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { Button } from "@/components/ui/button";
@@ -700,8 +701,8 @@ function HouseholdPanel() {
                 if (!res.ok) throw new Error(data?.error || "Failed");
                 await refetch();
                 toast.success("Household code created!");
-              } catch (e: any) {
-                setCreateError(e?.message || "Failed to generate code");
+              } catch (e: unknown) {
+                setCreateError(getErrorMessage(e, "Failed to generate code"));
                 toast.error("Failed to create code");
               } finally {
                 setCreating(false);

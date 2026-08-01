@@ -1,6 +1,7 @@
 "use client";
 
 import { safeFetch } from "@/lib/safeFetch";
+import { getErrorMessage } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,8 +38,8 @@ export default function LinkHouseholdDialog({ open, onOpenChange }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to link");
       setSuccess(true);
-    } catch (e: any) {
-      setError(e?.message || "Failed to link");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Failed to link"));
     } finally {
       setLoading(false);
     }
@@ -57,8 +58,8 @@ export default function LinkHouseholdDialog({ open, onOpenChange }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to generate");
       setGeneratedCode(data?.code || null);
-    } catch (e: any) {
-      setError(e?.message || "Failed to generate code");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Failed to generate code"));
     } finally {
       setLoading(false);
     }

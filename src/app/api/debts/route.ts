@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
+import { getErrorCode } from "@/lib/errors";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -183,7 +184,7 @@ export async function POST(req: NextRequest) {
 
   if (debtError) {
     console.error("Error creating debt record:", debtError);
-    if ((debtError as any).code === "23505") {
+    if (getErrorCode(debtError) === "23505") {
       return NextResponse.json({ error: "Debt record already exists" }, { status: 409 });
     }
     return NextResponse.json({ error: debtError.message }, { status: 500 });

@@ -17,6 +17,7 @@ import {
   UploadIcon,
   WalletIcon,
 } from "lucide-react";
+import { getErrorMessage } from "@/lib/errors";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -171,8 +172,8 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
           `${transferCount} transfers auto-unselected (USD → Card transfers)`,
         );
       }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to parse statement");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to parse statement"));
     }
   };
 
@@ -529,8 +530,8 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
         `Successfully imported ${result.imported_count} transactions`,
       );
       setStep("complete");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to import transactions");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to import transactions"));
     }
   };
 

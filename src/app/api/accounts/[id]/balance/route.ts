@@ -1,4 +1,5 @@
 import { getAccessibleAccount } from "@/lib/accountAccess";
+import { getErrorCode } from "@/lib/errors";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
@@ -195,7 +196,7 @@ export async function POST(
     .single();
 
   if (error) {
-    if ((error as any).code === "23505") {
+    if (getErrorCode(error) === "23505") {
       return NextResponse.json(
         { error: "Balance record already exists for this account" },
         { status: 409 },

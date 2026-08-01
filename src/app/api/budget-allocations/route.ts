@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
+import { getErrorCode } from "@/lib/errors";
 import type {
   BudgetCategoryView,
   BudgetSubcategoryView,
@@ -613,7 +614,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (error) {
-    if ((error as any).code === "23505") {
+    if (getErrorCode(error) === "23505") {
       return NextResponse.json({ error: "Already exists" }, { status: 409 });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });

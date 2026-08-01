@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
+import { getErrorMessage } from "@/lib/errors";
 import { SupabaseTransactionService } from "@/services/transaction.service";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -60,9 +61,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(transaction, {
       headers: { "Cache-Control": "no-store" },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to create transaction:", err);
-    const message = err.message || "Failed to create transaction";
+    const message = getErrorMessage(err, "Failed to create transaction");
     const status =
       message.includes("required") || message.includes("Invalid") ? 400 : 500;
     return NextResponse.json({ error: message }, { status });
@@ -87,9 +88,9 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json(transaction, {
       headers: { "Cache-Control": "no-store" },
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("Failed to update transaction:", e);
-    const message = e.message || "Failed to update transaction";
+    const message = getErrorMessage(e, "Failed to update transaction");
     const status =
       message.includes("required") || message.includes("Invalid") ? 400 : 500;
     return NextResponse.json({ error: message }, { status });

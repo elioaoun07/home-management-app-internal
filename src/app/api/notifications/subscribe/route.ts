@@ -2,6 +2,7 @@
 // API route to save push subscription to database
 
 import { logPushEvent } from "@/lib/pushLogger";
+import { getErrorCode } from "@/lib/errors";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       console.error("[Subscribe] Failed to save push subscription:", error);
-      if ((error as any).code === "23505") {
+      if (getErrorCode(error) === "23505") {
         return NextResponse.json({ error: "Subscription already exists" }, { status: 409 });
       }
       return NextResponse.json(

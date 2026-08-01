@@ -188,7 +188,17 @@
       "Bash(cp /tmp/lt.bak /tmp/lt.mine)",
       "Bash(npx tsc *)",
       "Bash(pnpm typecheck *)",
-      "Bash(git ls-tree *)"
+      "Bash(git ls-tree *)",
+      "PowerShell(pnpm lint *)",
+      "PowerShell(pnpm typecheck *)",
+      "PowerShell(pnpm test *)",
+      "PowerShell(Out-Null *)",
+      "PowerShell(node \"$env:TEMP\\\\claude\\\\C--Users-aoune-WebApp-budget-app\\\\4ea54fe9-5ad6-4e93-9840-0f9dfb63b11a\\\\scratchpad\\\\gen-debt.mjs\")",
+      "PowerShell(node \"$env:TEMP\\\\claude\\\\C--Users-aoune-WebApp-budget-app\\\\4ea54fe9-5ad6-4e93-9840-0f9dfb63b11a\\\\scratchpad\\\\write-config.mjs\")",
+      "Bash(perl -i -pe 'if \\(m{^      \"src/}\\) { s/\\\\[/\\\\\\\\\\\\\\\\[/g; s/\\\\]/\\\\\\\\\\\\\\\\]/g; }' eslint.config.mjs)",
+      "Bash(perl -i -pe 'if \\(m{^      \"src/}\\) { s/\\\\\\\\\\\\[/\\\\\\\\\\\\\\\\[/g; s/\\\\\\\\\\\\]/\\\\\\\\\\\\\\\\]/g; }' eslint.config.mjs)",
+      "Bash(git checkout *)",
+      "PowerShell($s=\"$env:TEMP\\\\claude\\\\C--Users-aoune-WebApp-budget-app\\\\4ea54fe9-5ad6-4e93-9840-0f9dfb63b11a\\\\scratchpad\"; node \"$s\\\\gen-debt.mjs\"; node \"$s\\\\write-config.mjs\"; Select-String -Path eslint.config.mjs -Pattern 'debts/' | Select-Object -First 2)"
     ]
   }
 }

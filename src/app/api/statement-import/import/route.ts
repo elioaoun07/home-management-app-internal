@@ -2,6 +2,7 @@
 // Import parsed transactions into the database
 
 import { adjustAccountBalance } from "@/lib/balance";
+import { getErrorCode } from "@/lib/errors";
 import type { AccountType } from "@/lib/balance-utils";
 import { getBalanceDelta } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -138,7 +139,7 @@ export async function POST(req: NextRequest) {
 
       if (txnError) {
         // 23505 = unique_violation — this row already exists (duplicate import)
-        if ((txnError as any).code === "23505") {
+        if (getErrorCode(txnError) === "23505") {
           if (hashRoot && !skippedRoots.has(hashRoot)) {
             skippedCount++;
             skippedRoots.add(hashRoot);

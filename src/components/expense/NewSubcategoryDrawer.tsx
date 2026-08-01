@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/errors";
 import {
   Drawer,
   DrawerClose,
@@ -128,8 +129,8 @@ export default function NewSubcategoryDrawer({
       resetForm();
       onOpenChange(false);
       onSubcategoryCreated?.(subcategory.id);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to create subcategory", {
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to create subcategory"), {
         icon: ToastIcons.error,
       });
     } finally {

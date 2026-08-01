@@ -1,4 +1,5 @@
 import { adjustAccountBalance } from "@/lib/balance";
+import { getErrorMessage } from "@/lib/errors";
 import { getBalanceDelta } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
@@ -84,10 +85,10 @@ export async function PATCH(
     });
 
     return NextResponse.json({ transaction });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error confirming draft:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to confirm draft" },
+      { error: getErrorMessage(error, "Failed to confirm draft") },
       { status: 500 },
     );
   }
@@ -120,10 +121,10 @@ export async function DELETE(
     if (error) throw error;
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error deleting draft:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to delete draft" },
+      { error: getErrorMessage(error, "Failed to delete draft") },
       { status: 500 },
     );
   }

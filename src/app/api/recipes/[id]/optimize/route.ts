@@ -3,6 +3,7 @@
 // Returns a diff showing what changed and why
 
 import { generateContentWithFallback } from "@/lib/ai/gemini";
+import { getErrorMessage } from "@/lib/errors";
 import {
   checkUserRateLimit,
   generateRequestHash,
@@ -272,8 +273,8 @@ Only list fields that actually differ from the user's input.`;
       ...result,
       tokensUsed: usage?.totalTokenCount ?? null,
     });
-  } catch (err: any) {
-    console.error("[recipe-optimize] Error:", err.message);
+  } catch (err: unknown) {
+    console.error("[recipe-optimize] Error:", getErrorMessage(err));
     if (err instanceof SyntaxError) {
       return NextResponse.json(
         { error: "AI returned invalid data. Please try again." },
@@ -281,7 +282,7 @@ Only list fields that actually differ from the user's input.`;
       );
     }
     return NextResponse.json(
-      { error: err.message || "Failed to optimize recipe" },
+      { error: getErrorMessage(err, "Failed to optimize recipe") },
       { status: 500 },
     );
   }

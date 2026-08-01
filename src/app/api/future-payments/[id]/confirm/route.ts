@@ -1,4 +1,5 @@
 import { adjustAccountBalance } from "@/lib/balance";
+import { getErrorMessage } from "@/lib/errors";
 import { getBalanceDelta } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
@@ -129,10 +130,10 @@ export async function POST(
     });
 
     return NextResponse.json({ transaction: confirmed });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error confirming future payment:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to confirm payment" },
+      { error: getErrorMessage(error, "Failed to confirm payment") },
       { status: 500 },
     );
   }

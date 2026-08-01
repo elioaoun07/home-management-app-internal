@@ -1,5 +1,6 @@
 // src/app/api/inventory/items/route.ts
 import { supabaseServer } from "@/lib/supabase/server";
+import { getErrorCode } from "@/lib/errors";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -199,7 +200,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (itemError) {
-    if ((itemError as any).code === "23505") {
+    if (getErrorCode(itemError) === "23505") {
       return NextResponse.json({ error: "Item already exists" }, { status: 409 });
     }
     return NextResponse.json({ error: itemError.message }, { status: 500 });

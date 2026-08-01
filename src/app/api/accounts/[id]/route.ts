@@ -1,5 +1,6 @@
 // src/app/api/accounts/[id]/route.ts
 import { ACCOUNT_SELECT } from "@/lib/accountAccess";
+import { getErrorCode } from "@/lib/errors";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -68,10 +69,10 @@ export async function PATCH(
     .single();
 
   if (error) {
-    if ((error as any).code === "PGRST116") {
+    if (getErrorCode(error) === "PGRST116") {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    if ((error as any).code === "23505") {
+    if (getErrorCode(error) === "23505") {
       return NextResponse.json(
         { error: "Account name already exists" },
         { status: 409 },

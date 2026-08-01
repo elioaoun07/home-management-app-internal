@@ -1,4 +1,5 @@
 import { getAccessibleAccount } from "@/lib/accountAccess";
+import { getErrorMessage } from "@/lib/errors";
 import { adjustAccountBalance } from "@/lib/balance";
 import { getTransferDeltas } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -331,9 +332,9 @@ export async function POST(req: NextRequest) {
       is_owner: true,
       is_recipient: false,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error.message || "Failed to create transfer" },
+      { error: getErrorMessage(error, "Failed to create transfer") },
       { status: 500 },
     );
   }

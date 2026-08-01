@@ -8,6 +8,7 @@
 // This avoids the URL Context tool (needs 2.5+) and YouTube file_data (300 tokens/sec = very expensive)
 
 import { generateContentWithFallback } from "@/lib/ai/gemini";
+import { getErrorMessage } from "@/lib/errors";
 import {
   checkUserRateLimit,
   generateRequestHash,
@@ -417,8 +418,8 @@ Be accurate. If unsure about the exact recipe from this URL, generate the most l
 
     try {
       pageText = await fetchAndExtractText(url, isSocial);
-    } catch (err: any) {
-      console.error("Failed to fetch URL:", err.message);
+    } catch (err: unknown) {
+      console.error("Failed to fetch URL:", getErrorMessage(err));
 
       // For social media, fall back to AI knowledge if scraping fails entirely
       if (isSocial) {
@@ -460,7 +461,7 @@ Be accurate. If unsure about the exact recipe from this URL, generate the most l
       } else {
         return NextResponse.json(
           {
-            error: `Could not fetch the URL. ${err.message || "The page may be unavailable or require login."}`,
+            error: `Could not fetch the URL. ${getErrorMessage(err, "The page may be unavailable or require login.")}`,
           },
           { status: 422 },
         );
@@ -621,8 +622,8 @@ For tags, only include tags that clearly apply.`;
       source: sourceType,
       tokensUsed: usage?.totalTokenCount ?? null,
     });
-  } catch (err: any) {
-    console.error("[recipe-extract] AI error:", err.message);
+  } catch (err: unknown) {
+    console.error("[recipe-extract] AI error:", getErrorMessage(err));
 
     // Check for JSON parse errors specifically
     if (err instanceof SyntaxError) {
@@ -637,7 +638,7 @@ For tags, only include tags that clearly apply.`;
     }
 
     return NextResponse.json(
-      { error: err.message || "Failed to extract recipe from URL" },
+      { error: getErrorMessage(err, "Failed to extract recipe from URL") },
       { status: 500 },
     );
   }

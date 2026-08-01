@@ -2,6 +2,7 @@
 // AI suggests ingredient substitutions with impact analysis
 
 import { generateContentWithFallback } from "@/lib/ai/gemini";
+import { getErrorMessage } from "@/lib/errors";
 import {
   checkUserRateLimit,
   generateRequestHash,
@@ -152,8 +153,8 @@ Return ONLY valid JSON (no markdown, no code fences):
       ...result,
       tokensUsed: usage?.totalTokenCount ?? null,
     });
-  } catch (err: any) {
-    console.error("[recipe-substitute] Error:", err.message);
+  } catch (err: unknown) {
+    console.error("[recipe-substitute] Error:", getErrorMessage(err));
     if (err instanceof SyntaxError) {
       return NextResponse.json(
         { error: "AI returned invalid data. Please try again." },
@@ -161,7 +162,7 @@ Return ONLY valid JSON (no markdown, no code fences):
       );
     }
     return NextResponse.json(
-      { error: err.message || "Failed to get substitution suggestions" },
+      { error: getErrorMessage(err, "Failed to get substitution suggestions") },
       { status: 500 },
     );
   }

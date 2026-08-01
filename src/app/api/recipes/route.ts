@@ -1,5 +1,6 @@
 // src/app/api/recipes/route.ts
 import { supabaseServer } from "@/lib/supabase/server";
+import { getErrorCode } from "@/lib/errors";
 import type { RecipeInsert } from "@/types/recipe";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -151,7 +152,7 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       console.error("Error creating recipe:", error);
-      if ((error as any).code === "23505") {
+      if (getErrorCode(error) === "23505") {
         return NextResponse.json(
           { error: "Recipe already exists" },
           { status: 409 },
