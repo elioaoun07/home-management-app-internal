@@ -106,6 +106,7 @@ Budget is the household's **money graph**. Today it is a strong *reactive* ledge
 - 2026-07-30 — **BUD-11** delivery session `s-20260722-225601-whdv` ended **cancelled** at CANCELLED. 0 file(s) changed.
 - 2026-07-30 — **BUD-14** delivery session `s-20260729-121840-pdhx` ended **cancelled** at CANCELLED. 0 file(s) changed.
 - 2026-07-30 — **BUD-14** delivery session `s-20260730-104900-9mfu` ended **cancelled** at CANCELLED. 0 file(s) changed. · finish package: `.delivery/sessions/s-20260730-104900-9mfu/artifacts/finish/summary.md`
+- 2026-08-01 — **BUD-14** delivery session `s-20260801-094951-jx8o` ended **paused — needs a decision** at NEEDS_DECISION. 1 file(s) changed · ACs 0/3 satisfied. · finish package: `.delivery/sessions/s-20260801-094951-jx8o/artifacts/finish/summary.md`
 
 ## Vision & Decisions
 

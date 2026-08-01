@@ -1,6 +1,6 @@
 ---
 created: 2026-07-24
-updated: 2026-07-30
+updated: 2026-08-01
 type: checklist
 status: active
 owner: Elio
@@ -20,6 +20,14 @@ tags: [pm/checklist, tooling/delivery]
 **Mobile session drill-down** — shipped 2026-07-30 (DLV-63…DLV-67, swept to the Master Book). One verification is left, and it needs a real gated session.
 
 - [ ] **DLV-72** Live-verify the session drill-down end to end: a question-gated session shows its text on the phone, an advisory ledger answer lands in `ledger.json`, the four panes swipe, a gate push opens that session directly, and the published `session:<id>` row stays under the size cap for a long session _(friction - S)_
+
+**INSTANT lane** — shipped 2026-08-01 (DLV-73…DLV-76, swept to the Master Book). Two things are left, and both need the owner.
+
+> **DLV-78 was attempted 2026-08-01 and failed** (`s-20260801-094951-jx8o`): the edit landed correctly, but INSTANT verified the whole dirty working tree instead of its own diff, escalated, and blew the budget. Fixed as DLV-80/81/82 — see the Master Book. **DLV-78 still needs a clean live re-run**, and it is now also the natural place to exercise the two 🟡 items the failure exposed (REVIEWING's 8-turn ceiling; the targeted-test rung passing on zero test files).
+
+- [ ] **DLV-77** Run `migrations/2026-08-01_pm-commands-instant-gates.sql` in the Supabase SQL Editor, then verify `pg_get_constraintdef` lists `approve` and `accept`. Until this lands, the phone's INSTANT gate buttons fail at the DB CHECK — every other surface works _(blocker - S)_
+- [ ] **DLV-78** Live-verify INSTANT on the real BUD-14 item against a scratch branch: Flight-Check offers INSTANT and shows the located file **before** launch; `state.usage.total` at `UAT_READY` is ≤ $0.20 with `turnCounter === 2`; `events.ndjson` has `instant.verified` and no REVIEWING/UAT_PREP turn record; all three gate decisions exist from two owner actions; then repeat with the path stripped from the item text, and with an item that secretly touches two files to confirm `instant.escalated` fires _(friction - S)_
+- [ ] **DLV-79** Re-tune INSTANT's envelope from measurement once three sessions complete — `$0.25 / 250K / 8 internal turns` is a launch-time estimate, and `estPhaseUsage` switches to measured medians at three samples _(annoyance - S)_
 
 
 ## Next

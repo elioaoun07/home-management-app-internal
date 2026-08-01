@@ -70,6 +70,11 @@ export const DEFAULT_CONFIG = Object.freeze({
     // where DISCOVERY's mandated reading alone was ~33,151 tokens before the
     // agent could look at the one line it was asked to change.
     laneBudgets: Object.freeze({
+      // DLV-73: INSTANT is tighter than FAST on the same principle. FAST's numbers
+      // came from DLV-45, where DISCOVERY's mandated reading alone was ~33,151
+      // tokens before the agent could look at the one line it was asked to change.
+      // INSTANT arrives with that line already located, so it needs less still.
+      instant: Object.freeze({ discovery: 6_000, plan: 6_000, building: 8_000, review: 4_000 }),
       fast: Object.freeze({ discovery: 12_000, plan: 8_000, building: 12_000, review: 8_000 }),
       standard: Object.freeze({ discovery: null, plan: null, building: null, review: null }),
       deep: Object.freeze({ discovery: null, plan: null, building: null, review: null }),
@@ -104,6 +109,11 @@ export const DEFAULT_CONFIG = Object.freeze({
   // critical enough that skipping it is never worth the saved time.
   validation: Object.freeze({
     laneLadder: Object.freeze({
+      // DLV-73: INSTANT keeps FAST's ladder exactly. Validation costs no model
+      // tokens — it spawns `pnpm typecheck` / a targeted `vitest related` — so
+      // thinning it would buy nothing and give up the only automated correctness
+      // check the lane has left once REVIEWING is discharged deterministically.
+      instant: Object.freeze({ rungs: Object.freeze(["typecheck", "test"]), targetedTest: true }),
       fast: Object.freeze({ rungs: Object.freeze(["typecheck", "test"]), targetedTest: true }),
       standard: Object.freeze({ rungs: Object.freeze(["typecheck", "lint", "test"]), targetedTest: false }),
       deep: Object.freeze({ rungs: Object.freeze(["typecheck", "lint", "test"]), targetedTest: false }),
@@ -152,8 +162,29 @@ export const DEFAULT_CONFIG = Object.freeze({
   // *traversals* (two full-context turns become one), never the oversight. The
   // single-file condition is the safety rail: a change confined to one file the
   // item itself names is one whose spec and plan cannot meaningfully diverge.
+  //
+  // DLV-73 adds the INSTANT lane, which takes the same argument one step further.
+  // FAST still runs five phase traversals for a one-line edit; INSTANT runs two,
+  // and discharges REVIEWING and UAT_PREP from the diff instead of from a model
+  // turn. The owner's decision (2026-08-01) authorized two scoped amendments,
+  // both recorded in the Delivery Master Book rather than assumed here:
+  //   (a) the merged spec+plan artifact may be approved by one owner action that
+  //       writes BOTH gate decisions — three gates are still recorded, but there
+  //       are two review moments rather than three, because the second gate's
+  //       artifact *is* the first gate's artifact;
+  //   (b) `code-review` and `uat-generation` stay locked always-on rows, but on
+  //       INSTANT they are discharged by a deterministic assertion against the
+  //       declared edit, which escalates back to the real model turns the moment
+  //       the diff is anything other than what the approved plan described.
   pipeline: Object.freeze({
     mergeDiscoveryPlanOnFastSingleFile: true,
+    mergeDiscoveryPlanAlwaysOnInstant: true,
+    // The ceiling the deterministic review asserts against. A diff larger than
+    // this is, by definition, not the "one-line edit" INSTANT was authorized for,
+    // so it escalates to the full REVIEWING + UAT_PREP turns rather than being
+    // waved through. Sized to leave room for an import line and a formatting
+    // reflow around a single-value change, and nothing more.
+    instantMaxDiffLines: 20,
   }),
   budgets: Object.freeze({
     // maxInternalTurns (D9/DLV-6) caps the SDK's own `Options.maxTurns` — the
@@ -176,6 +207,15 @@ export const DEFAULT_CONFIG = Object.freeze({
     // a crash loop (DLV-44), so this is a cost/latency knob again, not a
     // correctness cliff.
     laneDefaults: Object.freeze({
+      // DLV-73: INSTANT forecasts two turns (~$0.07 each at economy against a
+      // pre-located 120-line read window), so $0.25 leaves headroom for one fix
+      // loop and parks before a third. 8 internal turns is FAST's 12 minus the
+      // ceremony INSTANT no longer performs — the file is already located, so the
+      // turn opens with a bounded Read rather than a search. Both numbers are
+      // launch-time estimates: once three INSTANT sessions complete,
+      // `estPhaseUsage` switches to their measured medians and these should be
+      // re-tuned against what actually happened rather than against this comment.
+      instant: Object.freeze({ maxUsd: 0.25, maxTokens: 250_000, warnPct: 0.8, maxInternalTurns: 8 }),
       fast: Object.freeze({ maxUsd: 0.5, maxTokens: 500_000, warnPct: 0.8, maxInternalTurns: 12 }),
       standard: Object.freeze({ maxUsd: 2, maxTokens: 2_000_000, warnPct: 0.8, maxInternalTurns: 20 }),
       deep: Object.freeze({ maxUsd: 5, maxTokens: 5_000_000, warnPct: 0.8, maxInternalTurns: 40 }),
@@ -228,7 +268,11 @@ function mergeDeep(base, override) {
 }
 
 const ROOT_KEYS = new Set(["schemaVersion", "pricingVersion", "providers", "effortMap", "routing", "context", "transcript", "errors", "budgets", "validation", "scope", "pipeline"]);
-const PIPELINE_KEYS = new Set(["mergeDiscoveryPlanOnFastSingleFile"]);
+const PIPELINE_KEYS = new Set([
+  "mergeDiscoveryPlanOnFastSingleFile",
+  "mergeDiscoveryPlanAlwaysOnInstant",
+  "instantMaxDiffLines",
+]);
 const CONTEXT_KEYS = new Set([
   "rotateAtTokens",
   "hardCeilingPct",
@@ -247,7 +291,7 @@ const SCOPE_AXIS_KEYS = new Set(["files", "occurrences", "modules"]);
 // already imports config.mjs (would-be circular), and this vocabulary is
 // small and stable enough that duplication is cheaper than a shared module.
 const VALIDATION_RUNG_KEYS = new Set(["typecheck", "lint", "test"]);
-const VALIDATION_LANES = new Set(["fast", "standard", "deep"]);
+const VALIDATION_LANES = new Set(["instant", "fast", "standard", "deep"]);
 const VALIDATION_LANE_KEYS = new Set(["rungs", "targetedTest"]);
 const PROVIDER_KEYS = new Set(["defaultModel", "efforts", "models"]);
 const MODEL_KEYS = new Set(["id", "label", "tier", "contextWindow", "pricing"]);
@@ -263,7 +307,7 @@ const BUDGET_KEYS = new Set([
   "maxPlanSteps",
   "validationTimeoutMs",
 ]);
-const BUDGET_LANES = new Set(["fast", "standard", "deep"]);
+const BUDGET_LANES = new Set(["instant", "fast", "standard", "deep"]);
 const BUDGET_ENVELOPE_KEYS = new Set(["maxUsd", "maxTokens", "warnPct", "maxInternalTurns"]);
 
 function validationError(path, message) {
@@ -333,11 +377,14 @@ export function validateConfig(raw) {
   }
   if (raw.pipeline !== undefined) {
     assertKnownKeys(raw.pipeline, PIPELINE_KEYS, "$.pipeline");
-    if (
-      raw.pipeline.mergeDiscoveryPlanOnFastSingleFile !== undefined &&
-      typeof raw.pipeline.mergeDiscoveryPlanOnFastSingleFile !== "boolean"
-    ) {
-      throw validationError("$.pipeline.mergeDiscoveryPlanOnFastSingleFile", "must be a boolean");
+    for (const key of ["mergeDiscoveryPlanOnFastSingleFile", "mergeDiscoveryPlanAlwaysOnInstant"]) {
+      if (raw.pipeline[key] !== undefined && typeof raw.pipeline[key] !== "boolean") {
+        throw validationError(`$.pipeline.${key}`, "must be a boolean");
+      }
+    }
+    assertOptionalNumber(raw.pipeline.instantMaxDiffLines, "$.pipeline.instantMaxDiffLines", { integer: true });
+    if (raw.pipeline.instantMaxDiffLines !== undefined && raw.pipeline.instantMaxDiffLines <= 0) {
+      throw validationError("$.pipeline.instantMaxDiffLines", "must be positive");
     }
   }
   if (raw.context !== undefined) {

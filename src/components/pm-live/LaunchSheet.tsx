@@ -12,14 +12,16 @@ import { displayText } from "@/features/pm-live/derive";
 import { useFleet, useTasks } from "@/features/pm-live/store";
 import type { LaneDefault, PmTask, SendCommand } from "@/features/pm-live/types";
 
-const LANES = ["FAST", "STANDARD", "DEEP"] as const;
+// DLV-73: INSTANT first — the two-turn lane for a single located file, and the
+// one the triage gate now recommends for a trivial item instead of refusing it.
+const LANES = ["INSTANT", "FAST", "STANDARD", "DEEP"] as const;
 type Lane = (typeof LANES)[number];
 
 // Used only until the fleet snapshot arrives with the laptop's real
 // laneDefaults. Previously this WAS the source of truth on mobile and drifted
 // silently from scripts/delivery/config.mjs whenever the owner customized
 // .delivery/config.json.
-const FALLBACK_LANE_USD: Record<Lane, number> = { FAST: 0.5, STANDARD: 2, DEEP: 5 };
+const FALLBACK_LANE_USD: Record<Lane, number> = { INSTANT: 0.25, FAST: 0.5, STANDARD: 2, DEEP: 5 };
 
 type Step = "pick" | "checking" | "blocked" | "configure" | "launching" | "launched" | "error";
 
@@ -79,9 +81,14 @@ export function LaunchSheet({
   const laneUsd = useMemo<Record<Lane, number>>(() => {
     const defaults = fleet?.laneDefaults;
     if (!defaults) return FALLBACK_LANE_USD;
-    const pick = (key: "fast" | "standard" | "deep", fallback: number) =>
+    const pick = (key: "instant" | "fast" | "standard" | "deep", fallback: number) =>
       (defaults[key] as LaneDefault | undefined)?.maxUsd ?? fallback;
-    return { FAST: pick("fast", 0.5), STANDARD: pick("standard", 2), DEEP: pick("deep", 5) };
+    return {
+      INSTANT: pick("instant", 0.25),
+      FAST: pick("fast", 0.5),
+      STANDARD: pick("standard", 2),
+      DEEP: pick("deep", 5),
+    };
   }, [fleet]);
 
   const eligible = useMemo(() => (tasks?.tasks || []).filter((t) => t.state === "open" && t.idChip), [tasks]);

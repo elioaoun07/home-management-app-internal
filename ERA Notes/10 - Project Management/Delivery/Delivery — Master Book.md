@@ -1,6 +1,6 @@
 ---
 created: 2026-07-11
-updated: 2026-07-30
+updated: 2026-08-01
 type: master-book
 status: active
 owner: Elio
@@ -28,7 +28,7 @@ Delivery is the agentic execution system: the owner picks a PM checklist item, a
 - **No git writes, ever.** Worktrees banned permanently; the read-only allowlist plus post-turn HEAD/ref guards enforce it.
 - **Never `bypassPermissions`.** `assertNeverBypass` in the Claude driver.
 - **`agent-registry.mjs` is the single source of truth** for the Agent Catalog.
-- **Always three human gates** — `SPEC_READY`, `PLAN_READY`, `UAT_READY` (typed `APPROVE` when risk flags include db-migration or security), plus owner-marked `SHIPPED`. Any lane that wants to change gate policy is an explicit owner decision, recorded in writing. **Lanes compress effort, context and validation — never oversight.**
+- **Always three human gates** — `SPEC_READY`, `PLAN_READY`, `UAT_READY` (typed `APPROVE` when risk flags include db-migration or security), plus owner-marked `SHIPPED`. Any lane that wants to change gate policy is an explicit owner decision, recorded in writing. **Lanes compress effort, context and validation — never oversight.** *(Amended 2026-08-01 for INSTANT only: three gate decisions are still recorded, but one owner action may produce the spec+plan pair, because on that lane they are one artifact from one turn. See "the INSTANT lane, and two scoped exceptions it needs" under Vision & Decisions — the amendment is the record this bullet requires.)*
 - **No writes to the live Supabase project by any route** (CLAUDE.md Hard Rule 26), enforced in the agent's `canUseTool` Bash screen as well as by the MCP seal.
 
 ## Current State (verified)
@@ -39,7 +39,18 @@ Delivery is the agentic execution system: the owner picks a PM checklist item, a
 
 **Durable-memory layer (the former DW campaign, shipped — all thirteen slices landed):** full transcript capture, a provider-neutral Q&A ledger, pause/resume/abort controls, mid-session model and effort switching via `/api/delivery/control`, and provider handoff/rotation/fork. DLV work builds *on* this machinery, never beside it.
 
-**Governance (the 10x campaign):** owner-set budget envelopes enforced between turns, a preflight Flight-Check panel, lanes as real policy bundles (effort-per-phase + budget + `maxInternalTurns` + context reading list + validation rungs), a scope contract with runner-derived size classes, an AC coverage matrix the runner confirms rather than the agent claims, a finish package written on every exit, salvage/continuation, automatic PM trace as a state-machine exit effect, fleet metrics, and a hard triage gate that refuses trivial items at launch.
+**Governance (the 10x campaign):** owner-set budget envelopes enforced between turns, a preflight Flight-Check panel, lanes as real policy bundles (effort-per-phase + budget + `maxInternalTurns` + context reading list + validation rungs), a scope contract with runner-derived size classes, an AC coverage matrix the runner confirms rather than the agent claims, a finish package written on every exit, salvage/continuation, automatic PM trace as a state-machine exit effect, fleet metrics, and a triage gate that routes trivial items to INSTANT at launch.
+
+**The four lanes.** Lanes are policy bundles resolved at launch and snapshotted into `packet.json` (`resolveLanePolicy`). Only INSTANT changes the pipeline's *shape*; the rest change its dials.
+
+| Lane | Tier | Model turns | Discovery+Plan | Review / UAT | Budget |
+|---|---|---|---|---|---|
+| **INSTANT** | economy | **2** | always merged | deterministic, escalates on any mismatch | $0.25 / 250K / 8 internal |
+| **FAST** | economy | 4–5 | merged when the item names one file | model turns | $0.50 / 500K / 12 |
+| **STANDARD** | standard | 5+ | separate | model turns | $2 / 2M / 20 |
+| **DEEP** | premium | 5+ | separate | model turns | $5 / 5M / 40 |
+
+INSTANT is the destination the triage gate routes to. It requires exactly one known target file — named by the item or resolved by the zero-token locator — and refuses rather than silently downgrading when it has none.
 
 **Mobile Command Surface:** `/pm/live` — a phone-installable PM + delivery app fed by an outbound-only Supabase relay from `pnpm pm --bridge`. Revoke-tier commands (pause / stop-turn / cancel) are always reachable; launch is a narrow, envelope-mandatory grant; `answer` works only when the session is *currently* awaiting the question gate, verified server-side.
 
@@ -55,8 +66,13 @@ Delivery is the agentic execution system: the owner picks a PM checklist item, a
 
 **The verdict recorded 2026-07-30:** *the FAST lane is now genuinely fast and correct, but it cannot beat editing by hand on an item this size, and it was never going to — the floor is ~5 phases each paying its own cache-creation cost. BUD-14 is the item the pipeline should refuse, and now it does.*
 
+**Revised 2026-08-01 (DLV-73).** That verdict was right about FAST and wrong about the conclusion. The floor it describes is a property of *the five-phase shape*, not of governed delivery — so the answer was to change the shape rather than to refuse the work. INSTANT runs BUD-14 in **two** model turns with all three gate decisions intact, because the phases it drops (PLAN, REVIEWING, UAT_PREP) are the ones whose output is derivable: the plan from the same turn as the spec, the review from asserting the diff against the approved `declaredEdit`, the UAT script from the turn that planned the change. **BUD-14 is no longer the item the pipeline refuses — it is the item INSTANT exists for.**
+
 ## Pain Inventory
 
+- ✅ ~~**INSTANT verified the whole working tree instead of its own diff.**~~ *(FIXED 2026-08-01, DLV-80/81/82 — surfaced by the first live DLV-78 run, `s-20260801-094951-jx8o`. The session made a **correct** two-line edit to `MobileExpenseForm.tsx` and was still judged a 1326-line, 20-file overreach, because the verifier was handed an unscoped `git diff` of a tree the owner had left dirty. It escalated to the REVIEWING and UAT_PREP turns INSTANT exists to avoid, REVIEWING then died on `max-turns (8)`, and the session exhausted its 250K envelope at 348K tokens / $0.2455 and parked at `NEEDS_DECISION` with 0/3 acceptance criteria — for a change that was already right on disk. On a repo that is normally dirty, this meant INSTANT could essentially never take its own fast path: the failure was **unconditional**, not data-dependent.)*
+- 🟡 **REVIEWING hit the 8-turn internal ceiling and returned no verdict at all.** On the escalation above, the fallback review turn failed with `Reached maximum number of turns (8)` rather than producing a PASS/FAIL — so the session had neither the deterministic verdict nor the model one. DLV-80 removes the escalation that triggered it, but the ceiling itself is untested under a real escalation and should be exercised deliberately: a review turn that cannot finish is a silent hole in the one path that makes skipping review safe. Worth folding into DLV-78's re-run.
+- 🟡 **The targeted-test rung can pass by finding nothing.** The same session recorded `test: ok, targeted: true` on the excerpt `No test files found, exiting with code 0` — vitest exits 0 when a filter matches no files, so "no test covers this file" is indistinguishable from "the tests pass". `passesDelta` was true and `attributable` false, so nothing downstream noticed. INSTANT's safety argument leans on "validation passed first time"; that assertion is weaker than it reads whenever the changed file has no test.
 - 🟠 **Repo lint baseline is still red** — 636 errors remaining, concentrated in `no-explicit-any` (586) and `react-hooks/exhaustive-deps` (50). These are not one batch: the `any`s span ~200 files and each needs the correct type from its own call site; `exhaustive-deps` sits in `SyncContext`, `HubPage` and `MobileExpenseForm`, where adding a dependency can produce an infinite render loop in the offline sync engine or a money form. Both classes need per-site judgment plus real in-app verification. **A red baseline taxes every future session** — the launch preflight runs the full ladder.
 - 🟡 **Transcript stub records and a stalled-session watchdog are still missing.** Gap *detection* at session end exists; nothing writes a stub the instant a turn id is allocated, and there is no runner-heartbeat watchdog.
 - 🟡 **Rotation doesn't seed the fresh session with a rendered context digest** — it relies on the artifact-by-path mechanism, which covers the substantive spec/plan output but not a mechanical summary of prior exploration.
@@ -66,6 +82,16 @@ Delivery is the agentic execution system: the owner picks a PM checklist item, a
 - ⚪ Conversation search and highlighting is real but polish-tier; deferred until the dependability path is done.
 
 ## Shipped Log
+
+### INSTANT lane
+
+- ✅ 2026-08-01 — **DLV-80** INSTANT's deterministic review now verifies **the session's own diff**, not the whole working tree. `tryInstantVerification` called `readDiff(repoRoot)` with no pathspec, so every uncommitted file the owner already had in flight counted against the lane's assertions; `readDiff` now takes the session's `changedFiles` (∪ the declared path) and passes them after `--`. Found by the first live DLV-78 run — see the Pain Inventory entry it closes. Evidence: replaying `s-20260801-094951-jx8o`'s real `declaredEdit` against the real repo goes `ok:false, 1425 lines, [undeclared-file, outside-scope-lock, diff-too-large]` → `ok:true, 2 lines, []`. Regression test `run-session-instant.test.ts` › "passes deterministically even when the rest of the tree is dirty" drives a full session against a git-like `readDiff` that returns the dirty tree when unscoped, and asserts `turnCounter === 2`; reverting the one-line fix fails it. A sibling test proves scoping did not weaken the check — a file the session touched but did not declare still escalates.
+- ✅ 2026-08-01 — **DLV-81** Three diff/path-reading defects found in the same trace and fixed: (1) `parseUnifiedDiff` treated any line beginning `---` as a file header, so a deleted SQL migration's `-- WHAT:` comments were filed as touched *file paths* and — the silent half — vanished from `removed`, where a `before` match could then fail on a diff that plainly contained it; headers are now recognized only as the adjacent `---`/`+++` pair git always emits, outside a hunk. (2) Git C-quotes any path with a non-ASCII byte and escapes it in **octal**, which `JSON.parse` can never decode; `normalizeStatusPath`'s fallback kept the raw quoted string and rewrote its backslashes, turning every `ERA Notes/… — Master Book.md` into `…/342/200/224…` — a path that matches nothing, so it silently dropped out of change-ownership, scope-lock and `fingerprintDirtyPaths`' integrity guard. New `unquoteGitPath` in `instant.mjs` decodes it properly and both readers share it. (3) The same path arrived twice, as `a/…` and `b/…`, because the `^[ab]/` strip ran before unquoting. 12 new tests.
+- ✅ 2026-08-01 — **DLV-82** Locator precision: bare numeric literals were grepped as plain substrings, so BUD-14's `$25` matched `text-white/25`, `bg-emerald-500/25` and `p256dh`. Enough of that noise lifted unrelated files close enough to the real one that the verdict fell from `likely` to `ambiguous` — which is the difference between INSTANT locating a file for free and spending a model turn on it. A number now matches only where it stands alone (not inside a longer identifier or number, and not after `/` or `.`, which here means a Tailwind opacity suffix). Evidence: BUD-14 goes `ambiguous` (leader 58.7, runner-up 34.5) → `likely` (leader 114.3, runner-up 22.1). Also fixed `scanLiterals`' signature, whose `= readFileSync` parameter default made TypeScript ignore the looser JSDoc and fail `tsc --noEmit` on all three tests that inject a fake reader — a red typecheck rung taxes every future session's validation ladder.
+- ✅ 2026-08-01 — **DLV-73** INSTANT lane shipped: two model turns for a single located file, against FAST's four to five. `scripts/delivery/locate.mjs` (zero-token locator), `scripts/delivery/instant.mjs` (deterministic review + synthesized UAT), lane plumbing across `recommendation.mjs` / `config.mjs` / `run-session.mjs` / `server-routes.mjs`, desktop + phone surfaces. Evidence: `tests/delivery/run-session-instant.test.ts` drives a full session against a **two-turn** fake-driver script and asserts `turnPhases === ["DISCOVERY", "BUILDING"]` with all three gate decisions on disk — a regression that reintroduces a REVIEWING or UAT_PREP model call runs the script dry and fails. 50 new tests; suite 1172 → 1222.
+- ✅ 2026-08-01 — **DLV-74** Triage gate converted from a wall into a router: a trivial item launches on INSTANT with **no acknowledgment at all**, and the refusal for other lanes now names INSTANT instead of "make the edit by hand". Lane and tier decoupled (`TIER_BY_LANE` gains `INSTANT: "economy"`; `laneForRecommendation` owns the choice) — they had been bijective, which is why the recommender could not previously suggest INSTANT at all.
+- ✅ 2026-08-01 — **DLV-75** Zero-token locator: item keywords → Feature Map `_index.md` intent table → the module's own file list → an in-process literal scan, ranked by co-occurrence. Resolves BUD-14 to `MobileExpenseForm.tsx` **with no path given** in ~45 ms at `confidence: "likely"`, anchored on the `QUICK_AMOUNTS` block. Ambiguity becomes a pre-launch picker — the cheapest place to ask, since a mid-session question costs a whole turn. (Built on an in-process scan rather than ripgrep: `execFileSync("rg")` throws ENOENT under Node here even though `rg` resolves from the shell, and a launch-blocking dependency on an external binary was a bad trade for a bounded scan.)
+- ✅ 2026-08-01 — **DLV-76** `declaredEdit` contract + deterministic review with auto-escalation; `manualSteps` from the same turn replaces the entire UAT_PREP turn. Migration `2026-08-01_pm-commands-instant-gates.sql` written for the mobile gate types — **not applied; owner runs it.**
 
 ### M1 — Governed Start
 
@@ -190,6 +216,31 @@ The root cause is a category error, not a UI bug: the phone got a **grant** capa
 - ✅ **Journaled, revertible bridge writes** — adopted: removing `tick` fixes today's incident, not the class.
 
 **Enforcement is server-side, not UI-side** — an installed PWA running a cached older bundle can still issue a removed command.
+
+### Amendment (2026-08-01): the INSTANT lane, and two scoped exceptions it needs
+
+**The problem.** The triage gate (DLV-39/59) refuses items it judges too trivial for the pipeline, and its refusal text quotes the measurement that justified it: BUD-14 — *"Mobile expense form quick-amount chip: replace the $25 preset with $20"* — **spent $0.5317 across DISCOVERY and PLAN and never reached BUILDING**, against roughly a cent to make the edit by hand. But refusal only ever had two exits, and both were bad: do it by hand (the pipeline has nothing to offer the work the owner does most often), or type `LAUNCH ANYWAY` and pay FAST's five-phase shape for a one-character change. **INSTANT is the third exit**, and the triage signal now *routes* to it instead of blocking.
+
+**The shape.** Two model turns — one merged DISCOVERY+PLAN, one BUILDING — against FAST's four to five. Everything else is deterministic: a zero-token locator resolves the file before launch, and REVIEWING and UAT_PREP are discharged by asserting the diff against a `declaredEdit` the owner approved. Forecast ~$0.12–0.20 for the BUD-14 profile.
+
+Two exceptions were needed, and both are recorded here as amendments rather than presented as compliance:
+
+| # | Exception | Why it is not a general loosening |
+|---|---|---|
+| **(a)** | **One owner action may record both the spec and plan approvals** on INSTANT. All three gate decisions still exist in `decisions/` and both transitions still run through the state machine — but INSTANT has **two review moments, not three**, because the second gate's artifact *is* the first gate's artifact. | The merged turn writes `spec.json` and `plan.json` together, so the two gates fire back-to-back with no work between them: the owner reads one thing and clicks approve twice. Requires INSTANT **and** a genuinely merged turn, and a risk-flagged plan (`db-migration` / `security`) still needs its own typed `APPROVE` — the collapse is refused otherwise. |
+| **(b)** | **`code-review` and `uat-generation` are discharged deterministically** on INSTANT, not by a model turn. Both remain locked always-on rows in `classify.mjs`. | The runner asserts the diff touches only the declared file, is within `instantMaxDiffLines` (20), matches `declaredEdit.before`/`.after`, and passed validation with no fix loop. **Any failure escalates to the real REVIEWING + UAT_PREP turns** — the escalation path, not the happy path, is what makes skipping them safe. You pay for review exactly when the change turns out not to have been trivial. |
+
+**Explicitly unchanged:** the "always three human gates" non-negotiable still holds in the sense that matters — three approvals are recorded, in every lane, and no gate was deleted. What (a) changes is the number of *interactions*, and that change is confined to a lane whose artifact makes it meaningless to review twice. Nothing here applies to FAST, STANDARD or DEEP.
+
+### Amendment (2026-08-01): mobile gate approval, INSTANT only
+
+The 2026-07-25 tiering above still rejects *"any decision on the `spec` / `plan` / `uat` / `blocked` gate"* from mobile. That rejection is revised for one lane only.
+
+The rejection's reasoning was that authorizing a gate from a phone used one-handed on a bus is not a risk worth taking — and that is right whenever the owner cannot actually read what they are approving. INSTANT inverts the premise by construction: its launch precondition is exactly one known target file, and its diff is bounded at 20 changed lines. That is a change that fits on a phone screen in full.
+
+- ✅ **`approve` (spec gate) and `accept` (uat gate) from mobile, on INSTANT sessions only.** Both re-read the session and refuse any other lane or gate server-side (`requireInstantGate` in `bridge.mjs`) — an installed PWA running a cached bundle cannot bypass it. The `pm_commands.type` CHECK is widened to admit them, but it *cannot* express "INSTANT only", so the bridge remains authoritative.
+- ✅ **`answer` may carry `acceptProposal`** when the runner marked the gate `proposalReady`. A DISCOVERY question normally re-runs the phase — a second full turn, i.e. a 50% overrun on a two-turn lane — so INSTANT's prompt requires a complete best-guess proposal *alongside* its questions, and the owner can answer and approve in one action when the guess was right. "Answer + revise" is unchanged and still available.
+- ❌ **Still rejected, unchanged:** `blocked`-gate decisions, `set-budget`, `set-config`, `rotate`, `fork`, and every gate decision on FAST / STANDARD / DEEP.
 
 ### Standing tensions to keep in view
 

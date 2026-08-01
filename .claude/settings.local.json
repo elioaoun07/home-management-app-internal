@@ -181,7 +181,14 @@
       "Bash(npx --yes ripgrep --version)",
       "Bash(awk '{print $1}')",
       "Bash(pnpm ls *)",
-      "Bash(sort -t R -k2 -n -u)"
+      "Bash(sort -t R -k2 -n -u)",
+      "Bash(rg --fixed-strings --line-number --no-heading --color never --max-count 30 --max-filesize 2M -- \"25\" src/components/expense/MobileExpenseForm.tsx)",
+      "Bash(npm run *)",
+      "Bash(cp scripts/delivery/locate.mjs /tmp/loc.bak)",
+      "Bash(cp /tmp/lt.bak /tmp/lt.mine)",
+      "Bash(npx tsc *)",
+      "Bash(pnpm typecheck *)",
+      "Bash(git ls-tree *)"
     ]
   }
 }

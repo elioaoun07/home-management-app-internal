@@ -1141,7 +1141,7 @@ function MobileExpenseFormContent() {
   const contentAreaBottomPadding = `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_HEIGHT}px)`;
 
   // Quick-amount presets for the amount step
-  const QUICK_AMOUNTS = ["5", "10", "25", "50", "100"];
+  const QUICK_AMOUNTS = ["5", "10", "20", "50", "100"];
 
   // Contextual next step label helper
   const getNextStepLabel = (next: Step | null): string => {

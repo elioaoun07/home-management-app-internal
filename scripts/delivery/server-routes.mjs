@@ -60,6 +60,7 @@ import {
   resolveLanePolicy,
   resolveMergedDiscoveryPlan,
 } from "./recommendation.mjs";
+import { explicitPathsInText, isConfidentLocation, locate } from "./locate.mjs";
 import { buildControl, controlFileName } from "./controls.mjs";
 import { createBudgetEnvelope, raiseBudgetEnvelope, totalProcessedTokens } from "./budgets.mjs";
 import { emptyLedger, splitOpenQuestions } from "./memory.mjs";
@@ -111,24 +112,10 @@ const SKILL_PATH_FOR_CAPABILITY = {
   "code-review": ".claude/skills/finish-task/SKILL.md",
 };
 
-// DLV-42: this repo's checklist grammar routinely names the exact target —
-// "… replace the $25 preset with $20 → `src/components/expense/MobileExpenseForm.tsx:1144`".
-// Matches repo-relative source paths, with an optional `:line` suffix and
-// optional surrounding backticks.
-const EXPLICIT_PATH_RE = /(?:^|[\s`(<→])((?:src|scripts|migrations|tests|public)\/[\w./-]*[\w-]\.\w{1,5})(?::\d+)?/g;
-
-/**
- * Repo-relative source paths the item text names outright, de-duplicated in
- * first-appearance order. Empty when the item only describes its target in prose.
- */
-export function explicitPathsInText(text) {
-  const out = [];
-  for (const match of String(text || "").matchAll(EXPLICIT_PATH_RE)) {
-    const path = match[1];
-    if (!out.includes(path)) out.push(path);
-  }
-  return out;
-}
+// DLV-42's path matcher now lives in locate.mjs, which owns the whole
+// item-text→file story (DLV-73). Re-exported here so the existing public surface
+// and its tests are unchanged.
+export { explicitPathsInText };
 
 /**
  * DLV-42 — scope hints used to *discard* the item's own file pointer and
@@ -150,18 +137,68 @@ export function explicitPathsInText(text) {
  * reasonable prior when nothing better exists, and a bad one when something
  * better was sitting in the item text all along.
  */
-function computeScopeHints(item) {
+/**
+ * DLV-73 inserts a third tier between "the item named its target" and "fall back
+ * to the campaign's whole glob table": a deterministic locator (`locate.mjs`) that
+ * costs no model tokens and runs before the session exists.
+ *
+ * The tiers, and why the order is what it is:
+ *   1. **explicit paths** — the item said so; nothing beats that.
+ *   2. **locator, confident** — a Feature Map phrase match plus a literal scan
+ *      resolved one file. Recorded as `scopeSource: "locator"`, which the merge
+ *      and triage predicates treat as equivalent evidence to (1) precisely because
+ *      `isConfidentLocation` refuses anything short of a decisive single winner.
+ *   3. **locator, ambiguous** — hits are attached for the Flight-Check picker but
+ *      `scopeSource` is deliberately left unset, so nothing downstream mistakes a
+ *      shortlist for a resolution. Scope stays on the campaign table.
+ *   4. **campaign globs** — the pre-DLV-42 behaviour, unchanged.
+ *
+ * `locatorChoice` is tier 3's resolution: the path the owner picked from the
+ * shortlist. It is validated against the locator's own hits rather than trusted,
+ * so a hand-edited request cannot inject an arbitrary path into the scope lock.
+ *
+ * @param {object} item
+ * @param {{repoRoot?:string, locatorChoice?:(string|null)}} [opts]
+ */
+function computeScopeHints(item, { repoRoot = null, locatorChoice = null } = {}) {
   const text = item.text || "";
   const keywords = text
     .split(/\s+/)
     .map((w) => w.toLowerCase().replace(/[^\w-]/g, ""))
     .filter((w) => w.length > 3);
   const explicitPaths = explicitPathsInText(text);
-  const globs = explicitPaths.length > 0 ? [...explicitPaths] : [...(CAMPAIGN_MODULE_GLOBS[item.campaign] || [])];
+  const campaignGlobs = [...(CAMPAIGN_MODULE_GLOBS[item.campaign] || [])];
+
+  if (explicitPaths.length > 0) {
+    return { keywords, globs: [...explicitPaths], modules: item.campaign ? [item.campaign] : [], scopeSource: "item-paths" };
+  }
+
+  let locator = null;
+  if (repoRoot) {
+    try {
+      locator = locate({ item, repoRoot, campaignGlobs });
+    } catch {
+      // The locator is an optimisation, never a precondition. A vault doc that
+      // moved or an unreadable file must not be able to block a launch — the
+      // campaign-glob fallback below is exactly what ran before it existed.
+      locator = null;
+    }
+  }
+
+  const base = { keywords, modules: item.campaign ? [item.campaign] : [] };
+  const chosen = locatorChoice && (locator?.hits || []).find((h) => h.path === locatorChoice);
+  if (chosen) {
+    return { ...base, globs: [chosen.path], scopeSource: "locator", locator: { ...locator, chosen: chosen.path } };
+  }
+  if (isConfidentLocation(locator)) {
+    return { ...base, globs: [locator.hits[0].path], scopeSource: "locator", locator };
+  }
+
+  const globs = [...campaignGlobs];
   // An explicit path list is already precise; widening it with the API glob on
   // a keyword match would re-introduce exactly the imprecision above.
-  if (explicitPaths.length === 0 && /\bapi\b|route|endpoint|cron/i.test(text)) globs.push("src/app/api/**");
-  return { keywords, globs, modules: item.campaign ? [item.campaign] : [], ...(explicitPaths.length > 0 ? { scopeSource: "item-paths" } : {}) };
+  if (/\bapi\b|route|endpoint|cron/i.test(text)) globs.push("src/app/api/**");
+  return { ...base, globs, ...(locator && locator.hits.length ? { locator } : {}) };
 }
 
 function buildSkillRefs(capabilities) {
@@ -302,7 +339,11 @@ function buildLaunchPreview(ctx, {
   lane = null,
 }) {
   const acceptanceCriteria = findPreLaunchAcceptanceCriteria(item, ctx.PM_DIR);
-  const recommendedLane = laneForTier(recommendation?.tier);
+  // DLV-73: the recommender resolves the lane itself now, because INSTANT cannot
+  // be derived from tier alone — it shares `economy` with FAST and is chosen by
+  // the triage signal. Re-deriving from the tier here would show the owner "FAST"
+  // on the very item the recommender had just routed to INSTANT.
+  const recommendedLane = recommendation?.lane || laneForTier(recommendation?.tier);
   // On FAST the runner keeps only skills a *risk flag* implicates (DLV-45), so
   // the preview must apply the same rule or it would promise reading the
   // session will never do.
@@ -834,7 +875,9 @@ function getCapabilities(ctx) {
 // DLV-8: `lane` is optional and lets the Flight-Check re-fetch the context
 // preview as the owner changes lane, so the reading list on screen always
 // matches the lane about to be launched. Omitted → the recommended lane.
-function getRecommendation(ctx, { file, cbidx, provider, lane = null }) {
+// DLV-73: `locatorChoice` is the path the owner picked when the locator came back
+// ambiguous — re-fetching with it resolves the scope the same way the launch will.
+function getRecommendation(ctx, { file, cbidx, provider, lane = null, locatorChoice = null }) {
   if (typeof file !== "string" || !file) throw fail(400, "file is required");
   if (cbidx == null || cbidx === "") throw fail(400, "cbidx is required");
   const cbidxNum = Number(cbidx);
@@ -853,10 +896,11 @@ function getRecommendation(ctx, { file, cbidx, provider, lane = null }) {
   if (!idResult.ok) throw fail(409, idResult.reason);
   const item = idResult.item;
 
-  const scopeHints = computeScopeHints(item);
+  const scopeHints = computeScopeHints(item, { repoRoot: ctx.ROOT, locatorChoice });
   const capabilities = classify({ item, scopeHints });
   const skills = buildSkillRefs(capabilities);
   const campaignFiles = findCampaignFiles(item.campaign, ctx.PM_DIR, ctx.PM_REL);
+  const riskFlags = capabilities.filter((c) => !ALWAYS_ON_CAPABILITIES.includes(c.name));
   const recommendation = recommendAgentConfig({
     item,
     capabilities,
@@ -864,6 +908,9 @@ function getRecommendation(ctx, { file, cbidx, provider, lane = null }) {
     provider: agent,
     config: ctx.deliveryConfig,
     history: loadRecommendationHistory(ctx),
+    // DLV-73: what used to refuse the launch now selects the lane for it.
+    trivial: isTrivialLaunchCandidate(item, riskFlags, scopeHints),
+    located: scopeHints.scopeSource === "item-paths" || scopeHints.scopeSource === "locator",
   });
   return {
     recommendation,
@@ -1059,6 +1106,10 @@ async function startSession(ctx, body) {
     // DLV-13: salvage relaunch — narrows this session to the predecessor's
     // remaining work and links the two.
     continuationOf,
+    // DLV-73: the file the owner picked when the locator returned a shortlist
+    // rather than a single answer. Validated against the locator's own hits in
+    // `computeScopeHints`, never trusted as a path.
+    locatorChoice,
   } = body || {};
   if (agent !== "codex" && agent !== "claude") throw fail(400, 'agent must be "codex" or "claude"');
   if (typeof file !== "string" || !file) throw fail(400, "file is required");
@@ -1136,7 +1187,7 @@ async function startSession(ctx, body) {
     throw fail(400, `baseline validation is red; type ${RED_BASELINE_ACK} to authorize delta-based validation`);
   }
 
-  const scopeHints = computeScopeHints(item);
+  const scopeHints = computeScopeHints(item, { repoRoot: ctx.ROOT, locatorChoice });
   // DLV-62: recorded onto the resolved lane policy so the runner reads one
   // packet field rather than re-deriving the rule, and so the audit trail shows
   // whether a given session ran merged and exactly why.
@@ -1160,6 +1211,8 @@ async function startSession(ctx, body) {
   const campaignFiles = findCampaignFiles(item.campaign, ctx.PM_DIR, ctx.PM_REL);
 
   const resolvedModel = model != null && model !== "" ? model : getDefaultModel(ctx.deliveryConfig, agent);
+  const preTriageRiskFlags = classifiedCapabilities.filter((c) => !ALWAYS_ON_CAPABILITIES.includes(c.name));
+  const isTrivialLaunch = !continuation && isTrivialLaunchCandidate(item, preTriageRiskFlags, scopeHints);
   const recommendation = recommendAgentConfig({
     item,
     capabilities: classifiedCapabilities,
@@ -1167,6 +1220,8 @@ async function startSession(ctx, body) {
     provider: agent,
     config: ctx.deliveryConfig,
     history: loadRecommendationHistory(ctx),
+    trivial: isTrivialLaunch,
+    located: scopeHints.scopeSource === "item-paths" || scopeHints.scopeSource === "locator",
   });
   const launchPreview = buildLaunchPreview(ctx, {
     item,
@@ -1188,21 +1243,56 @@ async function startSession(ctx, body) {
   // A salvage relaunch is never triage-refused: the predecessor's finish
   // package is direct evidence that this item was NOT too trivial to need the
   // pipeline — it already consumed one and did not finish.
-  const isTrivialLaunch = !continuation && isTrivialLaunchCandidate(item, launchPreview.riskFlags, scopeHints);
-  if (isTrivialLaunch && triageAck !== TRIAGE_OVERRIDE_ACK) {
+  // D11/DLV-39 → DLV-73: the triage gate is now a *router*, not a wall.
+  //
+  // It used to have only two exits, and both were bad: refuse the item outright
+  // ("make the edit by hand"), or type LAUNCH ANYWAY and pay FAST's five-phase
+  // pipeline for a one-character change — the $0.5317 BUD-14 outcome the gate was
+  // written in response to. INSTANT is the third exit, and it is strictly better
+  // than either: the work still runs through the pipeline, with all three gates,
+  // for roughly what the refusal was protecting against.
+  //
+  // So a trivial item launched on INSTANT needs no acknowledgment at all — it is
+  // being launched on the lane built for exactly its shape. The refusal survives
+  // only for the case it was always really about: a trivial item aimed at a lane
+  // whose overhead it cannot justify.
+  if (isTrivialLaunch && flightCheckInput.lane !== "INSTANT" && triageAck !== TRIAGE_OVERRIDE_ACK) {
     const est = recommendation
-      ? ` The pipeline forecast for this item: ~$${(recommendation.estCostUsd ?? 0).toFixed(2)} / ~${recommendation.estTokens.toLocaleString()} tokens.`
+      ? ` The ${flightCheckInput.lane} forecast for this item: ~$${(recommendation.estCostUsd ?? 0).toFixed(2)} / ~${recommendation.estTokens.toLocaleString()} tokens.`
       : "";
-    const onlyPath = scopeHints.scopeSource === "item-paths" ? (scopeHints.globs || [])[0] : null;
-    const why = onlyPath ? `names exactly one file (${onlyPath})` : "has no risk flags at all";
+    const located = scopeHints.scopeSource === "item-paths" || scopeHints.scopeSource === "locator";
+    const onlyPath = located ? (scopeHints.globs || [])[0] : null;
+    const why = onlyPath ? `resolves to exactly one file (${onlyPath})` : "has no risk flags at all";
     throw fail(
       400,
       `This item is S-effort and ${why}, with no money or vagueness flags -- ` +
-        `too small to be worth the pipeline's own overhead; a change this size cannot fail in an interesting way.${est} ` +
+        `too small to be worth the ${flightCheckInput.lane} lane's overhead; a change this size cannot fail in an interesting way.${est} ` +
         `For reference, the last such item measured (BUD-14) spent $0.53 across DISCOVERY and PLAN and never reached ` +
         `BUILDING, against roughly a cent to make the edit by hand. ` +
-        `Make the edit directly, or type "${TRIAGE_OVERRIDE_ACK}" to launch anyway.`,
+        (located
+          ? `Relaunch on the INSTANT lane, which is built for this exactly, or type "${TRIAGE_OVERRIDE_ACK}" to launch on ${flightCheckInput.lane} anyway.`
+          : `Make the edit directly, or type "${TRIAGE_OVERRIDE_ACK}" to launch anyway.`),
     );
+  }
+  // INSTANT's own precondition, and the one that makes its two-turn shape safe:
+  // the lane merges DISCOVERY and PLAN around a single known file, so without one
+  // there is nothing to merge them around. Refused rather than silently downgraded
+  // — an owner who picked INSTANT should be told why it cannot run, not quietly
+  // charged for a different lane.
+  if (flightCheckInput.lane === "INSTANT") {
+    const located = scopeHints.scopeSource === "item-paths" || scopeHints.scopeSource === "locator";
+    if (!located || (scopeHints.globs || []).length !== 1) {
+      const shortlist = (scopeHints.locator && scopeHints.locator.hits) || [];
+      throw fail(
+        400,
+        `INSTANT needs exactly one known target file, and this item resolves to ` +
+          `${located ? `${(scopeHints.globs || []).length} paths` : "none"}. ` +
+          (shortlist.length
+            ? `The locator shortlisted ${shortlist.map((h) => h.path).join(", ")} -- re-run the flight check with locatorChoice set to one of them, `
+            : "Name the target file in the checklist item, ") +
+          `or launch on FAST instead.`,
+      );
+    }
   }
   const selectedModelTier = resolvedModel
     ? getModelInfo(ctx.deliveryConfig, agent, resolvedModel)?.tier || null
@@ -1377,7 +1467,12 @@ const VALID_DECISIONS_FOR_GATE = {
 };
 
 async function postDecision(ctx, body) {
-  const { id, gate, decision, note, confirmText, tickCheckbox, answer, capabilitiesDrop, scopeSlice, scopeAck } = body || {};
+  const {
+    id, gate, decision, note, confirmText, tickCheckbox, answer, capabilitiesDrop, scopeSlice, scopeAck,
+    // DLV-73 — see the eligibility blocks below.
+    alsoApprovePlan,
+    acceptProposal,
+  } = body || {};
   if (typeof id !== "string" || !id) throw fail(400, "id is required");
   const s = readSession(ctx, id);
   if (!s) throw fail(404, "unknown session");
@@ -1436,11 +1531,70 @@ async function postDecision(ctx, body) {
         throw fail(400, 'typed confirmText "APPROVE" is required for a risk-flagged plan');
       }
     }
+    // DLV-73 — the one-click spec+plan approval, and the exact limits on it.
+    //
+    // On INSTANT the merged turn writes spec.json AND plan.json together, so the
+    // SPEC and PLAN gates fire back-to-back over one artifact with no work in
+    // between: the owner reads one thing and clicks approve twice. This collapses
+    // the second click, and *only* the click — both decisions are still written,
+    // both transitions still run through the state machine, and the audit trail
+    // is byte-for-byte what two separate approvals would have produced.
+    //
+    // Stated plainly, because it is a scoped amendment to the standing "three
+    // gates always" rule and not compliance with it: INSTANT records three gate
+    // approvals across **two** review moments. The owner authorized exactly that
+    // on 2026-08-01; it is written up in the Delivery Master Book.
+    //
+    // The limits are what keep it from becoming a general "skip the plan gate":
+    // it requires INSTANT, requires the plan to have genuinely been produced in
+    // the same turn as the spec, and re-runs the plan gate's own typed-approval
+    // rule for risk-flagged plans. A risk-flagged plan cannot be collapsed away.
+    if (alsoApprovePlan) {
+      if (gate !== "spec" || decision !== "approve") {
+        throw fail(400, "alsoApprovePlan is only valid when approving the spec gate");
+      }
+      const lanePolicy = (s.packet && s.packet.lanePolicy) || {};
+      if (lanePolicy.lane !== "INSTANT") {
+        throw fail(400, `alsoApprovePlan is an INSTANT-lane affordance; this session is ${lanePolicy.lane || "unknown"}`);
+      }
+      if (!lanePolicy.mergedDiscoveryPlan) {
+        throw fail(400, "alsoApprovePlan requires a merged spec+plan turn; this session planned separately");
+      }
+      const mergedPlan = readJsonIfExists(join(s.dir, "artifacts", "plan.json"));
+      if (!mergedPlan) {
+        throw fail(409, "no plan artifact on disk yet — approve the spec alone and the plan gate will follow");
+      }
+      const mergedRiskFlags = (mergedPlan.riskFlags || []).filter((f) => TYPED_APPROVAL_RISK_FLAGS.includes(f));
+      if (mergedRiskFlags.length && confirmText !== "APPROVE") {
+        throw fail(
+          400,
+          `this plan is risk-flagged (${mergedRiskFlags.join(", ")}), so its gate needs typed confirmText "APPROVE" — ` +
+            "approve the spec and plan separately, or resend with the confirmation",
+        );
+      }
+    }
+    // DLV-73 — "answer + approve" on a question gate that shipped a full proposal.
+    // Only legal against a gate the runner itself marked `proposalReady`, which it
+    // does only on INSTANT, and only when a complete spec+plan+declaredEdit is on
+    // disk. Everything else is the ordinary "answer + revise" path.
+    if (acceptProposal) {
+      if (gate !== "question" || decision !== "answer") {
+        throw fail(400, "acceptProposal is only valid when answering a question gate");
+      }
+      if (!s.state.awaiting || s.state.awaiting.proposalReady !== true) {
+        throw fail(400, "this question gate has no complete proposal to approve — answer it and the phase will re-run");
+      }
+      if (typeof answer !== "string" || !answer.trim()) {
+        throw fail(400, "an answer is required — approving the proposal does not answer the question it raised");
+      }
+    }
     if (capabilitiesDrop && capabilitiesDrop.length) {
       for (const name of capabilitiesDrop) {
         if (ALWAYS_ON_CAPABILITIES.includes(name)) throw fail(400, `cannot drop locked capability: ${name}`);
       }
     }
+  } else if (alsoApprovePlan || acceptProposal) {
+    throw fail(400, "alsoApprovePlan and acceptProposal are not valid on a cancel decision");
   }
   // Cancel decisions apply regardless of the currently-awaited gate — no gate
   // validation needed for them.
@@ -1461,10 +1615,38 @@ async function postDecision(ctx, body) {
     // itself so the audit trail shows the choice next to the approval it gated.
     scopeSlice: Number.isInteger(scopeSlice) ? scopeSlice : null,
     scopeAck: scopeAck === SCOPE_MISMATCH_ACK ? SCOPE_MISMATCH_ACK : null,
+    // DLV-73 — read by consumeQuestionDecision to resume at SPEC_READY instead of
+    // re-running DISCOVERY.
+    ...(acceptProposal ? { acceptProposal: true } : {}),
     at: new Date().toISOString(),
   };
   const name = `${String(seq).padStart(4, "0")}-${gate || "cancel"}.json`;
   atomicWriteJsonSync(join(decisionsDir, name), record);
+
+  // DLV-73: the plan half of a one-click approval. Written as a second, ordinary
+  // decision file rather than as a flag on the first — the runner consumes
+  // decisions in sequence, so SPEC_READY→PLAN_READY→BUILDING runs exactly as it
+  // would have with two clicks, and nothing in the state machine or the runner
+  // needs to know this affordance exists. `viaAlsoApprovePlan` marks it in the
+  // record so the audit trail never implies two independent reviews happened.
+  if (alsoApprovePlan) {
+    const planSeq = seq + 1;
+    const planRecord = {
+      seq: planSeq,
+      gate: "plan",
+      decision: "approve",
+      note: note || null,
+      confirmText: confirmText || null,
+      tickCheckbox: true,
+      answer: null,
+      capabilitiesDrop: null,
+      scopeSlice: null,
+      scopeAck: null,
+      viaAlsoApprovePlan: true,
+      at: new Date().toISOString(),
+    };
+    atomicWriteJsonSync(join(decisionsDir, `${String(planSeq).padStart(4, "0")}-plan.json`), planRecord);
+  }
 
   if (decision === "cancel" && !isRunnerAlive(s.dir).alive) {
     // No runner is alive to consume this decision file — pm-server marks the
@@ -1783,6 +1965,7 @@ export async function routeDelivery({ method, path, query, body }, ctx) {
         cbidx: query.get("cbidx"),
         provider: query.get("provider") || "claude",
         lane: query.get("lane") || null,
+        locatorChoice: query.get("locatorChoice") || null,
       }),
     );
   }

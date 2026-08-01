@@ -96,8 +96,17 @@ function campaignBookPath(PM_DIR, campaign) {
 // defence — the DB CHECK constraint on pm_commands.type is the first — but
 // THIS list, and the gate/type refusals inside each exec* function below, are
 // authoritative. Deliberately absent: set-budget, set-config, rotate, fork,
-// and any decision on the spec/plan/uat/blocked gates. Those stay
-// laptop-only (Delivery Master Book, mobile command tiers amendment).
+// and any decision on the blocked gate. Those stay laptop-only
+// (Delivery Master Book, mobile command tiers amendment).
+//
+// DLV-73 adds `approve` and `accept`, scoped to INSTANT sessions only. The
+// owner authorized that on 2026-08-01 and the reasoning is specific to the
+// lane rather than general: an INSTANT session is, by its launch precondition,
+// a single located file and a diff bounded at `instantMaxDiffLines` — a change
+// small enough to actually read on a phone screen, which is the thing the
+// laptop-only rule was protecting. It does not generalize: `execApprove` and
+// `execAccept` re-verify the lane server-side, so a FAST/STANDARD/DEEP session
+// is refused even if a stale phone bundle offers the button.
 export const ALLOWED_TYPES = new Set([
   "capture",
   "undo",
@@ -109,6 +118,8 @@ export const ALLOWED_TYPES = new Set([
   "cancel",
   "answer",
   "ask",
+  "approve",
+  "accept",
 ]);
 
 // Types that were once issuable and are now permanently refused, with the
@@ -721,10 +732,11 @@ export function createCommandExecutor({ PM_DIR, deliveryCtx }) {
    * so the gate is re-verified server-side before the reply is sent — the UI
    * hiding the box is not a guarantee.
    */
-  async function execAnswer(sessionId, text, questionId) {
+  async function execAnswer(sessionId, text, questionId, acceptProposal = false) {
     if (!sessionId) return { ok: false, error: "sessionId is required" };
     if (typeof text !== "string" || !text.trim()) return { ok: false, error: "text is required" };
     if (typeof questionId === "string" && questionId.trim()) {
+      // An advisory answer never carries an approval — it does not unblock a gate.
       return execControl(sessionId, "answer", { questionId: questionId.trim(), text });
     }
     let session;
@@ -739,13 +751,97 @@ export function createCommandExecutor({ PM_DIR, deliveryCtx }) {
     }
     const gate = session.state.awaiting && session.state.awaiting.gate;
     if (gate !== "question") return { ok: false, error: "approve on the laptop — mobile may only answer an open question gate" };
+    // DLV-73: "answer + approve" is only offered when the runner itself marked
+    // the gate `proposalReady`, which it does only on INSTANT. Silently dropping
+    // the flag rather than erroring keeps a stale phone bundle working — the
+    // answer still lands, the phase just re-runs as it always did.
+    const withProposal = acceptProposal && session.state.awaiting.proposalReady === true;
     try {
       const result = await routeDelivery(
         {
           method: "POST",
           path: "/api/delivery/decision",
           query: new URLSearchParams(),
-          body: { id: sessionId, gate: "question", decision: "answer", answer: text },
+          body: { id: sessionId, gate: "question", decision: "answer", answer: text, ...(withProposal ? { acceptProposal: true } : {}) },
+        },
+        deliveryCtx,
+      );
+      return { ok: true, ...result.json };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /**
+   * DLV-73 — read a session and confirm it is an INSTANT one parked at `gate`.
+   *
+   * Every phone-issued gate decision goes through here rather than trusting the
+   * command's own claims, on exactly the principle `execAnswer` already applies
+   * to the question gate: the UI hiding a button is not a guarantee, because the
+   * phone is an installed PWA that can be running a cached older bundle. The
+   * lane check is what keeps this affordance scoped to the one lane it was
+   * authorized for.
+   */
+  async function requireInstantGate(sessionId, gate) {
+    if (!sessionId) return { ok: false, error: "sessionId is required" };
+    let session;
+    try {
+      const result = await routeDelivery(
+        { method: "GET", path: "/api/delivery/session", query: new URLSearchParams({ id: sessionId }), body: {} },
+        deliveryCtx,
+      );
+      session = result.json;
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+    const lane = (session.packet && session.packet.lanePolicy && session.packet.lanePolicy.lane) || null;
+    if (lane !== "INSTANT") {
+      return { ok: false, error: `approve on the laptop — mobile gate approval is INSTANT-only, and this session is ${lane || "unknown"}` };
+    }
+    const current = session.state.awaiting && session.state.awaiting.gate;
+    if (current !== gate) {
+      return { ok: false, error: `session is awaiting "${current || "nothing"}", not "${gate}"` };
+    }
+    return { ok: true, session };
+  }
+
+  /**
+   * Approve an INSTANT spec gate from the phone. Always sends `alsoApprovePlan`:
+   * on INSTANT the spec and plan are one artifact produced by one turn, so
+   * offering the phone a spec-only approval would just park it at a second gate
+   * showing the same thing it has already approved. The server still records two
+   * decisions and still refuses the collapse for a risk-flagged plan.
+   */
+  async function execApprove(sessionId) {
+    const check = await requireInstantGate(sessionId, "spec");
+    if (!check.ok) return check;
+    try {
+      const result = await routeDelivery(
+        {
+          method: "POST",
+          path: "/api/delivery/decision",
+          query: new URLSearchParams(),
+          body: { id: sessionId, gate: "spec", decision: "approve", alsoApprovePlan: true },
+        },
+        deliveryCtx,
+      );
+      return { ok: true, ...result.json };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /** Accept an INSTANT UAT gate from the phone. `tickCheckbox` stays true — accepting IS the PM trace. */
+  async function execAccept(sessionId) {
+    const check = await requireInstantGate(sessionId, "uat");
+    if (!check.ok) return check;
+    try {
+      const result = await routeDelivery(
+        {
+          method: "POST",
+          path: "/api/delivery/decision",
+          query: new URLSearchParams(),
+          body: { id: sessionId, gate: "uat", decision: "accept", tickCheckbox: true },
         },
         deliveryCtx,
       );
@@ -796,9 +892,14 @@ export function createCommandExecutor({ PM_DIR, deliveryCtx }) {
       case "cancel":
         return execCancel(p.sessionId);
       case "answer":
-        return execAnswer(p.sessionId, p.text, p.questionId);
+        return execAnswer(p.sessionId, p.text, p.questionId, p.acceptProposal === true);
       case "ask":
         return execAsk(p.sessionId, p.text);
+      // DLV-73 — INSTANT-only; both re-verify the lane server-side.
+      case "approve":
+        return execApprove(p.sessionId);
+      case "accept":
+        return execAccept(p.sessionId);
       default:
         return { ok: false, error: "unhandled command type" };
     }

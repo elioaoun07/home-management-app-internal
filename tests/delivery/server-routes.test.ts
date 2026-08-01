@@ -261,7 +261,9 @@ describe("POST /api/delivery/start", () => {
       // eligible for the merged DISCOVERY+PLAN turn — and the policy records
       // why, rather than just recording false.
       mergedDiscoveryPlan: false,
-      mergedDiscoveryPlanReason: "the item names no explicit file paths, so its scope is not known to be single-file",
+      // DLV-73 widened the accepted evidence from "the item named a path" to
+      // "a single file is known", so the locator counts too — hence the wording.
+      mergedDiscoveryPlanReason: "no explicit or located file path, so scope is not known to be single-file",
     });
   });
 

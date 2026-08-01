@@ -110,6 +110,13 @@ export interface DeliveryAwaiting {
    * question in it.
    */
   questions?: AwaitingQuestion[];
+  /**
+   * DLV-73 — set by the runner on an INSTANT question gate whose turn already
+   * produced a complete spec + plan + declaredEdit. It is what makes
+   * "answer + approve" legitimate rather than a blind approval: there is a
+   * finished proposal on disk, and the owner is looking at it.
+   */
+  proposalReady?: boolean;
   /** Set when a budget pause suspended a phase gate; restored on an authorized raise. */
   priorAwaiting?: { gate?: string | null } | null;
 }
@@ -245,7 +252,9 @@ export interface FleetSnapshot {
   generatedAt: string;
   /** Absent until the laptop runs a bridge new enough to publish them. */
   spendByDay?: SpendDay[];
-  laneDefaults?: Record<"fast" | "standard" | "deep", LaneDefault>;
+  // DLV-73: `instant` is optional-by-position like the rest — a laptop running
+  // an older bridge simply omits it and the phone falls back to its own default.
+  laneDefaults?: Partial<Record<"instant" | "fast" | "standard" | "deep", LaneDefault>>;
 }
 
 // ---- bridge ----------------------------------------------------------------
@@ -277,7 +286,12 @@ export type CommandType =
   | "resume"
   | "cancel"
   | "answer"
-  | "ask";
+  | "ask"
+  // DLV-73 — INSTANT-lane gate decisions. The bridge re-verifies both the lane
+  // and the awaited gate before relaying either (see `requireInstantGate`), so
+  // these are never authority the phone holds on its own.
+  | "approve"
+  | "accept";
 
 export interface CommandOutcome {
   ok: boolean;

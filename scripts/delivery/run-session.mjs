@@ -95,6 +95,7 @@ import {
   pathsOutsideScope,
 } from "./scope.mjs";
 import { reassessFitAfterDiscovery } from "./recommendation.mjs";
+import { buildInstantUat, normalizeDeclaredEdit, unquoteGitPath, verifyInstantEdit } from "./instant.mjs";
 import { buildFinishPackage } from "./finish-package.mjs";
 import { applyContextBudget, boundReplayedOutput, buildContextManifest, tokensForBytes } from "./context-budget.mjs";
 import {
@@ -1316,6 +1317,52 @@ export const MERGED_SPEC_PLAN_SCHEMA = Object.freeze({
   },
 });
 
+/**
+ * DLV-73: INSTANT's merged payload — MERGED_SPEC_PLAN_SCHEMA plus the two fields
+ * that let the runner discharge REVIEWING and UAT_PREP without a model turn.
+ *
+ * Composed the same way MERGED_SPEC_PLAN_SCHEMA composes its two, and for the same
+ * reason: the spec and plan an INSTANT session produces must be the identical
+ * artifacts every other lane's gates approve, or the gates would be approving a
+ * different, weaker contract. The additions are strictly extra.
+ *
+ *   `declaredEdit` — the exact before/after text of the intended change. This is
+ *     the whole basis of the deterministic review (instant.mjs): without it there
+ *     is nothing to verify the diff against, which is why it is required here and
+ *     why a missing one escalates rather than passes.
+ *   `manualSteps`  — the UAT script, in the shape `assembleUatPackage` already
+ *     consumes. Emitted by the turn that planned the change, so it costs nothing
+ *     beyond a few output tokens and replaces an entire UAT_PREP turn.
+ */
+export const INSTANT_SPEC_PLAN_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: [...MERGED_SPEC_PLAN_SCHEMA.required, "declaredEdit", "manualSteps"],
+  properties: {
+    ...MERGED_SPEC_PLAN_SCHEMA.properties,
+    declaredEdit: {
+      type: "object",
+      additionalProperties: false,
+      required: ["path", "before", "after"],
+      properties: {
+        path: { type: "string" },
+        anchor: { type: "number" },
+        before: { type: "string" },
+        after: { type: "string" },
+      },
+    },
+    manualSteps: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["action", "expected"],
+        properties: { action: { type: "string" }, expected: { type: "string" } },
+      },
+    },
+  },
+});
+
 export const HANDOFF_VERIFICATION_SCHEMA = Object.freeze({
   type: "object",
   additionalProperties: false,
@@ -1419,18 +1466,45 @@ export function parsePlanOutput(text) {
   return plan;
 }
 
+/**
+ * DLV-73 — the INSTANT-only fields, validated on the same terms as everything
+ * else the merged turn returns. A malformed `declaredEdit` is a hard error rather
+ * than a silently-dropped field: the whole lane's licence to skip REVIEWING rests
+ * on that object being trustworthy, so a session that cannot produce one must not
+ * be allowed to reach BUILDING as though it had.
+ * @param {string} text
+ * @returns {{declaredEdit:object, manualSteps:{action:string, expected:string}[]}}
+ */
+export function parseInstantExtras(text) {
+  const raw = parseJsonObject(text, "DISCOVERY");
+  const declaredEdit = normalizeDeclaredEdit(raw.declaredEdit);
+  if (!declaredEdit) {
+    throw new RunnerError(
+      'INSTANT output field "declaredEdit" must be {path, before, after} with a non-empty path and after ' +
+        "— it is what the deterministic review verifies the diff against",
+    );
+  }
+  if (
+    !Array.isArray(raw.manualSteps) ||
+    raw.manualSteps.some((s) => !s || typeof s.action !== "string" || typeof s.expected !== "string")
+  ) {
+    throw new RunnerError('INSTANT output field "manualSteps" must contain {action,expected} objects');
+  }
+  return { declaredEdit, manualSteps: raw.manualSteps };
+}
+
 // ---- git guards (doc 4 §3) ----
 
+// Git C-quotes any path with a non-ASCII byte and escapes it in octal, which
+// `JSON.parse` can never accept (`\342` is not a JSON escape). The old fallback
+// kept the raw quoted string and then rewrote its backslashes to `/`, so
+// `ERA Notes/… — Master Book.md` became `…/342/200/224…`: a path that matches
+// nothing. Every downstream consumer failed quietly on it — pre-existing-change
+// ownership, the scope-lock comparison, and `fingerprintDirtyPaths`, whose
+// git-integrity guard simply cannot stat a path that does not exist.
+// `unquoteGitPath` decodes the octal properly. See instant.mjs.
 function normalizeStatusPath(rawPath) {
-  let value = String(rawPath || "").trim();
-  if (value.startsWith('"') && value.endsWith('"')) {
-    try {
-      value = JSON.parse(value);
-    } catch {
-      // Keep Git's rendered path if it is not JSON-compatible C quoting.
-    }
-  }
-  return value.replace(/\\/g, "/");
+  return unquoteGitPath(rawPath);
 }
 
 /** Parse repo-relative paths from `git status --porcelain` without mutating Git. */
@@ -2334,6 +2408,28 @@ function isFastLane(packet) {
   return packetLane(packet) === "FAST";
 }
 
+/** DLV-73: INSTANT — the two-turn lane for a single located file. */
+function isInstantLane(packet) {
+  return packetLane(packet) === "INSTANT";
+}
+
+/**
+ * DLV-73 — which editorial context profile a lane gets.
+ *
+ * This replaces a bare `isFastLane(packet)` boolean inside `phaseContextPolicy`.
+ * The boolean was correct while there were exactly three lanes and exactly one of
+ * them was lean, but it fails open: a fourth lane added anywhere in the system
+ * silently inherits STANDARD's full reading list, which for INSTANT would mean a
+ * two-turn lane loading four campaign strategy docs. An explicit table makes the
+ * omission impossible to make by accident — an unknown lane still defaults to
+ * "full", which is the safe direction to fail in.
+ */
+const LANE_CONTEXT_PROFILE = Object.freeze({ INSTANT: "lean", FAST: "lean", STANDARD: "full", DEEP: "full" });
+
+function laneContextProfile(packet) {
+  return LANE_CONTEXT_PROFILE[packetLane(packet)] || "full";
+}
+
 /** DLV-62: did this launch resolve to the merged DISCOVERY+PLAN shape? */
 function isMergedDiscoveryPlan(packet) {
   return !!(packet.lanePolicy && packet.lanePolicy.mergedDiscoveryPlan);
@@ -2384,10 +2480,10 @@ function contextBudgetFor(packet, phase, deliveryConfig) {
  * @param {{repoRoot?:string, deliveryConfig?:object}} [opts]
  */
 function phaseContextPolicy(packet, phase, { repoRoot = null, deliveryConfig = null } = {}) {
-  const fast = isFastLane(packet);
-  const campaignFilePaths = fast ? [] : (packet.context && packet.context.campaignFiles) || [];
-  const skills = fast ? riskFlagSkillPaths(packet) : skillPaths(packet);
-  const includeDoctrine = fast ? phase === "building" : true;
+  const lean = laneContextProfile(packet) === "lean";
+  const campaignFilePaths = lean ? [] : (packet.context && packet.context.campaignFiles) || [];
+  const skills = lean ? riskFlagSkillPaths(packet) : skillPaths(packet);
+  const includeDoctrine = lean ? phase === "building" : true;
 
   const budgetTokens = contextBudgetFor(packet, phase, deliveryConfig);
   if (!budgetTokens || !repoRoot) {
@@ -2682,6 +2778,23 @@ async function handleSelected({ sessionDir, state, config }) {
   return newState;
 }
 
+/** Write the plan a merged DISCOVERY+PLAN turn produced, and record it in the ledger. */
+function persistMergedPlan(sessionDir, mergedPlan, packet, turnId, { provisional = false } = {}) {
+  writeArtifactJson(sessionDir, "plan.json", mergedPlan);
+  writeArtifactText(sessionDir, "plan.md", renderPlanMd(mergedPlan));
+  const planLedger = applyPlan(loadLedger(sessionDir), mergedPlan, { turnId });
+  writeLedger(sessionDir, planLedger.ledger);
+  emitEvent(sessionDir, {
+    type: "plan.merged",
+    phase: "DISCOVERY",
+    data: {
+      steps: (mergedPlan.steps || []).length,
+      reason: (packet.lanePolicy && packet.lanePolicy.mergedDiscoveryPlanReason) || null,
+      ...(provisional ? { provisional: true } : {}),
+    },
+  });
+}
+
 async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, config }) {
   state = maybeRotateAtPhaseBoundary({ sessionDir, state, packet, deliveryConfig: config.deliveryConfig, phase: "discovery" });
   const forbiddenPaths = (packet.constraints && packet.constraints.forbiddenPaths) || [];
@@ -2721,7 +2834,10 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
   // DLV-45 lane narrowing + DLV-8 token budget — see phaseContextPolicy.
   const discoveryContext = phaseContextPolicy(packet, "discovery", { repoRoot, deliveryConfig: config.deliveryConfig });
   // DLV-62: on FAST with a single named file, this turn also produces the plan.
+  // DLV-73: on INSTANT it always does, and additionally produces the declaredEdit
+  // and manualSteps that let REVIEWING and UAT_PREP be discharged without a turn.
   const merged = isMergedDiscoveryPlan(packet);
+  const instant = isInstantLane(packet);
   const maxPlanSteps = (config.deliveryConfig && config.deliveryConfig.budgets && config.deliveryConfig.budgets.maxPlanSteps) || null;
   const prompt = buildDiscoveryPrompt({
     packet,
@@ -2731,6 +2847,7 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
     ownerMessages,
     includePlan: merged,
     maxPlanSteps: merged ? maxPlanSteps : null,
+    instant,
   });
   recordContextManifest(sessionDir, packet, "discovery", discoveryContext, formatTurnId((working.turnCounter || 0) + 1), prompt);
   // Strategy reflects whether a driver ref existed BEFORE this handler ran —
@@ -2744,7 +2861,7 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
     prompt,
     phase: "DISCOVERY",
     agent: "orchestrator",
-    outputSchema: merged ? MERGED_SPEC_PLAN_SCHEMA : SPEC_OUTPUT_SCHEMA,
+    outputSchema: instant ? INSTANT_SPEC_PLAN_SCHEMA : merged ? MERGED_SPEC_PLAN_SCHEMA : SPEC_OUTPUT_SCHEMA,
     repoRoot,
     guardMode: "readonly",
     takeSnapshot: config.takeSnapshot,
@@ -2770,6 +2887,7 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
   working = withContextOccupancy(working, "discovery", turn.usageV2, tc.windowTokens);
   let spec;
   let mergedPlan = null;
+  let instantExtras = null;
   try {
     spec = parseSpecOutput(turn.finalText);
     if (merged) {
@@ -2780,11 +2898,20 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
       if (!raw.plan) throw new RunnerError("merged DISCOVERY+PLAN output is missing the required `plan` object");
       mergedPlan = parsePlanOutput(JSON.stringify(raw.plan));
     }
+    // DLV-73: parsed *before* the gate, not at review time. A declaredEdit that
+    // turns out to be malformed after the owner has already approved the plan
+    // would leave the session with no way to discharge REVIEWING and no way back
+    // — catching it here makes it an ordinary DISCOVERY failure instead.
+    if (instant) instantExtras = parseInstantExtras(turn.finalText);
   } catch (error) {
     return blockFrom(sessionDir, working, "DISCOVERY", { error });
   }
   writeArtifactJson(sessionDir, "spec.json", spec);
   writeArtifactText(sessionDir, "spec.md", renderSpecMd(spec));
+  if (instantExtras) {
+    writeArtifactJson(sessionDir, "instant-edit.json", instantExtras);
+    working = { ...working, instant: { ...instantExtras } };
+  }
 
   // DW-5: seed the durable ledger's objective/requirements from the spec,
   // and raise a ledger-tracked blocking question per openQuestions entry —
@@ -2800,10 +2927,32 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
     const result = smNext(working.state, "question.raised");
     const questions = spec.openQuestions.map((q, i) => ({ text: q.text, id: specLedger.questionIds[i] }));
     emitEvent(sessionDir, { type: "question.raised", phase: "DISCOVERY", data: { questions } });
+    // DLV-73 — on INSTANT the plan IS persisted on the question path, which is the
+    // opposite of DLV-62's rule two blocks below. The rule's premise is that a
+    // discovery turn ending in questions will be re-run, making its plan stale.
+    // INSTANT's prompt breaks that premise on purpose: it requires a complete
+    // best-guess spec, plan and declaredEdit *alongside* the questions, precisely
+    // so the common case — the owner confirms a detail and the guess was right —
+    // can be answered and approved in one action instead of buying a second full
+    // turn. On a two-turn lane, one clarification would otherwise be a 50% overrun.
+    //
+    // A re-run (the owner answers and asks for a revision) overwrites both
+    // artifacts, so the provisional plan can only ever be superseded, never
+    // silently approved after the spec it belongs to has changed.
+    const provisional = instant && mergedPlan;
+    if (provisional) persistMergedPlan(sessionDir, mergedPlan, packet, turn.turnId, { provisional: true });
     return {
       ...working,
+      ...(provisional ? { mergedPlanPending: true } : {}),
       state: result.to,
-      awaiting: { gate: "question", returnTo: "DISCOVERY", questions },
+      awaiting: {
+        gate: "question",
+        returnTo: "DISCOVERY",
+        questions,
+        // Tells the gate UI it may offer "answer + approve" as well as
+        // "answer + revise" — there is a complete proposal on disk to approve.
+        ...(provisional ? { proposalReady: true } : {}),
+      },
     };
   }
   // DLV-7: the scope tripwire. Computed here — at the one moment the session
@@ -2869,17 +3018,7 @@ async function handleDiscovery({ sessionDir, state, packet, driver, repoRoot, co
   // DLV-62: the plan is persisted only once the spec is actually going to the
   // gate. A discovery turn that ends in open questions will be re-run, and a
   // plan written from a superseded spec is worse than no plan at all.
-  if (mergedPlan) {
-    writeArtifactJson(sessionDir, "plan.json", mergedPlan);
-    writeArtifactText(sessionDir, "plan.md", renderPlanMd(mergedPlan));
-    const planLedger = applyPlan(loadLedger(sessionDir), mergedPlan, { turnId: turn.turnId });
-    writeLedger(sessionDir, planLedger.ledger);
-    emitEvent(sessionDir, {
-      type: "plan.merged",
-      phase: "DISCOVERY",
-      data: { steps: (mergedPlan.steps || []).length, reason: (packet.lanePolicy && packet.lanePolicy.mergedDiscoveryPlanReason) || null },
-    });
-  }
+  if (mergedPlan) persistMergedPlan(sessionDir, mergedPlan, packet, turn.turnId);
 
   const result = smNext(working.state, "spec.written");
   emitEvent(sessionDir, { type: "phase.transition", phase: "DISCOVERY", data: { to: result.to } });
@@ -3733,7 +3872,184 @@ async function handleValidating({ sessionDir, state, packet, config }) {
   };
 }
 
+/**
+ * DLV-73 — INSTANT's stand-in for the REVIEWING and UAT_PREP turns.
+ *
+ * Returns `null` when this session is not eligible or the assertions did not
+ * hold, and the caller falls through to the two real model turns. That fall-
+ * through is what makes the shortcut safe: the deterministic path only ever
+ * applies to a diff that provably *is* the small, declared edit the owner
+ * approved, and anything else buys the full review it turns out to need.
+ *
+ * @returns {object|null} the next state, or null to run the normal review
+ */
+function tryInstantVerification({ sessionDir, state, packet, repoRoot, config }) {
+  if (!isInstantLane(packet)) return null;
+  const declaredEdit = normalizeDeclaredEdit(state.instant && state.instant.declaredEdit);
+  const changedFiles = (state.workspace && state.workspace.changedFiles) || [];
+
+  // The diff must be scoped to what THIS session touched. An unscoped
+  // `git diff` reports the owner's pre-existing uncommitted work too, and the
+  // verifier has no way to tell that apart from the agent overreaching: it
+  // fires undeclared-file, outside-scope-lock and diff-too-large all at once
+  // and escalates. s-20260801-094951-jx8o did exactly that — a correct
+  // two-line edit was judged a 1326-line, 20-file one because the tree was
+  // dirty at launch, and the escalation it forced burned the session's whole
+  // budget. On a repo that is normally dirty, the unscoped read meant INSTANT
+  // could essentially never take its own fast path.
+  //
+  // Scoping does not weaken the check. `changedFiles` is the session's own
+  // record of what it wrote, so a file the agent touched but did not declare
+  // is still in this list and still caught; only files the session never
+  // touched are excluded.
+  const scopePaths = [...new Set([...changedFiles, ...(declaredEdit ? [declaredEdit.path] : [])])].filter(Boolean);
+
+  let diffText = "";
+  if (scopePaths.length) {
+    try {
+      // `--unified=0` keeps context lines out of the count, so the ceiling measures
+      // changed lines rather than how much surrounding code the file happens to have.
+      diffText = config.readDiff(repoRoot, scopePaths);
+    } catch {
+      // A diff we cannot read is not evidence of a small change. Escalate.
+      return null;
+    }
+  }
+
+  const verification = verifyInstantEdit({
+    declaredEdit,
+    changedFiles,
+    diffText,
+    scopeLockPaths: (state.scopeLock && state.scopeLock.paths) || [],
+    maxDiffLines: (config.deliveryConfig && config.deliveryConfig.pipeline && config.deliveryConfig.pipeline.instantMaxDiffLines) || 20,
+    fixLoop: state.fixLoop || 0,
+  });
+  writeArtifactJson(sessionDir, "instant-verification.json", {
+    ...verification,
+    verifiedAt: new Date().toISOString(),
+    changedFiles,
+  });
+
+  if (!verification.ok) {
+    emitEvent(sessionDir, {
+      type: "instant.escalated",
+      phase: "REVIEWING",
+      data: { failures: verification.failures.map((f) => f.code), changedLines: verification.changedLines },
+    });
+    return null;
+  }
+
+  const spec = readJsonIfExists(artifactPath(sessionDir, "spec.json")) || {};
+  const plan = readJsonIfExists(artifactPath(sessionDir, "plan.json")) || {};
+  const validation = readJsonIfExists(artifactPath(sessionDir, "validation.json"));
+  // `results` is keyed by rung name (see runValidationCommands), not an array.
+  const validationSummary = validation
+    ? `validation ladder: ${Object.entries(validation.results || {})
+        .map(([name, r]) => `${name} ${r && r.skipped ? "SKIPPED" : r && r.ok ? "PASS" : "FAIL"}`)
+        .join(", ")}`
+    : "";
+
+  const uat = buildInstantUat({
+    spec,
+    plan,
+    declaredEdit,
+    manualSteps: (state.instant && state.instant.manualSteps) || [],
+    changedFiles,
+    verification,
+    validationSummary,
+  });
+
+  // The review artifact is still written, because "no review turn ran" must be a
+  // visible fact in the session record rather than an absence someone has to
+  // notice. A missing review-self.md would read as a bug.
+  writeArtifactText(
+    sessionDir,
+    "review-self.md",
+    [
+      "# Self review — deterministic (INSTANT)",
+      "",
+      "No review model turn was spent. The runner asserted the working-tree diff against the",
+      "`declaredEdit` the owner approved at the plan gate, and every assertion held:",
+      "",
+      `- the diff touches only \`${verification.declaredPath}\``,
+      `- it changes ${verification.changedLines} line(s), within INSTANT's ceiling`,
+      "- the removed text matches `declaredEdit.before`, the added text matches `declaredEdit.after`",
+      "- the validation ladder passed with no fix loop",
+      "",
+      "Any one of those failing would have escalated this session to the full REVIEWING and",
+      "UAT_PREP turns. See `artifacts/instant-verification.json`.",
+      "",
+    ].join("\n"),
+  );
+  emitEvent(sessionDir, {
+    type: "instant.verified",
+    phase: "REVIEWING",
+    data: { changedLines: verification.changedLines, path: verification.declaredPath },
+  });
+
+  let working = withReconciledAcceptance(sessionDir, state, uat.acceptanceCriteria || [], repoRoot, null, "UAT_PREP");
+  assembleUatPackage(sessionDir, uat, packet, working);
+
+  // The unmet-acceptance precondition is deliberately NOT bypassed: skipping the
+  // review turn says nothing about whether the spec's criteria are actually
+  // covered, and BUD-11's failure was precisely a UAT assembled over unmet ACs
+  // with nothing objecting.
+  const unsatisfied = unsatisfiedAcceptance(working.acceptance);
+  if (unsatisfied.length) {
+    const smResult = smNext(working.state, "question.raised");
+    const id = "q-acceptance-instant";
+    const rows = (working.acceptance || []).filter((r) => unsatisfied.includes(r.id));
+    const questionText =
+      `${unsatisfied.length} acceptance criteria are not met and cannot be evidenced: ` +
+      `${rows.map((r) => `${r.id} (${r.status})`).join(", ")}. ` +
+      `See .delivery/sessions/${packet.sessionId}/artifacts/acceptance.md for the full matrix. ` +
+      'Answer "waive" to waive them and proceed to UAT, or send the session back to BUILDING to finish them.';
+    const ledger = applyQuestionRaised(loadLedger(sessionDir), {
+      id,
+      phase: "UAT_PREP",
+      source: "runner",
+      text: questionText,
+      kind: "blocking",
+      evidence: { turnId: null, seq: null },
+    });
+    writeLedger(sessionDir, ledger);
+    emitEvent(sessionDir, {
+      type: "acceptance.incomplete",
+      phase: "REVIEWING",
+      data: { unsatisfied, summary: summarizeAcceptance(working.acceptance) },
+    });
+    return {
+      ...working,
+      state: smResult.to,
+      awaiting: {
+        gate: "question",
+        returnTo: "REVIEWING",
+        reason: "acceptance-incomplete",
+        unsatisfiedAcceptance: unsatisfied,
+        questions: [{ text: questionText, id }],
+      },
+    };
+  }
+
+  const result = smNext(working.state, "reviews.pass");
+  emitEvent(sessionDir, { type: "phase.transition", phase: "REVIEWING", data: { to: result.to } });
+  return {
+    ...working,
+    state: result.to,
+    awaiting: {
+      gate: GATES[result.to] || "uat",
+      ...((working.acceptance || []).length ? { acceptance: summarizeAcceptance(working.acceptance) } : {}),
+    },
+  };
+}
+
 async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, config }) {
+  // DLV-73: on INSTANT, try to discharge both review turns deterministically
+  // before establishing a driver handle — a handle established here would be a
+  // model call's worth of setup for a phase that may not run one.
+  const instantResult = tryInstantVerification({ sessionDir, state, packet, repoRoot, config });
+  if (instantResult) return instantResult;
+
   state = maybeRotateAtPhaseBoundary({ sessionDir, state, packet, deliveryConfig: config.deliveryConfig, phase: "reviewing" });
   const handle = await getHandle({ driver, state, packet, repoRoot, mode: "readonly", phase: "review" });
   let working = withDriverRef(state, handle);
@@ -4014,7 +4330,31 @@ function consumeQuestionDecision({ sessionDir, state, decision }) {
     state.awaiting.reason === "acceptance-incomplete" &&
     typeof decision.answer === "string" &&
     /^\s*waive\b/i.test(decision.answer);
-  const returnTo = wantsWaiver ? "UAT_READY" : (state.awaiting && state.awaiting.returnTo) || "DISCOVERY";
+  // DLV-73 — "answer + approve", the same saving as the waiver above applied to
+  // the other end of the session.
+  //
+  // A DISCOVERY question normally returns to DISCOVERY, which re-runs the phase:
+  // a second full-context turn to re-produce a spec and plan that are already on
+  // disk and that the owner has just read. That is the right default when the
+  // answer might change the proposal — but on INSTANT the turn is *required* to
+  // ship a complete best-guess proposal alongside its questions, and the common
+  // case is that the answer confirms it. When the owner says so explicitly
+  // (`acceptProposal`, and only against a gate that advertised `proposalReady`),
+  // resuming at SPEC_READY spends nothing and loses nothing: the artifacts being
+  // approved are exactly the ones that were on screen.
+  //
+  // "Answer + revise" is unchanged and still available — it is the branch that
+  // exists for when the answer *does* change things.
+  const acceptsProposal =
+    !!decision.acceptProposal &&
+    !!state.awaiting &&
+    state.awaiting.proposalReady === true &&
+    state.awaiting.returnTo === "DISCOVERY";
+  const returnTo = wantsWaiver
+    ? "UAT_READY"
+    : acceptsProposal
+      ? "SPEC_READY"
+      : (state.awaiting && state.awaiting.returnTo) || "DISCOVERY";
   const result = smNext(state.state, "decision.answer", { returnTo });
   emitEvent(sessionDir, { type: "decision.consumed", phase: "NEEDS_DECISION", data: { answer: decision.answer } });
   const answerNote = decision.answer ? `Owner's answer to the open question: ${decision.answer}` : null;
@@ -4107,7 +4447,7 @@ function consumeCancel({ sessionDir, state, packet, repoRoot }) {
  * persist the result. Returns `{didWork: boolean, state}`.
  * @param {{sessionDir:string, driver:object, repoRoot:string, runValidation?:Function,
  *   retryDelayMs?:number, sleep?:Function, takeSnapshot?:Function, readHead?:Function,
- *   deliveryConfig?:object, createDriver?:Function, abortPollMs?:number,
+ *   readDiff?:Function, deliveryConfig?:object, createDriver?:Function, abortPollMs?:number,
  *   providerDriverCache?:(Map|null)}} options
  */
 export async function advanceSession(options) {
@@ -4119,6 +4459,19 @@ export async function advanceSession(options) {
     sleep: options.sleep || defaultSleep,
     takeSnapshot: options.takeSnapshot || snapshotGit,
     readHead: options.readHead || ((root) => gitRevParseHead({ cwd: root })),
+    // DLV-73: the working-tree diff INSTANT's deterministic review asserts
+    // against. Injected on the same terms as takeSnapshot/readHead — a unit test
+    // must be able to hand the verifier a diff without standing up a git repo,
+    // and this is the only place the review reads the tree.
+    //
+    // `paths` is mandatory in practice: the caller always scopes the read to the
+    // files the session itself changed, so the owner's unrelated uncommitted
+    // work never reaches the verifier. Pathspecs are passed after `--` so a file
+    // named like a flag cannot be read as one.
+    readDiff:
+      options.readDiff ||
+      ((root, paths = []) =>
+        gitDiff(paths.length ? ["--unified=0", "--", ...paths] : ["--unified=0"], { cwd: root })),
     // DW-1: owner-edited `.delivery/config.json` (model catalog, pricing,
     // transcript caps) — injectable for tests, else loaded fresh per call
     // (cheap: one small JSON read, no different from packet/state loads above).

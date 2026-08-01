@@ -25,7 +25,16 @@ import { CancelSessionDialog } from "./SessionDetail.jsx";
 
 const EFFORT_PHASES = ["discovery", "plan", "building", "review"];
 const TERMINAL_STATES = new Set(["SHIPPED", "CANCELLED", "FAILED"]);
-const DELIVERY_LANES = ["FAST", "STANDARD", "DEEP"];
+// DLV-73: INSTANT leads the list because it is the cheapest thing that can
+// still be a supervised session — the lane the triage gate now routes a trivial
+// item to instead of refusing it outright.
+const DELIVERY_LANES = ["INSTANT", "FAST", "STANDARD", "DEEP"];
+const LANE_BLURB = {
+  INSTANT: "2 turns · one located file · review verified from the diff",
+  FAST: "merged spec+plan · lean context · targeted tests",
+  STANDARD: "full pipeline",
+  DEEP: "full pipeline · highest reasoning",
+};
 const checklist = (path) => /(?:^|\/)4\s*-\s*Checklist\.md$/i.test(path);
 
 export function DeliveryHome() {
@@ -229,9 +238,9 @@ function Wizard({ value, setValue, onClose }) {
   const models = providerCaps?.models || [];
   const efforts = providerCaps?.efforts || providerCaps?.manifest?.efforts || [];
   useEffect(() => {
-    if (value.task) loadDeliveryRecommendation(value.task.file, value.task.cbidx, value.provider);
+    if (value.task) loadDeliveryRecommendation(value.task.file, value.task.cbidx, value.provider, value.locatorChoice);
     else deliveryRecommendation.value = null;
-  }, [value.task?.file, value.task?.cbidx, value.provider]);
+  }, [value.task?.file, value.task?.cbidx, value.provider, value.locatorChoice]);
   useEffect(() => {
     if (value.task) loadDeliveryPreflight();
     else deliveryPreflight.value = { loading: false, data: null, error: null };
@@ -241,6 +250,9 @@ function Wizard({ value, setValue, onClose }) {
   const launchPreview = recommendationPayload?.preview;
   const capabilities = launchPreview?.capabilities || [];
   const selectedLane = value.lane || launchPreview?.recommendedLane || "STANDARD";
+  // DLV-73: what the zero-token locator resolved, so the owner sees the target
+  // before authorizing anything.
+  const locator = launchPreview?.scopeHints?.locator || null;
   // D9/DLV-6: was hardcoded to laneDefaults.standard regardless of the lane
   // the owner actually selected -- a FAST launch pre-filled the STANDARD
   // envelope ($2/2M) instead of FAST's ($0.50/500K).
@@ -316,6 +328,9 @@ function Wizard({ value, setValue, onClose }) {
         triageAck: value.triageAck,
         budget: budgetPayload,
         flightCheck: { reviewed: true, lane: selectedLane },
+        // DLV-73 — re-validated server-side against the locator's own hits, so
+        // this is a choice among candidates, never an arbitrary path.
+        locatorChoice: value.locatorChoice || undefined,
         options: { capabilitiesDrop: value.dropped },
       },
       "Delivery session launched",
@@ -340,7 +355,7 @@ function Wizard({ value, setValue, onClose }) {
           <div class="eyebrow">1 · Topic</div>
           <div class="chip-row">
             {topics.map((topic) => (
-              <button class={`button ${value.campaign === topic ? "primary" : ""}`} onClick={() => update({ campaign: topic, task: null, lane: null, dropped: [], dirtyAck: "", redBaselineAck: "", triageAck: "" })}>
+              <button class={`button ${value.campaign === topic ? "primary" : ""}`} onClick={() => update({ campaign: topic, task: null, lane: null, locatorChoice: null, dropped: [], dirtyAck: "", redBaselineAck: "", triageAck: "" })}>
                 {topic}
               </button>
             ))}
@@ -353,7 +368,7 @@ function Wizard({ value, setValue, onClose }) {
               {candidates.map((task) => {
                 const eligibility = deliverEligibility(task, deliveryData.value.sessions, topics);
                 return (
-                  <button class={`palette-result ${value.task?.key === task.key ? "selected" : ""}`} disabled={!eligibility.eligible} title={eligibility.reason || ""} onClick={() => update({ task, lane: null, dropped: [], dirtyAck: "", redBaselineAck: "", triageAck: "" })}>
+                  <button class={`palette-result ${value.task?.key === task.key ? "selected" : ""}`} disabled={!eligibility.eligible} title={eligibility.reason || ""} onClick={() => update({ task, lane: null, locatorChoice: null, dropped: [], dirtyAck: "", redBaselineAck: "", triageAck: "" })}>
                     <span class="palette-result-main">
                       <strong>
                         {task.idChip ? `${task.idChip} · ` : ""}
@@ -402,11 +417,46 @@ function Wizard({ value, setValue, onClose }) {
               <div class="eyebrow">Lane, provider & model fit</div>
               <div class="chip-row" style={{ marginBottom: 8 }}>
                 {DELIVERY_LANES.map((lane) => (
-                  <button type="button" class={`button ${selectedLane === lane ? "primary" : ""}`} onClick={() => update({ lane })}>
+                  <button type="button" title={LANE_BLURB[lane] || ""} class={`button ${selectedLane === lane ? "primary" : ""}`} onClick={() => update({ lane })}>
                     {lane}{lane === launchPreview?.recommendedLane ? " · recommended" : ""}
                   </button>
                 ))}
               </div>
+              <p class="muted" style={{ fontSize: 11, marginBottom: 8 }}>{LANE_BLURB[selectedLane]}</p>
+              {/* DLV-73: what the locator resolved, shown BEFORE launch. An
+                  ambiguous result is a picker here — the cheapest possible place
+                  to ask, since a question raised mid-session costs a whole turn. */}
+              {locator && locator.hits?.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <div class="eyebrow">
+                    Target {locator.confidence === "exact" ? "· named by the item" : `· located (${locator.confidence})`}
+                  </div>
+                  {locator.confidence === "ambiguous" ? (
+                    <>
+                      <p class="muted" style={{ fontSize: 11 }}>
+                        Several files match. Pick one to enable INSTANT, or launch on FAST and let DISCOVERY decide.
+                      </p>
+                      <div class="chip-row">
+                        {locator.hits.map((hit) => (
+                          <button
+                            type="button"
+                            class={`button ${value.locatorChoice === hit.path ? "primary" : ""}`}
+                            title={hit.why}
+                            onClick={() => update({ locatorChoice: value.locatorChoice === hit.path ? null : hit.path })}
+                          >
+                            {hit.path.split("/").pop()}{hit.line ? `:${hit.line}` : ""}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p class="muted" style={{ fontSize: 11 }}>
+                      <code>{locator.hits[0].path}{locator.hits[0].line ? `:${locator.hits[0].line}` : ""}</code>
+                      {locator.source === "item-paths" ? "" : " — resolved with no model call"}
+                    </p>
+                  )}
+                </div>
+              )}
               <div class="chip-row">
                 {["claude", "codex"].map((provider) => (
                   <button class={`button ${value.provider === provider ? "primary" : ""}`} onClick={() => update({ provider, model: null, lane: null, effort: {} })}>
@@ -688,6 +738,8 @@ export function DeliveryWizardPage() {
       provider: "claude",
       model: null,
       lane: null,
+      // DLV-73: the file picked from an ambiguous locator shortlist, if any.
+      locatorChoice: null,
       effort: {},
       dropped: [],
       dirtyAck: "",

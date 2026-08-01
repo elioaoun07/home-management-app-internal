@@ -43,11 +43,15 @@ export async function loadDeliveryCapabilities() {
   try { deliveryCapabilities.value = await apiGet("/api/delivery/capabilities"); }
   catch { /* wizard falls back to provider-only selection if this fails */ }
 }
-export async function loadDeliveryRecommendation(file, cbidx, provider) {
+// DLV-73: `locatorChoice` re-resolves the preview around the file the owner
+// picked from an ambiguous locator shortlist, so the scope, lane recommendation
+// and forecast on screen are the ones the launch will actually use.
+export async function loadDeliveryRecommendation(file, cbidx, provider, locatorChoice = null) {
   if (globalThis.PM_MODE !== "server" || !file || cbidx == null) { deliveryRecommendation.value = null; return; }
   deliveryRecommendation.value = null;
   try {
     const params = new URLSearchParams({ file, cbidx: String(cbidx), provider });
+    if (locatorChoice) params.set("locatorChoice", locatorChoice);
     const result = await apiGet(`/api/delivery/recommendation?${params.toString()}`);
     deliveryRecommendation.value = result;
   } catch { deliveryRecommendation.value = null; } // wizard just hides the card

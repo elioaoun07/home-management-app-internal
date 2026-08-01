@@ -293,6 +293,9 @@ export function buildDiscoveryPrompt({
   // and every non-FAST lane keeps the two-turn shape.
   includePlan = false,
   maxPlanSteps = null,
+  // DLV-73 — INSTANT. Implies includePlan, and adds the declaredEdit/manualSteps
+  // ask that lets the runner discharge REVIEWING and UAT_PREP without a turn.
+  instant = false,
 }) {
   const campaignBlock =
     campaignFilePaths.length > 0
@@ -302,11 +305,11 @@ export function buildDiscoveryPrompt({
       : // Saying nothing here would read as an omission the agent might try to
         // repair by hunting for the campaign docs itself — the opposite of the
         // saving. State that the narrow scope is deliberate.
-        "\nThis is a FAST-lane session: no campaign strategy docs are in scope. " +
+        `\nThis is a ${instant ? "INSTANT" : "FAST"}-lane session: no campaign strategy docs are in scope. ` +
         "The work item above (with its file:line pointer, where it has one) is your starting point — " +
         "go straight to the code. Do not go looking for campaign or roadmap documents.\n";
   return (
-    `Phase: ${includePlan ? "DISCOVERY + PLAN (merged)" : "DISCOVERY"}\n` +
+    `Phase: ${instant ? "INSTANT (DISCOVERY + PLAN, one turn)" : includePlan ? "DISCOVERY + PLAN (merged)" : "DISCOVERY"}\n` +
     "You are the Delivery Orchestrator investigating one work item read-only. " +
     "Explore the codebase and return only the structured JSON payload requested below. " +
     `Do not create, edit, or delete any file; the runner writes ${sessionArtifactPath(packet, "artifacts/spec.md")} after validating your JSON.\n` +
@@ -322,9 +325,48 @@ export function buildDiscoveryPrompt({
     "If you have a concrete open question that blocks writing the spec, raise it as a " +
     'question ("question.raised") instead of guessing.\n' +
     (includePlan ? renderMergedPlanAsk(packet, maxPlanSteps) : "") +
+    (instant ? renderInstantAsk() : "") +
     renderOwnerMessages(ownerMessages) +
     (includeDoctrine ? DOCTRINE_POINTER : "") +
     `\n${GIT_BAN_TEXT}\n`
+  );
+}
+
+/**
+ * DLV-73 — the two extra fields INSTANT's whole shape rests on, and the one
+ * behavioural instruction that keeps a question from costing a second turn.
+ *
+ * `declaredEdit` is the lane's contract with itself: the runner will diff the
+ * working tree against it and, if they match, skip REVIEWING and UAT_PREP
+ * entirely. So the ask has to be unambiguous that `before` is *verbatim source*,
+ * not a description of it — a paraphrase makes the assertion fail and costs the
+ * session the two turns it was trying to save.
+ *
+ * The "propose anyway" instruction addresses the other half of the cost problem.
+ * A question raised in DISCOVERY parks the session and re-enters the phase on
+ * answer, i.e. a second full turn — on a lane budgeted for two turns total, one
+ * clarification would be a 50% overrun. Requiring a complete best-guess proposal
+ * *alongside* the questions lets the owner answer and approve in one action when
+ * the guess was right, which is the common case for items whose only ambiguity is
+ * a detail the owner can confirm at a glance.
+ */
+function renderInstantAsk() {
+  return (
+    "\nINSTANT lane — two additional required fields:\n" +
+    "- `declaredEdit`: {path, anchor, before, after}. `before` must be the **exact, verbatim source text** you " +
+    "will replace (copy it from the file — not a paraphrase, not a description), and `after` the exact text you " +
+    "will replace it with. The runner verifies the real diff against these two strings and skips the review and " +
+    "UAT turns only if they match, so an approximate `before` costs this session two extra turns. For a pure " +
+    "insertion, use an empty `before`.\n" +
+    "- `manualSteps`: [{action, expected}] — the short manual check the owner will run. This replaces the UAT " +
+    "turn, so write it for a human at the app, not for an agent.\n" +
+    "\nThis lane is for a single small edit in one file. If what you find is materially bigger than that, say so " +
+    "in `scopeEstimate` and `openQuestions` rather than quietly planning a large change — the runner will " +
+    "escalate rather than hold you to INSTANT's shape.\n" +
+    "\nIf something is unclear, still return a **complete** spec, plan, declaredEdit and manualSteps representing " +
+    "your best reading, AND put the ambiguity in `openQuestions`. Do not return a partial payload and wait: the " +
+    "owner can answer your question and approve your proposal in the same action, which costs no extra turn, but " +
+    "only if the proposal is actually there.\n"
   );
 }
 

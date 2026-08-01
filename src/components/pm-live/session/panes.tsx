@@ -118,9 +118,21 @@ export function QuestionsPane({
   const open = session.qa?.open ?? [];
   const answered = session.qa?.answered ?? [];
 
-  async function send(text: string, questionId?: string) {
+  // DLV-73: on INSTANT the turn that raised these questions also produced a
+  // complete spec+plan, which the runner advertises as `proposalReady`. Answering
+  // with `acceptProposal` approves that proposal in the same action instead of
+  // re-running DISCOVERY — a whole extra turn on a two-turn lane.
+  const proposalReady = session.awaiting?.gate === "question" && session.awaiting?.proposalReady === true;
+  const [acceptProposal, setAcceptProposal] = useState(true);
+
+  async function send(text: string, questionId?: string, withProposal = false) {
     setMsg("");
-    const outcome = await sendCommand("answer", { sessionId: session.sessionId, text, ...(questionId ? { questionId } : {}) });
+    const outcome = await sendCommand("answer", {
+      sessionId: session.sessionId,
+      text,
+      ...(questionId ? { questionId } : {}),
+      ...(withProposal ? { acceptProposal: true } : {}),
+    });
     if (!outcome.ok) setMsg(outcome.error || "failed");
     return outcome.ok;
   }
@@ -145,7 +157,17 @@ export function QuestionsPane({
               {question.text}
             </p>
           ))}
-          <Composer placeholder="Answer and let it continue…" disabled={!canSend} onSend={(text) => send(text)} />
+          {proposalReady && (
+            <label className="flex items-center gap-2 text-[13px] mb-1.5" style={{ color: "var(--pm-fg-2)" }}>
+              <input type="checkbox" checked={acceptProposal} onChange={(e) => setAcceptProposal(e.currentTarget.checked)} />
+              Also approve the spec + plan it already proposed
+            </label>
+          )}
+          <Composer
+            placeholder={proposalReady && acceptProposal ? "Answer and approve…" : "Answer and let it continue…"}
+            disabled={!canSend}
+            onSend={(text) => send(text, undefined, proposalReady && acceptProposal)}
+          />
         </div>
       )}
 

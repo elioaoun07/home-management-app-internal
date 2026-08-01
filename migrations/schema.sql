@@ -1852,6 +1852,7 @@ CREATE TABLE public.pm_commands (
   type text NOT NULL CHECK (type IN (
     'capture', 'undo', 'preflight', 'launch',
     'pause', 'abort-turn', 'resume', 'cancel', 'answer', 'ask',
+    'approve', 'accept',  -- DLV-73: INSTANT-lane gates only; scoping lives in the bridge, not here
     'legacy-tick'  -- historical rows only; 'tick' was dropped 2026-07-25, never executed again
   )),
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,

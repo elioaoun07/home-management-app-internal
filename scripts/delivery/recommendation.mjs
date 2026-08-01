@@ -18,7 +18,7 @@ import { estimateCostUsd } from "./usage.mjs";
 import { getModelInfo, getModelPricing, getProviderConfig } from "./config.mjs";
 
 export const TIERS = Object.freeze(["economy", "standard", "premium"]);
-export const DELIVERY_LANES = Object.freeze(["FAST", "STANDARD", "DEEP"]);
+export const DELIVERY_LANES = Object.freeze(["INSTANT", "FAST", "STANDARD", "DEEP"]);
 
 const EFFORT_SCORE_BY_LETTER = Object.freeze({ S: 0, M: 1, L: 2 });
 const LANE_BY_TIER = Object.freeze({
@@ -154,14 +154,39 @@ function phaseHasMeasuredPrior(tier, phase, history = []) {
  * one direction that matters (too low) while looking more precise.
  *
  * @param {{tier:string, itemEffort?:(string|null), maxPlanSteps?:(number|null),
- *   history?:object[], pricing?:(object|null)}} args
+ *   history?:object[], pricing?:(object|null), lane?:(string|null), merged?:boolean}} args
  */
-export function forecastByPhase({ tier, itemEffort = null, maxPlanSteps = null, history = [], pricing = null }) {
+export function forecastByPhase({
+  tier,
+  itemEffort = null,
+  maxPlanSteps = null,
+  history = [],
+  pricing = null,
+  lane = null,
+  merged = false,
+}) {
   const letter = String(itemEffort || "").trim().toUpperCase();
   let buildingSteps = BUILDING_STEPS_BY_EFFORT[letter] ?? 2;
   if (maxPlanSteps && buildingSteps > maxPlanSteps) buildingSteps = maxPlanSteps;
 
-  const traversalsByPhase = { discovery: 1, plan: 1, building: buildingSteps, reviewing: 1, uat: 1 };
+  // DLV-73 — the forecast has to model the *pipeline shape*, not just its price.
+  // Two lanes now traverse fewer phases than the five-phase default:
+  //   - a merged DISCOVERY+PLAN turn (DLV-62 on FAST, always on INSTANT) runs
+  //     `plan` zero times — the plan comes out of the discovery turn;
+  //   - INSTANT additionally spends no model turn on REVIEWING or UAT_PREP,
+  //     which the runner discharges deterministically from the declared edit.
+  // Charging for phases that cannot run is how DLV-38's forecast came out at
+  // $0.175 for a session that spent $0.53, only in the opposite direction: it
+  // would make INSTANT look 2.5x more expensive than it is and push the owner
+  // back toward doing the edit by hand.
+  const instant = lane === "INSTANT";
+  const traversalsByPhase = {
+    discovery: 1,
+    plan: instant || merged ? 0 : 1,
+    building: instant ? 1 : buildingSteps,
+    reviewing: instant ? 0 : 1,
+    uat: instant ? 0 : 1,
+  };
   const phases = FORECAST_PHASES.map((phase) => {
     const perTraversal = estPhaseUsage(tier, phase, history);
     const traversals = traversalsByPhase[phase];
@@ -187,10 +212,12 @@ export function forecastByPhase({ tier, itemEffort = null, maxPlanSteps = null, 
     estTokens,
     estCostUsd,
     assumptions: {
-      buildingSteps,
-      buildingStepsBasis: letter
-        ? `${letter}-effort item (${BUILDING_STEPS_BY_EFFORT[letter] ?? 2} plan steps assumed)${maxPlanSteps && BUILDING_STEPS_BY_EFFORT[letter] > maxPlanSteps ? `, capped at the ${maxPlanSteps}-step budget` : ""}`
-        : "no effort recorded on the item — 2 plan steps assumed",
+      buildingSteps: traversalsByPhase.building,
+      buildingStepsBasis: instant
+        ? "INSTANT: one build step, and no model turn for PLAN, REVIEWING or UAT_PREP"
+        : letter
+          ? `${letter}-effort item (${BUILDING_STEPS_BY_EFFORT[letter] ?? 2} plan steps assumed)${maxPlanSteps && BUILDING_STEPS_BY_EFFORT[letter] > maxPlanSteps ? `, capped at the ${maxPlanSteps}-step budget` : ""}${merged ? ", with DISCOVERY and PLAN merged into one turn" : ""}`
+          : `no effort recorded on the item — 2 plan steps assumed${merged ? ", with DISCOVERY and PLAN merged into one turn" : ""}`,
       excludesFixLoops: true,
       perFixLoop: { tokens: totalUsageTokens(fixLoopUsage), costUsd: pricing ? estimateCostUsd(fixLoopUsage, pricing) : null },
       // Reported from what each phase actually used, never from a proxy for it.
@@ -277,11 +304,39 @@ export function laneForTier(tier) {
   return LANE_BY_TIER[tier] || LANE_BY_TIER.standard;
 }
 
-const TIER_BY_LANE = Object.freeze({ FAST: "economy", STANDARD: "standard", DEEP: "premium" });
+// DLV-73: lane and tier were bijective until INSTANT, and `laneForTier` /
+// `tierForLane` were literal inverses of one table. They cannot be any more:
+// INSTANT and FAST are both `economy` (INSTANT reuses that tier wholesale — see
+// EFFORT_BY_TIER's DLV-57 note, whose reasoning about a `plan` phase that only
+// has to say "edit this line" describes INSTANT exactly), while `economy` still
+// recommends FAST by default. The two directions are now separate questions:
+// "what does this lane cost" (TIER_BY_LANE) and "what lane should we suggest"
+// (laneForRecommendation), and only the second one knows about triviality.
+const TIER_BY_LANE = Object.freeze({ INSTANT: "economy", FAST: "economy", STANDARD: "standard", DEEP: "premium" });
 
 /** Reverse of `laneForTier` — the tier a given (owner-selected) lane implies. */
 export function tierForLane(lane) {
   return TIER_BY_LANE[lane] || TIER_BY_LANE.STANDARD;
+}
+
+/**
+ * The lane the Flight-Check should pre-select.
+ *
+ * Complexity scoring alone can never suggest INSTANT: it maps a score to a tier,
+ * and INSTANT shares `economy` with FAST. What separates them is the triage
+ * predicate (`isTrivialLaunchCandidate`) — the same signal that used to *refuse*
+ * these items outright. Before DLV-73 a trivial item's only paths were "make the
+ * edit by hand" or type `LAUNCH ANYWAY` and pay FAST's full pipeline; INSTANT is
+ * the third answer, so the triage signal now routes instead of blocking.
+ *
+ * @param {{tier:string, trivial?:boolean, located?:boolean}} args
+ *   `located` — whether a single file is actually known (item-named or located).
+ *   INSTANT's whole shape assumes one known file; without one there is nothing
+ *   to merge DISCOVERY and PLAN around, so it is not offered.
+ */
+export function laneForRecommendation({ tier, trivial = false, located = false }) {
+  if (trivial && located && tier === "economy") return "INSTANT";
+  return laneForTier(tier);
 }
 
 /**
@@ -328,15 +383,30 @@ export function tierForLane(lane) {
  * @returns {{merged:boolean, reason:string}}
  */
 export function resolveMergedDiscoveryPlan({ lane, scopeHints = {}, config = null }) {
+  // DLV-73: on INSTANT the merge is unconditional, because the lane's launch
+  // precondition already *is* DLV-62's safety rail — INSTANT is only offered
+  // when exactly one file is known (named by the item or located deterministically
+  // at Flight-Check), so re-deriving single-file-ness here would just restate it.
+  if (lane === "INSTANT") {
+    const enabledInstant = !(config && config.pipeline && config.pipeline.mergeDiscoveryPlanAlwaysOnInstant === false);
+    if (!enabledInstant) return { merged: false, reason: "disabled in .delivery/config.json" };
+    return { merged: true, reason: "INSTANT always produces the spec and plan in one turn" };
+  }
   const enabled = !(config && config.pipeline && config.pipeline.mergeDiscoveryPlanOnFastSingleFile === false);
   if (!enabled) return { merged: false, reason: "disabled in .delivery/config.json" };
   if (lane !== "FAST") return { merged: false, reason: `lane is ${lane}, not FAST` };
-  if (scopeHints.scopeSource !== "item-paths") {
-    return { merged: false, reason: "the item names no explicit file paths, so its scope is not known to be single-file" };
+  // DLV-73 widens this from "item-paths" to any provably-single-file source. The
+  // rail was never about *who* named the file — it is that spec and plan cannot
+  // meaningfully diverge inside one known file. A deterministic locator hit is
+  // evidence of the same fact, and `isConfidentLocation` already refuses to set
+  // `scopeSource: "locator"` on an ambiguous result.
+  if (scopeHints.scopeSource !== "item-paths" && scopeHints.scopeSource !== "locator") {
+    return { merged: false, reason: "no explicit or located file path, so scope is not known to be single-file" };
   }
   const globs = scopeHints.globs || [];
-  if (globs.length !== 1) return { merged: false, reason: `the item names ${globs.length} paths, not exactly one` };
-  return { merged: true, reason: `FAST lane and the item names exactly one file (${globs[0]})` };
+  if (globs.length !== 1) return { merged: false, reason: `scope names ${globs.length} paths, not exactly one` };
+  const how = scopeHints.scopeSource === "locator" ? "the locator resolved" : "the item names";
+  return { merged: true, reason: `FAST lane and ${how} exactly one file (${globs[0]})` };
 }
 
 export function resolveLanePolicy(lane, config) {
@@ -369,7 +439,11 @@ export function assessRecommendationMismatch({
 }) {
   if (!recommendation) return [];
   const warnings = [];
-  const recommendedLane = laneForTier(recommendation.tier);
+  // DLV-73: prefer the lane the recommendation actually resolved. Re-deriving it
+  // from the tier alone would report "INSTANT differs from the recommended FAST"
+  // on a session the recommender itself had just recommended INSTANT for —
+  // economy maps to FAST by default, and only the recommender knows about triage.
+  const recommendedLane = recommendation.lane || laneForTier(recommendation.tier);
   if (
     selectedModelTier &&
     TIER_RANK[selectedModelTier] != null &&
@@ -518,12 +592,23 @@ function estUsageForTier(tier, history = []) {
  *   estTokens:number, estCostUsd:(number|null), phaseForecast:object,
  *   legacySessionEstimate:{estTokens:number, estCostUsd:(number|null)}}|null}
  */
-export function recommendAgentConfig({ item, capabilities = [], scopeHints = {}, provider, config, history = [] }) {
+export function recommendAgentConfig({
+  item,
+  capabilities = [],
+  scopeHints = {},
+  provider,
+  config,
+  history = [],
+  trivial = false,
+  located = false,
+}) {
   const { score, rationale } = scoreComplexity({ item, capabilities, scopeHints });
   const tier = tierForScore(score);
   const model = pickModelForTier(config, provider, tier);
   if (!model) return null;
 
+  const lane = laneForRecommendation({ tier, trivial, located });
+  const merged = resolveMergedDiscoveryPlan({ lane, scopeHints, config }).merged;
   const pricing = getModelPricing(config, provider, model);
 
   // DLV-56: the headline forecast is now the per-phase sum. The old per-session
@@ -538,6 +623,8 @@ export function recommendAgentConfig({ item, capabilities = [], scopeHints = {},
     maxPlanSteps: (config && config.budgets && config.budgets.maxPlanSteps) || null,
     history,
     pricing,
+    lane,
+    merged,
   });
   const legacyUsage = estUsageForTier(tier, history);
 
@@ -545,6 +632,7 @@ export function recommendAgentConfig({ item, capabilities = [], scopeHints = {},
     model,
     effortByPhase: effortForTier(tier),
     tier,
+    lane,
     rationale,
     estTokens: phaseForecast.estTokens,
     estCostUsd: phaseForecast.estCostUsd,

@@ -12,9 +12,73 @@ import { ArrowLeft, Coins, FileText, HelpCircle, MessageSquare } from "lucide-re
 import { formatUsd } from "@/features/pm-live/chartTheme";
 import { useBridgeLive, useFleet, useSessions } from "@/features/pm-live/store";
 import { useViewState, type SessionPane } from "@/features/pm-live/viewState";
-import type { SendCommand } from "@/features/pm-live/types";
+import type { SendCommand, SessionSnapshot } from "@/features/pm-live/types";
 import { SegmentedPanes, type PaneSpec } from "./SegmentedPanes";
 import { ArtifactsPane, ConversationPane, CostPane, QuestionsPane } from "./panes";
+import { useState } from "react";
+
+/**
+ * DLV-73 — the INSTANT lane's gate actions, on the phone.
+ *
+ * Mobile gate approval is deliberately INSTANT-only. The laptop-only rule exists
+ * because approving work you cannot actually read is not oversight, and on every
+ * other lane a phone screen genuinely cannot show you enough. INSTANT is the one
+ * lane whose launch precondition guarantees the opposite: one located file, and a
+ * diff bounded by `instantMaxDiffLines`. The bridge re-verifies the lane and the
+ * gate server-side (`requireInstantGate`), so this component is a convenience,
+ * never the control.
+ *
+ * The spec button approves spec AND plan together, because on INSTANT they are
+ * one artifact from one turn — approving only the spec would park the phone at a
+ * second gate showing what it just approved.
+ */
+function InstantGateBar({
+  session,
+  sendCommand,
+  canSend,
+}: {
+  session: SessionSnapshot;
+  sendCommand: SendCommand;
+  canSend: boolean;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const gate = session.awaiting?.gate;
+  if (session.lane !== "INSTANT" || (gate !== "spec" && gate !== "uat")) return null;
+
+  const run = async (type: "approve" | "accept") => {
+    setBusy(true);
+    setError(null);
+    const outcome = await sendCommand(type, { sessionId: session.sessionId });
+    if (!outcome.ok) setError(outcome.error || "failed");
+    setBusy(false);
+  };
+
+  return (
+    <div className="px-4 py-2.5 border-b" style={{ borderColor: "var(--pm-border)", backgroundColor: "var(--pm-surface)" }}>
+      <p className="text-[12px] font-semibold mb-1.5" style={{ color: "var(--pm-fg-2)" }}>
+        {gate === "spec" ? "WAITING ON YOU — SPEC + PLAN" : "WAITING ON YOU — ACCEPT THE CHANGE"}
+      </p>
+      <button
+        className="pm-btn w-full justify-center"
+        disabled={!canSend || busy}
+        onClick={() => run(gate === "spec" ? "approve" : "accept")}
+      >
+        {busy ? "Sending…" : gate === "spec" ? "Approve spec + plan" : "Accept"}
+      </button>
+      {gate === "spec" && (
+        <p className="text-[12px] mt-1.5" style={{ color: "var(--pm-fg-3)" }}>
+          Records both gate decisions. Request changes on the laptop.
+        </p>
+      )}
+      {error && (
+        <p className="text-[12.5px] mt-1.5" style={{ color: "var(--pm-warn)" }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 const STATE_STYLE: Record<string, { color: string; background: string }> = {
   BLOCKED: { color: "var(--pm-warn)", background: "var(--pm-warn-soft)" },
@@ -127,6 +191,7 @@ export function SessionDetailView({ sessionId, sendCommand }: { sessionId: strin
         ) : null}
       </header>
 
+      <InstantGateBar session={session} sendCommand={sendCommand} canSend={bridgeLive} />
       <SegmentedPanes panes={panes} active={pane} onChange={setPane} />
     </div>
   );
