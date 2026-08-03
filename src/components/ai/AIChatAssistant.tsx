@@ -128,6 +128,8 @@ export default function AIChatAssistant() {
     "/watch",
     "/era",
     "/today",
+    "/trips",
+    "/pm/",
   ];
   const isStandalonePage =
     mounted && standaloneRoutes.some((r) => pathname?.startsWith(r));
