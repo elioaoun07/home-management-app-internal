@@ -1,6 +1,9 @@
 import { scanLines } from "./md-scan.mjs";
 import { cleanInlineText } from "./text.mjs";
 
+/** The working-queue file — the only place Ship / Discard / the sweep operate. */
+export const isChecklistPath = (path) => /(?:^|\/)4\s*-\s*Checklist\.md$/i.test(String(path || ""));
+
 export function sectionRank(section) {
   return ({ now: 0, next: 1, later: 2 })[String(section || "").toLowerCase()] ?? 3;
 }

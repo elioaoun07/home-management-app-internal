@@ -40,6 +40,7 @@ import {
   stripNumPrefix,
   toggleCheckbox,
 } from "./pm/mutations.mjs";
+import { archiveItem, monthlySweep, restoreSnapshots } from "./pm/archive.mjs";
 import { hostAllowed } from "./pm/net.mjs";
 import { collectSources, readSourceFile, walk } from "./pm/scan.mjs";
 import { buildHtml, buildHtmlLegacy } from "./pm/ui.mjs";
@@ -273,8 +274,29 @@ function opAppend(b) {
   return { ok: true, raw: out };
 }
 
+// Ship / Discard: a checklist item leaves the queue and becomes a dated stamp
+// elsewhere (Master Book › Shipped Log, or _Archive/Cancelled Log.md). Both
+// return `undo` snapshots the client hands straight back to `restore`.
+const ARCHIVE_CTX = { pmDir: PM_DIR, repoRoot: ROOT, pmRelFromRoot: PM_REL.replace(/\\/g, "/") };
+
+function opShip(b) {
+  return archiveItem({ ...ARCHIVE_CTX, file: b.file, cbidx: b.cbidx, mode: "ship" });
+}
+function opDiscard(b) {
+  return archiveItem({ ...ARCHIVE_CTX, file: b.file, cbidx: b.cbidx, mode: "discard", reason: b.reason });
+}
+function opRestore(b) {
+  const snapshots = Array.isArray(b.snapshots) ? b.snapshots : [];
+  if (!snapshots.length) throw fail(400, "nothing to restore");
+  for (const snapshot of snapshots) resolveInside(PM_DIR, snapshot.path); // path-traversal guard
+  return restoreSnapshots(PM_DIR, snapshots);
+}
+
 const MUTATIONS = {
   toggle: opToggle,
+  ship: opShip,
+  discard: opDiscard,
+  restore: opRestore,
   move: opMove,
   rename: opRename,
   reorder: opReorder,
@@ -548,6 +570,22 @@ function listen(port, attemptsLeft) {
     else if (process.env.PM_BRIDGE === "1") console.log("[pm-bridge] disabled by --no-bridge");
     if (!noOpen) openBrowser(url);
   });
+}
+
+// Monthly checklist sweep (_Conventions §2): on the first boot of each calendar
+// month, every ticked `[x]` item is moved into its campaign's Shipped Log with
+// its git-derived completion date and deleted from the checklist. Guarded by a
+// stamp in `.pm/archive-stamp.json`, and reversible with `pnpm pm:archive --undo`.
+try {
+  const sweep = monthlySweep(ARCHIVE_CTX);
+  if (sweep?.swept.length) {
+    console.log(`Monthly sweep: archived ${sweep.swept.length} shipped item(s) into their Master Books.`);
+    for (const entry of sweep.swept) console.log("  " + entry.campaign + "  " + entry.stamp);
+    console.log("  Undo with: pnpm pm:archive --undo");
+  }
+  for (const error of sweep?.errors || []) console.error(`  ! sweep skipped ${error.campaign}: ${error.error}`);
+} catch (error) {
+  console.error("Monthly sweep failed (checklists untouched):", error.message);
 }
 
 listen(PORT, 10);

@@ -50,6 +50,10 @@ nul
 # Agentic Delivery Workspace — local session store (packet/state/events/artifacts), never committed
 /.delivery/
 
+# Monthly checklist-sweep state (last-run stamp + the undo snapshot for
+# `pnpm pm:archive --undo`) — machine-local, and the snapshot duplicates whole files.
+ERA Notes/10 - Project Management/.pm/
+
 # Generated read-only PM Command Center page (rebuilt from ERA Notes markdown by
 # `pnpm pm:public` / prebuild on every deploy) — large, churns; never committed.
 /public/pm.html

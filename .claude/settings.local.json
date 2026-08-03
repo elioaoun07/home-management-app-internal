@@ -206,7 +206,9 @@
       "Bash(jq -r '.hooks // {} | to_entries[] | .key as $e | .value[]? | \\($e + \" | matcher=\" + \\(.matcher // \"*\"\\) + \" | \" + \\(\\(.hooks//[]\\) | map\\(\\(.command // \"?\"\\) + \" \\(timeout=\" + \\(\\(.timeout // \"default\"\\)|tostring\\) + \"\\)\"\\) | join\\(\" ;; \"\\)\\)\\)' /c/Users/aoune/WebApp/budget-app/.claude/settings.json)",
       "Bash(jq -r '.projects[\"C:\\\\\\\\Users\\\\\\\\aoune\\\\\\\\WebApp\\\\\\\\budget-app\"] | keys | map\\(select\\(test\\(\"mcp|onnector\";\"i\"\\)\\)\\)' 'C:\\\\Users\\\\aoune/.claude.json')",
       "Bash(jq -r '.projects[\"C:\\\\\\\\Users\\\\\\\\aoune\\\\\\\\WebApp\\\\\\\\budget-app\"] | {mcpServers: \\(.mcpServers|keys?\\), disabledMcpServers, enabledMcpjsonServers, disabledMcpjsonServers}' 'C:\\\\Users\\\\aoune/.claude.json')",
-      "Bash(awk '/^## Pain Inventory/,/^## /' \"PM Tooling — Master Book.md\")"
+      "Bash(awk '/^## Pain Inventory/,/^## /' \"PM Tooling — Master Book.md\")",
+      "Bash(sort -t'R' -k2 -n)",
+      "Bash(awk '/^## Shipped Log/,/^## [^S]/' \"PM Tooling — Master Book.md\")"
     ]
   }
 }

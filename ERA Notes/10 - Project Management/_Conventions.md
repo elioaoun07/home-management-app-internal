@@ -1,6 +1,6 @@
 ---
 created: 2026-07-15
-updated: 2026-07-30
+updated: 2026-08-01
 type: reference
 status: living
 owner: Elio
@@ -76,7 +76,23 @@ Exactly one each, H2, this exact text, in this order:
 
 - **No headings inside a lane.** Any heading resets the board's section, so phase/round context is written as a **bold paragraph** (`**Phase 4 — foundational hardening** *(carried)*`) or a `> ⚠️ …` blockquote, never as `###`.
 - **Definition of Done** items use `**D1**, **D2**, …` (prefix-exempt; they stay off the board by design).
-- **No `## Done` lane.** Sweep instead: tick `[x]`; at the next touch, move the record to the campaign's **Master Book › Shipped Log** with a dated stamp (§3) and delete the checklist line. Git history + the Shipped Log are the archive.
+- **No `## Done` lane.** Sweep instead: tick `[x]`; the record moves to the campaign's **Master Book › Shipped Log** with a dated stamp (§3) and the checklist line is deleted. Git history + the Shipped Log are the archive. **The sweep is automated — see §2.1.**
+
+### 2.1 Sweep & discard (automated)
+
+Two ways an item leaves a checklist. Both are reversible.
+
+| Action | Where the item goes | How to trigger |
+|---|---|---|
+| **Ship** (item is `[x]`) | Master Book › **Shipped Log**, `- ✅ YYYY-MM-DD — **ID** text` (§3) | 🗄 icon on the checklist row / **Ship** on the task card · `pnpm pm:archive` · the monthly auto-sweep |
+| **Discard** (any state) | `_Archive/Cancelled Log.md`, under a `## <Campaign>` heading, `- ❌ YYYY-MM-DD — **ID** text _(cancelled: reason)_` | 🚫 icon on the checklist row / **Discard** on the task card |
+
+- **Monthly auto-sweep.** The first `pnpm pm` boot of each calendar month ships every ticked item in every `4 - Checklist.md`, then stamps `.pm/archive-stamp.json` (gitignored) so it runs once per month. The console prints what moved.
+- **Dates are git-derived, not "today".** Each swept line is binary-searched through the checklist's recent history for the commit where it first appears as `[x]`, so a monthly sweep doesn't flatten four weeks of work onto the 1st. Uncommitted ticks (and anything git can't answer) fall back to today.
+- **Definition of Done items are never swept.** `**D1**, **D2**, …` are acceptance criteria: ticking one records a fact about the campaign, so the sweep skips that lane entirely.
+- **Undo.** The dashboard shows an Undo toast that restores every touched file byte-for-byte (including deleting a Cancelled Log the first Discard created). For the CLI/auto sweep: `pnpm pm:archive --undo`. Preview first with `pnpm pm:archive --dry-run`.
+- **Cancelled work is invisible to tooling, not lost.** `_Archive/` is skipped by `scan.mjs`, so a discarded item leaves the board, the burndown and the linter — but stays readable, greppable, and one Undo (or one `git revert`) from coming back.
+- Engine: `scripts/pm/archive.mjs` (pure helpers + fs ops + CLI), server ops `ship` / `discard` / `restore` in `scripts/pm-server.mjs`, tests in `tests/pm-ui/archive.test.ts`.
 
 ---
 
@@ -140,6 +156,7 @@ The prefix table and `CAMPAIGNS` in `scripts/pm/lint.mjs` must agree. Renaming a
 
 - **`pnpm pm:lint`** — validates the ten checklists above: grammar, lanes, ID prefix + uniqueness, and that every `→` link resolves. Run it after editing any `4 - Checklist.md` (finish-task Gate E).
 - **`pnpm pm`** — the consolidated Task board / table. Every parseable item shows with ID / severity / effort chips, filterable (`m:Budget s:blocker is:open`), click-through to the exact doc line.
+- **`pnpm pm:archive`** — sweeps every ticked checklist item into its Master Book's Shipped Log (§2.1). `--dry-run` to preview, `--undo` to revert the last sweep. Runs automatically on the first `pnpm pm` boot of each month.
 - **`_Archive/` is never scanned by any PM tool.** The skip lives in `scripts/pm/scan.mjs`, so the server, the static build, the bridge and the linter all inherit it. Archived docs stay in git for history and `rg`, and are reachable by opening the file directly — they are simply not part of the corpus the tools see. Move a doc there when it is superseded rather than deleting it.
 - **Hidden layers** — any doc with frontmatter `status: superseded | baseline-frozen | template` is hidden from the board's default view (toggle "archived docs" to reveal). They are reference layers, not execution queues.
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "preact/hooks";
 import { scanCheckboxes } from "../../../shared/md-scan.mjs";
-import { allTasks, files, hideCompleted, postponed, runMutation, togglePostponed, toggleTask } from "../../app/store.js";
+import { isChecklistPath } from "../../../shared/tasks.mjs";
+import { allTasks, archiveTask, files, hideCompleted, postponed, runMutation, togglePostponed, toggleTask } from "../../app/store.js";
 import { parseRoute, route } from "../../app/router.js";
 import { matchesFilters, parseQuery } from "../search/queryLang.js";
 import { Chip, EmptyState, Modal } from "../../components/Primitives.jsx";
@@ -8,10 +9,13 @@ import { Icon } from "../../components/Icon.jsx";
 import { BoardToolbar } from "./BoardToolbar.jsx";
 import { boardHash, groupTasks, readBoardState, sortTasks } from "./boardState.js";
 
-const isChecklist = (path) => /(?:^|\/)4\s*-\s*Checklist\.md$/i.test(path);
+const isChecklist = isChecklistPath;
 
+// "Deliver" launches a delivery session (an agent doing the work); "Ship" and
+// "Discard" retire the item from the queue — see Markdown.jsx TaskItem.
 function TaskCard({ task }) {
-  return <article class="task-card"><div class="task-card-main"><button class={`checkbox ${task.state === "done" ? "checked" : ""}`} onClick={()=>toggleTask(task.file,task.cbidx)} disabled={globalThis.PM_MODE!=="server"}>{task.state==="done"?"✓":""}</button><div class="task-text">{task.text}</div></div><div class="task-meta">{task.idChip&&<Chip tone="id">{task.idChip}</Chip>}{task.severity&&<Chip tone={task.severity}>{task.severity}</Chip>}{task.effort&&<Chip>{task.effort}</Chip>}<Chip>{task.module}</Chip>{task.postponed&&<Chip>postponed</Chip>}</div><div class="task-actions"><a class="button ghost" href={`#/doc/${encodeURI(task.file)}?cb=${task.cbidx}`}>Open</a><button class="button ghost" onClick={()=>togglePostponed(task.key)}><Icon name="clock" size={14}/>{task.postponed?"Resume":"Postpone"}</button>{globalThis.PM_MODE==="server"&&<a class="button ghost" href={`#/delivery?file=${encodeURIComponent(task.file)}&cb=${task.cbidx}`}><Icon name="bolt" size={14}/>Deliver</a>}</div></article>;
+  const canArchive = globalThis.PM_MODE==="server" && isChecklist(task.file);
+  return <article class="task-card"><div class="task-card-main"><button class={`checkbox ${task.state === "done" ? "checked" : ""}`} onClick={()=>toggleTask(task.file,task.cbidx)} disabled={globalThis.PM_MODE!=="server"}>{task.state==="done"?"✓":""}</button><div class="task-text">{task.text}</div></div><div class="task-meta">{task.idChip&&<Chip tone="id">{task.idChip}</Chip>}{task.severity&&<Chip tone={task.severity}>{task.severity}</Chip>}{task.effort&&<Chip>{task.effort}</Chip>}<Chip>{task.module}</Chip>{task.postponed&&<Chip>postponed</Chip>}</div><div class="task-actions"><a class="button ghost" href={`#/doc/${encodeURI(task.file)}?cb=${task.cbidx}`}>Open</a><button class="button ghost" onClick={()=>togglePostponed(task.key)}><Icon name="clock" size={14}/>{task.postponed?"Resume":"Postpone"}</button>{globalThis.PM_MODE==="server"&&<a class="button ghost" href={`#/delivery?file=${encodeURIComponent(task.file)}&cb=${task.cbidx}`}><Icon name="bolt" size={14}/>Deliver</a>}{canArchive&&task.state==="done"&&<button class="button ghost ship" title="File into the Master Book's Shipped Log" onClick={()=>archiveTask(task.file,task.cbidx,"ship")}><Icon name="archive" size={14}/>Ship</button>}{canArchive&&<button class="button ghost discard" title="Archive as Cancelled" onClick={()=>archiveTask(task.file,task.cbidx,"discard")}><Icon name="ban" size={14}/>Discard</button>}</div></article>;
 }
 
 function QuickAdd({ module, lane, onClose }) {

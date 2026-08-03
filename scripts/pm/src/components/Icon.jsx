@@ -18,6 +18,8 @@ const paths = {
   eye: <><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/></>,
   "eye-off": <><path d="M3 3l18 18"/><path d="M10.6 6.2A9.9 9.9 0 0 1 12 6c6.4 0 10 6 10 6a17.6 17.6 0 0 1-3.4 3.9M6.2 7.9A17.4 17.4 0 0 0 2 12s3.6 6 10 6a9.8 9.8 0 0 0 3.4-.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></>,
   inbox: <><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M4.5 5h15l1.5 8v6H3v-6z"/></>,
+  archive: <><path d="M3 4h18v4H3z"/><path d="M5 8v12h14V8M10 12h4"/></>,
+  ban: <><circle cx="12" cy="12" r="9"/><path d="m6 6 12 12"/></>,
 };
 
 export function Icon({ name, size = 18, class: className = "" }) {

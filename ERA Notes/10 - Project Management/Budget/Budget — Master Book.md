@@ -95,6 +95,7 @@ Budget is the household's **money graph**. Today it is a strong *reactive* ledge
 - ✅ 2026-07-11 — `analytics/debug` route removed from the prod surface
 - ✅ 2026-07-18 — **BUD-12** deleted the remaining debug/diagnostic routes (`env-check`, `supabase-check` — the latter an unauthenticated `listUsers` probe); zero callers verified, typecheck green
 - ✅ 2026-07-21 — **BUD-13** household transfers authorize a visible private partner account only as the destination of an explicit household transfer; ordinary partner writes stay public-only (`src/lib/accountAccess.test.ts`)
+- ✅ 2026-08-01 — **BUD-14** [TEST] Mobile expense form quick-amount chip: replace the $25 preset with $20 → `src/components/expense/MobileExpenseForm.tsx:1144`
 
 ## Delivery session log
 

@@ -1,6 +1,8 @@
 import { resolveRelativeMd } from "../../../shared/links.mjs";
-import { hideCompleted, toggleTask, sourcePreview } from "../../app/store.js";
+import { isChecklistPath } from "../../../shared/tasks.mjs";
+import { archiveTask, hideCompleted, toggleTask, sourcePreview } from "../../app/store.js";
 import { parseMarkdown } from "../../lib/md-parse.js";
+import { Icon } from "../../components/Icon.jsx";
 
 const tokenRe = /(\[([^\]]+)\]\((<[^>]+>|[^)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|~~([^~]+)~~|_([^_]+)_)/g;
 
@@ -36,11 +38,23 @@ export function Markdown({ raw, file }) {
   })}</div>;
 }
 
+/**
+ * A checklist row. Beyond the checkbox (which only records state) it carries the
+ * two actions that take the item *out* of the queue: Ship writes a dated stamp
+ * into the campaign's Shipped Log, Discard writes one into the Cancelled Log —
+ * both delete the line here, both undoable from the toast. Ship needs a ticked
+ * box (the server rejects `not-done`), so it only appears once the row is done.
+ */
 function TaskItem({ item, file }) {
   const done = item.checkbox.state === "done";
+  const canArchive = globalThis.PM_MODE === "server" && isChecklistPath(file);
   return <li class={`md-task ${item.checkbox.state}`} data-cbidx={item.checkbox.cbidx} style={{marginLeft:item.indent}}>
     <button class={`checkbox ${done ? "checked" : ""}`} onClick={() => toggleTask(file, item.checkbox.cbidx)} disabled={globalThis.PM_MODE !== "server"} aria-label={done ? "Reopen task" : "Complete task"}>{done ? "✓" : ""}</button>
     <Inline text={item.text} file={file}/>
+    {canArchive && <span class="md-task-actions">
+      {done && <button class="icon-button ship" title="Ship — file into the Master Book's Shipped Log and clear the line" aria-label="Ship task" onClick={() => archiveTask(file, item.checkbox.cbidx, "ship")}><Icon name="archive" size={15}/></button>}
+      <button class="icon-button discard" title="Discard — archive as Cancelled and clear the line" aria-label="Discard task" onClick={() => archiveTask(file, item.checkbox.cbidx, "discard")}><Icon name="ban" size={15}/></button>
+    </span>}
   </li>;
 }
 

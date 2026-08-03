@@ -106,11 +106,24 @@ export async function toggleTask(relPath, cbidx, { quiet = false } = {}) {
   }
 }
 
+/**
+ * Ship (`[x]` → Master Book Shipped Log) or Discard (→ _Archive/Cancelled Log.md)
+ * a checklist item. Both delete the checklist line, so both hand the server's
+ * file snapshots back to `restore` as the Undo action — a mis-click is one tap
+ * from being fully reverted, including the Cancelled Log the first Discard created.
+ */
+export async function archiveTask(relPath, cbidx, mode, reason) {
+  const label = mode === "ship" ? "Shipped" : "Discarded";
+  return runMutation(mode, { file: relPath, cbidx, reason }, (result) => `${label} — ${result.idChip || "item"} → ${result.target.split("/").pop().replace(/\.md$/, "")}`,
+    (result) => runMutation("restore", { snapshots: result.undo }, "Restored"));
+}
+
 export async function runMutation(op, body, success, undo = null) {
   if (offlineSnapshot.value) { showToast("Viewing an offline snapshot — reconnect to your laptop to make changes.", { type: "error" }); throw new Error("offline"); }
   try {
     const result = await apiPost(op, body); await reloadData();
-    showToast(success, undo ? { action: { label: "Undo", run: () => undo(result) } } : {}); return result;
+    showToast(typeof success === "function" ? success(result) : success,
+      undo ? { action: { label: "Undo", run: () => undo(result) } } : {}); return result;
   } catch (error) { showToast(error.message, { type: "error" }); throw error; }
 }
 
