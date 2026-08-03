@@ -9,6 +9,8 @@ export const tripKeys = {
 
   places: (tripId: string) => [...tripKeys.all, "places", tripId] as const,
   packing: (tripId: string) => [...tripKeys.all, "packing", tripId] as const,
+  documents: (tripId: string) => [...tripKeys.all, "documents", tripId] as const,
+  documentUrls: (paths: string[]) => [...tripKeys.all, "document-urls", paths] as const,
 
   templates: () => [...tripKeys.all, "templates"] as const,
 };

@@ -76,6 +76,11 @@ export function TripActivateSheet({ open, onOpenChange, trip }: TripActivateShee
             </div>
           )}
 
+          <div className="flex items-start gap-2 text-amber-400 text-sm bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <p>This cascade has not been verified end-to-end yet. It will make real changes across your schedule, chores and meal plans. Consider using the trip as a planner until that verification is done.</p>
+          </div>
+
           <div className="space-y-2">
             <p className={cn("text-xs font-medium uppercase tracking-wider", tc.textFaint)}>What will happen</p>
             <ul className="space-y-2">

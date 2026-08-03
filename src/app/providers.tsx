@@ -37,6 +37,10 @@ const STABLE_KEYS = new Set([
   // Household allergen feed — tiny payload; persisted so recipe allergen
   // warnings still render offline after an app restart.
   "household-allergens",
+  // Trip data (detail/places/packing/documents) — small payload (one trip's
+  // worth of rows), persisted so the itinerary, packing list and document
+  // list still render on a cold start with no signal while travelling.
+  "trips",
 ]);
 
 /**

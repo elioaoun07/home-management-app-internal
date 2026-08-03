@@ -11,7 +11,7 @@ const MAX_PAYLOAD_SIZE = 64 * 1024; // 64KB
 
 export interface OfflineOperation {
   id: string;
-  feature: "transaction" | "item" | "hub-message" | "subtask" | "recurring";
+  feature: "transaction" | "item" | "hub-message" | "subtask" | "recurring" | "trip";
   operation:
     | "create"
     | "update"

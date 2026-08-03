@@ -1,6 +1,6 @@
 ---
 created: 2026-06-20
-updated: 2026-07-15
+updated: 2026-08-03
 type: checklist
 status: active
 owner: Elio
@@ -18,6 +18,7 @@ tags:
 >
 > **Legend:** Sev blocker / friction / annoyance / parked. Effort S / M / L.
 > **ID migration (2026-07-15):** N1–N3→TRIP-1–TRIP-3, X1→TRIP-4, L1–L5→TRIP-5–TRIP-9.
+> **2026-08-03 note:** TRIP-1/2/3 (the gate) are untouched by this session's planner-mode work on purpose — see [Trips / Overview](<../../03 - Junction Modules/Trips/Overview.md>)'s new Planner vs Live split. TRIP-10/11 below are new, standalone, ungated.
 
 ---
 
@@ -38,6 +39,8 @@ tags:
 - [ ] **TRIP-7** Cascade visibility surfaced from the Schedule / Meal / Chores side. _(annoyance - M)_
 - [ ] **TRIP-8** Richer template library (weekend / abroad / business) with cascade prefs. _(parked - M)_
 - [ ] **TRIP-9** Trips → ERA re-entry briefing ("you're back tomorrow — N items resume"). _(annoyance - M)_
+- [ ] **TRIP-10** Catalogue/inventory picker for packing items — `inventory_item_id`/`catalogue_item_id` are accepted by `POST/PATCH .../packing` and typed, but no UI sets them. _(annoyance - M)_
+- [ ] **TRIP-11** Replace Overview's "Planned spend" placeholder (sums `trip_places.cost` only) with the trip account's real balance/transactions once actuals matter. _(annoyance - M)_
 
 ## Definition of Done
 

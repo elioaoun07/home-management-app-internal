@@ -572,20 +572,6 @@ CREATE TABLE public.push_subscriptions (
   CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id),
   CONSTRAINT push_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-CREATE TABLE public.google_calendar_connections (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  refresh_token text NOT NULL,
-  google_calendar_id text NOT NULL,
-  sync_enabled boolean NOT NULL DEFAULT true,
-  last_synced_at timestamp with time zone,
-  sync_error text,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT google_calendar_connections_pkey PRIMARY KEY (id),
-  CONSTRAINT google_calendar_connections_user_id_key UNIQUE (user_id),
-  CONSTRAINT google_calendar_connections_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
-);
 CREATE TABLE public.item_occurrence_actions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   item_id uuid NOT NULL,
@@ -862,7 +848,7 @@ CREATE TABLE public.account_balance_history (
   previous_balance numeric NOT NULL DEFAULT 0,
   new_balance numeric NOT NULL,
   change_amount numeric NOT NULL,
-  change_type text NOT NULL CHECK (change_type = ANY (ARRAY['initial_set'::text, 'manual_set'::text, 'manual_adjustment'::text, 'transfer_in'::text, 'transfer_out'::text, 'transfer_updated'::text, 'transfer_deleted'::text, 'transaction_expense'::text, 'transaction_income'::text, 'transaction_deleted'::text, 'split_bill_paid'::text, 'split_bill_received'::text, 'draft_confirmed'::text, 'correction'::text, 'transaction'::text, 'transfer'::text, 'split_bill'::text, 'future_payment'::text, 'debt_settled'::text, 'statement_import'::text, 'auto_reconciliation'::text])),
+  change_type text NOT NULL CHECK (change_type = ANY (ARRAY['initial_set'::text, 'manual_set'::text, 'manual_adjustment'::text, 'transfer_in'::text, 'transfer_out'::text, 'transaction_expense'::text, 'transaction_income'::text, 'transaction_deleted'::text, 'split_bill_paid'::text, 'split_bill_received'::text, 'draft_confirmed'::text, 'correction'::text, 'transaction'::text, 'transfer'::text, 'split_bill'::text, 'future_payment'::text, 'debt_settled'::text, 'auto_reconciliation'::text])),
   transaction_id uuid,
   transfer_id uuid,
   reason text,
@@ -1329,10 +1315,10 @@ CREATE TABLE public.ai_budget_suggestions (
   suggestions jsonb NOT NULL DEFAULT '[]'::jsonb,
   wallet_balance_used numeric NOT NULL DEFAULT 0,
   total_suggested numeric NOT NULL DEFAULT 0,
-  summary text,
-  generation_method text CHECK (generation_method IS NULL OR generation_method = ANY (ARRAY['ai'::text, 'estimate'::text])),
-  excluded_outlier_count integer NOT NULL DEFAULT 0,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
+  summary text,
+  generation_method text CHECK (generation_method IS NULL OR (generation_method = ANY (ARRAY['ai'::text, 'estimate'::text]))),
+  excluded_outlier_count integer NOT NULL DEFAULT 0,
   CONSTRAINT ai_budget_suggestions_pkey PRIMARY KEY (id),
   CONSTRAINT ai_budget_suggestions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -1433,6 +1419,7 @@ CREATE TABLE public.trips (
   completed_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  custom_packing_categories jsonb NOT NULL DEFAULT '[]'::jsonb,
   CONSTRAINT trips_pkey PRIMARY KEY (id),
   CONSTRAINT trips_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT trips_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
@@ -1454,6 +1441,9 @@ CREATE TABLE public.trip_places (
   position integer NOT NULL DEFAULT 0,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  confirmation_code text,
+  address text,
+  end_time time without time zone,
   CONSTRAINT trip_places_pkey PRIMARY KEY (id),
   CONSTRAINT trip_places_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT trip_places_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
@@ -1472,7 +1462,9 @@ CREATE TABLE public.trip_packing_items (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   packed_quantity integer NOT NULL DEFAULT 0,
+  assigned_to uuid,
   CONSTRAINT trip_packing_items_pkey PRIMARY KEY (id),
+  CONSTRAINT trip_packing_items_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES auth.users(id),
   CONSTRAINT trip_packing_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT trip_packing_items_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
 );
@@ -1489,145 +1481,6 @@ CREATE TABLE public.trip_side_effects (
   CONSTRAINT trip_side_effects_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT trip_side_effects_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
 );
-
--- =============================================================================
--- ROW LEVEL SECURITY
--- Captured from live Supabase 2026-06-06 via pg_policies query.
--- =============================================================================
-
-ALTER TABLE public.event_details ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.item_alerts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.item_recurrence_rules ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.item_subtasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.reminder_details ENABLE ROW LEVEL SECURITY;
-
--- items policies
-CREATE POLICY items_insert ON public.items AS PERMISSIVE FOR INSERT WITH CHECK ((user_id = auth.uid()));
-CREATE POLICY items_select ON public.items AS PERMISSIVE FOR SELECT USING (((user_id = auth.uid()) OR (responsible_user_id = auth.uid()) OR ((is_public = true) AND (EXISTS ( SELECT 1 FROM household_links WHERE ((household_links.active = true) AND (((household_links.owner_user_id = auth.uid()) AND (household_links.partner_user_id = items.user_id)) OR ((household_links.partner_user_id = auth.uid()) AND (household_links.owner_user_id = items.user_id)))))))));
-CREATE POLICY items_update ON public.items AS PERMISSIVE FOR UPDATE USING (((user_id = auth.uid()) OR (responsible_user_id = auth.uid()) OR ((is_public = true) AND (EXISTS ( SELECT 1 FROM household_links WHERE ((household_links.active = true) AND (((household_links.owner_user_id = auth.uid()) AND (household_links.partner_user_id = items.user_id)) OR ((household_links.partner_user_id = auth.uid()) AND (household_links.owner_user_id = items.user_id)))))))));
-CREATE POLICY items_delete ON public.items AS PERMISSIVE FOR DELETE USING (((user_id = auth.uid()) OR ((is_public = true) AND (EXISTS ( SELECT 1 FROM household_links WHERE ((household_links.active = true) AND (((household_links.owner_user_id = auth.uid()) AND (household_links.partner_user_id = items.user_id)) OR ((household_links.partner_user_id = auth.uid()) AND (household_links.owner_user_id = items.user_id)))))))));
-
--- child table policies (via_parent = household-aware: user_id OR responsible_user_id OR is_public+partner)
-CREATE POLICY event_details_via_parent ON public.event_details AS PERMISSIVE FOR ALL USING ((EXISTS ( SELECT 1 FROM items i WHERE ((i.id = event_details.item_id) AND ((i.user_id = ( SELECT auth.uid() AS uid)) OR (i.responsible_user_id = ( SELECT auth.uid() AS uid)) OR ((i.is_public = true) AND (EXISTS ( SELECT 1 FROM household_links hl WHERE ((hl.active = true) AND (((hl.owner_user_id = ( SELECT auth.uid() AS uid)) AND (hl.partner_user_id = i.user_id)) OR ((hl.partner_user_id = ( SELECT auth.uid() AS uid)) AND (hl.owner_user_id = i.user_id))))))))))));
-CREATE POLICY item_alerts_via_parent ON public.item_alerts AS PERMISSIVE FOR ALL USING ((EXISTS ( SELECT 1 FROM items i WHERE ((i.id = item_alerts.item_id) AND ((i.user_id = ( SELECT auth.uid() AS uid)) OR (i.responsible_user_id = ( SELECT auth.uid() AS uid)) OR ((i.is_public = true) AND (EXISTS ( SELECT 1 FROM household_links hl WHERE ((hl.active = true) AND (((hl.owner_user_id = ( SELECT auth.uid() AS uid)) AND (hl.partner_user_id = i.user_id)) OR ((hl.partner_user_id = ( SELECT auth.uid() AS uid)) AND (hl.owner_user_id = i.user_id))))))))))));
-CREATE POLICY item_recurrence_rules_via_parent ON public.item_recurrence_rules AS PERMISSIVE FOR ALL USING ((EXISTS ( SELECT 1 FROM items i WHERE ((i.id = item_recurrence_rules.item_id) AND ((i.user_id = ( SELECT auth.uid() AS uid)) OR (i.responsible_user_id = ( SELECT auth.uid() AS uid)) OR ((i.is_public = true) AND (EXISTS ( SELECT 1 FROM household_links hl WHERE ((hl.active = true) AND (((hl.owner_user_id = ( SELECT auth.uid() AS uid)) AND (hl.partner_user_id = i.user_id)) OR ((hl.partner_user_id = ( SELECT auth.uid() AS uid)) AND (hl.owner_user_id = i.user_id))))))))))));
-CREATE POLICY item_subtasks_via_parent ON public.item_subtasks AS PERMISSIVE FOR ALL USING ((EXISTS ( SELECT 1 FROM items i WHERE ((i.id = item_subtasks.parent_item_id) AND ((i.user_id = ( SELECT auth.uid() AS uid)) OR (i.responsible_user_id = ( SELECT auth.uid() AS uid)) OR ((i.is_public = true) AND (EXISTS ( SELECT 1 FROM household_links hl WHERE ((hl.active = true) AND (((hl.owner_user_id = ( SELECT auth.uid() AS uid)) AND (hl.partner_user_id = i.user_id)) OR ((hl.partner_user_id = ( SELECT auth.uid() AS uid)) AND (hl.owner_user_id = i.user_id))))))))))));
-CREATE POLICY reminder_details_via_parent ON public.reminder_details AS PERMISSIVE FOR ALL USING ((EXISTS ( SELECT 1 FROM items i WHERE ((i.id = reminder_details.item_id) AND ((i.user_id = ( SELECT auth.uid() AS uid)) OR (i.responsible_user_id = ( SELECT auth.uid() AS uid)) OR ((i.is_public = true) AND (EXISTS ( SELECT 1 FROM household_links hl WHERE ((hl.active = true) AND (((hl.owner_user_id = ( SELECT auth.uid() AS uid)) AND (hl.partner_user_id = i.user_id)) OR ((hl.partner_user_id = ( SELECT auth.uid() AS uid)) AND (hl.owner_user_id = i.user_id))))))))))));
-
--- =============================================================================
--- FUNCTIONS
--- Captured from live Supabase 2026-06-06 via pg_get_functiondef query.
--- =============================================================================
-
--- get_schedule_bundle: include_drafts param added 2026-06-16, see
--- migrations/2026-06-16_draft-item-status.sql (old 1-arg overload dropped).
-CREATE OR REPLACE FUNCTION public.get_schedule_bundle(
-  include_archived boolean DEFAULT false,
-  include_drafts boolean DEFAULT false
-)
- RETURNS jsonb
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
- SET search_path TO 'public', 'pg_temp'
-AS $function$
-DECLARE
-  uid uuid := auth.uid();
-  partner_id uuid;
-  result jsonb;
-BEGIN
-  IF uid IS NULL THEN
-    RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
-  END IF;
-
-  -- Resolve active household partner (if any)
-  SELECT CASE
-           WHEN owner_user_id = uid THEN partner_user_id
-           ELSE owner_user_id
-         END
-    INTO partner_id
-    FROM public.household_links
-   WHERE active = true
-     AND (owner_user_id = uid OR partner_user_id = uid)
-   ORDER BY created_at DESC
-   LIMIT 1;
-
-  WITH visible_items AS (
-    SELECT i.*
-      FROM public.items i
-     WHERE i.deleted_at IS NULL
-       AND (include_archived OR i.archived_at IS NULL)
-       AND (include_drafts OR i.status IS DISTINCT FROM 'draft')
-       AND (
-            i.user_id = uid
-         OR (partner_id IS NOT NULL AND i.user_id = partner_id AND i.is_public = true)
-       )
-  ),
-  rd AS (
-    SELECT r.*
-      FROM public.reminder_details r
-      JOIN visible_items v ON v.id = r.item_id
-  ),
-  ed AS (
-    SELECT e.*
-      FROM public.event_details e
-      JOIN visible_items v ON v.id = e.item_id
-  ),
-  sub AS (
-    SELECT s.*
-      FROM public.item_subtasks s
-      JOIN visible_items v ON v.id = s.parent_item_id
-  ),
-  al AS (
-    SELECT a.*
-      FROM public.item_alerts a
-      JOIN visible_items v ON v.id = a.item_id
-  ),
-  rr AS (
-    SELECT r.*,
-           COALESCE(
-             (SELECT jsonb_agg(to_jsonb(ex))
-                FROM public.item_recurrence_exceptions ex
-               WHERE ex.rule_id = r.id),
-             '[]'::jsonb
-           ) AS exceptions
-      FROM public.item_recurrence_rules r
-      JOIN visible_items v ON v.id = r.item_id
-  ),
-  rp AS (
-    SELECT p.*
-      FROM public.recurrence_pauses p
-      JOIN visible_items v ON v.id = p.item_id
-  )
-  SELECT jsonb_build_object(
-    'partner_id', partner_id,
-    'items', COALESCE((
-      SELECT jsonb_agg(
-        to_jsonb(v)
-        || jsonb_build_object(
-             'reminder_details', (SELECT to_jsonb(rd.*) FROM rd WHERE rd.item_id = v.id LIMIT 1),
-             'event_details',    (SELECT to_jsonb(ed.*) FROM ed WHERE ed.item_id = v.id LIMIT 1),
-             'subtasks',         COALESCE((SELECT jsonb_agg(to_jsonb(sub.*)) FROM sub WHERE sub.parent_item_id = v.id), '[]'::jsonb),
-             'alerts',           COALESCE((SELECT jsonb_agg(to_jsonb(al.*))  FROM al  WHERE al.item_id = v.id),        '[]'::jsonb),
-             'pauses',           COALESCE((SELECT jsonb_agg(to_jsonb(rp.*))  FROM rp  WHERE rp.item_id = v.id),        '[]'::jsonb),
-             'recurrence_rule',  (SELECT to_jsonb(rr.*) FROM rr WHERE rr.item_id = v.id LIMIT 1)
-           )
-        ORDER BY v.created_at DESC
-      )
-      FROM visible_items v
-    ), '[]'::jsonb)
-  )
-  INTO result;
-
-  RETURN result;
-END;
-$function$;
-
--- ============================================
--- Plan My Day! (added 2026-06-16, see migrations/2026-06-16_plan-my-day.sql)
--- Merged into /reminders; checkpoints -> checklist (added 2026-06-17, see
--- migrations/2026-06-17_day-plan-checklist.sql)
--- ============================================
 CREATE TABLE public.day_plans (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -1640,30 +1493,28 @@ CREATE TABLE public.day_plans (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT day_plans_pkey PRIMARY KEY (id),
-  CONSTRAINT day_plans_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT day_plans_user_id_plan_date_key UNIQUE (user_id, plan_date)
+  CONSTRAINT day_plans_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-CREATE INDEX day_plans_user_date_idx ON public.day_plans USING btree (user_id, plan_date);
-
-ALTER TABLE public.day_plans ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY day_plans_select ON public.day_plans AS PERMISSIVE FOR SELECT USING (((user_id = auth.uid()) OR ((is_public = true) AND (EXISTS ( SELECT 1 FROM household_links WHERE ((household_links.active = true) AND (((household_links.owner_user_id = auth.uid()) AND (household_links.partner_user_id = day_plans.user_id)) OR ((household_links.partner_user_id = auth.uid()) AND (household_links.owner_user_id = day_plans.user_id)))))))));
-CREATE POLICY day_plans_insert ON public.day_plans AS PERMISSIVE FOR INSERT WITH CHECK ((user_id = auth.uid()));
-CREATE POLICY day_plans_update ON public.day_plans AS PERMISSIVE FOR UPDATE USING ((user_id = auth.uid()));
-CREATE POLICY day_plans_delete ON public.day_plans AS PERMISSIVE FOR DELETE USING ((user_id = auth.uid()));
-
--- ── Healthcare module (Phase 1: 2026-07-17_healthcare-core.sql) ─────────────
--- Owner-only RLS on all four tables (managing_user_id = auth.uid()); household
--- visibility is resolved inside SECURITY DEFINER RPCs get_health_bundle() /
--- get_household_allergens() (not captured here — schema.sql is tables-only).
-
+CREATE TABLE public.google_calendar_connections (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL UNIQUE,
+  refresh_token text NOT NULL,
+  google_calendar_id text NOT NULL,
+  sync_enabled boolean NOT NULL DEFAULT true,
+  last_synced_at timestamp with time zone,
+  sync_error text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT google_calendar_connections_pkey PRIMARY KEY (id),
+  CONSTRAINT google_calendar_connections_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.health_profiles (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   managing_user_id uuid NOT NULL,
   user_id uuid,
   name text NOT NULL,
   date_of_birth date,
-  blood_type text,
+  blood_type text CHECK (blood_type IS NULL OR (blood_type = ANY (ARRAY['A+'::text, 'A-'::text, 'B+'::text, 'B-'::text, 'AB+'::text, 'AB-'::text, 'O+'::text, 'O-'::text]))),
   notes text,
   shared_with_household boolean NOT NULL DEFAULT false,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -1671,51 +1522,39 @@ CREATE TABLE public.health_profiles (
   deleted_at timestamp with time zone,
   CONSTRAINT health_profiles_pkey PRIMARY KEY (id),
   CONSTRAINT health_profiles_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id),
-  CONSTRAINT health_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT health_profiles_blood_type_check CHECK (blood_type IS NULL OR blood_type IN ('A+','A-','B+','B-','AB+','AB-','O+','O-'))
+  CONSTRAINT health_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-CREATE INDEX health_profiles_managing_user_id_idx ON public.health_profiles USING btree (managing_user_id);
-
 CREATE TABLE public.health_allergies (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   profile_id uuid NOT NULL,
   managing_user_id uuid NOT NULL,
   allergen text NOT NULL,
-  severity text NOT NULL DEFAULT 'moderate',
+  severity text NOT NULL DEFAULT 'moderate'::text CHECK (severity = ANY (ARRAY['mild'::text, 'moderate'::text, 'severe'::text, 'anaphylaxis'::text])),
   reaction_notes text,
-  keywords text[] NOT NULL DEFAULT '{}',
+  keywords ARRAY NOT NULL DEFAULT '{}'::text[],
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT health_allergies_pkey PRIMARY KEY (id),
-  CONSTRAINT health_allergies_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.health_profiles(id) ON DELETE CASCADE,
-  CONSTRAINT health_allergies_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id),
-  CONSTRAINT health_allergies_severity_check CHECK (severity IN ('mild','moderate','severe','anaphylaxis'))
+  CONSTRAINT health_allergies_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.health_profiles(id),
+  CONSTRAINT health_allergies_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id)
 );
-CREATE INDEX health_allergies_profile_id_idx ON public.health_allergies USING btree (profile_id);
-CREATE INDEX health_allergies_managing_user_id_idx ON public.health_allergies USING btree (managing_user_id);
-
 CREATE TABLE public.health_conditions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   profile_id uuid NOT NULL,
   managing_user_id uuid NOT NULL,
-  kind text NOT NULL DEFAULT 'condition',
+  kind text NOT NULL DEFAULT 'condition'::text CHECK (kind = ANY (ARRAY['condition'::text, 'surgery'::text, 'doctor_visit'::text])),
   title text NOT NULL,
   notes text,
   occurred_on date,
-  status text NOT NULL DEFAULT 'active',
+  status text NOT NULL DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'resolved'::text])),
   catalogue_item_id uuid,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT health_conditions_pkey PRIMARY KEY (id),
-  CONSTRAINT health_conditions_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.health_profiles(id) ON DELETE CASCADE,
+  CONSTRAINT health_conditions_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.health_profiles(id),
   CONSTRAINT health_conditions_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id),
-  CONSTRAINT health_conditions_catalogue_item_id_fkey FOREIGN KEY (catalogue_item_id) REFERENCES public.catalogue_items(id) ON DELETE SET NULL,
-  CONSTRAINT health_conditions_kind_check CHECK (kind IN ('condition','surgery','doctor_visit')),
-  CONSTRAINT health_conditions_status_check CHECK (status IN ('active','resolved'))
+  CONSTRAINT health_conditions_catalogue_item_id_fkey FOREIGN KEY (catalogue_item_id) REFERENCES public.catalogue_items(id)
 );
-CREATE INDEX health_conditions_profile_id_idx ON public.health_conditions USING btree (profile_id);
-CREATE INDEX health_conditions_managing_user_id_idx ON public.health_conditions USING btree (managing_user_id);
-
 CREATE TABLE public.health_vaccines (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   profile_id uuid NOT NULL,
@@ -1731,25 +1570,10 @@ CREATE TABLE public.health_vaccines (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT health_vaccines_pkey PRIMARY KEY (id),
-  CONSTRAINT health_vaccines_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.health_profiles(id) ON DELETE CASCADE,
   CONSTRAINT health_vaccines_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id),
-  CONSTRAINT health_vaccines_catalogue_item_id_fkey FOREIGN KEY (catalogue_item_id) REFERENCES public.catalogue_items(id) ON DELETE SET NULL
+  CONSTRAINT health_vaccines_catalogue_item_id_fkey FOREIGN KEY (catalogue_item_id) REFERENCES public.catalogue_items(id),
+  CONSTRAINT health_vaccines_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.health_profiles(id)
 );
-CREATE INDEX health_vaccines_profile_id_idx ON public.health_vaccines USING btree (profile_id);
-CREATE INDEX health_vaccines_managing_user_id_idx ON public.health_vaccines USING btree (managing_user_id);
-
-ALTER TABLE public.health_profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.health_allergies ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.health_conditions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.health_vaccines ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY health_profiles_owner_all ON public.health_profiles AS PERMISSIVE FOR ALL USING ((managing_user_id = auth.uid())) WITH CHECK ((managing_user_id = auth.uid()));
-CREATE POLICY health_allergies_owner_all ON public.health_allergies AS PERMISSIVE FOR ALL USING ((managing_user_id = auth.uid())) WITH CHECK ((managing_user_id = auth.uid()));
-CREATE POLICY health_conditions_owner_all ON public.health_conditions AS PERMISSIVE FOR ALL USING ((managing_user_id = auth.uid())) WITH CHECK ((managing_user_id = auth.uid()));
-CREATE POLICY health_vaccines_owner_all ON public.health_vaccines AS PERMISSIVE FOR ALL USING ((managing_user_id = auth.uid())) WITH CHECK ((managing_user_id = auth.uid()));
-
--- ── Outfits / Wardrobe (personal per user — NO household sharing by locked design D4) ──
-
 CREATE TABLE public.wardrobe_profiles (
   user_id uuid NOT NULL,
   height_cm numeric,
@@ -1760,19 +1584,18 @@ CREATE TABLE public.wardrobe_profiles (
   CONSTRAINT wardrobe_profiles_pkey PRIMARY KEY (user_id),
   CONSTRAINT wardrobe_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
 CREATE TABLE public.wardrobe_items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
   name text NOT NULL,
-  slot text NOT NULL CHECK (slot IN ('top','bottom','shoes','outerwear','accessory','headwear')),
+  slot text NOT NULL CHECK (slot = ANY (ARRAY['top'::text, 'bottom'::text, 'shoes'::text, 'outerwear'::text, 'accessory'::text, 'headwear'::text])),
   subcategory text,
-  colors text[] NOT NULL DEFAULT '{}',
+  colors ARRAY NOT NULL DEFAULT '{}'::text[],
   brand text,
   size text,
-  season text[] NOT NULL DEFAULT '{}',
-  formality text CHECK (formality IN ('casual','smart-casual','business','formal','athletic') OR formality IS NULL),
-  style_tags text[] NOT NULL DEFAULT '{}',
+  season ARRAY NOT NULL DEFAULT '{}'::text[],
+  formality text CHECK ((formality = ANY (ARRAY['casual'::text, 'smart-casual'::text, 'business'::text, 'formal'::text, 'athletic'::text])) OR formality IS NULL),
+  style_tags ARRAY NOT NULL DEFAULT '{}'::text[],
   image_path text,
   cutout_path text,
   fit_note text,
@@ -1786,8 +1609,6 @@ CREATE TABLE public.wardrobe_items (
   CONSTRAINT wardrobe_items_pkey PRIMARY KEY (id),
   CONSTRAINT wardrobe_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-CREATE INDEX wardrobe_items_user_slot_idx ON public.wardrobe_items USING btree (user_id, slot) WHERE archived_at IS NULL;
-
 CREATE TABLE public.outfits (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -1802,38 +1623,17 @@ CREATE TABLE public.outfits (
   CONSTRAINT outfits_pkey PRIMARY KEY (id),
   CONSTRAINT outfits_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
 CREATE TABLE public.outfit_items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,  -- denormalized from outfits for flat RLS (Hard Rule 20); server sets it on insert
+  user_id uuid NOT NULL,
   outfit_id uuid NOT NULL,
   item_id uuid NOT NULL,
-  slot text NOT NULL CHECK (slot IN ('top','bottom','shoes','outerwear','accessory','headwear')),
+  slot text NOT NULL CHECK (slot = ANY (ARRAY['top'::text, 'bottom'::text, 'shoes'::text, 'outerwear'::text, 'accessory'::text, 'headwear'::text])),
   CONSTRAINT outfit_items_pkey PRIMARY KEY (id),
-  CONSTRAINT outfit_items_outfit_slot_key UNIQUE (outfit_id, slot),
   CONSTRAINT outfit_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT outfit_items_outfit_id_fkey FOREIGN KEY (outfit_id) REFERENCES public.outfits(id) ON DELETE CASCADE,
-  CONSTRAINT outfit_items_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.wardrobe_items(id) ON DELETE CASCADE
+  CONSTRAINT outfit_items_outfit_id_fkey FOREIGN KEY (outfit_id) REFERENCES public.outfits(id),
+  CONSTRAINT outfit_items_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.wardrobe_items(id)
 );
-CREATE INDEX outfit_items_outfit_idx ON public.outfit_items USING btree (outfit_id);
-CREATE INDEX outfit_items_item_idx ON public.outfit_items USING btree (item_id);
-
-ALTER TABLE public.wardrobe_profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.wardrobe_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.outfits ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.outfit_items ENABLE ROW LEVEL SECURITY;
-
--- One policy per verb on each table, all flat user_id = auth.uid() (no EXISTS subqueries):
--- {table}_select_own / {table}_insert_own / {table}_update_own / {table}_delete_own
--- for each of: wardrobe_profiles, wardrobe_items, outfits, outfit_items.
--- Full CREATE POLICY statements: migrations/2026-07-18_outfits-catalog-and-builder.sql
-
--- ── PM mobile relay (/pm/live — laptop bridge <-> phone, outbound-only from laptop) ──
--- id: 'tasks' | 'bridge' | 'fleet' | 'session:<sessionId>'. pm_commands.type CHECK is a
--- second line of defence only; the bridge's in-code allowlist is authoritative and
--- excludes set-budget/set-config/rotate/fork and any spec/plan/uat/blocked gate decision.
--- 'tick' was removed 2026-07-25 (migrations/2026-07-25_pm-commands-drop-tick.sql): the
--- phone cannot mark a checklist item done at all — it launches delivery sessions instead.
 CREATE TABLE public.pm_live (
   id text NOT NULL,
   user_id uuid NOT NULL,
@@ -1844,19 +1644,12 @@ CREATE TABLE public.pm_live (
   CONSTRAINT pm_live_pkey PRIMARY KEY (id),
   CONSTRAINT pm_live_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-CREATE INDEX pm_live_user_idx ON public.pm_live USING btree (user_id);
-
 CREATE TABLE public.pm_commands (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL DEFAULT auth.uid(),
-  type text NOT NULL CHECK (type IN (
-    'capture', 'undo', 'preflight', 'launch',
-    'pause', 'abort-turn', 'resume', 'cancel', 'answer', 'ask',
-    'approve', 'accept',  -- DLV-73: INSTANT-lane gates only; scoping lives in the bridge, not here
-    'legacy-tick'  -- historical rows only; 'tick' was dropped 2026-07-25, never executed again
-  )),
+  type text NOT NULL CHECK (type = ANY (ARRAY['capture'::text, 'undo'::text, 'preflight'::text, 'launch'::text, 'pause'::text, 'abort-turn'::text, 'resume'::text, 'cancel'::text, 'answer'::text, 'ask'::text, 'approve'::text, 'accept'::text, 'legacy-tick'::text])),
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'claimed', 'done', 'failed', 'expired')),
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'claimed'::text, 'done'::text, 'failed'::text, 'expired'::text])),
   result jsonb,
   error text,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -1865,12 +1658,19 @@ CREATE TABLE public.pm_commands (
   CONSTRAINT pm_commands_pkey PRIMARY KEY (id),
   CONSTRAINT pm_commands_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-CREATE INDEX pm_commands_pending_idx ON public.pm_commands USING btree (user_id, status, created_at);
-
-ALTER TABLE public.pm_live ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.pm_commands ENABLE ROW LEVEL SECURITY;
-
--- One policy per verb on each table, all flat user_id = auth.uid() (no EXISTS subqueries):
--- {table}_select_own / {table}_insert_own / {table}_update_own / {table}_delete_own
--- for each of: pm_live, pm_commands. Both added to the supabase_realtime publication.
--- Full CREATE POLICY / ALTER PUBLICATION statements: migrations/2026-07-25_pm-mobile-relay.sql
+CREATE TABLE public.trip_documents (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  trip_id uuid NOT NULL,
+  title text NOT NULL,
+  doc_type text NOT NULL DEFAULT 'other'::text CHECK (doc_type = ANY (ARRAY['passport'::text, 'visa'::text, 'ticket'::text, 'booking'::text, 'insurance'::text, 'other'::text])),
+  storage_path text NOT NULL,
+  expires_on date,
+  notes text,
+  position integer NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT trip_documents_pkey PRIMARY KEY (id),
+  CONSTRAINT trip_documents_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT trip_documents_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
+);

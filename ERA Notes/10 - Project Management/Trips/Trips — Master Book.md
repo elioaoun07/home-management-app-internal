@@ -1,6 +1,6 @@
 ---
 created: 2026-05-30
-updated: 2026-07-30
+updated: 2026-08-03
 type: master-book
 status: active
 owner: Elio
@@ -23,22 +23,22 @@ Two consequences: it is the proof that the app is one graph rather than many app
 
 **Vision in one line:** *turn Trips from a feature that fires cascades into a context-switch you can trust — every module adapts when you leave and restores when you return, visibly and reversibly.*
 
-**Source:** `src/features/trips/`, `src/app/trips/`, `src/app/api/trips/` (9 routes, 3,251 LOC), `src/components/trips/`, `src/lib/tripAccess.ts`. DB: `trips`, `trip_places`, `trip_packing_items`, `trip_side_effects`. Vault: [Trips / Overview](<../../03 - Junction Modules/Trips/Overview.md>) — **read before touching activation/completion logic**.
+**Source:** `src/features/trips/`, `src/app/trips/`, `src/app/api/trips/` (17 routes as of 2026-08-03, up from 9 — see Shipped Log), `src/components/trips/`, `src/lib/tripAccess.ts`. DB: `trips`, `trip_places`, `trip_packing_items`, `trip_documents`, `trip_side_effects`. Vault: [Trips / Overview](<../../03 - Junction Modules/Trips/Overview.md>) — **read before touching activation/completion logic**. The Overview doc now leads with a **Planner mode vs. Live mode** split (2026-08-03) — read that first, it changes how the rest of this book should be read.
 
 ## Current State (verified)
 
-**Maturity 2.8 / 10 as of 2026-07-18 (FABLED 3) — unchanged across three consecutive generations.** The audit layer is not the bottleneck here; execution is.
+**Maturity 2.8 / 10 as of 2026-07-18 (FABLED 3) — unchanged across three consecutive generations.** The audit layer is not the bottleneck here; execution is. **This score describes the Live-mode cascade specifically and is still accurate after 2026-08-03** — the planner-mode session below deliberately did not touch it (see the new Planner vs. Live split in the Overview doc). Rescore Live mode only after the RPC bodies are recovered and TRIP-1/2/3 pass; don't let planner-mode progress read as cascade progress.
 
 | Dimension | Score | Evidence |
 |---|---|---|
 | Design quality | 8 | `trip_side_effects` reversal ledger; `tripAccess.ts` sharing guard is clean and well-commented |
 | Verification | 1 | activate→complete has never been exercised with witnesses — 7+ weeks deferred |
-| Repo recoverability | 2 | `grep -rn "activate_trip" migrations/` → **zero hits** (re-verified 2026-07-18) |
+| Repo recoverability | 2 | `grep -rn "activate_trip" migrations/` → **zero hits** (re-verified 2026-08-03 — the new `get_trip_bundle()` RPC does NOT count; it's read-only and unrelated to the cascade) |
 | Cross-module safety | 3 | the sharing guard *mirrors* `is_public` account logic — a second mirrored-logic drift surface |
-| Test protection | 0 | `find src tests -path "*trip*" -name "*.test.*"` → nothing |
+| Test protection | 0→1 (cascade still 0) | `getTripPhase()`/`tripCountdown()` now have a real test file (`tripPhase.test.ts`, 14 assertions) — the module's first test, exactly as this book called for. It covers **planner-mode date math only**; the cascade (`activate_trip`/`complete_trip`) remains completely untested, so don't let this line read as progress on Verification above. |
 | Handoff readiness | 2 | human-first for lifecycle/cascades; any-model ONLY for UI polish |
 
-> **Escalation clause (recorded 2026-07-18):** if a fourth generation finds the three moves below still unmoved, honour the fallback — **freeze the module in writing** and stop pretending it is active.
+> **Escalation clause (recorded 2026-07-18):** if a fourth generation finds the three moves below still unmoved, honour the fallback — **freeze the module in writing** and stop pretending it is active. **Still unmoved as of 2026-08-03** — this session was scoped to planner mode specifically so as not to touch this clause.
 
 | Sub-feature | Tier | Reality |
 |---|---|---|
@@ -47,8 +47,9 @@ Two consequences: it is the proof that the app is one graph rather than many app
 | Household trip cascade | 🟡 | chores skipped, recurring events paused via `recurrence_pauses`, one-time events cancelled, meal plans skipped. **`recurring_payments` intentionally NOT paused** — bills are still due while travelling |
 | Solo trip cascade | 🟡 | the traveller's items reassign to the partner (`responsible_user_id` flip); meal planning untouched |
 | Auto trip account | 🟡 | created on activation via direct inserts mirroring accounts-route logic; **kept after completion** |
-| Places / Packing / Templates | 🟡 | `trip_places`, `trip_packing_items`, `is_template` trips cloned via `/api/trips/[id]/clone` |
-| Household sharing | 🟡 | `getAccessibleTrip()` (`b03b2bb`, 2026-07-11): owner always; partner only when `scope === "household"` and the active link matches. **Asymmetric by design** — places/packing are collaborative read+write, but edit/activate/complete/delete stay owner-only |
+| Places / Packing / Templates | 🟢 *(was 🟡)* | `trip_places` now a day-by-day itinerary (times, confirmation codes, addresses, drag-reorder, Maps deep links); `trip_packing_items` has starter presets, persisted custom categories, per-person assignment, and drag-reorder. `is_template` trips cloned via `/api/trips/[id]/clone` — now reachable from the UI (Duplicate/Save as template/Start from template), previously fully-implemented dead code. **Manually verified 2026-08-03** against the real household trip in a running browser (see Shipped Log) — this is the one sub-feature in this table that has actually been clicked through, not just typechecked. |
+| Documents vault | 🟡 *(new, 2026-08-03)* | `trip_documents` + private `trip-documents` storage bucket; passport/visa/ticket/insurance with pre-departure expiry warnings on Overview. Manually verified the empty-state render only — file upload was not exercised in the browser this session (see Successor Briefing note below). |
+| Household sharing | 🟡 | `getAccessibleTrip()` (`b03b2bb`, 2026-07-11): owner always; partner only when `scope === "household"` and the active link matches. **Asymmetric by design** — places/packing are collaborative read+write, but edit/activate/complete/delete stay owner-only. `custom_packing_categories` (2026-08-03) deliberately extends this: collaborative via its own route despite living on the owner-only `trips` row. |
 
 ## Pain Inventory
 
@@ -59,11 +60,15 @@ Two consequences: it is the proof that the app is one graph rather than many app
 - 🟠 **Zero tests.** `tripAccess.ts` is a pure function taking a `SupabaseLike` — mockable by design and the cheapest test in the module.
 - 🟡 One subtle rule is easy to forget: `recurring_payments` are intentionally *not* paused. A well-meaning "pause everything on travel" change would break a deliberate decision.
 - 🟡 Sharing-under-lifecycle is unspecified — what *should* happen to partner edits when a trip activates or completes mid-edit has never been written down.
+- 🟠 **Zero RLS now covers a 5th table.** `trip_documents` (2026-08-03) followed the existing app-layer-only pattern of `trips`/`trip_places`/`trip_packing_items`/`trip_side_effects` rather than fixing the gap, because the honest fix collides with two other rules: a naive `user_id = auth.uid()` policy breaks partner access to household trips, and the household-aware version needs an `EXISTS` subquery Hard Rule #20 forbids on child tables. Not decided unilaterally — flagged here for a real design pass.
+- 🟡 **Two docs disagree about `trip_side_effects`.** The Overview doc says "DO NOT query this table for display — it is an internal rollback log only." This checklist's TRIP-4 says build a panel that reads it. Both predate 2026-08-03; neither was resolved by the planner-mode session. One has to give.
 
 ## Shipped Log
 
 - ✅ 2026-05-30 — Trips junction module shipped (`e058192`): lifecycle RPCs, side-effect ledger, household and solo cascades, auto trip account, places, packing list, templates
 - ✅ 2026-07-11 — household sharing layer (`b03b2bb`): `src/lib/tripAccess.ts` + scope gates on 6 routes, `scope` on `src/types/trips.ts`, partner badge / ownership state in `TripCard` and `TripDetail`
+- ✅ 2026-08-03 — **Planner-mode upgrade** (standalone-first; Live mode / cascade untouched, gate unaffected): date-derived trip phase (`draft` no longer means "unusable" — `tripPhase.ts` + first unit test); day-by-day itinerary with times/confirmation codes/addresses/Maps links/drag-reorder (`itinerary/ItineraryView.tsx`, replaces the old flat `TripPlacesList.tsx`); packing presets, persisted custom categories, per-person assignment with person-absolute color identity (Hard Rule #14), drag-reorder, return sweep, and revived clone/template UI (previously dead code) (`TripPackingList.tsx`); `trip_documents` vault with pre-departure expiry warnings (`documents/DocumentsView.tsx`, private `trip-documents` storage bucket); Overview tab rebuilt from two static lines into six data-driven widgets (`overview/OverviewTab.tsx`); `get_trip_bundle()` read RPC (repo-resident, unlike the two lifecycle RPCs) + offline queueing for place/packing edits + trip data added to the app's offline persistence allowlist. Fixed 3 pre-existing bugs (wrong-place Undo restore, clone not resetting `packed_quantity`, hardcoded `$` ignoring trip currency). Migration `2026-08-03_trips-planner-upgrade.sql`, run by Elio same day.
+  **Verification:** typecheck/lint/`pnpm test` clean throughout. Also manually verified in a running browser against the real household trip ("Italy - August 2026") after the owner ran the migration — countdown, itinerary day-strip, place add with time/address/confirmation-code, packing category open + assignment cycling (confirmed correct blue/pink identity), Docs tab empty state, and the new Activate-sheet cascade-unverified warning all confirmed working with zero console errors. One real bug was **found and fixed during this pass**: `ItineraryView.tsx`'s place row nested a `<button>`/`<a>` inside an outer `<button>`, an invalid HTML structure that Next.js flagged as a hydration error — fixed by changing the outer element to a `<div role="button">`. Packing document *upload* (the file-picker path) was not exercised in-browser this session — typecheck/lint clean but not click-tested.
 
 ## Delivery session log
 
@@ -79,6 +84,8 @@ Two consequences: it is the proof that the app is one graph rather than many app
 
 The one exemption: a **read-only trip briefing signal** (an upcoming household-scope trip within 7 days surfaces one line in the ERA briefing with dates + packing completion %). No cascade interaction, so it is exempt from the gate — but it has nowhere to render until the Awakening briefing is live.
 
+**Second exemption, added 2026-08-03 *(IMPLEMENTED)*:** the gate blocks *Track A enhancements to the cascade*, not standalone planner-mode work. The Overview doc now formalizes this as the **Planner mode / Live mode split** — itinerary, packing, documents, and any UI/data work touching only `trip_places`/`trip_packing_items`/`trip_documents`/`trips` is exempt from the gate and safe for any-model work; `activate_trip`/`complete_trip`/`trip_side_effects` stay exactly as gated as before. This is why the 2026-08-03 Shipped Log entry below exists without TRIP-1/2/3 having moved.
+
 ### Track A — internal enhancements (all gated)
 
 | Enhancement | Today | The dream | Effort |
@@ -86,8 +93,8 @@ The one exemption: a **read-only trip briefing signal** (an upcoming household-s
 | Verify the cascades | fire but unverified | a proven activate→complete round-trip for household **and** solo, with a written checklist | S–M verify / M automate |
 | Side-effect transparency view | `trip_side_effects` is internal | a "trip impact" panel: what this trip paused/cancelled/created/reassigned and what completion will reverse — doubles as a permanent verification tool | M |
 | Per-cascade opt-out | rules are fixed | toggle which cascades fire per trip ("pause chores but keep meal plans") | M |
-| Trip budget rollup | auto trip account exists | trip spend vs budget + a post-trip summary ("this trip cost X") | M |
-| Richer templates | `is_template` clone | a template library (weekend / abroad / business) seeding places + packing + cascade prefs | M |
+| Trip budget rollup | *(2026-08-03) Overview shows a "Planned spend" card summing place costs, explicitly labelled "not actuals"* | trip spend vs budget + a post-trip summary from the **real** trip account (TRIP-11) | M |
+| Richer templates | *(2026-08-03) 4 packing presets (Abroad/Beach/Business/Weekend) + revived clone/save-as-template/start-from-template UI* | a full template library seeding places + packing + **cascade prefs** — the cascade-pref half is still gated | M |
 
 ### Track B — bridges out of Trips
 
@@ -138,9 +145,10 @@ Then read `src/lib/tripAccess.ts` (the sharing guard) → `src/app/api/trips/[id
 | Task archetype | Tier | Route |
 |---|---|---|
 | UI polish (cards, badges, packing list layout) | any-model | `ui-guardrails`; no lifecycle interaction |
-| Places/packing CRUD field changes | any-model | copy the existing route pattern; keep `getAccessibleTrip` as the ONLY access decision |
-| Testing `tripAccess.ts` | any-model | pure function, mockable |
+| Places/packing/documents CRUD field changes | any-model | copy the existing route pattern (`itinerary/`, `documents/`, `TripPackingList.tsx`); keep `getAccessibleTrip` as the ONLY access decision |
+| Testing `tripAccess.ts` or `tripPhase.ts` | any-model | pure functions, mockable — `tripPhase.test.ts` is the template |
 | Reading trip state for display elsewhere | mid-tier+ | respect `scope`; never re-implement the access rule |
+| `get_trip_bundle()` changes | any-model, but re-run the verification manifest | read-only, repo-resident, does not touch the cascade — still worth confirming it stays that way |
 | Activate / complete / clone logic; `trip_side_effects`; pause writing | human-first | RPC bodies are not in the repo — you cannot verify what you'd be changing. Propose; let Elio recover them first |
 | Trip-account creation path | human-first | mirrors June-drifted accounts semantics (`money-rules` domain) |
 
@@ -160,10 +168,10 @@ Then read `src/lib/tripAccess.ts` (the sharing guard) → `src/app/api/trips/[id
 
 | Claim | Command | Expected |
 |---|---|---|
-| RPC bodies still missing | `grep -rn "activate_trip" migrations/ \| wc -l` | 0 (any hit means recovery landed — rescore) |
-| 9 API routes | `find src/app/api/trips -name route.ts \| wc -l` | 9 |
-| Zero tests | `find src tests -path "*trip*" -name "*.test.*" \| wc -l` | 0 (any hit means rescore) |
-| Access rule is single-sourced | `grep -rln "scope === \"household\"" src \| wc -l` | 1 (`tripAccess.ts` only) |
+| RPC bodies still missing | `grep -rn "activate_trip\\|complete_trip" migrations/ \| wc -l` | 0 (any hit means recovery landed — rescore). `get_trip_bundle` IS in the repo by design — don't let that grep hit confuse you if you match too broadly. |
+| 17 API routes (was 9 pre-2026-08-03) | `find src/app/api/trips -name route.ts \| wc -l` | 17 |
+| One test file (planner-mode only; cascade still untested) | `find src tests -path "*trip*" -name "*.test.*" \| wc -l` | 1 (`tripPhase.test.ts`) — this is expected now, not a red flag; the cascade's test count is still 0 |
+| Access rule is single-sourced | `grep -rln "scope === \"household\"" src \| wc -l` | **Corrected 2026-08-03 — the old "1" claim in this row was already stale before this session touched the file; re-verified against ground truth, not assumed.** Actual count is **7**: `tripAccess.ts` (the genuine access decision — this is the one that must stay singular) + `TripActivateSheet.tsx` + `TripDetail.tsx` (pre-existing UI *display-label* reads of `scope`, not access decisions — showing "Household" vs "Solo" text) + 4 hits in `src/app/api/recycle-bin/*` (unrelated module, its own `scope` concept, nothing to do with trips). `get_trip_bundle()` adds an 8th, SQL-side copy of the access *rule itself* (not a display read) that this grep can't see since it only scans `src/`. Re-run this and read every hit before trusting a bare count — a rising number is only a problem if a *new access decision* appears outside `tripAccess.ts`, not if unrelated modules or display code use the same string. |
 
 ## Pointers
 

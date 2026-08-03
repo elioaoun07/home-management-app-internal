@@ -16,8 +16,11 @@ const patchSchema = z.object({
   priority: z.enum(["mandatory", "flexible", "wishlist"]).optional(),
   scheduled_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
   scheduled_time: z.string().regex(/^\d{2}:\d{2}$/).nullish(),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/).nullish(),
   is_booked: z.boolean().optional(),
   position: z.number().int().optional(),
+  confirmation_code: z.string().max(100).nullish(),
+  address: z.string().max(500).nullish(),
 });
 
 export async function PATCH(

@@ -53,7 +53,7 @@ export function TripCard({ trip, onClick, className }: TripCardProps) {
             )}
           </div>
         </div>
-        <TripStatusBadge status={trip.status} className="flex-shrink-0" />
+        <TripStatusBadge status={trip.status} trip={trip} className="flex-shrink-0" />
       </div>
 
       {(dateRange || trip.scope === "solo" || trip.is_owner === false) && (

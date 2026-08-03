@@ -16,8 +16,11 @@ const placeSchema = z.object({
   priority: z.enum(["mandatory", "flexible", "wishlist"]).default("flexible"),
   scheduled_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
   scheduled_time: z.string().regex(/^\d{2}:\d{2}$/).nullish(),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/).nullish(),
   is_booked: z.boolean().default(false),
   position: z.number().int().default(0),
+  confirmation_code: z.string().max(100).nullish(),
+  address: z.string().max(500).nullish(),
 });
 
 export async function GET(
@@ -74,8 +77,11 @@ export async function POST(
       priority: d.priority,
       scheduled_date: d.scheduled_date ?? null,
       scheduled_time: d.scheduled_time ?? null,
+      end_time: d.end_time ?? null,
       is_booked: d.is_booked,
       position: d.position,
+      confirmation_code: d.confirmation_code ?? null,
+      address: d.address ?? null,
     })
     .select()
     .single();

@@ -1,7 +1,9 @@
 "use client";
 
+import { isReallyOnline, markOffline } from "@/lib/connectivityManager";
+import { addToQueue } from "@/lib/offlineQueue";
 import { invalidateAccountData } from "@/lib/queryInvalidation";
-import { safeFetch } from "@/lib/safeFetch";
+import { isOfflineError, safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import type {
   ActivateTripResult,
@@ -9,8 +11,10 @@ import type {
   CreateTripPackingItemInput,
   CreateTripPlaceInput,
   Trip,
+  TripDocument,
   TripPackingItem,
   TripPlace,
+  UpdateTripDocumentInput,
   UpdateTripInput,
   UpdateTripPackingItemInput,
   UpdateTripPlaceInput,
@@ -91,6 +95,41 @@ export function useTripPacking(tripId: string) {
     queryKey: tripKeys.packing(tripId),
     queryFn: () => fetchTripPacking(tripId),
     staleTime: 1000 * 60 * 5,
+    enabled: !!tripId,
+  });
+}
+
+interface TripBundle {
+  trip: Trip;
+  is_owner: boolean;
+  places: TripPlace[];
+  packing: TripPackingItem[];
+  documents: TripDocument[];
+}
+
+/**
+ * Primes the detail/places/packing/documents caches from a single
+ * get_trip_bundle() RPC call instead of the 3-4 separate round trips Trip
+ * Detail would otherwise make as tabs are opened (Hard Rule #21). Call once
+ * near the top of Trip Detail — the individual useTrip/useTripPlaces/
+ * useTripPacking/useTripDocuments hooks used by each tab then read from the
+ * warm cache instead of firing their own request.
+ */
+export function useTripBundle(tripId: string) {
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: [...tripKeys.all, "bundle", tripId],
+    queryFn: async (): Promise<TripBundle> => {
+      const res = await fetch(`/api/trips/${tripId}/bundle`);
+      if (!res.ok) throw new Error("Failed to fetch trip bundle");
+      const bundle = (await res.json()) as TripBundle;
+      qc.setQueryData(tripKeys.detail(tripId), { ...bundle.trip, is_owner: bundle.is_owner });
+      qc.setQueryData(tripKeys.places(tripId), bundle.places);
+      qc.setQueryData(tripKeys.packing(tripId), bundle.packing);
+      qc.setQueryData(tripKeys.documents(tripId), bundle.documents);
+      return bundle;
+    },
+    staleTime: 1000 * 60 * 2,
     enabled: !!tripId,
   });
 }
@@ -297,19 +336,60 @@ export function useUpdateTripPlace(tripId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...input }: UpdateTripPlaceInput & { id: string }) => {
-      const res = await safeFetch(`/api/trips/${tripId}/places/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "Failed to update place");
+      const endpoint = `/api/trips/${tripId}/places/${id}`;
+
+      if (!isReallyOnline()) {
+        await addToQueue({
+          feature: "trip",
+          operation: "update",
+          endpoint,
+          method: "PATCH",
+          body: input,
+          metadata: { label: "Update trip place" },
+        });
+        return { id, ...input } as TripPlace;
       }
-      return res.json() as Promise<TripPlace>;
+
+      try {
+        const res = await safeFetch(endpoint, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error ?? "Failed to update place");
+        }
+        return res.json() as Promise<TripPlace>;
+      } catch (err) {
+        if (isOfflineError(err)) {
+          markOffline();
+          await addToQueue({
+            feature: "trip",
+            operation: "update",
+            endpoint,
+            method: "PATCH",
+            body: input,
+            metadata: { label: "Update trip place" },
+          });
+          return { id, ...input } as TripPlace;
+        }
+        throw err;
+      }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: tripKeys.places(tripId) }),
-    onError: () => toast.error("Failed to update place", { icon: ToastIcons.error }),
+    onMutate: async ({ id, ...input }) => {
+      await qc.cancelQueries({ queryKey: tripKeys.places(tripId) });
+      const previous = qc.getQueryData<TripPlace[]>(tripKeys.places(tripId));
+      qc.setQueryData<TripPlace[]>(tripKeys.places(tripId), (old) =>
+        old?.map((p) => (p.id === id ? { ...p, ...input } : p)) ?? [],
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(tripKeys.places(tripId), ctx.previous);
+      toast.error("Failed to update place", { icon: ToastIcons.error });
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: tripKeys.places(tripId) }),
   });
 }
 
@@ -318,17 +398,18 @@ export function useDeleteTripPlace(tripId: string) {
   return useMutation({
     mutationFn: async (placeId: string) => {
       const snapshot = qc.getQueryData<TripPlace[]>(tripKeys.places(tripId));
+      const deleted = snapshot?.find((p) => p.id === placeId);
       const res = await safeFetch(`/api/trips/${tripId}/places/${placeId}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error ?? "Failed to delete place");
       }
-      return { placeId, snapshot };
+      return { placeId, deleted };
     },
-    onSuccess: ({ snapshot }) => {
+    onSuccess: ({ deleted }) => {
       qc.invalidateQueries({ queryKey: tripKeys.places(tripId) });
       const undo = async () => {
-        const place = snapshot?.find(() => true);
+        const place = deleted;
         if (!place) return;
         await safeFetch(`/api/trips/${tripId}/places`, {
           method: "POST",
@@ -340,6 +421,41 @@ export function useDeleteTripPlace(tripId: string) {
       toast.success("Place removed", { icon: ToastIcons.delete, duration: 4000, action: { label: "Undo", onClick: undo } });
     },
     onError: () => toast.error("Failed to remove place", { icon: ToastIcons.error }),
+  });
+}
+
+export function useReorderTripPlaces(tripId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (updates: Array<{ id: string; position: number; scheduled_date?: string | null }>) => {
+      const res = await safeFetch(`/api/trips/${tripId}/places/reorder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to reorder places");
+      }
+    },
+    onMutate: async (updates) => {
+      await qc.cancelQueries({ queryKey: tripKeys.places(tripId) });
+      const previous = qc.getQueryData<TripPlace[]>(tripKeys.places(tripId));
+      const byId = new Map(updates.map((u) => [u.id, u]));
+      qc.setQueryData<TripPlace[]>(tripKeys.places(tripId), (old) =>
+        old?.map((p) => {
+          const u = byId.get(p.id);
+          if (!u) return p;
+          return { ...p, position: u.position, scheduled_date: u.scheduled_date !== undefined ? u.scheduled_date : p.scheduled_date };
+        }) ?? [],
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(tripKeys.places(tripId), ctx.previous);
+      toast.error("Failed to reorder places", { icon: ToastIcons.error });
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: tripKeys.places(tripId) }),
   });
 }
 
@@ -376,6 +492,7 @@ export function useCreatePackingItem(tripId: string) {
         position: input.position ?? 0,
         inventory_item_id: input.inventory_item_id ?? null,
         catalogue_item_id: input.catalogue_item_id ?? null,
+        assigned_to: input.assigned_to ?? null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -399,16 +516,46 @@ export function useUpdatePackingItem(tripId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...input }: UpdateTripPackingItemInput & { id: string }) => {
-      const res = await safeFetch(`/api/trips/${tripId}/packing/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "Failed to update item");
+      const endpoint = `/api/trips/${tripId}/packing/${id}`;
+
+      if (!isReallyOnline()) {
+        await addToQueue({
+          feature: "trip",
+          operation: "update",
+          endpoint,
+          method: "PATCH",
+          body: input,
+          metadata: { label: "Update packing item" },
+        });
+        return { id, ...input } as TripPackingItem;
       }
-      return res.json() as Promise<TripPackingItem>;
+
+      try {
+        const res = await safeFetch(endpoint, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error ?? "Failed to update item");
+        }
+        return res.json() as Promise<TripPackingItem>;
+      } catch (err) {
+        if (isOfflineError(err)) {
+          markOffline();
+          await addToQueue({
+            feature: "trip",
+            operation: "update",
+            endpoint,
+            method: "PATCH",
+            body: input,
+            metadata: { label: "Update packing item" },
+          });
+          return { id, ...input } as TripPackingItem;
+        }
+        throw err;
+      }
     },
     onMutate: async ({ id, ...input }) => {
       await qc.cancelQueries({ queryKey: tripKeys.packing(tripId) });
@@ -431,6 +578,87 @@ export function useUpdatePackingItem(tripId: string) {
       toast.error("Failed to update item", { icon: ToastIcons.error });
     },
     onSettled: () => qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) }),
+  });
+}
+
+export function useBulkCreatePackingItems(tripId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (items: CreateTripPackingItemInput[]) => {
+      const res = await safeFetch(`/api/trips/${tripId}/packing/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to add items");
+      }
+      return res.json() as Promise<TripPackingItem[]>;
+    },
+    onSuccess: (items) => {
+      qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) });
+      toast.success(`${items.length} item${items.length === 1 ? "" : "s"} added`, {
+        icon: ToastIcons.create,
+        duration: 4000,
+      });
+    },
+    onError: () => toast.error("Failed to add items", { icon: ToastIcons.error }),
+  });
+}
+
+export function useReorderPackingItems(tripId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (updates: Array<{ id: string; position: number }>) => {
+      const res = await safeFetch(`/api/trips/${tripId}/packing/reorder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to reorder items");
+      }
+    },
+    onMutate: async (updates) => {
+      await qc.cancelQueries({ queryKey: tripKeys.packing(tripId) });
+      const previous = qc.getQueryData<TripPackingItem[]>(tripKeys.packing(tripId));
+      const positionById = new Map(updates.map((u) => [u.id, u.position]));
+      qc.setQueryData<TripPackingItem[]>(tripKeys.packing(tripId), (old) =>
+        old
+          ?.map((item) => (positionById.has(item.id) ? { ...item, position: positionById.get(item.id)! } : item))
+          .sort((a, b) => a.position - b.position) ?? [],
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(tripKeys.packing(tripId), ctx.previous);
+      toast.error("Failed to reorder items", { icon: ToastIcons.error });
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) }),
+  });
+}
+
+export function useUpdatePackingCategories(tripId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (categories: string[]) => {
+      const res = await safeFetch(`/api/trips/${tripId}/packing/categories`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categories }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to save category");
+      }
+      return res.json() as Promise<Trip>;
+    },
+    onSuccess: (trip) => {
+      qc.setQueryData(tripKeys.detail(trip.id), trip);
+    },
+    onError: () => toast.error("Failed to save category", { icon: ToastIcons.error }),
   });
 }
 
@@ -461,5 +689,119 @@ export function useDeletePackingItem(tripId: string) {
       toast.success("Item removed", { icon: ToastIcons.delete, duration: 4000, action: { label: "Undo", onClick: undo } });
     },
     onError: () => toast.error("Failed to remove item", { icon: ToastIcons.error }),
+  });
+}
+
+// ── Document mutations ────────────────────────────────────────────────────
+
+async function fetchTripDocuments(tripId: string): Promise<TripDocument[]> {
+  const res = await fetch(`/api/trips/${tripId}/documents`);
+  if (!res.ok) throw new Error("Failed to fetch documents");
+  return res.json();
+}
+
+export function useTripDocuments(tripId: string) {
+  return useQuery({
+    queryKey: tripKeys.documents(tripId),
+    queryFn: () => fetchTripDocuments(tripId),
+    staleTime: 1000 * 60 * 5,
+    enabled: !!tripId,
+  });
+}
+
+export function useTripDocumentUrls(tripId: string, rawPaths: Array<string | null | undefined>) {
+  const paths = [...new Set(rawPaths.filter((p): p is string => !!p))].sort().slice(0, 100);
+  const query = useQuery({
+    queryKey: tripKeys.documentUrls(paths),
+    enabled: paths.length > 0,
+    staleTime: 50 * 60_000,
+    gcTime: 55 * 60_000,
+    queryFn: async (): Promise<Record<string, string>> => {
+      const res = await safeFetch(`/api/trips/${tripId}/documents/signed-urls`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paths }),
+        timeoutMs: 15_000,
+      });
+      if (!res.ok) throw new Error("Failed to sign document URLs");
+      const data = await res.json();
+      return data.urls ?? {};
+    },
+  });
+  return { ...query, urls: query.data ?? {}, getUrl: (path: string | null | undefined) => (path ? (query.data?.[path] ?? null) : null) };
+}
+
+export interface CreateTripDocumentUpload {
+  file: File;
+  title: string;
+  doc_type: TripDocument["doc_type"];
+  expires_on?: string | null;
+  notes?: string | null;
+}
+
+export function useCreateTripDocument(tripId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateTripDocumentUpload) => {
+      const form = new FormData();
+      form.set("file", input.file);
+      form.set("title", input.title);
+      form.set("doc_type", input.doc_type);
+      if (input.expires_on) form.set("expires_on", input.expires_on);
+      if (input.notes) form.set("notes", input.notes);
+      const res = await safeFetch(`/api/trips/${tripId}/documents`, {
+        method: "POST",
+        body: form,
+        timeoutMs: 30_000,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to upload document");
+      }
+      return res.json() as Promise<TripDocument>;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: tripKeys.documents(tripId) });
+      toast.success("Document added", { icon: ToastIcons.create, duration: 4000 });
+    },
+    onError: () => toast.error("Failed to upload document", { icon: ToastIcons.error }),
+  });
+}
+
+export function useUpdateTripDocument(tripId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...input }: UpdateTripDocumentInput & { id: string }) => {
+      const res = await safeFetch(`/api/trips/${tripId}/documents/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to update document");
+      }
+      return res.json() as Promise<TripDocument>;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: tripKeys.documents(tripId) }),
+    onError: () => toast.error("Failed to update document", { icon: ToastIcons.error }),
+  });
+}
+
+export function useDeleteTripDocument(tripId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (docId: string) => {
+      const res = await safeFetch(`/api/trips/${tripId}/documents/${docId}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to delete document");
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: tripKeys.documents(tripId) });
+      toast.success("Document removed", { icon: ToastIcons.delete, duration: 4000 });
+    },
+    onError: () => toast.error("Failed to remove document", { icon: ToastIcons.error }),
   });
 }

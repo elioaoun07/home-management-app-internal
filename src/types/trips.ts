@@ -5,6 +5,7 @@ export type TripScope = "solo" | "household";
 export type TripPlaceType = "hotel" | "activity" | "restaurant" | "attraction" | "transport" | "note" | "other";
 export type TripPlacePriority = "mandatory" | "flexible" | "wishlist";
 export type TripSideEffectType = "chore_skip" | "event_skip" | "recurrence_pause" | "meal_skip" | "item_reassign";
+export type TripDocumentType = "passport" | "visa" | "ticket" | "booking" | "insurance" | "other";
 
 export interface Trip {
   id: string;
@@ -27,6 +28,8 @@ export interface Trip {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  /** User-added packing category names (the 8 built-ins are a code constant — see packingCategories.ts). */
+  custom_packing_categories: string[];
 }
 
 export interface TripPlace {
@@ -46,6 +49,9 @@ export interface TripPlace {
   position: number;
   created_at: string;
   updated_at: string;
+  confirmation_code: string | null;
+  address: string | null;
+  end_time: string | null;
 }
 
 export interface TripPackingItem {
@@ -60,6 +66,22 @@ export interface TripPackingItem {
   position: number;
   inventory_item_id: string | null;
   catalogue_item_id: string | null;
+  created_at: string;
+  updated_at: string;
+  /** Household member this item is assigned to pack. Null = unassigned/either. */
+  assigned_to: string | null;
+}
+
+export interface TripDocument {
+  id: string;
+  user_id: string;
+  trip_id: string;
+  title: string;
+  doc_type: TripDocumentType;
+  storage_path: string;
+  expires_on: string | null;
+  notes: string | null;
+  position: number;
   created_at: string;
   updated_at: string;
 }
@@ -111,8 +133,11 @@ export interface CreateTripPlaceInput {
   priority?: TripPlacePriority;
   scheduled_date?: string | null;
   scheduled_time?: string | null;
+  end_time?: string | null;
   is_booked?: boolean;
   position?: number;
+  confirmation_code?: string | null;
+  address?: string | null;
 }
 
 // An interface that only extends and adds nothing is exactly a type alias, and
@@ -127,6 +152,7 @@ export interface CreateTripPackingItemInput {
   position?: number;
   inventory_item_id?: string | null;
   catalogue_item_id?: string | null;
+  assigned_to?: string | null;
 }
 
 export interface UpdateTripPackingItemInput {
@@ -138,7 +164,19 @@ export interface UpdateTripPackingItemInput {
   position?: number;
   inventory_item_id?: string | null;
   catalogue_item_id?: string | null;
+  assigned_to?: string | null;
 }
+
+export interface CreateTripDocumentInput {
+  title: string;
+  doc_type?: TripDocumentType;
+  storage_path: string;
+  expires_on?: string | null;
+  notes?: string | null;
+  position?: number;
+}
+
+export type UpdateTripDocumentInput = Partial<Omit<CreateTripDocumentInput, "storage_path">>;
 
 export interface ActivateTripResult {
   scope: TripScope;
@@ -186,4 +224,13 @@ export const PLACE_PRIORITY_COLORS: Record<TripPlacePriority, string> = {
   mandatory: "text-pink-400",
   flexible: "text-cyan-400",
   wishlist: "text-white/50",
+};
+
+export const TRIP_DOCUMENT_TYPE_LABELS: Record<TripDocumentType, string> = {
+  passport: "Passport",
+  visa: "Visa",
+  ticket: "Ticket",
+  booking: "Booking",
+  insurance: "Insurance",
+  other: "Other",
 };

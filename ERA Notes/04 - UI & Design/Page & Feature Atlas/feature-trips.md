@@ -13,35 +13,43 @@ tags:
 
 # Feature · Trips
 
-> Standalone feature module. Hosts hooks/types/utilities. Not directly routable.
+> Standalone feature module. Hosts hooks, query keys, and the date-derived trip-phase helper. Not directly routable.
 
 ## Files
 
 - **Module dir**: `src/features/trips/`
+  - `hooks.ts` — all queries/mutations
+  - `queryKeys.ts` — `tripKeys`
+  - `tripPhase.ts` — `getTripPhase()` / `tripCountdown()` (pure, unit-tested — the module's first test)
+  - `index.ts` — barrel export
 
 ## Hooks
 
-- See files in `src/features/trips/` (typically `hooks.ts` or sub-files)
+- Queries: `useTrips`, `useTripTemplates`, `useTrip`, `useTripBundle`, `useTripPlaces`, `useTripPacking`, `useTripDocuments`, `useTripDocumentUrls`
+- Mutations: `useCreateTrip`, `useUpdateTrip`, `useDeleteTrip`, `useActivateTrip`, `useCompleteTrip`, `useCloneTrip`, `useCreateTripPlace`, `useUpdateTripPlace`, `useDeleteTripPlace`, `useReorderTripPlaces`, `useCreatePackingItem`, `useUpdatePackingItem`, `useDeletePackingItem`, `useBulkCreatePackingItems`, `useReorderPackingItems`, `useUpdatePackingCategories`, `useCreateTripDocument`, `useUpdateTripDocument`, `useDeleteTripDocument`
 
 ## API routes
 
-- TODO (list `/api/trips/...` routes used by this feature)
+- `/api/trips`, `/api/trips/[id]` (+ `/bundle`, `/activate`, `/complete`, `/clone`)
+- `/api/trips/[id]/places` (+ `/[placeId]`, `/reorder`)
+- `/api/trips/[id]/packing` (+ `/[itemId]`, `/bulk`, `/reorder`, `/categories`)
+- `/api/trips/[id]/documents` (+ `/[docId]`, `/signed-urls`)
 
 ## DB tables
 
-- TODO
+- `trips`, `trip_places`, `trip_packing_items`, `trip_documents`, `trip_side_effects`
 
 ## How to get here
 
-- Used by pages — see "What it links to" or grep imports of `@/features/trips`.
+- Used by `src/components/trips/*` — see [[trips]] and [[trips-id]].
 
 ## What it links to
 
-- TODO (which pages render this feature's UI)
+- `/trips`, `/trips/[id]`
 
 ## Related vault doc
 
-- `ERA Notes/02 - Standalone Modules/Trips/` _(verify path)_
+- [[Trips/Overview]] (`ERA Notes/03 - Junction Modules/Trips/Overview.md`) — Trips is a **Junction** module (CLAUDE.md Feature Index), despite living in this Atlas section alongside other standalone feature dirs.
 
 ## Screenshots
 
@@ -49,4 +57,4 @@ tags:
 
 ## Notes
 
-- TODO
+- `useUpdateTripPlace` and `useUpdatePackingItem` are offline-aware: on `isOfflineError`, they queue via `addToQueue({ feature: "trip", ... })` (`src/lib/offlineQueue.ts`) instead of failing. `useTripBundle` primes the places/packing/documents caches from one `get_trip_bundle()` RPC call so opening tabs on Trip Detail doesn't fire a fresh round trip each time.

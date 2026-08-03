@@ -36,6 +36,7 @@ export const FEATURE_QUERY_KEYS: Record<string, string[][]> = {
   ],
   subtask: [["items"]],
   recurring: [["recurring-payments"], ["transactions"], ["account-balance"]],
+  trip: [["trips"]],
 };
 
 type InvalidateQueriesFn = (queryKeys: string[][]) => void;

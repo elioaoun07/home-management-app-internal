@@ -1,15 +1,23 @@
 "use client";
 
 import {
+  useBulkCreatePackingItems,
   useCreatePackingItem,
   useDeletePackingItem,
+  useReorderPackingItems,
+  useTrip,
   useTripPacking,
+  useUpdatePackingCategories,
   useUpdatePackingItem,
 } from "@/features/trips/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
+import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
+import { BUILTIN_PACKING_CATEGORIES } from "@/constants/packingCategories";
+import { PACKING_PRESETS, type PackingPreset } from "@/constants/packingPresets";
 import type { TripPackingItem } from "@/types/trips";
-import { MoreHorizontal, Plus, Trash2, ChevronLeft, Pencil, X } from "lucide-react";
+import { MoreHorizontal, Plus, Trash2, ChevronLeft, Pencil, X, GripVertical, RotateCcw, Sparkles } from "lucide-react";
 import { useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { ToastIcons } from "@/lib/toastIcons";
@@ -28,6 +36,23 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 // ── Category metadata ────────────────────────────────────────────────────────
 
@@ -149,10 +174,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
   },
 };
 
-const PACKING_CATEGORIES = [
-  "Documents", "Clothes", "Electronics", "Toiletries",
-  "Health", "Money", "Accessories", "Other",
-];
+const PACKING_CATEGORIES: readonly string[] = BUILTIN_PACKING_CATEGORIES;
 
 function getCategoryMeta(cat: string): CategoryMeta {
   return (
@@ -304,21 +326,95 @@ function PackedRing({
   );
 }
 
+// ── Assignment chip ──────────────────────────────────────────────────────────
+// Person-absolute color identity per CLAUDE.md Hard Rule #14: derive blue/pink
+// from the viewer's theme, not from role — same pattern as ChoreCard.tsx.
+
+function AssignChip({
+  assignedTo,
+  currentUserId,
+  partnerId,
+  partnerName,
+  onCycle,
+}: {
+  assignedTo: string | null;
+  currentUserId: string | null;
+  partnerId: string | null;
+  partnerName: string;
+  onCycle: (next: string | null) => void;
+}) {
+  const { theme } = useTheme();
+  if (!partnerId) return null;
+
+  const isPink = theme === "pink";
+  const meColor = isPink ? "#ec4899" : "#3b82f6";
+  const partnerColor = isPink ? "#3b82f6" : "#ec4899";
+
+  const handleTap = () => {
+    // Cycle: unassigned -> me -> partner -> unassigned
+    if (assignedTo === null) onCycle(currentUserId);
+    else if (assignedTo === currentUserId) onCycle(partnerId);
+    else onCycle(null);
+  };
+
+  if (assignedTo === null) {
+    return (
+      <button
+        onClick={handleTap}
+        className="flex-shrink-0 w-5 h-5 rounded-full border border-dashed border-white/20 text-white/0 hover:border-white/40 transition-colors"
+        aria-label="Assign to"
+      />
+    );
+  }
+
+  const isMe = assignedTo === currentUserId;
+  const color = isMe ? meColor : partnerColor;
+  const label = isMe ? "You" : partnerName;
+
+  return (
+    <button
+      onClick={handleTap}
+      className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-semibold"
+      style={{ backgroundColor: `${color}30`, color, border: `1px solid ${color}60` }}
+      aria-label={`Assigned to ${label}`}
+      title={label}
+    >
+      {label[0]?.toUpperCase()}
+    </button>
+  );
+}
+
 // ── Item row ─────────────────────────────────────────────────────────────────
 
 function ItemRow({
   item,
   tripId,
   iconColor,
+  currentUserId,
+  partnerId,
+  partnerName,
+  sortable,
 }: {
   item: TripPackingItem;
   tripId: string;
   iconColor: string;
+  currentUserId?: string | null;
+  partnerId?: string | null;
+  partnerName?: string;
+  /** When true, renders a drag handle and participates in the enclosing dnd-kit sort context. */
+  sortable?: boolean;
 }) {
   const updateItem = useUpdatePackingItem(tripId);
   const deleteItem = useDeletePackingItem(tripId);
   const [nameEdit, setNameEdit] = useState(false);
   const [nameDraft, setNameDraft] = useState(item.name);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id,
+    disabled: !sortable,
+  });
+  const dragStyle: React.CSSProperties = sortable
+    ? { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }
+    : {};
 
   const packedQty = item.packed_quantity ?? (item.is_packed ? item.quantity : 0);
 
@@ -352,7 +448,21 @@ function ItemRow({
   const isFullyPacked = item.is_packed || packedQty >= item.quantity;
 
   return (
-    <div className={cn("flex items-center gap-3 py-3 border-b border-white/8 last:border-0 group")}>
+    <div
+      ref={sortable ? setNodeRef : undefined}
+      style={dragStyle}
+      className={cn("flex items-center gap-2 py-3 border-b border-white/8 last:border-0 group")}
+    >
+      {sortable && (
+        <button
+          {...attributes}
+          {...listeners}
+          className="flex-shrink-0 p-1 -ml-1 text-white/15 hover:text-white/40 cursor-grab active:cursor-grabbing touch-none"
+          aria-label="Drag to reorder"
+        >
+          <GripVertical className="w-3.5 h-3.5" />
+        </button>
+      )}
       {/* Check: simple toggle for qty=1, ring cycle for qty>1 */}
       {item.quantity > 1 ? (
         <PackedRing
@@ -410,6 +520,17 @@ function ItemRow({
         value={item.quantity}
         onChange={(v) => updateItem.mutate({ id: item.id, quantity: v })}
       />
+
+      {/* Assignment */}
+      {partnerId && (
+        <AssignChip
+          assignedTo={item.assigned_to}
+          currentUserId={currentUserId ?? null}
+          partnerId={partnerId}
+          partnerName={partnerName ?? "Partner"}
+          onCycle={(next) => updateItem.mutate({ id: item.id, assigned_to: next })}
+        />
+      )}
 
       {/* Delete */}
       <button
@@ -592,17 +713,45 @@ function CategoryFocusPanel({
   category,
   items,
   tripId,
+  currentUserId,
+  partnerId,
+  partnerName,
   onClose,
 }: {
   category: string;
   items: TripPackingItem[];
   tripId: string;
+  currentUserId?: string | null;
+  partnerId?: string | null;
+  partnerName?: string;
   onClose: () => void;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const meta = getCategoryMeta(category);
+  const reorderItems = useReorderPackingItems(tripId);
+  const [orderedIds, setOrderedIds] = useState<string[]>(items.map((i) => i.id));
   // Track items added while the panel was open for the deferred toast
   const initialCountRef = useRef(items.length);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  // Keep local order in sync as items are added/removed, but preserve any drag reorder.
+  const knownIds = new Set(orderedIds);
+  const mergedIds = [...orderedIds.filter((id) => items.some((i) => i.id === id)), ...items.filter((i) => !knownIds.has(i.id)).map((i) => i.id)];
+  const orderedItems = mergedIds.map((id) => items.find((i) => i.id === id)).filter((i): i is TripPackingItem => !!i);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = mergedIds.indexOf(active.id as string);
+    const newIndex = mergedIds.indexOf(over.id as string);
+    const next = arrayMove(mergedIds, oldIndex, newIndex);
+    setOrderedIds(next);
+    reorderItems.mutate(next.map((id, position) => ({ id, position })));
+  };
 
   const handleClose = () => {
     const added = items.length - initialCountRef.current;
@@ -704,9 +853,22 @@ function CategoryFocusPanel({
           {items.length === 0 && (
             <p className="text-center text-sm text-white/25 py-6">No items yet — add one below</p>
           )}
-          {items.map((item) => (
-            <ItemRow key={item.id} item={item} tripId={tripId} iconColor={meta.iconColor} />
-          ))}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={mergedIds} strategy={verticalListSortingStrategy}>
+              {orderedItems.map((item) => (
+                <ItemRow
+                  key={item.id}
+                  item={item}
+                  tripId={tripId}
+                  iconColor={meta.iconColor}
+                  currentUserId={currentUserId}
+                  partnerId={partnerId}
+                  partnerName={partnerName}
+                  sortable
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
           <InlineAddRow tripId={tripId} category={category} iconColor={meta.iconColor} />
         </div>
       </div>
@@ -804,27 +966,48 @@ function CategoryCard({
 
 // ── Main component ───────────────────────────────────────────────────────────
 
+type AssignFilter = "all" | "mine" | "partner";
+
 export function TripPackingList({ tripId }: { tripId: string }) {
   const tc = useThemeClasses();
-  const { data: items = [], isLoading } = useTripPacking(tripId);
+  const { data: allItems = [], isLoading } = useTripPacking(tripId);
+  const { data: trip } = useTrip(tripId);
+  const { data: household } = useHouseholdMembers();
   const [addCatOpen, setAddCatOpen] = useState(false);
-  const [extraCategories, setExtraCategories] = useState<string[]>([]);
+  const [presetOpen, setPresetOpen] = useState(false);
   const [focusedCategory, setFocusedCategory] = useState<string | null>(null);
+  const [assignFilter, setAssignFilter] = useState<AssignFilter>("all");
+  const updateCategories = useUpdatePackingCategories(tripId);
+  const bulkCreate = useBulkCreatePackingItems(tripId);
+  const updatePackingItem = useUpdatePackingItem(tripId);
+
+  const currentUserId = household?.currentUserId ?? null;
+  const partner = household?.members.find((m) => !m.isCurrentUser);
+  const partnerId = partner?.id ?? null;
+  const partnerName = partner?.displayName ?? "Partner";
+
+  const items = allItems.filter((item) => {
+    if (assignFilter === "mine") return item.assigned_to === currentUserId;
+    if (assignFilter === "partner") return item.assigned_to === partnerId;
+    return true;
+  });
 
   const packed = items.filter((i) => i.is_packed).length;
   const total = items.length;
+  const anyPacked = allItems.some((i) => i.is_packed || i.packed_quantity > 0);
 
-  // Build category map — seed all 8 defaults + any local extras
+  const persistedCustomCategories = trip?.custom_packing_categories ?? [];
+
+  // Build category map — seed all 8 defaults + persisted custom ones
   const byCategory: Record<string, TripPackingItem[]> = {};
   for (const cat of PACKING_CATEGORIES) byCategory[cat] = [];
-  for (const cat of extraCategories) if (!byCategory[cat]) byCategory[cat] = [];
+  for (const cat of persistedCustomCategories) if (!byCategory[cat]) byCategory[cat] = [];
   for (const item of items) {
     const key = item.category ?? "Other";
     if (!byCategory[key]) byCategory[key] = [];
     byCategory[key].push(item);
   }
 
-  // Defaults first, then persisted custom ones (have items), then local extras with no items yet
   const allCategories = [
     ...PACKING_CATEGORIES,
     ...Object.keys(byCategory).filter((c) => !PACKING_CATEGORIES.includes(c)),
@@ -832,12 +1015,27 @@ export function TripPackingList({ tripId }: { tripId: string }) {
 
   const handleCategoryCreated = (name: string) => {
     const trimmed = name.trim();
-    if (!trimmed) return;
-    // If it's not already visible, add to local extras so the card appears
-    if (!allCategories.includes(trimmed)) {
-      setExtraCategories((prev) => [...prev, trimmed]);
+    if (!trimmed || allCategories.includes(trimmed)) {
+      if (trimmed) setFocusedCategory(trimmed);
+      return;
     }
+    updateCategories.mutate([...persistedCustomCategories, trimmed]);
     setFocusedCategory(trimmed);
+  };
+
+  const handleApplyPreset = (preset: PackingPreset) => {
+    bulkCreate.mutate(preset.items.map((i) => ({ name: i.name, category: i.category, quantity: i.quantity ?? 1 })));
+    setPresetOpen(false);
+  };
+
+  const handleReturnSweep = () => {
+    const packedItems = allItems.filter((i) => i.is_packed || i.packed_quantity > 0);
+    if (packedItems.length === 0) return;
+    Promise.all(
+      packedItems.map((item) => updatePackingItem.mutateAsync({ id: item.id, packed_quantity: 0, is_packed: false })),
+    ).then(() => {
+      toast.success("Packing list reset for next trip", { icon: ToastIcons.success, duration: 4000 });
+    });
   };
 
   return (
@@ -851,13 +1049,46 @@ export function TripPackingList({ tripId }: { tripId: string }) {
               <p className="text-xs text-white/30 mt-0.5">{packed}/{total} packed</p>
             )}
           </div>
-          <button
-            onClick={() => setAddCatOpen(true)}
-            className={cn("flex items-center gap-1 text-sm", tc.text)}
-          >
-            <Plus className="w-4 h-4" /> Add
-          </button>
+          <div className="flex items-center gap-3">
+            {anyPacked && (
+              <button
+                onClick={handleReturnSweep}
+                className="flex items-center gap-1 text-xs text-white/40 hover:text-white/70 transition-colors"
+                title="Reset packed status for the next trip"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Reset
+              </button>
+            )}
+            <button
+              onClick={() => setAddCatOpen(true)}
+              className={cn("flex items-center gap-1 text-sm", tc.text)}
+            >
+              <Plus className="w-4 h-4" /> Add
+            </button>
+          </div>
         </div>
+
+        {/* Assignment filter */}
+        {partnerId && allItems.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            {([
+              ["all", "All"],
+              ["mine", "Mine"],
+              ["partner", partnerName],
+            ] as Array<[AssignFilter, string]>).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setAssignFilter(key)}
+                className={cn(
+                  "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                  assignFilter === key ? cn(tc.bgSurface, tc.text, tc.border) : "text-white/40 border-white/10 hover:text-white/60",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Overall progress */}
         {total > 0 && (
@@ -867,6 +1098,16 @@ export function TripPackingList({ tripId }: { tripId: string }) {
               style={{ width: `${(packed / total) * 100}%` }}
             />
           </div>
+        )}
+
+        {/* Empty state — offer a starter preset instead of 8 empty tiles */}
+        {!isLoading && allItems.length === 0 && (
+          <button
+            onClick={() => setPresetOpen(true)}
+            className={cn("w-full flex items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-sm", tc.border, tc.textMuted)}
+          >
+            <Sparkles className="w-4 h-4" /> Start from a packing preset
+          </button>
         )}
 
         {/* Grid — always show all categories */}
@@ -885,6 +1126,8 @@ export function TripPackingList({ tripId }: { tripId: string }) {
           </div>
         )}
 
+        <PresetPickerSheet open={presetOpen} onOpenChange={setPresetOpen} onSelect={handleApplyPreset} />
+
         {/* Add category sheet */}
         <AddCategorySheet
           open={addCatOpen}
@@ -899,6 +1142,9 @@ export function TripPackingList({ tripId }: { tripId: string }) {
           category={focusedCategory}
           items={byCategory[focusedCategory] ?? []}
           tripId={tripId}
+          currentUserId={currentUserId}
+          partnerId={partnerId}
+          partnerName={partnerName}
           onClose={() => setFocusedCategory(null)}
         />
       )}
@@ -956,6 +1202,43 @@ function AddCategorySheet({
             Add category
           </Button>
         </form>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ── Preset picker sheet ──────────────────────────────────────────────────────
+
+function PresetPickerSheet({
+  open,
+  onOpenChange,
+  onSelect,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSelect: (preset: PackingPreset) => void;
+}) {
+  const tc = useThemeClasses();
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className={cn("rounded-t-2xl border-t", tc.border, tc.bgPage)}>
+        <SheetHeader className="pb-4">
+          <SheetTitle className="text-white">Start from a preset</SheetTitle>
+        </SheetHeader>
+        <div className="space-y-2 pb-8">
+          {PACKING_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              onClick={() => onSelect(preset)}
+              className={cn("w-full text-left rounded-xl border p-3.5 bg-white/5 hover:bg-white/8 transition-colors", tc.border)}
+            >
+              <p className="text-sm font-medium text-white">{preset.label}</p>
+              <p className="text-xs text-white/40 mt-0.5">{preset.description}</p>
+              <p className="text-xs text-white/25 mt-1">{preset.items.length} items</p>
+            </button>
+          ))}
+        </div>
       </SheetContent>
     </Sheet>
   );

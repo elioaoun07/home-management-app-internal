@@ -66,6 +66,8 @@ tags:
 | `g-drinks-admin` | `/g/drinks-admin` | [[g-drinks-admin]] |
 | `expense-drafts` | `/expense/drafts` | [[expense-drafts]] |
 | `outfits`        | `/outfits`        | [[outfits]]        |
+| `trips`          | `/trips`          | [[trips]]          |
+| `trips-id`       | `/trips/[id]`     | [[trips-id]]       |
 
 ## Utility Routes
 
@@ -110,6 +112,7 @@ tags:
 | `feature-transactions`     | `src/features/transactions/`     | [[feature-transactions]]     |
 | `feature-transfers`        | `src/features/transfers/`        | [[feature-transfers]]        |
 | `feature-outfits`          | `src/features/outfits/`          | [[feature-outfits]]          |
+| `feature-trips`            | `src/features/trips/`            | [[feature-trips]]            |
 
 ---
 

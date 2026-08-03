@@ -2,10 +2,17 @@
 
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
-import { useTrips } from "@/features/trips/hooks";
+import { useCloneTrip, useTripTemplates, useTrips } from "@/features/trips/hooks";
+import { tripCountdown } from "@/features/trips/tripPhase";
 import { TripCard } from "./TripCard";
 import { TripFormSheet } from "./TripFormSheet";
-import { Plane, Plus } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Plane, Plus, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { TripStatus } from "@/types/trips";
@@ -16,7 +23,16 @@ export function TripsView() {
   const tc = useThemeClasses();
   const router = useRouter();
   const { data: trips = [], isLoading } = useTrips();
+  const { data: templates = [] } = useTripTemplates();
+  const cloneTrip = useCloneTrip();
   const [newOpen, setNewOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+
+  const handleUseTemplate = async (templateId: string, templateName: string) => {
+    const trip = await cloneTrip.mutateAsync({ id: templateId, name: templateName });
+    setTemplatesOpen(false);
+    router.push(`/trips/${trip.id}`);
+  };
 
   const sorted = [...trips].sort((a, b) => {
     const ai = STATUS_ORDER.indexOf(a.status);
@@ -26,7 +42,19 @@ export function TripsView() {
   });
 
   const active = sorted.filter((t) => t.status === "active");
-  const upcoming = sorted.filter((t) => t.status === "upcoming" || t.status === "draft");
+  // A trip can sit in `draft` indefinitely (activation is a deliberate, gated action — see
+  // Trips vault doc), so within this group we surface the soonest departure first rather than
+  // relying on status/created_at, which never changes for an unactivated trip.
+  const upcoming = sorted
+    .filter((t) => t.status === "upcoming" || t.status === "draft")
+    .sort((a, b) => {
+      const da = tripCountdown(a).days;
+      const db = tripCountdown(b).days;
+      if (da == null && db == null) return 0;
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return da - db;
+    });
   const past = sorted.filter((t) => t.status === "completed" || t.status === "archived");
 
   return (
@@ -42,12 +70,22 @@ export function TripsView() {
             <p className={cn("text-xs", tc.textFaint)}>{trips.length} trip{trips.length !== 1 ? "s" : ""}</p>
           </div>
         </div>
-        <button
-          onClick={() => setNewOpen(true)}
-          className={cn("flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg border", tc.text, tc.bgSurface, tc.border)}
-        >
-          <Plus className="w-4 h-4" /> New
-        </button>
+        <div className="flex items-center gap-2">
+          {templates.length > 0 && (
+            <button
+              onClick={() => setTemplatesOpen(true)}
+              className={cn("flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg border", tc.textMuted, tc.border)}
+            >
+              <Sparkles className="w-4 h-4" /> From template
+            </button>
+          )}
+          <button
+            onClick={() => setNewOpen(true)}
+            className={cn("flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg border", tc.text, tc.bgSurface, tc.border)}
+          >
+            <Plus className="w-4 h-4" /> New
+          </button>
+        </div>
       </div>
 
       <div className="px-4 pt-4 space-y-6">
@@ -90,6 +128,26 @@ export function TripsView() {
       </div>
 
       <TripFormSheet open={newOpen} onOpenChange={setNewOpen} />
+
+      <Sheet open={templatesOpen} onOpenChange={setTemplatesOpen}>
+        <SheetContent side="bottom" className={cn("rounded-t-2xl border-t", tc.border, tc.bgPage)}>
+          <SheetHeader className="pb-4">
+            <SheetTitle className="text-white">Start from a template</SheetTitle>
+          </SheetHeader>
+          <div className="space-y-2 pb-8">
+            {templates.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => handleUseTemplate(t.id, t.name)}
+                className={cn("w-full text-left rounded-xl border p-3.5 bg-white/5 hover:bg-white/8 transition-colors", tc.border)}
+              >
+                <p className="text-sm font-medium text-white">{t.name}</p>
+                {t.destination_name && <p className="text-xs text-white/40 mt-0.5">{t.destination_name}</p>}
+              </button>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -2,26 +2,53 @@
 
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
-import { useTrip } from "@/features/trips/hooks";
+import { useCloneTrip, useTrip, useTripBundle } from "@/features/trips/hooks";
 import { TripStatusBadge } from "./TripStatusBadge";
-import { TripPlacesList } from "./TripPlacesList";
+import { ItineraryView } from "./itinerary/ItineraryView";
 import { TripPackingList } from "./TripPackingList";
+import { DocumentsView } from "./documents/DocumentsView";
+import { OverviewTab } from "./overview/OverviewTab";
 import { TripActivateSheet } from "./TripActivateSheet";
 import { TripCompleteSheet } from "./TripCompleteSheet";
 import { TripFormSheet } from "./TripFormSheet";
 import { Button } from "@/components/ui/button";
-import { Calendar, MapPin, Pencil, Plane, Users } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Calendar, Copy, MapPin, MoreVertical, Pencil, Plane, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-type Tab = "overview" | "places" | "packing";
+type Tab = "overview" | "places" | "packing" | "documents";
 
 export function TripDetail({ tripId }: { tripId: string }) {
   const tc = useThemeClasses();
+  const router = useRouter();
+  // Primes places/packing/documents caches from one RPC call so opening those
+  // tabs doesn't fire a fresh round trip each time (Hard Rule #21). The header
+  // itself still reads from useTrip below, which mutations (edit/activate/
+  // complete) already know how to update.
+  useTripBundle(tripId);
   const { data: trip, isLoading } = useTrip(tripId);
+  const cloneTrip = useCloneTrip();
   const [tab, setTab] = useState<Tab>("overview");
   const [activateOpen, setActivateOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+
+  const handleDuplicate = async () => {
+    if (!trip) return;
+    const newTrip = await cloneTrip.mutateAsync({ id: trip.id, name: `${trip.name} (copy)` });
+    router.push(`/trips/${newTrip.id}`);
+  };
+
+  const handleSaveAsTemplate = async () => {
+    if (!trip) return;
+    await cloneTrip.mutateAsync({ id: trip.id, name: `${trip.name} (template)`, as_template: true });
+  };
 
   if (isLoading) {
     return <div className={cn("p-6 text-center text-sm", tc.textFaint)}>Loading…</div>;
@@ -37,6 +64,7 @@ export function TripDetail({ tripId }: { tripId: string }) {
     { id: "overview", label: "Overview" },
     { id: "places", label: "Places" },
     { id: "packing", label: "Packing" },
+    { id: "documents", label: "Docs" },
   ];
 
   return (
@@ -50,13 +78,32 @@ export function TripDetail({ tripId }: { tripId: string }) {
             </div>
             <div className="min-w-0">
               <h1 className="text-lg font-semibold text-white truncate">{trip.name}</h1>
-              <TripStatusBadge status={trip.status} />
+              <TripStatusBadge status={trip.status} trip={trip} />
             </div>
           </div>
           {trip.is_owner !== false && (
-            <button onClick={() => setEditOpen(true)} className={cn("p-2 rounded-lg", tc.bgHover, tc.textMuted)}>
-              <Pencil className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button onClick={() => setEditOpen(true)} className={cn("p-2 rounded-lg", tc.bgHover, tc.textMuted)}>
+                <Pencil className="w-4 h-4" />
+              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className={cn("p-2 rounded-lg", tc.bgHover, tc.textMuted)}>
+                    <MoreVertical className="w-4 h-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleDuplicate}>
+                    <Copy className="w-3.5 h-3.5 mr-2" />
+                    Duplicate trip
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleSaveAsTemplate}>
+                    <Plane className="w-3.5 h-3.5 mr-2" />
+                    Save as template
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           )}
         </div>
 
@@ -120,30 +167,10 @@ export function TripDetail({ tripId }: { tripId: string }) {
 
       {/* Tab content */}
       <div className="px-4 pt-4">
-        {tab === "overview" && (
-          <div className="space-y-4">
-            {trip.notes && (
-              <div className={cn("rounded-xl border p-4", tc.border, "bg-white/5")}>
-                <p className={cn("text-xs font-medium uppercase tracking-wider mb-2", tc.textFaint)}>Notes</p>
-                <p className="text-sm text-white/70 whitespace-pre-wrap">{trip.notes}</p>
-              </div>
-            )}
-            {trip.account_id && (
-              <div className={cn("rounded-xl border p-4", tc.border, "bg-white/5")}>
-                <p className={cn("text-xs font-medium uppercase tracking-wider mb-1", tc.textFaint)}>Trip account</p>
-                <p className={cn("text-sm", tc.text)}>Linked to expense account</p>
-                <p className="text-xs text-white/40 mt-0.5">View in the Accounts tab to track spend</p>
-              </div>
-            )}
-            {!trip.notes && !trip.account_id && (
-              <p className={cn("text-sm text-center py-8", tc.textFaint)}>
-                {trip.status === "draft" ? "Set dates and activate to begin" : "Trip overview"}
-              </p>
-            )}
-          </div>
-        )}
-        {tab === "places" && <TripPlacesList tripId={tripId} />}
+        {tab === "overview" && <OverviewTab tripId={tripId} trip={trip} />}
+        {tab === "places" && <ItineraryView tripId={tripId} />}
         {tab === "packing" && <TripPackingList tripId={tripId} />}
+        {tab === "documents" && <DocumentsView tripId={tripId} />}
       </div>
 
       {/* Sheets */}

@@ -32,6 +32,7 @@ const patchSchema = z.object({
   end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
   notes: z.string().max(2000).nullish(),
   is_template: z.boolean().optional(),
+  custom_packing_categories: z.array(z.string().min(1).max(50)).max(30).optional(),
 });
 
 export async function PATCH(

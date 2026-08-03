@@ -13,6 +13,7 @@ const packingSchema = z.object({
   position: z.number().int().default(0),
   inventory_item_id: z.string().uuid().nullish(),
   catalogue_item_id: z.string().uuid().nullish(),
+  assigned_to: z.string().uuid().nullish(),
 });
 
 export async function GET(
@@ -65,6 +66,7 @@ export async function POST(
       position: d.position,
       inventory_item_id: d.inventory_item_id ?? null,
       catalogue_item_id: d.catalogue_item_id ?? null,
+      assigned_to: d.assigned_to ?? null,
     })
     .select()
     .single();

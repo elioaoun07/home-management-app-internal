@@ -76,11 +76,12 @@ export async function POST(
 
   if (packingItems?.length) {
     await supabase.from("trip_packing_items").insert(
-      packingItems.map(({ id: _id, created_at: _c, updated_at: _u, trip_id: _t, is_packed: _p, ...rest }) => ({
+      packingItems.map(({ id: _id, created_at: _c, updated_at: _u, trip_id: _t, is_packed: _p, packed_quantity: _pq, ...rest }) => ({
         ...rest,
         user_id: user.id,
         trip_id: newTrip.id,
         is_packed: false,
+        packed_quantity: 0,
       })),
     );
   }
