@@ -23,8 +23,8 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
 import { PACKING_PRESETS, type PackingPreset } from "@/constants/packingPresets";
 import type { TripPackingCategory, TripPackingItem } from "@/types/trips";
-import { MoreHorizontal, Plus, Trash2, ChevronLeft, Pencil, X, GripVertical, RotateCcw, Sparkles, Save, History } from "lucide-react";
-import { useState, useRef, useCallback } from "react";
+import { MoreHorizontal, Plus, Trash2, ArrowLeft, Pencil, GripVertical, RotateCcw, Sparkles, Save, History } from "lucide-react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { ToastIcons } from "@/lib/toastIcons";
@@ -634,94 +634,95 @@ function ItemRow({
     <div
       ref={sortable ? setNodeRef : undefined}
       style={dragStyle}
-      className={cn("flex items-center gap-2 py-3 border-b border-white/8 last:border-0 group")}
+      className={cn("py-2.5 border-b border-white/8 last:border-0 group")}
     >
-      {sortable && (
-        <button
-          {...attributes}
-          {...listeners}
-          className="flex-shrink-0 p-1 -ml-1 text-white/15 hover:text-white/40 cursor-grab active:cursor-grabbing touch-none"
-          aria-label="Drag to reorder"
-        >
-          <GripVertical className="w-3.5 h-3.5" />
-        </button>
-      )}
-      {/* Check: simple toggle for qty=1, ring cycle for qty>1 */}
-      {item.quantity > 1 ? (
-        <PackedRing
-          packedQty={packedQty}
-          quantity={item.quantity}
-          iconColor={iconColor}
-          onCycle={handleCycleQty}
-        />
-      ) : (
-        <button
-          onClick={handleSimpleToggle}
-          className="flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all"
-          style={{
-            borderColor: isFullyPacked ? iconColor : "rgba(255,255,255,0.25)",
-            backgroundColor: isFullyPacked ? iconColor : "transparent",
-          }}
-        >
-          {isFullyPacked && (
-            <svg className="w-3 h-3 text-black" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M2 5l2.5 2.5 4-4" />
-            </svg>
-          )}
-        </button>
-      )}
-
-      {/* Name */}
-      <div className="flex-1 min-w-0">
-        {nameEdit ? (
-          <input
-            autoFocus
-            className="w-full text-base bg-white/10 border border-white/20 rounded px-2 py-1.5 text-white outline-none"
-            value={nameDraft}
-            onChange={(e) => setNameDraft(e.target.value)}
-            onBlur={commitName}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitName();
-              if (e.key === "Escape") { setNameDraft(item.name); setNameEdit(false); }
-            }}
+      {/* One-line layout: name flexes; compact controls stay grouped at the right. */}
+      <div className="flex items-center gap-2">
+        {sortable && (
+          <button
+            {...attributes}
+            {...listeners}
+            className="flex-shrink-0 p-1 -ml-1 text-white/15 hover:text-white/40 cursor-grab active:cursor-grabbing touch-none"
+            aria-label="Drag to reorder"
+          >
+            <GripVertical className="w-3.5 h-3.5" />
+          </button>
+        )}
+        {/* Check: simple toggle for qty=1, ring cycle for qty>1 */}
+        {item.quantity > 1 ? (
+          <PackedRing
+            packedQty={packedQty}
+            quantity={item.quantity}
+            iconColor={iconColor}
+            onCycle={handleCycleQty}
           />
         ) : (
-          <span
-            onClick={() => setNameEdit(true)}
-            className={cn(
-              "text-base cursor-text block truncate",
-              isFullyPacked ? "line-through text-white/30" : "text-white/85",
-            )}
+          <button
+            onClick={handleSimpleToggle}
+            className="flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all"
+            style={{
+              borderColor: isFullyPacked ? iconColor : "rgba(255,255,255,0.25)",
+              backgroundColor: isFullyPacked ? iconColor : "transparent",
+            }}
           >
-            {item.name}
-          </span>
+            {isFullyPacked && (
+              <svg className="w-3 h-3 text-black" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M2 5l2.5 2.5 4-4" />
+              </svg>
+            )}
+          </button>
         )}
+
+        {/* Name */}
+        <div className="flex-1 min-w-0">
+          {nameEdit ? (
+            <input
+              autoFocus
+              className="w-full text-base bg-white/10 border border-white/20 rounded px-2 py-1.5 text-white outline-none"
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitName();
+                if (e.key === "Escape") { setNameDraft(item.name); setNameEdit(false); }
+              }}
+            />
+          ) : (
+            <span
+              onClick={() => setNameEdit(true)}
+              className={cn(
+                "text-base cursor-text block break-words",
+                isFullyPacked ? "line-through text-white/30" : "text-white/85",
+              )}
+            >
+              {item.name}
+            </span>
+          )}
+        </div>
+
+        <div className="flex-shrink-0 flex items-center gap-1.5">
+          <QtyControl
+            value={item.quantity}
+            onChange={(v) => updateItem.mutate({ id: item.id, quantity: v })}
+          />
+          {partnerId && (
+            <AssignChip
+              assignedTo={item.assigned_to}
+              currentUserId={currentUserId ?? null}
+              partnerId={partnerId}
+              partnerName={partnerName ?? "Partner"}
+              onCycle={(next) => updateItem.mutate({ id: item.id, assigned_to: next })}
+            />
+          )}
+          <button
+            onClick={() => deleteItem.mutate(item.id)}
+            className="flex-shrink-0 p-1.5 text-white/25 hover:text-red-400 active:text-red-400 transition-colors"
+            aria-label={`Delete ${item.name}`}
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
-
-      {/* Qty stepper */}
-      <QtyControl
-        value={item.quantity}
-        onChange={(v) => updateItem.mutate({ id: item.id, quantity: v })}
-      />
-
-      {/* Assignment */}
-      {partnerId && (
-        <AssignChip
-          assignedTo={item.assigned_to}
-          currentUserId={currentUserId ?? null}
-          partnerId={partnerId}
-          partnerName={partnerName ?? "Partner"}
-          onCycle={(next) => updateItem.mutate({ id: item.id, assigned_to: next })}
-        />
-      )}
-
-      {/* Delete */}
-      <button
-        onClick={() => deleteItem.mutate(item.id)}
-        className="flex-shrink-0 p-1.5 text-white/25 hover:text-red-400 active:text-red-400 transition-colors"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
     </div>
   );
 }
@@ -898,73 +899,70 @@ function RenameCategorySheet({
   );
 }
 
-// ── Category sidebar (persists across category switches while full-screen) ──
+// ── Category switcher (keeps the item canvas full-width) ──────────────────
 
-function CategorySidebar({
+function CategorySwitcher({
   allCategories,
   byCategory,
   focusedKey,
   onSelect,
-  open,
-  onToggle,
 }: {
   allCategories: CategoryRef[];
   byCategory: Record<string, TripPackingItem[]>;
   focusedKey: string;
   onSelect: (key: string) => void;
-  open: boolean;
-  onToggle: () => void;
 }) {
+  const activeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    activeButtonRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [focusedKey]);
+
   return (
-    <div
-      className={cn(
-        "flex-shrink-0 h-full overflow-y-auto border-r border-white/8 transition-[width] duration-200 flex flex-col",
-        open ? "w-48" : "w-14",
-      )}
-      style={{ background: "rgba(4,4,10,0.98)" }}
+    <nav
+      aria-label="Packing categories"
+      className="relative flex-shrink-0 border-y border-white/8"
     >
-      <button
-        onClick={onToggle}
-        className="flex-shrink-0 flex items-center justify-center h-11 text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors"
-        aria-label={open ? "Collapse category list" : "Expand category list"}
-      >
-        <ChevronLeft className={cn("w-4 h-4 transition-transform", !open && "rotate-180")} />
-      </button>
-      {allCategories.map((category) => {
-        const key = categoryKey(category);
-        const items = byCategory[key] ?? [];
-        const meta = getCategoryMeta(category);
-        const packed = items.filter((i) => i.is_packed).length;
-        const total = items.length;
-        const active = key === focusedKey;
-        return (
-          <button
-            key={key}
-            onClick={() => onSelect(key)}
-            className={cn(
-              "flex-shrink-0 flex items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors",
-              active ? "bg-white/10" : "hover:bg-white/5",
-            )}
-            style={active ? { borderLeft: `2px solid ${meta.iconColor}` } : { borderLeft: "2px solid transparent" }}
-          >
-            <span
-              className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: `${meta.iconColor}20` }}
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide px-4 py-2.5 snap-x">
+        {allCategories.map((category) => {
+          const key = categoryKey(category);
+          const items = byCategory[key] ?? [];
+          const meta = getCategoryMeta(category);
+          const active = key === focusedKey;
+          const packed = items.filter((item) => item.is_packed).length;
+          const total = items.length;
+          return (
+            <button
+              key={key}
+              ref={active ? activeButtonRef : undefined}
+              onClick={() => onSelect(key)}
+              aria-pressed={active}
+              className={cn(
+                "flex-shrink-0 snap-start h-11 max-w-44 rounded-xl px-2.5 flex items-center gap-2 border text-left transition-colors",
+                active ? "bg-white/10" : "border-white/8 hover:bg-white/5",
+              )}
+              style={active ? { borderColor: `${meta.iconColor}70` } : undefined}
             >
-              <span style={{ color: meta.iconColor, transform: "scale(0.45)" }}>{meta.icon(meta.iconColor)}</span>
-            </span>
-            {open && (
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm text-white/80 truncate">{category.name}</span>
-                <span className="block text-[11px] tabular-nums" style={{ color: total > 0 && packed === total ? "#34d399" : "rgba(255,255,255,0.35)" }}>
+              <span
+                className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center"
+                style={{ backgroundColor: `${meta.iconColor}18` }}
+              >
+                <span style={{ color: meta.iconColor, transform: "scale(0.42)" }}>{meta.icon(meta.iconColor)}</span>
+              </span>
+              <span className="min-w-0">
+                <span className={cn("block text-xs truncate", active ? "text-white" : "text-white/65")}>{category.name}</span>
+                <span
+                  className="block text-[10px] tabular-nums"
+                  style={{ color: total > 0 && packed === total ? "#34d399" : "rgba(255,255,255,0.35)" }}
+                >
                   {packed}/{total}
                 </span>
               </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
@@ -977,8 +975,10 @@ function CategoryFocusContent({
   currentUserId,
   partnerId,
   partnerName,
+  allCategories,
+  byCategory,
+  onFocusCategory,
   onClose,
-  onToggleSidebar,
 }: {
   category: CategoryRef;
   items: TripPackingItem[];
@@ -986,8 +986,10 @@ function CategoryFocusContent({
   currentUserId?: string | null;
   partnerId?: string | null;
   partnerName?: string;
+  allCategories: CategoryRef[];
+  byCategory: Record<string, TripPackingItem[]>;
+  onFocusCategory: (key: string) => void;
   onClose: () => void;
-  onToggleSidebar: () => void;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const meta = getCategoryMeta(category);
@@ -1030,25 +1032,14 @@ function CategoryFocusContent({
         {/* Header */}
         <div className="relative flex-shrink-0 px-4 pt-5 pb-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                onClick={onToggleSidebar}
-                className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors md:hidden"
-                style={{ color: meta.iconColor }}
-                aria-label="Browse categories"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold text-white leading-tight truncate">{category.name}</h2>
-                <span
-                  className="text-xs font-medium tabular-nums"
-                  style={{ color: allPacked && total > 0 ? "#34d399" : meta.iconColor }}
-                >
-                  {packed}/{total} packed
-                </span>
-              </div>
-            </div>
+            <button
+              onClick={onClose}
+              className="-ml-2 h-10 px-2 rounded-xl flex items-center gap-2 text-sm text-white/55 hover:text-white hover:bg-white/10 transition-colors"
+              aria-label="Back to all packing categories"
+            >
+              <ArrowLeft className="w-4.5 h-4.5" />
+              <span>All packages</span>
+            </button>
 
             <div className="flex items-center gap-2 flex-shrink-0">
               {category.id && (
@@ -1066,13 +1057,24 @@ function CategoryFocusContent({
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
-              <button
-                onClick={onClose}
-                className="w-9 h-9 rounded-full flex items-center justify-center text-white/25 hover:text-white/50 hover:bg-white/10 transition-colors"
-                aria-label="Close packing"
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 mt-3 min-w-0">
+            <span
+              className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: `${meta.iconColor}14`, border: `1px solid ${meta.iconColor}25` }}
+            >
+              <span style={{ color: meta.iconColor, transform: "scale(0.56)" }}>{meta.icon(meta.iconColor)}</span>
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-white leading-tight break-words">{category.name}</h2>
+              <span
+                className="text-xs font-medium tabular-nums"
+                style={{ color: allPacked && total > 0 ? "#34d399" : meta.iconColor }}
               >
-                <X className="w-4.5 h-4.5" />
-              </button>
+                {packed}/{total} packed
+              </span>
             </div>
           </div>
 
@@ -1088,15 +1090,12 @@ function CategoryFocusContent({
           </div>
         </div>
 
-        {/* Icon row */}
-        <div className="relative flex-shrink-0 flex justify-center py-4">
-          <div
-            className="rounded-3xl p-4"
-            style={{ backgroundColor: `${meta.iconColor}12`, border: `1px solid ${meta.iconColor}20` }}
-          >
-            {meta.icon(meta.iconColor)}
-          </div>
-        </div>
+        <CategorySwitcher
+          allCategories={allCategories}
+          byCategory={byCategory}
+          focusedKey={categoryKey(category)}
+          onSelect={onFocusCategory}
+        />
 
         {/* Items list */}
         <div className="relative flex-1 overflow-y-auto px-4 pb-safe-area-inset-bottom">
@@ -1158,20 +1157,12 @@ function CategoryFocusPanel({
   partnerName?: string;
   onClose: () => void;
 }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const tc = useThemeClasses();
   const category = allCategories.find((c) => categoryKey(c) === focusedKey) ?? allCategories[0];
   const items = byCategory[focusedKey] ?? [];
 
   return (
-    <div className="fixed inset-0 z-50 flex" style={{ background: "rgba(8,8,16,0.96)" }}>
-      <CategorySidebar
-        allCategories={allCategories}
-        byCategory={byCategory}
-        focusedKey={focusedKey}
-        onSelect={onFocusCategory}
-        open={sidebarOpen}
-        onToggle={() => setSidebarOpen((v) => !v)}
-      />
+    <div className={cn("fixed inset-0 z-50 flex", tc.bgPage)}>
       <CategoryFocusContent
         key={focusedKey}
         category={category}
@@ -1180,8 +1171,10 @@ function CategoryFocusPanel({
         currentUserId={currentUserId}
         partnerId={partnerId}
         partnerName={partnerName}
+        allCategories={allCategories}
+        byCategory={byCategory}
+        onFocusCategory={onFocusCategory}
         onClose={onClose}
-        onToggleSidebar={() => setSidebarOpen((v) => !v)}
       />
     </div>
   );

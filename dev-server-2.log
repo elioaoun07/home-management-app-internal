@@ -134,3 +134,44 @@ Using the user object as returned from supabase.auth.getSession() or from some s
  GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 839ms (compile: 5ms, render: 834ms)
  GET /api/notifications/in-app?limit=0&include_read=false 200 in 831ms (compile: 4ms, render: 827ms)
  HEAD /api/health 200 in 7ms
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 901ms (compile: 3ms, render: 898ms)
+ HEAD /api/health 200 in 6ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 781ms (compile: 8ms, render: 773ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 869ms (compile: 3ms, render: 866ms)
+ HEAD /api/health 200 in 9ms
+Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+ GET /trips/8913dcff-f66b-47fd-9070-d737cf84a1c8 200 in 183ms (compile: 23ms, render: 160ms)
+ GET /api/accounts 200 in 616ms (compile: 5ms, render: 611ms)
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 489ms (compile: 7ms, render: 483ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 912ms (compile: 16ms, render: 896ms)
+ GET /api/accounts?own=true&includeHidden=true 200 in 357ms (compile: 5ms, render: 352ms)
+ GET /api/drafts 200 in 400ms (compile: 12ms, render: 388ms)
+ GET /api/transactions/split-bill 200 in 393ms (compile: 5ms, render: 389ms)
+ HEAD /api/health 200 in 8ms
+ GET /api/transactions?start=2026-07-31&end=2026-08-30 200 in 2.0s (compile: 5ms, render: 2.0s)
+ HEAD /api/health 200 in 5ms
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 902ms (compile: 6ms, render: 896ms)
+ HEAD /api/health 200 in 6ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 677ms (compile: 4ms, render: 673ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 1089ms (compile: 5ms, render: 1085ms)
+ HEAD /api/health 200 in 5ms
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 907ms (compile: 4ms, render: 903ms)
+ HEAD /api/health 200 in 6ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 746ms (compile: 5ms, render: 741ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 909ms (compile: 4ms, render: 905ms)
+ HEAD /api/health 200 in 8ms
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 952ms (compile: 4ms, render: 948ms)
+ HEAD /api/health 200 in 6ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 620ms (compile: 4ms, render: 616ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 1652ms (compile: 4ms, render: 1649ms)
+ HEAD /api/health 200 in 5ms
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 785ms (compile: 3ms, render: 782ms)
+ HEAD /api/health 200 in 5ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 2.0s (compile: 3ms, render: 2.0s)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 1821ms (compile: 4ms, render: 1817ms)
+ HEAD /api/health 200 in 3ms
+ HEAD /api/health 200 in 14ms
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 3.0s (compile: 4ms, render: 3.0s)
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+[?25h
+ ELIFECYCLE  Command failed with exit code 1.
