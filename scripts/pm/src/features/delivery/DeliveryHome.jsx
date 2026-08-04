@@ -63,6 +63,10 @@ export function DeliveryHome() {
         </div>
       )}
       {deliveryData.value.buildLockActive && <div class="lock-banner">A session is already past the plan gate. Other plan approvals wait for the build lock.</div>}
+      <section class="delivery-launch-panel">
+        <div class="delivery-launch-copy"><div class="eyebrow">Execution lanes</div><h2>Choose the smallest lane that can safely ship the work</h2><p>Every lane remains governed by explicit scope, owner gates, budget limits, validation, and an auditable session record.</p></div>
+        <div class="lane-picker">{DELIVERY_LANES.map((lane) => <button class="lane-option" onClick={() => navigate(`/delivery/new?lane=${lane}`)} key={lane}><span class="lane-option-icon"><Icon name="bolt" size={16} /></span><span><strong>{lane[0] + lane.slice(1).toLowerCase()}</strong><small>{LANE_BLURB[lane]}</small></span><Icon name="arrow" size={15} /></button>)}</div>
+      </section>
       <div class="delivery-tabs">
         <button class={`button ${tab === "sessions" ? "primary" : ""}`} onClick={() => setTab("sessions")}>
           Sessions
@@ -355,7 +359,7 @@ function Wizard({ value, setValue, onClose }) {
           <div class="eyebrow">1 · Topic</div>
           <div class="chip-row">
             {topics.map((topic) => (
-              <button class={`button ${value.campaign === topic ? "primary" : ""}`} onClick={() => update({ campaign: topic, task: null, lane: null, locatorChoice: null, dropped: [], dirtyAck: "", redBaselineAck: "", triageAck: "" })}>
+              <button class={`button ${value.campaign === topic ? "primary" : ""}`} onClick={() => update({ campaign: topic, task: null, locatorChoice: null, dropped: [], dirtyAck: "", redBaselineAck: "", triageAck: "" })}>
                 {topic}
               </button>
             ))}
@@ -368,7 +372,7 @@ function Wizard({ value, setValue, onClose }) {
               {candidates.map((task) => {
                 const eligibility = deliverEligibility(task, deliveryData.value.sessions, topics);
                 return (
-                  <button class={`palette-result ${value.task?.key === task.key ? "selected" : ""}`} disabled={!eligibility.eligible} title={eligibility.reason || ""} onClick={() => update({ task, lane: null, locatorChoice: null, dropped: [], dirtyAck: "", redBaselineAck: "", triageAck: "" })}>
+                  <button class={`palette-result ${value.task?.key === task.key ? "selected" : ""}`} disabled={!eligibility.eligible} title={eligibility.reason || ""} onClick={() => update({ task, locatorChoice: null, dropped: [], dirtyAck: "", redBaselineAck: "", triageAck: "" })}>
                     <span class="palette-result-main">
                       <strong>
                         {task.idChip ? `${task.idChip} · ` : ""}
@@ -731,13 +735,14 @@ export function DeliveryWizardPage() {
   const [value, setValue] = useState(() => {
     const file = route.value.query.get("file"),
       cb = Number(route.value.query.get("cb"));
+    const requestedLane = String(route.value.query.get("lane") || "").toUpperCase();
     const task = file && Number.isInteger(cb) ? allTasks.value.find((entry) => entry.file === file && entry.cbidx === cb) : null;
     return {
       campaign: task?.module || null,
       task: task || null,
       provider: "claude",
       model: null,
-      lane: null,
+      lane: DELIVERY_LANES.includes(requestedLane) ? requestedLane : null,
       // DLV-73: the file picked from an ambiguous locator shortlist, if any.
       locatorChoice: null,
       effort: {},

@@ -37,6 +37,8 @@
 | `PATCH/DELETE /api/trips/[id]/places/[placeId]` | `src/app/api/trips/[id]/places/[placeId]/route.ts` |
 | `GET/POST /api/trips/[id]/packing` | `src/app/api/trips/[id]/packing/route.ts` |
 | `PATCH/DELETE /api/trips/[id]/packing/[itemId]` | `src/app/api/trips/[id]/packing/[itemId]/route.ts` |
+| `GET/POST /api/trips/[id]/packing/categories` | `src/app/api/trips/[id]/packing/categories/route.ts` |
+| `PATCH/DELETE /api/trips/[id]/packing/categories/[categoryId]` | `src/app/api/trips/[id]/packing/categories/[categoryId]/route.ts` |
 
 ### DB (Supabase SQL editor)
 | Intent | File |

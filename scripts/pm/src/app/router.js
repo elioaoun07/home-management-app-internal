@@ -9,13 +9,13 @@ export function parseRoute(hash = "") {
   if (!parts.length) return { name: "home", path: "/", query };
   if (parts[0] === "module" && parts[1]) return { name: "module", module: parts.slice(1).join("/"), path, query };
   if (parts[0] === "doc" && parts[1]) return { name: "doc", relPath: parts.slice(1).join("/"), path, query };
-  if (parts[0] === "tasks") return { name: "tasks", mode: parts[1] === "table" ? "table" : "board", path, query };
+  if (["tasks", "work"].includes(parts[0])) return { name: "tasks", mode: parts[1] === "table" ? "table" : "board", path, query };
   if (parts[0] === "delivery") {
     if (parts[1] === "session") return { name: "delivery-session", id: parts[2] || null, path, query };
     if (parts[1] === "new") return { name: "delivery-new", path, query };
     return { name: "delivery", path, query };
   }
-  if (["checklist", "bugs", "search", "inbox"].includes(parts[0])) return { name: parts[0], path, query };
+  if (["checklist", "bugs", "search", "inbox", "projects", "activity"].includes(parts[0])) return { name: parts[0], path, query };
   return { name: "not-found", path, query };
 }
 

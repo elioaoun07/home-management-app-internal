@@ -1453,7 +1453,6 @@ CREATE TABLE public.trip_packing_items (
   user_id uuid NOT NULL,
   trip_id uuid NOT NULL,
   name text NOT NULL,
-  category text,
   quantity integer NOT NULL DEFAULT 1,
   is_packed boolean NOT NULL DEFAULT false,
   position integer NOT NULL DEFAULT 0,
@@ -1463,8 +1462,10 @@ CREATE TABLE public.trip_packing_items (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   packed_quantity integer NOT NULL DEFAULT 0,
   assigned_to uuid,
+  category_id uuid,
   CONSTRAINT trip_packing_items_pkey PRIMARY KEY (id),
   CONSTRAINT trip_packing_items_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES auth.users(id),
+  CONSTRAINT trip_packing_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.trip_packing_category(id),
   CONSTRAINT trip_packing_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT trip_packing_items_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
 );
@@ -1673,4 +1674,15 @@ CREATE TABLE public.trip_documents (
   CONSTRAINT trip_documents_pkey PRIMARY KEY (id),
   CONSTRAINT trip_documents_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT trip_documents_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
+);
+CREATE TABLE public.trip_packing_category (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  trip_id uuid NOT NULL,
+  name text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT trip_packing_category_pkey PRIMARY KEY (id),
+  CONSTRAINT trip_packing_category_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT trip_packing_category_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
 );

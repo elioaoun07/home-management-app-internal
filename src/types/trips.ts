@@ -59,7 +59,10 @@ export interface TripPackingItem {
   user_id: string;
   trip_id: string;
   name: string;
+  /** Legacy free-text category retained while existing rows are manually migrated. */
   category: string | null;
+  category_id: string | null;
+  packing_category?: TripPackingCategory | null;
   quantity: number;
   packed_quantity: number;
   is_packed: boolean;
@@ -70,6 +73,15 @@ export interface TripPackingItem {
   updated_at: string;
   /** Household member this item is assigned to pack. Null = unassigned/either. */
   assigned_to: string | null;
+}
+
+export interface TripPackingCategory {
+  id: string;
+  user_id: string;
+  trip_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface TripDocument {
@@ -147,7 +159,9 @@ export type UpdateTripPlaceInput = Partial<CreateTripPlaceInput>;
 
 export interface CreateTripPackingItemInput {
   name: string;
+  /** Legacy free-text category retained while existing rows are manually migrated. */
   category?: string | null;
+  category_id?: string | null;
   quantity?: number;
   position?: number;
   inventory_item_id?: string | null;
@@ -157,7 +171,9 @@ export interface CreateTripPackingItemInput {
 
 export interface UpdateTripPackingItemInput {
   name?: string;
+  /** Legacy free-text category retained while existing rows are manually migrated. */
   category?: string | null;
+  category_id?: string | null;
   quantity?: number;
   packed_quantity?: number;
   is_packed?: boolean;

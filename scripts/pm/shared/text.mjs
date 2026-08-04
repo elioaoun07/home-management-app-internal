@@ -10,8 +10,7 @@ export function cleanInlineText(value) {
   return String(value || "")
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\((?:<[^>]+>|[^)]+)\)/g, "$1")
+    .replace(/\s+_\([^)]*\)_\s*$/g, "")
     .replace(/[`*_~]/g, "")
-    .replace(/\s+_\([^)]*\)\s*$/g, "")
     .replace(/\s+/g, " ").trim();
 }
-

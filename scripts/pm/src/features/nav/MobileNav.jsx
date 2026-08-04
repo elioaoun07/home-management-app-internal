@@ -6,10 +6,10 @@ import { Icon } from "../../components/Icon.jsx";
 // had no phone-reachable entry point at all before this.
 const TABS = [
   { href: "/", icon: "home", label: "Home" },
-  { href: "/tasks", icon: "tasks", label: "Tasks" },
-  { href: "/search", icon: "search", label: "Search" },
-  { href: "/inbox", icon: "inbox", label: "Inbox" },
+  { href: "/work", icon: "tasks", label: "Work" },
+  { href: "/projects", icon: "projects", label: "Projects" },
   { href: "/delivery", icon: "bolt", label: "Delivery", serverOnly: true },
+  { href: "/activity", icon: "activity", label: "Activity" },
 ];
 
 // Fixed bottom tab bar for phone-width viewports (shown ≤700px via mobile.css).

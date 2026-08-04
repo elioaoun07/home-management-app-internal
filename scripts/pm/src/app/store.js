@@ -118,6 +118,20 @@ export async function archiveTask(relPath, cbidx, mode, reason) {
     (result) => runMutation("restore", { snapshots: result.undo }, "Restored"));
 }
 
+export async function moveTask(task, toHeading) {
+  if (!task || task.section === toHeading) return;
+  const file = byRelPath.value.get(task.file.toLowerCase());
+  const target = file ? scanCheckboxes(file.raw)[task.cbidx] : null;
+  if (!file || !target) return;
+  const expectLine = file.raw.split("\n")[target.line];
+  return runMutation(
+    "move-task",
+    { file: task.file, cbidx: task.cbidx, expectLine, toHeading },
+    `${task.idChip || "Task"} moved to ${toHeading}`,
+    (result) => runMutation("restore", { snapshots: result.undo }, "Move undone"),
+  );
+}
+
 export async function runMutation(op, body, success, undo = null) {
   if (offlineSnapshot.value) { showToast("Viewing an offline snapshot — reconnect to your laptop to make changes.", { type: "error" }); throw new Error("offline"); }
   try {

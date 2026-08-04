@@ -228,9 +228,9 @@ function writeAll(writes) {
 
 /**
  * Archive ONE checklist item by its checkbox ordinal.
- * @param {{pmDir, repoRoot, pmRelFromRoot, file, cbidx, mode, reason, date}} args
+ * @param {{pmDir:string, repoRoot:string, pmRelFromRoot:string, file:string, cbidx:number, mode:string, reason?:string, date?:string}} args
  *        mode: "ship" | "discard"
- * @returns {{ok:true, stamp, target, undo:[{path,raw}]}}
+ * @returns {{ok:true, stamp:string, target:string, date:string, campaign:string, undo:Array<{path:string,raw:string|null}>, idChip:string|null}}
  * @throws  Error with `.status` on any precondition failure.
  */
 export function archiveItem(args) {
@@ -291,7 +291,7 @@ export function archiveItem(args) {
 /**
  * Sweep every ticked item out of every campaign checklist. One pass per
  * campaign so a failure in one leaves the others intact (and reported).
- * @returns {{swept:[], errors:[], undo:[{path,raw}]}}
+ * @returns {{swept:Array<{campaign:string,date:string,stamp:string,idChip:string|null,target:string}>, errors:Array<{campaign:string,error:string}>, undo:Array<{path:string,raw:string|null}>}}
  */
 export function sweepAll({ pmDir, repoRoot, pmRelFromRoot, dryRun = false }) {
   const swept = [];

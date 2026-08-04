@@ -39,6 +39,7 @@ import {
   sanitizeBaseName,
   stripNumPrefix,
   toggleCheckbox,
+  moveCheckboxUnderHeading,
 } from "./pm/mutations.mjs";
 import { archiveItem, monthlySweep, restoreSnapshots } from "./pm/archive.mjs";
 import { hostAllowed } from "./pm/net.mjs";
@@ -271,7 +272,25 @@ function opAppend(b) {
     : /\u0000$^/;
   const out = appendUnderHeading(raw, headingRe, line);
   writeFileSync(abs, out, "utf8");
-  return { ok: true, raw: out };
+  return { ok: true, raw: out, undo: [{ path: b.file, raw }] };
+}
+
+function opMoveTask(b) {
+  const lane = String(b.toHeading || "");
+  if (!["Now", "Next", "Later"].includes(lane)) throw fail(400, "invalid lane");
+  const abs = resolveInside(PM_DIR, b.file);
+  if (!existsSync(abs)) throw fail(404, "file not found");
+  const raw = readFileSync(abs, "utf8");
+  const result = moveCheckboxUnderHeading(raw, b.cbidx, lane, b.expectLine);
+  if (!result.ok) throw fail(409, result.reason);
+  writeFileSync(abs, result.raw, "utf8");
+  return {
+    ok: true,
+    raw: result.raw,
+    fromHeading: result.fromHeading,
+    toHeading: result.toHeading,
+    undo: [{ path: b.file, raw }],
+  };
 }
 
 // Ship / Discard: a checklist item leaves the queue and becomes a dated stamp
@@ -303,6 +322,7 @@ const MUTATIONS = {
   create: opCreate,
   delete: opDelete,
   append: opAppend,
+  "move-task": opMoveTask,
 };
 
 // ---- SSE live-reload (fs.watch -> debounced broadcast) ----

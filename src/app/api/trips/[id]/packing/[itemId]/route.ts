@@ -8,7 +8,9 @@ export const dynamic = "force-dynamic";
 
 const patchSchema = z.object({
   name: z.string().min(1).max(300).optional(),
+  // Kept during the owner's manual backfill of legacy items.
   category: z.string().max(100).nullish(),
+  category_id: z.string().uuid().nullish(),
   quantity: z.number().int().positive().optional(),
   packed_quantity: z.number().int().min(0).optional(),
   is_packed: z.boolean().optional(),
@@ -34,12 +36,23 @@ export async function PATCH(
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
+  if (parsed.data.category_id) {
+    const { data: category, error: categoryError } = await supabase
+      .from("trip_packing_category")
+      .select("id")
+      .eq("id", parsed.data.category_id)
+      .eq("trip_id", id)
+      .maybeSingle();
+    if (categoryError) return NextResponse.json({ error: categoryError.message }, { status: 500 });
+    if (!category) return NextResponse.json({ error: "Category does not belong to this trip" }, { status: 400 });
+  }
+
   const { data, error } = await supabase
     .from("trip_packing_items")
     .update({ ...parsed.data, updated_at: new Date().toISOString() })
     .eq("id", itemId)
     .eq("trip_id", id)
-    .select()
+    .select("*, packing_category:trip_packing_category!trip_packing_items_category_id_fkey(*)")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -16,7 +16,7 @@ related:
 
 > **Module:** `src/features/trips/` | **API:** `src/app/api/trips/` | **Pages:** `src/app/trips/`, `src/app/trips/[id]/`
 > **Components:** `src/components/trips/`
-> **DB Tables:** `trips`, `trip_places`, `trip_packing_items`, `trip_documents`, `trip_side_effects`
+> **DB Tables:** `trips`, `trip_places`, `trip_packing_category`, `trip_packing_items`, `trip_documents`, `trip_side_effects`
 > **Type:** Junction (bridges Budget + Items/Chores/Recurring + Meal Planning + Catalogue)
 > **Status:** Active
 
@@ -90,6 +90,8 @@ No RLS is enabled on `trips`/`trip_places`/`trip_packing_items`/`trip_side_effec
 
 `custom_packing_categories jsonb` *(added 2026-08-03)*: user-added packing category names for this trip. The 8 built-in categories (Documents, Clothes, Electronics, Toiletries, Health, Money, Accessories, Other) are a code constant (`src/constants/packingCategories.ts`) and are never stored — only categories beyond those live here. Written via the collaborative `PATCH /api/trips/[id]/packing/categories` route (not the owner-only trip PATCH route — see Visibility note below).
 
+`trip_packing_category` *(added 2026-08-04)*: collaborative, per-trip category lookup rows. `trip_packing_items.category_id` references a category row and is the source of truth for new packing items; category CRUD lives at `GET/POST /api/trips/[id]/packing/categories` and `PATCH/DELETE /api/trips/[id]/packing/categories/[categoryId]`. The legacy free-text `trip_packing_items.category` and `trips.custom_packing_categories` JSON remain temporarily so existing data can be manually migrated without a destructive release. The new table follows the rest of Trips' app-layer access pattern: every route uses `getAccessibleTrip()` and no RLS policy is added.
+
 ### `trip_places`
 Saved hotels/activities/restaurants/etc. `priority IN ('mandatory','flexible','wishlist')`. `scheduled_date` + `scheduled_time` + `end_time` place the item in the day-by-day itinerary (`src/components/trips/itinerary/ItineraryView.tsx`); a `null` `scheduled_date` puts it in the "Ideas" bucket. `confirmation_code` and `address` *(added 2026-08-03)* back the copy-to-clipboard and "Directions" (Google Maps deep link) affordances on the itinerary row. Child of `trips` with `ON DELETE CASCADE`. Denormalized `user_id` for direct RLS policy. `position` is honored for the untimed "anytime" items on a day (drag-reorder via dnd-kit + `POST .../places/reorder`); timed items are always time-sorted.
 
@@ -131,6 +133,8 @@ Reversal ledger. One row per side effect fired at activation. `previous_value js
 - `itemsKeys.all` — schedule/items
 - `flexibleRoutinesKeys.all` — chores
 - `mealPlanKeys.all` — meal planning
+
+- `src/features/trips/hooks.ts` also owns `useTripPackingCategories()` and the collaborative packing-category CRUD hooks.
 
 ## Gotchas
 

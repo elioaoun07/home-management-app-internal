@@ -12,6 +12,7 @@ import type {
   CreateTripPlaceInput,
   Trip,
   TripDocument,
+  TripPackingCategory,
   TripPackingItem,
   TripPlace,
   UpdateTripDocumentInput,
@@ -50,6 +51,12 @@ async function fetchTripPlaces(tripId: string): Promise<TripPlace[]> {
 async function fetchTripPacking(tripId: string): Promise<TripPackingItem[]> {
   const res = await fetch(`/api/trips/${tripId}/packing`);
   if (!res.ok) throw new Error("Failed to fetch packing list");
+  return res.json();
+}
+
+async function fetchTripPackingCategories(tripId: string): Promise<TripPackingCategory[]> {
+  const res = await fetch(`/api/trips/${tripId}/packing/categories`);
+  if (!res.ok) throw new Error("Failed to fetch packing categories");
   return res.json();
 }
 
@@ -99,11 +106,21 @@ export function useTripPacking(tripId: string) {
   });
 }
 
+export function useTripPackingCategories(tripId: string) {
+  return useQuery({
+    queryKey: tripKeys.packingCategories(tripId),
+    queryFn: () => fetchTripPackingCategories(tripId),
+    staleTime: 1000 * 60 * 5,
+    enabled: !!tripId,
+  });
+}
+
 interface TripBundle {
   trip: Trip;
   is_owner: boolean;
   places: TripPlace[];
   packing: TripPackingItem[];
+  packing_categories: TripPackingCategory[];
   documents: TripDocument[];
 }
 
@@ -126,6 +143,7 @@ export function useTripBundle(tripId: string) {
       qc.setQueryData(tripKeys.detail(tripId), { ...bundle.trip, is_owner: bundle.is_owner });
       qc.setQueryData(tripKeys.places(tripId), bundle.places);
       qc.setQueryData(tripKeys.packing(tripId), bundle.packing);
+      qc.setQueryData(tripKeys.packingCategories(tripId), bundle.packing_categories);
       qc.setQueryData(tripKeys.documents(tripId), bundle.documents);
       return bundle;
     },
@@ -486,6 +504,10 @@ export function useCreatePackingItem(tripId: string) {
         trip_id: tripId,
         name: input.name,
         category: input.category ?? null,
+        category_id: input.category_id ?? null,
+        packing_category: input.category_id
+          ? qc.getQueryData<TripPackingCategory[]>(tripKeys.packingCategories(tripId))?.find((category) => category.id === input.category_id) ?? null
+          : null,
         quantity: input.quantity ?? 1,
         packed_quantity: 0,
         is_packed: false,
@@ -581,6 +603,81 @@ export function useUpdatePackingItem(tripId: string) {
   });
 }
 
+export function useCreatePackingCategory(tripId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name }: { name: string }) => {
+      const res = await safeFetch(`/api/trips/${tripId}/packing/categories`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to add category");
+      }
+      return res.json() as Promise<TripPackingCategory>;
+    },
+    onSuccess: (category) => {
+      qc.invalidateQueries({ queryKey: tripKeys.packingCategories(tripId) });
+      const undo = () => {
+        safeFetch(`/api/trips/${tripId}/packing/categories/${category.id}`, { method: "DELETE" }).then(() => {
+          qc.invalidateQueries({ queryKey: tripKeys.packingCategories(tripId) });
+          qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) });
+        });
+      };
+      toast.success("Category added", {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: { label: "Undo", onClick: undo },
+      });
+    },
+    onError: () => toast.error("Failed to add category", { icon: ToastIcons.error }),
+  });
+}
+
+export function useUpdatePackingCategory(tripId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const res = await safeFetch(`/api/trips/${tripId}/packing/categories/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to update category");
+      }
+      return res.json() as Promise<TripPackingCategory>;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: tripKeys.packingCategories(tripId) });
+      qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) });
+    },
+    onError: () => toast.error("Failed to update category", { icon: ToastIcons.error }),
+  });
+}
+
+export function useDeletePackingCategory(tripId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (categoryId: string) => {
+      const res = await safeFetch(`/api/trips/${tripId}/packing/categories/${categoryId}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to remove category");
+      }
+    },
+    onSuccess: () => {
+      // Deleting a category unsets linked item references and cannot be safely undone.
+      qc.invalidateQueries({ queryKey: tripKeys.packingCategories(tripId) });
+      qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) });
+    },
+    onError: () => toast.error("Failed to remove category", { icon: ToastIcons.error }),
+  });
+}
+
 export function useBulkCreatePackingItems(tripId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -598,9 +695,13 @@ export function useBulkCreatePackingItems(tripId: string) {
     },
     onSuccess: (items) => {
       qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) });
+      const undo = () => Promise.all(
+        items.map((item) => safeFetch(`/api/trips/${tripId}/packing/${item.id}`, { method: "DELETE" })),
+      ).then(() => qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) }));
       toast.success(`${items.length} item${items.length === 1 ? "" : "s"} added`, {
         icon: ToastIcons.create,
         duration: 4000,
+        action: { label: "Undo", onClick: undo },
       });
     },
     onError: () => toast.error("Failed to add items", { icon: ToastIcons.error }),
@@ -640,28 +741,6 @@ export function useReorderPackingItems(tripId: string) {
   });
 }
 
-export function useUpdatePackingCategories(tripId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (categories: string[]) => {
-      const res = await safeFetch(`/api/trips/${tripId}/packing/categories`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ categories }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "Failed to save category");
-      }
-      return res.json() as Promise<Trip>;
-    },
-    onSuccess: (trip) => {
-      qc.setQueryData(tripKeys.detail(trip.id), trip);
-    },
-    onError: () => toast.error("Failed to save category", { icon: ToastIcons.error }),
-  });
-}
-
 export function useDeletePackingItem(tripId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -682,7 +761,13 @@ export function useDeletePackingItem(tripId: string) {
         await safeFetch(`/api/trips/${tripId}/packing`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: deleted.name, category: deleted.category, quantity: deleted.quantity }),
+          body: JSON.stringify({
+            name: deleted.name,
+            category: deleted.category,
+            category_id: deleted.category_id,
+            quantity: deleted.quantity,
+            assigned_to: deleted.assigned_to,
+          }),
         });
         qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) });
       };

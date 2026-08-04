@@ -151,3 +151,46 @@ export function appendUnderHeading(raw, headingRe, line) {
   lines.splice(insertAt, 0, line);
   return lines.join("\n");
 }
+
+/**
+ * Move one Markdown checkbox line into another heading in the same file.
+ *
+ * `expectedLine` is the optimistic-concurrency token used by the live PM
+ * server: if an external edit changed the selected row after the UI loaded,
+ * the operation returns a conflict instead of moving the wrong task.
+ */
+export function moveCheckboxUnderHeading(raw, cbidx, heading, expectedLine) {
+  var source = String(raw);
+  var boxes = scanCheckboxes(source);
+  var target = boxes[cbidx];
+  if (!target) return { ok: false, reason: "out-of-range" };
+
+  var lines = source.split("\n");
+  var line = lines[target.line];
+  if (expectedLine != null && line !== expectedLine) {
+    return { ok: false, reason: "stale-line" };
+  }
+
+  var fromHeading = "Other";
+  for (var i = target.line - 1; i >= 0; i--) {
+    var match = lines[i].match(/^#{1,6}\s+(.+?)\s*$/);
+    if (match) {
+      fromHeading = match[1];
+      break;
+    }
+  }
+
+  lines.splice(target.line, 1);
+  var without = lines.join("\n");
+  var escaped = String(heading).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  var headingRe = new RegExp("^#{1,6}\\s+" + escaped + "\\s*$", "im");
+  if (!headingRe.test(without)) return { ok: false, reason: "heading-not-found" };
+
+  return {
+    ok: true,
+    raw: appendUnderHeading(without, headingRe, line),
+    line,
+    fromHeading,
+    toHeading: String(heading),
+  };
+}

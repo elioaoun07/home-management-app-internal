@@ -14,6 +14,7 @@ describe("PM shared parsing", () => {
     expect(fileTasks(raw).map((task) => [task.cbidx, task.idChip, task.state])).toEqual([[0, "N4", "open"], [1, null, "done"]]);
     expect(parseMarkdown(raw).flatMap((block) => block.type === "list" ? block.items : []).filter((item) => item?.checkbox)).toHaveLength(2);
     expect(parseTaskMeta("**N4** Build it _(blocker - S)_").severity).toBe("blocker");
+    expect(parseTaskMeta("**N4** Build it _(blocker - S)_").text).toBe("N4 Build it");
   });
 
   it("parses canonical prefixed / hyphenated / lettered IDs", () => {
@@ -41,6 +42,9 @@ describe("PM shared parsing", () => {
   it("parses filters, routes, and fuzzy matches", () => {
     expect(parseQuery("m:Budget is:open N4")).toEqual({ filters: { m: "Budget", is: "open" }, text: "N4" });
     expect(parseRoute("#/doc/Budget/4%20-%20Checklist.md?cb=2")).toMatchObject({ name: "doc", relPath: "Budget/4 - Checklist.md" });
+    expect(parseRoute("#/work?q=s%3Ablocker")).toMatchObject({ name: "tasks", mode: "board" });
+    expect(parseRoute("#/projects")).toMatchObject({ name: "projects" });
+    expect(parseRoute("#/activity")).toMatchObject({ name: "activity" });
     expect(legacyRouteToHash('{"type":"file","relPath":"Budget/4 - Checklist.md"}')).toBe("#/doc/Budget/4%20-%20Checklist.md");
     expect(fuzzyScore("n4", "Budget N4 task")).toBeGreaterThan(fuzzyScore("n4", "Budget next task"));
   });

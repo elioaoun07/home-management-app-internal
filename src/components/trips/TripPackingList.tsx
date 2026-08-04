@@ -2,21 +2,22 @@
 
 import {
   useBulkCreatePackingItems,
+  useCreatePackingCategory,
   useCreatePackingItem,
+  useDeletePackingCategory,
   useDeletePackingItem,
   useReorderPackingItems,
-  useTrip,
   useTripPacking,
-  useUpdatePackingCategories,
+  useTripPackingCategories,
+  useUpdatePackingCategory,
   useUpdatePackingItem,
 } from "@/features/trips/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
-import { BUILTIN_PACKING_CATEGORIES } from "@/constants/packingCategories";
 import { PACKING_PRESETS, type PackingPreset } from "@/constants/packingPresets";
-import type { TripPackingItem } from "@/types/trips";
+import type { TripPackingCategory, TripPackingItem } from "@/types/trips";
 import { MoreHorizontal, Plus, Trash2, ChevronLeft, Pencil, X, GripVertical, RotateCcw, Sparkles } from "lucide-react";
 import { useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
@@ -57,15 +58,34 @@ import { CSS } from "@dnd-kit/utilities";
 // ── Category metadata ────────────────────────────────────────────────────────
 
 type CategoryMeta = {
-  gradient: string;
+  /** Base hex for the tile wash. Kept as a raw value (not a Tailwind class) so the
+   * gradient is applied inline like iconColor/borderColor — a lookup table like this
+   * is exactly the shape Tailwind's scanner handles badly, and a missing/stale
+   * `from-*` class silently renders a flat, colourless tile. */
+  gradientColor: string;
+  /** Opacity stops for the wash, defaults to [0.35, 0.15, 0.05]. */
+  gradientStops?: [number, number, number] | number[];
   iconColor: string;
   borderColor: string;
   icon: (color: string) => React.ReactNode;
 };
 
+/** Appends an 8-bit alpha channel to a #rrggbb value. */
+function withAlpha(hex: string, alpha: number): string {
+  return `${hex}${Math.round(alpha * 255).toString(16).padStart(2, "0")}`;
+}
+
+/** Builds the tile wash as an inline `linear-gradient`, mirroring the three-stop
+ * `from-X/35 via-X/15 to-X/5` ramp the tiles used to get from Tailwind. */
+function categoryGradient(meta: CategoryMeta, direction: "to bottom right" | "to bottom"): string {
+  const [from, via, to] = meta.gradientStops ?? [0.35, 0.15, 0.05];
+  const c = meta.gradientColor;
+  return `linear-gradient(${direction}, ${withAlpha(c, from)} 0%, ${withAlpha(c, via)} 50%, ${withAlpha(c, to)} 100%)`;
+}
+
 const CATEGORY_META: Record<string, CategoryMeta> = {
   Documents: {
-    gradient: "from-amber-500/35 via-amber-500/15 to-amber-500/5",
+    gradientColor: "#f59e0b",
     iconColor: "#fbbf24",
     borderColor: "rgba(251,191,36,0.25)",
     icon: (c) => (
@@ -81,7 +101,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     ),
   },
   Clothes: {
-    gradient: "from-blue-500/35 via-blue-500/15 to-blue-500/5",
+    gradientColor: "#3b82f6",
     iconColor: "#60a5fa",
     borderColor: "rgba(96,165,250,0.25)",
     icon: (c) => (
@@ -92,7 +112,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     ),
   },
   Electronics: {
-    gradient: "from-violet-500/35 via-violet-500/15 to-violet-500/5",
+    gradientColor: "#8b5cf6",
     iconColor: "#a78bfa",
     borderColor: "rgba(167,139,250,0.25)",
     icon: (c) => (
@@ -104,7 +124,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     ),
   },
   Toiletries: {
-    gradient: "from-cyan-500/35 via-cyan-500/15 to-cyan-500/5",
+    gradientColor: "#06b6d4",
     iconColor: "#22d3ee",
     borderColor: "rgba(34,211,238,0.25)",
     icon: (c) => (
@@ -116,7 +136,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     ),
   },
   Health: {
-    gradient: "from-rose-500/35 via-rose-500/15 to-rose-500/5",
+    gradientColor: "#f43f5e",
     iconColor: "#fb7185",
     borderColor: "rgba(251,113,133,0.25)",
     icon: (c) => (
@@ -127,7 +147,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     ),
   },
   Money: {
-    gradient: "from-emerald-500/35 via-emerald-500/15 to-emerald-500/5",
+    gradientColor: "#10b981",
     iconColor: "#34d399",
     borderColor: "rgba(52,211,153,0.25)",
     icon: (c) => (
@@ -142,7 +162,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     ),
   },
   Accessories: {
-    gradient: "from-pink-500/35 via-pink-500/15 to-pink-500/5",
+    gradientColor: "#ec4899",
     iconColor: "#f472b6",
     borderColor: "rgba(244,114,182,0.25)",
     icon: (c) => (
@@ -159,7 +179,8 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     ),
   },
   Other: {
-    gradient: "from-slate-400/30 via-slate-400/12 to-slate-400/4",
+    gradientColor: "#94a3b8",
+    gradientStops: [0.3, 0.12, 0.04],
     iconColor: "#94a3b8",
     borderColor: "rgba(148,163,184,0.2)",
     icon: (c) => (
@@ -172,19 +193,175 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
       </svg>
     ),
   },
+  Shoes: {
+    gradientColor: "#f97316",
+    iconColor: "#fb923c",
+    borderColor: "rgba(251,146,60,0.25)",
+    // Shoe outline from Tabler Icons (MIT) — https://tabler.io/icons/icon/shoe
+    // 24×24 source grid; stroke width tuned down from Tabler's 2 to sit at the same
+    // visual weight as the hand-drawn 40×40 icons around it.
+    icon: (c) => (
+      <svg viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" className="w-10 h-10">
+        <path d="M4 6h5.426a1 1 0 0 1 .863 .496l1.064 1.823a3 3 0 0 0 1.896 1.407l4.677 1.114a4 4 0 0 1 3.074 3.89v2.27a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-10a1 1 0 0 1 1 -1" />
+        <path d="M14 13l1 -2" />
+        <path d="M8 18v-1a4 4 0 0 0 -4 -4h-1" />
+        <path d="M10 12l1.5 -3" />
+      </svg>
+    ),
+  },
+  Bags: {
+    gradientColor: "#14b8a6",
+    iconColor: "#2dd4bf",
+    borderColor: "rgba(45,212,191,0.25)",
+    icon: (c) => (
+      <svg viewBox="0 0 40 40" fill="none" className="w-10 h-10">
+        <rect x="7" y="14" width="26" height="18" rx="3" stroke={c} strokeWidth="1.6" />
+        <path d="M15 14v-2.5a3 3 0 013-3h4a3 3 0 013 3V14" stroke={c} strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M7 21h26" stroke={c} strokeWidth="1.2" strokeLinecap="round" opacity="0.4" />
+        <path d="M17 21v5M23 21v5" stroke={c} strokeWidth="1.3" strokeLinecap="round" opacity="0.55" />
+      </svg>
+    ),
+  },
+  Swim: {
+    gradientColor: "#818cf8",
+    iconColor: "#818cf8",
+    borderColor: "rgba(129,140,248,0.25)",
+    // Two-piece swimwear: linked cups with shoulder straps above a swim bottom.
+    // Hand-drawn — no permissively-licensed swimwear glyph exists in Tabler/Lucide.
+    icon: (c) => (
+      <svg viewBox="0 0 40 40" fill="none" stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="w-10 h-10">
+        <path d="M9 11l4.5 4M31 11l-4.5 4" />
+        <circle cx="13.5" cy="16" r="5.5" />
+        <circle cx="26.5" cy="16" r="5.5" />
+        <path d="M19 16h2" />
+        <path d="M10 26.5c3.3-1.8 6.6-1.8 10 0 3.4-1.8 6.7-1.8 10 0l-2.5 6.8c-2.2-1.2-4.9-1.2-7.5 0-2.6-1.2-5.3-1.2-7.5 0z" />
+      </svg>
+    ),
+  },
 };
 
-const PACKING_CATEGORIES: readonly string[] = BUILTIN_PACKING_CATEGORIES;
+/** Substring aliases so category names close to a built-in (case, pluralization,
+ * compound names like "Documents & Wallet") still resolve to the right meta
+ * instead of falling through to the generic palette. Checked in order — more
+ * specific terms first so e.g. "swimwear" matches Swim before any clothing term. */
+const CATEGORY_ALIASES: Array<[RegExp, keyof typeof CATEGORY_META]> = [
+  [/swim|underwear|bikini|lingerie/, "Swim"],
+  [/shoe|footwear|sneaker|boot|sandal/, "Shoes"],
+  [/\bbag|luggage|suitcase|backpack/, "Bags"],
+  [/document|passport|wallet/, "Documents"],
+  [/cloth|shirt|outfit|apparel/, "Clothes"],
+  [/electronic|gadget|charger|cable|tech/, "Electronics"],
+  [/toiletr|hygiene|cosmetic/, "Toiletries"],
+  [/health|medic|pharma|first.?aid/, "Health"],
+  [/money|cash|currency|financ/, "Money"],
+  [/accessor|jewel|watch|sunglass/, "Accessories"],
+];
 
-function getCategoryMeta(cat: string): CategoryMeta {
-  return (
-    CATEGORY_META[cat] ?? {
-      gradient: "from-slate-400/30 via-slate-400/12 to-slate-400/4",
-      iconColor: "#94a3b8",
-      borderColor: "rgba(148,163,184,0.2)",
-      icon: CATEGORY_META.Other.icon,
-    }
+/** Deterministic fallback for anything that matches no built-in or alias — a
+ * rotating palette so unrecognized categories still look distinct from each
+ * other rather than all collapsing onto the same flat gray "Other" look. */
+const FALLBACK_PALETTE: CategoryMeta[] = [
+  {
+    gradientColor: "#84cc16",
+    iconColor: "#a3e635",
+    borderColor: "rgba(163,230,53,0.25)",
+    icon: (c) => (
+      <svg viewBox="0 0 40 40" fill="none" className="w-10 h-10">
+        <path d="M20 5l4.5 9.2 10.1 1.5-7.3 7.1 1.7 10.1L20 28.3l-9 4.6 1.7-10.1-7.3-7.1 10.1-1.5z" stroke={c} strokeWidth="1.6" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    gradientColor: "#d946ef",
+    iconColor: "#e879f9",
+    borderColor: "rgba(232,121,249,0.25)",
+    icon: (c) => (
+      <svg viewBox="0 0 40 40" fill="none" className="w-10 h-10">
+        <polygon points="20,5 33,13 33,27 20,35 7,27 7,13" stroke={c} strokeWidth="1.6" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    gradientColor: "#0ea5e9",
+    iconColor: "#38bdf8",
+    borderColor: "rgba(56,189,248,0.25)",
+    icon: (c) => (
+      <svg viewBox="0 0 40 40" fill="none" className="w-10 h-10">
+        <circle cx="20" cy="20" r="14" stroke={c} strokeWidth="1.6" />
+        <path d="M20 12v8l6 4" stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    gradientColor: "#ef4444",
+    gradientStops: [0.3, 0.12, 0.04],
+    iconColor: "#f87171",
+    borderColor: "rgba(248,113,113,0.2)",
+    icon: (c) => (
+      <svg viewBox="0 0 40 40" fill="none" className="w-10 h-10">
+        <path d="M20 32s-14-9.5-14-19a8 8 0 0114-5.3A8 8 0 0134 13c0 9.5-14 19-14 19z" stroke={c} strokeWidth="1.6" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    gradientColor: "#facc15",
+    iconColor: "#facc15",
+    borderColor: "rgba(250,204,21,0.25)",
+    icon: (c) => (
+      <svg viewBox="0 0 40 40" fill="none" className="w-10 h-10">
+        <path d="M22 4L9 23h8l-3 13 15-21h-9z" stroke={c} strokeWidth="1.6" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    gradientColor: "#a855f7",
+    iconColor: "#c084fc",
+    borderColor: "rgba(192,132,252,0.25)",
+    icon: (c) => (
+      <svg viewBox="0 0 40 40" fill="none" className="w-10 h-10">
+        <circle cx="20" cy="20" r="13" stroke={c} strokeWidth="1.6" />
+        <circle cx="20" cy="20" r="6.5" stroke={c} strokeWidth="1.4" opacity="0.6" />
+      </svg>
+    ),
+  },
+];
+
+type CategoryRef = Pick<TripPackingCategory, "id" | "name"> | { id: null; name: string };
+
+function categoryKey(category: CategoryRef): string {
+  return category.id ? `category:${category.id}` : `legacy:${category.name}`;
+}
+
+/** Simple deterministic string hash (djb2) — stable across renders/sessions so
+ * a given category id always lands on the same fallback palette entry. */
+function hashString(str: string): number {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) hash = (hash * 33) ^ str.charCodeAt(i);
+  return Math.abs(hash);
+}
+
+/**
+ * Resolves display metadata for a packing category. Categories are DB rows
+ * (`trip_packing_category`) with an id + free-typed name, not a fixed enum —
+ * the user can create any name at any time. Resolution order:
+ *   1. Exact match (case-insensitive) against a built-in name.
+ *   2. Keyword alias match (handles compounds like "Documents & Wallet").
+ *   3. Deterministic fallback palette, hashed on the category's stable `id`
+ *      (falling back to name for the legacy id-less "Other"/free-text bucket)
+ *      so a renamed category keeps its look instead of jumping to a new one.
+ */
+function getCategoryMeta(category: CategoryRef): CategoryMeta {
+  const normalized = category.name.trim().toLowerCase();
+  const exact = (Object.keys(CATEGORY_META) as Array<keyof typeof CATEGORY_META>).find(
+    (key) => key.toLowerCase() === normalized,
   );
+  if (exact) return CATEGORY_META[exact];
+
+  const alias = CATEGORY_ALIASES.find(([pattern]) => pattern.test(normalized));
+  if (alias) return CATEGORY_META[alias[1]];
+
+  const hashKey = category.id ?? category.name;
+  return FALLBACK_PALETTE[hashString(hashKey) % FALLBACK_PALETTE.length];
 }
 
 // ── Quantity stepper ─────────────────────────────────────────────────────────
@@ -547,11 +724,11 @@ function ItemRow({
 
 function InlineAddRow({
   tripId,
-  category,
+  categoryId,
   iconColor,
 }: {
   tripId: string;
-  category: string;
+  categoryId: string | null;
   iconColor: string;
 }) {
   const createItem = useCreatePackingItem(tripId);
@@ -564,7 +741,7 @@ function InlineAddRow({
     const trimmed = name.trim();
     if (!trimmed) { setActive(false); return; }
     createItem.mutate(
-      { name: trimmed, category: category === "Other" ? null : category, quantity: qty },
+      { name: trimmed, category_id: categoryId, quantity: qty },
       {
         onSuccess: () => {
           setName("");
@@ -573,7 +750,7 @@ function InlineAddRow({
         },
       },
     );
-  }, [name, qty, category, createItem]);
+  }, [name, qty, categoryId, createItem]);
 
   if (!active) {
     return (
@@ -630,25 +807,29 @@ function RenameCategorySheet({
   open,
   onOpenChange,
 }: {
-  category: string;
+  category: CategoryRef;
   items: TripPackingItem[];
   tripId: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
   const tc = useThemeClasses();
+  const updateCategory = useUpdatePackingCategory(tripId);
+  const deleteCategory = useDeletePackingCategory(tripId);
   const updateItem = useUpdatePackingItem(tripId);
-  const [newName, setNewName] = useState(category);
+  const [newName, setNewName] = useState(category.name);
   const [saving, setSaving] = useState(false);
 
   const handleRename = async () => {
     const trimmed = newName.trim();
-    if (!trimmed || trimmed === category) { onOpenChange(false); return; }
+    if (!trimmed || trimmed === category.name) { onOpenChange(false); return; }
     setSaving(true);
     try {
-      await Promise.all(
-        items.map((item) => updateItem.mutateAsync({ id: item.id, category: trimmed === "Other" ? null : trimmed })),
-      );
+      if (category.id) {
+        await updateCategory.mutateAsync({ id: category.id, name: trimmed });
+      } else {
+        await Promise.all(items.map((item) => updateItem.mutateAsync({ id: item.id, category: trimmed === "Other" ? null : trimmed })));
+      }
       onOpenChange(false);
     } finally {
       setSaving(false);
@@ -658,9 +839,11 @@ function RenameCategorySheet({
   const handleDeleteCategory = async () => {
     setSaving(true);
     try {
-      await Promise.all(
-        items.map((item) => updateItem.mutateAsync({ id: item.id, category: null })),
-      );
+      if (category.id) {
+        await deleteCategory.mutateAsync(category.id);
+      } else {
+        await Promise.all(items.map((item) => updateItem.mutateAsync({ id: item.id, category: null })));
+      }
       onOpenChange(false);
     } finally {
       setSaving(false);
@@ -718,7 +901,7 @@ function CategoryFocusPanel({
   partnerName,
   onClose,
 }: {
-  category: string;
+  category: CategoryRef;
   items: TripPackingItem[];
   tripId: string;
   currentUserId?: string | null;
@@ -730,8 +913,6 @@ function CategoryFocusPanel({
   const meta = getCategoryMeta(category);
   const reorderItems = useReorderPackingItems(tripId);
   const [orderedIds, setOrderedIds] = useState<string[]>(items.map((i) => i.id));
-  // Track items added while the panel was open for the deferred toast
-  const initialCountRef = useRef(items.length);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -754,13 +935,6 @@ function CategoryFocusPanel({
   };
 
   const handleClose = () => {
-    const added = items.length - initialCountRef.current;
-    if (added > 0) {
-      toast.success(
-        added === 1 ? "1 item added" : `${added} items added`,
-        { icon: ToastIcons.create, duration: 3000 },
-      );
-    }
     onClose();
   };
   const packed = items.filter((i) => i.is_packed).length;
@@ -775,8 +949,8 @@ function CategoryFocusPanel({
       >
         {/* Subtle gradient tint behind header */}
         <div
-          className={cn("absolute inset-x-0 top-0 h-48 bg-gradient-to-b pointer-events-none", meta.gradient)}
-          style={{ opacity: 0.45 }}
+          className="absolute inset-x-0 top-0 h-48 pointer-events-none"
+          style={{ backgroundImage: categoryGradient(meta, "to bottom"), opacity: 0.45 }}
         />
 
         {/* Header */}
@@ -791,7 +965,7 @@ function CategoryFocusPanel({
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <div>
-                <h2 className="text-base font-semibold text-white leading-tight">{category}</h2>
+                <h2 className="text-base font-semibold text-white leading-tight">{category.name}</h2>
                 <span
                   className="text-xs font-medium tabular-nums"
                   style={{ color: allPacked && total > 0 ? "#34d399" : meta.iconColor }}
@@ -802,7 +976,7 @@ function CategoryFocusPanel({
             </div>
 
             <div className="flex items-center gap-2">
-              {items.length > 0 && (
+              {category.id && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="w-9 h-9 rounded-full flex items-center justify-center text-white/30 hover:text-white/60 hover:bg-white/10 transition-colors">
@@ -869,7 +1043,7 @@ function CategoryFocusPanel({
               ))}
             </SortableContext>
           </DndContext>
-          <InlineAddRow tripId={tripId} category={category} iconColor={meta.iconColor} />
+          <InlineAddRow tripId={tripId} categoryId={category.id} iconColor={meta.iconColor} />
         </div>
       </div>
 
@@ -893,7 +1067,7 @@ function CategoryCard({
   items,
   onOpen,
 }: {
-  category: string;
+  category: CategoryRef;
   items: TripPackingItem[];
   onOpen: () => void;
 }) {
@@ -911,8 +1085,8 @@ function CategoryCard({
     >
       {/* Gradient bg */}
       <div
-        className={cn("absolute inset-0 bg-gradient-to-br", meta.gradient)}
-        style={{ opacity: allPacked ? 0.6 : 1 }}
+        className="absolute inset-0"
+        style={{ backgroundImage: categoryGradient(meta, "to bottom right"), opacity: allPacked ? 0.6 : 1 }}
       />
       <div
         className="absolute inset-0 rounded-2xl"
@@ -932,7 +1106,7 @@ function CategoryCard({
         </div>
 
         {/* Category name */}
-        <p className="text-white/85 text-sm font-medium mt-2 leading-tight">{category}</p>
+        <p className="text-white/85 text-sm font-medium mt-2 leading-tight">{category.name}</p>
 
         {/* Count + progress */}
         <div className="mt-1.5">
@@ -971,13 +1145,13 @@ type AssignFilter = "all" | "mine" | "partner";
 export function TripPackingList({ tripId }: { tripId: string }) {
   const tc = useThemeClasses();
   const { data: allItems = [], isLoading } = useTripPacking(tripId);
-  const { data: trip } = useTrip(tripId);
+  const { data: packingCategories = [] } = useTripPackingCategories(tripId);
   const { data: household } = useHouseholdMembers();
   const [addCatOpen, setAddCatOpen] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
-  const [focusedCategory, setFocusedCategory] = useState<string | null>(null);
+  const [focusedCategory, setFocusedCategory] = useState<CategoryRef | null>(null);
   const [assignFilter, setAssignFilter] = useState<AssignFilter>("all");
-  const updateCategories = useUpdatePackingCategories(tripId);
+  const createCategory = useCreatePackingCategory(tripId);
   const bulkCreate = useBulkCreatePackingItems(tripId);
   const updatePackingItem = useUpdatePackingItem(tripId);
 
@@ -996,45 +1170,62 @@ export function TripPackingList({ tripId }: { tripId: string }) {
   const total = items.length;
   const anyPacked = allItems.some((i) => i.is_packed || i.packed_quantity > 0);
 
-  const persistedCustomCategories = trip?.custom_packing_categories ?? [];
+  const categoriesById = new Map(packingCategories.map((category) => [category.id, category]));
+  const categories: CategoryRef[] = [...packingCategories, { id: null, name: "Other" }];
 
   // Build category map — seed all 8 defaults + persisted custom ones
   const byCategory: Record<string, TripPackingItem[]> = {};
-  for (const cat of PACKING_CATEGORIES) byCategory[cat] = [];
-  for (const cat of persistedCustomCategories) if (!byCategory[cat]) byCategory[cat] = [];
+  for (const category of categories) byCategory[categoryKey(category)] = [];
   for (const item of items) {
-    const key = item.category ?? "Other";
+    const category = item.category_id ? categoriesById.get(item.category_id) : null;
+    const key = category
+      ? categoryKey(category)
+      : categoryKey({ id: null, name: item.category ?? "Other" });
     if (!byCategory[key]) byCategory[key] = [];
     byCategory[key].push(item);
   }
 
-  const allCategories = [
-    ...PACKING_CATEGORIES,
-    ...Object.keys(byCategory).filter((c) => !PACKING_CATEGORIES.includes(c)),
-  ];
+  const legacyCategories: CategoryRef[] = Object.keys(byCategory)
+    .filter((key) => !categories.some((category) => categoryKey(category) === key))
+    .map((key) => ({ id: null, name: key.replace("legacy:", "") }));
+  const allCategories = [...categories, ...legacyCategories];
 
   const handleCategoryCreated = (name: string) => {
     const trimmed = name.trim();
-    if (!trimmed || allCategories.includes(trimmed)) {
-      if (trimmed) setFocusedCategory(trimmed);
+    const existing = allCategories.find((category) => category.name.toLocaleLowerCase() === trimmed.toLocaleLowerCase());
+    if (!trimmed || existing) {
+      if (existing) setFocusedCategory(existing);
       return;
     }
-    updateCategories.mutate([...persistedCustomCategories, trimmed]);
-    setFocusedCategory(trimmed);
+    createCategory.mutate({ name: trimmed }, { onSuccess: (category) => setFocusedCategory(category) });
   };
 
-  const handleApplyPreset = (preset: PackingPreset) => {
-    bulkCreate.mutate(preset.items.map((i) => ({ name: i.name, category: i.category, quantity: i.quantity ?? 1 })));
+  const handleApplyPreset = async (preset: PackingPreset) => {
+    const categoryByName = new Map(packingCategories.map((category) => [category.name.toLocaleLowerCase(), category]));
+    const namesToCreate = [...new Set(preset.items.map((item) => item.category))]
+      .filter((name) => !categoryByName.has(name.toLocaleLowerCase()));
+    const createdCategories = await Promise.all(namesToCreate.map((name) => createCategory.mutateAsync({ name })));
+    for (const category of createdCategories) categoryByName.set(category.name.toLocaleLowerCase(), category);
+    bulkCreate.mutate(preset.items.map((item) => ({
+      name: item.name,
+      category_id: categoryByName.get(item.category.toLocaleLowerCase())?.id ?? null,
+      quantity: item.quantity ?? 1,
+    })));
     setPresetOpen(false);
   };
 
   const handleReturnSweep = () => {
     const packedItems = allItems.filter((i) => i.is_packed || i.packed_quantity > 0);
     if (packedItems.length === 0) return;
+    const previous = packedItems.map((item) => ({ id: item.id, packed_quantity: item.packed_quantity, is_packed: item.is_packed }));
     Promise.all(
       packedItems.map((item) => updatePackingItem.mutateAsync({ id: item.id, packed_quantity: 0, is_packed: false })),
     ).then(() => {
-      toast.success("Packing list reset for next trip", { icon: ToastIcons.success, duration: 4000 });
+      toast.success("Packing list reset for next trip", {
+        icon: ToastIcons.success,
+        duration: 4000,
+        action: { label: "Undo", onClick: () => Promise.all(previous.map((item) => updatePackingItem.mutateAsync(item))) },
+      });
     });
   };
 
@@ -1115,12 +1306,12 @@ export function TripPackingList({ tripId }: { tripId: string }) {
           <p className={cn("text-sm text-center py-4", tc.textFaint)}>Loading…</p>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            {allCategories.map((cat) => (
+            {allCategories.map((category) => (
               <CategoryCard
-                key={cat}
-                category={cat}
-                items={byCategory[cat] ?? []}
-                onOpen={() => setFocusedCategory(cat)}
+                key={categoryKey(category)}
+                category={category}
+                items={byCategory[categoryKey(category)] ?? []}
+                onOpen={() => setFocusedCategory(category)}
               />
             ))}
           </div>
@@ -1140,7 +1331,7 @@ export function TripPackingList({ tripId }: { tripId: string }) {
       {focusedCategory !== null && (
         <CategoryFocusPanel
           category={focusedCategory}
-          items={byCategory[focusedCategory] ?? []}
+          items={byCategory[categoryKey(focusedCategory)] ?? []}
           tripId={tripId}
           currentUserId={currentUserId}
           partnerId={partnerId}

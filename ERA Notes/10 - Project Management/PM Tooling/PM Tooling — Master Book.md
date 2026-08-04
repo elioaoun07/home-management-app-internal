@@ -1,6 +1,6 @@
 ---
 created: 2026-07-13
-updated: 2026-08-01
+updated: 2026-08-03
 type: master-book
 status: active
 owner: Elio
@@ -50,7 +50,7 @@ The PM system is the owner's command centre: a markdown corpus under `ERA Notes/
 | Tooling | 8 (+1) | a full SPA (10 feature dirs, SSE, router, store), PWA manifest + service worker, static-twin parity test, 7 pm-ui test files. Cost: velocity briefly broke typecheck |
 | Handoff readiness | 6 | doc edits are any-model (grammar is linted and tested); tooling edits are mid-tier (bespoke untyped JS, but test-guarded) |
 
-**Dashboard reality:** the Preact Command Center is the default live dashboard — hash routes with browser history, ERA themes, module/document views, backlinks, canonical interactive checkboxes, a JIRA-style task board and table, MiniSearch global search with a Ctrl+K palette, rollups, file operations, and a re-skinned Delivery surface. Checkbox identity has a *constructional* safety guard: one dependency-free scanner serves mutations, Markdown, tasks and tests, with a parity test comparing it against the literal legacy algorithm across all 358 real PM files. The portable twin uses the same bundle with Geist vendored and inlined. A dedicated mobile home and bottom nav render below 700 px, and the Delivery gates, questions, monitoring and launch wizard are usable one-handed.
+**Dashboard reality:** the Preact Command Center is the default live dashboard — hash routes with browser history, ERA light/dark themes, an action-led Overview, Work Queue, Projects, Delivery and Activity workspace, module/document views, backlinks, canonical interactive checkboxes, MiniSearch global search with a Ctrl+K palette, rollups, file operations, and governed Delivery controls. Checkbox identity has a *constructional* safety guard: one dependency-free scanner serves mutations, Markdown, tasks and tests, with a parity test comparing it against the literal legacy algorithm across all real PM files. The portable twin uses the same bundle with Geist vendored and inlined. A dedicated mobile home and bottom nav render below 700 px, and the Delivery gates, questions, monitoring and launch wizard are usable one-handed.
 
 ## Pain Inventory
 
@@ -69,7 +69,7 @@ The PM system is the owner's command centre: a markdown corpus under `ERA Notes/
 - 🟠 **Hard Rule 12 (Zod on all API input) holds on only a third of mutating routes** — 113 of 170 `route.ts` files exporting POST/PATCH/PUT import no Zod at all. Unvalidated request bodies reaching money and schedule writes is the highest-consequence version of this gap; the rule is prose-only with nothing mechanical behind it. Measured 2026-08-01.
 - 🟡 **Hard Rule 1 ("ALL toasts must have an Undo button") is unachievable as written and is therefore ignored** — 781 toast call sites, 169 with an `action:`. But 417 of them are `toast.error(`, which has no meaningful inverse; the rule only makes sense for mutation-confirming toasts, where it holds at 165/345 `toast.success(` sites. A rule that mandates the impossible trains everyone to treat Hard Rules as advisory. Needs rescoping to "every toast that confirms a completed mutation". Measured 2026-08-01.
 - 🟢 **Rules with mechanical enforcement are the rules that hold** — the audit's central finding. Hook-enforced (11 `components/ui`, 23 Atlas, 24 migration pairing, 25 PM trace) and permission-enforced (26 Supabase deny; observed blocking a real `apply_migration` attempt this window) are all clean. Prose-only rules split by temptation: 7 (`navigator.onLine`) is *exemplary* — zero violations, and all six greps hits are comments explaining the compliance — as are 8 (6/6 cron routes carry bearer + `supabaseAdmin` + `maxDuration`), 15 (no `neo-card` on floating panels) and 19 (2 `type="number"`, one of which is a comment citing the rule). The prose rules that fail are exactly the ones with constant pull against them (6, 12, 22).
-- 🟠 **`cleanInlineText()` strips markdown emphasis before the meta-suffix regex runs, so the regex never matches** → `scripts/pm/shared/text.mjs:12-13`. `PmTask.text` (and every other consumer of `fileTasks`/`checklistItems`: `lint.mjs`, the desktop Preact board, the bridge) still carries the raw `IDCHIP … (severity - effort)` text instead of the clean prose the field name implies. Mitigated at the display layer in `/pm/live` only (`derive.ts`'s `displayText()`, 2026-07-31, R40) — the desktop Preact board and any other future consumer still get the unstripped string until the one-line ordering fix lands in `text.mjs` itself.
+- ✅ ~~**`cleanInlineText()` stripped markdown emphasis before the meta-suffix regex ran, so task titles repeated metadata.**~~ *(FIXED 2026-08-03, R41 — the canonical parser now strips the `_(severity - effort)_` suffix before emphasis, with shared-parser coverage.)*
 - 🟡 **`SegmentedPanes`' tap-to-select can silently fail to scroll on the Chromium `scroll-snap-mandatory` + JS `scrollTo({behavior:"smooth"})` combination** — the pill's active state and the `pane=` URL param update correctly, but the visible content can stay on the previous pane. Confirmed via raw `element.scrollTo()` outside React (`behavior:"instant"` works, `"smooth"` silently no-ops against the snap container) during the 2026-07-31 mobile rebuild's verification pass; not something that pass changed, and the primary interaction (a real touch swipe) drives the scroll natively rather than through this path, so it may be an automated-browser-only symptom — needs a real-device check before anyone touches it.
 
 ## Shipped Log
@@ -96,6 +96,8 @@ The PM system is the owner's command centre: a markdown corpus under `ERA Notes/
 - ✅ 2026-07-31 — **R39** `/pm/live` rebuilt phone-only (owner: "too cluttered, texts are too much, size is too small") — the `lg:` desktop layout and `SideNav` are gone, nav is 4 tabs + a raised centre Capture FAB (long-press = quick Launch), a 12px content-text floor with `neo-card`-style elevation replaces the old 4%-opacity/10px surface, Board rows and detail sheets stop printing the ID chip and severity/effort twice (see R40), Campaigns is reachable on the phone for the first time (was `desktopOnly`), Usage moved off the tab bar onto a Home "Spend" tile, and `/pm/live` gained its own installable manifest (`public/manifests/pm-live.webmanifest`, distinct from `/pm`'s). All four session panes (Q&A/Chat/Files/Cost) kept, enlarged, with badge counts always visible.
 - ✅ 2026-07-31 — **R40** fixed the display-layer duplication bug: `PmTask.text` still carries the ID chip and the `(severity - effort)` suffix because `cleanInlineText()` in `scripts/pm/shared/text.mjs` strips the underscores the meta-regex needs before that regex runs, so it never matches — every row rendering the ID chip and severity/effort as their own affordances was printing both twice. Added `displayText(task)` in `derive.ts` (display-only; `task.text` stays the raw search corpus) with test coverage in `tests/pm-live-derive.test.ts`. The upstream one-line fix in `text.mjs` was deliberately not taken here — shared by `lint.mjs`, the desktop Preact app and the bridge, wider blast radius than a UI pass — see the `## Next` item below.
 - ✅ 2026-08-01 — **R49** Automate the checklist sweep — Ship / Discard row actions with Undo, a git-dated `pnpm pm:archive` CLI, and a once-a-month auto-sweep on `pnpm pm` boot; discarded items land in `_Archive/Cancelled Log.md` → `scripts/pm/archive.mjs`
+- ✅ 2026-08-03 — **R41** fixed the shared task-text stripping order so every PM consumer receives clean prose instead of duplicated ID/severity metadata (`shared/text.mjs`; parsing regression test)
+- ✅ 2026-08-03 — **R50** transformed `pnpm pm` around real owner workflows: action-led Overview, movable Work Queue with undoable Markdown lane changes, portfolio Projects, unified Activity/audit history, visible execution lanes, compact preview-aligned light/dark themes, and responsive workspace navigation (`scripts/pm/src/`; 60 PM UI tests + bundle + typecheck)
 
 ## Delivery session log
 
@@ -106,6 +108,8 @@ The PM system is the owner's command centre: a markdown corpus under `ERA Notes/
 ### Where the dashboard is going
 
 The Command Center should behave like an application the owner opens daily, not a document viewer. Concretely, in priority order:
+
+*(IMPLEMENTED 2026-08-03 — R50: the daily workspace now begins with decisions, current focus and priority work; Projects, Activity and governed execution lanes are first-class surfaces, and queue cards mutate the Markdown source with Undo.)*
 
 1. **The basics have to actually work.** Hide-completed must apply everywhere a checkbox renders — especially the document view — and the control must be reachable at every width.
 2. **Search and the Inbox are first-class destinations**, with sidebar and mobile-nav entries, not hidden behind a keyboard shortcut and a three-step navigation.
@@ -137,7 +141,7 @@ The Command Center should behave like an application the owner opens daily, not 
 - **Acceptance:** Search and Inbox each have a sidebar entry and a mobile tab; `#/inbox` lists New and Processed entries with capture available in server mode; `id:`, `lane:` and `e:` narrow results.
 
 ### R32
-- **Acceptance:** `#/tasks?q=s%3Ablocker&group=lane` survives a reload with the filter intact; chips toggle their filter on and off; group-by renders labelled sections with counts.
+- **Acceptance:** `#/work?q=s%3Ablocker&group=lane` survives a reload with the filter intact (`#/tasks` remains a legacy alias); chips toggle their filter on and off; group-by renders labelled sections with counts.
 
 ## Successor Briefing
 

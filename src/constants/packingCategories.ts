@@ -6,12 +6,13 @@
 // these lives alongside the CategoryCard UI in src/components/trips/TripPackingList.tsx.
 
 export const BUILTIN_PACKING_CATEGORIES = [
-  "Documents",
-  "Clothes",
-  "Electronics",
-  "Toiletries",
-  "Health",
-  "Money",
-  "Accessories",
-  "Other",
+ "Clothes",
+ "Underwear & Swimwear",
+ "Shoes",
+ "Toiletries",
+ "Health",
+ "Electronics",
+ "Accessories",
+ "Bags & Travel Gear",
+ "Documents & Wallet",
 ] as const;

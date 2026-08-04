@@ -68,6 +68,37 @@ export async function POST(
     );
   }
 
+  const { data: packingCategories, error: categoriesError } = await supabase
+    .from("trip_packing_category")
+    .select("*")
+    .eq("trip_id", id);
+
+  if (categoriesError) {
+    return NextResponse.json({ error: categoriesError.message }, { status: 500 });
+  }
+
+  const categoryIdMap = new Map<string, string>();
+  if (packingCategories?.length) {
+    const { data: newCategories, error: newCategoriesError } = await supabase
+      .from("trip_packing_category")
+      .insert(packingCategories.map(({ id: _id, created_at: _c, updated_at: _u, trip_id: _t, ...rest }) => ({
+        ...rest,
+        user_id: user.id,
+        trip_id: newTrip.id,
+      })))
+      .select("id, name");
+
+    if (newCategoriesError || !newCategories) {
+      return NextResponse.json({ error: newCategoriesError?.message ?? "Failed to clone packing categories" }, { status: 500 });
+    }
+
+    const newCategoryIdByName = new Map(newCategories.map((category) => [category.name, category.id]));
+    for (const category of packingCategories) {
+      const newCategoryId = newCategoryIdByName.get(category.name);
+      if (newCategoryId) categoryIdMap.set(category.id, newCategoryId);
+    }
+  }
+
   const { data: packingItems } = await supabase
     .from("trip_packing_items")
     .select("*")
@@ -76,10 +107,11 @@ export async function POST(
 
   if (packingItems?.length) {
     await supabase.from("trip_packing_items").insert(
-      packingItems.map(({ id: _id, created_at: _c, updated_at: _u, trip_id: _t, is_packed: _p, packed_quantity: _pq, ...rest }) => ({
+      packingItems.map(({ id: _id, created_at: _c, updated_at: _u, trip_id: _t, is_packed: _p, packed_quantity: _pq, category_id, ...rest }) => ({
         ...rest,
         user_id: user.id,
         trip_id: newTrip.id,
+        category_id: category_id ? categoryIdMap.get(category_id) ?? null : null,
         is_packed: false,
         packed_quantity: 0,
       })),
