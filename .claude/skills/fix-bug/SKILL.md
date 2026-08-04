@@ -23,6 +23,28 @@ REPRO: <steps, or "not reproducible — evidence is X">
 - "Which user" matters here: many bugs are household-linking bugs that only occur for partner-owned data.
 - If the user references a logged error, check the Error Logs module (`src/app/error-logs/`, API `src/app/api/error-logs/`) for the structured entry before theorizing.
 
+## Phase 1.5 — GATE: is this a visibility bug? Then get DB state before reading code
+
+**Trigger:** ACTUAL is "can't see it" / "list is empty" / "works for me, not for my partner" / "shared record not showing" / any permission-shaped symptom **with no error message**.
+
+**Do this before Phase 2.** Reading routes cannot clear RLS, because RLS lives only in the live DB — `migrations/schema.sql` is a tables-only export (Hard Rule #27). Hand the owner Hard Rule #27's two queries (`pg_class.relrowsecurity` + `pg_policies`, untruncated) and wait.
+
+Why this is non-negotiable — the 2026-08-04 Trips bug, which is why this gate exists:
+- Household trips were invisible to the partner. `GET /api/trips`, `getAccessibleTrip()` and `get_trip_bundle()` were **all correct**.
+- `trips`/`trip_places`/`trip_packing_items` had RLS **on** with own-user-only policies. RLS stripped the rows before the route's filter ran: correct logic, zero rows, **no error**.
+- Three repo documents asserted "no RLS on the trips family." All three were wrong, and one had caused a new table to ship deliberately policy-free.
+- Cost: five turns of re-reading correct code, one confidently-wrong root cause, and a near-miss "fix" to a working route.
+
+Fast discriminators, in order:
+1. **Does a SECURITY DEFINER RPC path work where the PostgREST path doesn't?** (e.g. detail loads via `get_*_bundle` but the list is empty.) SECURITY DEFINER bypasses RLS — this disagreement is near-proof of RLS.
+2. **Does a sibling feature with the same sharing model work?** If Accounts shares fine but Trips doesn't, partner *resolution* is fine and the difference is per-table policy.
+3. **Silent + asymmetric = RLS.** Errors point at code; silence points at the DB.
+
+**STOP conditions:**
+- Never conclude "the code is fine, so it must be data" without the `pg_policies` output in hand.
+- Never edit a route you have just verified is correct in order to chase the symptom. Say it's correct, and go get DB state.
+- Treat a truncated `pg_policies` result as no result — you need `permissive` and `qual`, or a permissive policy you add may be overridden by a restrictive one you never saw.
+
 ## Phase 2 — Locate via the index, not via search
 
 1. `ERA Notes/01 - Architecture/Feature Map/_index.md` → module file → **exact source paths**.
@@ -50,7 +72,7 @@ This app's recurring bug signatures — check these FIRST before inventing a nov
 |---|---|---|
 | UI shows stale data after a save/delete | Missing/incomplete cache invalidation | Mutation's `onSuccess` — see `cache-invalidation` skill; balance-affecting mutations must call `invalidateAccountData(queryClient, accountId?)` from `src/lib/queryInvalidation.ts` |
 | App flags "offline" during a long operation (AI, upload) | `safeFetch` call missing `timeoutMs` — default timeout (see `DEFAULT_TIMEOUT_MS` in `src/lib/safeFetch.ts`) aborts and calls `markOffline()` | The mutation's `safeFetch(...)` options |
-| Partner's data missing (or leaking when it shouldn't) | Household-link logic: `ownOnly` / `is_public` / `household=true` flag mismatch | `src/app/api/accounts/route.ts` GET is the canonical pattern; helper `getActiveHouseholdPartnerId` in `src/lib/accountAccess.ts` |
+| Partner's data missing (or leaking when it shouldn't) | **1st: RLS has no household-aware policy** (silent row-strip — see the Phase 1.5 gate). 2nd: household-link logic — `ownOnly` / `is_public` / `household=true` flag mismatch | **RLS first**: `pg_class.relrowsecurity` + `pg_policies` for every table in the path. Only then `src/app/api/accounts/route.ts` GET (canonical pattern) and `getActiveHouseholdPartnerId` in `src/lib/accountAccess.ts` |
 | 500 error when creating a duplicate | Unique violation `23505` not mapped to `409` | The route's insert error handling |
 | Times shift by 2–3 h, or recurrence lands on wrong hour after DST | Naive date string / hand-rolled RRule | `timezone-handling` skill; utils in `src/lib/utils/date.ts` |
 | A page/list got dramatically slow | RLS `EXISTS`-subquery on a hot child table, or N sequential PostgREST calls instead of one bundle RPC | Hard Rules 20/21; `get_schedule_bundle` is the canonical fix pattern |

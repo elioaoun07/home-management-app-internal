@@ -213,7 +213,13 @@
       "Bash(sed -i '1061s/getCategoryMeta\\(category.name\\)/getCategoryMeta\\(category\\)/' src/components/trips/TripPackingList.tsx)",
       "Bash(pkill -f \"http.server 8971\")",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(pkill -f \"http.server 897\")"
+      "Bash(pkill -f \"http.server 897\")",
+      "Bash(export CLAUDE_PROJECT_DIR='C:\\\\Users\\\\aoune\\\\WebApp\\\\budget-app')",
+      "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/session-brief.sh')",
+      "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/block-ui-dir.sh')",
+      "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/check-migration.sh')",
+      "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/update-atlas.sh')",
+      "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/check-pm-update.sh')"
     ]
   }
 }

@@ -21,6 +21,7 @@ Deep-dive state of every module lives in its PM campaign's **Master Book** (`ERA
 
 ## Before You Code — Mandatory Checklist
 
+0. **Is the bug shaped like "X can't see Y"?** (partner/household can't see shared data, empty list with no error, works for one user but not another) — then **stop and run Hard Rule #27's two RLS queries before reading any code.** RLS is invisible to this repo; no amount of route-reading can rule it out, and the repo has actively lied about it before. Skip this gate only if the symptom is not visibility/permission-shaped.
 1. **For edit / bug-fix tasks, read the Feature Map first** — open `ERA Notes/01 - Architecture/Feature Map/_index.md`, find the matching module, then read that module's MD file to get exact source file paths. Do this **before** Glob / Grep / Read on source files. It is the cheapest and most accurate router from user intent → files to edit.
 2. **Identify the module type** (Standalone or Junction — see Module Model below) before scoping work
 3. **Check the Feature Index** for the deeper vault doc in `ERA Notes/`
@@ -129,6 +130,22 @@ Never use graphify as a substitute for ERA Notes — it cannot infer hard rules,
    - **`data-repair` skill runbooks are deliverables, not actions.** Produce the inspect/backup/fix/verify SQL for the owner to execute; the agent never executes it.
    - **If a task appears to require a DB write:** stop, state exactly what write is needed and why, and hand it to the owner. A blocked task reported honestly is correct; a silently-executed write is a breach.
 
+27. **Visibility / permission bugs: ask for the DB's RLS state BEFORE reading application code.** *(Added 2026-08-04 after this exact loop cost five turns and a false root cause.)* When the symptom is shaped like **"X can't see Y"** — partner/household can't see a shared record, a role sees an empty list, data appears for one user but not another, a list is silently empty with no error — the filter is at least as likely to be in **RLS** as in the route. RLS is invisible to this repo, so reading route code cannot rule it out, and correct-looking code is *not* evidence the code is fine.
+
+   - **First action, before Grep/Read on any route:** hand the owner this and wait for the output. It is two queries and it ends the guessing:
+     ```sql
+     select relname, relrowsecurity from pg_class c
+       join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname='public' and relname in (<every table in the read path>);
+     select tablename, policyname, permissive, cmd, qual from pg_policies
+      where schemaname='public' and tablename in (<same list>);
+     ```
+     Ask for it **untruncated** — a cut-off `qual`/`permissive` column is how you end up shipping a permissive policy that a restrictive one overrides.
+   - **No repo artifact is evidence about RLS.** Not `schema.sql` (tables-only), not a vault Overview, not a migration comment, not a Master Book entry, not this file. A doc claim about DB state is a **hypothesis to verify**, never a fact to reason from. In the 2026-08-04 Trips bug, three separate documents asserted "no RLS on the trips family" and all three were wrong; the false claim was even load-bearing, since a new table had been deliberately shipped policy-free *because* of it.
+   - **Silent-empty is the signature.** RLS never errors — it removes rows. So "correct query + zero rows + no error + works for the owner but not the partner" is the RLS fingerprint. Conversely, if a SECURITY DEFINER RPC path works while the equivalent PostgREST path doesn't, that is near-proof of RLS, because SECURITY DEFINER bypasses it. Check whether the two paths disagree *early* — it is the cheapest discriminator in the codebase.
+   - **Don't "fix" correct code to chase a symptom.** If every layer you read is right, say so and go get DB state; do not start rewriting working routes on a hunch.
+   - **When adding any child table**, give it a policy in the same migration, or state explicitly in the migration why it needs none. "The parent has no RLS" is not a reason — verify the parent.
+
 ---
 
 ## Module Model
@@ -202,8 +219,8 @@ Located in `src/contexts/`. Always use the `Safe` variant in components that may
 ## Database
 
 > **`migrations/schema.sql` is the single source of truth for tables/columns.** Read it before writing any SQL. Never assume a column exists.
-> **Caveat:** the live DB remains the final authority for RLS and functions — treat it as truth before any auth/RLS work (see `migrations/_verify_schedule_rls.md` for the verification queries).
-> *(Corrected 2026-08-01: this caveat previously claimed the export captures "tables only" and that RLS policies and function bodies are NOT in the repo. That is no longer true — `schema.sql` now contains the full policy set (see the `items` and `*_via_parent` policies) and a FUNCTIONS section including `get_schedule_bundle`. Doctrine §7.3: code wins over docs.)*
+> **Caveat — `schema.sql` CANNOT answer RLS or function questions. The live DB is the only authority.** The export is tables/columns/constraints only. Verify with `select relname, relrowsecurity from pg_class` and `select * from pg_policies`, never by reading this repo.
+> *(Re-corrected 2026-08-04. The "Corrected 2026-08-01" note that stood here was **false** and caused a production bug — it claimed `schema.sql` "now contains the full policy set (see the `items` and `*_via_parent` policies) and a FUNCTIONS section including `get_schedule_bundle`." None of that was ever in the file: `grep -c "_via_parent"` → 0, `grep -c "get_schedule_bundle"` → 0, no FUNCTIONS section, and `CREATE POLICY` count was 0 until the trips policies were hand-added on 2026-08-04. Believing that note is what made an agent treat "no policy in schema.sql" as "no RLS on the table" and spend five turns re-reading correct application code while RLS was the actual filter. See Hard Rule #27.)*
 
 DB changes = SQL run manually in Supabase SQL Editor. New tables must include RLS policies. **Always create a migration file first** (`migrations/YYYY-MM-DD_description.sql`), then update `schema.sql`. See Hard Rule #24.
 
