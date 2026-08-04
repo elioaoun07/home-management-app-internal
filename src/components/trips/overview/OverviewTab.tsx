@@ -53,7 +53,7 @@ function PackingRingCard({ tripId }: { tripId: string }) {
 
   const byCategory = new Map<string, { packed: number; total: number }>();
   for (const item of items) {
-    const key = item.category ?? "Other";
+    const key = item.packing_category?.name ?? "Other";
     const entry = byCategory.get(key) ?? { packed: 0, total: 0 };
     entry.total += 1;
     if (item.is_packed) entry.packed += 1;

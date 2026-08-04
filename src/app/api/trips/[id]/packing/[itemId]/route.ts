@@ -8,8 +8,6 @@ export const dynamic = "force-dynamic";
 
 const patchSchema = z.object({
   name: z.string().min(1).max(300).optional(),
-  // Kept during the owner's manual backfill of legacy items.
-  category: z.string().max(100).nullish(),
   category_id: z.string().uuid().nullish(),
   quantity: z.number().int().positive().optional(),
   packed_quantity: z.number().int().min(0).optional(),

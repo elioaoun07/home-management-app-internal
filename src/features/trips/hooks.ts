@@ -503,7 +503,6 @@ export function useCreatePackingItem(tripId: string) {
         user_id: "",
         trip_id: tripId,
         name: input.name,
-        category: input.category ?? null,
         category_id: input.category_id ?? null,
         packing_category: input.category_id
           ? qc.getQueryData<TripPackingCategory[]>(tripKeys.packingCategories(tripId))?.find((category) => category.id === input.category_id) ?? null
@@ -763,7 +762,6 @@ export function useDeletePackingItem(tripId: string) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: deleted.name,
-            category: deleted.category,
             category_id: deleted.category_id,
             quantity: deleted.quantity,
             assigned_to: deleted.assigned_to,

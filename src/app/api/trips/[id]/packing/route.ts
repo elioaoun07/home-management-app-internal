@@ -8,8 +8,6 @@ export const dynamic = "force-dynamic";
 
 const packingSchema = z.object({
   name: z.string().min(1).max(300),
-  // Kept during the owner's manual backfill of legacy items.
-  category: z.string().max(100).nullish(),
   category_id: z.string().uuid().nullish(),
   quantity: z.number().int().positive().default(1),
   position: z.number().int().default(0),
@@ -74,7 +72,6 @@ export async function POST(
       user_id: user.id,
       trip_id: id,
       name: d.name,
-      category: d.category ?? null,
       category_id: d.category_id ?? null,
       quantity: d.quantity,
       position: d.position,

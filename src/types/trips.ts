@@ -59,8 +59,6 @@ export interface TripPackingItem {
   user_id: string;
   trip_id: string;
   name: string;
-  /** Legacy free-text category retained while existing rows are manually migrated. */
-  category: string | null;
   category_id: string | null;
   packing_category?: TripPackingCategory | null;
   quantity: number;
@@ -159,8 +157,6 @@ export type UpdateTripPlaceInput = Partial<CreateTripPlaceInput>;
 
 export interface CreateTripPackingItemInput {
   name: string;
-  /** Legacy free-text category retained while existing rows are manually migrated. */
-  category?: string | null;
   category_id?: string | null;
   quantity?: number;
   position?: number;
@@ -171,8 +167,6 @@ export interface CreateTripPackingItemInput {
 
 export interface UpdateTripPackingItemInput {
   name?: string;
-  /** Legacy free-text category retained while existing rows are manually migrated. */
-  category?: string | null;
   category_id?: string | null;
   quantity?: number;
   packed_quantity?: number;

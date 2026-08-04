@@ -740,13 +740,22 @@ function InlineAddRow({
   const submit = useCallback(() => {
     const trimmed = name.trim();
     if (!trimmed) { setActive(false); return; }
+    const submittedQty = qty;
+
+    // Clear immediately: the mutation adds its own optimistic row, so this form
+    // is ready for the next item without waiting for the network round-trip.
+    setName("");
+    setQty(1);
+    requestAnimationFrame(() => inputRef.current?.focus());
+
     createItem.mutate(
-      { name: trimmed, category_id: categoryId, quantity: qty },
+      { name: trimmed, category_id: categoryId, quantity: submittedQty },
       {
-        onSuccess: () => {
-          setName("");
-          setQty(1);
-          inputRef.current?.focus();
+        onError: () => {
+          // Do not overwrite an item the user has started typing meanwhile.
+          setName((current) => current || trimmed);
+          setQty((current) => current === 1 ? submittedQty : current);
+          requestAnimationFrame(() => inputRef.current?.focus());
         },
       },
     );
@@ -786,7 +795,7 @@ function InlineAddRow({
       <QtyControl value={qty} onChange={setQty} />
       <button
         onClick={submit}
-        disabled={!name.trim() || createItem.isPending}
+        disabled={!name.trim()}
         className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center disabled:opacity-40 transition-opacity"
         style={{ backgroundColor: iconColor }}
       >
@@ -802,13 +811,11 @@ function InlineAddRow({
 
 function RenameCategorySheet({
   category,
-  items,
   tripId,
   open,
   onOpenChange,
 }: {
   category: CategoryRef;
-  items: TripPackingItem[];
   tripId: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -816,7 +823,6 @@ function RenameCategorySheet({
   const tc = useThemeClasses();
   const updateCategory = useUpdatePackingCategory(tripId);
   const deleteCategory = useDeletePackingCategory(tripId);
-  const updateItem = useUpdatePackingItem(tripId);
   const [newName, setNewName] = useState(category.name);
   const [saving, setSaving] = useState(false);
 
@@ -827,8 +833,6 @@ function RenameCategorySheet({
     try {
       if (category.id) {
         await updateCategory.mutateAsync({ id: category.id, name: trimmed });
-      } else {
-        await Promise.all(items.map((item) => updateItem.mutateAsync({ id: item.id, category: trimmed === "Other" ? null : trimmed })));
       }
       onOpenChange(false);
     } finally {
@@ -841,8 +845,6 @@ function RenameCategorySheet({
     try {
       if (category.id) {
         await deleteCategory.mutateAsync(category.id);
-      } else {
-        await Promise.all(items.map((item) => updateItem.mutateAsync({ id: item.id, category: null })));
       }
       onOpenChange(false);
     } finally {
@@ -1050,7 +1052,6 @@ function CategoryFocusPanel({
       {editOpen && (
         <RenameCategorySheet
           category={category}
-          items={items}
           tripId={tripId}
           open={editOpen}
           onOpenChange={setEditOpen}
@@ -1180,7 +1181,7 @@ export function TripPackingList({ tripId }: { tripId: string }) {
     const category = item.category_id ? categoriesById.get(item.category_id) : null;
     const key = category
       ? categoryKey(category)
-      : categoryKey({ id: null, name: item.category ?? "Other" });
+      : categoryKey({ id: null, name: "Other" });
     if (!byCategory[key]) byCategory[key] = [];
     byCategory[key].push(item);
   }
