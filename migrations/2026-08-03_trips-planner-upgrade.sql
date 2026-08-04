@@ -61,6 +61,16 @@ CREATE TABLE IF NOT EXISTS public.trip_documents (
 -- Inventory note added to the Trips Master Book in this same session). Adding a
 -- naive `user_id = auth.uid()` policy here would break partner access to household
 -- trips, same as it would for the other three tables — not fixed unilaterally.
+--
+-- *** CORRECTED 2026-08-04 — the paragraph above is factually wrong. ***
+-- `pg_class.relrowsecurity` shows RLS was ENABLED on trips/trip_places/
+-- trip_packing_items all along, with own-user-only policies — i.e. the very
+-- `user_id = auth.uid()` policy this comment warned would break partner access
+-- was already live and already breaking it (household trips were invisible to
+-- the partner). Only trip_documents genuinely had RLS off, which left it open to
+-- any authenticated user via PostgREST. Fixed in
+-- migrations/2026-08-04_trips-household-rls.sql. This migration is left
+-- unmodified because it has already been applied; do not re-run it.
 
 -- =============================================================================
 -- Phase 5 — get_trip_bundle: one round-trip read for Trip Detail

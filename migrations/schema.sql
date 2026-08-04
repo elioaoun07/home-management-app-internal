@@ -1686,3 +1686,65 @@ CREATE TABLE public.trip_packing_category (
   CONSTRAINT trip_packing_category_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT trip_packing_category_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
 );
+
+-- ===========================================================================
+-- TRIPS RLS (2026-08-04_trips-household-rls.sql)
+-- ===========================================================================
+-- This file is otherwise a tables-only export; the section below is maintained
+-- by hand because the trips family's RLS state was previously undocumented and
+-- actively mis-documented (the vault claimed no RLS existed on these tables,
+-- while the live DB had it enabled with own-user-only policies — that mismatch
+-- is what made partner trips invisible). Live DB remains authoritative.
+--
+-- RLS enabled: trips, trip_places, trip_packing_items, trip_packing_category,
+--              trip_documents.
+-- Own-user policies predating 2026-08-04 are still in place and are OR'd with
+-- the permissive household policies below.
+
+CREATE OR REPLACE FUNCTION public.is_household_partner(p_other_user_id uuid)
+ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT EXISTS (
+    SELECT 1 FROM public.household_links hl
+     WHERE hl.active
+       AND ((hl.owner_user_id = auth.uid() AND hl.partner_user_id = p_other_user_id)
+         OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = p_other_user_id))
+  );
+$function$;
+
+CREATE OR REPLACE FUNCTION public.trip_is_accessible(p_trip_id uuid)
+ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT EXISTS (
+    SELECT 1 FROM public.trips t
+     WHERE t.id = p_trip_id
+       AND (t.user_id = auth.uid()
+         OR (t.scope = 'household' AND public.is_household_partner(t.user_id)))
+  );
+$function$;
+
+CREATE POLICY trips_select_household_partner ON public.trips
+  FOR SELECT TO authenticated
+  USING (scope = 'household' AND public.is_household_partner(user_id));
+
+CREATE POLICY trip_places_household_access ON public.trip_places
+  FOR ALL TO authenticated
+  USING (public.trip_is_accessible(trip_id))
+  WITH CHECK (public.trip_is_accessible(trip_id));
+
+CREATE POLICY trip_packing_items_household_access ON public.trip_packing_items
+  FOR ALL TO authenticated
+  USING (public.trip_is_accessible(trip_id))
+  WITH CHECK (public.trip_is_accessible(trip_id));
+
+CREATE POLICY trip_packing_category_household_access ON public.trip_packing_category
+  FOR ALL TO authenticated
+  USING (public.trip_is_accessible(trip_id))
+  WITH CHECK (public.trip_is_accessible(trip_id));
+
+CREATE POLICY trip_documents_household_access ON public.trip_documents
+  FOR ALL TO authenticated
+  USING (public.trip_is_accessible(trip_id))
+  WITH CHECK (public.trip_is_accessible(trip_id));
