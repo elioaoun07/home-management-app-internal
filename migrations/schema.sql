@@ -13,6 +13,8 @@ CREATE TABLE public.accounts (
   position integer NOT NULL DEFAULT 0,
   visible boolean NOT NULL DEFAULT true,
   is_public boolean NOT NULL DEFAULT false,
+  currency text NOT NULL DEFAULT 'USD'::text,
+  exchange_rate numeric NOT NULL DEFAULT 1 CHECK (exchange_rate > 0::numeric),
   CONSTRAINT accounts_pkey PRIMARY KEY (id),
   CONSTRAINT accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -64,6 +66,7 @@ CREATE TABLE public.transactions (
   statement_hash text,
   deleted_at timestamp with time zone,
   receipt_url text,
+  exchange_rate numeric CHECK (exchange_rate > 0::numeric),
   CONSTRAINT transactions_pkey PRIMARY KEY (id),
   CONSTRAINT transactions_category_fk FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
   CONSTRAINT transactions_subcategory_fk FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
@@ -834,6 +837,8 @@ CREATE TABLE public.transfers (
   returned_amount numeric DEFAULT 0 CHECK (returned_amount >= 0::numeric),
   household_link_id uuid,
   deleted_at timestamp with time zone,
+  to_amount numeric CHECK (to_amount > 0::numeric),
+  exchange_rate numeric CHECK (exchange_rate > 0::numeric),
   CONSTRAINT transfers_pkey PRIMARY KEY (id),
   CONSTRAINT transfers_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT transfers_from_account_id_fkey FOREIGN KEY (from_account_id) REFERENCES public.accounts(id),
@@ -1769,3 +1774,36 @@ CREATE POLICY trip_documents_household_access ON public.trip_documents
   FOR ALL TO authenticated
   USING (public.trip_is_accessible(trip_id))
   WITH CHECK (public.trip_is_accessible(trip_id));
+
+-- ===========================================================================
+-- MULTI-CURRENCY (2026-08-04_multi-currency.sql)
+-- ===========================================================================
+-- accounts.currency / accounts.exchange_rate hold the account's CURRENT rate
+-- (USD value of 1 unit of that currency). transactions.exchange_rate is the
+-- FROZEN rate at the moment the transaction was logged, so historical USD
+-- dashboard totals never move when the account's rate is edited later.
+-- No new RLS: these are column adds on tables whose existing policies already
+-- cover accounts/transactions/transfers. The trigger below is not client-callable.
+
+CREATE OR REPLACE FUNCTION public.stamp_transaction_exchange_rate()
+ RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
+ SET search_path = public
+AS $function$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.exchange_rate IS NULL THEN
+      SELECT a.exchange_rate INTO NEW.exchange_rate
+        FROM public.accounts a WHERE a.id = NEW.account_id;
+    END IF;
+  ELSIF NEW.account_id IS DISTINCT FROM OLD.account_id THEN
+    SELECT a.exchange_rate INTO NEW.exchange_rate
+      FROM public.accounts a WHERE a.id = NEW.account_id;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+CREATE TRIGGER trg_stamp_tx_exchange_rate
+  BEFORE INSERT OR UPDATE OF account_id ON public.transactions
+  FOR EACH ROW
+  EXECUTE FUNCTION public.stamp_transaction_exchange_rate();

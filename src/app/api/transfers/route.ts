@@ -15,6 +15,8 @@ const TRANSFER_SELECT = `
   from_account_id,
   to_account_id,
   amount,
+  to_amount,
+  exchange_rate,
   description,
   date,
   transfer_type,
@@ -24,8 +26,8 @@ const TRANSFER_SELECT = `
   household_link_id,
   created_at,
   updated_at,
-  from_account:accounts!transfers_from_account_id_fkey(id, name, type, user_id, is_public),
-  to_account:accounts!transfers_to_account_id_fkey(id, name, type, user_id, is_public)
+  from_account:accounts!transfers_from_account_id_fkey(id, name, type, user_id, is_public, currency),
+  to_account:accounts!transfers_to_account_id_fkey(id, name, type, user_id, is_public, currency)
 `;
 
 const createTransferSchema = z.object({
@@ -41,6 +43,10 @@ const createTransferSchema = z.object({
   recipient_user_id: z.string().uuid().optional(),
   fee_amount: z.coerce.number().min(0).optional(),
   returned_amount: z.coerce.number().min(0).optional(),
+  // Cross-currency conversion transfers only (transfer_type: "self").
+  // to_amount = what the destination account actually received, in its own
+  // currency, after the owner's optional rounding override.
+  to_amount: z.coerce.number().positive().optional(),
 });
 
 async function getHouseholdInfo(
@@ -77,6 +83,10 @@ function formatTransfer(transfer: any, currentUserId: string) {
     from_account_user_id: transfer.from_account?.user_id || null,
     to_account_user_id: transfer.to_account?.user_id || null,
     amount: transfer.amount,
+    to_amount: transfer.to_amount ?? null,
+    exchange_rate: transfer.exchange_rate ?? null,
+    from_account_currency: transfer.from_account?.currency || "USD",
+    to_account_currency: transfer.to_account?.currency || "USD",
     description: transfer.description,
     date: transfer.date,
     transfer_type: transfer.transfer_type || "self",
@@ -211,6 +221,7 @@ export async function POST(req: NextRequest) {
       recipient_user_id,
       fee_amount = 0,
       returned_amount = 0,
+      to_amount,
     } = parsed.data;
     const effectiveFeeAmount = transfer_type === "household" ? fee_amount : 0;
     const effectiveReturnedAmount =
@@ -219,6 +230,15 @@ export async function POST(req: NextRequest) {
     if (from_account_id === to_account_id) {
       return NextResponse.json(
         { error: "Cannot transfer to the same account" },
+        { status: 400 },
+      );
+    }
+
+    // Conversion (to_amount) only composes with plain self-transfers — fee/
+    // returned-amount math on household transfers assumes a single currency.
+    if (to_amount !== undefined && transfer_type === "household") {
+      return NextResponse.json(
+        { error: "Currency conversion is not supported on household transfers" },
         { status: 400 },
       );
     }
@@ -278,6 +298,7 @@ export async function POST(req: NextRequest) {
     }
 
     const transferDate = date || new Date().toISOString().split("T")[0];
+    const exchangeRate = to_amount !== undefined ? to_amount / amount : null;
     const { data: transfer, error: insertError } = await supabase
       .from("transfers")
       .insert({
@@ -285,6 +306,8 @@ export async function POST(req: NextRequest) {
         from_account_id,
         to_account_id,
         amount,
+        to_amount: to_amount ?? null,
+        exchange_rate: exchangeRate,
         description: description || "",
         date: transferDate,
         transfer_type,
@@ -307,6 +330,7 @@ export async function POST(req: NextRequest) {
       amount,
       effectiveReturnedAmount,
       transfer_type,
+      to_amount,
     );
     const labelPrefix = transfer_type === "household" ? "Household" : "Self";
 
@@ -329,6 +353,8 @@ export async function POST(req: NextRequest) {
       to_account_type: toAccount.type || "expense",
       from_account_user_id: fromAccount.user_id,
       to_account_user_id: toAccount.user_id,
+      from_account_currency: fromAccount.currency || "USD",
+      to_account_currency: toAccount.currency || "USD",
       is_owner: true,
       is_recipient: false,
     });

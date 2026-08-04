@@ -23,7 +23,14 @@ export interface Transfer {
   to_account_type: "income" | "expense" | "saving";
   from_account_user_id: string | null;
   to_account_user_id: string | null;
+  from_account_currency?: string;
+  to_account_currency?: string;
   amount: number;
+  /** Destination-currency amount for cross-currency conversion transfers.
+   *  null = legacy same-currency transfer (destination receives `amount`). */
+  to_amount: number | null;
+  /** to_amount / amount, stored for display. null when to_amount is null. */
+  exchange_rate: number | null;
   description: string;
   date: string;
   transfer_type: "self" | "household";
@@ -47,6 +54,8 @@ export interface CreateTransferInput {
   recipient_user_id?: string;
   fee_amount?: number;
   returned_amount?: number;
+  /** Cross-currency conversion transfers only (transfer_type "self"). */
+  to_amount?: number;
 }
 
 export interface UpdateTransferInput {
@@ -56,6 +65,7 @@ export interface UpdateTransferInput {
   date?: string;
   fee_amount?: number;
   returned_amount?: number;
+  to_amount?: number;
 }
 
 // Query keys
@@ -277,7 +287,10 @@ export function useCreateTransfer() {
 
       toast.success("Transfer completed!", {
         icon: ToastIcons.create,
-        description: `$${data.amount.toFixed(2)} transferred`,
+        description:
+          data.to_amount != null
+            ? `${data.amount.toFixed(2)} ${data.from_account_currency || "USD"} → ${data.to_amount.toFixed(2)} ${data.to_account_currency || "USD"}`
+            : `$${data.amount.toFixed(2)} transferred`,
         duration: 4000,
         action: {
           label: "Undo",
@@ -354,6 +367,7 @@ export function useUpdateTransfer() {
                 date: prev.date,
                 fee_amount: prev.fee_amount,
                 returned_amount: prev.returned_amount,
+                to_amount: prev.to_amount ?? undefined,
               });
               queryClient.invalidateQueries({ queryKey: transferKeys.all });
               invalidateAccountData(queryClient, prev.from_account_id);
@@ -439,6 +453,10 @@ export function useDeleteTransfer() {
                 recipient_user_id: deleted.recipient_user_id ?? undefined,
                 fee_amount: deleted.fee_amount,
                 returned_amount: deleted.returned_amount,
+                // Must carry to_amount forward — omitting it on a conversion
+                // transfer would recreate it as a symmetric same-currency
+                // transfer and silently corrupt the destination balance.
+                to_amount: deleted.to_amount ?? undefined,
               });
               queryClient.invalidateQueries({ queryKey: transferKeys.all });
               invalidateAccountData(queryClient, deleted.from_account_id);

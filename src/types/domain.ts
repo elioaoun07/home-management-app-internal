@@ -17,6 +17,8 @@ export type Account = {
   visible?: boolean | null;
   is_public?: boolean | null;
   balance_set_at?: string | null;
+  currency?: string; // ISO 4217, defaults to "USD"
+  exchange_rate?: number; // USD value of 1 unit of `currency`, defaults to 1
 };
 
 /** User (DB) categories are flat; subcats use parent_id */

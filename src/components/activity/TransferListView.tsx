@@ -209,8 +209,14 @@ export default function TransferListView({
             <div className="text-right">
               <BlurredAmount blurIntensity="sm">
                 <p className="text-lg font-bold bg-gradient-to-br from-cyan-400 via-cyan-300 to-blue-400 bg-clip-text text-transparent">
-                  ${transfer.amount.toFixed(2)}
+                  {transfer.amount.toFixed(2)} {transfer.from_account_currency ?? "USD"}
                 </p>
+                {transfer.to_amount != null && (
+                  <p className="text-[11px] text-slate-400/70 mt-0.5">
+                    → {transfer.to_amount.toFixed(2)}{" "}
+                    {transfer.to_account_currency ?? "USD"}
+                  </p>
+                )}
               </BlurredAmount>
             </div>
           </div>

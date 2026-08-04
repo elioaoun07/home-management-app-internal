@@ -45,15 +45,31 @@ export function getBalanceDelta(
 /**
  * For transfers: returns the delta for each side.
  * Transfers always decrease the source and increase the destination.
+ *
+ * `toAmount` supports cross-currency conversion transfers (e.g. USD wallet ->
+ * EUR trip cash): when provided, the destination leg uses it instead of the
+ * source `net` so each account's balance stays in its own currency. Omitted
+ * (undefined/null) preserves the original same-currency symmetric behavior.
  */
 export function getTransferDeltas(
   amount: number,
   returnedAmount: number = 0,
   transferType: "self" | "household" = "self",
+  toAmount?: number | null,
 ): { fromDelta: number; toDelta: number } {
   const net = transferType === "household" ? amount - returnedAmount : amount;
   return {
     fromDelta: -net, // Source account loses money
-    toDelta: net, // Destination account gains money
+    toDelta: toAmount ?? net, // Destination account gains money (converted, if applicable)
   };
+}
+
+/**
+ * Converts a native-currency amount to its frozen USD equivalent using the
+ * rate stamped on the transaction at insert time (or the account's current
+ * rate, for balances). A null/undefined rate means USD or a pre-migration
+ * row — treated as 1 so nothing changes for existing data.
+ */
+export function toUsd(amount: number, exchangeRate?: number | null): number {
+  return amount * (exchangeRate ?? 1);
 }

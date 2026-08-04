@@ -87,6 +87,9 @@ export type Transaction = {
   is_debt_return?: boolean;
   // Receipt
   receipt_url?: string | null;
+  /** Frozen USD value of 1 unit of the account's currency, stamped at insert time.
+   *  null/undefined = pre-migration row or USD account; treat as 1. */
+  exchange_rate?: number | null;
 };
 
 type TransactionInput = {

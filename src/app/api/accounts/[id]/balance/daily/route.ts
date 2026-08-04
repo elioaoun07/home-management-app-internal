@@ -22,6 +22,7 @@ interface Transfer {
   id: string;
   date: string;
   amount: number;
+  to_amount: number | null;
   description: string | null;
   from_account_id: string;
   to_account_id: string;
@@ -116,6 +117,7 @@ export async function GET(
       id,
       date,
       amount,
+      to_amount,
       description,
       from_account_id,
       to_account_id,
@@ -216,9 +218,10 @@ export async function GET(
       (sum, t) => sum + Number(t.amount),
       0,
     );
-    // Transfers in add to balance
+    // Transfers in add to balance — cross-currency conversion transfers land
+    // at to_amount (destination units), which may differ from `amount`.
     const totalTransfersIn = day.transfers_in.reduce(
-      (sum, t) => sum + Number(t.amount),
+      (sum, t) => sum + Number(t.to_amount ?? t.amount),
       0,
     );
     // Transfers out subtract from balance
@@ -284,7 +287,7 @@ export async function GET(
       })),
       transfers_in: day.transfers_in.map((t) => ({
         id: t.id,
-        amount: Number(t.amount),
+        amount: Number(t.to_amount ?? t.amount),
         description: t.description || "",
         from_account: getAccountName(t.from_account),
       })),

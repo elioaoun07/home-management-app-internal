@@ -183,6 +183,28 @@ PATCH /api/transfers/{id}
 }
 ```
 
+### Cross-Currency Conversion Transfers (2026-08-04)
+
+For moving money between accounts with **different currencies** (e.g. a USD Wallet → a EUR trip-cash account), `self`-type transfers accept an optional `to_amount`: the destination-currency amount actually received, after any owner rounding override (a cash-exchange booth rarely gives you the textbook rate).
+
+```
+POST /api/transfers
+{
+  "from_account_id": "wallet-usd-uuid",
+  "to_account_id": "trip-italy-eur-uuid",
+  "amount": 100,
+  "to_amount": 92,
+  "transfer_type": "self"
+}
+```
+
+- `to_amount` is **rejected on `household` transfers** — the fee/returned-amount math there assumes a single currency.
+- The API stores `exchange_rate = to_amount / amount` alongside `to_amount`. Both are `null` on ordinary same-currency transfers (legacy symmetric behavior — the destination leg equals `amount`).
+- Balance deltas become asymmetric: source loses `amount` (its own currency), destination gains `to_amount` (its own currency) instead of the same number. See `getTransferDeltas(amount, returnedAmount, transferType, toAmount)` in `src/lib/balance-utils.ts`.
+- **PATCH recompute rule:** editing `amount` on an existing conversion transfer without also passing `to_amount` recomputes `to_amount` at the *same* stored rate, so the destination leg never silently goes stale.
+- The UI (`TransferDialog.tsx`) shows a "They receive" field, prefilled from the two accounts' `exchange_rate` (both stored on `accounts`, see [[Overview]] → Currency & Exchange Rates), editable for rounding.
+- **Undo/delete-recreate must carry `to_amount` forward** (`src/features/transfers/hooks.ts`) — omitting it on a deleted conversion transfer's Undo would recreate it as a symmetric same-currency transfer and corrupt the destination balance.
+
 ### Delete Transfer
 
 ```
@@ -214,6 +236,8 @@ CREATE TABLE public.transfers (
   from_account_id uuid NOT NULL,
   to_account_id uuid NOT NULL,
   amount numeric NOT NULL CHECK (amount > 0),
+  to_amount numeric CHECK (to_amount > 0),      -- cross-currency destination amount (2026-08-04); null = same-currency
+  exchange_rate numeric CHECK (exchange_rate > 0), -- to_amount / amount, stored for display; null when to_amount is null
   description text,
   date date NOT NULL,
   created_at timestamp with time zone,

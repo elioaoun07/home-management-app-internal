@@ -13,6 +13,8 @@ const patchAccountSchema = z.object({
   type: z.enum(["expense", "income", "saving"]).optional(),
   visible: z.boolean().optional(),
   is_public: z.boolean().optional(),
+  currency: z.string().trim().length(3).toUpperCase().optional(),
+  exchange_rate: z.coerce.number().positive().optional(),
 });
 
 export async function PATCH(
@@ -51,6 +53,12 @@ export async function PATCH(
   }
   if (typeof parsed.data.is_public === "boolean") {
     patch.is_public = parsed.data.is_public;
+  }
+  if (parsed.data.currency !== undefined) {
+    patch.currency = parsed.data.currency;
+  }
+  if (parsed.data.exchange_rate !== undefined) {
+    patch.exchange_rate = parsed.data.exchange_rate;
   }
 
   if (Object.keys(patch).length === 0) {

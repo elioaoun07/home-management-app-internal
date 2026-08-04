@@ -27,6 +27,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useHouseholdAccounts } from "@/features/accounts/hooks";
 import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { toUsd } from "@/lib/balance-utils";
 import { cn } from "@/lib/utils";
 import {
   getCurrentSeasonComparison,
@@ -108,6 +109,9 @@ type Transaction = {
   collaborator_description?: string;
   split_completed_at?: string;
   total_amount?: number;
+  /** Frozen USD value of 1 unit of the account's currency, stamped at insert
+   *  time. null/undefined = pre-migration row or USD account; treat as 1. */
+  exchange_rate?: number | null;
 };
 
 type Props = {
@@ -452,24 +456,45 @@ const WebDashboard = memo(function WebDashboard({
     [transactions],
   );
 
+  // Convert every transaction's amount to its frozen USD equivalent using the
+  // rate stamped on it at insert time (see accounts.exchange_rate /
+  // transactions.exchange_rate). USD accounts and pre-migration rows have no
+  // rate and pass through unchanged (toUsd treats null/undefined as 1).
+  const usdTransactions = useMemo(
+    () =>
+      transactions.map((t) =>
+        t.exchange_rate != null && t.exchange_rate !== 1
+          ? {
+              ...t,
+              amount: toUsd(t.amount, t.exchange_rate),
+              collaborator_amount:
+                t.collaborator_amount != null
+                  ? toUsd(t.collaborator_amount, t.exchange_rate)
+                  : t.collaborator_amount,
+            }
+          : t,
+      ),
+    [transactions],
+  );
+
   // ==================== OWNERSHIP FILTERED TRANSACTIONS ====================
   // Apply ownership filter FIRST before any other processing
   // For split bills: "mine" includes transactions where user is owner OR collaborator
   // "partner" shows transactions where user is neither owner nor collaborator
   const ownershipFilteredTransactions = useMemo(() => {
-    if (ownershipFilter === "all") return transactions;
+    if (ownershipFilter === "all") return usdTransactions;
     if (ownershipFilter === "mine")
-      return transactions.filter(
+      return usdTransactions.filter(
         (t) => t.is_owner === true || t.is_collaborator === true,
       );
     // Partner filter should include:
     // 1. Transactions owned by partner (!is_owner)
     // 2. Transactions owned by me but split with partner (is_owner && split_completed_at)
-    return transactions.filter(
+    return usdTransactions.filter(
       (t) =>
         t.is_owner === false || (t.is_owner === true && !!t.split_completed_at),
     );
-  }, [transactions, ownershipFilter]);
+  }, [usdTransactions, ownershipFilter]);
 
   // ==================== INCOME VS EXPENSE ====================
   const incomeExpenseSummary = useMemo(() => {

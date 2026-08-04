@@ -39,6 +39,7 @@ import {
   useUpdateAccountSharing,
   useUnhideAccount,
 } from "@/features/accounts/hooks";
+import type { Account } from "@/types/domain";
 import {
   useDeleteCategory,
   useReorderCategories,
@@ -85,6 +86,7 @@ import {
   AlertTriangle,
   Calendar as CalendarLucide,
   Check,
+  Coins,
   Eye,
   EyeOff,
   GripVertical,
@@ -122,6 +124,10 @@ const CalculatorDialog = dynamic(() => import("./CalculatorDialog"), {
 const NewAccountDrawer = dynamic(() => import("./NewAccountDrawer"), {
   ssr: false,
 });
+const AccountCurrencyDialog = dynamic(
+  () => import("./AccountCurrencyDialog"),
+  { ssr: false },
+);
 const NewCategoryDrawer = dynamic(() => import("./NewCategoryDrawer"), {
   ssr: false,
 });
@@ -323,6 +329,8 @@ function MobileExpenseFormContent() {
   const [editModeSubcategory, setEditModeSubcategory] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [currencyDialogAccount, setCurrencyDialogAccount] =
+    useState<Account | null>(null);
   const [showReceiptSheet, setShowReceiptSheet] = useState(false);
   const [pendingReceiptFile, setPendingReceiptFile] = useState<File | null>(null);
 
@@ -1854,7 +1862,7 @@ function MobileExpenseFormContent() {
                     >
                       {orderedAccounts
                         .filter((a: any) => a.visible !== false)
-                        .map((account: any) => (
+                        .map((account: any, index: number) => (
                           <Reorder.Item
                             key={account.id}
                             value={account}
@@ -1873,12 +1881,15 @@ function MobileExpenseFormContent() {
                                 rotate: {
                                   repeat: Infinity,
                                   duration: 0.4,
+                                  repeatDelay: 2,
                                   ease: "easeInOut",
                                 },
                               }}
                             >
                               {/* Hide button - EyeOff icon */}
                               <button
+                                type="button"
+                                aria-label={`Hide ${account.name}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setDeleteConfirm({
@@ -1896,64 +1907,9 @@ function MobileExpenseFormContent() {
                                 />
                               </button>
 
-                              <button
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const nextPublic = !account.is_public;
-                                  try {
-                                    await updateAccountSharingMutation.mutateAsync(
-                                      {
-                                        id: account.id,
-                                        is_public: nextPublic,
-                                      },
-                                    );
-                                    toast.success(
-                                      nextPublic
-                                        ? "Account shared"
-                                        : "Account made private",
-                                      {
-                                        icon: ToastIcons.update,
-                                        duration: 4000,
-                                        action: {
-                                          label: "Undo",
-                                          onClick: () =>
-                                            updateAccountSharingMutation.mutate({
-                                              id: account.id,
-                                              is_public: !nextPublic,
-                                            }),
-                                        },
-                                      },
-                                    );
-                                  } catch (error: unknown) {
-                                    toast.error(
-                                      getErrorMessage(error, "Failed to update visibility"),
-                                      { icon: ToastIcons.error },
-                                    );
-                                  }
-                                }}
-                                className={cn(
-                                  "absolute -top-2 -right-2 z-20 w-6 h-6 rounded-full flex items-center justify-center text-white shadow-lg transform transition-transform hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-200",
-                                  account.is_public
-                                    ? "bg-emerald-500"
-                                    : "bg-slate-600",
-                                )}
-                              >
-                                {account.is_public ? (
-                                  <Users
-                                    className="w-3.5 h-3.5"
-                                    strokeWidth={2.5}
-                                  />
-                                ) : (
-                                  <Lock
-                                    className="w-3.5 h-3.5"
-                                    strokeWidth={2.5}
-                                  />
-                                )}
-                              </button>
-
                               <div
                                 className={cn(
-                                  "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-2",
+                                  "w-full min-h-[72px] p-3 rounded-lg border text-left transition-all flex items-center gap-2",
                                   selectedAccountId === account.id
                                     ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow-sm`
                                     : `neo-card ${themeClasses.border} bg-bg-card-custom`,
@@ -1965,16 +1921,126 @@ function MobileExpenseFormContent() {
                                 >
                                   <GripVertical className="w-5 h-5" />
                                 </div>
-                                <div className="flex-1">
+                                <div className="min-w-0 flex-1">
                                   <div
-                                    className={`font-semibold text-base ${themeClasses.textHighlight}`}
+                                    className={`truncate font-semibold text-base ${themeClasses.textHighlight}`}
                                   >
                                     {account.name}
                                   </div>
-                                  <div className="text-xs text-accent/70 capitalize mt-0.5">
+                                  <div className="text-xs text-accent/70 capitalize mt-0.5 flex items-center gap-1.5">
                                     {account.type}
+                                    {account.currency &&
+                                      account.currency !== "USD" && (
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/20 text-blue-400 normal-case">
+                                          {account.currency}
+                                        </span>
+                                      )}
                                   </div>
                                 </div>
+
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.75, x: 8 }}
+                                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                                  transition={{
+                                    type: "spring",
+                                    stiffness: 500,
+                                    damping: 24,
+                                    delay: 0.08 + index * 0.035,
+                                  }}
+                                  className="flex shrink-0 items-center gap-1.5"
+                                >
+                                  <button
+                                    type="button"
+                                    aria-label={
+                                      account.is_public
+                                        ? `Make ${account.name} private`
+                                        : `Share ${account.name}`
+                                    }
+                                    title={
+                                      account.is_public
+                                        ? "Shared — tap to make private"
+                                        : "Private — tap to share"
+                                    }
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      const nextPublic = !account.is_public;
+                                      try {
+                                        await updateAccountSharingMutation.mutateAsync(
+                                          {
+                                            id: account.id,
+                                            is_public: nextPublic,
+                                          },
+                                        );
+                                        toast.success(
+                                          nextPublic
+                                            ? "Account shared"
+                                            : "Account made private",
+                                          {
+                                            icon: ToastIcons.update,
+                                            duration: 4000,
+                                            action: {
+                                              label: "Undo",
+                                              onClick: () =>
+                                                updateAccountSharingMutation.mutate(
+                                                  {
+                                                    id: account.id,
+                                                    is_public: !nextPublic,
+                                                  },
+                                                ),
+                                            },
+                                          },
+                                        );
+                                      } catch (error: unknown) {
+                                        toast.error(
+                                          getErrorMessage(
+                                            error,
+                                            "Failed to update visibility",
+                                          ),
+                                          { icon: ToastIcons.error },
+                                        );
+                                      }
+                                    }}
+                                    className={cn(
+                                      "flex h-10 w-10 items-center justify-center rounded-full border shadow-sm transition-transform hover:scale-105 active:scale-90",
+                                      account.is_public
+                                        ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-300"
+                                        : "border-slate-400/30 bg-slate-500/15 text-slate-300",
+                                    )}
+                                  >
+                                    {account.is_public ? (
+                                      <Users
+                                        className="h-4 w-4"
+                                        strokeWidth={2.5}
+                                      />
+                                    ) : (
+                                      <Lock
+                                        className="h-4 w-4"
+                                        strokeWidth={2.5}
+                                      />
+                                    )}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    aria-label={`Edit ${account.name} currency`}
+                                    title="Edit currency and exchange rate"
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCurrencyDialogAccount(account);
+                                    }}
+                                    className="flex h-10 min-w-10 items-center justify-center gap-1 rounded-full border border-blue-400/40 bg-blue-500/15 px-2 text-blue-300 shadow-sm transition-transform hover:scale-105 active:scale-90"
+                                  >
+                                    <Coins
+                                      className="h-4 w-4"
+                                      strokeWidth={2.5}
+                                    />
+                                    <span className="text-[10px] font-bold leading-none">
+                                      {account.currency || "USD"}
+                                    </span>
+                                  </button>
+                                </motion.div>
                               </div>
                             </motion.div>
                           </Reorder.Item>
@@ -2916,6 +2982,14 @@ function MobileExpenseFormContent() {
             // Auto-select the newly created account
             setSelectedAccountId(accountId);
           }}
+        />
+
+        <AccountCurrencyDialog
+          open={!!currencyDialogAccount}
+          onOpenChange={(open) => {
+            if (!open) setCurrencyDialogAccount(null);
+          }}
+          account={currencyDialogAccount}
         />
 
         {selectedAccountId && (

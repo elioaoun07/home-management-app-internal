@@ -2,7 +2,7 @@ import type { AccountType } from "@/types/domain";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const ACCOUNT_SELECT =
-  "id,user_id,name,type,is_default,inserted_at,country_code,location_name,position,visible,is_public,account_balances(balance_set_at)";
+  "id,user_id,name,type,is_default,inserted_at,country_code,location_name,position,visible,is_public,currency,exchange_rate,account_balances(balance_set_at)";
 
 export type AccessibleAccount = {
   id: string;
@@ -16,6 +16,8 @@ export type AccessibleAccount = {
   position?: number | null;
   visible?: boolean | null;
   is_public?: boolean | null;
+  currency?: string | null;
+  exchange_rate?: number | null;
   isOwner: boolean;
   canRead: boolean;
   canWrite: boolean;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getBalanceDelta, getTransferDeltas } from "./balance-utils";
+import { getBalanceDelta, getTransferDeltas, toUsd } from "./balance-utils";
 
 describe("getBalanceDelta", () => {
   it("subtracts created transactions from expense accounts", () => {
@@ -49,5 +49,42 @@ describe("getTransferDeltas", () => {
       fromDelta: -135,
       toDelta: 135,
     });
+  });
+
+  it("uses toAmount for the destination leg on cross-currency conversion transfers", () => {
+    // $100 USD -> owner-overridden 92 EUR at a cash exchange booth
+    expect(getTransferDeltas(100, 0, "self", 92)).toEqual({
+      fromDelta: -100,
+      toDelta: 92,
+    });
+  });
+
+  it("falls back to symmetric behavior when toAmount is omitted or null", () => {
+    expect(getTransferDeltas(200, 0, "self", undefined)).toEqual({
+      fromDelta: -200,
+      toDelta: 200,
+    });
+    expect(getTransferDeltas(200, 0, "self", null)).toEqual({
+      fromDelta: -200,
+      toDelta: 200,
+    });
+  });
+
+  it("delete-reversal exactly negates the stored deltas of a conversion transfer", () => {
+    const { fromDelta, toDelta } = getTransferDeltas(100, 0, "self", 92);
+    const reversal = { fromDelta: -fromDelta, toDelta: -toDelta };
+    expect(reversal).toEqual({ fromDelta: 100, toDelta: -92 });
+  });
+});
+
+describe("toUsd", () => {
+  it("passes through unchanged when there is no rate (USD or pre-migration row)", () => {
+    expect(toUsd(50)).toBe(50);
+    expect(toUsd(50, null)).toBe(50);
+    expect(toUsd(50, undefined)).toBe(50);
+  });
+
+  it("converts a native-currency amount using the frozen rate", () => {
+    expect(toUsd(100, 1.09)).toBeCloseTo(109, 10);
   });
 });

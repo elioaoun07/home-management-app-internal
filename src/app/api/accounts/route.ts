@@ -21,6 +21,8 @@ const createAccountSchema = z.object({
   location_name: z.string().trim().min(1).max(120).optional(),
   with_default_categories: z.boolean().optional(),
   is_public: z.boolean().optional(),
+  currency: z.string().trim().length(3).toUpperCase().optional(),
+  exchange_rate: z.coerce.number().positive().optional(),
 });
 
 async function fetchAccountList(
@@ -240,6 +242,8 @@ export async function POST(req: NextRequest) {
       location_name,
       with_default_categories,
       is_public,
+      currency,
+      exchange_rate,
     } = parsed.data;
 
     // Determine if we should seed default categories and which ones
@@ -269,6 +273,12 @@ export async function POST(req: NextRequest) {
     }
     if (location_name) {
       insertData.location_name = location_name;
+    }
+    if (currency) {
+      insertData.currency = currency;
+    }
+    if (exchange_rate !== undefined) {
+      insertData.exchange_rate = exchange_rate;
     }
 
     const { data, error } = await supabase

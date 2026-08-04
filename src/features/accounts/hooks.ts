@@ -114,6 +114,8 @@ type CreateAccountInput = {
   location_name?: string;
   with_default_categories?: boolean;
   is_public?: boolean;
+  currency?: string;
+  exchange_rate?: number;
 };
 
 async function createAccount(input: CreateAccountInput): Promise<Account> {
@@ -148,6 +150,8 @@ export function useCreateAccount() {
       country_code,
       location_name,
       is_public,
+      currency,
+      exchange_rate,
     }) => {
       // Cancel all account queries
       await qc.cancelQueries({ queryKey: qk.accounts() });
@@ -166,6 +170,8 @@ export function useCreateAccount() {
         location_name,
         visible: true,
         is_public: is_public ?? false,
+        currency: currency ?? "USD",
+        exchange_rate: exchange_rate ?? 1,
       };
 
       // Update both caches optimistically
@@ -370,6 +376,91 @@ export function useUpdateAccountSharing() {
       const update = (accounts: Account[] = []) =>
         accounts.map((account) =>
           account.id === id ? { ...account, is_public } : account,
+        );
+
+      qc.setQueryData<Account[]>(qk.accounts(), update);
+      qc.setQueryData<Account[]>([...qk.accounts(), "own"], update);
+      qc.setQueryData<Account[]>(
+        [...qk.accounts(), "own", "withHidden"],
+        update,
+      );
+
+      return { previous, previousOwn, previousWithHidden };
+    },
+    onError: (_error, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(qk.accounts(), ctx.previous);
+      if (ctx?.previousOwn) {
+        qc.setQueryData([...qk.accounts(), "own"], ctx.previousOwn);
+      }
+      if (ctx?.previousWithHidden) {
+        qc.setQueryData(
+          [...qk.accounts(), "own", "withHidden"],
+          ctx.previousWithHidden,
+        );
+      }
+    },
+    onSettled: () => {
+      invalidateAccountData(qc);
+    },
+  });
+}
+
+// Update account currency/rate mutation
+type UpdateAccountInput = {
+  id: string;
+  currency?: string;
+  exchange_rate?: number;
+};
+
+async function updateAccount(input: UpdateAccountInput): Promise<Account> {
+  const { id, ...patch } = input;
+  const res = await safeFetch(`/api/accounts/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) {
+    let msg = "Failed to update account";
+    try {
+      const j = await res.json();
+      if (j?.error) msg = j.error;
+    } catch {}
+    throw new Error(msg);
+  }
+  return (await res.json()) as Account;
+}
+
+export function useUpdateAccount() {
+  const qc = useQueryClient();
+  return useMutation<
+    Account,
+    Error,
+    UpdateAccountInput,
+    {
+      previous?: Account[];
+      previousOwn?: Account[];
+      previousWithHidden?: Account[];
+    }
+  >({
+    mutationFn: updateAccount,
+    onMutate: async ({ id, currency, exchange_rate }) => {
+      await qc.cancelQueries({ queryKey: qk.accounts() });
+      const previous = qc.getQueryData<Account[]>(qk.accounts());
+      const previousOwn = qc.getQueryData<Account[]>([...qk.accounts(), "own"]);
+      const previousWithHidden = qc.getQueryData<Account[]>([
+        ...qk.accounts(),
+        "own",
+        "withHidden",
+      ]);
+      const update = (accounts: Account[] = []) =>
+        accounts.map((account) =>
+          account.id === id
+            ? {
+                ...account,
+                ...(currency !== undefined ? { currency } : {}),
+                ...(exchange_rate !== undefined ? { exchange_rate } : {}),
+              }
+            : account,
         );
 
       qc.setQueryData<Account[]>(qk.accounts(), update);

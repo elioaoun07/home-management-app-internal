@@ -21,6 +21,16 @@ import { FolderTree, Lock, MapPin, PenLine, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+// Common currencies for quick selection (USD is the app's implicit base currency)
+const CURRENCIES = [
+  { code: "USD", name: "US Dollar" },
+  { code: "EUR", name: "Euro" },
+  { code: "GBP", name: "British Pound" },
+  { code: "LBP", name: "Lebanese Pound" },
+  { code: "AED", name: "UAE Dirham" },
+  { code: "TRY", name: "Turkish Lira" },
+];
+
 // Common country codes for quick selection
 const POPULAR_COUNTRIES = [
   { code: "LB", name: "Lebanon" },
@@ -59,6 +69,8 @@ export default function NewAccountDrawer({
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [withDefaultCategories, setWithDefaultCategories] = useState(true);
   const [isPublic, setIsPublic] = useState(false);
+  const [currency, setCurrency] = useState("USD");
+  const [exchangeRate, setExchangeRate] = useState("");
 
   const resetForm = () => {
     setName("");
@@ -68,6 +80,8 @@ export default function NewAccountDrawer({
     setShowCountryPicker(false);
     setWithDefaultCategories(true);
     setIsPublic(false);
+    setCurrency("USD");
+    setExchangeRate("");
   };
 
   const handleSelectCountry = (code: string, countryName: string) => {
@@ -76,9 +90,19 @@ export default function NewAccountDrawer({
     setShowCountryPicker(false);
   };
 
+  const parsedRate = parseFloat(exchangeRate);
+  const rateNeeded = currency !== "USD";
+  const rateValid = !rateNeeded || (exchangeRate.trim() !== "" && parsedRate > 0);
+
   const handleCreate = async () => {
     if (!name.trim()) {
       toast.error("Please enter an account name", { icon: ToastIcons.error });
+      return;
+    }
+    if (!rateValid) {
+      toast.error("Enter the exchange rate to USD", {
+        icon: ToastIcons.error,
+      });
       return;
     }
 
@@ -90,6 +114,8 @@ export default function NewAccountDrawer({
         location_name: locationName || undefined,
         with_default_categories: withDefaultCategories,
         is_public: isPublic,
+        currency,
+        exchange_rate: rateNeeded ? parsedRate : undefined,
       },
       {
         onSuccess: (account) => {
@@ -476,6 +502,62 @@ export default function NewAccountDrawer({
             </div>
           )}
 
+          {/* Currency */}
+          <div className="space-y-2">
+            <Label className={`text-sm font-medium ${themeClasses.text}`}>
+              Currency
+            </Label>
+            <div className="grid grid-cols-3 gap-2">
+              {CURRENCIES.map((c) => (
+                <button
+                  key={c.code}
+                  type="button"
+                  onClick={() => setCurrency(c.code)}
+                  className={cn(
+                    "p-2 rounded-lg border text-center transition-all active:scale-95",
+                    currency === c.code
+                      ? `neo-card ${themeClasses.borderActive} bg-gradient-to-br from-blue-500/20 to-cyan-500/10 shadow-lg shadow-blue-500/10`
+                      : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`,
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "text-xs font-semibold",
+                      currency === c.code ? "text-blue-400" : "text-slate-300",
+                    )}
+                  >
+                    {c.code}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {rateNeeded && (
+              <div className="space-y-1 mt-2">
+                <p className="text-[11px] text-slate-500">
+                  Exchange rate to USD — 1 {currency} = ? USD. Transactions
+                  logged in this account freeze this rate, so later edits
+                  don&apos;t change past dashboard totals.
+                </p>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="e.g., 1.09"
+                  value={exchangeRate}
+                  onChange={(e) =>
+                    setExchangeRate(
+                      e.target.value.replace(/[^0-9.]/g, ""),
+                    )
+                  }
+                  className={cn(
+                    "h-11 bg-bg-card-custom text-white placeholder:text-slate-500",
+                    themeClasses.border,
+                  )}
+                />
+              </div>
+            )}
+          </div>
+
           {/* Location / Country (Optional) */}
           <div className="space-y-2">
             <Label className={`text-sm font-medium ${themeClasses.text}`}>
@@ -610,7 +692,9 @@ export default function NewAccountDrawer({
         <DrawerFooter className="pt-2 pb-6">
           <Button
             onClick={handleCreate}
-            disabled={!name.trim() || createAccountMutation.isPending}
+            disabled={
+              !name.trim() || !rateValid || createAccountMutation.isPending
+            }
             className="w-full h-12 text-base font-semibold neo-gradient text-white border-0 shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {createAccountMutation.isPending ? "Creating..." : "Create Account"}

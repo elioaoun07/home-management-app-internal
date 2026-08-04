@@ -92,6 +92,10 @@ export default function TransferDialog({
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [returnedAmount, setReturnedAmount] = useState("");
+  // Cross-currency conversion transfers only: what the destination account
+  // actually receives. User-overridable so they can round to what a cash
+  // exchange booth actually gave them.
+  const [toAmountOverride, setToAmountOverride] = useState("");
 
   const hasPartner = householdData?.hasPartner ?? false;
   const partner = householdData?.members.find((m) => !m.isCurrentUser);
@@ -126,6 +130,32 @@ export default function TransferDialog({
   // Net amount for preview
   const senderNet = parsedAmount - parsedReturned;
 
+  const fromCurrency = fromAccount?.currency ?? "USD";
+  const toCurrency = toAccount?.currency ?? "USD";
+  // Conversion only composes with self transfers — household fee/returned
+  // math (see API) assumes a single currency.
+  const needsConversion =
+    transferType === "self" &&
+    !!fromAccount &&
+    !!toAccount &&
+    fromCurrency !== toCurrency;
+
+  const fromRate = Number(fromAccount?.exchange_rate ?? 1);
+  const toRate = Number(toAccount?.exchange_rate ?? 1);
+  const suggestedToAmount =
+    needsConversion && parsedAmount > 0
+      ? Math.round(((parsedAmount * fromRate) / toRate) * 100) / 100
+      : 0;
+  const effectiveToAmountStr =
+    toAmountOverride !== ""
+      ? toAmountOverride
+      : suggestedToAmount > 0
+        ? suggestedToAmount.toFixed(2)
+        : "";
+  const parsedToAmount = parseFloat(effectiveToAmountStr) || 0;
+  const effectiveRate =
+    parsedAmount > 0 && parsedToAmount > 0 ? parsedToAmount / parsedAmount : 0;
+
   const resetForm = () => {
     setTransferType("self");
     setFromAccountId("");
@@ -134,6 +164,7 @@ export default function TransferDialog({
     setDescription("");
     setDate(format(new Date(), "yyyy-MM-dd"));
     setReturnedAmount("");
+    setToAmountOverride("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -156,6 +187,11 @@ export default function TransferDialog({
       }
     }
 
+    if (needsConversion && parsedToAmount <= 0) {
+      toast.error(`Enter how much ${toCurrency} the destination received`);
+      return;
+    }
+
     try {
       await createTransfer.mutateAsync({
         from_account_id: fromAccountId,
@@ -169,6 +205,7 @@ export default function TransferDialog({
         fee_amount: transferType === "household" ? parsedFee : undefined,
         returned_amount:
           transferType === "household" ? parsedReturned : undefined,
+        to_amount: needsConversion ? parsedToAmount : undefined,
       });
 
       resetForm();
@@ -241,7 +278,13 @@ export default function TransferDialog({
           {/* From Account */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">From Account</Label>
-            <Select value={fromAccountId} onValueChange={setFromAccountId}>
+            <Select
+              value={fromAccountId}
+              onValueChange={(v) => {
+                setFromAccountId(v);
+                setToAmountOverride("");
+              }}
+            >
               <SelectTrigger className="h-11">
                 <SelectValue placeholder="Select source account" />
               </SelectTrigger>
@@ -297,7 +340,10 @@ export default function TransferDialog({
             </Label>
             <Select
               value={toAccountId}
-              onValueChange={setToAccountId}
+              onValueChange={(v) => {
+                setToAccountId(v);
+                setToAmountOverride("");
+              }}
               disabled={!fromAccountId}
             >
               <SelectTrigger className="h-11">
@@ -349,6 +395,11 @@ export default function TransferDialog({
             <Label className="text-sm font-medium flex items-center gap-2">
               <DollarSignIcon className={cn("h-4 w-4", themeClasses.glow)} />
               Amount
+              {fromAccount && fromCurrency !== "USD" && (
+                <span className="text-xs text-blue-400 font-normal">
+                  ({fromCurrency})
+                </span>
+              )}
               {transferType === "household" && (
                 <span className="text-xs text-muted-foreground font-normal">
                   (total sent)
@@ -374,6 +425,42 @@ export default function TransferDialog({
               />
             </div>
           </div>
+
+          {/* Cross-currency conversion */}
+          {needsConversion && (
+            <div className="space-y-2 p-3 rounded-lg border border-blue-500/20 bg-blue-500/5">
+              <Label className="text-sm font-medium">
+                {toAccount?.name} receives ({toCurrency})
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold text-xs">
+                  {toCurrency}
+                </span>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={effectiveToAmountStr}
+                  onChange={(e) => setToAmountOverride(e.target.value)}
+                  className={cn(
+                    "pl-14 h-11 text-lg font-semibold",
+                    themeClasses.inputFocusForce,
+                  )}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Suggested from account rates — override to match what the
+                exchange actually gave you.
+                {effectiveRate > 0 && (
+                  <>
+                    {" "}
+                    Effective rate: 1 {fromCurrency} = {effectiveRate.toFixed(4)}{" "}
+                    {toCurrency}
+                  </>
+                )}
+              </p>
+            </div>
+          )}
 
           {/* Household-specific: Returned Amount */}
           {transferType === "household" && (
@@ -446,15 +533,22 @@ export default function TransferDialog({
             >
               {transferType === "self" ? (
                 <p className="font-medium">
-                  <span className="text-green-500">
-                    ${parsedAmount.toFixed(2)}
-                  </span>{" "}
                   <span className={getAccountTypeTextColor(fromAccount.type)}>
                     {fromAccount.name}
+                  </span>{" "}
+                  <span className="text-red-400">
+                    -{parsedAmount.toFixed(2)} {fromCurrency}
                   </span>{" "}
                   →{" "}
                   <span className={getAccountTypeTextColor(toAccount.type)}>
                     {toAccount.name}
+                  </span>{" "}
+                  <span className="text-green-500">
+                    +
+                    {needsConversion
+                      ? parsedToAmount.toFixed(2)
+                      : parsedAmount.toFixed(2)}{" "}
+                    {toCurrency}
                   </span>
                 </p>
               ) : (
@@ -518,7 +612,8 @@ export default function TransferDialog({
                 !fromAccountId ||
                 !toAccountId ||
                 !amount ||
-                parseFloat(amount) <= 0
+                parseFloat(amount) <= 0 ||
+                (needsConversion && parsedToAmount <= 0)
               }
             >
               {createTransfer.isPending ? (

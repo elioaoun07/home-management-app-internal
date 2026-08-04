@@ -766,7 +766,11 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
                       <SelectContent>
                         {accounts.map((acc: any) => (
                           <SelectItem key={acc.id} value={acc.id}>
-                            {acc.name} ({acc.type})
+                            {acc.name} ({acc.type}
+                            {acc.currency && acc.currency !== "USD"
+                              ? `, ${acc.currency}`
+                              : ""}
+                            )
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1041,6 +1045,9 @@ function TransactionRow({
                   {accounts.map((acc: any) => (
                     <SelectItem key={acc.id} value={acc.id}>
                       {acc.name}
+                      {acc.currency && acc.currency !== "USD"
+                        ? ` (${acc.currency})`
+                        : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -24,9 +24,11 @@ export function useNetWorthSeries(
       return [];
     }
 
-    // Current total balance
+    // Current total balance, converted to USD at each account's CURRENT rate
+    // (not the frozen per-transaction rate — net worth reflects what the
+    // money is worth today).
     const currentTotal = accounts.reduce(
-      (s, a) => s + Number(a.currentBalance),
+      (s, a) => s + Number(a.currentBalance) * (a.exchangeRate ?? 1),
       0,
     );
 

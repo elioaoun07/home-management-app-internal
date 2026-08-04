@@ -1,5 +1,6 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { getErrorMessage } from "@/lib/errors";
+import { toUsd } from "@/lib/balance-utils";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest) {
 
     let accountsQuery = supabase
       .from("accounts")
-      .select("id, name, type, user_id, visible, is_public")
+      .select("id, name, type, user_id, visible, is_public, currency, exchange_rate")
       .in("user_id", userIds);
 
     if (accountIdFilter) {
@@ -104,7 +105,7 @@ export async function GET(req: NextRequest) {
     const { data: rawTxs } = await supabase
       .from("transactions")
       .select(
-        "id, amount, date, account_id, category_id, subcategory_id, user_id, is_private, description, is_debt_return",
+        "id, amount, date, account_id, category_id, subcategory_id, user_id, is_private, description, is_debt_return, exchange_rate",
       )
       .in("account_id", accountIds)
       .eq("is_draft", false)
@@ -216,7 +217,9 @@ export async function GET(req: NextRequest) {
       m.txCount++;
 
       const acctType = accountMap.get(tx.account_id)?.type;
-      const amount = Number(tx.amount);
+      // Frozen rate stamped on the transaction (not the account's current rate)
+      // so historical totals never move when an account's rate is edited later.
+      const amount = toUsd(Number(tx.amount), tx.exchange_rate);
 
       // Real income (exclude debt returns)
       if (acctType === "income" && !tx.is_debt_return) {
@@ -396,6 +399,8 @@ export async function GET(req: NextRequest) {
         type: acct.type,
         userId: acct.user_id,
         currentBalance: balData?.balance ?? 0,
+        currency: acct.currency ?? "USD",
+        exchangeRate: Number(acct.exchange_rate ?? 1),
       });
     }
 

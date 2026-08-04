@@ -61,7 +61,7 @@ export async function GET(
   // Get transfers for the 6-month window
   const { data: transfersIn } = await admin
     .from("transfers")
-    .select("date, amount")
+    .select("date, amount, to_amount")
     .eq("to_account_id", accountId)
     .is("deleted_at", null)
     .gte("date", sixMonthsAgoStr)
@@ -107,11 +107,12 @@ export async function GET(
     monthMap[yearMonth].total_expenses += Number(txn.amount);
   }
 
-  // Add transfers
+  // Add transfers — cross-currency conversion transfers land at to_amount
+  // (destination units), which may differ from `amount`.
   for (const tr of transfersIn || []) {
     const yearMonth = tr.date.substring(0, 7);
     ensureMonth(yearMonth);
-    monthMap[yearMonth].transfers_in += Number(tr.amount);
+    monthMap[yearMonth].transfers_in += Number(tr.to_amount ?? tr.amount);
   }
 
   for (const tr of transfersOut || []) {

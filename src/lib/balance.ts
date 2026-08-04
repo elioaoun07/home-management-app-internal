@@ -218,7 +218,7 @@ export async function computeAccountBalance(
   const transferInPromise = (() => {
     let q = admin
       .from("transfers")
-      .select("amount, returned_amount, transfer_type")
+      .select("amount, to_amount, returned_amount, transfer_type")
       .eq("to_account_id", accountId)
       .is("deleted_at", null);
     if (balanceSetAt) q = q.gt("created_at", balanceSetAt);
@@ -269,10 +269,14 @@ export async function computeAccountBalance(
     transferImpact -= net; // Outgoing always decreases balance
   }
   for (const t of inResult.data || []) {
+    // Cross-currency conversion transfers land at to_amount (destination
+    // units), which may differ from the source `amount` — see transfers API.
     const net =
-      t.transfer_type === "household"
-        ? Number(t.amount) - Number(t.returned_amount || 0)
-        : Number(t.amount);
+      t.to_amount != null
+        ? Number(t.to_amount)
+        : t.transfer_type === "household"
+          ? Number(t.amount) - Number(t.returned_amount || 0)
+          : Number(t.amount);
     transferImpact += net; // Incoming always increases balance
   }
 

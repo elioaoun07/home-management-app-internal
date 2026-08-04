@@ -135,6 +135,11 @@ export default function AccountSelect({ value, onChange }: Props) {
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-primary" />
                 {a.name}
+                {a.currency && a.currency !== "USD" && (
+                  <span className="text-xs text-muted-foreground">
+                    ({a.currency})
+                  </span>
+                )}
               </div>
             </SelectItem>
           ))}

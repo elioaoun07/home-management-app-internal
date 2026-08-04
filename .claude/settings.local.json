@@ -220,7 +220,8 @@
       "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/check-migration.sh')",
       "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/update-atlas.sh')",
       "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/check-pm-update.sh')",
-      "Bash(pnpm db:verify-rls)"
+      "Bash(pnpm db:verify-rls)",
+      "Bash(awk 'NR==1846,NR==2060' src/components/expense/MobileExpenseForm.tsx)"
     ]
   }
 }

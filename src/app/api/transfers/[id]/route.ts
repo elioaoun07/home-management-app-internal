@@ -13,6 +13,8 @@ const TRANSFER_SELECT = `
   from_account_id,
   to_account_id,
   amount,
+  to_amount,
+  exchange_rate,
   description,
   date,
   transfer_type,
@@ -22,8 +24,8 @@ const TRANSFER_SELECT = `
   household_link_id,
   created_at,
   updated_at,
-  from_account:accounts!transfers_from_account_id_fkey(id, name, type, user_id, is_public),
-  to_account:accounts!transfers_to_account_id_fkey(id, name, type, user_id, is_public)
+  from_account:accounts!transfers_from_account_id_fkey(id, name, type, user_id, is_public, currency),
+  to_account:accounts!transfers_to_account_id_fkey(id, name, type, user_id, is_public, currency)
 `;
 
 function formatTransfer(transfer: any, currentUserId: string) {
@@ -38,7 +40,11 @@ function formatTransfer(transfer: any, currentUserId: string) {
     to_account_type: (transfer.to_account as any)?.type || "expense",
     from_account_user_id: (transfer.from_account as any)?.user_id || null,
     to_account_user_id: (transfer.to_account as any)?.user_id || null,
+    from_account_currency: (transfer.from_account as any)?.currency || "USD",
+    to_account_currency: (transfer.to_account as any)?.currency || "USD",
     amount: transfer.amount,
+    to_amount: transfer.to_amount ?? null,
+    exchange_rate: transfer.exchange_rate ?? null,
     description: transfer.description,
     date: transfer.date,
     transfer_type: transfer.transfer_type || "self",
@@ -123,7 +129,7 @@ export async function DELETE(
   const { data: transfer, error: fetchError } = await supabase
     .from("transfers")
     .select(
-      "id, from_account_id, to_account_id, amount, returned_amount, transfer_type",
+      "id, from_account_id, to_account_id, amount, to_amount, returned_amount, transfer_type",
     )
     .eq("id", id)
     .eq("user_id", user.id)
@@ -154,6 +160,7 @@ export async function DELETE(
     Number(transfer.amount),
     Number(transfer.returned_amount || 0),
     (transfer.transfer_type || "self") as "self" | "household",
+    transfer.to_amount != null ? Number(transfer.to_amount) : undefined,
   );
   // Reverse: negate the original deltas
   await adjustAccountBalance(
@@ -196,13 +203,14 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { amount, description, date, fee_amount, returned_amount } = body;
+  const { amount, description, date, fee_amount, returned_amount, to_amount } =
+    body;
 
   // Only the creator can update
   const { data: currentTransfer, error: fetchError } = await supabase
     .from("transfers")
     .select(
-      "id, amount, fee_amount, returned_amount, from_account_id, to_account_id, transfer_type",
+      "id, amount, to_amount, exchange_rate, fee_amount, returned_amount, from_account_id, to_account_id, transfer_type",
     )
     .eq("id", id)
     .eq("user_id", user.id)
@@ -280,6 +288,40 @@ export async function PATCH(
     updateFields.amount = newAmount;
   }
 
+  // Cross-currency conversion transfers carry a to_amount (destination units)
+  // separate from `amount` (source units). Resolve the post-update to_amount:
+  //  - explicit to_amount in the request always wins (owner's rounding override)
+  //  - otherwise, if this was already a conversion transfer and the source
+  //    amount changed, recompute at the SAME rate so the destination leg
+  //    doesn't silently go stale
+  //  - otherwise, keep whatever it already was (undefined = legacy symmetric)
+  let newToAmount: number | undefined =
+    currentTransfer.to_amount != null
+      ? Number(currentTransfer.to_amount)
+      : undefined;
+
+  if (to_amount !== undefined) {
+    const parsedToAmount = Number(to_amount);
+    if (!(parsedToAmount > 0)) {
+      return NextResponse.json(
+        { error: "to_amount must be positive" },
+        { status: 400 },
+      );
+    }
+    newToAmount = parsedToAmount;
+    updateFields.to_amount = newToAmount;
+    updateFields.exchange_rate = newToAmount / newAmount;
+  } else if (
+    amount !== undefined &&
+    currentTransfer.to_amount != null &&
+    currentTransfer.exchange_rate != null
+  ) {
+    newToAmount = Math.round(
+      newAmount * Number(currentTransfer.exchange_rate) * 100,
+    ) / 100;
+    updateFields.to_amount = newToAmount;
+  }
+
   if (Object.keys(updateFields).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
@@ -289,12 +331,26 @@ export async function PATCH(
   // Adjust balances for the amount/returned_amount change
   const oldAmount = Number(currentTransfer.amount);
   const oldReturned = Number(currentTransfer.returned_amount || 0);
+  const oldToAmount =
+    currentTransfer.to_amount != null
+      ? Number(currentTransfer.to_amount)
+      : undefined;
   const transferType = (currentTransfer.transfer_type || "self") as
     | "self"
     | "household";
 
-  const oldDeltas = getTransferDeltas(oldAmount, oldReturned, transferType);
-  const newDeltas = getTransferDeltas(newAmount, newReturned, transferType);
+  const oldDeltas = getTransferDeltas(
+    oldAmount,
+    oldReturned,
+    transferType,
+    oldToAmount,
+  );
+  const newDeltas = getTransferDeltas(
+    newAmount,
+    newReturned,
+    transferType,
+    newToAmount,
+  );
 
   const fromDiff = newDeltas.fromDelta - oldDeltas.fromDelta;
   const toDiff = newDeltas.toDelta - oldDeltas.toDelta;

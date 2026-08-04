@@ -96,6 +96,8 @@ Budget is the household's **money graph**. Today it is a strong *reactive* ledge
 - ✅ 2026-07-18 — **BUD-12** deleted the remaining debug/diagnostic routes (`env-check`, `supabase-check` — the latter an unauthenticated `listUsers` probe); zero callers verified, typecheck green
 - ✅ 2026-07-21 — **BUD-13** household transfers authorize a visible private partner account only as the destination of an explicit household transfer; ordinary partner writes stay public-only (`src/lib/accountAccess.test.ts`)
 - ✅ 2026-08-01 — **BUD-14** [TEST] Mobile expense form quick-amount chip: replace the $25 preset with $20 → `src/components/expense/MobileExpenseForm.tsx:1144`
+- ✅ 2026-08-04 — **BUD-15** Multi-currency accounts + frozen per-transaction exchange rates + cross-currency conversion transfers (built for the Italy trip's EUR cash account). `accounts.currency`/`accounts.exchange_rate` (current rate), `transactions.exchange_rate` stamped by a `SECURITY DEFINER` DB trigger (`stamp_transaction_exchange_rate`, BEFORE INSERT/UPDATE OF account_id) so historical USD dashboard totals stay frozen at the rate in effect when logged, even after the account's rate is later edited. `transfers.to_amount`/`exchange_rate` support asymmetric cross-currency transfers (`getTransferDeltas` in `src/lib/balance-utils.ts` gained an optional `toAmount` param) with a user-overridable destination amount for cash-exchange rounding. Analytics route and `WebDashboard` both convert to USD via the frozen rate (`toUsd()` helper); net worth converts via each account's *current* rate. New `AccountCurrencyDialog` lets an existing account's currency/rate be edited from the account wiggle-mode. Migration `migrations/2026-08-04_multi-currency.sql` pending owner run. Tests: `src/lib/balance-utils.test.ts` (+6 cases, conversion deltas + delete-reversal + toUsd).
+- ✅ 2026-08-04 — **BUD-16** Account long-press edit mode now springs into a clearer alternating wiggle, with non-overlapping in-card visibility and labeled currency controls sized for mobile touch.
 
 ## Delivery session log
 
@@ -122,6 +124,7 @@ Budget is the household's **money graph**. Today it is a strong *reactive* ledge
 | Allocation workflow across accounts | AI-proposed allocation + inline Allocate/Review *(IMPLEMENTED 2026-06-26)*; recurring commitments console *(IMPLEMENTED 2026-07-03)* | account funding, Wallet balance, recurring minimums and envelopes read as one flow | M |
 | Split the mega-forms | 3,099 + 3,083 LOC | decompose into testable units when next touched | M |
 | Household transfer authorization | — | *(IMPLEMENTED 2026-07-21)* | S |
+| Account edit-mode polish | edge-pinned visibility/currency badges overlapped between rows | in-flow mobile action rail + clearer spring/wiggle motion *(IMPLEMENTED 2026-08-04)* | S |
 
 ### Track B — bridges out of Budget
 

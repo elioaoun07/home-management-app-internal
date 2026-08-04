@@ -50,6 +50,8 @@ export type AccountBalance = {
   type: string;
   userId: string;
   currentBalance: number;
+  currency?: string;
+  exchangeRate?: number;
 };
 
 export type AnalyticsResponse = {

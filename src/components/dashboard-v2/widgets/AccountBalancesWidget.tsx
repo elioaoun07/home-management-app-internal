@@ -1,7 +1,7 @@
 "use client";
 
 import WidgetCard from "@/components/dashboard-v2/WidgetCard";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { Banknote, PiggyBank, TrendingUp, Wallet } from "lucide-react";
 import { useMemo } from "react";
 
@@ -11,6 +11,8 @@ type AccountBalance = {
   type: string;
   userId: string;
   currentBalance: number;
+  currency?: string;
+  exchangeRate?: number;
 };
 
 type Props = {
@@ -66,8 +68,14 @@ export default function AccountBalancesWidget({
     return groups;
   }, [accounts]);
 
+  // Net worth is a USD aggregate — convert each account's native balance by
+  // its current rate (accounts stay in their own currency; only the total is USD).
   const totalNetWorth = useMemo(
-    () => (accounts ?? []).reduce((sum, a) => sum + a.currentBalance, 0),
+    () =>
+      (accounts ?? []).reduce(
+        (sum, a) => sum + a.currentBalance * (a.exchangeRate ?? 1),
+        0,
+      ),
     [accounts],
   );
 
@@ -76,7 +84,7 @@ export default function AccountBalancesWidget({
   return (
     <WidgetCard
       title="Account Balances"
-      subtitle={`Net worth: $${totalNetWorth.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+      subtitle={`Net worth: ${formatCurrency(totalNetWorth, "USD")}`}
       interactive
     >
       <div className="space-y-4">
@@ -85,7 +93,10 @@ export default function AccountBalancesWidget({
           if (!accs || accs.length === 0) return null;
           const config = TYPE_CONFIG[type] ?? TYPE_CONFIG.expense;
           const Icon = config.icon;
-          const groupTotal = accs.reduce((s, a) => s + a.currentBalance, 0);
+          const groupTotal = accs.reduce(
+            (s, a) => s + a.currentBalance * (a.exchangeRate ?? 1),
+            0,
+          );
 
           return (
             <div key={type}>
@@ -97,7 +108,7 @@ export default function AccountBalancesWidget({
                   {config.label}
                 </span>
                 <span className="text-[10px] text-white/30 ml-auto tabular-nums">
-                  ${groupTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {formatCurrency(groupTotal, "USD")}
                 </span>
               </div>
 
@@ -123,7 +134,7 @@ export default function AccountBalancesWidget({
                         {acc.name}
                       </span>
                       <span className="text-sm font-semibold text-white tabular-nums">
-                        ${acc.currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatCurrency(acc.currentBalance, acc.currency || "USD")}
                       </span>
                     </button>
                   );
