@@ -32,6 +32,7 @@ export async function GET(
     .from("trip_packing_items")
     .select("*, packing_category:trip_packing_category!trip_packing_items_category_id_fkey(*)")
     .eq("trip_id", id)
+    .is("deleted_at", null)
     .order("position");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

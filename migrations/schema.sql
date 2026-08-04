@@ -1463,11 +1463,23 @@ CREATE TABLE public.trip_packing_items (
   packed_quantity integer NOT NULL DEFAULT 0,
   assigned_to uuid,
   category_id uuid,
+  deleted_at timestamp with time zone,
   CONSTRAINT trip_packing_items_pkey PRIMARY KEY (id),
   CONSTRAINT trip_packing_items_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES auth.users(id),
   CONSTRAINT trip_packing_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.trip_packing_category(id),
   CONSTRAINT trip_packing_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT trip_packing_items_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
+);
+CREATE TABLE public.trip_packing_checkpoints (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  trip_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  snapshot jsonb NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT trip_packing_checkpoints_pkey PRIMARY KEY (id),
+  CONSTRAINT trip_packing_checkpoints_trip_id_key UNIQUE (trip_id),
+  CONSTRAINT trip_packing_checkpoints_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id),
+  CONSTRAINT trip_packing_checkpoints_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.trip_side_effects (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -1740,6 +1752,15 @@ CREATE POLICY trip_packing_items_household_access ON public.trip_packing_items
   WITH CHECK (public.trip_is_accessible(trip_id));
 
 CREATE POLICY trip_packing_category_household_access ON public.trip_packing_category
+  FOR ALL TO authenticated
+  USING (public.trip_is_accessible(trip_id))
+  WITH CHECK (public.trip_is_accessible(trip_id));
+
+-- trips itself has no partner UPDATE policy (owner-only trips_owner + partner
+-- SELECT-only trips_select_household_partner — see migrations/db-state.json),
+-- so the packing checkpoint snapshot lives on its own child table rather than
+-- a column on trips, to stay collaboratively writable.
+CREATE POLICY trip_packing_checkpoints_household_access ON public.trip_packing_checkpoints
   FOR ALL TO authenticated
   USING (public.trip_is_accessible(trip_id))
   WITH CHECK (public.trip_is_accessible(trip_id));

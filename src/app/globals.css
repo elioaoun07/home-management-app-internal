@@ -1493,118 +1493,124 @@ body.theme-loaded {
 }
 
 /* Blue Theme - Default */
+/* NOTE: values below MUST be valid standalone CSS colors (hsl(...)/hex/oklch), never a bare
+   "H S% L%" triple — globals.css maps these straight through as `--color-x: var(--x)` with no
+   hsl() wrapper (see @theme inline above), so a bare triple is an invalid color and silently
+   resolves to transparent. This exact mistake caused floating panels (DropdownMenu, Popover,
+   Select, etc.) to render see-through with page content bleeding through — see Hard Rule #15
+   in CLAUDE.md. Fixed 2026-08-04; do not reintroduce bare triples here. */
 :root[data-theme="blue"] {
   /* Primary colors */
-  --primary: 221.2 83.2% 53.3%;
-  --primary-foreground: 210 40% 98%;
+  --primary: #2563eb;
+  --primary-foreground: #f8fafc;
 
   /* Accent colors */
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222.2 47.4% 11.2%;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
 
   /* Muted colors */
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
 
   /* Border and ring */
-  --border: 214.3 31.8% 91.4%;
-  --ring: 221.2 83.2% 53.3%;
+  --border: #e2e8f0;
+  --ring: #2563eb;
 
   /* Card */
-  --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
+  --card: #ffffff;
+  --card-foreground: #020817;
 
   /* Background */
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
+  --background: #ffffff;
+  --foreground: #020817;
 
   /* Destructive */
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
+  --destructive: #ef4444;
+  --destructive-foreground: #f8fafc;
 
   /* Secondary */
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
 
   /* Popover */
-  --popover: 0 0% 100%;
-  --popover-foreground: 222.2 84% 4.9%;
+  --popover: #ffffff;
+  --popover-foreground: #020817;
 
   /* Input */
-  --input: 214.3 31.8% 91.4%;
+  --input: #e2e8f0;
 }
 
 :root[data-theme="blue"].dark {
-  --primary: 217.2 91.2% 59.8%;
-  --primary-foreground: 222.2 47.4% 11.2%;
+  --primary: #3b82f6;
+  --primary-foreground: #0f172a;
 
-  --accent: 217.2 32.6% 17.5%;
-  --accent-foreground: 210 40% 98%;
+  --accent: #1e293b;
+  --accent-foreground: #f8fafc;
 
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
 
-  --border: 217.2 32.6% 17.5%;
-  --ring: 224.3 76.3% 48%;
+  --border: #1e293b;
+  --ring: #1d4ed8;
 
-  --card: 222.2 84% 4.9%;
-  --card-foreground: 210 40% 98%;
+  --card: #020817;
+  --card-foreground: #f8fafc;
 
-  --background: 222.2 84% 4.9%;
-  --foreground: 210 40% 98%;
+  --background: #020817;
+  --foreground: #f8fafc;
 
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 210 40% 98%;
+  --destructive: #7f1d1d;
+  --destructive-foreground: #f8fafc;
 
-  --secondary: 217.2 32.6% 17.5%;
-  --secondary-foreground: 210 40% 98%;
+  --secondary: #1e293b;
+  --secondary-foreground: #f8fafc;
 
-  --popover: 222.2 84% 4.9%;
-  --popover-foreground: 210 40% 98%;
+  --popover: #020817;
+  --popover-foreground: #f8fafc;
 
-  --input: 217.2 32.6% 17.5%;
+  --input: #1e293b;
 }
 
 /* Pink Theme */
 :root[data-theme="pink"] {
   /* Primary colors - Pink */
-  --primary: 330 81% 60%;
-  --primary-foreground: 0 0% 100%;
+  --primary: #ec4699;
+  --primary-foreground: #ffffff;
 
   /* Accent colors - Light pink */
-  --accent: 330 40% 96%;
-  --accent-foreground: 330 81% 25%;
+  --accent: #f9f1f5;
+  --accent-foreground: #730c40;
 
   /* Muted colors */
-  --muted: 330 40% 96%;
-  --muted-foreground: 330 16% 47%;
+  --muted: #f9f1f5;
+  --muted-foreground: #8b6578;
 
   /* Border and ring - Pink */
-  --border: 330 32% 91%;
-  --ring: 330 81% 60%;
+  --border: #efe1e8;
+  --ring: #ec4699;
 
   /* Card */
-  --card: 0 0% 100%;
-  --card-foreground: 330 84% 5%;
+  --card: #ffffff;
+  --card-foreground: #17020d;
 
   /* Background */
-  --background: 0 0% 100%;
-  --foreground: 330 84% 5%;
+  --background: #ffffff;
+  --foreground: #17020d;
 
   /* Destructive */
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 100%;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
 
   /* Secondary - Soft pink */
-  --secondary: 330 40% 96%;
-  --secondary-foreground: 330 81% 25%;
+  --secondary: #f9f1f5;
+  --secondary-foreground: #730c40;
 
   /* Popover */
-  --popover: 0 0% 100%;
-  --popover-foreground: 330 84% 5%;
+  --popover: #ffffff;
+  --popover-foreground: #17020d;
 
   /* Input */
-  --input: 330 32% 91%;
+  --input: #efe1e8;
 
   --background: #1a0a14;
   --card: #2d1b29;
@@ -1620,43 +1626,43 @@ body.theme-loaded {
 
 :root[data-theme="pink"].dark {
   /* Primary colors - Pink */
-  --primary: 330 81% 65%;
-  --primary-foreground: 330 84% 5%;
+  --primary: #ee5da6;
+  --primary-foreground: #17020d;
 
   /* Accent colors - Dark pink */
-  --accent: 330 33% 18%;
-  --accent-foreground: 0 0% 98%;
+  --accent: #3d1f2e;
+  --accent-foreground: #fafafa;
 
   /* Muted colors */
-  --muted: 330 33% 18%;
-  --muted-foreground: 330 20% 65%;
+  --muted: #3d1f2e;
+  --muted-foreground: #b894a6;
 
   /* Border and ring */
-  --border: 330 33% 18%;
-  --ring: 330 76% 48%;
+  --border: #3d1f2e;
+  --ring: #d71d7a;
 
   /* Card */
-  --card: 330 84% 5%;
-  --card-foreground: 0 0% 98%;
+  --card: #17020d;
+  --card-foreground: #fafafa;
 
   /* Background */
-  --background: 330 84% 5%;
-  --foreground: 0 0% 98%;
+  --background: #17020d;
+  --foreground: #fafafa;
 
   /* Destructive */
-  --destructive: 0 63% 31%;
-  --destructive-foreground: 0 0% 98%;
+  --destructive: #811d1d;
+  --destructive-foreground: #fafafa;
 
   /* Secondary */
-  --secondary: 330 33% 18%;
-  --secondary-foreground: 0 0% 98%;
+  --secondary: #3d1f2e;
+  --secondary-foreground: #fafafa;
 
   /* Popover */
-  --popover: 330 84% 5%;
-  --popover-foreground: 0 0% 98%;
+  --popover: #17020d;
+  --popover-foreground: #fafafa;
 
   /* Input */
-  --input: 330 33% 18%;
+  --input: #3d1f2e;
 }
 
 @layer utilities {

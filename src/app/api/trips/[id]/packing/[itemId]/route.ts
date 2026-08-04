@@ -69,11 +69,15 @@ export async function DELETE(
   const access = await getAccessibleTrip(supabase, user.id, id);
   if (!access) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  // Soft delete — keeps quantity/packed state/category/position intact so the
+  // in-context packing recycle bin can restore the row exactly, unlike a hard
+  // DELETE + client re-insert which loses packed_quantity/is_packed/position.
   const { error } = await supabase
     .from("trip_packing_items")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq("id", itemId)
-    .eq("trip_id", id);
+    .eq("trip_id", id)
+    .is("deleted_at", null);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return new NextResponse(null, { status: 204 });

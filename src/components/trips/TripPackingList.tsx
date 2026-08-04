@@ -7,8 +7,13 @@ import {
   useDeletePackingCategory,
   useDeletePackingItem,
   useReorderPackingItems,
+  useRestorePackingItem,
+  useRevertPackingCheckpoint,
+  useSavePackingCheckpoint,
   useTripPacking,
   useTripPackingCategories,
+  useTripPackingCheckpoint,
+  useTripPackingDeleted,
   useUpdatePackingCategory,
   useUpdatePackingItem,
 } from "@/features/trips/hooks";
@@ -18,8 +23,9 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
 import { PACKING_PRESETS, type PackingPreset } from "@/constants/packingPresets";
 import type { TripPackingCategory, TripPackingItem } from "@/types/trips";
-import { MoreHorizontal, Plus, Trash2, ChevronLeft, Pencil, X, GripVertical, RotateCcw, Sparkles } from "lucide-react";
+import { MoreHorizontal, Plus, Trash2, ChevronLeft, Pencil, X, GripVertical, RotateCcw, Sparkles, Save, History } from "lucide-react";
 import { useState, useRef, useCallback } from "react";
+import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { ToastIcons } from "@/lib/toastIcons";
 import {
@@ -27,7 +33,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/shared/DropdownMenu";
 import {
   Sheet,
   SheetContent,
@@ -388,7 +394,7 @@ function QtyControl({
     return (
       <input
         ref={inputRef}
-        className="w-10 text-center text-xs bg-white/10 border border-white/20 rounded text-white outline-none py-0.5"
+        className="w-10 text-center text-sm bg-white/10 border border-white/20 rounded text-white outline-none py-0.5"
         value={draft}
         inputMode="numeric"
         autoFocus
@@ -410,7 +416,7 @@ function QtyControl({
         </svg>
       </button>
       <button
-        className="px-1.5 text-xs font-mono text-white/70 hover:text-white transition-colors min-w-[20px] text-center"
+        className="px-1.5 text-sm font-mono text-white/70 hover:text-white transition-colors min-w-[20px] text-center"
         onClick={() => setEditing(true)}
       >
         {value}
@@ -670,7 +676,7 @@ function ItemRow({
         {nameEdit ? (
           <input
             autoFocus
-            className="w-full text-sm bg-white/10 border border-white/20 rounded px-2 py-1 text-white outline-none"
+            className="w-full text-base bg-white/10 border border-white/20 rounded px-2 py-1.5 text-white outline-none"
             value={nameDraft}
             onChange={(e) => setNameDraft(e.target.value)}
             onBlur={commitName}
@@ -683,7 +689,7 @@ function ItemRow({
           <span
             onClick={() => setNameEdit(true)}
             className={cn(
-              "text-sm cursor-text block truncate",
+              "text-base cursor-text block truncate",
               isFullyPacked ? "line-through text-white/30" : "text-white/85",
             )}
           >
@@ -765,7 +771,7 @@ function InlineAddRow({
     return (
       <button
         onClick={() => { setActive(true); setTimeout(() => inputRef.current?.focus(), 50); }}
-        className="w-full flex items-center gap-2.5 py-3 text-white/35 hover:text-white/60 transition-colors text-sm"
+        className="w-full flex items-center gap-2.5 py-3 text-white/35 hover:text-white/60 transition-colors text-base"
       >
         <Plus className="w-4 h-4 flex-shrink-0" />
         <span>Add item</span>
@@ -781,7 +787,7 @@ function InlineAddRow({
       />
       <input
         ref={inputRef}
-        className="flex-1 min-w-0 text-sm bg-transparent text-white placeholder:text-white/30 outline-none border-b border-white/20 pb-0.5"
+        className="flex-1 min-w-0 text-base bg-transparent text-white placeholder:text-white/30 outline-none border-b border-white/20 pb-0.5"
         placeholder="Item name…"
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -892,9 +898,79 @@ function RenameCategorySheet({
   );
 }
 
-// ── Category focus panel (full-screen overlay) ───────────────────────────────
+// ── Category sidebar (persists across category switches while full-screen) ──
 
-function CategoryFocusPanel({
+function CategorySidebar({
+  allCategories,
+  byCategory,
+  focusedKey,
+  onSelect,
+  open,
+  onToggle,
+}: {
+  allCategories: CategoryRef[];
+  byCategory: Record<string, TripPackingItem[]>;
+  focusedKey: string;
+  onSelect: (key: string) => void;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex-shrink-0 h-full overflow-y-auto border-r border-white/8 transition-[width] duration-200 flex flex-col",
+        open ? "w-48" : "w-14",
+      )}
+      style={{ background: "rgba(4,4,10,0.98)" }}
+    >
+      <button
+        onClick={onToggle}
+        className="flex-shrink-0 flex items-center justify-center h-11 text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors"
+        aria-label={open ? "Collapse category list" : "Expand category list"}
+      >
+        <ChevronLeft className={cn("w-4 h-4 transition-transform", !open && "rotate-180")} />
+      </button>
+      {allCategories.map((category) => {
+        const key = categoryKey(category);
+        const items = byCategory[key] ?? [];
+        const meta = getCategoryMeta(category);
+        const packed = items.filter((i) => i.is_packed).length;
+        const total = items.length;
+        const active = key === focusedKey;
+        return (
+          <button
+            key={key}
+            onClick={() => onSelect(key)}
+            className={cn(
+              "flex-shrink-0 flex items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors",
+              active ? "bg-white/10" : "hover:bg-white/5",
+            )}
+            style={active ? { borderLeft: `2px solid ${meta.iconColor}` } : { borderLeft: "2px solid transparent" }}
+          >
+            <span
+              className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: `${meta.iconColor}20` }}
+            >
+              <span style={{ color: meta.iconColor, transform: "scale(0.45)" }}>{meta.icon(meta.iconColor)}</span>
+            </span>
+            {open && (
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm text-white/80 truncate">{category.name}</span>
+                <span className="block text-[11px] tabular-nums" style={{ color: total > 0 && packed === total ? "#34d399" : "rgba(255,255,255,0.35)" }}>
+                  {packed}/{total}
+                </span>
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Category focus content (one category's items; remounted per switch) ────
+
+function CategoryFocusContent({
   category,
   items,
   tripId,
@@ -902,6 +978,7 @@ function CategoryFocusPanel({
   partnerId,
   partnerName,
   onClose,
+  onToggleSidebar,
 }: {
   category: CategoryRef;
   items: TripPackingItem[];
@@ -910,6 +987,7 @@ function CategoryFocusPanel({
   partnerId?: string | null;
   partnerName?: string;
   onClose: () => void;
+  onToggleSidebar: () => void;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const meta = getCategoryMeta(category);
@@ -936,19 +1014,13 @@ function CategoryFocusPanel({
     reorderItems.mutate(next.map((id, position) => ({ id, position })));
   };
 
-  const handleClose = () => {
-    onClose();
-  };
   const packed = items.filter((i) => i.is_packed).length;
   const total = items.length;
   const allPacked = total > 0 && packed === total;
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-50 flex flex-col"
-        style={{ background: "rgba(8,8,16,0.96)" }}
-      >
+      <div className="relative flex-1 flex flex-col overflow-hidden">
         {/* Subtle gradient tint behind header */}
         <div
           className="absolute inset-x-0 top-0 h-48 pointer-events-none"
@@ -958,16 +1030,17 @@ function CategoryFocusPanel({
         {/* Header */}
         <div className="relative flex-shrink-0 px-4 pt-5 pb-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               <button
-                onClick={handleClose}
-                className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+                onClick={onToggleSidebar}
+                className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors md:hidden"
                 style={{ color: meta.iconColor }}
+                aria-label="Browse categories"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <div>
-                <h2 className="text-base font-semibold text-white leading-tight">{category.name}</h2>
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-white leading-tight truncate">{category.name}</h2>
                 <span
                   className="text-xs font-medium tabular-nums"
                   style={{ color: allPacked && total > 0 ? "#34d399" : meta.iconColor }}
@@ -977,7 +1050,7 @@ function CategoryFocusPanel({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               {category.id && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -994,8 +1067,9 @@ function CategoryFocusPanel({
                 </DropdownMenu>
               )}
               <button
-                onClick={handleClose}
+                onClick={onClose}
                 className="w-9 h-9 rounded-full flex items-center justify-center text-white/25 hover:text-white/50 hover:bg-white/10 transition-colors"
+                aria-label="Close packing"
               >
                 <X className="w-4.5 h-4.5" />
               </button>
@@ -1058,6 +1132,58 @@ function CategoryFocusPanel({
         />
       )}
     </>
+  );
+}
+
+// ── Category focus panel (full-screen overlay + collapsible sidebar) ────────
+
+function CategoryFocusPanel({
+  allCategories,
+  byCategory,
+  focusedKey,
+  onFocusCategory,
+  tripId,
+  currentUserId,
+  partnerId,
+  partnerName,
+  onClose,
+}: {
+  allCategories: CategoryRef[];
+  byCategory: Record<string, TripPackingItem[]>;
+  focusedKey: string;
+  onFocusCategory: (key: string) => void;
+  tripId: string;
+  currentUserId?: string | null;
+  partnerId?: string | null;
+  partnerName?: string;
+  onClose: () => void;
+}) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const category = allCategories.find((c) => categoryKey(c) === focusedKey) ?? allCategories[0];
+  const items = byCategory[focusedKey] ?? [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex" style={{ background: "rgba(8,8,16,0.96)" }}>
+      <CategorySidebar
+        allCategories={allCategories}
+        byCategory={byCategory}
+        focusedKey={focusedKey}
+        onSelect={onFocusCategory}
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen((v) => !v)}
+      />
+      <CategoryFocusContent
+        key={focusedKey}
+        category={category}
+        items={items}
+        tripId={tripId}
+        currentUserId={currentUserId}
+        partnerId={partnerId}
+        partnerName={partnerName}
+        onClose={onClose}
+        onToggleSidebar={() => setSidebarOpen((v) => !v)}
+      />
+    </div>
   );
 }
 
@@ -1150,11 +1276,16 @@ export function TripPackingList({ tripId }: { tripId: string }) {
   const { data: household } = useHouseholdMembers();
   const [addCatOpen, setAddCatOpen] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
-  const [focusedCategory, setFocusedCategory] = useState<CategoryRef | null>(null);
+  const [deletedOpen, setDeletedOpen] = useState(false);
+  const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [assignFilter, setAssignFilter] = useState<AssignFilter>("all");
   const createCategory = useCreatePackingCategory(tripId);
   const bulkCreate = useBulkCreatePackingItems(tripId);
   const updatePackingItem = useUpdatePackingItem(tripId);
+  const { data: deletedItems = [] } = useTripPackingDeleted(tripId);
+  const { data: checkpoint } = useTripPackingCheckpoint(tripId);
+  const saveCheckpoint = useSavePackingCheckpoint(tripId);
+  const revertCheckpoint = useRevertPackingCheckpoint(tripId);
 
   const currentUserId = household?.currentUserId ?? null;
   const partner = household?.members.find((m) => !m.isCurrentUser);
@@ -1195,10 +1326,10 @@ export function TripPackingList({ tripId }: { tripId: string }) {
     const trimmed = name.trim();
     const existing = allCategories.find((category) => category.name.toLocaleLowerCase() === trimmed.toLocaleLowerCase());
     if (!trimmed || existing) {
-      if (existing) setFocusedCategory(existing);
+      if (existing) setFocusedKey(categoryKey(existing));
       return;
     }
-    createCategory.mutate({ name: trimmed }, { onSuccess: (category) => setFocusedCategory(category) });
+    createCategory.mutate({ name: trimmed }, { onSuccess: (category) => setFocusedKey(categoryKey(category)) });
   };
 
   const handleApplyPreset = async (preset: PackingPreset) => {
@@ -1242,6 +1373,45 @@ export function TripPackingList({ tripId }: { tripId: string }) {
             )}
           </div>
           <div className="flex items-center gap-3">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex items-center gap-1 text-white/40 hover:text-white/70 transition-colors"
+                  title="Packing checkpoint"
+                  aria-label="Packing checkpoint"
+                >
+                  <History className="w-4 h-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[220px]">
+                <DropdownMenuItem onClick={() => saveCheckpoint.mutate()}>
+                  <Save className="w-3.5 h-3.5 mr-2" />
+                  Save checkpoint
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!checkpoint?.created_at}
+                  onClick={() => revertCheckpoint.mutate()}
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mr-2" />
+                  {checkpoint?.created_at
+                    ? `Revert to checkpoint (${formatDistanceToNow(new Date(checkpoint.created_at), { addSuffix: true })})`
+                    : "Revert to checkpoint"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {deletedItems.length > 0 && (
+              <button
+                onClick={() => setDeletedOpen(true)}
+                className="relative flex items-center text-white/40 hover:text-white/70 transition-colors"
+                title="Deleted items"
+                aria-label="Deleted items"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-white/20 text-[9px] font-semibold flex items-center justify-center text-white/80">
+                  {deletedItems.length}
+                </span>
+              </button>
+            )}
             {anyPacked && (
               <button
                 onClick={handleReturnSweep}
@@ -1312,7 +1482,7 @@ export function TripPackingList({ tripId }: { tripId: string }) {
                 key={categoryKey(category)}
                 category={category}
                 items={byCategory[categoryKey(category)] ?? []}
-                onOpen={() => setFocusedCategory(category)}
+                onOpen={() => setFocusedKey(categoryKey(category))}
               />
             ))}
           </div>
@@ -1326,21 +1496,79 @@ export function TripPackingList({ tripId }: { tripId: string }) {
           onOpenChange={setAddCatOpen}
           onConfirm={handleCategoryCreated}
         />
+
+        <DeletedItemsSheet tripId={tripId} open={deletedOpen} onOpenChange={setDeletedOpen} />
       </div>
 
       {/* Focus panel overlay */}
-      {focusedCategory !== null && (
+      {focusedKey !== null && (
         <CategoryFocusPanel
-          category={focusedCategory}
-          items={byCategory[categoryKey(focusedCategory)] ?? []}
+          allCategories={allCategories}
+          byCategory={byCategory}
+          focusedKey={focusedKey}
+          onFocusCategory={setFocusedKey}
           tripId={tripId}
           currentUserId={currentUserId}
           partnerId={partnerId}
           partnerName={partnerName}
-          onClose={() => setFocusedCategory(null)}
+          onClose={() => setFocusedKey(null)}
         />
       )}
     </>
+  );
+}
+
+// ── Deleted items sheet (in-context packing recycle bin) ────────────────────
+
+function DeletedItemsSheet({
+  tripId,
+  open,
+  onOpenChange,
+}: {
+  tripId: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const tc = useThemeClasses();
+  const { data: deletedItems = [], isLoading } = useTripPackingDeleted(tripId);
+  const restoreItem = useRestorePackingItem(tripId);
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className={cn("rounded-t-2xl border-t max-h-[80vh] overflow-y-auto", tc.border, tc.bgPage)}>
+        <SheetHeader className="pb-4">
+          <SheetTitle className="text-white">Deleted items</SheetTitle>
+        </SheetHeader>
+        <div className="space-y-2 pb-8">
+          {isLoading && <p className={cn("text-sm text-center py-4", tc.textFaint)}>Loading…</p>}
+          {!isLoading && deletedItems.length === 0 && (
+            <p className={cn("text-sm text-center py-6", tc.textFaint)}>Nothing deleted from this trip's packing list</p>
+          )}
+          {deletedItems.map((item) => (
+            <div
+              key={item.id}
+              className={cn("flex items-center gap-3 rounded-xl border p-3", tc.border)}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-white/85 truncate">{item.name}</p>
+                <p className="text-xs text-white/35 mt-0.5">
+                  {item.packing_category?.name ?? "Other"} · qty {item.quantity}
+                  {item.deleted_at && ` · deleted ${formatDistanceToNow(new Date(item.deleted_at), { addSuffix: true })}`}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => restoreItem.mutate(item.id)}
+                disabled={restoreItem.isPending}
+                className={cn("flex-shrink-0 border font-medium", tc.bgSurface, tc.text, tc.border)}
+              >
+                Restore
+              </Button>
+            </div>
+          ))}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 

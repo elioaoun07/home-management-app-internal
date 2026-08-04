@@ -14,7 +14,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/shared/DropdownMenu";
 import {
   PLACE_PRIORITY_COLORS,
   PLACE_PRIORITY_LABELS,

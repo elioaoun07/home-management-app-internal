@@ -36,7 +36,11 @@
 | `GET/POST /api/trips/[id]/places` | `src/app/api/trips/[id]/places/route.ts` |
 | `PATCH/DELETE /api/trips/[id]/places/[placeId]` | `src/app/api/trips/[id]/places/[placeId]/route.ts` |
 | `GET/POST /api/trips/[id]/packing` | `src/app/api/trips/[id]/packing/route.ts` |
-| `PATCH/DELETE /api/trips/[id]/packing/[itemId]` | `src/app/api/trips/[id]/packing/[itemId]/route.ts` |
+| `PATCH/DELETE /api/trips/[id]/packing/[itemId]` | `src/app/api/trips/[id]/packing/[itemId]/route.ts` (DELETE soft-deletes) |
+| `POST /api/trips/[id]/packing/[itemId]/restore` | `src/app/api/trips/[id]/packing/[itemId]/restore/route.ts` |
+| `GET /api/trips/[id]/packing/deleted` | `src/app/api/trips/[id]/packing/deleted/route.ts` |
+| `GET/POST/DELETE /api/trips/[id]/packing/checkpoint` | `src/app/api/trips/[id]/packing/checkpoint/route.ts` |
+| `POST /api/trips/[id]/packing/checkpoint/revert` | `src/app/api/trips/[id]/packing/checkpoint/revert/route.ts` |
 | `GET/POST /api/trips/[id]/packing/categories` | `src/app/api/trips/[id]/packing/categories/route.ts` |
 | `PATCH/DELETE /api/trips/[id]/packing/categories/[categoryId]` | `src/app/api/trips/[id]/packing/categories/[categoryId]/route.ts` |
 

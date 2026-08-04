@@ -10,9 +10,11 @@ import type {
   CreateTripInput,
   CreateTripPackingItemInput,
   CreateTripPlaceInput,
+  SavePackingCheckpointResult,
   Trip,
   TripDocument,
   TripPackingCategory,
+  TripPackingCheckpoint,
   TripPackingItem,
   TripPlace,
   UpdateTripDocumentInput,
@@ -57,6 +59,18 @@ async function fetchTripPacking(tripId: string): Promise<TripPackingItem[]> {
 async function fetchTripPackingCategories(tripId: string): Promise<TripPackingCategory[]> {
   const res = await fetch(`/api/trips/${tripId}/packing/categories`);
   if (!res.ok) throw new Error("Failed to fetch packing categories");
+  return res.json();
+}
+
+async function fetchTripPackingDeleted(tripId: string): Promise<TripPackingItem[]> {
+  const res = await fetch(`/api/trips/${tripId}/packing/deleted`);
+  if (!res.ok) throw new Error("Failed to fetch deleted packing items");
+  return res.json();
+}
+
+async function fetchTripPackingCheckpoint(tripId: string): Promise<TripPackingCheckpoint> {
+  const res = await fetch(`/api/trips/${tripId}/packing/checkpoint`);
+  if (!res.ok) throw new Error("Failed to fetch packing checkpoint");
   return res.json();
 }
 
@@ -111,6 +125,26 @@ export function useTripPackingCategories(tripId: string) {
     queryKey: tripKeys.packingCategories(tripId),
     queryFn: () => fetchTripPackingCategories(tripId),
     staleTime: 1000 * 60 * 5,
+    enabled: !!tripId,
+  });
+}
+
+/** Soft-deleted packing items for this trip — powers the header's "Deleted
+ * items" badge count and the recycle bin sheet's list. */
+export function useTripPackingDeleted(tripId: string) {
+  return useQuery({
+    queryKey: tripKeys.packingDeleted(tripId),
+    queryFn: () => fetchTripPackingDeleted(tripId),
+    staleTime: 1000 * 30,
+    enabled: !!tripId,
+  });
+}
+
+export function useTripPackingCheckpoint(tripId: string) {
+  return useQuery({
+    queryKey: tripKeys.packingCheckpoint(tripId),
+    queryFn: () => fetchTripPackingCheckpoint(tripId),
+    staleTime: 1000 * 60,
     enabled: !!tripId,
   });
 }
@@ -514,6 +548,7 @@ export function useCreatePackingItem(tripId: string) {
         inventory_item_id: input.inventory_item_id ?? null,
         catalogue_item_id: input.catalogue_item_id ?? null,
         assigned_to: input.assigned_to ?? null,
+        deleted_at: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -744,34 +779,125 @@ export function useDeletePackingItem(tripId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (itemId: string) => {
-      const snapshot = qc.getQueryData<TripPackingItem[]>(tripKeys.packing(tripId));
-      const deleted = snapshot?.find((i) => i.id === itemId);
       const res = await safeFetch(`/api/trips/${tripId}/packing/${itemId}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error ?? "Failed to delete item");
       }
-      return { itemId, deleted };
+      return { itemId };
     },
-    onSuccess: ({ deleted }) => {
+    onSuccess: ({ itemId }) => {
       qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) });
+      qc.invalidateQueries({ queryKey: tripKeys.packingDeleted(tripId) });
+      // Soft delete (server sets deleted_at) — undo just nulls it back out via
+      // the restore route, which preserves quantity/packed state/position
+      // exactly instead of re-inserting a fresh row.
       const undo = async () => {
-        if (!deleted) return;
-        await safeFetch(`/api/trips/${tripId}/packing`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: deleted.name,
-            category_id: deleted.category_id,
-            quantity: deleted.quantity,
-            assigned_to: deleted.assigned_to,
-          }),
-        });
+        await safeFetch(`/api/trips/${tripId}/packing/${itemId}/restore`, { method: "POST" });
         qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) });
+        qc.invalidateQueries({ queryKey: tripKeys.packingDeleted(tripId) });
       };
       toast.success("Item removed", { icon: ToastIcons.delete, duration: 4000, action: { label: "Undo", onClick: undo } });
     },
     onError: () => toast.error("Failed to remove item", { icon: ToastIcons.error }),
+  });
+}
+
+export function useRestorePackingItem(tripId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (itemId: string) => {
+      const res = await safeFetch(`/api/trips/${tripId}/packing/${itemId}/restore`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to restore item");
+      }
+      return res.json() as Promise<TripPackingItem>;
+    },
+    onSuccess: (item) => {
+      qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) });
+      qc.invalidateQueries({ queryKey: tripKeys.packingDeleted(tripId) });
+      const undo = async () => {
+        await safeFetch(`/api/trips/${tripId}/packing/${item.id}`, { method: "DELETE" });
+        qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) });
+        qc.invalidateQueries({ queryKey: tripKeys.packingDeleted(tripId) });
+      };
+      toast.success("Item restored", { icon: ToastIcons.success, duration: 4000, action: { label: "Undo", onClick: undo } });
+    },
+    onError: () => toast.error("Failed to restore item", { icon: ToastIcons.error }),
+  });
+}
+
+export function useSavePackingCheckpoint(tripId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await safeFetch(`/api/trips/${tripId}/packing/checkpoint`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to save checkpoint");
+      }
+      return res.json() as Promise<SavePackingCheckpointResult>;
+    },
+    onSuccess: ({ created_at, previous }) => {
+      qc.setQueryData<TripPackingCheckpoint>(tripKeys.packingCheckpoint(tripId), { created_at });
+      // Undo re-upserts the exact prior snapshot (verbatim, including its own
+      // created_at) if one existed, or deletes the checkpoint row entirely if
+      // this was the first-ever save — a client-side cache tweak alone would
+      // leave the unwanted snapshot as the source of truth for a later revert.
+      const undo = async () => {
+        if (previous) {
+          await safeFetch(`/api/trips/${tripId}/packing/checkpoint`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ restore: previous }),
+          });
+          qc.setQueryData<TripPackingCheckpoint>(tripKeys.packingCheckpoint(tripId), { created_at: previous.created_at });
+        } else {
+          await safeFetch(`/api/trips/${tripId}/packing/checkpoint`, { method: "DELETE" });
+          qc.setQueryData<TripPackingCheckpoint>(tripKeys.packingCheckpoint(tripId), { created_at: null });
+        }
+      };
+      toast.success("Checkpoint saved", { icon: ToastIcons.success, duration: 4000, action: { label: "Undo", onClick: undo } });
+    },
+    onError: () => toast.error("Failed to save checkpoint", { icon: ToastIcons.error }),
+  });
+}
+
+export function useRevertPackingCheckpoint(tripId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await safeFetch(`/api/trips/${tripId}/packing/checkpoint/revert`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to revert to checkpoint");
+      }
+      return res.json() as Promise<{ applied: number }>;
+    },
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: tripKeys.packing(tripId) });
+      const previous = qc.getQueryData<TripPackingItem[]>(tripKeys.packing(tripId));
+      return { previous };
+    },
+    onSuccess: (_result, _vars, ctx) => {
+      qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) });
+      const undo = async () => {
+        if (!ctx?.previous) return;
+        await Promise.all(
+          ctx.previous.map((item) =>
+            safeFetch(`/api/trips/${tripId}/packing/${item.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ packed_quantity: item.packed_quantity, is_packed: item.is_packed }),
+            }),
+          ),
+        );
+        qc.invalidateQueries({ queryKey: tripKeys.packing(tripId) });
+      };
+      toast.success("Reverted to last checkpoint", { icon: ToastIcons.success, duration: 4000, action: { label: "Undo", onClick: undo } });
+    },
+    onError: () => toast.error("Failed to revert to checkpoint", { icon: ToastIcons.error }),
   });
 }
 

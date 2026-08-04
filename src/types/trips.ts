@@ -71,6 +71,25 @@ export interface TripPackingItem {
   updated_at: string;
   /** Household member this item is assigned to pack. Null = unassigned/either. */
   assigned_to: string | null;
+  /** Soft delete. Non-null rows are excluded from the normal packing list and
+   * only surfaced in the in-context packing recycle bin. */
+  deleted_at: string | null;
+}
+
+/** Single revertible packing-progress snapshot for a trip (trip_packing_checkpoints). */
+export interface TripPackingCheckpoint {
+  created_at: string | null;
+}
+
+export interface TripPackingCheckpointSnapshotEntry {
+  id: string;
+  packed_quantity: number;
+  is_packed: boolean;
+}
+
+export interface SavePackingCheckpointResult {
+  created_at: string;
+  previous: { snapshot: TripPackingCheckpointSnapshotEntry[]; created_at: string } | null;
 }
 
 export interface TripPackingCategory {

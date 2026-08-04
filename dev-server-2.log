@@ -1,0 +1,136 @@
+
+> home-manager@0.1.0 dev C:\Users\aoune\WebApp\budget-app
+> next dev --turbopack
+
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+   ▲ Next.js 16.0.7 (Turbopack)
+   - Local:         http://localhost:3000
+   - Network:       http://100.68.46.23:3000
+   - Environments: .env
+
+ ✓ Starting...
+ ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+ ✓ Ready in 1232ms
+ ○ Compiling /trips/[id] ...
+Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+ GET /trips/8913dcff-f66b-47fd-9070-d737cf84a1c8 200 in 7.8s (compile: 6.7s, render: 1101ms)
+ GET /trips/8913dcff-f66b-47fd-9070-d737cf84a1c8 200 in 200ms (compile: 26ms, render: 175ms)
+ POST /api/error-logs 200 in 1471ms (compile: 563ms, render: 909ms)
+ GET /api/accounts 200 in 1911ms (compile: 828ms, render: 1083ms)
+ POST /api/error-logs 200 in 489ms (compile: 6ms, render: 483ms)
+ GET /api/accounts 200 in 676ms (compile: 4ms, render: 672ms)
+ GET /api/accounts?own=true&includeHidden=true 200 in 346ms (compile: 9ms, render: 337ms)
+ GET /api/drafts 200 in 578ms (compile: 155ms, render: 424ms)
+ GET /api/onboarding 200 in 656ms (compile: 190ms, render: 466ms)
+ GET /api/accounts?own=true&includeHidden=true 200 in 292ms (compile: 5ms, render: 287ms)
+ HEAD /api/health 200 in 468ms
+ GET /api/drafts 200 in 478ms (compile: 13ms, render: 466ms)
+ GET /api/onboarding 200 in 589ms (compile: 16ms, render: 573ms)
+ HEAD /api/health 200 in 6ms
+ GET /api/accounts?own=true 200 in 456ms (compile: 8ms, render: 448ms)
+ GET /api/categories?accountId=95e86bc8-a531-4f58-bf2a-e0f442a58230 200 in 707ms (compile: 147ms, render: 560ms)
+ GET /api/transactions?start=2026-07-31&end=2026-08-30 200 in 1924ms (compile: 161ms, render: 1763ms)
+ GET /api/accounts?own=true 200 in 336ms (compile: 6ms, render: 330ms)
+ GET /api/categories?accountId=95e86bc8-a531-4f58-bf2a-e0f442a58230 200 in 482ms (compile: 4ms, render: 478ms)
+ GET /api/transactions?start=2026-07-31&end=2026-08-30 200 in 1634ms (compile: 7ms, render: 1627ms)
+ GET / 200 in 2.7s (compile: 2.5s, render: 186ms)
+ GET / 200 in 102ms (compile: 6ms, render: 96ms)
+Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+ GET /trips/8913dcff-f66b-47fd-9070-d737cf84a1c8 200 in 163ms (compile: 22ms, render: 141ms)
+ POST /api/error-logs 200 in 756ms (compile: 5ms, render: 750ms)
+ GET /api/accounts 200 in 1151ms (compile: 6ms, render: 1145ms)
+ GET /api/accounts?own=true&includeHidden=true 200 in 356ms (compile: 5ms, render: 351ms)
+ GET /api/drafts 200 in 467ms (compile: 13ms, render: 453ms)
+ GET /api/onboarding 200 in 739ms (compile: 26ms, render: 713ms)
+ HEAD /api/health 200 in 7ms
+ GET /api/accounts?own=true 200 in 601ms (compile: 5ms, render: 595ms)
+ GET /api/categories?accountId=95e86bc8-a531-4f58-bf2a-e0f442a58230 200 in 499ms (compile: 4ms, render: 495ms)
+ GET /api/transactions?start=2026-07-31&end=2026-08-30 200 in 2.1s (compile: 4ms, render: 2.1s)
+Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+ GET /trips/8913dcff-f66b-47fd-9070-d737cf84a1c8 200 in 175ms (compile: 31ms, render: 144ms)
+ GET /api/accounts 200 in 1173ms (compile: 4ms, render: 1169ms)
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 1022ms (compile: 419ms, render: 604ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 1148ms (compile: 394ms, render: 754ms)
+ GET /api/drafts 200 in 330ms (compile: 15ms, render: 315ms)
+ GET /api/accounts?own=true&includeHidden=true 200 in 486ms (compile: 10ms, render: 476ms)
+ GET /api/onboarding 200 in 598ms (compile: 29ms, render: 569ms)
+ GET /api/transactions/split-bill 200 in 456ms (compile: 151ms, render: 305ms)
+ HEAD /api/health 200 in 8ms
+ GET /api/accounts?own=true 200 in 544ms (compile: 6ms, render: 538ms)
+ GET /api/categories?accountId=95e86bc8-a531-4f58-bf2a-e0f442a58230 200 in 532ms (compile: 4ms, render: 528ms)
+ GET /api/transactions?start=2026-07-31&end=2026-08-30 200 in 1945ms (compile: 16ms, render: 1929ms)
+Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+ GET /trips/8913dcff-f66b-47fd-9070-d737cf84a1c8 200 in 159ms (compile: 17ms, render: 143ms)
+ HEAD /api/health 200 in 7ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 917ms (compile: 7ms, render: 910ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 926ms (compile: 16ms, render: 910ms)
+ GET /api/accounts 200 in 1230ms (compile: 6ms, render: 1224ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 537ms (compile: 7ms, render: 531ms)
+ GET /api/drafts 200 in 333ms (compile: 5ms, render: 328ms)
+ GET /api/transactions/split-bill 200 in 444ms (compile: 4ms, render: 440ms)
+ HEAD /api/health 200 in 6ms
+ GET /api/transactions?start=2026-07-31&end=2026-08-30 200 in 1971ms (compile: 5ms, render: 1966ms)
+ HEAD /api/health 200 in 6ms
+ HEAD /api/health 200 in 6ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 794ms (compile: 5ms, render: 789ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 1147ms (compile: 5ms, render: 1142ms)
+ HEAD /api/health 200 in 12ms
+ HEAD /api/health 200 in 8ms
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 1240ms (compile: 5ms, render: 1235ms)
+ HEAD /api/health 200 in 8ms
+ HEAD /api/health 200 in 7ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 1110ms (compile: 5ms, render: 1104ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 1007ms (compile: 5ms, render: 1002ms)
+ HEAD /api/health 200 in 7ms
+ HEAD /api/health 200 in 7ms
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 942ms (compile: 4ms, render: 938ms)
+ HEAD /api/health 200 in 7ms
+ HEAD /api/health 200 in 8ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 911ms (compile: 4ms, render: 907ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 1042ms (compile: 4ms, render: 1037ms)
+ HEAD /api/health 200 in 6ms
+ HEAD /api/health 200 in 8ms
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 1283ms (compile: 4ms, render: 1278ms)
+ HEAD /api/health 200 in 7ms
+ HEAD /api/health 200 in 5ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 676ms (compile: 4ms, render: 671ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 1058ms (compile: 5ms, render: 1053ms)
+ HEAD /api/health 200 in 6ms
+ HEAD /api/health 200 in 7ms
+Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+ GET /trips/8913dcff-f66b-47fd-9070-d737cf84a1c8 200 in 172ms (compile: 20ms, render: 152ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 910ms (compile: 5ms, render: 906ms)
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 492ms (compile: 7ms, render: 485ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 730ms (compile: 16ms, render: 713ms)
+ GET /api/accounts 200 in 1373ms (compile: 4ms, render: 1368ms)
+ GET /api/drafts 200 in 384ms (compile: 5ms, render: 379ms)
+ GET /api/transactions/split-bill 200 in 378ms (compile: 7ms, render: 372ms)
+ HEAD /api/health 200 in 11ms
+ GET /api/transactions?start=2026-07-31&end=2026-08-30 200 in 1769ms (compile: 5ms, render: 1764ms)
+ HEAD /api/health 200 in 6ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 762ms (compile: 5ms, render: 757ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 935ms (compile: 4ms, render: 931ms)
+ HEAD /api/health 200 in 9ms
+ HEAD /api/health 200 in 6ms
+ HEAD /api/health 200 in 6ms
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 1035ms (compile: 5ms, render: 1030ms)
+ HEAD /api/health 200 in 8ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 784ms (compile: 4ms, render: 780ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 930ms (compile: 4ms, render: 925ms)
+ HEAD /api/health 200 in 6ms
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 917ms (compile: 4ms, render: 913ms)
+ HEAD /api/health 200 in 12ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 776ms (compile: 5ms, render: 772ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 889ms (compile: 5ms, render: 885ms)
+ HEAD /api/health 200 in 7ms
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 886ms (compile: 4ms, render: 882ms)
+ HEAD /api/health 200 in 9ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 726ms (compile: 5ms, render: 721ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 920ms (compile: 5ms, render: 915ms)
+ HEAD /api/health 200 in 7ms
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 1487ms (compile: 5ms, render: 1482ms)
+ HEAD /api/health 200 in 7ms
+ GET /api/notifications/in-app?limit=20&include_read=true&exclude_actioned=true 200 in 839ms (compile: 5ms, render: 834ms)
+ GET /api/notifications/in-app?limit=0&include_read=false 200 in 831ms (compile: 4ms, render: 827ms)
+ HEAD /api/health 200 in 7ms

@@ -17,7 +17,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/shared/DropdownMenu";
 import { Calendar, Copy, MapPin, MoreVertical, Pencil, Plane, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";

@@ -24,6 +24,7 @@ tags:
 
 ## Now
 
+- [ ] **TRIP-18** Run `migrations/2026-08-04_trips-packing-checkpoint-recyclebin.sql` in the Supabase SQL Editor — adds `trip_packing_items.deleted_at` (in-context packing recycle bin) + the `trip_packing_checkpoints` table (single-snapshot quick-save/revert of packed status) + updates `get_trip_bundle()` to exclude soft-deleted items. Packing GET/checkpoint/deleted routes return 500 until this runs (confirmed via direct fetch against the live dev server 2026-08-04). → [Trips / Overview](<../../03 - Junction Modules/Trips/Overview.md>) _(blocker - S)_
 - [ ] **TRIP-1** Manual end-to-end verify — **household trip.** Activate a real household trip; confirm chores skip, recurring events pause via `recurrence_pauses`, one-time events cancel, meal plans skip, and the trip account is created. Then complete it and confirm **every** side-effect in `trip_side_effects` reverses cleanly. → [Trips / Overview](<../../03 - Junction Modules/Trips/Overview.md>) _(blocker - M)_
 - [ ] **TRIP-2** Manual end-to-end verify — **solo trip.** Confirm the traveler's items reassign to partner (`responsible_user_id` flip), meal planning is untouched, and completion reverses the reassignment. _(blocker - M)_
 - [ ] **TRIP-3** Confirm `recurring_payments` are **NOT** paused during a trip (deliberate rule — bills still due while travelling); guard against a future "pause everything" regression. _(blocker - S)_

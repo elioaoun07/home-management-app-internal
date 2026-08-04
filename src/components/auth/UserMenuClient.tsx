@@ -15,7 +15,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/shared/DropdownMenu";
 import { useOnboarding } from "@/features/preferences/useOnboarding";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { safeFetch } from "@/lib/safeFetch";
@@ -143,10 +143,7 @@ export default function UserMenuClient({ name, email, avatarUrl }: Props) {
           </Button>
         </DropdownMenuTrigger>
 
-        <DropdownMenuContent
-          align="end"
-          className={`w-64 p-2 ${themeClasses.modalBg} ${themeClasses.border}`}
-        >
+        <DropdownMenuContent align="end" className="w-64">
           {isOffline && (
             <div className="flex items-center gap-2 px-3 py-2 mb-1 rounded-lg bg-amber-500/10 border border-amber-500/30">
               <WifiOff className="h-3.5 w-3.5 text-amber-400 shrink-0" />
@@ -178,29 +175,20 @@ export default function UserMenuClient({ name, email, avatarUrl }: Props) {
               </div>
             </div>
           </DropdownMenuLabel>
-          <DropdownMenuSeparator className={themeClasses.separatorBg} />
-          <DropdownMenuItem
-            onClick={() => setSettingsOpen(true)}
-            className={`cursor-pointer rounded-lg py-2.5 text-white ${themeClasses.hoverBgSubtle}`}
-          >
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
             <SettingsIcon
-              className={`mr-3 h-4 w-4 ${themeClasses.labelText}`}
+              className={`h-4 w-4 ${themeClasses.labelText}`}
             />
             <span>Settings</span>
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setLinkOpen(true)}
-            className={`cursor-pointer rounded-lg py-2.5 text-white ${themeClasses.hoverBgSubtle}`}
-          >
-            <UserIcon className={`mr-3 h-4 w-4 ${themeClasses.labelText}`} />
+          <DropdownMenuItem onClick={() => setLinkOpen(true)}>
+            <UserIcon className={`h-4 w-4 ${themeClasses.labelText}`} />
             <span>Link household</span>
           </DropdownMenuItem>
-          <DropdownMenuSeparator className={themeClasses.separatorBg} />
-          <DropdownMenuItem
-            onClick={handleSignOut}
-            className="cursor-pointer rounded-lg py-2.5 text-red-400 hover:bg-red-500/10"
-          >
-            <LogOut className="mr-3 h-4 w-4" />
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleSignOut} variant="destructive">
+            <LogOut className="h-4 w-4" />
             <span>Sign out</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
