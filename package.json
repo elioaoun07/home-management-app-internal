@@ -27,7 +27,8 @@
     "pm:icons": "node scripts/pm/generate-icons.mjs",
     "pm:dashboard": "node scripts/build-pm-dashboard.mjs",
     "pm:public": "node scripts/build-pm-dashboard.mjs --public",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "db:verify-rls": "node scripts/check-db-state.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",

@@ -51,6 +51,26 @@ if [ -n "$newest" ]; then
   }
 fi
 
+# DB state snapshot freshness (Hard Rule #27). RLS/cascade/SECURITY DEFINER facts
+# live ONLY in migrations/db-state.json — schema.sql structurally cannot hold them.
+# A missing or stale snapshot must be announced, or an agent will silently fall
+# back to trusting repo prose about RLS, which is exactly how the 2026-08-04
+# invisible-household-trips bug happened.
+db_state="migrations/db-state.json"
+if [ ! -f "$db_state" ]; then
+  echo "DB STATE: migrations/db-state.json is MISSING. This repo currently cannot answer any question about RLS, policy bodies, FK cascade rules, or SECURITY DEFINER functions. Do NOT infer RLS from schema.sql or from any vault/PM doc (Hard Rule #27) — ask the owner to run migrations/db-state.sql. Verify with 'pnpm db:verify-rls'."
+else
+  stamp=$(grep -m1 '"generated_at"' "$db_state" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
+  if [ -n "$stamp" ]; then
+    then=$(date -d "$stamp" +%s 2>/dev/null) && {
+      days=$(( (now - then) / 86400 ))
+      if [ "$days" -gt 30 ]; then
+        echo "DB STATE: migrations/db-state.json was generated $stamp ($days days ago). Treat its RLS/policy/cascade contents as historical. Re-run migrations/db-state.sql before relying on it (Hard Rule #27)."
+      fi
+    }
+  fi
+fi
+
 if [ -n "$out" ]; then
   echo "PM FRESHNESS RADAR (SessionStart hook):"
   echo "$out"

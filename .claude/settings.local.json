@@ -219,7 +219,8 @@
       "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/block-ui-dir.sh')",
       "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/check-migration.sh')",
       "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/update-atlas.sh')",
-      "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/check-pm-update.sh')"
+      "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/check-pm-update.sh')",
+      "Bash(pnpm db:verify-rls)"
     ]
   }
 }
