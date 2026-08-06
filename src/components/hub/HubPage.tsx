@@ -31,6 +31,7 @@ import {
   useMarkMessageAsRead,
   useRealtimeMessages,
   useSendMessage,
+  useSetMessageColor,
   useSnoozeAlert,
   useUpdateNotificationTime,
   useVisibilityRefresh,
@@ -64,6 +65,11 @@ import {
   renderQuickActionIcon,
 } from "@/lib/notifications/registry";
 import { parseMessageForTransaction } from "@/lib/nlp/messageTransactionParser";
+import {
+  getMessageColorHex,
+  MESSAGE_COLOR_PALETTE,
+  type MessageColorKey,
+} from "@/features/hub/messageColors";
 import { useConversationMode } from "@/features/voice-conversation";
 import { safeFetch } from "@/lib/safeFetch";
 import { useChatFullscreenStore } from "@/lib/stores/chatFullscreenStore";
@@ -77,8 +83,10 @@ import {
   Bot,
   Clock,
   FileText,
+  Filter,
   Link as LinkIcon,
   ListChecks,
+  Palette,
   Pin,
   RefreshCw,
   Settings,
@@ -1664,6 +1672,7 @@ function ThreadConversation({
   const unreadSeparatorRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
+  const themeClasses = useThemeClasses();
   const hasScrolledToUnread = useRef(false);
   const hasProcessedUnread = useRef(false);
 
@@ -1752,6 +1761,21 @@ function ThreadConversation({
   );
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showBulkConvertSheet, setShowBulkConvertSheet] = useState(false);
+
+  // Per-message color tag (HUB-11) — active filter + the "pen" color applied
+  // to the next message sent. The compose color is sticky per-thread so the
+  // user can log a whole batch under one color before switching.
+  const [colorFilter, setColorFilter] = useState<MessageColorKey | null>(
+    null,
+  );
+  const [showColorFilterMenu, setShowColorFilterMenu] = useState(false);
+  const [activeComposeColor, setActiveComposeColor] =
+    useLocalStorage<MessageColorKey | null>(
+      `hub-compose-color-${threadId}`,
+      null,
+    );
+  const [showComposeColorPicker, setShowComposeColorPicker] = useState(false);
+  const setMessageColor = useSetMessageColor();
 
   // Thread settings modal
   const [showThreadSettings, setShowThreadSettings] = useState(false);
@@ -2255,6 +2279,12 @@ function ThreadConversation({
       )
     : filteredMessages;
 
+  // Further filter by the active color tag (HUB-11) — what's actually shown
+  // in the thread when a color filter is set.
+  const colorFilteredMessages = colorFilter
+    ? searchFilteredMessages.filter((msg) => msg.color === colorFilter)
+    : searchFilteredMessages;
+
   // Count hidden messages for visual feedback
   const hiddenMessagesCount = messages.length - filteredMessages.length;
 
@@ -2279,10 +2309,15 @@ function ThreadConversation({
   // convertible: no existing action, not deleted, and — for budget threads —
   // contain a detectable amount (per user requirement: only numeric rows).
   // Reminder threads select all eligible rows since text alone is enough.
+  // When a color filter is active (HUB-11), "select all" also narrows to
+  // just that color — e.g. filter to color A, select all, add as
+  // transactions, then repeat for color B, instead of one undifferentiated
+  // pass across the whole thread.
   const getSelectAllEligibleIds = useCallback(() => {
     return messages
       .filter((msg: HubMessage) => {
         if (msg.deleted_at) return false;
+        if (colorFilter && msg.color !== colorFilter) return false;
         const hasAction = messageActions.some(
           (a: any) => a.message_id === msg.id,
         );
@@ -2297,7 +2332,7 @@ function ThreadConversation({
         return true;
       })
       .map((msg: HubMessage) => msg.id);
-  }, [messages, messageActions, thread?.purpose, categories]);
+  }, [messages, messageActions, thread?.purpose, categories, colorFilter]);
 
   // Current user's theme determines their bubble color
   // Blue theme user = blue bubbles for "me", pink for partner
@@ -2336,6 +2371,14 @@ function ThreadConversation({
     hasScrolledToUnread.current = false;
   }, [threadId]);
 
+  // Color filter is a view-only affordance, scoped to whichever thread is
+  // open — don't let it silently carry over and hide messages in a
+  // different thread the user just switched to.
+  useEffect(() => {
+    setColorFilter(null);
+    setShowColorFilterMenu(false);
+  }, [threadId]);
+
   // Smooth scroll to bottom when new messages arrive (after initial load)
   const prevMessagesLength = useRef(searchFilteredMessages.length);
   useEffect(() => {
@@ -2360,7 +2403,11 @@ function ThreadConversation({
 
     const messageToSend = newMessage;
     setNewMessage(""); // Clear input immediately (optimistic)
-    sendMessage.mutate({ content: messageToSend, thread_id: threadId });
+    sendMessage.mutate({
+      content: messageToSend,
+      thread_id: threadId,
+      color: activeComposeColor,
+    });
   };
 
   // Shopping list handlers
@@ -2878,6 +2925,85 @@ function ThreadConversation({
                         <EyeIcon className="w-5 h-5" />
                       </button>
                     )}
+                  {/* Color filter (HUB-11) — works in any thread */}
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setShowComposeColorPicker(false);
+                        setShowColorFilterMenu((p) => !p);
+                      }}
+                      className={cn(
+                        "p-2 rounded-lg transition-all",
+                        colorFilter
+                          ? "hover:bg-white/10"
+                          : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70",
+                      )}
+                      style={
+                        colorFilter
+                          ? {
+                              backgroundColor: `${getMessageColorHex(colorFilter)}20`,
+                              color: getMessageColorHex(colorFilter) ?? undefined,
+                            }
+                          : undefined
+                      }
+                      title={
+                        colorFilter
+                          ? `Filtering by ${colorFilter}`
+                          : "Filter by color"
+                      }
+                    >
+                      <Filter className="w-5 h-5" />
+                    </button>
+                    {showColorFilterMenu && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setShowColorFilterMenu(false)}
+                        />
+                        <div
+                          className={cn(
+                            "absolute right-0 top-full mt-2 z-50 w-44 p-2 rounded-2xl border border-white/20 shadow-2xl",
+                            themeClasses.bgPage,
+                          )}
+                        >
+                          <div className="flex flex-wrap gap-1.5 p-1">
+                            <button
+                              onClick={() => {
+                                setColorFilter(null);
+                                setShowColorFilterMenu(false);
+                              }}
+                              className={cn(
+                                "w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all",
+                                colorFilter === null
+                                  ? "border-white/60"
+                                  : "border-white/10 hover:border-white/30",
+                              )}
+                              title="All colors"
+                            >
+                              <XIcon className="w-4 h-4 text-white/60" />
+                            </button>
+                            {MESSAGE_COLOR_PALETTE.map((c) => (
+                              <button
+                                key={c.key}
+                                onClick={() => {
+                                  setColorFilter(c.key);
+                                  setShowColorFilterMenu(false);
+                                }}
+                                className={cn(
+                                  "w-8 h-8 rounded-full border-2 transition-all",
+                                  colorFilter === c.key
+                                    ? "border-white/80 scale-110"
+                                    : "border-transparent hover:scale-105",
+                                )}
+                                style={{ backgroundColor: c.hex }}
+                                title={c.label}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                   {/* ERA Conversation Mode Button — budget + reminder threads only */}
                   {thread?.purpose &&
                     (thread.purpose === "budget" || thread.purpose === "reminder") && (
@@ -3057,18 +3183,35 @@ function ThreadConversation({
                     No messages yet. Start the conversation!
                   </p>
                 </div>
-              ) : searchFilteredMessages.length === 0 ? (
+              ) : colorFilteredMessages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <EyeIcon className="w-12 h-12 mb-3 text-emerald-400/30" />
-                  <p className="text-sm text-white/50">
-                    All messages have completed actions.
-                  </p>
-                  <p className="text-xs text-white/40 mt-1">
-                    Toggle the eye icon to show them.
-                  </p>
+                  {colorFilter ? (
+                    <>
+                      <Palette className="w-12 h-12 mb-3 text-white/20" />
+                      <p className="text-sm text-white/50">
+                        No messages tagged with this color.
+                      </p>
+                      <button
+                        onClick={() => setColorFilter(null)}
+                        className="text-xs text-blue-400 hover:text-blue-300 mt-1"
+                      >
+                        Clear filter
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <EyeIcon className="w-12 h-12 mb-3 text-emerald-400/30" />
+                      <p className="text-sm text-white/50">
+                        All messages have completed actions.
+                      </p>
+                      <p className="text-xs text-white/40 mt-1">
+                        Toggle the eye icon to show them.
+                      </p>
+                    </>
+                  )}
                 </div>
               ) : (
-                searchFilteredMessages.map((msg: HubMessage, index: number) => {
+                colorFilteredMessages.map((msg: HubMessage, index: number) => {
                   const styles = getMessageStyles(msg);
                   const isSystem = msg.message_type === "system";
                   const isMe = msg.sender_user_id === currentUserId;
@@ -3089,7 +3232,7 @@ function ThreadConversation({
                     (index === 0 ||
                       isDifferentDay(
                         msg.created_at,
-                        searchFilteredMessages[index - 1].created_at,
+                        colorFilteredMessages[index - 1].created_at,
                       ));
 
                   return (
@@ -3219,6 +3362,25 @@ function ThreadConversation({
                               styles.bubble,
                             )}
                           >
+                            {/* Color tag (HUB-11) — a small floating corner dot,
+                                same treatment as the action badges above (border
+                                matching the page background so it reads as a
+                                separate element instead of bleeding into the
+                                bubble's own rounded corner / gradient). Bottom
+                                corner so it never collides with an action badge. */}
+                            {msg.color && (
+                              <span
+                                className={cn(
+                                  "absolute -bottom-1 w-3.5 h-3.5 rounded-full border-2 border-bg-custom shadow-lg",
+                                  isMe ? "-right-1" : "-left-1",
+                                )}
+                                style={{
+                                  backgroundColor:
+                                    getMessageColorHex(msg.color) ?? undefined,
+                                }}
+                                title={`Tagged ${msg.color}`}
+                              />
+                            )}
                             {/* Action badges in top-right corner */}
                             {msgActions.length > 0 && (
                               <div className="absolute -top-1 -right-1 flex gap-1">
@@ -3470,6 +3632,90 @@ function ThreadConversation({
                     ) : null}
                   </div>
                 <div className="flex gap-2">
+                  {/* Active compose color (HUB-11) — fast pre-select before
+                      typing; stays sticky across sends so a batch of
+                      same-color messages doesn't need reselecting each time. */}
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowColorFilterMenu(false);
+                        setShowComposeColorPicker((p) => !p);
+                      }}
+                      className="w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all"
+                      style={{
+                        borderColor: activeComposeColor
+                          ? (getMessageColorHex(activeComposeColor) ?? "rgba(255,255,255,0.2)")
+                          : "rgba(255,255,255,0.2)",
+                        backgroundColor: activeComposeColor
+                          ? `${getMessageColorHex(activeComposeColor)}25`
+                          : "rgba(255,255,255,0.05)",
+                      }}
+                      title={
+                        activeComposeColor
+                          ? `Next message tagged ${activeComposeColor}`
+                          : "Tag next message with a color"
+                      }
+                    >
+                      <Palette
+                        className="w-4 h-4"
+                        style={{
+                          color:
+                            getMessageColorHex(activeComposeColor) ?? "rgba(255,255,255,0.5)",
+                        }}
+                      />
+                    </button>
+                    {showComposeColorPicker && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setShowComposeColorPicker(false)}
+                        />
+                        <div
+                          className={cn(
+                            "absolute left-0 z-50 w-44 p-2 rounded-2xl border border-white/20 shadow-2xl",
+                            themeClasses.bgPage,
+                          )}
+                          style={{ bottom: "calc(100% + 0.5rem)" }}
+                        >
+                          <div className="flex flex-wrap gap-1.5 p-1">
+                            <button
+                              onClick={() => {
+                                setActiveComposeColor(null);
+                                setShowComposeColorPicker(false);
+                              }}
+                              className={cn(
+                                "w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all",
+                                activeComposeColor === null
+                                  ? "border-white/60"
+                                  : "border-white/10 hover:border-white/30",
+                              )}
+                              title="No color"
+                            >
+                              <XIcon className="w-4 h-4 text-white/60" />
+                            </button>
+                            {MESSAGE_COLOR_PALETTE.map((c) => (
+                              <button
+                                key={c.key}
+                                onClick={() => {
+                                  setActiveComposeColor(c.key);
+                                  setShowComposeColorPicker(false);
+                                }}
+                                className={cn(
+                                  "w-8 h-8 rounded-full border-2 transition-all",
+                                  activeComposeColor === c.key
+                                    ? "border-white/80 scale-110"
+                                    : "border-transparent hover:scale-105",
+                                )}
+                                style={{ backgroundColor: c.hex }}
+                                title={c.label}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={newMessage}
@@ -3777,6 +4023,57 @@ function ThreadConversation({
                       </div>
                     </button>
                   )}
+
+                  {/* Change color (HUB-11) — hold-to-recolor, available on any message */}
+                  <div className="mt-1 px-2 py-2">
+                    <p className="text-xs font-medium text-white/50 px-2 mb-1.5">
+                      Color tag
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 px-2">
+                      <button
+                        onClick={() => {
+                          setMessageColor.mutate({
+                            message_id: actionMenuMessage.id,
+                            thread_id: threadId,
+                            color: null,
+                          });
+                          setActionMenuMessage(null);
+                          setActionMenuPosition(null);
+                        }}
+                        className={cn(
+                          "w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all",
+                          !actionMenuMessage.color
+                            ? "border-white/60"
+                            : "border-white/10 hover:border-white/30",
+                        )}
+                        title="No color"
+                      >
+                        <XIcon className="w-3.5 h-3.5 text-white/60" />
+                      </button>
+                      {MESSAGE_COLOR_PALETTE.map((c) => (
+                        <button
+                          key={c.key}
+                          onClick={() => {
+                            setMessageColor.mutate({
+                              message_id: actionMenuMessage.id,
+                              thread_id: threadId,
+                              color: c.key,
+                            });
+                            setActionMenuMessage(null);
+                            setActionMenuPosition(null);
+                          }}
+                          className={cn(
+                            "w-7 h-7 rounded-full border-2 transition-all",
+                            actionMenuMessage.color === c.key
+                              ? "border-white/80 scale-110"
+                              : "border-transparent hover:scale-105",
+                          )}
+                          style={{ backgroundColor: c.hex }}
+                          title={c.label}
+                        />
+                      ))}
+                    </div>
+                  </div>
 
                   {/* Multi-add Action - budget/reminder threads only, enters bulk-convert selection */}
                   {(threadPurpose === "budget" ||

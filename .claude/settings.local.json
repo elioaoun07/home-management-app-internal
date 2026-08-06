@@ -221,7 +221,9 @@
       "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/update-atlas.sh')",
       "Bash(sh -c 'cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/check-pm-update.sh')",
       "Bash(pnpm db:verify-rls)",
-      "Bash(awk 'NR==1846,NR==2060' src/components/expense/MobileExpenseForm.tsx)"
+      "Bash(awk 'NR==1846,NR==2060' src/components/expense/MobileExpenseForm.tsx)",
+      "Bash(sort -t- -k2 -n -u)",
+      "Bash(awk '/^## Now|^## Next|^## Later|^## Definition of Done/{print NR\": \"$0}' \"ERA Notes/10 - Project Management/Hub & ERA/4 - Checklist.md\")"
     ]
   }
 }

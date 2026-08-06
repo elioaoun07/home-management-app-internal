@@ -6,11 +6,16 @@ import {
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { sendPushToUser } from "@/lib/pushSender";
+import { MESSAGE_COLOR_KEYS } from "@/features/hub/messageColors";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
 type HubMessageActionRow = Record<string, unknown>;
+
+const messageColorSchema = z.enum(
+  MESSAGE_COLOR_KEYS as [string, ...string[]],
+);
 
 const sendMessageSchema = z.object({
   content: z.string().trim().min(1).max(10_000),
@@ -20,6 +25,7 @@ const sendMessageSchema = z.object({
   shopping_group_id: z.string().min(1).optional(),
   parent_item_id: z.string().min(1).optional(),
   item_chat_photo_url: z.string().url().optional(),
+  color: messageColorSchema.nullable().optional(),
 });
 
 const messageQuerySchema = z.object({
@@ -580,6 +586,7 @@ export async function POST(request: NextRequest) {
     shopping_group_id,
     parent_item_id,
     item_chat_photo_url,
+    color,
   } = parsed.data;
 
   // Get thread and verify access (include title and purpose for notification filtering)
@@ -643,6 +650,11 @@ export async function POST(request: NextRequest) {
   // Add item_chat_photo_url if provided
   if (item_chat_photo_url) {
     insertData.item_chat_photo_url = item_chat_photo_url;
+  }
+
+  // Add color if provided (the active compose color, HUB-11)
+  if (color) {
+    insertData.color = color;
   }
 
   const { data: message, error } = await supabase
@@ -901,6 +913,7 @@ export async function PATCH(request: NextRequest) {
         "set_quantity",
         "update_content",
         "assign_item",
+        "set_color",
       ].includes(action)
     ) {
       switch (action) {
@@ -1201,6 +1214,103 @@ export async function PATCH(request: NextRequest) {
             success: true,
             message_id,
             assigned_to: assigned_to || null,
+          });
+        }
+
+        case "set_color": {
+          if (!message_id) {
+            return NextResponse.json(
+              { error: "message_id is required" },
+              { status: 400 },
+            );
+          }
+
+          const colorParse = messageColorSchema
+            .nullable()
+            .safeParse(body.color ?? null);
+          if (!colorParse.success) {
+            return NextResponse.json(
+              { error: "Invalid color" },
+              { status: 400 },
+            );
+          }
+          const newColor = colorParse.data;
+
+          // Fetch thread_id for realtime broadcast + verify the message
+          // belongs to a thread the caller can reach (household check below).
+          const { data: colorMsg, error: colorFetchError } = await supabase
+            .from("hub_messages")
+            .select(
+              `
+              thread_id,
+              hub_chat_threads!inner ( household_id )
+            `,
+            )
+            .eq("id", message_id)
+            .single();
+
+          if (colorFetchError || !colorMsg) {
+            return NextResponse.json(
+              { error: "Message not found" },
+              { status: 404 },
+            );
+          }
+
+          const colorHouseholdId = getVerifiedMessageHouseholdId({
+            sender_user_id: user.id,
+            hub_chat_threads: colorMsg.hub_chat_threads,
+          } as VerifiedMessageRow);
+
+          if (colorHouseholdId) {
+            const { data: colorHousehold } = await supabase
+              .from("household_links")
+              .select("id")
+              .eq("id", colorHouseholdId)
+              .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
+              .eq("active", true)
+              .maybeSingle();
+
+            if (!colorHousehold) {
+              return NextResponse.json(
+                { error: "Unauthorized" },
+                { status: 403 },
+              );
+            }
+          }
+
+          const { error: colorUpdateError } = await supabase
+            .from("hub_messages")
+            .update({ color: newColor })
+            .eq("id", message_id);
+
+          if (colorUpdateError) {
+            return NextResponse.json(
+              { error: "Failed to set color" },
+              { status: 500 },
+            );
+          }
+
+          // Broadcast so the partner's open thread updates live too.
+          const colorChannel = supabase.channel(
+            `thread-${colorMsg.thread_id}`,
+          );
+          await colorChannel.subscribe();
+          await colorChannel.send({
+            type: "broadcast",
+            event: "message-color-update",
+            payload: {
+              message_id,
+              thread_id: colorMsg.thread_id,
+              color: newColor,
+              updated_by: user.id,
+            },
+          });
+          await supabase.removeChannel(colorChannel);
+
+          return NextResponse.json({
+            success: true,
+            message_id,
+            color: newColor,
           });
         }
 

@@ -126,6 +126,10 @@ For sweeping a noisy conversation in one pass instead of one-at-a-time:
 
 Budget rows share **one account** for the whole batch (not per-row) — pick it at the top of the sheet.
 
+### Scoping by color
+
+If you've tagged messages with a color (palette button next to the compose input, or long-press → color row on an existing message), apply the header **Filter** button first — **Select all** in Multi-add then only auto-checks messages matching that color. Useful for splitting a mixed budget thread: filter to "mine" → Multi-add → Select all → Save, then repeat with "partner's" instead of one undifferentiated pass across everything.
+
 ## 🆕 Coming Soon
 
 - Copy message action

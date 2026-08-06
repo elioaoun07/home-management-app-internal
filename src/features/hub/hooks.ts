@@ -3,9 +3,11 @@
 
 import { isReallyOnline } from "@/lib/connectivityManager";
 import { addToQueue } from "@/lib/offlineQueue";
+import { safeFetch } from "@/lib/safeFetch";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { MessageColorKey } from "./messageColors";
 import {
   addMessageToLocalCache,
   getCachedMessages,
@@ -118,6 +120,7 @@ export type HubMessage = {
   item_chat_photo_url?: string | null; // Photo URL for item chat messages
   reply_count?: number; // Computed: number of sub-messages for this item
   unread_reply_count?: number; // Computed: unread partner replies for this item
+  color?: MessageColorKey | null; // User-assigned color tag (HUB-11) — no fixed meaning
 };
 
 export type HubFeedItem = {
@@ -1046,6 +1049,7 @@ export function useSendMessage() {
       item_quantity,
       shopping_group_id,
       item_sort_order,
+      color,
     }: {
       content: string;
       thread_id: string;
@@ -1053,6 +1057,7 @@ export function useSendMessage() {
       item_quantity?: string;
       shopping_group_id?: string;
       item_sort_order?: number;
+      color?: MessageColorKey | null;
     }) => {
       if (!isReallyOnline()) {
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -1067,6 +1072,7 @@ export function useSendMessage() {
             topic_id,
             item_quantity,
             shopping_group_id,
+            color,
           },
           tempId,
           metadata: {
@@ -1080,6 +1086,7 @@ export function useSendMessage() {
             thread_id,
             topic_id: topic_id || null,
             item_quantity: item_quantity || null,
+            color: color || null,
             created_at: new Date().toISOString(),
             _isPending: true,
           },
@@ -1096,6 +1103,7 @@ export function useSendMessage() {
           item_quantity,
           shopping_group_id,
           item_sort_order,
+          color,
         }),
       });
       if (!res.ok) throw new Error("Failed to send message");
@@ -1198,6 +1206,7 @@ export function useSendMessage() {
           source_item_id: null,
           meal_plan_id: null,
           assigned_to: null,
+          color: variables.color ?? null,
         };
 
         queryClient.setQueryData(
@@ -1283,6 +1292,63 @@ export function useSendMessage() {
           };
         },
       );
+    },
+  });
+}
+
+// --- Message color tag (HUB-11) ---
+export function useSetMessageColor() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      message_id,
+      color,
+    }: {
+      message_id: string;
+      thread_id: string;
+      color: MessageColorKey | null;
+    }) => {
+      const res = await safeFetch("/api/hub/messages", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set_color", message_id, color }),
+      });
+      if (!res.ok) throw new Error("Failed to set message color");
+      return res.json();
+    },
+    onMutate: async ({ message_id, thread_id, color }) => {
+      await queryClient.cancelQueries({
+        queryKey: ["hub", "messages", thread_id],
+      });
+      const previous = queryClient.getQueryData([
+        "hub",
+        "messages",
+        thread_id,
+      ]);
+      queryClient.setQueryData(
+        ["hub", "messages", thread_id],
+        (
+          old: { messages: HubMessage[]; [key: string]: unknown } | undefined,
+        ) => {
+          if (!old) return old;
+          return {
+            ...old,
+            messages: old.messages.map((m) =>
+              m.id === message_id ? { ...m, color } : m,
+            ),
+          };
+        },
+      );
+      return { previous };
+    },
+    onError: (_err, variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(
+          ["hub", "messages", variables.thread_id],
+          context.previous,
+        );
+      }
     },
   });
 }

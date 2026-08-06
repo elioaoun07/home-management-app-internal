@@ -317,6 +317,7 @@ CREATE TABLE public.hub_messages (
   item_sort_order double precision,
   parent_item_id uuid,
   item_chat_photo_url text,
+  color text CHECK (color IS NULL OR (color = ANY (ARRAY['rose'::text, 'orange'::text, 'amber'::text, 'lime'::text, 'emerald'::text, 'cyan'::text, 'indigo'::text, 'fuchsia'::text]))),
   CONSTRAINT hub_messages_pkey PRIMARY KEY (id),
   CONSTRAINT hub_messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.hub_chat_threads(id),
   CONSTRAINT hub_messages_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
