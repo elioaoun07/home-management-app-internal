@@ -243,6 +243,12 @@ export function buildTurnEntry({
   // in-flight response is lost, but the workspace isn't rolled back, so the
   // owner needs to see what an abort actually touched before retrying.
   workspaceDelta = null,
+  // DLV-85: which live SDK session (segment) served this turn —
+  // `{id, seq, turnIndex, created, reason}`. `created: false` means the turn
+  // reused a warm session and paid no cache-creation for the prefix; this is
+  // the field that makes the cache economics auditable per turn instead of
+  // inferred from a session-wide total. `null` for drivers without segments.
+  segment = null,
 }) {
   if (!turnId) throw new TranscriptError("turn.turnId is required");
   if (!TURN_RESULTS.includes(result)) throw new TranscriptError(`unknown turn result "${result}"`);
@@ -272,6 +278,7 @@ export function buildTurnEntry({
     configChangeRef,
     compactBoundaries,
     workspaceDelta,
+    segment,
   };
 }
 

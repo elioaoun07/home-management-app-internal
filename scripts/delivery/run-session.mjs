@@ -1728,9 +1728,10 @@ async function runGuardedTurn({
       }
     : undefined;
 
-  function sealTurn(result, usageV2, { workspaceDelta = null, costUsd = null } = {}) {
+  function sealTurn(result, usageV2, { workspaceDelta = null, costUsd = null, segment = null } = {}) {
     if (!turnId) return;
     const entry = buildTurnEntry({
+      segment,
       turnId,
       phase,
       role,
@@ -1812,6 +1813,21 @@ async function runGuardedTurn({
             },
           }),
         );
+        // DLV-85: which live SDK session served this turn. A `created: true`
+        // segment paid a fresh cache-creation for the whole prefix; a reused
+        // one paid none. Emitting the open (and only the open) makes the
+        // sessions-per-run count directly greppable from events.ndjson —
+        // `agent.session.init` used to be 1:1 with turns, which is precisely
+        // the ratio this change exists to break.
+        const segment = result.segment || null;
+        if (segment && segment.created) {
+          emitEvent(sessionDir, {
+            type: "agent.segment.opened",
+            phase,
+            agent,
+            data: { segmentId: segment.id, seq: segment.seq, reason: segment.reason },
+          });
+        }
         const usageV2 = result.usageV2 || fallbackUsageV2FromV1(result.usage);
         const reportedCostUsd =
           typeof (result.usage && result.usage.costUsd) === "number"
@@ -1830,10 +1846,10 @@ async function runGuardedTurn({
             agent,
             data: { violations: guard.violations },
           });
-          sealTurn("guard-violation", usageV2, { workspaceDelta: { changedPaths }, costUsd: reportedCostUsd });
+          sealTurn("guard-violation", usageV2, { workspaceDelta: { changedPaths }, costUsd: reportedCostUsd, segment });
           return { ok: false, gitViolation: true, violations: guard.violations, changedPaths, turnId, usageV2 };
         }
-        sealTurn("ok", usageV2, { workspaceDelta: { changedPaths }, costUsd: reportedCostUsd });
+        sealTurn("ok", usageV2, { workspaceDelta: { changedPaths }, costUsd: reportedCostUsd, segment });
         return {
           ok: true,
           finalText: result.finalText,
@@ -1841,6 +1857,7 @@ async function runGuardedTurn({
           changedPaths,
           turnId,
           usageV2,
+          segment,
         };
       } catch (err) {
         if (err instanceof DriverAbortedError) {

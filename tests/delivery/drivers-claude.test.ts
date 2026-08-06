@@ -865,15 +865,28 @@ describe("createClaudeDriver: session lifecycle against a fake SDK", () => {
 });
 
 describe("createClaudeDriver: turn mechanics (sessionId vs resume, events, usage)", () => {
-  it("first turn uses sessionId, later turns resume the same id; onEvent fires in order", async () => {
+  // DLV-85: session identity is unchanged (first query() creates under our own
+  // `sessionId`, every later one `resume`s it) but it is now observed across a
+  // *segment* boundary rather than across every turn — two same-mode turns
+  // share one live query(), so the second one issues no query() call at all.
+  it("first segment uses sessionId, a later segment resumes the same id; onEvent fires in order", async () => {
     const preflightMessages = asyncGen([resultSuccess()]);
-    const turn1Messages = asyncGen([SYSTEM_INIT, assistantText("working"), userToolResult("ok"), resultSuccess({ result: "turn1" })]);
-    const turn2Messages = asyncGen([assistantText("still working"), resultSuccess({ result: "turn2" })]);
+    // One generator serves both turns of the build segment: the drain loop
+    // stops at each `result` and resumes from the next item on the next turn.
+    const buildSegment = asyncGen([
+      SYSTEM_INIT,
+      assistantText("working"),
+      userToolResult("ok"),
+      resultSuccess({ result: "turn1" }),
+      assistantText("still working"),
+      resultSuccess({ result: "turn2" }),
+    ]);
+    const reviewSegment = asyncGen([assistantText("reviewing"), resultSuccess({ result: "turn3" })]);
     const query = vi
       .fn()
       .mockReturnValueOnce(preflightMessages)
-      .mockReturnValueOnce(turn1Messages)
-      .mockReturnValueOnce(turn2Messages);
+      .mockReturnValueOnce(buildSegment)
+      .mockReturnValueOnce(reviewSegment);
     const driver = createClaudeDriver({ importSdk: async () => ({ query }) });
 
     const handle = await driver.startSession({ cwd: CWD, mode: "build", model: "claude-opus-4-8" });
@@ -891,14 +904,28 @@ describe("createClaudeDriver: turn mechanics (sessionId vs resume, events, usage
     ]);
     expect(handle.ref.established).toBe(true);
 
-    const turn1Call = query.mock.calls[1][0];
-    expect(turn1Call.options.sessionId).toBe(handle.ref.id);
-    expect(turn1Call.options.resume).toBeUndefined();
+    const firstSegmentCall = query.mock.calls[1][0];
+    expect(firstSegmentCall.options.sessionId).toBe(handle.ref.id);
+    expect(firstSegmentCall.options.resume).toBeUndefined();
+    expect(r1.segment).toMatchObject({ turnIndex: 1, created: true, reason: "first-turn" });
 
-    await driver.runTurn(handle, "continue", {});
-    const turn2Call = query.mock.calls[2][0];
-    expect(turn2Call.options.resume).toBe(handle.ref.id);
-    expect(turn2Call.options.sessionId).toBeUndefined();
+    // Same mode/model/effort/schema -> same live segment, no new query() call.
+    const r2 = await driver.runTurn(handle, "continue", {});
+    expect(r2.finalText).toBe("turn2");
+    expect(r2.segment).toMatchObject({ turnIndex: 2, created: false, reason: "reused" });
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(r2.segment.id).toBe(r1.segment.id);
+
+    // A mode change is a segment boundary: new query(), resuming the same id.
+    driver.resume(handle.ref, { mode: "readonly" });
+    const r3 = await driver.runTurn(handle, "review it", {});
+    expect(r3.finalText).toBe("turn3");
+    expect(query).toHaveBeenCalledTimes(3);
+    const secondSegmentCall = query.mock.calls[2][0];
+    expect(secondSegmentCall.options.resume).toBe(handle.ref.id);
+    expect(secondSegmentCall.options.sessionId).toBeUndefined();
+    expect(r3.segment).toMatchObject({ turnIndex: 1, created: true, reason: "resumed" });
+    expect(r3.segment.id).not.toBe(r1.segment.id);
   });
 
   it("feeds onRaw with full-fidelity records alongside onEvent (DW-1)", async () => {
