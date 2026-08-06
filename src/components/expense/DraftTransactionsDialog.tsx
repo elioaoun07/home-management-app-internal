@@ -26,6 +26,7 @@ import {
   useDrafts,
 } from "@/features/drafts/useDrafts";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getCurrencySymbol } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useState } from "react";
@@ -42,7 +43,7 @@ type DraftTransaction = {
   confidence_score: number | null;
   inserted_at: string;
   account_id: string;
-  accounts: { name: string };
+  accounts: { name: string; currency?: string | null };
   category?: { name: string } | null;
   subcategory?: { name: string } | null;
 };
@@ -346,7 +347,8 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
                         <div className="space-y-1 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="text-2xl font-bold">
-                              ${draft.amount.toFixed(2)}
+                              {getCurrencySymbol(draft.accounts.currency)}
+                              {draft.amount.toFixed(2)}
                             </span>
                             <Badge variant="outline" className="text-xs">
                               {draft.accounts.name}

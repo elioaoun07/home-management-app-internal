@@ -11,9 +11,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSyncSafe } from "@/contexts/SyncContext";
+import { useAccounts } from "@/features/accounts/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getCurrencySymbol } from "@/lib/currency";
 import type { OfflineOperation } from "@/lib/offlineQueue";
 import { cn } from "@/lib/utils";
+import type { Account } from "@/types/domain";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CheckCircle2,
@@ -38,6 +41,21 @@ interface OfflinePendingDrawerProps {
   onOpenChange: (open: boolean) => void;
 }
 
+// Queued ops span every feature (transactions, shopping list, ...), so a
+// pending transaction's currency has to be resolved from its own
+// account_id — not assumed to match whichever account is on screen.
+function currencySymbolForOp(
+  op: Pick<OfflineOperation, "body">,
+  accounts: Account[],
+): string {
+  const accountId = op.body?.account_id;
+  const account =
+    typeof accountId === "string"
+      ? accounts.find((a) => a.id === accountId)
+      : undefined;
+  return getCurrencySymbol(account?.currency);
+}
+
 export default function OfflinePendingDrawer({
   open,
   onOpenChange,
@@ -45,6 +63,7 @@ export default function OfflinePendingDrawer({
   const themeClasses = useThemeClasses();
   const sync = useSyncSafe();
   const pendingOps = sync?.offlinePendingOps ?? [];
+  const { data: accounts = [] } = useAccounts();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editAmount, setEditAmount] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -135,7 +154,7 @@ export default function OfflinePendingDrawer({
           description: editDescription || undefined,
         },
         metadata: {
-          label: `Add ${editDescription || "transaction"} $${newAmount}`,
+          label: `Add ${editDescription || "transaction"} ${currencySymbolForOp(op, accounts)}${newAmount}`,
         },
       });
 
@@ -165,7 +184,7 @@ export default function OfflinePendingDrawer({
       setEditingId(null);
       toast.success("Pending transaction updated", { icon: "Edit" });
     },
-    [sync, editAmount, editDescription],
+    [sync, editAmount, editDescription, accounts],
   );
 
   const handleClearAll = useCallback(async () => {
@@ -331,7 +350,8 @@ export default function OfflinePendingDrawer({
                           </span>
                           {typeof op.body?.amount === "number" && (
                             <span className="text-xs text-amber-400/80 font-medium">
-                              ${(op.body.amount as number).toFixed(2)}
+                              {currencySymbolForOp(op, accounts)}
+                              {(op.body.amount as number).toFixed(2)}
                             </span>
                           )}
                         </div>

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getCurrencySymbol } from "@/lib/currency";
 import { ReactNode, useState } from "react";
 import CalculatorDialog from "./CalculatorDialog";
 
@@ -15,11 +16,18 @@ type Props = {
   value?: string;
   onChange?: (value: string) => void;
   rightExtra?: ReactNode; // Optional extra control (e.g., voice entry)
+  currency?: string | null; // Selected account's currency — defaults to USD
 };
 
-export default function AmountInput({ value, onChange, rightExtra }: Props) {
+export default function AmountInput({
+  value,
+  onChange,
+  rightExtra,
+  currency,
+}: Props) {
   const themeClasses = useThemeClasses();
   const [isCalcOpen, setCalcOpen] = useState(false);
+  const currencySymbol = getCurrencySymbol(currency);
 
   return (
     <div className="space-y-2">
@@ -32,7 +40,7 @@ export default function AmountInput({ value, onChange, rightExtra }: Props) {
       </Label>
       <div className="relative flex items-center">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold z-10">
-          $
+          {currencySymbol}
         </span>
         <Input
           id="amount"
@@ -45,7 +53,7 @@ export default function AmountInput({ value, onChange, rightExtra }: Props) {
             const v = e.target.value;
             if (v === "" || /^\d*\.?\d*$/.test(v)) onChange?.(v);
           }}
-          className={`pl-8 pr-24 h-12 text-lg font-semibold transition-all focus:ring-0 focus-visible:ring-0 ${themeClasses.inputFocusForce}`}
+          className={`${currencySymbol.length > 1 ? "pl-12" : "pl-8"} pr-24 h-12 text-lg font-semibold transition-all focus:ring-0 focus-visible:ring-0 ${themeClasses.inputFocusForce}`}
         />
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
           <Button

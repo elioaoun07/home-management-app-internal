@@ -19,7 +19,7 @@ type DraftTransaction = {
   confidence_score: number | null;
   inserted_at: string;
   account_id: string;
-  accounts: { name: string };
+  accounts: { name: string; currency?: string | null };
   category?: { name: string } | null;
   subcategory?: { name: string } | null;
 };

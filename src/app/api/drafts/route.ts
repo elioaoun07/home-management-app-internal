@@ -31,7 +31,7 @@ export async function GET(request: Request) {
         confidence_score,
         inserted_at,
         account_id,
-        accounts!transactions_account_id_fkey(name),
+        accounts!transactions_account_id_fkey(name, currency),
         category:user_categories!transactions_category_fk(name),
         subcategory:user_categories!transactions_subcategory_fk(name)
       `,

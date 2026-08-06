@@ -14,6 +14,7 @@ import {
   XIcon,
 } from "@/components/icons/FuturisticIcons";
 import { getErrorMessage } from "@/lib/errors";
+import { getCurrencySymbol, getQuickAmounts } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
@@ -899,7 +900,7 @@ function MobileExpenseFormContent() {
           if (!res.ok) throw new Error("Failed");
           toast.success("Future payment scheduled!", {
             icon: <CalendarLucide className="w-4 h-4 text-blue-400" />,
-            description: `$${amountForToast} for ${categoryNameForToast} — due ${transactionData.date}`,
+            description: `${currencySymbol}${amountForToast} for ${categoryNameForToast} — due ${transactionData.date}`,
           });
           queryClient.invalidateQueries({
             queryKey: ["account-balance", transactionData.account_id],
@@ -956,7 +957,7 @@ function MobileExpenseFormContent() {
                 </div>
               ),
               duration: 4000,
-              description: `$${amountForToast} for ${categoryNameForToast} — will sync when online`,
+              description: `${currencySymbol}${amountForToast} for ${categoryNameForToast} — will sync when online`,
               action: {
                 label: "Undo",
                 onClick: async () => {
@@ -1012,8 +1013,8 @@ function MobileExpenseFormContent() {
               ? "Income added!"
               : "Expense added!";
           const successDescription = wasSplitBill
-            ? `$${amountForToast} for ${categoryNameForToast} - awaiting partner's amount`
-            : `$${amountForToast} for ${categoryNameForToast}`;
+            ? `${currencySymbol}${amountForToast} for ${categoryNameForToast} - awaiting partner's amount`
+            : `${currencySymbol}${amountForToast} for ${categoryNameForToast}`;
           toast.success(successMessage, {
             icon: ToastIcons.create,
             duration: 4000,
@@ -1149,8 +1150,10 @@ function MobileExpenseFormContent() {
 
   const contentAreaBottomPadding = `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_HEIGHT}px)`;
 
-  // Quick-amount presets for the amount step
-  const QUICK_AMOUNTS = ["5", "10", "20", "50", "100"];
+  // Quick-amount presets for the amount step — reflect the selected
+  // account's currency (e.g. EUR notes vs USD notes), not always USD.
+  const currencySymbol = getCurrencySymbol(selectedAccount?.currency);
+  const QUICK_AMOUNTS = getQuickAmounts(selectedAccount?.currency);
 
   // Contextual next step label helper
   const getNextStepLabel = (next: Step | null): string => {
@@ -1216,7 +1219,8 @@ function MobileExpenseFormContent() {
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full ${themeClasses.pillBg} ${themeClasses.pillBgHover} active:scale-95 transition-all duration-150 shrink-0`}
                 >
                   <span className="font-bold text-[11px] text-emerald-400">
-                    ${amount}
+                    {currencySymbol}
+                    {amount}
                   </span>
                 </button>
               )}
@@ -1331,6 +1335,7 @@ function MobileExpenseFormContent() {
               <AccountBalance
                 accountId={selectedAccountId}
                 accountName={selectedAccount?.name}
+                currency={selectedAccount?.currency}
               />
             </div>
           )}
@@ -1382,7 +1387,7 @@ function MobileExpenseFormContent() {
                       themeClasses.iconGlow,
                     )}
                   >
-                    $
+                    {currencySymbol}
                   </span>
                   <Input
                     ref={amountInputRef}
@@ -1396,7 +1401,17 @@ function MobileExpenseFormContent() {
                       if (v === "" || /^\d*\.?\d*$/.test(v)) setAmount(v);
                     }}
                     suppressHydrationWarning
-                    className={`text-2xl font-bold h-14 pl-10 pr-32 border text-center bg-bg-dark/60 ${themeClasses.border} ${themeClasses.textHighlight} placeholder:text-[hsl(var(--input-placeholder)/0.25)] ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} transition-all duration-200 rounded-xl`}
+                    className={cn(
+                      "text-2xl font-bold h-14 pr-32 border text-center bg-bg-dark/60",
+                      currencySymbol.length > 1 ? "pl-16" : "pl-10",
+                      themeClasses.border,
+                      themeClasses.textHighlight,
+                      "placeholder:text-[hsl(var(--input-placeholder)/0.25)]",
+                      themeClasses.focusBorder,
+                      "focus:ring-1",
+                      themeClasses.focusRing,
+                      "transition-all duration-200 rounded-xl",
+                    )}
                   />
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
                     <button
@@ -1481,7 +1496,8 @@ function MobileExpenseFormContent() {
                           : `${themeClasses.pillBg} border ${themeClasses.border} ${themeClasses.textMuted} hover:${themeClasses.text}`,
                       )}
                     >
-                      ${v}
+                      {currencySymbol}
+                      {Number(v).toLocaleString()}
                     </button>
                   ))}
                 </div>

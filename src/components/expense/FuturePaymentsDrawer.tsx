@@ -26,6 +26,7 @@ import {
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getCurrencySymbol } from "@/lib/currency";
 import { safeFetch } from "@/lib/safeFetch";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -44,6 +45,7 @@ interface FuturePaymentsDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   accountId?: string;
+  currency?: string | null;
 }
 
 interface FuturePayment {
@@ -63,8 +65,10 @@ export default function FuturePaymentsDrawer({
   open,
   onOpenChange,
   accountId,
+  currency,
 }: FuturePaymentsDrawerProps) {
   const themeClasses = useThemeClasses();
+  const currencySymbol = getCurrencySymbol(currency);
   const queryClient = useQueryClient();
 
   const { data: payments = [], isLoading } = useQuery<FuturePayment[]>({
@@ -175,7 +179,8 @@ export default function FuturePaymentsDrawer({
                 </span>
               </div>
               <div className="ml-auto text-xs text-white/30">
-                Total: ${payments.reduce((s, p) => s + p.amount, 0).toFixed(2)}
+                Total: {currencySymbol}
+                {payments.reduce((s, p) => s + p.amount, 0).toFixed(2)}
               </div>
             </div>
           )}
@@ -229,6 +234,7 @@ export default function FuturePaymentsDrawer({
                         onConfirm={() => confirmMutation.mutate(payment.id)}
                         onDelete={() => deleteMutation.mutate(payment.id)}
                         isConfirming={confirmMutation.isPending}
+                        currency={currency}
                       />
                     ))}
                   </div>
@@ -251,6 +257,7 @@ export default function FuturePaymentsDrawer({
                         onConfirm={() => confirmMutation.mutate(payment.id)}
                         onDelete={() => deleteMutation.mutate(payment.id)}
                         isConfirming={confirmMutation.isPending}
+                        currency={currency}
                       />
                     ))}
                   </div>
@@ -270,14 +277,17 @@ function PaymentCard({
   onConfirm,
   onDelete,
   isConfirming,
+  currency,
 }: {
   payment: FuturePayment;
   isDue: boolean;
   onConfirm: () => void;
   onDelete: () => void;
   isConfirming: boolean;
+  currency?: string | null;
 }) {
   const themeClasses = useThemeClasses();
+  const currencySymbol = getCurrencySymbol(currency);
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -374,7 +384,8 @@ function PaymentCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-white font-bold text-base">
-                ${payment.amount.toFixed(2)}
+                {currencySymbol}
+                {payment.amount.toFixed(2)}
               </span>
               {isDue && (
                 <Badge className="bg-red-500/20 text-red-300 border-red-400/30 text-[10px] px-1.5 py-0 h-4 font-semibold">

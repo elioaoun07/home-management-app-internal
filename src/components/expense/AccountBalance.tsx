@@ -23,6 +23,7 @@ import {
 import { invalidateAccountData } from "@/lib/queryInvalidation";
 import { useOfflinePendingStore } from "@/lib/stores/offlinePendingStore";
 import { ToastIcons } from "@/lib/toastIcons";
+import { getCurrencySymbol } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { differenceInDays, formatDistanceToNow, parseISO } from "date-fns";
@@ -39,6 +40,7 @@ import TransferDialog from "./TransferDialog";
 interface AccountBalanceProps {
   accountId: string | undefined;
   accountName?: string;
+  currency?: string | null;
 }
 
 interface Balance {
@@ -68,8 +70,10 @@ const RECONCILE_STALE_DAYS = 7;
 export default function AccountBalance({
   accountId,
   accountName,
+  currency,
 }: AccountBalanceProps) {
   const themeClasses = useThemeClasses();
+  const currencySymbol = getCurrencySymbol(currency);
   const queryClient = useQueryClient();
   const sync = useSyncSafe();
   const isOffline = sync ? !sync.isOnline : false;
@@ -511,7 +515,8 @@ export default function AccountBalance({
                   )}
                   title="View balance history"
                 >
-                  ${currentBalance.toFixed(2)}
+                  {currencySymbol}
+                  {currentBalance.toFixed(2)}
                 </button>
                 {/* Subtle loading indicator while syncing */}
                 {isFetching && (
@@ -617,7 +622,7 @@ export default function AccountBalance({
                 >
                   {balance.debt_count} open debt
                   {balance.debt_count !== 1 ? "s" : ""}
-                  {` ($${(balance.outstanding_debt ?? 0).toFixed(2)} owed)`}
+                  {` (${currencySymbol}${(balance.outstanding_debt ?? 0).toFixed(2)} owed)`}
                 </button>
               ) : null}
             </div>
@@ -682,6 +687,7 @@ export default function AccountBalance({
         <BalanceHistoryDrawer
           accountId={accountId}
           accountName={accountName}
+          currency={currency}
           open={showHistory}
           onOpenChange={setShowHistory}
           currentBalance={balance?.balance}
@@ -704,6 +710,7 @@ export default function AccountBalance({
         open={showFuturePayments}
         onOpenChange={setShowFuturePayments}
         accountId={accountId}
+        currency={currency}
       />
 
       {/* Offline Pending Drawer */}

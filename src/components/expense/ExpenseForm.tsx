@@ -20,6 +20,7 @@ import {
   useAddTransaction,
   useDeleteTransaction,
 } from "@/features/transactions/useDashboardTransactions";
+import { getCurrencySymbol } from "@/lib/currency";
 import { parseSpeechExpense } from "@/lib/nlp/speechExpense";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
@@ -54,6 +55,7 @@ export default function ExpenseForm() {
   const { data: ownAccounts = [] } = useMyAccounts();
   const selectedAccount = accounts.find((a: any) => a.id === selectedAccountId);
   const defaultAccount = ownAccounts.find((a: any) => a.is_default);
+  const currencySymbol = getCurrencySymbol(selectedAccount?.currency);
 
   // Mutation for adding transactions with optimistic updates
   const addTransactionMutation = useAddTransaction();
@@ -178,7 +180,7 @@ export default function ExpenseForm() {
         toast.success("Expense added!", {
           icon: ToastIcons.create,
           duration: 4000,
-          description: `$${txData.amount.toFixed(2)} added`,
+          description: `${currencySymbol}${txData.amount.toFixed(2)} added`,
           action: {
             label: "Undo",
             onClick: () => {
@@ -230,6 +232,7 @@ export default function ExpenseForm() {
         <AmountInput
           value={amount}
           onChange={setAmount}
+          currency={selectedAccount?.currency}
           rightExtra={
             <VoiceEntryButton
               categories={categories}
@@ -347,6 +350,7 @@ export default function ExpenseForm() {
       <AccountBalance
         accountId={selectedAccountId}
         accountName={selectedAccount?.name}
+        currency={selectedAccount?.currency}
       />
       {sectionOrderLoading ? (
         <div>Loading preferences...</div>

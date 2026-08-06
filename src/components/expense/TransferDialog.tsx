@@ -26,6 +26,7 @@ import { useAccounts, useHouseholdAccounts } from "@/features/accounts/hooks";
 import { useCreateTransfer } from "@/features/transfers/hooks";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getCurrencySymbol } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { AccountType } from "@/types/domain";
 import { format } from "date-fns";
@@ -132,6 +133,7 @@ export default function TransferDialog({
 
   const fromCurrency = fromAccount?.currency ?? "USD";
   const toCurrency = toAccount?.currency ?? "USD";
+  const fromCurrencySymbol = getCurrencySymbol(fromCurrency);
   // Conversion only composes with self transfers — household fee/returned
   // math (see API) assumes a single currency.
   const needsConversion =
@@ -408,7 +410,7 @@ export default function TransferDialog({
             </Label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">
-                $
+                {fromCurrencySymbol}
               </span>
               <Input
                 type="text"
@@ -419,7 +421,8 @@ export default function TransferDialog({
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 className={cn(
-                  "pl-8 h-11 text-lg font-semibold",
+                  fromCurrencySymbol.length > 1 ? "pl-14" : "pl-8",
+                  "h-11 text-lg font-semibold",
                   themeClasses.inputFocusForce,
                 )}
               />
@@ -473,7 +476,7 @@ export default function TransferDialog({
               </Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">
-                  $
+                  {fromCurrencySymbol}
                 </span>
                 <Input
                   type="text"
@@ -483,14 +486,15 @@ export default function TransferDialog({
                   placeholder="0.00"
                   value={returnedAmount}
                   onChange={(e) => setReturnedAmount(e.target.value)}
-                  className="pl-8 h-10"
+                  className={cn(fromCurrencySymbol.length > 1 ? "pl-14" : "pl-8", "h-10")}
                 />
               </div>
               {parsedReturned > 0 && parsedAmount > 0 && (
                 <p className="text-xs text-muted-foreground">
                   Fee auto-calculated:{" "}
                   <span className="text-red-400 font-medium">
-                    ${parsedFee.toFixed(2)}
+                    {fromCurrencySymbol}
+                    {parsedFee.toFixed(2)}
                   </span>
                 </p>
               )}
@@ -555,7 +559,8 @@ export default function TransferDialog({
                 <div className="space-y-1">
                   <p className="font-medium">
                     <span className="text-green-500">
-                      ${parsedAmount.toFixed(2)}
+                      {fromCurrencySymbol}
+                      {parsedAmount.toFixed(2)}
                     </span>{" "}
                     →{" "}
                     <span className="text-purple-400">
@@ -567,22 +572,26 @@ export default function TransferDialog({
                       <p>
                         Returned:{" "}
                         <span className="text-green-400">
-                          +${parsedReturned.toFixed(2)}
+                          +{fromCurrencySymbol}
+                          {parsedReturned.toFixed(2)}
                         </span>
                         {" · "}Fee:{" "}
                         <span className="text-red-400">
-                          ${parsedFee.toFixed(2)}
+                          {fromCurrencySymbol}
+                          {parsedFee.toFixed(2)}
                         </span>
                       </p>
                       <p>
                         You net:{" "}
                         <span className="text-cyan-400 font-semibold">
-                          -${senderNet.toFixed(2)}
+                          -{fromCurrencySymbol}
+                          {senderNet.toFixed(2)}
                         </span>
                         {" · "}
                         {partner?.displayName} net:{" "}
                         <span className="text-purple-400 font-semibold">
-                          -${parsedFee.toFixed(2)}
+                          -{fromCurrencySymbol}
+                          {parsedFee.toFixed(2)}
                         </span>
                       </p>
                     </div>

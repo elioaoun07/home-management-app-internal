@@ -13,12 +13,15 @@ import {
   TAGS_BAR_HEIGHT,
 } from "@/constants/layout";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getCurrencySymbol } from "@/lib/currency";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format, subDays } from "date-fns";
 import { type CSSProperties } from "react";
 
 interface ExpenseTagsBarProps {
-  selectedAccount: { id: string; name: string } | undefined;
+  selectedAccount:
+    | { id: string; name: string; currency?: string | null }
+    | undefined;
   amount: string;
   selectedCategory:
     | { id: string; name: string; icon?: string | null }
@@ -43,6 +46,7 @@ export default function ExpenseTagsBar({
   onDateChange,
 }: ExpenseTagsBarProps) {
   const themeClasses = useThemeClasses();
+  const currencySymbol = getCurrencySymbol(selectedAccount?.currency);
 
   const wrapperStyles: CSSProperties = {
     bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_HEIGHT + TAGS_BAR_GAP}px)`,
@@ -81,7 +85,8 @@ export default function ExpenseTagsBar({
             >
               <span className={`text-[10px] ${themeClasses.textFaint}`}>Amount</span>
               <span className="font-bold text-xs text-emerald-400">
-                ${amount}
+                {currencySymbol}
+                {amount}
               </span>
             </button>
           )}

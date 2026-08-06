@@ -32,6 +32,7 @@ import {
   useDrafts,
 } from "@/features/drafts/useDrafts";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getCurrencySymbol } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useState } from "react";
@@ -222,7 +223,8 @@ export default function DraftsDrawer({
                         <span
                           className={`text-xl font-bold ${themeClasses.textHighlight}`}
                         >
-                          ${Number(draft.amount).toFixed(2)}
+                          {getCurrencySymbol(draft.accounts?.currency)}
+                          {Number(draft.amount).toFixed(2)}
                         </span>
                         {getConfidenceBadge(draft.confidence_score)}
                       </div>

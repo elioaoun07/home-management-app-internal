@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { XIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import {
   type BalanceHistoryEntry,
 } from "@/features/balance/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getCurrencySymbol } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import {
   differenceInDays,
@@ -70,6 +71,7 @@ import { useMemo, useState } from "react";
 interface BalanceHistoryDrawerProps {
   accountId: string | undefined;
   accountName?: string;
+  currency?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentBalance?: number;
@@ -93,17 +95,19 @@ function formatDateHeader(dateStr: string): string {
 }
 
 // Format currency
-function formatCurrency(amount: number): string {
-  return `$${Math.abs(amount).toFixed(2)}`;
+function formatCurrency(amount: number, currency?: string | null): string {
+  return `${getCurrencySymbol(currency)}${Math.abs(amount).toFixed(2)}`;
 }
 
 // Daily summary card - simplified and clear
 function DayCard({
   day,
   themeClasses,
+  currency,
 }: {
   day: DailySummary;
   themeClasses: ReturnType<typeof useThemeClasses>;
+  currency?: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hasActivity =
@@ -132,8 +136,8 @@ function DayCard({
             {formatDateHeader(day.date)}
           </p>
           <p className={cn("text-xs mt-0.5", themeClasses.textFaint)}>
-            {formatCurrency(day.opening_balance)} →{" "}
-            {formatCurrency(day.closing_balance)}
+            {formatCurrency(day.opening_balance, currency)} →{" "}
+            {formatCurrency(day.closing_balance, currency)}
           </p>
         </div>
 
@@ -146,7 +150,7 @@ function DayCard({
               )}
             >
               {day.net_change >= 0 ? "+" : "−"}
-              {formatCurrency(day.net_change)}
+              {formatCurrency(day.net_change, currency)}
             </p>
             <div className="flex items-center justify-end gap-2 text-xs mt-0.5">
               {day.transaction_count > 0 && (
@@ -195,7 +199,7 @@ function DayCard({
                 Started the day with
               </p>
               <p className={cn("text-sm font-medium", themeClasses.text)}>
-                {formatCurrency(day.opening_balance)}
+                {formatCurrency(day.opening_balance, currency)}
               </p>
             </div>
           </div>
@@ -218,7 +222,7 @@ function DayCard({
                 </p>
               </div>
               <p className="text-sm font-medium text-green-400">
-                +{formatCurrency(tr.amount)}
+                +{formatCurrency(tr.amount, currency)}
               </p>
             </div>
           ))}
@@ -241,7 +245,7 @@ function DayCard({
                 </p>
               </div>
               <p className="text-sm font-medium text-orange-400">
-                −{formatCurrency(tr.amount)}
+                −{formatCurrency(tr.amount, currency)}
               </p>
             </div>
           ))}
@@ -264,7 +268,7 @@ function DayCard({
                 </p>
               </div>
               <p className="text-sm font-medium text-red-400">
-                −{formatCurrency(txn.amount)}
+                −{formatCurrency(txn.amount, currency)}
               </p>
             </div>
           ))}
@@ -291,8 +295,8 @@ function DayCard({
                     {mc.reason || label}
                   </p>
                   <p className={cn("text-xs", themeClasses.textFaint)}>
-                    {formatCurrency(mc.previous_balance)} →{" "}
-                    {formatCurrency(mc.new_balance)}
+                    {formatCurrency(mc.previous_balance, currency)} →{" "}
+                    {formatCurrency(mc.new_balance, currency)}
                   </p>
                 </div>
                 <p
@@ -302,7 +306,7 @@ function DayCard({
                   )}
                 >
                   {isPositive ? "+" : "−"}
-                  {formatCurrency(mc.change_amount)}
+                  {formatCurrency(mc.change_amount, currency)}
                 </p>
               </div>
             );
@@ -318,7 +322,7 @@ function DayCard({
                 Ended the day with
               </p>
               <p className={cn("text-sm font-medium", themeClasses.text)}>
-                {formatCurrency(day.closing_balance)}
+                {formatCurrency(day.closing_balance, currency)}
               </p>
             </div>
           </div>
@@ -352,9 +356,11 @@ function getIconComponent(iconKey: string): React.ReactNode {
 function ActivityEntry({
   entry,
   themeClasses,
+  currency,
 }: {
   entry: BalanceHistoryEntry;
   themeClasses: ReturnType<typeof useThemeClasses>;
+  currency?: string | null;
 }) {
   const typeInfo = getChangeTypeInfo(entry.change_type);
   const isPositive = entry.change_amount >= 0;
@@ -403,10 +409,10 @@ function ActivityEntry({
             )}
           >
             {isPositive ? "+" : "−"}
-            {formatCurrency(entry.change_amount)}
+            {formatCurrency(entry.change_amount, currency)}
           </p>
           <p className={cn("text-xs", themeClasses.textFaint)}>
-            → {formatCurrency(entry.new_balance)}
+            → {formatCurrency(entry.new_balance, currency)}
           </p>
         </div>
       </div>
@@ -425,9 +431,11 @@ function ActivityEntry({
 function ArchiveCard({
   archive,
   themeClasses,
+  currency,
 }: {
   archive: BalanceArchive;
   themeClasses: ReturnType<typeof useThemeClasses>;
+  currency?: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -465,11 +473,11 @@ function ArchiveCard({
               )}
             >
               {archive.net_change >= 0 ? "+" : "−"}
-              {formatCurrency(archive.net_change)}
+              {formatCurrency(archive.net_change, currency)}
             </p>
             <p className={cn("text-xs", themeClasses.textFaint)}>
-              {formatCurrency(archive.opening_balance)} →{" "}
-              {formatCurrency(archive.closing_balance)}
+              {formatCurrency(archive.opening_balance, currency)} →{" "}
+              {formatCurrency(archive.closing_balance, currency)}
             </p>
           </div>
           <ChevronDown
@@ -488,25 +496,25 @@ function ArchiveCard({
             <div className="p-2 rounded bg-white/5">
               <p className={themeClasses.textFaint}>Total Expenses</p>
               <p className="text-red-400 font-medium">
-                −{formatCurrency(archive.total_expenses)}
+                −{formatCurrency(archive.total_expenses, currency)}
               </p>
             </div>
             <div className="p-2 rounded bg-white/5">
               <p className={themeClasses.textFaint}>Total Income</p>
               <p className="text-green-400 font-medium">
-                +{formatCurrency(archive.total_income)}
+                +{formatCurrency(archive.total_income, currency)}
               </p>
             </div>
             <div className="p-2 rounded bg-white/5">
               <p className={themeClasses.textFaint}>Transfers In</p>
               <p className="text-blue-400 font-medium">
-                +{formatCurrency(archive.total_transfers_in)}
+                +{formatCurrency(archive.total_transfers_in, currency)}
               </p>
             </div>
             <div className="p-2 rounded bg-white/5">
               <p className={themeClasses.textFaint}>Transfers Out</p>
               <p className="text-orange-400 font-medium">
-                −{formatCurrency(archive.total_transfers_out)}
+                −{formatCurrency(archive.total_transfers_out, currency)}
               </p>
             </div>
           </div>
@@ -534,6 +542,7 @@ function groupByDate(
 export default function BalanceHistoryDrawer({
   accountId,
   accountName,
+  currency,
   open,
   onOpenChange,
   currentBalance: liveBalance,
@@ -721,7 +730,7 @@ export default function BalanceHistoryDrawer({
                 `bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent`,
               )}
             >
-              {formatCurrency(currentBalance)}
+              {formatCurrency(currentBalance, currency)}
             </p>
           </div>
 
@@ -911,6 +920,7 @@ export default function BalanceHistoryDrawer({
                       key={day.date}
                       day={day}
                       themeClasses={themeClasses}
+                      currency={currency}
                     />
                   ))}
                 </div>
@@ -954,6 +964,7 @@ export default function BalanceHistoryDrawer({
                             key={entry.id}
                             entry={entry}
                             themeClasses={themeClasses}
+                            currency={currency}
                           />
                         ))}
                       </div>
@@ -989,6 +1000,7 @@ export default function BalanceHistoryDrawer({
                       key={archive.id}
                       archive={archive}
                       themeClasses={themeClasses}
+                      currency={currency}
                     />
                   ))}
                 </div>
