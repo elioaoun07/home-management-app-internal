@@ -10,7 +10,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { TRIP_DOCUMENT_TYPE_LABELS, type TripDocument } from "@/types/trips";
 import { differenceInCalendarDays, parseISO } from "date-fns";
-import { AlertTriangle, ExternalLink, FileText, Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, ExternalLink, FileText, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { AddDocumentSheet } from "./AddDocumentSheet";
 
@@ -81,7 +81,7 @@ function DocumentRow({ tripId, doc, tripEndDate }: { tripId: string; doc: TripDo
 export function DocumentsView({ tripId }: { tripId: string }) {
   const tc = useThemeClasses();
   const { data: trip } = useTrip(tripId);
-  const { data: documents = [], isLoading } = useTripDocuments(tripId);
+  const { data: documents = [], isLoading, isError, isFetching, refetch } = useTripDocuments(tripId);
   const [addOpen, setAddOpen] = useState(false);
 
   return (
@@ -95,6 +95,20 @@ export function DocumentsView({ tripId }: { tripId: string }) {
 
       {isLoading ? (
         <p className={cn("text-sm text-center py-4", tc.textFaint)}>Loading…</p>
+      ) : isError ? (
+        <div className={cn("text-center py-8 rounded-xl border border-dashed", tc.border)}>
+          <FileText className={cn("w-8 h-8 mx-auto mb-2", tc.textFaint)} />
+          <p className={cn("text-sm", tc.textMuted)}>Couldn&apos;t load documents</p>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            className={cn("mt-3 inline-flex items-center gap-1.5 text-sm disabled:opacity-50", tc.text)}
+          >
+            <RefreshCw className={cn("w-4 h-4", isFetching && "animate-spin")} />
+            {isFetching ? "Retrying…" : "Try again"}
+          </button>
+        </div>
       ) : documents.length === 0 ? (
         <div className={cn("text-center py-8 rounded-xl border border-dashed", tc.border)}>
           <FileText className={cn("w-8 h-8 mx-auto mb-2", tc.textFaint)} />

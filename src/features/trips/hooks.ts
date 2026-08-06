@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { flexibleRoutinesKeys } from "../items/useFlexibleRoutines";
 import { itemsKeys } from "../items/useItems";
 import { mealPlanKeys } from "../meal-planning/queryKeys";
+import { tripDocumentsQueryOptions } from "./documentQueries";
 import { tripKeys } from "./queryKeys";
 
 // ── Fetch helpers ──────────────────────────────────────────────────────────
@@ -903,19 +904,8 @@ export function useRevertPackingCheckpoint(tripId: string) {
 
 // ── Document mutations ────────────────────────────────────────────────────
 
-async function fetchTripDocuments(tripId: string): Promise<TripDocument[]> {
-  const res = await fetch(`/api/trips/${tripId}/documents`);
-  if (!res.ok) throw new Error("Failed to fetch documents");
-  return res.json();
-}
-
 export function useTripDocuments(tripId: string) {
-  return useQuery({
-    queryKey: tripKeys.documents(tripId),
-    queryFn: () => fetchTripDocuments(tripId),
-    staleTime: 1000 * 60 * 5,
-    enabled: !!tripId,
-  });
+  return useQuery(tripDocumentsQueryOptions(tripId));
 }
 
 export function useTripDocumentUrls(tripId: string, rawPaths: Array<string | null | undefined>) {

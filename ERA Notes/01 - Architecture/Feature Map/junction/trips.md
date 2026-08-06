@@ -16,6 +16,8 @@
 | Completion sheet | `src/components/trips/TripCompleteSheet.tsx` |
 | Places list + add form | `src/components/trips/TripPlacesList.tsx` |
 | Packing list | `src/components/trips/TripPackingList.tsx` |
+| Document vault + retry state | `src/components/trips/documents/DocumentsView.tsx` |
+| Add/edit document sheet | `src/components/trips/documents/AddDocumentSheet.tsx` |
 
 ### Feature layer
 | Intent | File |
@@ -30,6 +32,10 @@
 |---|---|
 | `GET/POST /api/trips` | `src/app/api/trips/route.ts` |
 | `GET/PATCH/DELETE /api/trips/[id]` | `src/app/api/trips/[id]/route.ts` |
+| `GET /api/trips/[id]/bundle` | `src/app/api/trips/[id]/bundle/route.ts` |
+| `GET/POST /api/trips/[id]/documents` | `src/app/api/trips/[id]/documents/route.ts` |
+| `PATCH/DELETE /api/trips/[id]/documents/[docId]` | `src/app/api/trips/[id]/documents/[docId]/route.ts` |
+| `POST /api/trips/[id]/documents/signed-urls` | `src/app/api/trips/[id]/documents/signed-urls/route.ts` |
 | `POST /api/trips/[id]/activate` | `src/app/api/trips/[id]/activate/route.ts` |
 | `POST /api/trips/[id]/complete` | `src/app/api/trips/[id]/complete/route.ts` |
 | `POST /api/trips/[id]/clone` | `src/app/api/trips/[id]/clone/route.ts` |

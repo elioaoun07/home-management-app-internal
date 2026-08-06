@@ -121,6 +121,7 @@ Reversal ledger. One row per side effect fired at activation. `previous_value js
 ## Key Files
 
 - `src/features/trips/hooks.ts` — all TanStack Query hooks; `useActivateTrip` / `useCompleteTrip` use `timeoutMs: 30_000` (slow operations); `useUpdateTripPlace`/`useUpdatePackingItem` queue via `addToQueue({ feature: "trip", ... })` on `isOfflineError` *(2026-08-03)*
+- `src/features/trips/documentQueries.ts` — shared-document query policy. The bundle may prime the cache, but the Docs tab always revalidates on mount/window focus so a partner never treats another device's older empty snapshot as authoritative. *(2026-08-06)*
 - `src/features/trips/queryKeys.ts` — hierarchical key factory (`tripKeys`)
 - `src/features/trips/tripPhase.ts` — `getTripPhase()`/`tripCountdown()`, pure + unit-tested (`tripPhase.test.ts`) *(2026-08-03)*
 - `src/types/trips.ts` — all interfaces + display metadata (status labels/colors, place type/priority labels, document type labels)
@@ -155,7 +156,8 @@ Reversal ledger. One row per side effect fired at activation. `previous_value js
 8. **Two lifecycle RPCs are not in the repo; the bundle RPC is** *(2026-08-03)*: don't confuse `get_trip_bundle()` (read-only, repo-resident, safe) with `activate_trip()`/`complete_trip()` (write, live-DB-only, human-first). `grep -rn "activate_trip\|complete_trip" migrations/` still returns 0 — the planner-mode upgrade deliberately left that gap open rather than papering over it.
 9. **`useTripBundle()` primes caches, it doesn't replace the per-tab hooks** *(2026-08-03)*: `TripDetail` calls it for the side effect of warming `tripKeys.places/packing/documents`; each tab still calls its own `useTripPlaces()`/`useTripPacking()`/`useTripDocuments()`. On a cold mount both fire in parallel (no request is saved on first paint) — the win is on tab switches, which read warm cache instead of firing a new request. Don't "optimize" this into removing the per-tab hooks without also passing bundle data down as props everywhere; that's a bigger refactor than shipped here.
 10. **Packing checkpoint lives off `trips`, on purpose** *(2026-08-04)*: don't "simplify" it back onto a `trips.packing_checkpoint` column — the live DB's `trips` RLS has no partner `UPDATE` policy (see the `trip_packing_checkpoints` section above), so that would silently break checkpoint save/revert for the non-owner partner while working fine for the owner in testing. Same trap class as Hard Rule #27.
-11. **Soft delete ⇒ every packing query needs `deleted_at IS NULL`, including RPCs.** `get_trip_bundle()`'s `packing` array filters it explicitly; any new read path added later (another bundle field, a report, etc.) must too, or a deleted item reappears.
+11. **Trip documents are cross-device shared state** *(2026-08-06)*: `get_trip_bundle()` primes `tripKeys.documents(tripId)` for fast tab changes, but that snapshot must be revalidated when Docs mounts or the app regains focus. A multi-minute `staleTime` here makes a partner's cached empty array hide a document uploaded on the owner's device. Fetch errors must render a retry state, never the same empty state as a legitimate zero-row result.
+12. **Soft delete ⇒ every packing query needs `deleted_at IS NULL`, including RPCs.** `get_trip_bundle()`'s `packing` array filters it explicitly; any new read path added later (another bundle field, a report, etc.) must too, or a deleted item reappears.
 
 ## Out of scope (deferred)
 
