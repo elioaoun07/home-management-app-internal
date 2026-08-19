@@ -39,8 +39,9 @@ const transactionsModule: RecycleBinModule = {
   table: "transactions",
   deletedAtColumn: "deleted_at",
   scope: "user",
+  // is_debt_return is needed by the restore route to re-apply the balance.
   selectColumns:
-    "id,user_id,date,amount,description,account_id,category_id,subcategory_id,is_draft,is_private,deleted_at",
+    "id,user_id,date,amount,description,account_id,category_id,subcategory_id,is_draft,is_private,is_debt_return,deleted_at",
   searchColumns: ["description"],
   filterFields: [
     { key: "date", label: "Date", kind: "dateRange", column: "date" },

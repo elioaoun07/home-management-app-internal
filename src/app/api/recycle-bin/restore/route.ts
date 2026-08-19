@@ -1,4 +1,6 @@
 // src/app/api/recycle-bin/restore/route.ts
+import { adjustAccountBalance } from "@/lib/balance";
+import { getBalanceDelta, type AccountType } from "@/lib/balance-utils";
 import { syncItemToGoogleCalendar } from "@/lib/gcal/sync";
 import { getRecycleBinModule } from "@/lib/recycleBin/registry";
 import { resolveScope } from "@/lib/recycleBin/scope";
@@ -61,6 +63,41 @@ export async function POST(req: NextRequest) {
     .eq("id", parsed.data.id);
   if (updateErr) {
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
+  }
+
+  // Deleting a transaction reverses its balance delta
+  // (api/transactions/[id]/route.ts). Restoring never re-applied it, so every
+  // restore left the account short by the transaction amount, permanently and
+  // silently. Drafts are excluded: they were never counted in the balance.
+  // Lives here rather than in the registry because the registry is imported by
+  // client code and the balance helpers are server-only.
+  if (binModule.table === "transactions") {
+    const tx = row as unknown as {
+      amount: number | string;
+      account_id: string | null;
+      is_draft?: boolean;
+      is_debt_return?: boolean;
+    };
+    if (!tx.is_draft && tx.account_id) {
+      const { data: account } = await supabase
+        .from("accounts")
+        .select("type")
+        .eq("id", tx.account_id)
+        .maybeSingle();
+      if (account) {
+        await adjustAccountBalance(
+          tx.account_id,
+          getBalanceDelta(
+            Math.abs(Number(tx.amount)),
+            account.type as AccountType,
+            !!tx.is_debt_return,
+            "create",
+          ),
+          "transaction_restored",
+          { userId: user.id, transactionId: parsed.data.id },
+        );
+      }
+    }
   }
 
   if (binModule.onRestore) {

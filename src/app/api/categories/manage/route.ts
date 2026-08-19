@@ -60,7 +60,10 @@ async function createCategory(
     position?: number;
   }
 ) {
-  const { name, icon, color, account_id, parent_id, position } = data;
+  // Note: `icon` is accepted in the payload for backwards compatibility but
+  // never persisted — user_categories has no icon column (icons derive from
+  // the name via getCategoryIcon); inserting one made Postgres reject the row.
+  const { name, color, account_id, parent_id, position } = data;
 
   if (!name?.trim()) {
     return NextResponse.json(
@@ -96,7 +99,6 @@ async function createCategory(
     .insert({
       user_id: userId,
       name: name.trim(),
-      icon: icon || "📁",
       color: color || "#38bdf8",
       account_id,
       parent_id: parent_id || null,
@@ -302,6 +304,8 @@ async function bulkUpdateCategories(
 
   const updatePromises = updates.map((update) => {
     const { id, ...fields } = update;
+    // Strip icon — the column doesn't exist on user_categories
+    delete fields.icon;
     return supabase
       .from("user_categories")
       .update({ ...fields, updated_at: new Date().toISOString() })

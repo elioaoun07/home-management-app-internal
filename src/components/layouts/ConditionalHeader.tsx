@@ -88,6 +88,11 @@ const STANDALONE_APPS: Record<
     role: "Health Records",
     color: "from-emerald-400 to-teal-500",
   },
+  "/statement-import": {
+    title: "Statement Import",
+    role: "Reconcile & Audit",
+    color: "from-sky-400 to-indigo-500",
+  },
 };
 
 type Props = {

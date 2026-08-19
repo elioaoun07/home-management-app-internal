@@ -40,6 +40,7 @@ tags:
 | `/trips`     | Trips              | `Plane` (lucide)           | `from-cyan-400 to-sky-500`        |
 | `/today`     | Plan My Day        | `CalendarOff` (lucide)     | `from-pink-400 to-amber-400`      |
 | `/healthcare` | Health            | `HeartPulse` (lucide)      | `from-rose-400 to-pink-500`       |
+| `/statement-import` | Statement Import | `Upload` / `FileText` (lucide) | `from-sky-400 to-indigo-500` |
 
 ---
 

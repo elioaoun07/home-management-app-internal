@@ -53,6 +53,8 @@ type Transaction = {
   /** Future payment */
   scheduled_date?: string | null;
   is_debt_return?: boolean;
+  /** Set only when this row settles a debt — absent on imported refunds. */
+  parent_transaction_id?: string | null;
 };
 
 type OwnershipFilter = "all" | "mine" | "partner";
@@ -410,11 +412,16 @@ export default function SwipeableTransactionItem({
                   )}
                 </>
               )}
-              {/* Debt return indicator */}
+              {/* Money-back indicator. Both settle to the same balance math,
+                  but only a debt settlement is linked to a parent transaction —
+                  a statement refund/reversal is not, and must not claim to be
+                  a debt return. */}
               {transaction.is_debt_return && (
                 <>
                   <span>•</span>
-                  <span className="text-green-400">Debt Return</span>
+                  <span className="text-green-400">
+                    {transaction.parent_transaction_id ? "Debt Return" : "Refund"}
+                  </span>
                 </>
               )}
             </div>

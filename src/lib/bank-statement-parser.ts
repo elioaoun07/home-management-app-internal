@@ -5,6 +5,8 @@
 // must not be bundled for the client.
 
 import { createHash } from "node:crypto";
+import { matchMerchantMapping } from "@/lib/merchantMatch";
+import { normalizeMerchant } from "@/lib/utils/anomalyDetection";
 import { ParsedTransaction } from "@/types/statement";
 
 /**
@@ -449,11 +451,23 @@ export function convertToUITransactions(
       account_id: string | null;
       merchant_name: string;
     }
-  >
+  >,
+  accountId: string,
 ): ParsedTransaction[] {
+  // Mappings as a list so the SHARED matcher can be used (exact wins, then
+  // first substring hit) instead of a second, divergent implementation.
+  const mappingList = [...merchantMappings.entries()].map(
+    ([merchant_pattern, value]) => ({ merchant_pattern, ...value }),
+  );
+
+  // Count identical rows within this file so hash v2 can disambiguate them.
+  const occurrenceCount = new Map<string, number>();
+
   return rawTransactions.map((raw, index) => {
-    // Check for merchant mapping
-    const mapping = findMerchantMapping(raw.merchantPattern, merchantMappings);
+    // The normalized merchant key groups rows in the review UI and is what gets
+    // learned as a merchant mapping — "LE GRAY" and "LE MALL" stay distinct.
+    const normalizedKey = normalizeMerchant(raw.description);
+    const mapping = matchMerchantMapping(raw.merchantPattern, mappingList);
 
     // Determine if debit or credit
     const isCredit = raw.moneyIn !== null && raw.moneyIn > 0;
@@ -462,6 +476,15 @@ export function convertToUITransactions(
     // Handle reversals - they're credits but represent a refund
     const isReversal = raw.type === "reversal";
 
+    const occurrenceKey = [
+      raw.date,
+      raw.description.trim().toLowerCase(),
+      raw.moneyOut ?? "",
+      raw.moneyIn ?? "",
+    ].join("|");
+    const occurrence = (occurrenceCount.get(occurrenceKey) ?? 0) + 1;
+    occurrenceCount.set(occurrenceKey, occurrence);
+
     return {
       id: `txn-${Date.now()}-${index}`,
       date: raw.date,
@@ -469,191 +492,66 @@ export function convertToUITransactions(
       amount: amount,
       type: isCredit ? "credit" : "debit",
       merchant_name: mapping?.merchant_name || raw.merchantName,
+      normalized_key: normalizedKey,
       category_id: mapping?.category_id || null,
       subcategory_id: mapping?.subcategory_id || null,
-      account_id: mapping?.account_id || null,
-      matched: !!mapping,
+      // The statement belongs to ONE account, and that account is already
+      // baked into the hash below. A merchant mapping must never redirect the
+      // row somewhere else, or the fingerprint would describe a different
+      // account than the transaction it guards.
+      account_id: accountId,
+      // `matched` means "a learned mapping supplied a category" — nothing else.
+      matched: !!mapping?.category_id,
       selected: !isReversal, // Don't auto-select reversals
       statement_hash: generateStatementHash(
+        accountId,
         raw.date,
         raw.description,
         raw.moneyOut,
         raw.moneyIn,
-        raw.balance,
+        occurrence,
       ),
     };
   });
 }
 
 /**
- * Find a merchant mapping for a given pattern
- */
-function findMerchantMapping(
-  pattern: string,
-  mappings: Map<
-    string,
-    {
-      category_id: string | null;
-      subcategory_id: string | null;
-      account_id: string | null;
-      merchant_name: string;
-    }
-  >
-): {
-  category_id: string | null;
-  subcategory_id: string | null;
-  account_id: string | null;
-  merchant_name: string;
-} | null {
-  const upperPattern = pattern.toUpperCase();
-
-  // Direct match first
-  if (mappings.has(upperPattern)) {
-    return mappings.get(upperPattern)!;
-  }
-
-  // Partial match - check if any mapping pattern is contained in our pattern
-  for (const [key, value] of mappings) {
-    if (upperPattern.includes(key) || key.includes(upperPattern)) {
-      return value;
-    }
-  }
-
-  return null;
-}
-
-/**
- * Pre-configured known Lebanese merchants with suggested categories
- */
-export const LEBANESE_MERCHANTS: Array<{
-  pattern: string;
-  name: string;
-  suggestedCategory: string;
-  suggestedSubcategory?: string;
-}> = [
-  // Groceries
-  {
-    pattern: "SPINNEYS",
-    name: "Spinneys",
-    suggestedCategory: "Food & Dining",
-    suggestedSubcategory: "Groceries",
-  },
-  {
-    pattern: "CARREFOUR",
-    name: "Carrefour",
-    suggestedCategory: "Food & Dining",
-    suggestedSubcategory: "Groceries",
-  },
-
-  // Food Delivery
-  {
-    pattern: "TOTERS",
-    name: "Toters",
-    suggestedCategory: "Food & Dining",
-    suggestedSubcategory: "Restaurants",
-  },
-
-  // Telecom
-  {
-    pattern: "ALFA",
-    name: "Alfa",
-    suggestedCategory: "Bills & Utilities",
-    suggestedSubcategory: "Phone",
-  },
-  {
-    pattern: "TOUCH",
-    name: "Touch",
-    suggestedCategory: "Bills & Utilities",
-    suggestedSubcategory: "Phone",
-  },
-
-  // Home Appliances
-  {
-    pattern: "KHOURY HOME",
-    name: "Khoury Home",
-    suggestedCategory: "Shopping",
-    suggestedSubcategory: "Home",
-  },
-  {
-    pattern: "TAHAN",
-    name: "Tahan Home Appliance",
-    suggestedCategory: "Shopping",
-    suggestedSubcategory: "Home",
-  },
-
-  // Shopping
-  {
-    pattern: "STORIOM",
-    name: "Storiom",
-    suggestedCategory: "Shopping",
-    suggestedSubcategory: "Clothes",
-  },
-
-  // Gas
-  {
-    pattern: "TOTAL",
-    name: "Total (Gas)",
-    suggestedCategory: "Transport",
-    suggestedSubcategory: "Fuel",
-  },
-
-  // Tech/Subscriptions
-  {
-    pattern: "GITHUB",
-    name: "GitHub",
-    suggestedCategory: "Bills & Utilities",
-    suggestedSubcategory: "Internet",
-  },
-  {
-    pattern: "NETFLIX",
-    name: "Netflix",
-    suggestedCategory: "Entertainment",
-    suggestedSubcategory: "Movies",
-  },
-  {
-    pattern: "SPOTIFY",
-    name: "Spotify",
-    suggestedCategory: "Entertainment",
-    suggestedSubcategory: "Music",
-  },
-
-  // Hotels
-  {
-    pattern: "LE ROYAL",
-    name: "Le Royal Hotel",
-    suggestedCategory: "Travel",
-    suggestedSubcategory: "Hotels",
-  },
-
-  // Tech Stores
-  {
-    pattern: "MOJITECH",
-    name: "Mojitech",
-    suggestedCategory: "Shopping",
-    suggestedSubcategory: "Electronics",
-  },
-];
-
-/**
- * Generate a SHA-256 fingerprint from the five raw PDF columns.
- * Used to detect duplicate rows when the same e-statement is uploaded twice.
- * Format hashed: "date|description|moneyOut|moneyIn|balance"
+ * Generate a SHA-256 fingerprint of a statement row, used to make re-uploading
+ * the same e-statement a no-op.
+ *
+ * v2 (2026-08-18) hashes "v2|account|date|description|moneyOut|moneyIn":
+ *  - `balance` was DROPPED. It made the hash unstable: a bank re-issuing a
+ *    statement with a recomputed running balance produced different hashes for
+ *    the same purchases, so everything imported twice.
+ *  - `account_id` was ADDED. The same CSV imported into two accounts is two
+ *    distinct money events, not a duplicate.
+ *  - `date` is KEPT so a monthly subscription of identical amount stays
+ *    distinct month to month.
+ *  - `occurrence` disambiguates two identical rows in ONE file (same day, same
+ *    merchant, same amount) deterministically, so re-uploads still collide.
+ *
+ * Rows imported under the v1 formula keep their old hash; the reconciler's
+ * probable-duplicate tier (amount + date window against hash-bearing rows)
+ * catches those, so no backfill is needed.
  */
 function generateStatementHash(
+  accountId: string,
   date: string,
   description: string,
   moneyOut: number | null,
   moneyIn: number | null,
-  balance: number,
+  occurrence: number,
 ): string {
   const raw = [
+    "v2",
+    accountId,
     date,
     description.trim().toLowerCase(),
     moneyOut !== null ? moneyOut.toFixed(2) : "",
     moneyIn !== null ? moneyIn.toFixed(2) : "",
-    balance.toFixed(2),
   ].join("|");
-  return createHash("sha256").update(raw).digest("hex");
+  const preimage = occurrence > 1 ? `${raw}#${occurrence}` : raw;
+  return createHash("sha256").update(preimage).digest("hex");
 }
 
 /**

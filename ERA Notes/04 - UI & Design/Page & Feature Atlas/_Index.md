@@ -78,6 +78,7 @@ tags:
 | `error-logs`    | `/error-logs`    | [[error-logs]]    |
 | `ai-usage`      | `/ai-usage`      | [[ai-usage]]      |
 | `recycle-bin`   | `/recycle-bin`   | [[recycle-bin]]   |
+| `statement-import` | `/statement-import` | [[statement-import]] |
 | `atlas`         | `/atlas`         | [[atlas]]         |
 | `offline`       | `/offline`       | [[offline]]       |
 | `pm`            | `/pm`            | [[pm]]            |

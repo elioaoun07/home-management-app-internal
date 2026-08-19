@@ -15,6 +15,7 @@ import {
 import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { refreshCategoryCaches } from "@/lib/queryInvalidation";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import {
   closestCenter,
@@ -250,7 +251,7 @@ export function CategoryManagement() {
 
       if (!response.ok) throw new Error("Failed to save order");
 
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
+      await refreshCategoryCaches(queryClient);
       setHasChanges(false);
       toast.success("Category order saved!");
     } catch (error) {
@@ -283,7 +284,7 @@ export function CategoryManagement() {
       const originalData = { ...editingCategory };
       const updatedData = { id: editingCategory.id, ...updates };
 
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
+      await refreshCategoryCaches(queryClient);
       setEditingCategory(null);
       toast.success("Category updated!", {
         duration: 4000,
@@ -299,7 +300,7 @@ export function CategoryManagement() {
                   data: originalData,
                 }),
               });
-              await queryClient.invalidateQueries({ queryKey: ["categories"] });
+              await refreshCategoryCaches(queryClient);
               toast.success("Update undone");
             } catch {
               toast.error("Failed to undo");
@@ -335,7 +336,7 @@ export function CategoryManagement() {
       if (!response.ok) throw new Error("Failed to create category");
 
       const created = await response.json();
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
+      await refreshCategoryCaches(queryClient);
       setNewCategory(null);
       toast.success("Category created!", {
         duration: 4000,
@@ -351,7 +352,7 @@ export function CategoryManagement() {
                   data: { id: created.id, hard_delete: true },
                 }),
               });
-              await queryClient.invalidateQueries({ queryKey: ["categories"] });
+              await refreshCategoryCaches(queryClient);
               toast.success("Category removed");
             } catch {
               toast.error("Failed to undo");
@@ -386,7 +387,7 @@ export function CategoryManagement() {
         throw new Error(errorData.error || "Failed to delete category");
       }
 
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
+      await refreshCategoryCaches(queryClient);
       toast.success("Category deleted!", {
         duration: 4000,
         action: {
@@ -402,7 +403,7 @@ export function CategoryManagement() {
                   data: { id: categoryId, visible: true },
                 }),
               });
-              await queryClient.invalidateQueries({ queryKey: ["categories"] });
+              await refreshCategoryCaches(queryClient);
               toast.success("Category restored");
             } catch {
               toast.error("Failed to undo");

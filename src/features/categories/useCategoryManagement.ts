@@ -1,5 +1,6 @@
 "use client";
 
+import { refreshCategoryCaches } from "@/lib/queryInvalidation";
 import { safeFetch } from "@/lib/safeFetch";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -78,7 +79,7 @@ export function useCreateCategory() {
     mutationFn: (data: CreateCategoryData) =>
       manageCategoryOperation("create", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      refreshCategoryCaches(queryClient);
     },
   });
 }
@@ -93,7 +94,7 @@ export function useUpdateCategory() {
     mutationFn: (data: UpdateCategoryData) =>
       manageCategoryOperation("update", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      refreshCategoryCaches(queryClient);
     },
   });
 }
@@ -108,7 +109,7 @@ export function useDeleteCategory() {
     mutationFn: (data: DeleteCategoryData) =>
       manageCategoryOperation("delete", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      refreshCategoryCaches(queryClient);
     },
   });
 }
@@ -123,7 +124,7 @@ export function useReorderCategories() {
     mutationFn: (data: ReorderCategoriesData) =>
       manageCategoryOperation("reorder", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      refreshCategoryCaches(queryClient);
     },
   });
 }
@@ -138,7 +139,7 @@ export function useBulkUpdateCategories() {
     mutationFn: (data: BulkUpdateData) =>
       manageCategoryOperation("bulk_update", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      refreshCategoryCaches(queryClient);
     },
   });
 }

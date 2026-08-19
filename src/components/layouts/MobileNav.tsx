@@ -133,6 +133,8 @@ export default function MobileNav() {
     "/outfits",
     "/healthcare",
     "/pm/live",
+    // Focused workbench with its own sticky commit bar at the bottom.
+    "/statement-import",
   ];
 
   // Prefetch all tabs on initial mount for instant switching

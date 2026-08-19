@@ -1,0 +1,254 @@
+// src/features/statement-import/sessionModel.ts
+//
+// Pure logic for a statement review session: which bucket each row belongs to,
+// what category applies to it, and what the commit endpoint should be told.
+// No React, no IO — so the rules that decide whether money gets written are
+// testable on their own.
+
+import type { CommitAction } from "@/features/statement-import/hooks";
+import type {
+  GroupCategory,
+  RowDecision,
+  StatementSession,
+} from "@/lib/statementImportSession";
+import type { ParsedTransaction, RowClassification } from "@/types/statement";
+
+export type Bucket = "matched" | "review" | "skipped";
+
+export interface MerchantGroup {
+  key: string;
+  label: string;
+  rows: ParsedTransaction[];
+}
+
+/** Rows the user pulled out of a group get their own single-row group. */
+const DETACHED_PREFIX = "__row__:";
+
+export function groupKeyForRow(
+  row: ParsedTransaction,
+  decision: RowDecision | undefined,
+): string {
+  if (decision?.detached_from_group) return `${DETACHED_PREFIX}${row.id}`;
+  return row.normalized_key || row.description.toLowerCase();
+}
+
+/**
+ * Which of the three review buckets a row lands in.
+ *
+ * `matched` rows are done — the user logged them already and reconciliation
+ * found the counterpart. `skipped` is transfers (deferred by design) and rows
+ * the user explicitly set aside. Everything else needs a human.
+ */
+export function getBucket(
+  classification: RowClassification | undefined,
+  decision: RowDecision | undefined,
+): Bucket {
+  if (decision?.resolution === "skip") return "skipped";
+  if (!classification) return "review";
+
+  switch (classification.status) {
+    case "transfer":
+      return "skipped";
+    case "already_imported":
+      return "matched";
+    case "matched":
+      // Detaching a match sends it back for manual handling.
+      return decision?.resolution === "create" ? "review" : "matched";
+    case "probable":
+    case "ambiguous":
+      // One tap is enough, but it must be a deliberate tap.
+      return decision?.resolution === "accept_match" ||
+        decision?.resolution === "link"
+        ? "matched"
+        : "review";
+    case "unmatched":
+      return "review";
+  }
+}
+
+/**
+ * The category a row will be created with: an explicit per-row pick always
+ * wins; otherwise the row inherits whatever its merchant group was set to.
+ * (The old flow did the opposite — the group overwrote every row — which is
+ * why one wrong group assignment poisoned a dozen transactions.)
+ */
+export function resolveRowCategory(
+  row: ParsedTransaction,
+  session: Pick<StatementSession, "decisions" | "group_categories">,
+): GroupCategory {
+  const decision = session.decisions[row.id];
+  if (decision?.category_id !== undefined) {
+    return {
+      category_id: decision.category_id,
+      subcategory_id: decision.subcategory_id ?? null,
+    };
+  }
+
+  const group = session.group_categories[groupKeyForRow(row, decision)];
+  if (group) return group;
+
+  // Fall back to whatever a learned merchant mapping suggested at parse time.
+  return {
+    category_id: row.category_id ?? null,
+    subcategory_id: row.subcategory_id ?? null,
+  };
+}
+
+/** Rows still waiting on the user, grouped by normalized merchant. */
+export function buildReviewGroups(session: StatementSession): MerchantGroup[] {
+  const groups = new Map<string, MerchantGroup>();
+
+  for (const row of session.rows) {
+    const decision = session.decisions[row.id];
+    if (getBucket(session.classifications[row.id], decision) !== "review") {
+      continue;
+    }
+
+    const key = groupKeyForRow(row, decision);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        label: row.normalized_key || row.description,
+        rows: [],
+      });
+    }
+    groups.get(key)!.rows.push(row);
+  }
+
+  return [...groups.values()].sort(
+    (a, b) => b.rows.length - a.rows.length || a.label.localeCompare(b.label),
+  );
+}
+
+export function countUndecided(session: StatementSession): number {
+  return session.rows.filter((row) => {
+    if (getBucket(session.classifications[row.id], session.decisions[row.id]) !==
+      "review"
+    ) {
+      return false;
+    }
+    // A review row is "decided" once it has a category to be created with.
+    return !resolveRowCategory(row, session).category_id;
+  }).length;
+}
+
+export function bucketCounts(session: StatementSession) {
+  const counts = { matched: 0, review: 0, skipped: 0 };
+  for (const row of session.rows) {
+    counts[getBucket(session.classifications[row.id], session.decisions[row.id])]++;
+  }
+  return counts;
+}
+
+/** Title-case a normalized merchant key for display / mapping storage. */
+export function prettyMerchantName(key: string): string {
+  return key
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+/**
+ * Translate the session into commit actions.
+ *
+ * Deliberately conservative: a row produces an action ONLY when the user's
+ * intent is unambiguous. Anything skipped, already imported, or still lacking
+ * a category is left out entirely rather than guessed at — this function
+ * decides what touches money.
+ */
+export function buildCommitActions(session: StatementSession): CommitAction[] {
+  const actions: CommitAction[] = [];
+
+  for (const row of session.rows) {
+    const decision = session.decisions[row.id];
+    const classification = session.classifications[row.id];
+    const bucket = getBucket(classification, decision);
+
+    if (bucket === "skipped") continue;
+    if (!classification) continue;
+    if (classification.status === "already_imported") continue;
+
+    const statementHash = row.statement_hash;
+    if (!statementHash) continue;
+
+    if (bucket === "matched") {
+      // Which existing transaction this row proves.
+      let transactionId: string | undefined;
+      let kind: "confirmed" | "draft" = "confirmed";
+
+      if (classification.status === "matched" || classification.status === "probable") {
+        transactionId = decision?.linked_transaction_id ?? classification.transaction_id;
+        kind = classification.kind;
+      } else if (classification.status === "ambiguous") {
+        transactionId = decision?.linked_transaction_id;
+        kind =
+          classification.candidates.find(
+            (c) => c.transaction_id === transactionId,
+          )?.kind ?? "confirmed";
+      }
+
+      if (!transactionId) continue;
+
+      if (kind === "draft") {
+        actions.push({
+          kind: "confirm_draft",
+          row_id: row.id,
+          transaction_id: transactionId,
+          statement_hash: statementHash,
+          ...(decision?.accept_amount !== undefined
+            ? { amount: decision.accept_amount }
+            : {}),
+        });
+      } else {
+        actions.push({
+          kind: "stamp",
+          row_id: row.id,
+          transaction_id: transactionId,
+          statement_hash: statementHash,
+          ...(decision?.accept_amount !== undefined
+            ? { accept_amount: decision.accept_amount }
+            : {}),
+        });
+      }
+      continue;
+    }
+
+    // bucket === "review" → create it, but only once it has a category.
+    const { category_id, subcategory_id } = resolveRowCategory(row, session);
+    if (!category_id) continue;
+
+    // A statement is a statement OF an account: every row it contains moved
+    // money in that account, and that account is what the row's hash v2
+    // fingerprint is built from. This used to read the merchant mapping's
+    // account and skip the row when it was null — so on a first import, when
+    // nothing has been learned yet, EVERY create action was silently dropped
+    // and Commit reported "0 created" with no error anywhere.
+    const accountId = session.account_id;
+
+    const mappingPattern = row.normalized_key?.trim();
+
+    actions.push({
+      kind: "create",
+      row_id: row.id,
+      date: decision?.date || row.date,
+      description: row.description,
+      amount: row.amount,
+      direction: row.type,
+      account_id: accountId,
+      category_id,
+      subcategory_id,
+      statement_hash: statementHash,
+      ...(mappingPattern && mappingPattern.length >= 2
+        ? {
+            learn_mapping: {
+              pattern: mappingPattern.toUpperCase(),
+              name: prettyMerchantName(mappingPattern),
+            },
+          }
+        : {}),
+    });
+  }
+
+  return actions;
+}

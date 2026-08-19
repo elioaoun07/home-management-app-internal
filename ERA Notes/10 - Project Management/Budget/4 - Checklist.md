@@ -1,6 +1,6 @@
 ---
 created: 2026-06-20
-updated: 2026-07-15
+updated: 2026-08-19
 type: checklist
 status: active
 owner: Elio
@@ -25,6 +25,7 @@ tags:
 
 ## Next
 
+- [ ] **BUD-24** Recycle Bin restore must re-apply balances for **transfers** — BUD-23 fixed the transactions half (`api/recycle-bin/restore/route.ts`); restoring a deleted transfer still leaves both accounts short because delete reverses the deltas and restore never re-applies them. Audit every balance-moving module in `src/lib/recycleBin/registry.ts` for the same shape. _(friction - M)_
 - [ ] **BUD-1** Merchant-match → Voice Draft Transactions — when a spoken message contains a known merchant, run it through `matchMerchantMapping()` so the draft pre-selects Category/Subcategory from the merchant map (on top of existing NLP category matching). → `src/lib/nlp/` + drafts review UI _(annoyance - M)_
 - [ ] **BUD-2** Merchant-match → Hub Budget Chat "Add as Transaction" — when converting a chat message to a transaction (Message Actions), run the text through the merchant map to pre-select Category/Subcategory in the action sheet. Junction work — coordinate with [Hub & ERA · 4 · Checklist](<../Hub & ERA/4 - Checklist.md>) (HUB-10). _(annoyance - M)_
 

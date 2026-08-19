@@ -45,6 +45,28 @@ function clearAnalyticsLocalStorage() {
  * @param queryClient - The React Query client
  * @param accountId   - When provided, also invalidates the per-account keys
  */
+/**
+ * Refresh every cached category list after a create/update/delete.
+ *
+ * Why not plain `invalidateQueries`: `useCategories` runs with
+ * `refetchOnMount: false` + 1 h staleTime, and the "categories" key is
+ * persisted to localStorage (STABLE_KEYS in providers.tsx). `invalidateQueries`
+ * only refetches *active* observers, so a category created while a consumer
+ * (expense form, statement import) is unmounted kept serving the stale
+ * persisted list on remount — the "new subcategory never appears" bug.
+ *
+ * Fix: refetch what's on screen now, and drop inactive entries entirely so
+ * their next mount has no data and must fetch — without firing a network
+ * request per cached account.
+ */
+export function refreshCategoryCaches(queryClient: QueryClient) {
+  const refetchActive = queryClient.invalidateQueries({
+    queryKey: ["categories"],
+  });
+  queryClient.removeQueries({ queryKey: ["categories"], type: "inactive" });
+  return refetchActive;
+}
+
 export function invalidateAccountData(
   queryClient: QueryClient,
   accountId?: string,

@@ -4,8 +4,14 @@
 import { safeFetch } from "@/lib/safeFetch";
 import { invalidateAccountData } from "@/lib/queryInvalidation";
 import { qk } from "@/lib/queryKeys";
+import type {
+  ReconcileResponse,
+  RevertImportResult,
+  StatementImport,
+  StatementImportDetail,
+} from "@/types/statement";
 import { ParsedTransaction } from "@/types/statement";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 // Query keys
 export const statementKeys = {
@@ -13,6 +19,7 @@ export const statementKeys = {
   // Shared with Transactions' manual-entry auto-suggest — see src/hooks/useMerchantMappings.ts
   merchantMappings: qk.merchantMappings,
   imports: () => [...statementKeys.all, "imports"] as const,
+  import: (id: string) => [...statementKeys.all, "imports", id] as const,
 };
 
 // Fetch all merchant mappings — re-exported from the shared hook so existing
@@ -67,20 +74,33 @@ export function useDeleteMerchantMapping() {
   });
 }
 
-// Parse a PDF statement
+export interface ParseStatementResult {
+  transactions: ParsedTransaction[];
+  matchedCount: number;
+  unmatchedCount: number;
+  totalCount: number;
+  statement_id: string;
+  account_id: string;
+  account_currency: string;
+  statement_currency: string | null;
+  currency_mismatch: boolean;
+  rawTextPreview?: string;
+}
+
+// Parse a PDF statement. The target account is chosen first: it feeds the row
+// fingerprint (hash v2) and the currency check.
 export function useParseStatement() {
   return useMutation({
-    mutationFn: async (
-      file: File,
-    ): Promise<{
-      transactions: ParsedTransaction[];
-      matchedCount: number;
-      unmatchedCount: number;
-      totalCount: number;
-      rawTextPreview?: string;
-    }> => {
+    mutationFn: async ({
+      file,
+      accountId,
+    }: {
+      file: File;
+      accountId: string;
+    }): Promise<ParseStatementResult> => {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("account_id", accountId);
 
       const res = await safeFetch("/api/statement-import/parse", {
         method: "POST",
@@ -98,48 +118,210 @@ export function useParseStatement() {
   });
 }
 
-// Import transactions
-export function useImportTransactions() {
-  const queryClient = useQueryClient();
-
+// Match parsed rows against already-logged transactions.
+export function useReconcileStatement() {
   return useMutation({
     mutationFn: async (data: {
-      transactions: Array<{
+      account_id: string;
+      statement_id: string;
+      rows: Array<{
+        id: string;
         date: string;
         description: string;
         amount: number;
-        category_id: string | null;
-        subcategory_id: string | null;
-        account_id: string;
-        save_merchant_mapping?: boolean;
-        merchant_pattern?: string;
-        merchant_name?: string;
-        matched?: boolean;
-        statement_hash?: string;
+        type: "debit" | "credit";
+        statement_hash: string;
       }>;
-      file_name: string;
-    }) => {
-      const res = await safeFetch("/api/statement-import/import", {
+    }): Promise<ReconcileResponse> => {
+      const res = await safeFetch("/api/statement-import/reconcile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-        timeoutMs: 60_000, // Bulk import can be slow — 1 min timeout
+        timeoutMs: 30_000, // Candidate scan over a multi-week window
       });
 
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || "Failed to import transactions");
+        throw new Error(error.error || "Failed to reconcile statement");
       }
 
       return res.json();
     },
-    onSuccess: () => {
-      invalidateAccountData(queryClient);
+  });
+}
+
+export type CommitAction =
+  | {
+      kind: "create";
+      row_id: string;
+      date: string;
+      description: string;
+      amount: number;
+      direction: "debit" | "credit";
+      account_id: string;
+      category_id: string | null;
+      subcategory_id: string | null;
+      statement_hash: string;
+      learn_mapping?: { pattern: string; name: string };
+    }
+  | {
+      kind: "stamp";
+      row_id: string;
+      transaction_id: string;
+      statement_hash: string;
+      accept_amount?: number;
+    }
+  | {
+      kind: "confirm_draft";
+      row_id: string;
+      transaction_id: string;
+      statement_hash: string;
+      amount?: number;
+      category_id?: string | null;
+      subcategory_id?: string | null;
+    };
+
+export interface CommitResult {
+  success: true;
+  /** The statement_imports record this commit opened — revert targets it. */
+  import_id: string;
+  created: number;
+  stamped: number;
+  drafts_confirmed: number;
+  skipped: number;
+  errors: number;
+  mappings_saved: number;
+  balance_deltas: Record<string, number>;
+  results: Array<{
+    row_id: string;
+    status: "ok" | "skipped_duplicate" | "error";
+    error?: string;
+    transaction_id?: string;
+  }>;
+}
+
+// Write the reviewed session: create missing rows, stamp matched ones,
+// confirm matched drafts.
+export function useCommitStatement() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      statement_id: string;
+      file_name: string;
+      account_id: string;
+      actions: CommitAction[];
+    }): Promise<CommitResult> => {
+      const res = await safeFetch("/api/statement-import/commit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        timeoutMs: 60_000, // Bulk write — 1 min timeout
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to commit statement");
+      }
+
+      return res.json();
+    },
+    onSuccess: (_result, variables) => {
+      invalidateAccountData(queryClient, variables.account_id);
       queryClient.invalidateQueries({ queryKey: qk.drafts() });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({
         queryKey: statementKeys.merchantMappings(),
       });
+      queryClient.invalidateQueries({ queryKey: statementKeys.imports() });
+    },
+  });
+}
+
+// ── Import history & rollback ───────────────────────────────────────────────
+//
+// Every commit leaves a `statement_imports` record plus one ledger row per
+// transaction it touched, so a bulk import is reversible as a unit instead of
+// unpicked row by row. See src/lib/statement-revert.ts for the rules.
+
+/** The user's statement imports, newest first. */
+export function useStatementImports(limit = 20) {
+  return useQuery<{ imports: StatementImport[] }>({
+    queryKey: [...statementKeys.imports(), limit],
+    queryFn: async () => {
+      const res = await safeFetch(
+        `/api/statement-import/imports?limit=${limit}`,
+        { timeoutMs: 15_000 },
+      );
+      if (!res.ok) throw new Error("Failed to load import history");
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+}
+
+/** One import with its per-row ledger and the CURRENT state of each row. */
+export function useStatementImportDetail(id: string | null) {
+  return useQuery<StatementImportDetail & { revertable: boolean }>({
+    queryKey: statementKeys.import(id ?? "none"),
+    enabled: !!id,
+    queryFn: async () => {
+      const res = await safeFetch(`/api/statement-import/imports/${id}`, {
+        timeoutMs: 20_000,
+      });
+      if (!res.ok) throw new Error("Failed to load this import");
+      return res.json();
+    },
+    // Drift ("was this edited since?") is only meaningful when it's current.
+    staleTime: 0,
+  });
+}
+
+/** Walk a whole import backwards: rows, balances and merchant mappings. */
+export function useRevertStatementImport() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      revert_mappings = true,
+    }: {
+      id: string;
+      revert_mappings?: boolean;
+      /** Only used for cache invalidation on success. */
+      account_id?: string | null;
+    }): Promise<RevertImportResult> => {
+      const res = await safeFetch(
+        `/api/statement-import/imports/${id}/revert`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ revert_mappings }),
+          // Bulk reversal over up to 1,000 rows — same budget as the commit.
+          timeoutMs: 60_000,
+        },
+      );
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to revert this import");
+      }
+      return res.json();
+    },
+    onSuccess: (_result, variables) => {
+      if (variables.account_id) {
+        invalidateAccountData(queryClient, variables.account_id);
+      }
+      queryClient.invalidateQueries({ queryKey: qk.drafts() });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: statementKeys.imports() });
+      queryClient.invalidateQueries({
+        queryKey: statementKeys.import(variables.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: statementKeys.merchantMappings(),
+      });
+      // The reverted rows land in the Recycle Bin.
+      queryClient.invalidateQueries({ queryKey: ["recycle-bin"] });
     },
   });
 }

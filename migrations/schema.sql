@@ -76,6 +76,14 @@ CREATE TABLE public.transactions (
   CONSTRAINT transactions_collaborator_account_id_fkey FOREIGN KEY (collaborator_account_id) REFERENCES public.accounts(id),
   CONSTRAINT transactions_parent_transaction_id_fkey FOREIGN KEY (parent_transaction_id) REFERENCES public.transactions(id)
 );
+-- Statement-import dedupe backstop (23505 → "skipped duplicate" in the import route)
+CREATE UNIQUE INDEX transactions_statement_hash_uniq
+  ON public.transactions (user_id, statement_hash)
+  WHERE statement_hash IS NOT NULL;
+-- Statement reconciliation candidate lookup (account + fuzzy date window)
+CREATE INDEX idx_transactions_account_date
+  ON public.transactions (account_id, date)
+  WHERE deleted_at IS NULL;
 CREATE TABLE public.default_categories (
   id uuid NOT NULL,
   name text NOT NULL,
@@ -201,16 +209,64 @@ CREATE TABLE public.merchant_mappings (
   CONSTRAINT merchant_mappings_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
   CONSTRAINT merchant_mappings_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
+-- Upsert target for the import route's onConflict: "user_id,merchant_pattern"
+CREATE UNIQUE INDEX merchant_mappings_unique_pattern
+  ON public.merchant_mappings (user_id, merchant_pattern);
 CREATE TABLE public.statement_imports (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
   file_name text NOT NULL,
   imported_at timestamp with time zone NOT NULL DEFAULT now(),
   transactions_count integer DEFAULT 0,
-  status text DEFAULT 'completed'::text CHECK (status = ANY (ARRAY['pending'::text, 'processing'::text, 'completed'::text, 'failed'::text])),
+  status text DEFAULT 'completed'::text CHECK (status = ANY (ARRAY['pending'::text, 'processing'::text, 'completed'::text, 'failed'::text, 'reverted'::text, 'partially_reverted'::text])),
+  account_id uuid,
+  statement_id text,
+  created_count integer NOT NULL DEFAULT 0,
+  stamped_count integer NOT NULL DEFAULT 0,
+  drafts_confirmed_count integer NOT NULL DEFAULT 0,
+  skipped_count integer NOT NULL DEFAULT 0,
+  error_count integer NOT NULL DEFAULT 0,
+  balance_deltas jsonb NOT NULL DEFAULT '{}'::jsonb,
+  learned_mappings jsonb NOT NULL DEFAULT '[]'::jsonb,
+  reverted_at timestamp with time zone,
   CONSTRAINT statement_imports_pkey PRIMARY KEY (id),
-  CONSTRAINT statement_imports_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+  CONSTRAINT statement_imports_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT statement_imports_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
+-- Import history list: "my imports, newest first"
+CREATE INDEX idx_statement_imports_user_imported_at
+  ON public.statement_imports (user_id, imported_at DESC);
+-- Per-row ledger of what a statement commit did, so it can be reverted.
+-- user_id is denormalized from statement_imports so RLS stays a direct
+-- `user_id = auth.uid()` compare instead of an EXISTS subquery (Hard Rule #20).
+CREATE TABLE public.statement_import_entries (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  import_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  row_id text NOT NULL,
+  action text NOT NULL CHECK (action = ANY (ARRAY['create'::text, 'stamp'::text, 'confirm_draft'::text])),
+  transaction_id uuid,
+  account_id uuid NOT NULL,
+  statement_hash text NOT NULL,
+  applied_delta numeric NOT NULL DEFAULT 0,
+  previous jsonb NOT NULL DEFAULT '{}'::jsonb,
+  applied jsonb NOT NULL DEFAULT '{}'::jsonb,
+  reverted_at timestamp with time zone,
+  revert_note text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT statement_import_entries_pkey PRIMARY KEY (id),
+  CONSTRAINT statement_import_entries_import_id_fkey FOREIGN KEY (import_id) REFERENCES public.statement_imports(id) ON DELETE CASCADE,
+  CONSTRAINT statement_import_entries_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT statement_import_entries_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id) ON DELETE SET NULL,
+  CONSTRAINT statement_import_entries_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
+);
+CREATE INDEX idx_statement_import_entries_import
+  ON public.statement_import_entries (import_id);
+CREATE INDEX idx_statement_import_entries_user
+  ON public.statement_import_entries (user_id);
+-- One entry per (import, row): a retried commit updates rather than appends.
+CREATE UNIQUE INDEX statement_import_entries_import_row_uniq
+  ON public.statement_import_entries (import_id, row_id);
 CREATE TABLE public.future_purchases (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,

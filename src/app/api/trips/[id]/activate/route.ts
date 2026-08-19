@@ -39,6 +39,9 @@ export async function POST(
       type: "expense",
       country_code: trip.destination_country_code ?? null,
       location_name: trip.destination_name ?? null,
+      // Trip accounts live in the trip's currency (EUR trip → EUR account).
+      // exchange_rate stays at the DB default (1) until the owner sets it.
+      currency: trip.currency ?? "USD",
     })
     .select("id")
     .single();
