@@ -138,6 +138,9 @@ Budget is the household's **money graph**. Today it is a strong *reactive* ledge
 | Split the mega-forms | 3,099 + 3,083 LOC | decompose into testable units when next touched | M |
 | Household transfer authorization | — | *(IMPLEMENTED 2026-07-21)* | S |
 | Account edit-mode polish | edge-pinned visibility/currency badges overlapped between rows | in-flow mobile action rail + clearer spring/wiggle motion *(IMPLEMENTED 2026-08-04)* | S |
+| Post-trip statement reconciliation | one upload path that always **inserts**; the matcher is single-account, single-currency, −7/+1 days | two intents on one feature: Lebanon statements insert (recognizable merchants, low volume), trip statements **audit** a manual log that was captured tap-by-tap abroad — reconcile-only mode + FX/trip-aware matching + a two-sided exception report (BUD-26/27/28, entry point TRIP-28) | M–L |
+
+**Decision 2026-08-19 — where transactions come from, per geography.** Inside Lebanon the e-statement upload stays the *source* of transactions: merchants are recognizable, card volume is low, and typing them twice is waste. Abroad the order inverts — foreign statement descriptors are unreadable weeks after the fact, so each tap is logged manually at the moment of spend and the statement, uploaded after returning, is only the *auditor*. This is a workflow decision, not a feature request: it means statement import needs a second **mode**, not a second importer, and that the matcher must survive FX conversion and a longer posting lag (BUD-26/27/28). Trip-side entry point: Trips TRIP-28.
 
 ### Track B — bridges out of Budget
 
@@ -175,6 +178,15 @@ Budget is the household's **money graph**. Today it is a strong *reactive* ledge
 
 ### BUD-4
 - **Acceptance:** the briefing states a forward-looking balance dip with a date, derived from recurring + allocations, and is backed by a test with a worked before/after example.
+
+### BUD-26
+- **Acceptance:** an audit-mode statement run produces a per-row verdict and, on completion, `statement_import_entries` gained **zero** rows, no `balance_deltas` were written and no merchant mapping was learned — provable by comparing account balances before/after; the mode is visible on the review screen at all times.
+
+### BUD-27
+- **Acceptance:** a foreign-currency trip statement matches the manually logged trip transactions without widening `AMOUNT_TOLERANCE_PCT` — matching succeeds through an implied-rate cluster, spans both the card account and `trips.account_id`, and a unit test in `src/lib/statement-reconcile.test.ts` covers a worked EUR-logged / USD-posted example plus a rate-outlier that must be flagged, not silently matched.
+
+### BUD-28
+- **Acceptance:** the report opens with total statement vs total logged and one gap number, then lists exceptions in both directions (statement row with no log, logged transaction with no statement row); confirming or rejecting a `probable`/`ambiguous` pair resolves it and still writes no transaction.
 
 ## Successor Briefing
 

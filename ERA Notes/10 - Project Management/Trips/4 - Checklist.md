@@ -1,6 +1,6 @@
 ---
 created: 2026-06-20
-updated: 2026-08-03
+updated: 2026-08-19
 type: checklist
 status: active
 owner: Elio
@@ -32,6 +32,10 @@ tags:
 ## Next
 
 - [ ] **TRIP-4** Side-effect transparency view — a "trip impact" panel reading `trip_side_effects`: what this trip paused/cancelled/created/reassigned, and what completion will reverse. Doubles as a permanent verification tool. _(friction - M)_
+
+**Post-trip reconciliation** *(workflow decision 2026-08-19)* — during a trip every card tap is logged manually on the expense form (foreign statement descriptors are unreadable weeks later); after returning, the home-bank statement is uploaded in **audit** mode to prove the manual log tallies. Engine work is [Budget · 4 · Checklist](<../Budget/4 - Checklist.md>) (BUD-26 mode, BUD-27 matching, BUD-28 exception report); Trips owns the entry point and the scoping contract. **Ungated** — read-only over `trips`/`accounts`/`transactions`, no `activate_trip`/`complete_trip`/`trip_side_effects` interaction, so the Planner-mode exemption applies.
+
+- [ ] **TRIP-28** "Reconcile this trip" entry point — a post-trip action on a `completed` (or end-dated) trip that opens statement import in audit mode pre-scoped to that trip: date range widened by the posting-lag window, candidate accounts = the card account the statement belongs to **plus** the trip's own `trips.account_id`, and expected currency = `trips.currency`. Returns the BUD-28 exception report scoped to the trip and nothing else; result feeds the post-trip summary (TRIP-5) and the real-actuals card that replaces "Planned spend" (TRIP-11). → `src/app/trips/` _(friction - M)_
 
 ## Later
 

@@ -1,6 +1,6 @@
 ---
 created: 2026-05-30
-updated: 2026-08-06
+updated: 2026-08-19
 type: master-book
 status: active
 owner: Elio
@@ -132,7 +132,7 @@ The one exemption: a **read-only trip briefing signal** (an upcoming household-s
 Trips is *all* bridges by nature; these make the existing cascades legible from the other side.
 
 - **Trips → Schedule** — make it legible which items a trip paused/cancelled/created.
-- **Trips → Budget** — the trip account + spend feeds the money graph; surface trip cost in Analytics.
+- **Trips → Budget** — the trip account + spend feeds the money graph; surface trip cost in Analytics. *(2026-08-19 decision)* Abroad, transactions are logged **manually at the moment of spend** (foreign statement descriptors are unreadable weeks later); the home-bank statement is uploaded **after** the trip only to audit that log. So the bridge is a **post-trip reconciliation**: TRIP-28 opens statement import in audit mode scoped to the trip (dates + posting lag, card account **and** `trips.account_id`, `trips.currency`), and Budget owns the engine — BUD-26 reconcile-only mode, BUD-27 FX/trip-aware matching, BUD-28 the two-sided exception report. Ungated: read-only, no cascade contact.
 - **Trips → Meal Planning** — make the meal-plan skip visible and undo-able from the meal calendar.
 - **Trips → Chores** — skipped chores marked "paused: travelling", not silently absent.
 - **Trips → ERA briefing** — "you're back tomorrow — 3 chores and 2 routines resume".
@@ -156,6 +156,9 @@ Trips is *all* bridges by nature; these make the existing cascades legible from 
 
 ### TRIP-4
 - **Acceptance:** the trip impact panel lists every `trip_side_effects` row grouped by type, and states for each what completion will reverse.
+
+### TRIP-28
+- **Acceptance:** a completed trip offers "Reconcile this trip"; it opens statement import in audit mode with the trip's date window, both candidate accounts and `trips.currency` pre-applied, returns the exception report for that trip only, and finishes having created **zero** transactions.
 
 ## Successor Briefing
 
