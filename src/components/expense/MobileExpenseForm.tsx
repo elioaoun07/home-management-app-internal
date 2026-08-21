@@ -188,37 +188,71 @@ type DeleteConfirmState = {
   step: "first" | "second";
 } | null;
 
-// Long press hook for edit mode
+// Long press hook for edit mode.
+// Must ignore swipes: (1) a swipe-back gesture that gets handed off to the
+// browser/OS fires `touchcancel`, not `touchend` — without a touchcancel
+// listener the timer keeps running and fires edit mode after the finger is
+// already gone; (2) a slow swipe that stays on-screen past the threshold
+// still needs cancelling once the finger has clearly moved, not just lifted.
+const LONG_PRESS_MOVE_CANCEL_PX = 10;
+
 function useLongPress(callback: () => void, threshold = 500) {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const start = useCallback(() => {
-    timeoutRef.current = setTimeout(() => {
-      callback();
-    }, threshold);
-  }, [callback, threshold]);
+  const startPosRef = useRef<{ x: number; y: number } | null>(null);
 
   const clear = useCallback(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+    startPosRef.current = null;
   }, []);
+
+  const start = useCallback(
+    (e: React.TouchEvent | React.MouseEvent) => {
+      if ("touches" in e && e.touches.length > 0) {
+        startPosRef.current = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY,
+        };
+      }
+      timeoutRef.current = setTimeout(() => {
+        callback();
+      }, threshold);
+    },
+    [callback, threshold],
+  );
+
+  const onTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      const origin = startPosRef.current;
+      const touch = e.touches[0];
+      if (!origin || !touch) return;
+      const dx = touch.clientX - origin.x;
+      const dy = touch.clientY - origin.y;
+      if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_CANCEL_PX) {
+        clear();
+      }
+    },
+    [clear],
+  );
 
   return {
     onMouseDown: start,
     onMouseUp: clear,
     onMouseLeave: clear,
     onTouchStart: start,
+    onTouchMove,
     onTouchEnd: clear,
+    onTouchCancel: clear,
   };
 }
 
 /**
- * Free-text merchant/note input rendered in the SAME position (directly under
- * the step header) on both the Category and Subcategory steps. It binds to the
- * transaction description and drives the merchant-map suggestion glow.
- * Module-level so it isn't remounted (and doesn't lose focus) on every
+ * Free-text merchant/note input rendered in the SAME position (directly below
+ * the tile grid/reorder list) on both the Category and Subcategory steps. It
+ * binds to the transaction description and drives the merchant-map suggestion
+ * glow. Module-level so it isn't remounted (and doesn't lose focus) on every
  * keystroke re-render of the form.
  */
 function MerchantNoteInput({
@@ -2263,13 +2297,6 @@ function MobileExpenseFormContent() {
                 </p>
               )}
 
-              {!editModeCategory && (
-                <MerchantNoteInput
-                  value={description}
-                  onChange={setDescription}
-                />
-              )}
-
               <div {...categoryLongPress}>
                 {editModeCategory ? (
                   <>
@@ -2551,6 +2578,13 @@ function MobileExpenseFormContent() {
                 )}
               </div>
 
+              {!editModeCategory && (
+                <MerchantNoteInput
+                  value={description}
+                  onChange={setDescription}
+                />
+              )}
+
               {!editModeCategory && orderedCategories.length > 0 && (
                 <p
                   className={`text-[10px] ${themeClasses.textFaint} text-center -mt-2`}
@@ -2598,13 +2632,6 @@ function MobileExpenseFormContent() {
                       </span>{" "}
                       to hide
                     </p>
-                  )}
-
-                  {!editModeSubcategory && (
-                    <MerchantNoteInput
-                      value={description}
-                      onChange={setDescription}
-                    />
                   )}
 
                   <div {...subcategoryLongPress}>
@@ -2906,6 +2933,13 @@ function MobileExpenseFormContent() {
                     )}
                   </div>
 
+                  {!editModeSubcategory && (
+                    <MerchantNoteInput
+                      value={description}
+                      onChange={setDescription}
+                    />
+                  )}
+
                   {!editModeSubcategory && orderedSubcategories.length > 0 && (
                     <p
                       className={`text-[10px] ${themeClasses.textFaint} text-center`}
@@ -2927,10 +2961,6 @@ function MobileExpenseFormContent() {
                   >
                     Subcategory
                   </p>
-                  <MerchantNoteInput
-                    value={description}
-                    onChange={setDescription}
-                  />
                   <button
                     onClick={() => setShowNewSubcategoryDrawer(true)}
                     className={`w-full p-4 rounded-lg border-2 border-dashed ${themeClasses.dashedBorder} ${themeClasses.dashedBorderHover} text-center transition-all active:scale-95 bg-transparent ${themeClasses.dashedBgHover} flex flex-col items-center justify-center gap-2`}
@@ -2943,6 +2973,10 @@ function MobileExpenseFormContent() {
                       Optional - for more detailed tracking
                     </span>
                   </button>
+                  <MerchantNoteInput
+                    value={description}
+                    onChange={setDescription}
+                  />
                 </div>
               )}
 
