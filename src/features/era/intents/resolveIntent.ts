@@ -1,40 +1,67 @@
 // Central dispatcher — routes an intent to the appropriate resolver.
 // Returns { text, metadata } to be persisted as the assistant message.
+import { greeting } from "@/lib/era/phrasing";
 import { formatReply } from "../replyFormatter";
 import type { Intent } from "../types";
+import type { EraBudgetSubmitResult } from "../useEraBudgetSubmit";
 import { resolveMemoryRecall, resolveMemorySave } from "./resolvers/brain";
-import { resolveMonthSpend } from "./resolvers/budget";
+import {
+  resolveDraftTransaction,
+  resolveMonthSpend,
+  resolveShowAnalytics,
+} from "./resolvers/budget";
 import { resolveRecipeSearch } from "./resolvers/chef";
-import { resolveTodaySchedule } from "./resolvers/schedule";
+import {
+  resolveDraftReminder,
+  resolveTodaySchedule,
+} from "./resolvers/schedule";
 
 export interface ResolveResult {
   text: string;
   metadata?: Record<string, unknown>;
 }
 
-const GREETING_REPLIES = [
-  "Hey! I'm ERA — your household assistant. Ask me about your budget, schedule, recipes, or anything you want to remember.",
-  "Hello! What can I do for you? I can check your spending, pull up today's schedule, find a recipe, or save a note.",
-  "Hey there! Budget, schedule, chef, brain — pick one, or just ask freely.",
-  "Hi! I'm listening. Ask about your finances, what's on today, what to cook, or tell me something to remember.",
-  "Hey! Good to hear from you. What's on your mind?",
-  "Hello — ready when you are. Speak to any of my four modules.",
-];
+/**
+ * Capabilities the dispatcher can only get from a React tree.
+ *
+ * Everything ERA resolves is a plain async function so it can be unit-tested
+ * and reused outside the hub — but drafting a transaction needs the user's
+ * accounts, categories, the React Query client, and the Undo toast, all of
+ * which live in `useEraBudgetSubmit`. Rather than special-case that intent in
+ * the caller (which is what CommandBar used to do), the caller passes the
+ * hook's `submit` in here and the dispatcher stays the single owner of
+ * "intent → reply". Omit it and `draftTransaction` degrades to a clear
+ * "no account available" reply instead of silently doing nothing.
+ */
+export interface ResolveDeps {
+  submitBudgetDraft?: (sentence: string) => Promise<EraBudgetSubmitResult>;
+}
 
-export async function resolveIntent(intent: Intent): Promise<ResolveResult> {
+export async function resolveIntent(
+  intent: Intent,
+  deps: ResolveDeps = {},
+): Promise<ResolveResult> {
   switch (intent.kind) {
+    // Time-aware and varied — see src/lib/era/phrasing.ts. A greeting is the
+    // line a user hears most often, so a fixed string here is what makes the
+    // whole assistant sound canned.
     case "greeting":
-      return {
-        text: GREETING_REPLIES[
-          Math.floor(Math.random() * GREETING_REPLIES.length)
-        ],
-      };
+      return { text: greeting() };
 
     case "todaySchedule":
       return resolveTodaySchedule();
 
     case "monthSpend":
       return resolveMonthSpend(intent.scope, intent.categoryHint);
+
+    case "showAnalytics":
+      return resolveShowAnalytics();
+
+    case "draftTransaction":
+      return resolveDraftTransaction(intent.rawText, deps.submitBudgetDraft);
+
+    case "draftReminder":
+      return resolveDraftReminder(intent.rawText, intent.title);
 
     case "recipeSearch":
       return resolveRecipeSearch(intent.dish);

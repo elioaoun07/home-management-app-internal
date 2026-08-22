@@ -27,7 +27,7 @@ function intentBadge(kind: Intent["kind"] | null): string | null {
     case "draftTransaction":
       return "Draft transaction";
     case "draftReminder":
-      return "Draft reminder";
+      return "Reminder";
     case "showAnalytics":
       return "Analytics";
     case "greeting":

@@ -140,22 +140,19 @@ export function CommandBar() {
         console.error("[era] failed to persist user message", err);
       }
 
-      // Budget draft (legacy path)
-      let draftTransactionId: string | null = null;
-      if (intent.kind === "draftTransaction") {
-        const result = await budgetSubmit.submit(text);
-        if (result.ok) {
-          draftTransactionId = result.draftId;
-        }
-      }
+      // Resolve assistant reply. Every intent — including draftTransaction —
+      // goes through resolveIntent; the budget draft used to run on a parallel
+      // path here, which meant the write and the reply could disagree. The
+      // resolver now owns both and reports the draft id back in metadata.
+      const { text: reply, metadata } = await resolveIntent(intent, {
+        submitBudgetDraft: budgetSubmit.submit,
+      }).catch(() => ({
+        text: "Something went wrong. Try again.",
+        metadata: undefined as Record<string, unknown> | undefined,
+      }));
 
-      // Resolve assistant reply
-      const { text: reply, metadata } = await resolveIntent(intent).catch(
-        () => ({
-          text: "Something went wrong. Try again.",
-          metadata: undefined,
-        }),
-      );
+      const draftTransactionId =
+        typeof metadata?.draftId === "string" ? metadata.draftId : null;
 
       try {
         await createMessage.mutateAsync({

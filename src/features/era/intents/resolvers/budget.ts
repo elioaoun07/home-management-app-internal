@@ -2,7 +2,16 @@
 import { safeFetch } from "@/lib/safeFetch";
 import { getCachedPreferences } from "@/lib/queryConfig";
 import { getDefaultDateRange } from "@/lib/utils/date";
-import { formatBudgetError, formatMonthSpend } from "../formatters/budget";
+import {
+  formatAnalytics,
+  formatAnalyticsError,
+  formatBudgetError,
+  formatDraftTransaction,
+  formatDraftTransactionError,
+  formatMonthSpend,
+  monthKeyToLabel,
+} from "../formatters/budget";
+import type { EraBudgetSubmitResult } from "../../useEraBudgetSubmit";
 
 interface ResolveResult {
   text: string;
@@ -81,4 +90,128 @@ export async function resolveMonthSpend(
   } catch {
     return { text: formatBudgetError() };
   }
+}
+
+// ---------------------------------------------------------------------------
+// showAnalytics
+// ---------------------------------------------------------------------------
+
+interface AnalyticsMonth {
+  month: string;
+  income: number;
+  expense: number;
+  savingsRate: number;
+  transactionCount: number;
+  categoryBreakdown: Array<{ name: string; amount: number }>;
+}
+
+/**
+ * Spoken summary of the analytics page: this month's in/out, savings rate,
+ * top three categories, and the month-over-month delta.
+ *
+ * Pulls two months so the comparison line has something to compare against;
+ * `/api/analytics` returns months chronologically, so the last entry is the
+ * current one.
+ */
+export async function resolveShowAnalytics(): Promise<ResolveResult> {
+  try {
+    const res = await safeFetch("/api/analytics?months=2&ownership=all", {
+      timeoutMs: 10_000,
+    });
+    if (!res.ok) return { text: formatAnalyticsError() };
+
+    const data: { months?: AnalyticsMonth[] } = await res.json();
+    const months = data.months ?? [];
+    if (months.length === 0) {
+      return {
+        text: formatAnalytics({
+          monthLabel: monthKeyToLabel(new Date().toISOString().slice(0, 7)),
+          income: 0,
+          expense: 0,
+          savingsRate: 0,
+          transactionCount: 0,
+          topCategories: [],
+          previousExpense: null,
+        }),
+        metadata: { months: 0 },
+      };
+    }
+
+    const current = months[months.length - 1];
+    const previous = months.length > 1 ? months[months.length - 2] : null;
+
+    const topCategories = (current.categoryBreakdown ?? [])
+      .slice(0, 3)
+      .map((c) => ({ name: c.name, amount: c.amount }));
+
+    return {
+      text: formatAnalytics({
+        monthLabel: monthKeyToLabel(current.month),
+        income: current.income,
+        expense: current.expense,
+        savingsRate: current.savingsRate,
+        transactionCount: current.transactionCount,
+        topCategories,
+        previousExpense: previous?.expense ?? null,
+      }),
+      metadata: {
+        month: current.month,
+        income: current.income,
+        expense: current.expense,
+        savingsRate: current.savingsRate,
+        transactionCount: current.transactionCount,
+        topCategories,
+      },
+    };
+  } catch {
+    return { text: formatAnalyticsError() };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// draftTransaction
+// ---------------------------------------------------------------------------
+
+/**
+ * Turn "I paid $25 on fuel" into a real draft transaction.
+ *
+ * The write itself still lives in `useEraBudgetSubmit` — it needs the user's
+ * accounts, categories and the React Query client to invalidate, plus it owns
+ * the Undo toast required by Hard Rule #1. This resolver takes that hook's
+ * `submit` as an injected capability so the *decision and the reply* live on
+ * the resolver path like every other intent, instead of being special-cased in
+ * CommandBar. When no submitter is available (no accounts loaded yet, or a
+ * caller outside the hub) we fail with the same wording as a no-account result
+ * rather than silently doing nothing.
+ */
+export async function resolveDraftTransaction(
+  rawText: string,
+  submitDraft?: (sentence: string) => Promise<EraBudgetSubmitResult>,
+): Promise<ResolveResult> {
+  if (!submitDraft) {
+    return { text: formatDraftTransactionError("no-account") };
+  }
+
+  const result = await submitDraft(rawText);
+
+  if (!result.ok) {
+    return {
+      text: formatDraftTransactionError(result.reason, result.message),
+      metadata: { draftFailed: result.reason },
+    };
+  }
+
+  return {
+    text: formatDraftTransaction({
+      amount: result.parsed.amount ?? 0,
+      categoryName: result.parsed.categoryName,
+      subcategoryName: result.parsed.subcategoryName,
+    }),
+    metadata: {
+      draftId: result.draftId,
+      accountId: result.accountId,
+      amount: result.parsed.amount ?? 0,
+      categoryName: result.parsed.categoryName ?? null,
+    },
+  };
 }

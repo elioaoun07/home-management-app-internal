@@ -1,6 +1,12 @@
-// Schedule resolver — fetches today's items + overdue via supabaseBrowser
+// Schedule resolver — fetches today's items + overdue via supabaseBrowser,
+// and creates real reminders from natural language (draftReminder).
+import { safeFetch } from "@/lib/safeFetch";
+import { parseSmartText } from "@/lib/smartTextParser";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { localToISO } from "@/lib/utils/date";
 import {
+  formatReminderCreated,
+  formatReminderError,
   formatScheduleError,
   formatTodaySchedule,
 } from "../formatters/schedule";
@@ -84,5 +90,80 @@ export async function resolveTodaySchedule(): Promise<ResolveResult> {
     };
   } catch {
     return { text: formatScheduleError() };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// draftReminder — natural language → a real reminder item
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a reminder from an utterance like "remind me to call the bank
+ * tomorrow at 5pm".
+ *
+ * `parseSmartText` is the same NLP the mobile reminder form uses, so ERA and
+ * the form agree on titles, dates and recurrence. Two rules matter here:
+ *
+ *  - **Never send a `due_at` we invented.** `confidence.date === 0` means the
+ *    parser found no date at all; sending "now" would fire an alert instantly.
+ *    We omit `due_at` and the item lands undated, exactly like a form submit
+ *    with the date field left blank.
+ *  - **Local → UTC via `localToISO`.** `dueDate`/`dueTime` are wall-clock
+ *    strings; `due_at` is `timestamptz`. Mirrors MobileReminderForm, including
+ *    its noon default when a date was parsed but no time (Hard Rule #18).
+ *
+ * `title` is the already-cleaned title from the router; we re-derive from the
+ * raw text only as a fallback so this resolver is safe to call directly.
+ */
+export async function resolveDraftReminder(
+  rawText: string,
+  title?: string,
+): Promise<ResolveResult> {
+  const parsed = parseSmartText(rawText);
+
+  const finalTitle = (title?.trim() || parsed.title?.trim() || "").trim();
+  if (!finalTitle) {
+    return { text: formatReminderError("no-title") };
+  }
+
+  // Only send a due_at the user actually expressed (see doc comment).
+  let dueAt: string | null = null;
+  if (parsed.confidence.date > 0 && parsed.dueDate) {
+    dueAt = localToISO(parsed.dueDate, parsed.dueTime || "12:00");
+  }
+
+  try {
+    const res = await safeFetch("/api/items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "reminder",
+        title: finalTitle,
+        priority: parsed.priority,
+        ...(dueAt ? { due_at: dueAt } : {}),
+      }),
+      timeoutMs: 8_000,
+    });
+
+    if (!res.ok) return { text: formatReminderError() };
+
+    const { item } = (await res.json()) as { item?: { id?: string } };
+
+    return {
+      text: formatReminderCreated({
+        title: finalTitle,
+        dueAt,
+        recurring: Boolean(parsed.recurrenceRule),
+      }),
+      metadata: {
+        itemId: item?.id ?? null,
+        title: finalTitle,
+        dueAt,
+        recurrenceRule: parsed.recurrenceRule ?? null,
+        priority: parsed.priority,
+      },
+    };
+  } catch {
+    return { text: formatReminderError() };
   }
 }

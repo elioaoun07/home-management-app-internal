@@ -29,6 +29,9 @@ tags:
 
 - [ ] **HUB-3** Briefing enrichment ← Schedule — feed the whole week's shape into ERA's proactive briefing. Coordinate with [Schedule · 4 · Checklist](<../Schedule/4 - Checklist.md>). _(friction - M)_
 - [ ] **HUB-4** Briefing enrichment ← Budget (cashflow) — warn before a recurring payment overdraws. Coordinate with [Hub & ERA — Master Book](<Hub & ERA — Master Book.md>). _(friction - M)_
+- [ ] **HUB-16** Voice reminders lose the time and don't save — `intentClassifier.extractReminderTitle` regex-strips the date, and `HubPage.onSetReminder` opens a modal defaulted to today/next-hour while ERA says "Reminder set". Route voice through `resolveDraftReminder` + the shared phrasing pools so both surfaces agree. Surfaced by HUB-15. _(friction - M)_
+- [ ] **HUB-13** ERA's two spend answers disagree — `showAnalytics` buckets by calendar month (`/api/analytics`) while `monthSpend` uses the user's custom month start (`getDefaultDateRange`). Pick one basis for both. Surfaced by HUB-12. _(friction - S)_
+- [ ] **HUB-14** `resolveMonthSpend` partner scope is confidently wrong — it returns the household total but the formatter says "Your partner has spent $X". Either make the two-call split or fix the wording. Surfaced by HUB-12. _(friction - S)_
 
 ## Later
 

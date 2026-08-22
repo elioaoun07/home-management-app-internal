@@ -1098,24 +1098,29 @@ function parseCategories(
 function extractTitle(input: string, parsedComponents: string[]): string {
   let title = input;
 
-  // Remove type indicators (leading phrases)
-  title = title.replace(/^remind(?:er)?\s*(?:me)?\s*(?:to)?\s*/i, "");
-  title = title.replace(/^don'?t\s+forget\s*(?:to)?\s*/i, "");
-  title = title.replace(/^remember\s*(?:to)?\s*/i, "");
-  title = title.replace(/^need\s+to\s*/i, "");
+  // Remove type indicators (leading phrases).
+  //
+  // Every optional filler word is anchored with a word boundary. Without it
+  // the optional group eats the *prefix* of the real first word instead:
+  // "remind me tomorrow" lost its "to" and titled the item "Morrow", and
+  // "schedule an appointment" became "N appointment".
+  title = title.replace(/^remind(?:er)?\s*(?:me\b)?\s*(?:to\b)?\s*/i, "");
+  title = title.replace(/^don'?t\s+forget\s*(?:to\b)?\s*/i, "");
+  title = title.replace(/^remember\s*(?:to\b)?\s*/i, "");
+  title = title.replace(/^need\s+to\s+/i, "");
   title = title.replace(/^task\s*:?\s*/i, "");
-  title = title.replace(/^event\s*(?:on|at)?\s*:?\s*/i, "");
-  title = title.replace(/^meeting\s*(?:on|at)?\s*:?\s*/i, "");
-  title = title.replace(/^schedule\s*(?:a|an)?\s*/i, "");
+  title = title.replace(/^event\s*(?:(?:on|at)\b)?\s*:?\s*/i, "");
+  title = title.replace(/^meeting\s*(?:(?:on|at)\b)?\s*:?\s*/i, "");
+  title = title.replace(/^schedule\s*(?:an?\b)?\s*/i, "");
   title = title.replace(
-    /^(?:put|set)\s+(?:a\s+|an\s+)?(?:alarm|reminder)\s*(?:for)?\s*/i,
+    /^(?:put|set)\s+(?:an?\s+)?(?:alarm|reminder)\s*(?:for\b)?\s*/i,
     "",
   );
-  title = title.replace(/^alert\s+me\s*(?:to|about)?\s*/i, "");
-  title = title.replace(/^notify\s+me\s*(?:to|about)?\s*/i, "");
-  title = title.replace(/^ping\s+me\s*(?:to|about)?\s*/i, "");
-  title = title.replace(/^buzz\s+me\s*(?:to|about)?\s*/i, "");
-  title = title.replace(/^note\s+to\s+(?:my)?self\s*(?:to|:)?\s*/i, "");
+  title = title.replace(/^alert\s+me\s*(?:(?:to|about)\b)?\s*/i, "");
+  title = title.replace(/^notify\s+me\s*(?:(?:to|about)\b)?\s*/i, "");
+  title = title.replace(/^ping\s+me\s*(?:(?:to|about)\b)?\s*/i, "");
+  title = title.replace(/^buzz\s+me\s*(?:(?:to|about)\b)?\s*/i, "");
+  title = title.replace(/^note\s+to\s+(?:my)?self\s*(?:to\b|:)?\s*/i, "");
 
   // Strip trailing exclamation marks used for priority boost
   title = title.replace(/\s*!{2,}\s*$/, "");

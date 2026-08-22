@@ -31,7 +31,7 @@ interface RouteCase {
   readonly scope?: "self" | "partner" | "household";
   readonly categoryHint?: RegExp;
   readonly dish?: string;
-  /** Exact reminder title (the router copies the raw text). */
+  /** Exact reminder title — the router stores the parsed CLEAN title. */
   readonly title?: string;
   readonly query?: RegExp;
   readonly label?: RegExp;
@@ -94,7 +94,7 @@ const CASES: readonly RouteCase[] = [
     active: "budget",
     kind: "draftReminder",
     face: "schedule",
-    title: "remind me to buy groceries",
+    title: "Buy groceries",
   },
   // ── Budget — cross-face fallback (active is NOT budget) ───────────────────
   {
@@ -119,11 +119,11 @@ const CASES: readonly RouteCase[] = [
     kind: "todaySchedule",
   },
   {
-    name: "remind me → reminder draft keeps the raw title",
+    name: "remind me → reminder draft strips the lead-in, keeping the clean title",
     text: "remind me to call the bank",
     active: "schedule",
     kind: "draftReminder",
-    title: "remind me to call the bank",
+    title: "Call the bank",
   },
   {
     name: "appointment noun switches to schedule",
@@ -264,7 +264,7 @@ const CASES: readonly RouteCase[] = [
     active: "budget",
     kind: "draftReminder",
     face: "schedule",
-    title: "remind me to buy dinner ingredients",
+    title: "Buy dinner ingredients",
   },
   // ── Ambiguous → clarify (more than one non-active face matches) ───────────
   {

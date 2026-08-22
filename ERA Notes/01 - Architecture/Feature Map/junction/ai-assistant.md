@@ -41,6 +41,8 @@ ERA is the proactive AI co-pilot. It lives across all modules: a command bar par
   - `src/features/era/intents/{budget,schedule,chef,brain}.ts`
   - `src/features/era/intents/resolvers/{budget,schedule,chef,brain}.ts`
   - `src/features/era/intents/formatters/{budget,schedule,chef,brain}.ts`
+  - `src/lib/era/phrasing.ts` — ERA's voice: `pick`/`fill`/`say`, `describeWhen`, `money`, `greeting`. Reply POOLS live in the per-face formatters.
+  - Tests: `src/features/era/intents/rootIntentRouter.test.ts` (routing), `resolveIntent.test.ts` (side effect + reply), `src/lib/era/phrasing.test.ts` (phrasing mechanics)
   - `src/features/era/widgets/{useBudgetSummary,useScheduleSummary,useChefSummary,useBrainSummary}.ts`
 - **Voice conversation** (`src/features/voice-conversation/`):
   - `index.ts`
@@ -64,12 +66,15 @@ ERA is the proactive AI co-pilot. It lives across all modules: a command bar par
 - **"Add a new intent / face"** →
   1. New face entry in `src/features/era/faceRegistry.ts`.
   2. New folder under `src/features/era/intents/{name}.ts` + `resolvers/{name}.ts` + `formatters/{name}.ts`.
-  3. Register in `intents/index.ts` and `resolveIntent.ts`.
+  3. Register in `intents/index.ts` and `resolveIntent.ts`. **Both.** A `case` missing from `resolveIntent` does not fail loudly — it falls through to `replyFormatter` and returns a plausible-sounding reply while writing nothing (this is what HUB-12 fixed for `draftReminder` / `showAnalytics`).
   4. New widget hook under `widgets/`.
   5. UI in `src/components/era/face-widgets/` and `dashboards/`.
+  6. Add a row to `intents/rootIntentRouter.test.ts` (routing) and a case to `intents/resolveIntent.test.ts` (the write it performs + the reply it returns).
+- **"Make an intent actually do something"** → the resolver in `intents/resolvers/`, never the caller. If the side effect needs React (accounts, query client, a toast), inject it via `ResolveDeps` in `resolveIntent.ts` the way `draftTransaction` takes `submitBudgetDraft`; do not branch on `intent.kind` inside `CommandBar`.
 - **"Change command bar UI"** → `src/components/era/CommandBar.tsx`.
 - **"Edit voice mode flow"** → `src/features/voice-conversation/conversationEngine.ts` is the orchestrator. Wake-word in `azureWake.ts` (still needs external setup — see project memory).
-- **"Change ERA's voice / persona"** → `src/features/era/replyFormatter.ts` + `speechTemplates.ts`.
+- **"Change ERA's voice / persona"** → the reply POOLS in `src/features/era/intents/formatters/{budget,schedule,chef,brain}.ts` and `src/features/era/replyFormatter.ts`; the mechanics (and the generic greeting / ack / error pools) in `src/lib/era/phrasing.ts`. Voice-conversation still has its own un-pooled `speechTemplates.ts` (HUB-16).
+- **"ERA sounds repetitive / robotic"** → add variants to the relevant pool. Read the four rules in the header of `src/lib/era/phrasing.ts` first — above all, **every variant must state the same facts**; the variant harness in `resolveIntent.test.ts` fails a phrasing that drops one.
 - **"Edit the proactive briefing"** → see the briefing/insight calls in widget hooks + Focus briefing cache rule (vault Hard Rule).
 
 ## Gotchas
