@@ -90,19 +90,42 @@ export const rootIntentRouter: IntentRouter = {
     if (switchFace)
       return { kind: "switchFace", face: switchFace, rawText: text };
 
-    // 2) Active face router gets first crack
+    // 2) Active face router gets first crack. Its own weak "clarify" fallback
+    //    does NOT win outright — a face with no confident domain match should
+    //    not block a genuinely strong match on another face (e.g. "remind me
+    //    to buy dinner ingredients" while Budget is active: budget has no
+    //    real hit, schedule's slot-filled draftReminder should win).
     const active = useEraStore.getState().activeFaceKey;
-    const local = FACE_ROUTERS[active].parse(trimmed, {
+    const activeHit = FACE_ROUTERS[active].parse(trimmed, {
       activeFaceKey: active,
     });
-    if (local) return local;
+    if (activeHit && activeHit.kind !== "clarify") return activeHit;
 
-    // 3) Try every other face's router as cross-face fallback
+    // 3) Cross-face fallback, tiered by confidence. A fully slot-filled
+    //    intent (draftReminder, recipeSearch, monthSpend, …) is a confident
+    //    signal; a bare `switchFace` from a face's generic keyword sniff is
+    //    not. A confident hit from one face should not tie with a generic
+    //    keyword echo from another — only hits within the same tier can be
+    //    genuinely ambiguous. Exactly one hit in the higher tier present →
+    //    use it; more than one → ask the user to clarify.
+    const strongHits: Intent[] = [];
+    const weakHits: Intent[] = [];
     for (const k of FACE_KEYS) {
       if (k === active) continue;
       const hit = FACE_ROUTERS[k].parse(trimmed, { activeFaceKey: active });
-      if (hit) return hit;
+      if (!hit) continue;
+      (hit.kind === "switchFace" ? weakHits : strongHits).push(hit);
     }
+    if (strongHits.length === 1) return strongHits[0];
+    if (strongHits.length > 1)
+      return { kind: "clarify", reason: "ambiguous", rawText: text };
+
+    // No confident cross-face hit — fall back to the active face's own weak
+    // clarify (if any), then to a single unambiguous generic face switch.
+    if (activeHit) return activeHit;
+    if (weakHits.length === 1) return weakHits[0];
+    if (weakHits.length > 1)
+      return { kind: "clarify", reason: "ambiguous", rawText: text };
 
     return { kind: "unknown", rawText: text };
   },

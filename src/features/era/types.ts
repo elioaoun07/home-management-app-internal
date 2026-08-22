@@ -75,6 +75,12 @@ export type Intent =
     }
   | { kind: "memoryRecall"; face: "brain"; query: string; rawText: string }
   | { kind: "greeting"; rawText: string }
+  // Graceful fallback (HUB-1): a misrecognized intent asks the user to clarify
+  // instead of firing a wrong action. `ambiguous` = more than one face matched
+  // and we cannot know which was meant; `weak` = a single incidental keyword
+  // match too soft to act on confidently. Deliberately carries no `face`, so
+  // downstream consumers treat it like `unknown` (no face switch, no draft).
+  | { kind: "clarify"; reason: "ambiguous" | "weak"; rawText: string }
   | { kind: "unknown"; rawText: string };
 
 /**

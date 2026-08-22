@@ -101,6 +101,7 @@ import { applyContextBudget, boundReplayedOutput, buildContextManifest, tokensFo
 import {
   initAcceptance,
   isAcceptanceComplete,
+  normalizeArrayFields,
   reconcileAcceptance,
   renderAcceptanceMd,
   summarizeAcceptance,
@@ -4104,11 +4105,37 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
   };
   if (!turn.ok) return blockFrom(sessionDir, working, "REVIEWING", turn);
 
-  const review = JSON.parse(turn.finalText);
-  writeArtifactJson(sessionDir, "review-self.json", review);
-  writeArtifactText(sessionDir, "review-self.md", renderReviewMd(review));
+  // DLV-95: account for the turn BEFORE parsing its output, matching what
+  // DISCOVERY/PLAN/BUILDING already do. Previously the parse ran first and
+  // `working` — including this turn's usage — was discarded when it threw, so
+  // every crashed REVIEWING attempt was invisible to the budget boundary. That
+  // is how the 2026-08-22 HUB-1 session reached ~2.5x its authorized cap: the
+  // cap was fine, the spend simply never reached the ledger it is checked
+  // against. Usage must be recorded the moment it is incurred, unconditionally.
   working = { ...working, usage: accumulateUsage(working, "reviewing", turn.usageV2, turn.usage.costUsd) };
   working = withContextOccupancy(working, "reviewing", turn.usageV2, tc.windowTokens);
+
+  // DLV-95: a malformed review payload is an ordinary phase failure, not a
+  // runner crash. Parking via blockFrom persists the usage accumulated above
+  // and gives the owner a Retry at the gate, instead of killing the loop and
+  // leaving parkSessionOnCrash to re-read a state that never saw the cost.
+  let review;
+  try {
+    const rawReview = parseJsonObject(turn.finalText, "REVIEWING");
+    const normalized = normalizeArrayFields(rawReview, ["findings", "acceptanceCriteria", "openQuestions"]);
+    review = normalized.value;
+    if (normalized.dropped.length) {
+      emitEvent(sessionDir, {
+        type: "structured_output.degraded",
+        phase: "REVIEWING",
+        data: { turnId: turn.turnId || null, dropped: normalized.dropped },
+      });
+    }
+  } catch (error) {
+    return blockFrom(sessionDir, working, "REVIEWING", { error });
+  }
+  writeArtifactJson(sessionDir, "review-self.json", review);
+  writeArtifactText(sessionDir, "review-self.md", renderReviewMd(review));
   // DLV-10: the review turn may claim AC coverage (its output schema is
   // permissive, so this is a voluntary field the prompt asks for). Claims are
   // reconciled here on exactly the same terms as everywhere else.
@@ -4207,9 +4234,32 @@ async function handleReviewing({ sessionDir, state, packet, driver, repoRoot, co
   working = { ...working, turnCounter: (working.turnCounter || 0) + 1, execution: clearConfigOverrideFlag(working.execution) };
   if (!uatTurn.ok) return blockFrom(sessionDir, working, "REVIEWING", uatTurn);
 
-  const uat = JSON.parse(uatTurn.finalText);
+  // DLV-95: account before parsing — see the REVIEWING turn above. The UAT
+  // turn is the most expensive one to lose, because a crash here discarded
+  // both this turn's cost and the whole preceding REVIEWING phase's.
   working = { ...working, usage: accumulateUsage(working, "uat", uatTurn.usageV2, uatTurn.usage.costUsd) };
   working = withContextOccupancy(working, "uat", uatTurn.usageV2, uatTc.windowTokens);
+
+  let uat;
+  try {
+    const rawUat = parseJsonObject(uatTurn.finalText, "UAT");
+    const normalized = normalizeArrayFields(rawUat, [
+      "acceptanceCriteria",
+      "manualSteps",
+      "deviations",
+      "followUps",
+    ]);
+    uat = normalized.value;
+    if (normalized.dropped.length) {
+      emitEvent(sessionDir, {
+        type: "structured_output.degraded",
+        phase: "UAT_PREP",
+        data: { turnId: uatTurn.turnId || null, dropped: normalized.dropped },
+      });
+    }
+  } catch (error) {
+    return blockFrom(sessionDir, working, "REVIEWING", { error });
+  }
 
   // DLV-10: the UAT package's own per-AC claims are the last and most
   // consequential ones — they are what the owner reads when deciding to accept.

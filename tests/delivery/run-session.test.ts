@@ -289,6 +289,107 @@ describe("advanceSession: happy path SELECTED -> SHIPPED", () => {
     const seqs = events.map((e) => e.seq as number);
     for (let i = 1; i < seqs.length; i++) expect(seqs[i]).toBe(seqs[i - 1] + 1);
   });
+
+  it("normalizes stringified REVIEWING arrays instead of crashing", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const script = happyPathScript();
+    script.turns[3] = {
+      finalText: JSON.stringify({
+        verdict: "PASS",
+        findings: "[]",
+        acceptanceCriteria: JSON.stringify([{ id: "AC1", status: "met", evidence: "tests" }]),
+        openQuestions: "[]",
+      }),
+      usage: { input: 5, cachedInput: 0, output: 3, costUsd: null },
+    };
+    script.turns[4] = {
+      finalText: JSON.stringify({
+        summary: "done",
+        acceptanceCriteria: "[]",
+        manualSteps: JSON.stringify([{ action: "a", expected: "e" }]),
+        deviations: "[]",
+        followUps: "[]",
+      }),
+      usage: { input: 5, cachedInput: 0, output: 3, costUsd: null },
+    };
+    const driver = createDriver("fake", { script });
+
+    let state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("SPEC_READY");
+    writeDecision(dir, 1, "spec", "approve");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("PLAN_READY");
+    writeDecision(dir, 2, "plan", "approve");
+
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    expect(state.state).toBe("UAT_READY");
+    expect(state.acceptance).toEqual([expect.objectContaining({ id: "AC1", status: "met" })]);
+  });
+
+  // DLV-95: the 2026-08-22 HUB-1 session reached ~2.5x its authorized cap not
+  // because the cap was wrong but because crashed REVIEWING/UAT turns threw
+  // before their usage was accumulated, so `working` — and the spend it
+  // carried — was discarded. The budget boundary then checked a ledger that
+  // had never seen the money. These two tests lock the invariant that made
+  // that possible: a turn's cost is recorded even when its output is garbage.
+  // Valid JSON the driver happily accepts, but not the object shape the
+  // handler needs — the failure mode that reaches the handler rather than
+  // being caught at the driver's own structured-output validation.
+  it("records REVIEWING turn usage even when the payload is the wrong shape", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const script = happyPathScript();
+    script.turns[3] = {
+      finalText: JSON.stringify([{ verdict: "PASS" }]),
+      usage: { input: 4242, cachedInput: 0, output: 777, costUsd: null },
+    };
+    const driver = createDriver("fake", { script });
+
+    let state = await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 1, "spec", "approve");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 2, "plan", "approve");
+    state = await drive(dir, driver, root, { runValidation: passingValidation });
+
+    // Parked at an owner gate rather than crashing the runner process…
+    expect(["BLOCKED", "NEEDS_DECISION"]).toContain(state.state);
+    // …and, critically, the wasted turn is on the books. Before DLV-95 the
+    // parse threw first and this spend vanished, which is what let a crash
+    // loop run far past the authorized cap without the boundary ever seeing it.
+    expect(state.usage.perPhase.reviewing.input).toBeGreaterThanOrEqual(4242);
+    expect(state.usage.perPhase.reviewing.output).toBeGreaterThanOrEqual(777);
+    expect(state.usage.total.input).toBeGreaterThanOrEqual(4242);
+  });
+
+  it("flags dropped structured-output arrays instead of silently emptying them", async () => {
+    const root = setupRepo();
+    const { dir } = makePacketAndState(root);
+    const script = happyPathScript();
+    script.turns[3] = {
+      finalText: JSON.stringify({
+        verdict: "PASS",
+        // A findings list the provider mangled — must NOT read as "no findings".
+        findings: "{not valid json",
+        acceptanceCriteria: "[]",
+        openQuestions: "[]",
+      }),
+      usage: { input: 5, cachedInput: 0, output: 3, costUsd: null },
+    };
+    const driver = createDriver("fake", { script });
+
+    await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 1, "spec", "approve");
+    await drive(dir, driver, root, { runValidation: passingValidation });
+    writeDecision(dir, 2, "plan", "approve");
+    await drive(dir, driver, root, { runValidation: passingValidation });
+
+    const events = readEvents(dir).filter((e) => e.type === "structured_output.degraded");
+    expect(events.length).toBeGreaterThanOrEqual(1);
+    expect((events[0].data as { dropped: Array<{ field: string }> }).dropped).toEqual([
+      expect.objectContaining({ field: "findings", reason: "unparseable-json-string" }),
+    ]);
+  });
 });
 
 describe("advanceSession: D12/DLV-17 transcript integrity + raw SDK linkage", () => {

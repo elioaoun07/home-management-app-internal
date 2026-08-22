@@ -107,7 +107,13 @@ export function CommandBar() {
       setEraReply("");
       const intent = rootIntentRouter.parse(text);
       setLastIntent(intent);
-      if (intent.kind !== "unknown" && intent.kind !== "greeting") {
+      // clarify is a graceful fallback — treat it exactly like unknown/greeting:
+      // no face switch, no module change, no budget draft.
+      if (
+        intent.kind !== "unknown" &&
+        intent.kind !== "greeting" &&
+        intent.kind !== "clarify"
+      ) {
         setActiveFace(intent.face);
         setHubModuleKey(getFace(intent.face).eraModuleKey);
       }
@@ -122,7 +128,9 @@ export function CommandBar() {
           content: text,
           intent_kind: intent.kind,
           intent_face:
-            intent.kind === "unknown" || intent.kind === "greeting"
+            intent.kind === "unknown" ||
+            intent.kind === "greeting" ||
+            intent.kind === "clarify"
               ? null
               : intent.face,
           intent_payload: intentPayload(intent),
@@ -156,7 +164,9 @@ export function CommandBar() {
           content: reply,
           intent_kind: intent.kind,
           intent_face:
-            intent.kind === "unknown" || intent.kind === "greeting"
+            intent.kind === "unknown" ||
+            intent.kind === "greeting" ||
+            intent.kind === "clarify"
               ? null
               : intent.face,
           intent_payload: metadata ?? intentPayload(intent),

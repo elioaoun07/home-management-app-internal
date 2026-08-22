@@ -218,7 +218,15 @@ export const DEFAULT_CONFIG = Object.freeze({
       instant: Object.freeze({ maxUsd: 0.25, maxTokens: 250_000, warnPct: 0.8, maxInternalTurns: 8 }),
       fast: Object.freeze({ maxUsd: 0.5, maxTokens: 500_000, warnPct: 0.8, maxInternalTurns: 12 }),
       standard: Object.freeze({ maxUsd: 2, maxTokens: 2_000_000, warnPct: 0.8, maxInternalTurns: 20 }),
-      deep: Object.freeze({ maxUsd: 5, maxTokens: 5_000_000, warnPct: 0.8, maxInternalTurns: 40 }),
+      // DLV-95: lowered 5 -> 4 after the 2026-08-22 HUB-1 session recorded
+      // $12.56 against a $5 cap (~2.5x). The overrun's cause was an accounting
+      // leak in REVIEWING/UAT, now fixed — crashed turns discarded their own
+      // usage, so the cap was never actually tested against the real spend.
+      // With accounting honest, the cap binds; lowering it to 4 puts the first
+      // owner checkpoint earlier than the point that session blew past unseen.
+      // A deep session that genuinely needs more raises the cap at the gate,
+      // which is a decision, not a surprise.
+      deep: Object.freeze({ maxUsd: 4, maxTokens: 5_000_000, warnPct: 0.8, maxInternalTurns: 40 }),
     }),
     warnSessionUsd: 10,
     maxTurnBudgetUsd: null,

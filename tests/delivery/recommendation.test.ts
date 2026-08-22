@@ -180,7 +180,9 @@ describe("resolveLanePolicy (D9/DLV-6 — lanes become real policy bundles)", ()
     const policy = resolveLanePolicy("DEEP", CATALOG_CONFIG);
     expect(policy.tier).toBe("premium");
     expect(policy.effortByPhase).toEqual(effortForTier("premium"));
-    expect(policy.budget).toEqual({ maxUsd: 5, maxTokens: 5_000_000, warnPct: 0.8 });
+    // DLV-95: maxUsd lowered 5 -> 4 so the first owner checkpoint lands
+    // earlier than the point the 2026-08-22 HUB-1 session blew past unseen.
+    expect(policy.budget).toEqual({ maxUsd: 4, maxTokens: 5_000_000, warnPct: 0.8 });
     expect(policy.maxInternalTurns).toBe(40);
   });
 

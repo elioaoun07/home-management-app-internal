@@ -55,6 +55,65 @@ const RUNG_ALIASES = Object.freeze({
 });
 
 /**
+ * Normalize an array-valued field from permissive structured output. Some
+ * providers encode nested arrays as JSON strings when the outer schema is only
+ * `{type:"object"}`; invalid or non-array values are coerced to empty.
+ *
+ * DLV-95: coercing to `[]` keeps the runner alive, but silently swallowing a
+ * malformed value is its own failure mode — a review turn whose `findings`
+ * arrived unparseable would report "no findings" rather than "I could not read
+ * the findings", which is precisely the kind of quiet wrong answer this
+ * pipeline exists to prevent. `onDropped` lets the caller record that a field
+ * was discarded so it surfaces as a diagnostic instead of a clean empty list.
+ *
+ * @param {unknown} value
+ * @param {(info:{reason:string, received:string}) => void} [onDropped]
+ *   Invoked when a non-empty value could not be read as an array.
+ * @returns {unknown[]}
+ */
+export function normalizeArrayField(value, onDropped) {
+  if (Array.isArray(value)) return value;
+  // Absent is not malformed — an omitted optional field is a legal empty list.
+  if (value == null) return [];
+  const received = typeof value === "string" ? `string(${value.length})` : typeof value;
+  if (typeof value !== "string") {
+    if (onDropped) onDropped({ reason: "not-an-array", received });
+    return [];
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    if (onDropped) onDropped({ reason: "unparseable-json-string", received });
+    return [];
+  }
+  if (Array.isArray(parsed)) return parsed;
+  if (onDropped) onDropped({ reason: "json-string-was-not-an-array", received });
+  return [];
+}
+
+/**
+ * DLV-95: normalize a set of array fields on one structured-output object,
+ * collecting every field that had to be discarded. Returns the normalized
+ * object plus the list of dropped field names so the handler can emit a single
+ * diagnostic event rather than losing the information.
+ *
+ * @param {Record<string, unknown>} raw
+ * @param {readonly string[]} fields
+ * @returns {{ value: Record<string, unknown>, dropped: Array<{field:string, reason:string, received:string}> }}
+ */
+export function normalizeArrayFields(raw, fields) {
+  const dropped = [];
+  const value = { ...raw };
+  for (const field of fields) {
+    value[field] = normalizeArrayField(raw ? raw[field] : undefined, (info) =>
+      dropped.push({ field, ...info }),
+    );
+  }
+  return { value, dropped };
+}
+
+/**
  * Seed the matrix from the spec's acceptance criteria. Called at spec approval,
  * where the AC list becomes final (and, after DLV-7, possibly narrowed to one
  * decomposition slice).
@@ -121,7 +180,11 @@ export function resolveEvidence(evidence, facts = {}) {
  */
 export function reconcileAcceptance(matrix, claims = [], facts = {}) {
   const at = facts.at || new Date().toISOString();
-  const byId = new Map((claims || []).filter((c) => c && typeof c.id === "string").map((c) => [c.id, c]));
+  // REVIEWING's structured output is intentionally permissive. Treat a
+  // malformed voluntary claims field as no claims rather than letting a string
+  // or object reach Array.prototype.filter and crash the runner.
+  const normalizedClaims = normalizeArrayField(claims);
+  const byId = new Map(normalizedClaims.filter((c) => c && typeof c.id === "string").map((c) => [c.id, c]));
   const downgraded = [];
 
   const next = (matrix || []).map((row) => {

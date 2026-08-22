@@ -51,6 +51,10 @@ export async function resolveIntent(intent: Intent): Promise<ResolveResult> {
     case "memoryRecall":
       return resolveMemoryRecall(intent.query);
 
+    // Graceful fallback (HUB-1): surface the clarifying prompt, fire no action.
+    case "clarify":
+      return { text: formatReply(intent) };
+
     // Legacy kinds handled by replyFormatter
     default:
       return { text: formatReply(intent) };

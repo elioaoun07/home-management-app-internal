@@ -1,6 +1,6 @@
 ---
 created: 2026-06-20
-updated: 2026-07-15
+updated: 2026-08-22
 type: checklist
 status: active
 owner: Elio
@@ -23,7 +23,6 @@ tags:
 
 ## Now
 
-- [ ] **HUB-1** Intent-routing tests + graceful fallback — cover the common intents; a misrecognized intent clarifies instead of firing a wrong action. _(blocker - M)_
 - [ ] **HUB-2** Voice graceful degradation + setup docs — when Azure STT/TTS/wake is unavailable, degrade clearly; document the wake-word external setup (still required per memory); add degradation tests. _(blocker - M)_
 
 ## Next
@@ -42,7 +41,7 @@ tags:
 
 ## Definition of Done
 
-- [ ] **D1** Intent routing has test coverage; a misrecognized intent clarifies instead of mis-acting; `pnpm test` green.
+- [x] **D1** Intent routing has test coverage; a misrecognized intent clarifies instead of mis-acting; `pnpm test` green.
 - [ ] **D2** Voice degrades gracefully with no Azure connection, and the setup is documented.
 - [ ] **D3** ERA's briefing reads at least one of Schedule/Budget proactively (visibly smarter than reactive-only).
-- [ ] **D4** [Hub & ERA — Master Book](<Hub & ERA — Master Book.md>) updated to drop the "no tests" / "fragile" notes this work closes.
+- [x] **D4** [Hub & ERA — Master Book](<Hub & ERA — Master Book.md>) updated to drop the "no tests" / "fragile" notes this work closes. *(intent-routing notes dropped 2026-08-22; voice "fragile" note stays open for HUB-2)*

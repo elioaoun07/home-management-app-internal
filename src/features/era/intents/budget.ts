@@ -10,8 +10,18 @@ function extractAmount(text: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+/** Explicit currency / money markers — a strong signal the number is spend. */
+const CURRENCY_RE = /\$|\busd\b|\blbp\b|\bdollars?\b|\bbucks?\b|€|\beuros?\b|£/i;
+
+/**
+ * A number immediately followed by a non-money unit (hours, minutes, km, kg…).
+ * "spent 2 hours studying" trips this and must NOT become a transaction draft.
+ */
+const NON_MONEY_UNIT_RE =
+  /\b\d+(?:[.,]\d+)?\s*(hours?|hrs?|hr|minutes?|mins?|min|seconds?|secs?|sec|days?|weeks?|months?|years?|km|kms|kilometers?|miles?|mi|kg|kgs?|grams?|liters?|litres?|ml|cups?|pieces?|times?|percent|%)\b/i;
+
 export const budgetRouter: FaceIntentRouter = {
-  parse(text) {
+  parse(text, ctx) {
     const lo = text.toLowerCase();
 
     // "How much did I / my partner / we pay/spend this month"
@@ -30,9 +40,17 @@ export const budgetRouter: FaceIntentRouter = {
       return { kind: "monthSpend", face: "budget", scope, categoryHint, rawText: text };
     }
 
-    // Transaction draft — "I paid $25 on fuel"
+    // Transaction draft — "I paid $25 on fuel".
+    // Require clear spend semantics: a spend verb PLUS either an explicit
+    // currency marker or a number that is NOT attached to a non-money unit.
+    // This stops "spent 2 hours studying" from drafting a $2 transaction.
     const amount = extractAmount(text);
-    if (amount !== undefined && /\b(paid|pay|spent|spend|bought|cost)\b/i.test(text)) {
+    const hasSpendVerb = /\b(paid|pay|spent|spend|bought|cost)\b/i.test(text);
+    if (
+      amount !== undefined &&
+      hasSpendVerb &&
+      (CURRENCY_RE.test(text) || !NON_MONEY_UNIT_RE.test(text))
+    ) {
       return { kind: "draftTransaction", face: "budget", amount, description: text, rawText: text };
     }
 
@@ -41,11 +59,20 @@ export const budgetRouter: FaceIntentRouter = {
       return { kind: "showAnalytics", face: "budget", rawText: text };
     }
 
-    // Generic budget face switch
-    if (
-      /\b(budget|expense|income|transaction|balance|account|money|cost|fuel|grocery|groceries|lbp|\$|usd)\b/i.test(text)
-    ) {
+    // Strong budget-domain nouns → a confident face switch is warranted.
+    if (/\b(budget|expense|income|transaction|balance|account)\b/i.test(text)) {
       return { kind: "switchFace", face: "budget", rawText: text };
+    }
+
+    // Weak/incidental money words alone (money, cost, fuel, groceries, $, …) are
+    // too soft to switch faces on confidently. When Budget is the active face we
+    // ask the user to clarify rather than firing a wrong action; when Budget is
+    // only a cross-face fallback we return null so the root router's ambiguity
+    // logic — not this soft match — decides the outcome.
+    if (/\b(money|cost|fuel|grocery|groceries|lbp|usd)\b|\$/i.test(text)) {
+      return ctx?.activeFaceKey === "budget"
+        ? { kind: "clarify", reason: "weak", rawText: text }
+        : null;
     }
 
     return null;

@@ -34,6 +34,11 @@ export function formatReply(intent: Intent): string {
     case "greeting":
       return "Hey! Ask me about your budget, schedule, recipes, or anything to remember.";
 
+    case "clarify":
+      return intent.reason === "ambiguous"
+        ? "That could mean a couple of things — did you want budget, schedule, recipes, or to save a note? Say a bit more and I'll take it from there."
+        : "I'm not quite sure what you'd like to do. Try being a little more specific — e.g. how much you spent, what's on today, or a recipe you want.";
+
     // Phase 0.5 native chatbot — handled by resolveIntent; fallback only
     case "todaySchedule":
       return "Fetching your schedule…";
