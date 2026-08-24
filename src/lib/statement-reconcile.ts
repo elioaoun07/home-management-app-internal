@@ -11,6 +11,7 @@
 // statement. So matching uses a date WINDOW around the posting date, not
 // equality, plus amount and description signals.
 
+import type { AccountType } from "@/lib/balance-utils";
 import { normalizeMerchant } from "@/lib/utils/anomalyDetection";
 
 /** A logged tap can be up to 7 days OLDER than the statement's posting date. */
@@ -45,6 +46,11 @@ export interface CandidateTx {
   id: string;
   /** Which account this transaction actually lives in. */
   account_id: string;
+  /**
+   * Type of THAT account. Required because `is_debt_return` alone does not say
+   * which way the money went — see `movesMoneyIn` below.
+   */
+  account_type: AccountType;
   /** The date the user logged it for — the REAL date, not the posting date. */
   date: string;
   /** Always positive (sign is derived from the account type). */
@@ -75,6 +81,16 @@ export type RowClassification =
       status: "already_imported";
       reason: "hash" | "probable_duplicate";
       transaction_id: string;
+      /**
+       * The fingerprint currently stored on that transaction.
+       *
+       * When it differs from the row's own hash the row was recognised by the
+       * fuzzy tier, not by identity — i.e. the stored one was written by an
+       * older formula. Carrying it here lets the commit step RE-KEY the row to
+       * the current formula, so the history heals itself on re-import instead
+       * of needing a backfill migration nobody remembers to write.
+       */
+      stored_hash: string | null;
     }
   | ({ status: "matched" } & MatchCandidate)
   | ({ status: "probable" } & MatchCandidate)
@@ -143,6 +159,32 @@ const OWN_ACCOUNT_PATTERNS: RegExp[] = [
  */
 export function isTransferDescription(description: string): boolean {
   return OWN_ACCOUNT_PATTERNS.some((pattern) => pattern.test(description));
+}
+
+/**
+ * Did this transaction ADD money to its account?
+ *
+ * `is_debt_return` on its own is NOT the answer, and reading it as though it
+ * were is a real bug this fixed: the matcher compared
+ * `tx.is_debt_return !== (row.type === "credit")` and so refused to match a
+ * salary deposit — the row said credit, the stored transaction said
+ * `is_debt_return = false`, and it looked like a direction conflict. It is not.
+ *
+ * Direction has to be derived exactly the way the BALANCE is derived
+ * (`getBalanceDelta` in balance-utils.ts), because that is what the encoding
+ * actually means:
+ *
+ *   - `is_debt_return` always adds, whatever the account type.
+ *   - an income/saving account always adds — its transactions ARE money in, so
+ *     `is_debt_return` is redundant there and both values encode the same fact.
+ *   - only an expense account subtracts, and only when not a debt return.
+ *
+ * The old import route left `is_debt_return = false` on income rows while the
+ * current one writes `true`; both are correct and produce the same balance, so
+ * a matcher that compares the raw flag treats identical history as a conflict.
+ */
+function movesMoneyIn(tx: Pick<CandidateTx, "is_debt_return" | "account_type">) {
+  return tx.is_debt_return || tx.account_type !== "expense";
 }
 
 function dayDiff(laterISO: string, earlierISO: string): number {
@@ -253,6 +295,16 @@ export function reconcileStatementRows(
   // ── Pass 1: transfers, exact-hash re-imports, probable duplicates ─────────
   const pending: StatementRowInput[] = [];
 
+  // One transaction can only be "the one this row already is" for a SINGLE
+  // row. Without this, `find()` handed the same transaction to every matching
+  // row: a statement with two identical charges on one day, where only one had
+  // been imported, marked BOTH as already-imported and silently dropped the
+  // genuinely-new one. A missing transaction, which is worse than a duplicate.
+  // (Same-account matching got one-to-one assignment in BUD-19; this tier
+  // never did — it bites hardest on repeated fixed charges like a monthly
+  // subscription of identical amount.)
+  const claimedAsDuplicate = new Set<string>();
+
   for (const row of rows) {
     // The exact-hash check runs FIRST, ahead of the transfer rule, so a row
     // that really was written to the ledger reports itself honestly instead of
@@ -261,10 +313,12 @@ export function reconcileStatementRows(
     // "imported before" is the only signal pointing the owner at them.
     const hashHit = byHash.get(row.statement_hash);
     if (hashHit) {
+      claimedAsDuplicate.add(hashHit.id);
       results.set(row.id, {
         status: "already_imported",
         reason: "hash",
         transaction_id: hashHit.id,
+        stored_hash: hashHit.statement_hash,
       });
       continue;
     }
@@ -280,18 +334,33 @@ export function reconcileStatementRows(
     // A row already imported under an older hash formula (or from a re-issued
     // statement whose running balance changed) still carries SOME hash. Same
     // amount inside the window means it is the same money event.
-    const dupe = candidates.find((tx) => {
-      if (!tx.statement_hash) return false;
-      if (!amountsEqual(tx.amount, row.amount)) return false;
-      if (tx.is_debt_return !== (row.type === "credit")) return false;
-      const diff = dayDiff(row.date, tx.date);
-      return diff >= -MATCH_WINDOW_FORWARD_DAYS && diff <= MATCH_WINDOW_BACK_DAYS;
-    });
+    const dupe = candidates
+      .filter((tx) => {
+        if (!tx.statement_hash) return false;
+        if (claimedAsDuplicate.has(tx.id)) return false;
+        if (!amountsEqual(tx.amount, row.amount)) return false;
+        if (movesMoneyIn(tx) !== (row.type === "credit")) return false;
+        const diff = dayDiff(row.date, tx.date);
+        return (
+          diff >= -MATCH_WINDOW_FORWARD_DAYS && diff <= MATCH_WINDOW_BACK_DAYS
+        );
+      })
+      // Closest posting date wins, so the nearest twin is claimed rather than
+      // whichever happened to be first in the result set. `id` breaks ties so
+      // the outcome is deterministic across runs.
+      .sort((a, b) => {
+        const byDate =
+          Math.abs(dayDiff(row.date, a.date)) -
+          Math.abs(dayDiff(row.date, b.date));
+        return byDate !== 0 ? byDate : a.id.localeCompare(b.id);
+      })[0];
     if (dupe) {
+      claimedAsDuplicate.add(dupe.id);
       results.set(row.id, {
         status: "already_imported",
         reason: "probable_duplicate",
         transaction_id: dupe.id,
+        stored_hash: dupe.statement_hash,
       });
       continue;
     }
@@ -311,7 +380,7 @@ export function reconcileStatementRows(
         (tx) =>
           amountsEqual(tx.amount, row.amount) &&
           tx.date === row.date &&
-          tx.is_debt_return === (row.type === "credit"),
+          movesMoneyIn(tx) === (row.type === "credit"),
       )
       .sort((a, b) => {
         const overlap =
@@ -364,7 +433,7 @@ export function reconcileStatementRows(
     const pool: ScoredPair[] = [];
 
     for (const tx of claimable) {
-      if (tx.is_debt_return !== (row.type === "credit")) continue;
+      if (movesMoneyIn(tx) !== (row.type === "credit")) continue;
 
       const dateDiff = dayDiff(row.date, tx.date);
       if (dateDiff > MATCH_WINDOW_BACK_DAYS) continue;

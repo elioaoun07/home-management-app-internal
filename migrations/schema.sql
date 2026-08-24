@@ -244,7 +244,7 @@ CREATE TABLE public.statement_import_entries (
   import_id uuid NOT NULL,
   user_id uuid NOT NULL,
   row_id text NOT NULL,
-  action text NOT NULL CHECK (action = ANY (ARRAY['create'::text, 'stamp'::text, 'confirm_draft'::text])),
+  action text NOT NULL CHECK (action = ANY (ARRAY['create'::text, 'stamp'::text, 'confirm_draft'::text, 'rekey'::text])),
   transaction_id uuid,
   account_id uuid NOT NULL,
   statement_hash text NOT NULL,

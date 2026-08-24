@@ -41,6 +41,7 @@ const ACTION_LABEL: Record<StatementImportEntry["action"], string> = {
   create: "Created",
   stamp: "Matched",
   confirm_draft: "Draft confirmed",
+  rekey: "Re-fingerprinted",
 };
 
 function formatDate(iso: string): string {

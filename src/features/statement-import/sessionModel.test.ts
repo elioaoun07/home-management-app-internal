@@ -98,6 +98,7 @@ describe("getBucket", () => {
           status: "already_imported",
           reason: "hash",
           transaction_id: "tx-old",
+          stored_hash: "hash-1",
         },
         undefined,
       ),
@@ -449,10 +450,67 @@ describe("buildCommitActions", () => {
           status: "already_imported",
           reason: "hash",
           transaction_id: "tx-old",
+          stored_hash: "hash-1",
         },
         blank: { status: "unmatched" },
       },
       decisions: { skip: { resolution: "skip", category_id: CAT_FOOD } },
+    });
+
+    expect(buildCommitActions(s)).toEqual([]);
+  });
+
+  // Self-healing half of a fingerprint-formula change: a row the FUZZY tier
+  // recognised gets its stored hash upgraded, so the next import matches it by
+  // identity instead of by resemblance. Balance-neutral.
+  it("re-keys a row recognised by the fuzzy tier under an older fingerprint", () => {
+    const s = session({
+      classifications: {
+        "row-1": {
+          status: "already_imported",
+          reason: "probable_duplicate",
+          transaction_id: "tx-v1",
+          stored_hash: "v1-era-hash",
+        },
+      },
+    });
+
+    expect(buildCommitActions(s)).toEqual([
+      {
+        kind: "rekey",
+        row_id: "row-1",
+        transaction_id: "tx-v1",
+        statement_hash: "hash-1",
+        previous_hash: "v1-era-hash",
+      },
+    ]);
+  });
+
+  it("does not re-key a row that already carries the current fingerprint", () => {
+    const s = session({
+      classifications: {
+        "row-1": {
+          status: "already_imported",
+          reason: "probable_duplicate",
+          transaction_id: "tx-current",
+          stored_hash: "hash-1", // identical to the row's own hash
+        },
+      },
+    });
+
+    expect(buildCommitActions(s)).toEqual([]);
+  });
+
+  it("does not re-key an exact-hash hit — there is nothing to upgrade", () => {
+    const s = session({
+      classifications: {
+        "row-1": {
+          status: "already_imported",
+          reason: "hash",
+          transaction_id: "tx-old",
+          stored_hash: "hash-1",
+        },
+      },
     });
 
     expect(buildCommitActions(s)).toEqual([]);

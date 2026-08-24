@@ -79,6 +79,15 @@ function createQuery(table: string) {
         resolve({ data: mockState.candidates, error: null });
         return;
       }
+      // The route now selects the caller's accounts as a LIST (it needs every
+      // account's `type` to read a transaction's direction), not maybeSingle.
+      if (table === "accounts") {
+        resolve({
+          data: mockState.account ? [mockState.account] : [],
+          error: null,
+        });
+        return;
+      }
       resolve({ data: [], error: null });
     },
   };
@@ -94,7 +103,7 @@ function request(body: Row) {
 
 beforeEach(() => {
   mockState.user = { id: "user-1" };
-  mockState.account = { id: ACCOUNT_ID, currency: "EUR" };
+  mockState.account = { id: ACCOUNT_ID, name: "Trip", type: "expense", currency: "EUR" };
   mockState.candidates = [];
   mockState.candidateQueryFilters = [];
   mockState.transactionQueries = [];

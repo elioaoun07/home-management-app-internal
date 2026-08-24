@@ -82,12 +82,27 @@ const confirmDraftAction = z.object({
   subcategory_id: z.string().uuid().nullable().optional(),
 });
 
+const rekeyAction = z.object({
+  kind: z.literal("rekey"),
+  row_id: z.string().min(1).max(120),
+  transaction_id: z.string().uuid(),
+  statement_hash: z.string().min(1).max(200),
+  previous_hash: z.string().min(1).max(200),
+});
+
 const commitSchema = z.object({
   statement_id: z.string().min(8).max(200),
   file_name: z.string().max(200).default("Statement"),
   account_id: z.string().uuid(),
   actions: z
-    .array(z.discriminatedUnion("kind", [createAction, stampAction, confirmDraftAction]))
+    .array(
+      z.discriminatedUnion("kind", [
+        createAction,
+        stampAction,
+        confirmDraftAction,
+        rekeyAction,
+      ]),
+    )
     .min(1)
     .max(1000),
 });
@@ -190,7 +205,7 @@ export async function POST(req: NextRequest) {
       import_id: string;
       user_id: string;
       row_id: string;
-      action: "create" | "stamp" | "confirm_draft";
+      action: "create" | "stamp" | "confirm_draft" | "rekey";
       transaction_id: string | null;
       account_id: string;
       statement_hash: string;
@@ -568,6 +583,84 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ── 3b. Re-key — swap an outdated fingerprint for the current one ───────
+    //
+    // BALANCE-NEUTRAL by construction: `statement_hash` is the only column
+    // written. This is the self-healing half of a fingerprint-formula change —
+    // rows recognised by the fuzzy tier get upgraded so the NEXT import matches
+    // them by identity. Guarded on the previous hash so a row edited or
+    // re-keyed by a concurrent run is left alone rather than clobbered.
+    for (const a of actions) {
+      if (a.kind !== "rekey") continue;
+
+      const { data: existing } = await supabase
+        .from("transactions")
+        .select("id, account_id, statement_hash")
+        .eq("id", a.transaction_id)
+        .eq("user_id", user.id)
+        .is("deleted_at", null)
+        .maybeSingle();
+
+      if (!existing) {
+        results.push({
+          row_id: a.row_id,
+          status: "error",
+          error: "Transaction not found",
+        });
+        continue;
+      }
+      if (existing.statement_hash === a.statement_hash) {
+        // Already upgraded by an earlier run — retry-safe no-op.
+        results.push({ row_id: a.row_id, status: "skipped_duplicate" });
+        continue;
+      }
+
+      const { data: rekeyed, error: rekeyError } = await supabase
+        .from("transactions")
+        .update({ statement_hash: a.statement_hash })
+        .eq("id", a.transaction_id)
+        .eq("user_id", user.id)
+        .eq("statement_hash", a.previous_hash)
+        .select("id")
+        .maybeSingle();
+
+      if (rekeyError) {
+        // 23505 = the new fingerprint is already on some OTHER row, so this one
+        // is a genuine duplicate rather than an outdated key. Leave it as-is.
+        results.push({
+          row_id: a.row_id,
+          status:
+            getErrorCode(rekeyError) === "23505" ? "skipped_duplicate" : "error",
+          error:
+            getErrorCode(rekeyError) === "23505" ? undefined : rekeyError.message,
+        });
+        continue;
+      }
+      if (!rekeyed) {
+        results.push({ row_id: a.row_id, status: "skipped_duplicate" });
+        continue;
+      }
+
+      ledger.push({
+        import_id: importId,
+        user_id: user.id,
+        row_id: a.row_id,
+        action: "rekey",
+        transaction_id: a.transaction_id,
+        account_id: existing.account_id,
+        statement_hash: a.statement_hash,
+        applied_delta: 0,
+        previous: { statement_hash: a.previous_hash },
+        applied: { statement_hash: a.statement_hash },
+      });
+
+      results.push({
+        row_id: a.row_id,
+        status: "ok",
+        transaction_id: a.transaction_id,
+      });
+    }
+
     // ── 4. Persist the ledger BEFORE the balance moves ──────────────────────
     //
     // If the process dies between these two steps the worst case is a ledger
@@ -679,6 +772,12 @@ export async function POST(req: NextRequest) {
         actions.some((a) => a.kind === "confirm_draft" && a.row_id === r.row_id),
     ).length;
 
+    const rekeyed = results.filter(
+      (r) =>
+        r.status === "ok" &&
+        actions.some((a) => a.kind === "rekey" && a.row_id === r.row_id),
+    ).length;
+
     const skipped = results.filter(
       (r) => r.status === "skipped_duplicate",
     ).length;
@@ -708,6 +807,9 @@ export async function POST(req: NextRequest) {
         created,
         stamped,
         drafts_confirmed: draftsConfirmed,
+        // Fingerprints upgraded to the current formula. Balance-neutral, and
+        // not counted in transactions_count — no money moved.
+        rekeyed,
         skipped,
         errors: errorCount,
         mappings_saved: mappings.size,

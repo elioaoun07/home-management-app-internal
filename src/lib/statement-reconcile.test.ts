@@ -25,6 +25,7 @@ function tx(overrides: Partial<CandidateTx> = {}): CandidateTx {
   return {
     id: "tx-1",
     account_id: ACCOUNT,
+    account_type: "expense",
     date: "2026-08-10",
     amount: 80,
     description: "Roadster",
@@ -127,6 +128,7 @@ describe("reconcileStatementRows", () => {
       status: "already_imported",
       reason: "hash",
       transaction_id: "tx-1",
+      stored_hash: "hash-row-1",
     });
   });
 
@@ -139,6 +141,7 @@ describe("reconcileStatementRows", () => {
       status: "already_imported",
       reason: "probable_duplicate",
       transaction_id: "tx-1",
+      stored_hash: "v1-old-formula-hash",
     });
   });
 
@@ -272,6 +275,71 @@ describe("reconcileStatementRows", () => {
       status: "already_imported",
       reason: "hash",
       transaction_id: "tx-phantom",
+      stored_hash: "h-fx",
+    });
+  });
+
+  // Regression, found live on the owner's August 2025 Salary statement: a
+  // $2,524 salary deposit already in the ledger came back as `unmatched` and
+  // was offered as a NEW transaction. The stored row had `is_debt_return =
+  // false` (what the old import route wrote for income) while the statement row
+  // read as a credit, so the raw-flag comparison called it a direction
+  // conflict. On an income account both encodings mean "money in" — getBalanceDelta
+  // adds either way — so this must match.
+  it("matches an income-account deposit whatever is_debt_return says", () => {
+    for (const isDebtReturn of [false, true]) {
+      const results = reconcileStatementRows(
+        [row({ type: "credit", amount: 2524, description: "Incoming Payments" })],
+        [
+          tx({
+            account_type: "income",
+            is_debt_return: isDebtReturn,
+            amount: 2524,
+            description: "Incoming Payments",
+          }),
+        ],
+      );
+      expect(results.get("row-1"), `is_debt_return=${isDebtReturn}`).toMatchObject(
+        { status: "matched", transaction_id: "tx-1" },
+      );
+    }
+  });
+
+  it("still refuses to match a debit row against income-account money in", () => {
+    // The fix must not collapse direction entirely: an income account only ever
+    // adds, so a money-OUT statement row has no counterpart there.
+    const results = reconcileStatementRows(
+      [row({ type: "debit", amount: 750, description: "ATM Cash Withdrawal" })],
+      [
+        tx({
+          account_type: "income",
+          is_debt_return: false,
+          amount: 750,
+          description: "ATM Cash Withdrawal",
+        }),
+      ],
+    );
+    expect(results.get("row-1")).toEqual({ status: "unmatched" });
+  });
+
+  it("recognises an income re-import by the fuzzy tier so it can be re-keyed", () => {
+    const results = reconcileStatementRows(
+      [row({ type: "credit", amount: 2524, statement_hash: "v2-new" })],
+      [
+        tx({
+          account_type: "income",
+          is_debt_return: false,
+          amount: 2524,
+          date: "2026-08-12",
+          statement_hash: "v1-old",
+        }),
+      ],
+    );
+    expect(results.get("row-1")).toEqual({
+      status: "already_imported",
+      reason: "probable_duplicate",
+      transaction_id: "tx-1",
+      stored_hash: "v1-old",
     });
   });
 
@@ -370,6 +438,7 @@ describe("reconcileStatementRows", () => {
       status: "already_imported",
       reason: "hash",
       transaction_id: "tx-fee",
+      stored_hash: "h-fee",
     });
   });
 
@@ -384,6 +453,58 @@ describe("reconcileStatementRows", () => {
       [tx({ id: "tx-elsewhere", account_id: OTHER_ACCOUNT })],
     );
     expect(results.get("row-1")).toEqual({ status: "unmatched" });
+  });
+
+  // Regression for the tier that has no one-to-one guarantee. The owner's data
+  // has eight months of an identical $1.99 subscription; with `find()` a second
+  // statement row would resolve to the SAME already-imported transaction and be
+  // dropped as a duplicate when it is genuinely new — a missing transaction.
+  it("never lets two rows claim the same already-imported transaction", () => {
+    const results = reconcileStatementRows(
+      [
+        row({ id: "r1", statement_hash: "h1", date: "2026-08-12" }),
+        row({ id: "r2", statement_hash: "h2", date: "2026-08-12" }),
+      ],
+      // Only ONE prior import exists for this pair of identical charges.
+      [tx({ id: "tx-imported", statement_hash: "v1-hash", date: "2026-08-12" })],
+    );
+
+    expect(results.get("r1")).toMatchObject({
+      status: "already_imported",
+      transaction_id: "tx-imported",
+    });
+    // The second must NOT also resolve to tx-imported.
+    expect(results.get("r2")).toEqual({ status: "unmatched" });
+  });
+
+  it("claims the closest-dated twin when several could be the duplicate", () => {
+    const results = reconcileStatementRows(
+      [row({ id: "r1", statement_hash: "h1", date: "2026-08-12" })],
+      [
+        tx({ id: "tx-far", statement_hash: "v1-a", date: "2026-08-06" }),
+        tx({ id: "tx-near", statement_hash: "v1-b", date: "2026-08-11" }),
+      ],
+    );
+
+    expect(results.get("r1")).toMatchObject({
+      status: "already_imported",
+      transaction_id: "tx-near",
+      stored_hash: "v1-b",
+    });
+  });
+
+  it("carries the stored fingerprint so the commit step can upgrade it", () => {
+    const results = reconcileStatementRows(
+      [row({ statement_hash: "v2-hash" })],
+      [tx({ id: "tx-old", statement_hash: "v1-hash" })],
+    );
+
+    expect(results.get("row-1")).toEqual({
+      status: "already_imported",
+      reason: "probable_duplicate",
+      transaction_id: "tx-old",
+      stored_hash: "v1-hash",
+    });
   });
 
   it("summarizes a mixed batch", () => {

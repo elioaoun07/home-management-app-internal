@@ -12,6 +12,7 @@ import {
   summarize,
   type CandidateTx,
 } from "@/lib/statement-reconcile";
+import type { AccountType } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -67,19 +68,26 @@ export async function POST(req: NextRequest) {
     const { account_id, rows } = parsed.data;
 
     // Own accounts only — each household member imports their own statements.
-    const { data: account } = await supabase
+    // Every owned account, not just the statement's: candidates can live in any
+    // of them, and each one's TYPE is needed to read a transaction's direction
+    // (see `movesMoneyIn` in statement-reconcile.ts — `is_debt_return` alone
+    // does not say which way the money went).
+    const { data: ownedAccounts } = await supabase
       .from("accounts")
-      .select("id, currency")
-      .eq("id", account_id)
-      .eq("user_id", user.id)
-      .maybeSingle();
+      .select("id, name, type, currency")
+      .eq("user_id", user.id);
 
+    const account = (ownedAccounts || []).find((a) => a.id === account_id);
     if (!account) {
       return NextResponse.json(
         { error: "Account not found or not owned by you" },
         { status: 403 },
       );
     }
+
+    const accountTypes = new Map<string, AccountType>(
+      (ownedAccounts || []).map((a) => [a.id, a.type as AccountType]),
+    );
 
     // One query for every candidate the matcher could possibly need: the union
     // of all per-row windows (posting − 7 … posting + 1).
@@ -126,6 +134,7 @@ export async function POST(req: NextRequest) {
     const toCandidate = (tx: Record<string, unknown>): CandidateTx => ({
       id: tx.id as string,
       account_id: tx.account_id as string,
+      account_type: accountTypes.get(tx.account_id as string) ?? "expense",
       date: tx.date as string,
       amount: Math.abs(Number(tx.amount)),
       description: (tx.description as string) || "",
@@ -167,13 +176,9 @@ export async function POST(req: NextRequest) {
       ),
     ];
     const accountNames: Record<string, string> = {};
-    if (flaggedAccountIds.length > 0) {
-      const { data: named } = await supabase
-        .from("accounts")
-        .select("id, name")
-        .eq("user_id", user.id)
-        .in("id", flaggedAccountIds);
-      for (const a of named || []) accountNames[a.id] = a.name;
+    for (const id of flaggedAccountIds) {
+      const named = (ownedAccounts || []).find((a) => a.id === id);
+      if (named) accountNames[id] = named.name;
     }
 
     return NextResponse.json(

@@ -137,7 +137,11 @@ export interface LearnedMappingRecord {
   } | null;
 }
 
-export type ImportEntryAction = "create" | "stamp" | "confirm_draft";
+export type ImportEntryAction =
+  | "create"
+  | "stamp"
+  | "confirm_draft"
+  | "rekey";
 
 /** Why a revert did not undo an entry. */
 export type RevertNote =
@@ -187,6 +191,8 @@ export interface RevertImportResult {
   unstamped: number;
   /** Confirmed drafts put back to draft with their original values. */
   redrafted: number;
+  /** Fingerprint upgrades walked back to the hash the row carried before. */
+  rekeyed: number;
   /** Entries that could not be undone, by reason. */
   skipped: { gone: number; drifted: number; already_undone: number };
   /** Rows edited after the import that were removed anyway (creates only). */

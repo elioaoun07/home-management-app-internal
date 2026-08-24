@@ -179,6 +179,24 @@ export type CommitAction =
       amount?: number;
       category_id?: string | null;
       subcategory_id?: string | null;
+    }
+  /**
+   * Replace an OUTDATED fingerprint with the current formula's, on a row the
+   * fuzzy tier recognised. Balance-neutral — it touches nothing but
+   * `statement_hash`.
+   *
+   * This is how a fingerprint-formula change repairs itself: the v1 -> v2
+   * change orphaned 152 rows because no backfill shipped with it, and they
+   * survived only on the fuzzy tier, which is the weaker guarantee. Re-importing
+   * a statement now upgrades every row it recognises.
+   */
+  | {
+      kind: "rekey";
+      row_id: string;
+      transaction_id: string;
+      statement_hash: string;
+      /** Guard: only re-key while the row still carries this exact hash. */
+      previous_hash: string;
     };
 
 export interface CommitResult {
@@ -188,6 +206,8 @@ export interface CommitResult {
   created: number;
   stamped: number;
   drafts_confirmed: number;
+  /** Outdated fingerprints upgraded to the current formula (balance-neutral). */
+  rekeyed: number;
   skipped: number;
   errors: number;
   mappings_saved: number;

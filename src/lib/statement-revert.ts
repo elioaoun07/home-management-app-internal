@@ -26,7 +26,7 @@ import { getBalanceDelta, type AccountType } from "@/lib/balance-utils";
 /** Why an entry was not (or need not be) undone. */
 export type RevertNote = "reverted" | "gone" | "drifted" | "already_undone";
 
-export type EntryAction = "create" | "stamp" | "confirm_draft";
+export type EntryAction = "create" | "stamp" | "confirm_draft" | "rekey";
 
 export interface LedgerEntry {
   id: string;
@@ -86,6 +86,8 @@ export interface RevertPlanResult {
     deleted: number;
     unstamped: number;
     redrafted: number;
+    /** Fingerprints put back to the formula they carried before the import. */
+    rekeyed: number;
     gone: number;
     drifted: number;
     already_undone: number;
@@ -129,6 +131,7 @@ export function planRevert(
     deleted: 0,
     unstamped: 0,
     redrafted: 0,
+    rekeyed: 0,
     gone: 0,
     drifted: 0,
     already_undone: 0,
@@ -162,6 +165,33 @@ export function planRevert(
       if (delta === 0) return;
       deltas[tx.account_id] = (deltas[tx.account_id] || 0) + delta;
     };
+
+    // A re-key only ever swapped `statement_hash`, so walking it back is
+    // putting the old fingerprint back. Always balance-neutral: the row
+    // itself was already in the ledger before this import touched it, and the
+    // import neither created nor re-valued it.
+    if (entry.action === "rekey") {
+      const previousHash = entry.previous.statement_hash ?? null;
+      if (tx.statement_hash !== entry.statement_hash) {
+        // Someone (or a later import) has moved it on since — restoring a hash
+        // over a newer one is exactly the clobber this planner refuses to do.
+        plans.push(skip(entry, "drifted"));
+        counts.drifted++;
+        continue;
+      }
+      plans.push({
+        entry_id: entry.id,
+        transaction_id: tx.id,
+        action: "rekey",
+        note: "reverted",
+        update: { statement_hash: previousHash },
+        guard: { id: tx.id, statement_hash: entry.statement_hash },
+        delta: 0,
+        editedSince: false,
+      });
+      counts.rekeyed++;
+      continue;
+    }
 
     if (entry.action === "create") {
       if (tx.deleted_at) {
@@ -293,6 +323,10 @@ export function planRevert(
 export function hasDrifted(entry: LedgerEntry, tx: LiveTransaction): boolean {
   if (entry.action === "create") {
     return !!tx.deleted_at || !sameMoney(tx.amount, entry.applied.amount ?? tx.amount);
+  }
+  // A re-key claims nothing about the money, so only the fingerprint can drift.
+  if (entry.action === "rekey") {
+    return tx.statement_hash !== entry.statement_hash;
   }
   if (tx.statement_hash !== entry.statement_hash) return true;
   if (entry.action === "confirm_draft" && tx.is_draft) return true;

@@ -26,6 +26,13 @@ type Props = {
   category: { name: string; color: string; slug?: string | null } | null;
   /** Rows inside the group that were given a different category of their own. */
   overrides: number;
+  /**
+   * A single row's date, or a range ("12 Aug – 14 Aug") when the group spans
+   * more than one day. Previously the date was visible only after opening
+   * GroupSheet — a card that otherwise reads as a receipt line had no "when"
+   * on it at all.
+   */
+  dateLabel: string;
   onOpen: () => void;
 };
 
@@ -36,6 +43,7 @@ export function ReviewGroupCard({
   currency,
   category,
   overrides,
+  dateLabel,
   onOpen,
 }: Props) {
   const tc = useThemeClasses();
@@ -67,6 +75,8 @@ export function ReviewGroupCard({
           {total.toFixed(2)}
         </span>
       </div>
+
+      <p className={cn("text-[11px] -mt-1", tc.textFaint)}>{dateLabel}</p>
 
       <div className="flex items-center gap-2">
         {category && Icon ? (

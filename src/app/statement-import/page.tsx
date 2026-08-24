@@ -86,6 +86,7 @@ interface Receipt {
   created: number;
   stamped: number;
   drafts_confirmed: number;
+  rekeyed: number;
   skipped: number;
   errors: number;
   mappings_saved: number;
@@ -96,6 +97,25 @@ const DAY_MS = 86_400_000;
 function shiftIso(iso: string, days: number): string {
   const shifted = new Date(new Date(`${iso}T00:00:00Z`).getTime() + days * DAY_MS);
   return shifted.toISOString().slice(0, 10);
+}
+
+function shortDate(iso: string): string {
+  const parsed = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return parsed.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
+/**
+ * One date if every row in the group shares it, otherwise the earliest and
+ * latest as a range. A merchant group can legitimately span weeks (a
+ * multi-month import groups "Monthly Charges" together, since grouping is by
+ * merchant, not by date), so a single date would misrepresent the group.
+ */
+function groupDateLabel(rows: Array<{ date: string }>): string {
+  const dates = rows.map((r) => r.date).sort();
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  return first === last ? shortDate(first) : `${shortDate(first)} – ${shortDate(last)}`;
 }
 
 export default function StatementImportPage() {
@@ -417,6 +437,7 @@ export default function StatementImportPage() {
         return {
           ...group,
           total: group.rows.reduce((sum, r) => sum + r.amount, 0),
+          dateLabel: groupDateLabel(group.rows),
           // Only call a group "set" once every row in it has a category — a
           // half-categorized merchant still owes work.
           category:
@@ -441,6 +462,25 @@ export default function StatementImportPage() {
     () => (session ? buildCommitActions(session).length : 0),
     [session],
   );
+
+  // Splits the Imported tab by HOW each row was recognised. `rekeying` rows are
+  // the ones the Save button is counting: their stored fingerprint predates the
+  // current formula and the commit will bring it up to date.
+  const importedByReason = useMemo(() => {
+    const counts = { exact: 0, rekeying: 0 };
+    if (!session) return counts;
+    for (const row of session.rows) {
+      const classification = session.classifications[row.id];
+      if (classification?.status !== "already_imported") continue;
+      const stale =
+        classification.reason === "probable_duplicate" &&
+        classification.stored_hash !== null &&
+        classification.stored_hash !== row.statement_hash;
+      if (stale) counts.rekeying++;
+      else counts.exact++;
+    }
+    return counts;
+  }, [session]);
 
   const visibleRows = useMemo(() => {
     if (!session) return [];
@@ -825,6 +865,7 @@ export default function StatementImportPage() {
                     currency={currency}
                     category={group.category}
                     overrides={group.overrides}
+                    dateLabel={group.dateLabel}
                     onOpen={() => setOpenGroupKey(group.key)}
                   />
                 ))}
@@ -841,8 +882,24 @@ export default function StatementImportPage() {
                 )}
                 {visibleRows.length > 0 && (
                   <p className={cn("text-[11px] px-1 pt-1", tc.textFaint)}>
-                    {visibleRows.length} row(s) already in your ledger — the
-                    statement fingerprint matched, so they are left untouched.
+                    {visibleRows.length} row(s) already in your ledger — no
+                    money will be written for them.
+                    {/* Saying "the fingerprint matched" for every row here was
+                        untrue: a row recognised by amount + date carries an
+                        OLDER fingerprint, which is precisely why it is about to
+                        be re-keyed. Naming the two cases separately is what
+                        makes the Save count add up on screen. */}
+                    {importedByReason.rekeying > 0 && (
+                      <>
+                        {" "}
+                        {importedByReason.exact > 0 &&
+                          `${importedByReason.exact} matched by fingerprint; `}
+                        {importedByReason.rekeying} recognised by amount and
+                        date, carrying an older fingerprint — Save will update
+                        those to the current one. Balance is untouched either
+                        way.
+                      </>
+                    )}
                   </p>
                 )}
                 {groupRowsByDate(visibleRows).map(([date, dateRows]) => (
@@ -987,6 +1044,15 @@ export default function StatementImportPage() {
             <Stat value={receipt.stamped} label="matched" />
             <Stat value={receipt.drafts_confirmed} label="drafts" />
           </div>
+
+          {/* Only shown when it happened — on a healthy statement it is 0 and
+              the extra tile would be noise. */}
+          {receipt.rekeyed > 0 && (
+            <p className={cn("text-xs text-center", tc.textFaint)}>
+              {receipt.rekeyed} older row(s) re-fingerprinted to the current
+              formula · no money moved
+            </p>
+          )}
 
           {receipt.errors > 0 && (
             <p className="text-xs text-amber-500 text-center">

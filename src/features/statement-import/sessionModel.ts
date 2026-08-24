@@ -210,12 +210,30 @@ export function buildCommitActions(session: StatementSession): CommitAction[] {
     const bucket = getBucket(classification, decision);
 
     if (bucket === "skipped") continue;
-    // Already in the ledger — writing anything would double-count it. The DB's
-    // partial unique index on (user_id, statement_hash) is the hard backstop,
-    // but a row that never becomes an action never reaches it.
-    if (bucket === "imported") continue;
     if (!classification) continue;
-    if (classification.status === "already_imported") continue;
+
+    // Already in the ledger — creating anything would double-count it. But if
+    // it was recognised by the FUZZY tier while carrying a different (older)
+    // fingerprint, upgrade that fingerprint to the current formula so the next
+    // import matches it by identity instead of by resemblance. Balance-neutral.
+    if (classification.status === "already_imported") {
+      const storedHash = classification.stored_hash;
+      if (
+        classification.reason === "probable_duplicate" &&
+        storedHash &&
+        row.statement_hash &&
+        storedHash !== row.statement_hash
+      ) {
+        actions.push({
+          kind: "rekey",
+          row_id: row.id,
+          transaction_id: classification.transaction_id,
+          statement_hash: row.statement_hash,
+          previous_hash: storedHash,
+        });
+      }
+      continue;
+    }
 
     const statementHash = row.statement_hash;
     if (!statementHash) continue;

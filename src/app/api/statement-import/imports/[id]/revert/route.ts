@@ -198,6 +198,7 @@ export async function POST(
         counts.drifted++;
         if (plan.action === "create") counts.deleted--;
         else if (plan.action === "stamp") counts.unstamped--;
+        else if (plan.action === "rekey") counts.rekeyed--;
         else counts.redrafted--;
         if (plan.editedSince && plan.action === "create") {
           counts.removed_after_edit--;
@@ -298,6 +299,7 @@ export async function POST(
         status,
         deleted: counts.deleted,
         unstamped: counts.unstamped,
+        rekeyed: counts.rekeyed,
         redrafted: counts.redrafted,
         skipped: {
           gone: counts.gone,
