@@ -21,6 +21,7 @@
 import { GroupSheet } from "@/components/statement-import/GroupSheet";
 import { ImportHistory } from "@/components/statement-import/ImportHistory";
 import { MatchedRowCard } from "@/components/statement-import/MatchedRowCard";
+import { OtherAccountSheet } from "@/components/statement-import/OtherAccountSheet";
 import { ReviewGroupCard } from "@/components/statement-import/ReviewGroupCard";
 import { ReviewStepper } from "@/components/statement-import/ReviewStepper";
 import {
@@ -30,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useMyAccounts } from "@/features/accounts/hooks";
+import { useAccounts, useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
   useCommitStatement,
@@ -45,6 +46,7 @@ import {
   getBucket,
   resolveRowAccount,
   resolveRowCategory,
+  treatsAsTransfer,
   undecidedRows,
 } from "@/features/statement-import/sessionModel";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
@@ -66,6 +68,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Check,
+  EyeOff,
   Layers,
   Loader2,
   RotateCcw,
@@ -87,6 +90,8 @@ interface Receipt {
   stamped: number;
   drafts_confirmed: number;
   rekeyed: number;
+  skips_recorded: number;
+  skips_removed: number;
   skipped: number;
   errors: number;
   mappings_saved: number;
@@ -135,6 +140,10 @@ export default function StatementImportPage() {
   const [filter, setFilter] = useState<BucketFilter>("review");
   const [openGroupKey, setOpenGroupKey] = useState<string | null>(null);
   const [stepperOpen, setStepperOpen] = useState(false);
+  // Review holds three unrelated jobs; stacking them made one long scroll.
+  type ReviewSection = "categorize" | "other" | "maybe" | "household";
+  const [reviewSection, setReviewSection] = useState<ReviewSection>("categorize");
+  const [openOtherRowId, setOpenOtherRowId] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   // Transient on purpose: a currency hint is only trustworthy at the moment we
   // read the file, so it is never persisted into the session (a stale hint kept
@@ -148,6 +157,29 @@ export default function StatementImportPage() {
   );
 
   const { data: categories = [] } = useCategories(accountId);
+
+  // The destination of a household transfer must be the PARTNER's account —
+  // the transfers API rejects anything else — so the picker only offers those.
+  const { data: householdAccounts = [] } = useAccounts();
+  const partnerAccounts = useMemo(
+    () =>
+      householdAccounts.filter(
+        (a: { id: string }) => !accounts.some((o: { id: string }) => o.id === a.id),
+      ),
+    [householdAccounts, accounts],
+  );
+
+  const accountRefs = useMemo(
+    () =>
+      accounts.map(
+        (a: { id: string; type: string; is_default?: boolean }) => ({
+          id: a.id,
+          type: a.type as "expense" | "income" | "saving",
+          is_default: a.is_default,
+        }),
+      ),
+    [accounts],
+  );
 
   // No default account, deliberately. This picker chooses where a whole
   // statement's money lands, and pre-filling it meant the choice could be made
@@ -215,6 +247,54 @@ export default function StatementImportPage() {
     },
     [],
   );
+
+  /**
+   * Set every row still in Review aside in one go.
+   *
+   * The Undo restores the exact prior decisions rather than clearing them
+   * (Hard Rule #1): some of those rows may have carried a category or a rename
+   * the owner had already chosen, and a blanket reset would throw that away.
+   */
+  const skipAllInReview = useCallback(() => {
+    setSession((current) => {
+      if (!current) return current;
+      const targets = current.rows.filter(
+        (row) =>
+          getBucket(current.classifications[row.id], current.decisions[row.id]) ===
+          "review",
+      );
+      if (targets.length === 0) return current;
+
+      const before = { ...current.decisions };
+      const decisions = { ...current.decisions };
+      for (const row of targets) {
+        decisions[row.id] = {
+          ...(decisions[row.id] ?? { resolution: "undecided" as const }),
+          resolution: "skip",
+        };
+      }
+      const next = { ...current, decisions };
+      void saveSession(next);
+
+      toast.success(`${targets.length} row(s) skipped`, {
+        icon: ToastIcons.delete,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            setSession((latest) => {
+              if (!latest) return latest;
+              const restored = { ...latest, decisions: before };
+              void saveSession(restored);
+              return restored;
+            });
+          },
+        },
+      });
+
+      return next;
+    });
+  }, []);
 
   const runImport = async (file: File) => {
     if (!accountId || !account) {
@@ -319,7 +399,7 @@ export default function StatementImportPage() {
 
   const doCommit = async () => {
     if (!session) return;
-    const actions = buildCommitActions(session);
+    const actions = buildCommitActions(session, accountRefs);
     if (actions.length === 0) {
       toast.error("Nothing to save yet", { icon: ToastIcons.error });
       return;
@@ -413,6 +493,22 @@ export default function StatementImportPage() {
     });
   }, [session]);
 
+  // Household movements the owner still has to point at a destination account.
+  // Incoming legs are not here: only the sender can record a household transfer
+  // (the transfers API requires the creator to own the from-account), so a
+  // received one waits for the partner's own import.
+  const householdRows = useMemo(() => {
+    if (!session) return [];
+    return session.rows.filter((row) => {
+      const c = session.classifications[row.id];
+      if (c?.status !== "person_transfer") return false;
+      // A row the owner has re-labelled as ordinary spending leaves this tab
+      // and joins the merchant list, where it can be categorised.
+      if (!treatsAsTransfer(c, session.decisions[row.id])) return false;
+      return getBucket(c, session.decisions[row.id]) === "review";
+    });
+  }, [session]);
+
   // Merchant groups, each carrying the state the list needs to render: total,
   // whether every row has a category, and how many rows opted out of the
   // group's choice.
@@ -421,6 +517,7 @@ export default function StatementImportPage() {
     const pendingMatch = new Set([
       ...matchDecisionRows.map((r) => r.id),
       ...otherAccountRows.map((r) => r.id),
+      ...householdRows.map((r) => r.id),
     ]);
     return buildReviewGroups(session)
       .map((group) => ({
@@ -434,20 +531,89 @@ export default function StatementImportPage() {
         );
         const missing = resolved.filter((r) => !r.category_id).length;
         const first = resolved.find((r) => r.category_id)?.category_id ?? null;
+        // The subcategory is only shown when EVERY row agrees on it — the same
+        // rule the parent chip uses. Rows that disagree resolve to nothing,
+        // which is the honest answer for a summary card.
+        const firstSub = resolved[0]?.subcategory_id ?? null;
+        const subAgrees =
+          !!firstSub && resolved.every((r) => r.subcategory_id === firstSub);
         return {
           ...group,
           total: group.rows.reduce((sum, r) => sum + r.amount, 0),
-          dateLabel: groupDateLabel(group.rows),
+          // Append the target account when the rows do NOT land in the
+          // statement's own — an auto-suggested redirect is a money decision
+          // and must be visible on the card, not only inside the sheet.
+          dateLabel: (() => {
+            const base = groupDateLabel(group.rows);
+            const targets = new Set(
+              group.rows.map((r) => resolveRowAccount(r, session, accountRefs)),
+            );
+            if (targets.size !== 1) return base;
+            const [target] = [...targets];
+            if (target === session.account_id) return base;
+            const name = accounts.find(
+              (a: { id: string }) => a.id === target,
+            )?.name;
+            return name ? `${base} · ${name}` : base;
+          })(),
           // Only call a group "set" once every row in it has a category — a
           // half-categorized merchant still owes work.
           category:
             missing === 0 && first ? (categoryById.get(first) ?? null) : null,
+          subcategory:
+            missing === 0 && subAgrees
+              ? (categoryById.get(firstSub) ?? null)
+              : null,
           overrides: group.rows.filter(
             (row) => session.decisions[row.id]?.category_id !== undefined,
           ).length,
         };
       });
-  }, [session, categoryById, matchDecisionRows, otherAccountRows]);
+  }, [
+    session,
+    categoryById,
+    matchDecisionRows,
+    otherAccountRows,
+    householdRows,
+    accountRefs,
+    accounts,
+  ]);
+
+  // Keep the sub-nav on something that exists: answering the last row of a
+  // section would otherwise leave an empty pane with no indication why.
+  useEffect(() => {
+    if (reviewSection === "other" && otherAccountRows.length === 0)
+      setReviewSection("categorize");
+    if (reviewSection === "maybe" && matchDecisionRows.length === 0)
+      setReviewSection("categorize");
+    if (reviewSection === "household" && householdRows.length === 0)
+      setReviewSection("categorize");
+  }, [
+    reviewSection,
+    otherAccountRows.length,
+    matchDecisionRows.length,
+    householdRows.length,
+  ]);
+
+  const openOtherRow = useMemo(() => {
+    if (!session || !openOtherRowId) return null;
+    const row = session.rows.find((r) => r.id === openOtherRowId);
+    const classification = session.classifications[openOtherRowId];
+    if (!row || classification?.status !== "other_account") return null;
+    return {
+      row,
+      twin: {
+        account:
+          session.account_names?.[classification.account_id] ??
+          accounts.find((a: { id: string }) => a.id === classification.account_id)
+            ?.name ??
+          "Other account",
+        date: classification.date,
+        amount: classification.amount,
+        description: classification.description,
+      },
+    };
+  }, [session, openOtherRowId, accounts]);
 
   const openGroup = openGroupKey
     ? (reviewGroups.find((g) => g.key === openGroupKey) ?? null)
@@ -459,28 +625,9 @@ export default function StatementImportPage() {
   }, [openGroupKey, openGroup]);
 
   const saveCount = useMemo(
-    () => (session ? buildCommitActions(session).length : 0),
-    [session],
+    () => (session ? buildCommitActions(session, accountRefs).length : 0),
+    [session, accountRefs],
   );
-
-  // Splits the Imported tab by HOW each row was recognised. `rekeying` rows are
-  // the ones the Save button is counting: their stored fingerprint predates the
-  // current formula and the commit will bring it up to date.
-  const importedByReason = useMemo(() => {
-    const counts = { exact: 0, rekeying: 0 };
-    if (!session) return counts;
-    for (const row of session.rows) {
-      const classification = session.classifications[row.id];
-      if (classification?.status !== "already_imported") continue;
-      const stale =
-        classification.reason === "probable_duplicate" &&
-        classification.stored_hash !== null &&
-        classification.stored_hash !== row.statement_hash;
-      if (stale) counts.rekeying++;
-      else counts.exact++;
-    }
-    return counts;
-  }, [session]);
 
   const visibleRows = useMemo(() => {
     if (!session) return [];
@@ -545,9 +692,6 @@ export default function StatementImportPage() {
           )}
 
           <div className="flex flex-col gap-1.5">
-            <p className={cn("text-xs px-1", tc.textMuted)}>
-              Which account is this statement for?
-            </p>
             <Select value={accountId} onValueChange={setAccountId}>
               <SelectTrigger className="h-12 rounded-2xl text-base">
                 <SelectValue placeholder="Choose an account" />
@@ -588,9 +732,7 @@ export default function StatementImportPage() {
           >
             <Upload className={cn("w-7 h-7", tc.text)} />
             <span className={cn("text-base", tc.text)}>Upload statement</span>
-            <span className={cn("text-xs", tc.textFaint)}>
-              PDF or CSV · rows you already logged are matched for you
-            </span>
+            <span className={cn("text-xs", tc.textFaint)}>PDF or CSV</span>
           </button>
 
           {/* Every save is a record that can be opened and walked back —
@@ -714,9 +856,144 @@ export default function StatementImportPage() {
                     <EmptyState text="Nothing left to review." />
                   )}
 
-                {otherAccountRows.length > 0 && (
+                {(otherAccountRows.length > 0 ||
+                  matchDecisionRows.length > 0 ||
+                  householdRows.length > 0) && (
+                  <div className={cn("flex gap-1 p-1 rounded-xl", tc.pillBg)}>
+                    {(
+                      [
+                        ["categorize", "Categorize", reviewGroups.length],
+                        ["other", "Other account", otherAccountRows.length],
+                        ["maybe", "Maybe logged", matchDecisionRows.length],
+                        ["household", "Household", householdRows.length],
+                      ] as Array<[ReviewSection, string, number]>
+                    )
+                      .filter(([, , count]) => count > 0)
+                      .map(([value, label, count]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setReviewSection(value)}
+                          className={cn(
+                            "flex-1 rounded-lg h-8 text-[11px] font-medium px-1 truncate",
+                            reviewSection === value
+                              ? tc.buttonPrimary
+                              : tc.textMuted,
+                          )}
+                        >
+                          {label} {count}
+                        </button>
+                      ))}
+                  </div>
+                )}
+
+                {reviewSection === "household" && householdRows.length > 0 && (
                   <>
-                    <SectionLabel text="Already in another account" />
+                    {householdRows.map((row) => {
+                      const c = session.classifications[row.id];
+                      if (c?.status !== "person_transfer") return null;
+                      const decision = session.decisions[row.id];
+                      return (
+                        <div
+                          key={row.id}
+                          className={cn(
+                            "rounded-2xl px-4 py-3.5 flex flex-col gap-2.5",
+                            tc.sectionCard,
+                          )}
+                        >
+                          <div className="flex items-baseline gap-3">
+                            <p
+                              className={cn(
+                                "text-[15px] font-medium truncate flex-1 min-w-0",
+                                tc.headerText,
+                              )}
+                            >
+                              {c.counterparty}
+                            </p>
+                            <span
+                              className={cn(
+                                "text-sm tabular-nums shrink-0",
+                                tc.text,
+                              )}
+                            >
+                              {getCurrencySymbol(currency)}
+                              {row.amount.toFixed(2)}
+                            </span>
+                          </div>
+                          <p className={cn("text-[11px]", tc.textFaint)}>
+                            {shortDate(row.date)}
+                          </p>
+
+                          {c.direction === "out" ? (
+                            <Select
+                              value={decision?.transfer_to_account_id ?? ""}
+                              onValueChange={(next) =>
+                                updateDecision(row.id, {
+                                  transfer_to_account_id: next,
+                                  resolution: "create",
+                                })
+                              }
+                            >
+                              <SelectTrigger className="h-10 rounded-lg text-xs">
+                                <SelectValue placeholder="To account" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {partnerAccounts.map(
+                                  (a: { id: string; name: string }) => (
+                                    <SelectItem key={a.id} value={a.id}>
+                                      {a.name}
+                                    </SelectItem>
+                                  ),
+                                )}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            /* Only the sender can record a household transfer —
+                               the transfers API requires the creator to own the
+                               from-account. This side waits for their import. */
+                            <p className={cn("text-xs", tc.textMuted)}>
+                              Waiting for the sender&apos;s import
+                            </p>
+                          )}
+
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDecision(row.id, {
+                                  treat_as_transfer: false,
+                                  resolution: "undecided",
+                                })
+                              }
+                              className={cn(
+                                "rounded-xl h-10 text-xs flex-1",
+                                tc.buttonOutline,
+                              )}
+                            >
+                              Not household
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDecision(row.id, { resolution: "skip" })
+                              }
+                              className={cn(
+                                "rounded-xl h-10 text-xs flex-1",
+                                tc.buttonGhost,
+                                tc.textMuted,
+                              )}
+                            >
+                              Skip
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+
+                {reviewSection === "other" && otherAccountRows.length > 0 && (
+                  <>
                     {otherAccountRows.map((row) => {
                       const classification = session.classifications[row.id];
                       if (classification?.status !== "other_account") return null;
@@ -735,34 +1012,42 @@ export default function StatementImportPage() {
                             tc.sectionCard,
                           )}
                         >
-                          <div className="flex items-baseline gap-3">
-                            <p
-                              className={cn(
-                                "text-[15px] font-medium truncate flex-1 min-w-0",
-                                tc.headerText,
-                              )}
-                            >
-                              {row.description}
-                            </p>
-                            <span
-                              className={cn(
-                                "text-sm tabular-nums shrink-0",
-                                tc.text,
-                              )}
-                            >
-                              {getCurrencySymbol(currency)}
-                              {row.amount.toFixed(2)}
-                            </span>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setOpenOtherRowId(row.id)}
+                            className="text-left flex flex-col gap-1 active:scale-[0.99] transition-transform"
+                          >
+                            <div className="flex items-baseline gap-3">
+                              <p
+                                className={cn(
+                                  "text-[15px] font-medium truncate flex-1 min-w-0",
+                                  tc.headerText,
+                                )}
+                              >
+                                {row.description}
+                              </p>
+                              <span
+                                className={cn(
+                                  "text-sm tabular-nums shrink-0",
+                                  tc.text,
+                                )}
+                              >
+                                {getCurrencySymbol(currency)}
+                                {row.amount.toFixed(2)}
+                              </span>
+                            </div>
 
-                          <p className={cn("text-xs", tc.textMuted)}>
-                            Same date, amount and wording already sits in{" "}
-                            <span className={cn("font-medium", tc.headerText)}>
-                              {where}
-                            </span>
-                            . Filed there by mistake, or genuinely a separate
-                            charge?
-                          </p>
+                            <p className={cn("text-[11px]", tc.textFaint)}>
+                              {shortDate(row.date)}
+                            </p>
+
+                            <p className={cn("text-xs", tc.textMuted)}>
+                              Also in{" "}
+                              <span className={cn("font-medium", tc.headerText)}>
+                                {where}
+                              </span>
+                            </p>
+                          </button>
 
                           <div className="flex flex-wrap gap-2">
                             <button
@@ -775,7 +1060,7 @@ export default function StatementImportPage() {
                                 tc.buttonPrimary,
                               )}
                             >
-                              Same one — skip it
+                              Skip
                             </button>
                             <button
                               type="button"
@@ -787,7 +1072,7 @@ export default function StatementImportPage() {
                                 tc.buttonOutline,
                               )}
                             >
-                              Different — import it
+                              Import
                             </button>
                           </div>
                         </div>
@@ -799,7 +1084,7 @@ export default function StatementImportPage() {
                 {/* Offered only past a couple of rows: below that the merchant
                     list is already the shorter path, and a stepper would add a
                     screen to save none. */}
-                {undecided > 2 && (
+                {reviewSection === "categorize" && undecided > 2 && (
                   <button
                     type="button"
                     onClick={() => setStepperOpen(true)}
@@ -813,9 +1098,28 @@ export default function StatementImportPage() {
                   </button>
                 )}
 
-                {matchDecisionRows.length > 0 && (
+                {/* Bulk escape hatch: a statement can be mostly rows that are
+                    not spending at all, and clearing them one at a time is the
+                    slowest part of the review. Undo-able, and each skip is
+                    remembered by fingerprint so the next upload does not ask
+                    again. */}
+                {reviewSection === "categorize" && counts.review > 0 && (
+                  <button
+                    type="button"
+                    onClick={skipAllInReview}
+                    className={cn(
+                      "rounded-2xl h-11 text-xs flex items-center justify-center gap-2",
+                      tc.buttonGhost,
+                      tc.textMuted,
+                    )}
+                  >
+                    <EyeOff className="w-4 h-4" />
+                    Skip all {counts.review}
+                  </button>
+                )}
+
+                {reviewSection === "maybe" && matchDecisionRows.length > 0 && (
                   <>
-                    <SectionLabel text="Might already be logged" />
                     {matchDecisionRows.map((row) => {
                       const decision = session.decisions[row.id];
                       return (
@@ -850,13 +1154,11 @@ export default function StatementImportPage() {
                         />
                       );
                     })}
-                    {reviewGroups.length > 0 && (
-                      <SectionLabel text="Needs a category" />
-                    )}
                   </>
                 )}
 
-                {reviewGroups.map((group) => (
+                {reviewSection === "categorize" &&
+                  reviewGroups.map((group) => (
                   <ReviewGroupCard
                     key={group.key}
                     label={group.label}
@@ -864,6 +1166,7 @@ export default function StatementImportPage() {
                     total={group.total}
                     currency={currency}
                     category={group.category}
+                    subcategory={group.subcategory}
                     overrides={group.overrides}
                     dateLabel={group.dateLabel}
                     onOpen={() => setOpenGroupKey(group.key)}
@@ -878,30 +1181,9 @@ export default function StatementImportPage() {
             {filter === "imported" && (
               <>
                 {visibleRows.length === 0 && (
-                  <EmptyState text="Nothing from this statement was imported before." />
+                  <EmptyState text="Nothing imported before." />
                 )}
-                {visibleRows.length > 0 && (
-                  <p className={cn("text-[11px] px-1 pt-1", tc.textFaint)}>
-                    {visibleRows.length} row(s) already in your ledger — no
-                    money will be written for them.
-                    {/* Saying "the fingerprint matched" for every row here was
-                        untrue: a row recognised by amount + date carries an
-                        OLDER fingerprint, which is precisely why it is about to
-                        be re-keyed. Naming the two cases separately is what
-                        makes the Save count add up on screen. */}
-                    {importedByReason.rekeying > 0 && (
-                      <>
-                        {" "}
-                        {importedByReason.exact > 0 &&
-                          `${importedByReason.exact} matched by fingerprint; `}
-                        {importedByReason.rekeying} recognised by amount and
-                        date, carrying an older fingerprint — Save will update
-                        those to the current one. Balance is untouched either
-                        way.
-                      </>
-                    )}
-                  </p>
-                )}
+
                 {groupRowsByDate(visibleRows).map(([date, dateRows]) => (
                   <div key={date} className="flex flex-col gap-1.5">
                     <SectionLabel text={longDate(date)} />
@@ -941,13 +1223,7 @@ export default function StatementImportPage() {
             {(filter === "matched" || filter === "skipped") && (
               <>
                 {visibleRows.length === 0 && <EmptyState text="Nothing here." />}
-                {filter === "matched" && visibleRows.length > 0 && (
-                  <p className={cn("text-[11px] px-1 pt-1", tc.textFaint)}>
-                    Matched to something you logged yourself. Check the bank's
-                    wording against yours — detach any that are not the same
-                    purchase.
-                  </p>
-                )}
+
                 {visibleRows.map((row) => {
                   const classification = session.classifications[row.id];
                   if (!classification) return null;
@@ -971,7 +1247,9 @@ export default function StatementImportPage() {
                             {row.amount.toFixed(2)} ·{" "}
                             {classification.status === "transfer"
                               ? "transfer"
-                              : "skipped"}
+                              : classification.status === "skipped_before"
+                                ? "skipped before — remembered"
+                                : "skipped"}
                           </p>
                         </div>
                         {classification.status !== "transfer" && (
@@ -1049,8 +1327,7 @@ export default function StatementImportPage() {
               the extra tile would be noise. */}
           {receipt.rekeyed > 0 && (
             <p className={cn("text-xs text-center", tc.textFaint)}>
-              {receipt.rekeyed} older row(s) re-fingerprinted to the current
-              formula · no money moved
+              {receipt.rekeyed} re-fingerprinted
             </p>
           )}
 
@@ -1094,7 +1371,7 @@ export default function StatementImportPage() {
           rows={openGroup.rows}
           accountId={session.account_id}
           accounts={accounts}
-          resolveAccount={(row) => resolveRowAccount(row, session)}
+          resolveAccount={(row) => resolveRowAccount(row, session, accountRefs)}
           currency={currency}
           groupCategory={session.group_categories[openGroup.key]}
           decisions={session.decisions}
@@ -1109,6 +1386,22 @@ export default function StatementImportPage() {
               updateDecision(row.id, { date: shiftIso(current, days) });
             });
           }}
+        />
+      )}
+
+      {phase === "review" && session && openOtherRow && (
+        <OtherAccountSheet
+          open={!!openOtherRow}
+          onOpenChange={(next) => !next && setOpenOtherRowId(null)}
+          row={openOtherRow.row}
+          twin={openOtherRow.twin}
+          currency={currency}
+          onSkip={() =>
+            updateDecision(openOtherRow.row.id, { resolution: "skip" })
+          }
+          onImport={() =>
+            updateDecision(openOtherRow.row.id, { resolution: "create" })
+          }
         />
       )}
 

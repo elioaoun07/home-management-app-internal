@@ -156,6 +156,8 @@ export type CommitAction =
       row_id: string;
       date: string;
       description: string;
+      /** Raw statement line as the bank wrote it — the stable reporting axis. */
+      bank_description?: string | null;
       amount: number;
       direction: "debit" | "credit";
       account_id: string;
@@ -169,6 +171,7 @@ export type CommitAction =
       row_id: string;
       transaction_id: string;
       statement_hash: string;
+      bank_description?: string | null;
       accept_amount?: number;
     }
   | {
@@ -197,6 +200,38 @@ export type CommitAction =
       statement_hash: string;
       /** Guard: only re-key while the row still carries this exact hash. */
       previous_hash: string;
+      bank_description?: string | null;
+    }
+  /** Record a standing decision not to import this bank row, by fingerprint. */
+  | {
+      kind: "skip";
+      row_id: string;
+      statement_hash: string;
+      description?: string | null;
+      amount?: number;
+      date?: string;
+    }
+  /** Withdraw a previously recorded skip. */
+  | {
+      kind: "unskip";
+      row_id: string;
+      statement_hash: string;
+    }
+  /**
+   * Household money movement -> a `transfers` record, never a transaction.
+   * No category: it nets to zero across the household.
+   */
+  | {
+      kind: "create_transfer";
+      row_id: string;
+      statement_hash: string;
+      date: string;
+      amount: number;
+      description: string;
+      /** The owner's account the money left. */
+      from_account_id: string;
+      /** The partner's account it arrived in. */
+      to_account_id: string;
     };
 
 export interface CommitResult {
@@ -208,6 +243,11 @@ export interface CommitResult {
   drafts_confirmed: number;
   /** Outdated fingerprints upgraded to the current formula (balance-neutral). */
   rekeyed: number;
+  /** Household transfers recorded (money moved, both accounts). */
+  transfers_created: number;
+  /** Standing skip decisions recorded / withdrawn. */
+  skips_recorded: number;
+  skips_removed: number;
   skipped: number;
   errors: number;
   mappings_saved: number;

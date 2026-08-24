@@ -147,6 +147,18 @@ Never use graphify as a substitute for ERA Notes — it cannot infer hard rules,
    - **Don't "fix" correct code to chase a symptom.** If every layer you read is right, say so and go get DB state; do not start rewriting working routes on a hunch.
    - **When adding any child table**, give it a policy in the same migration, or state explicitly in the migration why it needs none. "The parent has no RLS" is not a reason — verify the parent.
 
+28. **UI text is a cost, not a feature — write the minimum and stop.** *(Added 2026-08-24 after the owner called this out: "you are adding on production, on the UI, way too many texts to explain things that are pretty clear for me… it is getting too frustrating.")* The reflex to explain a control in the control is wrong here. This is a **single-household app whose only users built it** — they already know what a button does, and every sentence of rationale steals vertical space on a phone and makes a simple screen read as complicated.
+
+   - **Default to no explanatory prose.** A label, a number, and an action verb. If a card can be understood from its title + amount + buttons, it needs nothing else.
+   - **Buttons are verbs, 1–2 words.** `Skip`, `Import`, `Restore`, `Change`. Not `Same one — skip it`, not `Different — import it`.
+   - **No reassurance text.** "no money moved", "still matches next time", "balance is untouched either way" — the owner knows the model; if they don't, that belongs in the vault doc, not the screen.
+   - **No banner that restates the tab it sits under.** An "Imported" tab does not need a line explaining that these rows were imported.
+   - **One short clause of context is the ceiling** where genuinely ambiguous — e.g. `Also in Debit Card - NEO`. Never a sentence, never a rhetorical question.
+   - **Never justify a design decision in the UI.** Rationale goes in a code comment or the vault; the screen states what is, not why.
+   - **When help is genuinely needed, use an `i` affordance** (tap/hover popover), not inline copy — so the explanation is available and invisible by default.
+   - **Applies to every string that ships**: titles, subtitles, captions, placeholders, empty states, toasts, confirm dialogs, receipts, tooltips.
+   - The owner will ask for more wording when they want it. Adding it unprompted is the failure mode this rule exists to stop.
+
 ---
 
 ## Module Model

@@ -179,6 +179,40 @@ export async function POST(
         continue;
       }
 
+      // A household transfer lives in `transfers`, not `transactions`, and is
+      // undone by soft-deleting the row rather than editing columns. Its two
+      // balance legs are already in `deltas`.
+      if (plan.action === "create_transfer") {
+        const transferId = plan.guard.id as string;
+        const fromAccountId = plan.guard.from_account_id as string;
+        const toAccountId = plan.guard.to_account_id as string | null;
+        const { data: removed, error: removeError } = await supabase
+          .from("transfers")
+          .update({ deleted_at: new Date().toISOString() })
+          .eq("id", transferId)
+          .eq("user_id", user.id)
+          .is("deleted_at", null)
+          .select("id")
+          .maybeSingle();
+
+        if (removeError || !removed) {
+          skippedEntries.push({ id: plan.entry_id, note: "drifted" });
+          counts.drifted++;
+          counts.transfers_deleted--;
+          // Both legs were planned but never applied — take them back out so
+          // the balance write below reflects only what actually happened.
+          deltas[fromAccountId] = (deltas[fromAccountId] || 0) - plan.delta;
+          if (toAccountId) {
+            deltas[toAccountId] =
+              (deltas[toAccountId] || 0) + plan.delta;
+          }
+          continue;
+        }
+
+        revertedEntryIds.push(plan.entry_id);
+        continue;
+      }
+
       let update = supabase
         .from("transactions")
         .update(plan.update)
@@ -300,6 +334,7 @@ export async function POST(
         deleted: counts.deleted,
         unstamped: counts.unstamped,
         rekeyed: counts.rekeyed,
+        transfers_deleted: counts.transfers_deleted,
         redrafted: counts.redrafted,
         skipped: {
           gone: counts.gone,

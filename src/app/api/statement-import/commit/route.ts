@@ -32,7 +32,7 @@
 
 import { adjustAccountBalance } from "@/lib/balance";
 import type { AccountType } from "@/lib/balance-utils";
-import { getBalanceDelta } from "@/lib/balance-utils";
+import { getBalanceDelta, getTransferDeltas } from "@/lib/balance-utils";
 import { getErrorCode } from "@/lib/errors";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
@@ -50,6 +50,9 @@ const createAction = z.object({
   row_id: z.string().min(1).max(120),
   date: isoDate,
   description: z.string().max(500),
+  /** The statement line as the BANK wrote it — stable across imports, so it is
+   *  what reporting groups on. `description` is the user's own wording. */
+  bank_description: z.string().max(500).nullable().optional(),
   amount: money,
   direction: z.enum(["debit", "credit"]),
   account_id: z.string().uuid(),
@@ -69,6 +72,7 @@ const stampAction = z.object({
   row_id: z.string().min(1).max(120),
   transaction_id: z.string().uuid(),
   statement_hash: z.string().min(1).max(200),
+  bank_description: z.string().max(500).nullable().optional(),
   accept_amount: money.optional(),
 });
 
@@ -88,6 +92,33 @@ const rekeyAction = z.object({
   transaction_id: z.string().uuid(),
   statement_hash: z.string().min(1).max(200),
   previous_hash: z.string().min(1).max(200),
+  bank_description: z.string().max(500).nullable().optional(),
+});
+
+const skipAction = z.object({
+  kind: z.literal("skip"),
+  row_id: z.string().min(1).max(120),
+  statement_hash: z.string().min(1).max(200),
+  description: z.string().max(500).nullable().optional(),
+  amount: z.number().finite().optional(),
+  date: isoDate.optional(),
+});
+
+const unskipAction = z.object({
+  kind: z.literal("unskip"),
+  row_id: z.string().min(1).max(120),
+  statement_hash: z.string().min(1).max(200),
+});
+
+const createTransferAction = z.object({
+  kind: z.literal("create_transfer"),
+  row_id: z.string().min(1).max(120),
+  statement_hash: z.string().min(1).max(200),
+  date: isoDate,
+  amount: money,
+  description: z.string().max(500),
+  from_account_id: z.string().uuid(),
+  to_account_id: z.string().uuid(),
 });
 
 const commitSchema = z.object({
@@ -101,6 +132,9 @@ const commitSchema = z.object({
         stampAction,
         confirmDraftAction,
         rekeyAction,
+        skipAction,
+        unskipAction,
+        createTransferAction,
       ]),
     )
     .min(1)
@@ -147,6 +181,9 @@ export async function POST(req: NextRequest) {
       ...new Set([
         sessionAccountId,
         ...actions.flatMap((a) => (a.kind === "create" ? [a.account_id] : [])),
+        ...actions.flatMap((a) =>
+          a.kind === "create_transfer" ? [a.from_account_id] : [],
+        ),
       ]),
     ];
     const { data: ownedAccounts } = await supabase
@@ -205,8 +242,9 @@ export async function POST(req: NextRequest) {
       import_id: string;
       user_id: string;
       row_id: string;
-      action: "create" | "stamp" | "confirm_draft" | "rekey";
+      action: "create" | "stamp" | "confirm_draft" | "rekey" | "create_transfer";
       transaction_id: string | null;
+      transfer_id?: string | null;
       account_id: string;
       statement_hash: string;
       applied_delta: number;
@@ -289,6 +327,7 @@ export async function POST(req: NextRequest) {
       date: a.date,
       amount: a.amount,
       description: a.description,
+      bank_description: a.bank_description ?? null,
       account_id: a.account_id,
       category_id: a.category_id,
       subcategory_id: a.subcategory_id,
@@ -379,7 +418,7 @@ export async function POST(req: NextRequest) {
 
       const { data: existing, error: readError } = await supabase
         .from("transactions")
-        .select("id, amount, account_id, is_debt_return, statement_hash")
+        .select("id, amount, account_id, is_debt_return, statement_hash, bank_description")
         .eq("id", a.transaction_id)
         .eq("user_id", user.id)
         .is("deleted_at", null)
@@ -403,6 +442,12 @@ export async function POST(req: NextRequest) {
       const update: Record<string, unknown> = { statement_hash: a.statement_hash };
       if (a.accept_amount !== undefined && a.accept_amount !== oldAmount) {
         update.amount = a.accept_amount;
+      }
+      // The bank's own wording for a row the user logged by hand. Their
+      // `description` is left exactly as they typed it — this only fills in the
+      // stable machine text alongside it, which is what reporting groups on.
+      if (a.bank_description !== undefined) {
+        update.bank_description = a.bank_description;
       }
 
       const { data: updated, error: updateError } = await supabase
@@ -454,10 +499,17 @@ export async function POST(req: NextRequest) {
         statement_hash: a.statement_hash,
         applied_delta: stampDelta,
         // The row existed and was unhashed — that is the state to walk back to.
-        previous: { amount: oldAmount, statement_hash: null },
+        previous: {
+          amount: oldAmount,
+          statement_hash: null,
+          bank_description: existing.bank_description ?? null,
+        },
         applied: {
           amount: update.amount !== undefined ? a.accept_amount! : oldAmount,
           statement_hash: a.statement_hash,
+          ...(update.bank_description !== undefined
+            ? { bank_description: update.bank_description }
+            : {}),
         },
       });
 
@@ -595,7 +647,7 @@ export async function POST(req: NextRequest) {
 
       const { data: existing } = await supabase
         .from("transactions")
-        .select("id, account_id, statement_hash")
+        .select("id, account_id, statement_hash, bank_description")
         .eq("id", a.transaction_id)
         .eq("user_id", user.id)
         .is("deleted_at", null)
@@ -609,15 +661,29 @@ export async function POST(req: NextRequest) {
         });
         continue;
       }
-      if (existing.statement_hash === a.statement_hash) {
-        // Already upgraded by an earlier run — retry-safe no-op.
+      const hashUnchanged = existing.statement_hash === a.statement_hash;
+      const bankUnchanged =
+        a.bank_description === undefined ||
+        existing.bank_description === a.bank_description;
+      if (hashUnchanged && bankUnchanged) {
+        // Nothing left to write — retry-safe no-op. Checking BOTH fields is
+        // what lets a statement with current fingerprints still backfill the
+        // bank wording; hash-only would have reported "nothing to do" and left
+        // `bank_description` empty forever.
         results.push({ row_id: a.row_id, status: "skipped_duplicate" });
         continue;
       }
 
+      const rekeyUpdate: Record<string, unknown> = {
+        statement_hash: a.statement_hash,
+      };
+      if (a.bank_description !== undefined) {
+        rekeyUpdate.bank_description = a.bank_description;
+      }
+
       const { data: rekeyed, error: rekeyError } = await supabase
         .from("transactions")
-        .update({ statement_hash: a.statement_hash })
+        .update(rekeyUpdate)
         .eq("id", a.transaction_id)
         .eq("user_id", user.id)
         .eq("statement_hash", a.previous_hash)
@@ -650,8 +716,16 @@ export async function POST(req: NextRequest) {
         account_id: existing.account_id,
         statement_hash: a.statement_hash,
         applied_delta: 0,
-        previous: { statement_hash: a.previous_hash },
-        applied: { statement_hash: a.statement_hash },
+        previous: {
+          statement_hash: a.previous_hash,
+          bank_description: existing.bank_description ?? null,
+        },
+        applied: {
+          statement_hash: a.statement_hash,
+          ...(rekeyUpdate.bank_description !== undefined
+            ? { bank_description: rekeyUpdate.bank_description }
+            : {}),
+        },
       });
 
       results.push({
@@ -659,6 +733,164 @@ export async function POST(req: NextRequest) {
         status: "ok",
         transaction_id: a.transaction_id,
       });
+    }
+
+    // ── 3b-bis. Household transfers — money, but never spending ─────────────
+    //
+    // Written to `transfers`, not `transactions`: a household move nets to zero
+    // across the household, and living in a different table keeps it out of
+    // every spending aggregate by construction rather than by a flag.
+    //
+    // The partner must own the destination — the same rule POST /api/transfers
+    // enforces — which is also why the receiving side can never create a second
+    // copy of the movement.
+    const transferRows = actions.filter(
+      (a): a is Extract<CommitAction, { kind: "create_transfer" }> =>
+        a.kind === "create_transfer",
+    );
+    if (transferRows.length > 0) {
+      const { data: link } = await supabase
+        .from("household_links")
+        .select("id, owner_user_id, partner_user_id")
+        .eq("active", true)
+        .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
+        .maybeSingle();
+      const partnerId = link
+        ? link.owner_user_id === user.id
+          ? link.partner_user_id
+          : link.owner_user_id
+        : null;
+
+      for (const a of transferRows) {
+        if (!link || !partnerId) {
+          results.push({
+            row_id: a.row_id,
+            status: "error",
+            error: "No active household link",
+          });
+          continue;
+        }
+
+        const { data: destination } = await supabase
+          .from("accounts")
+          .select("id, user_id, name")
+          .eq("id", a.to_account_id)
+          .maybeSingle();
+
+        if (!destination || destination.user_id !== partnerId) {
+          results.push({
+            row_id: a.row_id,
+            status: "error",
+            error: "Destination must be your household partner's account",
+          });
+          continue;
+        }
+
+        const { data: transfer, error: transferError } = await supabase
+          .from("transfers")
+          .insert({
+            user_id: user.id,
+            from_account_id: a.from_account_id,
+            to_account_id: a.to_account_id,
+            amount: a.amount,
+            description: a.description,
+            date: a.date,
+            transfer_type: "household",
+            recipient_user_id: partnerId,
+            household_link_id: link.id,
+          })
+          .select("id")
+          .single();
+
+        if (transferError || !transfer) {
+          results.push({
+            row_id: a.row_id,
+            status: "error",
+            error: transferError?.message || "Failed to create transfer",
+          });
+          continue;
+        }
+
+        const { fromDelta, toDelta } = getTransferDeltas(a.amount, 0, "household");
+        addDelta(a.from_account_id, fromDelta);
+        addDelta(a.to_account_id, toDelta);
+
+        ledger.push({
+          import_id: importId,
+          user_id: user.id,
+          row_id: a.row_id,
+          action: "create_transfer",
+          transaction_id: null,
+          transfer_id: transfer.id,
+          account_id: a.from_account_id,
+          statement_hash: a.statement_hash,
+          // Both legs of one movement. The revert deletes the transfer and puts
+          // BOTH balances back, so it is recorded as the net effect on the
+          // from-account with the to-account leg carried in `applied`.
+          applied_delta: fromDelta,
+          previous: {},
+          applied: {
+            amount: a.amount,
+            to_account_id: a.to_account_id,
+            to_delta: toDelta,
+          },
+        });
+
+        results.push({ row_id: a.row_id, status: "ok" });
+      }
+    }
+
+    // ── 3c. Standing skips — a decision about a bank ROW, not about money ───
+    //
+    // No balance, no ledger entry: nothing was written to `transactions`, so
+    // there is nothing for a revert to walk back. Deliberately kept out of the
+    // import ledger so reverting an import does not silently un-skip rows the
+    // owner ruled on separately.
+    const skipRows = actions.filter(
+      (a): a is Extract<CommitAction, { kind: "skip" }> => a.kind === "skip",
+    );
+    if (skipRows.length > 0) {
+      const { error: skipError } = await supabase
+        .from("statement_skipped_rows")
+        .upsert(
+          skipRows.map((a) => ({
+            user_id: user.id,
+            statement_hash: a.statement_hash,
+            account_id: sessionAccountId,
+            description: a.description ?? null,
+            amount: a.amount ?? null,
+            row_date: a.date ?? null,
+          })),
+          { onConflict: "user_id,statement_hash" },
+        );
+      for (const a of skipRows) {
+        results.push({
+          row_id: a.row_id,
+          status: skipError ? "error" : "ok",
+          error: skipError?.message,
+        });
+      }
+    }
+
+    const unskipRows = actions.filter(
+      (a): a is Extract<CommitAction, { kind: "unskip" }> => a.kind === "unskip",
+    );
+    if (unskipRows.length > 0) {
+      const { error: unskipError } = await supabase
+        .from("statement_skipped_rows")
+        .delete()
+        .eq("user_id", user.id)
+        .in(
+          "statement_hash",
+          unskipRows.map((a) => a.statement_hash),
+        );
+      for (const a of unskipRows) {
+        results.push({
+          row_id: a.row_id,
+          status: unskipError ? "error" : "ok",
+          error: unskipError?.message,
+        });
+      }
     }
 
     // ── 4. Persist the ledger BEFORE the balance moves ──────────────────────
@@ -778,6 +1010,22 @@ export async function POST(req: NextRequest) {
         actions.some((a) => a.kind === "rekey" && a.row_id === r.row_id),
     ).length;
 
+    const transfersCreated = results.filter(
+      (r) =>
+        r.status === "ok" && transferRows.some((a) => a.row_id === r.row_id),
+    ).length;
+
+    const skipsRecorded = results.filter(
+      (r) =>
+        r.status === "ok" &&
+        skipRows.some((a) => a.row_id === r.row_id),
+    ).length;
+    const skipsRemoved = results.filter(
+      (r) =>
+        r.status === "ok" &&
+        unskipRows.some((a) => a.row_id === r.row_id),
+    ).length;
+
     const skipped = results.filter(
       (r) => r.status === "skipped_duplicate",
     ).length;
@@ -810,6 +1058,9 @@ export async function POST(req: NextRequest) {
         // Fingerprints upgraded to the current formula. Balance-neutral, and
         // not counted in transactions_count — no money moved.
         rekeyed,
+        transfers_created: transfersCreated,
+        skips_recorded: skipsRecorded,
+        skips_removed: skipsRemoved,
         skipped,
         errors: errorCount,
         mappings_saved: mappings.size,

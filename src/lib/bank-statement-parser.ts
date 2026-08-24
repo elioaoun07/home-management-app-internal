@@ -106,6 +106,7 @@ function getTransactionType(description: string): TransactionType {
  */
 function isOwnAccountDescription(description: string): boolean {
   return (
+    /\btransfer\s+(from|to)\s+own\b/i.test(description) ||
     /\bown\s+account\b/i.test(description) ||
     /\baccount\s+exchange\b/i.test(description) ||
     /\binternal\s+transfer\b/i.test(description) ||

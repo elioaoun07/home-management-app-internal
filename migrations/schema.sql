@@ -64,6 +64,7 @@ CREATE TABLE public.transactions (
   is_debt_return boolean NOT NULL DEFAULT false,
   parent_transaction_id uuid,
   statement_hash text,
+  bank_description text,
   deleted_at timestamp with time zone,
   receipt_url text,
   exchange_rate numeric CHECK (exchange_rate > 0::numeric),
@@ -77,6 +78,10 @@ CREATE TABLE public.transactions (
   CONSTRAINT transactions_parent_transaction_id_fkey FOREIGN KEY (parent_transaction_id) REFERENCES public.transactions(id)
 );
 -- Statement-import dedupe backstop (23505 → "skipped duplicate" in the import route)
+CREATE INDEX idx_transactions_bank_description
+  ON public.transactions (user_id, bank_description)
+  WHERE bank_description IS NOT NULL;
+
 CREATE UNIQUE INDEX transactions_statement_hash_uniq
   ON public.transactions (user_id, statement_hash)
   WHERE statement_hash IS NOT NULL;
@@ -239,15 +244,31 @@ CREATE INDEX idx_statement_imports_user_imported_at
 -- Per-row ledger of what a statement commit did, so it can be reverted.
 -- user_id is denormalized from statement_imports so RLS stays a direct
 -- `user_id = auth.uid()` compare instead of an EXISTS subquery (Hard Rule #20).
+CREATE TABLE public.statement_skipped_rows (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  statement_hash text NOT NULL,
+  account_id uuid,
+  description text,
+  amount numeric,
+  row_date date,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT statement_skipped_rows_pkey PRIMARY KEY (id),
+  CONSTRAINT statement_skipped_rows_user_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT statement_skipped_rows_account_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE SET NULL,
+  CONSTRAINT statement_skipped_rows_uniq UNIQUE (user_id, statement_hash)
+);
+
 CREATE TABLE public.statement_import_entries (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   import_id uuid NOT NULL,
   user_id uuid NOT NULL,
   row_id text NOT NULL,
-  action text NOT NULL CHECK (action = ANY (ARRAY['create'::text, 'stamp'::text, 'confirm_draft'::text, 'rekey'::text])),
+  action text NOT NULL CHECK (action = ANY (ARRAY['create'::text, 'stamp'::text, 'confirm_draft'::text, 'rekey'::text, 'create_transfer'::text])),
   transaction_id uuid,
   account_id uuid NOT NULL,
   statement_hash text NOT NULL,
+  transfer_id uuid,
   applied_delta numeric NOT NULL DEFAULT 0,
   previous jsonb NOT NULL DEFAULT '{}'::jsonb,
   applied jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -258,6 +279,7 @@ CREATE TABLE public.statement_import_entries (
   CONSTRAINT statement_import_entries_import_id_fkey FOREIGN KEY (import_id) REFERENCES public.statement_imports(id) ON DELETE CASCADE,
   CONSTRAINT statement_import_entries_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT statement_import_entries_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id) ON DELETE SET NULL,
+  CONSTRAINT statement_import_entries_transfer_fkey FOREIGN KEY (transfer_id) REFERENCES public.transfers(id) ON DELETE SET NULL,
   CONSTRAINT statement_import_entries_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
 CREATE INDEX idx_statement_import_entries_import

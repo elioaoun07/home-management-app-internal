@@ -32,6 +32,7 @@ function tx(overrides: Partial<CandidateTx> = {}): CandidateTx {
     is_draft: false,
     is_debt_return: false,
     statement_hash: null,
+    bank_description: null,
     category_id: "cat-food",
     subcategory_id: null,
     inserted_at: "2026-08-10T18:00:00.000Z",
@@ -129,6 +130,7 @@ describe("reconcileStatementRows", () => {
       reason: "hash",
       transaction_id: "tx-1",
       stored_hash: "hash-row-1",
+      stored_bank_description: null,
     });
   });
 
@@ -142,6 +144,7 @@ describe("reconcileStatementRows", () => {
       reason: "probable_duplicate",
       transaction_id: "tx-1",
       stored_hash: "v1-old-formula-hash",
+      stored_bank_description: null,
     });
   });
 
@@ -218,9 +221,9 @@ describe("reconcileStatementRows", () => {
     });
   });
 
-  it("skips transfer rows before doing any matching", () => {
+  it("skips own-account transfer rows before doing any matching", () => {
     const results = reconcileStatementRows(
-      [row({ description: "Transfer from USD account" })],
+      [row({ description: "Transfer from Own Account 501400630002" })],
       [tx()],
     );
     expect(results.get("row-1")).toEqual({ status: "transfer" });
@@ -241,6 +244,134 @@ describe("reconcileStatementRows", () => {
       const results = reconcileStatementRows([row({ description })], [tx()]);
       expect(results.get("row-1"), description).toEqual({ status: "transfer" });
     }
+  });
+
+  // Own money on both sides -> skip. Money to or from another PERSON is real
+  // spending or real income and must reach the ledger; a blanket
+  // /transfer (from|to)/ rule used to swallow both.
+  it("skips own-account transfers but imports person-to-person ones", () => {
+    const own = [
+      "Transfer from Own Account 501400630002 - toters",
+      "Transfer to Own Account 501400630002 - readjust",
+    ];
+    for (const description of own) {
+      const results = reconcileStatementRows([row({ description })], []);
+      expect(results.get("row-1"), description).toEqual({ status: "transfer" });
+    }
+
+    const people = [
+      "Transfer from SALIM IBRAHIM SAADEH via Mobile -",
+      "Transfer to RACHA SAMIR TOUMA via Mobile - Car",
+    ];
+    // Surfaced for a decision rather than swallowed — the owner says whether
+    // each is household money or real spending.
+    for (const description of people) {
+      const results = reconcileStatementRows([row({ description })], []);
+      expect(results.get("row-1"), description).toMatchObject({
+        status: "person_transfer",
+      });
+    }
+  });
+
+  // Money between household members nets to zero across the household, so it
+  // must never be written as spending — it belongs in `transfers`.
+  it("separates a household transfer from a payment to an outsider", () => {
+    const members = [
+      { user_id: "u-elio", full_name: "Elio Aoun" },
+      { user_id: "u-racha", full_name: "Racha Touma" },
+    ];
+
+    const household = reconcileStatementRows(
+      [row({ description: "Transfer to RACHA SAMIR TOUMA via Mobile - Car" })],
+      [],
+      [],
+      new Set(),
+      members,
+    );
+    expect(household.get("row-1")).toEqual({
+      status: "person_transfer",
+      counterparty: "RACHA SAMIR TOUMA",
+      direction: "out",
+      household_match: true,
+      existing_transfer_id: null,
+    });
+
+    // An outsider is real spending: still surfaced, but NOT pre-selected as a
+    // household movement, so it flows to the categorize list.
+    const outsider = reconcileStatementRows(
+      [row({ description: "Transfer to SALIM IBRAHIM SAADEH via Mobile -" })],
+      [],
+      [],
+      new Set(),
+      members,
+    );
+    expect(outsider.get("row-1")).toMatchObject({
+      status: "person_transfer",
+      household_match: false,
+    });
+  });
+
+  it("reads direction from the money column, not the wording", () => {
+    const members = [{ user_id: "u-elio", full_name: "Elio Aoun" }];
+    const results = reconcileStatementRows(
+      [
+        row({
+          type: "credit",
+          description: "Transfer from ELIO ANTOINE AOUN via Mobile -",
+        }),
+      ],
+      [],
+      [],
+      new Set(),
+      members,
+    );
+    expect(results.get("row-1")).toMatchObject({
+      status: "person_transfer",
+      direction: "in",
+    });
+  });
+
+  it("recognises a household movement the other side already logged", () => {
+    const members = [{ user_id: "u-racha", full_name: "Racha Touma" }];
+    const results = reconcileStatementRows(
+      [row({ amount: 500, description: "Transfer to RACHA SAMIR TOUMA via Mobile" })],
+      [],
+      [],
+      new Set(),
+      members,
+      [{ id: "tr-1", date: "2026-08-11", amount: 500 }],
+    );
+    expect(results.get("row-1")).toMatchObject({
+      status: "person_transfer",
+      existing_transfer_id: "tr-1",
+    });
+  });
+
+  it("requires every name word to match before hinting household money", () => {
+    // A false positive would erase real spending from every total, so a partial
+    // name hit must NOT pre-select the transfer path.
+    const members = [{ user_id: "u-racha", full_name: "Racha Touma" }];
+    const results = reconcileStatementRows(
+      [row({ description: "Transfer to RACHA SAMIR KHOURY via Mobile" })],
+      [],
+      [],
+      new Set(),
+      members,
+    );
+    expect(results.get("row-1")).toMatchObject({ household_match: false });
+  });
+
+  // The whole feature used to silently do nothing when `profiles` was empty.
+  it("still surfaces person transfers with no household names configured", () => {
+    const results = reconcileStatementRows(
+      [row({ description: "Transfer to RACHA SAMIR TOUMA via Mobile - Car" })],
+      [],
+    );
+    expect(results.get("row-1")).toMatchObject({
+      status: "person_transfer",
+      counterparty: "RACHA SAMIR TOUMA",
+      household_match: false,
+    });
   });
 
   it("does not mistake a real merchant for an own-account move", () => {
@@ -276,6 +407,7 @@ describe("reconcileStatementRows", () => {
       reason: "hash",
       transaction_id: "tx-phantom",
       stored_hash: "h-fx",
+      stored_bank_description: null,
     });
   });
 
@@ -340,6 +472,7 @@ describe("reconcileStatementRows", () => {
       reason: "probable_duplicate",
       transaction_id: "tx-1",
       stored_hash: "v1-old",
+      stored_bank_description: null,
     });
   });
 
@@ -439,6 +572,7 @@ describe("reconcileStatementRows", () => {
       reason: "hash",
       transaction_id: "tx-fee",
       stored_hash: "h-fee",
+      stored_bank_description: null,
     });
   });
 
@@ -490,6 +624,7 @@ describe("reconcileStatementRows", () => {
       status: "already_imported",
       transaction_id: "tx-near",
       stored_hash: "v1-b",
+      stored_bank_description: null,
     });
   });
 
@@ -504,6 +639,7 @@ describe("reconcileStatementRows", () => {
       reason: "probable_duplicate",
       transaction_id: "tx-old",
       stored_hash: "v1-hash",
+      stored_bank_description: null,
     });
   });
 
@@ -515,7 +651,7 @@ describe("reconcileStatementRows", () => {
         row({
           id: "r3",
           statement_hash: "h3",
-          description: "Transfer to Card",
+          description: "Transfer to Own Account 501400630002",
         }),
       ],
       [tx()],
@@ -528,6 +664,8 @@ describe("reconcileStatementRows", () => {
       already_imported: 0,
       other_account: 0,
       transfers: 1,
+      person_transfers: 0,
+      skipped_before: 0,
       unmatched: 1,
     });
   });

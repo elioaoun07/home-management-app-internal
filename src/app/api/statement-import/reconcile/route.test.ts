@@ -60,6 +60,9 @@ function createQuery(table: string) {
       record(column, value);
       return query;
     },
+    or() {
+      return query;
+    },
     gte(column: string, value: unknown) {
       record(column, value);
       return query;
@@ -72,6 +75,8 @@ function createQuery(table: string) {
       if (table === "accounts") {
         return { data: mockState.account, error: null };
       }
+      // No household link in these fixtures: the reconcile route reads one to
+      // resolve transfer counterparties, and `null` is the solo-user case.
       return { data: null, error: null };
     },
     then(resolve: (value: { data?: unknown; error?: unknown }) => void) {

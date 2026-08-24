@@ -185,6 +185,7 @@ export function GroupSheet({
                   accounts={accounts}
                   statementAccountId={accountId}
                   rowAccountId={resolveAccount(rows[0])}
+                  symbol={symbol}
                   onRowChange={onRowChange}
                   onPickOwnCategory={null}
                 />
@@ -242,6 +243,7 @@ export function GroupSheet({
                           accounts={accounts}
                           statementAccountId={accountId}
                           rowAccountId={resolveAccount(r)}
+                          symbol={symbol}
                           onRowChange={onRowChange}
                           onPickOwnCategory={() => setRowTarget(r.id)}
                         />
@@ -282,6 +284,7 @@ function RowControls({
   accounts,
   statementAccountId,
   rowAccountId,
+  symbol,
   onRowChange,
   onPickOwnCategory,
 }: {
@@ -291,25 +294,32 @@ function RowControls({
   accounts: Array<{ id: string; name: string; currency?: string }>;
   statementAccountId: string;
   rowAccountId: string;
+  symbol: string;
   onRowChange: (rowId: string, patch: Partial<RowDecision>) => void;
   onPickOwnCategory: (() => void) | null;
 }) {
   const tc = useThemeClasses();
   const redirected = rowAccountId !== statementAccountId;
 
-  const renamed =
-    decision?.description !== undefined &&
-    decision.description.trim() !== "" &&
-    decision.description.trim() !== row.description;
-
   return (
     <div className={cn("rounded-xl p-3 flex flex-col gap-2.5", tc.pillBg)}>
       {/* The bank's own words stay on screen even while renamed — they are
           what the dedupe fingerprint is built from, so hiding them would make
           it look like the rename changed the key. It does not. */}
-      <p className={cn("text-[11px] truncate", tc.textFaint)}>
-        Bank: {row.description}
-      </p>
+      {/* Amount sits with the bank line so a multi-row merchant can be read
+          row by row: previously only the group TOTAL was visible, and the date
+          was the only per-row fact on screen. */}
+      <div className="flex items-baseline gap-2">
+        <p className={cn("text-[11px] truncate flex-1 min-w-0", tc.textFaint)}>
+          Bank: {row.description}
+        </p>
+        <span
+          className={cn("text-xs font-medium tabular-nums shrink-0", tc.text)}
+        >
+          {symbol}
+          {row.amount.toFixed(2)}
+        </span>
+      </div>
 
       <input
         type="text"
@@ -320,12 +330,6 @@ function RowControls({
         aria-label="Save this transaction as"
         className={cn("rounded-lg px-2 h-10 text-xs w-full", tc.formInput)}
       />
-
-      {renamed && (
-        <p className={cn("text-[11px]", tc.textFaint)}>
-          Saved as your name · still matches the bank row next time
-        </p>
-      )}
 
       <div className="flex items-center gap-2">
         <input
@@ -394,12 +398,6 @@ function RowControls({
           ))}
         </SelectContent>
       </Select>
-
-      {redirected && (
-        <p className={cn("text-[11px]", tc.textFaint)}>
-          Goes to another account · still fingerprinted against this statement
-        </p>
-      )}
 
       {ownCategoryName && (
         <button

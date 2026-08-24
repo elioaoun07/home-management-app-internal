@@ -80,7 +80,13 @@ export function CategoryPicker({
 
   const pickCategory = (id: string) => {
     tap();
-    onChange({ category_id: id, subcategory_id: null });
+    // Re-tapping the category the row ALREADY has must not wipe its
+    // subcategory: a learned merchant like Spinneys arrives as Food →
+    // Groceries, and opening Food to check it used to silently clear Groceries
+    // and show the grid with nothing selected. Only a genuine change of
+    // category drops the subcategory, since it cannot belong to the new parent.
+    const keepSubcategory = id === categoryId ? subcategoryId : null;
+    onChange({ category_id: id, subcategory_id: keepSubcategory });
     // Only stop for a subcategory when there is one to pick.
     if (subsOf(id).length > 0) setStep("subcategory");
     else onDone?.();

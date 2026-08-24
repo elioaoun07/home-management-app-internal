@@ -11,6 +11,7 @@ import type {
   RowDecision,
   StatementSession,
 } from "@/lib/statementImportSession";
+import { isPersonTransfer } from "@/lib/statement-reconcile";
 import type { ParsedTransaction, RowClassification } from "@/types/statement";
 
 /**
@@ -62,6 +63,7 @@ export function getBucket(
 
   switch (classification.status) {
     case "transfer":
+    case "skipped_before":
       return "skipped";
     case "already_imported":
       return "imported";
@@ -79,6 +81,11 @@ export function getBucket(
     // this is the same money (skip it) or genuinely belongs here too (create
     // it, possibly with a per-row account override).
     case "other_account":
+      return "review";
+    // Already recorded by whichever side sent it — nothing to do.
+    // Otherwise it needs a decision: household movement or real spending.
+    case "person_transfer":
+      if (classification.existing_transfer_id) return "imported";
       return "review";
     case "unmatched":
       return "review";
@@ -126,8 +133,79 @@ export function resolveRowCategory(
 export function resolveRowAccount(
   row: ParsedTransaction,
   session: Pick<StatementSession, "decisions" | "account_id">,
+  accounts: AccountRef[] = [],
 ): string {
-  return session.decisions[row.id]?.account_id || session.account_id;
+  return (
+    session.decisions[row.id]?.account_id ||
+    suggestAccountForRow(row, session.account_id, accounts)
+  );
+}
+
+export interface AccountRef {
+  id: string;
+  type: "expense" | "income" | "saving";
+  is_default?: boolean;
+}
+
+function pickAccount(
+  accounts: AccountRef[],
+  type: AccountRef["type"],
+): string | null {
+  const candidates = accounts.filter((a) => a.type === type);
+  if (candidates.length === 0) return null;
+  return (candidates.find((a) => a.is_default) ?? candidates[0]).id;
+}
+
+/**
+ * Where a row should land when the owner has not overridden it.
+ *
+ * Usually the statement's own account. Two cases where that is wrong:
+ *
+ *  1. **A money-OUT row on an income or saving account.** `getBalanceDelta()`
+ *     can only ADD on those types, so a debit filed there moves the balance the
+ *     WRONG WAY — importing a $400 ATM withdrawal into Salary raises it by
+ *     $400. There is no encoding that fixes this; the row has to go to an
+ *     expense account. A correctness fix, not a preference.
+ *
+ *  2. **Money IN from another person, on an expense account.** Representable
+ *     (`is_debt_return` adds), but it is income rather than a refund on a card,
+ *     so it belongs in an income account.
+ *
+ * Only ever a DEFAULT — the per-row account select still wins, and it shows
+ * the resolved account so the choice is visible rather than silent.
+ */
+export function suggestAccountForRow(
+  row: ParsedTransaction,
+  statementAccountId: string,
+  accounts: AccountRef[],
+): string {
+  const statement = accounts.find((a) => a.id === statementAccountId);
+  if (!statement) return statementAccountId;
+
+  const moneyIn = row.type === "credit";
+
+  if (!moneyIn && statement.type !== "expense") {
+    return pickAccount(accounts, "expense") ?? statementAccountId;
+  }
+
+  if (moneyIn && statement.type === "expense" && isPersonTransfer(row.description)) {
+    return pickAccount(accounts, "income") ?? statementAccountId;
+  }
+
+  return statementAccountId;
+}
+
+/**
+ * Should this person-to-person transfer become a `transfers` row rather than a
+ * categorised transaction? The owner's explicit pick wins; the name match is
+ * only the default.
+ */
+export function treatsAsTransfer(
+  classification: RowClassification | undefined,
+  decision: RowDecision | undefined,
+): boolean {
+  if (classification?.status !== "person_transfer") return false;
+  return decision?.treat_as_transfer ?? classification.household_match;
 }
 
 /** Rows still waiting on the user, grouped by normalized merchant. */
@@ -201,7 +279,10 @@ export function prettyMerchantName(key: string): string {
  * a category is left out entirely rather than guessed at — this function
  * decides what touches money.
  */
-export function buildCommitActions(session: StatementSession): CommitAction[] {
+export function buildCommitActions(
+  session: StatementSession,
+  accounts: AccountRef[] = [],
+): CommitAction[] {
   const actions: CommitAction[] = [];
 
   for (const row of session.rows) {
@@ -212,24 +293,68 @@ export function buildCommitActions(session: StatementSession): CommitAction[] {
     if (bucket === "skipped") continue;
     if (!classification) continue;
 
+    // Household money movement → a `transfers` record, never a transaction, so
+    // it stays out of every spending aggregate by construction. Only the
+    // OUTGOING leg is recordable: the transfers API requires the creator to own
+    // the from-account, which is also what makes a second copy impossible when
+    // the partner imports their own statement.
+    if (
+      classification.status === "person_transfer" &&
+      treatsAsTransfer(classification, decision)
+    ) {
+      const destination = decision?.transfer_to_account_id;
+      if (
+        classification.direction === "out" &&
+        !classification.existing_transfer_id &&
+        destination &&
+        row.statement_hash
+      ) {
+        actions.push({
+          kind: "create_transfer",
+          row_id: row.id,
+          statement_hash: row.statement_hash,
+          date: decision?.date || row.date,
+          amount: row.amount,
+          description: decision?.description?.trim() || row.description,
+          from_account_id: session.account_id,
+          to_account_id: destination,
+        });
+      }
+      continue;
+    }
+
     // Already in the ledger — creating anything would double-count it. But if
     // it was recognised by the FUZZY tier while carrying a different (older)
     // fingerprint, upgrade that fingerprint to the current formula so the next
     // import matches it by identity instead of by resemblance. Balance-neutral.
     if (classification.status === "already_imported") {
       const storedHash = classification.stored_hash;
-      if (
+      // Two reasons to touch an already-imported row, both balance-neutral:
+      //   1. its fingerprint predates the current formula (the fuzzy tier
+      //      recognised it) — upgrade so the next import matches by identity;
+      //   2. it is missing the bank's wording — backfill it.
+      // (2) matters on its own: a statement whose fingerprints are ALL current
+      // produced no actions at all, so the Save button sat disabled at "0 rows"
+      // and there was no way to fill in `bank_description` for that history.
+      const staleHash =
         classification.reason === "probable_duplicate" &&
-        storedHash &&
-        row.statement_hash &&
-        storedHash !== row.statement_hash
-      ) {
+        !!storedHash &&
+        !!row.statement_hash &&
+        storedHash !== row.statement_hash;
+      const missingBankText =
+        classification.stored_bank_description !== row.description;
+
+      if ((staleHash || missingBankText) && row.statement_hash) {
         actions.push({
           kind: "rekey",
           row_id: row.id,
           transaction_id: classification.transaction_id,
           statement_hash: row.statement_hash,
-          previous_hash: storedHash,
+          // Guard on what is actually stored. For a current fingerprint this is
+          // the same value, so the update is a no-op on the hash and only the
+          // bank wording changes.
+          previous_hash: storedHash ?? row.statement_hash,
+          bank_description: row.description,
         });
       }
       continue;
@@ -272,6 +397,7 @@ export function buildCommitActions(session: StatementSession): CommitAction[] {
           row_id: row.id,
           transaction_id: transactionId,
           statement_hash: statementHash,
+          bank_description: row.description,
           ...(decision?.accept_amount !== undefined
             ? { accept_amount: decision.accept_amount }
             : {}),
@@ -290,7 +416,7 @@ export function buildCommitActions(session: StatementSession): CommitAction[] {
     // merchant mapping's account and skip the row when it was null, so on a
     // first import EVERY create action was silently dropped and Commit reported
     // "0 created" with no error anywhere.
-    const accountId = resolveRowAccount(row, session);
+    const accountId = resolveRowAccount(row, session, accounts);
 
     const mappingPattern = row.normalized_key?.trim();
 
@@ -302,6 +428,10 @@ export function buildCommitActions(session: StatementSession): CommitAction[] {
       // untouched and still fingerprints the bank's raw text, so renaming a
       // row never lets it re-import as new next month.
       description: decision?.description?.trim() || row.description,
+      // Always the RAW statement line, never the rename: this column exists to
+      // be the stable axis for reporting, and the rename is the part that
+      // drifts ("Spinneys" one month, "Supermarket Spinneys" the next).
+      bank_description: row.description,
       amount: row.amount,
       direction: row.type,
       account_id: accountId,
@@ -317,6 +447,45 @@ export function buildCommitActions(session: StatementSession): CommitAction[] {
           }
         : {}),
     });
+  }
+
+  // ── Standing skips ────────────────────────────────────────────────────────
+  //
+  // A skip is a decision about a BANK ROW, not about one upload, so it is
+  // recorded against the fingerprint and honoured on every future import.
+  // Restoring a row from the Skipped tab withdraws it again.
+  for (const row of session.rows) {
+    if (!row.statement_hash) continue;
+    const decision = session.decisions[row.id];
+    const classification = session.classifications[row.id];
+
+    if (decision?.resolution === "skip") {
+      // Transfers are skipped by the matcher on every run, so recording them
+      // would fill the table with rows that need no memory at all.
+      if (classification?.status === "transfer") continue;
+      if (classification?.status === "skipped_before") continue;
+      actions.push({
+        kind: "skip",
+        row_id: row.id,
+        statement_hash: row.statement_hash,
+        description: row.description,
+        amount: row.amount,
+        date: row.date,
+      });
+      continue;
+    }
+
+    // Explicitly restored a row that a previous import had skipped.
+    if (
+      classification?.status === "skipped_before" &&
+      decision?.resolution === "undecided"
+    ) {
+      actions.push({
+        kind: "unskip",
+        row_id: row.id,
+        statement_hash: row.statement_hash,
+      });
+    }
   }
 
   return actions;

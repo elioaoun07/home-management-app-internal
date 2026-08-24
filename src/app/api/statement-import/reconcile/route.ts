@@ -11,6 +11,8 @@ import {
   reconcileStatementRows,
   summarize,
   type CandidateTx,
+  type HouseholdMember,
+  type HouseholdTransferRef,
 } from "@/lib/statement-reconcile";
 import type { AccountType } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -96,7 +98,7 @@ export async function POST(req: NextRequest) {
     const to = shiftDate(dates[dates.length - 1], MATCH_WINDOW_FORWARD_DAYS);
 
     const SELECT =
-      "id, account_id, date, amount, description, is_draft, is_debt_return, statement_hash, category_id, subcategory_id, inserted_at";
+      "id, account_id, date, amount, description, is_draft, is_debt_return, statement_hash, bank_description, category_id, subcategory_id, inserted_at";
 
     // Every account, not just the statement's: a row may have been routed
     // elsewhere by a per-row override, and one filed under the wrong account is
@@ -141,6 +143,7 @@ export async function POST(req: NextRequest) {
       is_draft: !!tx.is_draft,
       is_debt_return: !!tx.is_debt_return,
       statement_hash: (tx.statement_hash as string) ?? null,
+      bank_description: (tx.bank_description as string) ?? null,
       category_id: (tx.category_id as string) ?? null,
       subcategory_id: (tx.subcategory_id as string) ?? null,
       inserted_at: tx.inserted_at as string,
@@ -156,10 +159,67 @@ export async function POST(req: NextRequest) {
       else crossAccountCandidates.push(candidate);
     }
 
+    // Rows the owner has already ruled out, looked up by fingerprint so the
+    // decision survives a wider re-upload and a re-downloaded PDF.
+    const rowHashes = [...new Set(rows.map((r) => r.statement_hash))];
+    const { data: skipRows } = await supabase
+      .from("statement_skipped_rows")
+      .select("statement_hash")
+      .eq("user_id", user.id)
+      .in("statement_hash", rowHashes.slice(0, 1000));
+    const skippedHashes = new Set(
+      (skipRows || []).map((r) => r.statement_hash as string),
+    );
+
+    // Household members whose names can appear as a transfer counterparty, and
+    // the transfers already recorded between them. Both are needed to tell a
+    // household movement (not spending) from a payment to an outsider (which
+    // is), and to recognise a movement the other side has already logged.
+    const { data: link } = await supabase
+      .from("household_links")
+      .select("owner_user_id, partner_user_id")
+      .eq("active", true)
+      .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
+      .maybeSingle();
+
+    const memberIds = link
+      ? [link.owner_user_id, link.partner_user_id].filter(
+          (id): id is string => !!id,
+        )
+      : [user.id];
+
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", memberIds);
+
+    const householdMembers: HouseholdMember[] = (profiles || [])
+      .filter((p) => !!p.full_name)
+      .map((p) => ({ user_id: p.id as string, full_name: p.full_name as string }));
+
+    let householdTransfers: HouseholdTransferRef[] = [];
+    if (link) {
+      const { data: existing } = await supabase
+        .from("transfers")
+        .select("id, date, amount")
+        .eq("transfer_type", "household")
+        .is("deleted_at", null)
+        .gte("date", from)
+        .lte("date", to);
+      householdTransfers = (existing || []).map((t) => ({
+        id: t.id as string,
+        date: t.date as string,
+        amount: Math.abs(Number(t.amount)),
+      }));
+    }
+
     const classifications = reconcileStatementRows(
       rows,
       candidates,
       crossAccountCandidates,
+      skippedHashes,
+      householdMembers,
+      householdTransfers,
     );
     const results = rows.map((row) => ({
       row_id: row.id,

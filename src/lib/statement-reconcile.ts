@@ -59,6 +59,8 @@ export interface CandidateTx {
   is_draft: boolean;
   is_debt_return: boolean;
   statement_hash: string | null;
+  /** Bank wording already stored on the row, if any. */
+  bank_description: string | null;
   category_id: string | null;
   subcategory_id: string | null;
   inserted_at: string;
@@ -91,6 +93,14 @@ export type RowClassification =
        * of needing a backfill migration nobody remembers to write.
        */
       stored_hash: string | null;
+      /**
+       * Bank wording already on that transaction. When it is missing (or has
+       * drifted) the commit step fills it in, which is what lets a statement
+       * whose fingerprints are ALL current still be re-imported to backfill
+       * `bank_description` — otherwise such a statement produced no actions at
+       * all and the Save button sat disabled at "0 rows".
+       */
+      stored_bank_description: string | null;
     }
   | ({ status: "matched" } & MatchCandidate)
   | ({ status: "probable" } & MatchCandidate)
@@ -114,16 +124,59 @@ export type RowClassification =
       date: string;
       amount: number;
     }
+  /**
+   * Money moving between the owner and their household partner — "Transfer to
+   * RACHA SAMIR TOUMA via Mobile".
+   *
+   * NOT spending: it nets to zero across the household, so it belongs in
+   * `transfers` (a different table, therefore excluded from every spending
+   * aggregate by construction) with no category at all. What the partner then
+   * spends it on is a separate transaction with its own category.
+   *
+   * Only the SENDER can record it. `POST /api/transfers` requires the creator
+   * to own the from-account and the partner to own the to-account, so an
+   * incoming leg can never create a second copy of the same movement — it can
+   * only recognise the one the sender already made (`existing_transfer_id`).
+   */
+  | {
+      status: "person_transfer";
+      /** The name the statement puts on the other side of the movement. */
+      counterparty: string;
+      /** "out" = the owner sent it, "in" = the owner received it. */
+      direction: "in" | "out";
+      /**
+       * The counterparty name matches a household profile.
+       *
+       * Only a HINT that pre-selects "household transfer" in the UI — never a
+       * gate. Profile names are display names ("Elio") while statements carry
+       * legal ones ("ELIO ANTOINE AOUN"), and the profiles table can be empty
+       * outright, so making the classification depend on a name match meant the
+       * whole feature silently did nothing. The owner decides per row; this
+       * only saves them a tap when it can.
+       */
+      household_match: boolean;
+      /** A household transfer already recording this movement, if one exists. */
+      existing_transfer_id: string | null;
+    }
   | { status: "transfer" }
+  /**
+   * The owner skipped this exact row on a previous import and that decision was
+   * recorded against its fingerprint. Re-uploading the same period must not ask
+   * again — re-deciding the same rows every month is precisely the friction the
+   * idempotent-import work exists to remove. Restorable from the Skipped tab.
+   */
+  | { status: "skipped_before" }
   | { status: "unmatched" };
 
 export interface ReconcileSummary {
   matched: number;
+  skipped_before: number;
   probable: number;
   ambiguous: number;
   already_imported: number;
   other_account: number;
   transfers: number;
+  person_transfers: number;
   unmatched: number;
 }
 
@@ -142,8 +195,8 @@ export interface ReconcileSummary {
  * Exchange Hamra" and "The Exchange Bookshop" are real merchants.
  */
 const OWN_ACCOUNT_PATTERNS: RegExp[] = [
-  // "Transfer from Own Account 5014…" / "Transfer to NAME via Mobile"
-  /\btransfer\s+(from|to)\b/i,
+  // "Transfer from Own Account 5014…" — the owner's money on both sides.
+  /\btransfer\s+(from|to)\s+own\b/i,
   // "Own Account Exchange: USD to EUR at 0.852 - from 501400630004"
   /\bown\s+account\b/i,
   // The same event on statements that drop the "Own" prefix.
@@ -153,9 +206,80 @@ const OWN_ACCOUNT_PATTERNS: RegExp[] = [
 ];
 
 /**
- * Transfer rows are skipped (importing them as real transfers is deferred).
- * This module owns the rule so the parser and the matcher cannot drift into
- * two different answers about what counts as a transfer.
+ * "Transfer to RACHA SAMIR TOUMA via Mobile" / "Transfer from SALIM … via
+ * Mobile" — money moving between the owner and ANOTHER PERSON.
+ *
+ * That is real spending or real income and must be imported. It used to be
+ * swept up by a blanket `/transfer\s+(from|to)/` rule and skipped, so paying a
+ * friend simply never reached the ledger.
+ */
+const PERSON_TRANSFER_PATTERN = /\btransfer\s+(from|to)\b/i;
+
+/** A household member whose name can appear as a transfer counterparty. */
+export interface HouseholdMember {
+  user_id: string;
+  full_name: string;
+}
+
+/** An existing household transfer, for recognising a movement already logged. */
+export interface HouseholdTransferRef {
+  id: string;
+  date: string;
+  amount: number;
+}
+
+const NAME_NOISE = /[^A-Z\s]/g;
+
+/**
+ * Does this statement line name a household member?
+ *
+ * Requires EVERY significant word of the member's name to appear, because the
+ * consequence of a false positive is severe: real spending would be recorded as
+ * a household transfer, vanishing from every spending total. Banks pad names
+ * with middle names ("RACHA SAMIR TOUMA" for a profile of "Racha Touma"), so
+ * the check is subset-of-description, not equality.
+ */
+export function matchHouseholdMember(
+  description: string,
+  members: HouseholdMember[],
+): HouseholdMember | null {
+  const haystack = ` ${description.toUpperCase().replace(NAME_NOISE, " ").replace(/\s+/g, " ")} `;
+  for (const member of members) {
+    const words = member.full_name
+      .toUpperCase()
+      .replace(NAME_NOISE, " ")
+      .split(/\s+/)
+      .filter((w) => w.length >= 3);
+    if (words.length === 0) continue;
+    if (words.every((w) => haystack.includes(` ${w} `))) return member;
+  }
+  return null;
+}
+
+/**
+ * The name on the other side: "Transfer to RACHA SAMIR TOUMA via Mobile - Car"
+ * -> "RACHA SAMIR TOUMA". Falls back to the whole line when the shape is
+ * unfamiliar, so the card always has something to show.
+ */
+export function extractCounterparty(description: string): string {
+  const match = description.match(
+    /\btransfer\s+(?:from|to)\s+(.+?)(?:\s+via\b|\s+-\s|\s*$)/i,
+  );
+  return match?.[1]?.trim() || description;
+}
+
+export function isPersonTransfer(description: string): boolean {
+  return (
+    PERSON_TRANSFER_PATTERN.test(description) &&
+    !OWN_ACCOUNT_PATTERNS.some((pattern) => pattern.test(description))
+  );
+}
+
+/**
+ * OWN-account moves are skipped (importing them as real transfers is deferred).
+ * Person-to-person transfers are NOT — see `isPersonTransfer` above. This module
+ * owns the rule so the parser and the matcher cannot drift into two different
+ * answers about what counts as a transfer.
  */
 export function isTransferDescription(description: string): boolean {
   return OWN_ACCOUNT_PATTERNS.some((pattern) => pattern.test(description));
@@ -273,6 +397,12 @@ export function reconcileStatementRows(
    * brand new every month.
    */
   crossAccountCandidates: CandidateTx[] = [],
+  /** Fingerprints the owner has previously chosen to skip. */
+  skippedHashes: ReadonlySet<string> = new Set(),
+  /** Household members whose names can appear as a transfer counterparty. */
+  householdMembers: HouseholdMember[] = [],
+  /** Household transfers already recorded, for recognising a logged movement. */
+  householdTransfers: HouseholdTransferRef[] = [],
 ): Map<string, RowClassification> {
   const results = new Map<string, RowClassification>();
 
@@ -319,7 +449,16 @@ export function reconcileStatementRows(
         reason: "hash",
         transaction_id: hashHit.id,
         stored_hash: hashHit.statement_hash,
+        stored_bank_description: hashHit.bank_description,
       });
+      continue;
+    }
+
+    // A standing decision by the owner outranks every heuristic below — but not
+    // the exact-hash check above, because "you already imported this" is a
+    // stronger and more surprising fact than "you skipped this".
+    if (skippedHashes.has(row.statement_hash)) {
+      results.set(row.id, { status: "skipped_before" });
       continue;
     }
 
@@ -328,6 +467,26 @@ export function reconcileStatementRows(
     // the same value.
     if (isTransferDescription(row.description)) {
       results.set(row.id, { status: "transfer" });
+      continue;
+    }
+
+    // Every person-to-person transfer is surfaced for a decision, household or
+    // not. Checked before the matching passes so one can never be silently
+    // paired with — or categorised as — an ordinary purchase.
+    if (isPersonTransfer(row.description)) {
+      const member = matchHouseholdMember(row.description, householdMembers);
+      const existing = householdTransfers.find(
+        (t) =>
+          amountsEqual(t.amount, row.amount) &&
+          Math.abs(dayDiff(row.date, t.date)) <= MATCH_WINDOW_BACK_DAYS,
+      );
+      results.set(row.id, {
+        status: "person_transfer",
+        counterparty: extractCounterparty(row.description),
+        direction: row.type === "credit" ? "in" : "out",
+        household_match: !!member,
+        existing_transfer_id: existing?.id ?? null,
+      });
       continue;
     }
 
@@ -361,6 +520,7 @@ export function reconcileStatementRows(
         reason: "probable_duplicate",
         transaction_id: dupe.id,
         stored_hash: dupe.statement_hash,
+        stored_bank_description: dupe.bank_description,
       });
       continue;
     }
@@ -526,11 +686,13 @@ export function summarize(
 ): ReconcileSummary {
   const summary: ReconcileSummary = {
     matched: 0,
+    skipped_before: 0,
     probable: 0,
     ambiguous: 0,
     already_imported: 0,
     other_account: 0,
     transfers: 0,
+    person_transfers: 0,
     unmatched: 0,
   };
 
@@ -553,6 +715,12 @@ export function summarize(
         break;
       case "transfer":
         summary.transfers++;
+        break;
+      case "skipped_before":
+        summary.skipped_before++;
+        break;
+      case "person_transfer":
+        summary.person_transfers++;
         break;
       case "unmatched":
         summary.unmatched++;

@@ -59,6 +59,23 @@ export interface RowDecision {
    * filed. Reconcile looks hashes up across every account for that reason.
    */
   account_id?: string;
+  /**
+   * Destination account for a household transfer, picked per row.
+   *
+   * Distinct from `account_id`: that re-targets where a TRANSACTION is created,
+   * this names the other side of a `transfers` record. Deliberately not learned
+   * from the counterparty name — the owner chose to pick it each time.
+   */
+  transfer_to_account_id?: string;
+  /**
+   * For a person-to-person transfer: record it as a household `transfers` row
+   * (true) or as an ordinary categorised transaction (false).
+   *
+   * Unset means "follow the hint" — the classification's `household_match`.
+   * The owner always gets the final say, because a name match is a guess and
+   * getting it wrong either erases real spending or invents it.
+   */
+  treat_as_transfer?: boolean;
   /** Take the bank's amount for a matched row whose amount differs. */
   accept_amount?: number;
   /** Manually chosen counterpart (ambiguous picker or "link to existing"). */

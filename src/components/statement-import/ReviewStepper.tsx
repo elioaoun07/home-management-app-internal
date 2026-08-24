@@ -137,8 +137,7 @@ export function ReviewStepper({
             </div>
 
             <p className={cn("text-[11px] truncate", tc.textFaint)}>
-              {longDate(decision?.date || row.date)} · bank says &ldquo;
-              {row.description}&rdquo;
+              {longDate(decision?.date || row.date)}
             </p>
           </div>
 

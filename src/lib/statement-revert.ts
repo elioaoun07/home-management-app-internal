@@ -26,12 +26,19 @@ import { getBalanceDelta, type AccountType } from "@/lib/balance-utils";
 /** Why an entry was not (or need not be) undone. */
 export type RevertNote = "reverted" | "gone" | "drifted" | "already_undone";
 
-export type EntryAction = "create" | "stamp" | "confirm_draft" | "rekey";
+export type EntryAction =
+  | "create"
+  | "stamp"
+  | "confirm_draft"
+  | "rekey"
+  | "create_transfer";
 
 export interface LedgerEntry {
   id: string;
   action: EntryAction;
   transaction_id: string | null;
+  /** Set only for `create_transfer` — the `transfers` row this import made. */
+  transfer_id?: string | null;
   account_id: string;
   statement_hash: string;
   previous: {
@@ -40,6 +47,7 @@ export interface LedgerEntry {
     category_id?: string | null;
     subcategory_id?: string | null;
     statement_hash?: string | null;
+    bank_description?: string | null;
   };
   applied: {
     amount?: number;
@@ -48,6 +56,10 @@ export interface LedgerEntry {
     subcategory_id?: string | null;
     statement_hash?: string | null;
     is_debt_return?: boolean;
+    bank_description?: string | null;
+    /** create_transfer: the partner's account and the delta applied to it. */
+    to_account_id?: string;
+    to_delta?: number;
   };
   reverted_at: string | null;
 }
@@ -84,6 +96,8 @@ export interface RevertPlanResult {
   deltas: Record<string, number>;
   counts: {
     deleted: number;
+    /** Household transfers deleted, both balances put back. */
+    transfers_deleted: number;
     unstamped: number;
     redrafted: number;
     /** Fingerprints put back to the formula they carried before the import. */
@@ -129,6 +143,7 @@ export function planRevert(
   const deltas: Record<string, number> = {};
   const counts = {
     deleted: 0,
+    transfers_deleted: 0,
     unstamped: 0,
     redrafted: 0,
     rekeyed: 0,
@@ -142,6 +157,46 @@ export function planRevert(
     if (entry.reverted_at) {
       plans.push(skip(entry, "already_undone"));
       counts.already_undone++;
+      continue;
+    }
+
+    // A household transfer has no transaction at all — it lives in `transfers`
+    // and moved TWO balances, one of them the partner's. Reversing both is the
+    // whole point of recording it in the ledger: a bulk write across two users'
+    // accounts with no way back is exactly what this feature exists to prevent.
+    if (entry.action === "create_transfer") {
+      if (!entry.transfer_id) {
+        plans.push(skip(entry, "gone"));
+        counts.gone++;
+        continue;
+      }
+      const amount = entry.applied.amount ?? 0;
+      const toAccountId = entry.applied.to_account_id;
+      const toDelta = entry.applied.to_delta ?? 0;
+
+      deltas[entry.account_id] =
+        (deltas[entry.account_id] || 0) + amount; // undo the outgoing leg
+      if (toAccountId) {
+        deltas[toAccountId] = (deltas[toAccountId] || 0) - toDelta;
+      }
+
+      counts.transfers_deleted++;
+      plans.push({
+        entry_id: entry.id,
+        transaction_id: null,
+        action: "create_transfer",
+        note: "reverted",
+        update: {},
+        // `id` is the guard the route writes against; the two account ids ride
+        // along so it can back both legs out of `deltas` if the write is lost.
+        guard: {
+          id: entry.transfer_id,
+          from_account_id: entry.account_id,
+          to_account_id: toAccountId ?? null,
+        },
+        delta: amount,
+        editedSince: false,
+      });
       continue;
     }
 
@@ -184,7 +239,12 @@ export function planRevert(
         transaction_id: tx.id,
         action: "rekey",
         note: "reverted",
-        update: { statement_hash: previousHash },
+        update: {
+          statement_hash: previousHash,
+          ...(entry.applied.bank_description !== undefined
+            ? { bank_description: entry.previous.bank_description ?? null }
+            : {}),
+        },
         guard: { id: tx.id, statement_hash: entry.statement_hash },
         delta: 0,
         editedSince: false,
@@ -243,6 +303,11 @@ export function planRevert(
       const editedSince = !sameMoney(tx.amount, appliedAmount);
 
       const update: Record<string, unknown> = { statement_hash: null };
+      // Only when the import actually wrote it — otherwise a revert would
+      // blank a value that was already there before this import ran.
+      if (entry.applied.bank_description !== undefined) {
+        update.bank_description = entry.previous.bank_description ?? null;
+      }
       let delta = 0;
 
       if (changedTheAmount && !editedSince) {

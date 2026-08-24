@@ -24,6 +24,12 @@ type Props = {
   currency: string;
   /** Resolved category for the group — null while it still needs one. */
   category: { name: string; color: string; slug?: string | null } | null;
+  /**
+   * Resolved SUBcategory, when every row in the group agrees on one. Shown as a
+   * child chip beside the parent so the card states the full assignment
+   * (Food › Groceries) rather than only half of it.
+   */
+  subcategory: { name: string; color: string; slug?: string | null } | null;
   /** Rows inside the group that were given a different category of their own. */
   overrides: number;
   /**
@@ -42,6 +48,7 @@ export function ReviewGroupCard({
   total,
   currency,
   category,
+  subcategory,
   overrides,
   dateLabel,
   onOpen,
@@ -50,6 +57,9 @@ export function ReviewGroupCard({
   const symbol = getCurrencySymbol(currency);
   const Icon = category
     ? getCategoryIcon(category.name, category.slug ?? undefined)
+    : null;
+  const SubIcon = subcategory
+    ? getCategoryIcon(subcategory.name, subcategory.slug ?? undefined)
     : null;
 
   return (
@@ -80,22 +90,50 @@ export function ReviewGroupCard({
 
       <div className="flex items-center gap-2">
         {category && Icon ? (
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-2.5 h-7 min-w-0"
-            style={{ backgroundColor: `${category.color}20` }}
-          >
+          <span className="inline-flex items-center gap-1 min-w-0">
             <span
-              className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
-              style={{ backgroundColor: category.color, color: "#fff" }}
+              className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-2.5 h-7 min-w-0"
+              style={{ backgroundColor: `${category.color}20` }}
             >
-              <Icon className="w-3 h-3" />
+              <span
+                className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                style={{ backgroundColor: category.color, color: "#fff" }}
+              >
+                <Icon className="w-3 h-3" />
+              </span>
+              <span
+                className="text-xs truncate"
+                style={{ color: category.color }}
+              >
+                {category.name}
+              </span>
             </span>
-            <span
-              className="text-xs truncate"
-              style={{ color: category.color }}
-            >
-              {category.name}
-            </span>
+
+            {subcategory && SubIcon && (
+              <>
+                <ChevronRight
+                  className={cn("w-3 h-3 shrink-0", tc.textFaint)}
+                  aria-hidden
+                />
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-2.5 h-7 min-w-0"
+                  style={{ backgroundColor: `${subcategory.color}20` }}
+                >
+                  <span
+                    className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: subcategory.color, color: "#fff" }}
+                  >
+                    <SubIcon className="w-3 h-3" />
+                  </span>
+                  <span
+                    className="text-xs truncate"
+                    style={{ color: subcategory.color }}
+                  >
+                    {subcategory.name}
+                  </span>
+                </span>
+              </>
+            )}
           </span>
         ) : (
           <span

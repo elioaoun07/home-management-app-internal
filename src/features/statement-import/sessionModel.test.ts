@@ -8,6 +8,8 @@ import {
   countUndecided,
   getBucket,
   resolveRowCategory,
+  suggestAccountForRow,
+  type AccountRef,
 } from "./sessionModel";
 
 const ACCOUNT = "11111111-1111-4111-8111-111111111111";
@@ -99,6 +101,7 @@ describe("getBucket", () => {
           reason: "hash",
           transaction_id: "tx-old",
           stored_hash: "hash-1",
+          stored_bank_description: null,
         },
         undefined,
       ),
@@ -219,6 +222,66 @@ describe("buildReviewGroups", () => {
   });
 });
 
+const SALARY = "44444444-4444-4444-8444-444444444444";
+const WALLET = "55555555-5555-4555-8555-555555555555";
+
+const ACCOUNTS: AccountRef[] = [
+  { id: ACCOUNT, type: "expense" },
+  { id: SALARY, type: "income" },
+  { id: WALLET, type: "expense", is_default: true },
+];
+
+describe("suggestAccountForRow", () => {
+  // An income account can only ADD (getBalanceDelta), so a debit filed there
+  // moves the balance the wrong way — a $400 ATM withdrawal would RAISE Salary
+  // by $400. No encoding fixes that; the row has to go somewhere that subtracts.
+  it("moves a money-out row off an income account", () => {
+    expect(
+      suggestAccountForRow(
+        row({ type: "debit", description: "Audi ATM Cash withdrawal" }),
+        SALARY,
+        ACCOUNTS,
+      ),
+    ).toBe(WALLET); // the default expense account
+  });
+
+  it("leaves a money-out row on an expense account alone", () => {
+    expect(
+      suggestAccountForRow(row({ type: "debit" }), ACCOUNT, ACCOUNTS),
+    ).toBe(ACCOUNT);
+  });
+
+  it("sends money received from a person to an income account", () => {
+    expect(
+      suggestAccountForRow(
+        row({ type: "credit", description: "Transfer from SALIM IBRAHIM SAADEH via Mobile -" }),
+        ACCOUNT,
+        ACCOUNTS,
+      ),
+    ).toBe(SALARY);
+  });
+
+  it("leaves an ordinary refund on the card it was refunded to", () => {
+    // Money in on an expense account IS representable (is_debt_return adds), so
+    // only person transfers are re-homed — a merchant refund stays put.
+    expect(
+      suggestAccountForRow(
+        row({ type: "credit", description: "Reversal POS PURCHASE SPINNEYS" }),
+        ACCOUNT,
+        ACCOUNTS,
+      ),
+    ).toBe(ACCOUNT);
+  });
+
+  it("falls back to the statement account when no candidate exists", () => {
+    expect(
+      suggestAccountForRow(row({ type: "debit" }), SALARY, [
+        { id: SALARY, type: "income" },
+      ]),
+    ).toBe(SALARY);
+  });
+});
+
 describe("buildCommitActions", () => {
   it("stamps an auto-matched row without creating anything", () => {
     const s = session({
@@ -242,6 +305,7 @@ describe("buildCommitActions", () => {
         row_id: "row-1",
         transaction_id: "tx-1",
         statement_hash: "hash-1",
+        bank_description: "POS PURCHASE LE GRAY BEIRUT LB 3043",
       },
     ]);
   });
@@ -306,6 +370,7 @@ describe("buildCommitActions", () => {
         row_id: "row-1",
         date: "2026-08-12",
         description: "POS PURCHASE LE GRAY BEIRUT LB 3043",
+        bank_description: "POS PURCHASE LE GRAY BEIRUT LB 3043",
         amount: 80,
         direction: "debit",
         account_id: ACCOUNT,
@@ -345,6 +410,49 @@ describe("buildCommitActions", () => {
     expect(buildCommitActions(s)[0]).toMatchObject({
       description: "ALFA Prepaid Phone",
       statement_hash: "hash-prepaid",
+    });
+  });
+
+  // `description` is the owner's wording and drifts between imports;
+  // `bank_description` is the machine text and is what reporting groups on. A
+  // rename must never leak into it.
+  it("keeps the bank's own wording alongside a rename", () => {
+    const s = session({
+      rows: [row({ description: "POS Purchase SPINNEYS MTAYLEB LB 7121" })],
+      decisions: {
+        "row-1": {
+          resolution: "create",
+          category_id: CAT_FOOD,
+          description: "Spinneys",
+        },
+      },
+    });
+
+    expect(buildCommitActions(s)[0]).toMatchObject({
+      description: "Spinneys",
+      bank_description: "POS Purchase SPINNEYS MTAYLEB LB 7121",
+    });
+  });
+
+  it("sends the bank wording on a stamp so a hand-logged row gains it too", () => {
+    const s = session({
+      classifications: {
+        "row-1": {
+          status: "matched",
+          transaction_id: "tx-1",
+          kind: "confirmed",
+          amount_diff: 0,
+          date_diff: 2,
+          description: "Spinneys",
+          date: "2026-08-10",
+          amount: 80,
+        },
+      },
+    });
+
+    expect(buildCommitActions(s)[0]).toMatchObject({
+      kind: "stamp",
+      bank_description: "POS PURCHASE LE GRAY BEIRUT LB 3043",
     });
   });
 
@@ -435,7 +543,7 @@ describe("buildCommitActions", () => {
     expect(buildCommitActions(s)[0]).toMatchObject({ date: "2026-08-10" });
   });
 
-  it("writes nothing for rows that are skipped, transfers, already imported, or uncategorized", () => {
+  it("writes no MONEY for rows that are skipped, transfers, already imported, or uncategorized", () => {
     const s = session({
       rows: [
         row({ id: "skip", statement_hash: "h-1" }),
@@ -451,13 +559,20 @@ describe("buildCommitActions", () => {
           reason: "hash",
           transaction_id: "tx-old",
           stored_hash: "hash-1",
+          stored_bank_description: "POS PURCHASE LE GRAY BEIRUT LB 3043",
         },
         blank: { status: "unmatched" },
       },
       decisions: { skip: { resolution: "skip", category_id: CAT_FOOD } },
     });
 
-    expect(buildCommitActions(s)).toEqual([]);
+    // A manual skip DOES produce a standing-skip record (so the next import
+    // does not ask again), but it touches no transaction and no balance — which
+    // is what this test is actually guarding.
+    const moneyActions = buildCommitActions(s).filter(
+      (a) => a.kind !== "skip" && a.kind !== "unskip",
+    );
+    expect(moneyActions).toEqual([]);
   });
 
   // Self-healing half of a fingerprint-formula change: a row the FUZZY tier
@@ -471,6 +586,7 @@ describe("buildCommitActions", () => {
           reason: "probable_duplicate",
           transaction_id: "tx-v1",
           stored_hash: "v1-era-hash",
+          stored_bank_description: null,
         },
       },
     });
@@ -482,11 +598,12 @@ describe("buildCommitActions", () => {
         transaction_id: "tx-v1",
         statement_hash: "hash-1",
         previous_hash: "v1-era-hash",
+        bank_description: "POS PURCHASE LE GRAY BEIRUT LB 3043",
       },
     ]);
   });
 
-  it("does not re-key a row that already carries the current fingerprint", () => {
+  it("writes nothing when the fingerprint AND the bank wording are current", () => {
     const s = session({
       classifications: {
         "row-1": {
@@ -494,11 +611,86 @@ describe("buildCommitActions", () => {
           reason: "probable_duplicate",
           transaction_id: "tx-current",
           stored_hash: "hash-1", // identical to the row's own hash
+          stored_bank_description: "POS PURCHASE LE GRAY BEIRUT LB 3043",
         },
       },
     });
 
     expect(buildCommitActions(s)).toEqual([]);
+  });
+
+  // Regression: a statement whose fingerprints were ALL current produced no
+  // actions at all, so Save sat disabled at "0 rows" and there was no way to
+  // fill in `bank_description` for that history.
+  it("re-imports purely to backfill the bank wording when it is missing", () => {
+    const s = session({
+      classifications: {
+        "row-1": {
+          status: "already_imported",
+          reason: "hash",
+          transaction_id: "tx-current",
+          stored_hash: "hash-1", // fingerprint is already current
+          stored_bank_description: null, // …but the bank text was never stored
+        },
+      },
+    });
+
+    expect(buildCommitActions(s)).toEqual([
+      {
+        kind: "rekey",
+        row_id: "row-1",
+        transaction_id: "tx-current",
+        statement_hash: "hash-1",
+        // Guards on the CURRENT hash, so the write is a no-op on the
+        // fingerprint and only the bank wording lands.
+        previous_hash: "hash-1",
+        bank_description: "POS PURCHASE LE GRAY BEIRUT LB 3043",
+      },
+    ]);
+  });
+
+  it("records a manual skip as a standing decision, keyed by fingerprint", () => {
+    const s = session({
+      decisions: { "row-1": { resolution: "skip" } },
+    });
+
+    expect(buildCommitActions(s)).toEqual([
+      {
+        kind: "skip",
+        row_id: "row-1",
+        statement_hash: "hash-1",
+        description: "POS PURCHASE LE GRAY BEIRUT LB 3043",
+        amount: 80,
+        date: "2026-08-12",
+      },
+    ]);
+  });
+
+  it("does not record a skip for a transfer or an already-remembered row", () => {
+    // The matcher skips transfers on every run, so remembering them would fill
+    // the table with rows that need no memory at all.
+    const transfers = session({
+      classifications: { "row-1": { status: "transfer" } },
+      decisions: { "row-1": { resolution: "skip" } },
+    });
+    expect(buildCommitActions(transfers)).toEqual([]);
+
+    const remembered = session({
+      classifications: { "row-1": { status: "skipped_before" } },
+      decisions: { "row-1": { resolution: "skip" } },
+    });
+    expect(buildCommitActions(remembered)).toEqual([]);
+  });
+
+  it("withdraws a standing skip when the row is restored", () => {
+    const s = session({
+      classifications: { "row-1": { status: "skipped_before" } },
+      decisions: { "row-1": { resolution: "undecided" } },
+    });
+
+    expect(buildCommitActions(s)).toEqual([
+      { kind: "unskip", row_id: "row-1", statement_hash: "hash-1" },
+    ]);
   });
 
   it("does not re-key an exact-hash hit — there is nothing to upgrade", () => {
@@ -509,6 +701,7 @@ describe("buildCommitActions", () => {
           reason: "hash",
           transaction_id: "tx-old",
           stored_hash: "hash-1",
+          stored_bank_description: "POS PURCHASE LE GRAY BEIRUT LB 3043",
         },
       },
     });
