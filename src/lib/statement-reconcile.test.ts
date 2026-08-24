@@ -219,6 +219,58 @@ describe("reconcileStatementRows", () => {
     expect(results.get("row-1")).toEqual({ status: "transfer" });
   });
 
+  // Regression: these rows used to fall through as ordinary debits/credits and
+  // get written as real money. The two legs cancel on the balance, so the only
+  // visible damage was phantom income and phantom spend in analytics.
+  it("treats own-account FX legs as transfers, not spend or income", () => {
+    const legs = [
+      "Own Account Exchange: USD to EUR at 0.852 - from 501400630004 -",
+      "Own Account Exchange: EUR to USD at 1.140 - to 501400630004 -",
+      "Account Exchange: USD to EUR at 0.852",
+      "Internal Transfer between own accounts",
+    ];
+
+    for (const description of legs) {
+      const results = reconcileStatementRows([row({ description })], [tx()]);
+      expect(results.get("row-1"), description).toEqual({ status: "transfer" });
+    }
+  });
+
+  it("does not mistake a real merchant for an own-account move", () => {
+    // The failure that matters most: a false positive silently DROPS a real
+    // expense. Bare "exchange" must never be enough on its own.
+    for (const description of [
+      "POS PURCHASE CURRENCY EXCHANGE HAMRA LB 3043",
+      "POS PURCHASE THE EXCHANGE BOOKSHOP BEIRUT LB 1122",
+    ]) {
+      const results = reconcileStatementRows(
+        [row({ description, amount: 999 })],
+        [],
+      );
+      expect(results.get("row-1"), description).toEqual({ status: "unmatched" });
+    }
+  });
+
+  it("reports an already-imported transfer as imported, not as a transfer", () => {
+    // Hash wins over the transfer rule so phantom transfer rows written by the
+    // pre-fix importer stay visible instead of hiding in the skipped bucket.
+    const results = reconcileStatementRows(
+      [
+        row({
+          description: "Own Account Exchange: USD to EUR at 0.852",
+          statement_hash: "h-fx",
+        }),
+      ],
+      [tx({ id: "tx-phantom", statement_hash: "h-fx" })],
+    );
+
+    expect(results.get("row-1")).toEqual({
+      status: "already_imported",
+      reason: "hash",
+      transaction_id: "tx-phantom",
+    });
+  });
+
   it("keeps credits and debits apart", () => {
     const results = reconcileStatementRows(
       [row({ type: "credit" })],

@@ -13,7 +13,21 @@ import type {
 } from "@/lib/statementImportSession";
 import type { ParsedTransaction, RowClassification } from "@/types/statement";
 
-export type Bucket = "matched" | "review" | "skipped";
+/**
+ * `imported` and `matched` are deliberately SEPARATE buckets even though both
+ * are no-ops at commit time, because they answer different questions and carry
+ * very different trust:
+ *
+ *   imported — the statement fingerprint already exists in the ledger. Machine
+ *              certain, nothing to check, and the owner never audits it.
+ *   matched  — the matcher believes this bank row is a transaction the owner
+ *              logged by hand. A judgement call on amount/date/text, and the
+ *              one place a human eye is worth anything.
+ *
+ * Merging them (as the single "matched" bucket used to) buried a handful of
+ * fuzzy guesses inside a pile of certainties, so the guesses were never read.
+ */
+export type Bucket = "matched" | "imported" | "review" | "skipped";
 
 export interface MerchantGroup {
   key: string;
@@ -50,7 +64,7 @@ export function getBucket(
     case "transfer":
       return "skipped";
     case "already_imported":
-      return "matched";
+      return "imported";
     case "matched":
       // Detaching a match sends it back for manual handling.
       return decision?.resolution === "create" ? "review" : "matched";
@@ -120,20 +134,28 @@ export function buildReviewGroups(session: StatementSession): MerchantGroup[] {
   );
 }
 
-export function countUndecided(session: StatementSession): number {
+/**
+ * Rows still owing an answer, in statement order — the queue the review
+ * stepper walks. A review row counts as "decided" once it has a category to be
+ * created with; nothing else is required of it.
+ */
+export function undecidedRows(session: StatementSession): ParsedTransaction[] {
   return session.rows.filter((row) => {
     if (getBucket(session.classifications[row.id], session.decisions[row.id]) !==
       "review"
     ) {
       return false;
     }
-    // A review row is "decided" once it has a category to be created with.
     return !resolveRowCategory(row, session).category_id;
-  }).length;
+  });
+}
+
+export function countUndecided(session: StatementSession): number {
+  return undecidedRows(session).length;
 }
 
 export function bucketCounts(session: StatementSession) {
-  const counts = { matched: 0, review: 0, skipped: 0 };
+  const counts = { matched: 0, imported: 0, review: 0, skipped: 0 };
   for (const row of session.rows) {
     counts[getBucket(session.classifications[row.id], session.decisions[row.id])]++;
   }
@@ -166,6 +188,10 @@ export function buildCommitActions(session: StatementSession): CommitAction[] {
     const bucket = getBucket(classification, decision);
 
     if (bucket === "skipped") continue;
+    // Already in the ledger — writing anything would double-count it. The DB's
+    // partial unique index on (user_id, statement_hash) is the hard backstop,
+    // but a row that never becomes an action never reaches it.
+    if (bucket === "imported") continue;
     if (!classification) continue;
     if (classification.status === "already_imported") continue;
 
@@ -232,7 +258,10 @@ export function buildCommitActions(session: StatementSession): CommitAction[] {
       kind: "create",
       row_id: row.id,
       date: decision?.date || row.date,
-      description: row.description,
+      // The user's rename wins for what gets STORED; `statement_hash` below is
+      // untouched and still fingerprints the bank's raw text, so renaming a
+      // row never lets it re-import as new next month.
+      description: decision?.description?.trim() || row.description,
       amount: row.amount,
       direction: row.type,
       account_id: accountId,

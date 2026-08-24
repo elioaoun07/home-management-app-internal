@@ -88,6 +88,38 @@ describe("getBucket", () => {
     );
   });
 
+  it("separates an already-imported row from a match against a manual log", () => {
+    // Both are no-ops at commit time, but they are different claims: one is a
+    // fingerprint hit, the other is the matcher's judgement. Merging them hid
+    // the judgements inside the certainties.
+    expect(
+      getBucket(
+        {
+          status: "already_imported",
+          reason: "hash",
+          transaction_id: "tx-old",
+        },
+        undefined,
+      ),
+    ).toBe("imported");
+
+    expect(
+      getBucket(
+        {
+          status: "matched",
+          transaction_id: "tx-1",
+          kind: "confirmed",
+          amount_diff: 0,
+          date_diff: 1,
+          description: "Le Gray",
+          date: "2026-08-10",
+          amount: 80,
+        },
+        undefined,
+      ),
+    ).toBe("matched");
+  });
+
   it("returns a detached match to review", () => {
     expect(
       getBucket(
@@ -289,6 +321,47 @@ describe("buildCommitActions", () => {
   // nothing has been learned yet, so EVERY row was silently dropped and Commit
   // reported "0 created" with no error. A statement belongs to one account —
   // the session's — and that is also the account baked into the row's hash.
+  // The rename is the whole point of this pair: the ledger gets the owner's
+  // words, the fingerprint keeps the bank's, so next month's import of the same
+  // statement still reads as already-imported.
+  it("stores the user's rename but fingerprints the bank's raw text", () => {
+    const s = session({
+      rows: [
+        row({
+          description: "PrePaid",
+          statement_hash: "hash-prepaid",
+        }),
+      ],
+      decisions: {
+        "row-1": {
+          resolution: "create",
+          category_id: CAT_FOOD,
+          description: "ALFA Prepaid Phone",
+        },
+      },
+    });
+
+    expect(buildCommitActions(s)[0]).toMatchObject({
+      description: "ALFA Prepaid Phone",
+      statement_hash: "hash-prepaid",
+    });
+  });
+
+  it("falls back to the bank text when a rename is blank", () => {
+    const s = session({
+      rows: [row({ description: "PrePaid" })],
+      decisions: {
+        "row-1": {
+          resolution: "create",
+          category_id: CAT_FOOD,
+          description: "   ",
+        },
+      },
+    });
+
+    expect(buildCommitActions(s)[0]).toMatchObject({ description: "PrePaid" });
+  });
+
   it("creates into the session account when no mapping supplied one", () => {
     const s = session({
       rows: [row({ account_id: null })],
@@ -411,6 +484,11 @@ describe("counters", () => {
     });
 
     expect(countUndecided(s)).toBe(1);
-    expect(bucketCounts(s)).toEqual({ matched: 0, review: 2, skipped: 0 });
+    expect(bucketCounts(s)).toEqual({
+      matched: 0,
+      imported: 0,
+      review: 2,
+      skipped: 0,
+    });
   });
 });

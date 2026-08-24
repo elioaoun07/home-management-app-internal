@@ -18,6 +18,7 @@ time. See the vault guide for why it is an audit rather than an entry path.
   - `CategoryPicker.tsx` — category + subcategory selects **with inline creation** (uses `refetchQueries`, the only thing that beats the persisted 1 h category cache).
   - `MatchedRowCard.tsx` — statement row vs. its matched transaction, drift badges, accept/detach, ambiguous picker.
   - `ReviewGroupCard.tsx` — merchant group; group category is a default, per-row overrides win; date edit + bulk shift; detach/skip.
+  - `ReviewStepper.tsx` — opt-in one-row-at-a-time drawer over the undecided queue (`undecidedRows()`); rename + category grid + skip, Back/Next. The queue is snapshot on open so answering a row does not renumber the steps.
   - `MerchantMappingsManager.tsx` — manage learned mappings (still a dialog in Settings).
   - `ImportHistory.tsx` — past imports on the upload screen; expands to the per-row ledger and holds the batch **Revert**.
 - **Pure logic**:
@@ -50,6 +51,9 @@ time. See the vault guide for why it is an audit rather than an entry path.
 - **The account is part of the dedupe key** — hash v2 is `v2|account|date|desc|out|in`, and creates always land in the session account. A merchant mapping must never redirect a row to another account, or the fingerprint would guard a different account than the transaction it describes.
 - **A commit refuses to move money it cannot undo** — if the `statement_imports` record or the `statement_import_entries` ledger cannot be written, the route returns 503 and no balance moves. Run `migrations/2026-08-19_statement-import-rollback.sql` before using the feature.
 - **Reverting a create frees its hash** (soft delete + `statement_hash = null`), so the statement can be re-imported. Keeping the hash would make every row read as "already imported" forever.
+- **A plain transaction delete does NOT free the hash.** `DELETE /api/transactions/[id]` only sets `deleted_at`, and the unique index is partial on `statement_hash IS NOT NULL`, so the deleted row still occupies the fingerprint. Re-importing then reports `skipped_duplicate` and the transactions never come back — reconcile also filters `deleted_at IS NULL`, so it does not even warn. **Batch Revert is the only correct way to undo an import.**
+- **Own-account / FX rows must never be written as money** — `isTransferDescription()` in `statement-reconcile.ts` owns the rule; `getTransactionType()` in the parser mirrors it. If you widen one, widen both (a test pins them to the same strings).
+- **Renaming a row never touches its hash** — `RowDecision.description` only changes what is stored. Do not recompute `statement_hash` from the edited text.
 - The page hides `MobileNav` (it has its own commit bar) and is registered in `STANDALONE_APPS` for its header — both are route lists that must be updated together if the route is renamed.
 - Category lists are cached 1 h with `refetchOnMount: false` **and persisted to localStorage** — after creating a category, `refetchQueries` (or `refreshCategoryCaches`) is required; `invalidateQueries` alone will not refresh an unmounted consumer.
 

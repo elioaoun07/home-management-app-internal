@@ -23,6 +23,9 @@ tags:
 
 ## Now
 
+- [ ] **BUD-31** Purge the phantom FX transactions written by pre-BUD-30 imports — every own-account exchange imported before 2026-08-24 exists as a real income/expense pair inflating both sides of analytics (balances are fine; the legs cancel). Needs a `data-repair` runbook for the owner to run: inspect + count rows whose `description` matches the own-account patterns and `statement_hash IS NOT NULL`, back up, then remove via **batch Revert** per affected import (a plain delete leaves the hash occupied — see BUD-32). Verification query after. _(blocker - M)_
+- [ ] **BUD-32** Free the statement fingerprint when an imported transaction is deleted — `DELETE /api/transactions/[id]` sets `deleted_at` but leaves `statement_hash`, so the partial unique index still holds it: re-importing reports `skipped_duplicate`, the row never returns, and reconcile (which filters `deleted_at IS NULL`) shows it as unmatched so Commit silently reports 0 created. Either null the hash on soft-delete, or make reconcile see soft-deleted hash-bearing rows and say "deleted — restore instead". → `src/app/api/transactions/[id]/route.ts` + `src/app/api/statement-import/reconcile/route.ts` _(friction - S)_
+
 ## Next
 
 - [ ] **BUD-24** Recycle Bin restore must re-apply balances for **transfers** — BUD-23 fixed the transactions half (`api/recycle-bin/restore/route.ts`); restoring a deleted transfer still leaves both accounts short because delete reverses the deltas and restore never re-applies them. Audit every balance-moving module in `src/lib/recycleBin/registry.ts` for the same shape. _(friction - M)_

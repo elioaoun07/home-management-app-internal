@@ -83,7 +83,34 @@ function getTransactionType(description: string): TransactionType {
   if (desc.includes("transfer from")) return "transfer_in";
   if (desc.includes("transfer to")) return "transfer_out";
 
+  // Own-account moves ("Own Account Exchange: USD to EUR at 0.852 - from
+  // 501400630004"). The leg is named by the trailing account reference, not by
+  // the "USD to EUR" part — "to EUR" is the currency, "- to 5014…" is the
+  // destination account. Classifying these keeps the parser's answer aligned
+  // with isTransferDescription() in statement-reconcile.ts, which is what
+  // actually stops them being written as spend or income.
+  if (isOwnAccountDescription(description)) {
+    if (/-\s*from\s+\d/i.test(description)) return "transfer_in";
+    if (/-\s*to\s+\d/i.test(description)) return "transfer_out";
+    return "transfer_out";
+  }
+
   return "unknown";
+}
+
+/**
+ * Mirror of the own-account rule the matcher enforces. Kept as a narrow local
+ * predicate rather than importing from statement-reconcile.ts, because that
+ * module is bundled for the client and this one is server-only; the shared
+ * contract is the test that pins both to the same strings.
+ */
+function isOwnAccountDescription(description: string): boolean {
+  return (
+    /\bown\s+account\b/i.test(description) ||
+    /\baccount\s+exchange\b/i.test(description) ||
+    /\binternal\s+transfer\b/i.test(description) ||
+    /\bbetween\s+(my|own)\s+accounts?\b/i.test(description)
+  );
 }
 
 /**
@@ -392,7 +419,12 @@ export function parsePDFText(text: string): RawTransaction[] {
             // Determine if it's money in or out based on context
             if (
               fullDescription.toLowerCase().includes("transfer from") ||
-              fullDescription.toLowerCase().includes("reversal")
+              fullDescription.toLowerCase().includes("reversal") ||
+              // An own-account leg names its direction with "- from 5014…";
+              // without this it fell through to the moneyOut default and the
+              // incoming leg was read as a payment.
+              (isOwnAccountDescription(fullDescription) &&
+                /-\s*from\s+\d/i.test(fullDescription))
             ) {
               moneyIn = first;
             } else {

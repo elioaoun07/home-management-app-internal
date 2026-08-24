@@ -22,6 +22,7 @@ import { GroupSheet } from "@/components/statement-import/GroupSheet";
 import { ImportHistory } from "@/components/statement-import/ImportHistory";
 import { MatchedRowCard } from "@/components/statement-import/MatchedRowCard";
 import { ReviewGroupCard } from "@/components/statement-import/ReviewGroupCard";
+import { ReviewStepper } from "@/components/statement-import/ReviewStepper";
 import {
   Select,
   SelectContent,
@@ -43,6 +44,7 @@ import {
   countUndecided,
   getBucket,
   resolveRowCategory,
+  undecidedRows,
 } from "@/features/statement-import/sessionModel";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getCurrencySymbol } from "@/lib/currency";
@@ -63,6 +65,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Check,
+  Layers,
   Loader2,
   RotateCcw,
   Trash2,
@@ -73,7 +76,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type Phase = "upload" | "working" | "review" | "receipt";
-type BucketFilter = "review" | "matched" | "skipped";
+// "imported" (fingerprint already in the ledger — machine certain) is split
+// from "matched" (the matcher thinks this is one of your manual logs — a
+// judgement call). See the Bucket doc comment in sessionModel.ts.
+type BucketFilter = "review" | "imported" | "matched" | "skipped";
 
 interface Receipt {
   created: number;
@@ -107,6 +113,7 @@ export default function StatementImportPage() {
   const [resumable, setResumable] = useState<StatementSession[]>([]);
   const [filter, setFilter] = useState<BucketFilter>("review");
   const [openGroupKey, setOpenGroupKey] = useState<string | null>(null);
+  const [stepperOpen, setStepperOpen] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   // Transient on purpose: a currency hint is only trustworthy at the moment we
   // read the file, so it is never persisted into the session (a stale hint kept
@@ -326,8 +333,12 @@ export default function StatementImportPage() {
 
   const counts = session
     ? bucketCounts(session)
-    : { matched: 0, review: 0, skipped: 0 };
+    : { matched: 0, imported: 0, review: 0, skipped: 0 };
   const undecided = session ? countUndecided(session) : 0;
+  const stepperQueue = useMemo(
+    () => (session ? undecidedRows(session) : []),
+    [session],
+  );
   const currency = session?.account_currency ?? account?.currency ?? "USD";
 
   const categoryById = useMemo(() => {
@@ -557,11 +568,14 @@ export default function StatementImportPage() {
                 </span>
               </div>
 
+              {/* Four tabs on a phone means short labels — the count carries
+                  the meaning, so each label is one word and never wraps. */}
               <div className={cn("flex gap-1 p-1 rounded-xl", tc.pillBg)}>
                 {(
                   [
                     ["review", "Review", counts.review],
-                    ["matched", "Matched", counts.matched],
+                    ["imported", "Imported", counts.imported],
+                    ["matched", "Logged", counts.matched],
                     ["skipped", "Skipped", counts.skipped],
                   ] as Array<[BucketFilter, string, number]>
                 ).map(([value, label, count]) => (
@@ -570,7 +584,7 @@ export default function StatementImportPage() {
                     type="button"
                     onClick={() => setFilter(value)}
                     className={cn(
-                      "flex-1 rounded-lg h-9 text-xs font-medium",
+                      "flex-1 rounded-lg h-9 text-[11px] font-medium px-1 truncate",
                       filter === value ? tc.buttonPrimary : tc.textMuted,
                     )}
                   >
@@ -597,6 +611,23 @@ export default function StatementImportPage() {
               <>
                 {reviewGroups.length === 0 && matchDecisionRows.length === 0 && (
                   <EmptyState text="Nothing left to review." />
+                )}
+
+                {/* Offered only past a couple of rows: below that the merchant
+                    list is already the shorter path, and a stepper would add a
+                    screen to save none. */}
+                {undecided > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => setStepperOpen(true)}
+                    className={cn(
+                      "rounded-2xl h-12 text-sm font-medium flex items-center justify-center gap-2",
+                      tc.buttonOutline,
+                    )}
+                  >
+                    <Layers className="w-4 h-4" />
+                    Review {undecided} one at a time
+                  </button>
                 )}
 
                 {matchDecisionRows.length > 0 && (
@@ -657,9 +688,66 @@ export default function StatementImportPage() {
               </>
             )}
 
-            {filter !== "review" && (
+            {/* Already in the ledger: a receipt, not a worklist. Nothing here
+                is actionable, so it reads as a dated scan rather than a stack
+                of cards with buttons the owner must resist pressing. */}
+            {filter === "imported" && (
+              <>
+                {visibleRows.length === 0 && (
+                  <EmptyState text="Nothing from this statement was imported before." />
+                )}
+                {visibleRows.length > 0 && (
+                  <p className={cn("text-[11px] px-1 pt-1", tc.textFaint)}>
+                    {visibleRows.length} row(s) already in your ledger — the
+                    statement fingerprint matched, so they are left untouched.
+                  </p>
+                )}
+                {groupRowsByDate(visibleRows).map(([date, dateRows]) => (
+                  <div key={date} className="flex flex-col gap-1.5">
+                    <SectionLabel text={longDate(date)} />
+                    {dateRows.map((row) => (
+                      <div
+                        key={row.id}
+                        className={cn(
+                          "rounded-2xl px-4 py-3 flex items-center gap-3",
+                          tc.sectionCard,
+                        )}
+                      >
+                        <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <p
+                          className={cn(
+                            "text-sm truncate min-w-0 flex-1",
+                            tc.text,
+                          )}
+                        >
+                          {row.description}
+                        </p>
+                        <span
+                          className={cn(
+                            "text-sm tabular-nums shrink-0",
+                            tc.textMuted,
+                          )}
+                        >
+                          {getCurrencySymbol(currency)}
+                          {row.amount.toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </>
+            )}
+
+            {(filter === "matched" || filter === "skipped") && (
               <>
                 {visibleRows.length === 0 && <EmptyState text="Nothing here." />}
+                {filter === "matched" && visibleRows.length > 0 && (
+                  <p className={cn("text-[11px] px-1 pt-1", tc.textFaint)}>
+                    Matched to something you logged yourself. Check the bank's
+                    wording against yours — detach any that are not the same
+                    purchase.
+                  </p>
+                )}
                 {visibleRows.map((row) => {
                   const classification = session.classifications[row.id];
                   if (!classification) return null;
@@ -814,6 +902,19 @@ export default function StatementImportPage() {
       )}
 
       {phase === "review" && session && (
+        <ReviewStepper
+          open={stepperOpen}
+          onOpenChange={setStepperOpen}
+          rows={stepperQueue}
+          accountId={session.account_id}
+          currency={currency}
+          decisions={session.decisions}
+          resolveCategory={(row) => resolveRowCategory(row, session)}
+          onRowChange={updateDecision}
+        />
+      )}
+
+      {phase === "review" && session && (
         <div
           className={cn(
             "fixed bottom-0 inset-x-0 z-30 border-t px-4 pt-3",
@@ -857,6 +958,29 @@ export default function StatementImportPage() {
       )}
     </div>
   );
+}
+
+/** Newest date first; rows inside a date keep their statement order. */
+function groupRowsByDate(
+  rows: ParsedTransaction[],
+): Array<[string, ParsedTransaction[]]> {
+  const byDate = new Map<string, ParsedTransaction[]>();
+  for (const row of rows) {
+    const bucket = byDate.get(row.date);
+    if (bucket) bucket.push(row);
+    else byDate.set(row.date, [row]);
+  }
+  return [...byDate.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+}
+
+function longDate(iso: string): string {
+  const parsed = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return parsed.toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
 }
 
 function SectionLabel({ text }: { text: string }) {

@@ -267,9 +267,35 @@ function RowControls({
 }) {
   const tc = useThemeClasses();
 
+  const renamed =
+    decision?.description !== undefined &&
+    decision.description.trim() !== "" &&
+    decision.description.trim() !== row.description;
+
   return (
     <div className={cn("rounded-xl p-3 flex flex-col gap-2.5", tc.pillBg)}>
-      <p className={cn("text-xs truncate", tc.text)}>{row.description}</p>
+      {/* The bank's own words stay on screen even while renamed — they are
+          what the dedupe fingerprint is built from, so hiding them would make
+          it look like the rename changed the key. It does not. */}
+      <p className={cn("text-[11px] truncate", tc.textFaint)}>
+        Bank: {row.description}
+      </p>
+
+      <input
+        type="text"
+        value={decision?.description ?? ""}
+        onChange={(e) => onRowChange(row.id, { description: e.target.value })}
+        placeholder={row.description}
+        maxLength={500}
+        aria-label="Save this transaction as"
+        className={cn("rounded-lg px-2 h-10 text-xs w-full", tc.formInput)}
+      />
+
+      {renamed && (
+        <p className={cn("text-[11px]", tc.textFaint)}>
+          Saved as your name · still matches the bank row next time
+        </p>
+      )}
 
       <div className="flex items-center gap-2">
         <input

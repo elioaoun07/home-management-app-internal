@@ -89,9 +89,38 @@ export interface ReconcileSummary {
   unmatched: number;
 }
 
-/** Transfer rows are skipped for now (importing them as transfers is deferred). */
+/**
+ * Descriptions that describe money moving between the owner's OWN accounts.
+ *
+ * These must never be imported as spend or income (money-rules Invariant 4):
+ * an own-account move nets to zero across the household, so writing it as a
+ * transaction invents phantom income on one leg and phantom expense on the
+ * other. The balance still lands right — the two legs cancel — which is
+ * exactly why this stayed invisible until the analytics were read.
+ *
+ * Deliberately CONSERVATIVE. A false positive silently drops a REAL expense,
+ * which is the worse failure, so every pattern is anchored to an explicit
+ * "account" / "transfer" word. Bare /exchange/ is not enough — "Currency
+ * Exchange Hamra" and "The Exchange Bookshop" are real merchants.
+ */
+const OWN_ACCOUNT_PATTERNS: RegExp[] = [
+  // "Transfer from Own Account 5014…" / "Transfer to NAME via Mobile"
+  /\btransfer\s+(from|to)\b/i,
+  // "Own Account Exchange: USD to EUR at 0.852 - from 501400630004"
+  /\bown\s+account\b/i,
+  // The same event on statements that drop the "Own" prefix.
+  /\baccount\s+exchange\b/i,
+  /\binternal\s+transfer\b/i,
+  /\bbetween\s+(my|own)\s+accounts?\b/i,
+];
+
+/**
+ * Transfer rows are skipped (importing them as real transfers is deferred).
+ * This module owns the rule so the parser and the matcher cannot drift into
+ * two different answers about what counts as a transfer.
+ */
 export function isTransferDescription(description: string): boolean {
-  return /transfer\s+(from|to)\b/i.test(description);
+  return OWN_ACCOUNT_PATTERNS.some((pattern) => pattern.test(description));
 }
 
 function dayDiff(laterISO: string, earlierISO: string): number {
@@ -189,11 +218,11 @@ export function reconcileStatementRows(
   const pending: StatementRowInput[] = [];
 
   for (const row of rows) {
-    if (isTransferDescription(row.description)) {
-      results.set(row.id, { status: "transfer" });
-      continue;
-    }
-
+    // The exact-hash check runs FIRST, ahead of the transfer rule, so a row
+    // that really was written to the ledger reports itself honestly instead of
+    // hiding behind "transfer". That matters right after the own-account fix:
+    // statements imported before it created phantom transfer transactions, and
+    // "imported before" is the only signal pointing the owner at them.
     const hashHit = byHash.get(row.statement_hash);
     if (hashHit) {
       results.set(row.id, {
@@ -201,6 +230,14 @@ export function reconcileStatementRows(
         reason: "hash",
         transaction_id: hashHit.id,
       });
+      continue;
+    }
+
+    // Ahead of the fuzzy probable-duplicate tier below, which matches on amount
+    // alone and would happily claim a transfer leg is an unrelated purchase of
+    // the same value.
+    if (isTransferDescription(row.description)) {
+      results.set(row.id, { status: "transfer" });
       continue;
     }
 

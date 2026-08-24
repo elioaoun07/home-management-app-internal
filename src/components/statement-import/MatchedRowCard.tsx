@@ -117,19 +117,52 @@ export function MatchedRowCard({
         </span>
       </div>
 
-      <div className="flex items-center gap-2">
-        {accepted && classification.status !== "already_imported" && (
-          <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-        )}
-        <p className={cn("text-xs truncate", tc.textFaint)}>
-          {shortDate(row.date)}
-          {classification.status === "already_imported"
-            ? " · imported before"
-            : candidate
-              ? ` · you logged "${candidate.description || "no description"}"`
+      {/* The wording comparison IS the decision here — "is the bank's row the
+          same purchase as the one I typed?" — so it gets two labelled lines
+          instead of being folded into a trailing clause nobody read. */}
+      {candidate ? (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-baseline gap-2">
+            <span
+              className={cn(
+                "text-[10px] uppercase tracking-wider w-9 shrink-0",
+                tc.textFaint,
+              )}
+            >
+              Bank
+            </span>
+            <span className={cn("text-xs truncate min-w-0", tc.textMuted)}>
+              {row.description} · {shortDate(row.date)}
+            </span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span
+              className={cn(
+                "text-[10px] uppercase tracking-wider w-9 shrink-0",
+                tc.textFaint,
+              )}
+            >
+              You
+            </span>
+            <span className={cn("text-xs truncate min-w-0", tc.text)}>
+              {candidate.description || "(no description)"} ·{" "}
+              {shortDate(candidate.date)}
+            </span>
+            {accepted && (
+              <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <p className={cn("text-xs truncate", tc.textFaint)}>
+            {shortDate(row.date)}
+            {classification.status === "already_imported"
+              ? " · imported before"
               : ""}
-        </p>
-      </div>
+          </p>
+        </div>
+      )}
 
       {candidate && <Badges candidate={candidate} currency={currency} tc={tc} />}
 

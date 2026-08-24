@@ -7,3 +7,4 @@ export { ImportHistory } from "./ImportHistory";
 export { MatchedRowCard } from "./MatchedRowCard";
 export { MerchantMappingsManager } from "./MerchantMappingsManager";
 export { ReviewGroupCard } from "./ReviewGroupCard";
+export { ReviewStepper } from "./ReviewStepper";

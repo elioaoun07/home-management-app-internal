@@ -35,6 +35,17 @@ export interface RowDecision {
   category_id?: string | null;
   subcategory_id?: string | null;
   date?: string;
+  /**
+   * A human-readable description to store INSTEAD of the bank's text.
+   *
+   * The bank's "PrePaid" is not a usable ledger entry; "ALFA Prepaid Phone"
+   * is. Renaming must not weaken dedupe, so this is deliberately kept apart
+   * from `statement_hash`: the fingerprint is computed once at parse time from
+   * the RAW bank text (bank-statement-parser.ts) and is never recomputed here.
+   * Re-importing the same statement therefore still reads as already-imported,
+   * however the row was renamed. Empty/whitespace falls back to the bank text.
+   */
+  description?: string;
   /** Take the bank's amount for a matched row whose amount differs. */
   accept_amount?: number;
   /** Manually chosen counterpart (ambiguous picker or "link to existing"). */
