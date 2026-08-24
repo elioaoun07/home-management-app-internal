@@ -77,6 +77,10 @@ export type {
 export interface ReconcileResponse {
   account_currency: string;
   candidates_considered: number;
+  /** Rows examined in the user's OTHER accounts (source of `other_account`). */
+  cross_account_considered: number;
+  /** account_id → name, for the accounts an `other_account` flag points at. */
+  account_names: Record<string, string>;
   window: { from: string; to: string };
   results: Array<
     { row_id: string } & import("@/lib/statement-reconcile").RowClassification

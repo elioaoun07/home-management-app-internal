@@ -87,13 +87,16 @@ export async function POST(req: NextRequest) {
     const from = shiftDate(dates[0], -MATCH_WINDOW_BACK_DAYS);
     const to = shiftDate(dates[dates.length - 1], MATCH_WINDOW_FORWARD_DAYS);
 
-    const { data: candidateRows, error: candidatesError } = await supabase
+    const SELECT =
+      "id, account_id, date, amount, description, is_draft, is_debt_return, statement_hash, category_id, subcategory_id, inserted_at";
+
+    // Every account, not just the statement's: a row may have been routed
+    // elsewhere by a per-row override, and one filed under the wrong account is
+    // exactly what the `other_account` flag exists to surface.
+    const { data: windowRows, error: candidatesError } = await supabase
       .from("transactions")
-      .select(
-        "id, date, amount, description, is_draft, is_debt_return, statement_hash, category_id, subcategory_id, inserted_at",
-      )
+      .select(SELECT)
       .eq("user_id", user.id)
-      .eq("account_id", account_id)
       .is("deleted_at", null)
       .gte("date", from)
       .lte("date", to);
@@ -105,29 +108,80 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const candidates: CandidateTx[] = (candidateRows || []).map((tx) => ({
-      id: tx.id,
-      date: tx.date,
+    // A fingerprint hit outside the date window still means "already imported"
+    // — the stored date can be edited after the fact, and a row overridden into
+    // another account is found by hash alone. The partial unique index on
+    // (user_id, statement_hash) makes this lookup cheap.
+    const { data: hashRows } = await supabase
+      .from("transactions")
+      .select(SELECT)
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .in(
+        "statement_hash",
+        [...new Set(rows.map((r) => r.statement_hash))].slice(0, 1000),
+      );
+
+    const seen = new Set<string>();
+    const toCandidate = (tx: Record<string, unknown>): CandidateTx => ({
+      id: tx.id as string,
+      account_id: tx.account_id as string,
+      date: tx.date as string,
       amount: Math.abs(Number(tx.amount)),
-      description: tx.description || "",
+      description: (tx.description as string) || "",
       is_draft: !!tx.is_draft,
       is_debt_return: !!tx.is_debt_return,
-      statement_hash: tx.statement_hash ?? null,
-      category_id: tx.category_id ?? null,
-      subcategory_id: tx.subcategory_id ?? null,
-      inserted_at: tx.inserted_at,
-    }));
+      statement_hash: (tx.statement_hash as string) ?? null,
+      category_id: (tx.category_id as string) ?? null,
+      subcategory_id: (tx.subcategory_id as string) ?? null,
+      inserted_at: tx.inserted_at as string,
+    });
 
-    const classifications = reconcileStatementRows(rows, candidates);
+    const candidates: CandidateTx[] = [];
+    const crossAccountCandidates: CandidateTx[] = [];
+    for (const raw of [...(windowRows || []), ...(hashRows || [])]) {
+      if (seen.has(raw.id)) continue;
+      seen.add(raw.id);
+      const candidate = toCandidate(raw);
+      if (candidate.account_id === account_id) candidates.push(candidate);
+      else crossAccountCandidates.push(candidate);
+    }
+
+    const classifications = reconcileStatementRows(
+      rows,
+      candidates,
+      crossAccountCandidates,
+    );
     const results = rows.map((row) => ({
       row_id: row.id,
       ...(classifications.get(row.id) ?? { status: "unmatched" as const }),
     }));
 
+    // Names for the accounts an `other_account` flag can point at, so the
+    // review screen can say "already in Debit Card" instead of a raw UUID.
+    const flaggedAccountIds = [
+      ...new Set(
+        [...classifications.values()].flatMap((c) =>
+          c.status === "other_account" ? [c.account_id] : [],
+        ),
+      ),
+    ];
+    const accountNames: Record<string, string> = {};
+    if (flaggedAccountIds.length > 0) {
+      const { data: named } = await supabase
+        .from("accounts")
+        .select("id, name")
+        .eq("user_id", user.id)
+        .in("id", flaggedAccountIds);
+      for (const a of named || []) accountNames[a.id] = a.name;
+    }
+
     return NextResponse.json(
       {
         account_currency: account.currency,
         candidates_considered: candidates.length,
+        cross_account_considered: crossAccountCandidates.length,
+        account_names: accountNames,
         window: { from, to },
         results,
         summary: summarize(classifications),

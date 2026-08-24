@@ -43,6 +43,8 @@ export interface StatementRowInput {
 
 export interface CandidateTx {
   id: string;
+  /** Which account this transaction actually lives in. */
+  account_id: string;
   /** The date the user logged it for — the REAL date, not the posting date. */
   date: string;
   /** Always positive (sign is derived from the account type). */
@@ -77,6 +79,25 @@ export type RowClassification =
   | ({ status: "matched" } & MatchCandidate)
   | ({ status: "probable" } & MatchCandidate)
   | { status: "ambiguous"; candidates: MatchCandidate[] }
+  /**
+   * Same money event, but it is sitting in a DIFFERENT account than the one
+   * this statement belongs to. Everything except the account matches, so this
+   * is almost always one of two things: the row was deliberately routed
+   * elsewhere on a previous import (a bank fee sent to the expenses account),
+   * or it was filed against the wrong account by mistake and wants moving.
+   *
+   * Deliberately NOT treated as a duplicate — it is surfaced for a decision,
+   * because auto-skipping it would hide a genuine mis-filing, and
+   * auto-importing it would double-count. The owner picks.
+   */
+  | {
+      status: "other_account";
+      transaction_id: string;
+      account_id: string;
+      description: string;
+      date: string;
+      amount: number;
+    }
   | { status: "transfer" }
   | { status: "unmatched" };
 
@@ -85,6 +106,7 @@ export interface ReconcileSummary {
   probable: number;
   ambiguous: number;
   already_imported: number;
+  other_account: number;
   transfers: number;
   unmatched: number;
 }
@@ -198,11 +220,25 @@ function toMatchCandidate(
 export function reconcileStatementRows(
   rows: StatementRowInput[],
   candidates: CandidateTx[],
+  /**
+   * Transactions in the user's OTHER accounts over the same window. Never
+   * matched against or claimed — used only to raise `other_account`.
+   *
+   * A row may legitimately live elsewhere: the per-row account override routes
+   * a bank fee off a salary statement into the expenses account, and the
+   * fingerprint stays keyed to the STATEMENT's account so re-imports still
+   * recognise it. Passing these in is what stops such a row coming back as
+   * brand new every month.
+   */
+  crossAccountCandidates: CandidateTx[] = [],
 ): Map<string, RowClassification> {
   const results = new Map<string, RowClassification>();
 
+  // Hash identity ignores which account the row ended up in — the fingerprint
+  // already encodes the statement's account, so a hit is the same statement row
+  // wherever it was filed.
   const byHash = new Map<string, CandidateTx>();
-  for (const tx of candidates) {
+  for (const tx of [...candidates, ...crossAccountCandidates]) {
     if (tx.statement_hash && !byHash.has(tx.statement_hash)) {
       byHash.set(tx.statement_hash, tx);
     }
@@ -256,6 +292,41 @@ export function reconcileStatementRows(
         status: "already_imported",
         reason: "probable_duplicate",
         transaction_id: dupe.id,
+      });
+      continue;
+    }
+
+    // Everything the fingerprint encodes EXCEPT the account agrees → flag,
+    // never skip.
+    //
+    // Gated on exact date + exact amount + direction, not on the posting
+    // window: this answers "is this row already filed under another account?",
+    // not "is anything similar out there". Description is deliberately NOT a
+    // gate — the mis-filing worth catching is often one the owner typed by
+    // hand, so its wording is their own, not the bank's. It ranks which
+    // transaction to show instead, and both descriptions are put on screen so
+    // the owner makes the call.
+    const elsewhere = crossAccountCandidates
+      .filter(
+        (tx) =>
+          amountsEqual(tx.amount, row.amount) &&
+          tx.date === row.date &&
+          tx.is_debt_return === (row.type === "credit"),
+      )
+      .sort((a, b) => {
+        const overlap =
+          jaccard(tokenSet(row.description), tokenSet(b.description)) -
+          jaccard(tokenSet(row.description), tokenSet(a.description));
+        return overlap !== 0 ? overlap : a.id.localeCompare(b.id);
+      })[0];
+    if (elsewhere) {
+      results.set(row.id, {
+        status: "other_account",
+        transaction_id: elsewhere.id,
+        account_id: elsewhere.account_id,
+        description: elsewhere.description,
+        date: elsewhere.date,
+        amount: elsewhere.amount,
       });
       continue;
     }
@@ -389,6 +460,7 @@ export function summarize(
     probable: 0,
     ambiguous: 0,
     already_imported: 0,
+    other_account: 0,
     transfers: 0,
     unmatched: 0,
   };
@@ -406,6 +478,9 @@ export function summarize(
         break;
       case "already_imported":
         summary.already_imported++;
+        break;
+      case "other_account":
+        summary.other_account++;
         break;
       case "transfer":
         summary.transfers++;

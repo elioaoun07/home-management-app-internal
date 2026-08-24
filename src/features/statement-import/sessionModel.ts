@@ -75,6 +75,11 @@ export function getBucket(
         decision?.resolution === "link"
         ? "matched"
         : "review";
+    // A flag, not a verdict: it stays in review until the owner says whether
+    // this is the same money (skip it) or genuinely belongs here too (create
+    // it, possibly with a per-row account override).
+    case "other_account":
+      return "review";
     case "unmatched":
       return "review";
   }
@@ -106,6 +111,23 @@ export function resolveRowCategory(
     category_id: row.category_id ?? null,
     subcategory_id: row.subcategory_id ?? null,
   };
+}
+
+/**
+ * The account a row will be created in: a per-row override if the user set
+ * one, otherwise the account the statement belongs to.
+ *
+ * Never a merchant mapping's account. That was BUD-23: a mapping learned on
+ * another account used to redirect the row, so the fingerprint (hashed with the
+ * statement's account) guarded a different account than the transaction it
+ * described. An override is a deliberate per-row act and is safe precisely
+ * because it does not touch the hash.
+ */
+export function resolveRowAccount(
+  row: ParsedTransaction,
+  session: Pick<StatementSession, "decisions" | "account_id">,
+): string {
+  return session.decisions[row.id]?.account_id || session.account_id;
 }
 
 /** Rows still waiting on the user, grouped by normalized merchant. */
@@ -244,13 +266,13 @@ export function buildCommitActions(session: StatementSession): CommitAction[] {
     const { category_id, subcategory_id } = resolveRowCategory(row, session);
     if (!category_id) continue;
 
-    // A statement is a statement OF an account: every row it contains moved
-    // money in that account, and that account is what the row's hash v2
-    // fingerprint is built from. This used to read the merchant mapping's
-    // account and skip the row when it was null — so on a first import, when
-    // nothing has been learned yet, EVERY create action was silently dropped
-    // and Commit reported "0 created" with no error anywhere.
-    const accountId = session.account_id;
+    // A statement is a statement OF an account, so the statement's account is
+    // the default for every row it contains — and it is what the row's hash v2
+    // fingerprint is built from, always, override or not. This used to read the
+    // merchant mapping's account and skip the row when it was null, so on a
+    // first import EVERY create action was silently dropped and Commit reported
+    // "0 created" with no error anywhere.
+    const accountId = resolveRowAccount(row, session);
 
     const mappingPattern = row.normalized_key?.trim();
 

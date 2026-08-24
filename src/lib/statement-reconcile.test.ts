@@ -18,9 +18,13 @@ function row(overrides: Partial<StatementRowInput> = {}): StatementRowInput {
   };
 }
 
+const ACCOUNT = "acct-statement";
+const OTHER_ACCOUNT = "acct-other";
+
 function tx(overrides: Partial<CandidateTx> = {}): CandidateTx {
   return {
     id: "tx-1",
+    account_id: ACCOUNT,
     date: "2026-08-10",
     amount: 80,
     description: "Roadster",
@@ -285,6 +289,103 @@ describe("reconcileStatementRows", () => {
     expect(refundMatched.get("row-1")).toMatchObject({ status: "matched" });
   });
 
+  it("flags a row that already exists under a different account", () => {
+    const results = reconcileStatementRows(
+      [row()],
+      [], // nothing in the statement's own account
+      [tx({ id: "tx-elsewhere", account_id: OTHER_ACCOUNT, date: "2026-08-12" })],
+    );
+
+    expect(results.get("row-1")).toEqual({
+      status: "other_account",
+      transaction_id: "tx-elsewhere",
+      account_id: OTHER_ACCOUNT,
+      description: "Roadster",
+      date: "2026-08-12",
+      amount: 80,
+    });
+  });
+
+  it("flags on date + amount even when the wording is the owner's own", () => {
+    // The mis-filing worth catching is usually hand-typed, so its description
+    // is nothing like the bank's. Wording must not gate the flag.
+    const results = reconcileStatementRows(
+      [row()],
+      [],
+      [
+        tx({
+          id: "tx-typed",
+          account_id: OTHER_ACCOUNT,
+          date: "2026-08-12",
+          description: "lunch with sara",
+        }),
+      ],
+    );
+    expect(results.get("row-1")).toMatchObject({
+      status: "other_account",
+      transaction_id: "tx-typed",
+    });
+  });
+
+  it("does not flag a different-account row on a different date", () => {
+    // The posting window is for same-account matching. Here the date must be
+    // exact, or every recurring charge would flag against every other account.
+    const results = reconcileStatementRows(
+      [row()],
+      [],
+      [tx({ id: "tx-other-day", account_id: OTHER_ACCOUNT, date: "2026-08-09" })],
+    );
+    expect(results.get("row-1")).toEqual({ status: "unmatched" });
+  });
+
+  it("shows the closest-worded twin when several share date and amount", () => {
+    const results = reconcileStatementRows(
+      [row()],
+      [],
+      [
+        tx({ id: "tx-far", account_id: OTHER_ACCOUNT, date: "2026-08-12", description: "pharmacy" }),
+        tx({ id: "tx-near", account_id: OTHER_ACCOUNT, date: "2026-08-12", description: "Roadster Beirut" }),
+      ],
+    );
+    expect(results.get("row-1")).toMatchObject({ transaction_id: "tx-near" });
+  });
+
+  it("recognises a row imported into another account by its fingerprint", () => {
+    // The per-row account override sends a row elsewhere while the hash stays
+    // keyed to the STATEMENT's account. Without a cross-account hash lookup the
+    // row would come back as brand new on every future import.
+    const results = reconcileStatementRows(
+      [row({ statement_hash: "h-fee" })],
+      [],
+      [
+        tx({
+          id: "tx-fee",
+          account_id: OTHER_ACCOUNT,
+          statement_hash: "h-fee",
+        }),
+      ],
+    );
+
+    expect(results.get("row-1")).toEqual({
+      status: "already_imported",
+      reason: "hash",
+      transaction_id: "tx-fee",
+    });
+  });
+
+  it("never lets a cross-account row be claimed as a match", () => {
+    // Cross-account rows inform; they are not candidates. Matching one would
+    // stamp a transaction in the wrong account with this statement's hash.
+    // Date 2026-08-10 is inside the posting window but not the exact date, so
+    // it is neither flagged nor matched — it is simply invisible to matching.
+    const results = reconcileStatementRows(
+      [row()],
+      [],
+      [tx({ id: "tx-elsewhere", account_id: OTHER_ACCOUNT })],
+    );
+    expect(results.get("row-1")).toEqual({ status: "unmatched" });
+  });
+
   it("summarizes a mixed batch", () => {
     const results = reconcileStatementRows(
       [
@@ -304,6 +405,7 @@ describe("reconcileStatementRows", () => {
       probable: 0,
       ambiguous: 0,
       already_imported: 0,
+      other_account: 0,
       transfers: 1,
       unmatched: 1,
     });

@@ -43,6 +43,7 @@ import {
   buildReviewGroups,
   countUndecided,
   getBucket,
+  resolveRowAccount,
   resolveRowCategory,
   undecidedRows,
 } from "@/features/statement-import/sessionModel";
@@ -128,13 +129,11 @@ export default function StatementImportPage() {
 
   const { data: categories = [] } = useCategories(accountId);
 
-  // Default to the user's default account once accounts load.
-  useEffect(() => {
-    if (accountId || accounts.length === 0) return;
-    const preferred =
-      accounts.find((a: { is_default?: boolean }) => a.is_default) ?? accounts[0];
-    setAccountId(preferred.id);
-  }, [accounts, accountId]);
+  // No default account, deliberately. This picker chooses where a whole
+  // statement's money lands, and pre-filling it meant the choice could be made
+  // by not noticing: the dropdown already read "Wallet", Upload was already
+  // enabled, and the account was never shown again for the rest of the review.
+  // A bulk money write should not have a silently pre-selected target.
 
   useEffect(() => {
     listSessions().then(setResumable);
@@ -237,6 +236,7 @@ export default function StatementImportPage() {
         classifications,
         decisions: {},
         group_categories: {},
+        account_names: reconciled.account_names,
       };
 
       setCurrencyWarning(
@@ -248,13 +248,17 @@ export default function StatementImportPage() {
 
       // Informational, not a mutation — nothing has been written yet, so there
       // is nothing to undo (Hard Rule 1 applies to mutation toasts).
-      const { matched, already_imported, unmatched } = reconciled.summary;
+      const { matched, already_imported, other_account, unmatched } =
+        reconciled.summary;
       toast.info(`${matched} already logged · ${unmatched} to review`, {
         icon: ToastIcons.success,
         description:
-          already_imported > 0
-            ? `${already_imported} imported before`
-            : undefined,
+          [
+            already_imported > 0 ? `${already_imported} imported before` : null,
+            other_account > 0 ? `${other_account} in another account` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || undefined,
       });
     } catch (error) {
       setPhase("upload");
@@ -375,12 +379,29 @@ export default function StatementImportPage() {
     });
   }, [session]);
 
+  // Rows whose twin already exists under a DIFFERENT account. Hoisted out of
+  // the merchant list for the same reason probable matches are: categorizing
+  // one silently creates a second copy of money that is already recorded.
+  const otherAccountRows = useMemo(() => {
+    if (!session) return [];
+    return session.rows.filter((row) => {
+      const classification = session.classifications[row.id];
+      if (classification?.status !== "other_account") return false;
+      const decision = session.decisions[row.id];
+      if (getBucket(classification, decision) !== "review") return false;
+      return decision?.resolution !== "create";
+    });
+  }, [session]);
+
   // Merchant groups, each carrying the state the list needs to render: total,
   // whether every row has a category, and how many rows opted out of the
   // group's choice.
   const reviewGroups = useMemo(() => {
     if (!session) return [];
-    const pendingMatch = new Set(matchDecisionRows.map((r) => r.id));
+    const pendingMatch = new Set([
+      ...matchDecisionRows.map((r) => r.id),
+      ...otherAccountRows.map((r) => r.id),
+    ]);
     return buildReviewGroups(session)
       .map((group) => ({
         ...group,
@@ -405,7 +426,7 @@ export default function StatementImportPage() {
           ).length,
         };
       });
-  }, [session, categoryById, matchDecisionRows]);
+  }, [session, categoryById, matchDecisionRows, otherAccountRows]);
 
   const openGroup = openGroupKey
     ? (reviewGroups.find((g) => g.key === openGroupKey) ?? null)
@@ -483,20 +504,25 @@ export default function StatementImportPage() {
             </div>
           )}
 
-          <Select value={accountId} onValueChange={setAccountId}>
-            <SelectTrigger className="h-12 rounded-2xl text-base">
-              <SelectValue placeholder="Choose an account" />
-            </SelectTrigger>
-            <SelectContent>
-              {accounts.map(
-                (a: { id: string; name: string; currency?: string }) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name} · {a.currency || "USD"}
-                  </SelectItem>
-                ),
-              )}
-            </SelectContent>
-          </Select>
+          <div className="flex flex-col gap-1.5">
+            <p className={cn("text-xs px-1", tc.textMuted)}>
+              Which account is this statement for?
+            </p>
+            <Select value={accountId} onValueChange={setAccountId}>
+              <SelectTrigger className="h-12 rounded-2xl text-base">
+                <SelectValue placeholder="Choose an account" />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map(
+                  (a: { id: string; name: string; currency?: string }) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} · {a.currency || "USD"}
+                    </SelectItem>
+                  ),
+                )}
+              </SelectContent>
+            </Select>
+          </div>
 
           <input
             ref={fileInputRef}
@@ -552,6 +578,39 @@ export default function StatementImportPage() {
               that float over content). */}
           <div className={cn("sticky top-16 z-20", tc.bgPage)}>
             <div className="max-w-2xl mx-auto px-4 pt-2 pb-2.5 flex flex-col gap-2.5">
+              {/* The target account was invisible for the whole review — the
+                  only place it appeared was the currency-mismatch banner,
+                  which usually never fires. Since the fingerprint is keyed to
+                  it, changing it means re-parsing, so "Change" restarts rather
+                  than pretending to edit in place. */}
+              <div className="flex items-center gap-2">
+                <p className={cn("text-xs truncate min-w-0 flex-1", tc.textMuted)}>
+                  Importing into{" "}
+                  <span className={cn("font-medium", tc.headerText)}>
+                    {session.account_name}
+                  </span>{" "}
+                  · {session.account_currency}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Start over and choose a different account?\n\nThe statement fingerprints are built from "${session.account_name}", so the file has to be read again. This review's decisions will be discarded.`,
+                      )
+                    ) {
+                      void discard(session.id);
+                    }
+                  }}
+                  className={cn(
+                    "text-[11px] h-8 px-2 rounded-lg shrink-0",
+                    tc.textFaint,
+                  )}
+                >
+                  Change
+                </button>
+              </div>
+
               <div className="flex items-center gap-3">
                 <div className={cn("h-1.5 rounded-full flex-1", tc.progressBg)}>
                   <div
@@ -609,8 +668,92 @@ export default function StatementImportPage() {
 
             {filter === "review" && (
               <>
-                {reviewGroups.length === 0 && matchDecisionRows.length === 0 && (
-                  <EmptyState text="Nothing left to review." />
+                {reviewGroups.length === 0 &&
+                  matchDecisionRows.length === 0 &&
+                  otherAccountRows.length === 0 && (
+                    <EmptyState text="Nothing left to review." />
+                  )}
+
+                {otherAccountRows.length > 0 && (
+                  <>
+                    <SectionLabel text="Already in another account" />
+                    {otherAccountRows.map((row) => {
+                      const classification = session.classifications[row.id];
+                      if (classification?.status !== "other_account") return null;
+                      const where =
+                        session.account_names?.[classification.account_id] ??
+                        accounts.find(
+                          (a: { id: string }) =>
+                            a.id === classification.account_id,
+                        )?.name ??
+                        "another account";
+                      return (
+                        <div
+                          key={row.id}
+                          className={cn(
+                            "rounded-2xl px-4 py-3.5 flex flex-col gap-2.5",
+                            tc.sectionCard,
+                          )}
+                        >
+                          <div className="flex items-baseline gap-3">
+                            <p
+                              className={cn(
+                                "text-[15px] font-medium truncate flex-1 min-w-0",
+                                tc.headerText,
+                              )}
+                            >
+                              {row.description}
+                            </p>
+                            <span
+                              className={cn(
+                                "text-sm tabular-nums shrink-0",
+                                tc.text,
+                              )}
+                            >
+                              {getCurrencySymbol(currency)}
+                              {row.amount.toFixed(2)}
+                            </span>
+                          </div>
+
+                          <p className={cn("text-xs", tc.textMuted)}>
+                            Same date, amount and wording already sits in{" "}
+                            <span className={cn("font-medium", tc.headerText)}>
+                              {where}
+                            </span>
+                            . Filed there by mistake, or genuinely a separate
+                            charge?
+                          </p>
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDecision(row.id, { resolution: "skip" })
+                              }
+                              className={cn(
+                                "rounded-xl px-4 h-10 text-xs font-medium flex-1 min-w-[120px]",
+                                tc.buttonPrimary,
+                              )}
+                            >
+                              Same one — skip it
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDecision(row.id, { resolution: "create" })
+                              }
+                              className={cn(
+                                "rounded-xl px-4 h-10 text-xs flex-1 min-w-[120px]",
+                                tc.buttonOutline,
+                              )}
+                            >
+                              Different — import it
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
                 )}
 
                 {/* Offered only past a couple of rows: below that the merchant
@@ -884,6 +1027,8 @@ export default function StatementImportPage() {
           label={openGroup.label}
           rows={openGroup.rows}
           accountId={session.account_id}
+          accounts={accounts}
+          resolveAccount={(row) => resolveRowAccount(row, session)}
           currency={currency}
           groupCategory={session.group_categories[openGroup.key]}
           decisions={session.decisions}

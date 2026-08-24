@@ -46,6 +46,19 @@ export interface RowDecision {
    * however the row was renamed. Empty/whitespace falls back to the bank text.
    */
   description?: string;
+  /**
+   * Send THIS row to a different account than the statement's.
+   *
+   * The everyday case is one statement → one account, but a single statement
+   * can carry rows that belong elsewhere: bank fees on a salary statement are
+   * a charge against the expenses account, not salary income.
+   *
+   * The row's `statement_hash` is NOT affected — the fingerprint stays keyed to
+   * the account the STATEMENT belongs to (a property of the file), so
+   * re-importing the same statement still recognises the row wherever it was
+   * filed. Reconcile looks hashes up across every account for that reason.
+   */
+  account_id?: string;
   /** Take the bank's amount for a matched row whose amount differs. */
   accept_amount?: number;
   /** Manually chosen counterpart (ambiguous picker or "link to existing"). */
@@ -73,6 +86,13 @@ export interface StatementSession {
   decisions: Record<string, RowDecision>;
   /** Category chosen for a whole merchant group, keyed by normalized merchant. */
   group_categories: Record<string, GroupCategory>;
+  /**
+   * account_id → name for accounts an `other_account` flag points at. Resolved
+   * server-side at reconcile time rather than from the client's account list,
+   * which excludes hidden accounts — and a row filed against a hidden account
+   * is exactly the mis-filing worth naming.
+   */
+  account_names?: Record<string, string>;
 }
 
 let memoryStore = new Map<string, StatementSession>();

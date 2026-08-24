@@ -14,6 +14,13 @@
 
 import { CategoryPicker } from "@/components/statement-import/CategoryPicker";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getCurrencySymbol } from "@/lib/currency";
@@ -28,7 +35,12 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   label: string;
   rows: ParsedTransaction[];
+  /** The account the STATEMENT belongs to — the default target for its rows. */
   accountId: string;
+  /** Every account a row can be re-targeted at, for the per-row override. */
+  accounts: Array<{ id: string; name: string; currency?: string }>;
+  /** The account a given row will actually be created in. */
+  resolveAccount: (row: ParsedTransaction) => string;
   currency: string;
   groupCategory: GroupCategory | undefined;
   decisions: Record<string, RowDecision>;
@@ -53,6 +65,8 @@ export function GroupSheet({
   label,
   rows,
   accountId,
+  accounts,
+  resolveAccount,
   currency,
   groupCategory,
   decisions,
@@ -144,8 +158,11 @@ export function GroupSheet({
               </button>
             )}
 
+            {/* A row sent to another account must pick from THAT account's
+                categories — `user_categories.account_id` is NOT NULL and the
+                commit route rejects a category belonging elsewhere. */}
             <CategoryPicker
-              accountId={accountId}
+              accountId={row ? resolveAccount(row) : accountId}
               categoryId={target.category_id}
               subcategoryId={target.subcategory_id}
               onChange={(next) => {
@@ -165,6 +182,9 @@ export function GroupSheet({
                   row={rows[0]}
                   decision={decisions[rows[0].id]}
                   ownCategoryName={null}
+                  accounts={accounts}
+                  statementAccountId={accountId}
+                  rowAccountId={resolveAccount(rows[0])}
                   onRowChange={onRowChange}
                   onPickOwnCategory={null}
                 />
@@ -219,6 +239,9 @@ export function GroupSheet({
                               ? nameOf(decisions[r.id]?.category_id)
                               : null
                           }
+                          accounts={accounts}
+                          statementAccountId={accountId}
+                          rowAccountId={resolveAccount(r)}
                           onRowChange={onRowChange}
                           onPickOwnCategory={() => setRowTarget(r.id)}
                         />
@@ -256,16 +279,23 @@ function RowControls({
   row,
   decision,
   ownCategoryName,
+  accounts,
+  statementAccountId,
+  rowAccountId,
   onRowChange,
   onPickOwnCategory,
 }: {
   row: ParsedTransaction;
   decision: RowDecision | undefined;
   ownCategoryName: string | null;
+  accounts: Array<{ id: string; name: string; currency?: string }>;
+  statementAccountId: string;
+  rowAccountId: string;
   onRowChange: (rowId: string, patch: Partial<RowDecision>) => void;
   onPickOwnCategory: (() => void) | null;
 }) {
   const tc = useThemeClasses();
+  const redirected = rowAccountId !== statementAccountId;
 
   const renamed =
     decision?.description !== undefined &&
@@ -335,6 +365,41 @@ function RowControls({
           <EyeOff className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Per-row destination. The everyday case is one statement → one
+          account; this exists for the rows that genuinely belong elsewhere —
+          bank fees on a salary statement are a charge, not income. Changing it
+          CLEARS the row's category, because categories are scoped to an
+          account and the commit route rejects one from the wrong account. */}
+      <Select
+        value={rowAccountId}
+        onValueChange={(next) =>
+          onRowChange(row.id, {
+            account_id: next === statementAccountId ? undefined : next,
+            category_id: null,
+            subcategory_id: null,
+          })
+        }
+      >
+        <SelectTrigger
+          className={cn("h-10 rounded-lg text-xs", redirected && tc.ringSelectionStrong)}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {accounts.map((a) => (
+            <SelectItem key={a.id} value={a.id}>
+              {a.id === statementAccountId ? `${a.name} (statement)` : a.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {redirected && (
+        <p className={cn("text-[11px]", tc.textFaint)}>
+          Goes to another account · still fingerprinted against this statement
+        </p>
+      )}
 
       {ownCategoryName && (
         <button

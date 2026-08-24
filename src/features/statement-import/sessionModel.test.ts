@@ -362,6 +362,36 @@ describe("buildCommitActions", () => {
     expect(buildCommitActions(s)[0]).toMatchObject({ description: "PrePaid" });
   });
 
+  // Bank fees riding along on a salary statement belong to the expenses
+  // account, not to salary. The override moves the transaction; it must NOT
+  // move the fingerprint, which stays keyed to the statement's account.
+  it("honours a per-row account override without touching the hash", () => {
+    const s = session({
+      rows: [row({ statement_hash: "hash-fee" })],
+      decisions: {
+        "row-1": {
+          resolution: "create",
+          category_id: CAT_FOOD,
+          account_id: "22222222-2222-4222-8222-222222222222",
+        },
+      },
+    });
+
+    expect(buildCommitActions(s)[0]).toMatchObject({
+      kind: "create",
+      account_id: "22222222-2222-4222-8222-222222222222",
+      statement_hash: "hash-fee",
+    });
+  });
+
+  it("falls back to the statement account when no override is set", () => {
+    const s = session({
+      rows: [row()],
+      decisions: { "row-1": { resolution: "create", category_id: CAT_FOOD } },
+    });
+    expect(buildCommitActions(s)[0]).toMatchObject({ account_id: ACCOUNT });
+  });
+
   it("creates into the session account when no mapping supplied one", () => {
     const s = session({
       rows: [row({ account_id: null })],
