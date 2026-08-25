@@ -6,6 +6,7 @@
 
 import { createHash } from "node:crypto";
 import { matchMerchantMapping } from "@/lib/merchantMatch";
+import { extractStatementMemo } from "@/lib/statement-reconcile";
 import { normalizeMerchant } from "@/lib/utils/anomalyDetection";
 import { ParsedTransaction } from "@/types/statement";
 
@@ -18,6 +19,7 @@ type TransactionType =
   | "bill_payment"
   | "transfer_in"
   | "transfer_out"
+  | "cash_withdrawal"
   | "reversal"
   | "opening_balance"
   | "closing_balance"
@@ -80,6 +82,10 @@ function getTransactionType(description: string): TransactionType {
   if (desc.startsWith("pos purchase")) return "pos_purchase";
   if (desc.startsWith("online purchase")) return "online_purchase";
   if (desc.startsWith("bill payment")) return "bill_payment";
+  // "Audi ATM Cash withdrawal …" / "Voucher ATM Cash Withdrawal at … for
+  // Voucher No … - Car Insurance" — always MONEY OUT, never spend/income on
+  // its own; the review UI decides cash-to-wallet vs a categorised payment.
+  if (desc.includes("withdrawal")) return "cash_withdrawal";
   if (desc.includes("transfer from")) return "transfer_in";
   if (desc.includes("transfer to")) return "transfer_out";
 
@@ -200,6 +206,20 @@ function extractMerchant(
       break;
     }
 
+    case "cash_withdrawal": {
+      // "Audi ATM Cash withdrawal 05606305 BANK AUDI HOLCOM-5 BEIRUT LB 7121"
+      // "Voucher ATM Cash Withdrawal at BANK AUDI MANSOURIEH-6 … for Voucher
+      //  No 6755430378 - Car Insurance" — the memo after the first " - " is
+      //  what the owner actually spent the voucher on; a plain ATM line has
+      //  none, so it falls back to a generic label.
+      const memo = extractStatementMemo(description);
+      name = memo || "ATM Cash Withdrawal";
+      pattern = /\bvoucher\b/i.test(description)
+        ? "VOUCHER_WITHDRAWAL"
+        : "ATM_WITHDRAWAL";
+      break;
+    }
+
     default:
       // Keep original
       break;
@@ -307,6 +327,25 @@ function parseCSVLine(line: string): string[] {
   return fields;
 }
 
+// ── Money tokens ─────────────────────────────────────────────────────────────
+//
+// A statement amount has EXACTLY two decimals. The `(?!\d)` is the whole point
+// and it is not optional: without it, `[\d,]+\.\d{2}` happily matches the first
+// two decimals of a THREE-decimal number, and statements carry those — an FX
+// rate. "Own Account Exchange: USD to EUR at 0.852 - to 501400630005 - 200.00 -
+// 1,909.46" was split at `0.85`, so the rate became the row's amount, the
+// description was truncated to "…USD to EUR at", and 137 exchange rows imported
+// as $0.85 each. Any new amount pattern in this file must carry the guard.
+//
+// No `g` flag on the two used with `.test()` / `.search()` — a global regex
+// carries `lastIndex` between calls and would skip every other line.
+const MONEY_ANYWHERE = /[\d,]+\.\d{2}(?!\d)/;
+/** MONEY_OUT MONEY_IN BALANCE at the end of a row, "-" for an empty column. */
+const TRAILING_AMOUNTS =
+  /([\d,]+\.\d{2}(?!\d)|-)\s+([\d,]+\.\d{2}(?!\d)|-)\s+([\d,]+\.\d{2}(?!\d))$/;
+/** Every column value in the numbers tail, in order. */
+const MONEY_OR_DASH = /([\d,]+\.\d{2}(?!\d)|-)/g;
+
 /**
  * Parse PDF text content - extract transactions using pattern matching
  * This is optimized for the specific Lebanese bank statement format
@@ -342,14 +381,12 @@ export function parsePDFText(text: string): RawTransaction[] {
         let numbersLine = "";
 
         // Check if this line contains the amounts (look for decimal numbers)
-        const hasAmounts = /\d+\.\d{2}/.test(content);
+        const hasAmounts = MONEY_ANYWHERE.test(content);
 
         if (hasAmounts) {
           // Split description and amounts
           // The amounts are usually at the end: MONEY_OUT MONEY_IN BALANCE or - MONEY_IN BALANCE
-          const amountPattern =
-            /([\d,]+\.\d{2}|-)\s+([\d,]+\.\d{2}|-)\s+([\d,]+\.\d{2})$/;
-          const match = content.match(amountPattern);
+          const match = content.match(TRAILING_AMOUNTS);
 
           if (match) {
             fullDescription = content
@@ -358,7 +395,7 @@ export function parsePDFText(text: string): RawTransaction[] {
             numbersLine = match[0];
           } else {
             // Try simpler pattern - just find where numbers start
-            const numStart = content.search(/[\d,]+\.\d{2}/);
+            const numStart = content.search(MONEY_ANYWHERE);
             if (numStart > 0) {
               fullDescription = content.substring(0, numStart).trim();
               numbersLine = content.substring(numStart).trim();
@@ -375,11 +412,9 @@ export function parsePDFText(text: string): RawTransaction[] {
             const nextLine = lines[i].trim();
 
             // Check if this line has the amounts
-            if (/[\d,]+\.\d{2}/.test(nextLine)) {
+            if (MONEY_ANYWHERE.test(nextLine)) {
               // This might be continuation + amounts or just amounts
-              const amountPattern =
-                /([\d,]+\.\d{2}|-)\s+([\d,]+\.\d{2}|-)\s+([\d,]+\.\d{2})$/;
-              const match = nextLine.match(amountPattern);
+              const match = nextLine.match(TRAILING_AMOUNTS);
 
               if (match) {
                 const prefix = nextLine
@@ -403,7 +438,7 @@ export function parsePDFText(text: string): RawTransaction[] {
         }
 
         // Parse the amounts
-        const amounts = numbersLine.match(/([\d,]+\.\d{2}|-)/g) || [];
+        const amounts = numbersLine.match(MONEY_OR_DASH) || [];
         let moneyOut: number | null = null;
         let moneyIn: number | null = null;
         let balance = 0;

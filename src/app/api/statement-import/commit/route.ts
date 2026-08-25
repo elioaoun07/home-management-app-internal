@@ -119,6 +119,17 @@ const createTransferAction = z.object({
   description: z.string().max(500),
   from_account_id: z.string().uuid(),
   to_account_id: z.string().uuid(),
+  transfer_type: z.enum(["self", "household"]).default("household"),
+  /**
+   * What the DESTINATION receives in its own currency, for an own-account FX
+   * exchange ("Own Account Exchange: USD to EUR at 0.852" — 200.00 out, 170.40
+   * in). Absent for a same-currency move, where the destination gains exactly
+   * `amount`. `exchange_rate` is DERIVED from `to_amount / amount` here rather
+   * than accepted from the client, so the stored rate can never disagree with
+   * the two amounts it is supposed to relate — the same rule
+   * POST /api/transfers follows.
+   */
+  to_amount: money.optional(),
 });
 
 const commitSchema = z.object({
@@ -183,6 +194,16 @@ export async function POST(req: NextRequest) {
         ...actions.flatMap((a) => (a.kind === "create" ? [a.account_id] : [])),
         ...actions.flatMap((a) =>
           a.kind === "create_transfer" ? [a.from_account_id] : [],
+        ),
+        // The household leg's to_account_id is the PARTNER's account and must
+        // NOT be checked against the caller's ownership here — that would
+        // reject every household transfer. Only the self leg's destination
+        // (the owner's own wallet) needs the same ownership guarantee as any
+        // other account this route writes to.
+        ...actions.flatMap((a) =>
+          a.kind === "create_transfer" && a.transfer_type === "self"
+            ? [a.to_account_id]
+            : [],
         ),
       ]),
     ];
@@ -735,26 +756,37 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── 3b-bis. Household transfers — money, but never spending ─────────────
+    // ── 3b-bis. Transfers — money, but never spending ───────────────────────
     //
-    // Written to `transfers`, not `transactions`: a household move nets to zero
-    // across the household, and living in a different table keeps it out of
-    // every spending aggregate by construction rather than by a flag.
+    // Written to `transfers`, not `transactions`: neither leg is spending, and
+    // living in a different table keeps both out of every spending aggregate
+    // by construction rather than by a flag.
     //
-    // The partner must own the destination — the same rule POST /api/transfers
-    // enforces — which is also why the receiving side can never create a second
-    // copy of the movement.
+    // Two shapes: "household" is real money moving between the owner and their
+    // partner — the partner must own the destination, the same rule
+    // POST /api/transfers enforces, which is also why the receiving side can
+    // never create a second copy of the movement. "self" is a cash withdrawal
+    // moving into the owner's OWN wallet account — nobody else involved, no
+    // household link needed.
     const transferRows = actions.filter(
       (a): a is Extract<CommitAction, { kind: "create_transfer" }> =>
         a.kind === "create_transfer",
     );
     if (transferRows.length > 0) {
-      const { data: link } = await supabase
-        .from("household_links")
-        .select("id, owner_user_id, partner_user_id")
-        .eq("active", true)
-        .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
-        .maybeSingle();
+      let link: {
+        id: string;
+        owner_user_id: string;
+        partner_user_id: string;
+      } | null = null;
+      if (transferRows.some((a) => a.transfer_type === "household")) {
+        const { data } = await supabase
+          .from("household_links")
+          .select("id, owner_user_id, partner_user_id")
+          .eq("active", true)
+          .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
+          .maybeSingle();
+        link = data;
+      }
       const partnerId = link
         ? link.owner_user_id === user.id
           ? link.partner_user_id
@@ -762,7 +794,9 @@ export async function POST(req: NextRequest) {
         : null;
 
       for (const a of transferRows) {
-        if (!link || !partnerId) {
+        const isHousehold = a.transfer_type === "household";
+
+        if (isHousehold && (!link || !partnerId)) {
           results.push({
             row_id: a.row_id,
             status: "error",
@@ -777,14 +811,22 @@ export async function POST(req: NextRequest) {
           .eq("id", a.to_account_id)
           .maybeSingle();
 
-        if (!destination || destination.user_id !== partnerId) {
+        const expectedOwner = isHousehold ? partnerId : user.id;
+        if (!destination || destination.user_id !== expectedOwner) {
           results.push({
             row_id: a.row_id,
             status: "error",
-            error: "Destination must be your household partner's account",
+            error: isHousehold
+              ? "Destination must be your household partner's account"
+              : "Destination must be one of your own accounts",
           });
           continue;
         }
+
+        // Conversion composes only with a plain SELF transfer: the fee /
+        // returned-amount math on a household transfer assumes one currency,
+        // which is the same restriction POST /api/transfers enforces.
+        const toAmount = !isHousehold ? a.to_amount : undefined;
 
         const { data: transfer, error: transferError } = await supabase
           .from("transfers")
@@ -795,14 +837,28 @@ export async function POST(req: NextRequest) {
             amount: a.amount,
             description: a.description,
             date: a.date,
-            transfer_type: "household",
-            recipient_user_id: partnerId,
-            household_link_id: link.id,
+            transfer_type: a.transfer_type,
+            recipient_user_id: isHousehold ? partnerId : null,
+            household_link_id: isHousehold ? link!.id : null,
+            to_amount: toAmount ?? null,
+            exchange_rate: toAmount !== undefined ? toAmount / a.amount : null,
+            // The same identity backstop `transactions` has carried since this
+            // feature shipped. Without it a re-imported statement re-offered
+            // every transfer row as new and the owner could move both balances
+            // a second time; the unique index on (user_id, statement_hash)
+            // catches whatever slips past the reconciler.
+            statement_hash: a.statement_hash,
           })
           .select("id")
           .single();
 
         if (transferError || !transfer) {
+          // 23505 = this bank line already has a live transfer. Not an error:
+          // the row is already recorded, which is exactly what was wanted.
+          if (getErrorCode(transferError) === "23505") {
+            results.push({ row_id: a.row_id, status: "skipped_duplicate" });
+            continue;
+          }
           results.push({
             row_id: a.row_id,
             status: "error",
@@ -811,7 +867,12 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        const { fromDelta, toDelta } = getTransferDeltas(a.amount, 0, "household");
+        const { fromDelta, toDelta } = getTransferDeltas(
+          a.amount,
+          0,
+          a.transfer_type,
+          toAmount,
+        );
         addDelta(a.from_account_id, fromDelta);
         addDelta(a.to_account_id, toDelta);
 

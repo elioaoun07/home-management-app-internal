@@ -137,3 +137,175 @@ describe("convertToUITransactions", () => {
     expect(isTransferDescription(rows[2].description)).toBe(false);
   });
 });
+
+// Transcribed from a real e-statement — both shapes the owner actually gets.
+describe("cash withdrawals", () => {
+  const WITHDRAWALS = [
+    "DATE TRANSACTIONS MONEY OUT MONEY IN BALANCE",
+    "01/01/2026 Opening Balance 0.00",
+    "11/08/2026 Audi ATM Cash withdrawal 05606305 BANK AUDI HOLCOM-5 BEIRUT LB 7121 200.00 - 500.00",
+    "12/08/2026 Voucher ATM Cash Withdrawal at BANK AUDI MANSOURIEH-6 MANSOURIEH LB for Voucher No 6755430378 - Car Insurance 30.42 - 469.58",
+  ].join("\n");
+
+  it("parses both real withdrawal shapes as debits typed cash_withdrawal", () => {
+    const rows = parsePDFText(WITHDRAWALS);
+    expect(rows).toHaveLength(2);
+
+    expect(rows[0]).toMatchObject({
+      date: "2026-08-11",
+      moneyOut: 200,
+      moneyIn: null,
+      type: "cash_withdrawal",
+      merchantName: "ATM Cash Withdrawal",
+    });
+
+    // The memo after the first " - " is what the owner actually paid for —
+    // it becomes the merchant name so the review UI shows it up front.
+    expect(rows[1]).toMatchObject({
+      date: "2026-08-12",
+      moneyOut: 30.42,
+      moneyIn: null,
+      type: "cash_withdrawal",
+      merchantName: "Car Insurance",
+    });
+  });
+
+  it("is never swept up as an own-account transfer", () => {
+    for (const row of parsePDFText(WITHDRAWALS)) {
+      expect(isTransferDescription(row.description), row.description).toBe(
+        false,
+      );
+    }
+  });
+});
+
+describe("parsePDFText — three-decimal FX rates in the description", () => {
+  // Verbatim from the owner's August statement. The rate has THREE decimals and
+  // sits INSIDE the description, before the two-decimal money columns.
+  const FX_ROW =
+    "08/08/2026 Own Account Exchange: USD to EUR at 0.852 - to 501400630005 - 200.00 - 1,909.46";
+
+  it("reads the money column, not the first two decimals of the rate", () => {
+    const [tx] = parsePDFText(FX_ROW);
+
+    // Was 0.85 — `[\d,]+\.\d{2}` matched inside "0.852", so the rate became the
+    // amount and 137 exchange rows imported as $0.85 each.
+    expect(tx.moneyOut).toBe(200);
+    expect(tx.moneyIn).toBeNull();
+    expect(tx.balance).toBe(1909.46);
+  });
+
+  it("keeps the rate and the counterparty account in the description", () => {
+    const [tx] = parsePDFText(FX_ROW);
+
+    // Was truncated at "…USD to EUR at", which is why classifyOwnExchange()
+    // found no rate and the row stayed on Skipped as a plain own-account move.
+    expect(tx.description).toBe(
+      "Own Account Exchange: USD to EUR at 0.852 - to 501400630005 -",
+    );
+    expect(tx.type).toBe("transfer_out");
+  });
+
+  it("reads the incoming leg on the other account's statement", () => {
+    const [tx] = parsePDFText(
+      "08/08/2026 Own Account Exchange: USD to EUR at 0.852 - from 501400630004 - - 170.40 170.40",
+    );
+
+    expect(tx.moneyOut).toBeNull();
+    expect(tx.moneyIn).toBe(170.4);
+    expect(tx.type).toBe("transfer_in");
+  });
+
+  it("still parses an ordinary two-decimal row unchanged", () => {
+    const [tx] = parsePDFText(
+      "09/08/2026 POS PURCHASE SPINNEYS BEIRUT LB 3043 42.08 - 1,867.38",
+    );
+
+    expect(tx.moneyOut).toBe(42.08);
+    expect(tx.balance).toBe(1867.38);
+    expect(tx.description).toBe("POS PURCHASE SPINNEYS BEIRUT LB 3043");
+  });
+
+  it("parses consecutive rows independently", () => {
+    // Guards the no-`g`-flag rule: a global regex reused across lines carries
+    // `lastIndex` and would silently skip every other row.
+    const rows = parsePDFText(
+      [
+        FX_ROW,
+        "09/08/2026 Own Account Exchange: USD to EUR at 0.861 - to 501400630005 - 100.00 - 1,809.46",
+        "10/08/2026 POS PURCHASE LE GRAY BEIRUT LB 1122 15.50 - 1,793.96",
+      ].join("\n"),
+    );
+
+    expect(rows).toHaveLength(3);
+    expect(rows.map((r) => r.moneyOut)).toEqual([200, 100, 15.5]);
+  });
+});
+
+describe("parsePDFText — FX row wrapped across extracted lines", () => {
+  // THE actual failure. The extractor hands the row over as three lines,
+  // because the description wraps in the PDF's TRANSACTIONS column:
+  //
+  //   08/08/2026 Own Account Exchange: USD to EUR
+  //   at 0.852 - to 501400630005 -
+  //   200.00 - 1,909.46
+  //
+  // The continuation line has no two-decimal money on it, only the rate. With
+  // the old `[\d,]+\.\d{2}` the loop treated it AS the numbers line, broke out,
+  // and read "0.85" as MONEY OUT — so every exchange imported as $0.85 with the
+  // rate missing from the description, which is why they all sat on Skipped as
+  // plain own-account moves instead of reaching the Transfers tab.
+  const WRAPPED = [
+    "08/08/2026 Own Account Exchange: USD to EUR",
+    "at 0.852 - to 501400630005 -",
+    "200.00 - 1,909.46",
+  ].join("\n");
+
+  it("takes the amount from the money line, not from the rate", () => {
+    const [tx] = parsePDFText(WRAPPED);
+
+    expect(tx.moneyOut).toBe(200);
+    expect(tx.moneyIn).toBeNull();
+    expect(tx.balance).toBe(1909.46);
+  });
+
+  it("rejoins the wrapped description so the rate survives", () => {
+    const [tx] = parsePDFText(WRAPPED);
+
+    expect(tx.description).toBe(
+      "Own Account Exchange: USD to EUR at 0.852 - to 501400630005 -",
+    );
+    expect(tx.type).toBe("transfer_out");
+  });
+
+  it("produces exactly one row, not one per wrapped line", () => {
+    expect(parsePDFText(WRAPPED)).toHaveLength(1);
+  });
+
+  it("handles the wrapped incoming leg on the EUR statement", () => {
+    const [tx] = parsePDFText(
+      [
+        "08/08/2026 Own Account Exchange: USD to EUR",
+        "at 0.852 - from 501400630004 -",
+        "- 170.40 170.40",
+      ].join("\n"),
+    );
+
+    expect(tx.moneyOut).toBeNull();
+    expect(tx.moneyIn).toBe(170.4);
+    expect(tx.type).toBe("transfer_in");
+  });
+
+  it("still wraps an ordinary long merchant description", () => {
+    const [tx] = parsePDFText(
+      [
+        "09/08/2026 POS PURCHASE SPINNEYS",
+        "BEIRUT LB 3043",
+        "42.08 - 1,867.38",
+      ].join("\n"),
+    );
+
+    expect(tx.description).toBe("POS PURCHASE SPINNEYS BEIRUT LB 3043");
+    expect(tx.moneyOut).toBe(42.08);
+  });
+});

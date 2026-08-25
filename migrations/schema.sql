@@ -918,6 +918,7 @@ CREATE TABLE public.transfers (
   deleted_at timestamp with time zone,
   to_amount numeric CHECK (to_amount > 0::numeric),
   exchange_rate numeric CHECK (exchange_rate > 0::numeric),
+  statement_hash text,
   CONSTRAINT transfers_pkey PRIMARY KEY (id),
   CONSTRAINT transfers_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT transfers_from_account_id_fkey FOREIGN KEY (from_account_id) REFERENCES public.accounts(id),
@@ -925,6 +926,15 @@ CREATE TABLE public.transfers (
   CONSTRAINT transfers_recipient_user_id_fkey FOREIGN KEY (recipient_user_id) REFERENCES auth.users(id),
   CONSTRAINT transfers_household_link_id_fkey FOREIGN KEY (household_link_id) REFERENCES public.household_links(id)
 );
+-- Statement-import dedupe backstop for transfers (23505 -> "skipped_duplicate").
+-- Excludes soft-deleted rows: a transfer removed by an import revert or from
+-- the Transfers module must leave its statement row importable again.
+CREATE UNIQUE INDEX transfers_statement_hash_uniq
+  ON public.transfers (user_id, statement_hash)
+  WHERE statement_hash IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX idx_transfers_statement_hash
+  ON public.transfers (user_id, statement_hash)
+  WHERE statement_hash IS NOT NULL;
 CREATE TABLE public.account_balance_history (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   account_id uuid NOT NULL,

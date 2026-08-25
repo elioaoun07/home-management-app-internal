@@ -160,10 +160,11 @@ export function planRevert(
       continue;
     }
 
-    // A household transfer has no transaction at all — it lives in `transfers`
-    // and moved TWO balances, one of them the partner's. Reversing both is the
-    // whole point of recording it in the ledger: a bulk write across two users'
-    // accounts with no way back is exactly what this feature exists to prevent.
+    // A transfer (household or self) has no transaction at all — it lives in
+    // `transfers` and moved TWO balances, possibly the partner's. Reversing
+    // both is the whole point of recording it in the ledger: a bulk write
+    // across accounts with no way back is exactly what this feature exists to
+    // prevent.
     if (entry.action === "create_transfer") {
       if (!entry.transfer_id) {
         plans.push(skip(entry, "gone"));

@@ -218,8 +218,13 @@ export type CommitAction =
       statement_hash: string;
     }
   /**
-   * Household money movement -> a `transfers` record, never a transaction.
-   * No category: it nets to zero across the household.
+   * Money moving to another account -> a `transfers` record, never a
+   * transaction. No category: it is not spending.
+   *
+   * "household" is the owner and their partner (a real money movement across
+   * the household, `recipient_user_id` set). "self" is a cash withdrawal
+   * moving from the statement's account into the owner's OWN wallet account —
+   * nobody else involved, `recipient_user_id` stays null.
    */
   | {
       kind: "create_transfer";
@@ -230,8 +235,19 @@ export type CommitAction =
       description: string;
       /** The owner's account the money left. */
       from_account_id: string;
-      /** The partner's account it arrived in. */
+      /** The partner's account (household) or the owner's own (self) it arrived in. */
       to_account_id: string;
+      transfer_type: "self" | "household";
+      /**
+       * What the DESTINATION account actually received, in its own currency,
+       * when the two accounts are in different currencies — an own-account
+       * FX exchange ("Own Account Exchange: USD to EUR at 0.852", 200.00 out →
+       * 170.40 in). Omitted for a same-currency move, where the destination
+       * gains exactly `amount`. The commit route derives `exchange_rate` from
+       * `to_amount / amount` rather than trusting a rate sent from the client,
+       * which is the same thing POST /api/transfers does.
+       */
+      to_amount?: number;
     };
 
 export interface CommitResult {

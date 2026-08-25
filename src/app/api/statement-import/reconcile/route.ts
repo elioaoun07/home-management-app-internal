@@ -13,6 +13,7 @@ import {
   type CandidateTx,
   type HouseholdMember,
   type HouseholdTransferRef,
+  type ImportedTransferRef,
 } from "@/lib/statement-reconcile";
 import type { AccountType } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -213,6 +214,25 @@ export async function POST(req: NextRequest) {
       }));
     }
 
+    // Transfers a previous import already created from these very rows. The
+    // ONLY money this feature writes outside `transactions`, and until they
+    // were looked up the reconciler was blind to them: a household transfer, a
+    // cash withdrawal to the wallet or an own-account exchange came back as
+    // brand new on every re-import, one confirm away from moving both balances
+    // twice. Keyed by fingerprint, scoped exactly like the unique index that
+    // backs it up — (user_id, statement_hash) over live rows.
+    const { data: transferHashRows } = await supabase
+      .from("transfers")
+      .select("id, statement_hash")
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .in("statement_hash", rowHashes.slice(0, 1000));
+    const importedTransfers: ImportedTransferRef[] = (transferHashRows || [])
+      .filter((t): t is { id: string; statement_hash: string } =>
+        !!t.statement_hash,
+      )
+      .map((t) => ({ id: t.id, statement_hash: t.statement_hash }));
+
     const classifications = reconcileStatementRows(
       rows,
       candidates,
@@ -220,6 +240,7 @@ export async function POST(req: NextRequest) {
       skippedHashes,
       householdMembers,
       householdTransfers,
+      importedTransfers,
     );
     const results = rows.map((row) => ({
       row_id: row.id,

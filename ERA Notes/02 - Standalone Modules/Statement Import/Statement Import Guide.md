@@ -1,6 +1,6 @@
 ---
 created: 2026-03-23
-updated: 2026-08-19
+updated: 2026-08-25
 type: guide
 module: statement-import
 tags:
@@ -43,17 +43,40 @@ If nothing was logged, the flow still works — everything simply lands in bucke
    Lebanese 5-column `DATE | TRANSACTIONS | MONEY OUT | MONEY IN | BALANCE`
    layout with `DD/MM/YYYY` dates is supported.
 3. **Reconcile** runs automatically (`reconcile/route.ts`) and sorts rows into
-   three buckets.
-4. **Review** the *Needs review* bucket.
-5. **Commit** (`commit/route.ts`) writes everything and shows a receipt.
+   five tabs.
+4. **Review** the *Review* tab, and the *Transfers* tab if it has anything in it.
+   Answering a row **stages** it — the row stays where it is and states what
+   will happen; nothing is written yet.
+5. **Check *Ready***, which lists every staged action in plain language.
+6. **Commit** (`commit/route.ts`) writes everything and shows a receipt.
 
-## The three buckets
+## The six tabs
 
-| Bucket | Contains | What you do |
+*(Rewritten 2026-08-25, BUD-51/52 — the old three-bucket table predates the
+Transfers tab, the `imported`/`matched` split, the Skipped toggle and Ready.)*
+
+`getBucket()` in `sessionModel.ts` partitions every row into exactly one of
+**five buckets** — those counts always sum to the row total. **Ready** is the
+sixth tab and is deliberately NOT a bucket: it is a cross-cutting view of what
+Save will write, so a staged row appears both in its own bucket tab and there.
+
+The bar **scrolls** rather than truncating, because the count is the
+information; the faded edge means there is more to drag toward.
+
+| Tab | Contains | What you do |
 |---|---|---|
-| **Matched** | Exact matches to logged transactions or drafts, plus rows already imported | Nothing. Tap *Not a match* on any that are wrong. |
-| **Review** | Unmatched rows, near-matches (`probable`), and ties (`ambiguous`) | Give a category; confirm or pick a match |
-| **Skipped** | Transfers, and rows you set aside | Nothing; restore if you change your mind |
+| **Review** | Unmatched rows, near-matches (`probable`), ties (`ambiguous`), and `other_account` flags | Give a category; confirm or pick a match; move or skip an other-account row |
+| **Transfers** | Every person-to-person transfer (**People** sub-tab) and every ATM/voucher withdrawal (**Cash** sub-tab) still needing a decision | **Transfer** (pick the destination account) or **Spent** (pick a category) |
+| **Ready** | Everything Save will write, in plain language — a cross-cutting view, not a bucket | Read it before pressing Save |
+| **Imported** | Rows already in the ledger by exact fingerprint, and recognised household/self transfers | Nothing |
+| **Logged** | Rows the matcher believes you already logged by hand (`matched`) | Nothing — tap *Not a match* on any that are wrong |
+| **Skipped** | Own-account moves (hidden by default — toggle to show), standing skips, and manual skips | Nothing; Restore if you change your mind |
+
+A `person_transfer` never sits in Review — before BUD-51 it counted in both
+tabs at once, so "Review N" always overcounted by however many transfers were
+pending. Restoring a row from Skipped drops it into whichever of the other four
+tabs it actually belongs on — before BUD-51 a restored row had nowhere to go
+and stayed stuck on Skipped regardless of what you tapped.
 
 ## Matching rules (`src/lib/statement-reconcile.ts`)
 
@@ -223,7 +246,8 @@ states exactly what will happen before anything moves.
 - Currency is only claimed when the statement explicitly labels it
   (`Currency: EUR`). A bare code in the header is ignored — this bank prints
   "Fresh USD" as a product name, which produced false mismatch warnings.
-- **Transfers are skipped, not imported as transfers** — deliberately deferred
-  (PM inbox item, 2026-07-31).
+- **Only own-account moves are skipped, not imported.** A person-to-person
+  transfer (partner or not) and an ATM/voucher cash withdrawal are both
+  surfaced on the Transfers tab for a decision — see BUD-46…51.
 - Import is own-accounts-only; each household member imports their own
   statements under their own login (enforced server-side).

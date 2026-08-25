@@ -78,7 +78,22 @@ export interface MatchCandidate {
   amount: number;
 }
 
-export type RowClassification =
+export type RowStatus =
+  /**
+   * This bank line already produced a `transfers` row on an earlier import.
+   *
+   * A separate arm from the transaction one because a transfer is not a
+   * transaction: there is nothing to re-key, nothing to stamp, and no
+   * `bank_description` to backfill — the only honest thing to do with the row
+   * is show it as done. Recognised by fingerprint alone (no fuzzy tier): the
+   * hash is written to `transfers.statement_hash` at commit time and guarded
+   * by a unique index, so identity is the whole story.
+   */
+  | {
+      status: "already_imported";
+      reason: "transfer_hash";
+      transfer_id: string;
+    }
   | {
       status: "already_imported";
       reason: "hash" | "probable_duplicate";
@@ -160,13 +175,51 @@ export type RowClassification =
     }
   | { status: "transfer" }
   /**
-   * The owner skipped this exact row on a previous import and that decision was
-   * recorded against its fingerprint. Re-uploading the same period must not ask
-   * again — re-deciding the same rows every month is precisely the friction the
-   * idempotent-import work exists to remove. Restorable from the Skipped tab.
+   * Legacy status kept ONLY so a session already sitting in IndexedDB (up to
+   * `MAX_SESSIONS` = 3, see statementImportSession.ts) still type-checks and
+   * resolves sanely on resume. `reconcileStatementRows` never emits this
+   * anymore — see `RowClassification.skipped_before` below.
    */
   | { status: "skipped_before" }
   | { status: "unmatched" };
+
+/**
+ * A row's real classification, plus cross-cutting facts stamped on top.
+ *
+ * `skipped_before`, `memo` and `withdrawal` are FLAGS, not statuses: a row the
+ * owner skipped on a previous import is still whatever it actually is
+ * (`matched`, `person_transfer`, `unmatched`, …) — the flag only adds "and the
+ * owner chose to skip it". Restore reads the real status to decide which tab a
+ * row lands in. Before this, `skipped_before` WAS the status, so it silently
+ * replaced the row's real classification and Restore had nowhere honest to
+ * send it — the row stayed on the Skipped tab forever while "Save N rows"
+ * quietly grew, with no visible change anywhere else.
+ */
+export type RowClassification = RowStatus & {
+  /** A standing skip on this fingerprint (`statement_skipped_rows`). */
+  skipped_before?: boolean;
+  /**
+   * The note the owner typed into the bank app — everything after the FIRST
+   * " - " in the raw line ("Transfer to X via Mobile - 'link bowling - for 2'"
+   * -> "link bowling - for 2"). Only a DEFAULT for the transaction description;
+   * never touches `statement_hash`, which stays keyed to the bank's raw text.
+   */
+  memo?: string | null;
+  /** Set when the description names an ATM or voucher cash withdrawal. */
+  withdrawal?: { kind: "atm" | "voucher" };
+  /**
+   * Set when the description names an own-account currency exchange.
+   *
+   * Only the **out** leg is actionable. The identical bank line appears on BOTH
+   * statements — money OUT 200.00 on the USD side, money IN 170.40 on the EUR
+   * side — and the two rows hash differently because the account is part of the
+   * fingerprint, so nothing would stop the second import from writing the same
+   * movement twice. Recording it once, from the side that pays, is the same
+   * rule `person_transfer` already follows for the same reason. The in leg
+   * stays on Skipped, labelled as the other side of an exchange.
+   */
+  exchange?: ReturnType<typeof classifyOwnExchange>;
+};
 
 export interface ReconcileSummary {
   matched: number;
@@ -228,6 +281,12 @@ export interface HouseholdTransferRef {
   amount: number;
 }
 
+/** A live `transfers` row that a previous import fingerprinted. */
+export interface ImportedTransferRef {
+  id: string;
+  statement_hash: string;
+}
+
 const NAME_NOISE = /[^A-Z\s]/g;
 
 /**
@@ -273,6 +332,99 @@ export function isPersonTransfer(description: string): boolean {
     PERSON_TRANSFER_PATTERN.test(description) &&
     !OWN_ACCOUNT_PATTERNS.some((pattern) => pattern.test(description))
   );
+}
+
+const WITHDRAWAL_PATTERN = /\bwithdrawals?\b/i;
+
+/**
+ * ATM / voucher cash withdrawals — never a merchant purchase, but not a
+ * no-op either: an ATM withdrawal is cash moving to the wallet (a SELF
+ * transfer, no spending yet) and a voucher withdrawal is real spending whose
+ * category the owner wrote into the bank line ("… for Voucher No 123 - Car
+ * Insurance"). A flag, like `skipped_before`, so an already-imported or
+ * hand-logged withdrawal still reports its real status.
+ */
+export function classifyWithdrawal(
+  description: string,
+): { kind: "atm" | "voucher" } | null {
+  if (!WITHDRAWAL_PATTERN.test(description)) return null;
+  return { kind: /\bvoucher\b/i.test(description) ? "voucher" : "atm" };
+}
+
+/**
+ * An own-account CURRENCY EXCHANGE — "Own Account Exchange: USD to EUR at
+ * 0.852 - to 501400630005 -".
+ *
+ * `isTransferDescription()` already recognises these as own-account moves, and
+ * that was where it stopped: the row classified `transfer`, landed on Skipped,
+ * and produced no action. But an exchange is not noise the way an internal
+ * same-currency move is — it is the owner buying EUR with USD, and the
+ * destination account's balance genuinely goes up by a DIFFERENT number than
+ * the one on the statement. Skipping it leaves the EUR account permanently
+ * short.
+ *
+ * Everything needed is on the line: both currencies, the rate, and the last
+ * digits of the counterparty account. A flag like `withdrawal`, so an
+ * already-imported or hand-logged exchange still reports its real status.
+ *
+ * `direction` comes from the statement's own MONEY OUT / MONEY IN column, never
+ * from the wording — the SAME line appears on both statements ("USD to EUR at
+ * 0.852" is written identically on the USD side and the EUR side), so the
+ * wording cannot say which side you are reading. Only the OUT leg is
+ * actionable; see the `exchange` field's doc comment on `RowClassification`.
+ */
+export function classifyOwnExchange(
+  description: string,
+  type: "debit" | "credit",
+): {
+  from_currency: string;
+  to_currency: string;
+  /** Units of `to_currency` per unit of `from_currency`, as the bank quotes it. */
+  rate: number;
+  /** Trailing digits of the other account, as printed. Null when absent. */
+  counterparty_account: string | null;
+  /** "out" — this statement is the FROM side. "in" — it is the TO side. */
+  direction: "in" | "out";
+} | null {
+  if (!/\bexchange\b/i.test(description)) return null;
+
+  // Anchored to "exchange" so a merchant called "Currency Exchange Hamra"
+  // cannot match: the pair-and-rate shape has to follow the word itself.
+  const pair = description.match(
+    /\bexchange\b\s*:?\s*([A-Z]{3})\s+to\s+([A-Z]{3})\s+at\s+([0-9]*\.?[0-9]+)/i,
+  );
+  if (!pair) return null;
+
+  const rate = Number(pair[3]);
+  if (!Number.isFinite(rate) || rate <= 0) return null;
+
+  const account = description.match(/\b(?:to|from)\s+(\d{4,})/i);
+
+  return {
+    from_currency: pair[1].toUpperCase(),
+    to_currency: pair[2].toUpperCase(),
+    rate,
+    counterparty_account: account ? account[1] : null,
+    direction: type === "debit" ? "out" : "in",
+  };
+}
+
+/**
+ * The note the owner typed into the bank app — everything after the FIRST
+ * " - " in the raw line, unwrapped if quoted.
+ *
+ * FIRST, not last: "Transfer to X via Mobile - 'link bowling - mkalles - for
+ * 2'" is one memo the owner wrote, not three fragments to rejoin. Guards
+ * against the trailing " -" some PDF/CSV rows carry from an empty MONEY OUT
+ * column ("Transfer from X via Mobile -"), which is not a memo.
+ */
+export function extractStatementMemo(description: string): string | null {
+  const idx = description.indexOf(" - ");
+  if (idx === -1) return null;
+  let memo = description.slice(idx + 3).trim();
+  const quoted = memo.match(/^['"](.+)['"]$/);
+  if (quoted) memo = quoted[1].trim();
+  return memo && memo !== "-" ? memo : null;
 }
 
 /**
@@ -403,6 +555,16 @@ export function reconcileStatementRows(
   householdMembers: HouseholdMember[] = [],
   /** Household transfers already recorded, for recognising a logged movement. */
   householdTransfers: HouseholdTransferRef[] = [],
+  /**
+   * Live transfers a previous import already created from these very rows.
+   *
+   * Transfers are the ONLY money this feature writes outside `transactions`,
+   * so without them the hash map below is blind to a whole class of rows: a
+   * household transfer, a cash withdrawal to the wallet, or an own-account FX
+   * exchange came back as brand new on every re-import and the owner could
+   * confirm the same movement twice.
+   */
+  importedTransfers: ImportedTransferRef[] = [],
 ): Map<string, RowClassification> {
   const results = new Map<string, RowClassification>();
 
@@ -413,6 +575,13 @@ export function reconcileStatementRows(
   for (const tx of [...candidates, ...crossAccountCandidates]) {
     if (tx.statement_hash && !byHash.has(tx.statement_hash)) {
       byHash.set(tx.statement_hash, tx);
+    }
+  }
+
+  const transfersByHash = new Map<string, ImportedTransferRef>();
+  for (const t of importedTransfers) {
+    if (t.statement_hash && !transfersByHash.has(t.statement_hash)) {
+      transfersByHash.set(t.statement_hash, t);
     }
   }
 
@@ -435,7 +604,14 @@ export function reconcileStatementRows(
   // subscription of identical amount.)
   const claimedAsDuplicate = new Set<string>();
 
+  // Fingerprints the owner has already chosen to skip. Recorded as a FLAG
+  // stamped onto the row's REAL classification in the post-pass below, never
+  // as a status of its own — see the RowClassification doc comment for why.
+  const previouslySkipped = new Set<string>();
+
   for (const row of rows) {
+    if (skippedHashes.has(row.statement_hash)) previouslySkipped.add(row.id);
+
     // The exact-hash check runs FIRST, ahead of the transfer rule, so a row
     // that really was written to the ledger reports itself honestly instead of
     // hiding behind "transfer". That matters right after the own-account fix:
@@ -454,11 +630,17 @@ export function reconcileStatementRows(
       continue;
     }
 
-    // A standing decision by the owner outranks every heuristic below — but not
-    // the exact-hash check above, because "you already imported this" is a
-    // stronger and more surprising fact than "you skipped this".
-    if (skippedHashes.has(row.statement_hash)) {
-      results.set(row.id, { status: "skipped_before" });
+    // Same identity check, against the other table this feature writes to.
+    // Runs BEFORE the transfer/person-transfer rules for the same reason the
+    // transaction one does: a row that really was recorded must say so, rather
+    // than being re-offered as an action the owner can take a second time.
+    const transferHit = transfersByHash.get(row.statement_hash);
+    if (transferHit) {
+      results.set(row.id, {
+        status: "already_imported",
+        reason: "transfer_hash",
+        transfer_id: transferHit.id,
+      });
       continue;
     }
 
@@ -678,6 +860,29 @@ export function reconcileStatementRows(
     });
   }
 
+  // ── Pass 5: stamp cross-cutting flags onto each row's REAL status ────────
+  // Every row gets this pass, regardless of which status it landed on above —
+  // an already-imported withdrawal is still `already_imported`, a hand-logged
+  // one is still `matched`; only an otherwise-`unmatched` withdrawal is new
+  // information for the UI to act on.
+  for (const row of rows) {
+    const existing = results.get(row.id);
+    if (!existing) continue;
+    const memo = extractStatementMemo(row.description);
+    const withdrawal = classifyWithdrawal(row.description);
+    const exchange = classifyOwnExchange(row.description, row.type);
+    results.set(row.id, {
+      ...existing,
+      ...(previouslySkipped.has(row.id) ? { skipped_before: true } : {}),
+      // An exchange line's " - " separates FIELDS ("… at 0.852 - to
+      // 501400630005 -"), it is not a note the owner typed — without this the
+      // transfer's default description became "to 501400630005 -".
+      ...(memo && !exchange ? { memo } : {}),
+      ...(withdrawal ? { withdrawal } : {}),
+      ...(exchange ? { exchange } : {}),
+    });
+  }
+
   return results;
 }
 
@@ -697,6 +902,10 @@ export function summarize(
   };
 
   for (const result of results.values()) {
+    // A flag, not a status (see RowClassification) — counted independently of
+    // the switch below, which reflects the real classification.
+    if (result.skipped_before) summary.skipped_before++;
+
     switch (result.status) {
       case "matched":
         summary.matched++;
@@ -717,6 +926,7 @@ export function summarize(
         summary.transfers++;
         break;
       case "skipped_before":
+        // Legacy status from a session already in IndexedDB — see RowStatus.
         summary.skipped_before++;
         break;
       case "person_transfer":

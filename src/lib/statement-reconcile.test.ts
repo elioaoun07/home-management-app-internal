@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyOwnExchange,
+  classifyWithdrawal,
+  extractStatementMemo,
   reconcileStatementRows,
   summarize,
   type CandidateTx,
@@ -242,7 +245,9 @@ describe("reconcileStatementRows", () => {
 
     for (const description of legs) {
       const results = reconcileStatementRows([row({ description })], [tx()]);
-      expect(results.get("row-1"), description).toEqual({ status: "transfer" });
+      expect(results.get("row-1"), description).toMatchObject({
+        status: "transfer",
+      });
     }
   });
 
@@ -256,7 +261,9 @@ describe("reconcileStatementRows", () => {
     ];
     for (const description of own) {
       const results = reconcileStatementRows([row({ description })], []);
-      expect(results.get("row-1"), description).toEqual({ status: "transfer" });
+      expect(results.get("row-1"), description).toMatchObject({
+        status: "transfer",
+      });
     }
 
     const people = [
@@ -288,12 +295,13 @@ describe("reconcileStatementRows", () => {
       new Set(),
       members,
     );
-    expect(household.get("row-1")).toEqual({
+    expect(household.get("row-1")).toMatchObject({
       status: "person_transfer",
       counterparty: "RACHA SAMIR TOUMA",
       direction: "out",
       household_match: true,
       existing_transfer_id: null,
+      memo: "Car",
     });
 
     // An outsider is real spending: still surfaced, but NOT pre-selected as a
@@ -308,6 +316,110 @@ describe("reconcileStatementRows", () => {
     expect(outsider.get("row-1")).toMatchObject({
       status: "person_transfer",
       household_match: false,
+    });
+  });
+
+  // Transfers are the only money this feature writes outside `transactions`,
+  // so before they were fingerprinted a re-imported statement re-offered every
+  // one of them as brand new and the owner could move both balances twice.
+  describe("transfers already created by a previous import", () => {
+    const imported = [{ id: "tr-1", statement_hash: "hash-row-1" }];
+
+    it("recognises a household transfer instead of offering it again", () => {
+      const results = reconcileStatementRows(
+        [row({ description: "Transfer to RACHA SAMIR TOUMA via Mobile - Car" })],
+        [],
+        [],
+        new Set(),
+        [{ user_id: "u-racha", full_name: "Racha Touma" }],
+        [],
+        imported,
+      );
+
+      expect(results.get("row-1")).toMatchObject({
+        status: "already_imported",
+        reason: "transfer_hash",
+        transfer_id: "tr-1",
+      });
+    });
+
+    it("recognises a cash withdrawal already moved to the wallet", () => {
+      const results = reconcileStatementRows(
+        [row({ description: "ATM CASH WITHDRAWAL BLOM HAMRA" })],
+        [],
+        [],
+        new Set(),
+        [],
+        [],
+        imported,
+      );
+
+      const result = results.get("row-1")!;
+      expect(result).toMatchObject({
+        status: "already_imported",
+        reason: "transfer_hash",
+      });
+      // The flag still rides along (pass 5 stamps every row) — what changed is
+      // the status underneath it, which is what decides whether an action is
+      // offered.
+      expect(result.withdrawal).toBeTruthy();
+    });
+
+    it("recognises the out leg of an own-account exchange", () => {
+      const results = reconcileStatementRows(
+        [
+          row({
+            description:
+              "Own Account Exchange: USD to EUR at 0.852 - from 501400630004 -",
+          }),
+        ],
+        [],
+        [],
+        new Set(),
+        [],
+        [],
+        imported,
+      );
+
+      expect(results.get("row-1")).toMatchObject({
+        status: "already_imported",
+        reason: "transfer_hash",
+      });
+    });
+
+    it("leaves a row alone when a DIFFERENT fingerprint was imported", () => {
+      const results = reconcileStatementRows(
+        [row({ description: "Transfer to RACHA SAMIR TOUMA via Mobile - Car" })],
+        [],
+        [],
+        new Set(),
+        [],
+        [],
+        [{ id: "tr-9", statement_hash: "hash-some-other-row" }],
+      );
+
+      expect(results.get("row-1")).toMatchObject({ status: "person_transfer" });
+    });
+
+    // A transaction and a transfer can never be the same money event, but if a
+    // fingerprint somehow landed on both, the transaction arm wins — it is the
+    // one carrying a re-key/backfill path.
+    it("prefers the transaction arm when both carry the fingerprint", () => {
+      const results = reconcileStatementRows(
+        [row()],
+        [tx({ statement_hash: "hash-row-1" })],
+        [],
+        new Set(),
+        [],
+        [],
+        imported,
+      );
+
+      expect(results.get("row-1")).toMatchObject({
+        status: "already_imported",
+        reason: "hash",
+        transaction_id: "tx-1",
+      });
     });
   });
 
@@ -402,12 +514,22 @@ describe("reconcileStatementRows", () => {
       [tx({ id: "tx-phantom", statement_hash: "h-fx" })],
     );
 
+    // The `exchange` flag rides along on the REAL status, like every other
+    // cross-cutting flag — an already-imported exchange is still
+    // `already_imported`, so it produces no second transfer.
     expect(results.get("row-1")).toEqual({
       status: "already_imported",
       reason: "hash",
       transaction_id: "tx-phantom",
       stored_hash: "h-fx",
       stored_bank_description: null,
+      exchange: {
+        from_currency: "USD",
+        to_currency: "EUR",
+        rate: 0.852,
+        counterparty_account: null,
+        direction: "out",
+      },
     });
   });
 
@@ -451,7 +573,7 @@ describe("reconcileStatementRows", () => {
         }),
       ],
     );
-    expect(results.get("row-1")).toEqual({ status: "unmatched" });
+    expect(results.get("row-1")).toMatchObject({ status: "unmatched" });
   });
 
   it("recognises an income re-import by the fuzzy tier so it can be re-keyed", () => {
@@ -668,5 +790,170 @@ describe("reconcileStatementRows", () => {
       skipped_before: 0,
       unmatched: 1,
     });
+  });
+
+  // BUD: withdrawals were previously unhandled anywhere — they fell through
+  // as an ordinary unmatched merchant row.
+  it("classifies ATM and voucher withdrawals, with their real memo carried along", () => {
+    const results = reconcileStatementRows(
+      [
+        row({
+          id: "atm",
+          statement_hash: "h-atm",
+          description:
+            "Audi ATM Cash withdrawal 05606305 BANK AUDI HOLCOM-5 BEIRUT LB 7121",
+        }),
+        row({
+          id: "voucher",
+          statement_hash: "h-voucher",
+          description:
+            "Voucher ATM Cash Withdrawal at BANK AUDI MANSOURIEH-6 MANSOURIEH LB for Voucher No 6755430378 - Car Insurance",
+        }),
+      ],
+      [],
+    );
+
+    expect(results.get("atm")).toEqual({
+      status: "unmatched",
+      withdrawal: { kind: "atm" },
+    });
+    expect(results.get("voucher")).toEqual({
+      status: "unmatched",
+      withdrawal: { kind: "voucher" },
+      memo: "Car Insurance",
+    });
+  });
+
+  // A withdrawal is still whatever it really is — the flag never hides an
+  // already-logged or already-imported row from its true status.
+  it("keeps a withdrawal's real status when it is already imported", () => {
+    const results = reconcileStatementRows(
+      [
+        row({
+          statement_hash: "h-atm",
+          description: "Audi ATM Cash withdrawal 05606305 BEIRUT LB 7121",
+        }),
+      ],
+      [tx({ statement_hash: "h-atm" })],
+    );
+    expect(results.get("row-1")).toMatchObject({
+      status: "already_imported",
+      withdrawal: { kind: "atm" },
+    });
+  });
+
+  // The bug this fixed: `skipped_before` used to BE the status, so a restored
+  // row had no real classification left to route it anywhere — it stayed
+  // stuck on the Skipped tab forever. Now it is a flag on top of whatever the
+  // row actually is.
+  it("carries skipped_before as a flag on the row's real status, not a status of its own", () => {
+    const results = reconcileStatementRows(
+      [row({ statement_hash: "h-skip" })],
+      [tx()],
+      [],
+      new Set(["h-skip"]),
+    );
+    expect(results.get("row-1")).toMatchObject({
+      status: "matched",
+      transaction_id: "tx-1",
+      skipped_before: true,
+    });
+  });
+});
+
+describe("extractStatementMemo", () => {
+  it("extracts the owner's own note from the bank line", () => {
+    const cases: Array<[string, string | null]> = [
+      [
+        "Transfer to ELIE JOSEPH AZAR via Mobile - 'link bowling - mkalles - for 2'",
+        "link bowling - mkalles - for 2",
+      ],
+      ["Transfer to RACHA SAMIR TOUMA via Mobile - Car", "Car"],
+      ["Transfer from SALIM IBRAHIM SAADEH via Mobile -", null],
+      [
+        "Voucher ATM Cash Withdrawal at BANK AUDI MANSOURIEH-6 MANSOURIEH LB for Voucher No 6755430378 - Car Insurance",
+        "Car Insurance",
+      ],
+      [
+        "Audi ATM Cash withdrawal 05606305 BANK AUDI HOLCOM-5 BEIRUT LB 7121",
+        null,
+      ],
+    ];
+    for (const [description, expected] of cases) {
+      expect(extractStatementMemo(description), description).toBe(expected);
+    }
+  });
+});
+
+describe("classifyWithdrawal", () => {
+  it("tells ATM and voucher withdrawals apart", () => {
+    expect(
+      classifyWithdrawal(
+        "Audi ATM Cash withdrawal 05606305 BANK AUDI HOLCOM-5 BEIRUT LB 7121",
+      ),
+    ).toEqual({ kind: "atm" });
+    expect(
+      classifyWithdrawal(
+        "Voucher ATM Cash Withdrawal at BANK AUDI MANSOURIEH-6 MANSOURIEH LB for Voucher No 6755430378 - Car Insurance",
+      ),
+    ).toEqual({ kind: "voucher" });
+    expect(classifyWithdrawal("POS Purchase ROADSTER BEIRUT LB 3043")).toBeNull();
+  });
+});
+
+describe("classifyOwnExchange", () => {
+  // Verbatim from the owner's August statement (the trailing " -" is the empty
+  // MONEY IN column the PDF carries through).
+  const LINE = "Own Account Exchange: USD to EUR at 0.852 - to 501400630005 -";
+
+  it("reads both currencies, the rate and the counterparty account", () => {
+    expect(classifyOwnExchange(LINE, "debit")).toEqual({
+      from_currency: "USD",
+      to_currency: "EUR",
+      rate: 0.852,
+      counterparty_account: "501400630005",
+      direction: "out",
+    });
+  });
+
+  it("takes direction from the money column, never the wording", () => {
+    // The SAME line appears on the EUR statement, as money IN. Only the column
+    // distinguishes the two legs, which is why the wording cannot be trusted
+    // for it — and why only the out leg is ever acted on.
+    expect(classifyOwnExchange(LINE, "credit")?.direction).toBe("in");
+    expect(classifyOwnExchange(LINE, "debit")?.direction).toBe("out");
+  });
+
+  it("handles the line without the account reference", () => {
+    expect(
+      classifyOwnExchange("Own Account Exchange: EUR to USD at 1.1735", "debit"),
+    ).toMatchObject({
+      from_currency: "EUR",
+      to_currency: "USD",
+      rate: 1.1735,
+      counterparty_account: null,
+    });
+  });
+
+  it("does not fire on a merchant that merely says exchange", () => {
+    // The pair-and-rate shape must follow the word itself.
+    expect(classifyOwnExchange("POS PURCHASE CURRENCY EXCHANGE HAMRA", "debit"))
+      .toBeNull();
+    expect(classifyOwnExchange("The Exchange Bookshop", "debit")).toBeNull();
+    expect(
+      classifyOwnExchange("Own Account Exchange: USD to EUR", "debit"),
+    ).toBeNull();
+  });
+
+  it("rejects a nonsense rate rather than converting by it", () => {
+    expect(
+      classifyOwnExchange("Own Account Exchange: USD to EUR at 0", "debit"),
+    ).toBeNull();
+  });
+
+  it("leaves a same-currency own-account move alone", () => {
+    expect(
+      classifyOwnExchange("Internal Transfer - to 501400630005", "debit"),
+    ).toBeNull();
   });
 });

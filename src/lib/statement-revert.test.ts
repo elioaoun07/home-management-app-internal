@@ -351,6 +351,96 @@ describe("planRevert — the whole batch", () => {
   });
 });
 
+describe("planRevert — create_transfer", () => {
+  // A self transfer (cash withdrawal -> wallet) reverts exactly like a
+  // household one: the ledger entry only records the NET effect, so the
+  // planner doesn't need to know which shape it is — it just undoes both legs.
+  it("reverts a self transfer's both legs from the entry alone", () => {
+    const WALLET = "acc-wallet";
+    const transferEntry: LedgerEntry = {
+      id: "entry-1",
+      action: "create_transfer",
+      transaction_id: null,
+      transfer_id: "tr-1",
+      account_id: ACCOUNT,
+      statement_hash: "hash-1",
+      previous: {},
+      applied: { amount: 200, to_account_id: WALLET, to_delta: 200 },
+      reverted_at: null,
+    };
+
+    const { plans, deltas, counts } = planRevert(
+      [transferEntry],
+      liveMap(),
+      accountTypes,
+    );
+
+    // The statement account gave up 200 (create_transfer's fromDelta was
+    // -200), so undoing it gives it back; the wallet received +200, so
+    // undoing it takes that back out.
+    expect(deltas[ACCOUNT]).toBe(200);
+    expect(deltas[WALLET]).toBe(-200);
+    expect(counts.transfers_deleted).toBe(1);
+    expect(plans[0]).toMatchObject({
+      action: "create_transfer",
+      note: "reverted",
+      guard: { id: "tr-1", from_account_id: ACCOUNT, to_account_id: WALLET },
+    });
+  });
+
+  // An FX exchange moves DIFFERENT numbers on the two sides (200.00 USD out,
+  // 170.40 EUR in), so a revert that assumed symmetry would leave the EUR
+  // account 29.60 over. The planner reads `to_delta` off the entry rather than
+  // re-deriving it from `amount`, which is what makes this work unchanged.
+  it("reverts a cross-currency exchange by the amount each side actually moved", () => {
+    const EUR = "acc-eur";
+    const { deltas, counts } = planRevert(
+      [
+        {
+          id: "entry-fx",
+          action: "create_transfer",
+          transaction_id: null,
+          transfer_id: "tr-fx",
+          account_id: ACCOUNT,
+          statement_hash: "hash-fx",
+          previous: {},
+          applied: { amount: 200, to_account_id: EUR, to_delta: 170.4 },
+          reverted_at: null,
+        },
+      ],
+      liveMap(),
+      accountTypes,
+    );
+
+    expect(deltas[ACCOUNT]).toBe(200);
+    expect(deltas[EUR]).toBe(-170.4);
+    expect(counts.transfers_deleted).toBe(1);
+  });
+
+  it("skips a transfer the entry never actually recorded (transfer_id missing)", () => {
+    const { plans, counts } = planRevert(
+      [
+        {
+          id: "entry-1",
+          action: "create_transfer",
+          transaction_id: null,
+          transfer_id: null,
+          account_id: ACCOUNT,
+          statement_hash: "hash-1",
+          previous: {},
+          applied: { amount: 200 },
+          reverted_at: null,
+        },
+      ],
+      liveMap(),
+      accountTypes,
+    );
+
+    expect(plans[0].note).toBe("gone");
+    expect(counts.gone).toBe(1);
+  });
+});
+
 describe("hasDrifted", () => {
   it("flags an edited amount on a created row", () => {
     expect(hasDrifted(entry(), tx({ amount: 60 }))).toBe(true);

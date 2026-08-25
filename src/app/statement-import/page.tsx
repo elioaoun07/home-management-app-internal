@@ -24,6 +24,8 @@ import { MatchedRowCard } from "@/components/statement-import/MatchedRowCard";
 import { OtherAccountSheet } from "@/components/statement-import/OtherAccountSheet";
 import { ReviewGroupCard } from "@/components/statement-import/ReviewGroupCard";
 import { ReviewStepper } from "@/components/statement-import/ReviewStepper";
+import { ScrollableTabs } from "@/components/statement-import/ScrollableTabs";
+import { TransferRowCard } from "@/components/statement-import/TransferRowCard";
 import {
   Select,
   SelectContent,
@@ -31,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAccounts, useMyAccounts } from "@/features/accounts/hooks";
+import { useHouseholdAccounts, useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
   useCommitStatement,
@@ -39,16 +41,27 @@ import {
   useReconcileStatement,
 } from "@/features/statement-import/hooks";
 import {
+  actionLane,
   bucketCounts,
   buildCommitActions,
+  convertAtRate,
   buildReviewGroups,
+  countOpen,
   countUndecided,
+  describeCommitAction,
   getBucket,
+  pickAccount,
   resolveRowAccount,
   resolveRowCategory,
-  treatsAsTransfer,
+  skippedGroupCounts,
+  skipReason,
+  stagedNetAmount,
   undecidedRows,
+  type ActionLane,
+  type SkipGroup,
 } from "@/features/statement-import/sessionModel";
+import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
+import { useHouseholdPartner } from "@/hooks/useHouseholdPartner";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getCurrencySymbol } from "@/lib/currency";
@@ -84,9 +97,14 @@ type Phase = "upload" | "working" | "review" | "receipt";
 // "imported" (fingerprint already in the ledger — machine certain) is split
 // from "matched" (the matcher thinks this is one of your manual logs — a
 // judgement call). See the Bucket doc comment in sessionModel.ts.
+// Five of these are buckets (a partition of every row); "ready" is a
+// CROSS-CUTTING view of what Save will write, so a staged row appears both in
+// its own tab and here. That is the point: deciding a row stages it, it does
+// not file it away somewhere new.
 type BucketFilter =
   | "review"
   | "transfers"
+  | "ready"
   | "imported"
   | "matched"
   | "skipped";
@@ -149,6 +167,16 @@ export default function StatementImportPage() {
   // Review holds three unrelated jobs; stacking them made one long scroll.
   type ReviewSection = "categorize" | "other" | "maybe";
   const [reviewSection, setReviewSection] = useState<ReviewSection>("categorize");
+  // Transfers holds two unrelated jobs too — people and cash need different
+  // controls (a partner/category decision vs. a wallet/spent one).
+  type TransfersSection = "people" | "cash" | "exchange";
+  const [transfersSection, setTransfersSection] =
+    useState<TransfersSection>("people");
+  // Skipped holds three unrelated populations (see skipReason in
+  // sessionModel.ts): what I set aside now, what an earlier import remembered,
+  // and own-account moves the matcher re-derives every run. One flat list put a
+  // 3-row decision inside 85 rows of noise.
+  const [skipSection, setSkipSection] = useState<SkipGroup>("session");
   const [openOtherRowId, setOpenOtherRowId] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   // Transient on purpose: a currency hint is only trustworthy at the moment we
@@ -166,13 +194,75 @@ export default function StatementImportPage() {
 
   // The destination of a household transfer must be the PARTNER's account —
   // the transfers API rejects anything else — so the picker only offers those.
-  const { data: householdAccounts = [] } = useAccounts();
+  //
+  // `useHouseholdAccounts()`, NOT `useAccounts()`: the latter exposes only the
+  // partner's `is_public` accounts, so a partner who keeps their accounts
+  // private produced an EMPTY dropdown with no error anywhere. A household
+  // transfer is exactly the case that is allowed to name a private partner
+  // account (BUD-13), and `TransferDialog` — the working precedent — sources
+  // it the same way. Identify the partner explicitly rather than by
+  // subtracting the owner's list, so an account missing from `useMyAccounts`
+  // (hidden, say) can never be mistaken for the partner's.
+  const { data: allHouseholdAccounts = [] } = useHouseholdAccounts();
+  const { data: householdData } = useHouseholdMembers();
+  // Name resolved server-side from auth metadata — `profiles` (what
+  // useHouseholdMembers reads) can be empty and degrade every name to an
+  // email prefix. Falls back to the members list if the endpoint is unreachable.
+  const { data: resolvedPartner } = useHouseholdPartner(
+    householdData?.currentUserId ?? undefined,
+  );
+  const partner =
+    resolvedPartner ?? householdData?.members.find((m) => !m.isCurrentUser);
   const partnerAccounts = useMemo(
     () =>
-      householdAccounts.filter(
-        (a: { id: string }) => !accounts.some((o: { id: string }) => o.id === a.id),
-      ),
-    [householdAccounts, accounts],
+      allHouseholdAccounts
+        .filter(
+          (a) => !!partner && a.user_id === partner.id && a.visible !== false,
+        )
+        // Both members name their accounts the same way ("Debit Card - NEO",
+        // "Salary", "Wallet" exist on both sides), so a bare account name in
+        // this picker is genuinely ambiguous — it reads as the owner's own.
+        .map((a) => ({
+          id: a.id,
+          name: partner ? `${a.name} · ${partner.displayName}` : a.name,
+        })),
+    [allHouseholdAccounts, partner],
+  );
+
+  // Where a cash withdrawal can land: the owner's OWN accounts, minus the one
+  // the statement belongs to (money cannot move to where it came from).
+  const ownDestinations = useMemo(
+    () =>
+      accounts
+        .filter((a: { id: string }) => a.id !== accountId)
+        // Currency is part of the identity here: an FX exchange row has to land
+        // in the account that is actually in the target currency, and several
+        // own accounts share a name shape ("Trip - Italy", "Trip - Greece").
+        .map((a: { id: string; name: string; currency?: string }) => ({
+          id: a.id,
+          name: a.currency ? `${a.name} · ${a.currency}` : a.name,
+        })),
+    [accounts, accountId],
+  );
+
+  /**
+   * Any account id this page can be asked to name — own, partner's, or one a
+   * cross-account flag points at. Partner accounts carry the partner's name
+   * because both members use the same account names.
+   */
+  const accountNameById = useCallback(
+    (id: string) => {
+      const own = accounts.find((a: { id: string }) => a.id === id);
+      if (own) return own.name;
+      const shared = allHouseholdAccounts.find((a) => a.id === id);
+      if (shared) {
+        return partner && shared.user_id === partner.id
+          ? `${shared.name} · ${partner.displayName}`
+          : shared.name;
+      }
+      return session?.account_names?.[id] ?? "Account";
+    },
+    [accounts, allHouseholdAccounts, partner, session],
   );
 
   // Hard Rule #14 — colour follows the PERSON, not the viewer. My theme picks
@@ -185,12 +275,26 @@ export default function StatementImportPage() {
   const accountRefs = useMemo(
     () =>
       accounts.map(
-        (a: { id: string; type: string; is_default?: boolean }) => ({
+        (a: {
+          id: string;
+          type: string;
+          is_default?: boolean;
+          currency?: string;
+        }) => ({
           id: a.id,
           type: a.type as "expense" | "income" | "saving",
           is_default: a.is_default,
+          currency: a.currency,
         }),
       ),
+    [accounts],
+  );
+
+  const accountCurrencyById = useCallback(
+    (id: string) =>
+      accounts.find((a: { id: string }) => a.id === id)?.currency as
+        | string
+        | undefined,
     [accounts],
   );
 
@@ -234,6 +338,12 @@ export default function StatementImportPage() {
         if (patch.category_id !== undefined && merged.resolution === "undecided") {
           merged.resolution = "create";
         }
+
+        // Skipping withdraws a Restore. Kept here rather than at each call
+        // site because every skip button in this screen means the same thing,
+        // and a stale `restored: true` would keep emitting an `unskip` action
+        // for a row the owner has just set aside again.
+        if (patch.resolution === "skip") merged.restored = false;
 
         const next = {
           ...current,
@@ -450,25 +560,65 @@ export default function StatementImportPage() {
 
   const counts = session
     ? bucketCounts(session)
-    : { matched: 0, imported: 0, review: 0, skipped: 0 };
+    : { matched: 0, imported: 0, review: 0, transfers: 0, skipped: 0 };
   const undecided = session ? countUndecided(session) : 0;
+  // Review-scoped `undecided` still drives the stepper and progress bar; the
+  // Save button and resume banner need the wider "review OR transfers, still
+  // no action" count so they stay honest now that transfers live outside the
+  // review bucket.
+  const openCount = useMemo(() => (session ? countOpen(session) : 0), [session]);
   const stepperQueue = useMemo(
     () => (session ? undecidedRows(session) : []),
     [session],
   );
   const currency = session?.account_currency ?? account?.currency ?? "USD";
 
+  // Categories are ACCOUNT-SCOPED, and a row does not always land in the
+  // statement's account: `suggestAccountForRow` redirects a money-OUT row off
+  // an income/saving statement to the default expense account, and money IN
+  // from a person off an expense statement to the income one. So the picker
+  // for such a row lists a DIFFERENT account's categories — and a map built
+  // only from the statement's account could not name the category that came
+  // back. The chip fell back to "Choose category" and the owner's pick looked
+  // like it had been thrown away the instant they made it.
+  //
+  // Hence one map spanning every account this screen can target. `useCategories`
+  // no-ops on undefined, so nothing extra is fetched when the statement account
+  // already is the suggested one.
+  const incomeAccountId = useMemo(
+    () => pickAccount(accountRefs, "income") ?? accountId,
+    [accountRefs, accountId],
+  );
+  const expenseAccountId = useMemo(
+    () => pickAccount(accountRefs, "expense") ?? accountId,
+    [accountRefs, accountId],
+  );
+  const { data: incomeCategories = [] } = useCategories(
+    incomeAccountId !== accountId ? incomeAccountId : undefined,
+  );
+  const { data: expenseCategories = [] } = useCategories(
+    expenseAccountId !== accountId ? expenseAccountId : undefined,
+  );
+
   const categoryById = useMemo(() => {
     const map = new Map<string, { name: string; color: string; slug?: string | null }>();
-    for (const c of categories) {
-      map.set(c.id, {
-        name: c.name,
-        color: c.color || tc.defaultAccentColor,
-        slug: c.slug,
-      });
+    // Statement account LAST so its own names win any id collision.
+    for (const list of [expenseCategories, incomeCategories, categories]) {
+      for (const c of list) {
+        map.set(c.id, {
+          name: c.name,
+          color: c.color || tc.defaultAccentColor,
+          slug: c.slug,
+        });
+      }
     }
     return map;
-  }, [categories, tc.defaultAccentColor]);
+  }, [categories, incomeCategories, expenseCategories, tc.defaultAccentColor]);
+
+  const categoryOf = useCallback(
+    (id: string | null | undefined) => (id ? (categoryById.get(id) ?? null) : null),
+    [categoryById],
+  );
 
   // Rows the matcher half-matched and the user has not ruled on yet. They are
   // shown as match cards, never as "categorize me" rows: categorizing one
@@ -506,23 +656,45 @@ export default function StatementImportPage() {
     });
   }, [session]);
 
-  // Household movements the owner still has to point at a destination account.
-  // Incoming legs are not here: only the sender can record a household transfer
-  // (the transfers API requires the creator to own the from-account), so a
-  // received one waits for the partner's own import.
-  // EVERY person-to-person transfer, household or not.
+  // EVERY person-to-person transfer still waiting on a decision — partner or
+  // not, sent or received. getBucket() routes every one of these (and nothing
+  // else) to the "transfers" bucket, so this list and the tab count agree by
+  // construction; Review no longer double-counts them.
   //
   // Gating this on the household name match was wrong: the tab is called
   // "Transfers", so a transfer belongs in it regardless of who the counterparty
   // is — and tying VISIBILITY to a name match meant a missed match hid the row
-  // in the merchant list instead of merely costing a tap. The match now only
+  // in the merchant list instead of merely costing a tap. The match only
   // pre-selects the household path on the card.
-  const householdRows = useMemo(() => {
+  const transferPeopleRows = useMemo(() => {
     if (!session) return [];
     return session.rows.filter((row) => {
       const c = session.classifications[row.id];
       if (c?.status !== "person_transfer") return false;
-      return getBucket(c, session.decisions[row.id]) === "review";
+      return getBucket(c, session.decisions[row.id]) === "transfers";
+    });
+  }, [session]);
+
+  // ATM / voucher cash withdrawals still waiting on "to wallet" vs "spent".
+  const transferCashRows = useMemo(() => {
+    if (!session) return [];
+    return session.rows.filter((row) => {
+      const c = session.classifications[row.id];
+      if (!c?.withdrawal) return false;
+      return getBucket(c, session.decisions[row.id]) === "transfers";
+    });
+  }, [session]);
+
+  // Own-account currency exchanges still waiting on a destination account.
+  // Only the OUT leg is here — the identical bank line appears on the other
+  // account's statement too, and recording both would write the movement twice
+  // (getBucket / RowClassification.exchange).
+  const transferExchangeRows = useMemo(() => {
+    if (!session) return [];
+    return session.rows.filter((row) => {
+      const c = session.classifications[row.id];
+      if (!c?.exchange) return false;
+      return getBucket(c, session.decisions[row.id]) === "transfers";
     });
   }, [session]);
 
@@ -531,10 +703,12 @@ export default function StatementImportPage() {
   // group's choice.
   const reviewGroups = useMemo(() => {
     if (!session) return [];
+    // Transfers and withdrawals are excluded from the review bucket itself
+    // now (getBucket), so buildReviewGroups never sees them — only the
+    // probable-match and other-account rows still need hoisting out here.
     const pendingMatch = new Set([
       ...matchDecisionRows.map((r) => r.id),
       ...otherAccountRows.map((r) => r.id),
-      ...householdRows.map((r) => r.id),
     ]);
     return buildReviewGroups(session)
       .map((group) => ({
@@ -575,12 +749,8 @@ export default function StatementImportPage() {
           })(),
           // Only call a group "set" once every row in it has a category — a
           // half-categorized merchant still owes work.
-          category:
-            missing === 0 && first ? (categoryById.get(first) ?? null) : null,
-          subcategory:
-            missing === 0 && subAgrees
-              ? (categoryById.get(firstSub) ?? null)
-              : null,
+          category: missing === 0 && first ? categoryOf(first) : null,
+          subcategory: missing === 0 && subAgrees ? categoryOf(firstSub) : null,
           overrides: group.rows.filter(
             (row) => session.decisions[row.id]?.category_id !== undefined,
           ).length,
@@ -588,10 +758,9 @@ export default function StatementImportPage() {
       });
   }, [
     session,
-    categoryById,
+    categoryOf,
     matchDecisionRows,
     otherAccountRows,
-    householdRows,
     accountRefs,
     accounts,
   ]);
@@ -634,10 +803,49 @@ export default function StatementImportPage() {
     if (openGroupKey && !openGroup) setOpenGroupKey(null);
   }, [openGroupKey, openGroup]);
 
-  const saveCount = useMemo(
-    () => (session ? buildCommitActions(session, accountRefs).length : 0),
-    [session, accountRefs],
+  // Everything Save would write, in plain language. Built from the SAME
+  // `buildCommitActions` the commit uses, so the Ready tab can never promise
+  // something the commit won't do.
+  const stagedActions = useMemo(() => {
+    if (!session) return [];
+    const rowById = new Map(session.rows.map((r) => [r.id, r]));
+    return buildCommitActions(session, accountRefs).map((action) => ({
+      action,
+      described: describeCommitAction(
+        action,
+        accountNameById,
+        accountCurrencyById,
+      ),
+      row: rowById.get(action.row_id),
+    }));
+  }, [session, accountRefs, accountNameById, accountCurrencyById]);
+
+  const saveCount = stagedActions.length;
+
+  // Ready is the last screen before a bulk money write, so it has to separate
+  // what moves money from what only stamps a match and what only teaches the
+  // next import. Flat, those read as the same kind of thing — which is why
+  // "Log" sitting next to "Restore" was unreadable.
+  const readyLanes = useMemo(() => {
+    const lanes: Record<ActionLane, typeof stagedActions> = {
+      money: [],
+      match: [],
+      memory: [],
+    };
+    for (const entry of stagedActions) lanes[actionLane(entry.action)].push(entry);
+    return lanes;
+  }, [stagedActions]);
+
+  const readyNet = useMemo(
+    () => stagedNetAmount(stagedActions.map((entry) => entry.action)),
+    [stagedActions],
   );
+
+  const READY_LANES: Array<[ActionLane, string]> = [
+    ["money", "Money"],
+    ["match", "Matches"],
+    ["memory", "Memory"],
+  ];
 
   const visibleRows = useMemo(() => {
     if (!session) return [];
@@ -647,6 +855,76 @@ export default function StatementImportPage() {
         filter,
     );
   }, [session, filter]);
+
+  // Every skipped row with the reason it is here, ready to be split by section.
+  const skippedRows = useMemo(() => {
+    if (!session) return [];
+    const out: Array<{
+      row: ParsedTransaction;
+      reason: ReturnType<typeof skipReason>;
+    }> = [];
+    for (const row of session.rows) {
+      const classification = session.classifications[row.id];
+      const decision = session.decisions[row.id];
+      if (getBucket(classification, decision) !== "skipped") continue;
+      out.push({
+        row,
+        reason: skipReason(classification, decision, accountNameById),
+      });
+    }
+    return out;
+  }, [session, accountNameById]);
+
+  const skipCounts = useMemo(
+    () =>
+      session
+        ? skippedGroupCounts(session)
+        : { session: 0, standing: 0, auto: 0 },
+    [session],
+  );
+
+  // The three jobs the Transfers tab can hold, in tab order. Sections with no
+  // rows are never shown, and `activeTransfersSection` keeps the pane on one
+  // that exists — answering the last row of a section used to leave an empty
+  // pane with no indication why.
+  const TRANSFER_SECTIONS: Array<
+    [TransfersSection, string, ParsedTransaction[]]
+  > = [
+    ["people", "People", transferPeopleRows],
+    ["cash", "Cash", transferCashRows],
+    ["exchange", "Exchange", transferExchangeRows],
+  ];
+
+  const activeTransfersSection: TransfersSection =
+    TRANSFER_SECTIONS.find(
+      ([value, , rows]) => value === transfersSection && rows.length > 0,
+    )?.[0] ??
+    TRANSFER_SECTIONS.find(([, , rows]) => rows.length > 0)?.[0] ??
+    "people";
+
+  const SKIP_SECTIONS: Array<[SkipGroup, string]> = [
+    ["session", "This import"],
+    ["standing", "Previously skipped"],
+    ["auto", "Own moves"],
+  ];
+
+  // Land on a section that has rows — opening Skipped on an empty "This import"
+  // is what made the tab read as broken when everything in it was remembered.
+  useEffect(() => {
+    if (filter !== "skipped") return;
+    if (skipCounts[skipSection] > 0) return;
+    const fallback = SKIP_SECTIONS.find(([g]) => skipCounts[g] > 0)?.[0];
+    if (fallback) setSkipSection(fallback);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, skipSection, skipCounts.session, skipCounts.standing, skipCounts.auto]);
+
+  const BUCKET_LABEL: Record<string, string> = {
+    review: "Review",
+    transfers: "Transfers",
+    imported: "Imported",
+    matched: "Logged",
+    skipped: "Skipped",
+  };
 
   const reviewTotal = counts.review;
   const reviewDone = reviewTotal - undecided;
@@ -671,7 +949,7 @@ export default function StatementImportPage() {
                       {saved.file_name}
                     </p>
                     <p className={cn("text-xs", tc.textFaint)}>
-                      {countUndecided(saved)} left · {saved.account_name}
+                      {countOpen(saved)} left · {saved.account_name}
                     </p>
                   </div>
                   <button
@@ -819,31 +1097,28 @@ export default function StatementImportPage() {
                 </span>
               </div>
 
-              {/* Four tabs on a phone means short labels — the count carries
-                  the meaning, so each label is one word and never wraps. */}
-              <div className={cn("flex gap-1 p-1 rounded-xl", tc.pillBg)}>
-                {(
-                  [
-                    ["review", "Review", counts.review],
-                    ["transfers", "Transfers", householdRows.length],
-                    ["imported", "Imported", counts.imported],
-                    ["matched", "Logged", counts.matched],
-                    ["skipped", "Skipped", counts.skipped],
-                  ] as Array<[BucketFilter, string, number]>
-                ).map(([value, label, count]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setFilter(value)}
-                    className={cn(
-                      "flex-1 rounded-lg h-9 text-[11px] font-medium px-1 truncate",
-                      filter === value ? tc.buttonPrimary : tc.textMuted,
-                    )}
-                  >
-                    {label} {count}
-                  </button>
-                ))}
-              </div>
+              {/* The count IS the information here ("Skipped 85"), so the bar
+                  scrolls rather than truncating it away. */}
+              <ScrollableTabs
+                value={filter}
+                onChange={setFilter}
+                tabs={[
+                  { value: "review", label: "Review", count: counts.review },
+                  {
+                    value: "transfers",
+                    label: "Transfers",
+                    count: counts.transfers,
+                  },
+                  { value: "imported", label: "Imported", count: counts.imported },
+                  { value: "matched", label: "Logged", count: counts.matched },
+                  { value: "skipped", label: "Skipped", count: counts.skipped },
+                  // LAST, deliberately. Ready is not another bucket to browse —
+                  // it is the final stage, the one screen that says what the
+                  // Save button below is about to do. Sitting third it read as
+                  // just another filter.
+                  { value: "ready", label: "Ready", count: saveCount },
+                ]}
+              />
             </div>
           </div>
 
@@ -869,8 +1144,11 @@ export default function StatementImportPage() {
 
                 {(otherAccountRows.length > 0 ||
                   matchDecisionRows.length > 0) && (
-                  <div className={cn("flex gap-1 p-1 rounded-xl", tc.pillBg)}>
-                    {(
+                  <ScrollableTabs
+                    size="sm"
+                    value={reviewSection}
+                    onChange={setReviewSection}
+                    tabs={(
                       [
                         ["categorize", "Categorize", reviewGroups.length],
                         ["other", "Other account", otherAccountRows.length],
@@ -878,22 +1156,12 @@ export default function StatementImportPage() {
                       ] as Array<[ReviewSection, string, number]>
                     )
                       .filter(([, , count]) => count > 0)
-                      .map(([value, label, count]) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setReviewSection(value)}
-                          className={cn(
-                            "flex-1 rounded-lg h-8 text-[11px] font-medium px-1 truncate",
-                            reviewSection === value
-                              ? tc.buttonPrimary
-                              : tc.textMuted,
-                          )}
-                        >
-                          {label} {count}
-                        </button>
-                      ))}
-                  </div>
+                      .map(([value, label, count]) => ({
+                        value,
+                        label,
+                        count,
+                      }))}
+                  />
                 )}
 
 
@@ -1081,118 +1349,232 @@ export default function StatementImportPage() {
             )}
 
             {filter === "transfers" && (
-                  <>
-                    {householdRows.map((row) => {
-                      const c = session.classifications[row.id];
-                      if (c?.status !== "person_transfer") return null;
-                      const decision = session.decisions[row.id];
-                      const isHousehold = treatsAsTransfer(c, decision);
-                      return (
+              <>
+                {TRANSFER_SECTIONS.filter(([, , rows]) => rows.length > 0)
+                  .length > 1 && (
+                  <ScrollableTabs
+                    size="sm"
+                    value={transfersSection}
+                    onChange={setTransfersSection}
+                    tabs={TRANSFER_SECTIONS.filter(
+                      ([, , rows]) => rows.length > 0,
+                    ).map(([value, label, rows]) => ({
+                      value,
+                      label,
+                      count: rows.length,
+                    }))}
+                  />
+                )}
+
+                {transferPeopleRows.length === 0 &&
+                  transferCashRows.length === 0 &&
+                  transferExchangeRows.length === 0 && (
+                    <EmptyState text="No transfers in this statement." />
+                  )}
+
+                {activeTransfersSection === "exchange" &&
+                  transferExchangeRows.map((row) => {
+                    const c = session.classifications[row.id]!;
+                    const exchange = c.exchange!;
+                    const destinationId = session.decisions[row.id]
+                      ?.transfer_to_account_id;
+                    const converts =
+                      !!destinationId &&
+                      accountCurrencyById(destinationId) === exchange.to_currency;
+                    return (
+                      <TransferRowCard
+                        key={row.id}
+                        row={row}
+                        classification={c}
+                        decision={session.decisions[row.id]}
+                        currency={currency}
+                        kind="exchange"
+                        title={`${exchange.from_currency} → ${exchange.to_currency}`}
+                        direction="out"
+                        statementAccountName={session.account_name}
+                        // Every own account except the statement's. The list is
+                        // NOT filtered to the target currency: an owner may
+                        // deliberately land it elsewhere, and a picker that
+                        // silently hides accounts is how a row becomes
+                        // un-answerable. The rate simply does not apply to a
+                        // mismatched account, and the card says so.
+                        destinations={ownDestinations}
+                        accountName={accountNameById}
+                        spendAccountId={session.account_id}
+                        spendAccountName={session.account_name}
+                        resolvedCategory={resolveRowCategory(row, session)}
+                        categoryOf={categoryOf}
+                        conversion={{
+                          rate: exchange.rate,
+                          fromCurrency: exchange.from_currency,
+                          toCurrency: exchange.to_currency,
+                          toAmount: converts
+                            ? convertAtRate(row.amount, exchange.rate)
+                            : null,
+                        }}
+                        partnerText={partnerText}
+                        partnerRing={partnerRing}
+                        onRowChange={updateDecision}
+                      />
+                    );
+                  })}
+
+                {activeTransfersSection === "people" &&
+                  transferPeopleRows.map((row) => {
+                    const c = session.classifications[row.id];
+                    if (c?.status !== "person_transfer") return null;
+                    return (
+                      <TransferRowCard
+                        key={row.id}
+                        row={row}
+                        classification={c}
+                        decision={session.decisions[row.id]}
+                        currency={currency}
+                        kind="person"
+                        title={c.counterparty}
+                        direction={c.direction}
+                        statementAccountName={session.account_name}
+                        destinations={partnerAccounts}
+                        accountName={accountNameById}
+                        spendAccountId={resolveRowAccount(row, session, accountRefs)}
+                        spendAccountName={accountNameById(
+                          resolveRowAccount(row, session, accountRefs),
+                        )}
+                        resolvedCategory={resolveRowCategory(row, session)}
+                        categoryOf={categoryOf}
+                        partnerText={partnerText}
+                        partnerRing={partnerRing}
+                        onRowChange={updateDecision}
+                      />
+                    );
+                  })}
+
+                {activeTransfersSection === "cash" &&
+                  transferCashRows.map((row) => {
+                    const c = session.classifications[row.id]!;
+                    return (
+                      <TransferRowCard
+                        key={row.id}
+                        row={row}
+                        classification={c}
+                        decision={session.decisions[row.id]}
+                        currency={currency}
+                        kind="cash"
+                        title={
+                          c.withdrawal?.kind === "voucher"
+                            ? "Voucher Withdrawal"
+                            : "ATM Cash Withdrawal"
+                        }
+                        direction="out"
+                        statementAccountName={session.account_name}
+                        destinations={ownDestinations}
+                        accountName={accountNameById}
+                        // Not the statement's account: a withdrawal off an
+                        // income/saving statement is unrepresentable there
+                        // (getBalanceDelta can only ADD), so it defaults to the
+                        // expense account — and the category grid has to offer
+                        // THAT account's categories or the commit rejects the
+                        // pair as a category/account mismatch.
+                        spendAccountId={resolveRowAccount(row, session, accountRefs)}
+                        spendAccountName={accountNameById(
+                          resolveRowAccount(row, session, accountRefs),
+                        )}
+                        resolvedCategory={resolveRowCategory(row, session)}
+                        categoryOf={categoryOf}
+                        partnerText={partnerText}
+                        partnerRing={partnerRing}
+                        onRowChange={updateDecision}
+                      />
+                    );
+                  })}
+              </>
+            )}
+
+            {filter === "ready" && (
+              <>
+                {stagedActions.length === 0 && (
+                  <EmptyState text="Nothing staged yet." />
+                )}
+
+                {/* The headline of the final stage: what Save does to the
+                    balance, in one signed number, next to how much of the list
+                    is bookkeeping that touches nothing. */}
+                {stagedActions.length > 0 && (
+                  <div
+                    className={cn(
+                      "rounded-2xl px-4 py-4 flex items-center gap-4",
+                      tc.sectionCard,
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={cn(
+                          "text-2xl font-semibold tabular-nums",
+                          readyNet < 0 ? tc.headerText : "text-emerald-500",
+                        )}
+                      >
+                        {readyNet < 0 ? "−" : "+"}
+                        {getCurrencySymbol(currency)}
+                        {Math.abs(readyNet).toFixed(2)}
+                      </p>
+                      <p className={cn("text-[11px]", tc.textFaint)}>
+                        {readyLanes.money.length} money ·{" "}
+                        {readyLanes.match.length} matches ·{" "}
+                        {readyLanes.memory.length} memory
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {READY_LANES.map(([lane, label]) =>
+                  readyLanes[lane].length === 0 ? null : (
+                    <div key={lane} className="flex flex-col gap-1.5">
+                      <SectionLabel text={label} />
+                      {readyLanes[lane].map(({ action, described, row }) => (
                         <div
-                          key={row.id}
+                          key={`${action.kind}-${action.row_id}`}
                           className={cn(
-                            "rounded-2xl px-4 py-3.5 flex flex-col gap-2.5 border",
+                            "rounded-2xl px-4 py-3 flex items-center gap-3",
                             tc.sectionCard,
-                            // Money to or from the partner is THEIR money, so it
-                            // carries their identity colour — Hard Rule #14:
-                            // colour follows the person, not the viewer.
-                            isHousehold ? partnerRing : "border-transparent",
                           )}
                         >
-                          <div className="flex items-baseline gap-3">
-                            <p
-                              className={cn(
-                                "text-[15px] font-medium truncate flex-1 min-w-0",
-                                isHousehold ? partnerText : tc.headerText,
-                              )}
-                            >
-                              {c.counterparty}
+                          <span
+                            className={cn(
+                              "rounded-full px-2.5 h-6 text-[11px] font-medium flex items-center shrink-0",
+                              lane === "money"
+                                ? tc.buttonPrimary
+                                : cn(tc.buttonOutline, tc.textMuted),
+                            )}
+                          >
+                            {described.verb}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className={cn("text-sm truncate", tc.headerText)}>
+                              {described.title}
                             </p>
+                            {described.detail && (
+                              <p className={cn("text-[11px] truncate", tc.textFaint)}>
+                                {described.detail}
+                              </p>
+                            )}
+                          </div>
+                          {row && lane === "money" && (
                             <span
                               className={cn(
                                 "text-sm tabular-nums shrink-0",
-                                tc.text,
+                                tc.textMuted,
                               )}
                             >
                               {getCurrencySymbol(currency)}
                               {row.amount.toFixed(2)}
                             </span>
-                          </div>
-                          <p className={cn("text-[11px]", tc.textFaint)}>
-                            {shortDate(row.date)} ·{" "}
-                            {c.direction === "out" ? "sent" : "received"}
-                          </p>
-
-                          {isHousehold && c.direction === "out" ? (
-                            <Select
-                              value={decision?.transfer_to_account_id ?? ""}
-                              onValueChange={(next) =>
-                                updateDecision(row.id, {
-                                  transfer_to_account_id: next,
-                                  resolution: "create",
-                                })
-                              }
-                            >
-                              <SelectTrigger className="h-10 rounded-lg text-xs">
-                                <SelectValue placeholder="To account" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {partnerAccounts.map(
-                                  (a: { id: string; name: string }) => (
-                                    <SelectItem key={a.id} value={a.id}>
-                                      {a.name}
-                                    </SelectItem>
-                                  ),
-                                )}
-                              </SelectContent>
-                            </Select>
-                          ) : isHousehold ? (
-                            /* Only the sender can record a household transfer —
-                               the transfers API requires the creator to own the
-                               from-account. This side waits for their import. */
-                            <p className={cn("text-xs", tc.textMuted)}>
-                              Waiting for the sender&apos;s import
-                            </p>
-                          ) : null}
-
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateDecision(row.id, {
-                                  treat_as_transfer: !isHousehold,
-                                  resolution: "undecided",
-                                })
-                              }
-                              className={cn(
-                                "rounded-xl h-10 text-xs flex-1",
-                                isHousehold ? tc.buttonOutline : tc.buttonPrimary,
-                              )}
-                            >
-                              {isHousehold ? "Not partner" : "Partner"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateDecision(row.id, { resolution: "skip" })
-                              }
-                              className={cn(
-                                "rounded-xl h-10 text-xs flex-1",
-                                tc.buttonGhost,
-                                tc.textMuted,
-                              )}
-                            >
-                              Skip
-                            </button>
-                          </div>
+                          )}
                         </div>
-                      );
-                    })}
-                  </>
+                      ))}
+                    </div>
+                  ),
                 )}
-
-            {filter === "transfers" && householdRows.length === 0 && (
-              <EmptyState text="No transfers in this statement." />
+              </>
             )}
 
             {filter === "imported" && (
@@ -1237,7 +1619,91 @@ export default function StatementImportPage() {
               </>
             )}
 
-            {(filter === "matched" || filter === "skipped") && (
+            {filter === "skipped" && (
+              <>
+                <ScrollableTabs
+                  size="sm"
+                  value={skipSection}
+                  onChange={setSkipSection}
+                  tabs={SKIP_SECTIONS.map(([value, label]) => ({
+                    value,
+                    label,
+                    count: skipCounts[value],
+                  }))}
+                />
+
+                {skippedRows.filter((e) => e.reason.group === skipSection)
+                  .length === 0 && <EmptyState text="Nothing here." />}
+
+                {skippedRows
+                  .filter((entry) => entry.reason.group === skipSection)
+                  .map(({ row, reason }) => (
+                    <div
+                      key={row.id}
+                      className={cn(
+                        "rounded-2xl px-4 py-3 flex items-center gap-3",
+                        tc.sectionCard,
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className={cn("text-sm truncate", tc.headerText)}>
+                          {row.description}
+                        </p>
+                        {/* Amount, date, and WHY it is here — the tab could
+                            not answer the last one at all before. */}
+                        <p className={cn("text-xs truncate", tc.textFaint)}>
+                          {getCurrencySymbol(currency)}
+                          {row.amount.toFixed(2)} · {shortDate(row.date)} ·{" "}
+                          {reason.label}
+                        </p>
+                      </div>
+                      {reason.restorable && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const classification =
+                              session.classifications[row.id];
+                            // Where the row actually lands — the same real
+                            // classification getBucket routes on, computed
+                            // BEFORE the decision changes so the toast names
+                            // it correctly.
+                            const destination = getBucket(classification, {
+                              resolution: "undecided",
+                              restored: true,
+                            });
+                            updateDecision(row.id, {
+                              resolution: "undecided",
+                              restored: true,
+                            });
+                            toast.success(
+                              `Restored to ${BUCKET_LABEL[destination]}`,
+                              {
+                                icon: ToastIcons.success,
+                                duration: 4000,
+                                action: {
+                                  label: "Undo",
+                                  onClick: () =>
+                                    updateDecision(row.id, {
+                                      resolution: "skip",
+                                    }),
+                                },
+                              },
+                            );
+                          }}
+                          className={cn(
+                            "rounded-xl px-4 h-10 text-xs shrink-0",
+                            tc.buttonOutline,
+                          )}
+                        >
+                          Restore
+                        </button>
+                      )}
+                    </div>
+                  ))}
+              </>
+            )}
+
+            {filter === "matched" && (
               <>
                 {visibleRows.length === 0 && <EmptyState text="Nothing here." />}
 
@@ -1245,47 +1711,6 @@ export default function StatementImportPage() {
                   const classification = session.classifications[row.id];
                   if (!classification) return null;
                   const decision = session.decisions[row.id];
-
-                  if (filter === "skipped") {
-                    return (
-                      <div
-                        key={row.id}
-                        className={cn(
-                          "rounded-2xl px-4 py-3 flex items-center gap-3",
-                          tc.sectionCard,
-                        )}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className={cn("text-sm truncate", tc.headerText)}>
-                            {row.description}
-                          </p>
-                          <p className={cn("text-xs", tc.textFaint)}>
-                            {getCurrencySymbol(currency)}
-                            {row.amount.toFixed(2)} ·{" "}
-                            {classification.status === "transfer"
-                              ? "transfer"
-                              : classification.status === "skipped_before"
-                                ? "skipped before — remembered"
-                                : "skipped"}
-                          </p>
-                        </div>
-                        {classification.status !== "transfer" && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updateDecision(row.id, { resolution: "undecided" })
-                            }
-                            className={cn(
-                              "rounded-xl px-4 h-10 text-xs shrink-0",
-                              tc.buttonOutline,
-                            )}
-                          >
-                            Restore
-                          </button>
-                        )}
-                      </div>
-                    );
-                  }
 
                   return (
                     <MatchedRowCard
@@ -1470,8 +1895,8 @@ export default function StatementImportPage() {
             >
               {commit.isPending
                 ? "Saving…"
-                : undecided > 0
-                  ? `Save ${saveCount} · ${undecided} left`
+                : openCount > 0
+                  ? `Save ${saveCount} · ${openCount} left`
                   : `Save ${saveCount} rows`}
             </button>
           </div>

@@ -82,6 +82,20 @@ export interface RowDecision {
   linked_transaction_id?: string;
   /** User pulled this row out of its merchant group. */
   detached_from_group?: boolean;
+  /**
+   * The owner brought this row back from a STANDING skip (a skip recorded by
+   * fingerprint on an earlier import) and it must stay back.
+   *
+   * A flag of its own, not `resolution: "undecided"`, which is what Restore
+   * used to mean. That was a bug with teeth: `resolution` is overwritten by the
+   * very next thing the owner does — picking a category sets "create", picking
+   * a transfer destination sets "create" — so `getBucket` saw
+   * `skipped_before && resolution !== "undecided"` again and threw the row
+   * straight back onto the Skipped tab. Restoring a row and then answering it
+   * made it VANISH from the tab it was answered on, at the exact moment it was
+   * answered. Restore is a durable fact about the row; it is now stored as one.
+   */
+  restored?: boolean;
 }
 
 export interface GroupCategory {
