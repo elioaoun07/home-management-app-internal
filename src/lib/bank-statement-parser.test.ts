@@ -20,14 +20,16 @@ const STATEMENT = [
   "07/08/2026 Own Account Exchange: USD to EUR at 0.852 - from 501400630004 - - 150.00 150.00",
   "07/08/2026 Own Account Exchange: EUR to USD at 1.140 - to 501400630004 - 150.00 - 0.00",
   "08/08/2026 POS Purchase ROADSTER BEIRUT LB 3043 45.50 - 104.50",
+  "09/08/2026 Transfer to RACHA SAMIR TOUMA via Mobile - Car 200.00 - 55.00",
+  "10/08/2026 Transfer from SALIM IBRAHIM SAADEH via Mobile - - 20.00 75.00",
 ].join("\n");
 
 describe("parsePDFText", () => {
   it("splits an own-account row's amounts despite dashes inside the description", () => {
     const rows = parsePDFText(STATEMENT);
 
-    // Opening Balance is dropped; the three money rows survive.
-    expect(rows).toHaveLength(3);
+    // Opening Balance is dropped; the money rows survive.
+    expect(rows).toHaveLength(5);
 
     expect(rows[0]).toMatchObject({
       date: "2026-08-07",
@@ -64,18 +66,52 @@ describe("parsePDFText", () => {
   });
 });
 
+// Person-to-person transfers are real money and must survive parsing — they
+// are not own-account moves and must be neither dropped nor mis-signed.
+describe("person-to-person transfers", () => {
+  it("parses both directions with the right sign", () => {
+    const rows = parsePDFText(STATEMENT);
+    expect(rows.find((r) => r.description.includes("RACHA"))).toMatchObject({
+      date: "2026-08-09",
+      moneyOut: 200,
+      moneyIn: null,
+      type: "transfer_out",
+    });
+    expect(rows.find((r) => r.description.includes("SALIM"))).toMatchObject({
+      date: "2026-08-10",
+      moneyOut: null,
+      moneyIn: 20,
+      type: "transfer_in",
+    });
+  });
+
+  it("is not swept up by the own-account skip rule", () => {
+    const rows = parsePDFText(STATEMENT).filter((r) =>
+      r.description.includes("via Mobile"),
+    );
+    expect(rows).toHaveLength(2);
+    for (const r of rows) {
+      expect(isTransferDescription(r.description), r.description).toBe(false);
+    }
+  });
+});
+
 describe("parser ↔ matcher agreement", () => {
   // The parser (server-only) and the matcher (bundled for the client) each
   // carry their own copy of the own-account rule. This is the test that stops
   // them drifting: whatever the parser calls a transfer, the matcher must skip.
-  it("every row the parser types as a transfer is skipped by the matcher", () => {
+  // The parser's `transfer_in`/`transfer_out` is a SHAPE label — it says the
+  // line reads like a transfer, not that the money should be ignored. Only
+  // OWN-account moves are skipped; a transfer to another person is real
+  // spending. Those two ideas were the same thing until the split, and
+  // conflating them again is what would silently drop a payment to a friend.
+  it("skips own-account moves and only those", () => {
     const rows = parsePDFText(STATEMENT);
 
     for (const row of rows) {
-      const parserSaysTransfer =
-        row.type === "transfer_in" || row.type === "transfer_out";
+      const ownAccount = /own account|account exchange/i.test(row.description);
       expect(isTransferDescription(row.description), row.description).toBe(
-        parserSaysTransfer,
+        ownAccount,
       );
     }
   });

@@ -49,6 +49,7 @@ import {
   treatsAsTransfer,
   undecidedRows,
 } from "@/features/statement-import/sessionModel";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getCurrencySymbol } from "@/lib/currency";
 import { getErrorMessage } from "@/lib/errors";
@@ -83,7 +84,12 @@ type Phase = "upload" | "working" | "review" | "receipt";
 // "imported" (fingerprint already in the ledger — machine certain) is split
 // from "matched" (the matcher thinks this is one of your manual logs — a
 // judgement call). See the Bucket doc comment in sessionModel.ts.
-type BucketFilter = "review" | "imported" | "matched" | "skipped";
+type BucketFilter =
+  | "review"
+  | "transfers"
+  | "imported"
+  | "matched"
+  | "skipped";
 
 interface Receipt {
   created: number;
@@ -141,7 +147,7 @@ export default function StatementImportPage() {
   const [openGroupKey, setOpenGroupKey] = useState<string | null>(null);
   const [stepperOpen, setStepperOpen] = useState(false);
   // Review holds three unrelated jobs; stacking them made one long scroll.
-  type ReviewSection = "categorize" | "other" | "maybe" | "household";
+  type ReviewSection = "categorize" | "other" | "maybe";
   const [reviewSection, setReviewSection] = useState<ReviewSection>("categorize");
   const [openOtherRowId, setOpenOtherRowId] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -168,6 +174,13 @@ export default function StatementImportPage() {
       ),
     [householdAccounts, accounts],
   );
+
+  // Hard Rule #14 — colour follows the PERSON, not the viewer. My theme picks
+  // my colour; the partner always gets the other one.
+  const { theme } = useTheme();
+  const partnerText = theme === "pink" ? "text-blue-400" : "text-pink-400";
+  const partnerRing =
+    theme === "pink" ? "border-blue-500/40" : "border-pink-500/40";
 
   const accountRefs = useMemo(
     () =>
@@ -497,14 +510,18 @@ export default function StatementImportPage() {
   // Incoming legs are not here: only the sender can record a household transfer
   // (the transfers API requires the creator to own the from-account), so a
   // received one waits for the partner's own import.
+  // EVERY person-to-person transfer, household or not.
+  //
+  // Gating this on the household name match was wrong: the tab is called
+  // "Transfers", so a transfer belongs in it regardless of who the counterparty
+  // is — and tying VISIBILITY to a name match meant a missed match hid the row
+  // in the merchant list instead of merely costing a tap. The match now only
+  // pre-selects the household path on the card.
   const householdRows = useMemo(() => {
     if (!session) return [];
     return session.rows.filter((row) => {
       const c = session.classifications[row.id];
       if (c?.status !== "person_transfer") return false;
-      // A row the owner has re-labelled as ordinary spending leaves this tab
-      // and joins the merchant list, where it can be categorised.
-      if (!treatsAsTransfer(c, session.decisions[row.id])) return false;
       return getBucket(c, session.decisions[row.id]) === "review";
     });
   }, [session]);
@@ -586,14 +603,7 @@ export default function StatementImportPage() {
       setReviewSection("categorize");
     if (reviewSection === "maybe" && matchDecisionRows.length === 0)
       setReviewSection("categorize");
-    if (reviewSection === "household" && householdRows.length === 0)
-      setReviewSection("categorize");
-  }, [
-    reviewSection,
-    otherAccountRows.length,
-    matchDecisionRows.length,
-    householdRows.length,
-  ]);
+  }, [reviewSection, otherAccountRows.length, matchDecisionRows.length]);
 
   const openOtherRow = useMemo(() => {
     if (!session || !openOtherRowId) return null;
@@ -815,6 +825,7 @@ export default function StatementImportPage() {
                 {(
                   [
                     ["review", "Review", counts.review],
+                    ["transfers", "Transfers", householdRows.length],
                     ["imported", "Imported", counts.imported],
                     ["matched", "Logged", counts.matched],
                     ["skipped", "Skipped", counts.skipped],
@@ -857,15 +868,13 @@ export default function StatementImportPage() {
                   )}
 
                 {(otherAccountRows.length > 0 ||
-                  matchDecisionRows.length > 0 ||
-                  householdRows.length > 0) && (
+                  matchDecisionRows.length > 0) && (
                   <div className={cn("flex gap-1 p-1 rounded-xl", tc.pillBg)}>
                     {(
                       [
                         ["categorize", "Categorize", reviewGroups.length],
                         ["other", "Other account", otherAccountRows.length],
                         ["maybe", "Maybe logged", matchDecisionRows.length],
-                        ["household", "Household", householdRows.length],
                       ] as Array<[ReviewSection, string, number]>
                     )
                       .filter(([, , count]) => count > 0)
@@ -887,110 +896,6 @@ export default function StatementImportPage() {
                   </div>
                 )}
 
-                {reviewSection === "household" && householdRows.length > 0 && (
-                  <>
-                    {householdRows.map((row) => {
-                      const c = session.classifications[row.id];
-                      if (c?.status !== "person_transfer") return null;
-                      const decision = session.decisions[row.id];
-                      return (
-                        <div
-                          key={row.id}
-                          className={cn(
-                            "rounded-2xl px-4 py-3.5 flex flex-col gap-2.5",
-                            tc.sectionCard,
-                          )}
-                        >
-                          <div className="flex items-baseline gap-3">
-                            <p
-                              className={cn(
-                                "text-[15px] font-medium truncate flex-1 min-w-0",
-                                tc.headerText,
-                              )}
-                            >
-                              {c.counterparty}
-                            </p>
-                            <span
-                              className={cn(
-                                "text-sm tabular-nums shrink-0",
-                                tc.text,
-                              )}
-                            >
-                              {getCurrencySymbol(currency)}
-                              {row.amount.toFixed(2)}
-                            </span>
-                          </div>
-                          <p className={cn("text-[11px]", tc.textFaint)}>
-                            {shortDate(row.date)}
-                          </p>
-
-                          {c.direction === "out" ? (
-                            <Select
-                              value={decision?.transfer_to_account_id ?? ""}
-                              onValueChange={(next) =>
-                                updateDecision(row.id, {
-                                  transfer_to_account_id: next,
-                                  resolution: "create",
-                                })
-                              }
-                            >
-                              <SelectTrigger className="h-10 rounded-lg text-xs">
-                                <SelectValue placeholder="To account" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {partnerAccounts.map(
-                                  (a: { id: string; name: string }) => (
-                                    <SelectItem key={a.id} value={a.id}>
-                                      {a.name}
-                                    </SelectItem>
-                                  ),
-                                )}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            /* Only the sender can record a household transfer —
-                               the transfers API requires the creator to own the
-                               from-account. This side waits for their import. */
-                            <p className={cn("text-xs", tc.textMuted)}>
-                              Waiting for the sender&apos;s import
-                            </p>
-                          )}
-
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateDecision(row.id, {
-                                  treat_as_transfer: false,
-                                  resolution: "undecided",
-                                })
-                              }
-                              className={cn(
-                                "rounded-xl h-10 text-xs flex-1",
-                                tc.buttonOutline,
-                              )}
-                            >
-                              Not household
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateDecision(row.id, { resolution: "skip" })
-                              }
-                              className={cn(
-                                "rounded-xl h-10 text-xs flex-1",
-                                tc.buttonGhost,
-                                tc.textMuted,
-                              )}
-                            >
-                              Skip
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
 
                 {reviewSection === "other" && otherAccountRows.length > 0 && (
                   <>
@@ -1175,9 +1080,121 @@ export default function StatementImportPage() {
               </>
             )}
 
-            {/* Already in the ledger: a receipt, not a worklist. Nothing here
-                is actionable, so it reads as a dated scan rather than a stack
-                of cards with buttons the owner must resist pressing. */}
+            {filter === "transfers" && (
+                  <>
+                    {householdRows.map((row) => {
+                      const c = session.classifications[row.id];
+                      if (c?.status !== "person_transfer") return null;
+                      const decision = session.decisions[row.id];
+                      const isHousehold = treatsAsTransfer(c, decision);
+                      return (
+                        <div
+                          key={row.id}
+                          className={cn(
+                            "rounded-2xl px-4 py-3.5 flex flex-col gap-2.5 border",
+                            tc.sectionCard,
+                            // Money to or from the partner is THEIR money, so it
+                            // carries their identity colour — Hard Rule #14:
+                            // colour follows the person, not the viewer.
+                            isHousehold ? partnerRing : "border-transparent",
+                          )}
+                        >
+                          <div className="flex items-baseline gap-3">
+                            <p
+                              className={cn(
+                                "text-[15px] font-medium truncate flex-1 min-w-0",
+                                isHousehold ? partnerText : tc.headerText,
+                              )}
+                            >
+                              {c.counterparty}
+                            </p>
+                            <span
+                              className={cn(
+                                "text-sm tabular-nums shrink-0",
+                                tc.text,
+                              )}
+                            >
+                              {getCurrencySymbol(currency)}
+                              {row.amount.toFixed(2)}
+                            </span>
+                          </div>
+                          <p className={cn("text-[11px]", tc.textFaint)}>
+                            {shortDate(row.date)} ·{" "}
+                            {c.direction === "out" ? "sent" : "received"}
+                          </p>
+
+                          {isHousehold && c.direction === "out" ? (
+                            <Select
+                              value={decision?.transfer_to_account_id ?? ""}
+                              onValueChange={(next) =>
+                                updateDecision(row.id, {
+                                  transfer_to_account_id: next,
+                                  resolution: "create",
+                                })
+                              }
+                            >
+                              <SelectTrigger className="h-10 rounded-lg text-xs">
+                                <SelectValue placeholder="To account" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {partnerAccounts.map(
+                                  (a: { id: string; name: string }) => (
+                                    <SelectItem key={a.id} value={a.id}>
+                                      {a.name}
+                                    </SelectItem>
+                                  ),
+                                )}
+                              </SelectContent>
+                            </Select>
+                          ) : isHousehold ? (
+                            /* Only the sender can record a household transfer —
+                               the transfers API requires the creator to own the
+                               from-account. This side waits for their import. */
+                            <p className={cn("text-xs", tc.textMuted)}>
+                              Waiting for the sender&apos;s import
+                            </p>
+                          ) : null}
+
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDecision(row.id, {
+                                  treat_as_transfer: !isHousehold,
+                                  resolution: "undecided",
+                                })
+                              }
+                              className={cn(
+                                "rounded-xl h-10 text-xs flex-1",
+                                isHousehold ? tc.buttonOutline : tc.buttonPrimary,
+                              )}
+                            >
+                              {isHousehold ? "Not partner" : "Partner"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDecision(row.id, { resolution: "skip" })
+                              }
+                              className={cn(
+                                "rounded-xl h-10 text-xs flex-1",
+                                tc.buttonGhost,
+                                tc.textMuted,
+                              )}
+                            >
+                              Skip
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+
+            {filter === "transfers" && householdRows.length === 0 && (
+              <EmptyState text="No transfers in this statement." />
+            )}
+
             {filter === "imported" && (
               <>
                 {visibleRows.length === 0 && (

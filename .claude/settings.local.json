@@ -225,5 +225,6 @@
       "Bash(sort -t- -k2 -n -u)",
       "Bash(awk '/^## Now|^## Next|^## Later|^## Definition of Done/{print NR\": \"$0}' \"ERA Notes/10 - Project Management/Hub & ERA/4 - Checklist.md\")"
     ]
-  }
+  },
+  "outputStyle": "Concise"
 }
