@@ -12,7 +12,14 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getFace } from "@/features/era/faceRegistry";
+import { useEraAskAI } from "@/features/era/useEraAskAI";
+import {
+  useActiveEraConversation,
+  useEraMessages,
+  useEraMessagesRealtime,
+} from "@/features/era/useEraConversation";
 import { useEraStore } from "@/features/era/useEraStore";
+import { useEraTurn } from "@/features/era/useEraTurn";
 import { useEraWakeListener } from "@/features/era/useEraWakeListener";
 import { useConversationMode } from "@/features/voice-conversation/hooks/useConversationMode";
 import { unlockAudioContext } from "@/features/voice-conversation/audioContext";
@@ -71,8 +78,11 @@ export function EraShell() {
   const isAwake       = useEraStore((s) => s.isAwake);
   const wake          = useEraStore((s) => s.wake);
   const setEraReply   = useEraStore((s) => s.setEraReply);
-  const eraReply      = useEraStore((s) => s.eraReply);
   const user          = useUser();
+
+  // The one entry point from "a sentence" to "a reply" — shared with
+  // CommandBar so typed and voice input can never disagree (HUB-16).
+  const { runTurn } = useEraTurn();
 
   const firstName = user?.name?.split(" ")[0] ?? "";
   const setVoiceReplyEnabled = useEraStore((s) => s.setVoiceReplyEnabled);
@@ -109,6 +119,12 @@ export function EraShell() {
     },
     handlers: {
       onWillSpeak: (text) => setEraReply(text),
+      // Same brain as the command bar — see useEraTurn. The engine only
+      // inspects `kind` to decide whether to offer the AI dig-deeper prompt.
+      runTurn: async (text) => {
+        const { reply, intent } = await runTurn(text);
+        return { reply, kind: intent.kind };
+      },
       sessionId: undefined,
     },
   });
@@ -291,9 +307,14 @@ export function EraShell() {
         </div>
       </div>
 
-      {/* ── ERA reply transcription — appears above command bar ── */}
+      {/* ── ERA conversation thread — appears above command bar ── */}
       <AnimatePresence>
-        {isAwake && !!eraReply && <EraReplyTranscript key="era-reply" />}
+        {isAwake && <EraThreadTranscript key="era-thread" />}
+      </AnimatePresence>
+
+      {/* ── AI proposal confirm card (Slice 4) — sits just above the command bar ── */}
+      <AnimatePresence>
+        {isAwake && <EraProposalCard key="era-proposal" />}
       </AnimatePresence>
 
       {/* ── Floating command bar (always visible) ── */}
@@ -302,25 +323,56 @@ export function EraShell() {
   );
 }
 
-function EraReplyTranscript() {
-  const eraReply = useEraStore((s) => s.eraReply);
+// Shows the last few turns of the active ERA conversation — not just the
+// latest reply. Reads `era_messages` via the same hooks the (now-retired)
+// EraTranscript used, so this is real conversation history, not a
+// re-derived summary: whatever CommandBar or voice just wrote is what
+// appears here, from both surfaces, on both devices (useEraMessagesRealtime).
+// Typewriter effect applies only to the newest assistant row, once.
+const MAX_VISIBLE_TURNS = 6;
+
+function EraThreadTranscript() {
+  const { data: conversation } = useActiveEraConversation();
+  const conversationId = conversation?.id ?? null;
+  const { data } = useEraMessages(conversationId);
+  useEraMessagesRealtime(conversationId);
+
+  const messages = data?.messages ?? [];
+  const newestAssistant =
+    [...messages].reverse().find((m) => m.role === "assistant") ?? null;
+  // Depend on primitive id/content, not the `.find()` result object — a new
+  // array/object reference arrives on every refetch (React Query, realtime)
+  // even when nothing changed, and putting that object straight in a
+  // useEffect dependency array — worse, mirroring its id into state and
+  // depending on THAT too — retriggers the effect on its own state update,
+  // tearing down the typewriter's setInterval a tick or two after it starts.
+  const newestAssistantId = newestAssistant?.id ?? null;
+  const newestAssistantContent = newestAssistant?.content ?? "";
+
+  const typedIdRef = useRef<string | null>(null);
   const [displayed, setDisplayed] = useState("");
-  const [typing, setTyping]       = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!newestAssistantId || newestAssistantId === typedIdRef.current) return;
+    typedIdRef.current = newestAssistantId;
     setDisplayed("");
-    setTyping(true);
     let i = 0;
     const id = setInterval(() => {
       i++;
-      setDisplayed(eraReply.slice(0, i));
-      if (i >= eraReply.length) {
-        clearInterval(id);
-        setTyping(false);
-      }
+      setDisplayed(newestAssistantContent.slice(0, i));
+      if (i >= newestAssistantContent.length) clearInterval(id);
     }, 16);
     return () => clearInterval(id);
-  }, [eraReply]);
+  }, [newestAssistantId, newestAssistantContent]);
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages.length]);
+
+  if (messages.length === 0) return null;
+  const recent = messages.slice(-MAX_VISIBLE_TURNS);
 
   return (
     <motion.div
@@ -328,27 +380,93 @@ function EraReplyTranscript() {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 8 }}
       transition={{ duration: 0.28, ease: "easeOut" }}
-      className="absolute inset-x-0 z-20 flex justify-center px-5 pointer-events-none bottom-[148px] md:bottom-[72px]"
+      className="absolute inset-x-0 z-20 flex justify-center px-5 bottom-[148px] md:bottom-[72px]"
     >
       <div
-        className="w-full max-w-[560px] px-4 py-3 rounded-2xl"
+        ref={listRef}
+        className="flex w-full max-w-[560px] flex-col gap-2 overflow-y-auto rounded-2xl px-4 py-3"
         style={{
           background: "rgba(13, 18, 32, 0.88)",
           border: "1px solid var(--era-border-subtle, rgba(255,255,255,0.08))",
+          maxHeight: 240,
         }}
       >
-        <p
-          className="text-[13px] font-mono leading-relaxed tracking-wide"
-          style={{ color: "var(--era-accent)" }}
-        >
-          {displayed}
-          {typing && (
-            <span
-              className="inline-block w-[2px] h-[14px] ml-[2px] align-middle animate-pulse"
-              style={{ backgroundColor: "var(--era-accent)", opacity: 0.9 }}
-            />
-          )}
+        {recent.map((m) => {
+          const isNewestAssistant =
+            m.role === "assistant" && m.id === newestAssistant?.id;
+          return (
+            <p
+              key={m.id}
+              className="text-[13px] font-mono leading-relaxed tracking-wide"
+              style={{
+                color:
+                  m.role === "user"
+                    ? "rgba(255,255,255,0.55)"
+                    : "var(--era-accent)",
+              }}
+            >
+              {m.role === "user" ? "› " : ""}
+              {isNewestAssistant ? displayed : m.content}
+              {isNewestAssistant && displayed.length < m.content.length && (
+                <span
+                  className="ml-[2px] inline-block h-[14px] w-[2px] animate-pulse align-middle"
+                  style={{ backgroundColor: "var(--era-accent)", opacity: 0.9 }}
+                />
+              )}
+            </p>
+          );
+        })}
+      </div>
+    </motion.div>
+  );
+}
+
+// AI-proposed action (Slice 4) — nothing behind this card has been written
+// yet; Confirm performs the real writes (POST /api/items, POST
+// .../prerequisites), Dismiss just clears it. Renders only while
+// `activeProposal` is set — the manual-handoff pattern's one shipped kind.
+function EraProposalCard() {
+  const { activeProposal, confirmProposal, dismissProposal } = useEraAskAI();
+  if (!activeProposal) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8 }}
+      transition={{ duration: 0.24, ease: "easeOut" }}
+      className="absolute inset-x-0 z-25 flex justify-center px-5 bottom-[148px] md:bottom-[76px]"
+    >
+      <div
+        className="flex w-full max-w-[560px] flex-col gap-3 rounded-2xl px-4 py-3"
+        style={{
+          background: "rgba(13, 18, 32, 0.94)",
+          border: "1px solid var(--era-border-subtle, rgba(255,255,255,0.14))",
+        }}
+      >
+        <p className="text-[13px] leading-relaxed" style={{ color: "var(--era-accent)" }}>
+          {activeProposal.text}
         </p>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={dismissProposal}
+            className="rounded-full px-3 py-1.5 text-xs text-white/60 transition-opacity hover:opacity-80"
+          >
+            Dismiss
+          </button>
+          <button
+            type="button"
+            onClick={confirmProposal}
+            className="rounded-full px-3 py-1.5 text-xs font-medium"
+            style={{
+              background: "var(--era-accent, white)",
+              color: "#0d1220",
+            }}
+          >
+            Confirm
+          </button>
+        </div>
       </div>
     </motion.div>
   );

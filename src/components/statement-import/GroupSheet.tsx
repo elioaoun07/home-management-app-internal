@@ -27,7 +27,7 @@ import { getCurrencySymbol } from "@/lib/currency";
 import type { GroupCategory, RowDecision } from "@/lib/statementImportSession";
 import { cn } from "@/lib/utils";
 import type { ParsedTransaction } from "@/types/statement";
-import { ChevronDown, ChevronLeft, EyeOff, Tag } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronLeft, EyeOff, Tag } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 type Props = {
@@ -48,6 +48,7 @@ type Props = {
   onGroupCategoryChange: (next: GroupCategory) => void;
   onRowChange: (rowId: string, patch: Partial<RowDecision>) => void;
   onShiftGroupDates: (days: number) => void;
+  focusRowId?: string | null;
 };
 
 function shortDate(iso: string): string {
@@ -74,6 +75,7 @@ export function GroupSheet({
   onGroupCategoryChange,
   onRowChange,
   onShiftGroupDates,
+  focusRowId,
 }: Props) {
   const tc = useThemeClasses();
   const symbol = getCurrencySymbol(currency);
@@ -87,8 +89,14 @@ export function GroupSheet({
     if (!open) {
       setRowTarget(null);
       setShowRows(false);
+      return;
     }
-  }, [open]);
+
+    if (focusRowId && rows.some((candidate) => candidate.id === focusRowId)) {
+      setShowRows(true);
+      setRowTarget(focusRowId);
+    }
+  }, [focusRowId, open, rows]);
 
   const nameOf = useMemo(
     () => (id: string | null | undefined) =>
@@ -161,19 +169,24 @@ export function GroupSheet({
             {/* A row sent to another account must pick from THAT account's
                 categories — `user_categories.account_id` is NOT NULL and the
                 commit route rejects a category belonging elsewhere. */}
-            <CategoryPicker
-              accountId={row ? resolveAccount(row) : accountId}
-              categoryId={target.category_id}
-              subcategoryId={target.subcategory_id}
-              onChange={(next) => {
-                if (row) onRowChange(row.id, next);
-                else onGroupCategoryChange(next);
-              }}
-              onDone={() => {
-                if (row) setRowTarget(null);
-                else onOpenChange(false);
-              }}
-            />
+            {!(
+              (row && decisions[row.id]?.action_kind === "transfer") ||
+              (single && decisions[rows[0].id]?.action_kind === "transfer")
+            ) && (
+              <CategoryPicker
+                accountId={row ? resolveAccount(row) : accountId}
+                categoryId={target.category_id}
+                subcategoryId={target.subcategory_id}
+                onChange={(next) => {
+                  if (row) onRowChange(row.id, next);
+                  else onGroupCategoryChange(next);
+                }}
+                onDone={() => {
+                  if (row) setRowTarget(null);
+                  else onOpenChange(false);
+                }}
+              />
+            )}
 
             {/* Per-row detail — deliberately behind a tap. */}
             {!row &&
@@ -300,9 +313,46 @@ function RowControls({
 }) {
   const tc = useThemeClasses();
   const redirected = rowAccountId !== statementAccountId;
+  const actionKind = decision?.action_kind ?? "transaction";
+  const transferAccounts = accounts.filter(
+    (account) => account.id !== statementAccountId,
+  );
 
   return (
     <div className={cn("rounded-xl p-3 flex flex-col gap-2.5", tc.pillBg)}>
+      <div className="flex gap-2">
+        {(["transaction", "transfer"] as const).map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            onClick={() =>
+              onRowChange(
+                row.id,
+                kind === "transfer"
+                  ? {
+                      action_kind: "transfer",
+                      account_id: undefined,
+                      category_id: null,
+                      subcategory_id: null,
+                      resolution: "undecided",
+                    }
+                  : {
+                      action_kind: "transaction",
+                      transfer_to_account_id: undefined,
+                      resolution: "undecided",
+                    },
+              )
+            }
+            className={cn(
+              "rounded-lg h-9 text-[11px] flex-1 capitalize",
+              actionKind === kind ? tc.buttonPrimary : tc.buttonOutline,
+            )}
+          >
+            {kind}
+          </button>
+        ))}
+      </div>
+
       {/* The bank's own words stay on screen even while renamed — they are
           what the dedupe fingerprint is built from, so hiding them would make
           it look like the rename changed the key. It does not. */}
@@ -339,7 +389,7 @@ function RowControls({
           className={cn("rounded-lg px-2 h-10 text-xs flex-1", tc.formInput)}
         />
 
-        {onPickOwnCategory && (
+        {actionKind === "transaction" && onPickOwnCategory && (
           <button
             type="button"
             onClick={onPickOwnCategory}
@@ -375,31 +425,69 @@ function RowControls({
           bank fees on a salary statement are a charge, not income. Changing it
           CLEARS the row's category, because categories are scoped to an
           account and the commit route rejects one from the wrong account. */}
-      <Select
-        value={rowAccountId}
-        onValueChange={(next) =>
-          onRowChange(row.id, {
-            account_id: next === statementAccountId ? undefined : next,
-            category_id: null,
-            subcategory_id: null,
-          })
-        }
-      >
-        <SelectTrigger
-          className={cn("h-10 rounded-lg text-xs", redirected && tc.ringSelectionStrong)}
+      {actionKind === "transaction" ? (
+        <Select
+          value={rowAccountId}
+          onValueChange={(next) =>
+            onRowChange(row.id, {
+              account_id: next === statementAccountId ? undefined : next,
+              category_id: null,
+              subcategory_id: null,
+            })
+          }
         >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {accounts.map((a) => (
-            <SelectItem key={a.id} value={a.id}>
-              {a.id === statementAccountId ? `${a.name} (statement)` : a.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+          <SelectTrigger
+            className={cn(
+              "h-10 rounded-lg text-xs",
+              redirected && tc.ringSelectionStrong,
+            )}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {accounts.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                {a.id === statementAccountId ? `${a.name} (statement)` : a.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className={cn("text-[11px] truncate", tc.textFaint)}>
+            {row.type === "debit" ? "Statement" : "Account"}
+          </span>
+          <ArrowRight className={cn("w-3.5 h-3.5 shrink-0", tc.textFaint)} />
+          <Select
+            value={decision?.transfer_to_account_id ?? ""}
+            onValueChange={(next) =>
+              onRowChange(row.id, {
+                action_kind: "transfer",
+                transfer_to_account_id: next,
+                resolution: "create",
+              })
+            }
+          >
+            <SelectTrigger className="h-10 rounded-lg text-xs flex-1 min-w-0">
+              <SelectValue placeholder="Pick account" />
+            </SelectTrigger>
+            <SelectContent>
+              {transferAccounts.map((account) => (
+                <SelectItem key={account.id} value={account.id}>
+                  {account.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {row.type === "credit" && (
+            <span className={cn("text-[11px] truncate", tc.textFaint)}>
+              Statement
+            </span>
+          )}
+        </div>
+      )}
 
-      {ownCategoryName && (
+      {actionKind === "transaction" && ownCategoryName && (
         <button
           type="button"
           onClick={() =>

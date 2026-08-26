@@ -2,15 +2,24 @@
 // Returns { text, metadata } to be persisted as the assistant message.
 import { greeting } from "@/lib/era/phrasing";
 import { formatReply } from "../replyFormatter";
-import type { Intent } from "../types";
+import type { EraPendingTurn, Intent } from "../types";
 import type { EraBudgetSubmitResult } from "../useEraBudgetSubmit";
 import { resolveMemoryRecall, resolveMemorySave } from "./resolvers/brain";
 import {
+  resolveConfirmDraft,
   resolveDraftTransaction,
+  resolveListDrafts,
   resolveMonthSpend,
+  resolveRecordDebt,
   resolveShowAnalytics,
+  resolveTransfer,
 } from "./resolvers/budget";
-import { resolveRecipeSearch } from "./resolvers/chef";
+import {
+  resolveAssignMeal,
+  resolveListRecipes,
+  resolveMealPlanGaps,
+  resolveRecipeSearch,
+} from "./resolvers/chef";
 import {
   resolveDraftReminder,
   resolveTodaySchedule,
@@ -19,6 +28,14 @@ import {
 export interface ResolveResult {
   text: string;
   metadata?: Record<string, unknown>;
+  /**
+   * Set when ERA is waiting on an answer (Slice 3) — see EraPendingTurn.
+   * Only `resolveDraftReminder`'s ask-path sets this; every other intent
+   * leaves it absent, which `useEraTurn` treats the same as `null` (nothing
+   * pending) — `resolveIntent` is never even called while a question is
+   * already outstanding, since `useEraTurn` intercepts that turn first.
+   */
+  pending?: EraPendingTurn | null;
 }
 
 /**
@@ -60,11 +77,32 @@ export async function resolveIntent(
     case "draftTransaction":
       return resolveDraftTransaction(intent.rawText, deps.submitBudgetDraft);
 
+    case "transfer":
+      return resolveTransfer(intent.amount, intent.fromHint, intent.toHint);
+
+    case "recordDebt":
+      return resolveRecordDebt(intent.debtorName, intent.amount, intent.notes);
+
+    case "listDrafts":
+      return resolveListDrafts();
+
+    case "confirmDraft":
+      return resolveConfirmDraft(intent.hint);
+
     case "draftReminder":
       return resolveDraftReminder(intent.rawText, intent.title);
 
     case "recipeSearch":
       return resolveRecipeSearch(intent.dish);
+
+    case "listRecipes":
+      return resolveListRecipes();
+
+    case "assignMeal":
+      return resolveAssignMeal(intent.dish, intent.dayHint, intent.mealType);
+
+    case "mealPlanGaps":
+      return resolveMealPlanGaps();
 
     case "recipeOfferGenerate":
       return {

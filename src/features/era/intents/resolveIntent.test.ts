@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EraBudgetSubmitResult } from "../useEraBudgetSubmit";
 import type { Intent } from "../types";
 import { resolveIntent } from "./resolveIntent";
+import { resolvePendingReminderAnswer } from "./resolvers/schedule";
 import { scheduleRouter } from "./schedule";
 
 // safeFetch pre-flights every request through the connectivity manager, whose
@@ -24,6 +25,16 @@ import { scheduleRouter } from "./schedule";
 vi.mock("@/lib/connectivityManager", () => ({
   isReallyOnline: () => true,
   markOffline: () => {},
+}));
+
+// resolveMonthSpend/resolveShowAnalytics need the current user's id to scope
+// household transactions (HUB-14) — real client creation throws in this
+// environment (no Supabase env vars), which the resolver already treats as
+// "degrade gracefully", so most existing tests below never touch this mock.
+// Tests that specifically exercise the scoped/custom-month path set it.
+const mockGetUser = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/supabase/client", () => ({
+  supabaseBrowser: () => ({ auth: { getUser: mockGetUser } }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -73,6 +84,10 @@ beforeEach(() => {
   calls.length = 0;
   // safeFetch narrates every request; keep the suite output readable.
   vi.spyOn(console, "log").mockImplementation(() => {});
+  // Default: no user resolvable — resolveMonthSpend/resolveShowAnalytics's
+  // custom-month enhancement degrades gracefully, matching the "real client
+  // throws in this env" case tests don't opt into explicitly.
+  mockGetUser.mockResolvedValue({ data: { user: null } });
 });
 
 // ---------------------------------------------------------------------------
@@ -141,7 +156,9 @@ describe("resolveIntent — draftReminder", () => {
   });
 
   it("creates a reminder titled with the CLEAN title, not the raw sentence", async () => {
-    const result = await resolveIntent(reminderIntent("remind me to call the bank"));
+    const result = await resolveIntent(
+      reminderIntent("remind me to call the bank tomorrow at 5pm"),
+    );
 
     const post = postTo("/api/items");
     expect(post).toBeDefined();
@@ -150,11 +167,21 @@ describe("resolveIntent — draftReminder", () => {
     expect(result.metadata).toMatchObject({ itemId: "item-1" });
   });
 
-  it("omits due_at entirely when no date was expressed (confidence.date === 0)", async () => {
-    await resolveIntent(reminderIntent("remind me to call the bank"));
+  // Slice 3: time is a required slot. Before this, a dateless reminder wrote
+  // anyway with due_at omitted — technically honest, but the owner's own
+  // complaint was ERA "logged the reminder without mentioning the time" and
+  // moved on. Now it asks, and writes nothing until the question is answered.
+  it("asks for a time instead of writing when no date was expressed (Slice 3)", async () => {
+    const result = await resolveIntent(
+      reminderIntent("remind me to call the bank"),
+    );
 
-    const post = postTo("/api/items")!;
-    expect(post.body).not.toHaveProperty("due_at");
+    expect(postTo("/api/items")).toBeUndefined();
+    expect(result.pending).toMatchObject({
+      kind: "draftReminder",
+      title: "Call the bank",
+    });
+    expect(result.text.toLowerCase()).toContain("call the bank");
   });
 
   it("sends due_at as a UTC instant matching the parsed local wall clock", async () => {
@@ -198,7 +225,7 @@ describe("resolveIntent — draftReminder", () => {
         : { json: {} },
     );
 
-    const intent = reminderIntent("remind me to call the bank");
+    const intent = reminderIntent("remind me to call the bank tomorrow at 5pm");
     const variants = await everyVariant(() => resolveIntent(intent));
 
     // The apology and the retry nudge vary; the diagnosis never does.
@@ -225,17 +252,14 @@ describe("resolveIntent — draftReminder", () => {
     allContain(variants, "tomorrow at 11:00 AM");
   });
 
-  it("never implies a nudge is coming when the reminder has no date", async () => {
+  it("every ask-for-time variant states the title and actually asks", async () => {
     const intent = reminderIntent("remind me to water the plants");
 
     const variants = await everyVariant(() => resolveIntent(intent));
 
     for (const v of variants) {
       expect(v.toLowerCase()).toContain("water the plants");
-      // Every undated variant must say so — "date", "time", "undated" or
-      // "when". A variant that only says "Saved!" would strand the user
-      // believing an alert exists.
-      expect(v.toLowerCase()).toMatch(/\b(date|time|undated|when)\b/);
+      expect(v).toMatch(/\?|when|time/i);
     }
   });
 
@@ -245,6 +269,58 @@ describe("resolveIntent — draftReminder", () => {
 
     // A pool worth having is a pool with real breadth.
     expect(variants.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolvePendingReminderAnswer — Slice 3 slot filling completion
+// ---------------------------------------------------------------------------
+
+describe("resolvePendingReminderAnswer", () => {
+  beforeEach(() => {
+    mockFetch(() => ({ json: { item: { id: "item-9" } } }));
+  });
+
+  const pending = {
+    kind: "draftReminder" as const,
+    title: "Call the bank",
+    priority: "normal" as const,
+    rawText: "remind me to call the bank",
+    createdAt: Date.now(),
+  };
+
+  it("completes the reminder when the answer parses to a date", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 22, 10, 0, 0));
+
+    const result = await resolvePendingReminderAnswer(pending, "tomorrow at 4pm");
+
+    const post = postTo("/api/items")!;
+    expect(post.body).toMatchObject({ title: "Call the bank" });
+    const due = new Date(post.body!.due_at as string);
+    expect(due.getDate()).toBe(23);
+    expect(due.getHours()).toBe(16);
+    expect(result.pending).toBeNull();
+    expect(result.text.toLowerCase()).toContain("call the bank");
+  });
+
+  it("flushes to a reviewable draft when the answer doesn't parse as a date, rather than losing the title", async () => {
+    const result = await resolvePendingReminderAnswer(pending, "actually never mind the time");
+
+    const post = postTo("/api/items")!;
+    expect(post.body).toMatchObject({
+      title: "Call the bank",
+      status: "draft",
+    });
+    expect(post.body).not.toHaveProperty("due_at");
+    expect(result.pending).toBeNull();
+    expect(result.metadata).toMatchObject({ draft: true });
+  });
+
+  it("clears the pending question even when the API call fails", async () => {
+    mockFetch(() => ({ status: 500, json: { error: "boom" } }));
+    const result = await resolvePendingReminderAnswer(pending, "not a date");
+    expect(result.pending).toBeNull();
   });
 });
 
@@ -350,6 +426,98 @@ describe("resolveIntent — showAnalytics", () => {
     const variants = await everyVariant(() => resolveIntent(analyticsIntent));
     allContain(variants, "I couldn't pull your analytics.");
   });
+
+  // HUB-13: /api/analytics buckets by calendar month; monthSpend uses the
+  // custom billing month. On a household whose billing month doesn't start
+  // on the 1st, the two used to disagree about "this month"'s total. Fixed
+  // by re-sourcing expense/transactionCount/topCategories from the same
+  // /api/transactions window monthSpend uses, whenever it's available.
+  it("sources the headline expense from the custom billing month, not the calendar month (HUB-13)", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u-me" } } });
+    const CUSTOM_MONTH_TRANSACTIONS = [
+      { amount: 500, user_id: "u-me", category: { name: "Rent" } },
+      { amount: 300, user_id: "u-me", category: { name: "Groceries" } },
+    ]; // total 800 — deliberately different from ANALYTICS_TWO_MONTHS.expense (2600)
+    mockFetch((url) =>
+      url.includes("/api/transactions")
+        ? { json: CUSTOM_MONTH_TRANSACTIONS }
+        : { json: ANALYTICS_TWO_MONTHS },
+    );
+
+    const result = await resolveIntent(analyticsIntent);
+
+    expect(result.metadata).toMatchObject({
+      expense: 800,
+      transactionCount: 2,
+    });
+    expect(result.text).toContain("$800");
+    expect(result.text).not.toContain("$2,600");
+    // income/savingsRate stay calendar-month-sourced — a narrower fix, not a
+    // re-architecture (see the resolver's doc comment).
+    expect(result.metadata).toMatchObject({ income: 4000, savingsRate: 35 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// monthSpend — scope filtering (HUB-14)
+// ---------------------------------------------------------------------------
+//
+// The transactions endpoint has no server-side ownOnly/scope support — it
+// always returns both household members' rows, tagged with user_id. Before
+// this fix, "partner" scope used the unfiltered household total and the
+// formatter still said "Your partner has spent $X", which was confidently
+// wrong on any household with two spenders. These tests pin the actual
+// filter, not just that a number gets returned.
+
+const HOUSEHOLD_TRANSACTIONS = [
+  { amount: 40, user_id: "u-me", category: { name: "Fuel" } },
+  { amount: 60, user_id: "u-me", category: { name: "Groceries" } },
+  { amount: 15, user_id: "u-partner", category: { name: "Dining" } },
+];
+
+function monthSpendIntent(
+  scope: "self" | "partner" | "household",
+): Intent {
+  return {
+    kind: "monthSpend",
+    face: "budget",
+    scope,
+    rawText: `how much did ${scope === "self" ? "I" : scope === "partner" ? "my partner" : "we"} spend`,
+  };
+}
+
+describe("resolveIntent — monthSpend scope filtering (HUB-14)", () => {
+  beforeEach(() => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u-me" } } });
+    mockFetch(() => ({ json: HOUSEHOLD_TRANSACTIONS }));
+  });
+
+  it("self scope totals only the current user's rows", async () => {
+    const result = await resolveIntent(monthSpendIntent("self"));
+    expect(result.metadata).toMatchObject({ total: 100, scope: "self" });
+    expect(result.text).toContain("$100");
+  });
+
+  it("partner scope totals only the partner's rows — not the household total", async () => {
+    const result = await resolveIntent(monthSpendIntent("partner"));
+    expect(result.metadata).toMatchObject({ total: 15, scope: "partner" });
+    expect(result.text).toContain("$15");
+    expect(result.text).not.toContain("$115"); // the old, wrong household total
+  });
+
+  it("household scope totals everyone", async () => {
+    const result = await resolveIntent(monthSpendIntent("household"));
+    expect(result.metadata).toMatchObject({ total: 115, scope: "household" });
+    expect(result.text).toContain("$115");
+  });
+
+  it("degrades to an honest error when the current user can't be resolved", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    const variants = await everyVariant(() =>
+      resolveIntent(monthSpendIntent("self")),
+    );
+    allContain(variants, "I couldn't pull your spending data.");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -436,5 +604,163 @@ describe("resolveIntent — draftTransaction", () => {
       expect(v).toMatch(/account/i);
     }
     expect((await resolveIntent(txIntent)).metadata).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chef — meal planning (Slice 5)
+// ---------------------------------------------------------------------------
+
+describe("resolveIntent — listRecipes", () => {
+  it("lists recipe names from the library", async () => {
+    mockFetch(() => ({
+      json: [
+        { id: "r1", name: "Chicken Parm" },
+        { id: "r2", name: "Pasta Bake" },
+      ],
+    }));
+
+    const result = await resolveIntent({
+      kind: "listRecipes",
+      face: "chef",
+      rawText: "what recipes do I have",
+    });
+
+    expect(result.text).toContain("Chicken Parm");
+    expect(result.text).toContain("Pasta Bake");
+    expect(result.metadata).toMatchObject({ count: 2 });
+  });
+
+  it("says the library is empty rather than an empty list", async () => {
+    mockFetch(() => ({ json: [] }));
+    const result = await resolveIntent({
+      kind: "listRecipes",
+      face: "chef",
+      rawText: "show my recipes",
+    });
+    expect(result.text.toLowerCase()).toMatch(/no recipes|empty/);
+  });
+});
+
+describe("resolveIntent — assignMeal", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 22, 10, 0, 0)); // Saturday 2026-08-22
+  });
+
+  it("resolves the dish against recipes, the day against parseSmartText, and posts the meal plan", async () => {
+    mockFetch((url) =>
+      url.includes("/api/recipes")
+        ? { json: [{ id: "r1", name: "Chicken Parm" }] }
+        : url.includes("/api/meal-plans")
+          ? { json: { id: "mp-1", recipe_id: "r1" } }
+          : { json: {} },
+    );
+
+    const result = await resolveIntent({
+      kind: "assignMeal",
+      face: "chef",
+      dish: "chicken",
+      dayHint: "thursday",
+      mealType: "dinner",
+      rawText: "assign chicken to thursday dinner",
+    });
+
+    const post = postTo("/api/meal-plans")!;
+    expect(post.body).toMatchObject({ recipe_id: "r1", meal_type: "dinner" });
+    // "thursday" from a Saturday anchor must land on the NEXT Thursday, not today.
+    expect(post.body!.planned_date).toBe("2026-08-27");
+    expect(result.text).toContain("Chicken Parm");
+    expect(result.metadata).toMatchObject({ mealPlanId: "mp-1" });
+  });
+
+  it("reports no match rather than guessing when the dish isn't in the library", async () => {
+    mockFetch((url) => (url.includes("/api/recipes") ? { json: [] } : { json: {} }));
+
+    const result = await resolveIntent({
+      kind: "assignMeal",
+      face: "chef",
+      dish: "unobtainium stew",
+      dayHint: "thursday",
+      mealType: undefined,
+      rawText: "assign unobtainium stew to thursday",
+    });
+
+    expect(postTo("/api/meal-plans")).toBeUndefined();
+    expect(result.text).toContain("unobtainium stew");
+  });
+
+  it("names the household requirement instead of surfacing a raw 400", async () => {
+    mockFetch((url) =>
+      url.includes("/api/recipes")
+        ? { json: [{ id: "r1", name: "Chicken Parm" }] }
+        : url.includes("/api/meal-plans")
+          ? { status: 400, json: { error: "Meal plans require a household. Please set up household sharing first." } }
+          : { json: {} },
+    );
+
+    const result = await resolveIntent({
+      kind: "assignMeal",
+      face: "chef",
+      dish: "chicken",
+      dayHint: "thursday",
+      mealType: undefined,
+      rawText: "assign chicken to thursday",
+    });
+
+    expect(result.text.toLowerCase()).toContain("household");
+  });
+});
+
+describe("resolveIntent — mealPlanGaps", () => {
+  it("names the days in the next 7 with no meal plan row", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 22, 10, 0, 0)); // Saturday 2026-08-22
+
+    mockFetch(() => ({
+      json: [
+        { planned_date: "2026-08-22" }, // Saturday — covered
+        { planned_date: "2026-08-24" }, // Monday — covered
+      ],
+    }));
+
+    const result = await resolveIntent({
+      kind: "mealPlanGaps",
+      face: "chef",
+      rawText: "what's unassigned this week",
+    });
+
+    // Covered days must NOT appear; the rest of the 7-day window should.
+    expect(result.text).not.toContain("Saturday");
+    expect(result.text).not.toContain("Monday");
+    expect(result.text).toContain("Sunday");
+    expect(result.text).toContain("Tuesday");
+    expect(result.metadata).toMatchObject({
+      emptyDays: expect.arrayContaining(["Sunday", "Tuesday"]),
+    });
+  });
+
+  it("says the week is fully planned rather than an empty list", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 22, 10, 0, 0));
+
+    // Local calendar date, not .toISOString() -- that converts to UTC and
+    // drifts a day in any positive-UTC-offset test environment, which is
+    // exactly the class of bug this resolver itself avoids (see formatDate).
+    const localDate = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    mockFetch(() => ({
+      json: Array.from({ length: 7 }, (_, i) => ({
+        planned_date: localDate(new Date(2026, 7, 22 + i)),
+      })),
+    }));
+
+    const result = await resolveIntent({
+      kind: "mealPlanGaps",
+      face: "chef",
+      rawText: "any gaps this week",
+    });
+
+    expect(result.text.toLowerCase()).toMatch(/no gaps|fully planned/);
   });
 });

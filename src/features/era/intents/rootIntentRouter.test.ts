@@ -300,6 +300,74 @@ const CASES: readonly RouteCase[] = [
     active: "schedule",
     kind: "unknown",
   },
+
+  // ── Chef — meal planning (Slice 5) ───────────────────────────────────────
+  {
+    name: "list recipes",
+    text: "what recipes do I have",
+    active: "chef",
+    kind: "listRecipes",
+  },
+  {
+    name: "show my recipes",
+    text: "show my recipes",
+    active: "chef",
+    kind: "listRecipes",
+  },
+  {
+    name: "assign a meal to a day and meal type",
+    text: "assign chicken to thursday dinner",
+    active: "chef",
+    kind: "assignMeal",
+    dish: "chicken",
+  },
+  {
+    name: "assign a meal, alternate phrasing",
+    text: "put the chicken parm on thursday for dinner",
+    active: "chef",
+    kind: "assignMeal",
+    dish: "chicken parm",
+  },
+  {
+    name: "meal plan gaps",
+    text: "what's unassigned this week for meals",
+    active: "chef",
+    kind: "mealPlanGaps",
+  },
+  {
+    name: "meal plan gaps, alternate phrasing",
+    text: "any gaps in the meal plan this week",
+    active: "chef",
+    kind: "mealPlanGaps",
+  },
+
+  // ── Budget — Slice 2 capabilities ────────────────────────────────────────
+  {
+    name: "transfer between own accounts",
+    text: "transfer 50 from wallet to savings",
+    active: "budget",
+    kind: "transfer",
+    amount: 50,
+  },
+  {
+    name: "record a debt",
+    text: "John owes me $30 for lunch",
+    active: "budget",
+    kind: "recordDebt",
+    amount: 30,
+  },
+  {
+    name: "list pending drafts",
+    text: "what drafts do I have",
+    active: "budget",
+    kind: "listDrafts",
+  },
+  {
+    name: "confirm a draft by hint",
+    text: "confirm the fuel draft",
+    active: "budget",
+    kind: "confirmDraft",
+  },
 ];
 
 describe("rootIntentRouter", () => {

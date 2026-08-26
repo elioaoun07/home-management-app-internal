@@ -1,6 +1,6 @@
 "use client";
 
-import { classifyIntent, type Intent } from "./intentClassifier";
+import { CANCEL_WORDS, SLEEP_WORDS, classifyIntent, type Intent } from "./intentClassifier";
 import { createAzureSTT, type AzureSTTCapture as STTCapture } from "./azureSTT";
 import { createTTSQueue, type TTSQueue } from "./ttsQueue";
 import {
@@ -30,7 +30,19 @@ export interface ConversationHandlers {
   onTranscriptChange?: (transcript: string) => void;
   /** Called when ERA is about to speak. Return true to cancel the utterance. */
   onWillSpeak?: (text: string) => void;
-  /** Native action callbacks — implement these in HubPage to write to DB */
+  /**
+   * The unified ERA brain (`useEraTurn` — see `src/components/era/EraShell.tsx`).
+   * Classifies AND resolves the transcript through the exact same router +
+   * resolvers the typed command bar uses, so voice and typed can never
+   * disagree on what a reminder's due date was or whether a draft actually
+   * saved (HUB-16). When present, this REPLACES the legacy `onLogExpense` /
+   * `onSetReminder` / … handlers below for this engine instance — see
+   * `handleTranscript`. `kind` is the resolved intent's discriminant; the
+   * engine uses it only to decide whether to offer the AI dig-deeper prompt
+   * (`kind === "unknown"`).
+   */
+  runTurn?: (text: string) => Promise<{ reply: string; kind: string }>;
+  /** Legacy native action callbacks — implement these in HubPage to write to DB */
   onLogExpense?: (intent: Extract<Intent, { kind: "log_expense" }>) => Promise<void>;
   onSetReminder?: (intent: Extract<Intent, { kind: "set_reminder" }>) => Promise<void>;
   onAddToShopping?: (intent: Extract<Intent, { kind: "add_to_shopping" }>) => Promise<void>;
@@ -104,6 +116,9 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
   let confirmationTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingIntent: Intent | null = null;
   let pendingConfirmIsDigDeeper = false;
+  /** Set only by the unified runTurn path (see handleUnifiedTurn) — the
+   *  legacy path still carries its dig-deeper transcript on pendingIntent. */
+  let pendingDigDeeperTranscript: string | null = null;
   let isStopped = false;
 
   function setState(s: ConversationState) {
@@ -178,6 +193,7 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
     stt = null;
     tts?.stop();
     pendingIntent = null;
+    pendingDigDeeperTranscript = null;
     onWake?.(source);
     setState("listening");
 
@@ -210,27 +226,81 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
     setState("speaking");
   }
 
+  /**
+   * The unified path: one call into the shared ERA brain, one reply to
+   * speak. No confidence-tier branching — an intent the router isn't sure
+   * about already comes back as `clarify`/`unknown` with a question baked
+   * into `reply` (see rootIntentRouter + resolveIntent), so there is nothing
+   * left for this engine to gate on except whether to offer the AI
+   * dig-deeper prompt.
+   */
+  async function handleUnifiedTurn(transcript: string) {
+    setState("executing");
+    try {
+      const { reply, kind } = await handlers.runTurn!(transcript);
+
+      if (kind === "unknown") {
+        pendingDigDeeperTranscript = transcript;
+        pendingConfirmIsDigDeeper = true;
+        speak(DIG_DEEPER_PROMPT, () => {
+          setState("confirming");
+          startConfirmationTimer();
+        });
+        return;
+      }
+
+      speak(reply, () => {
+        setState("listening");
+        startListeningSTT();
+        armContinuationWindow();
+      });
+    } catch {
+      speak("Something went wrong. Try again.", () => {
+        setState("listening");
+        startListeningSTT();
+        armContinuationWindow();
+      });
+    }
+  }
+
+  /**
+   * Legacy path (HubPage/`/chat` only — see `runTurn` on ConversationHandlers).
+   * Only claims success for an intent whose handler actually exists and ran;
+   * previously every kind spoke `successTemplate` unconditionally, so an
+   * intent with no wired handler (e.g. ERA Hub before this fix) reported
+   * "Added $25 to Fuel" having written nothing.
+   */
   async function executeNativeIntent(intent: Intent) {
     setState("executing");
     try {
-      if (intent.kind === "log_expense") await handlers.onLogExpense?.(intent);
-      else if (intent.kind === "set_reminder") await handlers.onSetReminder?.(intent);
-      else if (intent.kind === "add_to_shopping") await handlers.onAddToShopping?.(intent);
-      else if (intent.kind === "query_balance") {
-        const result = await handlers.onQueryBalance?.();
+      let handled = false;
+
+      if (intent.kind === "log_expense" && handlers.onLogExpense) {
+        await handlers.onLogExpense(intent);
+        handled = true;
+      } else if (intent.kind === "set_reminder" && handlers.onSetReminder) {
+        await handlers.onSetReminder(intent);
+        handled = true;
+      } else if (intent.kind === "add_to_shopping" && handlers.onAddToShopping) {
+        await handlers.onAddToShopping(intent);
+        handled = true;
+      } else if (intent.kind === "query_balance" && handlers.onQueryBalance) {
+        const result = await handlers.onQueryBalance();
         if (result) {
           speak(result, () => { setState("listening"); startListeningSTT(); armContinuationWindow(); });
           return;
         }
-      } else if (intent.kind === "query_items") {
-        const result = await handlers.onQueryItems?.(intent.filter);
+      } else if (intent.kind === "query_items" && handlers.onQueryItems) {
+        const result = await handlers.onQueryItems(intent.filter);
         if (result) {
           speak(result, () => { setState("listening"); startListeningSTT(); armContinuationWindow(); });
           return;
         }
       }
 
-      const confirmation = successTemplate(intent);
+      const confirmation = handled
+        ? successTemplate(intent)
+        : "I can't do that from here. Try it from the app.";
       speak(confirmation, () => {
         setState("listening");
         startListeningSTT();
@@ -343,10 +413,14 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
 
       if (isYes) {
         if (pendingConfirmIsDigDeeper) {
-          const t = (pendingIntent as Extract<Intent, { kind: "unknown" }>).transcript;
+          const t =
+            pendingDigDeeperTranscript ??
+            (pendingIntent as Extract<Intent, { kind: "unknown" }> | null)?.transcript ??
+            "";
           pendingIntent = null;
+          pendingDigDeeperTranscript = null;
           invokeAI(t);
-        } else {
+        } else if (pendingIntent) {
           const intent = pendingIntent;
           pendingIntent = null;
           executeNativeIntent(intent);
@@ -356,6 +430,7 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
 
       if (isNo) {
         pendingIntent = null;
+        pendingDigDeeperTranscript = null;
         speak(CANCEL_ACK, () => {
           setState("listening");
           startListeningSTT();
@@ -367,13 +442,13 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
     }
 
     setState("classifying");
-    const categories = handlers.getCategories?.() ?? [];
-    const intent = classifyIntent(transcript, categories);
+    tts?.stop(); // Barge-in: stop TTS the moment we start classifying
 
-    // Barge-in: stop TTS the moment we start classifying
-    tts?.stop();
-
-    if (intent.kind === "cancel") {
+    // Cancel/sleep are voice-session control, not household actions — check
+    // them ahead of BOTH the unified and legacy paths so the two never
+    // disagree on what ends a turn (see CANCEL_WORDS/SLEEP_WORDS export note).
+    const lower = transcript.toLowerCase().trim();
+    if (CANCEL_WORDS.test(lower)) {
       speak(CANCEL_ACK, () => {
         setState("listening");
         startListeningSTT();
@@ -381,11 +456,21 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
       });
       return;
     }
-
-    if (intent.kind === "sleep") {
+    if (SLEEP_WORDS.test(lower)) {
       speak(SLEEP_ACK, () => setState("idle"));
       return;
     }
+
+    if (handlers.runTurn) {
+      void handleUnifiedTurn(transcript);
+      return;
+    }
+
+    // ------------------------------------------------------------------
+    // Legacy path — used only where `runTurn` isn't wired up (HubPage/`/chat`).
+    // ------------------------------------------------------------------
+    const categories = handlers.getCategories?.() ?? [];
+    const intent = classifyIntent(transcript, categories);
 
     if (intent.confidence >= highConfidenceThreshold) {
       executeNativeIntent(intent);
@@ -419,6 +504,7 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
   function startConfirmationTimer() {
     confirmationTimer = setTimeout(() => {
       pendingIntent = null;
+      pendingDigDeeperTranscript = null;
       setState("listening");
       startListeningSTT();
       armContinuationWindow();

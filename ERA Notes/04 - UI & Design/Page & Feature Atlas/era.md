@@ -23,32 +23,35 @@ tags:
 
 - **Page**: `src/app/era/page.tsx`
 - **Main component**: `src/components/era/EraShell.tsx`
-- **Sub-components**:
-  - `src/components/era/FaceHeader.tsx`
-  - `src/components/era/FaceCanvas.tsx`
-  - `src/components/era/QuickFaceChips.tsx`
+- **Sub-components** *(corrected 2026-08-25, HUB-17 — the six listed below were confirmed to have zero importers and deleted: `FaceHeader.tsx`, `FaceCanvas.tsx`, `QuickFaceChips.tsx`, `FacePlaceholder.tsx`, `EraFaceCard.tsx`, `EraHubView.tsx`, `EraTranscript.tsx`. This doc had described Phase 0's plan, not shipped reality — see the Master Book Shipped Log for what actually exists)*:
   - `src/components/era/CommandBar.tsx`
-  - `src/components/era/FacePlaceholder.tsx`
+  - `src/components/era/EraFaceNav.tsx`
+  - `src/components/era/EraDots.tsx`
+  - `src/components/era/HubScatterWidgets.tsx`
+  - `EraThreadTranscript` — defined inline in `EraShell.tsx`, the scrollable multi-turn conversation view above the command bar
 
 ## Hooks
 
-- `src/features/era/useEraStore.ts` — `useEraStore` (Zustand) + `eraActions` (non-React)
+- `src/features/era/useEraStore.ts` — `useEraStore` (Zustand); the old non-React `eraActions` export and `turns`/`pushTurn`/`clearTurns` were dead code (zero importers) and removed 2026-08-25
+- `src/features/era/useEraTurn.ts` — **the one entry point from "a sentence" to "a reply"** (HUB-17): classify (`rootIntentRouter`) → resolve (`resolveIntent`) → persist (`era_messages`) → update store. `CommandBar` (typed) and `EraShell`'s voice wiring (spoken) both call this and nothing else.
 - `src/features/era/useEraHousehold.ts` — `useEraHousehold` (current user + partner id)
+- `src/features/era/useEraBudgetSubmit.ts` — money choke point for `draftTransaction`
+- `src/features/era/useEraConversation.ts` — `era_conversations`/`era_messages` persistence + realtime
 
 ## Feature module
 
 - `src/features/era/types.ts` — `FaceKey`, `Face`, `Intent`, `IntentRouter`
 - `src/features/era/faceRegistry.ts` — `FACES`, `getFace`, `DEFAULT_FACE_KEY`
-- `src/features/era/intentRouter.ts` — `stubIntentRouter` (Phase 0); replaced by Gemini in Phase 2
+- `src/features/era/intentRouter.ts` — re-exports `rootIntentRouter` (`src/features/era/intents/index.ts`), a deterministic keyword router — shipped, not a stub; no Gemini-backed router exists
 - `src/features/era/queryKeys.ts` — `eraKeys`
 
 ## API routes
 
-- None in Phase 0. Phase 2 will add `/api/era/intent` for the Gemini-backed router.
+- `src/app/api/era/conversations/route.ts`, `src/app/api/era/messages/route.ts` — shipped since Phase 0.5; append-only `era_messages`
 
 ## DB tables
 
-- None in Phase 0. Phase 2+ may add `era_transcripts` and/or `era_face_preferences`.
+- `era_conversations`, `era_messages` (`migrations/schema.sql`) — shipped since Phase 0.5
 
 ## How to get here
 
@@ -71,8 +74,7 @@ tags:
 ## Notes
 
 - The shell uses `fixed inset-x-0 top-16 bottom-0` to claim the viewport under the global `h-16` header. Mobile reserves 72px (`MOBILE_NAV_HEIGHT`) at the bottom for the `MobileNav` via `pb-[72px] md:pb-0`.
-- Brand mark on the global header: `moduleFromPath()` in `src/components/layouts/ConditionalHeader.tsx` maps `/era` → `memory`. The shell itself shows the **active face's** mark via `FaceHeader`.
-- `layoutId="era-face"` on `FaceCanvas` is reserved for Phase 1 morph animation.
+- Brand mark on the global header: `moduleFromPath()` in `src/components/layouts/ConditionalHeader.tsx` maps `/era` → `memory`. The shell itself shows the **active face's** mark inline in `EraShell.tsx` via `ERAMark` — `FaceHeader` (deleted 2026-08-25) never had an importer.
 - All command-bar input must flow through `IntentRouter` — never bypass.
 - `CommandBar` background uses `tc.bgPage` (Hard Rule #15: floating overlays must be opaque, never `neo-card`).
 - ERA is **not** in `STANDALONE_APPS`, so the global `ConditionalHeader` and `MobileNav` remain visible.

@@ -1,21 +1,10 @@
 // src/features/era/useEraStore.ts
-// ERA shell state — Zustand store. Mirrors the offlinePendingActions pattern
-// (src/lib/stores/offlinePendingStore.ts) so non-React modules can mutate
-// state via getState() if needed in later phases.
+// ERA shell state — Zustand store.
 
 import { create } from "zustand";
 import { DEFAULT_FACE_KEY } from "./faceRegistry";
 import type { ERAModuleKey } from "@/components/shared/ERAMark";
-import type { FaceKey, Intent } from "./types";
-
-/** A turn in the ERA conversation log — user input + ERA's parsed reply. */
-export interface EraTurn {
-  id: string;
-  at: number;
-  intent: Intent;
-  /** Canned natural-language reply shown to the user (Phase 0 templated). */
-  reply: string;
-}
+import type { EraActiveProposal, EraPendingTurn, FaceKey, Intent } from "./types";
 
 export type EraView = "hub" | "dashboard";
 
@@ -28,13 +17,12 @@ interface EraState {
   lastIntent: Intent | null;
   /** Persisted command-bar text across in-app navigation (cleared on submit). */
   pendingTranscript: string;
-  /** Rolling history of recent turns (most recent first, capped at 12). */
-  turns: EraTurn[];
   /** ERA starts dormant; first click on the shell wakes it and begins all animations. */
   isAwake: boolean;
   /** When true, assistant replies are spoken aloud via Azure TTS. Default false. */
   voiceReplyEnabled: boolean;
-  /** Latest assistant reply text — drives the typewriter transcription display. */
+  /** Latest assistant reply text — set the instant ERA begins speaking it, ahead
+   *  of the era_messages round trip (see conversationEngine's onWillSpeak). */
   eraReply: string;
   /**
    * The module key driving ERA DOT color/cue in hub view.
@@ -43,6 +31,12 @@ interface EraState {
    * addresses a module.
    */
   hubModuleKey: ERAModuleKey;
+  /** A question ERA is waiting on an answer to (Slice 3) — see EraPendingTurn. */
+  pendingTurn: EraPendingTurn | null;
+  /** An AI-proposed action awaiting Confirm/Dismiss (Slice 4) — see EraActiveProposal. */
+  activeProposal: EraActiveProposal | null;
+  /** True while an "Ask AI" call is in flight. */
+  askingAI: boolean;
 }
 
 interface EraActions {
@@ -52,27 +46,28 @@ interface EraActions {
   openDashboard: (key: FaceKey) => void;
   setLastIntent: (intent: Intent | null) => void;
   setPendingTranscript: (text: string) => void;
-  pushTurn: (turn: EraTurn) => void;
-  clearTurns: () => void;
   reset: () => void;
   wake: () => void;
   setVoiceReplyEnabled: (v: boolean) => void;
   setHubModuleKey: (key: ERAModuleKey) => void;
   setEraReply: (text: string) => void;
+  setPendingTurn: (turn: EraPendingTurn | null) => void;
+  setActiveProposal: (proposal: EraActiveProposal | null) => void;
+  setAskingAI: (v: boolean) => void;
 }
-
-const MAX_TURNS = 12;
 
 const INITIAL: EraState = {
   activeFaceKey: DEFAULT_FACE_KEY,
   activeView: "hub",
   lastIntent: null,
   pendingTranscript: "",
-  turns: [],
   isAwake: false,
   voiceReplyEnabled: false,
   hubModuleKey: "chat",
   eraReply: "",
+  pendingTurn: null,
+  activeProposal: null,
+  askingAI: false,
 };
 
 export const useEraStore = create<EraState & EraActions>((set) => ({
@@ -82,23 +77,12 @@ export const useEraStore = create<EraState & EraActions>((set) => ({
   openDashboard: (key) => set({ activeFaceKey: key, activeView: "dashboard" }),
   setLastIntent: (intent) => set({ lastIntent: intent }),
   setPendingTranscript: (text) => set({ pendingTranscript: text }),
-  pushTurn: (turn) =>
-    set((s) => ({ turns: [turn, ...s.turns].slice(0, MAX_TURNS) })),
-  clearTurns: () => set({ turns: [] }),
   reset: () => set(INITIAL),
   wake: () => set({ isAwake: true }),
   setVoiceReplyEnabled: (v) => set({ voiceReplyEnabled: v }),
   setHubModuleKey: (key) => set({ hubModuleKey: key }),
   setEraReply: (text) => set({ eraReply: text }),
+  setPendingTurn: (turn) => set({ pendingTurn: turn }),
+  setActiveProposal: (proposal) => set({ activeProposal: proposal }),
+  setAskingAI: (v) => set({ askingAI: v }),
 }));
-
-/** Non-React accessor for use from plain TS modules. */
-export const eraActions = {
-  setActiveFace: (key: FaceKey) => useEraStore.getState().setActiveFace(key),
-  setLastIntent: (intent: Intent | null) =>
-    useEraStore.getState().setLastIntent(intent),
-  setPendingTranscript: (text: string) =>
-    useEraStore.getState().setPendingTranscript(text),
-  pushTurn: (turn: EraTurn) => useEraStore.getState().pushTurn(turn),
-  getActiveFace: () => useEraStore.getState().activeFaceKey,
-};

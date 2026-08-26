@@ -40,6 +40,59 @@ export const budgetRouter: FaceIntentRouter = {
       return { kind: "monthSpend", face: "budget", scope, categoryHint, rawText: text };
     }
 
+    // Transfer — "transfer 50 from wallet to savings", "move $200 from
+    // checking to savings". Account names are resolved fuzzily against the
+    // user's real accounts in the resolver — the router only extracts hints.
+    const transferMatch = text.match(
+      /\b(?:transfer|move|send)\s+\$?(\d+(?:[.,]\d{1,2})?)\s+(?:dollars?\s+)?from\s+(.+?)\s+to\s+(.+?)(?:[.?!]|$)/i,
+    );
+    if (transferMatch) {
+      return {
+        kind: "transfer",
+        face: "budget",
+        amount: Number(transferMatch[1].replace(",", ".")),
+        fromHint: transferMatch[2].trim(),
+        toHint: transferMatch[3].trim(),
+        rawText: text,
+      };
+    }
+
+    // Record a debt — "John owes me $30 for lunch", "record a debt: John owes 30".
+    const debtMatch = text.match(
+      /^(?:record\s+(?:a\s+)?debt[:\s]+)?(\w[\w\s]{1,40}?)\s+owes?(?:\s+me)?\s+\$?(\d+(?:[.,]\d{1,2})?)\b(?:\s+for\s+(.+?))?[.?!]*$/i,
+    );
+    if (debtMatch) {
+      return {
+        kind: "recordDebt",
+        face: "budget",
+        debtorName: debtMatch[1].trim(),
+        amount: Number(debtMatch[2].replace(",", ".")),
+        notes: debtMatch[3]?.trim(),
+        rawText: text,
+      };
+    }
+
+    // Confirm a pending draft — "confirm my last draft", "confirm the fuel draft".
+    const confirmDraftMatch = text.match(
+      /\bconfirm\b\s*(?:my\s+|the\s+)?(.*?)\s*\bdraft\b/i,
+    );
+    if (confirmDraftMatch) {
+      return {
+        kind: "confirmDraft",
+        face: "budget",
+        hint: confirmDraftMatch[1]?.trim() || undefined,
+        rawText: text,
+      };
+    }
+
+    // List pending drafts — "what drafts do I have", "show my pending transactions".
+    if (
+      /\b(what|show|list|see|check)\b.{0,20}\bdrafts?\b/i.test(lo) ||
+      /\bpending (drafts?|transactions?)\b/i.test(lo)
+    ) {
+      return { kind: "listDrafts", face: "budget", rawText: text };
+    }
+
     // Transaction draft — "I paid $25 on fuel".
     // Require clear spend semantics: a spend verb PLUS either an explicit
     // currency marker or a number that is NOT attached to a non-money unit.

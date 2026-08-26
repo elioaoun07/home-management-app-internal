@@ -4,9 +4,13 @@ import { safeFetch } from "@/lib/safeFetch";
 import { parseSmartText } from "@/lib/smartTextParser";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { localToISO } from "@/lib/utils/date";
+import type { ItemPriority } from "@/types/items";
+import type { EraPendingTurn } from "../../types";
 import {
+  formatAskReminderTime,
   formatReminderCreated,
   formatReminderError,
+  formatReminderSavedAsDraft,
   formatScheduleError,
   formatTodaySchedule,
 } from "../formatters/schedule";
@@ -14,6 +18,7 @@ import {
 interface ResolveResult {
   text: string;
   metadata?: Record<string, unknown>;
+  pending?: EraPendingTurn | null;
 }
 
 export async function resolveTodaySchedule(): Promise<ResolveResult> {
@@ -102,15 +107,21 @@ export async function resolveTodaySchedule(): Promise<ResolveResult> {
  * tomorrow at 5pm".
  *
  * `parseSmartText` is the same NLP the mobile reminder form uses, so ERA and
- * the form agree on titles, dates and recurrence. Two rules matter here:
+ * the form agree on titles, dates and recurrence.
  *
- *  - **Never send a `due_at` we invented.** `confidence.date === 0` means the
- *    parser found no date at all; sending "now" would fire an alert instantly.
- *    We omit `due_at` and the item lands undated, exactly like a form submit
- *    with the date field left blank.
- *  - **Local → UTC via `localToISO`.** `dueDate`/`dueTime` are wall-clock
- *    strings; `due_at` is `timestamptz`. Mirrors MobileReminderForm, including
- *    its noon default when a date was parsed but no time (Hard Rule #18).
+ * **Time is a required slot (Slice 3).** `confidence.date === 0` means the
+ * parser found no date at all. Earlier this resolver wrote the item anyway
+ * with `due_at` omitted — technically honest (never invents a time) but the
+ * owner's own complaint: ERA "logged the reminder without mentioning the
+ * time" and moved on, leaving a silent, alert-less item. Now it asks instead
+ * of writing, and returns a `pending` question `useEraTurn` holds until the
+ * next turn answers it (see `resolvePendingReminderAnswer`) or it's flushed
+ * to a draft.
+ *
+ * **Local → UTC via `localToISO`** once a date IS known. `dueDate`/`dueTime`
+ * are wall-clock strings; `due_at` is `timestamptz`. Mirrors
+ * MobileReminderForm, including its noon default when a date was parsed but
+ * no time (Hard Rule #18).
  *
  * `title` is the already-cleaned title from the router; we re-derive from the
  * raw text only as a fallback so this resolver is safe to call directly.
@@ -126,11 +137,30 @@ export async function resolveDraftReminder(
     return { text: formatReminderError("no-title") };
   }
 
-  // Only send a due_at the user actually expressed (see doc comment).
-  let dueAt: string | null = null;
-  if (parsed.confidence.date > 0 && parsed.dueDate) {
-    dueAt = localToISO(parsed.dueDate, parsed.dueTime || "12:00");
+  if (parsed.confidence.date === 0 || !parsed.dueDate) {
+    return {
+      text: formatAskReminderTime({ title: finalTitle }),
+      pending: {
+        kind: "draftReminder",
+        title: finalTitle,
+        priority: parsed.priority,
+        rawText,
+        createdAt: Date.now(),
+      },
+    };
   }
+
+  return writeReminder(finalTitle, parsed.priority, parsed.dueDate, parsed.dueTime, parsed.recurrenceRule);
+}
+
+async function writeReminder(
+  title: string,
+  priority: ItemPriority,
+  dueDate: string,
+  dueTime: string | undefined,
+  recurrenceRule: string | undefined,
+): Promise<ResolveResult> {
+  const dueAt = localToISO(dueDate, dueTime || "12:00");
 
   try {
     const res = await safeFetch("/api/items", {
@@ -138,9 +168,9 @@ export async function resolveDraftReminder(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         type: "reminder",
-        title: finalTitle,
-        priority: parsed.priority,
-        ...(dueAt ? { due_at: dueAt } : {}),
+        title,
+        priority,
+        due_at: dueAt,
       }),
       timeoutMs: 8_000,
     });
@@ -151,19 +181,69 @@ export async function resolveDraftReminder(
 
     return {
       text: formatReminderCreated({
-        title: finalTitle,
+        title,
         dueAt,
-        recurring: Boolean(parsed.recurrenceRule),
+        recurring: Boolean(recurrenceRule),
       }),
       metadata: {
         itemId: item?.id ?? null,
-        title: finalTitle,
+        title,
         dueAt,
-        recurrenceRule: parsed.recurrenceRule ?? null,
-        priority: parsed.priority,
+        recurrenceRule: recurrenceRule ?? null,
+        priority,
       },
+      pending: null,
     };
   } catch {
     return { text: formatReminderError() };
+  }
+}
+
+/**
+ * Answers a pending "what time?" question (Slice 3). Called by `useEraTurn`
+ * instead of the normal router whenever a `draftReminder` question is
+ * outstanding — the whole next utterance is treated as the time answer, not
+ * reclassified.
+ *
+ * If it parses to a date, the reminder is written for real (same path as a
+ * one-shot "remind me… tomorrow at 5"). If it doesn't, the title is not
+ * lost: it's flushed to a reviewable `items.status = 'draft'` row — the same
+ * rule bulk-convert already uses for an unconfirmed item — rather than
+ * silently discarded or, worse, misread as a fresh unrelated command.
+ */
+export async function resolvePendingReminderAnswer(
+  pending: EraPendingTurn,
+  answerText: string,
+): Promise<ResolveResult> {
+  const parsed = parseSmartText(answerText);
+
+  if (parsed.confidence.date > 0 && parsed.dueDate) {
+    return writeReminder(pending.title, pending.priority, parsed.dueDate, parsed.dueTime, parsed.recurrenceRule);
+  }
+
+  try {
+    const res = await safeFetch("/api/items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "reminder",
+        title: pending.title,
+        priority: pending.priority,
+        status: "draft",
+      }),
+      timeoutMs: 8_000,
+    });
+
+    if (!res.ok) return { text: formatReminderError(), pending: null };
+
+    const { item } = (await res.json()) as { item?: { id?: string } };
+
+    return {
+      text: formatReminderSavedAsDraft({ title: pending.title }),
+      metadata: { itemId: item?.id ?? null, title: pending.title, draft: true },
+      pending: null,
+    };
+  } catch {
+    return { text: formatReminderError(), pending: null };
   }
 }

@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
     const to = shiftDate(dates[dates.length - 1], MATCH_WINDOW_FORWARD_DAYS);
 
     const SELECT =
-      "id, account_id, date, amount, description, is_draft, is_debt_return, statement_hash, bank_description, category_id, subcategory_id, inserted_at";
+      "id, account_id, date, amount, description, is_draft, is_debt_return, statement_hash, bank_description, category_id, subcategory_id, inserted_at, deleted_at";
 
     // Every account, not just the statement's: a row may have been routed
     // elsewhere by a per-row override, and one filed under the wrong account is
@@ -119,19 +119,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const rowHashes = [...new Set(rows.map((r) => r.statement_hash))];
+    const hashChunks = Array.from(
+      { length: Math.ceil(rowHashes.length / 100) },
+      (_, index) => rowHashes.slice(index * 100, index * 100 + 100),
+    );
+
     // A fingerprint hit outside the date window still means "already imported"
     // — the stored date can be edited after the fact, and a row overridden into
     // another account is found by hash alone. The partial unique index on
     // (user_id, statement_hash) makes this lookup cheap.
-    const { data: hashRows } = await supabase
-      .from("transactions")
-      .select(SELECT)
-      .eq("user_id", user.id)
-      .is("deleted_at", null)
-      .in(
-        "statement_hash",
-        [...new Set(rows.map((r) => r.statement_hash))].slice(0, 1000),
-      );
+    const hashRows: Array<Record<string, unknown>> = [];
+    for (const hashes of hashChunks) {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select(SELECT)
+        .eq("user_id", user.id)
+        .in("statement_hash", hashes);
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      hashRows.push(...((data || []) as Array<Record<string, unknown>>));
+    }
 
     const seen = new Set<string>();
     const toCandidate = (tx: Record<string, unknown>): CandidateTx => ({
@@ -148,11 +157,12 @@ export async function POST(req: NextRequest) {
       category_id: (tx.category_id as string) ?? null,
       subcategory_id: (tx.subcategory_id as string) ?? null,
       inserted_at: tx.inserted_at as string,
+      deleted_at: (tx.deleted_at as string) ?? null,
     });
 
     const candidates: CandidateTx[] = [];
     const crossAccountCandidates: CandidateTx[] = [];
-    for (const raw of [...(windowRows || []), ...(hashRows || [])]) {
+    for (const raw of [...(windowRows || []), ...hashRows]) {
       if (seen.has(raw.id)) continue;
       seen.add(raw.id);
       const candidate = toCandidate(raw);
@@ -162,14 +172,20 @@ export async function POST(req: NextRequest) {
 
     // Rows the owner has already ruled out, looked up by fingerprint so the
     // decision survives a wider re-upload and a re-downloaded PDF.
-    const rowHashes = [...new Set(rows.map((r) => r.statement_hash))];
-    const { data: skipRows } = await supabase
-      .from("statement_skipped_rows")
-      .select("statement_hash")
-      .eq("user_id", user.id)
-      .in("statement_hash", rowHashes.slice(0, 1000));
+    const skipRows: Array<{ statement_hash: string }> = [];
+    for (const hashes of hashChunks) {
+      const { data, error } = await supabase
+        .from("statement_skipped_rows")
+        .select("statement_hash")
+        .eq("user_id", user.id)
+        .in("statement_hash", hashes);
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      skipRows.push(...((data || []) as Array<{ statement_hash: string }>));
+    }
     const skippedHashes = new Set(
-      (skipRows || []).map((r) => r.statement_hash as string),
+      skipRows.map((r) => r.statement_hash),
     );
 
     // Household members whose names can appear as a transfer counterparty, and
@@ -221,17 +237,38 @@ export async function POST(req: NextRequest) {
     // brand new on every re-import, one confirm away from moving both balances
     // twice. Keyed by fingerprint, scoped exactly like the unique index that
     // backs it up — (user_id, statement_hash) over live rows.
-    const { data: transferHashRows } = await supabase
-      .from("transfers")
-      .select("id, statement_hash")
-      .eq("user_id", user.id)
-      .is("deleted_at", null)
-      .in("statement_hash", rowHashes.slice(0, 1000));
-    const importedTransfers: ImportedTransferRef[] = (transferHashRows || [])
-      .filter((t): t is { id: string; statement_hash: string } =>
+    const transferHashRows: Array<{
+      id: string;
+      statement_hash: string | null;
+      deleted_at: string | null;
+    }> = [];
+    for (const hashes of hashChunks) {
+      const { data, error } = await supabase
+        .from("transfers")
+        .select("id, statement_hash, deleted_at")
+        .eq("user_id", user.id)
+        .is("deleted_at", null)
+        .in("statement_hash", hashes);
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      transferHashRows.push(
+        ...((data || []) as Array<{
+          id: string;
+          statement_hash: string | null;
+          deleted_at: string | null;
+        }>),
+      );
+    }
+    const importedTransfers: ImportedTransferRef[] = transferHashRows
+      .filter((t): t is { id: string; statement_hash: string; deleted_at: string | null } =>
         !!t.statement_hash,
       )
-      .map((t) => ({ id: t.id, statement_hash: t.statement_hash }));
+      .map((t) => ({
+        id: t.id,
+        statement_hash: t.statement_hash,
+        deleted_at: t.deleted_at,
+      }));
 
     const classifications = reconcileStatementRows(
       rows,

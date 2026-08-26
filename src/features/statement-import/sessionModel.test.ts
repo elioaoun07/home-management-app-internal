@@ -168,7 +168,7 @@ describe("getBucket", () => {
     // Already recorded by the sender — nothing left to decide.
     expect(
       getBucket({ ...sent, existing_transfer_id: "tr-1" }, undefined),
-    ).toBe("imported");
+    ).toBe("matched");
   });
 
   it("routes an unmatched withdrawal to transfers, not the merchant list", () => {
@@ -180,6 +180,20 @@ describe("getBucket", () => {
     ).toBe("transfers");
     // An ordinary unmatched row (no withdrawal flag) is unaffected.
     expect(getBucket({ status: "unmatched" }, undefined)).toBe("review");
+  });
+
+  it("separates exact imported identities from heuristic matches", () => {
+    const base = {
+      status: "already_imported" as const,
+      transaction_id: "tx-1",
+      stored_hash: "hash-1",
+      stored_bank_description: "3% Cash Back Campaign",
+    };
+
+    expect(getBucket({ ...base, reason: "hash" }, undefined)).toBe("imported");
+    expect(
+      getBucket({ ...base, reason: "probable_duplicate" }, undefined),
+    ).toBe("matched");
   });
 
   // The bug this fixed: `skipped_before` used to BE the classification, so a
@@ -329,6 +343,16 @@ const ACCOUNTS: AccountRef[] = [
 ];
 
 describe("suggestAccountForRow", () => {
+  it("keeps a learned cross-account mapping as the default", () => {
+    expect(
+      suggestAccountForRow(
+        row({ mapping_account_id: ACCOUNT, type: "debit" }),
+        SALARY,
+        ACCOUNTS,
+      ),
+    ).toBe(ACCOUNT);
+  });
+
   // An income account can only ADD (getBalanceDelta), so a debit filed there
   // moves the balance the wrong way — a $400 ATM withdrawal would RAISE Salary
   // by $400. No encoding fixes that; the row has to go somewhere that subtracts.
@@ -380,6 +404,45 @@ describe("suggestAccountForRow", () => {
 });
 
 describe("buildCommitActions", () => {
+  it("stages an ordinary debit as a self transfer when its type is changed", () => {
+    const s = session({
+      decisions: {
+        "row-1": {
+          action_kind: "transfer",
+          transfer_to_account_id: CAT_TRAVEL,
+          resolution: "create",
+        },
+      },
+    });
+
+    expect(buildCommitActions(s)[0]).toMatchObject({
+      kind: "create_transfer",
+      from_account_id: ACCOUNT,
+      to_account_id: CAT_TRAVEL,
+      transfer_type: "self",
+    });
+  });
+
+  it("reverses the endpoints when an incoming row is changed to transfer", () => {
+    const s = session({
+      rows: [row({ type: "credit" })],
+      decisions: {
+        "row-1": {
+          action_kind: "transfer",
+          transfer_to_account_id: CAT_TRAVEL,
+          resolution: "create",
+        },
+      },
+    });
+
+    expect(buildCommitActions(s)[0]).toMatchObject({
+      kind: "create_transfer",
+      from_account_id: CAT_TRAVEL,
+      to_account_id: ACCOUNT,
+      transfer_type: "self",
+    });
+  });
+
   it("stamps an auto-matched row without creating anything", () => {
     const s = session({
       classifications: {
@@ -740,10 +803,7 @@ describe("buildCommitActions", () => {
     expect(buildCommitActions(s)).toEqual([]);
   });
 
-  // Regression: a statement whose fingerprints were ALL current produced no
-  // actions at all, so Save sat disabled at "0 rows" and there was no way to
-  // fill in `bank_description` for that history.
-  it("re-imports purely to backfill the bank wording when it is missing", () => {
+  it("keeps exact imported rows out of Ready when bank wording is missing", () => {
     const s = session({
       classifications: {
         "row-1": {
@@ -756,18 +816,7 @@ describe("buildCommitActions", () => {
       },
     });
 
-    expect(buildCommitActions(s)).toEqual([
-      {
-        kind: "rekey",
-        row_id: "row-1",
-        transaction_id: "tx-current",
-        statement_hash: "hash-1",
-        // Guards on the CURRENT hash, so the write is a no-op on the
-        // fingerprint and only the bank wording lands.
-        previous_hash: "hash-1",
-        bank_description: "POS PURCHASE LE GRAY BEIRUT LB 3043",
-      },
-    ]);
+    expect(buildCommitActions(s)).toEqual([]);
   });
 
   it("records a manual skip as a standing decision, keyed by fingerprint", () => {

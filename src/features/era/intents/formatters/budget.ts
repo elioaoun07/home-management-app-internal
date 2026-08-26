@@ -324,3 +324,191 @@ export function formatDraftTransactionError(
       );
   }
 }
+
+// ---------------------------------------------------------------------------
+// transfer
+// ---------------------------------------------------------------------------
+
+/** Slots: {ack}, {amount}, {from}, {to} */
+const TRANSFER_DONE = [
+  "{ack} moved {amount} from {from} to {to}.",
+  "{ack} {amount} is now in {to}, out of {from}.",
+  "Transferred {amount} from {from} to {to}.",
+  "{ack} that's {amount} across, from {from} to {to}.",
+  "Done — {amount} from {from} into {to}.",
+] as const;
+
+export function formatTransferCreated(data: {
+  amount: number;
+  fromName: string;
+  toName: string;
+}): string {
+  return say(TRANSFER_DONE, {
+    ack: pick(ACK_DONE),
+    amount: money(data.amount),
+    from: data.fromName,
+    to: data.toName,
+  });
+}
+
+const TRANSFER_NO_AMOUNT = [
+  'I need an amount and two accounts — try "transfer $50 from wallet to savings".',
+  'Missing the amount there. Something like "move $50 from wallet to savings" works.',
+] as const;
+
+const TRANSFER_NO_ACCOUNTS = [
+  'I need both accounts named — try "transfer $50 from wallet to savings".',
+  "I caught the amount but not which two accounts. Name both, like \"from wallet to savings\".",
+] as const;
+
+/** Slots: {hint} */
+const TRANSFER_ACCOUNT_NOT_FOUND = [
+  "I couldn't find an account matching \"{hint}\". Check the name in Accounts.",
+  "No account named anything like \"{hint}\" — have a look in Accounts.",
+] as const;
+
+const TRANSFER_SAME_ACCOUNT = [
+  "That's the same account twice — I need two different ones.",
+  "Both of those matched the same account. Pick two different ones.",
+] as const;
+
+export function formatTransferError(
+  reason: "no-amount" | "no-accounts" | "same-account" | "account-not-found" | "request-failed",
+  detail?: string,
+): string {
+  switch (reason) {
+    case "no-amount":
+      return pick(TRANSFER_NO_AMOUNT);
+    case "no-accounts":
+      return pick(TRANSFER_NO_ACCOUNTS);
+    case "same-account":
+      return pick(TRANSFER_SAME_ACCOUNT);
+    case "account-not-found":
+      return say(TRANSFER_ACCOUNT_NOT_FOUND, { hint: detail ?? "" });
+    default:
+      return errorReply(
+        detail ? `I couldn't make that transfer — ${detail}` : "I couldn't make that transfer.",
+      );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// recordDebt
+// ---------------------------------------------------------------------------
+
+/** Slots: {ack}, {name}, {amount} */
+const DEBT_RECORDED = [
+  "{ack} noted — {name} owes you {amount}.",
+  "{ack} tracking {amount} from {name}.",
+  "Got it — {name} owes {amount}. Filed under Debts.",
+  "{ack} {name}'s down for {amount} in Debts.",
+] as const;
+
+export function formatDebtRecorded(data: { debtorName: string; amount: number }): string {
+  return say(DEBT_RECORDED, {
+    ack: pick(ACK_DONE),
+    name: data.debtorName,
+    amount: money(data.amount),
+  });
+}
+
+const DEBT_MISSING_FIELDS = [
+  'I need who owes you and how much — try "John owes me $30 for lunch".',
+  'Missing a name or an amount there. Something like "Sara owes 20" works.',
+] as const;
+
+export function formatRecordDebtError(
+  reason: "missing-fields" | "request-failed",
+  detail?: string,
+): string {
+  return reason === "missing-fields"
+    ? pick(DEBT_MISSING_FIELDS)
+    : errorReply(
+        detail ? `I couldn't save that debt — ${detail}` : "I couldn't save that debt.",
+      );
+}
+
+// ---------------------------------------------------------------------------
+// listDrafts
+// ---------------------------------------------------------------------------
+
+/** Slots: {count}, {list} */
+const DRAFTS_LIST = [
+  "You've got {count} waiting: {list}.",
+  "{count} sitting in Drafts: {list}.",
+  "Pending: {list} — {count} in total.",
+] as const;
+
+const DRAFTS_EMPTY = [
+  "Nothing waiting in Drafts.",
+  "Drafts is empty — you're all caught up.",
+  "No pending drafts right now.",
+] as const;
+
+export function formatDraftsList(
+  drafts: Array<{ amount: number; description?: string | null }>,
+): string {
+  if (drafts.length === 0) return pick(DRAFTS_EMPTY);
+  const list = listOut(
+    drafts.map((d) => `${money(d.amount)}${d.description ? ` (${d.description})` : ""}`),
+  );
+  return say(DRAFTS_LIST, { count: plural(drafts.length, "draft"), list });
+}
+
+export function formatListDraftsError(): string {
+  return errorReply("I couldn't pull your drafts.");
+}
+
+// ---------------------------------------------------------------------------
+// confirmDraft
+// ---------------------------------------------------------------------------
+
+/** Slots: {ack}, {amount}, {where} */
+const DRAFT_CONFIRMED = [
+  "{ack} confirmed {amount}{where}.",
+  "{ack} that's logged now — {amount}{where}.",
+  "Confirmed — {amount}{where} is a real transaction now.",
+] as const;
+
+export function formatDraftConfirmed(data: {
+  amount: number;
+  categoryName?: string | null;
+}): string {
+  return say(DRAFT_CONFIRMED, {
+    ack: pick(ACK_DONE),
+    amount: money(data.amount),
+    where: data.categoryName ? ` under ${data.categoryName}` : "",
+  });
+}
+
+const DRAFT_NONE_PENDING = [
+  "There's nothing in Drafts to confirm.",
+  "Drafts is empty — nothing to confirm there.",
+] as const;
+
+/** Slots: {hint} */
+const DRAFT_HINT_NOT_FOUND = [
+  "I couldn't find a draft matching \"{hint}\".",
+  "Nothing in Drafts looks like \"{hint}\".",
+] as const;
+
+const DRAFT_HINT_AMBIGUOUS = [
+  "More than one draft matches that — open Drafts and confirm it there.",
+  "A few drafts match \"{hint}\" — pick the right one from Drafts.",
+] as const;
+
+export function formatConfirmDraftError(
+  reason: "none-pending" | "not-found" | "ambiguous" | "request-failed",
+  hint?: string,
+): string {
+  switch (reason) {
+    case "none-pending":
+      return pick(DRAFT_NONE_PENDING);
+    case "not-found":
+      return say(DRAFT_HINT_NOT_FOUND, { hint: hint ?? "" });
+    case "ambiguous":
+      return say(DRAFT_HINT_AMBIGUOUS, { hint: hint ?? "" });
+    default:
+      return errorReply("I couldn't confirm that draft.");
+  }
+}

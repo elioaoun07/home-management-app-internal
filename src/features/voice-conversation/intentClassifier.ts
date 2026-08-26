@@ -17,9 +17,16 @@ interface Category {
   subcategories?: Array<{ id: string; name: string }>;
 }
 
-/** Keywords that immediately end the turn. */
-const CANCEL_WORDS = /^(cancel|stop|never ?mind|abort|no)\b/i;
-const SLEEP_WORDS = /\b(thanks? era|that'?s? all|goodbye era|bye era|go to sleep|stop listening)\b/i;
+/**
+ * Keywords that immediately end the turn. Exported so `conversationEngine`
+ * can apply the same check ahead of the unified ERA-brain path (see
+ * `runTurn` in `ConversationHandlers`) — cancel/sleep are voice-session
+ * control, not household actions, so they never go through the shared
+ * intent router; both the legacy and unified paths still need to agree on
+ * what counts as "cancel" or "sleep".
+ */
+export const CANCEL_WORDS = /^(cancel|stop|never ?mind|abort|no)\b/i;
+export const SLEEP_WORDS = /\b(thanks? era|that'?s? all|goodbye era|bye era|go to sleep|stop listening)\b/i;
 
 const EXPENSE_VERBS = /\b(spent|paid|bought|purchased|got|ordered|charged|spend|pay)\b/i;
 const REMINDER_VERBS = /\b(remind|remember|don'?t forget|set (a |an )?reminder|alert me)\b/i;

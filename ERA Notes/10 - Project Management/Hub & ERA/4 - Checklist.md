@@ -1,6 +1,6 @@
 ---
 created: 2026-06-20
-updated: 2026-08-22
+updated: 2026-08-26
 type: checklist
 status: active
 owner: Elio
@@ -29,9 +29,14 @@ tags:
 
 - [ ] **HUB-3** Briefing enrichment ← Schedule — feed the whole week's shape into ERA's proactive briefing. Coordinate with [Schedule · 4 · Checklist](<../Schedule/4 - Checklist.md>). _(friction - M)_
 - [ ] **HUB-4** Briefing enrichment ← Budget (cashflow) — warn before a recurring payment overdraws. Coordinate with [Hub & ERA — Master Book](<Hub & ERA — Master Book.md>). _(friction - M)_
-- [ ] **HUB-16** Voice reminders lose the time and don't save — `intentClassifier.extractReminderTitle` regex-strips the date, and `HubPage.onSetReminder` opens a modal defaulted to today/next-hour while ERA says "Reminder set". Route voice through `resolveDraftReminder` + the shared phrasing pools so both surfaces agree. Surfaced by HUB-15. _(friction - M)_
+- [ ] **HUB-16** `/chat` voice reminders lose the time and don't save — `intentClassifier.extractReminderTitle` regex-strips the date, and `HubPage.onSetReminder` opens a modal defaulted to today/next-hour while ERA says "Reminder set". Route voice through `resolveDraftReminder` + the shared phrasing pools so both surfaces agree. Surfaced by HUB-15. **Scope narrowed 2026-08-25 (HUB-17):** this is now specifically about `/chat`/`HubPage.tsx` — `/era`'s equivalent (and worse: zero working voice handlers at all) is fixed. The `runTurn` capability pattern HUB-17 added to `ConversationHandlers` is the proven template to reapply here; `HubPage.tsx`'s own five-callback block (`:1819-1880`) would need the same treatment, which HUB-17 deliberately left alone (Junction — Hub Chat's own message-action pattern, out of this session's scope). _(friction - M)_
 - [ ] **HUB-13** ERA's two spend answers disagree — `showAnalytics` buckets by calendar month (`/api/analytics`) while `monthSpend` uses the user's custom month start (`getDefaultDateRange`). Pick one basis for both. Surfaced by HUB-12. _(friction - S)_
 - [ ] **HUB-14** `resolveMonthSpend` partner scope is confidently wrong — it returns the household total but the formatter says "Your partner has spent $X". Either make the two-call split or fix the wording. Surfaced by HUB-12. _(friction - S)_
+
+- [ ] **HUB-21** Live-verify Slices 2/3/4/5 against a running dev server — the server on port 3000 during this session was serving a stale build (its `.next/dev/build-manifest.json` predates the changes) and showed old phrasing after the edits landed. Restart that dev server (or start a fresh one) and re-run the scenarios in the Master Book's HUB-18/19/20 Shipped Log entries end-to-end. Two harmless test artifacts from this session's partial verification are still in the live DB: two undated reminders titled "Water the plants" and "Feed the cat" (no due_at, so no alert will ever fire) — delete via Reminders search when convenient. _(friction - S)_
+- [ ] **HUB-22** Slice 2 stretch capabilities not built this session: debt *settlement* via ERA (no clean Undo inverse exists on the standalone-debt PATCH path — see HUB-18 note), expense-split from chat (already tracked as HUB-6), and recurring-payment add/skip via ERA. _(annoyance - M)_
+
+- [ ] **HUB-24** Ask AI ships one proposal kind (`propose_nfc_reminder`). Widen the schema/UI only when a second concrete use case needs it (Design Doctrine: don't build for hypothetical requirements) — candidates already visible in the domain: propose a category for an uncategorized draft, propose a recipe substitution. _(annoyance - M)_
 
 ## Later
 

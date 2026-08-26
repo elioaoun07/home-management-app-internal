@@ -8,7 +8,11 @@ import { createHash } from "node:crypto";
 import { matchMerchantMapping } from "@/lib/merchantMatch";
 import { extractStatementMemo } from "@/lib/statement-reconcile";
 import { normalizeMerchant } from "@/lib/utils/anomalyDetection";
-import { ParsedTransaction } from "@/types/statement";
+import type {
+  ParsedTransaction,
+  StatementParseDiagnostics,
+  StatementSemanticKind,
+} from "@/types/statement";
 
 /**
  * Transaction type patterns from the bank statement
@@ -34,6 +38,11 @@ interface RawTransaction {
   type: TransactionType;
   merchantName: string;
   merchantPattern: string;
+}
+
+export interface PDFTextParseResult {
+  transactions: RawTransaction[];
+  diagnostics: StatementParseDiagnostics;
 }
 
 /**
@@ -118,6 +127,36 @@ function isOwnAccountDescription(description: string): boolean {
     /\binternal\s+transfer\b/i.test(description) ||
     /\bbetween\s+(my|own)\s+accounts?\b/i.test(description)
   );
+}
+
+function getSemanticKind(raw: RawTransaction): StatementSemanticKind {
+  const description = raw.description;
+  const lower = description.toLowerCase();
+
+  if (/\bexchange\b/i.test(description) && isOwnAccountDescription(description)) {
+    return "exchange";
+  }
+  if (isOwnAccountDescription(description)) return "own_transfer";
+  if (/\bwithdrawals?\b/i.test(description)) {
+    return /\bvoucher\b/i.test(description)
+      ? "voucher_withdrawal"
+      : "atm_withdrawal";
+  }
+  if (/\btransfer\s+(?:from|to)\b/i.test(description)) {
+    return "person_transfer";
+  }
+  if (
+    /\bmonthly charges?\b/i.test(description) ||
+    /\baccount service fees?\b/i.test(description) ||
+    /\bfees?\s+on\s+fund\s+transfer\b/i.test(description) ||
+    /\bbank\s+(?:service\s+)?fees?\b/i.test(description)
+  ) {
+    return "bank_fee";
+  }
+  if (raw.moneyIn !== null && /\bincoming payments?\b/i.test(lower)) {
+    return "salary_income";
+  }
+  return "other";
 }
 
 /**
@@ -350,8 +389,15 @@ const MONEY_OR_DASH = /([\d,]+\.\d{2}(?!\d)|-)/g;
  * Parse PDF text content - extract transactions using pattern matching
  * This is optimized for the specific Lebanese bank statement format
  */
-export function parsePDFText(text: string): RawTransaction[] {
+export function parsePDFTextWithDiagnostics(text: string): PDFTextParseResult {
   const transactions: RawTransaction[] = [];
+  const diagnostics: StatementParseDiagnostics = {
+    candidate_count: 0,
+    parsed_count: 0,
+    ignored_balance_count: 0,
+    rejected_count: 0,
+    rejected: [],
+  };
   const lines = text
     .split(/\n/)
     .map((l) => l.trim())
@@ -475,12 +521,24 @@ export function parsePDFText(text: string): RawTransaction[] {
 
         // Skip opening/closing balance
         if (type === "opening_balance" || type === "closing_balance") {
+          diagnostics.ignored_balance_count++;
           i++;
           continue;
         }
 
+        diagnostics.candidate_count++;
+
         // Skip if no money movement
         if (moneyOut === null && moneyIn === null) {
+          diagnostics.rejected.push({
+            date,
+            block: [dateStr, fullDescription, numbersLine]
+              .filter(Boolean)
+              .join(" ")
+              .replace(/\s+/g, " ")
+              .trim(),
+            reason: "amounts_unreadable",
+          });
           i++;
           continue;
         }
@@ -497,13 +555,19 @@ export function parsePDFText(text: string): RawTransaction[] {
           merchantName: name,
           merchantPattern: pattern,
         });
+        diagnostics.parsed_count++;
       }
     }
 
     i++;
   }
 
-  return transactions;
+  diagnostics.rejected_count = diagnostics.rejected.length;
+  return { transactions, diagnostics };
+}
+
+export function parsePDFText(text: string): RawTransaction[] {
+  return parsePDFTextWithDiagnostics(text).transactions;
 }
 
 /**
@@ -559,10 +623,12 @@ export function convertToUITransactions(
       description: raw.description,
       amount: amount,
       type: isCredit ? "credit" : "debit",
+      semantic_kind: getSemanticKind(raw),
       merchant_name: mapping?.merchant_name || raw.merchantName,
       normalized_key: normalizedKey,
       category_id: mapping?.category_id || null,
       subcategory_id: mapping?.subcategory_id || null,
+      mapping_account_id: mapping?.account_id || null,
       // The statement belongs to ONE account, and that account is already
       // baked into the hash below. A merchant mapping must never redirect the
       // row somewhere else, or the fingerprint would describe a different

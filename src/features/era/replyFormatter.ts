@@ -31,6 +31,13 @@ const DRAFTING = [
   "One moment — {amount}…",
 ] as const;
 
+const WORKING_ON_IT = [
+  "One moment…",
+  "Working on it…",
+  "Give me a second…",
+  "On it…",
+] as const;
+
 const SAVING_REMINDER = [
   "Saving that reminder…",
   "Writing that down…",
@@ -116,6 +123,14 @@ export function formatReply(intent: Intent): string {
       return say(DRAFTING, {
         amount: typeof intent.amount === "number" ? money(intent.amount) : "that",
       });
+    case "transfer":
+      return pick(WORKING_ON_IT);
+    case "recordDebt":
+      return pick(WORKING_ON_IT);
+    case "listDrafts":
+      return pick(WORKING_ON_IT);
+    case "confirmDraft":
+      return pick(WORKING_ON_IT);
     case "draftReminder":
       return pick(SAVING_REMINDER);
     case "showAnalytics":
@@ -140,6 +155,12 @@ export function formatReply(intent: Intent): string {
       return pick(SEARCHING_RECIPES);
     case "recipeOfferGenerate":
       return pick(OFFER_GENERATE);
+    case "listRecipes":
+      return pick(SEARCHING_RECIPES);
+    case "assignMeal":
+      return pick(WORKING_ON_IT);
+    case "mealPlanGaps":
+      return pick(WORKING_ON_IT);
     case "memorySave":
       return pick(SAVING_MEMORY);
     case "memoryRecall":

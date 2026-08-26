@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-25T15:05:55.265Z",
-  "count": 82,
+  "generatedAt": "2026-08-25T23:06:13.210Z",
+  "count": 81,
   "nodes": [
     {
       "slug": "auth-reset",
@@ -639,32 +639,6 @@
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-future-purchases.md"
     },
     {
-      "slug": "feature-graphify-out",
-      "title": "Feature · Graphify Out",
-      "category": "feature",
-      "route": "n/a",
-      "type": "feature",
-      "parent": null,
-      "children": [],
-      "status": "active",
-      "tags": [
-        "feature-module"
-      ],
-      "sections": {
-        "files": "- **Module dir**: `src/features/graphify-out/`",
-        "hooks": "- See files in `src/features/graphify-out/` (typically `hooks.ts` or sub-files)",
-        "api_routes": "- TODO (list `/api/graphify-out/...` routes used by this feature)",
-        "db_tables": "- TODO",
-        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/graphify-out`.",
-        "what_it_links_to": "- TODO (which pages render this feature's UI)",
-        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Graphify Out/` _(verify path)_",
-        "screenshots": "- n/a",
-        "notes": "- TODO"
-      },
-      "screenshots": [],
-      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-graphify-out.md"
-    },
-    {
       "slug": "feature-healthcare",
       "title": "Feature · Healthcare",
       "category": "feature",
@@ -1176,16 +1150,16 @@
         "phase-0"
       ],
       "sections": {
-        "files": "- **Page**: `src/app/era/page.tsx`\n- **Main component**: `src/components/era/EraShell.tsx`\n- **Sub-components**:\n  - `src/components/era/FaceHeader.tsx`\n  - `src/components/era/FaceCanvas.tsx`\n  - `src/components/era/QuickFaceChips.tsx`\n  - `src/components/era/CommandBar.tsx`\n  - `src/components/era/FacePlaceholder.tsx`",
-        "hooks": "- `src/features/era/useEraStore.ts` — `useEraStore` (Zustand) + `eraActions` (non-React)\n- `src/features/era/useEraHousehold.ts` — `useEraHousehold` (current user + partner id)",
-        "feature_module": "- `src/features/era/types.ts` — `FaceKey`, `Face`, `Intent`, `IntentRouter`\n- `src/features/era/faceRegistry.ts` — `FACES`, `getFace`, `DEFAULT_FACE_KEY`\n- `src/features/era/intentRouter.ts` — `stubIntentRouter` (Phase 0); replaced by Gemini in Phase 2\n- `src/features/era/queryKeys.ts` — `eraKeys`",
-        "api_routes": "- None in Phase 0. Phase 2 will add `/api/era/intent` for the Gemini-backed router.",
-        "db_tables": "- None in Phase 0. Phase 2+ may add `era_transcripts` and/or `era_face_preferences`.",
+        "files": "- **Page**: `src/app/era/page.tsx`\n- **Main component**: `src/components/era/EraShell.tsx`\n- **Sub-components** *(corrected 2026-08-25, HUB-17 — the six listed below were confirmed to have zero importers and deleted: `FaceHeader.tsx`, `FaceCanvas.tsx`, `QuickFaceChips.tsx`, `FacePlaceholder.tsx`, `EraFaceCard.tsx`, `EraHubView.tsx`, `EraTranscript.tsx`. This doc had described Phase 0's plan, not shipped reality — see the Master Book Shipped Log for what actually exists)*:\n  - `src/components/era/CommandBar.tsx`\n  - `src/components/era/EraFaceNav.tsx`\n  - `src/components/era/EraDots.tsx`\n  - `src/components/era/HubScatterWidgets.tsx`\n  - `EraThreadTranscript` — defined inline in `EraShell.tsx`, the scrollable multi-turn conversation view above the command bar",
+        "hooks": "- `src/features/era/useEraStore.ts` — `useEraStore` (Zustand); the old non-React `eraActions` export and `turns`/`pushTurn`/`clearTurns` were dead code (zero importers) and removed 2026-08-25\n- `src/features/era/useEraTurn.ts` — **the one entry point from \"a sentence\" to \"a reply\"** (HUB-17): classify (`rootIntentRouter`) → resolve (`resolveIntent`) → persist (`era_messages`) → update store. `CommandBar` (typed) and `EraShell`'s voice wiring (spoken) both call this and nothing else.\n- `src/features/era/useEraHousehold.ts` — `useEraHousehold` (current user + partner id)\n- `src/features/era/useEraBudgetSubmit.ts` — money choke point for `draftTransaction`\n- `src/features/era/useEraConversation.ts` — `era_conversations`/`era_messages` persistence + realtime",
+        "feature_module": "- `src/features/era/types.ts` — `FaceKey`, `Face`, `Intent`, `IntentRouter`\n- `src/features/era/faceRegistry.ts` — `FACES`, `getFace`, `DEFAULT_FACE_KEY`\n- `src/features/era/intentRouter.ts` — re-exports `rootIntentRouter` (`src/features/era/intents/index.ts`), a deterministic keyword router — shipped, not a stub; no Gemini-backed router exists\n- `src/features/era/queryKeys.ts` — `eraKeys`",
+        "api_routes": "- `src/app/api/era/conversations/route.ts`, `src/app/api/era/messages/route.ts` — shipped since Phase 0.5; append-only `era_messages`",
+        "db_tables": "- `era_conversations`, `era_messages` (`migrations/schema.sql`) — shipped since Phase 0.5",
         "how_to_get_here": "- Direct URL: `/era` (auth-gated; redirects to `/login` for guests)\n- Phase 0 does **not** add ERA to the bottom `MobileNav` — URL-only access while the design matures",
         "what_it_links_to": "- Each face's `route` (`/expense`, `/items`, `/recipe`, `/catalogue`) — Phase 1+ wires the placeholder body to deep-link into these\n- Settings, Atlas, etc. via the global `ConditionalHeader` (visible above the shell)",
         "related_vault_doc": "- `ERA Notes/03 - Junction Modules/ERA/Overview.md`",
         "screenshots": "- _(pending Phase 1 design)_",
-        "notes": "- The shell uses `fixed inset-x-0 top-16 bottom-0` to claim the viewport under the global `h-16` header. Mobile reserves 72px (`MOBILE_NAV_HEIGHT`) at the bottom for the `MobileNav` via `pb-[72px] md:pb-0`.\n- Brand mark on the global header: `moduleFromPath()` in `src/components/layouts/ConditionalHeader.tsx` maps `/era` → `memory`. The shell itself shows the **active face's** mark via `FaceHeader`.\n- `layoutId=\"era-face\"` on `FaceCanvas` is reserved for Phase 1 morph animation.\n- All command-bar input must flow through `IntentRouter` — never bypass.\n- `CommandBar` background uses `tc.bgPage` (Hard Rule #15: floating overlays must be opaque, never `neo-card`).\n- ERA is **not** in `STANDALONE_APPS`, so the global `ConditionalHeader` and `MobileNav` remain visible."
+        "notes": "- The shell uses `fixed inset-x-0 top-16 bottom-0` to claim the viewport under the global `h-16` header. Mobile reserves 72px (`MOBILE_NAV_HEIGHT`) at the bottom for the `MobileNav` via `pb-[72px] md:pb-0`.\n- Brand mark on the global header: `moduleFromPath()` in `src/components/layouts/ConditionalHeader.tsx` maps `/era` → `memory`. The shell itself shows the **active face's** mark inline in `EraShell.tsx` via `ERAMark` — `FaceHeader` (deleted 2026-08-25) never had an importer.\n- All command-bar input must flow through `IntentRouter` — never bypass.\n- `CommandBar` background uses `tc.bgPage` (Hard Rule #15: floating overlays must be opaque, never `neo-card`).\n- ERA is **not** in `STANDALONE_APPS`, so the global `ConditionalHeader` and `MobileNav` remain visible."
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/era.md"

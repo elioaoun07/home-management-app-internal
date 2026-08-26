@@ -124,7 +124,11 @@ function bucketForStatus(
       // — they simply reappear here every time.
       return "skipped";
     case "already_imported":
-      return "imported";
+      // Imported is an exact statement-key ledger. Fuzzy/legacy matches stay
+      // separate so the owner can tell certainty from a heuristic guess.
+      return classification.reason === "probable_duplicate"
+        ? "matched"
+        : "imported";
     case "matched":
       // Detaching a match sends it back for manual handling.
       return decision?.resolution === "create" ? "review" : "matched";
@@ -145,7 +149,7 @@ function bucketForStatus(
     // row, an ordinary transaction, or standing-skipped). Already recorded
     // by whichever side sent it needs nothing further.
     case "person_transfer":
-      return classification.existing_transfer_id ? "imported" : "transfers";
+      return classification.existing_transfer_id ? "matched" : "transfers";
     case "unmatched":
       // A withdrawal is money moving, not a merchant purchase — it belongs
       // on the Transfers tab's Cash section ("to wallet" or "spent"), not a
@@ -273,6 +277,13 @@ export function suggestAccountForRow(
   statementAccountId: string,
   accounts: AccountRef[],
 ): string {
+  if (
+    row.mapping_account_id &&
+    accounts.some((account) => account.id === row.mapping_account_id)
+  ) {
+    return row.mapping_account_id;
+  }
+
   const statement = accounts.find((a) => a.id === statementAccountId);
   if (!statement) return statementAccountId;
 
@@ -299,6 +310,7 @@ export function treatsAsTransfer(
   decision: RowDecision | undefined,
 ): boolean {
   if (classification?.status !== "person_transfer") return false;
+  if (decision?.action_kind) return decision.action_kind === "transfer";
   return decision?.treat_as_transfer ?? classification.household_match;
 }
 
@@ -336,11 +348,15 @@ export function buildReviewGroups(session: StatementSession): MerchantGroup[] {
 export function undecidedRows(session: StatementSession): ParsedTransaction[] {
   return session.rows.filter((row) => {
     const classification = session.classifications[row.id];
+    const decision = session.decisions[row.id];
     if (
-      getBucket(classification, session.decisions[row.id]) !== "review"
+      getBucket(classification, decision) !== "review"
     ) {
       return false;
     }
+    // A row explicitly changed to Transfer is answered in its row controls,
+    // not by the transaction category stepper.
+    if (decision?.action_kind === "transfer") return false;
     // Rows the Categorize list itself never shows — an other_account flag or
     // an undecided probable/ambiguous match needs a different decision (move
     // vs. same-money, not-a-match vs. accept) than "pick a category". Offering
@@ -450,8 +466,8 @@ export function describeCommitAction(
       return { verb: "Confirm", title: "Draft becomes real", detail: null };
     case "rekey":
       return {
-        verb: "Re-tag",
-        title: action.bank_description || "Fingerprint refreshed",
+        verb: "Update match",
+        title: action.bank_description || "Legacy match",
         detail: "no money moves",
       };
     case "skip":
@@ -589,6 +605,31 @@ export function buildCommitActions(
     // leaves `transfer_to_account_id` unset, so this falls through to the
     // ordinary create-a-transaction path below, gated on a category exactly
     // like any other row.
+    // Any ordinary review row can be corrected to an own-account transfer.
+    // The chosen type changes what is staged without making the card vanish
+    // from the review pane while the owner is still editing it. Credits reverse
+    // the endpoints because the statement account received the money.
+    if (decision?.action_kind === "transfer") {
+      const counterpart = decision.transfer_to_account_id;
+      if (counterpart && row.statement_hash) {
+        const incoming = row.type === "credit";
+        actions.push({
+          kind: "create_transfer",
+          row_id: row.id,
+          statement_hash: row.statement_hash,
+          date: decision.date || row.date,
+          amount: row.amount,
+          description:
+            decision.description?.trim() ||
+            defaultDescriptionFor(row, classification),
+          from_account_id: incoming ? counterpart : session.account_id,
+          to_account_id: incoming ? session.account_id : counterpart,
+          transfer_type: "self",
+        });
+      }
+      continue;
+    }
+
     if (classification.withdrawal) {
       const destination = decision?.transfer_to_account_id;
       if (destination && row.statement_hash) {
@@ -627,10 +668,10 @@ export function buildCommitActions(
         !!storedHash &&
         !!row.statement_hash &&
         storedHash !== row.statement_hash;
-      const missingBankText =
-        classification.stored_bank_description !== row.description;
-
-      if ((staleHash || missingBankText) && row.statement_hash) {
+      // Exact hashes are already complete. Only legacy fuzzy matches belong in
+      // Ready; exposing an internal bank-text backfill made an untouched
+      // Imported row look like a user decision.
+      if (staleHash && row.statement_hash) {
         actions.push({
           kind: "rekey",
           row_id: row.id,

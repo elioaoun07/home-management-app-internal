@@ -123,8 +123,13 @@ export function formatScheduleError(): string {
 
 export interface ReminderCreatedData {
   title: string;
-  /** UTC ISO instant the reminder is due, or null when no date was parsed. */
-  dueAt: string | null;
+  /**
+   * UTC ISO instant the reminder is due. Always present — time is now a
+   * required slot (Slice 3): resolveDraftReminder asks a question instead of
+   * writing an undated item, so by the time this formatter runs a date has
+   * always been resolved one way or another.
+   */
+  dueAt: string;
   /** True when parseSmartText also found a recurrence rule. */
   recurring: boolean;
 }
@@ -150,20 +155,6 @@ const REMINDER_WITH_WHEN = [
   "Consider it remembered: {title}, {when}.",
 ] as const;
 
-/**
- * Confirmations for a reminder with NO date. Each variant says the item was
- * saved AND that it has no date — leaving the second half out would let the
- * user walk away thinking a nudge is coming.
- */
-const REMINDER_NO_WHEN = [
-  "{ack} \"{Title}\" is on your list. No date on it, so it'll just sit there until you give it one.",
-  "{ack} I've saved \"{Title}\", but I didn't catch a date — it's undated for now.",
-  "\"{Title}\" is saved. I couldn't pick out a time, so nothing will nudge you yet.",
-  "{ack} \"{Title}\" is down. No date though — add one if you want a reminder.",
-  "Added \"{Title}\" to your list. Undated, so it won't chase you.",
-  "{ack} that's noted: \"{Title}\". I didn't hear a when, so there's no alert on it.",
-] as const;
-
 const RECURRING_NOTE = [
   "I picked up a repeat in there — check the item if the cadence looks off.",
   "Sounded like that repeats, so I've set it to recur. Worth a glance.",
@@ -176,19 +167,45 @@ export function formatReminderCreated(data: ReminderCreatedData): string {
   const when = describeWhen(dueAt);
 
   const parts: string[] = [
-    when
-      ? say(REMINDER_WITH_WHEN, {
-          ack: pick(ACK_DONE),
-          title: lowerFirst(title),
-          Title: title,
-          when,
-        })
-      : say(REMINDER_NO_WHEN, { ack: pick(ACK_DONE), Title: title }),
+    say(REMINDER_WITH_WHEN, {
+      ack: pick(ACK_DONE),
+      title: lowerFirst(title),
+      Title: title,
+      when,
+    }),
   ];
 
   if (recurring) parts.push(pick(RECURRING_NOTE));
 
   return parts.join(" ");
+}
+
+// ---------------------------------------------------------------------------
+// Ask for a time (Slice 3) — title understood, date/time missing
+// ---------------------------------------------------------------------------
+
+/** Slots: {Title} */
+const ASK_REMINDER_TIME = [
+  "Got \"{Title}\" — when should I remind you?",
+  "\"{Title}\" — what time?",
+  "When for \"{Title}\"?",
+  "Noted \"{Title}\". What's the when?",
+  "\"{Title}\" — give me a day and time and I'll set it.",
+] as const;
+
+export function formatAskReminderTime(data: { title: string }): string {
+  return say(ASK_REMINDER_TIME, { Title: data.title });
+}
+
+/** Slots: {Title} */
+const REMINDER_SAVED_AS_DRAFT = [
+  "Didn't catch a time, so I've left \"{Title}\" as a draft — finish it in Reminders.",
+  "No time came through — \"{Title}\" is saved as a draft for you to complete.",
+  "\"{Title}\" is parked as a draft since I didn't get a when. Pick it up in Reminders.",
+] as const;
+
+export function formatReminderSavedAsDraft(data: { title: string }): string {
+  return say(REMINDER_SAVED_AS_DRAFT, { Title: data.title });
 }
 
 const NO_TITLE_HELP = [

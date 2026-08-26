@@ -5,9 +5,10 @@ import {
   convertToUITransactions,
   detectFormat,
   parseCSV,
-  parsePDFText,
+  parsePDFTextWithDiagnostics,
 } from "@/lib/bank-statement-parser";
 import { supabaseServer } from "@/lib/supabase/server";
+import type { StatementParseDiagnostics } from "@/types/statement";
 import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -117,11 +118,10 @@ export async function POST(req: NextRequest) {
     // merchant name (display + grouping only) and drop the category, which
     // simply leaves the row in "needs review" where it belongs.
     for (const m of mappingsData || []) {
-      const sameAccount = m.account_id === accountId;
       mappings.set(m.merchant_pattern.toUpperCase(), {
-        category_id: sameAccount ? m.category_id : null,
-        subcategory_id: sameAccount ? m.subcategory_id : null,
-        account_id: accountId,
+        category_id: m.category_id,
+        subcategory_id: m.subcategory_id,
+        account_id: m.account_id,
         merchant_name: m.merchant_name,
       });
     }
@@ -134,11 +134,19 @@ export async function POST(req: NextRequest) {
 
     let text = "";
     let rawTransactions;
+    let diagnostics: StatementParseDiagnostics;
 
     if (isCSV) {
       // Read CSV file directly
       text = await file.text();
       rawTransactions = parseCSV(text);
+      diagnostics = {
+        candidate_count: rawTransactions.length,
+        parsed_count: rawTransactions.length,
+        ignored_balance_count: 0,
+        rejected_count: 0,
+        rejected: [],
+      };
     } else {
       // Parse PDF
       const arrayBuffer = await file.arrayBuffer();
@@ -176,9 +184,30 @@ export async function POST(req: NextRequest) {
 
       if (format === "csv") {
         rawTransactions = parseCSV(text);
+        diagnostics = {
+          candidate_count: rawTransactions.length,
+          parsed_count: rawTransactions.length,
+          ignored_balance_count: 0,
+          rejected_count: 0,
+          rejected: [],
+        };
       } else {
-        rawTransactions = parsePDFText(text);
+        const parsedPDF = parsePDFTextWithDiagnostics(text);
+        rawTransactions = parsedPDF.transactions;
+        diagnostics = parsedPDF.diagnostics;
       }
+    }
+
+    if (diagnostics.rejected_count > 0) {
+      return NextResponse.json(
+        {
+          error: `${diagnostics.rejected_count} statement row${diagnostics.rejected_count === 1 ? "" : "s"} could not be read`,
+          details:
+            "No rows were imported. Export as CSV or report this statement layout.",
+          diagnostics,
+        },
+        { status: 422 },
+      );
     }
 
     if (rawTransactions.length === 0) {
@@ -218,6 +247,7 @@ export async function POST(req: NextRequest) {
       currency_mismatch:
         !!statementCurrency && statementCurrency !== account.currency,
       rawTextPreview: text.substring(0, 500),
+      diagnostics,
     });
   } catch (error) {
     console.error("Failed to parse statement:", error);

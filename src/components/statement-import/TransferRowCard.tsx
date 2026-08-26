@@ -132,10 +132,14 @@ export function TransferRowCard({
   const mode: "transfer" | "spent" =
     kind === "exchange"
       ? "transfer"
-      : decision?.treat_as_transfer === true
+      : decision?.action_kind === "transfer"
         ? "transfer"
-        : decision?.treat_as_transfer === false
+        : decision?.action_kind === "transaction"
           ? "spent"
+          : decision?.treat_as_transfer === true
+            ? "transfer"
+            : decision?.treat_as_transfer === false
+              ? "spent"
           : kind === "person"
             ? classification.status === "person_transfer" &&
               classification.household_match
@@ -243,6 +247,7 @@ export function TransferRowCard({
             type="button"
             onClick={() =>
               onRowChange(row.id, {
+                action_kind: "transfer",
                 treat_as_transfer: true,
                 category_id: undefined,
                 subcategory_id: undefined,
@@ -260,6 +265,7 @@ export function TransferRowCard({
             type="button"
             onClick={() =>
               onRowChange(row.id, {
+                action_kind: "transaction",
                 treat_as_transfer: false,
                 transfer_to_account_id: undefined,
                 resolution: "undecided",
@@ -270,7 +276,7 @@ export function TransferRowCard({
               mode === "spent" ? tc.buttonPrimary : tc.buttonOutline,
             )}
           >
-            Spent
+            Transaction
           </button>
         </div>
       )}
@@ -291,6 +297,7 @@ export function TransferRowCard({
               onValueChange={(next) =>
                 onRowChange(row.id, {
                   transfer_to_account_id: next,
+                  action_kind: "transfer",
                   treat_as_transfer: true,
                   resolution: "create",
                 })

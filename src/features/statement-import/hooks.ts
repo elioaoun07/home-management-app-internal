@@ -7,6 +7,7 @@ import { qk } from "@/lib/queryKeys";
 import type {
   ReconcileResponse,
   RevertImportResult,
+  StatementParseDiagnostics,
   StatementImport,
   StatementImportDetail,
 } from "@/types/statement";
@@ -85,6 +86,7 @@ export interface ParseStatementResult {
   statement_currency: string | null;
   currency_mismatch: boolean;
   rawTextPreview?: string;
+  diagnostics: StatementParseDiagnostics;
 }
 
 // Parse a PDF statement. The target account is chosen first: it feeds the row

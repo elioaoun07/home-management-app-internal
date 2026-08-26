@@ -8,19 +8,13 @@
 //   #6  uses safeFetch (inside useEraBudgetSubmit + useCreateEraMessage)
 //   #15 command pill uses tc.bgPage — opaque, not glass
 
-import { getFace } from "@/features/era/faceRegistry";
-import { rootIntentRouter } from "@/features/era/intentRouter";
-import { resolveIntent } from "@/features/era/intents/resolveIntent";
-import type { FaceKey, Intent } from "@/features/era/types";
-import { useEraBudgetSubmit } from "@/features/era/useEraBudgetSubmit";
-import {
-  useActiveEraConversation,
-  useCreateEraMessage,
-} from "@/features/era/useEraConversation";
+import { useEraAskAI } from "@/features/era/useEraAskAI";
 import { useEraStore } from "@/features/era/useEraStore";
+import { useEraTurn } from "@/features/era/useEraTurn";
+import type { FaceKey } from "@/features/era/types";
 import { useBriefingTTS } from "@/hooks/useBriefingTTS";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
-import { ArrowRight, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
+import { ArrowRight, Mic, MicOff, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const PLACEHOLDERS: Record<FaceKey, string> = {
@@ -30,26 +24,17 @@ const PLACEHOLDERS: Record<FaceKey, string> = {
   brain: 'Talk to ERA — "Remember the car maintenance number is 70-123456"',
 };
 
-function intentPayload(intent: Intent): Record<string, unknown> {
-  const { kind: _kind, ...rest } = intent as Intent & { rawText?: string };
-  return rest as Record<string, unknown>;
-}
-
 export function CommandBar() {
   const tc = useThemeClasses();
   const pendingTranscript = useEraStore((s) => s.pendingTranscript);
   const setPendingTranscript = useEraStore((s) => s.setPendingTranscript);
   const activeFaceKey = useEraStore((s) => s.activeFaceKey);
-  const setActiveFace = useEraStore((s) => s.setActiveFace);
-  const setHubModuleKey = useEraStore((s) => s.setHubModuleKey);
-  const setLastIntent = useEraStore((s) => s.setLastIntent);
   const voiceReplyEnabled = useEraStore((s) => s.voiceReplyEnabled);
   const setVoiceReplyEnabled = useEraStore((s) => s.setVoiceReplyEnabled);
-  const setEraReply = useEraStore((s) => s.setEraReply);
+  const pendingTurn = useEraStore((s) => s.pendingTurn);
 
-  const budgetSubmit = useEraBudgetSubmit();
-  const { data: activeConversation } = useActiveEraConversation();
-  const createMessage = useCreateEraMessage();
+  const { runTurn } = useEraTurn();
+  const { askAI, askingAI } = useEraAskAI();
   const tts = useBriefingTTS();
   const [busy, setBusy] = useState(false);
 
@@ -104,103 +89,40 @@ export function CommandBar() {
   const submitText = useCallback(
     async (text: string) => {
       if (!text || busy) return;
-      setEraReply("");
-      const intent = rootIntentRouter.parse(text);
-      setLastIntent(intent);
-      // clarify is a graceful fallback — treat it exactly like unknown/greeting:
-      // no face switch, no module change, no budget draft.
-      if (
-        intent.kind !== "unknown" &&
-        intent.kind !== "greeting" &&
-        intent.kind !== "clarify"
-      ) {
-        setActiveFace(intent.face);
-        setHubModuleKey(getFace(intent.face).eraModuleKey);
-      }
       setBusy(true);
+      setPendingTranscript("");
 
-      let conversationId = activeConversation?.id ?? null;
-
-      try {
-        const userResult = await createMessage.mutateAsync({
-          conversation_id: conversationId,
-          role: "user",
-          content: text,
-          intent_kind: intent.kind,
-          intent_face:
-            intent.kind === "unknown" ||
-            intent.kind === "greeting" ||
-            intent.kind === "clarify"
-              ? null
-              : intent.face,
-          intent_payload: intentPayload(intent),
-        });
-        conversationId = userResult.conversation_id;
-      } catch (err) {
-        console.error("[era] failed to persist user message", err);
-      }
-
-      // Resolve assistant reply. Every intent — including draftTransaction —
-      // goes through resolveIntent; the budget draft used to run on a parallel
-      // path here, which meant the write and the reply could disagree. The
-      // resolver now owns both and reports the draft id back in metadata.
-      const { text: reply, metadata } = await resolveIntent(intent, {
-        submitBudgetDraft: budgetSubmit.submit,
-      }).catch(() => ({
-        text: "Something went wrong. Try again.",
-        metadata: undefined as Record<string, unknown> | undefined,
+      const { reply } = await runTurn(text).catch(() => ({
+        reply: "Something went wrong. Try again.",
       }));
 
-      const draftTransactionId =
-        typeof metadata?.draftId === "string" ? metadata.draftId : null;
-
-      try {
-        await createMessage.mutateAsync({
-          conversation_id: conversationId,
-          role: "assistant",
-          content: reply,
-          intent_kind: intent.kind,
-          intent_face:
-            intent.kind === "unknown" ||
-            intent.kind === "greeting" ||
-            intent.kind === "clarify"
-              ? null
-              : intent.face,
-          intent_payload: metadata ?? intentPayload(intent),
-          draft_transaction_id: draftTransactionId,
-        });
-      } catch (err) {
-        console.error("[era] failed to persist assistant reply", err);
-      }
-
-      setEraReply(reply);
-
-      // Speak if voice is enabled
       if (voiceReplyEnabled) {
         tts.play(reply);
       }
 
       setBusy(false);
     },
-    [
-      busy,
-      activeConversation,
-      createMessage,
-      budgetSubmit,
-      setLastIntent,
-      setActiveFace,
-      setHubModuleKey,
-      setPendingTranscript,
-      setEraReply,
-      voiceReplyEnabled,
-      tts,
-    ],
+    [busy, runTurn, setPendingTranscript, voiceReplyEnabled, tts],
   );
 
   const submit = useCallback(async () => {
     const text = pendingTranscript.trim();
     await submitText(text);
   }, [pendingTranscript, submitText]);
+
+  // Manual escape hatch (locked decision: always visible, never auto-triggered).
+  // With nothing typed, "Ask AI" re-sends whatever ERA was already asking about
+  // — the owner's exact scenario: ERA asked "when should I remind you?", the
+  // date parser couldn't handle "when I arrive home", so AI gets a shot at it
+  // with the original sentence instead of the blank input box.
+  const askAIClick = useCallback(async () => {
+    const text = pendingTranscript.trim() || pendingTurn?.rawText || "";
+    if (!text || busy || askingAI) return;
+    setPendingTranscript("");
+    await askAI(text).catch(() => {});
+  }, [pendingTranscript, pendingTurn, busy, askingAI, setPendingTranscript, askAI]);
+
+  const canAskAI = Boolean(pendingTranscript.trim() || pendingTurn) && !busy && !askingAI;
 
   const placeholder = PLACEHOLDERS[activeFaceKey] ?? "Talk to ERA…";
 
@@ -288,6 +210,23 @@ export function CommandBar() {
           ) : (
             <VolumeX className="size-4" aria-hidden />
           )}
+        </button>
+
+        {/* Ask AI — manual handoff, always visible (locked decision) */}
+        <button
+          type="button"
+          aria-label="Ask AI"
+          title="Ask AI"
+          onClick={askAIClick}
+          disabled={!canAskAI}
+          className={[
+            "flex-shrink-0 transition-opacity",
+            canAskAI ? "opacity-60 hover:opacity-100" : "opacity-20 cursor-not-allowed",
+            askingAI ? "animate-pulse" : "",
+          ].join(" ")}
+          style={{ color: "var(--era-accent, rgba(255,255,255,0.8))" }}
+        >
+          <Sparkles className="size-4" aria-hidden />
         </button>
 
         {/* Submit */}

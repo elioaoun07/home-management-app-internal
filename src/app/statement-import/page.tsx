@@ -50,6 +50,7 @@ import {
   countUndecided,
   describeCommitAction,
   getBucket,
+  groupKeyForRow,
   pickAccount,
   resolveRowAccount,
   resolveRowCategory,
@@ -77,11 +78,13 @@ import {
 } from "@/lib/statementImportSession";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
-import type { ParsedTransaction } from "@/types/statement";
+import type { ParsedTransaction, RowClassification } from "@/types/statement";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  ArrowUpRight,
   Check,
+  ChevronDown,
   EyeOff,
   Layers,
   Loader2,
@@ -101,13 +104,9 @@ type Phase = "upload" | "working" | "review" | "receipt";
 // CROSS-CUTTING view of what Save will write, so a staged row appears both in
 // its own tab and here. That is the point: deciding a row stages it, it does
 // not file it away somewhere new.
-type BucketFilter =
-  | "review"
-  | "transfers"
-  | "ready"
-  | "imported"
-  | "matched"
-  | "skipped";
+type TopFilter = "review" | "existing" | "ready" | "skipped";
+type ReviewKind = "transactions" | "transfers";
+type ExistingSection = "imported" | "matched";
 
 interface Receipt {
   created: number;
@@ -132,6 +131,16 @@ function shortDate(iso: string): string {
   const parsed = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return iso;
   return parsed.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
+function isSoftDeletedImport(
+  classification: RowClassification | undefined,
+): boolean {
+  return (
+    classification?.status === "already_imported" &&
+    "deleted_at" in classification &&
+    !!classification.deleted_at
+  );
 }
 
 /**
@@ -161,7 +170,10 @@ export default function StatementImportPage() {
   const [accountId, setAccountId] = useState("");
   const [session, setSession] = useState<StatementSession | null>(null);
   const [resumable, setResumable] = useState<StatementSession[]>([]);
-  const [filter, setFilter] = useState<BucketFilter>("review");
+  const [filter, setFilter] = useState<TopFilter>("review");
+  const [reviewKind, setReviewKind] = useState<ReviewKind>("transactions");
+  const [existingSection, setExistingSection] =
+    useState<ExistingSection>("imported");
   const [openGroupKey, setOpenGroupKey] = useState<string | null>(null);
   const [stepperOpen, setStepperOpen] = useState(false);
   // Review holds three unrelated jobs; stacking them made one long scroll.
@@ -177,6 +189,7 @@ export default function StatementImportPage() {
   // and own-account moves the matcher re-derives every run. One flat list put a
   // 3-row decision inside 85 rows of noise.
   const [skipSection, setSkipSection] = useState<SkipGroup>("session");
+  const [highlightedRowId, setHighlightedRowId] = useState<string | null>(null);
   const [openOtherRowId, setOpenOtherRowId] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   // Transient on purpose: a currency hint is only trustworthy at the moment we
@@ -467,7 +480,22 @@ export default function StatementImportPage() {
       );
       persist(next);
       setPhase("review");
-      setFilter(reconciled.summary.unmatched > 0 ? "review" : "matched");
+      const transactionReview =
+        reconciled.summary.unmatched +
+        reconciled.summary.probable +
+        reconciled.summary.ambiguous +
+        reconciled.summary.other_account;
+      const transferReview =
+        reconciled.summary.transfers + reconciled.summary.person_transfers;
+      if (transactionReview + transferReview > 0) {
+        setFilter("review");
+        setReviewKind(transactionReview > 0 ? "transactions" : "transfers");
+      } else {
+        setFilter("existing");
+        setExistingSection(
+          reconciled.summary.already_imported > 0 ? "imported" : "matched",
+        );
+      }
 
       // Informational, not a mutation — nothing has been written yet, so there
       // is nothing to undo (Hard Rule 1 applies to mutation toasts).
@@ -809,16 +837,37 @@ export default function StatementImportPage() {
   const stagedActions = useMemo(() => {
     if (!session) return [];
     const rowById = new Map(session.rows.map((r) => [r.id, r]));
-    return buildCommitActions(session, accountRefs).map((action) => ({
-      action,
-      described: describeCommitAction(
+    return buildCommitActions(session, accountRefs).map((action) => {
+      const described = describeCommitAction(
         action,
         accountNameById,
         accountCurrencyById,
-      ),
-      row: rowById.get(action.row_id),
-    }));
-  }, [session, accountRefs, accountNameById, accountCurrencyById]);
+      );
+      let selectedDetail = described.detail;
+      if (action.kind === "create") {
+        const category = categoryOf(action.category_id)?.name;
+        const subcategory = categoryOf(action.subcategory_id)?.name;
+        selectedDetail = [
+          accountNameById(action.account_id),
+          [category, subcategory].filter(Boolean).join(" / "),
+        ]
+          .filter(Boolean)
+          .join(" · ");
+      }
+      return {
+        action,
+        described,
+        selectedDetail,
+        row: rowById.get(action.row_id),
+      };
+    });
+  }, [
+    session,
+    accountRefs,
+    accountNameById,
+    accountCurrencyById,
+    categoryOf,
+  ]);
 
   const saveCount = stagedActions.length;
 
@@ -847,14 +896,79 @@ export default function StatementImportPage() {
     ["memory", "Memory"],
   ];
 
+  const focusReadyRow = useCallback(
+    (rowId: string) => {
+      if (!session) return;
+      const row = session.rows.find((candidate) => candidate.id === rowId);
+      if (!row) return;
+      const classification = session.classifications[rowId];
+      const decision = session.decisions[rowId];
+      const bucket = getBucket(classification, decision);
+
+      setHighlightedRowId(rowId);
+      if (bucket === "review") {
+        setFilter("review");
+        setReviewKind("transactions");
+        if (classification?.status === "other_account") {
+          setReviewSection("other");
+          setOpenOtherRowId(rowId);
+        } else if (
+          classification?.status === "probable" ||
+          classification?.status === "ambiguous"
+        ) {
+          setReviewSection("maybe");
+        } else {
+          setReviewSection("categorize");
+          setOpenGroupKey(groupKeyForRow(row, decision));
+        }
+      } else if (bucket === "transfers") {
+        setFilter("review");
+        setReviewKind("transfers");
+        setTransfersSection(
+          classification?.exchange
+            ? "exchange"
+            : classification?.withdrawal
+              ? "cash"
+              : "people",
+        );
+      } else if (bucket === "imported" || bucket === "matched") {
+        setFilter("existing");
+        setExistingSection(bucket);
+      } else {
+        setFilter("skipped");
+        setSkipSection(skipReason(classification, decision, accountNameById).group);
+      }
+
+      window.setTimeout(() => {
+        document
+          .getElementById(`statement-row-${rowId}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 80);
+      window.setTimeout(
+        () =>
+          setHighlightedRowId((current) => (current === rowId ? null : current)),
+        1800,
+      );
+    },
+    [session, accountNameById],
+  );
+
+  const highlightClass = useCallback(
+    (rowId: string) =>
+      highlightedRowId === rowId
+        ? "ring-2 ring-cyan-400/80 animate-pulse"
+        : undefined,
+    [highlightedRowId],
+  );
+
   const visibleRows = useMemo(() => {
     if (!session) return [];
     return session.rows.filter(
       (row) =>
         getBucket(session.classifications[row.id], session.decisions[row.id]) ===
-        filter,
+        existingSection,
     );
-  }, [session, filter]);
+  }, [session, existingSection]);
 
   // Every skipped row with the reason it is here, ready to be split by section.
   const skippedRows = useMemo(() => {
@@ -910,24 +1024,28 @@ export default function StatementImportPage() {
 
   // Land on a section that has rows — opening Skipped on an empty "This import"
   // is what made the tab read as broken when everything in it was remembered.
-  useEffect(() => {
-    if (filter !== "skipped") return;
-    if (skipCounts[skipSection] > 0) return;
-    const fallback = SKIP_SECTIONS.find(([g]) => skipCounts[g] > 0)?.[0];
-    if (fallback) setSkipSection(fallback);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, skipSection, skipCounts.session, skipCounts.standing, skipCounts.auto]);
-
   const BUCKET_LABEL: Record<string, string> = {
-    review: "Review",
-    transfers: "Transfers",
-    imported: "Imported",
-    matched: "Logged",
+    review: "Review / Transactions",
+    transfers: "Review / Transfers",
+    imported: "Existing / Imported",
+    matched: "Existing / Matched",
     skipped: "Skipped",
   };
 
-  const reviewTotal = counts.review;
-  const reviewDone = reviewTotal - undecided;
+  const reviewTotal = useMemo(
+    () =>
+      session
+        ? session.rows.filter((row) => {
+            const originalBucket = getBucket(
+              session.classifications[row.id],
+              undefined,
+            );
+            return originalBucket === "review" || originalBucket === "transfers";
+          }).length
+        : 0,
+    [session],
+  );
+  const reviewDone = Math.max(0, reviewTotal - openCount);
 
   return (
     <div className={cn("min-h-screen pt-16 pb-32", tc.bgPage)}>
@@ -1103,14 +1221,16 @@ export default function StatementImportPage() {
                 value={filter}
                 onChange={setFilter}
                 tabs={[
-                  { value: "review", label: "Review", count: counts.review },
                   {
-                    value: "transfers",
-                    label: "Transfers",
-                    count: counts.transfers,
+                    value: "review",
+                    label: "Review",
+                    count: counts.review + counts.transfers,
                   },
-                  { value: "imported", label: "Imported", count: counts.imported },
-                  { value: "matched", label: "Logged", count: counts.matched },
+                  {
+                    value: "existing",
+                    label: "Existing",
+                    count: counts.imported + counts.matched,
+                  },
                   { value: "skipped", label: "Skipped", count: counts.skipped },
                   // LAST, deliberately. Ready is not another bucket to browse —
                   // it is the final stage, the one screen that says what the
@@ -1135,6 +1255,30 @@ export default function StatementImportPage() {
             )}
 
             {filter === "review" && (
+              <ScrollableTabs
+                size="sm"
+                value={reviewKind}
+                onChange={setReviewKind}
+                tabs={[
+                  { value: "transactions", label: "Transactions", count: counts.review },
+                  { value: "transfers", label: "Transfers", count: counts.transfers },
+                ]}
+              />
+            )}
+
+            {filter === "existing" && (
+              <ScrollableTabs
+                size="sm"
+                value={existingSection}
+                onChange={setExistingSection}
+                tabs={[
+                  { value: "imported", label: "Imported", count: counts.imported },
+                  { value: "matched", label: "Matched", count: counts.matched },
+                ]}
+              />
+            )}
+
+            {filter === "review" && reviewKind === "transactions" && (
               <>
                 {reviewGroups.length === 0 &&
                   matchDecisionRows.length === 0 &&
@@ -1348,7 +1492,7 @@ export default function StatementImportPage() {
               </>
             )}
 
-            {filter === "transfers" && (
+            {filter === "review" && reviewKind === "transfers" && (
               <>
                 {TRANSFER_SECTIONS.filter(([, , rows]) => rows.length > 0)
                   .length > 1 && (
@@ -1382,8 +1526,12 @@ export default function StatementImportPage() {
                       !!destinationId &&
                       accountCurrencyById(destinationId) === exchange.to_currency;
                     return (
-                      <TransferRowCard
+                      <div
                         key={row.id}
+                        id={`statement-row-${row.id}`}
+                        className={cn("rounded-2xl", highlightClass(row.id))}
+                      >
+                        <TransferRowCard
                         row={row}
                         classification={c}
                         decision={session.decisions[row.id]}
@@ -1415,7 +1563,8 @@ export default function StatementImportPage() {
                         partnerText={partnerText}
                         partnerRing={partnerRing}
                         onRowChange={updateDecision}
-                      />
+                        />
+                      </div>
                     );
                   })}
 
@@ -1424,8 +1573,12 @@ export default function StatementImportPage() {
                     const c = session.classifications[row.id];
                     if (c?.status !== "person_transfer") return null;
                     return (
-                      <TransferRowCard
+                      <div
                         key={row.id}
+                        id={`statement-row-${row.id}`}
+                        className={cn("rounded-2xl", highlightClass(row.id))}
+                      >
+                        <TransferRowCard
                         row={row}
                         classification={c}
                         decision={session.decisions[row.id]}
@@ -1445,7 +1598,8 @@ export default function StatementImportPage() {
                         partnerText={partnerText}
                         partnerRing={partnerRing}
                         onRowChange={updateDecision}
-                      />
+                        />
+                      </div>
                     );
                   })}
 
@@ -1453,8 +1607,12 @@ export default function StatementImportPage() {
                   transferCashRows.map((row) => {
                     const c = session.classifications[row.id]!;
                     return (
-                      <TransferRowCard
+                      <div
                         key={row.id}
+                        id={`statement-row-${row.id}`}
+                        className={cn("rounded-2xl", highlightClass(row.id))}
+                      >
+                        <TransferRowCard
                         row={row}
                         classification={c}
                         decision={session.decisions[row.id]}
@@ -1484,7 +1642,8 @@ export default function StatementImportPage() {
                         partnerText={partnerText}
                         partnerRing={partnerRing}
                         onRowChange={updateDecision}
-                      />
+                        />
+                      </div>
                     );
                   })}
               </>
@@ -1528,56 +1687,72 @@ export default function StatementImportPage() {
 
                 {READY_LANES.map(([lane, label]) =>
                   readyLanes[lane].length === 0 ? null : (
-                    <div key={lane} className="flex flex-col gap-1.5">
-                      <SectionLabel text={label} />
-                      {readyLanes[lane].map(({ action, described, row }) => (
-                        <div
-                          key={`${action.kind}-${action.row_id}`}
-                          className={cn(
-                            "rounded-2xl px-4 py-3 flex items-center gap-3",
-                            tc.sectionCard,
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              "rounded-full px-2.5 h-6 text-[11px] font-medium flex items-center shrink-0",
-                              lane === "money"
-                                ? tc.buttonPrimary
-                                : cn(tc.buttonOutline, tc.textMuted),
-                            )}
-                          >
-                            {described.verb}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className={cn("text-sm truncate", tc.headerText)}>
-                              {described.title}
-                            </p>
-                            {described.detail && (
-                              <p className={cn("text-[11px] truncate", tc.textFaint)}>
-                                {described.detail}
-                              </p>
-                            )}
-                          </div>
-                          {row && lane === "money" && (
-                            <span
+                    <details key={lane} open className="group flex flex-col gap-1.5">
+                      <summary
+                        className={cn(
+                          "list-none cursor-pointer px-1 pt-2 h-9 flex items-center gap-2 text-[11px] uppercase tracking-wider",
+                          tc.textFaint,
+                        )}
+                      >
+                        <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />
+                        <span>{label}</span>
+                        <span>{readyLanes[lane].length}</span>
+                      </summary>
+                      <div className="flex flex-col gap-1.5">
+                        {readyLanes[lane].map(
+                          ({ action, described, selectedDetail, row }) => (
+                            <button
+                              type="button"
+                              key={`${action.kind}-${action.row_id}`}
+                              onClick={() => focusReadyRow(action.row_id)}
                               className={cn(
-                                "text-sm tabular-nums shrink-0",
-                                tc.textMuted,
+                                "rounded-2xl px-4 py-3 flex items-center gap-3 text-left active:scale-[0.99] transition-transform",
+                                tc.sectionCard,
                               )}
                             >
-                              {getCurrencySymbol(currency)}
-                              {row.amount.toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                              <span
+                                className={cn(
+                                  "rounded-full px-2.5 h-6 text-[11px] font-medium flex items-center shrink-0",
+                                  lane === "money"
+                                    ? tc.buttonPrimary
+                                    : cn(tc.buttonOutline, tc.textMuted),
+                                )}
+                              >
+                                {described.verb}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className={cn("text-sm truncate", tc.headerText)}>
+                                  {described.title}
+                                </p>
+                                {selectedDetail && (
+                                  <p className={cn("text-[11px] truncate", tc.textFaint)}>
+                                    {selectedDetail}
+                                  </p>
+                                )}
+                              </div>
+                              {row && lane === "money" && (
+                                <span
+                                  className={cn(
+                                    "text-sm tabular-nums shrink-0",
+                                    tc.textMuted,
+                                  )}
+                                >
+                                  {getCurrencySymbol(currency)}
+                                  {row.amount.toFixed(2)}
+                                </span>
+                              )}
+                              <ArrowUpRight className={cn("w-4 h-4 shrink-0", tc.textFaint)} />
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    </details>
                   ),
                 )}
               </>
             )}
 
-            {filter === "imported" && (
+            {filter === "existing" && existingSection === "imported" && (
               <>
                 {visibleRows.length === 0 && (
                   <EmptyState text="Nothing imported before." />
@@ -1589,12 +1764,27 @@ export default function StatementImportPage() {
                     {dateRows.map((row) => (
                       <div
                         key={row.id}
+                        id={`statement-row-${row.id}`}
                         className={cn(
                           "rounded-2xl px-4 py-3 flex items-center gap-3",
                           tc.sectionCard,
+                          highlightClass(row.id),
                         )}
                       >
                         <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                        {isSoftDeletedImport(
+                          session.classifications[row.id],
+                        ) && (
+                            <span
+                              className={cn(
+                                "rounded-full px-2 h-6 inline-flex items-center text-[10px] shrink-0",
+                                tc.pillBg,
+                                tc.textMuted,
+                              )}
+                            >
+                              Deleted
+                            </span>
+                          )}
                         <p
                           className={cn(
                             "text-sm truncate min-w-0 flex-1",
@@ -1640,9 +1830,11 @@ export default function StatementImportPage() {
                   .map(({ row, reason }) => (
                     <div
                       key={row.id}
+                      id={`statement-row-${row.id}`}
                       className={cn(
                         "rounded-2xl px-4 py-3 flex items-center gap-3",
                         tc.sectionCard,
+                        highlightClass(row.id),
                       )}
                     >
                       <div className="min-w-0 flex-1">
@@ -1703,7 +1895,7 @@ export default function StatementImportPage() {
               </>
             )}
 
-            {filter === "matched" && (
+            {filter === "existing" && existingSection === "matched" && (
               <>
                 {visibleRows.length === 0 && <EmptyState text="Nothing here." />}
 
@@ -1713,33 +1905,38 @@ export default function StatementImportPage() {
                   const decision = session.decisions[row.id];
 
                   return (
-                    <MatchedRowCard
+                    <div
                       key={row.id}
-                      row={row}
-                      classification={classification}
-                      currency={currency}
-                      accepted
-                      acceptedAmount={decision?.accept_amount}
-                      onAcceptMatch={() =>
-                        updateDecision(row.id, { resolution: "accept_match" })
-                      }
-                      onAcceptBankAmount={() =>
-                        updateDecision(row.id, {
-                          resolution: "accept_match",
-                          accept_amount: row.amount,
-                        })
-                      }
-                      onDetach={() =>
-                        updateDecision(row.id, { resolution: "create" })
-                      }
-                      pickedCandidateId={decision?.linked_transaction_id}
-                      onPickCandidate={(transactionId) =>
-                        updateDecision(row.id, {
-                          resolution: "link",
-                          linked_transaction_id: transactionId,
-                        })
-                      }
-                    />
+                      id={`statement-row-${row.id}`}
+                      className={cn("rounded-2xl", highlightClass(row.id))}
+                    >
+                      <MatchedRowCard
+                        row={row}
+                        classification={classification}
+                        currency={currency}
+                        accepted
+                        acceptedAmount={decision?.accept_amount}
+                        onAcceptMatch={() =>
+                          updateDecision(row.id, { resolution: "accept_match" })
+                        }
+                        onAcceptBankAmount={() =>
+                          updateDecision(row.id, {
+                            resolution: "accept_match",
+                            accept_amount: row.amount,
+                          })
+                        }
+                        onDetach={() =>
+                          updateDecision(row.id, { resolution: "create" })
+                        }
+                        pickedCandidateId={decision?.linked_transaction_id}
+                        onPickCandidate={(transactionId) =>
+                          updateDecision(row.id, {
+                            resolution: "link",
+                            linked_transaction_id: transactionId,
+                          })
+                        }
+                      />
+                    </div>
                   );
                 })}
               </>
@@ -1822,6 +2019,7 @@ export default function StatementImportPage() {
             updateGroupCategory(openGroup.key, next)
           }
           onRowChange={updateDecision}
+          focusRowId={highlightedRowId}
           onShiftGroupDates={(days) => {
             openGroup.rows.forEach((row) => {
               const current = session.decisions[row.id]?.date || row.date;

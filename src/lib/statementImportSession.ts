@@ -67,6 +67,8 @@ export interface RowDecision {
    * from the counterparty name — the owner chose to pick it each time.
    */
   transfer_to_account_id?: string;
+  /** Canonical ledger shape chosen by the owner. */
+  action_kind?: "transaction" | "transfer";
   /**
    * For a person-to-person transfer: record it as a household `transfers` row
    * (true) or as an ordinary categorised transaction (false).

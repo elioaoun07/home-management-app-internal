@@ -64,6 +64,8 @@ export interface CandidateTx {
   category_id: string | null;
   subcategory_id: string | null;
   inserted_at: string;
+  /** Exact fingerprints remain identities after a soft delete. */
+  deleted_at?: string | null;
 }
 
 export interface MatchCandidate {
@@ -93,6 +95,7 @@ export type RowStatus =
       status: "already_imported";
       reason: "transfer_hash";
       transfer_id: string;
+      deleted_at?: string | null;
     }
   | {
       status: "already_imported";
@@ -116,6 +119,7 @@ export type RowStatus =
        * all and the Save button sat disabled at "0 rows".
        */
       stored_bank_description: string | null;
+      deleted_at?: string | null;
     }
   | ({ status: "matched" } & MatchCandidate)
   | ({ status: "probable" } & MatchCandidate)
@@ -285,6 +289,7 @@ export interface HouseholdTransferRef {
 export interface ImportedTransferRef {
   id: string;
   statement_hash: string;
+  deleted_at?: string | null;
 }
 
 const NAME_NOISE = /[^A-Z\s]/g;
@@ -567,27 +572,37 @@ export function reconcileStatementRows(
   importedTransfers: ImportedTransferRef[] = [],
 ): Map<string, RowClassification> {
   const results = new Map<string, RowClassification>();
+  const liveCandidates = candidates.filter((tx) => !tx.deleted_at);
+  const liveCrossAccountCandidates = crossAccountCandidates.filter(
+    (tx) => !tx.deleted_at,
+  );
 
   // Hash identity ignores which account the row ended up in — the fingerprint
   // already encodes the statement's account, so a hit is the same statement row
   // wherever it was filed.
   const byHash = new Map<string, CandidateTx>();
   for (const tx of [...candidates, ...crossAccountCandidates]) {
-    if (tx.statement_hash && !byHash.has(tx.statement_hash)) {
-      byHash.set(tx.statement_hash, tx);
+    if (tx.statement_hash) {
+      const existing = byHash.get(tx.statement_hash);
+      if (!existing || (existing.deleted_at && !tx.deleted_at)) {
+        byHash.set(tx.statement_hash, tx);
+      }
     }
   }
 
   const transfersByHash = new Map<string, ImportedTransferRef>();
   for (const t of importedTransfers) {
-    if (t.statement_hash && !transfersByHash.has(t.statement_hash)) {
-      transfersByHash.set(t.statement_hash, t);
+    if (t.statement_hash) {
+      const existing = transfersByHash.get(t.statement_hash);
+      if (!existing || (existing.deleted_at && !t.deleted_at)) {
+        transfersByHash.set(t.statement_hash, t);
+      }
     }
   }
 
   const rowTokens = new Map<string, Set<string>>();
   const candidateTokens = new Map<string, Set<string>>();
-  for (const tx of candidates) {
+  for (const tx of liveCandidates) {
     candidateTokens.set(tx.id, tokenSet(tx.description));
   }
 
@@ -626,6 +641,7 @@ export function reconcileStatementRows(
         transaction_id: hashHit.id,
         stored_hash: hashHit.statement_hash,
         stored_bank_description: hashHit.bank_description,
+        ...(hashHit.deleted_at ? { deleted_at: hashHit.deleted_at } : {}),
       });
       continue;
     }
@@ -640,6 +656,9 @@ export function reconcileStatementRows(
         status: "already_imported",
         reason: "transfer_hash",
         transfer_id: transferHit.id,
+        ...(transferHit.deleted_at
+          ? { deleted_at: transferHit.deleted_at }
+          : {}),
       });
       continue;
     }
@@ -675,7 +694,7 @@ export function reconcileStatementRows(
     // A row already imported under an older hash formula (or from a re-issued
     // statement whose running balance changed) still carries SOME hash. Same
     // amount inside the window means it is the same money event.
-    const dupe = candidates
+    const dupe = liveCandidates
       .filter((tx) => {
         if (!tx.statement_hash) return false;
         if (claimedAsDuplicate.has(tx.id)) return false;
@@ -717,7 +736,7 @@ export function reconcileStatementRows(
     // hand, so its wording is their own, not the bank's. It ranks which
     // transaction to show instead, and both descriptions are put on screen so
     // the owner makes the call.
-    const elsewhere = crossAccountCandidates
+    const elsewhere = liveCrossAccountCandidates
       .filter(
         (tx) =>
           amountsEqual(tx.amount, row.amount) &&
@@ -749,7 +768,7 @@ export function reconcileStatementRows(
   // ── Pass 2: score every (row, candidate) pair worth considering ──────────
   // Only hashless candidates can be claimed — anything carrying a hash was
   // already reconciled against some statement row.
-  const claimable = candidates.filter((tx) => !tx.statement_hash);
+  const claimable = liveCandidates.filter((tx) => !tx.statement_hash);
 
   // Rank by how recently the row was logged; used only as a final tiebreak so
   // results stay deterministic.

@@ -137,6 +137,21 @@ describe("reconcileStatementRows", () => {
     });
   });
 
+  it("keeps a soft-deleted exact fingerprint from being re-imported", () => {
+    const deletedAt = "2026-08-20T10:00:00.000Z";
+    const results = reconcileStatementRows(
+      [row()],
+      [tx({ statement_hash: "hash-row-1", deleted_at: deletedAt })],
+    );
+
+    expect(results.get("row-1")).toMatchObject({
+      status: "already_imported",
+      reason: "hash",
+      transaction_id: "tx-1",
+      deleted_at: deletedAt,
+    });
+  });
+
   it("recognizes a re-import under an older hash formula as a probable duplicate", () => {
     const results = reconcileStatementRows(
       [row()],

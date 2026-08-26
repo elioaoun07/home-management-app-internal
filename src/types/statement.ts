@@ -31,12 +31,39 @@ export interface TransactionSplit {
   subcategory_id?: string | null;
 }
 
+export type StatementSemanticKind =
+  | "salary_income"
+  | "bank_fee"
+  | "exchange"
+  | "own_transfer"
+  | "atm_withdrawal"
+  | "voucher_withdrawal"
+  | "person_transfer"
+  | "other";
+
+export interface StatementParseIssue {
+  date: string;
+  block: string;
+  reason: "amounts_unreadable";
+}
+
+export interface StatementParseDiagnostics {
+  candidate_count: number;
+  parsed_count: number;
+  ignored_balance_count: number;
+  rejected_count: number;
+  rejected: StatementParseIssue[];
+}
+
 export interface ParsedTransaction {
   id: string; // temporary ID for UI
   date: string; // ISO date string
   description: string; // raw description from statement
   amount: number;
   type: "debit" | "credit";
+  /** Meaning of the bank row; independent from its debit/credit direction. */
+  /** Optional only for resumable sessions created before semantic kinds. */
+  semantic_kind?: StatementSemanticKind;
   // These are populated from merchant mappings or left null for user to fill
   merchant_name?: string;
   // normalizeMerchant(description) — stable merchant key used to group rows in
@@ -44,6 +71,8 @@ export interface ParsedTransaction {
   normalized_key?: string;
   category_id?: string | null;
   subcategory_id?: string | null;
+  /** Account on which the learned category was recorded, if one matched. */
+  mapping_account_id?: string | null;
   // The account this statement belongs to. Always the account chosen before
   // upload — never a merchant mapping's account — because it is baked into
   // statement_hash below and must describe the same account the transaction
@@ -207,6 +236,7 @@ export interface ParseStatementResponse {
   transactions: ParsedTransaction[];
   unmatchedCount: number;
   matchedCount: number;
+  diagnostics: StatementParseDiagnostics;
 }
 
 export interface ImportTransactionsRequest {
