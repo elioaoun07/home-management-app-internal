@@ -30,6 +30,7 @@ import { BudgetDashboard } from "./dashboards/BudgetDashboard";
 import { ScheduleDashboard } from "./dashboards/ScheduleDashboard";
 import { ChefDashboard } from "./dashboards/ChefDashboard";
 import { BrainDashboard } from "./dashboards/BrainDashboard";
+import { ArtifactsView } from "./dashboards/ArtifactsView";
 import { CommandBar } from "./CommandBar";
 import { EraDots } from "./EraDots";
 import { EraFaceNav } from "./EraFaceNav";
@@ -134,11 +135,13 @@ export function EraShell() {
 
   const hubModuleKey = useEraStore((s) => s.hubModuleKey);
   const face      = getFace(activeFaceKey);
+  const isHub      = activeView === "hub";
+  const isActivity = activeView === "activity";
   // Hub → tracks last mentioned module (starts as "chat", shifts when user addresses a face);
+  // Activity → neutral chat hue, it isn't tied to any one face;
   // Module dashboard → that face's module key.
-  const moduleKey = activeView === "hub" ? hubModuleKey : face.eraModuleKey;
+  const moduleKey = isHub ? hubModuleKey : isActivity ? "chat" : face.eraModuleKey;
   const fc        = MODULE_COLORS[moduleKey] ?? MODULE_COLORS.chat;
-  const isHub     = activeView === "hub";
 
   const greeting  = `${getTimeGreeting()}${firstName ? `, ${firstName}.` : "."}`;
 
@@ -288,7 +291,7 @@ export function EraShell() {
           <AnimatePresence mode="wait">
             {!isHub && (
               <motion.div
-                key={activeFaceKey}
+                key={isActivity ? "activity" : activeFaceKey}
                 className="absolute inset-x-0 overflow-y-auto"
                 style={{ top: dashboardTop, bottom: 0 }}
                 initial={{ opacity: 0, y: 28 }}
@@ -298,7 +301,7 @@ export function EraShell() {
               >
                 {/* Bottom padding clears the CommandBar (80px mobile offset + ~52px height) */}
                 <div className="pb-[148px] md:pb-[80px]">
-                  <DashboardContent faceKey={activeFaceKey} />
+                  {isActivity ? <ArtifactsView /> : <DashboardContent faceKey={activeFaceKey} />}
                 </div>
               </motion.div>
             )}

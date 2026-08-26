@@ -36,9 +36,11 @@ export async function resolveMemorySave(
 
     if (!res.ok) return { text: formatMemorySaveError() };
 
+    const saved = (await res.json()) as { id?: string };
+
     return {
       text: formatMemorySaved(label, value),
-      metadata: { saved: true, label, value },
+      metadata: { saved: true, label, value, memoryId: saved.id ?? null },
     };
   } catch {
     return { text: formatMemorySaveError() };

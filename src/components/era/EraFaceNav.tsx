@@ -65,7 +65,7 @@ export function EraFaceNav() {
 
       {/* Face dots */}
       {FACES.map((face) => {
-        const isActive = !isHub && activeFaceKey === face.key;
+        const isActive = activeView === "dashboard" && activeFaceKey === face.key;
         const hue = FACE_HUE[face.eraModuleKey] ?? 175;
         const dotColor = `hsl(${hue}, 72%, 65%)`;
         const dotGlow = `0 0 8px hsl(${hue}, 72%, 55%)`;
@@ -103,6 +103,32 @@ export function EraFaceNav() {
           </button>
         );
       })}
+
+      {/* Separator dot */}
+      <span className="mx-0.5 h-1 w-1 rounded-full bg-white/15" />
+
+      {/* Artifacts — today's log of everything ERA created/updated */}
+      <button
+        type="button"
+        onClick={() => setActiveView("activity")}
+        className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all"
+        style={
+          activeView === "activity"
+            ? {
+                background: "hsla(190, 30%, 12%, 0.9)",
+                border: "1px solid hsla(190, 55%, 45%, 0.35)",
+                color: "hsl(190, 72%, 75%)",
+                boxShadow: "0 0 12px hsla(190, 60%, 40%, 0.2)",
+              }
+            : {
+                background: "transparent",
+                border: "1px solid rgba(255,255,255,0.06)",
+                color: "rgba(255,255,255,0.38)",
+              }
+        }
+      >
+        Artifacts
+      </button>
     </div>
   );
 }

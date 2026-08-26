@@ -404,6 +404,8 @@ export async function resolveTransfer(
         amount,
         fromAccountId: fromAccount.id,
         toAccountId: toAccount.id,
+        fromName: fromAccount.name,
+        toName: toAccount.name,
       },
     };
   } catch {

@@ -13,9 +13,11 @@
 // Doctrine Q10: the model proposes, the human confirms, the deterministic
 // path executes.
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import type { AskAIResult } from "@/lib/ai/eraAskProposal";
 import { safeFetch } from "@/lib/safeFetch";
+import { logEraNfcReminder } from "./logEraAction";
 import type { EraActiveProposal } from "./types";
 import {
   useActiveEraConversation,
@@ -37,6 +39,7 @@ export function useEraAskAI() {
   const { data: activeConversation } = useActiveEraConversation();
   const { data: messagesData } = useEraMessages(activeConversation?.id ?? null);
   const createMessage = useCreateEraMessage();
+  const queryClient = useQueryClient();
 
   const askAI = useCallback(
     async (question: string) => {
@@ -141,6 +144,7 @@ export function useEraAskAI() {
       if (!prereqRes.ok) throw new Error("prerequisite create failed");
 
       replyText = `Set — "${proposal.reminderTitle}" fires when ${proposal.nfcTagLabel} reaches ${proposal.targetState}.`;
+      logEraNfcReminder(item.id, proposal.reminderTitle, queryClient);
     } catch {
       replyText = "That didn't save — try setting the trigger from the item's own page instead.";
     }
@@ -151,7 +155,7 @@ export function useEraAskAI() {
       content: replyText,
     });
     setEraReply(replyText);
-  }, [activeProposal, activeConversation, createMessage, setActiveProposal, setEraReply]);
+  }, [activeProposal, activeConversation, createMessage, setActiveProposal, setEraReply, queryClient]);
 
   const dismissProposal = useCallback(() => {
     setActiveProposal(null);

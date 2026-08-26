@@ -6,12 +6,12 @@ import { DEFAULT_FACE_KEY } from "./faceRegistry";
 import type { ERAModuleKey } from "@/components/shared/ERAMark";
 import type { EraActiveProposal, EraPendingTurn, FaceKey, Intent } from "./types";
 
-export type EraView = "hub" | "dashboard";
+export type EraView = "hub" | "dashboard" | "activity";
 
 interface EraState {
   /** Currently active face. Drives ERA hue + intent routing + chip highlight. */
   activeFaceKey: FaceKey;
-  /** "hub" = chat/ERAMark center; "dashboard" = full face dashboard view. */
+  /** "hub" = chat/ERAMark center; "dashboard" = full face dashboard view; "activity" = the Activity log (not tied to a face). */
   activeView: EraView;
   /** Last intent produced by the IntentRouter — useful for debug / future toasts. */
   lastIntent: Intent | null;

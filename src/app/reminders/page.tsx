@@ -97,6 +97,7 @@ export default function RemindersStandalonePage() {
     const tab = searchParams.get("tab");
     return tab === "chores" || tab === "assign" ? tab : undefined;
   }, [searchParams]);
+  const initialOpenItemId = useMemo(() => searchParams.get("openId"), [searchParams]);
   const themeClasses = useThemeClasses();
 
   const [mounted, setMounted] = useState(false);
@@ -323,6 +324,7 @@ export default function RemindersStandalonePage() {
           currentUserId={currentUserId}
           typeFilter={typeFilter}
           recurringFilter={recurringFilter}
+          initialOpenItemId={initialOpenItemId}
         />
       ) : activePage === "chores" ? (
         <ChoresTabContent

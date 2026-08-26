@@ -12,5 +12,6 @@ export const eraKeys = {
     budget: () => [...(["era"] as const), "widget", "budget"] as const,
     chef: () => [...(["era"] as const), "widget", "chef"] as const,
     brain: () => [...(["era"] as const), "widget", "brain"] as const,
+    activity: () => [...(["era"] as const), "widget", "activity"] as const,
   },
 };

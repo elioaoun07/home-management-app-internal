@@ -435,6 +435,20 @@ CREATE TABLE public.hub_feed (
   CONSTRAINT hub_feed_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT hub_feed_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id)
 );
+CREATE TABLE public.era_actions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  household_id uuid,
+  action text NOT NULL CHECK (action = ANY (ARRAY['created'::text, 'updated'::text])),
+  entity_type text NOT NULL CHECK (entity_type = ANY (ARRAY['reminder'::text, 'transaction'::text, 'transfer'::text, 'debt'::text, 'meal_plan'::text, 'memory'::text])),
+  entity_id uuid,
+  title text NOT NULL,
+  route text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT era_actions_pkey PRIMARY KEY (id),
+  CONSTRAINT era_actions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT era_actions_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id)
+);
 CREATE TABLE public.hub_user_stats (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,

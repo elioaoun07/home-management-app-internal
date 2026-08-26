@@ -151,6 +151,7 @@ export async function resolveAssignMeal(
       metadata: {
         mealPlanId: mealPlan.id,
         recipeId: recipe.id,
+        recipeName: recipe.name,
         plannedDate,
         mealType: mealType || "lunch",
       },

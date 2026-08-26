@@ -79,6 +79,7 @@ import {
   Wallet,
   Wind,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -437,6 +438,48 @@ const WebDashboard = memo(function WebDashboard({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedTransaction, setSelectedTransaction] =
     useState<Transaction | null>(null);
+
+  // Deep-link open (Activity card, etc.) — reuse the already-loaded page of
+  // transactions when the row is on it; otherwise fetch it directly rather
+  // than requiring the caller to know which date range holds it.
+  const searchParams = useSearchParams();
+  const openId = searchParams.get("openId");
+  const openIdConsumedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openId || openIdConsumedRef.current === openId) return;
+
+    const fromPage = transactions.find((t) => t.id === openId);
+    if (fromPage) {
+      openIdConsumedRef.current = openId;
+      setSelectedTransaction(fromPage);
+      return;
+    }
+
+    let cancelled = false;
+    fetch(`/api/transactions/${openId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data || openIdConsumedRef.current === openId) return;
+        openIdConsumedRef.current = openId;
+        setSelectedTransaction({
+          id: data.id,
+          date: data.date,
+          category: data.category?.name ?? null,
+          subcategory: data.subcategory?.name ?? null,
+          amount: data.amount,
+          description: data.description,
+          account_id: data.account_id,
+          inserted_at: data.inserted_at,
+          category_color: data.category?.color ?? undefined,
+          subcategory_color: data.subcategory?.color ?? undefined,
+          exchange_rate: data.exchange_rate ?? null,
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [openId, transactions]);
   const [categoryDetail, setCategoryDetail] = useState<string | null>(null);
   const [hoveredTransaction, setHoveredTransaction] = useState<string | null>(
     null,

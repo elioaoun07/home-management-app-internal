@@ -16,11 +16,13 @@
 // treated as the answer, not reclassified as a fresh command. See
 // `resolvePendingReminderAnswer` in `intents/resolvers/schedule.ts`.
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { getFace } from "./faceRegistry";
 import { rootIntentRouter } from "./intentRouter";
 import { resolveIntent } from "./intents/resolveIntent";
 import { resolvePendingReminderAnswer } from "./intents/resolvers/schedule";
+import { logEraAction } from "./logEraAction";
 import type { Intent } from "./types";
 import { useEraBudgetSubmit } from "./useEraBudgetSubmit";
 import {
@@ -52,6 +54,7 @@ export function useEraTurn() {
   const budgetSubmit = useEraBudgetSubmit();
   const { data: activeConversation } = useActiveEraConversation();
   const createMessage = useCreateEraMessage();
+  const queryClient = useQueryClient();
 
   const runTurn = useCallback(
     async (text: string): Promise<EraTurnResult> => {
@@ -104,6 +107,7 @@ export function useEraTurn() {
       }));
 
       setPendingTurn(nextPending ?? null);
+      logEraAction(intent.kind, metadata, queryClient);
 
       const draftTransactionId =
         typeof metadata?.draftId === "string" ? metadata.draftId : null;
@@ -136,6 +140,7 @@ export function useEraTurn() {
       setActiveFace,
       setHubModuleKey,
       setEraReply,
+      queryClient,
     ],
   );
 

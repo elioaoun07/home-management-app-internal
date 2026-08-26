@@ -14,6 +14,7 @@ import {
 import EditOccurrenceDialog from "@/components/web/EditOccurrenceDialog";
 import { WebEventFormDialog } from "@/components/web/WebEventFormDialog";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useItem } from "@/features/items/useItems";
 import type { ChecklistItem, DayPlan, DayPlanIntent } from "@/features/day-plan/types";
 import {
   useChecklistActions,
@@ -487,6 +488,9 @@ interface WebDayPlannerProps {
   currentUserId?: string;
   typeFilter?: TypeFilter;
   recurringFilter?: RecurringFilter;
+  /** Deep-link from outside (e.g. the ERA Activity card) — open this item's
+   *  detail modal once it loads, regardless of which section it's in. */
+  initialOpenItemId?: string | null;
 }
 
 export type PlannerMode = "browsing" | "planning" | "preview";
@@ -511,6 +515,7 @@ export default function WebDayPlanner({
   currentUserId,
   typeFilter = "all",
   recurringFilter = "all",
+  initialOpenItemId = null,
 }: WebDayPlannerProps) {
   const { theme } = useTheme();
   const isPink = theme === "pink";
@@ -546,6 +551,19 @@ export default function WebDayPlanner({
   } | null>(null);
   const [selectedItem, setSelectedItem] = useState<ItemWithDetails | null>(null);
   const [editingItem, setEditingItem] = useState<ItemWithDetails | null>(null);
+
+  // Deep-link open (Activity card, etc.) — fetch directly by id rather than
+  // searching whatever occurrence sections happen to be rendered, since the
+  // item may not be in any of the day's already-expanded lists.
+  const initialOpenConsumedRef = useRef(false);
+  const { data: initialOpenItem } = useItem(
+    !initialOpenConsumedRef.current && initialOpenItemId ? initialOpenItemId : undefined,
+  );
+  useEffect(() => {
+    if (initialOpenConsumedRef.current || !initialOpenItem) return;
+    initialOpenConsumedRef.current = true;
+    setSelectedItem(initialOpenItem);
+  }, [initialOpenItem]);
   type EditFlow =
     | { step: "chooser"; item: ItemWithDetails; date: Date }
     | { step: "occurrence"; item: ItemWithDetails; date: Date }
