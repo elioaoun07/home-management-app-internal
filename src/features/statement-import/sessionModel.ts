@@ -264,6 +264,8 @@ export interface AccountRef {
   id: string;
   type: "expense" | "income" | "saving";
   is_default?: boolean;
+  /** The default INCOME account specifically — independent of is_default, which is app-wide across every type. */
+  is_default_income?: boolean;
   /** Needed to decide whether a quoted FX rate applies to this account. */
   currency?: string;
 }
@@ -285,6 +287,17 @@ export function pickAccount(
 ): string | null {
   const candidates = accounts.filter((a) => a.type === type);
   if (candidates.length === 0) return null;
+  // Income has its own default flag (is_default_income) — is_default is the
+  // app-wide quick-entry default and typically sits on an expense account, so
+  // reusing it here would fall through to whichever income account happens
+  // to be first in the list.
+  if (type === "income") {
+    return (
+      candidates.find((a) => a.is_default_income) ??
+      candidates.find((a) => a.is_default) ??
+      candidates[0]
+    ).id;
+  }
   return (candidates.find((a) => a.is_default) ?? candidates[0]).id;
 }
 

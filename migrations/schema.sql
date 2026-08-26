@@ -8,6 +8,13 @@ CREATE TABLE public.accounts (
   type text NOT NULL CHECK (type = ANY (ARRAY['income'::text, 'expense'::text, 'saving'::text])),
   inserted_at timestamp with time zone NOT NULL DEFAULT now(),
   is_default boolean DEFAULT false,
+  -- Independent of is_default (see 2026-08-26_accounts-default-income.sql) —
+  -- is_default is the app-wide quick-entry default (any type); this is
+  -- specifically which income account Statement Import's
+  -- suggestAccountForRow() lands a received person-transfer in. Both are
+  -- capped at one true row per user via a partial unique index + trigger;
+  -- live DB is authoritative for those (see migrations/db-state.json).
+  is_default_income boolean NOT NULL DEFAULT false,
   country_code text,
   location_name text,
   position integer NOT NULL DEFAULT 0,

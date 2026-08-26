@@ -294,11 +294,13 @@ export default function StatementImportPage() {
           id: string;
           type: string;
           is_default?: boolean;
+          is_default_income?: boolean;
           currency?: string;
         }) => ({
           id: a.id,
           type: a.type as "expense" | "income" | "saving",
           is_default: a.is_default,
+          is_default_income: a.is_default_income,
           currency: a.currency,
         }),
       ),

@@ -239,6 +239,17 @@ The account chip in the bottom summary bar:
 
 ---
 
+## Addendum (2026-08-26): Default INCOME Account
+
+`is_default` above is a single app-wide flag — one account total, any type — used for everyday quick-entry (expense form, Hub, watch views). It has nothing to do with which INCOME account something should land in by default, but Statement Import's `pickAccount(accounts, "income")` used to reuse it anyway for redirecting a received person-transfer, so with `is_default` sitting on an expense account (Wallet), it fell through to whichever income account was first in the list (Drawer) instead of the household's real preference (Salary).
+
+Fix: a second, independent flag, `accounts.is_default_income` (`migrations/2026-08-26_accounts-default-income.sql`), enforced to one true row per user the same way as `is_default` (partial unique index + trigger). `pickAccount()` in `src/features/statement-import/sessionModel.ts` now prefers it for `type === "income"`, falling back to `is_default` then array order only if unset.
+
+- **API**: `PATCH /api/accounts/[id]/default-income` (mirrors `.../default`, rejects a non-income account with 400).
+- **Hook**: `useSetDefaultIncomeAccount()` in `src/features/accounts/hooks.ts`.
+- **UI**: Settings → Accounts — income-type accounts get a second "Income default" badge / "Set income default" button alongside the existing default badge.
+- See [Statement Import/Overview.md](<../Statement Import/Overview.md>) for the downstream effect this had on category-chip display (same root cause, one fix).
+
 ## Next Steps
 
 1. ✅ Run the migration SQL

@@ -19,7 +19,11 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useMyAccounts, useSetDefaultAccount } from "@/features/accounts/hooks";
+import {
+  useMyAccounts,
+  useSetDefaultAccount,
+  useSetDefaultIncomeAccount,
+} from "@/features/accounts/hooks";
 import {
   useSectionOrder,
   useUpdatePreferences,
@@ -543,7 +547,7 @@ function AccountsPanel() {
   const { data: accounts = [] } = useMyAccounts();
   const themeClasses = useThemeClasses();
   const setDefaultMutation = useSetDefaultAccount();
-  const defaultAccount = accounts.find((a: any) => a.is_default);
+  const setDefaultIncomeMutation = useSetDefaultIncomeAccount();
 
   const handleSetDefault = async (accountId: string) => {
     try {
@@ -552,6 +556,16 @@ function AccountsPanel() {
     } catch (error) {
       console.error("Failed to set default account:", error);
       toast.error("Failed to set default account");
+    }
+  };
+
+  const handleSetDefaultIncome = async (accountId: string) => {
+    try {
+      await setDefaultIncomeMutation.mutateAsync(accountId);
+      toast.success("Default income account updated!");
+    } catch (error) {
+      console.error("Failed to set default income account:", error);
+      toast.error("Failed to set default income account");
     }
   };
 
@@ -575,47 +589,70 @@ function AccountsPanel() {
       ) : (
         <div className="space-y-3">
           {accounts.map((account: any) => (
-            <button
+            <div
               key={account.id}
-              onClick={() => handleSetDefault(account.id)}
               className={`
-                w-full neo-card p-5 rounded-xl flex items-center gap-4 transition-all hover:scale-[1.01]
+                w-full neo-card p-5 rounded-xl flex items-center gap-4 transition-all
                 ${
                   account.is_default
                     ? `ring-2 ${themeClasses.ringActive} ${themeClasses.shadowActive}`
-                    : "hover:bg-[hsl(var(--card)/0.8)]"
+                    : ""
                 }
               `}
             >
-              <div
-                className={`w-12 h-12 rounded-xl bg-gradient-to-br ${themeClasses.iconBg} flex items-center justify-center`}
+              <button
+                type="button"
+                onClick={() => handleSetDefault(account.id)}
+                className="flex items-center gap-4 flex-1 min-w-0 text-left hover:scale-[1.01] transition-transform"
               >
-                <span className="text-xl">
-                  {account.type === "cash" ? (
-                    "💵"
-                  ) : account.type === "bank" ? (
-                    "🏦"
-                  ) : (
-                    <CreditCard className="w-4 h-4 text-blue-400" />
-                  )}
-                </span>
-              </div>
-              <div className="flex-1 text-left">
-                <p className={`font-semibold ${themeClasses.textHighlight}`}>
-                  {account.name}
-                </p>
-                <p className={`text-xs ${themeClasses.textFaint} capitalize`}>
-                  {account.type}
-                </p>
-              </div>
-              {account.is_default && (
                 <div
-                  className={`px-3 py-1 rounded-full ${themeClasses.bgActive} ${themeClasses.textActive} text-xs font-medium`}
+                  className={`w-12 h-12 rounded-xl bg-gradient-to-br ${themeClasses.iconBg} flex items-center justify-center shrink-0`}
                 >
-                  Default
+                  <span className="text-xl">
+                    {account.type === "cash" ? (
+                      "💵"
+                    ) : account.type === "bank" ? (
+                      "🏦"
+                    ) : (
+                      <CreditCard className="w-4 h-4 text-blue-400" />
+                    )}
+                  </span>
                 </div>
-              )}
-            </button>
+                <div className="flex-1 min-w-0">
+                  <p className={`font-semibold ${themeClasses.textHighlight}`}>
+                    {account.name}
+                  </p>
+                  <p className={`text-xs ${themeClasses.textFaint} capitalize`}>
+                    {account.type}
+                  </p>
+                </div>
+              </button>
+              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                {account.is_default && (
+                  <div
+                    className={`px-3 py-1 rounded-full ${themeClasses.bgActive} ${themeClasses.textActive} text-xs font-medium`}
+                  >
+                    Default
+                  </div>
+                )}
+                {account.type === "income" &&
+                  (account.is_default_income ? (
+                    <div
+                      className={`px-3 py-1 rounded-full ${themeClasses.bgActive} ${themeClasses.textActive} text-xs font-medium`}
+                    >
+                      Income default
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleSetDefaultIncome(account.id)}
+                      className={`px-3 py-1 rounded-full text-xs hover:opacity-80 ${themeClasses.textFaint}`}
+                    >
+                      Set income default
+                    </button>
+                  ))}
+              </div>
+            </div>
           ))}
         </div>
       )}

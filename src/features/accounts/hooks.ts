@@ -233,6 +233,32 @@ export function useSetDefaultAccount() {
   });
 }
 
+// Set default INCOME account mutation — independent of setDefaultAccount
+// above, see /api/accounts/[id]/default-income.
+async function setDefaultIncomeAccount(accountId: string): Promise<void> {
+  const res = await safeFetch(`/api/accounts/${accountId}/default-income`, {
+    method: "PATCH",
+  });
+  if (!res.ok) {
+    let msg = "Failed to set default income account";
+    try {
+      const j = await res.json();
+      if (j?.error) msg = j.error;
+    } catch {}
+    throw new Error(msg);
+  }
+}
+
+export function useSetDefaultIncomeAccount() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: setDefaultIncomeAccount,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.accounts() });
+    },
+  });
+}
+
 // Delete account mutation
 async function deleteAccount(accountId: string): Promise<void> {
   const res = await safeFetch(`/api/accounts/${accountId}`, {

@@ -13,6 +13,7 @@ import {
   formatStatementDate,
   getBucket,
   hasMultipleYears,
+  pickAccount,
   resolveRowCategory,
   skippedGroupCounts,
   skipReason,
@@ -402,6 +403,38 @@ describe("suggestAccountForRow", () => {
         { id: SALARY, type: "income" },
       ]),
     ).toBe(SALARY);
+  });
+
+  // Regression: with two income accounts, is_default is the APP-WIDE quick-
+  // entry flag (usually sitting on an expense account) and has nothing to do
+  // with which income account should catch a received person-transfer. Before
+  // is_default_income existed, this fell through to "whichever income account
+  // is first in the array" — Drawer, not Salary — even though the household's
+  // real preference was Salary.
+  const DRAWER = "66666666-6666-4666-8666-666666666666";
+  it("prefers is_default_income over array order when multiple income accounts exist", () => {
+    const accounts: AccountRef[] = [
+      { id: ACCOUNT, type: "expense" },
+      { id: DRAWER, type: "income" },
+      { id: SALARY, type: "income", is_default_income: true },
+      { id: WALLET, type: "expense", is_default: true },
+    ];
+    expect(
+      suggestAccountForRow(
+        row({ type: "credit", description: "Transfer from SALIM IBRAHIM SAADEH via Mobile -" }),
+        ACCOUNT,
+        accounts,
+      ),
+    ).toBe(SALARY);
+  });
+
+  it("falls back to array order when no income account is marked is_default_income", () => {
+    const accounts: AccountRef[] = [
+      { id: DRAWER, type: "income" },
+      { id: SALARY, type: "income" },
+      { id: WALLET, type: "expense", is_default: true },
+    ];
+    expect(pickAccount(accounts, "income")).toBe(DRAWER);
   });
 });
 
