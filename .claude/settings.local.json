@@ -223,7 +223,10 @@
       "Bash(pnpm db:verify-rls)",
       "Bash(awk 'NR==1846,NR==2060' src/components/expense/MobileExpenseForm.tsx)",
       "Bash(sort -t- -k2 -n -u)",
-      "Bash(awk '/^## Now|^## Next|^## Later|^## Definition of Done/{print NR\": \"$0}' \"ERA Notes/10 - Project Management/Hub & ERA/4 - Checklist.md\")"
+      "Bash(awk '/^## Now|^## Next|^## Later|^## Definition of Done/{print NR\": \"$0}' \"ERA Notes/10 - Project Management/Hub & ERA/4 - Checklist.md\")",
+      "Bash(awk '/^## /{if\\(h\\)printf \"%6d  %s\\\\n\", n, h; h=$0; n=0} {n+=length\\($0\\)+1} END{printf \"%6d  %s\\\\n\", n, h}' CLAUDE.md)",
+      "Bash(awk 'NR>=79 && NR<=160' CLAUDE.md)",
+      "Bash(awk '{printf \"%d %s\\\\n\", length\\($0\\), substr\\($0,1,60\\)}')"
     ]
   },
   "outputStyle": "Concise"
