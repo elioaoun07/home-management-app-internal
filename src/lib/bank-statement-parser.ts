@@ -386,6 +386,16 @@ const TRAILING_AMOUNTS =
 const MONEY_OR_DASH = /([\d,]+\.\d{2}(?!\d)|-)/g;
 
 /**
+ * The bank's authenticity/e-signature footer, printed once at the very
+ * bottom of the whole statement (these PDFs are one tall page, not paginated
+ * — see `pdf-parser.ts`). It carries no date and no money of its own, so
+ * without this filter it reads exactly like a wrapped description and gets
+ * glued onto whichever transaction happens to sit right before it.
+ */
+const DOCUMENT_FOOTER_PATTERN =
+  /^(for verifications|scan the qr code|this tamperproof is digitally signed\.?|both printed and electronic copies can instantly be verified|bank audi plaza,)/i;
+
+/**
  * Parse PDF text content - extract transactions using pattern matching
  * This is optimized for the specific Lebanese bank statement format
  */
@@ -401,12 +411,22 @@ export function parsePDFTextWithDiagnostics(text: string): PDFTextParseResult {
   const lines = text
     .split(/\n/)
     .map((l) => l.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((l) => !DOCUMENT_FOOTER_PATTERN.test(l));
 
   // The PDF format has DATE, TRANSACTIONS, MONEY OUT, MONEY IN, BALANCE columns
   // We need to identify transaction lines by date pattern
 
   const datePattern = /^(\d{1,2}\/\d{1,2}\/\d{4})/;
+
+  // A line that isn't itself dated and carries no money of its own: this
+  // bank sometimes prints the date on the SAME line as the amounts rather
+  // than the first line of the description, when the description overflows
+  // onto an earlier or later physical line (even across a page break) that
+  // has neither. Buffered here until the next dated line resolves whether it
+  // belongs to the row that just closed (a trailing wrap) or the row that is
+  // about to start (a leading wrap, when the dated line is amounts-only).
+  let pendingOrphan: string[] = [];
 
   let i = 0;
   while (i < lines.length) {
@@ -419,7 +439,33 @@ export function parsePDFTextWithDiagnostics(text: string): PDFTextParseResult {
 
       if (date) {
         // Get the rest of the line after the date
-        const content = line.substring(dateMatch[0].length).trim();
+        let content = line.substring(dateMatch[0].length).trim();
+
+        if (pendingOrphan.length > 0) {
+          const probe = content.match(TRAILING_AMOUNTS);
+          const isAmountsOnly =
+            !!probe &&
+            content.slice(0, content.length - probe[0].length).trim() === "";
+
+          if (isAmountsOnly) {
+            // The date sat with the amounts; the buffered lines ARE this
+            // row's description.
+            content = `${pendingOrphan.join(" ")} ${content}`.trim();
+          } else {
+            // This dated line is a normal, self-contained row start, so the
+            // buffered lines must be the PREVIOUS row's overflow instead.
+            const prev = transactions[transactions.length - 1];
+            if (prev) {
+              prev.description =
+                `${prev.description} ${pendingOrphan.join(" ")}`.trim();
+              prev.type = getTransactionType(prev.description);
+              const merchant = extractMerchant(prev.description, prev.type);
+              prev.merchantName = merchant.name;
+              prev.merchantPattern = merchant.pattern;
+            }
+          }
+          pendingOrphan = [];
+        }
 
         // Sometimes the description spans multiple lines
         // Collect until we find the numbers
@@ -557,6 +603,10 @@ export function parsePDFTextWithDiagnostics(text: string): PDFTextParseResult {
         });
         diagnostics.parsed_count++;
       }
+    } else if (!MONEY_ANYWHERE.test(line)) {
+      // Not a row start and not a bare amounts line either — hold it until
+      // the next dated line decides which transaction it belongs to.
+      pendingOrphan.push(line);
     }
 
     i++;

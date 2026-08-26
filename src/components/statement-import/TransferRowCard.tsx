@@ -15,9 +15,16 @@
 // Nothing here disappears when it is decided. A decided row keeps its place and
 // grows a "will be saved" line, because picking an option is staging, not
 // saving — Save at the bottom is the only thing that writes.
+//
+// Once a row IS decided (category picked, or destination picked), the answer
+// collapses to a read-only summary — the same "looks read-only until you tap
+// it" feel as the Categorize tab's cards, so the two tabs read as one system
+// instead of one being a form and the other a receipt. Tapping the summary
+// re-opens the control that produced it.
 
 import { CategoryChip } from "@/components/statement-import/CategoryChip";
-import { CategoryPickerSheet } from "@/components/statement-import/CategoryPickerSheet";
+import { GroupSheet } from "@/components/statement-import/GroupSheet";
+import { TransferToggle } from "@/components/statement-import/TransferToggle";
 import {
   Select,
   SelectContent,
@@ -25,7 +32,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { defaultDescriptionFor } from "@/features/statement-import/sessionModel";
+import {
+  defaultDescriptionFor,
+  formatStatementDate,
+} from "@/features/statement-import/sessionModel";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getCurrencySymbol } from "@/lib/currency";
 import type { GroupCategory, RowDecision } from "@/lib/statementImportSession";
@@ -36,15 +46,7 @@ import { useState } from "react";
 
 type CategoryRef = { name: string; color: string; slug?: string | null } | null;
 type AccountRef = { id: string; name: string };
-
-function shortDate(iso: string): string {
-  const parsed = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return iso;
-  return parsed.toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-  });
-}
+type FullAccountRef = { id: string; name: string; currency?: string };
 
 type Props = {
   row: ParsedTransaction;
@@ -67,6 +69,12 @@ type Props = {
   statementAccountName: string;
   /** Destinations offered under Transfer: partner accounts, or the owner's own. */
   destinations: AccountRef[];
+  /**
+   * Every account the owner has — for the full editor's (GroupSheet's)
+   * per-row account override on a "Spent" row. Wider than `destinations`,
+   * which is scoped to this row's transfer kind.
+   */
+  accounts: FullAccountRef[];
   /**
    * Names ANY account id, including one missing from `destinations`.
    *
@@ -98,6 +106,8 @@ type Props = {
   partnerText: string;
   partnerRing: string;
   onRowChange: (rowId: string, patch: Partial<RowDecision>) => void;
+  /** Shows the year on the date — only when this statement spans more than one. */
+  showYear?: boolean;
 };
 
 export function TransferRowCard({
@@ -110,6 +120,7 @@ export function TransferRowCard({
   direction,
   statementAccountName,
   destinations,
+  accounts,
   accountName,
   spendAccountId,
   spendAccountName,
@@ -119,11 +130,19 @@ export function TransferRowCard({
   partnerText,
   partnerRing,
   onRowChange,
+  showYear = false,
 }: Props) {
   const tc = useThemeClasses();
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Whether a DECIDED transfer destination is showing its `Select` instead of
+  // the read-only chips. Starts false (chips first) and resets whenever a new
+  // destination is picked, so tapping the chips, picking again, and landing
+  // back on the chips is the whole loop. (The "Spent" side has no equivalent
+  // flag — its decided summary opens the full GroupSheet editor directly.)
+  const [editing, setEditing] = useState(false);
   const symbol = getCurrencySymbol(currency);
   const received = direction === "in";
+  const shortDate = (iso: string) => formatStatementDate(iso, { year: showYear });
 
   // The owner's explicit pick always wins. With nothing picked yet, fall back
   // to the strongest hint available: a matched household name for a person
@@ -210,22 +229,51 @@ export function TransferRowCard({
         </span>
       </div>
 
-      <p
-        className={cn(
-          "text-[11px] flex items-center gap-1",
-          received ? "text-emerald-500" : tc.textFaint,
-        )}
-      >
-        {shortDate(row.date)} ·{" "}
-        <span className="inline-flex items-center gap-0.5">
-          {received ? (
-            <ArrowDownLeft className="w-3 h-3" />
-          ) : (
-            <ArrowUpRight className="w-3 h-3" />
+      <div className="flex items-center justify-between gap-2">
+        <p
+          className={cn(
+            "text-[11px] flex items-center gap-1",
+            received ? "text-emerald-500" : tc.textFaint,
           )}
-          {received ? "received" : "sent"}
-        </span>
-      </p>
+        >
+          {shortDate(row.date)} ·{" "}
+          <span className="inline-flex items-center gap-0.5">
+            {received ? (
+              <ArrowDownLeft className="w-3 h-3" />
+            ) : (
+              <ArrowUpRight className="w-3 h-3" />
+            )}
+            {received ? "received" : "sent"}
+          </span>
+        </p>
+
+        {/* The one decision this card exists for — an exchange has no second
+            answer (it moved, by definition), so it gets no toggle. */}
+        {kind !== "exchange" && (
+          <TransferToggle
+            checked={mode === "transfer"}
+            onChange={() => {
+              setEditing(false);
+              if (mode === "transfer") {
+                onRowChange(row.id, {
+                  action_kind: "transaction",
+                  treat_as_transfer: false,
+                  transfer_to_account_id: undefined,
+                  resolution: "undecided",
+                });
+              } else {
+                onRowChange(row.id, {
+                  action_kind: "transfer",
+                  treat_as_transfer: true,
+                  category_id: undefined,
+                  subcategory_id: undefined,
+                  resolution: "undecided",
+                });
+              }
+            }}
+          />
+        )}
+      </div>
 
       {/* The bank already stated the rate and both currencies; only the
           destination account is unknown. */}
@@ -239,53 +287,38 @@ export function TransferRowCard({
         </p>
       )}
 
-      {/* The one decision this card exists for. An exchange has no second
-          answer — it moved, by definition — so it gets no toggle. */}
-      {kind !== "exchange" && (
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              onRowChange(row.id, {
-                action_kind: "transfer",
-                treat_as_transfer: true,
-                category_id: undefined,
-                subcategory_id: undefined,
-                resolution: "undecided",
-              })
-            }
-            className={cn(
-              "rounded-xl h-10 text-xs flex-1",
-              mode === "transfer" ? tc.buttonPrimary : tc.buttonOutline,
-            )}
-          >
-            Transfer
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              onRowChange(row.id, {
-                action_kind: "transaction",
-                treat_as_transfer: false,
-                transfer_to_account_id: undefined,
-                resolution: "undecided",
-              })
-            }
-            className={cn(
-              "rounded-xl h-10 text-xs flex-1",
-              mode === "spent" ? tc.buttonPrimary : tc.buttonOutline,
-            )}
-          >
-            Transaction
-          </button>
-        </div>
-      )}
-
       {mode === "transfer" ? (
         waitingOnSender ? (
           <p className={cn("text-xs", tc.textMuted)}>
             Waiting for the sender&apos;s import
           </p>
+        ) : destination && !editing ? (
+          // Decided — read-only chips. Tap to change the destination.
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="flex items-center gap-2 w-full min-w-0"
+          >
+            <span
+              className={cn(
+                "rounded-full px-2.5 h-7 inline-flex items-center text-[11px] truncate min-w-0",
+                tc.pillBg,
+                tc.textMuted,
+              )}
+            >
+              {statementAccountName}
+            </span>
+            <ArrowRight className={cn("w-3.5 h-3.5 shrink-0", tc.textFaint)} />
+            <span
+              className={cn(
+                "rounded-full px-2.5 h-7 inline-flex items-center text-[11px] truncate min-w-0",
+                tc.pillBg,
+                tc.text,
+              )}
+            >
+              {destination.name}
+            </span>
+          </button>
         ) : (
           <div className="flex items-center gap-2">
             <span className={cn("text-[11px] shrink-0", tc.textFaint)}>
@@ -294,14 +327,15 @@ export function TransferRowCard({
             <ArrowRight className={cn("w-3.5 h-3.5 shrink-0", tc.textFaint)} />
             <Select
               value={decision?.transfer_to_account_id ?? ""}
-              onValueChange={(next) =>
+              onValueChange={(next) => {
                 onRowChange(row.id, {
                   transfer_to_account_id: next,
                   action_kind: "transfer",
                   treat_as_transfer: true,
                   resolution: "create",
-                })
-              }
+                });
+                setEditing(false);
+              }}
             >
               <SelectTrigger className="h-10 rounded-lg text-xs flex-1 min-w-0">
                 <SelectValue placeholder="Pick account" />
@@ -322,6 +356,23 @@ export function TransferRowCard({
             </Select>
           </div>
         )
+      ) : resolvedCategory.category_id ? (
+        // Decided — read-only, like a Categorize-tab card. Tap opens the same
+        // full editor a Categorize-tab merchant does (GroupSheet below).
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          className="flex flex-col items-start gap-1 w-full text-left min-w-0"
+        >
+          <CategoryChip
+            category={categoryOf(resolvedCategory.category_id)}
+            subcategory={categoryOf(resolvedCategory.subcategory_id)}
+            interactive={false}
+          />
+          <span className={cn("text-xs truncate w-full", tc.textMuted)}>
+            {decision?.description || defaultDescriptionFor(row, classification)}
+          </span>
+        </button>
       ) : (
         <>
           <input
@@ -366,14 +417,30 @@ export function TransferRowCard({
         Skip
       </button>
 
-      {mode === "spent" && (
-        <CategoryPickerSheet
+      {/* The SAME editor a Categorize-tab merchant opens — description,
+          per-row account, date AND category all in one place, plus this
+          row's own Transfer toggle. Gated on `pickerOpen` too (not just
+          `mode === "spent"`), because flipping that toggle from inside the
+          sheet changes `mode` immediately and must not unmount the sheet the
+          owner is still looking at. */}
+      {(mode === "spent" || pickerOpen) && (
+        <GroupSheet
           open={pickerOpen}
           onOpenChange={setPickerOpen}
+          label={title}
+          rows={[row]}
           accountId={spendAccountId}
-          categoryId={resolvedCategory.category_id}
-          subcategoryId={resolvedCategory.subcategory_id}
-          onChange={(next) => onRowChange(row.id, next)}
+          accounts={accounts}
+          resolveAccount={() => spendAccountId}
+          currency={currency}
+          groupCategory={undefined}
+          decisions={decision ? { [row.id]: decision } : {}}
+          resolveCategory={() => resolvedCategory}
+          onGroupCategoryChange={(next) => onRowChange(row.id, next)}
+          onRowChange={onRowChange}
+          onShiftGroupDates={() => {}}
+          showYear={showYear}
+          transferDestinations={destinations}
         />
       )}
     </div>

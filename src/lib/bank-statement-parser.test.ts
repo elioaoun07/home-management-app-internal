@@ -3,7 +3,7 @@ import {
   convertToUITransactions,
   parsePDFText,
 } from "./bank-statement-parser";
-import { isTransferDescription } from "./statement-reconcile";
+import { isPersonTransfer, isTransferDescription } from "./statement-reconcile";
 
 const ACCOUNT = "11111111-1111-4111-8111-111111111111";
 
@@ -307,5 +307,83 @@ describe("parsePDFText — FX row wrapped across extracted lines", () => {
 
     expect(tx.description).toBe("POS PURCHASE SPINNEYS BEIRUT LB 3043");
     expect(tx.moneyOut).toBe(42.08);
+  });
+});
+
+// Transcribed verbatim (names changed) from the real corpus: the description
+// wraps onto TWO extra physical lines that carry no date of their own, one
+// BEFORE the amounts and one AFTER. The bank prints the date next to the
+// amounts here, not next to the first line of the description — the reverse
+// of every other wrap shape above.
+describe("parsePDFText — description wraps around a dateless amounts line", () => {
+  const ROWS = [
+    "17/06/2026 POS Purchase SPINNEYS MTAYLEB",
+    "MTAYLEB LB 0000",
+    "95.24 - 206.97",
+    "Transfer to JOHN GEORGES",
+    "YAZBECK via Mobile - malak el",
+    "18/06/2026 14.00 - 192.97",
+    "tawouk 2 burgers",
+    "18/06/2026 Bill Payment, Invoice # ALFA PREPAID 17.04 - 175.93",
+  ].join("\n");
+
+  it("does not merge the transfer into the row before it", () => {
+    const rows = parsePDFText(ROWS);
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toMatchObject({
+      date: "2026-06-17",
+      description: "POS Purchase SPINNEYS MTAYLEB MTAYLEB LB 0000",
+      moneyOut: 95.24,
+    });
+  });
+
+  it("recovers the leading wrap (before the amounts) AND the trailing wrap (after them)", () => {
+    const [, tx] = parsePDFText(ROWS);
+    expect(tx).toMatchObject({
+      date: "2026-06-18",
+      description: "Transfer to JOHN GEORGES YAZBECK via Mobile - malak el tawouk 2 burgers",
+      moneyOut: 14,
+      moneyIn: null,
+      balance: 192.97,
+      type: "transfer_out",
+      merchantName: "Transfer to JOHN GEORGES YAZBECK",
+    });
+  });
+
+  it("classifies as a person transfer, not an unmatched review row", () => {
+    const [, tx] = parsePDFText(ROWS);
+    expect(isPersonTransfer(tx.description)).toBe(true);
+    expect(isTransferDescription(tx.description)).toBe(false);
+  });
+
+  it("leaves the next row untouched", () => {
+    const [, , next] = parsePDFText(ROWS);
+    expect(next).toMatchObject({
+      date: "2026-06-18",
+      moneyOut: 17.04,
+    });
+  });
+});
+
+describe("parsePDFText — document authenticity footer", () => {
+  // Printed once at the very bottom of the statement (these PDFs are one
+  // tall page, not paginated). It has no date and no money of its own, so
+  // without filtering it out it reads exactly like a wrapped continuation
+  // and gets glued onto the last real transaction above it.
+  const WITH_FOOTER = [
+    "20/08/2026 POS Purchase SPINNEYS MTAYLEB",
+    "MTAYLEB LB 0000",
+    "154.06 - 62.07",
+    "For Verifications",
+    "Scan the QR code",
+    "This Tamperproof is digitally signed.",
+    "Both printed and electronic copies can instantly be verified by scanning the QR code. © Neo by Bank Audi 2023",
+    "Bank Audi Plaza, Omar Daouk Street, Bab Idriss, Beirut 8102 2021, P.O. Box: 2560-11, Beirut, Lebanon.",
+  ].join("\n");
+
+  it("is dropped instead of being appended to the last transaction", () => {
+    const [tx] = parsePDFText(WITH_FOOTER);
+    expect(tx.description).toBe("POS Purchase SPINNEYS MTAYLEB MTAYLEB LB 0000");
+    expect(parsePDFText(WITH_FOOTER)).toHaveLength(1);
   });
 });

@@ -25,8 +25,8 @@ const CORPUS: CorpusCase[] = [
     debits: 297,
     semantic: {
       own_transfer: 87,
-      other: 282,
-      person_transfer: 15,
+      other: 281,
+      person_transfer: 16,
       bank_fee: 5,
       voucher_withdrawal: 1,
     },

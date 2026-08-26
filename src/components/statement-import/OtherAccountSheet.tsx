@@ -8,6 +8,7 @@
 // transaction it resembles, each with its own date, amount and wording.
 
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
+import { formatStatementDate } from "@/features/statement-import/sessionModel";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getCurrencySymbol } from "@/lib/currency";
 import { cn } from "@/lib/utils";
@@ -28,18 +29,9 @@ type Props = {
   currency: string;
   onSkip: () => void;
   onImport: () => void;
+  /** Shows the year on every date — only when this statement spans more than one. */
+  showYear?: boolean;
 };
-
-function longDate(iso: string): string {
-  const parsed = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return iso;
-  return parsed.toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 export function OtherAccountSheet({
   open,
@@ -49,9 +41,12 @@ export function OtherAccountSheet({
   currency,
   onSkip,
   onImport,
+  showYear = false,
 }: Props) {
   const tc = useThemeClasses();
   const symbol = getCurrencySymbol(currency);
+  const longDate = (iso: string) =>
+    formatStatementDate(iso, { weekday: true, year: showYear });
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>

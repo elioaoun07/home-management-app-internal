@@ -15,7 +15,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getCurrencySymbol } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Layers } from "lucide-react";
 
 type Props = {
   label: string;
@@ -40,6 +40,8 @@ type Props = {
    */
   dateLabel: string;
   onOpen: () => void;
+  /** Sets every row in the group aside at once — same action as a Transfer row's Skip. */
+  onSkip: () => void;
 };
 
 export function ReviewGroupCard({
@@ -52,6 +54,7 @@ export function ReviewGroupCard({
   overrides,
   dateLabel,
   onOpen,
+  onSkip,
 }: Props) {
   const tc = useThemeClasses();
   const symbol = getCurrencySymbol(currency);
@@ -63,95 +66,116 @@ export function ReviewGroupCard({
     : null;
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={cn(
-        "w-full rounded-2xl px-4 py-3.5 text-left flex flex-col gap-2 active:scale-[0.99] transition-transform",
-        tc.sectionCard,
-      )}
-    >
-      <div className="flex items-baseline gap-3">
-        <p
-          className={cn(
-            "text-[15px] font-medium truncate flex-1 min-w-0",
-            tc.headerText,
-          )}
-        >
-          {label || "(no merchant)"}
-        </p>
-        <span className={cn("text-sm tabular-nums shrink-0", tc.text)}>
-          {symbol}
-          {total.toFixed(2)}
-        </span>
-      </div>
-
-      <p className={cn("text-[11px] -mt-1", tc.textFaint)}>{dateLabel}</p>
-
-      <div className="flex items-center gap-2">
-        {category && Icon ? (
-          <span className="inline-flex items-center gap-1 min-w-0">
+    <div className={cn("w-full rounded-2xl px-4 py-3.5 flex flex-col gap-2", tc.sectionCard)}>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="w-full text-left flex flex-col gap-2 active:scale-[0.99] transition-transform"
+      >
+        <div className="flex items-baseline gap-2">
+          {rowCount > 1 && (
             <span
-              className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-2.5 h-7 min-w-0"
-              style={{ backgroundColor: `${category.color}20` }}
+              className={cn(
+                "inline-flex items-center gap-0.5 text-[11px] shrink-0",
+                tc.textFaint,
+              )}
             >
-              <span
-                className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
-                style={{ backgroundColor: category.color, color: "#fff" }}
-              >
-                <Icon className="w-3 h-3" />
-              </span>
-              <span
-                className="text-xs truncate"
-                style={{ color: category.color }}
-              >
-                {category.name}
-              </span>
+              <Layers className="w-3 h-3" aria-hidden />
+              {rowCount}
             </span>
-
-            {subcategory && SubIcon && (
-              <>
-                <ChevronRight
-                  className={cn("w-3 h-3 shrink-0", tc.textFaint)}
-                  aria-hidden
-                />
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-2.5 h-7 min-w-0"
-                  style={{ backgroundColor: `${subcategory.color}20` }}
-                >
-                  <span
-                    className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: subcategory.color, color: "#fff" }}
-                  >
-                    <SubIcon className="w-3 h-3" />
-                  </span>
-                  <span
-                    className="text-xs truncate"
-                    style={{ color: subcategory.color }}
-                  >
-                    {subcategory.name}
-                  </span>
-                </span>
-              </>
-            )}
-          </span>
-        ) : (
-          <span
+          )}
+          <p
             className={cn(
-              "inline-flex items-center gap-1 rounded-full px-3 h-7 text-xs font-medium",
-              tc.buttonPrimary,
+              "text-[15px] font-medium truncate flex-1 min-w-0",
+              tc.headerText,
             )}
           >
-            Choose category
-            <ChevronRight className="w-3.5 h-3.5" />
+            {label || "(no merchant)"}
+          </p>
+          <span className={cn("text-sm tabular-nums shrink-0", tc.text)}>
+            {symbol}
+            {total.toFixed(2)}
           </span>
-        )}
+        </div>
 
-        <span className={cn("text-[11px] ml-auto shrink-0", tc.textFaint)}>
-          {rowCount > 1 ? `${rowCount} rows` : "1 row"}
-          {overrides > 0 && ` · ${overrides} custom`}
-        </span>
+        <p className={cn("text-[11px] -mt-1", tc.textFaint)}>{dateLabel}</p>
+      </button>
+
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={onOpen} className="flex items-center gap-2 min-w-0">
+          {category && Icon ? (
+            <span className="inline-flex items-center gap-1 min-w-0">
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-2.5 h-7 min-w-0"
+                style={{ backgroundColor: `${category.color}20` }}
+              >
+                <span
+                  className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: category.color, color: "#fff" }}
+                >
+                  <Icon className="w-3 h-3" />
+                </span>
+                <span
+                  className="text-xs truncate"
+                  style={{ color: category.color }}
+                >
+                  {category.name}
+                </span>
+              </span>
+
+              {subcategory && SubIcon && (
+                <>
+                  <ChevronRight
+                    className={cn("w-3 h-3 shrink-0", tc.textFaint)}
+                    aria-hidden
+                  />
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-2.5 h-7 min-w-0"
+                    style={{ backgroundColor: `${subcategory.color}20` }}
+                  >
+                    <span
+                      className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: subcategory.color, color: "#fff" }}
+                    >
+                      <SubIcon className="w-3 h-3" />
+                    </span>
+                    <span
+                      className="text-xs truncate"
+                      style={{ color: subcategory.color }}
+                    >
+                      {subcategory.name}
+                    </span>
+                  </span>
+                </>
+              )}
+            </span>
+          ) : (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-3 h-7 text-xs font-medium",
+                tc.buttonPrimary,
+              )}
+            >
+              Choose category
+              <ChevronRight className="w-3.5 h-3.5" />
+            </span>
+          )}
+
+          {overrides > 0 && (
+            <span className={cn("text-[11px] shrink-0", tc.textFaint)}>
+              {overrides} custom
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={onSkip}
+          className={cn("text-[11px] ml-auto shrink-0 h-7 px-2", tc.textFaint)}
+        >
+          Skip
+        </button>
       </div>
-    </button>
+    </div>
   );
 }

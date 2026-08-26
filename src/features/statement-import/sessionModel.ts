@@ -226,6 +226,40 @@ export function defaultDescriptionFor(
   return classification?.memo?.trim() || row.description;
 }
 
+/**
+ * True once the rows span more than one calendar year — every date on the
+ * review screen gets a year suffix only then. A single-year statement (the
+ * common case) stays as "21 Oct"; a statement that crosses a year boundary
+ * (BUD-59-adjacent: a December→January cycle, or a multi-month re-upload)
+ * would otherwise show two "21 Oct" rows a year apart with no way to tell
+ * them apart.
+ */
+export function hasMultipleYears(rows: Array<{ date: string }>): boolean {
+  const years = new Set(rows.map((r) => r.date.slice(0, 4)));
+  return years.size > 1;
+}
+
+/**
+ * The one date formatter for the whole review screen. `year`/`weekday` are
+ * opt-in per call site (a merchant card wants neither by default; the
+ * "Imported before" day-group header wants weekday) so every card can stay
+ * consistent without re-deriving the `toLocaleDateString` options object six
+ * times over.
+ */
+export function formatStatementDate(
+  iso: string,
+  opts: { year?: boolean; weekday?: boolean } = {},
+): string {
+  const parsed = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return parsed.toLocaleDateString(undefined, {
+    ...(opts.weekday ? { weekday: "short" as const } : {}),
+    day: "numeric",
+    month: "short",
+    ...(opts.year ? { year: "numeric" as const } : {}),
+  });
+}
+
 export interface AccountRef {
   id: string;
   type: "expense" | "income" | "saving";

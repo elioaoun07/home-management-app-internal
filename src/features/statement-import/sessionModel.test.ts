@@ -10,7 +10,9 @@ import {
   countOpen,
   countUndecided,
   describeCommitAction,
+  formatStatementDate,
   getBucket,
+  hasMultipleYears,
   resolveRowCategory,
   skippedGroupCounts,
   skipReason,
@@ -1744,5 +1746,44 @@ describe("own-account exchange", () => {
     );
     expect(stagedNetAmount(actions)).toBe(0);
     expect(actionLane(actions[0])).toBe("money");
+  });
+});
+
+describe("hasMultipleYears", () => {
+  it("is false for a single-year statement", () => {
+    expect(
+      hasMultipleYears([{ date: "2026-01-05" }, { date: "2026-08-12" }]),
+    ).toBe(false);
+  });
+
+  it("is true once a row crosses a year boundary", () => {
+    expect(
+      hasMultipleYears([{ date: "2025-12-29" }, { date: "2026-01-03" }]),
+    ).toBe(true);
+  });
+
+  it("is false for an empty or single-row statement", () => {
+    expect(hasMultipleYears([])).toBe(false);
+    expect(hasMultipleYears([{ date: "2026-08-12" }])).toBe(false);
+  });
+});
+
+describe("formatStatementDate", () => {
+  it("omits the year by default", () => {
+    expect(formatStatementDate("2026-08-12")).not.toContain("2026");
+  });
+
+  it("includes the year only when asked", () => {
+    expect(formatStatementDate("2026-08-12", { year: true })).toContain("2026");
+  });
+
+  it("adds the weekday only when asked", () => {
+    const withWeekday = formatStatementDate("2026-08-12", { weekday: true });
+    const without = formatStatementDate("2026-08-12");
+    expect(withWeekday.length).toBeGreaterThan(without.length);
+  });
+
+  it("falls back to the raw string for an invalid date", () => {
+    expect(formatStatementDate("not-a-date")).toBe("not-a-date");
   });
 });

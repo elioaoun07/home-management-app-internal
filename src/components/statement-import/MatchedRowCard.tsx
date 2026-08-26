@@ -8,6 +8,7 @@
 // a decision is actually owed. Nothing here is an icon-only 28px target any
 // more — every action is a labelled 40px control.
 
+import { formatStatementDate } from "@/features/statement-import/sessionModel";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getCurrencySymbol } from "@/lib/currency";
 import { cn } from "@/lib/utils";
@@ -29,13 +30,9 @@ type Props = {
   onDetach: () => void;
   onPickCandidate?: (transactionId: string) => void;
   pickedCandidateId?: string;
+  /** Shows the year on every date — only when this statement spans more than one. */
+  showYear?: boolean;
 };
-
-function shortDate(iso: string): string {
-  const parsed = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return iso;
-  return parsed.toLocaleDateString(undefined, { day: "numeric", month: "short" });
-}
 
 function Badges({
   candidate,
@@ -87,9 +84,11 @@ export function MatchedRowCard({
   onDetach,
   onPickCandidate,
   pickedCandidateId,
+  showYear = false,
 }: Props) {
   const tc = useThemeClasses();
   const symbol = getCurrencySymbol(currency);
+  const shortDate = (iso: string) => formatStatementDate(iso, { year: showYear });
 
   const candidate =
     classification.status === "matched" || classification.status === "probable"

@@ -49,8 +49,10 @@ import {
   countOpen,
   countUndecided,
   describeCommitAction,
+  formatStatementDate,
   getBucket,
   groupKeyForRow,
+  hasMultipleYears,
   pickAccount,
   resolveRowAccount,
   resolveRowCategory,
@@ -127,10 +129,8 @@ function shiftIso(iso: string, days: number): string {
   return shifted.toISOString().slice(0, 10);
 }
 
-function shortDate(iso: string): string {
-  const parsed = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return iso;
-  return parsed.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+function shortDate(iso: string, showYear = false): string {
+  return formatStatementDate(iso, { year: showYear });
 }
 
 function isSoftDeletedImport(
@@ -149,11 +149,13 @@ function isSoftDeletedImport(
  * multi-month import groups "Monthly Charges" together, since grouping is by
  * merchant, not by date), so a single date would misrepresent the group.
  */
-function groupDateLabel(rows: Array<{ date: string }>): string {
+function groupDateLabel(rows: Array<{ date: string }>, showYear = false): string {
   const dates = rows.map((r) => r.date).sort();
   const first = dates[0];
   const last = dates[dates.length - 1];
-  return first === last ? shortDate(first) : `${shortDate(first)} – ${shortDate(last)}`;
+  return first === last
+    ? shortDate(first, showYear)
+    : `${shortDate(first, showYear)} – ${shortDate(last, showYear)}`;
 }
 
 export default function StatementImportPage() {
@@ -432,6 +434,47 @@ export default function StatementImportPage() {
     });
   }, []);
 
+  /**
+   * Set aside every row in one merchant group — the Transactions-tab
+   * equivalent of a Transfer row's Skip. Same Undo-restores-prior-decisions
+   * shape as `skipAllInReview` (Hard Rule #1), just scoped to one group.
+   */
+  const skipGroup = useCallback((rowIds: string[]) => {
+    if (rowIds.length === 0) return;
+    setSession((current) => {
+      if (!current) return current;
+
+      const before = { ...current.decisions };
+      const decisions = { ...current.decisions };
+      for (const rowId of rowIds) {
+        decisions[rowId] = {
+          ...(decisions[rowId] ?? { resolution: "undecided" as const }),
+          resolution: "skip",
+        };
+      }
+      const next = { ...current, decisions };
+      void saveSession(next);
+
+      toast.success(`${rowIds.length} row(s) skipped`, {
+        icon: ToastIcons.delete,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            setSession((latest) => {
+              if (!latest) return latest;
+              const restored = { ...latest, decisions: before };
+              void saveSession(restored);
+              return restored;
+            });
+          },
+        },
+      });
+
+      return next;
+    });
+  }, []);
+
   const runImport = async (file: File) => {
     if (!accountId || !account) {
       toast.error("Pick an account first", { icon: ToastIcons.error });
@@ -648,6 +691,13 @@ export default function StatementImportPage() {
     [categoryById],
   );
 
+  // Every date on the review screen carries a year suffix only when this
+  // statement itself crosses a year boundary — see hasMultipleYears().
+  const multiYear = useMemo(
+    () => (session ? hasMultipleYears(session.rows) : false),
+    [session],
+  );
+
   // Rows the matcher half-matched and the user has not ruled on yet. They are
   // shown as match cards, never as "categorize me" rows: categorizing one
   // creates a second transaction for money that is already logged. Answering
@@ -763,7 +813,7 @@ export default function StatementImportPage() {
           // statement's own — an auto-suggested redirect is a money decision
           // and must be visible on the card, not only inside the sheet.
           dateLabel: (() => {
-            const base = groupDateLabel(group.rows);
+            const base = groupDateLabel(group.rows, multiYear);
             const targets = new Set(
               group.rows.map((r) => resolveRowAccount(r, session, accountRefs)),
             );
@@ -791,6 +841,7 @@ export default function StatementImportPage() {
     otherAccountRows,
     accountRefs,
     accounts,
+    multiYear,
   ]);
 
   // Keep the sub-nav on something that exists: answering the last row of a
@@ -1355,7 +1406,7 @@ export default function StatementImportPage() {
                             </div>
 
                             <p className={cn("text-[11px]", tc.textFaint)}>
-                              {shortDate(row.date)}
+                              {shortDate(row.date, multiYear)}
                             </p>
 
                             <p className={cn("text-xs", tc.textMuted)}>
@@ -1445,6 +1496,7 @@ export default function StatementImportPage() {
                           row={row}
                           classification={session.classifications[row.id]!}
                           currency={currency}
+                          showYear={multiYear}
                           accepted={false}
                           acceptedAmount={decision?.accept_amount}
                           onAcceptMatch={() =>
@@ -1487,6 +1539,7 @@ export default function StatementImportPage() {
                     overrides={group.overrides}
                     dateLabel={group.dateLabel}
                     onOpen={() => setOpenGroupKey(group.key)}
+                    onSkip={() => skipGroup(group.rows.map((row) => row.id))}
                   />
                 ))}
               </>
@@ -1547,6 +1600,7 @@ export default function StatementImportPage() {
                         // un-answerable. The rate simply does not apply to a
                         // mismatched account, and the card says so.
                         destinations={ownDestinations}
+                        accounts={accounts}
                         accountName={accountNameById}
                         spendAccountId={session.account_id}
                         spendAccountName={session.account_name}
@@ -1563,6 +1617,7 @@ export default function StatementImportPage() {
                         partnerText={partnerText}
                         partnerRing={partnerRing}
                         onRowChange={updateDecision}
+                        showYear={multiYear}
                         />
                       </div>
                     );
@@ -1588,6 +1643,7 @@ export default function StatementImportPage() {
                         direction={c.direction}
                         statementAccountName={session.account_name}
                         destinations={partnerAccounts}
+                        accounts={accounts}
                         accountName={accountNameById}
                         spendAccountId={resolveRowAccount(row, session, accountRefs)}
                         spendAccountName={accountNameById(
@@ -1598,6 +1654,7 @@ export default function StatementImportPage() {
                         partnerText={partnerText}
                         partnerRing={partnerRing}
                         onRowChange={updateDecision}
+                        showYear={multiYear}
                         />
                       </div>
                     );
@@ -1626,6 +1683,7 @@ export default function StatementImportPage() {
                         direction="out"
                         statementAccountName={session.account_name}
                         destinations={ownDestinations}
+                        accounts={accounts}
                         accountName={accountNameById}
                         // Not the statement's account: a withdrawal off an
                         // income/saving statement is unrepresentable there
@@ -1642,6 +1700,7 @@ export default function StatementImportPage() {
                         partnerText={partnerText}
                         partnerRing={partnerRing}
                         onRowChange={updateDecision}
+                        showYear={multiYear}
                         />
                       </div>
                     );
@@ -1760,7 +1819,7 @@ export default function StatementImportPage() {
 
                 {groupRowsByDate(visibleRows).map(([date, dateRows]) => (
                   <div key={date} className="flex flex-col gap-1.5">
-                    <SectionLabel text={longDate(date)} />
+                    <SectionLabel text={longDate(date, multiYear)} />
                     {dateRows.map((row) => (
                       <div
                         key={row.id}
@@ -1845,7 +1904,7 @@ export default function StatementImportPage() {
                             not answer the last one at all before. */}
                         <p className={cn("text-xs truncate", tc.textFaint)}>
                           {getCurrencySymbol(currency)}
-                          {row.amount.toFixed(2)} · {shortDate(row.date)} ·{" "}
+                          {row.amount.toFixed(2)} · {shortDate(row.date, multiYear)} ·{" "}
                           {reason.label}
                         </p>
                       </div>
@@ -1914,6 +1973,7 @@ export default function StatementImportPage() {
                         row={row}
                         classification={classification}
                         currency={currency}
+                        showYear={multiYear}
                         accepted
                         acceptedAmount={decision?.accept_amount}
                         onAcceptMatch={() =>
@@ -2020,6 +2080,7 @@ export default function StatementImportPage() {
           }
           onRowChange={updateDecision}
           focusRowId={highlightedRowId}
+          showYear={multiYear}
           onShiftGroupDates={(days) => {
             openGroup.rows.forEach((row) => {
               const current = session.decisions[row.id]?.date || row.date;
@@ -2042,6 +2103,7 @@ export default function StatementImportPage() {
           onImport={() =>
             updateDecision(openOtherRow.row.id, { resolution: "create" })
           }
+          showYear={multiYear}
         />
       )}
 
@@ -2055,6 +2117,7 @@ export default function StatementImportPage() {
           decisions={session.decisions}
           resolveCategory={(row) => resolveRowCategory(row, session)}
           onRowChange={updateDecision}
+          showYear={multiYear}
         />
       )}
 
@@ -2117,14 +2180,8 @@ function groupRowsByDate(
   return [...byDate.entries()].sort((a, b) => b[0].localeCompare(a[0]));
 }
 
-function longDate(iso: string): string {
-  const parsed = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return iso;
-  return parsed.toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
+function longDate(iso: string, showYear = false): string {
+  return formatStatementDate(iso, { weekday: true, year: showYear });
 }
 
 function SectionLabel({ text }: { text: string }) {

@@ -13,6 +13,7 @@
 // screen unreadable on a phone.
 
 import { CategoryPicker } from "@/components/statement-import/CategoryPicker";
+import { TransferToggle } from "@/components/statement-import/TransferToggle";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import {
   Select,
@@ -22,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
+import { formatStatementDate } from "@/features/statement-import/sessionModel";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getCurrencySymbol } from "@/lib/currency";
 import type { GroupCategory, RowDecision } from "@/lib/statementImportSession";
@@ -49,16 +51,17 @@ type Props = {
   onRowChange: (rowId: string, patch: Partial<RowDecision>) => void;
   onShiftGroupDates: (days: number) => void;
   focusRowId?: string | null;
+  /** Shows the year on every date — only when this statement spans more than one. */
+  showYear?: boolean;
+  /**
+   * Overrides RowControls' default transfer-destination list ("every other
+   * account") with a kind-scoped one — the Transfers tab passes its own
+   * `destinations` (partner accounts for a person row, the owner's own for
+   * cash) so re-opening the transfer option from inside this shared sheet
+   * offers the same choices the card itself would.
+   */
+  transferDestinations?: Array<{ id: string; name: string }>;
 };
-
-function shortDate(iso: string): string {
-  const parsed = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return iso;
-  return parsed.toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-  });
-}
 
 export function GroupSheet({
   open,
@@ -76,9 +79,12 @@ export function GroupSheet({
   onRowChange,
   onShiftGroupDates,
   focusRowId,
+  showYear = false,
+  transferDestinations,
 }: Props) {
   const tc = useThemeClasses();
   const symbol = getCurrencySymbol(currency);
+  const shortDate = (iso: string) => formatStatementDate(iso, { year: showYear });
   const { data: categories = [] } = useCategories(accountId);
 
   // Which target the picker writes to: the whole merchant, or one row of it.
@@ -92,8 +98,10 @@ export function GroupSheet({
       return;
     }
 
+    // Open on the rows expanded, not behind an extra tap — a multi-row group
+    // is exactly why the owner opened this sheet in the first place.
+    setShowRows(true);
     if (focusRowId && rows.some((candidate) => candidate.id === focusRowId)) {
-      setShowRows(true);
       setRowTarget(focusRowId);
     }
   }, [focusRowId, open, rows]);
@@ -196,6 +204,7 @@ export function GroupSheet({
                   decision={decisions[rows[0].id]}
                   ownCategoryName={null}
                   accounts={accounts}
+                  transferDestinations={transferDestinations}
                   statementAccountId={accountId}
                   rowAccountId={resolveAccount(rows[0])}
                   symbol={symbol}
@@ -254,6 +263,7 @@ export function GroupSheet({
                               : null
                           }
                           accounts={accounts}
+                          transferDestinations={transferDestinations}
                           statementAccountId={accountId}
                           rowAccountId={resolveAccount(r)}
                           symbol={symbol}
@@ -295,6 +305,7 @@ function RowControls({
   decision,
   ownCategoryName,
   accounts,
+  transferDestinations,
   statementAccountId,
   rowAccountId,
   symbol,
@@ -305,6 +316,8 @@ function RowControls({
   decision: RowDecision | undefined;
   ownCategoryName: string | null;
   accounts: Array<{ id: string; name: string; currency?: string }>;
+  /** Overrides the default "every other account" destination list — see the GroupSheet prop of the same name. */
+  transferDestinations?: Array<{ id: string; name: string }>;
   statementAccountId: string;
   rowAccountId: string;
   symbol: string;
@@ -314,43 +327,35 @@ function RowControls({
   const tc = useThemeClasses();
   const redirected = rowAccountId !== statementAccountId;
   const actionKind = decision?.action_kind ?? "transaction";
-  const transferAccounts = accounts.filter(
-    (account) => account.id !== statementAccountId,
-  );
+  const transferAccounts =
+    transferDestinations ??
+    accounts.filter((account) => account.id !== statementAccountId);
 
   return (
     <div className={cn("rounded-xl p-3 flex flex-col gap-2.5", tc.pillBg)}>
-      <div className="flex gap-2">
-        {(["transaction", "transfer"] as const).map((kind) => (
-          <button
-            key={kind}
-            type="button"
-            onClick={() =>
-              onRowChange(
-                row.id,
-                kind === "transfer"
-                  ? {
-                      action_kind: "transfer",
-                      account_id: undefined,
-                      category_id: null,
-                      subcategory_id: null,
-                      resolution: "undecided",
-                    }
-                  : {
-                      action_kind: "transaction",
-                      transfer_to_account_id: undefined,
-                      resolution: "undecided",
-                    },
-              )
-            }
-            className={cn(
-              "rounded-lg h-9 text-[11px] flex-1 capitalize",
-              actionKind === kind ? tc.buttonPrimary : tc.buttonOutline,
-            )}
-          >
-            {kind}
-          </button>
-        ))}
+      <div className="flex items-center justify-between">
+        <span className={cn("text-[11px]", tc.textFaint)}>Transfer</span>
+        <TransferToggle
+          checked={actionKind === "transfer"}
+          onChange={() =>
+            onRowChange(
+              row.id,
+              actionKind === "transfer"
+                ? {
+                    action_kind: "transaction",
+                    transfer_to_account_id: undefined,
+                    resolution: "undecided",
+                  }
+                : {
+                    action_kind: "transfer",
+                    account_id: undefined,
+                    category_id: null,
+                    subcategory_id: null,
+                    resolution: "undecided",
+                  },
+            )
+          }
+        />
       </div>
 
       {/* The bank's own words stay on screen even while renamed — they are

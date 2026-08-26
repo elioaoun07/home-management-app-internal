@@ -16,6 +16,7 @@
 
 import { CategoryPicker } from "@/components/statement-import/CategoryPicker";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
+import { formatStatementDate } from "@/features/statement-import/sessionModel";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getCurrencySymbol } from "@/lib/currency";
 import type { GroupCategory, RowDecision } from "@/lib/statementImportSession";
@@ -34,17 +35,9 @@ type Props = {
   decisions: Record<string, RowDecision>;
   resolveCategory: (row: ParsedTransaction) => GroupCategory;
   onRowChange: (rowId: string, patch: Partial<RowDecision>) => void;
+  /** Shows the year on every date — only when this statement spans more than one. */
+  showYear?: boolean;
 };
-
-function longDate(iso: string): string {
-  const parsed = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return iso;
-  return parsed.toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
-}
 
 export function ReviewStepper({
   open,
@@ -55,9 +48,12 @@ export function ReviewStepper({
   decisions,
   resolveCategory,
   onRowChange,
+  showYear = false,
 }: Props) {
   const tc = useThemeClasses();
   const symbol = getCurrencySymbol(currency);
+  const longDate = (iso: string) =>
+    formatStatementDate(iso, { weekday: true, year: showYear });
 
   // The queue is SNAPSHOT on open, never live. Answering a row removes it from
   // the caller's undecided list, so a live queue would renumber under the
