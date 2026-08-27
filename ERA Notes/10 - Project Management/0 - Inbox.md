@@ -16,6 +16,7 @@ tags:
 > Entries under New show chip-less in the Task table — that's the untriaged queue, on purpose.
 
 ## New
+- [ ] 2026-08-27 — ERA Top layer chat: support multiple chat sessions (like a chat-by-session history), let the user reopen an earlier session after closing/returning, and auto-generate a smart session title instead of leaving it blank. `era_conversations` already has `title`/multi-row/`is_archived` and `GET /api/era/conversations` already lists them — only the picker UI and title-generation are missing.
 - [ ] NFC Checklist - probably should be a standalone Campaign? not sure, you could challenge it.
 
 Work on the NFC When leaving the house or going back to the house.

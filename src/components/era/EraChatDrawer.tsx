@@ -26,10 +26,24 @@ export function EraChatDrawer({
         type="button"
         aria-label="Open chat with ERA"
         onClick={() => onOpenChange(true)}
-        className="fixed right-4 bottom-24 z-30 flex h-12 w-12 items-center justify-center rounded-full shadow-lg md:hidden"
-        style={{ background: "var(--era-accent, white)", color: "#0d1220" }}
+        className="fixed right-4 bottom-24 z-30 flex h-12 w-12 items-center justify-center overflow-hidden rounded-full md:hidden"
+        style={{
+          background: `linear-gradient(155deg, hsl(var(--era-hue) var(--era-sat) calc(var(--era-lum) + 16%)) 0%, hsl(var(--era-hue) var(--era-sat) var(--era-lum)) 55%, hsl(var(--era-hue) calc(var(--era-sat) + 8%) calc(var(--era-lum) - 14%)) 100%)`,
+          color: "#0d1220",
+          boxShadow:
+            "0 6px 16px hsla(var(--era-hue), 70%, 35%, 0.45), inset 0 1px 1px rgba(255,255,255,0.55), inset 0 -3px 5px rgba(0,0,0,0.25)",
+        }}
       >
-        <MessageCircle className="size-5" aria-hidden />
+        {/* Specular highlight — glossy sheen across the top of the bubble */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-full"
+          style={{
+            background:
+              "linear-gradient(160deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.12) 32%, rgba(255,255,255,0) 55%)",
+          }}
+        />
+        <MessageCircle className="relative z-10 size-5" aria-hidden />
       </button>
 
       {/* Backdrop + sheet stay mounted and animate via `open` directly
