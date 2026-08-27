@@ -420,6 +420,13 @@ const CASES: readonly RouteCase[] = [
     amount: 50,
   },
   {
+    name: "transfer with trailing dollar sign on the amount",
+    text: "Transfer 2$ from my account to drawer",
+    active: "budget",
+    kind: "transfer",
+    amount: 2,
+  },
+  {
     name: "record a debt",
     text: "John owes me $30 for lunch",
     active: "budget",

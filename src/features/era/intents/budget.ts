@@ -41,10 +41,11 @@ export const budgetRouter: FaceIntentRouter = {
     }
 
     // Transfer — "transfer 50 from wallet to savings", "move $200 from
-    // checking to savings". Account names are resolved fuzzily against the
-    // user's real accounts in the resolver — the router only extracts hints.
+    // checking to savings", "transfer 2$ from account to drawer". The currency
+    // marker can land before OR after the digits, so it's optional on both
+    // sides — same shape as extractAmount's amount token.
     const transferMatch = text.match(
-      /\b(?:transfer|move|send)\s+\$?(\d+(?:[.,]\d{1,2})?)\s+(?:dollars?\s+)?from\s+(.+?)\s+to\s+(.+?)(?:[.?!]|$)/i,
+      /\b(?:transfer|move|send)\s+\$?\s?(\d+(?:[.,]\d{1,2})?)\s?(?:\$|usd|lbp|dollars?)?\s+from\s+(.+?)\s+to\s+(.+?)(?:[.?!]|$)/i,
     );
     if (transferMatch) {
       return {
