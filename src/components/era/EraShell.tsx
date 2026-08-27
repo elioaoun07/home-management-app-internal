@@ -26,12 +26,14 @@ import { unlockAudioContext } from "@/features/voice-conversation/audioContext";
 import { preloadGreetings } from "@/features/voice-conversation/greetingCache";
 import { ERAMark } from "@/components/shared/ERAMark";
 import { useUser } from "@/contexts/UserContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { BudgetDashboard } from "./dashboards/BudgetDashboard";
 import { ScheduleDashboard } from "./dashboards/ScheduleDashboard";
 import { ChefDashboard } from "./dashboards/ChefDashboard";
 import { BrainDashboard } from "./dashboards/BrainDashboard";
 import { ArtifactsView } from "./dashboards/ArtifactsView";
 import { CommandBar } from "./CommandBar";
+import { EraChatDrawer } from "./EraChatDrawer";
 import { EraDots } from "./EraDots";
 import { EraFaceNav } from "./EraFaceNav";
 import { HubScatterWidgets } from "./HubScatterWidgets";
@@ -52,7 +54,8 @@ const MODULE_COLORS: Record<string, { hue: number; sat: number; lum: number }> =
 
 // Heights used to centre the ERA DOT block in hub mode.
 // The motion.div contains: greeting (~80px) + ring (500px) + label (~40px).
-const RING_H       = 500;   // ring container height (desktop)
+const RING_H        = 500;  // ring container height (desktop)
+const RING_H_MOBILE = 208;  // mobile single-ring diameter (era-hub-ring-inner box)
 const HUB_BLOCK_H  = 622;   // greeting + ring + label + margins (approx)
 const MODULE_SCALE = 0.34;  // ERA DOT scale in module mode
 
@@ -80,6 +83,8 @@ export function EraShell() {
   const wake          = useEraStore((s) => s.wake);
   const setEraReply   = useEraStore((s) => s.setEraReply);
   const user          = useUser();
+  const isMobile       = useIsMobile();
+  const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
 
   // The one entry point from "a sentence" to "a reply" — shared with
   // CommandBar so typed and voice input can never disagree (HUB-16).
@@ -145,6 +150,12 @@ export function EraShell() {
 
   const greeting  = `${getTimeGreeting()}${firstName ? `, ${firstName}.` : "."}`;
 
+  // Mobile module/activity views hide the floating chat surface behind
+  // EraChatDrawer — close it automatically if the user steps back to Hub.
+  useEffect(() => {
+    if (isHub) setChatDrawerOpen(false);
+  }, [isHub]);
+
   // Measure the content area so we can spring the ERA DOT to an exact pixel center.
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentH, setContentH] = useState(() =>
@@ -163,8 +174,11 @@ export function EraShell() {
   const hubDotTop     = Math.max(0, (contentH - HUB_BLOCK_H) / 2);
   // ERA DOT top-offset in module mode: sits just below the nav
   const moduleDotTop  = 8;
-  // Dashboard starts below the shrunk ERA DOT + gap
-  const dashboardTop  = Math.round(moduleDotTop + RING_H * MODULE_SCALE + 20);
+  // Dashboard starts below the shrunk ERA DOT + gap. Mobile renders a single
+  // ring (RING_H_MOBILE), not the desktop 3-ring orbital (RING_H) — using the
+  // desktop constant on mobile over-reserves space above the dashboard.
+  const ringH         = isMobile ? RING_H_MOBILE : RING_H;
+  const dashboardTop  = Math.round(moduleDotTop + ringH * MODULE_SCALE + 20);
 
   return (
     <div
@@ -269,18 +283,28 @@ export function EraShell() {
               </motion.div>
             </div>
 
-            {/* Mobile: single ring, smaller mark */}
-            <motion.div
-              className="relative md:hidden"
-              animate={{ filter: isAwake ? "grayscale(0) brightness(1)" : "grayscale(1) brightness(0.35)" }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-            >
-              <div
-                className="era-hub-ring-inner absolute rounded-full"
-                style={{ inset: -24 }}
-              />
-              <ERAMark module={moduleKey} size={160} />
-            </motion.div>
+            {/* Mobile: single ring, smaller mark — fixed box (not inset math
+                against an implicit parent) so the ring is a true circle,
+                centered on the mark regardless of surrounding flow width. */}
+            <div className="relative mx-auto md:hidden" style={{ width: 160, height: 160 }}>
+              <motion.div
+                className="absolute inset-0 flex items-center justify-center"
+                animate={{ filter: isAwake ? "grayscale(0) brightness(1)" : "grayscale(1) brightness(0.35)" }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+              >
+                {/* `inset`, not `left/top` + `transform`: the ring's own
+                    `era-orbit-breathe` animation (globals.css) owns the
+                    `transform` property outright and silently discards any
+                    inline transform, which is what produced the original
+                    off-center ring. `inset` doesn't touch `transform`, and
+                    is exact now that the parent box is a fixed 160×160. */}
+                <div
+                  className="era-hub-ring-inner absolute rounded-full"
+                  style={{ inset: -(RING_H_MOBILE - 160) / 2 }}
+                />
+                <ERAMark module={moduleKey} size={160} />
+              </motion.div>
+            </div>
 
           </motion.div>
 
@@ -310,18 +334,29 @@ export function EraShell() {
         </div>
       </div>
 
-      {/* ── ERA conversation thread — appears above command bar ── */}
-      <AnimatePresence>
-        {isAwake && <EraThreadTranscript key="era-thread" />}
-      </AnimatePresence>
+      {/* ── ERA conversation thread — appears above command bar ──
+          Desktop: always floating, every view. Mobile: floating only in
+          Hub — module/activity views hide it behind EraChatDrawer instead. */}
+      {(!isMobile || isHub) && (
+        <AnimatePresence>
+          {isAwake && <EraThreadTranscript key="era-thread" />}
+        </AnimatePresence>
+      )}
 
-      {/* ── AI proposal confirm card (Slice 4) — sits just above the command bar ── */}
+      {/* ── AI proposal confirm card (Slice 4) — sits just above the command bar ──
+          Always visible when active, in every view/breakpoint: it's an
+          action awaiting confirmation, not a chat surface. */}
       <AnimatePresence>
         {isAwake && <EraProposalCard key="era-proposal" />}
       </AnimatePresence>
 
-      {/* ── Floating command bar (always visible) ── */}
-      <CommandBar />
+      {/* ── Floating command bar — same gating as the thread above ── */}
+      {(!isMobile || isHub) && <CommandBar />}
+
+      {/* ── Mobile module/activity chat bubble + bottom sheet ── */}
+      {isMobile && !isHub && isAwake && (
+        <EraChatDrawer open={chatDrawerOpen} onOpenChange={setChatDrawerOpen} />
+      )}
     </div>
   );
 }
@@ -334,7 +369,11 @@ export function EraShell() {
 // Typewriter effect applies only to the newest assistant row, once.
 const MAX_VISIBLE_TURNS = 6;
 
-function EraThreadTranscript() {
+export function EraThreadTranscript({
+  variant = "floating",
+}: {
+  variant?: "floating" | "embedded";
+} = {}) {
   const { data: conversation } = useActiveEraConversation();
   const conversationId = conversation?.id ?? null;
   const { data } = useEraMessages(conversationId);
@@ -377,24 +416,25 @@ function EraThreadTranscript() {
   if (messages.length === 0) return null;
   const recent = messages.slice(-MAX_VISIBLE_TURNS);
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 8 }}
-      transition={{ duration: 0.28, ease: "easeOut" }}
-      className="absolute inset-x-0 z-20 flex justify-center px-5 bottom-[148px] md:bottom-[72px]"
+  const list = (
+    <div
+      ref={listRef}
+      className={
+        variant === "embedded"
+          ? "flex h-full w-full flex-col gap-2 overflow-y-auto px-2 py-2"
+          : "flex w-full max-w-[560px] flex-col gap-2 overflow-y-auto rounded-2xl px-4 py-3"
+      }
+      style={
+        variant === "embedded"
+          ? undefined
+          : {
+              background: "rgba(13, 18, 32, 0.88)",
+              border: "1px solid var(--era-border-subtle, rgba(255,255,255,0.08))",
+              maxHeight: 240,
+            }
+      }
     >
-      <div
-        ref={listRef}
-        className="flex w-full max-w-[560px] flex-col gap-2 overflow-y-auto rounded-2xl px-4 py-3"
-        style={{
-          background: "rgba(13, 18, 32, 0.88)",
-          border: "1px solid var(--era-border-subtle, rgba(255,255,255,0.08))",
-          maxHeight: 240,
-        }}
-      >
-        {recent.map((m) => {
+      {recent.map((m) => {
           const isNewestAssistant =
             m.role === "assistant" && m.id === newestAssistant?.id;
           return (
@@ -419,7 +459,20 @@ function EraThreadTranscript() {
             </p>
           );
         })}
-      </div>
+    </div>
+  );
+
+  if (variant === "embedded") return list;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8 }}
+      transition={{ duration: 0.28, ease: "easeOut" }}
+      className="absolute inset-x-0 z-20 flex justify-center px-5 bottom-[148px] md:bottom-[72px]"
+    >
+      {list}
     </motion.div>
   );
 }

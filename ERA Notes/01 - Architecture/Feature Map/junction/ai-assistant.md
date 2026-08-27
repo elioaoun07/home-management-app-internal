@@ -19,6 +19,7 @@ ERA is the proactive AI co-pilot. It lives across all modules: a command bar par
   - `src/components/era/EraFaceNav.tsx`
   - `src/components/era/EraDots.tsx`
   - `src/components/era/HubScatterWidgets.tsx`
+  - `src/components/era/EraChatDrawer.tsx` — mobile-only (`md:hidden`) chat bubble + bottom sheet for module/activity dashboard views, so the floating CommandBar/transcript don't permanently eat a phone screen. `CommandBar` and `EraShell`'s exported `EraThreadTranscript` both take a `variant?: "floating" | "embedded"` prop (default `"floating"`, byte-identical to before) so the sheet reuses their logic instead of duplicating it. Backdrop/sheet stay mounted and animate via the `open` prop directly (no `AnimatePresence` mount/unmount) — the embedded transcript's own re-renders (realtime, typewriter) were interfering with `AnimatePresence`'s exit-complete tracking and left it stuck-but-invisible.
   - *(deleted 2026-08-25, HUB-17 — confirmed zero importers: `EraHubView.tsx`, `EraTranscript.tsx`, `EraFaceCard.tsx`, `QuickFaceChips.tsx`, `FaceHeader.tsx`, `FaceCanvas.tsx`, `FacePlaceholder.tsx`)*
 - **Face widgets** (one per face): `src/components/era/face-widgets/`
 - **Dashboards**: `src/components/era/dashboards/`

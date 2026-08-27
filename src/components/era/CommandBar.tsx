@@ -24,7 +24,11 @@ const PLACEHOLDERS: Record<FaceKey, string> = {
   brain: 'Talk to ERA — "Remember the car maintenance number is 70-123456"',
 };
 
-export function CommandBar() {
+export function CommandBar({
+  variant = "floating",
+}: {
+  variant?: "floating" | "embedded";
+} = {}) {
   const tc = useThemeClasses();
   const pendingTranscript = useEraStore((s) => s.pendingTranscript);
   const setPendingTranscript = useEraStore((s) => s.setPendingTranscript);
@@ -126,20 +130,15 @@ export function CommandBar() {
 
   const placeholder = PLACEHOLDERS[activeFaceKey] ?? "Talk to ERA…";
 
-  return (
-    <div
-      className={[
-        "absolute inset-x-0 z-30 flex justify-center px-5",
-        "bottom-[80px] md:bottom-5",
-      ].join(" ")}
-    >
+  const form = (
       <form
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
         className={[
-          "era-command-pill flex w-full max-w-[660px] items-center gap-3 rounded-full px-5 py-3.5",
+          "era-command-pill flex w-full items-center gap-3 rounded-full px-5 py-3.5",
+          variant === "floating" ? "max-w-[660px]" : "",
           tc.bgPage,
         ].join(" ")}
         style={{
@@ -240,6 +239,18 @@ export function CommandBar() {
           <ArrowRight className="size-4" />
         </button>
       </form>
+  );
+
+  if (variant === "embedded") return form;
+
+  return (
+    <div
+      className={[
+        "absolute inset-x-0 z-30 flex justify-center px-5",
+        "bottom-[80px] md:bottom-5",
+      ].join(" ")}
+    >
+      {form}
     </div>
   );
 }

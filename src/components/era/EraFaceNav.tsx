@@ -35,14 +35,17 @@ export function EraFaceNav() {
 
   return (
     <div
-      className="absolute inset-x-0 top-0 z-20 flex items-center justify-center gap-1 px-4 py-3"
-      style={{ background: "linear-gradient(to bottom, rgba(13,18,32,0.95) 60%, rgba(13,18,32,0))" }}
+      className="absolute inset-x-0 top-0 z-20 flex items-center justify-start gap-1 overflow-x-auto scrollbar-hide px-4 py-3 md:justify-center"
+      style={{
+        background: "linear-gradient(to bottom, rgba(13,18,32,0.95) 60%, rgba(13,18,32,0))",
+        WebkitOverflowScrolling: "touch",
+      }}
     >
       {/* ERA (hub/chat) */}
       <button
         type="button"
         onClick={() => setActiveView("hub")}
-        className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all"
+        className="flex shrink-0 items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all"
         style={
           isHub
             ? {
@@ -61,7 +64,7 @@ export function EraFaceNav() {
       </button>
 
       {/* Separator dot */}
-      <span className="mx-0.5 h-1 w-1 rounded-full bg-white/15" />
+      <span className="mx-0.5 h-1 w-1 shrink-0 rounded-full bg-white/15" />
 
       {/* Face dots */}
       {FACES.map((face) => {
@@ -75,7 +78,7 @@ export function EraFaceNav() {
             key={face.key}
             type="button"
             onClick={() => openDashboard(face.key)}
-            className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all"
+            className="flex shrink-0 items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all"
             style={
               isActive
                 ? {
@@ -105,13 +108,13 @@ export function EraFaceNav() {
       })}
 
       {/* Separator dot */}
-      <span className="mx-0.5 h-1 w-1 rounded-full bg-white/15" />
+      <span className="mx-0.5 h-1 w-1 shrink-0 rounded-full bg-white/15" />
 
       {/* Artifacts — today's log of everything ERA created/updated */}
       <button
         type="button"
         onClick={() => setActiveView("activity")}
-        className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all"
+        className="flex shrink-0 items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all"
         style={
           activeView === "activity"
             ? {
