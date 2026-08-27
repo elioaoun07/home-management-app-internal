@@ -1505,6 +1505,21 @@ CREATE TABLE public.era_messages (
   CONSTRAINT era_messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT era_messages_draft_transaction_id_fkey FOREIGN KEY (draft_transaction_id) REFERENCES public.transactions(id)
 );
+CREATE TABLE public.era_templates (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  capability_id text NOT NULL,
+  pattern_text text NOT NULL,
+  slot_names text[] NOT NULL DEFAULT '{}'::text[],
+  source_text text NOT NULL,
+  match_count integer NOT NULL DEFAULT 1,
+  enabled boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  last_matched_at timestamp with time zone,
+  CONSTRAINT era_templates_pkey PRIMARY KEY (id),
+  CONSTRAINT era_templates_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT era_templates_unique_pattern UNIQUE (user_id, capability_id, pattern_text)
+);
 CREATE TABLE public.item_alert_suppressions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   item_id uuid NOT NULL,

@@ -55,9 +55,50 @@ export type Intent =
       title?: string;
       rawText: string;
     }
+  // Stage 1 — focus-memory follow-ups ("change it to 11", "delete that
+  // one"). `itemId`/`title` are resolved by the router BEFORE the intent is
+  // built (the router already reads `useEraStore` for `activeFaceKey`, so
+  // reading `focusEntities` there too is the same established pattern —
+  // see rootIntentRouter.test.ts's header comment). `null` means the pronoun
+  // couldn't be resolved (no live focus entity) and the resolver must ask
+  // rather than guess.
+  | {
+      kind: "reminderReschedule";
+      face: "schedule";
+      itemId: string | null;
+      title: string | null;
+      /** Trailing text naming the new day/time, e.g. "11" or "tomorrow at 5". */
+      whenText: string;
+      rawText: string;
+    }
+  | {
+      kind: "reminderComplete";
+      face: "schedule";
+      itemId: string | null;
+      title: string | null;
+      rawText: string;
+    }
+  | {
+      kind: "reminderDelete";
+      face: "schedule";
+      itemId: string | null;
+      title: string | null;
+      rawText: string;
+    }
   | { kind: "showAnalytics"; face: "budget"; rawText: string }
   // Phase 0.5 — native chatbot intents
-  | { kind: "todaySchedule"; face: "schedule"; rawText: string }
+  | {
+      kind: "todaySchedule";
+      face: "schedule";
+      rawText: string;
+      /**
+       * yyyy-MM-dd of the day being asked about. Absent = today (the
+       * original behavior). Stage 0 fix: "what's on my schedule Saturday"
+       * used to always answer for today because the router matched on
+       * generic schedule nouns and ignored the day word entirely.
+       */
+      dateISO?: string;
+    }
   | {
       kind: "monthSpend";
       face: "budget";
@@ -106,6 +147,22 @@ export type Intent =
     }
   | { kind: "memoryRecall"; face: "brain"; query: string; rawText: string }
   | { kind: "greeting"; rawText: string }
+  // Stage 4 (HUB-30) — a taught-phrase template (era_templates) matched the
+  // utterance after every built-in router missed. `slots` are the captured
+  // named slots plus, for capabilities with an `entityRefSlot`, the real id
+  // already resolved from focus memory (see intents/index.ts's matcher) —
+  // never a raw value a template captured itself. `resolveIntent` validates
+  // `slots` against the target capability's own Zod schema before executing,
+  // the same gate Ask AI proposals go through.
+  | {
+      kind: "capabilityAction";
+      face: FaceKey;
+      capabilityId: string;
+      slots: Record<string, unknown>;
+      rawText: string;
+      /** The template that produced this match, so a successful run can bump its match_count. */
+      sourceTemplateId?: string;
+    }
   // Graceful fallback (HUB-1): a misrecognized intent asks the user to clarify
   // instead of firing a wrong action. `ambiguous` = more than one face matched
   // and we cannot know which was meant; `weak` = a single incidental keyword
@@ -134,14 +191,29 @@ export interface EraPendingTurn {
  * Deliberately one shape — the only proposal kind currently built. Never
  * written until the user taps Confirm; see `useEraAskAI.confirmProposal`.
  */
-export interface EraActiveProposal {
-  kind: "propose_nfc_reminder";
-  text: string;
-  reminderTitle: string;
-  nfcTagId: string;
-  nfcTagLabel: string;
-  targetState: string;
-}
+export type EraActiveProposal =
+  | {
+      kind: "propose_nfc_reminder";
+      text: string;
+      reminderTitle: string;
+      nfcTagId: string;
+      nfcTagLabel: string;
+      targetState: string;
+    }
+  // Stage 3 (HUB-29) — Ask AI mapped the request to a real capability in the
+  // registry and its slots already validated server-side (see
+  // src/lib/ai/eraAskProposal.ts). `slots` is the final, resolved object —
+  // any entity reference has already been swapped for a real id from focus
+  // memory, never a model-invented one. `sourceText` is the ORIGINAL
+  // question the user asked Ask AI, kept so a successful confirm can learn a
+  // phrasing template from it (Stage 4).
+  | {
+      kind: "propose_action";
+      text: string;
+      capabilityId: string;
+      slots: Record<string, unknown>;
+      sourceText: string;
+    };
 
 /**
  * IntentRouter contract. The Phase 0 stub matches a handful of keywords;

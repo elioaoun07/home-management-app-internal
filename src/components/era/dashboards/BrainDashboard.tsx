@@ -11,6 +11,7 @@ import {
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { EraStatCard } from "./EraStatCard";
+import { TaughtPhrasesSection } from "./TaughtPhrasesSection";
 
 const HUE = 220;
 const ACCENT = `hsl(${HUE}, 72%, 68%)`;
@@ -187,6 +188,8 @@ export function BrainDashboard() {
           </div>
         )}
       </div>
+
+      <TaughtPhrasesSection />
     </div>
   );
 }

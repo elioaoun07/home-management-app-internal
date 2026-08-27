@@ -17,7 +17,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import type { AskAIResult } from "@/lib/ai/eraAskProposal";
 import { safeFetch } from "@/lib/safeFetch";
-import { logEraNfcReminder } from "./logEraAction";
+import { getCapability } from "./capabilities/registry";
+import { logEraCapabilityAction, logEraNfcReminder } from "./logEraAction";
+import { eraKeys } from "./queryKeys";
+import { learnTemplateFromProposal } from "./templates/learn";
 import type { EraActiveProposal } from "./types";
 import {
   useActiveEraConversation,
@@ -32,6 +35,7 @@ export function useEraAskAI() {
   const setPendingTurn = useEraStore((s) => s.setPendingTurn);
   const activeProposal = useEraStore((s) => s.activeProposal);
   const setActiveProposal = useEraStore((s) => s.setActiveProposal);
+  const focusEntities = useEraStore((s) => s.focusEntities);
   const askingAI = useEraStore((s) => s.askingAI);
   const setAskingAI = useEraStore((s) => s.setAskingAI);
   const setEraReply = useEraStore((s) => s.setEraReply);
@@ -60,6 +64,12 @@ export function useEraAskAI() {
             content: m.content,
           }));
 
+        // Focus memory lives in browser state — send the single most recent
+        // reminder so the server can resolve a "FOCUS" sentinel in a
+        // propose_action proposal (see eraAskProposal.ts). `useEraStore`
+        // already keeps this pruned/de-duped/newest-first.
+        const focusEntity = focusEntities[0] ?? null;
+
         const res = await safeFetch("/api/era/ask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -68,6 +78,7 @@ export function useEraAskAI() {
             face: activeFaceKey,
             history,
             pendingReminderTitle: pendingTurn?.title,
+            focusEntity,
           }),
           timeoutMs: 60_000, // Hard Rule #6 — AI calls are slow
         });
@@ -88,6 +99,15 @@ export function useEraAskAI() {
             targetState: result.targetState,
           };
           setActiveProposal(proposal);
+        } else if (result.kind === "propose_action") {
+          const proposal: EraActiveProposal = {
+            kind: "propose_action",
+            text: result.text,
+            capabilityId: result.capabilityId,
+            slots: result.slots,
+            sourceText: question,
+          };
+          setActiveProposal(proposal);
         }
 
         await createMessage.mutateAsync({
@@ -106,6 +126,7 @@ export function useEraAskAI() {
       messagesData,
       activeFaceKey,
       pendingTurn,
+      focusEntities,
       createMessage,
       setPendingTurn,
       setActiveProposal,
@@ -121,6 +142,50 @@ export function useEraAskAI() {
 
     const conversationId = activeConversation?.id ?? null;
     let replyText: string;
+
+    if (proposal.kind === "propose_action") {
+      // Stage 3 (HUB-29) — slots were already validated + entity-resolved
+      // server-side (eraAskProposal.ts) using the SAME Zod schema this
+      // capability owns; execute() is the one existing code path this
+      // reuses, never a second write implementation.
+      const capability = getCapability(proposal.capabilityId);
+      try {
+        if (!capability) throw new Error("unknown capability");
+        const result = await capability.execute(proposal.slots);
+        replyText = result.text;
+        logEraCapabilityAction(proposal.capabilityId, result.metadata, queryClient);
+
+        // Stage 4 (HUB-30) — learn a phrasing template from this SUCCESSFUL
+        // execution only. A dismissed or failed proposal teaches nothing.
+        const learned = learnTemplateFromProposal(proposal.sourceText, proposal.slots);
+        if (learned) {
+          safeFetch("/api/era/templates", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              capabilityId: proposal.capabilityId,
+              patternText: learned.patternText,
+              slotNames: learned.slotNames,
+              sourceText: proposal.sourceText,
+            }),
+          })
+            .then((res) => {
+              if (res.ok) queryClient.invalidateQueries({ queryKey: eraKeys.templates() });
+            })
+            .catch(() => {});
+        }
+      } catch {
+        replyText = "That didn't go through — try it from the app directly.";
+      }
+
+      await createMessage.mutateAsync({
+        conversation_id: conversationId,
+        role: "assistant",
+        content: replyText,
+      });
+      setEraReply(replyText);
+      return;
+    }
 
     try {
       const itemRes = await safeFetch("/api/items", {

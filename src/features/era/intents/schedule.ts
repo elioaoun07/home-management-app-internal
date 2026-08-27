@@ -1,6 +1,8 @@
 // Per-face intent router — Schedule face
 import { parseSmartText } from "@/lib/smartTextParser";
+import { resolveFocusRef } from "../focusMemory";
 import type { FaceKey, Intent } from "../types";
+import { useEraStore } from "../useEraStore";
 
 export interface FaceIntentRouter {
   parse(text: string, ctx: { activeFaceKey: FaceKey }): Intent | null;
@@ -23,6 +25,21 @@ export function reminderTitleFrom(text: string): string {
   return title && title.length > 0 ? title : text.trim();
 }
 
+/**
+ * Pull a specific target day out of a schedule query, e.g. "Saturday" in
+ * "what's on my schedule Saturday" — reuses `parseSmartText`'s date parsing
+ * (day-of-week, "tomorrow", explicit dates, …) instead of a second parser.
+ * `undefined` means no day was named — the resolver defaults to today.
+ */
+function scheduleDateISO(text: string): string | undefined {
+  const parsed = parseSmartText(text);
+  if (parsed.confidence.date === 0) return undefined;
+  // parseSmartText's type detector reads "schedule" as an event noun, which
+  // routes the parsed date into startDate rather than dueDate — a schedule
+  // QUERY isn't creating either, so fall back to whichever one it filled.
+  return parsed.dueDate ?? parsed.startDate;
+}
+
 export const scheduleRouter: FaceIntentRouter = {
   parse(text) {
     const lo = text.toLowerCase();
@@ -32,12 +49,91 @@ export const scheduleRouter: FaceIntentRouter = {
       /\b(today|schedule|due|on my list|this week|upcoming|overdue)\b/.test(lo) &&
       /\b(what|show|tell|list|get|have|do i|i have|got)\b/.test(lo)
     ) {
-      return { kind: "todaySchedule", face: "schedule", rawText: text };
+      return {
+        kind: "todaySchedule",
+        face: "schedule",
+        rawText: text,
+        dateISO: scheduleDateISO(text),
+      };
     }
 
     // "What do I have to do today" edge cases
     if (/what.*have.*today|today.*what.*have|show.*today|today.*items/.test(lo)) {
-      return { kind: "todaySchedule", face: "schedule", rawText: text };
+      return {
+        kind: "todaySchedule",
+        face: "schedule",
+        rawText: text,
+        dateISO: scheduleDateISO(text),
+      };
+    }
+
+    // Stage 1 focus-memory follow-ups. Deliberately pronoun-gated
+    // (it/that/this/that one/this one) rather than matched on the verb
+    // alone — "move" also means transfer money or move a meal, so the
+    // pronoun is what scopes these to "the thing we were just talking
+    // about" and keeps them from colliding with those other faces'
+    // vocabulary (see types.ts's Stage 1 comment).
+    //
+    // `resolveFocusRef` is called with the literal "it" below rather than
+    // the actual matched word — every supported pronoun resolves the same
+    // way (most recent live "reminder"), so which one was said doesn't
+    // change the outcome.
+    const rescheduleMatch = text.match(
+      /\b(?:change|move|push|reschedule|shift)\b[\s\S]*?\b(?:it|that|this(?:\s+one)?)\b\s+(?:back\s+)?to\s+(.+?)[\s.!?]*$/i,
+    );
+    if (rescheduleMatch) {
+      const focus = resolveFocusRef(
+        "it",
+        "reminder",
+        useEraStore.getState().focusEntities,
+      );
+      return {
+        kind: "reminderReschedule",
+        face: "schedule",
+        itemId: focus?.id ?? null,
+        title: focus?.title ?? null,
+        whenText: rescheduleMatch[1].trim(),
+        rawText: text,
+      };
+    }
+
+    if (
+      /\b(?:mark|complete|finish(?:ed)?)\b[\s\S]*?\b(?:it|that|this(?:\s+one)?)\b/i.test(
+        text,
+      ) ||
+      /\bdone\s+with\s+(?:it|that|this(?:\s+one)?)\b/i.test(text)
+    ) {
+      const focus = resolveFocusRef(
+        "it",
+        "reminder",
+        useEraStore.getState().focusEntities,
+      );
+      return {
+        kind: "reminderComplete",
+        face: "schedule",
+        itemId: focus?.id ?? null,
+        title: focus?.title ?? null,
+        rawText: text,
+      };
+    }
+
+    if (
+      /\b(?:delete|remove|cancel)\b[\s\S]*?\b(?:it|that|this(?:\s+one)?)\b/i.test(
+        text,
+      )
+    ) {
+      const focus = resolveFocusRef(
+        "it",
+        "reminder",
+        useEraStore.getState().focusEntities,
+      );
+      return {
+        kind: "reminderDelete",
+        face: "schedule",
+        itemId: focus?.id ?? null,
+        title: focus?.title ?? null,
+        rawText: text,
+      };
     }
 
     // Reminder draft — "remind me about X"
@@ -50,9 +146,11 @@ export const scheduleRouter: FaceIntentRouter = {
       };
     }
 
-    // Generic schedule face switch
+    // Generic schedule face switch — includes the bare word "schedule"
+    // itself (previously missing: typing just "Schedule" matched nothing
+    // here and fell all the way through to "unknown").
     if (
-      /\b(task|todo|to-do|deadline|appointment|event|meeting|calendar)\b/i.test(text)
+      /\b(task|todo|to-do|deadline|appointment|event|meeting|calendar|schedule)\b/i.test(text)
     ) {
       return { kind: "switchFace", face: "schedule", rawText: text };
     }

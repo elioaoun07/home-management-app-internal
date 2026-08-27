@@ -14,18 +14,27 @@ import {
   say,
 } from "@/lib/era/phrasing";
 
-export interface ScheduleData {
-  todayCount: number;
+export interface DayScheduleItem {
+  title: string;
+  /** Local wall-clock time, e.g. "10:00 AM". */
+  time: string;
+}
+
+export interface DayScheduleData {
+  /** yyyy-MM-dd of the day being reported. */
+  dateISO: string;
+  isToday: boolean;
+  items: DayScheduleItem[];
+  /** Only meaningful when isToday — overdue is relative to "now". */
   overdueCount: number;
-  firstTitle: string | null;
   firstOverdueTitle: string | null;
 }
 
 // ---------------------------------------------------------------------------
-// Today's schedule
+// A day's schedule (today or any named day)
 // ---------------------------------------------------------------------------
 
-const NOTHING_ON = [
+const NOTHING_ON_TODAY = [
   "Your slate is clean today — nothing due, nothing overdue. Enjoy it.",
   "Nothing due today and nothing overdue. Rare. Take the win.",
   "You're clear today. No deadlines, no stragglers.",
@@ -35,22 +44,12 @@ const NOTHING_ON = [
   "Clean slate. Nothing due, nothing overdue.",
 ] as const;
 
-/** Slots: {count} e.g. "3 things", {first} e.g. "starting with Call the bank" */
-const TODAY_SOME = [
-  "You've got {count} today{first}.",
-  "{count} on your plate today{first}.",
-  "Today's list has {count}{first}.",
-  "Looking at {count} today{first}.",
-  "There are {count} due today{first}.",
-  "{count} lined up for today{first}.",
-] as const;
-
-const TODAY_ONE = [
-  "One thing today{first}.",
-  "Just the one today{first}.",
-  "You've got a single item today{first}.",
-  "One on the list today{first}.",
-  "Only one thing due today{first}.",
+/** Slots: {day} e.g. "Saturday" / "tomorrow" */
+const NOTHING_ON_DAY = [
+  "Nothing on for {day}.",
+  "{day} is wide open — nothing on the schedule.",
+  "Clear on {day}. Nothing due.",
+  "Your {day} is empty.",
 ] as const;
 
 const NOTHING_DUE_TODAY = [
@@ -58,6 +57,24 @@ const NOTHING_DUE_TODAY = [
   "Today itself is clear.",
   "Nothing on the books for today.",
   "No deadlines today.",
+] as const;
+
+/** Slots: {count} e.g. "3 things", {list} e.g. "Call the bank at 10:00 AM, Pay rent at 2:00 PM" */
+const TODAY_SOME = [
+  "You've got {count} today: {list}.",
+  "{count} on your plate today: {list}.",
+  "Today's list: {list}.",
+  "Looking at {count} today: {list}.",
+  "{count} lined up for today: {list}.",
+] as const;
+
+/** Slots: {day}, {count}, {list} */
+const DAY_SOME = [
+  "{day}: {list}.",
+  "On {day}, you've got {list}.",
+  "{count} on {day}: {list}.",
+  "For {day}: {list}.",
+  "{day}'s got {list}.",
 ] as const;
 
 /** Slots: {count} e.g. "3 things", {first} e.g. "including Pay rent" */
@@ -77,37 +94,68 @@ const OVERDUE_ONE = [
   "One left over from before{first} — worth a look.",
 ] as const;
 
-export function formatTodaySchedule(data: ScheduleData): string {
-  const { todayCount, overdueCount, firstTitle, firstOverdueTitle } = data;
+/** "Saturday" for a day within the coming week, "Fri, Aug 28" further out. */
+function describeDay(dateISO: string): string {
+  const d = new Date(`${dateISO}T12:00:00`);
+  const startOfDay = (x: Date) =>
+    new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const dayDelta = Math.round(
+    (startOfDay(d) - startOfDay(new Date())) / 86_400_000,
+  );
 
-  if (todayCount === 0 && overdueCount === 0) return pick(NOTHING_ON);
+  if (dayDelta === 1) return "tomorrow";
+  if (dayDelta === -1) return "yesterday";
+  if (dayDelta > 1 && dayDelta < 7) {
+    return d.toLocaleDateString("en-US", { weekday: "long" });
+  }
+  return d.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
 
-  const lines: string[] = [];
+export function formatScheduleForDay(data: DayScheduleData): string {
+  const { isToday, items, overdueCount, firstOverdueTitle } = data;
 
-  if (todayCount === 1) {
-    lines.push(say(TODAY_ONE, { first: firstTitle ? `— ${firstTitle}` : "" }));
-  } else if (todayCount > 1) {
-    lines.push(
-      say(TODAY_SOME, {
-        count: plural(todayCount, "thing"),
-        first: firstTitle ? `, starting with ${firstTitle}` : "",
-      }),
-    );
-  } else {
-    lines.push(pick(NOTHING_DUE_TODAY));
+  // Full clean slate — nothing today AND nothing overdue — gets the
+  // celebratory pool and skips the overdue line entirely (there is none).
+  if (isToday && items.length === 0 && overdueCount === 0) {
+    return pick(NOTHING_ON_TODAY);
   }
 
-  if (overdueCount === 1) {
+  const listText = items.map((i) => `${i.title} at ${i.time}`).join(", ");
+  const lines: string[] = [];
+
+  if (items.length === 0) {
     lines.push(
-      say(OVERDUE_ONE, { first: firstOverdueTitle ? `— ${firstOverdueTitle}` : "" }),
+      isToday ? pick(NOTHING_DUE_TODAY) : say(NOTHING_ON_DAY, { day: describeDay(data.dateISO) }),
     );
-  } else if (overdueCount > 1) {
+  } else if (isToday) {
+    lines.push(say(TODAY_SOME, { count: plural(items.length, "thing"), list: listText }));
+  } else {
     lines.push(
-      say(OVERDUE_SOME, {
-        count: plural(overdueCount, "thing"),
-        first: firstOverdueTitle ? `, including ${firstOverdueTitle}` : "",
+      say(DAY_SOME, {
+        day: describeDay(data.dateISO),
+        count: plural(items.length, "thing"),
+        list: listText,
       }),
     );
+  }
+
+  if (isToday) {
+    if (overdueCount === 1) {
+      lines.push(
+        say(OVERDUE_ONE, { first: firstOverdueTitle ? `— ${firstOverdueTitle}` : "" }),
+      );
+    } else if (overdueCount > 1) {
+      lines.push(
+        say(OVERDUE_SOME, {
+          count: plural(overdueCount, "thing"),
+          first: firstOverdueTitle ? `, including ${firstOverdueTitle}` : "",
+        }),
+      );
+    }
   }
 
   return lines.join(" ");
@@ -218,4 +266,82 @@ const NO_TITLE_HELP = [
 export function formatReminderError(reason?: "no-title" | "offline"): string {
   if (reason === "no-title") return pick(NO_TITLE_HELP);
   return errorReply("I couldn't save that reminder.");
+}
+
+// ---------------------------------------------------------------------------
+// Stage 1 — focus-memory follow-ups: reschedule / complete / delete
+// ---------------------------------------------------------------------------
+
+/** Slots: {Title}, {when} e.g. "today at 11:00 AM" */
+const REMINDER_RESCHEDULED = [
+  "{ack} \"{Title}\" is now {when}.",
+  "Moved — \"{Title}\" is set for {when}.",
+  "{ack} I've pushed \"{Title}\" to {when}.",
+  "\"{Title}\" now lands {when}.",
+  "Rescheduled: \"{Title}\", {when}.",
+] as const;
+
+export function formatReminderRescheduled(data: { title: string; dueAt: string }): string {
+  return say(REMINDER_RESCHEDULED, {
+    ack: pick(ACK_DONE),
+    Title: data.title,
+    when: describeWhen(data.dueAt),
+  });
+}
+
+/** Slots: {Title} (optional — the item may have no known title) */
+const REMINDER_COMPLETED = [
+  "{ack} \"{Title}\" is marked done.",
+  "Checked off — \"{Title}\".",
+  "{ack} \"{Title}\" is complete.",
+  "Marked \"{Title}\" as done.",
+] as const;
+
+export function formatReminderCompleted(title: string | null): string {
+  return say(REMINDER_COMPLETED, { ack: pick(ACK_DONE), Title: title ?? "that" });
+}
+
+/** Slots: {Title} */
+const REMINDER_DELETED = [
+  "{ack} \"{Title}\" is deleted.",
+  "Removed — \"{Title}\". It's in the Recycle Bin for 30 days if you need it back.",
+  "{ack} \"{Title}\" is gone. Recoverable from the Recycle Bin for a month.",
+  "Deleted \"{Title}\".",
+] as const;
+
+export function formatReminderDeleted(title: string | null): string {
+  return say(REMINDER_DELETED, { ack: pick(ACK_DONE), Title: title ?? "that" });
+}
+
+/** No live focus entity to resolve the pronoun against. Slots: {action} e.g. "reschedule" */
+const FOCUS_MISSING = [
+  "I'm not sure what \"that\" refers to — what should I {action}?",
+  "Which one? I don't have anything recent to {action}.",
+  "I've lost track of what you mean — name the reminder and I'll {action} it.",
+  "Not sure which reminder you mean — what's it called, so I can {action} it?",
+] as const;
+
+export function formatFocusMissing(action: string): string {
+  return say(FOCUS_MISSING, { action });
+}
+
+export function formatReminderActionError(
+  title: string | null,
+  action: "reschedule" | "complete" | "delete",
+): string {
+  return errorReply(`I couldn't ${action} "${title ?? "that"}".`);
+}
+
+/** Slots: {Title}, {action} */
+const RECURRING_NEEDS_APP = [
+  "\"{Title}\" repeats, so I'll let you {action} that specific occurrence in Reminders — I don't want to guess which one.",
+  "That one's recurring. Open \"{Title}\" in Reminders to {action} the right occurrence.",
+  "\"{Title}\" repeats — pick the occurrence to {action} in Reminders rather than me guessing.",
+] as const;
+
+export function formatRecurringNeedsApp(
+  title: string | null,
+  action: "reschedule" | "complete" | "delete",
+): string {
+  return say(RECURRING_NEEDS_APP, { action, Title: title ?? "that" });
 }

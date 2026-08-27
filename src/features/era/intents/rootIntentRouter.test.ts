@@ -35,6 +35,13 @@ interface RouteCase {
   readonly title?: string;
   readonly query?: RegExp;
   readonly label?: RegExp;
+  /**
+   * For `todaySchedule` rows that name a specific day (HUB Stage 0 fix):
+   * asserts `intent.dateISO` resolves to this day-of-week (0=Sun..6=Sat)
+   * rather than pinning an exact date, since "Saturday" resolves relative
+   * to whatever day the suite runs on.
+   */
+  readonly dayOfWeek?: number;
 }
 
 const CASES: readonly RouteCase[] = [
@@ -119,11 +126,45 @@ const CASES: readonly RouteCase[] = [
     kind: "todaySchedule",
   },
   {
+    // Stage 0 fix: this used to always answer for TODAY regardless of the
+    // day named in the utterance — the regex matched on "schedule" alone.
+    name: "named-day schedule query resolves that day, not today",
+    text: "what's on my schedule Saturday?",
+    active: "schedule",
+    kind: "todaySchedule",
+    dayOfWeek: 6,
+  },
+  {
     name: "remind me → reminder draft strips the lead-in, keeping the clean title",
     text: "remind me to call the bank",
     active: "schedule",
     kind: "draftReminder",
     title: "Call the bank",
+  },
+  // ── Schedule — Stage 1 focus-memory follow-ups (pronoun-gated) ────────────
+  {
+    name: "change it to <time> → reschedule",
+    text: "Change it to 11.",
+    active: "schedule",
+    kind: "reminderReschedule",
+  },
+  {
+    name: "move that to <time> → reschedule",
+    text: "Could you move that to tomorrow at 5?",
+    active: "schedule",
+    kind: "reminderReschedule",
+  },
+  {
+    name: "mark it done → complete",
+    text: "Mark it done.",
+    active: "schedule",
+    kind: "reminderComplete",
+  },
+  {
+    name: "delete that one → delete",
+    text: "Delete that one.",
+    active: "schedule",
+    kind: "reminderDelete",
   },
   {
     name: "appointment noun switches to schedule",
@@ -138,6 +179,35 @@ const CASES: readonly RouteCase[] = [
     text: "what do I have due today",
     active: "budget",
     kind: "todaySchedule",
+  },
+  // REGRESSION (found via real usage 2026-08-27): brainRouter's broad "what's
+  // X" recall pattern used to ALSO match this exact phrase (as a memory
+  // recall for the literal string "on my schedule this saturday"), so with a
+  // non-schedule active face the root router saw two confident cross-face
+  // hits and asked the user to clarify instead of answering. The existing
+  // "named-day schedule query" row above only ever exercised this with
+  // Schedule already active, which short-circuits before the cross-face
+  // ambiguity check ever runs — this row is the one that actually catches
+  // it. HUB-26's acceptance phrase must resolve uniquely through the FULL
+  // root router, not just in scheduleRouter isolation.
+  {
+    name: "REGRESSION: 'what's on my schedule this Saturday' resolves uniquely to Schedule, not an ambiguous clarify",
+    text: "what's on my schedule this Saturday",
+    active: "budget",
+    kind: "todaySchedule",
+    dayOfWeek: 6,
+  },
+  // REGRESSION (same session): the bare word "schedule" matched nothing in
+  // scheduleRouter (todaySchedule needs a question word too; the generic
+  // switch list had every schedule-domain noun EXCEPT "schedule" itself),
+  // so it fell all the way through to "unknown" instead of selecting the
+  // Schedule face.
+  {
+    name: "REGRESSION: bare 'Schedule' selects the Schedule face",
+    text: "Schedule",
+    active: "budget",
+    kind: "switchFace",
+    face: "schedule",
   },
 
   // ── Chef — active-face path ──────────────────────────────────────────────
@@ -422,6 +492,14 @@ describe("rootIntentRouter", () => {
           (intent as Extract<Intent, { kind: "memorySave" }>).label,
         ).toMatch(expected.label);
       }
+      if (expected.dayOfWeek !== undefined) {
+        const dateISO = (intent as Extract<Intent, { kind: "todaySchedule" }>)
+          .dateISO;
+        expect(dateISO).toBeDefined();
+        expect(new Date(`${dateISO}T12:00:00`).getDay()).toBe(
+          expected.dayOfWeek,
+        );
+      }
     },
   );
 
@@ -437,5 +515,142 @@ describe("rootIntentRouter", () => {
     const intent = rootIntentRouter.parse("I need some money");
     expect(intent.kind).not.toBe("switchFace");
     expect(intent.kind).toBe("clarify");
+  });
+
+  // Stage 1 focus-memory follow-ups are pronoun-gated specifically so
+  // "move"/"cancel" keep meaning what they already mean elsewhere.
+  it("REGRESSION: 'move $100 to savings' (no pronoun) is not a reminder reschedule", () => {
+    useEraStore.setState({ activeFaceKey: "budget" });
+    const intent = rootIntentRouter.parse("move $100 to savings");
+    expect(intent.kind).not.toBe("reminderReschedule");
+  });
+
+  it("REGRESSION: 'move dinner to Wednesday' (no pronoun) is not a reminder reschedule", () => {
+    useEraStore.setState({ activeFaceKey: "chef" });
+    const intent = rootIntentRouter.parse("move dinner to Wednesday");
+    expect(intent.kind).not.toBe("reminderReschedule");
+  });
+});
+
+describe("rootIntentRouter — Stage 1 focus-memory resolution", () => {
+  beforeEach(() => {
+    useEraStore.getState().reset();
+    useEraStore.setState({ activeFaceKey: "schedule" });
+  });
+
+  it("resolves the pronoun to the most recently focused reminder", () => {
+    useEraStore.getState().pushFocusEntity({
+      id: "item-123",
+      type: "reminder",
+      title: "Water the plants",
+      addedAt: Date.now(),
+    });
+
+    const intent = rootIntentRouter.parse("Change it to 11.");
+    expect(intent).toMatchObject({
+      kind: "reminderReschedule",
+      itemId: "item-123",
+      title: "Water the plants",
+      whenText: "11",
+    });
+  });
+
+  it("resolves itemId to null (not a guess) when nothing is in focus", () => {
+    const intent = rootIntentRouter.parse("Delete that one.");
+    expect(intent).toMatchObject({ kind: "reminderDelete", itemId: null });
+  });
+});
+
+// Stage 4 (HUB-30) — Layer 2 taught-phrase matching. Only reached after
+// every built-in router (Layer 1) has missed — these utterances are
+// deliberately NOT phrasings any built-in router regex would catch.
+describe("rootIntentRouter — Stage 4 taught-phrase matching (Layer 2)", () => {
+  beforeEach(() => {
+    useEraStore.getState().reset();
+    useEraStore.setState({ activeFaceKey: "budget" }); // deliberately NOT schedule — a template match shouldn't need it
+  });
+
+  it("matches a taught phrase only after every built-in router has missed, and resolves its focus reference", () => {
+    useEraStore.getState().pushFocusEntity({
+      id: "item-123",
+      type: "reminder",
+      title: "Water the plants",
+      addedAt: Date.now(),
+    });
+    useEraStore.getState().setTemplates([
+      {
+        id: "tpl-1",
+        capabilityId: "reminder.reschedule",
+        patternText: "nudge it to {whenText}",
+        slotNames: ["whenText"],
+        enabled: true,
+      },
+    ]);
+
+    const intent = rootIntentRouter.parse("nudge it to 5pm");
+    expect(intent).toMatchObject({
+      kind: "capabilityAction",
+      face: "schedule",
+      capabilityId: "reminder.reschedule",
+      slots: { itemId: "item-123", whenText: "5pm", title: "Water the plants" },
+      sourceTemplateId: "tpl-1",
+    });
+  });
+
+  it("falls through to unknown, not a dead end, when the entity reference can't be resolved", () => {
+    useEraStore.getState().setTemplates([
+      {
+        id: "tpl-1",
+        capabilityId: "reminder.reschedule",
+        patternText: "nudge it to {whenText}",
+        slotNames: ["whenText"],
+        enabled: true,
+      },
+    ]);
+    // No focus entity pushed — nothing to resolve "it" against.
+    const intent = rootIntentRouter.parse("nudge it to 5pm");
+    expect(intent.kind).toBe("unknown");
+  });
+
+  it("never matches a disabled template", () => {
+    useEraStore.getState().pushFocusEntity({
+      id: "item-123",
+      type: "reminder",
+      title: "Water the plants",
+      addedAt: Date.now(),
+    });
+    useEraStore.getState().setTemplates([
+      {
+        id: "tpl-1",
+        capabilityId: "reminder.reschedule",
+        patternText: "nudge it to {whenText}",
+        slotNames: ["whenText"],
+        enabled: false,
+      },
+    ]);
+    expect(rootIntentRouter.parse("nudge it to 5pm").kind).toBe("unknown");
+  });
+
+  it("a confident built-in match wins even when a template would also match", () => {
+    useEraStore.getState().pushFocusEntity({
+      id: "item-123",
+      type: "reminder",
+      title: "Water the plants",
+      addedAt: Date.now(),
+    });
+    useEraStore.setState({ activeFaceKey: "schedule" });
+    useEraStore.getState().setTemplates([
+      {
+        id: "tpl-1",
+        capabilityId: "reminder.reschedule",
+        patternText: "change it to {whenText}",
+        slotNames: ["whenText"],
+        enabled: true,
+      },
+    ]);
+    // The built-in schedule router already handles this phrasing (Stage 1) —
+    // Layer 2 must never get a chance to override a confident Layer 1 hit.
+    const intent = rootIntentRouter.parse("change it to 5pm");
+    expect(intent.kind).toBe("reminderReschedule");
   });
 });

@@ -18,6 +18,24 @@ const RECALL_PATTERNS: RegExp[] = [
   /^(?:what is|what's)\s+(.+?)\s+(?:number|contact|info|information|detail)\??$/i,
 ];
 
+/**
+ * Domain vocabulary owned by another face. The recall patterns above are
+ * deliberately broad ("what's X", "tell me X", …) so they catch a wide
+ * range of real memory queries ("what's my wifi password") — but that same
+ * breadth means, unguarded, they ALSO swallow a schedule/budget/chef
+ * question shaped the same way ("what's on my schedule Saturday" used to
+ * parse as a memory recall for the literal string "on my schedule
+ * saturday"). Vocabulary mirrors each face's own trigger words (schedule.ts's
+ * todaySchedule condition + every face's generic switch list) so this stays
+ * in sync with what actually routes elsewhere. A recall pattern must never
+ * fire when one of these words is present — regression case: the HUB-26
+ * acceptance phrase "what's on my schedule this Saturday" must resolve
+ * uniquely to Schedule through the FULL root router, not just when Schedule
+ * happens to already be the active face.
+ */
+const OTHER_DOMAIN_RE =
+  /\b(schedule|today|due|upcoming|overdue|this week|task|todo|to-do|deadline|appointment|event|meeting|calendar|reminder|reminders|budget|expense|expenses|income|transaction|transactions|balance|account|spend|spent|spending|recipe|recipes|cook|cooking|meal|meals|dinner|lunch|breakfast|ingredient|kitchen|chef)\b/i;
+
 export const brainRouter: FaceIntentRouter = {
   parse(text) {
     // Check save patterns first
@@ -32,13 +50,16 @@ export const brainRouter: FaceIntentRouter = {
       }
     }
 
-    // Check recall patterns
-    for (const re of RECALL_PATTERNS) {
-      const m = text.match(re);
-      if (m) {
-        const query = m[1].trim();
-        if (query.length >= 2 && query.length <= 80) {
-          return { kind: "memoryRecall", face: "brain", query, rawText: text };
+    // Check recall patterns — skipped entirely when the question is clearly
+    // about another face's domain (see OTHER_DOMAIN_RE above).
+    if (!OTHER_DOMAIN_RE.test(text)) {
+      for (const re of RECALL_PATTERNS) {
+        const m = text.match(re);
+        if (m) {
+          const query = m[1].trim();
+          if (query.length >= 2 && query.length <= 80) {
+            return { kind: "memoryRecall", face: "brain", query, rawText: text };
+          }
         }
       }
     }

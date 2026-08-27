@@ -40,6 +40,21 @@ const bodySchema = z.object({
     .default([]),
   /** Set when a "what time?" question was outstanding — see useEraTurn. */
   pendingReminderTitle: z.string().optional(),
+  /**
+   * Stage 3 (HUB-29) — focus memory lives in browser state (useEraStore),
+   * not the DB, so the client sends the single most recent focus reminder
+   * here rather than the server trying to look it up. Used only to resolve
+   * a "FOCUS" sentinel in a propose_action proposal — see eraAskProposal.ts.
+   */
+  focusEntity: z
+    .object({
+      id: z.string().min(1),
+      type: z.literal("reminder"),
+      title: z.string().min(1),
+      addedAt: z.number(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -56,7 +71,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  const { message, face, history, pendingReminderTitle } = parsed.data;
+  const { message, face, history, pendingReminderTitle, focusEntity } = parsed.data;
 
   // Monthly token budget (Hard Rule-adjacent: same ceiling as /api/ai-chat).
   const { data: usageRows } = await supabase
@@ -106,6 +121,7 @@ export async function POST(req: NextRequest) {
     budgetContext,
     scheduleContext,
     pendingReminderTitle,
+    focusEntity,
   });
 
   // Lightweight usage tracking — same table the rest of AI Assistant uses,

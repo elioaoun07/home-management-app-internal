@@ -133,6 +133,11 @@ export function formatReply(intent: Intent): string {
       return pick(WORKING_ON_IT);
     case "draftReminder":
       return pick(SAVING_REMINDER);
+    case "reminderReschedule":
+    case "reminderComplete":
+    case "reminderDelete":
+    case "capabilityAction":
+      return pick(WORKING_ON_IT);
     case "showAnalytics":
       return pick(PULLING_ANALYTICS);
     case "unknown":

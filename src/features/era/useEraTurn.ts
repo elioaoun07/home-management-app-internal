@@ -22,8 +22,11 @@ import { getFace } from "./faceRegistry";
 import { rootIntentRouter } from "./intentRouter";
 import { resolveIntent } from "./intents/resolveIntent";
 import { resolvePendingReminderAnswer } from "./intents/resolvers/schedule";
-import { logEraAction } from "./logEraAction";
-import type { Intent } from "./types";
+import { logEraAction, logEraCapabilityAction } from "./logEraAction";
+import { classifyMiss, type MissClassification } from "./missTracking";
+import { useEraTemplates } from "./templates/useEraTemplates";
+import { deriveLearnedVocab } from "./templates/vocabGrowth";
+import type { EraPendingTurn, Intent } from "./types";
 import { useEraBudgetSubmit } from "./useEraBudgetSubmit";
 import {
   useActiveEraConversation,
@@ -35,6 +38,37 @@ function intentPayload(intent: Intent): Record<string, unknown> {
   const rest: Record<string, unknown> = { ...intent };
   delete rest.kind;
   return rest;
+}
+
+/**
+ * Stage 1 focus memory — push whichever reminder this turn created or
+ * touched, so a follow-up like "change it to 11" has something to resolve
+ * against. Reads `metadata.itemId`/`metadata.title` set by the resolver;
+ * `reminderDelete` deliberately never sets `itemId` (see its resolver's
+ * doc comment) so a deleted reminder falls OUT of focus instead of back in.
+ */
+function pushFocusFromResult(
+  intent: Intent,
+  pending: EraPendingTurn | null,
+  metadata: Record<string, unknown> | undefined,
+): void {
+  const relevant =
+    pending !== null || // completed a "what time?" question → draftReminder
+    intent.kind === "draftReminder" ||
+    intent.kind === "reminderReschedule" ||
+    intent.kind === "reminderComplete" ||
+    (intent.kind === "capabilityAction" &&
+      intent.capabilityId !== "reminder.delete" &&
+      intent.capabilityId !== "schedule.forDay");
+  if (!relevant) return;
+
+  const itemId = typeof metadata?.itemId === "string" ? metadata.itemId : null;
+  const title = typeof metadata?.title === "string" ? metadata.title : null;
+  if (!itemId || !title) return;
+
+  useEraStore
+    .getState()
+    .pushFocusEntity({ id: itemId, type: "reminder", title, addedAt: Date.now() });
 }
 
 export interface EraTurnResult {
@@ -55,6 +89,9 @@ export function useEraTurn() {
   const { data: activeConversation } = useActiveEraConversation();
   const createMessage = useCreateEraMessage();
   const queryClient = useQueryClient();
+  // Stage 4 (HUB-30) — keeps useEraStore().templates current for the
+  // router's Layer 2 matcher; see that hook's doc comment.
+  useEraTemplates();
 
   const runTurn = useCallback(
     async (text: string): Promise<EraTurnResult> => {
@@ -107,10 +144,24 @@ export function useEraTurn() {
       }));
 
       setPendingTurn(nextPending ?? null);
-      logEraAction(intent.kind, metadata, queryClient);
+      if (intent.kind === "capabilityAction") {
+        logEraCapabilityAction(intent.capabilityId, metadata, queryClient);
+      } else {
+        logEraAction(intent.kind, metadata, queryClient);
+      }
+      pushFocusFromResult(intent, pending, metadata);
 
       const draftTransactionId =
         typeof metadata?.draftId === "string" ? metadata.draftId : null;
+
+      // Stage 2 (HUB-28) — a "clarify"/"unknown" turn is a router miss.
+      // Classify it (language gap vs capability gap) and fold the result
+      // into this same era_messages row's intent_payload — no new table,
+      // reusing intent_kind as the miss signal itself (see missTracking.ts).
+      const missClassification: MissClassification | null =
+        !pending && (intent.kind === "clarify" || intent.kind === "unknown")
+          ? classifyMiss(text, deriveLearnedVocab(useEraStore.getState().templates))
+          : null;
 
       try {
         await createMessage.mutateAsync({
@@ -119,7 +170,9 @@ export function useEraTurn() {
           content: reply,
           intent_kind: intent.kind,
           intent_face: isFaceless ? null : intent.face,
-          intent_payload: metadata ?? intentPayload(intent),
+          intent_payload: missClassification
+            ? { ...(metadata ?? intentPayload(intent)), ...missClassification }
+            : (metadata ?? intentPayload(intent)),
           draft_transaction_id: draftTransactionId,
         });
       } catch (err) {

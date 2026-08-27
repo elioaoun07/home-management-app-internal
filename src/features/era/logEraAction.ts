@@ -44,7 +44,7 @@ function buildPayload(
         entity_type: "reminder",
         entity_id: itemId,
         title,
-        route: `/items?openId=${itemId}${dateParam}`,
+        route: `/reminders?openId=${itemId}${dateParam}`,
       };
     }
 
@@ -161,6 +161,48 @@ export function logEraAction(
   post(payload, queryClient);
 }
 
+/**
+ * Separate entry point for `capabilityAction` (Stage 3/4 — Ask AI proposals
+ * and taught-template matches both execute a capability, not a fixed
+ * Intent["kind"] `buildPayload` has a case for). era_actions' `entity_type`
+ * enum only covers "reminder" today, matching the registry — a future
+ * transaction/mealPlan capability needs a new branch here, not a rewrite.
+ */
+export function logEraCapabilityAction(
+  capabilityId: string,
+  metadata: Record<string, unknown> | undefined,
+  queryClient?: QueryClient,
+): void {
+  if (!metadata || !capabilityId.startsWith("reminder.")) return;
+
+  if (capabilityId === "reminder.delete") {
+    const deletedItemId =
+      typeof metadata.deletedItemId === "string" ? metadata.deletedItemId : null;
+    const title = typeof metadata.title === "string" ? metadata.title : "Reminder";
+    if (!deletedItemId) return;
+    post(
+      { action: "updated", entity_type: "reminder", entity_id: deletedItemId, title: `${title} — deleted`, route: "/reminders" },
+      queryClient,
+    );
+    return;
+  }
+
+  const itemId = typeof metadata.itemId === "string" ? metadata.itemId : null;
+  const title = typeof metadata.title === "string" ? metadata.title : null;
+  if (!itemId || !title) return;
+
+  post(
+    {
+      action: capabilityId === "reminder.create" ? "created" : "updated",
+      entity_type: "reminder",
+      entity_id: itemId,
+      title,
+      route: `/reminders?openId=${itemId}`,
+    },
+    queryClient,
+  );
+}
+
 /** Separate entry point — the NFC-trigger reminder proposal doesn't flow
  *  through resolveIntent, so it doesn't have an Intent["kind"] to switch on. */
 export function logEraNfcReminder(itemId: string, title: string, queryClient?: QueryClient): void {
@@ -170,7 +212,7 @@ export function logEraNfcReminder(itemId: string, title: string, queryClient?: Q
       entity_type: "reminder",
       entity_id: itemId,
       title,
-      route: `/items?openId=${itemId}`,
+      route: `/reminders?openId=${itemId}`,
     },
     queryClient,
   );

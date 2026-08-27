@@ -21,6 +21,9 @@
 
 import { Type, type Schema } from "@google/genai";
 import { z } from "zod";
+import { ERA_CAPABILITIES, getCapability } from "@/features/era/capabilities/registry";
+import type { FocusEntity, FocusEntityType } from "@/features/era/focusMemory";
+import { resolveFocusRef } from "@/features/era/focusMemory";
 import type { BudgetContext, ChatMessage } from "./gemini";
 import { generateContentWithFallback, generateSystemPrompt } from "./gemini";
 import type { ScheduleContext } from "./context";
@@ -39,6 +42,18 @@ const AskAIResponseSchema = z.discriminatedUnion("kind", [
     nfcTagId: z.string().min(1),
     targetState: z.string().min(1),
   }),
+  // Stage 3 (HUB-29) — a controlled action against the capability registry.
+  // `slotsJson` is a JSON-ENCODED string, not a nested object: Gemini's
+  // structured-output schema needs a fixed shape per kind, and each
+  // capability's slots differ, so the model emits a string we parse and
+  // validate ourselves (same pattern this file already used for the top-
+  // level response). Never trusted as-is — see parseAskAIResponse.
+  z.object({
+    kind: z.literal("propose_action"),
+    text: z.string().min(1),
+    capabilityId: z.string().min(1),
+    slotsJson: z.string().min(1),
+  }),
 ]);
 
 export type AskAIResponse = z.infer<typeof AskAIResponseSchema>;
@@ -54,20 +69,35 @@ export type AskAIResult =
       nfcTagId: string;
       nfcTagLabel: string;
       targetState: string;
+    }
+  | {
+      kind: "propose_action";
+      text: string;
+      capabilityId: string;
+      /** Final, VALIDATED slots — any entity reference already resolved to a real id. */
+      slots: Record<string, unknown>;
     };
 
 // ─────────────────────── Gemini structured-output schema ───────────────────────
 
 const ASK_AI_RESPONSE_SCHEMA: Schema = {
   type: Type.OBJECT,
-  propertyOrdering: ["kind", "text", "reminderTitle", "nfcTagId", "targetState"],
+  propertyOrdering: [
+    "kind",
+    "text",
+    "reminderTitle",
+    "nfcTagId",
+    "targetState",
+    "capabilityId",
+    "slotsJson",
+  ],
   required: ["kind", "text"],
   properties: {
     kind: {
       type: Type.STRING,
-      enum: ["prose", "propose_nfc_reminder"],
+      enum: ["prose", "propose_nfc_reminder", "propose_action"],
       description:
-        "prose for a plain answer; propose_nfc_reminder ONLY when the user wants a reminder triggered by an NFC tag reaching a specific state, and a matching tag is listed in context",
+        "prose for a plain answer; propose_nfc_reminder ONLY for a reminder triggered by an NFC tag reaching a specific state (a matching tag must be listed in context); propose_action for any OTHER action against one of the listed capabilities (create/reschedule/complete/delete a reminder, look up a day's schedule)",
     },
     text: {
       type: Type.STRING,
@@ -88,18 +118,36 @@ const ASK_AI_RESPONSE_SCHEMA: Schema = {
       description:
         "propose_nfc_reminder only — MUST be one of that exact tag's declared states, copied exactly.",
     },
+    capabilityId: {
+      type: Type.STRING,
+      description:
+        "propose_action only — MUST be copied EXACTLY from one of the capability ids listed in context. Never invent one.",
+    },
+    slotsJson: {
+      type: Type.STRING,
+      description:
+        "propose_action only — a JSON OBJECT ENCODED AS A STRING, e.g. '{\"whenText\":\"tomorrow at 5\"}', using exactly the slot names given for that capability in context. For a slot that identifies a SPECIFIC existing reminder (itemId), use the literal string \"FOCUS\" if the user referred to it by pronoun (it/that/this) and a current focus reminder is given in context — never invent a real id.",
+    },
   },
 };
 
 // ───────────────────────────────── prompt ─────────────────────────────────
+
+/** Capability catalog description for the prompt — built from the registry itself, never hand-duplicated. */
+function describeCapabilities(): string {
+  return Object.values(ERA_CAPABILITIES)
+    .map((c) => `- ${c.id} (${c.operation}) — slots: ${c.promptSlots}`)
+    .join("\n");
+}
 
 function buildSystemPrompt(args: {
   face: "budget" | "schedule" | "chef" | "brain";
   budgetContext?: BudgetContext;
   scheduleContext?: ScheduleContext;
   pendingReminderTitle?: string;
+  focusEntity?: FocusEntity | null;
 }): string {
-  const { face, budgetContext, scheduleContext, pendingReminderTitle } = args;
+  const { face, budgetContext, scheduleContext, pendingReminderTitle, focusEntity } = args;
 
   const contract = [
     "You are ERA, a household assistant. Respond with JSON matching the given schema — never prose outside the JSON.",
@@ -120,12 +168,21 @@ function buildSystemPrompt(args: {
             )
             .join("\n")
         : "(none configured)",
+      "",
+      'Otherwise, if the user wants some OTHER action ERA can already do — create/reschedule/complete/delete a reminder, or look up a day\'s schedule — respond with kind "propose_action". You MUST pick capabilityId EXACTLY from the list below; if nothing matches, use kind "prose" instead of guessing.',
+      "",
+      "Available capabilities (id | operation | slots):",
+      describeCapabilities(),
+      "",
+      focusEntity
+        ? `Current focus reminder: "${focusEntity.title}" — if the user refers to it by pronoun (it/that/this), use the literal string "FOCUS" for that capability's entity-identifying slot (e.g. itemId). Never invent a real id.`
+        : "No current focus reminder — if a capability needs an entity-identifying slot (itemId) and the user only used a pronoun with nothing recent to resolve it against, use kind \"prose\" and ask them to name the reminder instead of guessing.",
     );
 
     if (pendingReminderTitle) {
       contract.push(
         "",
-        `The user was already asked for a time for a reminder titled "${pendingReminderTitle}" and instead described a trigger condition. Use that exact title as reminderTitle if you propose a trigger.`,
+        `The user was already asked for a time for a reminder titled "${pendingReminderTitle}" and instead described a trigger condition. Use that exact title as reminderTitle if you propose a trigger, or as the title slot if you propose reminder.create.`,
       );
     }
 
@@ -157,6 +214,8 @@ export async function generateAskAIResponse(args: {
   budgetContext?: BudgetContext;
   scheduleContext?: ScheduleContext;
   pendingReminderTitle?: string;
+  /** The single most recent focus reminder (client-sent — focus memory lives in browser state, see useEraStore). Undefined/null = none. */
+  focusEntity?: FocusEntity | null;
 }): Promise<AskAIResult> {
   const { message, history = [] } = args;
 
@@ -182,7 +241,7 @@ export async function generateAskAIResponse(args: {
         },
       });
 
-      const parsed = parseAskAIResponse(response.text, args.scheduleContext);
+      const parsed = parseAskAIResponse(response.text, args.scheduleContext, args.focusEntity);
       if (parsed) return parsed;
     } catch {
       // Rate limit, network, bad JSON — fall through to the deterministic reply below.
@@ -206,6 +265,7 @@ export async function generateAskAIResponse(args: {
 export function parseAskAIResponse(
   text: string | undefined,
   scheduleContext?: ScheduleContext,
+  focusEntity?: FocusEntity | null,
 ): AskAIResult | null {
   if (!text) return null;
 
@@ -228,5 +288,62 @@ export function parseAskAIResponse(
     return { ...data, nfcTagLabel: tag.label };
   }
 
+  if (data.kind === "propose_action") {
+    return validateProposeActionResponse(data, focusEntity);
+  }
+
   return data;
+}
+
+/**
+ * Stage 3 (HUB-29) safety gate — the actual point where a model-proposed
+ * action either becomes something a confirm tap can execute, or degrades to
+ * prose. Every check here is "never trust the model" applied one more time:
+ *   1. capabilityId must name a REAL entry in the registry.
+ *   2. slotsJson must be valid JSON.
+ *   3. any entity-identifying slot (itemId) must be the literal "FOCUS"
+ *      sentinel, never a raw value the model invented — and it must resolve
+ *      to a REAL live focus entity via the same resolveFocusRef the native
+ *      router uses. A destructive capability (reminder.delete) is no
+ *      exception: it gets no separate check because it already can't reach
+ *      here without a real resolved entity, same as any other update.
+ *   4. the final slots object must pass the capability's own Zod schema.
+ * Any failure degrades to `{ kind: "prose", text: data.text }` — never a
+ * partial or best-effort execution.
+ */
+function validateProposeActionResponse(
+  data: { kind: "propose_action"; text: string; capabilityId: string; slotsJson: string },
+  focusEntity?: FocusEntity | null,
+): AskAIResult {
+  const fallback: AskAIResult = { kind: "prose", text: data.text };
+
+  const capability = getCapability(data.capabilityId);
+  if (!capability) return fallback;
+
+  let slots: unknown;
+  try {
+    slots = JSON.parse(data.slotsJson);
+  } catch {
+    return fallback;
+  }
+  if (typeof slots !== "object" || slots === null || Array.isArray(slots)) return fallback;
+
+  const slotsObj: Record<string, unknown> = { ...(slots as Record<string, unknown>) };
+
+  if (capability.entityRefSlot) {
+    if (slotsObj[capability.entityRefSlot] !== "FOCUS") return fallback; // never trust a raw model-supplied id
+    const resolved = resolveFocusRef(
+      "it",
+      capability.entity as FocusEntityType,
+      focusEntity ? [focusEntity] : [],
+    );
+    if (!resolved) return fallback;
+    slotsObj[capability.entityRefSlot] = resolved.id;
+    slotsObj.title = resolved.title;
+  }
+
+  const parsed = capability.slots.safeParse(slotsObj);
+  if (!parsed.success) return fallback;
+
+  return { kind: "propose_action", text: data.text, capabilityId: capability.id, slots: parsed.data as Record<string, unknown> };
 }

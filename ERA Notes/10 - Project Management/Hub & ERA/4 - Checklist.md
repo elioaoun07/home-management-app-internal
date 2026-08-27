@@ -1,6 +1,6 @@
 ---
 created: 2026-06-20
-updated: 2026-08-26
+updated: 2026-08-27
 type: checklist
 status: active
 owner: Elio
@@ -36,7 +36,6 @@ tags:
 - [ ] **HUB-21** Live-verify Slices 2/3/4/5 against a running dev server — the server on port 3000 during this session was serving a stale build (its `.next/dev/build-manifest.json` predates the changes) and showed old phrasing after the edits landed. Restart that dev server (or start a fresh one) and re-run the scenarios in the Master Book's HUB-18/19/20 Shipped Log entries end-to-end. Two harmless test artifacts from this session's partial verification are still in the live DB: two undated reminders titled "Water the plants" and "Feed the cat" (no due_at, so no alert will ever fire) — delete via Reminders search when convenient. _(friction - S)_
 - [ ] **HUB-22** Slice 2 stretch capabilities not built this session: debt *settlement* via ERA (no clean Undo inverse exists on the standalone-debt PATCH path — see HUB-18 note), expense-split from chat (already tracked as HUB-6), and recurring-payment add/skip via ERA. _(annoyance - M)_
 
-- [ ] **HUB-24** Ask AI ships one proposal kind (`propose_nfc_reminder`). Widen the schema/UI only when a second concrete use case needs it (Design Doctrine: don't build for hypothetical requirements) — candidates already visible in the domain: propose a category for an uncategorized draft, propose a recipe substitution. _(annoyance - M)_
 
 ## Later
 

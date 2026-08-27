@@ -54,7 +54,12 @@ export const itemsKeys = {
 // FETCH FUNCTIONS
 // ============================================
 
-async function fetchItems(
+/**
+ * Exported so read-only consumers outside the query-hook tree (e.g. ERA's
+ * plain-async intent resolvers) can reuse the household-resolved bundle
+ * fetch instead of re-querying `items` directly and losing partner scoping.
+ */
+export async function fetchItems(
   filters?: ItemsFilter,
   sort?: ItemsSort,
 ): Promise<ItemWithDetails[]> {

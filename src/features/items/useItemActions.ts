@@ -144,34 +144,41 @@ export function useItemOccurrenceActions(itemId: string | undefined) {
   });
 }
 
-/** Fetch all occurrence actions used to render completed/skipped/postponed state. */
+/**
+ * Fetch all occurrence actions used to render completed/skipped/postponed
+ * state. Exported (not just the hook) so ERA's plain-async resolvers can
+ * reuse the same source of truth instead of re-deriving occurrence state.
+ *
+ * No date window. A completed/skipped occurrence must render with its
+ * strikethrough whenever it is visible — and the calendar can navigate to
+ * ANY month. The previous "last 30 days" filter keyed on occurrence_date
+ * silently dropped the completion state of anything older, so a recurring
+ * occurrence completed 2 months ago re-rendered as an active, un-done event.
+ * The table is one small row per handled occurrence (RLS-scoped to the
+ * user's items) and is cached + invalidated on every action mutation, so
+ * loading the full history is cheap relative to being wrong.
+ */
+export async function fetchAllOccurrenceActions(): Promise<ItemOccurrenceAction[]> {
+  const supabase = supabaseBrowser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("item_occurrence_actions")
+    .select("*")
+    .order("occurrence_date", { ascending: false });
+
+  if (error) throw error;
+
+  return data as ItemOccurrenceAction[];
+}
+
 export function useAllOccurrenceActions() {
   return useQuery({
     queryKey: itemsKeys.allActions(),
-    queryFn: async () => {
-      const supabase = supabaseBrowser();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return [];
-
-      // No date window. A completed/skipped occurrence must render with its
-      // strikethrough whenever it is visible — and the calendar can navigate to
-      // ANY month. The previous "last 30 days" filter keyed on occurrence_date
-      // silently dropped the completion state of anything older, so a recurring
-      // occurrence completed 2 months ago re-rendered as an active, un-done
-      // event. The table is one small row per handled occurrence (RLS-scoped to
-      // the user's items) and is cached + invalidated on every action mutation,
-      // so loading the full history is cheap relative to being wrong.
-      const { data, error } = await supabase
-        .from("item_occurrence_actions")
-        .select("*")
-        .order("occurrence_date", { ascending: false });
-
-      if (error) throw error;
-
-      return data as ItemOccurrenceAction[];
-    },
+    queryFn: fetchAllOccurrenceActions,
     staleTime: 1000 * 60 * 2,
   });
 }

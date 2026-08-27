@@ -4,6 +4,9 @@
 import { create } from "zustand";
 import { DEFAULT_FACE_KEY } from "./faceRegistry";
 import type { ERAModuleKey } from "@/components/shared/ERAMark";
+import type { FocusEntity } from "./focusMemory";
+import { pushEntity } from "./focusMemory";
+import type { EraTemplate } from "./templates/matcher";
 import type { EraActiveProposal, EraPendingTurn, FaceKey, Intent } from "./types";
 
 export type EraView = "hub" | "dashboard" | "activity";
@@ -37,6 +40,18 @@ interface EraState {
   activeProposal: EraActiveProposal | null;
   /** True while an "Ask AI" call is in flight. */
   askingAI: boolean;
+  /**
+   * Short-term conversational context (Stage 1) — the last ~10 entities ERA
+   * created/touched, newest first, so "change it to 11" can resolve without
+   * repeating the title. See focusMemory.ts for the resolution rules.
+   */
+  focusEntities: FocusEntity[];
+  /**
+   * Taught-phrase templates (Stage 4, HUB-30), mirrored from a React Query
+   * cache by useEraTemplates() so the router's Layer 2 matcher can read them
+   * synchronously — see that hook's doc comment for why.
+   */
+  templates: EraTemplate[];
 }
 
 interface EraActions {
@@ -54,6 +69,8 @@ interface EraActions {
   setPendingTurn: (turn: EraPendingTurn | null) => void;
   setActiveProposal: (proposal: EraActiveProposal | null) => void;
   setAskingAI: (v: boolean) => void;
+  pushFocusEntity: (entity: FocusEntity) => void;
+  setTemplates: (templates: EraTemplate[]) => void;
 }
 
 const INITIAL: EraState = {
@@ -68,6 +85,8 @@ const INITIAL: EraState = {
   pendingTurn: null,
   activeProposal: null,
   askingAI: false,
+  focusEntities: [],
+  templates: [],
 };
 
 export const useEraStore = create<EraState & EraActions>((set) => ({
@@ -85,4 +104,7 @@ export const useEraStore = create<EraState & EraActions>((set) => ({
   setPendingTurn: (turn) => set({ pendingTurn: turn }),
   setActiveProposal: (proposal) => set({ activeProposal: proposal }),
   setAskingAI: (v) => set({ askingAI: v }),
+  pushFocusEntity: (entity) =>
+    set((s) => ({ focusEntities: pushEntity(s.focusEntities, entity) })),
+  setTemplates: (templates) => set({ templates }),
 }));

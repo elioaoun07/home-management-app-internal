@@ -1,7 +1,9 @@
 // Central dispatcher — routes an intent to the appropriate resolver.
 // Returns { text, metadata } to be persisted as the assistant message.
 import { greeting } from "@/lib/era/phrasing";
+import { getCapability } from "../capabilities/registry";
 import { formatReply } from "../replyFormatter";
+import { bumpTemplateMatch } from "../templates/useEraTemplates";
 import type { EraPendingTurn, Intent } from "../types";
 import type { EraBudgetSubmitResult } from "../useEraBudgetSubmit";
 import { resolveMemoryRecall, resolveMemorySave } from "./resolvers/brain";
@@ -22,7 +24,10 @@ import {
 } from "./resolvers/chef";
 import {
   resolveDraftReminder,
-  resolveTodaySchedule,
+  resolveReminderComplete,
+  resolveReminderDelete,
+  resolveReminderReschedule,
+  resolveScheduleForDay,
 } from "./resolvers/schedule";
 
 export interface ResolveResult {
@@ -66,7 +71,7 @@ export async function resolveIntent(
       return { text: greeting() };
 
     case "todaySchedule":
-      return resolveTodaySchedule();
+      return resolveScheduleForDay(intent.dateISO);
 
     case "monthSpend":
       return resolveMonthSpend(intent.scope, intent.categoryHint);
@@ -91,6 +96,31 @@ export async function resolveIntent(
 
     case "draftReminder":
       return resolveDraftReminder(intent.rawText, intent.title);
+
+    case "reminderReschedule":
+      return resolveReminderReschedule(intent.itemId, intent.title, intent.whenText);
+
+    case "reminderComplete":
+      return resolveReminderComplete(intent.itemId, intent.title);
+
+    case "reminderDelete":
+      return resolveReminderDelete(intent.itemId, intent.title);
+
+    // Stage 4 (HUB-30) — Layer 2 taught-phrase match. Slots were captured
+    // from stored template text (and any entity reference already resolved
+    // from focus memory by the matcher — see intents/index.ts), so they
+    // still go through the SAME Zod validation an Ask AI proposal would
+    // (Stage 3's gate, reused rather than duplicated): a stale or malformed
+    // template degrades to the normal "unknown" reply instead of executing.
+    case "capabilityAction": {
+      const capability = getCapability(intent.capabilityId);
+      if (!capability) return { text: formatReply({ kind: "unknown", rawText: intent.rawText }) };
+      const parsed = capability.slots.safeParse(intent.slots);
+      if (!parsed.success) return { text: formatReply({ kind: "unknown", rawText: intent.rawText }) };
+      const result = await capability.execute(parsed.data);
+      if (intent.sourceTemplateId) bumpTemplateMatch(intent.sourceTemplateId);
+      return { text: result.text, metadata: result.metadata };
+    }
 
     case "recipeSearch":
       return resolveRecipeSearch(intent.dish);

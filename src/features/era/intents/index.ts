@@ -1,4 +1,8 @@
 // Root intent router — delegates to per-face routers, falls back to global detection.
+import { entityFace, getCapability } from "../capabilities/registry";
+import type { FocusEntityType } from "../focusMemory";
+import { resolveFocusRef } from "../focusMemory";
+import { matchTemplates } from "../templates/matcher";
 import type { FaceKey, Intent, IntentRouter } from "../types";
 import { useEraStore } from "../useEraStore";
 import { brainRouter } from "./brain";
@@ -77,6 +81,52 @@ function isGreeting(text: string): boolean {
   return GREETING_RE.some((re) => re.test(text.trim()));
 }
 
+/**
+ * Layer 2 (Stage 4, HUB-30) — deterministic taught-phrase matching, tried
+ * ONLY after every built-in router (Layer 1) has failed to produce a
+ * confident intent. `useEraStore().templates` is a synchronous mirror of the
+ * user's era_templates rows (see templates/useEraTemplates.ts) so this stays
+ * as latency-free as the rest of the router.
+ *
+ * A matched template's `itemId`-shaped slot is NEVER trusted from the
+ * captured text — any capability with an `entityRefSlot` gets it resolved
+ * fresh from focus memory here, the same "never guess when ambiguous" rule
+ * Ask AI's proposal validation uses (see eraAskProposal.ts). If resolution
+ * fails, this returns `null` and the router falls through to its normal
+ * unknown/clarify fallback — never a dead end.
+ */
+function matchAgainstTemplates(text: string): Intent | null {
+  const { templates, focusEntities } = useEraStore.getState();
+  if (templates.length === 0) return null;
+
+  const match = matchTemplates(text, templates);
+  if (!match) return null;
+
+  const capability = getCapability(match.template.capabilityId);
+  if (!capability) return null; // stale template referencing a removed capability
+
+  const slots: Record<string, unknown> = { ...match.slots };
+  if (capability.entityRefSlot) {
+    const focus = resolveFocusRef(
+      "it",
+      capability.entity as FocusEntityType,
+      focusEntities,
+    );
+    if (!focus) return null; // nothing to resolve "it" against — let the normal fallback ask instead of guessing
+    slots[capability.entityRefSlot] = focus.id;
+    slots.title = focus.title;
+  }
+
+  return {
+    kind: "capabilityAction",
+    face: entityFace(capability.entity),
+    capabilityId: capability.id,
+    slots,
+    rawText: text,
+    sourceTemplateId: match.template.id,
+  };
+}
+
 export const rootIntentRouter: IntentRouter = {
   parse(text: string): Intent {
     const trimmed = text.trim();
@@ -126,6 +176,11 @@ export const rootIntentRouter: IntentRouter = {
     if (weakHits.length === 1) return weakHits[0];
     if (weakHits.length > 1)
       return { kind: "clarify", reason: "ambiguous", rawText: text };
+
+    // Layer 2 — every built-in router missed; try a taught phrase before
+    // giving up entirely.
+    const templateHit = matchAgainstTemplates(trimmed);
+    if (templateHit) return templateHit;
 
     return { kind: "unknown", rawText: text };
   },

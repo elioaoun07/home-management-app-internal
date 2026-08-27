@@ -12,6 +12,7 @@
 // intent that reaches the dispatcher and falls through to `formatReply` looks
 // like it worked ("Saving that reminder…") while writing nothing.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { localToISO } from "@/lib/utils/date";
 import type { EraBudgetSubmitResult } from "../useEraBudgetSubmit";
 import type { Intent } from "../types";
 import { resolveIntent } from "./resolveIntent";
@@ -33,8 +34,27 @@ vi.mock("@/lib/connectivityManager", () => ({
 // "degrade gracefully", so most existing tests below never touch this mock.
 // Tests that specifically exercise the scoped/custom-month path set it.
 const mockGetUser = vi.hoisted(() => vi.fn());
+// resolveScheduleForDay reuses fetchItems (get_schedule_bundle RPC) and
+// fetchAllOccurrenceActions (item_occurrence_actions table) — only the
+// todaySchedule tests below drive these; every other describe block only
+// ever touches `.auth.getUser`.
+const mockRpc = vi.hoisted(() => vi.fn());
+const mockOccurrenceActionsSelect = vi.hoisted(() => vi.fn());
+// Stage 1 resolvers (reschedule/complete) look up a single row by table name
+// — `.from(table).select().eq().maybeSingle()`. Keyed by table so a test can
+// seed `reminder_details` and `items` independently.
+const mockMaybeSingleByTable = vi.hoisted(() => vi.fn<(table: string) => unknown>());
 vi.mock("@/lib/supabase/client", () => ({
-  supabaseBrowser: () => ({ auth: { getUser: mockGetUser } }),
+  supabaseBrowser: () => ({
+    auth: { getUser: mockGetUser },
+    rpc: mockRpc,
+    from: (table: string) => ({
+      select: () => ({
+        order: () => mockOccurrenceActionsSelect(),
+        eq: () => ({ maybeSingle: () => mockMaybeSingleByTable(table) }),
+      }),
+    }),
+  }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -80,6 +100,11 @@ function postTo(path: string): RecordedCall | undefined {
   return calls.find((c) => c.url.includes(path) && c.method === "POST");
 }
 
+/** The call the resolver made to a given route with the given method. */
+function callTo(path: string, method: string): RecordedCall | undefined {
+  return calls.find((c) => c.url.includes(path) && c.method === method);
+}
+
 beforeEach(() => {
   calls.length = 0;
   // safeFetch narrates every request; keep the suite output readable.
@@ -88,6 +113,9 @@ beforeEach(() => {
   // custom-month enhancement degrades gracefully, matching the "real client
   // throws in this env" case tests don't opt into explicitly.
   mockGetUser.mockResolvedValue({ data: { user: null } });
+  mockRpc.mockResolvedValue({ data: { items: [] }, error: null });
+  mockOccurrenceActionsSelect.mockResolvedValue({ data: [], error: null });
+  mockMaybeSingleByTable.mockResolvedValue({ data: null, error: null });
 });
 
 // ---------------------------------------------------------------------------
@@ -135,6 +163,240 @@ function allContain(variants: string[], needle: string): void {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+// ---------------------------------------------------------------------------
+// todaySchedule / resolveScheduleForDay (Stage 0 fix)
+// ---------------------------------------------------------------------------
+
+function scheduleIntent(dateISO?: string): Intent {
+  return {
+    kind: "todaySchedule",
+    face: "schedule",
+    rawText: "what's on my schedule",
+    dateISO,
+  };
+}
+
+/** yyyy-MM-dd `daysAhead` days from now, in local calendar terms. */
+function localDateISO(daysAhead: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + daysAhead);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+describe("resolveIntent — todaySchedule", () => {
+  it("reports items for a NAMED day, not today — the exact bug this stage fixes", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    const targetISO = localDateISO(3);
+    mockRpc.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "item-1",
+            type: "reminder",
+            title: "Water the plants",
+            status: "pending",
+            reminder_details: { due_at: localToISO(targetISO, "14:00") },
+            alerts: [],
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const variants = await everyVariant(() => resolveIntent(scheduleIntent(targetISO)));
+    allContain(variants, "Water the plants");
+  });
+
+  it("does not leak items from a different day onto the requested day", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    const targetISO = localDateISO(3);
+    const otherDayISO = localDateISO(4);
+    mockRpc.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "item-1",
+            type: "reminder",
+            title: "Not this day's task",
+            status: "pending",
+            reminder_details: { due_at: localToISO(otherDayISO, "14:00") },
+            alerts: [],
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await resolveIntent(scheduleIntent(targetISO));
+    expect(result.text).not.toContain("Not this day's task");
+  });
+
+  it("degrades to an honest error when the current user can't be resolved", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    const result = await resolveIntent(scheduleIntent());
+    expect(result.text).toContain("I couldn't pull up your schedule.");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Stage 1 focus-memory follow-ups: reschedule / complete / delete
+// ---------------------------------------------------------------------------
+
+function rescheduleIntent(
+  itemId: string | null,
+  title: string | null,
+  whenText: string,
+): Intent {
+  return {
+    kind: "reminderReschedule",
+    face: "schedule",
+    itemId,
+    title,
+    whenText,
+    rawText: `change it to ${whenText}`,
+  };
+}
+
+function completeIntent(itemId: string | null, title: string | null): Intent {
+  return {
+    kind: "reminderComplete",
+    face: "schedule",
+    itemId,
+    title,
+    rawText: "mark it done",
+  };
+}
+
+function deleteIntent(itemId: string | null, title: string | null): Intent {
+  return {
+    kind: "reminderDelete",
+    face: "schedule",
+    itemId,
+    title,
+    rawText: "delete that",
+  };
+}
+
+describe("resolveIntent — reminderReschedule", () => {
+  it("a bare time keeps the reminder's existing date and only shifts the time", async () => {
+    mockFetch(() => ({ json: { item: { id: "item-1" } } }));
+    const existingISO = localToISO(localDateISO(1), "09:00");
+    mockMaybeSingleByTable.mockImplementation(async (table: string) =>
+      table === "reminder_details"
+        ? { data: { due_at: existingISO }, error: null }
+        : { data: null, error: null },
+    );
+
+    const result = await resolveIntent(
+      rescheduleIntent("item-1", "Water the plants", "11"),
+    );
+
+    const patch = callTo("/api/items/item-1", "PATCH");
+    expect(patch?.body?.due_at).toBe(localToISO(localDateISO(1), "11:00"));
+    expect(result.text).toContain("Water the plants");
+  });
+
+  it("an explicit date+time replaces both, ignoring the reminder's old date", async () => {
+    mockFetch(() => ({ json: { item: { id: "item-1" } } }));
+    mockMaybeSingleByTable.mockImplementation(async (table: string) =>
+      table === "reminder_details"
+        ? { data: { due_at: localToISO(localDateISO(1), "09:00") }, error: null }
+        : { data: null, error: null },
+    );
+
+    await resolveIntent(rescheduleIntent("item-1", "Water the plants", "tomorrow at 5"));
+
+    const patch = callTo("/api/items/item-1", "PATCH");
+    expect(patch?.body?.due_at).toBe(localToISO(localDateISO(1), "17:00"));
+  });
+
+  it("asks instead of guessing when focus memory has no candidate (itemId null)", async () => {
+    const variants = await everyVariant(() =>
+      resolveIntent(rescheduleIntent(null, null, "11")),
+    );
+    allContain(variants, "reschedule");
+    expect(callTo("/api/items/", "PATCH")).toBeUndefined();
+  });
+
+  it("surfaces the failure instead of claiming success when the API rejects it", async () => {
+    mockFetch(() => ({ status: 500, json: {} }));
+    mockMaybeSingleByTable.mockResolvedValue({ data: null, error: null });
+    const result = await resolveIntent(
+      rescheduleIntent("item-1", "Water the plants", "tomorrow at 5"),
+    );
+    expect(result.text).toContain("couldn't");
+  });
+});
+
+describe("resolveIntent — reminderComplete", () => {
+  it("completes a non-recurring reminder using ITS OWN due date as the occurrence", async () => {
+    mockFetch(() => ({ json: { success: true } }));
+    const dueAt = localToISO(localDateISO(1), "09:00");
+    mockMaybeSingleByTable.mockImplementation(async (table: string) =>
+      table === "items"
+        ? {
+            data: { id: "item-1", reminder_details: { due_at: dueAt }, item_recurrence_rules: [] },
+            error: null,
+          }
+        : { data: null, error: null },
+    );
+
+    const result = await resolveIntent(completeIntent("item-1", "Water the plants"));
+
+    const post = postTo("/api/items/item-1/complete");
+    expect(post?.body).toMatchObject({
+      occurrence_date: localDateISO(1),
+      is_recurring: false,
+    });
+    expect(result.text).toContain("Water the plants");
+  });
+
+  it("points a RECURRING reminder at the app instead of guessing which occurrence", async () => {
+    mockMaybeSingleByTable.mockImplementation(async (table: string) =>
+      table === "items"
+        ? {
+            data: {
+              id: "item-1",
+              reminder_details: { due_at: localToISO(localDateISO(1), "09:00") },
+              item_recurrence_rules: [{ id: "rule-1" }],
+            },
+            error: null,
+          }
+        : { data: null, error: null },
+    );
+
+    const result = await resolveIntent(completeIntent("item-1", "Take out trash"));
+
+    expect(postTo("/api/items/item-1/complete")).toBeUndefined();
+    expect(result.text).toContain("Take out trash");
+    expect(result.text.toLowerCase()).toContain("reminders");
+  });
+
+  it("asks instead of guessing when focus memory has no candidate (itemId null)", async () => {
+    const variants = await everyVariant(() =>
+      resolveIntent(completeIntent(null, null)),
+    );
+    allContain(variants, "complete");
+  });
+});
+
+describe("resolveIntent — reminderDelete", () => {
+  it("soft-deletes via the same DELETE route the app's own delete button uses", async () => {
+    mockFetch(() => ({ json: { success: true, action: "deleted" } }));
+    const result = await resolveIntent(deleteIntent("item-1", "Water the plants"));
+
+    expect(callTo("/api/items/item-1", "DELETE")).toBeDefined();
+    expect(result.text).toContain("Water the plants");
+    expect(result.metadata).toMatchObject({ deletedItemId: "item-1" });
+  });
+
+  it("asks instead of guessing when focus memory has no candidate (itemId null)", async () => {
+    const variants = await everyVariant(() => resolveIntent(deleteIntent(null, null)));
+    allContain(variants, "delete");
+    expect(callTo("/api/items/", "DELETE")).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -762,5 +1024,57 @@ describe("resolveIntent — mealPlanGaps", () => {
     });
 
     expect(result.text.toLowerCase()).toMatch(/no gaps|fully planned/);
+  });
+});
+
+// Stage 4 (HUB-30) — a `capabilityAction` intent is what BOTH a matched
+// taught template (native, Layer 2) and a confirmed Ask AI propose_action
+// (Stage 3) reduce to before resolveIntent runs. These tests exercise it
+// directly rather than through the router, since the router's own matching
+// is pinned separately (templates/matcher.test.ts).
+describe("resolveIntent — capabilityAction", () => {
+  it("validates slots against the target capability and executes the SAME resolver the native router uses", async () => {
+    mockFetch(() => ({ json: { item: { id: "item-1" } } }));
+    mockMaybeSingleByTable.mockImplementation(async (table: string) =>
+      table === "reminder_details"
+        ? { data: { due_at: localToISO(localDateISO(1), "09:00") }, error: null }
+        : { data: null, error: null },
+    );
+
+    const result = await resolveIntent({
+      kind: "capabilityAction",
+      face: "schedule",
+      capabilityId: "reminder.reschedule",
+      slots: { itemId: "item-1", whenText: "11", title: "Water the plants" },
+      rawText: "shift it to 11",
+    });
+
+    const patch = callTo("/api/items/item-1", "PATCH");
+    expect(patch?.body?.due_at).toBe(localToISO(localDateISO(1), "11:00"));
+    expect(result.text).toContain("Water the plants");
+  });
+
+  it("degrades to the unknown reply for a capability id that doesn't exist — never throws", async () => {
+    const result = await resolveIntent({
+      kind: "capabilityAction",
+      face: "schedule",
+      capabilityId: "reminder.teleport",
+      slots: {},
+      rawText: "beam it somewhere",
+    });
+    expect(result.text.length).toBeGreaterThan(0);
+    expect(callTo("/api/items/", "PATCH")).toBeUndefined();
+  });
+
+  it("degrades to the unknown reply when slots fail the capability's own Zod schema — never executes", async () => {
+    const result = await resolveIntent({
+      kind: "capabilityAction",
+      face: "schedule",
+      capabilityId: "reminder.reschedule",
+      slots: { whenText: "11" }, // missing required itemId
+      rawText: "shift it to 11",
+    });
+    expect(result.text.length).toBeGreaterThan(0);
+    expect(callTo("/api/items/", "PATCH")).toBeUndefined();
   });
 });
