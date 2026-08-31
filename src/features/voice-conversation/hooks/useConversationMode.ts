@@ -72,6 +72,7 @@ export function useConversationMode(opts: UseConversationModeOptions): UseConver
         get onTranscriptChange() { return handlersRef.current.onTranscriptChange; },
         get onWillSpeak() { return handlersRef.current.onWillSpeak; },
         get runTurn() { return handlersRef.current.runTurn; },
+        get askAI() { return handlersRef.current.askAI; },
         get onLogExpense() { return handlersRef.current.onLogExpense; },
         get onSetReminder() { return handlersRef.current.onSetReminder; },
         get onAddToShopping() { return handlersRef.current.onAddToShopping; },

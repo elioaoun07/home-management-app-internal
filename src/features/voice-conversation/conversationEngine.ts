@@ -38,10 +38,23 @@ export interface ConversationHandlers {
    * saved (HUB-16). When present, this REPLACES the legacy `onLogExpense` /
    * `onSetReminder` / … handlers below for this engine instance — see
    * `handleTranscript`. `kind` is the resolved intent's discriminant; the
-   * engine uses it only to decide whether to offer the AI dig-deeper prompt
-   * (`kind === "unknown"`).
+   * engine uses it, together with `aiHandled`, to decide whether to offer
+   * the AI dig-deeper prompt (`kind === "unknown" && !aiHandled` — Stage C's
+   * useEraTurn already auto-escalates a language-gap miss and sets
+   * `aiHandled: true`, so this only still offers for a capability gap).
    */
-  runTurn?: (text: string) => Promise<{ reply: string; kind: string }>;
+  runTurn?: (text: string) => Promise<{ reply: string; kind: string; aiHandled?: boolean }>;
+  /**
+   * Stage C2 — ERA's registry-aware "Ask AI" (`useEraAskAI.askAI`), wired
+   * only on the ERA engine instance (EraShell) alongside `runTurn`. When
+   * present, the spoken "yes, dig deeper" confirmation calls THIS instead of
+   * `invokeAI`'s `/api/ai-chat/stream` fetch below — so a voice escalation
+   * can propose a real action and learn a taught template (HUB-30) exactly
+   * like a typed one, instead of only ever getting prose back. Absent on the
+   * legacy HubPage/`/chat` engine instance, which has no capability registry
+   * to propose against — `invokeAI` stays that instance's only path.
+   */
+  askAI?: (text: string) => Promise<string>;
   /** Legacy native action callbacks — implement these in HubPage to write to DB */
   onLogExpense?: (intent: Extract<Intent, { kind: "log_expense" }>) => Promise<void>;
   onSetReminder?: (intent: Extract<Intent, { kind: "set_reminder" }>) => Promise<void>;
@@ -237,9 +250,12 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
   async function handleUnifiedTurn(transcript: string) {
     setState("executing");
     try {
-      const { reply, kind } = await handlers.runTurn!(transcript);
+      const { reply, kind, aiHandled } = await handlers.runTurn!(transcript);
 
-      if (kind === "unknown") {
+      // Stage C — a language-gap miss was already auto-escalated by
+      // useEraTurn; `reply` is the AI's real answer, so just speak it below
+      // instead of offering an escalation that already happened.
+      if (kind === "unknown" && !aiHandled) {
         pendingDigDeeperTranscript = transcript;
         pendingConfirmIsDigDeeper = true;
         speak(DIG_DEEPER_PROMPT, () => {
@@ -308,6 +324,33 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
       });
     } catch {
       speak("Something went wrong. Try again.", () => {
+        setState("listening");
+        startListeningSTT();
+        armContinuationWindow();
+      });
+    }
+  }
+
+  /**
+   * Stage C2 — the ERA engine instance's dig-deeper path (a capability-gap
+   * miss; a language-gap one never reaches here — see handleUnifiedTurn).
+   * Calls the SAME `useEraAskAI.askAI` a typed "Ask AI" tap uses, so a voice
+   * escalation can render a real proposal and learn a taught template
+   * (HUB-30) instead of only ever getting prose back from `/api/ai-chat/stream`.
+   * Not streamed (askAI awaits one JSON response) — the visual state and
+   * error handling otherwise mirror `invokeAI` below.
+   */
+  async function invokeEraAskAI(transcript: string) {
+    setState("ai_streaming");
+    try {
+      const reply = await handlers.askAI!(transcript);
+      speak(reply, () => {
+        setState("listening");
+        startListeningSTT();
+        armContinuationWindow();
+      });
+    } catch {
+      speak("I couldn't reach the AI right now.", () => {
         setState("listening");
         startListeningSTT();
         armContinuationWindow();
@@ -419,7 +462,13 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
             "";
           pendingIntent = null;
           pendingDigDeeperTranscript = null;
-          invokeAI(t);
+          // Stage C2 — the ERA engine instance has a registry-aware Ask AI;
+          // use it so this can propose/learn instead of only ever prose.
+          if (handlers.askAI) {
+            invokeEraAskAI(t);
+          } else {
+            invokeAI(t);
+          }
         } else if (pendingIntent) {
           const intent = pendingIntent;
           pendingIntent = null;

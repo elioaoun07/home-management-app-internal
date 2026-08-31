@@ -52,6 +52,14 @@ interface EraState {
    * synchronously — see that hook's doc comment for why.
    */
   templates: EraTemplate[];
+  /**
+   * The raw text of the most recent router miss (`unknown`/`clarify`),
+   * kept around so the command bar's "Ask AI" button stays usable after a
+   * miss even though `pendingTranscript` is cleared on submit — otherwise
+   * the escape hatch is disabled at exactly the moment it's needed and the
+   * owner has to retype the sentence. Cleared on the next non-miss turn.
+   */
+  lastMissText: string | null;
 }
 
 interface EraActions {
@@ -71,6 +79,7 @@ interface EraActions {
   setAskingAI: (v: boolean) => void;
   pushFocusEntity: (entity: FocusEntity) => void;
   setTemplates: (templates: EraTemplate[]) => void;
+  setLastMissText: (text: string | null) => void;
 }
 
 const INITIAL: EraState = {
@@ -87,6 +96,7 @@ const INITIAL: EraState = {
   askingAI: false,
   focusEntities: [],
   templates: [],
+  lastMissText: null,
 };
 
 export const useEraStore = create<EraState & EraActions>((set) => ({
@@ -107,4 +117,5 @@ export const useEraStore = create<EraState & EraActions>((set) => ({
   pushFocusEntity: (entity) =>
     set((s) => ({ focusEntities: pushEntity(s.focusEntities, entity) })),
   setTemplates: (templates) => set({ templates }),
+  setLastMissText: (text) => set({ lastMissText: text }),
 }));

@@ -14,7 +14,13 @@
 import type { z } from "zod";
 
 /** The application domains ERA can act on. Grows as new capabilities are added. */
-export type EraEntityType = "reminder" | "schedule";
+export type EraEntityType =
+  | "reminder"
+  | "schedule"
+  | "transaction"
+  | "recipe"
+  | "meal"
+  | "memory";
 
 export type EraCapabilityOperation =
   | "read"
@@ -26,6 +32,16 @@ export type EraCapabilityOperation =
 export interface EraCapabilityResult {
   text: string;
   metadata?: Record<string, unknown>;
+  /**
+   * Explicit success signal — absent (or `true`) means success; `false`
+   * means the wrapped resolver returned a graceful error reply rather than
+   * throwing. Mirrors `ResolveResult.ok` (resolveIntent.ts) since every
+   * `execute()` below forwards a resolver's return value verbatim. Read by
+   * `useEraAskAI.confirmProposal` (HUB-34) to decide whether this execution
+   * is worth teaching as a template — a phrasing that didn't actually work
+   * must never get memorized as if it did.
+   */
+  ok?: boolean;
 }
 
 export interface EraCapability<TSlots = unknown> {

@@ -9,6 +9,7 @@ import {
   isPronounRef,
   pruneExpired,
   pushEntity,
+  resolveEntityRef,
   resolveFocusRef,
   type FocusEntity,
 } from "./focusMemory";
@@ -87,5 +88,59 @@ describe("resolveFocusRef", () => {
     const now = 1_000_000;
     const stale = entity("stale", now - FOCUS_TTL_MS - 1);
     expect(resolveFocusRef("it", "reminder", [stale], now)).toBeNull();
+  });
+});
+
+// HUB-34 — fuzzy-title resolution for a captured (non-pronoun) reference,
+// e.g. "the dentist reminder" from a taught template's `{target}` slot.
+// Regression coverage for the bug this fixes: the router previously
+// discarded the captured reference entirely and always grabbed the most
+// recent entity of the type, so a template naming one reminder could
+// silently act on a completely different one.
+describe("resolveEntityRef", () => {
+  it("delegates to the pronoun tier unchanged", () => {
+    const now = 1_000_000;
+    const entities = [entity("newest", now - 200), entity("older", now - 500)];
+    expect(resolveEntityRef("it", "reminder", entities, now)?.id).toBe("newest");
+  });
+
+  it("resolves a named reference to the matching title, NOT the most recent", () => {
+    const now = 1_000_000;
+    const dentist = entity("dentist-id", now - 500, "Call the dentist");
+    const mostRecent = entity("recent-id", now - 100, "Water the plants");
+    // "dentist" is older than "water the plants" — a naive most-recent
+    // fallback (the pre-fix behavior) would wrongly pick mostRecent here.
+    const result = resolveEntityRef(
+      "the dentist reminder",
+      "reminder",
+      [mostRecent, dentist],
+      now,
+    );
+    expect(result?.id).toBe("dentist-id");
+  });
+
+  it("returns null — never guesses — when two live titles share equally strong overlap", () => {
+    const now = 1_000_000;
+    const a = entity("a", now - 100, "Call the dentist");
+    const b = entity("b", now - 200, "Call the vet dentist");
+    expect(resolveEntityRef("the dentist reminder", "reminder", [a, b], now)).toBeNull();
+  });
+
+  it("returns null when nothing meaningful is left after stopword stripping", () => {
+    const now = 1_000_000;
+    const entities = [entity("a", now - 100, "Call the dentist")];
+    expect(resolveEntityRef("the reminder", "reminder", entities, now)).toBeNull();
+  });
+
+  it("returns null when no live title shares enough overlap", () => {
+    const now = 1_000_000;
+    const entities = [entity("a", now - 100, "Call the dentist")];
+    expect(resolveEntityRef("the grocery list", "reminder", entities, now)).toBeNull();
+  });
+
+  it("never resolves to an expired entity", () => {
+    const now = 1_000_000;
+    const stale = entity("stale", now - FOCUS_TTL_MS - 1, "Call the dentist");
+    expect(resolveEntityRef("the dentist reminder", "reminder", [stale], now)).toBeNull();
   });
 });

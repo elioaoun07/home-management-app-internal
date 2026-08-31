@@ -9,6 +9,13 @@
 // written algorithm that turns that placeholder syntax into a match — the
 // only regex construction happens here, in reviewed application code, never
 // from a string the model wrote.
+//
+// B1 — both the incoming text and the pattern's own literal segments are run
+// through the same normalizer (normalize.ts) before comparison, so a taught
+// phrase survives a trailing "?", a "please" prefix, or extra whitespace —
+// none of which the regex's case-insensitive flag alone handles.
+
+import { normalizePatternText, normalizeUtterance } from "./normalize";
 
 export interface EraTemplate {
   id: string;
@@ -37,37 +44,40 @@ function escapeRegExp(s: string): string {
  * each swallow the whole remainder.
  */
 function compilePattern(patternText: string): { regex: RegExp; slotOrder: string[] } {
+  const normalized = normalizePatternText(patternText);
   const slotOrder: string[] = [];
   let lastIndex = 0;
   let source = "";
   SLOT_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
-  while ((m = SLOT_RE.exec(patternText))) {
-    source += escapeRegExp(patternText.slice(lastIndex, m.index));
+  while ((m = SLOT_RE.exec(normalized))) {
+    source += escapeRegExp(normalized.slice(lastIndex, m.index));
     source += "(.+?)";
     slotOrder.push(m[1]);
     lastIndex = SLOT_RE.lastIndex;
   }
-  source += escapeRegExp(patternText.slice(lastIndex));
+  source += escapeRegExp(normalized.slice(lastIndex));
   return { regex: new RegExp(`^${source}$`, "i"), slotOrder };
 }
 
 /**
  * Tries every enabled template against `text` in order, returning the first
  * match. Templates are per-user and few (taught one at a time), so a linear
- * scan is plenty — no index needed.
+ * scan is plenty — no index needed. Caller (the router) is responsible for
+ * ordering `templates` by usefulness (see `useEraTemplates.ts` / the
+ * `/api/era/templates` GET order) — this just takes the first hit.
  */
 export function matchTemplates(
   text: string,
   templates: readonly EraTemplate[],
 ): TemplateMatch | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
+  const normalizedText = normalizeUtterance(text);
+  if (!normalizedText) return null;
 
   for (const template of templates) {
     if (!template.enabled) continue;
     const { regex, slotOrder } = compilePattern(template.patternText);
-    const m = trimmed.match(regex);
+    const m = normalizedText.match(regex);
     if (!m) continue;
 
     const slots: Record<string, string> = {};

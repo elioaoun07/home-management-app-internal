@@ -33,6 +33,10 @@ export async function GET() {
   const { data, error } = await supabase
     .from("era_templates")
     .select("*")
+    // B3 — matchTemplates (matcher.ts) takes the FIRST hit in this order, so
+    // when more than one taught pattern could match the same utterance, the
+    // most-used one should win the tie, not just the most recently taught.
+    .order("match_count", { ascending: false })
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -660,4 +660,92 @@ describe("rootIntentRouter — Stage 4 taught-phrase matching (Layer 2)", () => 
     const intent = rootIntentRouter.parse("change it to 5pm");
     expect(intent.kind).toBe("reminderReschedule");
   });
+
+  // HUB-34 regression — a template that captured a NAMED reference must act
+  // on the entity that name matches, not just whatever was touched most
+  // recently. Before this fix, matchAgainstTemplates discarded the captured
+  // reference entirely and always resolved "it" against focus memory.
+  it("resolves a {target}-captured reference by name, not by recency", () => {
+    useEraStore.getState().pushFocusEntity({
+      id: "recent-id",
+      type: "reminder",
+      title: "Water the plants",
+      addedAt: Date.now() - 100,
+    });
+    useEraStore.getState().pushFocusEntity({
+      id: "dentist-id",
+      type: "reminder",
+      title: "Call the dentist",
+      addedAt: Date.now() - 500, // older than the reminder above
+    });
+    useEraStore.getState().setTemplates([
+      {
+        id: "tpl-1",
+        capabilityId: "reminder.reschedule",
+        patternText: "shift {target} to {whenText}",
+        slotNames: ["target", "whenText"],
+        enabled: true,
+      },
+    ]);
+
+    const intent = rootIntentRouter.parse("shift the dentist reminder to 5pm");
+    expect(intent).toMatchObject({
+      kind: "capabilityAction",
+      capabilityId: "reminder.reschedule",
+      slots: { itemId: "dentist-id", whenText: "5pm", title: "Call the dentist" },
+      sourceTemplateId: "tpl-1",
+    });
+  });
+
+  it("a legacy {title}-captured reference (taught before HUB-34) still resolves by name", () => {
+    useEraStore.getState().pushFocusEntity({
+      id: "recent-id",
+      type: "reminder",
+      title: "Water the plants",
+      addedAt: Date.now() - 100,
+    });
+    useEraStore.getState().pushFocusEntity({
+      id: "dentist-id",
+      type: "reminder",
+      title: "Call the dentist",
+      addedAt: Date.now() - 500,
+    });
+    useEraStore.getState().setTemplates([
+      {
+        id: "tpl-1",
+        capabilityId: "reminder.reschedule",
+        patternText: "shift {title} to {whenText}",
+        slotNames: ["title", "whenText"],
+        enabled: true,
+      },
+    ]);
+
+    const intent = rootIntentRouter.parse("shift the dentist reminder to 5pm");
+    expect(intent).toMatchObject({
+      kind: "capabilityAction",
+      slots: { itemId: "dentist-id" },
+    });
+  });
+
+  // A1 regression — a taught template must not be shadowed by the active
+  // face's own weak "clarify" (previously Layer 2 ran only after that weak
+  // fallback, so this template was unreachable whenever budget was active).
+  it("a taught template wins over the active face's own weak clarify", () => {
+    useEraStore.getState().setTemplates([
+      {
+        id: "tpl-1",
+        capabilityId: "reminder.create",
+        patternText: "grocery run",
+        slotNames: [],
+        enabled: true,
+      },
+    ]);
+    // Budget's own weak-money-word clarify would otherwise fire on "grocery".
+    const intent = rootIntentRouter.parse("grocery run");
+    expect(intent).toMatchObject({
+      kind: "capabilityAction",
+      capabilityId: "reminder.create",
+      sourceTemplateId: "tpl-1",
+    });
+  });
 });

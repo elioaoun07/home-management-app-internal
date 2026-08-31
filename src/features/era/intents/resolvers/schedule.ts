@@ -28,6 +28,8 @@ interface ResolveResult {
   text: string;
   metadata?: Record<string, unknown>;
   pending?: EraPendingTurn | null;
+  /** HUB-34 — false on every graceful-error return below; see resolveIntent.ts's ResolveResult doc for why this exists. */
+  ok?: boolean;
 }
 
 /**
@@ -43,7 +45,7 @@ export async function resolveScheduleForDay(dateISO?: string): Promise<ResolveRe
   try {
     const supabase = supabaseBrowser();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { text: formatScheduleError() };
+    if (!user) return { text: formatScheduleError(), ok: false };
 
     const [items, actions] = await Promise.all([
       fetchItems(),
@@ -105,7 +107,7 @@ export async function resolveScheduleForDay(dateISO?: string): Promise<ResolveRe
       },
     };
   } catch {
-    return { text: formatScheduleError() };
+    return { text: formatScheduleError(), ok: false };
   }
 }
 
@@ -145,10 +147,13 @@ export async function resolveDraftReminder(
 
   const finalTitle = (title?.trim() || parsed.title?.trim() || "").trim();
   if (!finalTitle) {
-    return { text: formatReminderError("no-title") };
+    return { text: formatReminderError("no-title"), ok: false };
   }
 
   if (parsed.confidence.date === 0 || !parsed.dueDate) {
+    // Nothing has been written yet — this only asks a follow-up question.
+    // HUB-34: not a success to learn from (via reminder.create's Ask AI
+    // wrapper); the reminder isn't created until the answer resolves it.
     return {
       text: formatAskReminderTime({ title: finalTitle }),
       pending: {
@@ -158,6 +163,7 @@ export async function resolveDraftReminder(
         rawText,
         createdAt: Date.now(),
       },
+      ok: false,
     };
   }
 
@@ -186,7 +192,7 @@ async function writeReminder(
       timeoutMs: 8_000,
     });
 
-    if (!res.ok) return { text: formatReminderError() };
+    if (!res.ok) return { text: formatReminderError(), ok: false };
 
     const { item } = (await res.json()) as { item?: { id?: string } };
 
@@ -206,7 +212,7 @@ async function writeReminder(
       pending: null,
     };
   } catch {
-    return { text: formatReminderError() };
+    return { text: formatReminderError(), ok: false };
   }
 }
 
@@ -286,7 +292,7 @@ export async function resolveReminderReschedule(
   title: string | null,
   whenText: string,
 ): Promise<ResolveResult> {
-  if (!itemId) return { text: formatFocusMissing("reschedule") };
+  if (!itemId) return { text: formatFocusMissing("reschedule"), ok: false };
 
   let existingDueAt: string | null = null;
   try {
@@ -315,7 +321,7 @@ export async function resolveReminderReschedule(
   } else if (parsed.confidence.time > 0 && parsedTime && existingDueAt) {
     dueAt = localToISO(formatDate(new Date(existingDueAt)), parsedTime);
   } else {
-    return { text: formatReminderActionError(title, "reschedule") };
+    return { text: formatReminderActionError(title, "reschedule"), ok: false };
   }
 
   try {
@@ -325,14 +331,14 @@ export async function resolveReminderReschedule(
       body: JSON.stringify({ due_at: dueAt }),
       timeoutMs: 8_000,
     });
-    if (!res.ok) return { text: formatReminderActionError(title, "reschedule") };
+    if (!res.ok) return { text: formatReminderActionError(title, "reschedule"), ok: false };
 
     return {
       text: formatReminderRescheduled({ title: title ?? "that reminder", dueAt }),
       metadata: { itemId, title, dueAt },
     };
   } catch {
-    return { text: formatReminderActionError(title, "reschedule") };
+    return { text: formatReminderActionError(title, "reschedule"), ok: false };
   }
 }
 
@@ -347,7 +353,7 @@ export async function resolveReminderComplete(
   itemId: string | null,
   title: string | null,
 ): Promise<ResolveResult> {
-  if (!itemId) return { text: formatFocusMissing("complete") };
+  if (!itemId) return { text: formatFocusMissing("complete"), ok: false };
 
   try {
     const supabase = supabaseBrowser();
@@ -356,10 +362,10 @@ export async function resolveReminderComplete(
       .select("id, reminder_details(due_at), item_recurrence_rules(id)")
       .eq("id", itemId)
       .maybeSingle();
-    if (!item) return { text: formatReminderActionError(title, "complete") };
+    if (!item) return { text: formatReminderActionError(title, "complete"), ok: false };
 
     const rules = embedOne((item as any).item_recurrence_rules);
-    if (rules) return { text: formatRecurringNeedsApp(title, "complete") };
+    if (rules) return { text: formatRecurringNeedsApp(title, "complete"), ok: false };
 
     const reminderDetails = embedOne<{ due_at: string | null }>(
       (item as any).reminder_details,
@@ -374,14 +380,14 @@ export async function resolveReminderComplete(
       body: JSON.stringify({ occurrence_date: occurrenceDate, is_recurring: false }),
       timeoutMs: 8_000,
     });
-    if (!res.ok) return { text: formatReminderActionError(title, "complete") };
+    if (!res.ok) return { text: formatReminderActionError(title, "complete"), ok: false };
 
     return {
       text: formatReminderCompleted(title),
       metadata: { itemId, title },
     };
   } catch {
-    return { text: formatReminderActionError(title, "complete") };
+    return { text: formatReminderActionError(title, "complete"), ok: false };
   }
 }
 
@@ -395,20 +401,20 @@ export async function resolveReminderDelete(
   itemId: string | null,
   title: string | null,
 ): Promise<ResolveResult> {
-  if (!itemId) return { text: formatFocusMissing("delete") };
+  if (!itemId) return { text: formatFocusMissing("delete"), ok: false };
 
   try {
     const res = await safeFetch(`/api/items/${itemId}`, {
       method: "DELETE",
       timeoutMs: 8_000,
     });
-    if (!res.ok) return { text: formatReminderActionError(title, "delete") };
+    if (!res.ok) return { text: formatReminderActionError(title, "delete"), ok: false };
 
     return {
       text: formatReminderDeleted(title),
       metadata: { deletedItemId: itemId, title },
     };
   } catch {
-    return { text: formatReminderActionError(title, "delete") };
+    return { text: formatReminderActionError(title, "delete"), ok: false };
   }
 }

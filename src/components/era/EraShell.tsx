@@ -89,6 +89,11 @@ export function EraShell() {
   // The one entry point from "a sentence" to "a reply" — shared with
   // CommandBar so typed and voice input can never disagree (HUB-16).
   const { runTurn } = useEraTurn();
+  // Stage C2 — wired into the conversation engine's `handlers.askAI` below,
+  // so a voice dig-deeper escalation goes through the same registry-aware
+  // path a typed "Ask AI" tap does (EraProposalCard renders whatever
+  // proposal either one produces, via the shared store).
+  const { askAI } = useEraAskAI();
 
   const firstName = user?.name?.split(" ")[0] ?? "";
   const setVoiceReplyEnabled = useEraStore((s) => s.setVoiceReplyEnabled);
@@ -125,12 +130,16 @@ export function EraShell() {
     },
     handlers: {
       onWillSpeak: (text) => setEraReply(text),
-      // Same brain as the command bar — see useEraTurn. The engine only
-      // inspects `kind` to decide whether to offer the AI dig-deeper prompt.
+      // Same brain as the command bar — see useEraTurn. The engine inspects
+      // `kind`/`aiHandled` to decide whether to offer the AI dig-deeper
+      // prompt (Stage C already auto-escalated a language-gap miss).
       runTurn: async (text) => {
-        const { reply, intent } = await runTurn(text);
-        return { reply, kind: intent.kind };
+        const { reply, intent, aiHandled } = await runTurn(text);
+        return { reply, kind: intent.kind, aiHandled };
       },
+      // Stage C2 — the capability-gap dig-deeper path; skipUserMessage
+      // because runTurn already persisted this transcript as a user turn.
+      askAI: (text) => askAI(text, { skipUserMessage: true }),
       sessionId: undefined,
     },
   });

@@ -1,10 +1,17 @@
 // src/app/api/era/ask/route.ts
-// ERA "Ask AI" (Slice 4) — the manual AI handoff. Never invoked by the
-// deterministic router; only by an explicit tap in the ERA Hub UI. Builds
-// face-scoped context (src/lib/ai/context.ts), asks Gemini for either a
-// plain answer or a validated proposal (src/lib/ai/eraAskProposal.ts), and
-// returns it untouched — this route performs no writes. The client decides
-// what to render and performs any write only on the user's explicit confirm.
+// ERA "Ask AI" — the AI handoff. Reached either by an explicit tap in the
+// ERA Hub UI, or (Stage C) automatically from useEraTurn when the
+// deterministic router misses AND the miss classifies as a "language gap"
+// (see missTracking.ts) — a genuine "I don't do that" (capability gap) never
+// reaches here on the auto path, only on a manual tap. Builds face-scoped
+// context (src/lib/ai/context.ts), asks Gemini for either a plain answer or
+// a validated proposal (src/lib/ai/eraAskProposal.ts), and returns it
+// untouched — this route performs no writes. The client decides what to
+// render and performs any write only on the user's explicit confirm.
+//
+// Auto-escalations (`auto: true`) are capped per day, separately from the
+// existing monthly token ceiling below — a manual tap never counts against
+// or is blocked by this cap, only the automatic path is.
 
 import { fetchBudgetContext, fetchScheduleContext } from "@/lib/ai/context";
 import { generateAskAIResponse } from "@/lib/ai/eraAskProposal";
@@ -25,6 +32,12 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const FACE_KEYS = ["budget", "schedule", "chef", "brain"] as const;
+
+/** Stage C — ceiling on how many times a router MISS can auto-escalate to the AI in one day; a manual tap is never subject to this. */
+const DAILY_AUTO_ESCALATION_CAP = 15;
+/** Tags the ai_messages rows this route inserts so the cap above can count only auto-escalations, never manual "Ask AI" taps. */
+const AUTO_SESSION_ID = "era-ask-auto";
+const MANUAL_SESSION_ID = "era-ask";
 
 const bodySchema = z.object({
   message: z.string().min(1).max(2000),
@@ -55,6 +68,8 @@ const bodySchema = z.object({
     })
     .nullable()
     .optional(),
+  /** Stage C — true when useEraTurn escalated this automatically after a language-gap miss; never set by a manual "Ask AI" tap. */
+  auto: z.boolean().optional().default(false),
 });
 
 export async function POST(req: NextRequest) {
@@ -71,7 +86,32 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  const { message, face, history, pendingReminderTitle, focusEntity } = parsed.data;
+  const { message, face, history, pendingReminderTitle, focusEntity, auto } = parsed.data;
+  const sessionId = auto ? AUTO_SESSION_ID : MANUAL_SESSION_ID;
+
+  // Stage C — the daily auto-escalation cap. Counted from this route's own
+  // `ai_messages` rows (tagged by session_id), not a new table. A manual tap
+  // always uses MANUAL_SESSION_ID and is never counted or blocked here.
+  if (auto) {
+    const startOfToday = new Date(
+      new Date().getFullYear(),
+      new Date().getMonth(),
+      new Date().getDate(),
+    ).toISOString();
+    const { count } = await supabase
+      .from("ai_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("session_id", AUTO_SESSION_ID)
+      .eq("role", "user")
+      .gte("created_at", startOfToday);
+    if ((count ?? 0) >= DAILY_AUTO_ESCALATION_CAP) {
+      return NextResponse.json(
+        { kind: "prose", text: "I'm holding off on AI for now — tap Ask AI directly if you'd like." },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+  }
 
   // Monthly token budget (Hard Rule-adjacent: same ceiling as /api/ai-chat).
   const { data: usageRows } = await supabase
@@ -133,7 +173,7 @@ export async function POST(req: NextRequest) {
   await supabase.from("ai_messages").insert([
     {
       user_id: user.id,
-      session_id: "era-ask",
+      session_id: sessionId,
       role: "user",
       content: message,
       input_tokens: inputTokenEstimate,
@@ -141,7 +181,7 @@ export async function POST(req: NextRequest) {
     },
     {
       user_id: user.id,
-      session_id: "era-ask",
+      session_id: sessionId,
       role: "assistant",
       content: result.text,
       input_tokens: 0,

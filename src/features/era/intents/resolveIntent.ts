@@ -41,6 +41,17 @@ export interface ResolveResult {
    * already outstanding, since `useEraTurn` intercepts that turn first.
    */
   pending?: EraPendingTurn | null;
+  /**
+   * Explicit success signal — absent (or `true`) means success; `false`
+   * means the resolver returned a graceful error reply rather than throwing
+   * (safeFetch failure, unparseable slot, ambiguous match, …). A resolver
+   * that fails this way still returns normally with error text in `text`,
+   * so a caller can't tell success from failure by catching — this field is
+   * the only reliable signal. Read by `useEraAskAI.confirmProposal` (HUB-34):
+   * a taught template is learned ONLY when `ok !== false`, so a phrasing
+   * that didn't actually work never gets memorized as if it did.
+   */
+  ok?: boolean;
 }
 
 /**

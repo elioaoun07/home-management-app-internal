@@ -1,14 +1,16 @@
 "use client";
 
 // src/features/era/useEraAskAI.ts
-// ERA "Ask AI" (Slice 4) — the manual escape hatch, always available, never
-// triggered automatically by the router (locked decision: manual button,
-// always visible — no auto-escalation, no surprise quota burn).
+// ERA "Ask AI" (Slice 4) — the escape hatch to the AI. Originally a manual-
+// only button (locked decision: no auto-escalation, no surprise quota burn);
+// Stage C reopens that decision under a specific guard — see useEraTurn.ts's
+// module doc. Both entry points funnel through THIS hook and this route, so
+// there is exactly one place that builds the request, renders a proposal,
+// and learns a template — never a second implementation for the auto path.
 //
 // Sends the current face + recent thread history to POST /api/era/ask. The
 // model either answers in prose (persisted to the thread like any other
-// reply) or proposes a specific action (Slice 4 ships exactly one kind:
-// "trigger this reminder from an NFC tag"), rendered as a confirm card via
+// reply) or proposes a specific action, rendered as a confirm card via
 // `activeProposal`. Nothing is written until `confirmProposal()` runs —
 // Doctrine Q10: the model proposes, the human confirms, the deterministic
 // path executes.
@@ -20,7 +22,7 @@ import { safeFetch } from "@/lib/safeFetch";
 import { getCapability } from "./capabilities/registry";
 import { logEraCapabilityAction, logEraNfcReminder } from "./logEraAction";
 import { eraKeys } from "./queryKeys";
-import { learnTemplateFromProposal } from "./templates/learn";
+import { learnTemplateFromProposal, shouldLearnFrom } from "./templates/learn";
 import type { EraActiveProposal } from "./types";
 import {
   useActiveEraConversation,
@@ -46,16 +48,25 @@ export function useEraAskAI() {
   const queryClient = useQueryClient();
 
   const askAI = useCallback(
-    async (question: string) => {
+    async (
+      question: string,
+      opts: { skipUserMessage?: boolean; auto?: boolean } = {},
+    ): Promise<string> => {
+      const { skipUserMessage = false, auto = false } = opts;
       const conversationId = activeConversation?.id ?? null;
       setAskingAI(true);
 
       try {
-        await createMessage.mutateAsync({
-          conversation_id: conversationId,
-          role: "user",
-          content: question,
-        });
+        // C1 — when useEraTurn escalates a miss automatically, it already
+        // persisted the user's turn as part of its normal flow; persisting
+        // it again here would duplicate the era_messages row.
+        if (!skipUserMessage) {
+          await createMessage.mutateAsync({
+            conversation_id: conversationId,
+            role: "user",
+            content: question,
+          });
+        }
 
         const history = (messagesData?.messages ?? [])
           .slice(-8)
@@ -79,6 +90,7 @@ export function useEraAskAI() {
             history,
             pendingReminderTitle: pendingTurn?.title,
             focusEntity,
+            auto,
           }),
           timeoutMs: 60_000, // Hard Rule #6 — AI calls are slow
         });
@@ -117,6 +129,7 @@ export function useEraAskAI() {
         });
 
         setEraReply(result.text);
+        return result.text;
       } finally {
         setAskingAI(false);
       }
@@ -156,8 +169,15 @@ export function useEraAskAI() {
         logEraCapabilityAction(proposal.capabilityId, result.metadata, queryClient);
 
         // Stage 4 (HUB-30) — learn a phrasing template from this SUCCESSFUL
-        // execution only. A dismissed or failed proposal teaches nothing.
-        const learned = learnTemplateFromProposal(proposal.sourceText, proposal.slots);
+        // execution only. A dismissed proposal never reaches here at all; a
+        // proposal that reached here but returned a graceful error (HUB-34:
+        // `shouldLearnFrom` — a resolver reports failure by RETURNING error
+        // text, not throwing, so `result.ok` is the only reliable success
+        // signal) teaches nothing either — a phrasing that didn't actually
+        // work must never get memorized as if it did.
+        const learned = shouldLearnFrom(result)
+          ? learnTemplateFromProposal(proposal.sourceText, proposal.slots, capability)
+          : null;
         if (learned) {
           safeFetch("/api/era/templates", {
             method: "POST",

@@ -76,4 +76,36 @@ describe("matchTemplates", () => {
     // this input should NOT match since the parens aren't in it at all.
     expect(matchTemplates("push it please to noon", [special])).toBeNull();
   });
+
+  // B1 — normalization end to end: a taught pattern still matches everyday
+  // variance in trailing punctuation and politeness prefixes.
+  it("matches despite trailing punctuation on the input", () => {
+    expect(matchTemplates("shift it to 5pm?", [RESCHEDULE_TEMPLATE])?.slots).toEqual({
+      whenText: "5pm",
+    });
+  });
+
+  it("matches despite a leading politeness prefix on the input", () => {
+    expect(
+      matchTemplates("please shift it to 5pm", [RESCHEDULE_TEMPLATE])?.slots,
+    ).toEqual({ whenText: "5pm" });
+    expect(
+      matchTemplates("hey era, shift it to 5pm", [RESCHEDULE_TEMPLATE])?.slots,
+    ).toEqual({ whenText: "5pm" });
+  });
+
+  it("matches despite a prefix baked into the STORED pattern itself", () => {
+    const taughtWithPrefix: EraTemplate = {
+      id: "tpl-5",
+      capabilityId: "reminder.reschedule",
+      patternText: "please shift it to {whenText}",
+      slotNames: ["whenText"],
+      enabled: true,
+    };
+    // A plain "shift it to 5pm" (no "please") should still match a pattern
+    // that was taught WITH the prefix — both sides normalize the same way.
+    expect(matchTemplates("shift it to 5pm", [taughtWithPrefix])?.slots).toEqual({
+      whenText: "5pm",
+    });
+  });
 });

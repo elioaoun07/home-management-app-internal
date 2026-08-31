@@ -15,6 +15,8 @@ import {
 interface ResolveResult {
   text: string;
   metadata?: Record<string, unknown>;
+  /** HUB-34 — false only on a genuine technical failure (fetch/exception); a correctly-executed search that legitimately found nothing is still a success — see resolveIntent.ts's ResolveResult doc. */
+  ok?: boolean;
 }
 
 export async function resolveRecipeSearch(dish: string): Promise<ResolveResult> {
@@ -23,7 +25,7 @@ export async function resolveRecipeSearch(dish: string): Promise<ResolveResult> 
       `/api/recipes?search=${encodeURIComponent(dish)}&limit=1`,
       { timeoutMs: 8_000 },
     );
-    if (!res.ok) return { text: formatChefError() };
+    if (!res.ok) return { text: formatChefError(), ok: false };
 
     const recipes: Array<{
       id: string;
@@ -34,6 +36,9 @@ export async function resolveRecipeSearch(dish: string): Promise<ResolveResult> 
     }> = await res.json();
 
     if (!recipes.length) {
+      // The search itself worked correctly — it just found nothing for THIS
+      // dish. That's a legitimate outcome, not a phrasing failure, so it
+      // still counts as `ok` for template-learning purposes.
       return {
         text: formatRecipeNotFound(dish),
         metadata: { found: false, dish },
@@ -53,7 +58,7 @@ export async function resolveRecipeSearch(dish: string): Promise<ResolveResult> 
       metadata: { found: true, recipeId: recipe.id, dish },
     };
   } catch {
-    return { text: formatChefError() };
+    return { text: formatChefError(), ok: false };
   }
 }
 
@@ -64,7 +69,7 @@ export async function resolveRecipeSearch(dish: string): Promise<ResolveResult> 
 export async function resolveListRecipes(): Promise<ResolveResult> {
   try {
     const res = await safeFetch("/api/recipes", { timeoutMs: 8_000 });
-    if (!res.ok) return { text: formatChefError() };
+    if (!res.ok) return { text: formatChefError(), ok: false };
 
     const recipes: Array<{ id: string; name: string }> = await res.json();
 
@@ -73,7 +78,7 @@ export async function resolveListRecipes(): Promise<ResolveResult> {
       metadata: { count: recipes.length, recipeIds: recipes.map((r) => r.id) },
     };
   } catch {
-    return { text: formatChefError() };
+    return { text: formatChefError(), ok: false };
   }
 }
 
@@ -97,12 +102,12 @@ export async function resolveAssignMeal(
   mealType: "breakfast" | "lunch" | "dinner" | "snack" | undefined,
 ): Promise<ResolveResult> {
   if (!dish || !dayHint) {
-    return { text: formatAssignMealError("missing-fields") };
+    return { text: formatAssignMealError("missing-fields"), ok: false };
   }
 
   const parsedDay = parseSmartText(dayHint);
   if (parsedDay.confidence.date === 0 || !parsedDay.dueDate) {
-    return { text: formatAssignMealError("bad-day", dayHint) };
+    return { text: formatAssignMealError("bad-day", dayHint), ok: false };
   }
   const plannedDate = parsedDay.dueDate; // YYYY-MM-DD
 
@@ -111,9 +116,9 @@ export async function resolveAssignMeal(
       `/api/recipes?search=${encodeURIComponent(dish)}&limit=1`,
       { timeoutMs: 8_000 },
     );
-    if (!searchRes.ok) return { text: formatChefError() };
+    if (!searchRes.ok) return { text: formatChefError(), ok: false };
     const recipes: Array<{ id: string; name: string }> = await searchRes.json();
-    if (!recipes.length) return { text: formatAssignMealError("no-recipe", dish) };
+    if (!recipes.length) return { text: formatAssignMealError("no-recipe", dish), ok: false };
     const recipe = recipes[0];
 
     const res = await safeFetch("/api/meal-plans", {
@@ -130,9 +135,9 @@ export async function resolveAssignMeal(
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: undefined as string | undefined }));
       if (res.status === 400 && err.error?.toLowerCase().includes("household")) {
-        return { text: formatAssignMealError("no-household") };
+        return { text: formatAssignMealError("no-household"), ok: false };
       }
-      return { text: formatAssignMealError("request-failed", err.error) };
+      return { text: formatAssignMealError("request-failed", err.error), ok: false };
     }
 
     const mealPlan = await res.json();
@@ -157,7 +162,7 @@ export async function resolveAssignMeal(
       },
     };
   } catch {
-    return { text: formatChefError() };
+    return { text: formatChefError(), ok: false };
   }
 }
 

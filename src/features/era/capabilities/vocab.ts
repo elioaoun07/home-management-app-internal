@@ -47,6 +47,43 @@ export const BASE_ENTITY_VOCAB: Record<EraEntityType, readonly string[]> = {
     "overdue",
     "due",
   ],
+  // Stage D — vocab for the capabilities registered alongside reminder/schedule
+  // (registry.ts). Without a bucket here, missTracking.ts can never classify
+  // a miss against these entities as a "language gap" (a real capability
+  // exists, phrasing just didn't parse) — it would always read as a
+  // "capability gap" instead, which also means Stage C's auto-escalation
+  // guard (only escalating language-gap misses) would never fire for them.
+  transaction: [
+    "spend",
+    "spent",
+    "spending",
+    "transaction",
+    "transactions",
+    "expense",
+    "expenses",
+    "budget",
+    "draft",
+    "drafts",
+    "cost",
+    "paid",
+    "pay",
+    "bought",
+    "purchase",
+    "purchased",
+  ],
+  recipe: [
+    "recipe",
+    "recipes",
+    "cook",
+    "cooking",
+    "dish",
+    "ingredient",
+    "ingredients",
+    "kitchen",
+    "chef",
+  ],
+  meal: ["meal", "meals", "dinner", "lunch", "breakfast", "snack", "plan", "planning", "assign"],
+  memory: ["remember", "memory", "memories", "recall", "note", "save", "stored"],
 };
 
 /** Words too generic to ever count as a domain signal on their own. */
@@ -114,7 +151,14 @@ export function classifyMissEntity(
   text: string,
   learnedVocab?: Partial<Record<EraEntityType, ReadonlySet<string>>>,
 ): EraEntityType | null {
-  const entities: EraEntityType[] = ["reminder", "schedule"];
+  const entities: EraEntityType[] = [
+    "reminder",
+    "schedule",
+    "transaction",
+    "recipe",
+    "meal",
+    "memory",
+  ];
   for (const entity of entities) {
     if (matchesEntityVocab(text, entity, learnedVocab?.[entity])) return entity;
   }

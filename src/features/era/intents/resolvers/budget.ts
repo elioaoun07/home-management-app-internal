@@ -25,6 +25,8 @@ import type { EraBudgetSubmitResult } from "../../useEraBudgetSubmit";
 interface ResolveResult {
   text: string;
   metadata?: Record<string, unknown>;
+  /** HUB-34 — false on every graceful-error return; see resolveIntent.ts's ResolveResult doc. Only set on resolvers reachable through the capability registry (spend.month, draft.list, draft.confirm). */
+  ok?: boolean;
 }
 
 interface PeriodTransaction {
@@ -95,14 +97,14 @@ export async function resolveMonthSpend(
 ): Promise<ResolveResult> {
   try {
     const period = await fetchCurrentPeriodTransactions();
-    if (!period) return { text: formatBudgetError() };
+    if (!period) return { text: formatBudgetError(), ok: false };
     const { start, end, currentUserId } = period;
 
     // "self"/"partner" require knowing who "self" is — without it we cannot
     // honestly split the household total, and showing it under either label
     // would be exactly the HUB-14 failure this resolver exists to avoid.
     if (scope !== "household" && !currentUserId) {
-      return { text: formatBudgetError() };
+      return { text: formatBudgetError(), ok: false };
     }
 
     const transactions = scopeTransactions(
@@ -152,7 +154,7 @@ export async function resolveMonthSpend(
       metadata: { total: filteredTotal, scope, start, end },
     };
   } catch {
-    return { text: formatBudgetError() };
+    return { text: formatBudgetError(), ok: false };
   }
 }
 
@@ -478,7 +480,7 @@ async function fetchDrafts(): Promise<DraftRow[] | null> {
 export async function resolveListDrafts(): Promise<ResolveResult> {
   try {
     const drafts = await fetchDrafts();
-    if (!drafts) return { text: formatListDraftsError() };
+    if (!drafts) return { text: formatListDraftsError(), ok: false };
 
     return {
       text: formatDraftsList(
@@ -487,7 +489,7 @@ export async function resolveListDrafts(): Promise<ResolveResult> {
       metadata: { count: drafts.length, draftIds: drafts.map((d) => d.id) },
     };
   } catch {
-    return { text: formatListDraftsError() };
+    return { text: formatListDraftsError(), ok: false };
   }
 }
 
@@ -507,8 +509,8 @@ export async function resolveListDrafts(): Promise<ResolveResult> {
 export async function resolveConfirmDraft(hint: string | undefined): Promise<ResolveResult> {
   try {
     const drafts = await fetchDrafts();
-    if (!drafts) return { text: formatConfirmDraftError("request-failed") };
-    if (drafts.length === 0) return { text: formatConfirmDraftError("none-pending") };
+    if (!drafts) return { text: formatConfirmDraftError("request-failed"), ok: false };
+    if (drafts.length === 0) return { text: formatConfirmDraftError("none-pending"), ok: false };
 
     let target: DraftRow | undefined;
     if (!hint) {
@@ -520,8 +522,8 @@ export async function resolveConfirmDraft(hint: string | undefined): Promise<Res
           d.description?.toLowerCase().includes(h) ||
           d.category?.name?.toLowerCase().includes(h),
       );
-      if (matches.length === 0) return { text: formatConfirmDraftError("not-found", hint) };
-      if (matches.length > 1) return { text: formatConfirmDraftError("ambiguous", hint) };
+      if (matches.length === 0) return { text: formatConfirmDraftError("not-found", hint), ok: false };
+      if (matches.length > 1) return { text: formatConfirmDraftError("ambiguous", hint), ok: false };
       target = matches[0];
     }
 
@@ -541,7 +543,7 @@ export async function resolveConfirmDraft(hint: string | undefined): Promise<Res
         }>)
       : [];
     const full = fullDrafts.find((d) => d.id === target!.id);
-    if (!full) return { text: formatConfirmDraftError("request-failed") };
+    if (!full) return { text: formatConfirmDraftError("request-failed"), ok: false };
 
     const res = await safeFetch(`/api/drafts/${full.id}`, {
       method: "PATCH",
@@ -558,7 +560,7 @@ export async function resolveConfirmDraft(hint: string | undefined): Promise<Res
     });
 
     if (!res.ok) {
-      return { text: formatConfirmDraftError("request-failed") };
+      return { text: formatConfirmDraftError("request-failed"), ok: false };
     }
 
     const { transaction } = (await res.json()) as {
@@ -570,6 +572,6 @@ export async function resolveConfirmDraft(hint: string | undefined): Promise<Res
       metadata: { transactionId: transaction.id, amount: full.amount },
     };
   } catch {
-    return { text: formatConfirmDraftError("request-failed") };
+    return { text: formatConfirmDraftError("request-failed"), ok: false };
   }
 }

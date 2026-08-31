@@ -14,14 +14,25 @@ describe("ERA_CAPABILITIES", () => {
     }
   });
 
-  it("includes the Stage 1 core set", () => {
+  it("includes the Stage 1 core set plus Stage D's widened registry", () => {
     expect(Object.keys(ERA_CAPABILITIES).sort()).toEqual(
       [
+        // Stage 1
         "reminder.complete",
         "reminder.create",
         "reminder.delete",
         "reminder.reschedule",
         "schedule.forDay",
+        // Stage D — deliberately NOT transaction.draft; see registry.ts's
+        // Stage D comment for why (needs a React-bound hook, not a slot).
+        "spend.month",
+        "draft.list",
+        "draft.confirm",
+        "recipe.search",
+        "recipe.list",
+        "meal.assign",
+        "memory.save",
+        "memory.recall",
       ].sort(),
     );
   });
@@ -86,8 +97,49 @@ describe("ERA_CAPABILITIES", () => {
     }
   });
 
-  it("entityFace maps every registered entity to the schedule face", () => {
+  it("entityFace maps every registered entity to its owning face", () => {
     expect(entityFace("reminder")).toBe("schedule");
     expect(entityFace("schedule")).toBe("schedule");
+    expect(entityFace("transaction")).toBe("budget");
+    expect(entityFace("recipe")).toBe("chef");
+    expect(entityFace("meal")).toBe("chef");
+    expect(entityFace("memory")).toBe("brain");
+  });
+
+  // Stage D — the zero-slot capabilities (draft.list, recipe.list) must
+  // still accept an empty slots object, the same as schedule.forDay's
+  // optional dateISO already does.
+  it("zero-slot capabilities accept an empty slots object", () => {
+    expect(ERA_CAPABILITIES["draft.list"].slots.safeParse({}).success).toBe(true);
+    expect(ERA_CAPABILITIES["recipe.list"].slots.safeParse({}).success).toBe(true);
+  });
+
+  it("spend.month rejects a missing scope but accepts a well-formed one", () => {
+    expect(ERA_CAPABILITIES["spend.month"].slots.safeParse({}).success).toBe(false);
+    expect(
+      ERA_CAPABILITIES["spend.month"].slots.safeParse({ scope: "household" }).success,
+    ).toBe(true);
+  });
+
+  it("meal.assign requires dish and dayHint but not mealType", () => {
+    expect(ERA_CAPABILITIES["meal.assign"].slots.safeParse({ dish: "pasta" }).success).toBe(
+      false,
+    );
+    expect(
+      ERA_CAPABILITIES["meal.assign"].slots.safeParse({ dish: "pasta", dayHint: "Friday" })
+        .success,
+    ).toBe(true);
+  });
+
+  it("memory.save requires both label and value", () => {
+    expect(
+      ERA_CAPABILITIES["memory.save"].slots.safeParse({ label: "wifi password" }).success,
+    ).toBe(false);
+    expect(
+      ERA_CAPABILITIES["memory.save"].slots.safeParse({
+        label: "wifi password",
+        value: "hunter2",
+      }).success,
+    ).toBe(true);
   });
 });

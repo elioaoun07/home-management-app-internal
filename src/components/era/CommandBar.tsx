@@ -36,6 +36,8 @@ export function CommandBar({
   const voiceReplyEnabled = useEraStore((s) => s.voiceReplyEnabled);
   const setVoiceReplyEnabled = useEraStore((s) => s.setVoiceReplyEnabled);
   const pendingTurn = useEraStore((s) => s.pendingTurn);
+  const lastMissText = useEraStore((s) => s.lastMissText);
+  const setLastMissText = useEraStore((s) => s.setLastMissText);
 
   const { runTurn } = useEraTurn();
   const { askAI, askingAI } = useEraAskAI();
@@ -118,15 +120,29 @@ export function CommandBar({
   // With nothing typed, "Ask AI" re-sends whatever ERA was already asking about
   // — the owner's exact scenario: ERA asked "when should I remind you?", the
   // date parser couldn't handle "when I arrive home", so AI gets a shot at it
-  // with the original sentence instead of the blank input box.
+  // with the original sentence instead of the blank input box. A2 extends the
+  // same fallback to a plain router miss (unknown/clarify): runTurn cleared
+  // the input on submit, so without `lastMissText` this button would go dark
+  // right when it's needed and the owner would have to retype the sentence.
   const askAIClick = useCallback(async () => {
-    const text = pendingTranscript.trim() || pendingTurn?.rawText || "";
+    const text = pendingTranscript.trim() || pendingTurn?.rawText || lastMissText || "";
     if (!text || busy || askingAI) return;
     setPendingTranscript("");
+    setLastMissText(null);
     await askAI(text).catch(() => {});
-  }, [pendingTranscript, pendingTurn, busy, askingAI, setPendingTranscript, askAI]);
+  }, [
+    pendingTranscript,
+    pendingTurn,
+    lastMissText,
+    busy,
+    askingAI,
+    setPendingTranscript,
+    setLastMissText,
+    askAI,
+  ]);
 
-  const canAskAI = Boolean(pendingTranscript.trim() || pendingTurn) && !busy && !askingAI;
+  const canAskAI =
+    Boolean(pendingTranscript.trim() || pendingTurn || lastMissText) && !busy && !askingAI;
 
   const placeholder = PLACEHOLDERS[activeFaceKey] ?? "Talk to ERA…";
 

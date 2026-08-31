@@ -345,4 +345,32 @@ describe("generateAskAIResponse", () => {
 
     expect(result).toEqual({ kind: "prose", text: "I'll set that up." });
   });
+
+  // A3 — the capability catalog (propose_action) must be offered on EVERY
+  // face, not just Schedule. Previously it was nested inside the
+  // `face === "schedule"` branch of buildSystemPrompt, so Ask AI on
+  // budget/chef/brain could only ever answer prose — nothing there could be
+  // proposed, confirmed, or learned as a taught template (HUB-30 only fires
+  // after a successful propose_action).
+  it.each(["budget", "chef", "brain"] as const)(
+    "includes the propose_action capability catalog in the system prompt for the %s face",
+    async (face) => {
+      vi.stubEnv("GEMINI_API_KEY", "test-key");
+      mockGenerateContentWithFallback.mockResolvedValue({
+        text: json({ kind: "prose", text: "ok" }),
+      });
+
+      await generateAskAIResponse({ message: "do something", face });
+
+      // Mock call history isn't reset between tests in this file — read the
+      // most recent call rather than assuming an absolute call count.
+      const call = mockGenerateContentWithFallback.mock.calls.at(-1)?.[0] as {
+        systemInstruction: string;
+      };
+      expect(call.systemInstruction).toContain("propose_action");
+      expect(call.systemInstruction).toContain("reminder.create");
+      // NFC proposals stay schedule-only — no tag catalog leaks into other faces.
+      expect(call.systemInstruction).not.toContain("propose_nfc_reminder");
+    },
+  );
 });

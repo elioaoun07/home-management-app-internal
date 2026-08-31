@@ -15,6 +15,19 @@
 // resolver instead of the normal classify step — the whole next utterance is
 // treated as the answer, not reclassified as a fresh command. See
 // `resolvePendingReminderAnswer` in `intents/resolvers/schedule.ts`.
+//
+// Stage C reopens useEraAskAI's "manual escape hatch only" decision under a
+// specific guard: a router miss (`unknown`/`clarify`) that `classifyMiss`
+// (missTracking.ts) reads as a LANGUAGE gap — a registered capability
+// plausibly covers this, the phrasing just didn't parse — auto-escalates to
+// Ask AI instead of returning the canned "I didn't catch that" line. A
+// CAPABILITY gap (nothing in the registry covers this at all) never
+// escalates automatically; it stays a deterministic reply and keeps feeding
+// the build-queue signal missClassification already existed for. This is a
+// heuristic, not a guarantee (missTracking.ts's own doc comment says so) —
+// worst case a language-gap guess escalates something Ask AI can't help
+// with either, which just costs one AI call, capped per day server-side
+// (see /api/era/ask/route.ts's DAILY_AUTO_ESCALATION_CAP).
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
@@ -27,6 +40,7 @@ import { classifyMiss, type MissClassification } from "./missTracking";
 import { useEraTemplates } from "./templates/useEraTemplates";
 import { deriveLearnedVocab } from "./templates/vocabGrowth";
 import type { EraPendingTurn, Intent } from "./types";
+import { useEraAskAI } from "./useEraAskAI";
 import { useEraBudgetSubmit } from "./useEraBudgetSubmit";
 import {
   useActiveEraConversation,
@@ -75,6 +89,16 @@ export interface EraTurnResult {
   intent: Intent;
   reply: string;
   metadata?: Record<string, unknown>;
+  /**
+   * Stage C — true when a language-gap miss was already auto-escalated to
+   * the AI, so `reply` is the AI's real answer, not the canned "I didn't
+   * catch that" line. `intent.kind` stays "unknown"/"clarify" either way
+   * (the ROUTER still missed — this only says what happened next), so a
+   * caller that gates behavior on `kind === "unknown"` (voice's dig-deeper
+   * offer — see conversationEngine.ts) needs this to avoid re-offering an
+   * escalation that already happened.
+   */
+  aiHandled?: boolean;
 }
 
 export function useEraTurn() {
@@ -84,11 +108,16 @@ export function useEraTurn() {
   const setEraReply = useEraStore((s) => s.setEraReply);
   const pendingTurn = useEraStore((s) => s.pendingTurn);
   const setPendingTurn = useEraStore((s) => s.setPendingTurn);
+  const setLastMissText = useEraStore((s) => s.setLastMissText);
 
   const budgetSubmit = useEraBudgetSubmit();
   const { data: activeConversation } = useActiveEraConversation();
   const createMessage = useCreateEraMessage();
   const queryClient = useQueryClient();
+  // Stage C — the auto-escalation path below reuses this hook's askAI
+  // verbatim (same request, same proposal rendering, same template
+  // learning) rather than a second implementation of any of it.
+  const { askAI } = useEraAskAI();
   // Stage 4 (HUB-30) — keeps useEraStore().templates current for the
   // router's Layer 2 matcher; see that hook's doc comment.
   useEraTemplates();
@@ -103,6 +132,12 @@ export function useEraTurn() {
         : rootIntentRouter.parse(text);
 
       if (!pending) setLastIntent(intent);
+
+      // A2 — a miss (unknown/clarify) keeps its raw text around so "Ask AI"
+      // stays usable after the input box clears; a resolved turn (whether it
+      // hit a router or answered a pending question) forgets it.
+      const isMiss = !pending && (intent.kind === "clarify" || intent.kind === "unknown");
+      setLastMissText(isMiss ? text : null);
 
       const isFaceless =
         intent.kind === "unknown" ||
@@ -130,6 +165,29 @@ export function useEraTurn() {
         console.error("[era] failed to persist user message", err);
       }
 
+      // Stage 2 (HUB-28) — a "clarify"/"unknown" turn is a router miss.
+      // Classify it (language gap vs capability gap) BEFORE deciding what to
+      // do next — Stage C's auto-escalation reads this same classification.
+      const missClassification: MissClassification | null = isMiss
+        ? classifyMiss(text, deriveLearnedVocab(useEraStore.getState().templates))
+        : null;
+
+      // Stage C — a language-gap miss escalates to the AI automatically; a
+      // capability-gap miss (nothing in the registry covers this) never
+      // does. The user message above is already persisted, so `askAI` must
+      // not persist it a second time — it persists its own assistant reply
+      // and manages the proposal/template-learning flow exactly as a manual
+      // tap would.
+      if (isMiss && missClassification?.missKind === "language-gap") {
+        // Handled (or at least attempted) automatically — the manual "Ask
+        // AI" fallback no longer needs to hold this text around.
+        setLastMissText(null);
+        const reply = await askAI(text, { skipUserMessage: true, auto: true }).catch(
+          () => "Something went wrong. Try again.",
+        );
+        return { intent, reply, metadata: undefined, aiHandled: true };
+      }
+
       const {
         text: reply,
         metadata,
@@ -153,15 +211,6 @@ export function useEraTurn() {
 
       const draftTransactionId =
         typeof metadata?.draftId === "string" ? metadata.draftId : null;
-
-      // Stage 2 (HUB-28) — a "clarify"/"unknown" turn is a router miss.
-      // Classify it (language gap vs capability gap) and fold the result
-      // into this same era_messages row's intent_payload — no new table,
-      // reusing intent_kind as the miss signal itself (see missTracking.ts).
-      const missClassification: MissClassification | null =
-        !pending && (intent.kind === "clarify" || intent.kind === "unknown")
-          ? classifyMiss(text, deriveLearnedVocab(useEraStore.getState().templates))
-          : null;
 
       try {
         await createMessage.mutateAsync({
@@ -189,7 +238,9 @@ export function useEraTurn() {
       activeConversation,
       createMessage,
       budgetSubmit,
+      askAI,
       setLastIntent,
+      setLastMissText,
       setActiveFace,
       setHubModuleKey,
       setEraReply,

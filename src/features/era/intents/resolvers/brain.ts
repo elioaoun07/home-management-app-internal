@@ -11,6 +11,8 @@ import {
 interface ResolveResult {
   text: string;
   metadata?: Record<string, unknown>;
+  /** HUB-34 — false on a genuine failure (technical, or a save that didn't actually save, e.g. the 409-duplicate branch below); a recall that correctly found nothing is still a success — see resolveIntent.ts's ResolveResult doc. */
+  ok?: boolean;
 }
 
 export async function resolveMemorySave(
@@ -27,14 +29,16 @@ export async function resolveMemorySave(
 
     if (res.status === 409) {
       // Duplicate — update by deleting old + re-inserting would need a PATCH route.
-      // For now, inform the user and let them rephrase.
+      // For now, inform the user and let them rephrase. Nothing was saved,
+      // so this must not be learned as a working phrasing (HUB-34).
       return {
         text: `I already have "${label}" saved. Say "update the ${label} to <new value>" and I'll overwrite it. That's coming soon.`,
         metadata: { duplicate: true, label },
+        ok: false,
       };
     }
 
-    if (!res.ok) return { text: formatMemorySaveError() };
+    if (!res.ok) return { text: formatMemorySaveError(), ok: false };
 
     const saved = (await res.json()) as { id?: string };
 
@@ -43,7 +47,7 @@ export async function resolveMemorySave(
       metadata: { saved: true, label, value, memoryId: saved.id ?? null },
     };
   } catch {
-    return { text: formatMemorySaveError() };
+    return { text: formatMemorySaveError(), ok: false };
   }
 }
 
@@ -53,11 +57,13 @@ export async function resolveMemoryRecall(query: string): Promise<ResolveResult>
       `/api/memories?q=${encodeURIComponent(query)}&limit=3`,
       { timeoutMs: 8_000 },
     );
-    if (!res.ok) return { text: formatMemoryRecallError() };
+    if (!res.ok) return { text: formatMemoryRecallError(), ok: false };
 
     const memories: Array<{ label: string; value: string }> = await res.json();
 
     if (!memories.length) {
+      // The recall itself worked — it just found nothing for this query.
+      // Legitimate outcome, not a phrasing failure.
       return {
         text: formatMemoryNotFound(query),
         metadata: { found: false, query },
@@ -71,6 +77,6 @@ export async function resolveMemoryRecall(query: string): Promise<ResolveResult>
       metadata: { found: true, label: hit.label, value: hit.value },
     };
   } catch {
-    return { text: formatMemoryRecallError() };
+    return { text: formatMemoryRecallError(), ok: false };
   }
 }

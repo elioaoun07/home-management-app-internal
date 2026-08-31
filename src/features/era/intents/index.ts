@@ -1,7 +1,7 @@
 // Root intent router — delegates to per-face routers, falls back to global detection.
 import { entityFace, getCapability } from "../capabilities/registry";
 import type { FocusEntityType } from "../focusMemory";
-import { resolveFocusRef } from "../focusMemory";
+import { resolveEntityRef } from "../focusMemory";
 import { matchTemplates } from "../templates/matcher";
 import type { FaceKey, Intent, IntentRouter } from "../types";
 import { useEraStore } from "../useEraStore";
@@ -94,6 +94,14 @@ function isGreeting(text: string): boolean {
  * Ask AI's proposal validation uses (see eraAskProposal.ts). If resolution
  * fails, this returns `null` and the router falls through to its normal
  * unknown/clarify fallback — never a dead end.
+ *
+ * HUB-34 — the reference used to resolve that entity is now whatever the
+ * template actually captured (`{target}` on a template taught after this
+ * fix, `{title}` on one taught before it, or the literal "it" when neither
+ * was captured), matched by NAME against focus memory (`resolveEntityRef`)
+ * rather than always grabbing the most recently touched entity regardless
+ * of what the template named — see focusMemory.ts's doc comment for the bug
+ * this replaces.
  */
 function matchAgainstTemplates(text: string): Intent | null {
   const { templates, focusEntities } = useEraStore.getState();
@@ -107,12 +115,16 @@ function matchAgainstTemplates(text: string): Intent | null {
 
   const slots: Record<string, unknown> = { ...match.slots };
   if (capability.entityRefSlot) {
-    const focus = resolveFocusRef(
-      "it",
-      capability.entity as FocusEntityType,
-      focusEntities,
-    );
-    if (!focus) return null; // nothing to resolve "it" against — let the normal fallback ask instead of guessing
+    const ref =
+      typeof slots.target === "string"
+        ? slots.target
+        : typeof slots.title === "string"
+          ? slots.title
+          : "it";
+    delete slots.target; // matcher-level concept — never a capability's own Zod slot
+
+    const focus = resolveEntityRef(ref, capability.entity as FocusEntityType, focusEntities);
+    if (!focus) return null; // couldn't resolve the reference — let the normal fallback ask instead of guessing
     slots[capability.entityRefSlot] = focus.id;
     slots.title = focus.title;
   }
@@ -170,17 +182,22 @@ export const rootIntentRouter: IntentRouter = {
     if (strongHits.length > 1)
       return { kind: "clarify", reason: "ambiguous", rawText: text };
 
-    // No confident cross-face hit — fall back to the active face's own weak
-    // clarify (if any), then to a single unambiguous generic face switch.
+    // Layer 2 — no built-in router produced a confident (strong) hit. Try a
+    // taught phrase BEFORE falling back to a weak clarify/switchFace guess —
+    // a taught phrase is a confident, user-authored signal and should beat a
+    // face's generic keyword echo. (Previously this ran only after the weak
+    // fallbacks below, which meant the active face's own weak "clarify" could
+    // shadow a taught template every time — see HUB-30 follow-up.)
+    const templateHit = matchAgainstTemplates(trimmed);
+    if (templateHit) return templateHit;
+
+    // No confident cross-face hit and no taught phrase — fall back to the
+    // active face's own weak clarify (if any), then to a single unambiguous
+    // generic face switch.
     if (activeHit) return activeHit;
     if (weakHits.length === 1) return weakHits[0];
     if (weakHits.length > 1)
       return { kind: "clarify", reason: "ambiguous", rawText: text };
-
-    // Layer 2 — every built-in router missed; try a taught phrase before
-    // giving up entirely.
-    const templateHit = matchAgainstTemplates(trimmed);
-    if (templateHit) return templateHit;
 
     return { kind: "unknown", rawText: text };
   },

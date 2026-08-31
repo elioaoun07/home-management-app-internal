@@ -154,10 +154,37 @@ function buildSystemPrompt(args: {
     'Default to kind "prose": answer the question directly, in one or two short sentences, spoken-style — no markdown.',
   ];
 
+  // A3 — the capability catalog (propose_action) is available on EVERY face,
+  // not just Schedule. This used to live inside the `face === "schedule"`
+  // branch below, so Ask AI on budget/chef/brain could only ever answer
+  // prose — nothing on those faces could be proposed, confirmed, or learned
+  // as a taught template (Stage 4, HUB-30 only fires after a successful
+  // propose_action). The registry itself still gates what's actually
+  // offered — see capabilities/registry.ts; today that's reminder/schedule
+  // capabilities regardless of which face is active.
+  contract.push(
+    "",
+    'If the user wants an action ERA can already do — create/reschedule/complete/delete a reminder, or look up a day\'s schedule — respond with kind "propose_action". You MUST pick capabilityId EXACTLY from the list below; if nothing matches, use kind "prose" instead of guessing.',
+    "",
+    "Available capabilities (id | operation | slots):",
+    describeCapabilities(),
+    "",
+    focusEntity
+      ? `Current focus reminder: "${focusEntity.title}" — if the user refers to it by pronoun (it/that/this), use the literal string "FOCUS" for that capability's entity-identifying slot (e.g. itemId). Never invent a real id.`
+      : "No current focus reminder — if a capability needs an entity-identifying slot (itemId) and the user only used a pronoun with nothing recent to resolve it against, use kind \"prose\" and ask them to name the reminder instead of guessing.",
+  );
+
+  if (pendingReminderTitle) {
+    contract.push(
+      "",
+      `The user was already asked for a time for a reminder titled "${pendingReminderTitle}" and instead described a trigger condition. Use that exact title as reminderTitle if you propose a trigger, or as the title slot if you propose reminder.create.`,
+    );
+  }
+
   if (face === "schedule" && scheduleContext) {
     contract.push(
       "",
-      'If — and only if — the user wants a reminder that should fire when an NFC tag reaches a specific state (e.g. "remind me when I get home", "when I leave for work"), respond with kind "propose_nfc_reminder" instead. You MUST pick nfcTagId and targetState EXACTLY from the tags listed below — never invent an id or a state that isn\'t listed. If no listed tag plausibly matches what the user described, use kind "prose" and say so — do not guess.',
+      'If — and only if — the user wants a reminder that should fire when an NFC tag reaches a specific state (e.g. "remind me when I get home", "when I leave for work"), respond with kind "propose_nfc_reminder" instead of propose_action. You MUST pick nfcTagId and targetState EXACTLY from the tags listed below — never invent an id or a state that isn\'t listed. If no listed tag plausibly matches what the user described, use kind "prose" and say so — do not guess.',
       "",
       "Available NFC tags (id | label | states | current state):",
       scheduleContext.nfcTags.length
@@ -168,23 +195,7 @@ function buildSystemPrompt(args: {
             )
             .join("\n")
         : "(none configured)",
-      "",
-      'Otherwise, if the user wants some OTHER action ERA can already do — create/reschedule/complete/delete a reminder, or look up a day\'s schedule — respond with kind "propose_action". You MUST pick capabilityId EXACTLY from the list below; if nothing matches, use kind "prose" instead of guessing.',
-      "",
-      "Available capabilities (id | operation | slots):",
-      describeCapabilities(),
-      "",
-      focusEntity
-        ? `Current focus reminder: "${focusEntity.title}" — if the user refers to it by pronoun (it/that/this), use the literal string "FOCUS" for that capability's entity-identifying slot (e.g. itemId). Never invent a real id.`
-        : "No current focus reminder — if a capability needs an entity-identifying slot (itemId) and the user only used a pronoun with nothing recent to resolve it against, use kind \"prose\" and ask them to name the reminder instead of guessing.",
     );
-
-    if (pendingReminderTitle) {
-      contract.push(
-        "",
-        `The user was already asked for a time for a reminder titled "${pendingReminderTitle}" and instead described a trigger condition. Use that exact title as reminderTitle if you propose a trigger, or as the title slot if you propose reminder.create.`,
-      );
-    }
 
     if (scheduleContext.upcoming.length > 0) {
       contract.push(
