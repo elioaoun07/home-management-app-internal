@@ -161,10 +161,56 @@ export interface CreateEraMessageResult {
   conversation_id: string;
 }
 
+type EraMessagesPage = {
+  messages: EraMessage[];
+  nextCursor: string | null;
+};
+
+type CreateEraMessageContext = {
+  conversationId: string | null;
+  optimisticId: string | null;
+};
+
+// Keep writes ordered without making the visible turn wait for Postgres. This
+// matters when a user row and its assistant row are submitted back-to-back.
+const conversationWriteQueues = new Map<
+  string,
+  Promise<CreateEraMessageResult>
+>();
+
+function enqueueConversationWrite(
+  conversationId: string,
+  write: () => Promise<CreateEraMessageResult>,
+): Promise<CreateEraMessageResult> {
+  const previous = conversationWriteQueues.get(conversationId);
+  const current = previous ? previous.then(write) : write();
+  conversationWriteQueues.set(conversationId, current);
+
+  void current.then(
+    () => {
+      if (conversationWriteQueues.get(conversationId) === current) {
+        conversationWriteQueues.delete(conversationId);
+      }
+    },
+    () => {
+      if (conversationWriteQueues.get(conversationId) === current) {
+        conversationWriteQueues.delete(conversationId);
+      }
+    },
+  );
+
+  return current;
+}
+
 export function useCreateEraMessage() {
   const queryClient = useQueryClient();
 
-  return useMutation<CreateEraMessageResult, Error, CreateEraMessageInput>({
+  return useMutation<
+    CreateEraMessageResult,
+    Error,
+    CreateEraMessageInput,
+    CreateEraMessageContext
+  >({
     mutationFn: async (input) => {
       // Strip null/undefined so the API zod schema (which uses
       // `.optional()` on most fields) doesn't choke on JSON nulls.
@@ -181,24 +227,102 @@ export function useCreateEraMessage() {
       if (input.draft_transaction_id)
         payload.draft_transaction_id = input.draft_transaction_id;
 
-      const res = await safeFetch("/api/era/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `HTTP ${res.status}`);
-      }
-      return res.json();
+      const write = async () => {
+        const res = await safeFetch("/api/era/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || `HTTP ${res.status}`);
+        }
+        return res.json() as Promise<CreateEraMessageResult>;
+      };
+
+      return input.conversation_id
+        ? enqueueConversationWrite(input.conversation_id, write)
+        : write();
     },
-    onSuccess: (result) => {
-      // Refresh both the messages list for this conversation and the
-      // conversations list (updated_at changed).
-      queryClient.invalidateQueries({
-        queryKey: eraKeys.messages(result.conversation_id),
-      });
+    onMutate: async (input) => {
+      const conversationId = input.conversation_id;
+      if (!conversationId) {
+        return { conversationId: null, optimisticId: null };
+      }
+
+      const cachedPage = queryClient.getQueryData<EraMessagesPage>(
+        eraKeys.messages(conversationId),
+      );
+      if (cachedPage) {
+        await queryClient.cancelQueries({
+          queryKey: eraKeys.messages(conversationId),
+        });
+      }
+
+      const optimisticId = `optimistic-${crypto.randomUUID()}`;
+      const optimisticMessage: EraMessage = {
+        id: optimisticId,
+        conversation_id: conversationId,
+        user_id: "optimistic",
+        role: input.role,
+        content: input.content,
+        intent_kind: input.intent_kind ?? null,
+        intent_face: input.intent_face ?? null,
+        intent_payload: input.intent_payload ?? null,
+        draft_transaction_id: input.draft_transaction_id ?? null,
+        created_at: new Date().toISOString(),
+      };
+
+      queryClient.setQueryData<EraMessagesPage>(
+        eraKeys.messages(conversationId),
+        (old) => ({
+          messages: [...(old?.messages ?? []), optimisticMessage],
+          nextCursor: old?.nextCursor ?? null,
+        }),
+      );
+
+      return { conversationId, optimisticId };
+    },
+    onSuccess: (result, _input, context) => {
+      queryClient.setQueryData<EraMessagesPage>(
+        eraKeys.messages(result.conversation_id),
+        (old) => {
+          const current = old?.messages ?? [];
+          const withoutServerDuplicate = current.filter(
+            (message) => message.id !== result.message.id,
+          );
+          const optimisticIndex = withoutServerDuplicate.findIndex(
+            (message) => message.id === context?.optimisticId,
+          );
+
+          const messages = [...withoutServerDuplicate];
+          if (optimisticIndex >= 0) {
+            messages[optimisticIndex] = result.message;
+          } else {
+            messages.push(result.message);
+          }
+
+          return {
+            messages,
+            nextCursor: old?.nextCursor ?? null,
+          };
+        },
+      );
+
+      // updated_at changed, so the active conversation ordering may change.
       queryClient.invalidateQueries({ queryKey: eraKeys.conversations() });
+    },
+    onError: (_error, _input, context) => {
+      if (!context?.conversationId || !context.optimisticId) return;
+      queryClient.setQueryData<EraMessagesPage>(
+        eraKeys.messages(context.conversationId),
+        (old) => ({
+          messages: (old?.messages ?? []).filter(
+            (message) => message.id !== context.optimisticId,
+          ),
+          nextCursor: old?.nextCursor ?? null,
+        }),
+      );
     },
   });
 }

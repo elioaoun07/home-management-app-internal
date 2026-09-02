@@ -1,7 +1,7 @@
 ---
 created: 2026-07-06
 type: master-plan
-status: active
+status: superseded
 owner: Elio
 author: Claude Fable 5
 tags:
@@ -322,3 +322,7 @@ Sources: [Microsoft Learn — SpeechRecognizer (JS)](https://learn.microsoft.com
 
 - **2026-07-06** — Plan created. Wake-word double-dead-end verified (Azure JS SDK gap — §2.3). Awaiting WP-00 answers: Q-VERCEL, Q-WIP.
 - **2026-07-17** — [ERA Top View — Design Study](<ERA Top View — Design Study (2026-07-17).md>) created on owner request as a *companion* consumer of this plan's signal engine (pull mouth of the same brain). Its packets WP-T1..T5 slot behind WP-03/04/11; heartbeat priority unchanged — if a session must choose, WP-04 wins. No WP ticked as of this date.
+- **2026-09-02** — **G0 MISSED** (was due 2026-07-08): no `cron_runs` ledger, no `vercel.json`, no scheduler committed. Cause: Phase 0 never started.
+- **2026-09-02** — **G1 MISSED** (was due 2026-07-19): zero briefing deliveries; `src/lib/briefing/` does not exist; ERA has never spoken first. Cause: Program A (proactive) had no packet shipped between plan creation and this date.
+- **2026-09-02** — **G2 MISSED** (was due 2026-08-16): no routing-fixture-driven fail-safe distinct from what shipped reactively (HUB-1/12 landed instead, a different program); no partner briefing; no delivery policy. Cause: same as above — proactive work never began.
+- **2026-09-02** — **Plan superseded** by [ERA Top Layer — Master Plan (2026-09-02)](<ERA Top Layer — Master Plan (2026-09-02).md>) per this plan's own §6 rule ("two consecutive missed gates ⇒ stop, shrink the plan"). The new plan carries forward D1–D13's still-valid defaults (rebound as its own §3), the wake-word vendor verdicts (§2.3/§12, unchanged, now explicitly out of scope), and re-sequences Program A/B/C into dated phases with a 2-lane, WIP-1 execution model. Read the new plan, not this one, for anything touching Hub & ERA proactive work from this date forward.

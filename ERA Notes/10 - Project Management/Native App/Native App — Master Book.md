@@ -13,8 +13,8 @@ tags:
 
 # Native App — Master Book
 
-> **Stamped:** 2026-07-11 · **Status:** 📋 PLANNED — approved plan, implementation not started.
-> **No checklist yet.** This campaign has no `4 - Checklist.md` and no ID prefix registered in [_Conventions](<../_Conventions.md>) §5. When work actually starts, register a `NAT` prefix, add the campaign to `CAMPAIGNS` in `scripts/pm/lint.mjs`, and create the checklist from `_Templates/Campaign Checklist.md`.
+> **Stamped:** 2026-07-11 · **Status:** 📋 PLANNED, scheduled — Phase 4 (Dec 8–31, 2026) of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>); groundwork (NAT-1) opens async 2026-09-15. Implementation not started.
+> **Checklist and prefix registered 2026-09-02.** [4 - Checklist.md](<4 - Checklist.md>), prefix `NAT`, both in `CAMPAIGNS` (`scripts/pm/lint.mjs`) and [_Conventions](<../_Conventions.md>) §5.
 >
 > **Freshness protocol:** trust this plan as of 2026-07-11. Before implementing any phase, delta with `git log --since=2026-07-11 -- src/lib/pushSender.ts src/hooks/usePushNotifications.ts src/lib/supabase/ proxy.ts next.config.ts public/sw.js` — those are the load-bearing integration points. If `push_subscriptions` changed, re-verify the migration spec.
 

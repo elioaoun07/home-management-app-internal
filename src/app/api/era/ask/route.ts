@@ -25,7 +25,7 @@ import {
 import { estimateTokens } from "@/lib/ai/tokenUtils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -88,40 +88,46 @@ export async function POST(req: NextRequest) {
   }
   const { message, face, history, pendingReminderTitle, focusEntity, auto } = parsed.data;
   const sessionId = auto ? AUTO_SESSION_ID : MANUAL_SESSION_ID;
+  const requestHash = generateRequestHash(message, `era-ask-${face}`);
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const startOfToday = auto
+    ? new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+    : null;
+
+  // These quota checks are independent. Pay one network latency layer.
+  const autoCountQuery = startOfToday
+    ? supabase
+        .from("ai_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("session_id", AUTO_SESSION_ID)
+        .eq("role", "user")
+        .gte("created_at", startOfToday)
+    : null;
+  const monthlyUsageQuery = supabase
+    .from("ai_messages")
+    .select("input_tokens, output_tokens")
+    .eq("user_id", user.id)
+    .gte("created_at", startOfMonth);
+  const [autoCountResult, monthlyUsageResult, rateLimitCheck] = await Promise.all([
+    autoCountQuery ?? Promise.resolve(null),
+    monthlyUsageQuery,
+    checkUserRateLimit(supabase, user.id, requestHash),
+  ]);
 
   // Stage C — the daily auto-escalation cap. Counted from this route's own
   // `ai_messages` rows (tagged by session_id), not a new table. A manual tap
   // always uses MANUAL_SESSION_ID and is never counted or blocked here.
-  if (auto) {
-    const startOfToday = new Date(
-      new Date().getFullYear(),
-      new Date().getMonth(),
-      new Date().getDate(),
-    ).toISOString();
-    const { count } = await supabase
-      .from("ai_messages")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("session_id", AUTO_SESSION_ID)
-      .eq("role", "user")
-      .gte("created_at", startOfToday);
-    if ((count ?? 0) >= DAILY_AUTO_ESCALATION_CAP) {
-      return NextResponse.json(
-        { kind: "prose", text: "I'm holding off on AI for now — tap Ask AI directly if you'd like." },
-        { headers: { "Cache-Control": "no-store" } },
-      );
-    }
+  if ((autoCountResult?.count ?? 0) >= DAILY_AUTO_ESCALATION_CAP) {
+    return NextResponse.json(
+      { kind: "prose", text: "I'm holding off on AI for now — tap Ask AI directly if you'd like." },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   }
 
   // Monthly token budget (Hard Rule-adjacent: same ceiling as /api/ai-chat).
-  const { data: usageRows } = await supabase
-    .from("ai_messages")
-    .select("input_tokens, output_tokens")
-    .eq("user_id", user.id)
-    .gte(
-      "created_at",
-      new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
-    );
+  const usageRows = monthlyUsageResult.data;
   const monthlyUsage = (usageRows ?? []).reduce(
     (sum, r) => sum + (r.input_tokens ?? 0) + (r.output_tokens ?? 0),
     0,
@@ -133,26 +139,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const requestHash = generateRequestHash(message, `era-ask-${face}`);
-  const rateLimitCheck = await checkUserRateLimit(supabase, user.id, requestHash);
   if (!rateLimitCheck.allowed) {
     return NextResponse.json(
       { error: rateLimitCheck.reason ?? "Rate limited" },
       { status: 429 },
     );
   }
-  await recordRequestHash(supabase, user.id, "era-ask", requestHash);
-
   const formattedHistory: ChatMessage[] = history.map((m) => ({
     role: m.role,
     content: m.content,
     timestamp: new Date(),
   }));
 
-  const [budgetContext, scheduleContext] = await Promise.all([
+  const contextPromise = Promise.all([
     face === "budget" ? fetchBudgetContext(supabase, user.id) : Promise.resolve(undefined),
     face === "schedule" ? fetchScheduleContext(supabase, user.id) : Promise.resolve(undefined),
   ]);
+  await recordRequestHash(supabase, user.id, "era-ask", requestHash);
+  const [budgetContext, scheduleContext] = await contextPromise;
 
   const result = await generateAskAIResponse({
     message,
@@ -170,25 +174,27 @@ export async function POST(req: NextRequest) {
   const inputTokenEstimate =
     estimateTokens(message) +
     formattedHistory.reduce((s, m) => s + estimateTokens(m.content), 0);
-  await supabase.from("ai_messages").insert([
-    {
-      user_id: user.id,
-      session_id: sessionId,
-      role: "user",
-      content: message,
-      input_tokens: inputTokenEstimate,
-      output_tokens: 0,
-    },
-    {
-      user_id: user.id,
-      session_id: sessionId,
-      role: "assistant",
-      content: result.text,
-      input_tokens: 0,
-      output_tokens: outputTokenEstimate,
-      model_used: process.env.GEMINI_MODEL || "gemini-flash-latest",
-    },
-  ]);
+  after(async () => {
+    await supabase.from("ai_messages").insert([
+      {
+        user_id: user.id,
+        session_id: sessionId,
+        role: "user",
+        content: message,
+        input_tokens: inputTokenEstimate,
+        output_tokens: 0,
+      },
+      {
+        user_id: user.id,
+        session_id: sessionId,
+        role: "assistant",
+        content: result.text,
+        input_tokens: 0,
+        output_tokens: outputTokenEstimate,
+        model_used: process.env.GEMINI_MODEL || "gemini-flash-latest",
+      },
+    ]);
+  });
 
   return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
 }

@@ -143,8 +143,9 @@ IDs are per-campaign, so always name the campaign — `L1` alone is ambiguous ac
 | `PM Tooling/` | `R` (grandfathered) |
 | `Delivery/` | `DLV` |
 | `Outfits/` | `OUT` |
+| `Native App/` | `NAT` |
 
-`Native App/` is a plan pack with no checklist and no prefix yet — register `NAT` here, add it to `CAMPAIGNS` in `scripts/pm/lint.mjs`, and create the checklist from `_Templates/` when work starts.
+`Native App/` registered 2026-09-02 — its `4 - Checklist.md` exists (created by the [ERA Top Layer — Master Plan](<ERA Top Layer — Master Plan (2026-09-02).md>)'s Phase-4 packets, N-00…N-05).
 
 **Retired prefixes (never reused):** `DW` (Delivery Workspace — merged into `Delivery`, 2026-07-30).
 

@@ -50,10 +50,17 @@ export function useEraAskAI() {
   const askAI = useCallback(
     async (
       question: string,
-      opts: { skipUserMessage?: boolean; auto?: boolean } = {},
+      opts: {
+        skipUserMessage?: boolean;
+        auto?: boolean;
+        conversationId?: string | null;
+      } = {},
     ): Promise<string> => {
       const { skipUserMessage = false, auto = false } = opts;
-      const conversationId = activeConversation?.id ?? null;
+      let conversationId =
+        opts.conversationId === undefined
+          ? (activeConversation?.id ?? null)
+          : opts.conversationId;
       setAskingAI(true);
 
       try {
@@ -61,19 +68,29 @@ export function useEraAskAI() {
         // persisted the user's turn as part of its normal flow; persisting
         // it again here would duplicate the era_messages row.
         if (!skipUserMessage) {
-          await createMessage.mutateAsync({
+          const userMessage = {
             conversation_id: conversationId,
-            role: "user",
+            role: "user" as const,
             content: question,
-          });
+          };
+
+          if (conversationId) {
+            void createMessage.mutateAsync(userMessage).catch(() => {});
+          } else {
+            try {
+              const userResult = await createMessage.mutateAsync(userMessage);
+              conversationId = userResult.conversation_id;
+            } catch {
+              conversationId = null;
+            }
+          }
         }
 
-        const history = (messagesData?.messages ?? [])
-          .slice(-8)
-          .map((m) => ({
-            role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
-            content: m.content,
-          }));
+        const history = (messagesData?.messages ?? []).slice(-8).map((m) => ({
+          role:
+            m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+          content: m.content,
+        }));
 
         // Focus memory lives in browser state — send the single most recent
         // reminder so the server can resolve a "FOCUS" sentinel in a
@@ -97,7 +114,10 @@ export function useEraAskAI() {
 
         const result: AskAIResult = res.ok
           ? await res.json()
-          : { kind: "prose", text: "I couldn't reach the AI just now. Try again in a moment." };
+          : {
+              kind: "prose",
+              text: "I couldn't reach the AI just now. Try again in a moment.",
+            };
 
         setPendingTurn(null); // Ask AI is a deliberate escape hatch — it ends the pending question either way.
 
@@ -122,13 +142,18 @@ export function useEraAskAI() {
           setActiveProposal(proposal);
         }
 
-        await createMessage.mutateAsync({
-          conversation_id: conversationId,
-          role: "assistant",
-          content: result.text,
-        });
-
         setEraReply(result.text);
+
+        if (conversationId) {
+          void createMessage
+            .mutateAsync({
+              conversation_id: conversationId,
+              role: "assistant",
+              content: result.text,
+            })
+            .catch(() => {});
+        }
+
         return result.text;
       } finally {
         setAskingAI(false);
@@ -166,7 +191,11 @@ export function useEraAskAI() {
         if (!capability) throw new Error("unknown capability");
         const result = await capability.execute(proposal.slots);
         replyText = result.text;
-        logEraCapabilityAction(proposal.capabilityId, result.metadata, queryClient);
+        logEraCapabilityAction(
+          proposal.capabilityId,
+          result.metadata,
+          queryClient,
+        );
 
         // Stage 4 (HUB-30) — learn a phrasing template from this SUCCESSFUL
         // execution only. A dismissed proposal never reaches here at all; a
@@ -176,7 +205,11 @@ export function useEraAskAI() {
         // signal) teaches nothing either — a phrasing that didn't actually
         // work must never get memorized as if it did.
         const learned = shouldLearnFrom(result)
-          ? learnTemplateFromProposal(proposal.sourceText, proposal.slots, capability)
+          ? learnTemplateFromProposal(
+              proposal.sourceText,
+              proposal.slots,
+              capability,
+            )
           : null;
         if (learned) {
           safeFetch("/api/era/templates", {
@@ -190,7 +223,10 @@ export function useEraAskAI() {
             }),
           })
             .then((res) => {
-              if (res.ok) queryClient.invalidateQueries({ queryKey: eraKeys.templates() });
+              if (res.ok)
+                queryClient.invalidateQueries({
+                  queryKey: eraKeys.templates(),
+                });
             })
             .catch(() => {});
         }
@@ -198,12 +234,16 @@ export function useEraAskAI() {
         replyText = "That didn't go through — try it from the app directly.";
       }
 
-      await createMessage.mutateAsync({
-        conversation_id: conversationId,
-        role: "assistant",
-        content: replyText,
-      });
       setEraReply(replyText);
+      if (conversationId) {
+        void createMessage
+          .mutateAsync({
+            conversation_id: conversationId,
+            role: "assistant",
+            content: replyText,
+          })
+          .catch(() => {});
+      }
       return;
     }
 
@@ -211,7 +251,10 @@ export function useEraAskAI() {
       const itemRes = await safeFetch("/api/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "reminder", title: proposal.reminderTitle }),
+        body: JSON.stringify({
+          type: "reminder",
+          title: proposal.reminderTitle,
+        }),
         timeoutMs: 8_000,
       });
       if (!itemRes.ok) throw new Error("item create failed");
@@ -222,7 +265,10 @@ export function useEraAskAI() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           condition_type: "nfc_state_change",
-          condition_config: { tag_id: proposal.nfcTagId, target_state: proposal.targetState },
+          condition_config: {
+            tag_id: proposal.nfcTagId,
+            target_state: proposal.targetState,
+          },
         }),
         timeoutMs: 8_000,
       });
@@ -231,16 +277,28 @@ export function useEraAskAI() {
       replyText = `Set — "${proposal.reminderTitle}" fires when ${proposal.nfcTagLabel} reaches ${proposal.targetState}.`;
       logEraNfcReminder(item.id, proposal.reminderTitle, queryClient);
     } catch {
-      replyText = "That didn't save — try setting the trigger from the item's own page instead.";
+      replyText =
+        "That didn't save — try setting the trigger from the item's own page instead.";
     }
 
-    await createMessage.mutateAsync({
-      conversation_id: conversationId,
-      role: "assistant",
-      content: replyText,
-    });
     setEraReply(replyText);
-  }, [activeProposal, activeConversation, createMessage, setActiveProposal, setEraReply, queryClient]);
+    if (conversationId) {
+      void createMessage
+        .mutateAsync({
+          conversation_id: conversationId,
+          role: "assistant",
+          content: replyText,
+        })
+        .catch(() => {});
+    }
+  }, [
+    activeProposal,
+    activeConversation,
+    createMessage,
+    setActiveProposal,
+    setEraReply,
+    queryClient,
+  ]);
 
   const dismissProposal = useCallback(() => {
     setActiveProposal(null);

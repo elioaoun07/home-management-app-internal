@@ -23,6 +23,7 @@ _See [[Sync and Offline]] in Architecture._
 - Legacy localStorage queue in `SyncContext` (hub shopping list only)
 - FIFO replay with max 5 retries
 - Use `isReallyOnline()` not `navigator.onLine`
+- `safeFetch` distinguishes confirmed offline failures from request latency: timeouts trigger a de-duplicated health probe and never enter the mutation queue by themselves
 
 ## See Also
 

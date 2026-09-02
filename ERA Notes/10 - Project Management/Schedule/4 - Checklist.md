@@ -67,7 +67,7 @@ tags:
 
 > User: "I don't want to see Task anymore." Deferred, cross-cutting. Still to do: DB merge (`task` rows → `reminder` or a `kind` flag), other surfaces (`WebEventFormDialog`, `ItemDetailModal`, `ItemsListView`, web calendars, `AddReminderFromMessageModal`, filters/sub-modes), the `ItemType` union, and every Schedule doc that names "Task".
 
-- [ ] **SCH-6.1** Retire the `task` type end-to-end (DB + all surfaces + the `ItemType` union + docs). Do this as one dedicated slice before touching the DB. _(friction - L)_
+- [ ] **SCH-6.1** *(packet **M-09** of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>), Lane M while native waits; split M-09a DB+types / M-09b surfaces+docs)* Retire the `task` type end-to-end (DB + all surfaces + the `ItemType` union + docs). Do this as one dedicated slice before touching the DB. _(friction - L)_
 
 ## Definition of Done
 

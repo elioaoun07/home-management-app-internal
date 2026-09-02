@@ -23,13 +23,13 @@ When the network drops, mutations are queued locally and replayed when connectiv
 
 ## Common edit scenarios
 
-- **"Add a new queueable mutation"** → use `safeFetch()`. Failures (timeout / network) call `markOffline()`; the engine retries.
+- **"Add a new queueable mutation"** → use `safeFetch()`. Confirmed network failures call `markOffline()`; endpoint timeouts do not enter the queue.
 - **"Edit the offline indicator UI"** → wherever it's rendered — usually `MobileNav` or header. Check `src/components/layouts/MobileNav.tsx`.
 
 ## Gotchas
 
 - **Never use `navigator.onLine`** (Hard Rule #7). Use `isReallyOnline()`.
-- **Always pass `timeoutMs`** for long calls. Default is 3 s; AI / uploads / imports must override or they trip the offline flag falsely (Hard Rule #6).
+- **Always pass `timeoutMs`** for long calls. Default is 8 s; AI / uploads / imports must override it. A timeout throws `RequestTimeoutError` and probes `/api/health` without immediately changing global connectivity (Hard Rule #6).
 - The legacy localStorage queue is **only** for shopping list — don't extend it. New offline work goes through IndexedDB.
 
 ## Connected modules

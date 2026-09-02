@@ -24,13 +24,13 @@ tags:
 
 **Phase 1 — Core module + allergies** — profiles, allergies, conditions, vaccines; recipe allergen warnings. HLTH-1…6 shipped 2026-07-17 → swept to [Healthcare — Master Book](<Healthcare — Master Book.md>).
 
-- [ ] **HLTH-7** (Phase 1) Run core migration in Supabase SQL Editor, then verify mobile viewport + both-accounts allergen warning + privacy (partner cannot see unshared condition) _(blocker - S)_
+- [ ] **HLTH-7** *(bundled into the Phase-0 owner day, packet **E-00**, of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>))* (Phase 1) Run core migration in Supabase SQL Editor, then verify mobile viewport + both-accounts allergen warning + privacy (partner cannot see unshared condition) _(blocker - S)_
 
 ## Next
 
 **Phase 2 — Medications + Items junction + verified Google sync** — the safety-critical core (recurrence-safety + timezone-handling mandatory).
 
-- [ ] **HLTH-8** (Phase 2) Medications migration — `health_medications` + `health_medication_logs` (idempotent unique key), `items.source_medication_id` FK + partial index, occurrence-action mirror trigger, materialization RPCs _(blocker - M)_
+- [ ] **HLTH-8** *(packet **M-07a** of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>); plan sacrifice #3 if a gate is missed)* (Phase 2) Medications migration — `health_medications` + `health_medication_logs` (idempotent unique key), `items.source_medication_id` FK + partial index, occurrence-action mirror trigger, materialization RPCs _(blocker - M)_
 - [ ] **HLTH-9** (Phase 2) Medications routes — transactional item materialization (one `urgent` reminder item per dose-time), **awaited verified** gcal sync with `gcal_status` bookkeeping, warn-but-allow when Google disconnected → `src/lib/gcal/sync.ts` _(blocker - L)_
 - [ ] **HLTH-10** (Phase 2) Extend reconcile cron — med items first, heal `gcal_status` both ways → `src/app/api/cron/gcal-reconcile/route.ts` _(blocker - S)_
 - [ ] **HLTH-11** (Phase 2) Medications UI — meds card (status, next dose, gcal badge), adherence history, "Connect Google" CTA _(blocker - M)_

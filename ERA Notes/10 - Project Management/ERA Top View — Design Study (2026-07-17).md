@@ -1,7 +1,7 @@
 ---
 created: 2026-07-17
 type: design-study
-status: proposed
+status: superseded
 owner: Elio
 author: Claude Fable 5
 tags:
@@ -202,3 +202,4 @@ You are implementing a *renderer over existing layers*. You should almost never 
 ## 11 · Delta ledger (append-only)
 
 - **2026-07-17** — Study created on owner request (Fable handoff window). Verified: EraHubView/HubScatterWidgets/4 widget hooks round-trip count, mission-control precedent, Awakening WP queue untouched since 07-06. Core decision: Top View = pull mouth of the briefing brain; one bundle RPC; drafts-only actions; sequenced behind the heartbeat.
+- **2026-09-02** — **Study superseded** by [ERA Top Layer — Master Plan (2026-09-02)](<ERA Top Layer — Master Plan (2026-09-02).md>), which folds packets WP-T1..T5 into E-10 (status line + card, WP-11/T2), E-14 (bundle RPC, T1), E-15 (mobile vitals, T3) and E-20 (signal stack + doors, T4/T5), sequenced into dated Phase 2–3 slots. Core decisions here (one brain two mouths, one bundle RPC, drafts-only actions, renderer-not-owner) carry forward unchanged into the new plan's §2/§3. Q-T1/T2/T3 remain open, deferred to their packets' own STOP conditions.

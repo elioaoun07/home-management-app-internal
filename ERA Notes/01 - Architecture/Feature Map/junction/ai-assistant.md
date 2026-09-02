@@ -25,7 +25,7 @@ ERA is the proactive AI co-pilot. It lives across all modules: a command bar par
 - **Dashboards**: `src/components/era/dashboards/`
 - **AI assistant component** (in-app chat surface): `src/components/ai/AIChatAssistant.tsx`
 - **Hooks**:
-  - `src/features/era/useEraConversation.ts`
+  - `src/features/era/useEraConversation.ts` — optimistic transcript rows plus ordered per-conversation background persistence
   - `src/features/era/useEraBudgetSubmit.ts`
   - `src/features/era/useEraStore.ts`
   - `src/features/era/useEraHousehold.ts`
@@ -33,7 +33,7 @@ ERA is the proactive AI co-pilot. It lives across all modules: a command bar par
   - `src/features/era/useEraAskAI.ts` — "Ask AI" (Slice 4): `askAI()` calls `/api/era/ask`; `confirmProposal()`/`dismissProposal()` act on `activeProposal`
 - **Intent layer**:
   - `src/features/era/intentRouter.ts`
-  - `src/features/era/useEraTurn.ts` — **the one entry point from "a sentence" to "a reply"** (HUB-17). Classifies via `rootIntentRouter`, resolves via `resolveIntent`, persists to `era_messages`, updates the store. `CommandBar` (typed) and `EraShell`'s voice wiring (spoken, via `ConversationHandlers.runTurn`) both call this and nothing else.
+  - `src/features/era/useEraTurn.ts` — **the one entry point from "a sentence" to "a reply"** (HUB-17). Classifies via `rootIntentRouter`, resolves via `resolveIntent`, renders transcript rows optimistically, persists them in order without holding up the reply, and updates the store. `CommandBar` (typed) and `EraShell`'s voice wiring (spoken, via `ConversationHandlers.runTurn`) both call this and nothing else.
   - `src/features/era/replyFormatter.ts`
   - `src/features/era/faceRegistry.ts`
   - `src/features/era/intents/index.ts`, `resolveIntent.ts`
@@ -51,14 +51,14 @@ ERA is the proactive AI co-pilot. It lives across all modules: a command bar par
   - `ttsQueue.ts`, `speechTemplates.ts`, `greetingCache.ts`
   - `intentClassifier.ts`
   - `components/ConversationOrb.tsx`, `ConversationToggle.tsx`
-  - `hooks/useConversationMode.ts`
+  - `hooks/useConversationMode.ts`, `hooks/useEraReplyTTS.ts`
 - **API routes**:
   - `src/app/api/ai-chat/` ← main inference endpoint
-  - `src/app/api/era/ask/` ← ERA "Ask AI" manual handoff (Slice 4, HUB-23) — never invoked by the router, only an explicit UI tap; performs no writes itself
+  - `src/app/api/era/ask/` ← ERA "Ask AI" handoff: manual tap or guarded language-gap auto-escalation; domain writes still require explicit confirmation
   - `src/app/api/azure-speech/` ← STT/TTS bridge
   - `src/app/api/tts/`
   - `src/app/api/suggest-schedule/`
-- **Context assembly** (`src/lib/ai/context.ts`, WP-10): `fetchBudgetContext`/`fetchMonthlyTrend` (moved here from `api/ai-chat/route.ts` — route files can only export HTTP methods, so anything meant for reuse has to live in `lib`) and `fetchScheduleContext` (new — upcoming items + NFC tags/states, feeds the Ask AI schedule-face prompt)
+- **Context assembly** (`src/lib/ai/context.ts`, WP-10): `fetchBudgetContext`/`fetchMonthlyTrend` and `fetchScheduleContext`; independent PostgREST reads run concurrently so context gathering pays two latency layers (account ids, then dependent data) rather than one layer per table
 - **Ask AI proposal contract** (`src/lib/ai/eraAskProposal.ts`): Gemini structured output (`responseSchema`) → Zod-validated `AskAIResponse` → a `propose_nfc_reminder` is enriched and returned as `AskAIResult` ONLY when its `nfcTagId`/`targetState` match a real row in `ScheduleContext` — otherwise it degrades to prose. Same three-layer safety pattern as `analysisReport.ts`.
 - **DB tables**: AI session usage rows in the AI Usage module's tables
 - **Avatar**: `src/components/shared/EraAvatar.tsx`, `src/components/shared/ERAMark.tsx`

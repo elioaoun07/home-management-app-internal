@@ -55,7 +55,6 @@ Notifications have one job: **say the right thing, calmly, and take me to the ri
 
 ## Pain Inventory
 
-- 🔴 **The daily items summary opens the expense form.** It shares the `daily_reminder` type with the budget reminder, so both `getActionRoute()` and the `sw.js` switch send it to `/expense`; its `action_url: "/items"` is ignored *and* points at a route that does not exist (the real list is `/reminders`). Tapping "You have N items today" drops you on the budget entry screen.
 - 🟠 **The bell rings perpetually while unread** — a 1 s infinite wobble plus an always-on pulse ring reads as an alarm and pulls the eye every second. It also ignores `prefers-reduced-motion`.
 - 🟠 **Drawer rows are over-described** — title + 2-line message + timestamp + worded action pills. A glance should yield "what + when"; instead every row is a paragraph.
 - 🟠 **Three cron routes still carry `console.*`** (Hard Rule 22) — 13 / 9 / 8 as of 2026-07-18.
@@ -70,6 +69,7 @@ Notifications have one job: **say the right thing, calmly, and take me to the ri
 
 ## Shipped Log
 
+- ✅ *(date unrecorded, found already fixed 2026-09-02)* — **the daily items summary now opens `/reminders`, not `/expense`.** `daily-items-reminder/route.ts:363` uses its own `daily_items_summary` type (not the shared `daily_reminder`) and `:371/:432` set `action_url`/route to `/reminders`; the registry's `daily_items_summary.resolveRoute()` (`src/lib/notifications/registry.tsx:145-148`) returns `/reminders` and both `useNotifications.ts`'s `getActionRoute()` and `sw.js`'s two `daily_items_summary` branches (`:528`, `:780`) consult it. This closes NOTIF-1.1–1.6 in full — the checklist lines were stale, tracking a bug that no longer existed; swept during the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>) ground-truth pass rather than under its own session.
 - ✅ 2026-07-10 — **notification type registry** (`src/lib/notifications/registry.tsx`): one entry per type drives route, actions, icon, class, `calendarSync`, `takeoverEligible` and retention
 - ✅ 2026-07-10 — **alerts page unified** onto the bell's data source: realtime, date-grouped, `group_key`-deduped, filter chips, shared icon vocabulary
 - ✅ 2026-07-10 — actions-route column bug fixed (quick actions had silently no-opped for weeks)

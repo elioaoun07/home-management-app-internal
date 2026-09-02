@@ -71,21 +71,69 @@ export async function fetchBudgetContext(
     };
   }
 
-  // Fetch account balances (try account_balances table first)
-  const accountBalances: Record<string, number> = {};
-  try {
-    const { data: balances } = await supabase
+  // Once account ids are known, every remaining context query is independent.
+  // Run them together: serial PostgREST calls add a network round trip apiece
+  // before Gemini can even begin.
+  const [
+    { data: balances },
+    { data: recurring },
+    { data: future },
+    { data: drafts },
+    { data: allocations },
+    { data: categories },
+    { data: transactions },
+    { data: lastMonthTransactions },
+  ] = await Promise.all([
+    supabase
       .from("account_balances")
       .select("account_id, balance")
-      .in("account_id", accountIds);
+      .in("account_id", accountIds),
+    supabase
+      .from("recurring_payments")
+      .select("name, amount, recurrence_type, next_due_date")
+      .eq("user_id", userId)
+      .eq("is_active", true),
+    supabase
+      .from("future_purchases")
+      .select("name, target_amount, current_saved, target_date")
+      .eq("user_id", userId)
+      .neq("status", "cancelled"),
+    supabase
+      .from("transactions")
+      .select("voice_transcript, confidence_score")
+      .eq("user_id", userId)
+      .eq("is_draft", true),
+    supabase
+      .from("budget_allocations")
+      .select("monthly_budget, category_id")
+      .eq("user_id", userId)
+      .or(`budget_month.eq.${currentMonth},budget_month.is.null`),
+    supabase
+      .from("user_categories")
+      .select("id, name")
+      .eq("user_id", userId)
+      .is("parent_id", null),
+    supabase
+      .from("transactions")
+      .select("amount, category_id, description, date, account_id")
+      .in("account_id", accountIds)
+      .gte("date", startDate)
+      .lte("date", endDate)
+      .order("date", { ascending: false }),
+    supabase
+      .from("transactions")
+      .select("amount, category_id, description, date, account_id")
+      .in("account_id", accountIds)
+      .gte("date", lastMonthStart)
+      .lte("date", lastMonthEnd)
+      .order("date", { ascending: false }),
+  ]);
 
-    if (balances) {
-      balances.forEach((b) => {
-        accountBalances[b.account_id] = b.balance;
-      });
-    }
-  } catch (error) {
-    console.warn("Could not fetch account balances:", error);
+  const accountBalances: Record<string, number> = {};
+  if (balances) {
+    balances.forEach((balance) => {
+      accountBalances[balance.account_id] = balance.balance;
+    });
   }
 
   const accountsWithBalances = (accounts || []).map((a) => ({
@@ -94,98 +142,30 @@ export async function fetchBudgetContext(
     balance: accountBalances[a.id] || 0,
   }));
 
-  // Fetch recurring payments
-  let recurringPayments: BudgetContext["recurringPayments"] = [];
-  try {
-    const { data: recurring } = await supabase
-      .from("recurring_payments")
-      .select("name, amount, recurrence_type, next_due_date")
-      .eq("user_id", userId)
-      .eq("is_active", true);
+  const recurringPayments: BudgetContext["recurringPayments"] = (
+    recurring ?? []
+  ).map((payment) => ({
+    name: payment.name,
+    amount: payment.amount,
+    recurrence: payment.recurrence_type,
+    nextDue: payment.next_due_date,
+  }));
 
-    if (recurring) {
-      recurringPayments = recurring.map((r) => ({
-        name: r.name,
-        amount: r.amount,
-        recurrence: r.recurrence_type,
-        nextDue: r.next_due_date,
-      }));
-    }
-  } catch (error) {
-    console.warn("Could not fetch recurring payments:", error);
-  }
+  const futurePurchases: BudgetContext["futurePurchases"] = (future ?? []).map(
+    (purchase) => ({
+      name: purchase.name,
+      targetAmount: purchase.target_amount,
+      saved: purchase.current_saved,
+      targetDate: purchase.target_date,
+    }),
+  );
 
-  // Fetch future purchases
-  let futurePurchases: BudgetContext["futurePurchases"] = [];
-  try {
-    const { data: future } = await supabase
-      .from("future_purchases")
-      .select("name, target_amount, current_saved, target_date")
-      .eq("user_id", userId)
-      .neq("status", "cancelled");
-
-    if (future) {
-      futurePurchases = future.map((f) => ({
-        name: f.name,
-        targetAmount: f.target_amount,
-        saved: f.current_saved,
-        targetDate: f.target_date,
-      }));
-    }
-  } catch (error) {
-    console.warn("Could not fetch future purchases:", error);
-  }
-
-  // Fetch draft transactions
-  let draftTransactions: BudgetContext["draftTransactions"] = [];
-  try {
-    const { data: drafts } = await supabase
-      .from("transactions")
-      .select("voice_transcript, confidence_score")
-      .eq("user_id", userId)
-      .eq("is_draft", true);
-
-    if (drafts) {
-      draftTransactions = drafts.map((d) => ({
-        transcript: d.voice_transcript || "Unknown draft",
-        confidence: d.confidence_score || 0,
-      }));
-    }
-  } catch (error) {
-    console.warn("Could not fetch draft transactions:", error);
-  }
-
-  // Fetch budget allocations
-  const { data: allocations } = await supabase
-    .from("budget_allocations")
-    .select("monthly_budget, category_id")
-    .eq("user_id", userId)
-    .or(`budget_month.eq.${currentMonth},budget_month.is.null`);
-
-  // Fetch categories
-  const { data: categories } = await supabase
-    .from("user_categories")
-    .select("id, name")
-    .eq("user_id", userId)
-    .is("parent_id", null);
-
-  // Fetch current month transactions
-  const { data: transactions } = await supabase
-    .from("transactions")
-    .select("amount, category_id, description, date, account_id")
-    .in("account_id", accountIds)
-    .gte("date", startDate)
-    .lte("date", endDate)
-    .order("date", { ascending: false });
-
-  // Fetch LAST MONTH transactions
-  const { data: lastMonthTransactions } = await supabase
-    .from("transactions")
-    .select("amount, category_id, description, date, account_id")
-    .in("account_id", accountIds)
-    .gte("date", lastMonthStart)
-    .lte("date", lastMonthEnd)
-    .order("date", { ascending: false });
+  const draftTransactions: BudgetContext["draftTransactions"] = (
+    drafts ?? []
+  ).map((draft) => ({
+    transcript: draft.voice_transcript || "Unknown draft",
+    confidence: draft.confidence_score || 0,
+  }));
 
   // Separate expense and income transactions (current month)
   const expenseTransactions = (transactions || []).filter((tx) =>
@@ -444,15 +424,23 @@ export interface ScheduleContext {
  * shapes defensively instead of asserting one with `as any`.
  */
 function firstDueTimestamp(item: {
-  reminder_details?: { due_at: string | null } | { due_at: string | null }[] | null;
-  event_details?: { start_at: string | null } | { start_at: string | null }[] | null;
+  reminder_details?:
+    | { due_at: string | null }
+    | { due_at: string | null }[]
+    | null;
+  event_details?:
+    | { start_at: string | null }
+    | { start_at: string | null }[]
+    | null;
 }): string | null {
   const reminder = Array.isArray(item.reminder_details)
     ? item.reminder_details[0]
     : item.reminder_details;
   if (reminder?.due_at) return reminder.due_at;
 
-  const event = Array.isArray(item.event_details) ? item.event_details[0] : item.event_details;
+  const event = Array.isArray(item.event_details)
+    ? item.event_details[0]
+    : item.event_details;
   return event?.start_at ?? null;
 }
 
@@ -463,20 +451,27 @@ export async function fetchScheduleContext(
   const now = new Date().toISOString();
   const soon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: items } = await supabase
-    .from("items")
-    .select(
-      `
-      title, status,
-      reminder_details(due_at),
-      event_details(start_at)
-    `,
-    )
-    .eq("user_id", userId)
-    .not("status", "in", `("completed","cancelled")`)
-    .is("deleted_at", null)
-    .is("archived_at", null)
-    .limit(50);
+  const [{ data: items }, { data: tags }] = await Promise.all([
+    supabase
+      .from("items")
+      .select(
+        `
+        title, status,
+        reminder_details(due_at),
+        event_details(start_at)
+      `,
+      )
+      .eq("user_id", userId)
+      .not("status", "in", `("completed","cancelled")`)
+      .is("deleted_at", null)
+      .is("archived_at", null)
+      .limit(50),
+    supabase
+      .from("nfc_tags")
+      .select("id, label, states, current_state")
+      .eq("user_id", userId)
+      .eq("is_active", true),
+  ]);
 
   const upcoming: ScheduleContextItem[] = [];
   let overdueCount = 0;
@@ -491,12 +486,6 @@ export async function fetchScheduleContext(
       upcoming.push({ title: item.title, status: item.status, dueAt });
     }
   }
-
-  const { data: tags } = await supabase
-    .from("nfc_tags")
-    .select("id, label, states, current_state")
-    .eq("user_id", userId)
-    .eq("is_active", true);
 
   const nfcTags: ScheduleContextNfcTag[] = (tags ?? []).map((t) => ({
     id: t.id,

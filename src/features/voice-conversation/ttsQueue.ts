@@ -35,6 +35,7 @@ export function createTTSQueue(opts: {
   voice?: string;
   onStateChange?: (state: PlaybackState) => void;
   onSentenceStart?: (text: string) => void;
+  onError?: (error: unknown) => void;
   onDone?: () => void;
 }): TTSQueue {
   const voice = opts.voice ?? DEFAULT_TTS_VOICE;
@@ -51,7 +52,13 @@ export function createTTSQueue(opts: {
   }
 
   async function processQueue() {
-    if (stopped || queue.length === 0 || state === "playing" || state === "fetching") return;
+    if (
+      stopped ||
+      queue.length === 0 ||
+      state === "playing" ||
+      state === "fetching"
+    )
+      return;
 
     const entry = queue.shift()!;
     setState("fetching");
@@ -73,10 +80,16 @@ export function createTTSQueue(opts: {
 
     try {
       await player.synthAndPlay(buildTTSSSML(entry.text, voice));
-    } catch {
+    } catch (error) {
       currentPlayer = null;
       setState("idle");
-      processQueue();
+      opts.onError?.(error);
+      if (stopped) return;
+      if (queue.length > 0) {
+        processQueue();
+      } else if (flushed) {
+        opts.onDone?.();
+      }
     }
   }
 

@@ -26,6 +26,7 @@ export const CAMPAIGNS = Object.freeze({
   "Delivery": "DLV",
   "Outfits": "OUT",
   "Healthcare": "HLTH",
+  "Native App": "NAT",
 });
 
 /**

@@ -15,7 +15,7 @@ Run each check with the Grep tool, scoped to your changed files. Any hit in **yo
 |---|---|---|---|
 | 1 | `console\.(log\|warn\|error)` | Hard Rule 22 — no committed console output | Delete, or route through Error Logs module |
 | 2 | `fetch\(` on a POST/PATCH/PUT/DELETE call you wrote | Hard Rule 6 — mutations use `safeFetch` | Swap to `safeFetch` from `@/lib/safeFetch` |
-| 3 | `safeFetch` calls for AI/upload/external ops **without** `timeoutMs` | Hard Rule 6 — default timeout will abort + false-offline | Add `{ timeoutMs: 60_000 }` (or appropriate) |
+| 3 | `safeFetch` calls for AI/upload/external ops **without** `timeoutMs` | Hard Rule 6 — the default CRUD budget is too short for long work | Add `{ timeoutMs: 60_000 }` (or appropriate); timeout must not directly mark Offline |
 | 4 | `toast.success(` without `action:` in the options | Hard Rule 1 — every mutation toast has Undo | Add the Undo action (see ui-guardrails §7) |
 | 5 | `type="number"` | Hard Rule 19 | `type="text"` + `inputMode="decimal"` |
 | 6 | `queryKey: \[` with inline string arrays in code you wrote | Query-key rule | Use `qk.*` / the module's `queryKeys.ts` factory |

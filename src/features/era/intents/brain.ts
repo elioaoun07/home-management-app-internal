@@ -1,5 +1,4 @@
 // Per-face intent router — Brain / Memory face
-import type { Intent } from "../types";
 import type { FaceIntentRouter } from "./schedule";
 
 const SAVE_PATTERNS: RegExp[] = [
@@ -34,7 +33,7 @@ const RECALL_PATTERNS: RegExp[] = [
  * happens to already be the active face.
  */
 const OTHER_DOMAIN_RE =
-  /\b(schedule|today|due|upcoming|overdue|this week|task|todo|to-do|deadline|appointment|event|meeting|calendar|reminder|reminders|budget|expense|expenses|income|transaction|transactions|balance|account|spend|spent|spending|recipe|recipes|cook|cooking|meal|meals|dinner|lunch|breakfast|ingredient|kitchen|chef)\b/i;
+  /\b(schedule|today|due|upcoming|overdue|this week|tomorrow|tonight|agenda|weekend|task|todo|to-do|deadline|appointment|event|meeting|calendar|reminder|reminders|alarm|alarms|budget|expense|expenses|income|transaction|transactions|balance|account|spend|spent|spending|pay|paid|cost|costs|draft|drafts|savings|wallet|transfer|recipe|recipes|cook|cooking|bake|baking|meal|meals|menu|dish|dishes|snack|dinner|lunch|breakfast|ingredient|kitchen|chef|reservation|reservations)\b/i;
 
 export const brainRouter: FaceIntentRouter = {
   parse(text) {

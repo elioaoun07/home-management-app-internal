@@ -33,6 +33,7 @@ const state: ConnectivityState = {
 };
 
 let probeTimer: ReturnType<typeof setInterval> | null = null;
+let probeInFlight: Promise<boolean> | null = null;
 let started = false;
 
 // ── Public API ──────────────────────────────────────────────
@@ -43,7 +44,7 @@ export function isReallyOnline(): boolean {
 }
 
 /**
- * Called by any code that detected a network failure (e.g. fetch timeout).
+ * Called by code that detected a confirmed network failure.
  * Immediately transitions to offline state without waiting for a probe.
  */
 export function markOffline(): void {
@@ -60,19 +61,29 @@ export function markOffline(): void {
  * Returns the result.
  */
 export async function probeNow(): Promise<boolean> {
-  const result = await doProbe();
-  const changed = result !== state.online;
-  state.online = result;
-  if (result) {
-    state.lastOnline = Date.now();
-  } else {
-    state.lastOffline = Date.now();
+  if (probeInFlight) return probeInFlight;
+
+  probeInFlight = (async () => {
+    const result = await doProbe();
+    const changed = result !== state.online;
+    state.online = result;
+    if (result) {
+      state.lastOnline = Date.now();
+    } else {
+      state.lastOffline = Date.now();
+    }
+    if (changed) {
+      notify();
+      restartProbing();
+    }
+    return result;
+  })();
+
+  try {
+    return await probeInFlight;
+  } finally {
+    probeInFlight = null;
   }
-  if (changed) {
-    notify();
-    restartProbing();
-  }
-  return result;
 }
 
 /** Start the background probing loop. Call once from SyncProvider. */

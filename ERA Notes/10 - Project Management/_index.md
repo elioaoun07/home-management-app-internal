@@ -32,7 +32,7 @@ tags:
 | **Outfits** (wardrobe) | `OUT` | [Master Book](<Outfits/Outfits — Master Book.md>) | [Checklist](<Outfits/4 - Checklist.md>) |
 | **PM Tooling** (the command centre itself) | `R` | [Master Book](<PM Tooling/PM Tooling — Master Book.md>) | [Checklist](<PM Tooling/4 - Checklist.md>) |
 | **Delivery** (agentic delivery sessions) | `DLV` | [Master Book](<Delivery/Delivery — Master Book.md>) | [Checklist](<Delivery/4 - Checklist.md>) |
-| **Native App** (Capacitor plan, not started) | — | [Master Book](<Native App/Native App — Master Book.md>) | *(no checklist yet — register `NAT` first)* |
+| **Native App** (Capacitor, Phase 4 of the ERA Top Layer plan) | `NAT` | [Master Book](<Native App/Native App — Master Book.md>) | [Checklist](<Native App/4 - Checklist.md>) |
 
 **Every campaign folder holds exactly two files:** the Master Book and the checklist. Nothing else. Superseded material lives in [_Archive/](<_Archive/_index.md>), which **no PM tool scans**.
 
@@ -40,8 +40,9 @@ tags:
 
 | Doc | What it is |
 |---|---|
-| [ERA Awakening — Master Execution Plan](<ERA Awakening — Master Execution Plan (2026-07-06).md>) | The proactive-era contract (Jul 6 → Oct 4, 2026): scheduler → briefing → tested ERA brain → voice → learning loop. Feeds campaign Now lanes. **The active execution contract** — execute its WP queue, don't re-plan it. |
-| [ERA Top View — Design Study](<ERA Top View — Design Study (2026-07-17).md>) | The Hub L-0 glance surface as the pull mouth of the briefing brain. Sequenced *behind* the Awakening work packets. |
+| [ERA Top Layer — Master Plan](<ERA Top Layer — Master Plan (2026-09-02).md>) | Sep 2 → Dec 31, 2026, 17-week program covering manual modules, reactive ERA, proactive ERA (scheduler → briefing → learning loop), voice, offline, security and native, in dated packets. **The active execution contract** — execute its E/M/N/H packet catalog (§5), don't re-plan it. |
+| ~~ERA Awakening — Master Execution Plan~~ | *(superseded 2026-09-02 — G0/G1/G2 all missed; see its §14 for the scored delta and the plan above for the successor)* |
+| ~~ERA Top View — Design Study~~ | *(superseded 2026-09-02 — folded into the Master Plan's E-10/E-14/E-15/E-20)* |
 | [FABLE — Testament](<FABLE — Testament (2026-07-18).md>) | The operating doctrine for AI sessions: how to start, what to trust, what to hand on. |
 | [0 - Inbox](<0 - Inbox.md>) | Raw capture. Triaged into canonical items by `/triage-inbox`. |
 

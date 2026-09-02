@@ -8,3 +8,4 @@ export { classifyIntent } from "./intentClassifier";
 export type { Intent } from "./intentClassifier";
 export { isAzureSTTSupported, prewarmAzureSpeech } from "./azureSTT";
 export { prewarmTTSWorklet } from "./azureTTS";
+export { useEraReplyTTS } from "./hooks/useEraReplyTTS";

@@ -66,9 +66,10 @@ Native actions in `HubPage.tsx` wire to existing infrastructure:
 
 ### T4: TTS Playback
 - `src/features/voice-conversation/ttsQueue.ts`
-- Sentence-streaming: splits text on `.!?`, fetches each sentence from `/api/tts`, plays sequentially
+- Sentence-streaming: splits text on `.!?`, synthesizes each sentence through the Azure Speech SDK, streams raw PCM chunks into an AudioWorklet, and plays sequentially
 - Voice: `en-US-AvaMultilingualNeural` (Azure Neural TTS)
-- Playback uses **Web Audio API** (`AudioContext` + `AudioBufferSourceNode`) — autoplay-policy-safe. Previous `HTMLAudioElement.play()` was silently blocked after voice-wake (no user gesture). AudioContext is unlocked on first user interaction in `EraShell` via `unlockAudioContext()`.
+- Playback uses **Web Audio API** (`AudioContext` + `AudioWorkletNode`) — autoplay-policy-safe. Previous `HTMLAudioElement.play()` was silently blocked after voice-wake (no user gesture). AudioContext is unlocked on first user interaction in `EraShell` via `unlockAudioContext()`.
+- The typed `/era` Command Bar uses the same low-latency queue through `hooks/useEraReplyTTS.ts`; it no longer waits for `/api/tts` to return a complete MP3. Azure failure falls back to browser `speechSynthesis` without blocking the reply text.
 - **Greeting pre-cache** (`src/features/voice-conversation/greetingCache.ts`): on mount, pre-fetches the 3 current-hour greeting variants from `/api/tts` and decodes them into `AudioBuffer`s. Voice-wake greeting plays from cache (~instant) rather than waiting for an Azure fetch (~400-700ms).
 - First audio byte audible ~400ms after ERA starts generating (well before full response)
 - Barge-in stops playback immediately

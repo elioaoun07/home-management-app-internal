@@ -401,12 +401,24 @@ export function EraThreadTranscript({
   const newestAssistantContent = newestAssistant?.content ?? "";
 
   const typedIdRef = useRef<string | null>(null);
+  const typedContentRef = useRef("");
   const [displayed, setDisplayed] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!newestAssistantId || newestAssistantId === typedIdRef.current) return;
+
+    // An optimistic message is replaced with its server row after persistence.
+    // The id changes, but the reply did not: keep it visible instead of
+    // restarting the typewriter from the first character.
+    if (newestAssistantContent === typedContentRef.current) {
+      typedIdRef.current = newestAssistantId;
+      setDisplayed(newestAssistantContent);
+      return;
+    }
+
     typedIdRef.current = newestAssistantId;
+    typedContentRef.current = newestAssistantContent;
     setDisplayed("");
     let i = 0;
     const id = setInterval(() => {

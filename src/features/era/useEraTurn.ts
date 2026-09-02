@@ -82,7 +82,12 @@ function pushFocusFromResult(
 
   useEraStore
     .getState()
-    .pushFocusEntity({ id: itemId, type: "reminder", title, addedAt: Date.now() });
+    .pushFocusEntity({
+      id: itemId,
+      type: "reminder",
+      title,
+      addedAt: Date.now(),
+    });
 }
 
 export interface EraTurnResult {
@@ -128,7 +133,12 @@ export function useEraTurn() {
       // never reclassified through the normal router (see module doc above).
       const pending = pendingTurn;
       const intent: Intent = pending
-        ? { kind: "draftReminder", face: "schedule", title: pending.title, rawText: text }
+        ? {
+            kind: "draftReminder",
+            face: "schedule",
+            title: pending.title,
+            rawText: text,
+          }
         : rootIntentRouter.parse(text);
 
       if (!pending) setLastIntent(intent);
@@ -136,7 +146,8 @@ export function useEraTurn() {
       // A2 — a miss (unknown/clarify) keeps its raw text around so "Ask AI"
       // stays usable after the input box clears; a resolved turn (whether it
       // hit a router or answered a pending question) forgets it.
-      const isMiss = !pending && (intent.kind === "clarify" || intent.kind === "unknown");
+      const isMiss =
+        !pending && (intent.kind === "clarify" || intent.kind === "unknown");
       setLastMissText(isMiss ? text : null);
 
       const isFaceless =
@@ -150,26 +161,38 @@ export function useEraTurn() {
       }
 
       let conversationId = activeConversation?.id ?? null;
+      const userMessage = {
+        conversation_id: conversationId,
+        role: "user" as const,
+        content: text,
+        intent_kind: intent.kind,
+        intent_face: isFaceless ? null : intent.face,
+        intent_payload: intentPayload(intent),
+      };
 
-      try {
-        const userResult = await createMessage.mutateAsync({
-          conversation_id: conversationId,
-          role: "user",
-          content: text,
-          intent_kind: intent.kind,
-          intent_face: isFaceless ? null : intent.face,
-          intent_payload: intentPayload(intent),
-        });
-        conversationId = userResult.conversation_id;
-      } catch (err) {
-        console.error("[era] failed to persist user message", err);
+      if (conversationId) {
+        // Existing threads render this optimistically and persist it in the
+        // per-conversation write queue. Intent resolution can start now.
+        void createMessage.mutateAsync(userMessage).catch(() => {});
+      } else {
+        // The first turn must create the parent conversation before its
+        // assistant row has a valid foreign key.
+        try {
+          const userResult = await createMessage.mutateAsync(userMessage);
+          conversationId = userResult.conversation_id;
+        } catch {
+          conversationId = null;
+        }
       }
 
       // Stage 2 (HUB-28) — a "clarify"/"unknown" turn is a router miss.
       // Classify it (language gap vs capability gap) BEFORE deciding what to
       // do next — Stage C's auto-escalation reads this same classification.
       const missClassification: MissClassification | null = isMiss
-        ? classifyMiss(text, deriveLearnedVocab(useEraStore.getState().templates))
+        ? classifyMiss(
+            text,
+            deriveLearnedVocab(useEraStore.getState().templates),
+          )
         : null;
 
       // Stage C — a language-gap miss escalates to the AI automatically; a
@@ -182,9 +205,11 @@ export function useEraTurn() {
         // Handled (or at least attempted) automatically — the manual "Ask
         // AI" fallback no longer needs to hold this text around.
         setLastMissText(null);
-        const reply = await askAI(text, { skipUserMessage: true, auto: true }).catch(
-          () => "Something went wrong. Try again.",
-        );
+        const reply = await askAI(text, {
+          skipUserMessage: true,
+          auto: true,
+          conversationId,
+        }).catch(() => "Something went wrong. Try again.");
         return { intent, reply, metadata: undefined, aiHandled: true };
       }
 
@@ -192,9 +217,10 @@ export function useEraTurn() {
         text: reply,
         metadata,
         pending: nextPending,
-      } = await (pending
-        ? resolvePendingReminderAnswer(pending, text)
-        : resolveIntent(intent, { submitBudgetDraft: budgetSubmit.submit })
+      } = await (
+        pending
+          ? resolvePendingReminderAnswer(pending, text)
+          : resolveIntent(intent, { submitBudgetDraft: budgetSubmit.submit })
       ).catch(() => ({
         text: "Something went wrong. Try again.",
         metadata: undefined as Record<string, unknown> | undefined,
@@ -212,23 +238,28 @@ export function useEraTurn() {
       const draftTransactionId =
         typeof metadata?.draftId === "string" ? metadata.draftId : null;
 
-      try {
-        await createMessage.mutateAsync({
-          conversation_id: conversationId,
-          role: "assistant",
-          content: reply,
-          intent_kind: intent.kind,
-          intent_face: isFaceless ? null : intent.face,
-          intent_payload: missClassification
-            ? { ...(metadata ?? intentPayload(intent)), ...missClassification }
-            : (metadata ?? intentPayload(intent)),
-          draft_transaction_id: draftTransactionId,
-        });
-      } catch (err) {
-        console.error("[era] failed to persist assistant reply", err);
-      }
-
       setEraReply(reply);
+
+      if (conversationId) {
+        // onMutate makes the reply visible immediately. The write queue keeps
+        // it behind the user's row without holding up text or speech.
+        void createMessage
+          .mutateAsync({
+            conversation_id: conversationId,
+            role: "assistant",
+            content: reply,
+            intent_kind: intent.kind,
+            intent_face: isFaceless ? null : intent.face,
+            intent_payload: missClassification
+              ? {
+                  ...(metadata ?? intentPayload(intent)),
+                  ...missClassification,
+                }
+              : (metadata ?? intentPayload(intent)),
+            draft_transaction_id: draftTransactionId,
+          })
+          .catch(() => {});
+      }
 
       return { intent, reply, metadata };
     },

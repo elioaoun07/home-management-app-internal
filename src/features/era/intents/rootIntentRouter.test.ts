@@ -445,6 +445,197 @@ const CASES: readonly RouteCase[] = [
     active: "budget",
     kind: "confirmDraft",
   },
+
+  // ── HUB-35 coverage pass — Schedule: creation lead-ins ────────────────────
+  {
+    name: "add a reminder to X → draftReminder, ERA-level lead-in stripped",
+    text: "add a reminder to call mom",
+    active: "schedule",
+    kind: "draftReminder",
+    title: "Call mom",
+  },
+  {
+    name: "set a reminder to X → draftReminder, leftover 'to' connector stripped",
+    text: "set a reminder to call mom",
+    active: "schedule",
+    kind: "draftReminder",
+    title: "Call mom",
+  },
+  {
+    name: "don't forget to X <day> → draftReminder",
+    text: "don't forget to pay rent Friday",
+    active: "schedule",
+    kind: "draftReminder",
+  },
+  {
+    name: "ping me to X <day> → draftReminder",
+    text: "ping me to call the bank tomorrow",
+    active: "schedule",
+    kind: "draftReminder",
+  },
+  {
+    name: "note to self: X → draftReminder",
+    text: "note to self: renew passport",
+    active: "schedule",
+    kind: "draftReminder",
+  },
+  // REGRESSION guard: bare "reminder(s)" mention alone must NEVER imply
+  // creation (owner decision 2026-08-31) — "check my reminders" is a QUERY.
+  {
+    name: "bare 'reminders' mention is a query, never a silent create",
+    text: "check my reminders",
+    active: "schedule",
+    kind: "todaySchedule",
+  },
+
+  // ── HUB-35 coverage pass — Schedule: widened query gates ──────────────────
+  {
+    name: "what do I have tomorrow → todaySchedule",
+    text: "what do I have tomorrow",
+    active: "schedule",
+    kind: "todaySchedule",
+  },
+  {
+    name: "anything due tomorrow → todaySchedule",
+    text: "anything due tomorrow",
+    active: "schedule",
+    kind: "todaySchedule",
+  },
+  {
+    name: "am I free <day> → todaySchedule, resolves that day",
+    text: "am I free Saturday",
+    active: "schedule",
+    kind: "todaySchedule",
+    dayOfWeek: 6,
+  },
+  {
+    name: "anything overdue → todaySchedule",
+    text: "anything overdue",
+    active: "schedule",
+    kind: "todaySchedule",
+  },
+
+  // ── HUB-35 coverage pass — Schedule: follow-up verb widening ──────────────
+  {
+    name: "make it <time> → reschedule (elliptical, no literal 'to')",
+    text: "make it 11",
+    active: "schedule",
+    kind: "reminderReschedule",
+  },
+  {
+    name: "snooze it to <time> → reschedule",
+    text: "snooze it to 7",
+    active: "schedule",
+    kind: "reminderReschedule",
+  },
+  {
+    name: "check it off → complete",
+    text: "check it off",
+    active: "schedule",
+    kind: "reminderComplete",
+  },
+  {
+    name: "get rid of that one → delete",
+    text: "get rid of that one",
+    active: "schedule",
+    kind: "reminderDelete",
+  },
+
+  // ── HUB-35 coverage pass — Budget: positional/marked amounts ──────────────
+  {
+    name: "unmarked amount, strong verb + 'for' → draftTransaction",
+    text: "I paid 25 for fuel",
+    active: "budget",
+    kind: "draftTransaction",
+    amount: 25,
+  },
+  {
+    name: "unmarked amount, strong verb + 'on' → draftTransaction",
+    text: "spent 40 on groceries",
+    active: "budget",
+    kind: "draftTransaction",
+    amount: 40,
+  },
+  {
+    name: "unmarked amount, strong verb, sentence-final → draftTransaction",
+    text: "I spent 25",
+    active: "budget",
+    kind: "draftTransaction",
+    amount: 25,
+  },
+  {
+    name: "log phrasing widening → draftTransaction",
+    text: "log $12 for coffee",
+    active: "budget",
+    kind: "draftTransaction",
+    amount: 12,
+  },
+  {
+    name: "thousands-grouped amount ($2,000) → draftTransaction",
+    text: "I paid $2,000 for rent",
+    active: "budget",
+    kind: "draftTransaction",
+    amount: 2000,
+  },
+  {
+    name: "recordDebt tolerates a trailing dollar sign (Pain Inventory fix)",
+    text: "John owes me 30$ for lunch",
+    active: "budget",
+    kind: "recordDebt",
+    amount: 30,
+  },
+  {
+    name: "transfer, reversed 'to … from' ordering",
+    text: "transfer $50 to savings from wallet",
+    active: "budget",
+    kind: "transfer",
+    amount: 50,
+  },
+
+  // ── HUB-35 coverage pass — Chef: consolidated recipe patterns ─────────────
+  {
+    name: "'show me a recipe for X' — unanchored RECIPE_FOR_RE",
+    text: "show me a recipe for pasta",
+    active: "chef",
+    kind: "recipeSearch",
+    dish: "pasta",
+  },
+  {
+    name: "'how do I bake X' — bake verb added",
+    text: "how do I bake focaccia",
+    active: "chef",
+    kind: "recipeSearch",
+    dish: "focaccia",
+  },
+  {
+    name: "'what can I cook' → listRecipes",
+    text: "what can I cook",
+    active: "chef",
+    kind: "listRecipes",
+  },
+  {
+    name: "assignMeal — 'plan X for <day> <meal>' phrasing",
+    text: "plan pasta for tomorrow dinner",
+    active: "chef",
+    kind: "assignMeal",
+    dish: "pasta",
+  },
+
+  // ── HUB-35 — capability-gap guards: pinned as switchFace, never masked ────
+  {
+    name: "REGRESSION: appointment creation stays switchFace, never draftReminder (owner decision)",
+    text: "schedule a dentist appointment tomorrow at 5",
+    active: "schedule",
+    kind: "switchFace",
+    face: "schedule",
+  },
+  {
+    name: "REGRESSION: 'what's for dinner' stays switchFace, never assignMeal/mealPlanGaps (no plan-read resolver)",
+    text: "what's for dinner tonight",
+    active: "chef",
+    kind: "switchFace",
+    face: "chef",
+  },
 ];
 
 describe("rootIntentRouter", () => {
@@ -536,6 +727,101 @@ describe("rootIntentRouter", () => {
     useEraStore.setState({ activeFaceKey: "chef" });
     const intent = rootIntentRouter.parse("move dinner to Wednesday");
     expect(intent.kind).not.toBe("reminderReschedule");
+  });
+
+  // ── HUB-35 — money-wrong false positives ──────────────────────────────────
+  it("REGRESSION: 'I bought 2 shirts' does not draft a money transaction (count, not spend)", () => {
+    useEraStore.setState({ activeFaceKey: "budget" });
+    const intent = rootIntentRouter.parse("I bought 2 shirts");
+    expect(intent.kind).not.toBe("draftTransaction");
+    expect(intent).not.toHaveProperty("amount");
+  });
+
+  it("REGRESSION: 'bought 3 coffees' does not draft a money transaction", () => {
+    useEraStore.setState({ activeFaceKey: "budget" });
+    const intent = rootIntentRouter.parse("bought 3 coffees");
+    expect(intent.kind).not.toBe("draftTransaction");
+    expect(intent).not.toHaveProperty("amount");
+  });
+
+  it("REGRESSION: 'I got paid $2000' does not draft an expense (there is no income write path)", () => {
+    useEraStore.setState({ activeFaceKey: "budget" });
+    const intent = rootIntentRouter.parse("I got paid $2000");
+    expect(intent.kind).not.toBe("draftTransaction");
+  });
+
+  it("REGRESSION: 'I owe John 30' is not recordDebt (recordDebt is a receivable only, wrong direction)", () => {
+    useEraStore.setState({ activeFaceKey: "budget" });
+    const intent = rootIntentRouter.parse("I owe John 30");
+    expect(intent.kind).not.toBe("recordDebt");
+  });
+
+  // ── HUB-35 — Chef cross-face collision guards ─────────────────────────────
+  it("REGRESSION: 'make it 11' with Chef active still resolves to Schedule's reschedule, not a recipe search", () => {
+    useEraStore.setState({ activeFaceKey: "chef" });
+    const intent = rootIntentRouter.parse("make it 11");
+    expect(intent.kind).toBe("reminderReschedule");
+  });
+
+  it("REGRESSION: 'make a reminder for tomorrow' with Chef active still resolves to Schedule's draftReminder", () => {
+    useEraStore.setState({ activeFaceKey: "chef" });
+    const intent = rootIntentRouter.parse("make a reminder for tomorrow");
+    expect(intent.kind).toBe("draftReminder");
+  });
+
+  it("REGRESSION: 'plan the dentist for Monday' is never an assignMeal (schedule-domain word blocks it)", () => {
+    useEraStore.setState({ activeFaceKey: "chef" });
+    const intent = rootIntentRouter.parse("plan the dentist for Monday");
+    expect(intent.kind).not.toBe("assignMeal");
+  });
+});
+
+// HUB-35 — the named-target reschedule/complete/delete branches are
+// otherwise-unbounded string captures ("move (.+?) to (.+)", "delete
+// (.+?)"); their ONLY prior guard was `resolveEntityRef` returning null,
+// which is RUNTIME STATE — it only "worked" because these regression tests
+// (above, in the base describe block) happen to run with an EMPTY focus
+// memory. Seeding a colliding reminder first proves the guard is lexical
+// (OTHER_FACE_RE), not accidental.
+describe("rootIntentRouter — Stage 1 named-target guard holds even WITH a colliding reminder in focus", () => {
+  beforeEach(() => {
+    useEraStore.getState().reset();
+    useEraStore.setState({ activeFaceKey: "budget" });
+  });
+
+  it("a reminder titled 'Savings plan' in focus does not turn 'move $100 to savings' into a reschedule", () => {
+    useEraStore.getState().pushFocusEntity({
+      id: "savings-plan-id",
+      type: "reminder",
+      title: "Savings plan",
+      addedAt: Date.now(),
+    });
+    const intent = rootIntentRouter.parse("move $100 to savings");
+    expect(intent.kind).not.toBe("reminderReschedule");
+  });
+
+  it("a reminder titled 'Dinner with John' in focus does not turn 'move dinner to Wednesday' into a reschedule", () => {
+    useEraStore.getState().pushFocusEntity({
+      id: "dinner-john-id",
+      type: "reminder",
+      title: "Dinner with John",
+      addedAt: Date.now(),
+    });
+    useEraStore.setState({ activeFaceKey: "chef" });
+    const intent = rootIntentRouter.parse("move dinner to Wednesday");
+    expect(intent.kind).not.toBe("reminderReschedule");
+  });
+
+  it("a reminder titled 'Pasta night' in focus does not turn 'delete the pasta recipe' into a delete", () => {
+    useEraStore.getState().pushFocusEntity({
+      id: "pasta-night-id",
+      type: "reminder",
+      title: "Pasta night",
+      addedAt: Date.now(),
+    });
+    useEraStore.setState({ activeFaceKey: "schedule" });
+    const intent = rootIntentRouter.parse("delete the pasta recipe");
+    expect(intent.kind).not.toBe("reminderDelete");
   });
 });
 
@@ -665,6 +951,13 @@ describe("rootIntentRouter — Stage 4 taught-phrase matching (Layer 2)", () => 
   // on the entity that name matches, not just whatever was touched most
   // recently. Before this fix, matchAgainstTemplates discarded the captured
   // reference entirely and always resolved "it" against focus memory.
+  //
+  // Uses "nudge" rather than "shift" as the verb: the HUB-35 coverage pass
+  // taught scheduleRouter's own built-in named-target matching the verbs
+  // change/move/push/reschedule/shift/postpone/snooze/delay/bump, so
+  // "shift the dentist reminder to 5pm" is now a genuine Layer 1 hit and
+  // would never reach Layer 2's template matcher at all. "nudge" stays
+  // outside Layer 1's verb list, keeping this a true Layer-2-only case.
   it("resolves a {target}-captured reference by name, not by recency", () => {
     useEraStore.getState().pushFocusEntity({
       id: "recent-id",
@@ -682,13 +975,13 @@ describe("rootIntentRouter — Stage 4 taught-phrase matching (Layer 2)", () => 
       {
         id: "tpl-1",
         capabilityId: "reminder.reschedule",
-        patternText: "shift {target} to {whenText}",
+        patternText: "nudge {target} to {whenText}",
         slotNames: ["target", "whenText"],
         enabled: true,
       },
     ]);
 
-    const intent = rootIntentRouter.parse("shift the dentist reminder to 5pm");
+    const intent = rootIntentRouter.parse("nudge the dentist reminder to 5pm");
     expect(intent).toMatchObject({
       kind: "capabilityAction",
       capabilityId: "reminder.reschedule",
@@ -714,13 +1007,13 @@ describe("rootIntentRouter — Stage 4 taught-phrase matching (Layer 2)", () => 
       {
         id: "tpl-1",
         capabilityId: "reminder.reschedule",
-        patternText: "shift {title} to {whenText}",
+        patternText: "nudge {title} to {whenText}",
         slotNames: ["title", "whenText"],
         enabled: true,
       },
     ]);
 
-    const intent = rootIntentRouter.parse("shift the dentist reminder to 5pm");
+    const intent = rootIntentRouter.parse("nudge the dentist reminder to 5pm");
     expect(intent).toMatchObject({
       kind: "capabilityAction",
       slots: { itemId: "dentist-id" },

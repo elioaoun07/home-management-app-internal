@@ -17,9 +17,10 @@ tags: [pm/checklist, tooling/pm]
 
 ## Now
 
+- [ ] **R49** *(packet **E-01** of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>))* Add `.github/workflows/ci.yml` running `pnpm typecheck` / `pnpm test` / `pnpm lint` on push and PR — today the only workflow diffs three Markdown mirrors, so nothing outside the local pre-commit hook has ever verified a commit. → `.github/workflows/ci.yml` _(blocker - S)_
 - [ ] **R6** Complete the desktop + 390 px visual UAT and a fake-driver delivery walkthrough, then delete the legacy `client.js` / `styles.css` / `body.html` and the `?ui=old` rollback surface _(blocker - M)_
 - [ ] **R43** Decide Hard Rule 20's real contract and make the schema match it — either reword the rule to "never let a hot read path traverse a `*_via_parent` policy; route through a `get_*_bundle()` RPC", or denormalize `user_id` onto the five child tables per the rule's own second option → `migrations/schema.sql:1512-1516` _(blocker - M)_
-- [ ] **R44** Add an eslint guard for Hard Rule 6 so no *new* raw mutating `fetch()` can enter client code — a `no-restricted-syntax` rule scoped to the client directories (components, features, hooks, contexts), warn-level until the existing 98 sites are burned down → `eslint.config.mjs` _(blocker - S)_
+- [ ] **R44** *(hygiene packet **H-02** of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>))* Add an eslint guard for Hard Rule 6 so no *new* raw mutating `fetch()` can enter client code — a `no-restricted-syntax` rule scoped to the client directories (components, features, hooks, contexts), warn-level until the existing 98 sites are burned down → `eslint.config.mjs` _(blocker - S)_
 - [ ] **R45** Rescope Hard Rule 1 to mutation-confirming toasts only ("every toast that confirms a completed mutation carries an Undo"), then measure the real gap against `toast.success(` alone — the current all-toasts wording is unachievable for the 417 `toast.error(` sites and is training everyone to read Hard Rules as advisory _(friction - S)_
 
 ## Next
@@ -29,7 +30,7 @@ tags: [pm/checklist, tooling/pm]
 - [ ] **R35** Meta-work budget rule in the conventions: a session that only touches `ERA Notes/` or `scripts/pm/` must state which product-code item it unblocks, and two consecutive such sessions require a product session between them → [_Conventions](<../_Conventions.md>) _(friction - S)_
 - [ ] **R7** Verify SSE data and UI rebuild frames in a browser, including external edits and 409 drift recovery _(friction - S)_
 - [ ] **R46** Add a PostToolUse hook warning when an API route file exporting POST/PATCH/PUT has no Zod import (Hard Rule 12) — 113 of 170 mutating routes currently have none, pattern to follow is `.claude/hooks/check-migration.sh` _(friction - M)_
-- [ ] **R47** Scoped `no-console` eslint rule matching Hard Rule 22's corrected client-only wording, warn-level over the client directories (202 sites); server routes stay exempt by design → `eslint.config.mjs` _(annoyance - S)_
+- [ ] **R47** *(bundled with R44 into hygiene packet **H-02**)* Scoped `no-console` eslint rule matching Hard Rule 22's corrected client-only wording, warn-level over the client directories (202 sites); server routes stay exempt by design → `eslint.config.mjs` _(annoyance - S)_
 - [ ] **R48** Burn down the 98 raw client `fetch()` mutation sites to `safeFetch()`, starting with `hub/ShoppingListView.tsx` (13) and `useNotifications.ts` (8); flip R44's eslint rule from warn to error when it reaches zero _(friction - L)_
 
 ## Later

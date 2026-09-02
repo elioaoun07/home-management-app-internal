@@ -24,13 +24,13 @@ tags:
 
 **Phase 1 — Wardrobe catalog** *(shipped 2026-07-18 — OUT-1…OUT-6 swept to the Master Book's Shipped Log)*
 
-- [ ] **OUT-19** (Phase 1) Real-phone acceptance: run the core migration, then photo → cutout → tagged garment in the grid in under a minute with ONE batch signed-URL request per screen; measure the first-use model download on a real network _(blocker - S)_
+- [ ] **OUT-19** *(bundled into the Phase-0 owner day, packet **E-00**, of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>) — its pass/fail gates whether **M-08**/OUT-7 runs in Phase 3)* (Phase 1) Real-phone acceptance: run the core migration, then photo → cutout → tagged garment in the grid in under a minute with ONE batch signed-URL request per screen; measure the first-use model download on a real network _(blocker - S)_
 
 ## Next
 
 **Phase 2 — AI auto-tag** — accelerator on manual tagging; quota exhaustion must cost zero functionality.
 
-- [ ] **OUT-7** (Phase 2) Widen `GenerateOptions` parts to accept `inlineData` image parts (non-breaking; repo-wide typecheck is the proof) → `src/lib/ai/gemini.ts` _(friction - S)_
+- [ ] **OUT-7** *(packet **M-08** of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>); plan sacrifice #2, only runs if OUT-19 passed)* (Phase 2) Widen `GenerateOptions` parts to accept `inlineData` image parts (non-breaking; repo-wide typecheck is the proof) → `src/lib/ai/gemini.ts` _(friction - S)_
 - [ ] **OUT-8** (Phase 2) `tag-garment` route (enum-constrained JSON via `generateContentWithFallback`, Zod-parsed, 429→cooldown) + Auto-tag button with `timeoutMs: 60_000` pre-filling editable form fields _(friction - M)_
 
 **Phase 3 — Outfit builder** *(shipped 2026-07-18 — OUT-9…OUT-11 swept to the Master Book's Shipped Log)*

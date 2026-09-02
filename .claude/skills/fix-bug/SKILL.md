@@ -71,7 +71,7 @@ This app's recurring bug signatures — check these FIRST before inventing a nov
 | Symptom | Likely cause | Where to confirm |
 |---|---|---|
 | UI shows stale data after a save/delete | Missing/incomplete cache invalidation | Mutation's `onSuccess` — see `cache-invalidation` skill; balance-affecting mutations must call `invalidateAccountData(queryClient, accountId?)` from `src/lib/queryInvalidation.ts` |
-| App flags "offline" during a long operation (AI, upload) | `safeFetch` call missing `timeoutMs` — default timeout (see `DEFAULT_TIMEOUT_MS` in `src/lib/safeFetch.ts`) aborts and calls `markOffline()` | The mutation's `safeFetch(...)` options |
+| A long operation times out | `safeFetch` call missing an appropriate `timeoutMs` — the default is the CRUD budget (see `DEFAULT_TIMEOUT_MS` in `src/lib/safeFetch.ts`) | The mutation's `safeFetch(...)` options; a timeout must trigger a health probe, not directly call `markOffline()` or enter the offline queue |
 | Partner's data missing (or leaking when it shouldn't) | **1st: RLS has no household-aware policy** (silent row-strip — see the Phase 1.5 gate). 2nd: household-link logic — `ownOnly` / `is_public` / `household=true` flag mismatch | **RLS first**: `pg_class.relrowsecurity` + `pg_policies` for every table in the path. Only then `src/app/api/accounts/route.ts` GET (canonical pattern) and `getActiveHouseholdPartnerId` in `src/lib/accountAccess.ts` |
 | 500 error when creating a duplicate | Unique violation `23505` not mapped to `409` | The route's insert error handling |
 | Times shift by 2–3 h, or recurrence lands on wrong hour after DST | Naive date string / hand-rolled RRule | `timezone-handling` skill; utils in `src/lib/utils/date.ts` |

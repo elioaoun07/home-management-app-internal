@@ -117,35 +117,47 @@ export async function checkUserRateLimit(
   const dedupStart = new Date(now.getTime() - DEDUP_WINDOW_MS);
 
   try {
-    // Check for duplicate request using ai_messages (same content hash within 5s)
-    if (requestHash) {
-      // Check ai_rate_limits for dedup (fast, short-lived entries)
-      const { data: duplicates } = await supabase
-        .from("ai_rate_limits")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("request_hash", requestHash)
-        .gte("created_at", dedupStart.toISOString())
-        .limit(1);
+    // These checks are independent. Running them together removes two
+    // PostgREST round trips from every allowed AI request.
+    const duplicateQuery = requestHash
+      ? supabase
+          .from("ai_rate_limits")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("request_hash", requestHash)
+          .gte("created_at", dedupStart.toISOString())
+          .limit(1)
+      : null;
 
-      if (duplicates && duplicates.length > 0) {
-        return {
-          allowed: false,
-          retryAfterSeconds: Math.ceil(DEDUP_WINDOW_MS / 1000),
-          reason: "Duplicate request detected. Please wait a moment.",
-        };
-      }
-    }
-
-    // Count user's requests in the current window using ai_messages
-    // Count user messages only (each request = 1 user message)
-    const { count: userCount, error: countError } = await supabase
+    const userCountQuery = supabase
       .from("ai_messages")
       .select("*", { count: "exact", head: true })
       .eq("user_id", userId)
       .eq("role", "user")
       .gte("created_at", windowStart.toISOString());
 
+    const globalCountQuery = supabase
+      .from("ai_messages")
+      .select("*", { count: "exact", head: true })
+      .eq("role", "user")
+      .gte("created_at", windowStart.toISOString());
+
+    const [duplicateResult, userCountResult, globalCountResult] =
+      await Promise.all([
+        duplicateQuery ?? Promise.resolve(null),
+        userCountQuery,
+        globalCountQuery,
+      ]);
+
+    if (duplicateResult?.data && duplicateResult.data.length > 0) {
+      return {
+        allowed: false,
+        retryAfterSeconds: Math.ceil(DEDUP_WINDOW_MS / 1000),
+        reason: "Duplicate request detected. Please wait a moment.",
+      };
+    }
+
+    const { count: userCount, error: countError } = userCountResult;
     if (countError) {
       console.error("Rate limit check error:", countError);
       // On error, allow the request but log it
@@ -178,13 +190,7 @@ export async function checkUserRateLimit(
       };
     }
 
-    // Check global rate limit (across all users)
-    const { count: globalCount } = await supabase
-      .from("ai_messages")
-      .select("*", { count: "exact", head: true })
-      .eq("role", "user")
-      .gte("created_at", windowStart.toISOString());
-
+    const { count: globalCount } = globalCountResult;
     if ((globalCount || 0) >= GLOBAL_MAX_REQUESTS_PER_WINDOW) {
       return {
         allowed: false,

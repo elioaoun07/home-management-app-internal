@@ -23,11 +23,11 @@ tags:
 
 ## Now
 
-- [ ] **KIT-1** Inventory low-stock → Shopping List auto-add (gap 2a) — when stock drops below threshold, the item appears on the shopping list. ⚠️ Respect the **legacy localStorage queue** (Shopping List rides it by design — see [Sync & Offline](<../../03 - Junction Modules/Sync & Offline/Overview.md>)); don't migrate it as a side-effect. _(friction - M)_
+- [ ] **KIT-1** *(packet **M-03** of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>); exports a pure `lowStockItems()` that E-22 reuses as a briefing signal)* Inventory low-stock → Shopping List auto-add (gap 2a) — when stock drops below threshold, the item appears on the shopping list. ⚠️ Respect the **legacy localStorage queue** (Shopping List rides it by design — see [Sync & Offline](<../../03 - Junction Modules/Sync & Offline/Overview.md>)); don't migrate it as a side-effect. _(friction - M)_
 
 ## Next
 
-- [ ] **KIT-2** Recipe → Inventory deduction (gap 2b) — cooking a recipe deducts its ingredients from inventory, which then feeds KIT-1's low-stock trigger. _(friction - M)_
+- [ ] **KIT-2** *(packet **M-05** of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>))* Recipe → Inventory deduction (gap 2b) — cooking a recipe deducts its ingredients from inventory, which then feeds KIT-1's low-stock trigger. _(friction - M)_
 
 ## Later
 

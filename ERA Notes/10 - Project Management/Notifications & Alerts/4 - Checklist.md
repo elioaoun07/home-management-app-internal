@@ -23,14 +23,7 @@ tags:
 
 ## Now
 
-**Phase 1 — Routing fix** *(the one blocker; W1 / M1)*
-
-- [ ] **NOTIF-1.1** Decide Option A (new `daily_items_summary` type) vs Option B (honor `action_url` for `source:"system"`). _(blocker - S)_
-- [ ] **NOTIF-1.2** Update the cron: change `daily-items-reminder` to the new type (Option A) or fix `action_url` from `/items` → `/reminders` (Option B). → `src/app/api/cron/daily-items-reminder/route.ts` _(blocker - S)_
-- [ ] **NOTIF-1.3** Update in-app routing: add the case to `getActionRoute()` (`→ /reminders`) or make it consult `action_url` first for system notifications. → `src/hooks/useNotifications.ts` _(blocker - S)_
-- [ ] **NOTIF-1.4** Update push routing: add the case to the `notificationclick` switch in `public/sw.js` (and confirm `DeepLinkHandler` handles a `/reminders` hard-nav — it's a standalone route, not a tab). → `public/sw.js`, `src/components/DeepLinkHandler.tsx` _(blocker - S)_
-- [ ] **NOTIF-1.5** If Option A: add the enum value to the TS `NotificationType` union + any Zod schema; confirm `migrations/schema.sql` reflects it (DB change → migration file first, Hard Rule #24). _(blocker - S)_
-- [ ] **NOTIF-1.6** Verify end-to-end: tapping the summary (push + in-app) lands on `/reminders`; the budget reminder still opens the expense form. _(blocker - S)_
+- [ ] **NOTIF-19** *(E-19 of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>))* Delivery policy v1: quiet hours 21:00–08:00 Beirut + 3-push/day/user budget + severity classes + digest overflow, consulted inside `pushSender.sendPushToUser` so every producer inherits it. Absorbs the remaining half of **NOTIF-5.7**. _(friction - M)_
 
 ## Next
 
@@ -70,7 +63,7 @@ tags:
 - [ ] **NOTIF-5.3** Empty / "all caught up" states for drawer + page (page's empty state preserved as-is, not redesigned). _(annoyance - S)_
 - [ ] **NOTIF-5.4** Strip `console.*` from the notification crons (Hard Rule #22). → `src/app/api/cron/daily-items-reminder/route.ts`, `src/app/api/cron/daily-reminder/route.ts`, `src/app/api/cron/item-reminders/route.ts`. Still open; on 2026-07-10 `console.*` was instead stripped from `/api/notifications/in-app` and `/api/notifications/actions`. _(annoyance - S)_
 - [ ] **NOTIF-5.6** Audit Undo on dismiss/snooze across both surfaces (Hard Rule #1). Still open on the drawer/alerts page (silent optimistic mutations, no toast); the new Critical Alert Gate does have Undo. _(annoyance - S)_
-- [ ] **NOTIF-5.7** Quiet hours / DND + per-type mute in Preferences. _(annoyance - L)_
+- [ ] **NOTIF-5.7** Quiet hours / DND + per-type mute in Preferences — fully absorbed by **NOTIF-19** above; delete this line once NOTIF-19 ships. _(annoyance - L)_
 - [ ] **NOTIF-5.8** Bulk actions: snooze-all, clear-category. _(annoyance - M)_
 
 ## Definition of Done

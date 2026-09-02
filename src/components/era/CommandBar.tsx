@@ -12,7 +12,7 @@ import { useEraAskAI } from "@/features/era/useEraAskAI";
 import { useEraStore } from "@/features/era/useEraStore";
 import { useEraTurn } from "@/features/era/useEraTurn";
 import type { FaceKey } from "@/features/era/types";
-import { useBriefingTTS } from "@/hooks/useBriefingTTS";
+import { useEraReplyTTS } from "@/features/voice-conversation";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { ArrowRight, Mic, MicOff, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -41,7 +41,7 @@ export function CommandBar({
 
   const { runTurn } = useEraTurn();
   const { askAI, askingAI } = useEraAskAI();
-  const tts = useBriefingTTS();
+  const { play: speakReply } = useEraReplyTTS();
   const [busy, setBusy] = useState(false);
 
   // Mic / speech recognition state
@@ -103,12 +103,12 @@ export function CommandBar({
       }));
 
       if (voiceReplyEnabled) {
-        tts.play(reply);
+        speakReply(reply);
       }
 
       setBusy(false);
     },
-    [busy, runTurn, setPendingTranscript, voiceReplyEnabled, tts],
+    [busy, runTurn, setPendingTranscript, voiceReplyEnabled, speakReply],
   );
 
   const submit = useCallback(async () => {
@@ -129,7 +129,8 @@ export function CommandBar({
     if (!text || busy || askingAI) return;
     setPendingTranscript("");
     setLastMissText(null);
-    await askAI(text).catch(() => {});
+    const reply = await askAI(text).catch(() => null);
+    if (reply && voiceReplyEnabled) speakReply(reply);
   }, [
     pendingTranscript,
     pendingTurn,
@@ -139,6 +140,8 @@ export function CommandBar({
     setPendingTranscript,
     setLastMissText,
     askAI,
+    voiceReplyEnabled,
+    speakReply,
   ]);
 
   const canAskAI =

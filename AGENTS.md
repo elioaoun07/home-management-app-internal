@@ -89,9 +89,10 @@ Never use graphify as a substitute for ERA Notes — it cannot infer hard rules,
 3. **No red for individual task/item rows** — use theme colors (pink/cyan). Container headers CAN use red/amber. Overdue date labels → `text-white/40`
 4. **Futuristic SVG icons** where available in toasts and UI elements
 5. **Mobile-first** — always verify on mobile viewport
-6. **Never use `fetch()` for mutations** — use `safeFetch()` from `src/lib/safeFetch.ts`: pre-flight online check, configurable timeout (default **3 s**), `markOffline()` on any abort/network failure.
-   - The 3 s default fits CRUD. **Long-running calls (AI generation, file uploads, any external API that may take >5 s) MUST pass `timeoutMs`** — e.g. `{ timeoutMs: 60_000 }` — or the request is killed at 3 s and the app is falsely flagged offline.
-   - `markOffline()` fires on **timeout** too, not only hard network failures: a missing `timeoutMs` on a slow call lights up the offline indicator and badge while the user is fully online.
+6. **Never use `fetch()` for mutations** — use `safeFetch()` from `src/lib/safeFetch.ts`: pre-flight online check, configurable timeout (default **8 s**), and verified offline classification.
+   - **Long-running calls (AI generation, file uploads, any external API that may take >8 s) MUST pass `timeoutMs`** — e.g. `{ timeoutMs: 60_000 }` — or the request is aborted with `RequestTimeoutError`.
+   - **A timeout is latency, not proof of lost connectivity.** `safeFetch` starts a de-duplicated `/api/health` probe on timeout and does not call `markOffline()` unless that probe fails. Browser `offline` events and fetch-level network failures still transition immediately.
+   - `isOfflineError()` must remain false for endpoint timeouts and caller aborts so they cannot enqueue a duplicate mutation. Only confirmed connectivity failures enter the offline queue.
 7. **Never trust `navigator.onLine`** — use `isReallyOnline()` from `src/lib/connectivityManager.ts`. It probes `/api/health` every 30s for real connectivity.
 8. **Cron routes**: verify `Authorization: Bearer {CRON_SECRET}`, use `supabaseAdmin()` (not `supabaseServer()`), add `export const maxDuration = 60`.
 9. **Unique constraint violations** (`error.code === "23505"`) → return `409 Conflict`, not 500.

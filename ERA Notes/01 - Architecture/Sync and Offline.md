@@ -17,6 +17,16 @@ tags:
 
 The app uses a **foreground sync** strategy (not Background Sync API — unsupported). When offline, mutations are queued in IndexedDB. On reconnect or app foreground, the sync engine replays queued operations sequentially.
 
+## Verified Connectivity
+
+`safeFetch()` has separate failure classes because an endpoint exceeding its latency budget is not evidence that the network is gone:
+
+- Known-offline preflight, browser `offline` events, and fetch-level network failures throw `OfflineError` and may enter the offline queue.
+- A request timeout throws `RequestTimeoutError`, starts a de-duplicated `/api/health` probe, and leaves global connectivity unchanged unless that probe also fails.
+- A caller-owned abort remains a caller cancellation. It neither marks the app offline nor queues a mutation.
+
+The normal CRUD budget is 8 seconds. AI, uploads, imports, and other long operations must pass an explicit `timeoutMs` appropriate to the endpoint.
+
 ## Architecture
 
 ```
