@@ -1,6 +1,6 @@
 ---
 created: 2026-07-11
-updated: 2026-07-30
+updated: 2026-09-06
 type: master-book
 status: active
 owner: Elio
@@ -56,6 +56,13 @@ This activates the standing parked decision ("Capacitor shell — revisit when t
 **PWA surface:** root `public/manifest.json` + **9 per-route manifests** forming a multi-PWA setup, untouched by this plan. Safe-area is already handled (`viewport-fit` / `env(safe-area-inset-*)`) — the UI is notch-ready.
 
 ## Pain Inventory
+
+**ASTRA reconciliation · 2026-09-06:** [accepted study](<ASTRA/Native App — ASTRA Book.md>) and [qualification sheet](<ASTRA/Native App — ASTRA Packets.md>) landed against source `3106164`; native implementation remains **0%**. The July snapshot is historical: the accepted recount is 224 API route files, six declared offline feature types and 16 manifests (root + 14 route manifests + standalone PM). NAT is already registered; the old registration pointer is superseded. These counts do not establish coverage, installed builds, account readiness or device behavior.
+
+- 🟠 **Architecture certainty exceeds the planned device evidence.** “All modules keep working by construction” and “then permanent” login conflict with the uncompleted iPhone bridge/offline/auth spike. The accepted study cites Capacitor 7's `server.url` production caveat; ASTRA-NAT-1 refines NAT-3's go/no-go evidence. Preserve the locked remote-shell choice and fallback; do not silently pivot to Stage 2.
+- 🟠 **“SW platform guards” can be read against the Non-Interference Contract.** NAT-2 and the Phase roadmap use that phrase, while `_Archive/Native App/2 - Architecture Decision.md:53–61` forbids native-driven SW/manifest changes. Guard at the existing bridge/registration caller; any conflicting implementation needs an explicit owner amendment.
+- 🟡 **The platform ceiling is stale, not a revised v1 scope.** The accepted [ASTRA platform review](<ASTRA/Native App — ASTRA Book.md>) cites Apple's iOS 26 AlarmKit documentation, contradicting “no true alarm API” / “not a platform concept.” Time Sensitive and tap-through remain the chosen v1 contract; a version/permission/device spike stays held. No native alarm delivery is claimed.
+- 🟠 **Native inherits web replay and delivery ambiguity.** `src/lib/offlineSyncEngine.ts:256–276` drops 4xx and retries 5xx; current ERA idempotency/queue gaps remain E-09 prerequisites. `src/lib/pushSender.ts:59–80,203–216` does not turn provider acceptance or zero subscriptions into device receipt. N-03 must reuse E-05's event/person identity before endpoint fanout; no second cron or sync queue.
 
 - 🟠 The **`WKAppBoundDomains` × `server.url`** pairing is unproven — service-worker offline cold start and bridge injection have never been verified together on a real iPhone. This is the Phase-1 go/no-go spike.
 - 🟠 **Env drift between `era-web` and `era-mobile`** is the standing human-factor risk — a missing secret on one project shows up as confusing native-only bugs.

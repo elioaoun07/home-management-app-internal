@@ -1,6 +1,6 @@
 ---
 created: 2026-07-17
-updated: 2026-07-30
+updated: 2026-09-06
 type: master-book
 status: active
 owner: Elio
@@ -38,10 +38,15 @@ Greenfield on 2026-07-17; the catalog and builder shipped together on 2026-07-18
 
 ## Pain Inventory
 
-- 🟠 **The migration has not been run.** `migrations/2026-07-18_outfits-catalog-and-builder.sql` must be executed manually in the Supabase SQL Editor — all `/api/outfits/*` routes 500 until then.
+**ASTRA reconciliation · 2026-09-06:** [accepted study](<ASTRA/Outfits — ASTRA Book.md>) and [execution sheets](<ASTRA/Outfits — ASTRA Packets.md>) landed against source `3106164`; no product change or migration is marked shipped. The July phone/CSP case study is real debugging evidence, not completed OUT-19 acceptance. D1–D6 remain locked; optional AI and planner work keep their existing gates.
+
+- 🟠 **Signed-image completeness stops at 100 paths.** `src/features/outfits/useSignedUrls.ts:18–20` truncates the sorted input and cache key while `WardrobeGrid.tsx:46,105` renders the complete visible set; path 101 never receives a URL. ASTRA-OUT-2 stays held on the explicit OUT-19/D2 batch-contract decision: bounded batches are proposed, not an approved rewrite of the ONE-request criterion.
+- 🟠 **The authored wear RPC is not concurrent-idempotent or a complete inverse.** The proposed SQL at `ERA Notes/02 - Standalone Modules/Outfits/Overview.md:189–210` checks status without locking, uses mutable current membership, and preserves the newer last-worn date on Undo. Concurrent calls can double-increment; later composition changes can reverse different garments. These are defects in the runbook, not deployed-function claims. Hold OUT-12's “DDL verbatim” instruction and OUT-14 until the owner resolves the historical-wear/inverse contract.
+
+- 🟠 **Core migration/storage readiness is UNVERIFIED.** The cited `migrations/2026-07-18_outfits-catalog-and-builder.sql` is absent from the current tree; that does not prove it was never applied or that every route currently returns 500. E-00/OUT-19 requires owner-stamped core APPLIED evidence and fresh DB/storage state before any manual repair. Do not rerun guessed SQL from this old claim.
 - 🟡 **Phone acceptance (D2) is still pending** — the photo → cutout → grid flow has not been verified on a real device, and the ~40 MB first-use model download UX needs a real-network test.
-- 🟡 **Garment hard-delete Undo is partial by design** — Undo recreates the row (tags) but the photos are gone (storage removed server-side). The delete button warns first; archive is the soft path.
-- ⚪ Outfit `PATCH` composition replacement is delete-then-insert (PostgREST has no cross-call transaction), so a mid-flight failure leaves the outfit empty until re-saved. Surfaced as an error so the user re-saves; low risk single-user.
+- 🟠 **Garment hard-delete Undo loses identity and composition as well as photos.** `src/app/api/outfits/items/[id]/route.ts:79–119` removes the row/storage; `src/features/outfits/hooks.ts:242–278` recreates tags without the old ID or image paths, so it cannot restore prior outfit membership. Archive already provides the reversible path. The existing delete policy remains unchanged pending the explicitly held owner decision.
+- 🟠 **Outfit save can mutate metadata before validation and erase prior composition on failure.** `src/app/api/outfits/[id]/route.ts:57–98` updates metadata, validates garments, then deletes/inserts composition; create compensation is also unchecked (`src/app/api/outfits/route.ts:89–109`). Re-saving cannot reconstruct discarded server state. OUT-20 (ASTRA-OUT-1) proposes an atomic save boundary after current owner APPLIED evidence; no migration is applied by this study.
 - ⚪ **Server-side background removal is the clean end-state** but is not built — it would also fix the ~40–80 MB per-device model download and the on-device compute that caused the original "slow" complaint.
 
 ## Shipped Log

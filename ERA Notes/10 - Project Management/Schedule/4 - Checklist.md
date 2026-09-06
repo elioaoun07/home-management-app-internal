@@ -1,6 +1,6 @@
 ---
 created: 2026-05-30
-updated: 2026-07-15
+updated: 2026-09-06
 type: checklist
 status: active
 owner: Elio
@@ -23,7 +23,7 @@ tags:
 
 ## Now
 
-- [ ] **SCH-4.2** (Phase 4) Universal placement-rule **guard test** — a forgotten skip+inject breaks flexible items everywhere. A first placement-rule test shipped; this is the broader per-view guard, which has a known gap against [WebTodayView.tsx](<../../../src/components/web/WebTodayView.tsx>) (see [Master Book](<Schedule — Master Book.md>) › Pain Inventory). _(friction - M)_
+- [ ] **SCH-4.2** (ASTRA source correction; Phase 4) Verify broader per-view placement semantics; WebTodayView now delegates through the shared day path, so the old known-red-source claim is stale. This does not prove pause/exception/flexible parity or close broader coverage. → [Verified delta](<ASTRA/Schedule — ASTRA Book.md>) _(friction - M)_
 - [ ] **SCH-4.3b** (Phase 4) Engine/UI recurrence unification — Stages 2–3 (one expansion engine + one occurrence-action sheet across all surfaces). → [Master Book](<Schedule — Master Book.md>) _(friction - L)_
 - [ ] **SCH-5.5** (Phase 5) Mobile-form cleanup carried from the R3–R8 rounds: add **Undo** to success toasts (Hard Rule #1), remove the stray `console.error` in the submit/speech handler (Hard Rule #22), drop the unused `missingFieldType` state, and do the real-device visual check across themes. → [MobileReminderForm.tsx](<../../../src/components/reminder/MobileReminderForm.tsx>) _(friction - S)_
 
@@ -33,13 +33,21 @@ tags:
 
 ## Next
 
+**ASTRA prerequisite (2026-09-06)** *(study: [ASTRA Book](<ASTRA/Schedule — ASTRA Book.md>))*
+
+- [ ] **SCH-7** (ASTRA-SCH-2) Unsupported recurrence is refused before creating a one-time reminder or a misleading pending turn; blocks safe E-09 conversational capture. → [Execution sheet](<ASTRA/Schedule — ASTRA Packets.md>) _(blocker - S)_
+
 > **⚠️ Reality note (2026-06-06):** item NLP is **not** net-new — [smartTextParser.ts](<../../../src/lib/smartTextParser.ts>) (~1,420 LOC: type, dates, times, RRULE, priority, categories, confidence) already exists and is wired into the live form. Remaining 1b/1c work is incremental.
 
 - [ ] **SCH-1b.4** (Phase 1b) Harden recurrence extraction — keep conservative; **gate behind the SCH-4.2 tests** before trusting RRULE writes from text. _(friction - M)_
-- [ ] **SCH-1c.1** (Phase 1c) Wire one-line → structured item via **Gemini**; **pass `timeoutMs`** (Hard Rule #6 — AI calls exceed the 3 s default). → `src/lib/ai/gemini.ts` _(friction - M)_
+- [ ] **SCH-1c.1** (Phase 1c) Wire one-line → structured item via **Gemini**; **pass `timeoutMs`** (Hard Rule #6 — AI calls can exceed the current 8 s default). → `src/lib/ai/gemini.ts` _(friction - M)_
 - [ ] **SCH-1c.2** (Phase 1c) Reuse/extend the Hub create path ([AddReminderFromMessageModal.tsx](<../../../src/components/hub/AddReminderFromMessageModal.tsx>) · [messageActions.ts](<../../../src/features/hub/messageActions.ts>)) — confirm chip before commit. _(friction - M)_
 
 ## Later
+
+**ASTRA wave 1 (2026-09-06)** *(study: [ASTRA Book](<ASTRA/Schedule — ASTRA Book.md>); sheets: [ASTRA Packets](<ASTRA/Schedule — ASTRA Packets.md>))*
+
+ASTRA-SCH-1 is the bounded first day-adapter slice of SCH-4.3b; never dispatch the whole L parent as one ASTRA packet or tick it on this child. ASTRA-SCH-3 remains held until that adapter passes, then refines E-04/E-08 under HUB-41/45 with Schedule ownership before a fresh execution ID is admitted. SCH-4.4's optional status conflicts with unconditional D2; the existing requirement is not waived by this study. No new clock-trigger work is queued.
 
 **Phase 2 — Location + NFC-from-text** *(only after Phase 1 ships; no geofencing — routed through the existing arrive/leave-home NFC trigger)*
 

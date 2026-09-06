@@ -1,6 +1,6 @@
 ---
 created: 2026-07-15
-updated: 2026-08-01
+updated: 2026-09-06
 type: reference
 status: living
 owner: Elio
@@ -13,7 +13,7 @@ tags:
 
 > **What this file is:** the single grammar every campaign checklist item and done-stamp follows, so the `pnpm pm` Task board can show all campaigns in one consolidated view and you can jump item → item. **Enforced by `pnpm pm:lint`.** The parser homes are `scripts/pm/shared/tasks.mjs` (dashboard) and `scripts/delivery/packet.mjs` (delivery) — change both in lockstep if the grammar ever moves.
 >
-> **Campaign layout (2026-07-30):** every campaign folder holds exactly two files — `<Campaign> — Master Book.md` (state, shipped log, pains, vision, acceptance criteria, successor briefing) and `4 - Checklist.md` (the working queue). Everything superseded lives in `_Archive/`, which no PM tool scans.
+> **Campaign layout (amended 2026-09-06):** every campaign root holds exactly two files — `<Campaign> — Master Book.md` (state, shipped log, pains, vision, acceptance criteria, successor briefing) and `4 - Checklist.md` (the working queue). The sanctioned `ASTRA/` subfolder holds the study pair (§8). Everything superseded lives in `_Archive/`, which no PM tool scans.
 
 ---
 
@@ -24,10 +24,10 @@ tags:
 ```
 
 - **`- [ ]` / `- [x]`** — open / done. Indent 0, directly under a lane heading. Sub-points are plain `-` bullets, never nested checkboxes (a nested `- [ ]` becomes its own board task with no lane).
-- **`**PREFIX-n**`** — the ID chip. `PREFIX` is the campaign's (table below); `n` is the next free integer for that prefix. Sub-items of a shipped parent use `.n` (`SCH-1c.1`); variants use a trailing lowercase letter (`SCH-4.3b`). IDs are **never reused**.
+- **`**PREFIX-n**`** — the ID chip. `PREFIX` is the campaign's (table below); allocate above the highest integer already used anywhere in that campaign's whole Master Book and checklist, including history and references. Sub-items of a shipped parent use `.n` (`SCH-1c.1`); variants use a trailing lowercase letter (`SCH-4.3b`). IDs are **never reused**. **PM Tooling overrides the hyphenated example:** its grandfathered IDs are `R` immediately followed by digits, such as `R51`; `R-51` fails linter rule E4.
 - **body** — the outcome, phrased so "done / not done" is unambiguous. Provenance goes in parentheses at the **start** of the body (`(Phase 4) Universal placement-rule guard test …`), never in the meta suffix.
 - **`→ target`** (optional) — where the work lives:
-  - a doc: `→ [Overview](<../../02 - Standalone Modules/Trips/Overview.md>)` (angle-bracket relative markdown link — resolves in-app + backlinks + lint-checkable)
+  - a doc: `→ [Trips Overview](<../03 - Junction Modules/Trips/Overview.md>)` (angle-bracket relative markdown link — resolve from the containing document; this example is relative to this conventions file)
   - code: `` → `src/app/api/cron/daily-items-reminder/route.ts` `` (backticked repo-relative path, optional `:line` — renders as a source-preview chip)
 - **`_(severity - effort)_`** — required trailing meta. Exactly one space – hyphen – space between the two words.
 
@@ -47,6 +47,8 @@ tags:
 | `L` | 3+ days |
 
 **No ranges** (`S-M` is invalid — round **up** to `M`). **No `H`** (the parser never understood it — use `L`). Severity is **always** a lowercase word, never an emoji, inside the meta tag.
+
+**ASTRA sizing is narrower (§8):** both S and M execution sheets must fit one 2–4-hour session; no ASTRA L sheets. The general M estimate above remains 1–2 days for the broader repository queue. A packet that cannot meet the ASTRA session limit must be split before dispatch, even when its parent is M or L.
 
 ### Valid / invalid
 
@@ -145,6 +147,8 @@ IDs are per-campaign, so always name the campaign — `L1` alone is ambiguous ac
 | `Outfits/` | `OUT` |
 | `Native App/` | `NAT` |
 
+**Grandfathered spelling:** PM Tooling uses `R1`, `R49`, `R51`, with no hyphen between prefix and integer. This exception takes precedence over §1's generic `PREFIX-n` notation; `scripts/pm/lint.mjs:124` rejects `R-51` with E4.
+
 `Native App/` registered 2026-09-02 — its `4 - Checklist.md` exists (created by the [ERA Top Layer — Master Plan](<ERA Top Layer — Master Plan (2026-09-02).md>)'s Phase-4 packets, N-00…N-05).
 
 **Retired prefixes (never reused):** `DW` (Delivery Workspace — merged into `Delivery`, 2026-07-30).
@@ -155,7 +159,7 @@ The prefix table and `CAMPAIGNS` in `scripts/pm/lint.mjs` must agree. Renaming a
 
 ## 6. Enforcement & tooling
 
-- **`pnpm pm:lint`** — validates the ten checklists above: grammar, lanes, ID prefix + uniqueness, and that every `→` link resolves. Run it after editing any `4 - Checklist.md` (finish-task Gate E).
+- **`pnpm pm:lint`** — validates the eleven checklists above: grammar, lanes, ID prefix + uniqueness, and that every `→` link resolves. Run it after editing any `4 - Checklist.md` (finish-task Gate E).
 - **`pnpm pm`** — the consolidated Task board / table. Every parseable item shows with ID / severity / effort chips, filterable (`m:Budget s:blocker is:open`), click-through to the exact doc line.
 - **`pnpm pm:archive`** — sweeps every ticked checklist item into its Master Book's Shipped Log (§2.1). `--dry-run` to preview, `--undo` to revert the last sweep. Runs automatically on the first `pnpm pm` boot of each month.
 - **`_Archive/` is never scanned by any PM tool.** The skip lives in `scripts/pm/scan.mjs`, so the server, the static build, the bridge and the linter all inherit it. Archived docs stay in git for history and `rg`, and are reachable by opening the file directly — they are simply not part of the corpus the tools see. Move a doc there when it is superseded rather than deleting it.
@@ -179,3 +183,19 @@ The capture surface for raw, not-yet-canonical thoughts — ideas, bugs, checkli
 - Capture paths: write the line by hand, or the 💡 button in the dashboard topbar (server mode).
 - **Triage** is done by the `/triage-inbox` Claude Code skill (`.claude/skills/triage-inbox/SKILL.md`): it elaborates each entry (clarifying questions for bugs), files a canonical §1 item in the right campaign, adds a Feature State pain bullet for bugs, and moves the entry to **Processed** as a **plain bullet** (no checkbox — drops out of task views) keeping the original wording plus a `→` pointer to where it landed.
 - Processed is swept (deleted) past ~20 bullets, **only with owner approval** — git is the archive.
+
+---
+
+## 8. ASTRA studies (sanctioned 2026-09-06)
+
+The owner commissioned ASTRA as an enhancement layer subordinate to the [ERA Top Layer — Master Plan](<ERA Top Layer — Master Plan (2026-09-02).md>). It does not replace that execution contract or create another queue.
+
+Each of the eleven campaign roots retains exactly the two files described above. Its sanctioned `ASTRA/` subfolder contains exactly `<Campaign> — ASTRA Book.md` and `<Campaign> — ASTRA Packets.md`. The Book carries verified deltas, findings and held defects; Packets carries bounded proposed execution sheets. `Top Layer/` and `Command Center/` are cross-cutting study folders, **not campaigns**: neither gains a checklist or ID prefix. Their work lands in the existing owning campaign.
+
+Every ASTRA document uses `type: astra-study`, `status: active`, `owner: Elio`, and ISO `created:` / `updated:` stamps (the initial landing is `2026-09-06`). Its header explicitly names the active plan as superior, separates the repository evidence cutoff from inspection/runtime evidence, and links its owning queue or studies. Active metadata makes the studies visible to PM tooling; it does not make their proposals executable. A Master Book's updated stamp records PM reconciliation, not a new runtime or DB verification date.
+
+**Execution remains in the existing Now / Next / Later lanes.** Do not add study checkboxes, another checklist, or a fourth lane. Every proposal maps to an existing plan/campaign ID or is marked `NEW`; a locked-decision conflict is recorded in the [Contradiction Register](<ASTRA — Contradiction Register.md>) and remains unresolved until the owner decides. Held work is not dispatch-approved. Every ASTRA S/M sheet must fit one 2–4-hour session, with dependencies, evidence gates and file boundaries honored; a completed child sheet does not tick a broader parent unless all of that parent's acceptance criteria are satisfied.
+
+**Phase 5 allocation record:** nine new canonical IDs were selected: BUD-63–BUD-66, HUB-57–HUB-58, SCH-7, HLTH-21 and OUT-20. Only BUD-66 and SCH-7 enter Next as concrete E-04/E-08/E-09 blockers; the other seven enter Later. Other refinements stay attached to existing parents or held in the study. Renaming the reused open PM Tooling R7 to **R51** repairs its identity; it is not a tenth new outcome. The competing CI use of R49 is absorbed by canonical **HUB-37 / E-01**. Historical records retain their original IDs and are cross-referenced rather than rewritten.
+
+**Delivery's freeze remains:** new delivery machinery waits for two real product completions under the existing DLV-92/DLV-93 gate. A study landing, lint pass or tooling child completion does not satisfy that gate. The [10x Portfolio](<ASTRA — 10x Portfolio.md>) is a ranked decision sheet, and [Coverage & Orphans](<ASTRA — Coverage & Orphans.md>) is an ownership map; neither authorizes dispatch or replaces the canonical lanes.

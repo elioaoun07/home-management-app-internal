@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uncommitted files</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #0d1117;
+    color: #e6edf3;
+    margin: 0;
+    padding: 2rem clamp(1rem, 4vw, 3rem);
+    line-height: 1.6;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+  .sub { color: #8b949e; margin: 0 0 2rem; font-size: .9rem; }
+  h2 {
+    font-size: 1rem;
+    margin: 2rem 0 .75rem;
+    padding-bottom: .4rem;
+    border-bottom: 1px solid #30363d;
+    display: flex; align-items: center; gap: .6rem;
+  }
+  .count {
+    font-size: .75rem; font-weight: 600;
+    padding: .1rem .5rem; border-radius: 999px;
+  }
+  .count.new { background: #1f6feb33; color: #79c0ff; }
+  .count.mod { background: #9e6a0333; color: #e3b341; }
+  ol { list-style: none; margin: 0; padding: 0; }
+  li { margin: 0; }
+  a.file {
+    display: block;
+    padding: .45rem .6rem;
+    border-radius: 6px;
+    color: #e6edf3;
+    text-decoration: none;
+    font-size: .85rem;
+    word-break: break-all;
+    border: 1px solid transparent;
+  }
+  a.file:hover { background: #161b22; border-color: #30363d; color: #79c0ff; }
+  a.file .dir { color: #8b949e; }
+  a.file .name { color: #e6edf3; }
+  a.file:hover .name { color: #79c0ff; }
+  .hint {
+    margin-top: 2.5rem; padding: 1rem;
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    color: #8b949e; font-size: .8rem;
+  }
+  .hint code { color: #e3b341; }
+</style>
+</head>
+<body>
+  <h1>Uncommitted files</h1>
+  <p class="sub">Snapshot from <code>git status</code> &middot; click a file to open it in VS Code. This page itself is untracked &mdash; delete it after you commit.</p>
+
+  <h2>New files (untracked) <span class="count new" id="new-count"></span></h2>
+  <ol id="new-list"></ol>
+
+  <h2>Modified files <span class="count mod" id="mod-count"></span></h2>
+  <ol id="mod-list"></ol>
+
+  <div class="hint">
+    Links use <code>vscode://file/</code> so they open in VS Code. If a link does nothing, your browser may ask permission to open VS Code &mdash; allow it.
+  </div>
+
+<script>
+  const BASE = "vscode://file/c:/Users/aoune/WebApp/budget-app/";
+
+  const newFiles = [
+    "ERA Notes/10 - Project Management/ASTRA — 10x Portfolio.md",
+    "ERA Notes/10 - Project Management/ASTRA — Contradiction Register.md",
+    "ERA Notes/10 - Project Management/ASTRA — Coverage & Orphans.md",
+    "ERA Notes/10 - Project Management/Budget/ASTRA/Budget — ASTRA Book.md",
+    "ERA Notes/10 - Project Management/Budget/ASTRA/Budget — ASTRA Packets.md",
+    "ERA Notes/10 - Project Management/Command Center/Command Center — ASTRA Architecture.md",
+    "ERA Notes/10 - Project Management/Command Center/Command Center — ASTRA Experience.md",
+    "ERA Notes/10 - Project Management/Command Center/Command Center — ASTRA Orchestration.md",
+    "ERA Notes/10 - Project Management/Command Center/Command Center — ASTRA Packets.md",
+    "ERA Notes/10 - Project Management/Delivery/ASTRA/Delivery — ASTRA Book.md",
+    "ERA Notes/10 - Project Management/Delivery/ASTRA/Delivery — ASTRA Packets.md",
+    "ERA Notes/10 - Project Management/Healthcare/ASTRA/Healthcare — ASTRA Book.md",
+    "ERA Notes/10 - Project Management/Healthcare/ASTRA/Healthcare — ASTRA Packets.md",
+    "ERA Notes/10 - Project Management/Hub & ERA/ASTRA/Hub & ERA — ASTRA Book.md",
+    "ERA Notes/10 - Project Management/Hub & ERA/ASTRA/Hub & ERA — ASTRA Packets.md",
+    "ERA Notes/10 - Project Management/Kitchen/ASTRA/Kitchen — ASTRA Book.md",
+    "ERA Notes/10 - Project Management/Kitchen/ASTRA/Kitchen — ASTRA Packets.md",
+    "ERA Notes/10 - Project Management/Native App/ASTRA/Native App — ASTRA Book.md",
+    "ERA Notes/10 - Project Management/Native App/ASTRA/Native App — ASTRA Packets.md",
+    "ERA Notes/10 - Project Management/Notifications & Alerts/ASTRA/Notifications & Alerts — ASTRA Book.md",
+    "ERA Notes/10 - Project Management/Notifications & Alerts/ASTRA/Notifications & Alerts — ASTRA Packets.md",
+    "ERA Notes/10 - Project Management/Outfits/ASTRA/Outfits — ASTRA Book.md",
+    "ERA Notes/10 - Project Management/Outfits/ASTRA/Outfits — ASTRA Packets.md",
+    "ERA Notes/10 - Project Management/PM Tooling/ASTRA/PM Tooling — ASTRA Book.md",
+    "ERA Notes/10 - Project Management/PM Tooling/ASTRA/PM Tooling — ASTRA Packets.md",
+    "ERA Notes/10 - Project Management/Schedule/ASTRA/Schedule — ASTRA Book.md",
+    "ERA Notes/10 - Project Management/Schedule/ASTRA/Schedule — ASTRA Packets.md",
+    "ERA Notes/10 - Project Management/Top Layer/Top Layer — ASTRA Architecture.md",
+    "ERA Notes/10 - Project Management/Top Layer/Top Layer — ASTRA Completion.md",
+    "ERA Notes/10 - Project Management/Top Layer/Top Layer — ASTRA Experience.md",
+    "ERA Notes/10 - Project Management/Top Layer/Top Layer — ASTRA Packets.md",
+    "ERA Notes/10 - Project Management/Trips/ASTRA/Trips — ASTRA Book.md",
+    "ERA Notes/10 - Project Management/Trips/ASTRA/Trips — ASTRA Packets.md",
+    "docs/ASTRA-SESSION-BRIEF.md",
+  ];
+
+  const modFiles = [
+    "ERA Notes/10 - Project Management/Budget/4 - Checklist.md",
+    "ERA Notes/10 - Project Management/Budget/Budget — Master Book.md",
+    "ERA Notes/10 - Project Management/Delivery/4 - Checklist.md",
+    "ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md",
+    "ERA Notes/10 - Project Management/Healthcare/4 - Checklist.md",
+    "ERA Notes/10 - Project Management/Healthcare/Healthcare — Master Book.md",
+    "ERA Notes/10 - Project Management/Hub & ERA/4 - Checklist.md",
+    "ERA Notes/10 - Project Management/Hub & ERA/Hub & ERA — Master Book.md",
+    "ERA Notes/10 - Project Management/Kitchen/4 - Checklist.md",
+    "ERA Notes/10 - Project Management/Kitchen/Kitchen — Master Book.md",
+    "ERA Notes/10 - Project Management/Native App/4 - Checklist.md",
+    "ERA Notes/10 - Project Management/Native App/Native App — Master Book.md",
+    "ERA Notes/10 - Project Management/Notifications & Alerts/4 - Checklist.md",
+    "ERA Notes/10 - Project Management/Notifications & Alerts/Notifications & Alerts — Master Book.md",
+    "ERA Notes/10 - Project Management/Outfits/4 - Checklist.md",
+    "ERA Notes/10 - Project Management/Outfits/Outfits — Master Book.md",
+    "ERA Notes/10 - Project Management/PM Tooling/4 - Checklist.md",
+    "ERA Notes/10 - Project Management/PM Tooling/PM Tooling — Master Book.md",
+    "ERA Notes/10 - Project Management/Schedule/4 - Checklist.md",
+    "ERA Notes/10 - Project Management/Schedule/Schedule — Master Book.md",
+    "ERA Notes/10 - Project Management/Trips/4 - Checklist.md",
+    "ERA Notes/10 - Project Management/Trips/Trips — Master Book.md",
+    "ERA Notes/10 - Project Management/_Conventions.md",
+    "ERA Notes/10 - Project Management/_index.md",
+  ];
+
+  function render(files, listId, countId) {
+    const list = document.getElementById(listId);
+    document.getElementById(countId).textContent = files.length;
+    for (const rel of files) {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.className = "file";
+      a.href = BASE + encodeURI(rel);
+      const slash = rel.lastIndexOf("/");
+      const dir = slash >= 0 ? rel.slice(0, slash + 1) : "";
+      const name = slash >= 0 ? rel.slice(slash + 1) : rel;
+      a.innerHTML = '<span class="dir"></span><span class="name"></span>';
+      a.querySelector(".dir").textContent = dir;
+      a.querySelector(".name").textContent = name;
+      li.appendChild(a);
+      list.appendChild(li);
+    }
+  }
+
+  render(newFiles, "new-list", "new-count");
+  render(modFiles, "mod-list", "mod-count");
+</script>
+</body>
+</html>

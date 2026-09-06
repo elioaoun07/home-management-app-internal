@@ -1,6 +1,6 @@
 ---
 created: 2026-07-17
-updated: 2026-07-18
+updated: 2026-09-06
 type: checklist
 status: active
 owner: Elio
@@ -24,7 +24,7 @@ tags:
 
 **Phase 1 — Wardrobe catalog** *(shipped 2026-07-18 — OUT-1…OUT-6 swept to the Master Book's Shipped Log)*
 
-- [ ] **OUT-19** *(bundled into the Phase-0 owner day, packet **E-00**, of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>) — its pass/fail gates whether **M-08**/OUT-7 runs in Phase 3)* (Phase 1) Real-phone acceptance: run the core migration, then photo → cutout → tagged garment in the grid in under a minute with ONE batch signed-URL request per screen; measure the first-use model download on a real network _(blocker - S)_
+- [ ] **OUT-19** *(bundled into the Phase-0 owner day, packet **E-00**, of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>) — its pass/fail gates whether **M-08**/OUT-7 runs in Phase 3)* (Phase 1) Real-phone acceptance: owner verifies core migration APPLIED evidence and applies only missing reviewed SQL, then photo → cutout → tagged garment in the grid in under a minute with ONE batch signed-URL request per screen; measure the first-use model download on a real network _(blocker - S)_
 
 ## Next
 
@@ -37,9 +37,15 @@ tags:
 
 ## Later
 
+**ASTRA wave 1 (2026-09-06)** *(study: [ASTRA Book](<ASTRA/Outfits — ASTRA Book.md>) · [execution sheets](<ASTRA/Outfits — ASTRA Packets.md>))*
+
+- [ ] **OUT-20** (ASTRA-OUT-1) Save an outfit and its garment membership atomically so a failed edit preserves the previous composition. → [Execution sheet](<ASTRA/Outfits — ASTRA Packets.md>) _(friction - M)_
+
+ASTRA-OUT-2 is unallocated and HELD: chunking beyond 100 image paths needs an explicit amendment to OUT-19/D2's ONE-request acceptance before implementation. No extra AI work is admitted; OUT-7/8 remain gated by OUT-19.
+
 **Phase 4 — Planner + wear log** — the functional payoff: plan the week, never repeat an event outfit.
 
-- [ ] **OUT-12** (Phase 4) Migration C — `outfit_plans` (unique per user+date) + reversible `set_outfit_plan_worn` SECURITY DEFINER RPC, paired `schema.sql`; DDL verbatim from [Overview §4](<../../02 - Standalone Modules/Outfits/Overview.md>) _(blocker - S)_
+- [ ] **OUT-12** (Phase 4; ASTRA contract review required before dispatch) Migration C — `outfit_plans` (unique per user+date) + reversible `set_outfit_plan_worn` SECURITY DEFINER RPC, paired `schema.sql`; review the authored [Overview §4](<../../02 - Standalone Modules/Outfits/Overview.md>) runbook's locking and inverse assumptions before owner application. Current deployment is UNVERIFIED; do not silently amend the accepted wear-stat approximation. _(blocker - S)_
 - [ ] **OUT-13** (Phase 4) OutfitPlannerCalendar (one-slot-per-day clone) + plans routes (409-upsert on date collision) + PlanOutfitSheet with the amber no-repeat banner ("Last worn … at …, worn N×"; warns, never blocks) → `src/components/web/WebMealPlanCalendar.tsx` _(blocker - L)_
 - [ ] **OUT-14** (Phase 4) Mark-worn flow — status pill → RPC, Undo toast drives `p_worn=false`; wear stats surfaced on garments and outfits _(friction - M)_
 

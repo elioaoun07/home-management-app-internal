@@ -1,6 +1,6 @@
 ---
 created: 2026-07-17
-updated: 2026-07-30
+updated: 2026-09-06
 type: master-book
 status: active
 owner: Elio
@@ -14,6 +14,8 @@ tags:
 # Healthcare — Master Book
 
 > **Campaign:** Healthcare · prefix `HLTH` · working queue → [4 · Checklist](<4 - Checklist.md>)
+
+> **ASTRA study landing — 2026-09-06:** [Campaign Book](<ASTRA/Healthcare — ASTRA Book.md>) · [Packets](<ASTRA/Healthcare — ASTRA Packets.md>). Accepted source cutoff `3106164`; subordinate to the active Top Layer plan. Pain Inventory corrections qualify older deployment/roadmap statements below; dated implementation history and owner privacy decisions remain intact. This landing verifies no live health data, DB state or native alarm.
 
 ## Identity & North Star
 
@@ -42,13 +44,16 @@ The household's health facts live in heads and on paper. ERA's promise — captu
 
 ## Pain Inventory
 
-- 🔴 **The core migration has not been run in Supabase.** Until `migrations/2026-07-17_healthcare-core.sql` is executed manually, `/healthcare` and `/api/healthcare/*` 500 on missing tables, and mobile-viewport + both-accounts verification cannot happen. The module is UI over a missing schema.
+- 🔴 **Current core/privacy acceptance remains UNVERIFIED; blanket missing-schema claims are stale.** The historical 2026-08-04 `db-state.json` catalog contains all four health tables plus `get_health_bundle`/`get_household_allergens`; this contradicts “UI over missing tables” at that timestamp but proves neither full migration application nor current grants/privacy. E-00/HLTH-7 must obtain fresh owner catalog and two-account/mobile evidence before rerunning SQL. The older roadmap, “next moves” and trap instructions to run first are qualified by this verify-first requirement (ASTRA Book, Book delta).
 - 🟠 **Zero route tests across 10 API routes** — and Phase 2 (medications, safety-critical) is about to land on top of them.
-- 🟠 **No domain skill yet.** It should be authored *before* medications, not after, so the safety-critical work is skill-guarded from day one.
-- 🟡 Recipe *list* cards show no allergen dot — the `RecipeListItem` payload has no ingredients, so this needs a recipes list API change. Deferred; the detail view (the pre-cook surface) is covered.
+- 🟠 **No domain skill yet.** HLTH-19 belongs before HLTH-8/9 medication schema/routes, despite its older Phase-4 lane. Preserve the existing dose/occurrence engine and privacy boundaries; resolve the prerequisite before medication dispatch (ASTRA F3).
+- 🟡 **Recipe list warnings remain unwired.** `RecipeListItem` omits ingredients; an existing `RecipeCardAllergenDot` declaration is not list wiring. HLTH-18 remains deferred. The detail view has a warning aid, but its failed-feed state is defective below; do not treat that surface as fully verified (ASTRA F1/F4).
 - 🟡 `HealthcareClient.tsx` is 1,013 lines — extract into `src/components/healthcare/` rather than growing it.
 - ⚪ Allergen matching is keyword-based over free-text ingredients — a warn-aid, not a guarantee, by design. Keywords are editable per allergy to correct drift.
 - ⚪ The `shared_with_household` privacy boundary is under-documented — ask before assuming.
+
+- 🟠 **Failed allergen retrieval is indistinguishable from no matches.** `useHouseholdAllergens.ts:19–24` throws for failed retrieval but defaults a missing payload field to []; `RecipeAllergenWarning.tsx:26–30,51` discards query status and hides the warning when no hits remain. ASTRA-HLTH-1 must retain cached hits and distinguish checked/cached/unavailable, including first-load failure. This does not mean the UI explicitly labels food safe, and changes neither the keyword warning aid nor cooking permission (ASTRA F1).
+- 🟡 **“Verified Google sync” is a planned acceptance state, not observed backup delivery.** The identity/medication prose below is stronger than the available evidence: `gcal/sync.ts:204` stores an event ID after API creation; HLTH-12 still requires a native alarm with the app closed, zero duplicate occurrences after schedule change and one replayed dose row. Keep the warn-but-allow disconnected decision. Dose identity must follow medication/intended dose across archive-and-recreate item IDs before declaring the bridge complete (ASTRA F3).
 
 ## Shipped Log
 

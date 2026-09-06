@@ -1,6 +1,6 @@
 ---
 created: 2026-05-30
-updated: 2026-07-30
+updated: 2026-09-06
 type: master-book
 status: active
 owner: Elio
@@ -15,6 +15,8 @@ tags:
 
 > **Campaign:** Schedule · prefix `SCH` · working queue → [4 · Checklist](<4 - Checklist.md>)
 > **What this file is:** the single consolidated record for the Schedule (Items & Reminders) module — state, shipped history, pains, the recurrence audit, decisions, acceptance criteria, and the successor briefing.
+
+> **ASTRA landing — 2026-09-06:** [Study](<ASTRA/Schedule — ASTRA Book.md>) · [Packets](<ASTRA/Schedule — ASTRA Packets.md>), subordinate to the active [ERA Top Layer plan](<../ERA Top Layer — Master Plan (2026-09-02).md>). Repository evidence is fixed at `3106164`; this landing changes documentation only. The dated study and current pain corrections supersede stale operational claims below; historical scores, shipped records and locked decisions are retained. Live DB state remains **UNVERIFIED** without fresh owner evidence.
 
 ## Identity & North Star
 
@@ -62,23 +64,29 @@ Two things make it strategically important: **it is the spine ERA reads from** (
 
 ## Pain Inventory
 
-- 🟠 **The red suite is a culture problem, not a test problem.** One guard failure (`expandOccurrences.test.ts` "keeps documented schedule views on the flexible skip plus inject pattern" vs `WebTodayView.tsx`) has kept `pnpm test` red since 2026-06-16. Every session since has learned to read "1 failed" as normal — exactly how the *second* real failure slips through. The diagnosis (real double-expansion bug vs stale source-text guard) is itself unresolved, which is the point.
-- 🟠 **Three diverging expansion engines.** `date.ts` + `WebCalendar` inline (complete) vs `dayOccurrences.ts` (ignores exceptions, pauses, `rescheduled_to`, per-occurrence overrides) vs `schedule/expandOccurrences.ts` (canonical, tested, **imported by nothing**). An edited/paused/moved occurrence is right on the calendar and wrong on `/reminders` and Today.
+**ASTRA delta, 2026-09-06:** [Study findings F1–F5](<ASTRA/Schedule — ASTRA Book.md>) are the current source baseline; dated test/DB claims below are not fresh runtime evidence.
+
+- 🟠 **ERA's agenda omits placed flexible routines and mislabels overdue work.** `src/features/era/intents/resolvers/schedule.ts:50–65` passes an empty placements array while `src/components/planner/WebDayPlanner.tsx:749` supplies real placements; `:80–90` derives overdue from alert triggers rather than due/completion state. ASTRA-SCH-3 supplies complete E-04/E-08/E-22 inputs after ASTRA-SCH-1; it does not finish all Schedule bridges.
+- 🟠 **Conversational capture acknowledges recurrence it never writes.** The resolver carries `recurrenceRule` into its result but POST writes only type/title/priority/due time (`src/features/era/intents/resolvers/schedule.ts:170–209`); the pending path uses the same writer (`:237–238`). ASTRA-SCH-2 is the S guard for E-09: refuse unsupported recurrence before any write and keep the structured-form path; full recurrence capture remains under SCH-1b.4/SCH-1c.2.
+- 🟠 **Google receives a weaker recurrence projection.** `src/lib/gcal/sync.ts:64,111` sends the base RRULE without the app's exception, pause or flexible-placement semantics. A healthy scheduled reconciler would not repair that representational gap; source behavior is verified, Google/device execution is UNVERIFIED. Hold projection work until the shared occurrence contract is established.
+
+- **Correction 2026-09-06:** the old known-red `WebTodayView` source guard is stale. `src/lib/schedule/expandOccurrences.test.ts:99–114` now accepts delegation to `expandOccurrencesInRange`, which the view uses (`src/components/web/WebTodayView.tsx:111,122`). ASTRA did not execute the suite; neither an expected failure nor a blanket green claim is warranted. SCH-4.2 still owns meaningful per-view behavior protection.
+- 🟠 **The live day engine omits recurrence semantics and mishandles boundaries.** `src/lib/utils/dayOccurrences.ts:55–67` expands without exception/pause/materialization inputs, `:138–141` passes next midnight into the inclusive range in `src/lib/utils/date.ts:240`, `:115` turns hour zero into 09, and `:119` collapses multiple flexible slots by item/day. ASTRA-SCH-1 narrows SCH-4.2/SCH-4.3b to the day adapter first; canonical `src/lib/schedule/expandOccurrences.ts:97–146` also needs placement and legacy-move compatibility before adoption. No claim that every other calendar path is complete.
 - 🟠 **The tested engine isn't the used engine** — false confidence: the test guards code no surface imports.
 - 🟠 **Two diverging occurrence-action UIs** — the calendar's inline modal (`WebEvents.tsx`) and the shared sheet (`ItemActionsSheet.tsx`). Both now distinguish Skip from Cancel correctly, but they are two implementations to keep in sync.
 - 🟠 **The `gcal-reconcile` cron may never run.** It shipped 2026-07-10 and is well-built (two-pass, idempotent, self-reporting via `last_synced_at`) — but there is no `vercel.json` and no scheduler trace in the repo. An unscheduled cron is indistinguishable from a scheduled one by reading code. Until `last_synced_at` is *observed advancing daily in prod*, treat the Google copy as silently diverging — and Healthcare medications plan to trust this layer.
 - 🟠 **Seven surfaces for one module** — cognitive load; no single obvious place to do the thing. Organic growth: each view added without retiring or merging an old one.
 - 🟡 Two representations of "move one occurrence" — a `postponed` action (`postponed_to`) *and* a recurrence exception (`override_payload_json.rescheduled_to`); the canonical engine speaks only the exception dialect, the live UI writes the action dialect.
 - 🟡 `MobileItemForm.tsx` is dead code on its **fourth** generational flag — 49,943 bytes, zero importers. Deleting it is a 2-minute `git rm` + typecheck. (Left in place per an earlier owner decision — do not delete without ticking SCH-5.3.)
-- 🟡 OAuth token lifecycle is unobserved — `google_calendar_connections` stores refresh tokens with no surfaced "refresh failed / connection dead" state. A dead connection looks identical to a healthy idle one.
-- 🟡 Prerequisites is half-built — 4 evaluators advertised but inert.
+- 🟡 **Google token/cron health remains unobserved in production.** A `sync_error` write already exists (`src/lib/gcal/sync.ts:224`), so "no error state" was too broad. Establish advancing reconciliation timestamps and visible failure behavior with owner/device evidence before treating the projection as current.
+- 🟡 **A time-window predicate alone cannot activate an item when time advances.** Four evaluators remain inert; `src/lib/prerequisites/evaluators/time-window.ts:8–9` returns false and `src/lib/prerequisites/engine.ts:122–189` runs on incoming trigger events, with no clock source among the current cron routes. SCH-4.4 remains conditional on a real caller; its optional checklist wording conflicts with mandatory Definition of Done D2 and awaits owner resolution. Do not ship only the predicate or light up the other stubs.
 - 🟡 `useItems.ts` is ~2,665 LOC — change-risk hotspot. Split when a feature next forces you in, never "just because".
 - 🟡 No reassignment history / audit — disputes ("I thought you had it") have no record.
 - 🟡 Events are easier to log than reminders/tasks — events map to one start time; reminders invite optional recurrence/alert/subtask decisions that slow entry.
 - 🟡 Auto-archive 1-month window duplicated as a constant in two routes plus a manual backfill migration — drift risk.
 - ⚪ `day_plans.intent` is captured but unconsumed; no `getWeekShape()` for ERA.
 - ⚪ Stats surface unused — maintenance with zero payoff; parked.
-- ⚪ Residual RLS drift (parked deliberately): duplicate policy generations coexist per table (harmless — RLS OR-combines), and `get_schedule_bundle` doesn't surface items where I'm responsible but the partner is creator and `is_public = false` (the assignment picker prevents that state today).
+- ⚪ **Historical RLS concerns need fresh owner evidence.** Earlier duplicate-policy/private-assignment claims and the 2026-08-04 `item_prerequisites` concern recorded in the Trips book are not current DB proof. Permissive policies OR-combine, but restrictive policies can veto them; inspect a fresh owner snapshot before changing access or claiming the residual drift harmless. ASTRA made no DB calls.
 
 ## Shipped Log
 

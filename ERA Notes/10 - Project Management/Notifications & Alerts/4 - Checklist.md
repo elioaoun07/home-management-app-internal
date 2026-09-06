@@ -1,6 +1,6 @@
 ---
 created: 2026-06-19
-updated: 2026-07-15
+updated: 2026-09-06
 type: checklist
 status: active
 owner: Elio
@@ -29,9 +29,9 @@ tags:
 
 **Phase 2 — Calm bell** *(W2 / M2)*
 
-- [ ] **NOTIF-2.1** Replace the `1s infinite` ring with a **finite** on-arrival animation (play once on new, then rest); drop the always-on `.animate-notification-pulse` while merely unread. → `src/components/notifications/NotificationBell.tsx`, `src/app/globals.css` _(friction - M)_
-- [ ] **NOTIF-2.2** Recolor the badge toward a calmer accent (theme/severity-aware); reserve red for urgent severities. Keep the count legible (`99+`). _(friction - S)_
-- [ ] **NOTIF-2.3** Add a `prefers-reduced-motion` path → static dot/count, no animation. _(friction - S)_
+- [ ] **NOTIF-2.1** (ASTRA source correction) Verify the existing finite arrival animation and absence of perpetual unread ringing; implementation is already present, so repair only a reproduced discrepancy. → [Verified delta](<ASTRA/Notifications & Alerts — ASTRA Book.md>) _(friction - S)_
+- [ ] **NOTIF-2.2** (ASTRA source correction) Verify the existing urgency-aware badge and readable count across themes; do not reimplement source-present styling. → [Verified delta](<ASTRA/Notifications & Alerts — ASTRA Book.md>) _(friction - S)_
+- [ ] **NOTIF-2.3** (ASTRA source correction) Verify the existing reduced-motion path on the phone; no new animation implementation without a reproduced failure. → [Verified delta](<ASTRA/Notifications & Alerts — ASTRA Book.md>) _(friction - S)_
 - [ ] **NOTIF-2.4** Keep an explicit, accessible "N unread" + a calm "all caught up" rest state. _(friction - S)_
 - [ ] **NOTIF-2.5** Verify on a mobile viewport under each theme (Hard Rule #5). _(friction - S)_
 
@@ -51,6 +51,10 @@ tags:
 
 ## Later
 
+**ASTRA wave 1 (2026-09-06)** *(study: [ASTRA Book](<ASTRA/Notifications & Alerts — ASTRA Book.md>); sheets: [ASTRA Packets](<ASTRA/Notifications & Alerts — ASTRA Packets.md>))*
+
+ASTRA-NOTIF-1 is held without a new ID until the owner accepts the extra-tap containment tradeoff; it does not certify the existing item tool or restore one-tap completion. Occurrence identity and shared action semantics precede that later restoration. E-05a/b and NOTIF-19 share event/person policy; no second delivery-policy engine. C01's 07:15/quiet-window conflict must be resolved before scheduled delivery. No new cosmetic ticket is admitted.
+
 **Phase 4 — Scannable alerts page** *(W4 / M4)*
 
 - [ ] **NOTIF-4.1** Card hierarchy: bold title → one-line context → time + a clear type icon; tighten copy throughout. → `src/components/hub/HubPage.tsx` (~5554–5737) _(friction - M)_
@@ -61,7 +65,7 @@ tags:
 **Phase 5 — Backlog (Should → Could)**
 
 - [ ] **NOTIF-5.3** Empty / "all caught up" states for drawer + page (page's empty state preserved as-is, not redesigned). _(annoyance - S)_
-- [ ] **NOTIF-5.4** Strip `console.*` from the notification crons (Hard Rule #22). → `src/app/api/cron/daily-items-reminder/route.ts`, `src/app/api/cron/daily-reminder/route.ts`, `src/app/api/cron/item-reminders/route.ts`. Still open; on 2026-07-10 `console.*` was instead stripped from `/api/notifications/in-app` and `/api/notifications/actions`. _(annoyance - S)_
+- [ ] **NOTIF-5.4** (ASTRA policy reconciliation; HELD for owner decision) Resolve locked decision 5's blanket cron-log removal against the corrected global rule permitting server diagnostics; this study waives neither the module decision nor the global rule. → [ASTRA evidence](<ASTRA/Notifications & Alerts — ASTRA Book.md>) _(annoyance - S)_
 - [ ] **NOTIF-5.6** Audit Undo on dismiss/snooze across both surfaces (Hard Rule #1). Still open on the drawer/alerts page (silent optimistic mutations, no toast); the new Critical Alert Gate does have Undo. _(annoyance - S)_
 - [ ] **NOTIF-5.7** Quiet hours / DND + per-type mute in Preferences — fully absorbed by **NOTIF-19** above; delete this line once NOTIF-19 ships. _(annoyance - L)_
 - [ ] **NOTIF-5.8** Bulk actions: snooze-all, clear-category. _(annoyance - M)_

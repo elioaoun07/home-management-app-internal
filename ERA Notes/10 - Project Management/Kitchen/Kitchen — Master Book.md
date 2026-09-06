@@ -1,6 +1,6 @@
 ---
 created: 2026-05-30
-updated: 2026-07-30
+updated: 2026-09-06
 type: master-book
 status: active
 owner: Elio
@@ -15,9 +15,11 @@ tags:
 
 > **Campaign:** Kitchen · prefix `KIT` · working queue → [4 · Checklist](<4 - Checklist.md>)
 
+> **ASTRA landing — 2026-09-06:** [Study](<ASTRA/Kitchen — ASTRA Book.md>) · [Packets](<ASTRA/Kitchen — ASTRA Packets.md>), subordinate to the active [ERA Top Layer plan](<../ERA Top Layer — Master Plan (2026-09-02).md>). Repository evidence is fixed at `3106164`; this landing changes documentation only. The dated study and current pain corrections supersede stale operational claims below; historical scores, shipped records and locked decisions are retained. Live DB state remains **UNVERIFIED** without fresh owner evidence.
+
 ## Identity & North Star
 
-"Kitchen" is a convenience grouping of the household food domain — **Recipes**, **Meal Planning**, **Inventory** (standalone) and **Shopping List** (junction), plus **Catalogue** and **Chores** in the same neighbourhood. All four are 🔵 Established: fully built and shipping. The defining trait is that they are **built but loosely connected** — the value is in the bridges, not the pieces.
+"Kitchen" is a convenience grouping of the household food domain — **Recipes** and **Inventory** (standalone), **Meal Planning** and **Shopping List** (junction), plus **Catalogue** in the same neighbourhood. **Chores are owned by Schedule**; their older placement here is historical grouping, not permission for cross-campaign work. The defining trait is that the tools are built but loosely connected.
 
 Today the loop is **open**: you cook without inventory updating, you plan without knowing the budget, you run out without the list knowing.
 
@@ -50,11 +52,20 @@ Today the loop is **open**: you cook without inventory updating, you plan withou
 
 ## Pain Inventory
 
-- 🟠 **The loop is open and the keystone is one wiring step.** Inventory low-stock → Shopping List auto-add has been flagged for 4+ months. At this age it belongs in the monument class: the cost of executing it is now far below the cost of re-documenting it each generation.
-- 🟠 **Zero tests across the whole domain** — the only campaign domain at zero. This now has a safety edge: ingredient parsing feeds Healthcare's allergen warnings; `allergenMatch` is tested on the Healthcare side, but the *ingredient shape* it consumes is protected by nothing on the Kitchen side.
+**ASTRA delta, 2026-09-06 — [study F1–F5](<ASTRA/Kitchen — ASTRA Book.md>):** stock functions in the 2026-08-04 catalog are recoverable historical contracts, not proof of today's deployed behavior. Recipe ingredients are JSON arrays with string quantities/units (`migrations/schema.sql:1097–1098`, `src/types/recipe.ts:9–16`), not normalized inventory links. This is not a safe automation practice campaign: quantity integrity, household scope and allergen consumers matter.
+
+- 🔴 **Restock can lose increments, accept the wrong input type and lose history.** `src/app/api/inventory/restock/route.ts:29–51` reads and replaces an absolute quantity; concurrent 5+2/+3 can leave 7 or 8, and a string quantity passes loose positivity checks. History insertion errors are unchecked (`:85–93`). ASTRA-KIT-1 is an owner-contract-gated atomic-restock prerequisite to KIT-1/M-03, not completion of low-stock auto-add.
+- 🟠 **Adding stock to shopping has no stable effect identity.** `src/app/api/inventory/add-to-shopping/route.ts:60–95` inserts a message before updating its backlink, without enforcing uniqueness or checking the backlink result; retries/concurrent calls can duplicate the entry. Keep automatic consumers held until idempotence and the existing legacy queue contract are proved.
+- 🟠 **Meal coverage disagrees across Kitchen and ERA.** Chef counts a set of `planned_date` values (`src/features/era/intents/resolvers/chef.ts:192–195`), the calendar expands leftovers (`src/components/web/WebMealPlanCalendar.tsx:64–77`), and hooks use either a fixed 14-day look-back or origin-day selection (`src/features/meal-planning/hooks.ts:23–41`). Status and `for_user` must also agree. ASTRA-KIT-2 refines KIT-4/KIT-7 for E-08/E-22; it does not finish either whole parent.
+- 🔴 **Persisted recipe ingredients can violate the allergen consumer's contract.** Extraction/generation accept unchecked shapes (`src/app/api/recipes/extract-from-url/route.ts:579`, `src/app/api/recipes/[id]/generate/route.ts:126–137`), while `src/lib/health/allergenMatch.ts:96,154,188` calls string methods on ingredient names. ASTRA-KIT-3 validates all four persistence writers; extraction-response checks remain held. This guards structural compatibility, not clinical completeness.
+- 🟠 **Cooking totals and Undo can report effects they did not perform.** `src/app/api/recipes/[id]/cooking-log/route.ts:116–124` requests a head-only count but reads `data.length`, producing `times_cooked = 1`; cooking and restock Undo callbacks only invalidate queries (`src/features/recipes/hooks.ts:287–304`, `src/features/inventory/hooks.ts:224–239`). Count correction and genuine inverse actions remain held, recorded here rather than implied by an unrelated packet.
+- 🟡 **A dormant stock-settings hook sends the wrong identifier.** `src/features/inventory/hooks.ts:118–119` sends the stock-row ID to a route keyed by inventory-item ID. `useUpdateStock` has no live caller at the evidence cutoff (`:245`); hold correction/deletion until its intended consumer is known, rather than describing a witnessed UI failure.
+
+- 🟠 **Low-stock auto-add is not a single wiring step (KIT-1).** The implemented low-stock read is based on run-out date/auto-add settings (`src/app/api/inventory/low-stock/route.ts:28–59`), while acceptance says quantity threshold. Resolve that contract and the stock/shopping effect guarantees above before automation. The locked automatic-add outcome remains; a read-only signal does not complete it.
+- 🟠 **Ingredient producer protection is missing.** The three feature directories have no tests at the cutoff, but `src/lib/health/allergenMatch.test.ts` already protects the shared consumer, so "zero tests across the whole domain" is false. Producer-shape fixtures must cover the actual four persistence boundaries, not merely mirror a type declaration.
 - 🟡 The recipe AI surface (extract/optimize/scale/substitute) is fixture-less — prompt drift silently changes extractions with nothing to catch it.
-- 🟡 Planned meals are invisible to calendar/Today/ERA — the outward bridge the assistant needs.
-- 🟡 The pieces are built, the bridges are thin — cook a recipe → deplete inventory → low stock → auto-add to shopping → plan next week around what you have is mostly manual.
+- **Correction 2026-09-06:** ERA already has meal assignment and gap reads (`src/features/era/intents/resolvers/chef.ts:99,180`, HUB-20). The remaining work is consistent coverage semantics and the direct E-08 read contract, not inventing a Kitchen→ERA bridge.
+- 🟡 **Cooking does not have a safe stock-consumption mapping (KIT-2/M-05).** `src/app/api/recipes/[id]/cooking-log/route.ts:82–143` records cooking and statistics without inventory deduction; ingredient names and string quantities/units do not identify stock rows or normalize amounts. Hold automatic deduction until explicit ingredient→inventory identity, units and an idempotent inverse are defined.
 - ⚪ Shopping List rides the legacy localStorage queue **by design** — a correctness trap if someone "modernizes" it without knowing it's intentional.
 
 ## Shipped Log

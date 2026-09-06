@@ -1,6 +1,6 @@
 ---
 created: 2026-05-29
-updated: 2026-07-30
+updated: 2026-09-06
 type: index
 status: living
 tags:
@@ -9,9 +9,9 @@ tags:
 
 # 10 · Project Management — Command Center
 
-> **Start here when you ask "what do I do next?"** Two files per campaign, one job each:
+> **Start here when you ask "what do I do next?"** Two files at each campaign root, one job each; the supporting ASTRA pair lives one level down:
 >
-> 1. **Truth & direction** — `<Campaign> — Master Book.md`: current state with a scored maturity read, the shipped log, the pain inventory, the locked decisions, the acceptance criteria, and a **Successor Briefing** (task-tier map, trap registry, verification manifest) for AI sessions. Trust it as of its `updated:` stamp, then delta with `git log`.
+> 1. **Truth & direction** — `<Campaign> — Master Book.md`: current state with a scored maturity read, the shipped log, the pain inventory, the locked decisions, the acceptance criteria, and a **Successor Briefing** (task-tier map, trap registry, verification manifest) for AI sessions. Read the evidence cutoff and current corrections, then delta with `git log`; `updated:` records PM maintenance, not runtime or DB verification.
 > 2. **Execution** — `4 - Checklist.md`, as **Now / Next / Later** lanes. One item grammar for all of them: [_Conventions](<_Conventions.md>), validated by `pnpm pm:lint`, seeded from [_Templates/](<_Templates/>).
 >
 > **View:** `pnpm pm` opens the consolidated Task board/table — every campaign's items with ID / severity / effort chips, filterable (`m:Budget s:blocker is:open`), click-through to the exact line.
@@ -20,21 +20,33 @@ tags:
 
 ## Campaigns
 
-| Campaign | Prefix | Book | Queue |
-|---|---|---|---|
-| **Budget** (finance cluster) | `BUD` | [Master Book](<Budget/Budget — Master Book.md>) | [Checklist](<Budget/4 - Checklist.md>) |
-| **Schedule** (Items & Reminders) | `SCH` | [Master Book](<Schedule/Schedule — Master Book.md>) | [Checklist](<Schedule/4 - Checklist.md>) |
-| **Kitchen** (Recipes · Meal · Inventory · Shopping) | `KIT` | [Master Book](<Kitchen/Kitchen — Master Book.md>) | [Checklist](<Kitchen/4 - Checklist.md>) |
-| **Trips** (lifecycle travel junction) | `TRIP` | [Master Book](<Trips/Trips — Master Book.md>) | [Checklist](<Trips/4 - Checklist.md>) |
-| **Hub & ERA** (Hub Chat · AI · Voice) | `HUB` | [Master Book](<Hub & ERA/Hub & ERA — Master Book.md>) | [Checklist](<Hub & ERA/4 - Checklist.md>) |
-| **Notifications & Alerts** | `NOTIF` | [Master Book](<Notifications & Alerts/Notifications & Alerts — Master Book.md>) | [Checklist](<Notifications & Alerts/4 - Checklist.md>) |
-| **Healthcare** | `HLTH` | [Master Book](<Healthcare/Healthcare — Master Book.md>) | [Checklist](<Healthcare/4 - Checklist.md>) |
-| **Outfits** (wardrobe) | `OUT` | [Master Book](<Outfits/Outfits — Master Book.md>) | [Checklist](<Outfits/4 - Checklist.md>) |
-| **PM Tooling** (the command centre itself) | `R` | [Master Book](<PM Tooling/PM Tooling — Master Book.md>) | [Checklist](<PM Tooling/4 - Checklist.md>) |
-| **Delivery** (agentic delivery sessions) | `DLV` | [Master Book](<Delivery/Delivery — Master Book.md>) | [Checklist](<Delivery/4 - Checklist.md>) |
-| **Native App** (Capacitor, Phase 4 of the ERA Top Layer plan) | `NAT` | [Master Book](<Native App/Native App — Master Book.md>) | [Checklist](<Native App/4 - Checklist.md>) |
+| Campaign | Prefix | Book | Queue | ASTRA study |
+|---|---|---|---|---|
+| **Budget** (finance cluster) | `BUD` | [Master Book](<Budget/Budget — Master Book.md>) | [Checklist](<Budget/4 - Checklist.md>) | [ASTRA Book](<Budget/ASTRA/Budget — ASTRA Book.md>) |
+| **Schedule** (Items & Reminders) | `SCH` | [Master Book](<Schedule/Schedule — Master Book.md>) | [Checklist](<Schedule/4 - Checklist.md>) | [ASTRA Book](<Schedule/ASTRA/Schedule — ASTRA Book.md>) |
+| **Kitchen** (Recipes · Meal · Inventory · Shopping) | `KIT` | [Master Book](<Kitchen/Kitchen — Master Book.md>) | [Checklist](<Kitchen/4 - Checklist.md>) | [ASTRA Book](<Kitchen/ASTRA/Kitchen — ASTRA Book.md>) |
+| **Trips** (lifecycle travel junction) | `TRIP` | [Master Book](<Trips/Trips — Master Book.md>) | [Checklist](<Trips/4 - Checklist.md>) | [ASTRA Book](<Trips/ASTRA/Trips — ASTRA Book.md>) |
+| **Hub & ERA** (Hub Chat · AI · Voice) | `HUB` | [Master Book](<Hub & ERA/Hub & ERA — Master Book.md>) | [Checklist](<Hub & ERA/4 - Checklist.md>) | [ASTRA Book](<Hub & ERA/ASTRA/Hub & ERA — ASTRA Book.md>) |
+| **Notifications & Alerts** | `NOTIF` | [Master Book](<Notifications & Alerts/Notifications & Alerts — Master Book.md>) | [Checklist](<Notifications & Alerts/4 - Checklist.md>) | [ASTRA Book](<Notifications & Alerts/ASTRA/Notifications & Alerts — ASTRA Book.md>) |
+| **Healthcare** | `HLTH` | [Master Book](<Healthcare/Healthcare — Master Book.md>) | [Checklist](<Healthcare/4 - Checklist.md>) | [ASTRA Book](<Healthcare/ASTRA/Healthcare — ASTRA Book.md>) |
+| **Outfits** (wardrobe) | `OUT` | [Master Book](<Outfits/Outfits — Master Book.md>) | [Checklist](<Outfits/4 - Checklist.md>) | [ASTRA Book](<Outfits/ASTRA/Outfits — ASTRA Book.md>) |
+| **PM Tooling** (the command centre itself) | `R` (no hyphen) | [Master Book](<PM Tooling/PM Tooling — Master Book.md>) | [Checklist](<PM Tooling/4 - Checklist.md>) | [ASTRA Book](<PM Tooling/ASTRA/PM Tooling — ASTRA Book.md>) |
+| **Delivery** (agentic delivery sessions) | `DLV` | [Master Book](<Delivery/Delivery — Master Book.md>) | [Checklist](<Delivery/4 - Checklist.md>) | [ASTRA Book](<Delivery/ASTRA/Delivery — ASTRA Book.md>) |
+| **Native App** (Capacitor, Phase 4 of the ERA Top Layer plan) | `NAT` | [Master Book](<Native App/Native App — Master Book.md>) | [Checklist](<Native App/4 - Checklist.md>) | [ASTRA Book](<Native App/ASTRA/Native App — ASTRA Book.md>) |
 
-**Every campaign folder holds exactly two files:** the Master Book and the checklist. Nothing else. Superseded material lives in [_Archive/](<_Archive/_index.md>), which **no PM tool scans**.
+**Every campaign root holds exactly two files:** the Master Book and the checklist. The sanctioned `ASTRA/` subfolder holds its Book/Packets pair ([_Conventions §8](<_Conventions.md#8-astra-studies-sanctioned-2026-09-06>)). Superseded material lives in [_Archive/](<_Archive/_index.md>), which **no PM tool scans**.
+
+## ASTRA landing — 2026-09-06
+
+The studies are subordinate to the active ERA Top Layer plan. They record repository findings and proposed refinements; held sheets are not dispatch-approved, and finishing a child does not complete its broader parent. Canonical work remains in the eleven existing campaign queues. Delivery's two-real-product-completion freeze remains in force.
+
+| Reference | Purpose |
+|---|---|
+| [10x Portfolio](<ASTRA — 10x Portfolio.md>) | Ten ranked decisions across the workstreams; not another roadmap or queue. |
+| [Contradiction Register](<ASTRA — Contradiction Register.md>) | Claims, source evidence, consequences and explicit owner decisions; preserves locked-decision conflicts. |
+| [Coverage & Orphans](<ASTRA — Coverage & Orphans.md>) | Ownership and depth across the existing campaign boundaries. |
+| Top Layer: [Architecture](<Top Layer/Top Layer — ASTRA Architecture.md>) · [Experience](<Top Layer/Top Layer — ASTRA Experience.md>) · [Completion](<Top Layer/Top Layer — ASTRA Completion.md>) · [Packets](<Top Layer/Top Layer — ASTRA Packets.md>) | Cross-cutting study folder; no new campaign, checklist or prefix. |
+| Command Center: [Architecture](<Command Center/Command Center — ASTRA Architecture.md>) · [Orchestration](<Command Center/Command Center — ASTRA Orchestration.md>) · [Experience](<Command Center/Command Center — ASTRA Experience.md>) · [Packets](<Command Center/Command Center — ASTRA Packets.md>) | Cross-cutting study folder; work stays under the existing owning campaigns. |
 
 ## Standing plans (read, don't execute from)
 

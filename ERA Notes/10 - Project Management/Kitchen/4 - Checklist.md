@@ -1,6 +1,6 @@
 ---
 created: 2026-06-20
-updated: 2026-07-15
+updated: 2026-09-06
 type: checklist
 status: active
 owner: Elio
@@ -31,8 +31,12 @@ tags:
 
 ## Later
 
+**ASTRA wave 1 (2026-09-06)** *(study: [ASTRA Book](<ASTRA/Kitchen — ASTRA Book.md>); sheets: [ASTRA Packets](<ASTRA/Kitchen — ASTRA Packets.md>))*
+
+No new Kitchen ticket is admitted. ASTRA-KIT-1 is the atomic restock/history prerequisite inside KIT-1; current owner RPC/trigger evidence precedes any SQL, and KIT-1 remains open for its separate idempotent shopping-link scope. KIT-2 automatic deduction is held until stable ingredient-to-stock identity and unit rules exist. ASTRA-KIT-2 refines KIT-4 and the read prerequisite for KIT-7. ASTRA-KIT-3 producer validation remains documented without an execution ID; Healthcare owns the consumer's unavailable-feed repair. No new deduction engine or migration of the legacy shopping queue.
+
 - [ ] **KIT-3** Meal plan budget estimate (gap 2c) — show estimated grocery cost per plan. Coordinate with [Budget — Master Book](<../Budget/Budget — Master Book.md>). _(annoyance - M)_
-- [ ] **KIT-4** Kitchen → ERA nudges — "low on staples, nothing planned Thursday." _(annoyance - M)_
+- [ ] **KIT-4** (ASTRA-KIT-2 prerequisite; E-08/E-22) Scoped meal coverage and existing Chef reads feed kitchen nudges. First verify person/status/leftover interval coverage; a passing helper alone does not complete the nudge or KIT-7 calendar integration. → [Execution sheet](<ASTRA/Kitchen — ASTRA Packets.md>) _(annoyance - M)_
 - [ ] **KIT-5** Pantry-aware recipe suggestions ("what can I make with what I have"). _(annoyance - M)_
 - [ ] **KIT-6** Smarter per-item low-stock thresholds + restock cadence from usage history. _(annoyance - M)_
 - [ ] **KIT-7** Meal Planning → Schedule (planned meals on the calendar/today views). _(annoyance - M)_

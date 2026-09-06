@@ -1,6 +1,6 @@
 ---
 created: 2026-06-19
-updated: 2026-07-30
+updated: 2026-09-06
 type: master-book
 status: active
 owner: Elio
@@ -14,6 +14,8 @@ tags:
 # Notifications & Alerts — Master Book
 
 > **Campaign:** Notifications & Alerts · prefix `NOTIF` · working queue → [4 · Checklist](<4 - Checklist.md>)
+
+> **ASTRA study landing — 2026-09-06:** [Campaign Book](<ASTRA/Notifications & Alerts — ASTRA Book.md>) · [Packets](<ASTRA/Notifications & Alerts — ASTRA Packets.md>). Accepted source cutoff `3106164`; subordinate to the active Top Layer plan. Pain Inventory corrections below qualify the older state/roadmap wording; this landing implements no product behavior and verifies no live scheduler, Google alarm or phone delivery.
 
 ## Identity & North Star
 
@@ -55,17 +57,24 @@ Notifications have one job: **say the right thing, calmly, and take me to the ri
 
 ## Pain Inventory
 
-- 🟠 **The bell rings perpetually while unread** — a 1 s infinite wobble plus an always-on pulse ring reads as an alarm and pulls the eye every second. It also ignores `prefers-reduced-motion`.
+- 🟡 **Bell acceptance still needs device proof; the perpetual-ring claim is stale.** `NotificationBell.tsx:39–68,92–96` already has finite arrival/rest behavior; `globals.css:3712–3743` has one iteration and reduced-motion handling. Theme/urgency and accessible labels are present. Reconcile NOTIF-2.1–2.4 against this source and obtain 390×844 arrival/rest/reduced-motion evidence; do not rebuild it or mark phone acceptance verified from source alone (ASTRA Book, Book delta).
 - 🟠 **Drawer rows are over-described** — title + 2-line message + timestamp + worded action pills. A glance should yield "what + when"; instead every row is a paragraph.
-- 🟠 **Three cron routes still carry `console.*`** (Hard Rule 22) — 13 / 9 / 8 as of 2026-07-18.
-- 🟠 **Nothing in the repo schedules the crons.** `vercel.json` is absent; an external scheduler must be configured. Code that "shipped" may never run — this includes `gcal-reconcile`, shared with the Schedule campaign.
-- 🟡 `daily_reminder` is overloaded — two different notifications can't be routed, themed or filtered apart.
+- ⚪ **The cron console cleanup conflicts with current Hard Rule 22.** Its corrected scope permits server-side `console.error`; existing locked decision 5 and NOTIF-5.4 still request blanket removal. Record that rule conflict before dispatch and preserve useful server diagnostics; the old 13/9/8 counts are historical, not a current client-rule violation (ASTRA Book, Book delta).
+- 🟠 **External cron execution and delivery remain UNVERIFIED.** Missing `vercel.json` does not prove an external scheduler is absent. E-02/E-03 require owner scheduler invocation/response and last-success evidence for the six jobs; NOTIF-6.6 additionally requires advancing Google `last_synced_at`, induced-drift repair and an observed native phone alarm. Source/API acceptance alone closes none of those gates (ASTRA F3).
+
+> **2026-09-06 source correction — daily-summary routing already has its own type.** The 2026-09-02 Shipped Log closes NOTIF-1.1–1.6: `daily_items_summary` resolves to `/reminders` in registry and both service-worker branches. Older “overloaded `daily_reminder`/dead `/items`” state rows are stale; do not queue another routing fix (ASTRA Book, Book delta).
+
 - 🟡 **Registry vs `sw.js` duality** — `sw.js` lives outside the registry, so push can show different text/actions than in-app. Change both sides or neither.
 - 🟡 The drawer is still ungrouped even though `group_key` grouping shipped on the alerts page; five item reminders are five rows.
 - 🟡 Dismiss/snooze on the drawer and alerts page are silent optimistic mutations with no toast — Hard Rule 1 requires Undo. (The Critical Alert Gate does have it.)
-- 🟡 No quiet hours / DND / per-type mute; volume grew (critical gate + gcal) while a send budget still doesn't exist.
+- 🟡 **No unified quiet-hours/DND/mute and recipient-event budget.** NOTIF-19/E-19 must count one logical recipient event before subscription fanout, not one unit per endpoint (`pushSender.ts:98`). Reuse E-05a's identity/claim/outcome contract. Top Layer C01's 07:15 versus 21:00–08:00 conflict and C03's partner sequencing remain held owner decisions; this inventory changes neither policy (ASTRA F4).
 - ⚪ Expiry/retention is set inconsistently across types.
-- ⚪ No calm "you're caught up" state — the only strong signal is the alarm.
+- ⚪ Calm empty-state work remains under NOTIF-5.3; the prior “only strong signal is the alarm” rationale is obsolete after the finite-bell source correction above. Preserve Hard Rule 28's minimal copy.
+
+- 🔴 **In-app Done can complete a recurring parent and dismiss a failed action.** `/api/notifications/actions:106–135` updates the notification first, then directly completes its item without occurrence dispatch or checking the item update error. ASTRA-NOTIF-1 removes the unsafe shortcut and opens the item tool; NOTIF-3.2/3.3 remain gated on Schedule's authorized occurrence transition before compact Done/Undo can return (ASTRA F1).
+- 🟠 **Push completion has a separate, weakly specified mutation contract.** `sw.js:1269–1285` sends an occurrence date or today's UTC fallback and defaults missing recurrence to false; `/api/items/[id]/complete:92–107,114,159–195` trusts the recurrence flag, has a broader household fallback than creator/responsible/public access and writes separately. These are source defects, not proof of live RLS behavior. Contain push Done in ASTRA-NOTIF-1; Schedule owns authorized atomic completion before restoration (ASTRA F1).
+- 🟠 **Stored item alerts lose the occurrence identity carried by push.** `item-reminders/route.ts:337–341` stores item/alert/type metadata while `:369–375` adds occurrence date/recurrence only to the push payload. Old in-app alerts cannot safely reconstruct an intended occurrence from a mutable trigger or today's date. Repair provenance through the existing notification record before notification actions or E-11 claim occurrence correctness (ASTRA F2).
+- 🟡 **Some no-send outcomes disappear from delivery counters.** `pushSender.ts:59–80` returns sent=0/failed=0/allFailed=false for missing configuration, query errors or no subscriptions; `item-reminders/route.ts:386–387` counts neither outcome. Later sent>0 means endpoint acceptance, not phone display. E-05a/HUB-42 owns explicit no-send/unknown/accepted outcomes before policy or briefing confidence consumes them (ASTRA F3; Top Layer A12).
 
 ## Shipped Log
 

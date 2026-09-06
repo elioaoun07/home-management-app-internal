@@ -1,6 +1,6 @@
 ---
 created: 2026-06-20
-updated: 2026-09-02
+updated: 2026-09-06
 type: checklist
 status: active
 owner: Elio
@@ -24,22 +24,29 @@ tags:
 
 ## Now
 
-- [ ] **HUB-37** *(E-01)* Commit the working tree (HUB-35/36) + a CI workflow that actually runs `typecheck`/`test`/`lint` on push — today only a docs-diff workflow exists. Includes the ERA-offline-honesty rider: replace the two raw `fetch()` in `useEraConversation.ts` with `safeFetch`, delete the false offline-queue comment, and make an offline write intent reply with a form door instead of "Something went wrong." → `.github/workflows/ci.yml`, `src/features/era/useEraConversation.ts`, `src/features/era/useEraTurn.ts` _(blocker - M)_
-- [ ] **HUB-38** *(E-02)* Cron run ledger (`cron_runs`) + wrap all six `/api/cron/*` routes + per-job liveness in `/api/health`; strip the `console.*` still in three cron routes. Add the Applied-migrations table to `migrations/README.md`. _(blocker - M)_
-- [ ] **HUB-39** *(E-03)* Scheduler of record: Supabase `pg_cron` + `pg_net` (Hobby tier, per owner 2026-09-02) firing the six cron routes with a commented `era-briefing` slot for HUB-41 to activate. _(blocker - S)_
-- [ ] **HUB-40** *(M-00)* Truth sweep: score Awakening's G0/G1/G2 as missed in its own §14 *(done 2026-09-02)*, mark both Awakening and Top View superseded *(done 2026-09-02)*, write "which assistant for what" into the AI Assistant Overview, delete dead ERA code (`face-widgets/`, `recipeOfferGenerate`, `stubIntentRouter`, `useEraHousehold`, unreachable `MODULE_COLORS`, `Face.route`), fix the Native book's manifest count (14, not 9) and this book's `HubPage.tsx` LOC (6,275). → [AI Assistant Overview](<../../03 - Junction Modules/AI Assistant/Overview.md>) _(blocker - M)_
+- [ ] **HUB-37** (ASTRA E-01a; absorbs former open R49 CI alias) CI runs typecheck/test/lint on push and PR; ERA preserves recoverable input on rejected capture and distinguishes offline, timeout and uncertain results. HEAD is already committed; no git write is part of this packet. → [Execution sheet](<../Top Layer/Top Layer — ASTRA Packets.md>) _(blocker - M)_
+- [ ] **HUB-38** (ASTRA E-02a; E-02 retained parent) Owner-verified cron ledger and six wrappers provide authenticated cadence-aware liveness; record APPLIED migrations separately. E-02a follows ledger implementation. Cron logging reconciliation remains held under NOTIF-5.4; this packet waives neither applicable rule. → [Execution sheet](<../Top Layer/Top Layer — ASTRA Packets.md>) _(blocker - M)_
+- [ ] **HUB-39** (ASTRA E-03a) Owner configures the existing scheduler-of-record plan with polling and IANA local-date eligibility; DST and duplicate ticks are verified. The briefing slot stays inactive until recipient policy and owner-recorded C01 eligible-hour/C03 partner-sequencing decisions are satisfied. → [Execution sheet](<../Top Layer/Top Layer — ASTRA Packets.md>) _(blocker - S)_
+- [ ] **HUB-40** (ASTRA M-00a) Complete the assistant treaty and source-proven dead-code removal without changing existing ERA layout. Earlier plan supersession is already recorded; inventory correction is 16 total manifests, including 14 per-route. HubPage remains 6,275 LF lines until its sanctioned rider. → [Execution sheet](<../Top Layer/Top Layer — ASTRA Packets.md>) _(blocker - M)_
 
 ## Next
 
-- [ ] **HUB-41** *(E-04)* Signals v0 (new file: src/lib/briefing/signals.ts): today's schedule, recurring dues next 7 days (including the cheap overdraw check — absorbs **HUB-4**), yesterday + MTD spend vs plan. Pure, tested, provenance on every signal. _(friction - M)_
-- [ ] **HUB-42** *(E-05)* Briefing v0.5: compose deterministically, store, push at 07:15 Beirut via the new `era-briefing` cron, exactly-once by `group_key`. Retires the dead `focus_insights` feature in the same migration. **First real proactive delivery — the identity gap closes here.** _(blocker - M)_
+- [ ] **HUB-41** (ASTRA E-04a) Signals distinguish complete, partial and unavailable facts with provenance. Reuse canonical Schedule/Budget inputs; BUD-66 and the Schedule day-adapter/parity prerequisites must pass before their summaries are certified. Existing recurring-dues/overdraw scope remains. → [Execution sheet](<../Top Layer/Top Layer — ASTRA Packets.md>) _(friction - M)_
+- [ ] **HUB-42** (ASTRA E-05a/b; C01/C03 decisions pending) Deterministic stored briefing delivers once per eligible local date and recipient, with verified identity/claim and recipient hour/toggle policy. Activate only at an owner-resolved eligible hour; D5 stays binding. Composition and focus-insights retirement remain parent obligations. → [Execution sheets](<../Top Layer/Top Layer — ASTRA Packets.md>) _(blocker - M)_
 - [ ] **HUB-43** *(E-06)* Briefing feedback (👍/👎) + the "ERA vital signs" tile block (SFR₇, precision, cron liveness) in the Activity view. _(friction - M)_
-- [ ] **HUB-44** *(E-07)* AI quota gauge + degradation matrix + `AI_MODEL`/`AI_FALLBACK_MODEL` pin/kill-switch env vars. Must ship before any new Gemini consumer (HUB-45). _(friction - S)_
-- [ ] **HUB-45** *(E-08)* Reactive reads: `balanceQuery`, `mealPlanRead`, and AI context for the Chef/Brain faces (currently zero — Ask AI on those faces sees only the capability catalog). _(friction - M)_
-- [ ] **HUB-46** *(E-09)* Reactive writes through a real offline choke point: income draft, event creation, and `draftTransaction`/`draftReminder` moved onto `enqueueCapabilityAction()` (reuses the existing `transaction`/`item` queue features — no new queue key). _(friction - M)_
-- [ ] **HUB-47** *(E-11)* ERA correctness bundle: `era_conversations.updated_at` trigger, `capabilityAction` stops bumping a failed template's match count, `logEraCapabilityAction` covers every registry entity (not just `reminder.*`), the dead `/era?face=` deep-link gets a handler. _(friction - S)_
+- [ ] **HUB-44** (ASTRA E-07a; E-07 coordination parent) Dispatch the M provider/model/usage-attribution sheet first, then the retained quota gauge, degradation matrix and `AI_MODEL`/`AI_FALLBACK_MODEL` pin/kill-switch obligations. One bounded child per session; E-07a alone does not close the parent. Must ship before new Gemini consumers (HUB-45). → [Execution sheet](<../Top Layer/Top Layer — ASTRA Packets.md>) _(friction - M)_
+- [ ] **HUB-45** (ASTRA E-08a) ERA reads balances and scoped meal coverage and supplies bounded Chef/Brain context. Reuse the existing Chef meal read; complete meal/person/status coverage and canonical money facts precede a trusted answer. → [Execution sheet](<../Top Layer/Top Layer — ASTRA Packets.md>) _(friction - M)_
+- [ ] **HUB-46** (ASTRA E-09a–f; coordination parent) Durable queue acknowledgment, idempotent draft/nonrecurring-item endpoints and owner-bound reconciliation precede income/event extensions. Dispatch one bounded child sheet per session; reuse existing queue feature keys. Parent remains open until every retained criterion passes. → [Execution sheets](<../Top Layer/Top Layer — ASTRA Packets.md>) _(friction - M)_
+- [ ] **HUB-47** (ASTRA E-11a/b) Failed/pending/uncertain actions cannot count as success or improve templates; Activity covers capability outcomes and opens real doors. Verify current conversation behavior with owner evidence; any needed migration belongs to E-05a, not a duplicate trigger guess. → [Execution sheets](<../Top Layer/Top Layer — ASTRA Packets.md>) _(friction - M)_
 
 ## Later
+
+**ASTRA wave 1 (2026-09-06)** *(study: [ASTRA Book](<ASTRA/Hub & ERA — ASTRA Book.md>); top-layer ownership: [accepted sheets](<../Top Layer/Top Layer — ASTRA Packets.md>))*
+
+- [ ] **HUB-57** (ASTRA-HUB-1) Future chat conversion links the actual returned draft ID and never automatically recreates a draft after link failure. → [Execution sheet](<ASTRA/Hub & ERA — ASTRA Packets.md>) _(friction - S)_
+- [ ] **HUB-58** (ASTRA-HUB-2) Bulk conversion Undo checks every inverse result and refuses a false completion acknowledgment. → [Execution sheet](<ASTRA/Hub & ERA — ASTRA Packets.md>) _(friction - S)_
+
+These two guards remain Later. Existing Top Layer parents retain their own phases; the 21 child sheets are refinements, not 21 new commitments. Unallocated frontier work and unresolved owner decisions remain in the study.
 
 - [ ] **HUB-2** Voice graceful degradation + setup docs *(now packet **E-17**, Phase 2)* — one `speak()` seam with a `speechSynthesis` fallback promoted from `useEraReplyTTS`, distinct orb states for token-mint/SDK/worklet/mid-stream failures. Wake-word setup itself is out of scope per owner decision 2026-09-02 (D2) — voice degradation is about the TTS/STT pipeline, not wake. _(blocker - M)_
 - [ ] **HUB-48** *(E-10)* Status line + in-hub briefing card (additive, doesn't move the orb/widgets/nav) + `analysis.report` capability so the floating `AIChatAssistant` can be retired once the report is reachable from ERA. _(friction - M)_
@@ -56,7 +63,7 @@ tags:
 - [ ] **HUB-5** Decompose `HubPage.tsx` — no standalone extraction packet; per D10 it only shrinks as a rider on a real feature (E-13/HUB-16 is the sanctioned one this window). _(friction - L)_
 - [ ] **HUB-6** Expense-split from chat (gap 8a) — untouched by this plan; still Later. _(annoyance - M)_
 - [ ] **HUB-10** Merchant-match in "Add as Transaction" — untouched by this plan; still Later. Counterpart of [Budget · 4 · Checklist](<../Budget/4 - Checklist.md>) BUD-2. _(annoyance - M)_
-- [ ] **HUB-21** Live-verify Slices 2/3/4/5 against a running dev server — superseded by **HUB-37**'s CI (a stale-build class of bug can't recur once CI runs the real build). Close once HUB-37 ships; the two harmless test reminders ("Water the plants", "Feed the cat") still need manual deletion. _(friction - S)_
+- [ ] **HUB-21** (ASTRA C12) Verify the served build and original slice flows with actual revision/device evidence; HUB-37 CI alone cannot close this item. Any historical test-data cleanup remains owner-only and requires current inspection. → [Completion gates](<../Top Layer/Top Layer — ASTRA Completion.md>) _(friction - S)_
 - [ ] **HUB-22** Slice 2 stretch capabilities not built: debt settlement via ERA, expense-split from chat (HUB-6), recurring-payment add/skip via ERA — untouched by this plan. _(annoyance - M)_
 
 ## Definition of Done

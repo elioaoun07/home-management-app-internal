@@ -1,6 +1,6 @@
 ---
 created: 2026-07-17
-updated: 2026-07-17
+updated: 2026-09-06
 type: checklist
 status: active
 owner: Elio
@@ -24,7 +24,7 @@ tags:
 
 **Phase 1 — Core module + allergies** — profiles, allergies, conditions, vaccines; recipe allergen warnings. HLTH-1…6 shipped 2026-07-17 → swept to [Healthcare — Master Book](<Healthcare — Master Book.md>).
 
-- [ ] **HLTH-7** *(bundled into the Phase-0 owner day, packet **E-00**, of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>))* (Phase 1) Run core migration in Supabase SQL Editor, then verify mobile viewport + both-accounts allergen warning + privacy (partner cannot see unshared condition) _(blocker - S)_
+- [ ] **HLTH-7** *(bundled into the Phase-0 owner day, packet **E-00**, of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>))* (Phase 1) Owner verifies the current core schema and privacy contract, applies missing reviewed SQL only if needed, then verifies mobile viewport + both-accounts allergen warning + privacy (partner cannot see unshared condition) _(blocker - S)_
 
 ## Next
 
@@ -37,6 +37,12 @@ tags:
 - [ ] **HLTH-12** (Phase 2) Verification battery — 2-dose med = exactly 2 items/events; native alarm with app closed; edit → zero duplicates; offline dose log replay = one row _(blocker - M)_
 
 ## Later
+
+**ASTRA wave 1 (2026-09-06)** *(study: [ASTRA Book](<ASTRA/Healthcare — ASTRA Book.md>) · [execution sheets](<ASTRA/Healthcare — ASTRA Packets.md>))*
+
+- [ ] **HLTH-21** (ASTRA-HLTH-1) Propagate allergy-feed availability so an unavailable household feed cannot be interpreted as a completed ingredient check. → [Execution sheet](<ASTRA/Healthcare — ASTRA Packets.md>) _(friction - M)_
+
+HLTH-19's safety contracts must be available before executing medication math in HLTH-8/9; this reuses the existing domain-skill item. HLTH-7 remains an owner evidence gate. Written migrations and prospective alarm support do not establish deployment or device acceptance.
 
 **Phase 3 — Catalogue junction** — doctors, insurance, hospitals.
 
