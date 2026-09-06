@@ -129,6 +129,20 @@ The owner commissioned the six-file [Proactive ERA study](<Proactive ERA/Proacti
 | PE06 | Master Plan §1.8: Chef has nothing to anticipate before stock/shopping bridges | Recipe steps/timings, planned meals and explicit feedback already exist; Kitchen ASTRA already recognizes coverage/feedback. A bounded meal/time preparation can precede physical-stock automation. | QUALIFY prerequisite by claim. No waiver of locked automatic shopping/consumption outcomes; preparation does not close KIT-1/KIT-2. |
 | PE07 | A stronger model/semantic validator can certify household truth | Structured references/slots can be validated, but arbitrary semantic dependencies, unseen physical state and private scope cannot be certified by model confidence. | NEW, UNALLOCATED interpretation experiment only. D3 deterministic composition, E-07 accounting, human confirmation and domain permission remain binding. |
 
+## Autonomous Delivery V2 research delta — 2026-09-06
+
+The owner explicitly commissioned architecture replacement analysis under `docs/ASTRA-PM-COMMAND-CENTER-V2=STUDY.md`. The ten-file [study](<Autonomous Delivery/PM Delivery — Current System Diagnosis.md>) at `d6e0260` rechecked current PM/Delivery source (unchanged from `3106164` in the inspected paths). Its [recommendation](<Autonomous Delivery/PM Delivery — Migration Strategy.md>) replaces the earlier preserve-V1 premise for target design; it does not alter V1 operation or implement its proposed governance.
+
+| ID | Correction / consequence | Status |
+|---|---|---|
+| V2-01 | Prior CC studies' preserve-machinery/four-lane/three-gate target restrictions are not the new research contract. V2 proposes contract/effect/evidence authority with two experiences and incremental migration. | RESEARCH RECOMMENDATION; no implementation or operational policy amendment |
+| V2-02 | Current pure probes reproduce stale row targeting, surplus INSTANT edits, unrelated AC promotion, zero-test success and completed steps returning as remaining despite 382 passing scoped tests. | VERIFIED source/fixtures; Diagnosis D01/D04/D05/D18; existing implementation work remains open |
+| V2-03 | Seven open New Inbox captures yield zero Inbox rows in the current pure task projection; successful capture lacks a stable returned work identity. | VERIFIED local source/Markdown probe, not live phone observation; Diagnosis D14 |
+| V2-04 | Paid preflights are outside normal run usage; declared investigation fields are unpopulated; normal rotation does not deliver its saved package. | VERIFIED source/metadata; Diagnosis D09/D17; no provider calls |
+| V2-05 | Callback/path screens and post-turn guards do not establish universal OS/process containment. Current documented Claude auto-approval ordering can skip canUseTool. | SOURCE + DOCUMENTED-ORDER INFERENCE; no exploit; installed-version conformance required before unattended writes |
+
+The proposed portfolio is unallocated. Historical policy, source evidence and future recommendations remain separate; accepting research is not evidence that V2 exists.
+
 ## Decisions left to the owner
 
 These are dispatch gates, not questions needed to finish this study: briefing hour/quiet exception; persistent person-color mapping; literal Undo policy for nonmutating failures; optional versus mandatory timed activation; Notifications shortcut tradeoff and stricter cron-log policy; Outfits complete image batches and any changed deletion/wear approximation; Trips preservation/reversal semantics. Existing `/era` layout and Delivery oversight/freeze remain binding. No frontier idea receives an implementation slot by appearing here.

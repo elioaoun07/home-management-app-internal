@@ -12,6 +12,8 @@ tags:
 
 # Delivery — Master Book
 
+> **V2 research · 2026-09-06:** the owner commissioned an unconstrained architecture study under `docs/ASTRA-PM-COMMAND-CENTER-V2=STUDY.md`. The ten-file [Autonomous Delivery study](<../Autonomous Delivery/PM Delivery — Current System Diagnosis.md>) recommends a new contract/effect/evidence core with selective V1 reuse; [decision and migration](<../Autonomous Delivery/PM Delivery — Migration Strategy.md>). It rechecks earlier ASTRA findings and adds capture visibility, paid-preflight and permission-boundary evidence. Research only: no implementation, migration, gate change or shipped completion; V1 operation and history remain unchanged.
+
 > **Campaign:** Delivery · prefix `DLV` (`DW` retired, IDs never reused) · working queue → [4 · Checklist](<4 - Checklist.md>)
 > **What this file is:** the single consolidated record for the agentic Delivery system — the base architecture, the durable-memory layer, the governance campaign, the smoke-test forensics, the design debates, and the cost anatomy.
 
@@ -69,6 +71,9 @@ INSTANT is the destination the triage gate routes to. It requires exactly one kn
 **Revised 2026-08-01 (DLV-73).** That verdict was right about FAST and wrong about the conclusion. The floor it describes is a property of *the five-phase shape*, not of governed delivery — so the answer was to change the shape rather than to refuse the work. INSTANT runs BUD-14 in **two** model turns with all three gate decisions intact, because the phases it drops (PLAN, REVIEWING, UAT_PREP) are the ones whose output is derivable: the plan from the same turn as the spec, the review from asserting the diff against the approved `declaredEdit`, the UAT script from the turn that planned the change. **BUD-14 is no longer the item the pipeline refuses — it is the item INSTANT exists for.**
 
 ## Pain Inventory
+
+- 🟠 **Generative driver preflights are outside conserved run usage.** V2 study rechecked `drivers/claude.mjs:1036` and `drivers/codex.mjs:237`: both obtain a model response without carrying its usage through the run attempt ledger. This is source evidence, not a newly measured bill. [Diagnosis D17](<../Autonomous Delivery/PM Delivery — Current System Diagnosis.md>); proposed attempt-accounting boundary remains unimplemented.
+- 🟠 **Universal pre-write containment is not established by the current callback tests.** Claude build config uses `acceptEdits` plus `canUseTool` (`drivers/claude.mjs:425`); current official permission ordering says auto-approved calls can skip that callback. Shell screens are heuristic and guards run after effects. Source/documentation inference only, no exploit or credential exposure observed; installed-version/OS conformance is needed before unattended authority. [V2 context/provider analysis](<../Autonomous Delivery/PM Delivery — Context & Agent Model.md>).
 
 **ASTRA reconciliation · 2026-09-06:** [accepted study](<ASTRA/Delivery — ASTRA Book.md>) and [execution sheets](<ASTRA/Delivery — ASTRA Packets.md>) landed against source `3106164` and the September 6 local artifact review. This is study evidence, not shipped implementation. The Current State table's DEEP default is now **$4** (`scripts/delivery/config.mjs:229`). The later HUB-1 ACCEPTED record is a product attempt, not proof of two product completions; the Aug6 freeze, three gates and DLV-92/93 limits remain binding.
 

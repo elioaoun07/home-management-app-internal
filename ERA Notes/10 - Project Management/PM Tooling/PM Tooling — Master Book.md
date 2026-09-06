@@ -12,6 +12,8 @@ tags:
 
 # PM Tooling — Master Book
 
+> **V2 research · 2026-09-06:** the owner commissioned the ten-file [Autonomous Delivery study](<../Autonomous Delivery/PM Delivery — Current System Diagnosis.md>), with freedom to replace V1 architecture. [Target product](<../Autonomous Delivery/PM Delivery — Target Product.md>) and [migration decision](<../Autonomous Delivery/PM Delivery — Migration Strategy.md>) define stable work identity, explicit Markdown/runtime authority, reliable capture/command receipts and desktop/phone result views. Research only; no tooling/UI change or new implementation slot is marked shipped.
+
 > **Campaign:** PM Tooling · prefix `R` (grandfathered) · working queue → [4 · Checklist](<4 - Checklist.md>)
 > **What this file is:** the consolidated record for the PM machine itself — the Command Center dashboard, the parsing/lint core, the conventions enforcement, and the generational audit of how well the PM system is doing its job.
 
@@ -53,6 +55,8 @@ The PM system is the owner's command centre: a markdown corpus under `ERA Notes/
 **Dashboard reality:** the Preact Command Center is the default live dashboard — hash routes with browser history, ERA light/dark themes, an action-led Overview, Work Queue, Projects, Delivery and Activity workspace, module/document views, backlinks, canonical interactive checkboxes, MiniSearch global search with a Ctrl+K palette, rollups, file operations, and governed Delivery controls. Checkbox identity has a *constructional* safety guard: one dependency-free scanner serves mutations, Markdown, tasks and tests, with a parity test comparing it against the literal legacy algorithm across all real PM files. The portable twin uses the same bundle with Geist vendored and inlined. A dedicated mobile home and bottom nav render below 700 px, and the Delivery gates, questions, monitoring and launch wizard are usable one-handed.
 
 ## Pain Inventory
+
+- 🟡 **Captured Inbox work has no immediate identity in the phone task projection.** The V2 study's read-only task-builder probe found seven open New captures and zero relayed Inbox rows: `scripts/pm/bridge.mjs:171–172` filters Now/Next/Later even for Inbox at `:203–206`; capture returns only success and closes the sheet. This is local source/Markdown evidence, not a live-device observation. [Diagnosis D14](<../Autonomous Delivery/PM Delivery — Current System Diagnosis.md>); target is visible stable capture identity before triage, with implementation unallocated.
 
 **ASTRA reconciliation · 2026-09-06:** [accepted study](<ASTRA/PM Tooling — ASTRA Book.md>) and [execution sheets](<ASTRA/PM Tooling — ASTRA Packets.md>) landed against source `3106164`. No implementation is marked shipped. Three surfaces share Preact; `/pm/live` is React/Next (`scripts/pm/ui.mjs:18`; `src/components/pm-live/PmLiveApp.tsx`). Desktop filtering already ships in `BoardToolbar.jsx:12` and `boardState.js:96`; the phone is a behavioral reference, not an unbuilt toolbar requirement. Seven-day relay retention exists (`scripts/pm/bridge.mjs:79,1046`); R38 concerns the remaining local history convention.
 
