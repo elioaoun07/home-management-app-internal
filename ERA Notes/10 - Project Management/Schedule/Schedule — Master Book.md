@@ -64,6 +64,8 @@ Two things make it strategically important: **it is the spine ERA reads from** (
 
 ## Pain Inventory
 
+- 🟡 **Historical durations and suggestion confidence are not measured capacity.** Proactive discovery 2026-09-06 at `83e44be`: `src/components/items/ItemDetailModal.tsx:353–380` pre-fills actual task minutes from estimates and excludes chores. The currently unconsumed suggestion endpoint uses date-only conflict avoidance and labels three completions high confidence (`src/app/api/suggest-schedule/route.ts:124–167,247–252`); occupied-date fallback can reuse period start (`:325–354`). Do not activate it or infer available effort from those values. [Study](<../Proactive ERA/Proactive ERA — Architectural Leverage.md>) proposes bounded conditional feasibility and explicit day intent; no new implementation admission.
+
 **ASTRA delta, 2026-09-06:** [Study findings F1–F5](<ASTRA/Schedule — ASTRA Book.md>) are the current source baseline; dated test/DB claims below are not fresh runtime evidence.
 
 - 🟠 **ERA's agenda omits placed flexible routines and mislabels overdue work.** `src/features/era/intents/resolvers/schedule.ts:50–65` passes an empty placements array while `src/components/planner/WebDayPlanner.tsx:749` supplies real placements; `:80–90` derives overdue from alert triggers rather than due/completion state. ASTRA-SCH-3 supplies complete E-04/E-08/E-22 inputs after ASTRA-SCH-1; it does not finish all Schedule bridges.

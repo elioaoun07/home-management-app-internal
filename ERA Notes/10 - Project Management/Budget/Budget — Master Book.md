@@ -61,6 +61,12 @@ Budget is the household's **money graph**. Today it is a strong *reactive* ledge
 
 ## Pain Inventory
 
+**Proactive discovery delta, 2026-09-06 (`83e44be`; source inspection only):**
+
+- 🟠 **Debt retrieval changes the obligations it is meant to observe.** `src/app/api/debts/route.ts:21–34` archives open debts older than one month during GET. Archived is not repaid (`migrations/schema.sql:1157–1172`); the account balance endpoint counts only open debts (`src/app/api/accounts/[id]/balance/route.ts:86–96`). A proactive reader must not invoke that mutation or infer no receivables from the count. This conflicts with the Doctrine's read-path rule; no repair or production incidence is claimed.
+- 🟠 **Future-purchase confidence cannot support proactive affordability.** `src/app/api/future-purchases/[id]/analysis/route.ts:57–81,225–254` reduces unqualified native transaction amounts and assigns heuristic confidence from 100; accounts/transaction read errors can become empty history. Each goal is evaluated separately, while `allocate/route.ts:57–104` changes saved progress without reserving account cash. One-month urgency front-loading can also allocate only 55–70% of the remaining target (`analysis/route.ts:163–204`). Preserve these meaning/arithmetic limits before any reuse; no new forecast or scheduled work is admitted.
+- 🟡 **Recurring candidate matches lack exclusive coverage provenance.** `src/app/recurring/page.tsx:290–311` matches each commitment independently; `commitments.ts:299–338` can accept another account and carries no currency; `mark-covered/route.ts:97–103` stores dates without the selected transaction relationship. A candidate is not confirmed settlement, and one transaction must not silently satisfy two obligations. Extends the existing heuristic-matching pain; see [Proactive architecture](<../Proactive ERA/Proactive ERA — Architectural Leverage.md>).
+
 **ASTRA delta, 2026-09-06 — open source defects, including held work:**
 
 - 🔴 **Balance changes can lose concurrent money movements and swallow failures.** `src/lib/balance.ts:47–92` reads a balance then writes an absolute replacement; failed reads/updates can return a plausible amount, and history insertion is separate (`:95–119`). From 100, concurrent −10/−20 can leave 90 or 80 instead of 70. ASTRA-BUD-1 scopes the shared atomic primitive; owner-supplied function/grant evidence is required first. [Study F1](<ASTRA/Budget — ASTRA Book.md#f1--the-financial-choke-point-is-a-lost-update-race>).

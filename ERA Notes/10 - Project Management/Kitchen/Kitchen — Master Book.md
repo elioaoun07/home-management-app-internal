@@ -52,6 +52,8 @@ Today the loop is **open**: you cook without inventory updating, you plan withou
 
 ## Pain Inventory
 
+- 🟠 **Cooking estimates can return to AI as observed experience.** Proactive discovery 2026-09-06 at `83e44be`: `src/components/web/RecipeCookingMode.tsx:524–551` pre-fills actual prep/cook and difficulty from recipe estimates and submits untouched values; `src/app/api/recipes/[id]/optimize/route.ts:97–112` labels them actual history. Step timers do not populate those fields. Legacy logs cannot distinguish defaults from explicit corrections; retain unknown basis before duration learning. Explicit `would_make_again` is separately supplied and should not be conflated with those defaults. [Study evidence](<../Proactive ERA/Proactive ERA — Intelligence Model.md>). Source finding only; no correction or new checklist item.
+
 **ASTRA delta, 2026-09-06 — [study F1–F5](<ASTRA/Kitchen — ASTRA Book.md>):** stock functions in the 2026-08-04 catalog are recoverable historical contracts, not proof of today's deployed behavior. Recipe ingredients are JSON arrays with string quantities/units (`migrations/schema.sql:1097–1098`, `src/types/recipe.ts:9–16`), not normalized inventory links. This is not a safe automation practice campaign: quantity integrity, household scope and allergen consumers matter.
 
 - 🔴 **Restock can lose increments, accept the wrong input type and lose history.** `src/app/api/inventory/restock/route.ts:29–51` reads and replaces an absolute quantity; concurrent 5+2/+3 can leave 7 or 8, and a string quantity passes loose positivity checks. History insertion errors are unchecked (`:85–93`). ASTRA-KIT-1 is an owner-contract-gated atomic-restock prerequisite to KIT-1/M-03, not completion of low-stock auto-add.

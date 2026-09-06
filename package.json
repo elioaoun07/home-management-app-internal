@@ -17,6 +17,7 @@
     "atlas": "node scripts/build-atlas.mjs",
     "atlas:seed": "node scripts/seed-atlas.mjs && node scripts/build-atlas.mjs",
     "docs:check": "node scripts/check-feature-index.mjs",
+    "gen:uncommitted": "node scripts/gen-uncommitted-html.mjs",
     "new:module": "node scripts/new-module.mjs",
     "prebuild": "node scripts/build-atlas.mjs && node scripts/build-pm-dashboard.mjs --public",
     "sync:ai": "node scripts/sync-ai-mirrors.mjs",
