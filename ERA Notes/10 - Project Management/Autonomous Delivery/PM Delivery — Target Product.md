@@ -1,108 +1,105 @@
 ---
 created: 2026-09-06
 updated: 2026-09-06
-type: astra-study
+type: delivery-plan
 status: active
 owner: Elio
+plan_revision: "2.1"
 ---
 
 # PM Delivery — Target Product
 
+> **V2.1 target plan, revised 2026-09-06.** This replaces the original V2 product prescription following the accepted [independent reassessment](<../../../docs/ASTRA-Ideas.MD#point-2-reassessment>). It describes planned behavior, not implemented capability or a change to current permissions. [V2 Architecture](<PM Delivery — V2 Architecture.md>) defines the canonical records and lifecycle; [Evidence & Autonomy](<PM Delivery — Evidence & Autonomy.md>) defines acceptance and authority.
+
 ## 1. The owner's job
 
-**Delegate a meaningful software change once, return when a real decision or useful result is ready, and recover without reconstructing the session personally.** That is the smallest useful mission. Project documentation and agent monitoring support it; they are not the product outcome.
+**Select Item X → Deliver → minimal owner supervision → trustworthy verified result.** The PM Center maintains the connection between the selected work, its authorization, actual changes, evidence and requested destination. Existing coding environments perform the engineering. The owner should not have to launch sessions manually, repeat requirements, supervise ordinary tool use or reconstruct a failed conversation.
 
-Repository evidence of the owner's workflow is unusually concrete: the BUD-14 quick-amount change spent $0.5317 before building; a mobile tap accidentally completed and hid work; an accepted session held the build slot for four days; the phone redesign was prompted by excessive clutter and text. These are recorded incidents, not observations of today's installed app. See [Diagnosis](<PM Delivery — Current System Diagnosis.md>) and the Delivery/PM Tooling Master Books.
+This is a hypothesis to test through total owner effort: setup, clarification, monitoring, decisions, recovery, review, application, release and maintaining Delivery itself. A supervisor that reduces typing but creates more rescue work does not meet the goal. The native-only workflow is a mandatory comparison, and an external delivery service may win that comparison.
 
-The owner wants to delegate capture-to-fix, investigation of unclear defects, bounded feature work, testing and documentation. They should retain decisions about product intent when alternatives materially differ, broader scope/resources than authorized, consequential release actions, and observations unavailable to software. File location, routine repair attempts and regeneration of already-approved artifacts should not consume owner decisions.
+The historical evidence supports both useful memory and excessive supervision: the inspected HUB-1 product attempt retained valuable validation and decision records, but incurred twelve owner decisions and wrapper failures after product validation. Its ACCEPTED state coexisted with an older BLOCKED finish package. The mixed 16-session history is not a success-rate sample. See [Current System Diagnosis](<PM Delivery — Current System Diagnosis.md>) and the reassessment; these are dated findings, not claims that every repaired defect remains present.
 
-## 2. What the product removes
+## 2. The complete journey
 
-The owner currently needs to select modes/models, interpret preflight, inspect multiple phase artifacts, notice questions, recover limits, judge whether checks proved the request, and distinguish acceptance from actual shipping. Some of this is necessary; much is compensation for weak machine records.
-
-V2 removes repeated transcription of the same intent, approvals of identical artifacts, manual context reconstruction, guessing whether a phone command succeeded, and watching a heartbeat to infer progress. It keeps useful evidence, explicit decisions and a short recoverable history. It does not import sprint machinery, velocity targets or team ceremony for a solo owner.
-
-## 3. Desktop information architecture
-
-Four destinations are sufficient:
-
-| Destination | Primary content | Main action |
+| Moment | Owner experience | Required system behavior |
 |---|---|---|
-| Work | Now/Next/Later product work; search, campaign, risk and dependency filters | Open or start work |
-| Running | Active work, last meaningful progress, resource bounds, waits | Inspect, pause or resume |
-| Decisions | Only unresolved decisions the owner can resolve | Read evidence and decide |
-| Results | Verified candidates, required UAT, partial handoffs, integration/shipping receipts | Inspect and accept/integrate where authorized |
+| Select | Open the current item and choose **Deliver** | Resolve a stable WorkRef and immutable Contract revision. Preserve the intended outcome and requested disposition. |
+| Admit | Existing policy supplies permissions, resources and escalation. Details are available without a required form. | Validate the Grant and executor qualification. Clear work starts; ambiguous work may begin already-authorized investigation. An unavailable guarantee produces a concrete exception before dependent work. |
+| Work | Leave; return only for an exception or result | Dispatch a confined native job. Preserve its identity, execution reference, current obligation and useful Checkpoint. Let the native environment handle ordinary investigation, editing and repair. |
+| Decide | Resolve one consequential question with enough evidence to choose | Bind the answer to the exact proposition and revision. Continue eligible work without repeating resolved questions. |
+| Verify | No routine approval of machine-checkable facts | Protected checks evaluate the actual frozen candidate against the required criteria. Repair automatically when authorized and affordable. Missing observations remain missing. |
+| Reach destination | Receive the result at the authorized destination, or the prepared next action | Record observed disposition separately from requested disposition. Apply or release only through a qualified, authorized path. |
+| Finish | See what changed, what was verified, where it now exists, remaining work and resource basis | Close the execution honestly. Mark the selected work complete only when its requested obligations are met. Retain evidence and decisions for later continuation. |
 
-Campaign documents, prior studies and learned facts remain searchable detail, not extra dashboards. Activity is the event trail within a work item, with a global filtered view when useful. The current board, search and routing are reusable; four new destinations do not require four new implementations.
+The four supported requested dispositions are defined in Architecture. A research result, a verified candidate, an applied change and an observed deployment are distinct outcomes. A local patch cannot satisfy an item requesting a deployed fix. A job can end usefully while that item remains open.
 
-Illustrative desktop arrangement:
+The main result is generated from authoritative receipts, not the latest model summary. A short explanation may help interpretation; it cannot change evidence status or disposition.
 
-```text
-Work  Running  Decisions  Results                    Search   Capture
+## 3. Decisions must resolve an exception
 
-Now                         Selected work
-  Offline retry receipt     Desired outcome + FAST / DEEP DIVE
-  Quick amount preset       Latest meaningful event / next obligation
-  Schedule consistency      Candidate and evidence / decisions / history
-```
-
-An active card answers: what work, what changed since the last useful update, what happens next, and whether it needs the owner. Raw tool calls remain one click away. There is no fabricated percent-complete gauge.
-
-## 4. Phone information architecture
-
-Home shows urgent decisions and ready results first, then active work. Three primary destinations—Home, Work, Results—with a persistent Capture affordance are enough. Sessions open directly from notifications. A short result fits the screen; evidence opens on demand. Large diffs or device-dependent checks state what is still needed instead of shrinking desktop UI onto the phone.
-
-```text
-Needs you
-  Schedule rule — choose date meaning           Open
-
-Ready
-  Quick amount preset — checks complete         Review
-
-Running
-  Offline retry receipt — regression reproduced
-
-Home              Work              Results       +
-```
-
-These are information sketches, not approved production strings. Real UI follows Hard Rule 28: short labels, verbs and facts, no rationale paragraphs. Desktop affords dense exploration; mobile affords status, decisions, bounded review and control.
-
-The phone can approve the same proposition as desktop when it displays sufficient current evidence and the grant permits it. Device size is not itself a security model. An unavailable artifact, stale revision, large unreadable change or required typed risk decision can make a particular decision ineligible. This is a V2 recommendation, not expansion of V1's INSTANT-only phone approval policy.
-
-## 5. Two experiences, automatic internal strategy
-
-**FAST:** select or describe a bounded change, inspect one compact contract if needed, start, receive a checked candidate. Known templates can supply scope and checks. The owner need not choose agent roles, phase counts or a model. An unexpected dependency becomes a specific scope decision or an automatic DEEP DIVE escalation within the already-authorized resources.
-
-**DEEP DIVE:** describe the uncertain problem and investigation allowance. The system records competing explanations and gathers discriminating evidence, then presents a design decision only when owner values are needed. It implements accepted scope in useful increments and preserves understanding across interruption. Depth is useful investigation, not mandatory document volume.
-
-Every capture immediately returns a stable work identity and appears as untriaged Work. Offline capture shows its local pending receipt until the authority acknowledges the same ID. Triage can wait; finding the captured item cannot depend on triage. This directly addresses the current seven-Inbox-rows/zero-relayed-rows reproduction in Diagnosis D14.
-
-Mode selection affects effort and exploration. It does not grant permission or weaken evidence. [FAST](<PM Delivery — FAST.md>) and [DEEP DIVE](<PM Delivery — DEEP DIVE.md>) contain complete journeys, including failures and final outcomes.
-
-## 6. Decisions must buy something
-
-| Decision | Owner sees | What the answer changes |
+| Exception | What the owner receives | What a response changes |
 |---|---|---|
-| Intent unresolved | Two meaningful outcomes and relevant evidence | Contract revision |
-| Scope/resource exception | New dependency/risk and proposed bound | Grant, never retroactive authority |
-| Required observation | Exact build and a short action to perform | Attributed observation, not generic approval |
-| Candidate acceptance | Change, checks, missing evidence and known limits | Acceptance receipt for this revision |
-| Integration/release | Exact candidate and destination | Only the named consequential effect |
+| Intent | The unresolved choice, relevant findings and consequences | A Contract revision |
+| Authority | Exact additional effect or scope and the prepared proposal | The applicable Grant, with no retroactive permission |
+| Resources | Work completed, remaining obligation and a bounded continuation proposal | Resource policy for future jobs |
+| Required observation | Named build/environment and the short observation needed | An attributed observation; no automatic claim beyond it |
+| Recovery | Known facts, unknown outcome and available safe next actions | A recoverable decision on the identified job or effect |
 
-Do not ask the owner to approve a retry that software can safely reconcile. Do not ask twice because a request timed out. One informed action may accept and authorize integration of the same exact candidate when both consequences are clear; separate receipts do not require separate gates. Do not bundle acceptance of a specification with a hidden budget increase. Changed requirements invalidate affected decisions visibly.
+Choosing models, agent teams, phase counts and routine retry mechanics is not the owner's default job. FAST and DEEP DIVE are optional effort preferences; their definitions do not enlarge permission or weaken evidence. Native continuation or a bounded repair should proceed within the existing Grant.
 
-## 7. Truthful degraded experience
+A fixed candidate-acceptance gate is not required by the target. Protected verification and standing policy can accept eligible work automatically. Where an application or release remains owner-controlled, one informed action can authorize the exact prepared effect; separate factual receipts do not require several approval screens. Current V1 gates remain binding until an explicit operational cutover.
 
-`Working` requires a current attempt, while `Connected` only describes transport. `Checked` names the evidence scope. `Accepted`, `Integrated`, and `Shipped` are distinct receipts. Unknown completion is shown as unresolved, never silently converted to failure or success.
+Never ask the same decision again because its acknowledgment timed out. Never turn a Stop request into an assurance that execution already stopped. Revocation removes future publication authority immediately; execution status follows confirmed executor state.
 
-The phone distinguishes laptop availability, projection age and command receipt. Cached results remain readable with their original timestamp. Account changes never reveal the prior owner's cache. An offline Stop request does not claim the process has stopped. A result cannot turn green solely because the latest summary sounds positive.
+## 4. Reuse the existing PM surfaces
 
-Notification-worthy events are a consequential question, failed evidence that cannot recover within allowance, resource exception, unresolved external effect, or completed result. Tool-call notifications and periodic model-generated reassurance are unnecessary.
+The first product slice adds **Deliver**, current delivery state and a concise result to the existing work/detail flow. Reuse current search, campaign navigation and history links. A new dashboard, backlog lifecycle, destination taxonomy or capture system is not a prerequisite.
 
-## 8. Product success and limits
+An item needs four readable areas, which may be sections or filters within existing views:
 
-Track owner active minutes, decisions requiring new information, unattended useful work, time to verified candidate, time to safe recovery, escaped defects and cost provenance. Compare similar tasks; do not turn the selected 16-session history into a reliable rate estimate.
+| Information | Minimum content |
+|---|---|
+| Work | Intended outcome, applicable policy and Deliver |
+| Progress | Current meaningful activity or wait, latest observation, next obligation |
+| Decision | One unresolved proposition, evidence and eligible actions |
+| Result | Observed disposition, criterion summary, remaining action, resource basis and expandable records |
 
-Proposed pilot goals, not measured claims: a known FAST task reaches a candidate with one launch interaction and no intermediate owner decision; a DEEP DIVE can be resumed by a fresh model without re-asking recorded decisions; a dropped mobile acknowledgment creates no duplicate effect; every closed result explains exactly what is and is not established. Release remains explicitly owner controlled.
+These are information requirements, not a mandate for four new pages. Use the same result representation wherever desktop, phone or history displays it. Raw provider logs and full artifacts remain available on demand; no fabricated percentage, tool-call notification stream or periodic model reassurance is needed.
 
-The product may conclude with a useful partial result. It may not hide missing evidence to preserve an autonomy statistic.
+UI strings follow Hard Rule 28: short labels, action verbs and facts. An illustrative result could show `Ready to apply`, `Checks: 4 passed`, `Device check: pending`, `Review`. The evidence detail carries scenario and limitations; the card does not explain the architecture.
+
+The existing PM corpus remains editable intent authority. Stable selection plus a source fingerprint fixes what active work means without migrating the entire backlog. A later relevant source edit creates a conflict or proposed successor; it cannot silently rewrite the authorized request. Only one dispatcher owns the installation's active delivery work during cutover. Capture visibility and the existing phone inbox defects remain useful PM work, but they do not block the first delivery slice unless that slice depends on them.
+
+## 5. Phone and runner availability
+
+Add mobile execution/control only after the narrow delivery path proves useful or when access away from the laptop is an explicit pilot requirement. Reuse current surfaces and the shared result representation. Small screens favor concise status, decisions and results; large diffs can open a fuller view or remain a desktop action when they cannot be meaningfully inspected.
+
+Whenever phone commands are enabled, authenticated identity, exact target/revision binding, same-ID receipt reconciliation and stale-data handling are required. A queued or timed-out grant cannot be silently replayed as fresh authority. Old-owner caches must not survive an account change. These are eligibility conditions for the feature, not a reason to build a new signing/relay platform before local delivery works.
+
+A laptop runner only works while available. Show `Queued — runner offline` when appropriate. Distinguish last projection time, command receipt and execution availability. If the intended experience requires execution at any time, qualify a managed or existing always-on runner before inventing distributed scheduling. Hosting choice must not change the result contract.
+
+## 6. Truthful outcomes and degradation
+
+Use the canonical lifecycle and evidence states from Architecture and Evidence & Autonomy. Product wording expresses those facts without creating another state machine.
+
+- A current native job can justify `Working`; a transport connection or heartbeat alone cannot establish useful progress.
+- A cancelled run can retain useful work, but cannot publish after revocation. Unconfirmed stop acknowledgment remains explicit.
+- A provider timeout can leave launch or usage unknown. Retain its identity and resource reservation; reconcile before starting replacement paid work.
+- A stale candidate or changed verification input invalidates affected evidence. Preserve the previous result as history, not current certification.
+- A missing device, production or deployment observation stays an open obligation. Additional model reasoning does not replace it.
+- A result with waivers or unmet requested obligations can be useful; it cannot become verified completion by renaming the destination.
+
+The current Delivery policy prohibits Git writes/worktrees and keeps shipping owner-controlled. Production DB writes remain prohibited. Consequently, the initial endpoint is a verified candidate with a prepared owner application/release handoff. `Ready to apply` or `Awaiting release` is truthful when those obligations remain. The target may later complete eligible work under standing policy through an explicitly approved and qualified application path. This plan grants none of that authority now.
+
+## 7. Product acceptance for the staged build
+
+The [Execution Portfolio](<PM Delivery — Execution Portfolio.md>) owns stage ordering and build packets. Product acceptance must include:
+
+1. Selecting a clear item starts the eligible job without mandatory mode, model, specification or phase approvals.
+2. The owner can leave during ordinary engineering and receive either an evidenced result or one precise exception.
+3. A failed or interrupted job preserves useful work, binding decisions, unknown usage and a safe next action.
+4. A result names its actual disposition and cannot close work with a stronger requested destination still unmet.
+5. Desktop and any enabled phone projection show the same result and decision revision; acknowledgment loss cannot duplicate a consequential command.
+6. Comparative real-work records include failed runs, review/application effort and maintenance. The planned FAST and interrupted DEEP samples are operational evidence, not statistical proof of reliability or savings.
+
+If the supervisor does not reduce total owner effort relative to equivalent native delivery, retain the board, contract templates and result links and stop expanding orchestration. If an external workflow satisfies the same contract more simply, delegate more. The product's value is the trustworthy outcome with less supervision, whichever executor supplies it.

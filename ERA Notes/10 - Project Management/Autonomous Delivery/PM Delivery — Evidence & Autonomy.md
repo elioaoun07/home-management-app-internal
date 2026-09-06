@@ -1,114 +1,206 @@
 ---
 created: 2026-09-06
 updated: 2026-09-06
-type: astra-study
+type: delivery-plan
 status: active
 owner: Elio
+plan_revision: "2.1"
 ---
 
 # PM Delivery — Evidence & Autonomy
 
-## 1. Four things the system must not confuse
+> Canonical evidence and completion contract for [Architecture revision 2.1](<PM Delivery — V2 Architecture.md>). This plan integrates the accepted reassessment. All fixtures below are future implementation requirements; the preserved historical test receipt is in [Diagnosis](<PM Delivery — Current System Diagnosis.md>).
 
-**Claim:** an assertion about what changed or works. **Evidence:** an attributed observation with inputs, method and result. **Proof:** evidence accepted for a specific proposition under a declared verification rule. **Owner decision:** a recorded choice, authorization, waiver or observation, with its exact subject.
+## 1. What trustworthy means
 
-“Proof” here is operational and bounded, not mathematical certainty or a promise that no undiscovered defect exists. An owner can accept a result with a limitation; the system must not rename that limitation verified. A model's confidence score is not a substitute for any of these records.
+A result is trustworthy when the owner can identify the requested outcome, authorized work, actual candidate, observations supporting each claim, remaining uncertainty and actual disposition. It is bounded engineering evidence, not a mathematical guarantee of defect-free software.
 
-## 2. Establish the proposition before implementation
+Keep four facts distinct: a model's **claim**, an attributed **observation**, a policy-qualified **verification**, and an **owner decision**. An owner may accept a limitation; a waiver remains a limitation. Native job success, a reviewer's confidence and a PM checkbox cannot independently establish delivery.
 
-Each criterion has stable ID and revision, proposition, scope/environment, required observer type, expected result, forbidden weaker substitutes, fixture/oracle origin and freshness dependencies. Risk and known failure modes determine the strength of the observer. The plan is reviewed for semantic adequacy when ambiguous; schemas alone cannot prove the test tests the right thing.
+Verification is the custom boundary worth building. Use existing compiler/test/browser tools and concrete task-class checks. Do not build a general observer marketplace or complex dependency cache first.
 
-Illustrative structured contract:
+## 2. Criterion contract before implementation
+
+Every required criterion has:
+
+| Field | Meaning |
+|---|---|
+| `criterion_id`, `revision` | Stable proposition within the immutable Contract revision. |
+| `proposition` | Observable requested behavior or source/research outcome. |
+| `scope` | Candidate/environment/scenario covered, including fixture or device limits. |
+| `observer` | Eligible method and expected result; named existing checks where known. |
+| `oracle_ref` | Origin/version of expected behavior, independent of the writer when consequence warrants it. |
+| `freshness_inputs` | Candidate, observer/config, fixture and relevant environment identity. |
+| `required_for` | Candidate verification, requested disposition, or both. |
+| `forbidden_substitutes` | Weaker facts that cannot satisfy this claim. |
+
+The supervisor can populate a small contract from the selected item and an established task template. The agent may propose missing criteria. Semantic ambiguity needs an appropriate independent review or owner choice before implementation changes the intended outcome. Do not ask the owner to approve every obvious criterion.
+
+Illustrative behavior criterion:
 
 ```json
 {
-  "criterionId": "AC-2",
+  "criterion_id": "AC-amount",
   "revision": 1,
-  "proposition": "Replaying one synthetic capture twice creates one effect",
-  "scope": "isolated integration fixture",
-  "observer": "integration-test",
-  "requiredCases": ["duplicate replay", "response lost after commit"],
-  "rejectSubstitutes": ["file exists", "unit test of UUID creation"],
-  "freshness": ["candidate", "fixture", "test selection", "toolchain"]
+  "proposition": "The mobile quick-amount control displays and selects 20",
+  "scope": "identified local candidate, mobile form",
+  "observer": "mounted interaction or browser action with selected-value assertion",
+  "oracle_ref": "selected item revision",
+  "freshness_inputs": ["candidate", "test-config", "fixture", "toolchain"],
+  "required_for": "candidate",
+  "forbidden_substitutes": ["replacement text exists", "zero tests selected"]
 }
 ```
 
-This does not certify production behavior. A separate deployment/device criterion would require a separate observer. Keep criteria small enough to distinguish source change, local behavior and external outcome.
+This does not add a claim about production transaction persistence unless the requested change implicates it. An explicitly source-only edit can have a structural criterion. An ordinary control change should not be silently weakened to source-only acceptance.
 
-## 3. Proposition-to-observer matrix
+## 3. Eligible observations
 
-| Claim class | Eligible evidence | Insufficient alone |
+| Claim | Eligible evidence | Insufficient alone |
 |---|---|---|
-| Exact source transformation | Base/candidate hashes; exact full diff; no surplus change witness | Declaration appears somewhere in diff |
-| Compile/type correctness | Executed compiler receipt on identified candidate/config/toolchain | Changed TS file; model says typecheck passed |
-| Unit behavior | Named executed tests/assertions and relevant fixtures | Exit zero with zero tests; test filename |
-| Integration behavior | Isolated integration trace with effect/storage assertions and fault cases | Mock only returning expected status |
-| UI interaction | Mounted component/browser actions and observable state at identified build | Screenshot alone; source event handler exists |
-| Visual state | Screenshot with viewport, build, theme and scenario | Backend correctness or persistence inferred from appearance |
-| Browser/offline behavior | Browser storage/network/reload sequence and result | Unit-only queue test |
-| Physical-device behavior | Owner/tester observation from named device/build/scenario | Desktop emulation or emitted push ID |
-| Migration correctness | Reviewed exact SQL; isolated compatible schema test; owner-applied verification if live outcome required | SQL file exists; repo schema claims installed state |
-| External-system effect | Authorized observer's result/receipt for exact external object/version | Local request sent; timeout or optimistic UI |
-| Owner acceptance | Decision linked to reviewed candidate/evidence | Automatic PM checkbox or positive review text |
+| Exact source transformation | Complete base-to-candidate diff; exact intended change and absence of surplus changes | Intended text appears somewhere in the diff |
+| Compile/type correctness | Actual compiler execution on identified source/config/toolchain | Changed TypeScript file |
+| Unit behavior | Named executed assertions with suitable fixtures | Test path; exit zero after selecting no tests |
+| Integration behavior | Controlled integration scenario with relevant effects asserted | Mock returning a desired status |
+| UI interaction | Mounted/browser actions and observable values/state | Screenshot or handler source alone |
+| Appearance | Screenshot with viewport/theme/scenario/build identity | Backend correctness inferred from appearance |
+| Offline/reload/replay | Browser/storage/network sequence with persistence/dedup assertions | Queue function unit test alone |
+| Physical-device behavior | Attributed observation of named scenario/device/build | Desktop emulation, push request ID |
+| Research finding | Source-backed report, verified citations, explicit uncertainty and challenge appropriate to consequence | Unsupported model conclusion or invented citation |
+| Migration preparation | Exact SQL reviewed plus isolated compatible-schema testing where available | Migration filename |
+| Applied change | Exact destination/candidate correspondence and necessary destination checks | Patch exported, owner clicked Accept |
+| Verified deployment | Identified deployed build plus required environment/behavior observations | Merge, successful build, deployment request sent |
+| Owner acceptance | Decision bound to the reviewed result/candidate/revision | Positive chat text with an ambiguous subject |
 
-The checker records command argv, execution directory, environment/config identity, start/end, exit/signal, selected/executed/skipped counts, output hashes and scope. Trusted adapters create these receipts. Models may suggest checks but cannot mint receipts. A deliberately test-free exact edit can use a valid structural observer; it is not forced to run a meaningless test just to reach a nonzero count.
+A zero-test structural edit can be verified structurally when that satisfies the real request. It must never masquerade as tested behavior. A required production DB change remains an owner-run obligation under repository rules.
 
-## 4. Satisfaction and freshness
+## 4. Protected check execution
 
-Per-criterion state is `missing`, `satisfied`, `failed`, `inconclusive`, `stale`, or `waived`. A zero-test behavioral observer is missing, not satisfied. A malformed review is inconclusive. Missing artifacts or source drift invalidate dependent proof. A waiver names actor, criterion revision, reason and candidate; it never becomes satisfied and is excluded from automatic verified-completion policy.
+The checker executes after trusted snapshotting freezes a candidate the writer cannot mutate. It uses an approved observer/configuration outside the writer's authority and a restricted execution environment. A candidate-authored package script cannot become the trusted evaluator simply by emitting a familiar success line.
 
-Evidence binds contract revision, frozen candidate manifest, observer/config/fixture version, environment and raw result. Start conservatively: any relevant input change marks affected checks stale. Do not permit the writer to choose an unrealistically narrow dependency set merely to keep tests green.
+Minimum receipt:
 
-Tests authored during implementation are useful but correlated. A trusted proof plan, held regression witness, independent semantic review or additional observer addresses that correlation when consequence warrants it. More model votes do not establish an external observation.
+- `evidence_id`, candidate ID, criterion/revision and observer/config/oracle refs;
+- relevant source/environment/fixture/toolchain fingerprints;
+- actual argv or interaction procedure, working directory and safe environment description;
+- started/finished times, exit/signal or interaction outcome;
+- selected/executed/skipped counts where meaningful;
+- raw output/artifact hashes and any redaction/truncation;
+- asserted scope, result and diagnostic reason.
 
-## 5. Safe autonomy is a capability, not a single rating
+The supervisor/check adapter writes the receipt. The native engineer can suggest checks and supply logs, but supplied logs remain attributed inputs until verified. Test execution alone cannot settle an inadequate semantic oracle.
 
-Use four operational profiles. These describe proposed admission, not current deployed labels.
+Protect established regression witnesses. New tests remain part of the candidate; independently scrutinize changes that remove assertions, alter test selection, weaken policy or redefine expected behavior. When needed, a fresh reviewer receives Contract, diff, source and evidence before the implementer's narrative. Findings resolve through a reproducible witness or bounded probe, not model voting.
 
-| Profile | Qualifying work / write scope | Mechanical guarantees and evidence | Owner role / acceptable uncertainty |
-|---|---|---|---|
-| **Assist** | Investigation and proposed patch; no automatic host integration | Attributed source/probe evidence; no completion certification | Owner directs consequential steps and verifies result; unresolved hypotheses allowed |
-| **Bounded execution** | Contract-scoped isolated candidate | Identity, qualified containment, attempt/usage records, bounded recovery; basic proof plan | Owner authorizes scope, reviews evidence and resolves missing observations |
-| **Verified handoff** | Supported FAST or DEEP candidate within grant | All required machine criteria satisfied, independent challenge when required, replay/crash fixtures passed | Owner receives candidate/UAT package; external/device obligations remain explicit |
-| **Policy completion** | Repeated low-risk class with complete eligible proof, no waiver, qualified integration if requested | Same guarantees plus proven freshness/integration recovery and preauthorized disposition | No routine intermediate decision; notification on completion; no unobserved required criterion |
+Changes to delivery grants, the supervisor, receipt writer or evaluator require independent authorization under the previously trusted version. A candidate cannot certify its own new authority. Such work is excluded from the first autonomous product class.
 
-Maximum safe current V1 posture: **supervised bounded assistance/execution with independent owner verification**, not certified Verified handoff or Policy completion. The current source demonstrates acceptance, accounting and isolation gaps; therefore even existing unattended settings do not establish those profiles. This is a limit on justified confidence, not an assertion that V1 cannot produce useful code.
+## 5. Evidence state and freshness
 
-Realistic V2 target: Policy completion for a growing set of low-risk **local** changes, and Verified handoff for harder work. Broad autonomous production delivery is neither demonstrated nor necessary. No-git-write, no-worktree and no-production-DB-write rules remain; owner shipping/deployment is distinct. A successful local candidate can complete its contract without claiming release.
+Per-criterion state is `missing | satisfied | failed | inconclusive | stale | waived`.
 
-Autonomy eligibility is the intersection of work risk, permission grant, observer coverage, adapter qualification, source freshness and recoverability. A cheaper model, FAST label or phone approval never independently increases it.
+| Input | State consequence |
+|---|---|
+| No eligible observation, no selected behavioral tests, missing required artifact | missing |
+| Eligible fresh observation establishes expected proposition | satisfied |
+| Eligible observation demonstrates violation | failed |
+| Interrupted check, malformed review, ambiguous observation | inconclusive |
+| Relevant candidate/observer/environment input changed | stale |
+| Explicit owner accepts a named limitation | waived, never satisfied |
 
-## 6. Recovery contract
+Freeze generation C1, check C1, return evidence for C1. A repair creates C2. C1's evidence stays historical and cannot certify C2 automatically. Initially rerun affected checks conservatively, using the complete relevant source/config/lockfile/fixture/toolchain identity. A fine-grained evidence reuse engine is deferred.
 
-| Interruption point | Durable minimum | Recovery action |
+Owner edits to the source or application destination create a freshness issue. Hash checking does not establish exclusion from concurrent host editors. Initial handoff is owner controlled; later application qualification must establish its own source-to-destination validity.
+
+## 6. One result and an honest completion predicate
+
+Result schema is shared by desktop, phone, export and continuation. Minimum fields:
+
+```text
+result_id, result_version
+work_id, contract_id, contract_revision, run_id
+candidate_ref, closed_outcome, job_receipt_refs
+criterion_states[], evidence_refs[]
+requestedDisposition, observedDisposition, disposition_receipt_refs[]
+remaining_obligations[], unknown_jobs_or_effects[]
+resource_summary { basis, settled, reserved, unknown, enforcement_profile }
+owner_decision_refs[], checkpoint_ref, next_safe_action
+candidateVerified, workComplete, projection_status
+```
+
+`candidate_ref` and `checkpoint_ref` are null when none exists; `closed_outcome` is null while the Run remains open. Missing optional engineer prose does not invalidate an otherwise independently established candidate. Raw observations and authoritative records, not the availability of a model-written summary, determine the Result.
+
+`candidateVerified` requires every required candidate criterion satisfied by eligible fresh evidence, valid artifact identity and publication scope, plus no unresolved authority/integrity violation. A candidate can be technically verified while native cost reconciliation remains outstanding; that accounting stays visible and reserved. It cannot be treated as free allowance or complete a strict-budget obligation. Any further job must fit the remaining allowance with all unresolved reservations retained.
+
+`workComplete` requires candidate/research evidence appropriate to the request, every requested-disposition criterion satisfied, observed disposition establishing the requested destination, and no unresolved consequential job/effect or resource obligation. A waiver allows explicitly limited owner acceptance, not automatic verified work completion. A different acceptable outcome requires a deliberate Contract revision; do not rewrite the original request invisibly.
+
+`requestedDisposition` and Run closed outcomes use Architecture's exact enums. Research may produce a `kind=research` Candidate. A source run closed as `verified_candidate` may still leave an `applied_change` or `verified_deployment` item incomplete. Later observed disposition appends a Result version without rerunning or rewriting the closed engineering history.
+
+If the current Result or referenced artifacts are missing/inconsistent, show that failure. Do not prefer whichever legacy file appears greenest. A failed PM writeback affects `projection_status`; it does not erase verified engineering. The pending projection can retry the same receipt without running another model or marking the item complete prematurely.
+
+Human acceptance, exact application and verified release are distinct receipts even when one informed owner action authorizes more than one. `RecordDisposition` may record an attributed owner observation, but cannot promote a generic click into proof of a deployed scenario.
+
+## 7. Autonomy is eligibility, not another owner-facing ladder
+
+Automatic execution requires all of: current Grant, supported executor, qualified confinement, enforceable resource profile, recoverable dispatch and an adequate initial evidence plan. Automatic completion additionally requires the full completion predicate and an authorized disposition path.
+
+FAST/DEEP labels confer neither permissions nor proof. Deep read-only research can run with little owner involvement; a tiny high-consequence write can require strong review.
+
+The initial FAST preset permits one supervisor-initiated repair after protected checks fail, if the Grant and remaining resource allowance permit it. This counts outer repair dispatches, not native internal test/fix iterations. Those remain covered by the native job's complete bound. Different repair limits or DEEP escalation must be explicit policy values rather than accidental retries.
+
+| Operating capability | What is permitted | Exit evidence |
 |---|---|---|
-| Before provider dispatch | Reserved attempt, input manifest, grant, resources | If provably undispatched, dispatch once; otherwise reconcile |
-| Provider response lost | Request/segment identity, partial observations, outstanding reserve | Query/reconcile when supported; retain unknown usage/effect otherwise |
-| Partial candidate edits | Private candidate generation and tool/effect trail | Inspect actual bytes; quarantine/rebuild; no shared workspace rollback |
-| Check process crashes | Candidate/check identities, partial output, signal/process status | Mark not completed; rerun safe check if grant allows |
-| Integration partly writes | Per-file preimage/postimage journal and current fence | Reconcile hashes; finish or guarded restore; preserve later owner edits |
-| Runner dies or loses lease | Epoch, attempt/effect records, process identity | Revoke publication; terminate or contain old process before replacement |
-| Model replaced | Dossier, input manifest, pending effects and evidence | Compile fresh context; revalidate stale premises; continue next obligation |
-| Resume days later | All above plus environment and contract revisions | Verify fresh authority and inputs; linked successor if meaning changed |
+| Prepared assistance | Produce a proposal/contract or owner-run instructions within available authority | Attributed findings and explicit gaps |
+| Confined native execution | Engineer within a qualified private environment | Recoverable Job/Candidate and truthful resources |
+| Verified candidate delivery | Complete eligible machine/research checks | Candidate verified; outstanding application/release/device obligations explicit |
+| Automatic work completion | Only a qualified task class with authorized disposition and no unmet required obligation | Work-completion predicate true |
 
-Recovery happens before another potentially duplicate effect. Derived projections may be regenerated; paid calls and file effects are never “replayed” merely to recreate history. A remote command timeout reuses the same ID for status queries. An unknown provider cost remains reserved. If no safe reconciliation exists, return a precise unresolved effect instead of a broad retry button.
+These are system capabilities, not four UI modes or new mandatory phases. Qualification attaches to an exact executor/OS/version/profile and supported task class. Unsupported capabilities remain unavailable.
 
-## 7. Retry policy by effect
+V1's current evidence supports supervised assistance with independent owner verification, not a demonstrated unattended completion guarantee. V2 implementation must earn eligibility through the fixtures and product trials below. A documented native sandbox or SDK option is not qualification.
 
-Safe reads and deterministic checks against immutable input can retry within allowance. Generation may retry when cost is recorded and outputs are confined/discardable. Candidate edits recover by inspecting the actual private generation, not repeating an entire turn blindly. Integration retries only the identified journaled effect after pre/postimage reconciliation.
+## 8. Failure and continuation table
 
-Never automatically retry an unknown external non-idempotent action, an unqualified provider's partially completed tool sequence against shared state, a changed contract, expired authority, or a production DB write. Changes to write scope or resources are new grants, not retry options.
+| Boundary failure | Required response |
+|---|---|
+| Crash before dispatch is known to start | Retain reserved identity; permit dispatch only if proven undispatched and grant still valid. |
+| Launch response lost | Inspect/reconcile existing native reference or correlation ID. If unresolved, hold `unknown` and reserve; no second paid launch. |
+| Native session pauses for decision | Persist Decision bound to subject revision; admitted answer/resume preserves native session when useful. |
+| Native process crashes with partial edits | Retain/quarantine private scratch, reconcile usage, snapshot useful output safely; successor only after authority/resource checks. |
+| Stop acknowledgment lost or child remains | Revoke publication immediately; keep Stop requested/unknown until stop or independent containment is established. |
+| Writer reports success with malformed result | Preserve raw output/usage and reconstruct from the actual candidate and trusted receipts. Missing optional prose needs no paid retry. Only information required to establish identity, evidence or disposition creates an obligation; obtain it safely or return an honest partial. |
+| Check fails or crashes | Preserve receipt; repair within grant or retain precise obligation. New candidate gets new checks. |
+| Controller/store restarts | Recover records, verify referenced artifacts, inspect native jobs; do not recreate history by replaying model calls. |
+| Context or provider replacement | Load valid Checkpoint/decisions/candidate/native references; reconcile outstanding jobs and stale inputs before resume. |
+| Application/release is unavailable | Preserve requested disposition as an open obligation; return prepared candidate and concrete owner action. |
+| PM projection or phone response lost | Retry/query the same receipt. Never redispatch engineering to rebuild a result view. |
 
-## 8. Completion and resumption package
+A closed cancellation/failure may retain an unknown charge or quarantined native job. Such records are not silently settled. Authority cancellation, process stopping, billing settlement and useful artifact preservation are separate facts.
 
-Every result—verified, partial, failed, cancelled—exports the same compact manifest: work/contract identity; grant and decisions; base/candidate/integration identity; attempt and inclusive usage ledger; per-criterion status and evidence; unresolved effects/observations; useful changes; safe next action; recovery references. Raw observations remain linked, with explicit redaction/truncation metadata.
+## 9. Canonical fixture families
 
-One evaluator supplies desktop, phone, export and continuation eligibility. Read paths expose stale packages without repairing them silently. Acceptance records what the owner saw. The canonical result cannot be greener than its weakest required unresolved obligation.
+Each fixture uses disposable synthetic inputs and fake services before any real product trial. Stages reference these IDs; native qualification cases in Context map to the same families.
 
-This answers the eight recovery questions in the brief: attempted work, authority, actual execution, changes, cost basis, evidence, uncertainty and next action. A fresh engineer can continue from facts rather than trusting “done.”
+| Family | Required witness and expected behavior | First required |
+|---|---|---|
+| **F-ID** | Insert/reorder/rename a selected row; duplicate alias; same-state stale ordinal. Launch the exact WorkRef or refuse ambiguous/stale selection; never another item. | S0/S1 |
+| **F-AUTH** | Old same-kind approval, expired/revoked grant, new contract, or resume with exhausted allowance. Refuse dispatch; unchanged valid grant permits routine continuation. | S1 |
+| **F-ISOLATION** | Synthetic host file/env secret, outside write/read, network/connector, symlink/reparse and descendant probes. Protected targets remain inaccessible; scratch edits remain confined. | S1 |
+| **F-JOB** | Crash before/after dispatch; lost native reference/ack; failed job then retry; cancel and late output. One recorded dispatch identity per attempt; unknown never blind-retries or publishes. | S1; expanded S2 |
+| **F-COST** | Repeated cumulative reading, counter reset, failed-then-successful jobs, unknown usage, inner retries/subagents/paid tools and threshold overshoot. No double count/refund; total job bounds proven or strict profile rejected. | S1 |
+| **F-EVIDENCE** | Surplus same-file edit; unrelated path proof; zero tests; invalid verdict; changed oracle; mutation during check. Weaker/stale evidence cannot satisfy a behavioral claim. | S1/S2 |
+| **F-RESULT** | ACCEPTED-like label plus stale finish; missing blob; partial artifact commit; failed PM projection. One honest result survives; no false item completion or paid replay. | S1/S2 |
+| **F-RESUME** | Force interruption; replace native session; changed source/contract/authority; answered question. Preserve decisions/useful findings, reopen stale obligations, do not renew authority implicitly. | S2 |
+| **F-COMMAND** | Duplicate/early/lost receipt, actor/payload ID reuse, stale grant, wrong-owner cache, empty full snapshot and cursor gap. Same command reconciles; no unintended grant or stale-row resurrection. | Local S1; remote S3 |
+| **F-PUBLISH** | Verified candidate with no application; wrong destination/build; response lost after application; owner edits later. Requested disposition stays unmet until valid observation; no repeated unknown write or rollback of later edits. | Handoff S1; automatic path S3 |
 
-## 9. Pilot thresholds for enabling autonomy
+Storage fault variants of F-RESULT include disk full between artifact write and reference commit, interrupted backup and restore with missing blobs. Test local transactional persistence/restart in S1; complete restore drill before unattended S2 cutover. No cleanup erases unresolved native jobs, reservations or candidate provenance.
 
-Suggested initial operational gates, not statistical safety proofs: all adversarial fixtures relevant to a profile pass; at least three non-tooling FAST product candidates complete with no false-proof/authority incident; one forced-crash recovery preserves effects and cost; one multi-session DEEP engagement resumes with a replacement model; phone commands survive dropped acknowledgment and stale decision fixtures. Required device/live observations are supplied by the owner.
+## 10. Product evidence and stop rules
 
-Any false completion, escaped authorized scope or duplicated consequential effect immediately disables the affected automatic profile until its causal fix and regression witness pass. Continue safe inspection and unrelated supported work. Do not erase failed runs from the comparison denominator.
+S0 compares the same delivery contract/evidence with ordinary native work. S1 produces one actual non-tooling candidate after fake fixtures and the required operational authorization. S2 reaches at least three comparable FAST product results in total plus one interrupted DEEP engagement with fresh-session continuation. These small operational samples are not statistical safety proof.
+
+Record owner-active minutes including setup, clarification, recovery, review, application/release and maintenance; avoidable decisions; repeated explanation; actual disposition; evidence gaps; defects; resources with basis; and elapsed time. Include failures. Do not infer savings from mixed historical sessions or model time alone.
+
+Any false completion, containment escape, unauthorized publication or duplicate consequential effect disables the affected automatic capability until its causal fix and fixture pass. Preserve useful results and continue unaffected read-only inspection. If owner benefit fails to appear, reduce the custom surface or choose an external execution workflow; do not use the trial to justify every deferred feature.
+
+No production DB, device, billing reconciliation, Windows isolation or provider behavior was tested by this documentation revision. Those are explicit future qualification/owner observation obligations.

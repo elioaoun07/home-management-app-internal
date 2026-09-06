@@ -1,73 +1,97 @@
 ---
 created: 2026-09-06
 updated: 2026-09-06
-type: astra-study
+type: delivery-plan
 status: active
 owner: Elio
+plan_revision: "2.1"
 ---
 
 # PM Delivery — DEEP DIVE
 
+> **V2.1 target plan, revised 2026-09-06.** DEEP DIVE shares [V2 Architecture](<PM Delivery — V2 Architecture.md>) with FAST. [Context & Agent Model](<PM Delivery — Context & Agent Model.md>) owns the Checkpoint contract; [Evidence & Autonomy](<PM Delivery — Evidence & Autonomy.md>) owns verification and authorization. The original V2 mandatory investigation dossier/context-rotation machinery is replaced by native continuity plus meaningful portable records.
+
 ## 1. A durable engineering engagement
 
-DEEP DIVE resolves uncertainty and implements a defensible change. It uses the same contract, effect and evidence kernel as FAST. Its additional machinery is a durable investigation record, deliberate probes, architectural alternatives and selective independent challenge. It is not FAST with a larger token cap or more mandatory phases.
+DEEP DIVE is the effort policy for uncertain causality, product meaning or architecture. It uses the same WorkRef, Contract, Grant, confined native jobs, protected verification and disposition rules as FAST. It adds deliberate investigation, a larger authorized effort allowance and selective independent challenge. It does not add another runtime, grant broader access or require more approval phases.
 
-An investigation may be authorized before implementation scope is known. Its grant is read/probe-only against approved inputs, with a resource allowance and a concrete research question. Implementation authority follows a sufficiently understood contract. Useful investigation can close as a research result without pretending software shipped.
+An unclear item may start permitted investigation before implementation scope is known. The Contract retains the intended outcome and requested disposition; the Grant can initially allow only safe reads/probes. If the owner requested a fix, an investigation result does not silently become completion of that request. A research-only request can be completed when its own required evidence and disposition are met; its report and source/evidence manifest form the research candidate defined in Architecture.
 
-## 2. Investigation protocol
+The owner normally selects the item and chooses **Deliver**. The system selects or escalates effort within authority. The owner resolves values and consequential exceptions, not hypothesis bookkeeping or context-window management.
 
-1. Record observed symptom, source/owner evidence, current environment and unknowns. Separate observation from hypothesis.
-2. Build a small hypothesis set. Name the cheapest discriminating probe and the outcome that would weaken each hypothesis.
-3. Run safe probes and retain observations, including failed or negative results. Stop repeating an identical probe against identical inputs.
-4. Follow newly discovered dependencies when they can change the decision; record why expanded context matters.
-5. Compare plausible designs using correctness, recovery, owner effort, implementation cost and deletion opportunities. Reuse a strong primitive when it solves the problem.
-6. Draft the bounded implementation contract and evidence plan. Obtain owner decisions only for unresolved product meaning, consequential authority or resources beyond the grant.
+## 2. Native investigation with explicit exit conditions
 
-Stop investigation when the selected change has an adequate causal explanation, known affected boundaries, an executable proof plan and no unresolved high-consequence assumption. If these remain missing after the allowance, return a partial result with the next discriminating action. Document length is not the exit condition.
+The engineer should:
 
-The [Context & Agent Model](<PM Delivery — Context & Agent Model.md>) supplies records for source facts, rejected hypotheses, decisions and resumption. Native conversation continuity is valuable but never the only copy of these facts.
+1. Separate the observed symptom, attributed owner reports, source facts and unknowns.
+2. Identify plausible causes and choose a cheap probe that distinguishes them.
+3. Use approved synthetic or isolated inputs; retain relevant positive and negative observations.
+4. Follow dependencies when they can change the decision, applying the existing module/domain rules.
+5. Compare plausible repairs by correctness, recovery, total owner effort, implementation cost and opportunities to reuse or delete machinery.
+6. Produce a bounded candidate and evidence plan, or the precise unresolved choice that prevents it.
+
+These are engineering expectations, not six persisted phases or a required row for every search/hypothesis. Native planning, tools, context management and read-only subagents may supply them. ERA retains only findings and decisions necessary to preserve the commitment and resume safely.
+
+Implementation can proceed when the causal explanation is adequate, affected boundaries are understood, an executable verification path exists and no unresolved high-consequence assumption blocks the proposed scope. Continue without an owner gate if the Grant already covers it. Otherwise present the prepared contract/authority change and its consequences.
+
+When allowance ends first, preserve useful work and the next discriminating action. More tokens, longer prose or a stronger model do not resolve unavailable external evidence. Repeating the same probe against unchanged inputs requires a new reason.
 
 ## 3. Complete journey: duplicate or lost offline capture
 
-Illustrative product case, not an executed task: the owner reports, “Sometimes retrying an offline capture duplicates it; after restarting, another one disappeared.” It crosses local persistence, replay, API identity and displayed outcome. Domain documentation and production-data restrictions still govern.
+Illustrative case, not an executed task: “Sometimes retrying an offline capture duplicates it; after restarting, another one disappeared.” The request crosses local persistence, replay, API identity and displayed outcome. The existing domain rules govern investigation and implementation.
 
-| Stage | Owner action | Engineer/system action | Evidence and uncertainty |
+| Moment | Owner action | Native engineer / supervisor | Required evidence and limits |
 |---|---|---|---|
-| Intake | Describes incidents and intended behavior | Authorize bounded investigation; record unknown reproduction conditions | Owner recollection is attributed, not converted to an execution trace |
-| Orient | None | Map local capture → durable store → replay → server result → UI; read relevant domain rules | Source manifest and dependency map; no production probing |
-| Probe | None | Use synthetic fixtures for reload-before-commit, response loss and duplicate replay | Distinct hypotheses: nondurable local write versus repeated external effect |
-| Decision | Clarifies whether an ambiguous past capture should wait or ask, if contract lacks this | Present consequences with current evidence | Decision linked to a contract revision, not buried in chat |
-| Design | Approves bounded implementation authority if needed | Compare minimal existing-queue repair against a new identity boundary | Exact once-only claim is scoped to the effect and tested failure windows |
-| Implement | Can leave | One writer builds candidate; focused read-only investigator may check the server contract independently | No parallel edits; all attempts and costs recorded |
-| Verify | Supplies external/device observation only where required | Run clean reproduction, regression, replay and failure-injection checks; fresh reviewer challenges proof sufficiency | Synthetic tests cannot prove current production RLS or installed-device behavior |
-| Result | Reviews remaining observation or accepts candidate | Present established facts, candidate identity, limits and integration action | A pending owner-applied DB migration prevents a claim of completed deployed behavior |
+| Select | Chooses the reported item and Deliver | Resolves current intent and admits a bounded investigation | Owner recollection remains attributed; it is not fabricated into a trace |
+| Orient | None | Reads routed docs and follows capture → durable store → replay → server result → UI | No production probing; distinguish source facts from hypotheses |
+| Probe | None | Exercises reload-before-commit, response loss and duplicate replay using isolated fixtures | Separate nondurable local write from repeated external effect; retain discriminating results |
+| Decide | Answers only an unresolved product choice | Presents ambiguity about an uncertain past capture with evidence and consequences | Bind the answer to the applicable Contract revision |
+| Design | No action if existing authority covers it | Compares a repair using the existing queue with any necessary identity change | Explain the once-only guarantee at the actual effect boundary and its failure windows |
+| Implement | Can leave | One candidate writer makes the repair; native read-only investigators may answer independent questions | Native work stays within the admitted job/resources; no parallel writers or new authority |
+| Verify | Supplies a device/external observation only when required | Protected checks reproduce the defect, exercise regression and inject relevant failures; optional fresh reviewer challenges the proof | Synthetic tests cannot prove current production RLS, installed-device state or deployed behavior |
+| Result | Receives established findings, candidate and remaining action | Records actual disposition with evidence and a Checkpoint for continuation | A required owner-applied migration or release keeps the original fix item open |
 
-If the correct fix requires a production database change, produce the exact manual migration/runbook under repository rules, then conclude or wait on that explicit owner dependency. The agent never applies it. The absence of live DB evidence must not trigger speculative route edits.
+If investigation identifies a visibility/permission symptom, Hard Rule 27 applies before reading route code: inspect the committed DB-state snapshot and obtain owner evidence when missing or stale. Correct-looking routes cannot disprove RLS. This plan does not authorize production access.
 
-## 4. Surviving a multi-session engagement
+If the repair needs a DB change, prepare the manual migration and authoritative schema update under the repository rules. The agent never applies it to production. Required application/live verification remains an explicit owner dependency; the absence of that evidence is not permission for a speculative code workaround.
 
-**Long reasoning:** checkpoint when a probe changes the hypothesis, a decision changes the contract, or a candidate/check generation changes. Use a short decision ledger and linked evidence, not periodic prose summaries that gradually lose exceptions.
+## 4. Continuity without a second context engine
 
-**Context rotation:** seal the attempt and usage; compile a new context package from valid facts, rejected hypotheses, next obligations and selected source spans. The new model must resolve the open issue, not repeat the initial discovery. Record what context was omitted and why; critical constraints are never evicted by relevance ranking.
+Default to continuing the native conversation. Preserve the native execution reference and raw record pointers. Do not measure context pressure using cumulative processed tokens or implement an ERA rotation/compaction scheduler.
 
-**Owner interruption:** record steering as a decision/proposed amendment. Pause at a safe tool boundary, revoke further effects if requested, preserve the candidate. A request to stop is not an assertion that no request remains in flight. The UI shows acknowledgment separately.
+The [Context & Agent Model](<PM Delivery — Context & Agent Model.md>) defines the lean Checkpoint and its exact fields. Write it at candidate handoff, task-level wait or planned pause, and before native replacement where possible. It preserves binding decisions, consequential findings with source references, candidate identity, remaining obligations, native record references and the next safe action. Retain negative findings that would otherwise cause repeated work. Link artifacts; do not duplicate the native transcript or persist a checkpoint after every probe.
 
-**Agent/model replacement:** the successor receives contract, authorization, candidate, latest observations, failed hypotheses and next probe, all revisioned. It performs a resumption check for stale dependencies. It need not trust the predecessor's reasoning, and it cannot reinterpret an owner decision as optional.
+| Event | Required continuation behavior |
+|---|---|
+| Native context compaction | Let the environment manage it; retain ERA's actual launch/resume inputs and useful supplied telemetry |
+| Fresh session or model | Supply the Checkpoint and current source/candidate references; revalidate Grant and resources before dispatch |
+| Owner steering | Record a decision or proposed amendment; preserve existing work and stop dependent activity if its authority changes |
+| Cancellation | Withdraw future publication authority immediately; retain uncertainty until executor stop is confirmed |
+| Worker crash or lost acknowledgment | Reconcile the existing job and unknown allowance first; resume only when safe, otherwise isolate successor work from the old writer |
+| Resume days later | Recheck source/environment and relevant evidence; changed inputs may need a successor candidate and new checks |
+| Failed protected check | Preserve its receipt and candidate; an admitted repair returns a new candidate and reruns necessary verification |
 
-**Failure and resume days later:** reconcile unknown effects and usage first; verify source/environment and artifact hashes. Reuse unchanged evidence; mark dependent proof stale after drift. If the owner edited related files, derive a successor candidate from the new base and recheck, rather than silently replaying the old patch.
+A successor need not trust the predecessor's reasoning. It should verify material findings where needed, but recorded owner decisions remain binding. Portable continuation should reduce reconstruction; it cannot promise that no reasoning will ever repeat.
 
-**Validation failure:** retain failing logs and candidate. A bounded repair returns to editing, then produces a new immutable generation. Earlier passes remain historical and cannot certify the repaired generation automatically.
+## 5. Independent challenge where it earns its cost
 
-## 5. Independent challenge where it changes the outcome
+A reviewer is useful when a proposed cause, architectural tradeoff or evidence plan has a meaningful chance of being wrong. It receives the Contract, candidate/diff, relevant source and evidence before the writer's conclusion where practical. It asks whether the observations prove the requested behavior and whether recovery or an overlooked dependency changes the result.
 
-A fresh read-only reviewer receives the contract, base/candidate diff, source access and evidence plan before the implementer's conclusion. It asks whether the tests prove the right behavior, whether an unexamined dependency changes the design, and whether recovery leaves partial effects. It produces findings with a witness or falsifiable question.
+Use concrete counterexamples and falsifiable questions. A witnessed failure defeats a broad success claim until resolved. An unsupported objection becomes a bounded probe; model disagreement is not settled by voting or endless review. Missing external facts still require an authorized observer.
 
-Do not settle disagreement by voting. A concrete counterexample defeats a broad success claim until resolved. An unsupported objection becomes a bounded probe, not an endless debate. For domain uncertainty no model can settle, ask the owner for the missing fact or observation. The writer cannot approve its own criterion waiver.
+Native subagents are preferred for bounded independent investigation inside the same qualified environment and resource policy. If ERA starts a separate reviewer job, it repeats job admission and resource accounting. One writer owns a candidate; reviewers are read-only and cannot authorize a waiver or modify the standard they are evaluating. Managed grading may supply useful challenge, but it does not replace protected observations or ERA's acceptance semantics.
 
-Additional investigators are justified only for independent bounded questions with distinct evidence, such as client persistence and API effect identity. They share immutable evidence; they do not maintain competing plans. Stop spawning once coordination costs more than the remaining independent work.
+## 6. DEEP DIVE build acceptance
 
-## 6. What success feels like
+The [Execution Portfolio](<PM Delivery — Execution Portfolio.md>) places an interrupted real engagement after the first vertical slice. That engagement must demonstrate:
 
-The owner can leave for hours and return to either a defensible candidate or one precise decision with useful work already completed. Restarting tomorrow does not mean explaining the problem again. A stronger model can replace a weaker one without reconstructing the engagement from transcripts. The final package includes the causal finding, selected design, rejected alternatives that matter, actual checks, unresolved observations and recovery instructions.
+- The initial authorized investigation discovers something useful without routine owner supervision.
+- A material decision, negative finding and current candidate survive an interruption and fresh-session continuation.
+- The successor rechecks changed source/grant inputs, preserves binding decisions and avoids repeating already-resolved questions.
+- Native and separately dispatched work remain inside current resources, including unresolved usage; DEEP never bypasses cost admission.
+- Protected evidence detects a deliberately inadequate or stale result, and the owner receives a useful next action if it cannot be repaired within authority.
+- A verified candidate is not reported as an applied or deployed fix; the selected item's requested disposition remains intact.
 
-Measure information gained per probe, repeated discovery after resumption, owner decisions containing genuinely new information, escaped defects and useful partial outcomes. Do not reward raw tokens, number of agents or length of the architecture memo.
+Compare against the same work performed in a native environment with equivalent rules. Measure owner-active minutes, avoidable decisions, repeated explanation, recovery time, verified outcomes, escaped defects and maintenance. The planned interrupted engagement is an operational qualification sample, not statistical proof of general autonomy.
+
+Success feels simple: the owner can leave, return to either a defensible result or one consequential choice, and resume tomorrow without reconstructing the engagement personally. More agents, more context machinery and longer documents earn no credit unless they improve that experience.

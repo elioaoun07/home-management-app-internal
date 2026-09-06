@@ -1,100 +1,83 @@
 ---
 created: 2026-09-06
 updated: 2026-09-06
-type: astra-study
+type: delivery-plan
 status: active
 owner: Elio
+plan_revision: "2.1"
 ---
 
 # PM Delivery — Red Team
 
-## 1. Five root causes explain most failures
+> Challenge of the integrated revision 2.1 target. [Diagnosis](<PM Delivery — Current System Diagnosis.md>) retains the source/historical D01–D18 evidence; [Architecture](<PM Delivery — V2 Architecture.md>) defines V2-I01–I10; [Evidence & Autonomy](<PM Delivery — Evidence & Autonomy.md>) defines the canonical F-* fixtures. This file adds no second runtime or fixture vocabulary.
 
-The evidence register in [Diagnosis](<PM Delivery — Current System Diagnosis.md>) uses D01–D18 below. The proposal is judged against failure behavior, not clean diagrams.
+## 1. The principal risk has changed
 
-1. **Identity is weaker than intent.** An ordinal, phase label, filename or latest artifact is asked to identify a changing proposition. Fix with stable work identity and immutable contract/candidate/decision revisions.
-2. **Effects outrun durable knowledge.** A provider call, file write or remote command can happen before state/usage/receipt persistence. Fix with pre-dispatch attempt/effect records and explicit reconciliation, not blind replay.
-3. **Evidence establishes a weaker fact.** Exit zero, changed source and model approval become user-visible completion. Fix with criterion-specific observers and fresh evidence, while admitting semantic limits.
-4. **Authority and execution share mutable space.** A capable model or script can alter more than its task and can outlive a lease. Fix with isolation, trusted receipt storage and fenced publication.
-5. **Projections hide uncertainty.** Cached UI, latest summary, heartbeat and accepted label flatten different facts into success. Fix with one projection contract preserving freshness, missing observations and unknown outcomes.
+The smaller target removes some failure-sensitive orchestration, but delegation alone does not establish trust. The model can still misunderstand the item, the sandbox can expose host resources, a lost launch can cost money, checks can prove too little, and a candidate can be mistaken for a release.
 
-These primitives eliminate classes of defects. No primitive eliminates uncertainty about physical devices, external systems or whether a human-written criterion captures the intended product.
+The design is sound only if the native job is confined and the supervisor keeps authority, evidence and disposition outside the writer's control. These boundaries carry the guarantees. Internal tool histories stay native unless a particular unsupported guarantee requires finer control.
 
-## 2. Lifecycle attack and response
+## 2. Challenge the chosen boundary
 
-“Automatic” below means inside an existing grant with sufficient evidence. Every unresolved effect retains its identity and observation trail. “Owner” names an actual missing decision, not a default approval for routine work.
+| Challenge | Required design response | Witness / stage |
+|---|---|---|
+| The selected row moved, or the alias identifies two records | Resolve exact WorkRef/source fingerprint; refuse ambiguity. No full backlog migration is necessary to avoid launching another item. | D01; F-ID in S0/S1 |
+| The agent decides that a simpler result counts as success | Preserve immutable requested outcome/disposition; material amendments require an exact decision and successor Contract. | D03; F-AUTH/F-RESULT in S1 |
+| The “isolated” directory can read host secrets or call installed connectors | Qualify read/write/environment/network/connector/descendant boundaries using synthetic canaries. Exclude undeclared access, not only host writes. | D16/D17; F-ISOLATION in S1 |
+| A job has a per-request cap but can issue unlimited requests | Require enforceable whole-job coverage plus in-flight margin for a strict profile, or decline it. Use finer dispatch only where a demonstrated capability gap warrants it. | D06/D07; F-COST in S1 |
+| Start succeeded but its acknowledgment was lost | Persist dispatch-key correlation and marker; inspect the existing job where supported. Otherwise hold unknown/reservation rather than launch twice. | D10/D12; F-JOB in S1/S2 |
+| Stop returned but a child or remote request continues | Revoke publication/future dispatch immediately. Keep stop uncertainty and charges visible; verify stopping or independent containment before overlapping work. | D16; F-JOB/F-ISOLATION in S1/S2 |
+| The worker returns malformed optional prose after completing the task | Derive Result from frozen candidate and trusted receipts. Do not reproduce the historical wrapper crashes as a new mandatory repair gate. Required missing information alone creates an obligation. | D05/D11; F-RESULT in S1/S2 |
+| A test run selects nothing, or a filename is treated as behavior | Use criterion-specific observers; missing evidence remains missing. A structural edit may use structural proof only when that matches intent. | D04/D05; F-EVIDENCE in S1 |
+| The writer weakens tests, test selection or the verifier | Protect trusted observer/configuration; inspect changed oracles independently. Safeguard changes are authorized under the prior trusted version. | D04; F-EVIDENCE/F-AUTH in S1; expanded S2 |
+| The candidate changes while checks run | Quiesce and snapshot through trusted import; check an immutable generation. Relevant changes stale its evidence. | D04/D16; F-EVIDENCE in S1/S2 |
+| Native continuation forgets decisions or revives expired permissions | Revalidate current grant/source/allowance, preserve concise Checkpoint and evidence. Native memory is an optimization, not authority. | D08/D09; F-RESUME in S2 |
+| A checked patch is reported as a fixed deployed feature | Keep requested and observed disposition separate. Owner application/release/device obligations remain open. | D11/D18; F-RESULT/F-PUBLISH from S1 |
+| A stale phone grants new authority or a cached record looks current | Authenticate full command/installation/target; same-ID reconciliation; source generation and owner-scoped authoritative replacement. Remote grants stay disabled until qualified. | D12/D13; F-COMMAND local S1, remote S3 |
+| The store says done but its artifact or projection is missing | Commit references only after verified artifact publication; fail dependent evidence on missing blobs. Projection failure is separate, retryable and cannot rerun engineering. | D10/D11/D18; F-RESULT in S1/S2 |
+| A stale V1 client starts a writer after V2 is enabled | Drain V1 and use one installation/service dispatch choice, enforced server-side for every write-capable entry point. Preserve read-only legacy history. | D10; F-AUTH/F-JOB in S1 |
+| The new platform costs more owner effort than ordinary native delivery | Include setup, recovery, review, release and maintenance in the comparison. Stop expanding the supervisor if benefit is absent. | Historical mixed cohort; comparative S0/S2 evidence |
 
-| Failure family | Prevent / detect | Safe recovery | Owner involvement | Reconstruction and UI obligation |
-|---|---|---|---|---|
-| Wrong/stale work item; renamed/reordered Markdown | Stable work ID; expected revision; ambiguous import refusal (D01) | Refresh mapping, preserve selected identity | Resolve ambiguous historical aliases only | Original capture, source, mapping and rejected command visible |
-| Stale requirements or misunderstood intent | Immutable contract; separate assumptions; material intent check | New linked revision; invalidate dependent grants/proofs | Choose behavior only when materially ambiguous | Show amended outcome, not silent scope drift |
-| Wrong repository / dirty tree / wrong files | Source manifest including relevant untracked/config inputs; bounded candidate scope | Rebase candidate by new derived snapshot; recheck | Resolve conflicting owner edits | Base/candidate/destination provenance, drift detail |
-| Too little discovery; hallucinated assumption | Required dependency/unknown ledger; falsifiable probes | Target missing evidence; escalate reasoning | Supply unavailable fact | Unsupported assertions remain claims |
-| Excess discovery / wrong context / polluted retrieval | Budgeted retrieval and next-probe value; record negative probes | Stop duplicate probes, narrow context, return useful partial | Additional allowance only if warranted | Show last useful finding, not tokens as progress |
-| Rotation/model replacement loses understanding | Delivered context manifest + source-bound dossier (D08/D09) | Recompile; replay only unprocessed observation tail | No repeated answered questions | List stale facts and next action |
-| Malformed output / partial structured answer | Strict schemas plus semantic invariants; unknown verdict blocks (D05) | One bounded correction or return inconclusive | Usually none | Preserve raw answer and parse diagnostics |
-| Partial/unrelated/unauthorized edits | OS isolation; broker scope; frozen generation; whole-diff checks (D04/D16) | Quarantine candidate; keep useful authorized changes separately | Scope enlargement needs grant | No publication of rejected generation |
-| Incorrect/no tests; tests prove wrong behavior | Trusted check receipt; nonzero selection; proof-plan review (D04/D05) | Correct observer/fixture; new evidence generation | Missing product oracle may need owner | Distinguish not-run, missing, fail and pass |
-| Review fails or cannot conclude | Explicit verdict schema; independent input for selected risk | Probe concrete objection; no vote/loop | Resolve residual product ambiguity | Inconclusive cannot turn into pass |
-| Provider interruption / duplicate attempts / retry side effects | Durable attempt ID, provider request IDs, private candidate, reservations (D06/D17) | Reconcile request/effect; retry only known-safe unit | Unknown nonreconcilable external effect | Unknown remains unknown; no fake zero spend |
-| Cost or context accounting failure | Typed units/provenance; every paid call recorded (D06–D08/D17) | Stop further dispatch; reconcile raw receipts | Approve new allowance only on known basis | Cost estimate, observed usage and outstanding reserve separate |
-| Runaway loops / no progress | Repair/probe/time bounds; repeated-input detection | Pause with last useful state and next discriminating action | Continue/re-scope only if justified | Heartbeat stays separate from progress |
-| Crashed runner / stale lock / racing actors | Transactional ownership, fencing epoch, exclusive publication (D10) | Revoke old publication; reconcile before new writer | Manual release only with evidence | Expiry alone never means old process stopped |
-| Stale/contradictory/missing artifacts | Immutable hashes + committed manifest references (D11/D18) | Rebuild projection from records; missing evidence blocks completion | Usually none | Display history and current result distinctly |
-| Mobile early receipt / ambiguous timeout / duplicate tap | Client command ID before submission; same-ID status query (D12) | Reconcile existing command; never create new grant automatically | None unless original intent changes | Pending/unknown status survives reload |
-| Missed deletion / wrong-owner cache / cached old UI | Owner/schema envelope; full-snapshot replacement; cursor gaps (D13) | Clear wrong-owner state, refresh coherent projection | Reauthenticate if necessary | Original age remains visible |
-| Capture succeeds but disappears | Stable capture ID; untriaged Work visibility (D14) | Query same capture, preserve pending-triage state | Triage when useful, not to rediscover capture | Receipt opens retrievable item |
-| Owner interruption / resume weeks later | Durable revocation, context and checkpoints | Validate source/grant/evidence, reconcile pending effects | Renew expired authority or change intent | Explain exact resume dependency |
-| Provider/model unavailable | Capability registry and qualified alternatives | Approved equivalent fallback or pause; keep dossier | New provider/authority/billing basis only | No silent weaker safety contract |
-| Malicious repository content / tool misuse | Untrusted context labels; scrubbed environment; egress and filesystem containment | Quarantine attempt, revoke effects, retain audit | Security exception is not auto-approved | Tool-denial and affected scope reported |
-| Disk full/corruption / missing backup | Transaction errors fail closed; referenced-blob verification | Restore consistent backup into separate store; validate before activation | Choose recovery point if data is irrecoverable | Missing history is explicit, never invented |
+## 3. What complexity can be removed safely?
 
-## 3. Highest-consequence attacks on the proposal
+**Inner edit recovery:** ordinary changes inside authorized disposable scratch can be inspected or discarded. ERA does not need to journal every edit. This is valid only while the job lacks consequential external authority. Granting such authority would change the recovery requirement.
 
-### The model edits its own verifier
+**Context machinery:** native sessions handle their own context and compaction. The supervisor retains binding decisions and a portable Checkpoint at meaningful boundaries. It need not track every negative search or manufacture a resident-context estimate from token throughput.
 
-An engineer can add a test that mirrors a bug, remove assertions or change test selection. A real test receipt then proves only that the modified test passed. Freeze the proof requirements before implementation. Record changes to test sources/config as part of the candidate, run trusted selection/reporting outside model control, and independently inspect a changed oracle. For risky behavior retain a regression witness or adversarial fixture the writer cannot weaken. “Independent” means different evidence access and authority, not another role label.
+**Mandatory reviewer phases:** protected deterministic checks settle many bounded claims. Independent semantic challenge is selected for ambiguity/consequence; a model reviewer cannot replace an absent device observation or a malformed evidence record.
 
-### A revoked shell keeps running
+**Full PM adoption:** a selected item's stable mapping and immutable snapshot can coexist with Markdown intent. A separate database is justified for asynchronous job facts, not as an excuse to move all PM lifecycle authority.
 
-Broker checks at tool dispatch do not stop an already-started subprocess. Keep it confined to a disposable candidate with no authoritative publication path. Revoke its publication epoch immediately; terminate the descendant process tree. If containment cannot be demonstrated, remain supervised and do not allow host integration. This is a Stage 1 requirement, not later hardening.
+**Mobile infrastructure:** current result viewing can be retained while remote grants remain unavailable. Authentication, receipt reconciliation and owner-bound state are required when that capability is implemented; a new mobile application/key system is not a prerequisite for local delivery.
 
-### A candidate passes but the actual destination differs
+**Host integration:** initially prepare the exact candidate and its remaining owner action. Later evaluate an established publication path under amended policy. Building a concurrent multi-file host writer is a separate investment, not hidden inside “apply patch.”
 
-Checking only changed files misses drift in configuration, dependencies and test fixtures. Initially use a conservative complete relevant-input manifest. A candidate's source-only equivalence is not environment equivalence. Destination drift invalidates the affected proof; keep the candidate useful, but recheck before integration/completion claims.
+## 4. Where simplification would go too far
 
-### The database commits but the side effect is unknown
+Do not reduce the supervisor to an agent launcher that trusts final prose, a cost gauge or a green exit code. It still needs durable job identity, actual confinement, resource admission, protected evidence and truthful disposition.
 
-SQLite cannot transact with provider billing, arbitrary scripts, the filesystem and a remote relay. Store intent before dispatch, outcome after observation, and a resolver for the interval. Local idempotent command acceptance is achievable. General exactly-once external execution is not. Unknown non-idempotent effects cannot auto-retry.
+Do not declare strict budgets from an estimate. Do not treat a job timeout as proof it did not execute. Do not call a process stopped because publication was revoked. Do not regard a signed receipt as semantically adequate evidence. Do not count a failed or inconclusive required criterion as a waiver the model can grant itself.
 
-### Every uncertainty becomes an owner gate
+The no-production-DB rule is not solved by a more capable agent. Required live observations still come from permitted owner procedures. No speculative code rewrite can replace missing RLS/device evidence.
 
-That would recreate V1 with better vocabulary. The recovery resolver must distinguish software-resolvable uncertainty from missing owner authority or knowledge. Poll an existing command receipt; revalidate hashes; rerun a safe read; regenerate a derived projection. Ask only for a product choice, new scope/resources, authentic observation or an irreducible effect ambiguity.
+## 5. Avoid owner gates created by the implementation
 
-### The system accumulates a second PM truth
+Software should reconcile command receipts, inspect known native jobs, verify source/artifact identity, rerun authorized safe checks and regenerate projections. Routine native test/fix work remains inside the job allowance.
 
-Import/projection must define field ownership. Do not allow generated runtime status in Markdown to compete with the store. Do not hide external prose edits: propose a new contract revision. Keep a direct export/restore path so the database is not an opaque single point of dependence.
+Owner attention is justified for new intent, authority/resources, required unavailable observations, or a genuinely irreconcilable consequential effect. A parse error in optional prose or a change of activity label is not a new owner decision. Default Deliver uses established policy; no forced model, lane, agent-team or autonomy-level selection.
 
-## 4. Mandatory adversarial fixtures
+Store the exact decision and evidence seen once. After reconnection or resume, show that decision's current status; do not ask the same question again because the native conversation changed.
 
-These are requirements for future implementation, **not tests run by this study**.
+## 6. Qualification and rollout consequences
 
-| Fixture | Pass condition |
-|---|---|
-| Crash before dispatch, after dispatch, after effect, before receipt, after receipt | One reserved identity; actual/unknown effect conserved; no duplicate publication |
-| Two controllers issue same command and different commands on same revision | Same-ID returns same receipt; competing revision fails or serializes safely |
-| Same command ID reused with another actor/payload; stale phone revokes after ordinary progress | Digest/actor mismatch conflicts; revoke stops only the still-current named authority despite progress, never a successor |
-| Old same-kind approval after contract/candidate changes | Rejected as obsolete; no authority granted |
-| Expired worker emits a late candidate / still-running child writes | Private output cannot publish; host state unchanged |
-| Writer changes verifier or removes selected tests | Proof obligation remains unsatisfied until independent observer validity is established |
-| Existing path, arbitrary diff and zero tests attached to behavioral criterion | All rejected as insufficient proof |
-| Failed attempt then successful retry; duplicate cumulative SDK reading | Inclusive usage conserved exactly once; unknown reservation not refunded |
-| Response lost after successful integration | Destination hashes reconcile prior effect; second write not issued |
-| Owner edits a dependency during validation or a postimage during recovery | Stale proof/integration refused; later edit preserved |
-| Wrong-owner cache, empty authoritative snapshot, missed DELETE, restarted relay | No cross-owner hydration; absence replaces old rows; durable cursor restores ordering |
-| Negative search reused after searched universe changes | Absence claim becomes stale; bounded search may run again |
-| Disk full between blob write and metadata commit | No committed false proof; orphan blob harmless; clear resumable failure |
+S1 must establish F-ID, F-AUTH, F-ISOLATION, F-JOB, F-COST, basic F-EVIDENCE/F-RESULT and local F-COMMAND before a real pilot uses the corresponding authority. A minimal restart/lost-dispatch witness is part of the first useful path. S2 broadens crash/restore/resume and real behavioral evidence before unattended cutover. S3 qualifies optional remote access and publication; unsupported extensions remain absent.
 
-## 5. What remains uncertain even after V2
+A first native backend is chosen by demonstrated contract fit, not brand preference. If a managed platform supplies the necessary native durability/limits with less effort, use it. If an executor cannot meet a mandatory bound, decline that profile or make the concrete environment/control change necessary; never silently weaken it.
 
-No tool can mechanically decide every product intent, certify all behaviors from finite tests, prove a physical-phone observation from source, or guarantee future provider availability. The right target is bounded confidence with reconstructable evidence and controlled effects. Large ambiguous work still needs owner decisions. Production database writes remain owner-only under this repository's policy. A cleaner core earns autonomy incrementally; architecture documents do not confer it.
+A false completion, unauthorized effect or containment escape disables the affected automatic capability until causal repair and regression evidence exist. Store failure history. A small successful pilot supports operational learning; it cannot establish a universal safety rate.
+
+## 7. Residual limits
+
+Finite tests cannot decide every product intention, prove every device behavior or guarantee provider availability. A local runner may be asleep. A private candidate may require an owner application step under current policy. A native request may remain billable after cancellation. An unsupported exact monetary cap may prevent launch.
+
+Those limits must appear as explicit eligibility or result obligations. The target is a system the owner can leave alone within known boundaries, with trustworthy evidence and useful recovery when a boundary is reached.

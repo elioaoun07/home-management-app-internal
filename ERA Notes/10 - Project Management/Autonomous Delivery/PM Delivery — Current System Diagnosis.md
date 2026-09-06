@@ -4,15 +4,18 @@ updated: 2026-09-06
 type: astra-study
 status: active
 owner: Elio
+plan_revision: "2.1"
 ---
 
 # PM Delivery — Current System Diagnosis
+
+> **Evidence baseline retained; target updated to revision 2.1.** The D01–D18 source findings, artifacts and test receipt below belong to the original 2026-09-06 investigation. They were not rerun by the documentation refactor. The owner accepted the ownership reassessment; the current normative target is the [V2 Architecture](<PM Delivery — V2 Architecture.md>) and bounded [Execution Portfolio](<PM Delivery — Execution Portfolio.md>), not the earlier inner-effect core.
 
 ## 1. Finding and study scope
 
 **V1 contains useful engineering assets, but its organizing boundaries do not support the desired autonomy.** Work is often identified by document position, authority by phase/gate name, proof by resolvable artifact references, and completion by several mutable files. The same missing identity and effect boundary recurs across selection, execution, billing, recovery, acceptance and mobile control.
 
-Recommend a V2 execution core with a staged migration, not a full product rewrite. Start reading the [Migration Strategy](<PM Delivery — Migration Strategy.md>) for the decision, [Target Product](<PM Delivery — Target Product.md>) for the experience, and [V2 Architecture](<PM Delivery — V2 Architecture.md>) for the design. The [Execution Portfolio](<PM Delivery — Execution Portfolio.md>) is a proposed implementation sequence, not an activated backlog.
+The accepted target is a small delivery supervisor around qualified native jobs, isolated candidates, protected checks and explicit disposition. Preserve the useful V1 assets without owning the native engineering loop. Start reading [Target Product](<PM Delivery — Target Product.md>) for the experience, [V2 Architecture](<PM Delivery — V2 Architecture.md>) for the shared contracts and [Migration Strategy](<PM Delivery — Migration Strategy.md>) for the alternative comparison. The Execution Portfolio is ready for later bounded implementation; no stage or operational policy change was executed by this documentation task.
 
 Research contract was read end to end: [ASTRA V2 brief](<../../../docs/ASTRA-PM-COMMAND-CENTER-V2=STUDY.md>). Baseline HEAD `d6e0260`, 2026-09-06. The brief was already modified at task start and has been preserved. `git diff --stat 3106164..HEAD -- scripts/delivery scripts/pm scripts/pm-server.mjs src/components/pm-live src/features/pm-live` returned no changes; previous ASTRA source findings were therefore still relevant, but were rechecked at the affected seams.
 
@@ -84,7 +87,7 @@ Do not carry forward historical defects already fixed as if they remain current:
 
 **Preserve:** scanner/parser behavior and fixtures, source-preview containment, useful board/search/filter components, offline snapshot honesty, guarded postimage Undo invariant, explicit truncation, outbound relay topology, pure-function testing style, fake drivers, normalized transcript capture, Windows artifact writing helpers, owner decision history, native session reuse and domain rules.
 
-**Replace at the core:** ordinal execution identity, gate-name-only decisions, phase-sized persistence, freely interpreted acceptance references, mutable finish authority, unqualified provider interchangeability and model access to shared authoritative state.
+**Replace at the delivery boundary:** ordinal execution identity, gate-name-only decisions, phase-sized authoritative persistence, freely interpreted acceptance references, mutable finish authority, unqualified provider interchangeability and model access to shared authoritative state. Native jobs own their inner tool/context lifecycle; ERA records dispatch, decisions, candidate/evidence and actual disposition.
 
 **Retire after cutover:** legacy desktop assets, redundant activity-as-agent roles, four public lanes, model turns that only format a result, repeated context summary layers and duplicate client interpretations of cost/status. Code volume alone is not a reason to rewrite. The reason is that correctness depends on facts which V1 cannot bind together consistently.
 

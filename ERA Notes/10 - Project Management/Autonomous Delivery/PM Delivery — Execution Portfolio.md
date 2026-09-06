@@ -1,148 +1,156 @@
 ---
 created: 2026-09-06
 updated: 2026-09-06
-type: astra-study
+type: delivery-plan
 status: active
 owner: Elio
+plan_revision: "2.1"
 ---
 
 # PM Delivery — Execution Portfolio
 
-> Written after the target architecture and second-pass challenge. **Proposed stages only. No implementation is authorized or marked shipped by this study.** These are six bounded milestones, not six claims of one-session effort. Each contains a small number of independently reviewable implementation slices; split a slice only when its proof cannot fit one focused session.
+> **V2.1 plan, not implementation.** The owner accepted the ownership reassessment and authorized this documentation refactor. No slice below is shipped, no provider is qualified by this document, and no live job, migration, operational gate change or release is authorized here. S0–S3 replace the original Stage 0–5 blueprint; the pointer map is in [Migration Strategy](<PM Delivery — Migration Strategy.md>).
 
-## 1. Admission and implementation rules
+## 1. Execution contract for every future slice
 
-Read [V2 Architecture](<PM Delivery — V2 Architecture.md>), [Evidence & Autonomy](<PM Delivery — Evidence & Autonomy.md>) and the relevant source evidence before coding. Recheck source because paths/line citations describe `d6e0260`. The owner may authorize a stage later; this portfolio does not insert hundreds of tasks into existing queues or silently supersede their operational policy.
+Read [V2 Architecture](<PM Delivery — V2 Architecture.md>), [Evidence & Autonomy](<PM Delivery — Evidence & Autonomy.md>), [Context & Agent Model](<PM Delivery — Context & Agent Model.md>) and the relevant [Diagnosis](<PM Delivery — Current System Diagnosis.md>) witnesses before implementation. Architecture owns the schemas and V2-I01–V2-I10; Evidence owns F-ID, F-AUTH, F-ISOLATION, F-JOB, F-COST, F-EVIDENCE, F-RESULT, F-RESUME, F-COMMAND and F-PUBLISH. This portfolio names fixtures against those contracts rather than redefining enums or success semantics.
 
-Use proposed namespace `scripts/delivery-v2/` and a small shared contract package, with final paths chosen in Stage 0. These paths do not exist yet. Keep V1 imports one-way through adapters; V2 kernel cannot depend on `run-session.mjs` or write `.delivery/sessions/`. Leave production Supabase untouched. Any later relay schema change requires a manual migration/runbook and owner application under Hard Rules 24/26.
+Proposed code lives under **scripts/delivery-v2/**; proposed tests under **tests/delivery-v2/**; proposed local runtime storage under **.delivery/v2/** uses SQLite plus immutable artifacts. These paths/modules are planning boundaries, not existing implementations. Do not add an ORM, event framework, generic broker or duplicate public type package without a demonstrated requirement. Keep new authoritative schemas in one module and reuse them at entry/projection boundaries.
 
-For every slice: specify input/output schema, invariant, effect authority, fixture, rollback and one observable user outcome. A weaker model should implement that contract, not redesign the architecture or infer missing safety behavior. Test fixture side effects in temporary isolated directories. Do not launch real providers/bridges simply to make a test realistic.
+Every slice states exact files, input/output, dependency, invariant, fixtures, observable exit and stop/rollback behavior. Implement only that slice; a newly discovered gap becomes an explicit dependency rather than an improvised subsystem. Split a slice if its proof cannot fit one reviewable change. New fixture names below are **proposed fixtures**, not tests reported as passing today.
 
-No-git-write/no-worktree policies continue. One product writer. Source/preimage hashes and process isolation must be real before unattended execution. Missing platform capability yields a read-only/supervised fallback, not a permission bypass.
+All simulated provider/process fixtures use disposable files, synthetic secrets and fake endpoints. Do not run real providers, production relay or paid preflights as test setup. Real product samples require separate implementation/pilot authorization. Current no-Git-write/no-worktree/no-bypass/no-production-write rules remain binding. No worker writes the host checkout, store, trusted evidence, acceptance policy or publication credentials. Missing confinement means read-only assistance or a stop, never unsandboxed write access.
 
-## 2. Stage 0 — Import and show one truthful work record
+For every sample, preserve requested disposition even when only a candidate is available. Record owner setup, explanation, decisions, recovery, review, application and release effort as well as outcome, latency, cost basis and limitations. Unobserved owner minutes remain unknown. The comparison is against the same required outcome and evidence.
 
-**Outcome:** select existing product work in a read-only V2 view without changing its identity or falsely certifying historical sessions.
+## 2. S0 — Contract and native baseline
 
-**Slices:** (a) shared typed Work/Contract/Run/Decision/Evidence/Command schemas and invariants; (b) scanner-based import plus origin/alias mapping; (c) minimal CLI/local view showing one work record, legacy history and contradictions.
+**Stage exit:** one eligible product item has a frozen outcome/evidence/disposition contract, and a comparable ordinary-native workflow has an honest baseline record. No backlog migration or new dashboard.
 
-**Reuse/read:** `scripts/pm/shared/md-scan.mjs`, `shared/tasks.mjs`, `scripts/delivery/packet.mjs`, current parser fixtures; D01/D11/D14. Select SQLite binding/runtime version based on local compatibility, with transactions, backup and durability support tested. Pin and document the choice; do not add an ORM or event framework without a concrete need.
+### S0.1 — Select and freeze one item
 
-**Input/output contract:** immutable source snapshot → imported work IDs and conflict records. Reimport same snapshot is idempotent; reordered source preserves mapped identity; unresolved duplicates remain conflicts. Legacy accepted state plus stale finish appears inconsistent, never verified. Capture draft obtains identity before triage.
+- **Files:** proposed scripts/delivery-v2/contracts.mjs, work-ref.mjs and tests/delivery-v2/work-ref.test.ts. Read existing scripts/pm/shared/md-scan.mjs, scripts/pm/shared/tasks.mjs and scripts/delivery/packet.mjs; reuse parsing, not ordinal authority.
+- **Input → output:** current selected Markdown block and fingerprint → validated WorkRef and immutable Contract revision. Human ID is an alias; source locator and fingerprint protect selection. Preserve required disposition and unresolved criteria.
+- **Dependency/invariant:** canonical Architecture contracts; F-ID/F-AUTH/F-RESULT. Store only mappings for selected items. No V1 state or source mutation.
+- **Fixtures:** selection-reordered.md prepends R-9 before selected R-1 and must still resolve R-1; selection-edited.md changes its text and must require a new revision; duplicate human IDs must produce conflict; a deployment request retains that disposition when candidate-only execution is proposed.
+- **Done:** deterministic selection/contract output and resolving source references; re-reading identical content yields the same mapping/revision. No existing checklist is rewritten.
+- **Stop/rollback:** ambiguous source stays unselected. Remove only new generated projection/mapping in a disposable test; preserve source and previously issued contracts.
 
-**Proof:** reordered/renamed/duplicate-alias fixtures; interrupted import transaction; complete export and restore of one record; read-only source hash comparison. Actual V1 files unchanged.
+### S0.2 — Specify the proof and measure the native baseline
 
-**Stop/rollback:** if mapping is ambiguous, leave the item unadopted and continue other imports. Remove only the new projection/config to roll back; originals remain authoritative. No source edits to V1 for this stage.
+- **Files:** proposed scripts/delivery-v2/profiles/fast-local.json, a pilot record under .delivery/v2/artifacts/ and tests/delivery-v2/fixtures/fast-control/. Use canonical artifact references; do not create a new PM campaign.
+- **Input → output:** selected product outcome, standing policy and actual environment → explicit check plan, resource-policy basis, requested disposition and native baseline record. A display-value change requires a click/action-value observation, not just a string match.
+- **Dependency/invariant:** S0.1; F-EVIDENCE/F-COST/F-RESULT. The owner or a trusted previously established checker approves the observation plan independently of the writer.
+- **Fixtures:** a button displaying 20 whose action still emits 25 fails the behavioral criterion; an unrelated boolean change fails scope if the approved change is exact. Use fake action handlers, no financial mutations.
+- **Done:** criteria state what passes/fails, who can observe it and which source/environment identity matters. Separately authorized ordinary-native work records all owner effort and outstanding release obligations; do not invent a baseline from prior smoke sessions.
+- **Stop/rollback:** if no safe relevant product task or observation exists, narrow the pilot explicitly without weakening the item's outcome. No baseline job runs under this planning authorization.
 
-**Exit artifact:** working local record viewer plus schema contract and conflict report. This stage alone does not qualify execution.
+## 3. S1 — One supervised delivery slice
 
-## 3. Stage 1 — One isolated FAST candidate with crash recovery
+**Stage exit:** one separately authorized product task passes its required local checks on a frozen candidate, survives a forced interruption/restart, and appears in the existing PM experience with its actual remaining application/release action. Implement the four slices in order; fake fixtures precede the real pilot.
 
-**Outcome:** one clear non-tooling task becomes a checked candidate with conserved attempt identity and usage; forced interruption can resume safely.
+### S1.1 — Qualify one native backend and scratch boundary
 
-**Slices:** (a) qualify one provider/process boundary on Windows using fake tools and negative containment fixtures; (b) kernel transactions for grants, attempts, effects, usage/reservations and projection outbox; (c) candidate manifest plus one FAST observer and minimal result view; (d) explicit owner-authorized real product pilot after fixtures pass.
+- **Files:** proposed scripts/delivery-v2/adapters/codex.mjs, candidate.mjs, tests/delivery-v2/backend-profile.test.ts and isolation.test.ts. Read scripts/delivery/drivers/codex.mjs, tests/delivery/drivers-codex.test.ts and the native interfaces in Context. Reuse stream/injection seams only after checking their contracts.
+- **Input → output:** pinned adapter/runtime configuration and fixture workspace → qualification profile plus native execution reference/candidate export through the canonical adapter methods. Codex exec/SDK is the first candidate; no second backend or live app-server UI is required.
+- **Dependency/invariant:** S0.1–S0.2; F-ISOLATION/F-JOB/F-COST. Describe actual writable/readable roots, permitted network/connectors, credentials and stopping scope. A copied checkout is not itself a security boundary; exclude .git, production secrets and authoritative control files. Qualify launch in that metadata-free snapshot using the selected interface's supported non-Git option (Codex CLI --skip-git-repo-check or its supported SDK equivalent); never create .git to satisfy a repository check.
+- **Fixtures:** attempted outside-scratch write/read, fake-secret access, .git mutation, reparse/symlink escape, fake disallowed network call, inherited child process after stop and worker access to store/verifier. Exercise boundary enforcement with disposable canaries, not merely the generated settings object.
+- **Done:** record supported/unsupported controls on the intended host with pinned versions; candidate export cannot publish or certify. Prove or refuse the strict whole-job monetary profile, including inner requests/retries/subagents/paid tools and in-flight margin. Explicit threshold admission is a different owner-authorized policy.
+- **Stop/rollback:** no qualified scratch confinement means no autonomous edit pilot. No qualified hard bound means no strict monetary promise. Disable the profile and preserve diagnostics; never turn off the sandbox to pass.
 
-**Reuse/read:** driver stream/normalization seams and fake drivers; `scripts/delivery/fsx.mjs` for artifact output; diff/locator helpers; D03/D04/D06/D10/D16/D17. Do not port weak acceptance semantics or the 14-state graph. Default to patch/candidate output with no host integration.
+### S1.2 — Persist admission, jobs and unknown outcomes
 
-**Input/output contract:** exact contract + grant + base manifest → unique reserved attempts → isolated candidate + typed observer receipt → result manifest. Every paid call, including retry/preflight, uses the same reservation protocol. Native model output cannot update the runtime database or mint evidence.
+- **Files:** proposed scripts/delivery-v2/store.mjs, jobs.mjs, tests/delivery-v2/jobs.test.ts and store.test.ts. Read scripts/delivery/fsx.mjs and scripts/delivery/drivers/fake.mjs; the latter supplies scripted failure/event seams, not OS containment proof.
+- **Input → output:** current WorkRef/Contract, unrevoked Grant, profile, resource reservation and unique Job ID → durable executionRef with backend_id and dispatch_key equal to job_id, plus optional native_ref → native status/usage readings → reconciled receipt or explicit unknown. Each new native start/resume/repair/review dispatch gets a Job ID; read-only inspect/reattach is not new paid work.
+- **Dependency/invariant:** S1.1; F-AUTH/F-JOB/F-COST. Choose and pin one locally compatible SQLite binding with transaction/backup support. Persist intent/reservation/executionRef before launch and dispatch_started_at immediately before calling the backend; absent native_ref does not prove no dispatch. Check current revisions, expiry, effects and allowance before every paid continuation. Native tools never transact against this store.
+- **Fixtures:** lost-launch-ack accepts launch then drops its response; restart inspects/reconciles without issuing a second start. failed-then-success retains first-job usage; duplicate-usage does not double-count cumulative readings; unknown-cost keeps reservation; revoked-resume refuses new paid work; lost-stop-ack revokes publication but does not report stopped. Reuse failStartSession, throwsEvery and throwsUsage ideas from the V1 fake.
+- **Done:** transactional crash/restore retains records and artifact references; duplicate admission is idempotent; failed/unknown work remains visible and resource-accounted. No native transcript event needs a corresponding authoritative database transaction.
+- **Stop/rollback:** inspect by dispatch key only where the qualified backend supports it; otherwise a lost start acknowledgment remains unknown and reserved. Never blindly retry. Disable dispatch and preserve store/artifacts; deleting unknown jobs is not recovery.
 
-**Proof:** outside-path write, `.git` access, secrets/environment access, network escape, symlink/reparse traversal, descendant process after revoke, late publication; crash at dispatch/effect/receipt boundaries; duplicate cumulative usage; failed retry followed by success. These must operate on disposable fixtures, never real secrets or production endpoints. One exact-edit observer must reject surplus change; working-control template verifies value binding. Unknown costs stay reserved.
+### S1.3 — Freeze, check and report the actual candidate
 
-**Stop/rollback:** if isolation or revocation cannot be demonstrated, expose read-only/patch assistance only. If effect identity or usage is uncertain, block further dispatch and keep artifacts. Disable V2 launch without touching V1 history.
+- **Files:** proposed scripts/delivery-v2/checks.mjs, results.mjs, tests/delivery-v2/evidence.test.ts and results.test.ts. Read tests/delivery/acceptance.test.ts, instant.test.ts, finish-package.test.ts and validation-baseline.test.ts; preserve counterexamples while rejecting generic filename-as-proof semantics.
+- **Input → output:** stopped/reconciled writer export → frozen code or research candidate identity → protected independently selected check execution → evidence and Result with actual disposition, pending obligations and raw references. Bind and emit the minimal canonical Checkpoint from Context §5 at candidate handoff/task-level wait/planned pause, using its shared shape in contracts.mjs; fresh-session continuation is qualified in S2.2. The candidate cannot alter trusted check selection or mint its receipt.
+- **Dependency/invariant:** S1.2; F-EVIDENCE/F-RESULT/F-PUBLISH. Use a clean controlled check environment without publication credentials. Pin trusted checker inputs outside the writer; changes to tests/config/lockfiles or acceptance rules trigger independent scrutiny and evidence invalidation.
+- **Fixtures:** exit-zero with zero tests fails required behavior; arbitrary existing proof file fails; a required malformed review stays inconclusive, while optional malformed engineer prose does not block independently sufficient evidence; surplus edit and stale bound action fail the S0 fixture; candidate mutation stales proof; missing artifact blocks completion; build:null must not resurrect completed work; a verified candidate does not complete a required deployment.
+- **Done:** one result evaluator drives view/export/continuation; evidence records actual commands, counts and identities. Required local observations pass for the candidate; missing phone/live-DB/release evidence remains an obligation. Initial FAST policy allows at most one supervisor-dispatched post-check repair, only within the current Grant/resource policy. Native inner repairs remain inside the whole-job bound; they are not separately scheduled ERA Jobs. Further escalation needs available standing authority or a concrete decision.
+- **Stop/rollback:** any false completion disables the affected evidence profile. Preserve useful output and failed observations; no waiver becomes verified success.
 
-**Exit artifact:** a non-tooling candidate the owner can review and apply manually, with one reproduced forced-crash recovery and inclusive usage basis. Do not build a new dashboard before this outcome.
+### S1.4 — Connect existing selection to one real product pilot
 
-## 4. Stage 2 — Prove behavior and make results trustworthy
+- **Files:** proposed scripts/delivery-v2/cli.mjs/entry adapter; narrow integration in scripts/delivery/server-routes.mjs and scripts/pm/src/features/delivery/ for dispatch mode, selection and result. Add tests/delivery-v2/pilot-entry.test.ts. Reuse current board/search/styles and result surface; no new app or dashboard.
+- **Input → output:** selected item + applicable policy → admitted Run/Job → visible result and concrete outstanding owner action. One local service persists an installation-wide v1|v2 dispatch switch. Store only selected WorkRef mappings, not an adoption registry.
+- **Dependency/invariant:** S1.3; F-ID/F-AUTH/F-JOB/F-RESULT/F-COMMAND. Before V2 dispatch, drain/reconcile V1 writers. In V2 mode, stale V1 launch/resume/fork and other write-capable routes refuse server-side; history/read routes remain available. Future implementation authorization identifies the pilot's gate policy explicitly.
+- **Fixtures:** duplicate start returns the same admitted outcome; same command ID with another actor/payload conflicts; unauthenticated/cross-origin local requests refuse; stale selected source refuses launch; active V1 writer prevents mode switch; cached V1 client cannot launch/resume/fork after switch; reload shows current unknown/decision/result. Exercise the existing desktop surface at 390px if it changes.
+- **Done:** after fake fixtures and boundary qualification, one separately authorized non-tooling product job produces required local evidence and a coherent result after a forced restart. Measure review/application/release effort even if the owner performs those steps. Product work closes only when its requested disposition and evidence are fulfilled.
+- **Stop/rollback:** disable new V2 admission; revoke/reconcile active work and preserve candidates/results. Switch back only after V2 writers are confirmed drained/reconciled; do not turn an unknown dispatch into a fresh V1 launch. Direct development remains available, without pretending to control the owner's editor.
 
-**Outcome:** bounded product behavior gets criterion-specific proof and one identical result on local view/export/continuation.
+## 4. S2 — Recovery and comparative proof
 
-**Slices:** (a) trusted test selection/execution receipt with nonzero/skipped/inconclusive semantics; (b) criterion/evidence eligibility and freshness, including test-oracle changes; (c) result exporter/recovery projection and three comparable FAST product pilots in total.
+**Stage exit:** three comparable FAST samples in total, plus one interrupted DEEP engagement, support a decision about owner-effort savings and the next actual gap. This is a small operating sample, not a statistical safety claim. One executor and one contract model serve both modes.
 
-**Reuse/read:** `tests/delivery/acceptance.test.ts`, `instant.test.ts`, `finish-package.test.ts`, `validation-baseline.test.ts`, raw transcript fixtures; D04/D05/D11/D18. Reuse test infrastructure; intentionally replace assertions that accept arbitrary filenames.
+### S2.1 — Complete the failure matrix
 
-**Input/output contract:** frozen candidate + criterion proof requirements + observer versions → eligible evidence set and per-criterion statuses. Export, UI and successor selection consume that same evaluator. Waived/missing/stale evidence never becomes satisfied. Failed PM export has its own retryable receipt, not an opaque done marker.
+- **Files:** extend proposed jobs.test.ts, store.test.ts, evidence.test.ts and results.test.ts under tests/delivery-v2; alter production modules only for a reproduced failing contract.
+- **Input → output:** fault at each persisted launch/receipt/export boundary → reconciled record or honest unknown with no unintended new authority.
+- **Dependency/invariant:** S1; F-AUTH/F-JOB/F-COST/F-EVIDENCE/F-RESULT. Use fake clock/process/event injection and temporary SQLite/artifacts.
+- **Fixtures:** crash before dispatch versus after provider acceptance; partial/missing artifact; expired grant during native wait; revoked job emits a late result; repeated start response; changed contract before repair/review; backup restore with unresolved cost. Verify current authority on resume, not only initial launch.
+- **Done:** each row names observed state, next permitted action and preserved reservation/artifact; cancellation never promises termination before acknowledgment. Re-run only affected contract suites.
+- **Stop/rollback:** unknown external effects keep relevant scope paused; late writers cannot publish. Keep the last qualified profile and preserve incident records.
 
-**Proof:** arbitrary existing-file evidence rejected; no-test exit-zero rejected for behavior; altered oracle/config invalidates prior proof; malformed review remains inconclusive; candidate mutation after test stales evidence; missing blob blocks completion; contradictory legacy finish is exposed without rewriting history.
+### S2.2 — Resume DEEP work without a custom context engine
 
-**Stop/rollback:** false completion disables the affected profile immediately. Keep safe candidate inspection and unrelated supported classes available. No observer may certify a live environment it did not inspect.
+- **Files:** proposed scripts/delivery-v2/continuation.mjs and tests/delivery-v2/continuation.test.ts; adapter changes only for native resume/export. Read scripts/delivery/memory.mjs and context-assembly.mjs for D08/D09 witnesses, not mandatory dossier shapes.
+- **Input → output:** current contract/decisions, executionRef, candidate and meaningful source-bound findings → native resume or compact portable checkpoint → authorized successor Job. Include rejected approaches only when they prevent rediscovery, and link raw evidence.
+- **Dependency/invariant:** S2.1; F-RESUME/F-AUTH/F-COST/F-EVIDENCE. Native conversation continuity is default. Snapshot what ERA actually passes; do not infer provider occupancy from processed tokens or require every inner read to be indexed.
+- **Fixtures:** forced fresh session receives a recorded owner answer, rejected hypothesis, open evidence and current candidate; changed source invalidates its dependent finding; no undocumented transcript dependency is required to find the next safe action. Two outstanding jobs never share writable scratch.
+- **Done:** one authorized real DEEP investigation/implementation survives interruption and fresh-session continuation without re-asking a settled decision; repeated work and missing understanding are measured, not declared impossible. Independent review is added only for a concrete semantic uncertainty.
+- **Stop/rollback:** improve the checkpoint if it fails; do not automatically add vector storage, paid summarizers or more agents. Inconclusive review remains an obligation.
 
-**Exit artifact:** coherent verified candidate packages with measured owner actions, active minutes if supplied, inclusive resources, limitations and failures. Three pilots are an initial operating gate, not statistical proof of safety.
+### S2.3 — Decide whether the supervisor earns expansion
 
-## 5. Stage 3 — A DEEP DIVE survives replacement and delay
+- **Files:** append immutable pilot comparison artifacts and a concise campaign record; no runtime feature is a default deliverable of this slice.
+- **Input → output:** native baseline, three FAST samples and interrupted DEEP sample, including failures → explicit continue/narrow/delegate-more decision with measured gaps.
+- **Dependency/invariant:** S2.1–S2.2; F-RESULT. Compare the same scope, evidence and requested disposition; separate observed cost/list cost/estimates/subscription usage and unknowns.
+- **Fixtures/checks:** comparison rejects a missing failed attempt, omitted owner application time, tooling smoke passed off as product work, or patch-only completion compared with deployed completion. Manual observations may remain unknown without false precision.
+- **Done:** record owner-active minutes where observed, avoidable decisions, repeated explanation, recovery effort, verified outcomes, escaped defects, latency and maintenance/setup cost. Choose only the next consequential burden.
+- **Stop/rollback:** if value is weak, stop expansion and keep the PM board, contract/check templates and result links. If an external workflow is better, migrate the job adapter/links rather than defend custom ownership.
 
-**Outcome:** a fresh model continues a real investigation/implementation after interruption without re-asking recorded decisions or trusting stale facts.
+## 5. S3 — Conditional access, publication and retirement
 
-**Slices:** (a) seven-part dossier with hypothesis/probe/decision/obligation producers; (b) prompt compiler and delivered-input manifests; (c) qualified fresh challenger and one multi-session product engagement.
+These slices are independent choices after S2. Implement only the one justified by evidence and separately authorized scope. S3 is not a mandatory platform completion checklist.
 
-**Reuse/read:** `scripts/delivery/memory.mjs`, `context-assembly.mjs`, `context-policy.mjs`, transcript pointer formats and owner Q&A; D08/D09. Preserve useful native continuity; do not add a vector store, autonomous summarizer or multi-writer coordinator.
+### S3.1 — Remove an observed access or availability burden
 
-**Input/output contract:** current contract + source-bound dossier + pending effect cursor → compiled context with manifest → successor observations. Requested paths are not marked retrieved; compiled content is not reported as measured provider footprint. Unknown telemetry stays unknown.
+- **Files:** choose either existing scripts/pm/bridge.mjs, src/features/pm-live/ and src/components/pm-live/ for a narrow mobile projection/decision change, **or** one proposed managed-backend adapter. Do not combine a mobile rewrite with a hosting platform. Add F-COMMAND or backend qualification fixtures as appropriate.
+- **Input → output:** authenticated revision-bound decision/command → durable same-ID receipt; alternatively, qualified managed job → the same Job/candidate/result contract. SDK/exec with persisted task-level escalation is default; a live per-tool approval client needs a demonstrated requirement.
+- **Dependency/invariant:** S2.3; F-COMMAND/F-AUTH/F-JOB/F-COST. Phone cache must be owner-bound and stale state explicit. Managed hosting needs its own runtime/cost/credential qualification; documented beta capability alone is insufficient.
+- **Fixtures:** lost command acknowledgment, same ID/different payload, stale decision, actor switch, duplicate tap, relay restart and full-snapshot replacement; for hosting, lost launch/stop, environment/candidate export and resource-bound conformance. Require owner-provided physical-phone/live-relay evidence where current policy prevents direct inspection.
+- **Done:** the chosen owner burden measurably decreases without weaker authority or truthful status. A sleeping local runner remains visibly queued unless qualified hosting actually removes that dependence.
+- **Stop/rollback:** keep mobile read-only when provenance is unproven; disable only the unqualified host/profile. Production relay changes require owner-applied manual SQL under existing rules, never a back door.
 
-**Proof:** rotate with failed hypotheses and unanswered obligations; verify actual input consumed by new driver; source drift reopens dependent facts; repeated identical negative probe is detected; owner answer survives model change; crash leaves bounded raw tail; challenge receives independent inputs and cannot modify code/acceptance.
+### S3.2 — Resolve publication policy without building a host integrator
 
-**Stop/rollback:** if replacement repeatedly rediscovers the same established facts, improve the dossier/assembly boundary before adding context capacity or more agents. Inconclusive review becomes an obligation, not a vote.
+- **Files:** result/pending-obligation projection first; conventional CI/publication configuration only after a separate written policy amendment permits it. No mandatory integration journal or worktree module.
+- **Input → output:** verified frozen candidate + explicit permitted publication action → application/release receipt and required environment observation, or precise owner handoff. One owner action may authorize related steps while evidence stays distinct.
+- **Dependency/invariant:** S2.3; F-PUBLISH/F-AUTH/F-EVIDENCE/F-RESULT. No Git writes/worktrees under current policy. Production DB writes remain owner-only. Changes to trust/acceptance rules need independent authorization under the previously trusted version.
+- **Fixtures:** candidate changed after approval; host/source drift; candidate applied but deployment absent; deployment identifier differs from checked version; owner applies SQL without supplied verification; duplicate receipt; failed PM writeback. Never infer production success from a local build.
+- **Done:** either manual handoff is accepted as the operating boundary with measured effort, or an explicitly authorized established publication path proves the requested disposition. Required deployment stays pending until observed.
+- **Stop/rollback:** retain pending obligations and last valid evidence; reconcile uncertain publication before retry. Do not overwrite owner edits, weaken disposition, or create a bespoke integrator to avoid a policy decision.
 
-**Exit artifact:** one linked multi-session engagement with replacement-model resumption, recorded investigation value, selected design, actual implementation checks and remaining owner observations.
+### S3.3 — Retire only demonstrated redundancy
 
-## 6. Stage 4 — Dependable desktop and phone control
+- **Files:** selected V1 entry/runner/UI paths and compatibility tests, named from actual references at cutover. Preserve .delivery/sessions/ originals and useful readers/exports.
+- **Input → output:** supported-path inventory and active-session list → bounded retirement diff plus restored-fallback drill.
+- **Dependency/invariant:** applicable S3 choice or S2 evidence alone; F-ID/F-JOB/F-RESULT. No active work depends on removed code; known cached desktop/phone server routes cannot bypass retirement.
+- **Fixtures:** active V1 session blocks deletion; old client tries retired launch; historical result still opens; export includes raw pointers; restore recovers artifacts and unknown reservations. Test affected paths rather than claim all providers/devices are qualified.
+- **Done:** obsolete phase/summary/status machinery disappears for the supported path and owner effort is remeasured. No bulk session conversion or raw-history deletion.
+- **Stop/rollback:** disable new successor launches, reconcile/drain active jobs, restore the supported dispatch mode/profile and preserve artifacts. Never replay an unknown launch to make rollback look complete.
 
-**Outcome:** both devices show the same work/decision/result revision; a timed-out command never causes an accidental second effect; captures remain visible before triage.
+## 6. Scope and completion discipline
 
-**Slices:** (a) common projection and versioned command schemas used by existing desktop components; (b) local authenticated/signed command acceptance and replay/expiry/key-revocation receipts; (c) relay client with owner-bound cache, cursor/full-refresh and command status query; (d) compact Work/Running/Decisions/Results information architecture and owner device acceptance.
+S0 and the S1 vertical path are the only initial investment. S2 decides what comes next; S3 choices are conditional. A product pilot must happen before provider parity, full PM migration, a new dashboard, generic context/effect infrastructure or a universal observer library. Existing V1 hazards that block continued use may receive narrow fixes independently.
 
-**Reuse/read:** current board/search/filter components, `scripts/pm/bridge.mjs`, `src/features/pm-live/*`, session views, containment and explicit truncation; D12–D15. One typed contract package, not copied field/type definitions. Preserve static read-only export.
+For future implementation, finish each slice with: exact changed files; applicable invariant/fixture families; actual command/observer receipts; missing live/device/provider evidence; useful product artifact; owner effort and cost basis; stop/rollback state. A green unit suite is evidence for its tested boundary, not delivery success.
 
-**Input/output contract:** verified device command bound to installation/owner/target revision → durable receipt queryable by same ID. Snapshot contains source generation/cursor and independent liveness/progress metadata. Complete snapshot replaces prior scope; failed refresh retains identified stale data. Captured work is returned by ID immediately.
-
-**Proof:** response before insert acknowledgment, lost realtime result, duplicate tap/reload, same ID with changed actor/payload, bridge crash after effect, stale same-kind decision, signature/payload mismatch, expired/revoked key, wrong installation, owner switch, missed deletion, relay restart, schema mismatch and truncation. Revocation must work across ordinary progress on the named run/grant while refusing a successor target. Desktop and 390px viewport plus physical-phone grant/UAT checks. Existing production relay behavior is owner-verified only.
-
-**Stop/rollback:** keep mobile read-only when provenance or live relay constraints are unverified; disable grant controls while retaining result/capture/status where safe. No guessed production migration. Do not describe cached commands as executed.
-
-**Exit artifact:** one owner journey from phone capture to visible work, one decision reconciled after acknowledgment loss, and one result identical to desktop at the same revision.
-
-## 7. Stage 5 — Controlled application and deliberate retirement
-
-**Outcome:** supported candidates can be applied under proven conditions; obsolete V1 machinery is removed without losing historical evidence or blocking ERA development.
-
-**Slices:** (a) destination-fidelity/exclusion qualification and per-file integration journal; (b) idempotent PM result projection with explicit field ownership; (c) selected-class cutover, rollback drill and legacy retirement.
-
-**Reuse/read:** postimage Undo and path/snapshot helpers, V1 active-session reader, archive/import fixtures. No Git writes or worktrees. If actual OS exclusion cannot cover external editors and path creation/deletion, retain owner-controlled application permanently; local verified candidate completion does not depend on automatic integration.
-
-**Input/output contract:** frozen verified candidate + explicit integration grant + current excluded destination → recorded apply intent → observed postimages and integration receipt. Acceptance and integration may be authorized by one informed owner action, with distinct records. Owner shipping/deployment stays separate.
-
-**Proof:** external editor race before/during application, drift in an unchanged dependency, crash after first of multiple file writes, late old worker publication, partial rollback with a newer owner edit, duplicate apply command, PM projection conflict, adoption racing V1 launch/mutation, mixed-checklist unrelated edit, backup/restore with referenced blobs. V1 server paths enforce adopted-item exclusion; separate projection export is the fallback until shared-file exclusion is proven. Never claim atomic whole-repository application.
-
-**Retirement gate:** all active V1 sessions have completed or been exported; no new session of a cutover class routes into V1; desktop/phone/static/historical-reader checks pass; rollback preserves candidates and records. Then remove old launch routes, legacy desktop assets, duplicate phase/status/cost derivations and unused compatibility code. Do not delete raw session history to simplify the migration.
-
-**Exit artifact:** one supported application path or explicit permanent manual-application boundary, with a deletion diff and restoration receipt. Re-measure owner effort before expanding scope.
-
-## 8. Effort and sequencing discipline
-
-Stage 0 is small; Stage 1 is the largest uncertainty because real Windows/provider containment and effect recovery are the hard work. Stage 2 and Stage 4 are medium-to-large depending on observer and relay scope; Stage 3 is medium with one provider; Stage 5 is conditional and may be omitted as automatic integration. These are relative engineering estimates, not promises of two-hour packets or a calendar date.
-
-The portfolio need not halt household product work. Schedule one foundation slice alongside ordinary ERA delivery, and let each stage produce a usable artifact. Do not allocate a second provider, framework rewrite, remote always-on execution or full domain-autonomy library until the first qualified path saves owner attention.
-
-At each exit record: useful product outcome, missing proof, owner interactions, elapsed/active time where actually observed, all usage basis, recovery result, and what code/concepts can now be deleted. Pause expansion if investment only generates internal tooling artifacts.
-
-## 9. Research contract coverage
-
-| Brief concern | Primary study document |
-|---|---|
-| Existing system, historical evidence, prior studies | [Diagnosis](<PM Delivery — Current System Diagnosis.md>) |
-| Owner mission, desktop/mobile product, confidence | [Target Product](<PM Delivery — Target Product.md>) |
-| Failure lifecycle and common root causes | [Red Team](<PM Delivery — Red Team.md>) |
-| State, authority, work, storage, effects, tool boundaries | [V2 Architecture](<PM Delivery — V2 Architecture.md>) |
-| Complete high-speed journey and escalation | [FAST](<PM Delivery — FAST.md>) |
-| Complete reasoning-heavy journey and interruption | [DEEP DIVE](<PM Delivery — DEEP DIVE.md>) |
-| Durable memory, agents, providers, resource governance | [Context & Agent Model](<PM Delivery — Context & Agent Model.md>) |
-| Claim/evidence/proof/decision, verification, recovery, autonomy | [Evidence & Autonomy](<PM Delivery — Evidence & Autonomy.md>) |
-| Repair/refactor/V2, reuse/deletion, cutover, second-pass challenge, final answers | [Migration Strategy](<PM Delivery — Migration Strategy.md>) |
-| Bounded future implementation stages and exit evidence | This portfolio |
-
-All ten documents are research deliverables. Source tests and synthetic probes in Diagnosis establish the reported current findings; proposed V2 fixtures are explicitly future work. No V2 feature, migration, deployment or autonomy level is marked implemented.
-
-## 10. Study completion receipt — 2026-09-06
-
-All ten required files are present with UTF-8/LF frontmatter, balanced fenced blocks and resolving relative Markdown links. Independent runtime and product/context reviews challenged the target; their concrete authority, integration, revocation, billing-provenance and proof corrections were incorporated. The Delivery and PM Tooling Master Books link the study and record newly evidenced pain; the Contradiction Register distinguishes the new target-design mandate from unchanged V1 operation.
-
-`node scripts/pm/lint.mjs` passed with **0 errors** and the existing Native App empty-Next warning. `node scripts/check-feature-index.mjs` passed. `git diff --check` passed. The scoped source tests and six pure research probes are documented in Diagnosis; full application typecheck/build/browser/device testing was not run because no implementation changed. No provider, bridge, deployment or production DB action occurred. The owner's pre-existing research-brief edit was preserved.
+This refactor changes planning documents only. The prior study's test counts and pure probes remain historical receipts in Diagnosis. None of the proposed fixtures, backend qualification, pilots, migrations or release paths above has run as part of this plan update.

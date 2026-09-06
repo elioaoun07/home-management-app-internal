@@ -1,156 +1,123 @@
 ---
 created: 2026-09-06
 updated: 2026-09-06
-type: astra-study
+type: delivery-plan
 status: active
 owner: Elio
+plan_revision: "2.1"
 ---
 
 # PM Delivery — Migration Strategy
 
-## 1. Decision: a V2 core, delivered by incremental replacement
+## 1. Adopted planning direction
 
-Build a new contract/effect/evidence kernel and move selected work into it. Use deep refactoring as the migration technique, not as a requirement to preserve V1's conceptual model. Retain the current PM application where useful, import the corpus, preserve history and qualify selected utilities/providers.
+**Make V2 a delivery supervisor over native coding jobs.** ERA retains the selected outcome, authority, resources, candidate, protected evidence and honest final disposition. A qualified coding environment owns the engineering conversation, tools, routine investigation/edit/test/repair loop, context management and native session continuity.
 
-The decisive evidence is the recurring boundary failure across D01–D18 in [Diagnosis](<PM Delivery — Current System Diagnosis.md>). Fixing stale rows, malformed review and cost deltas individually is feasible. Achieving dependable autonomy also requires immutable decision subjects, per-attempt effects, isolated candidates, semantic evidence, durable context and consistent projections. Retaining phase-sized mutable persistence while layering those guarantees around it would preserve the central complexity.
+This document replaces the earlier recommendation to construct the full contract/effect/evidence runtime before proving its product value. The owner accepted the [first-principles reassessment](<../../../docs/ASTRA-Ideas.MD#point-2-reassessment>) and requested this plan refactor. That authorizes documentation work; implementation, live jobs, operational gate changes and deployment remain separate actions. The historical findings in [Diagnosis](<PM Delivery — Current System Diagnosis.md>) remain evidence, not a mandate to preserve either architecture.
 
-This does not justify discarding the scanner, transcript assets, controls, UI and fake-driver tests. Those are the strongest argument against a wholesale rewrite.
+The canonical contracts and invariant names are in [V2 Architecture](<PM Delivery — V2 Architecture.md>); proof requirements and fixture families are in [Evidence & Autonomy](<PM Delivery — Evidence & Autonomy.md>). [Execution Portfolio](<PM Delivery — Execution Portfolio.md>) supplies the bounded S0–S3 slices. Do not implement the superseded six-stage portfolio from old copies or references.
 
-## 2. Compare the alternatives
+## 2. Compare complete owner experiences
 
-Assessment is architectural judgment, not measured implementation cost. No percentage of retained code or completion date is invented.
+The comparison is architectural judgment until real samples exist. Compare the same requested outcome, restrictions, evidence and release obligation; a fast patch cannot win by omitting work another path performs.
 
-| Dimension | A — Repair V1 | B — Deep refactor preserving core interfaces/model | C — V2 core with selective migration |
-|---|---|---|---|
-| Conceptual complexity | Retains phase/gate/awaiting/returnTo and file coordination | Reduces module size; risks carrying old state semantics through adapters | New bounded contract model; temporary dual-engine complexity during migration |
-| Initial effort | Lowest for specific defects | Moderate/high; many behavior-sensitive seams | Highest foundational cost; first useful path must stay narrow |
-| Total future effort | Repeated compatibility patches for each new autonomous behavior | Good if authority/effect model can truly change; otherwise hidden V2 work | Up-front kernel investment, fewer repeated integrations afterward |
-| Migration risk | Lowest immediate change risk; unresolved trust risks remain | Live runner surgery and legacy-session migration can be delicate | Parallel candidate-only pilot lowers blast radius; adapters/import need care |
-| Existing code retained | Most | Most surface/utilities, substantial runner rewrite | Strong utilities/UI/history retained; central runner/state/acceptance replaced |
-| Reliability ceiling | Material improvement, but many unbound effects/claims remain | High only if transactional identity and isolation replace old boundaries | High for supported effect/observer classes; no universal correctness claim |
-| Autonomy ceiling | Supervised use; less friction possible | Similar to C if deep enough, at cost of compatibility constraints | Verified handoff and low-risk local policy completion after evidence |
-| Desktop/mobile quality | Existing solid surfaces, continued semantic duplication | Shared projections can improve both without new UX model | Work/decision/result model with separate device layouts and common truth |
-| Context architecture | Patch rotation, retain phase artifacts | Can add durable dossier but legacy phase triggers remain | Dossier and delivered input manifest independent of provider/phase |
-| Maintainability | Familiar, large regression surface | Improved modules; adapters can become permanent | Small trusted kernel; qualification cost explicit; retire adapters deliberately |
-| Testability | Existing extensive suite, some weak assertions | Reuse fixtures while changing seams | Property/fault/observer contracts plus reused fixtures; new burden visible |
-| Provider portability | Nominal interface masks unequal controls | Can qualify adapters, but current runner assumes capabilities | Admission by actual controls/telemetry; one provider first |
-| Owner attention | Removes specific pain; routine gates persist | Can improve attention if allowed to alter semantics | Goal is exceptions and results, with no phase-operation requirement |
-| Stronger future models | Better reasoning inside old loop | Potentially strong, constrained by residual model | Models propose more capable work while kernel protects fixed boundaries |
+| Option | What ERA retains | Benefit | Cost or unresolved requirement | Decision |
+|---|---|---|---|---|
+| Ordinary native coding workflow | PM source, reusable instructions/checks, result links | Lowest integration cost; mature engineering interaction | Owner still launches, supplies context, follows missing evidence and reconnects outcomes to items | Required baseline; acceptable permanent outcome if supervision adds little |
+| Small delivery supervisor + one native backend | Selected-item contract, job admission/reconciliation, candidate/evidence/result, exceptions | Removes repeated owner coordination while reusing the runtime | Requires real boundary qualification and a small durable store | First implementation candidate |
+| Existing managed or issue-to-PR workflow | ERA-specific contract/policy and only missing adapters/projections | Can outsource hosting, job persistence and more workflow | Availability, privacy, permitted Git operations, cost limits and actual evidence must fit | Evaluate when it can remove a demonstrated burden; may replace more of ERA |
+| Broad custom delivery runtime | Inner calls, tool broker, context lifecycle, generic orchestration and host application machinery | Potential control where native boundaries cannot express a requirement | Largest ongoing qualification and recovery burden; no measured need for most of it | Do not build by default; justify a specific missing guarantee first |
 
-**Why not A:** too many required changes concern what the system considers identity, authority and proof. A succeeds as temporary hazard reduction, not as the long-term autonomy architecture.
+Selective V1 repairs remain valid while V1 is used. They are neither prerequisites to the pilot nor an automatic commitment to continue V1. A repair should carry a concrete incident witness and a bounded usefulness period.
 
-**Why not a constrained B:** if B replaces state meaning, storage authority, effect execution, context and acceptance, it is substantively the V2 core proposed here. Keeping public APIs briefly is useful; preserving their incorrect semantic assumptions indefinitely is not.
+One backend comes first. The initial candidate is Codex exec/SDK on the existing Windows host, subject to the qualification in [Context & Agent Model](<PM Delivery — Context & Agent Model.md>). Installed CLI flags and published sandbox features are not proof of containment or cost enforcement on this installation. A strict monetary profile must be refused unless the backend supplies the required whole-job bound; a separately authorized threshold profile must describe its weaker guarantee. Do not invent a dollar cap or add an inner tool broker just to make the first provider qualify. Initial FAST supervision allows one post-check repair dispatch within the Grant; ordinary inner repair remains the native runtime's work under its qualified whole-job limit.
 
-**Why not a full greenfield product:** scanner, components, raw artifacts, read-only controls and test seams already solve valuable problems. Rebuilding them delays the first product outcome and repeats the corpus's documented meta-work bias.
+Managed hosting is a conditional alternative, not a proven winner. If local execution availability dominates owner effort, compare a qualified managed runner before building distributed scheduling. If a managed workflow meets the same contract with less total work, delegate more and remove redundant ERA components.
 
-## 3. Migration without freezing ERA work
+## 3. Preserve the current operating boundary
 
-V1 remains available for existing sessions and ordinary direct development remains available. V2 begins as an optional local path producing isolated candidates. No existing live session is converted in place. A selected work item has one execution owner at a time; assignment is explicit and visible.
+The [Delivery Master Book](<../Delivery/Delivery — Master Book.md>) remains the authority for V1 operation: no Git writes/worktrees, no permission bypass, the existing human gates and owner-controlled shipping. Production Supabase writes remain forbidden by the repository rules. This plan does not amend those policies.
 
-1. **Read-only import/projection:** parse existing work, preserve aliases/origins, identify conflicts, expose historical results as unverified legacy records. Do not alter V1 runtime files or mark old criteria verified.
-2. **First FAST candidate:** one qualified provider, one bounded supported task template, one isolated candidate and a truthful result. Test a forced crash. No phone grants or automatic repository integration required.
-3. **Broader proof and resumption:** extend observer coverage and durable investigation after the first real product outcome establishes value.
-4. **Shared clients:** existing desktop components consume typed V2 projections; mobile adopts command identity, provenance and cache contracts before receiving grant authority.
-5. **Controlled integration and retirement:** enable only demonstrated capabilities; retire V1 launch paths for migrated classes, then legacy presentation/runner code after active sessions finish.
+V2's first engineering worker writes only to disposable private scratch. It has no host-checkout write access, production credentials, release authority, supervisor-store access or ability to mint trusted receipts. The supervisor freezes a candidate and the independent checker observes it. A changed filesystem outside scratch is not made safe by noticing it afterward.
 
-There is no deadline-driven bulk migration. If the first path does not reduce owner work or produces false proof, stop expanding it and fix the causal boundary. Do not repair every V1 backlog item before the pilot. A V1 defect requiring continued use may receive one targeted temporary fix; port its regression witness to V2 so the work is not duplicated invisibly.
+The earliest useful result is a checked candidate and a precise owner application/release handoff. **Requested disposition remains binding.** If Item X asks for deployed behavior, the item remains open until the identified deployment and required observation exist. A closed engineering run can contain useful partial work; it cannot convert the requested deployment into a candidate-only promise. Contract publicationScope describes allowed output paths/change constraints; the Grant separately permits candidate handoff, application or release effects. Neither field silently rewrites the promised endpoint.
 
-The old two-completion freeze is evidence of a sound product-first instinct, not a requirement to repair V1 into two completions before researching its successor. This research authorizes no implementation. When the owner authorizes V2 work, use the new explicit pilot/cutover criteria rather than silently editing old policy or treating every old parked ticket as newly admitted.
+The longer-term policy choice is explicit: retain manual application, or separately authorize a conventional isolated branch/PR/CI path. Reconsidering the Git restriction is a possible future decision, not permission to create a worktree now. A bespoke multi-file host integrator and universal editor-exclusion system are not prerequisites to V2. If manual application costs erase the supervisor's savings, report that rather than hiding it outside the comparison.
 
-## 4. Compatibility boundaries
+## 4. Migrate only the selected work
 
-| Boundary | Rule | Exit condition |
+Markdown remains intent authority. At selection, create a WorkRef for the chosen item and freeze the source fingerprint and Contract revision. Reordering alone must not retarget the selection; a changed or ambiguous item requires re-resolution. A later intent edit supersedes the active snapshot explicitly. Do not import the entire backlog, rewrite checklist IDs, migrate historical session state or turn the new store into the authority for all PM work.
+
+The initial pilot uses **one local delivery service and an installation-wide v1|v2 dispatch switch**, not simultaneous engines with a shared per-item ownership platform. Before switching to V2, drain and reconcile active V1 writers. In V2 dispatch mode, stale V1 launch/resume/fork and other write-capable route paths refuse server-side. Preserve V1 reads, history and exports. The implementation authorization must identify the pilot's gate policy explicitly; this planning document does not deactivate V1 gates.
+
+| Boundary | Initial rule | Expansion or retirement condition |
 |---|---|---|
-| V1 historical sessions | Read originals; import immutable references with unknown/inconsistent status | Permanent history reader or exported archive; never fabricate clean history |
-| Existing Markdown work | V1 authority until explicitly adopted | Adoption writes identity mapping and makes legacy execution status a pointer/projection |
-| Current PM components | Consume adapter-shaped view models initially | Replace semantic duplication with typed kernel projections |
-| Existing Delivery API | Read-only compatibility for old sessions; explicit engine discriminator | No new V1 sessions in cutover class |
-| Provider driver | Preserve normalization/stream handling only after conformance | Versioned adapter contract, no old assumptions leaking into kernel |
-| Relay | Distinct installation/engine namespace; one command ID and kernel-verifiable provenance | Qualified V2 command and snapshot protocol on both clients |
-| PM completion export | Runtime owns adopted status; Markdown reflects a committed result | Idempotent export receipt and conflict handling proven |
+| Existing work corpus | Read selected source with its locator and fingerprint; retain human IDs as aliases | Expand mappings only as more work is selected |
+| V1 sessions/history | Read originals and link raw records; never convert acceptance claims into verified V2 evidence | Preserve historical reader/export permanently where useful |
+| Delivery admission | One installation-wide dispatch mode after existing writers drain; stale incompatible write routes refuse | No per-item adoption registry or dual-engine scheduler prerequisite |
+| Native session | Persist executionRef and resume where safe; each authorized paid dispatch has its own Job record | Successor session only after authority/resources/inputs are checked |
+| Existing PM UI | Reuse item selection and add the minimum launch/result/decision projection | Redesign only where observed owner friction warrants it |
+| PM completion | Derive from valid result and requested disposition; publication/projection receipts remain separate | Guarded idempotent update only when the actual item can be identified safely |
+| Phone/relay | Retain useful read-only status under existing policy | New grants require proven actor/revision binding and receipt reconciliation |
 
-Historical import never guesses identity from a reused human ID alone. Preserve original path, text, timestamp, session and digest; mark uncertain mappings. A failed import leaves the original usable. Export must include contract, decisions, evidence manifest and raw-reference inventory so another tool can inspect the result without the running service.
+Disabling a button is not dispatch exclusion. Test the server paths used by old cached clients as well as the new entry. Direct engineering remains available: one managed product writer does not claim control over the owner's editor. Private candidates protect the host checkout; owner/source changes invalidate relevant evidence and future application assumptions.
 
-Adoption exclusion must be enforced in both V1's server mutation paths and Delivery launch paths; a Markdown pointer or disabled button cannot stop an old cached client. Route all engine assignments through a shared ownership registry or equivalent atomic admission boundary. When the registry is unavailable, refuse execution for an ambiguously owned item. Shared checklist files still contain V1-owned rows: V2 export updates only its identified block under a guarded read/modify/write protocol and never restores a whole-file preimage over unrelated rows. Until shared-file writer exclusion is demonstrated, export to a separate V2 projection rather than modifying the mixed checklist. Adoption/import and a fresh V1 launch racing must resolve to one execution owner.
+Where PM writeback cannot safely update an identified row without conflicting with other edits, keep a separate result link and explicit pending projection. Do not overwrite a shared checklist from a saved whole-file preimage. A failed projection never fabricates completion or forces the owner to reconstruct the run.
 
-## 5. What survives, and in what form
+## 5. Small stages, early product evidence
 
-| Asset | Disposition |
-|---|---|
-| Markdown scanner, text parsing, source containment, URL filter helpers | Reuse unchanged where their input contract remains identical; keep parity tests |
-| Windows atomic file helper | Keep for exports/artifact writes; do not treat it as runtime transaction authority |
-| Fake drivers, failure fixtures, diff/path-decoding utilities | Reuse invariants and injection seams; strengthen tests that currently accept weak evidence |
-| Raw transcript shards, prompts, decisions, postmortems | Preserve unchanged as historical evidence; mark provenance and known gaps |
-| Native session reuse | Keep as economic optimization after usage normalization and safety qualification |
-| Read-only mode, postimage Undo, server-side capability refusal, explicit skipped/truncated evidence | Preserve safety properties; implementation may move into kernel/adapters |
-| Existing board/search/components/styles and static export | Keep useful parts; no compulsory framework unification |
-| Pure V1 state machine | Keep only in V1 compatibility path; reuse pure reducer testing style in V2 |
-
-No module earns unchanged reuse solely because it is tested: `acceptance.test.ts` currently tests semantics V2 intentionally rejects. Qualify the contract, not the green checkmark.
-
-## 6. Deletion ledger
-
-| Delete from target | Why | Required retirement evidence |
+| Stage | Owner-visible exit | Prerequisites deliberately excluded |
 |---|---|---|
-| Four public lanes and phase-operation UI | Two modes plus automatic strategy reduce repeated owner choices | FAST and DEEP journeys pass with equivalent or stronger authority/evidence |
-| Separate spec/plan/UAT formatting model calls | Often no independent information gained | Deterministic result/contract generation covers those cases |
-| Role catalog entries that merely name activities | No justified independence | Fresh challenger and investigator paths cover actual needs |
-| Ordinal as runtime identity | Selection can move to another item | Import/reorder/archive/resume identity fixtures pass |
-| Mutable finish files as authoritative status | Crash/resume creates contradictory truth | All clients and export read one revisioned result projection |
-| Throughput occupancy, duplicate cost calculations | Wrong units and drift | Normalized usage/telemetry conformance and client contract fixtures |
-| Unpopulated memory fields and repeated summary layers | Promise memory without carrying discoveries | Replacement-model resumption proves durable dossier usefulness |
-| Legacy `scripts/pm/client.js`, `styles.css`, `body.html` and old UI escape hatches | A second desktop implementation consumes attention and misleads source search | Existing desktop/mobile/static/fake-driver parity checks complete |
-| Superseded V1 launch/runner paths for migrated classes | Permanent two-engine support defeats simplification | No active V1 sessions; supported-class cutover and history access verified |
+| **S0 — Contract and native baseline** | A representative selected task has measurable criteria, permitted effects, requested disposition and a comparable native-workflow record | Full backlog import, new dashboard, broad storage migration |
+| **S1 — One supervised delivery slice** | One authorized product task yields a frozen independently checked candidate, honest remaining action and recoverable job/result | Every V1 repair, provider parity, phone grants, automatic host integration |
+| **S2 — Recovery and comparative proof** | Three FAST samples in total and one interrupted DEEP engagement show outcomes, failures and total owner effort against the baseline | Universal observer framework, context database, generic subagent scheduler |
+| **S3 — Conditional access, publication and retirement** | Only the measured next burden is removed; supported V1 paths can retire without losing history | Mandatory mobile rebuild, distributed hosting, bespoke apply journal |
 
-Do not delete raw history, manuals needed to run old sessions, useful static export or safety tests merely to reach a code-reduction target. The brief's 70% thought experiment is a prioritization lens, not a deletion quota: preserve raw evidence, domain rules, scanner and tested mechanics; discard the orchestration/presentation layers that can be regenerated from the new kernel.
+The portfolio defines concrete slices and fixtures. These samples are operational evidence, not a statistical reliability claim. Include unsuccessful work and setup/review/application/release time. Do not infer savings from model latency or count tooling smoke tasks as household product outcomes.
 
-## 7. Cutover and rollback gates
+Old-stage pointers are retired as follows:
 
-Before a work class leaves V1: identity/revision tests, qualified process isolation, effect/usage recovery, correct observer coverage and real non-tooling result evidence must pass. Three initial FAST results are a proposed operational sample, not statistical proof. A multi-session DEEP result and fresh-model resumption qualify that mode separately. No expansion follows merely from a green unit suite.
-
-Before phone grant controls: duplicate/early/lost receipt, signed-command replay/expiry/revocation, stale same-kind decision, wrong-owner cache and gap/full-snapshot fixtures pass. Owner supplies necessary live relay/device evidence under existing DB policy.
-
-Before automatic host integration: demonstrate exclusion from all external writers plus crash/recovery under that exclusion. A cooperative quiet workspace supports supervised application only. If exclusion is unavailable, keep candidate handoff permanently; this is still a useful product, not a migration failure.
-
-Rollback disables V2 launches for the affected class, freezes its active writers, preserves their receipts/candidates and returns new work to V1 or direct engineering. Do not import a half-executed V2 run into V1. Continue it under its original kernel or produce a handoff after reconciling effects. Restore/export validation protects against storage failure; deleting the V2 database is never rollback.
-
-## 8. Mandatory second-pass challenge
-
-| Challenge from the brief | Answer after evidence and adversarial review |
+| Superseded portfolio | Replacement |
 |---|---|
-| Preserving V1 because it is familiar? | No: replace its phase/authority/proof core despite tested sunk cost. Preserve assets with independently useful contracts. |
-| Rewriting because it is attractive? | A dashboard rewrite, graph database and distributed orchestration were rejected. First investment must deliver a real candidate. |
-| Which V1 primitive is stronger? | Forensic artifact preservation and proven read-only/import utilities beat an opaque new service; keep portable exports and originals. |
-| Genuine versus accidental complexity? | Auth, offline transport, unknown effects and owner observations are genuine. Phase names as dispatch, duplicated summaries and three records masquerading as independent decisions are historical choices. |
-| What if no code existed? | Build a small local contract/effect/evidence service with one engineer and two task experiences. |
-| What survives a 70% deletion? | Domain policy, source/intent corpus, raw history, scanner/containment, diff/fixture utilities and minimal controls. No precise line-count deletion is claimed. |
-| Can FAST be fast? | One useful engineering conversation plus necessary checks; environment overhead measured. No paid preflight or mandatory phase cascade. |
-| Can DEEP survive hours/days? | Dossier includes rejected hypotheses and consumed context manifests; test a replacement model and stale-source resume. |
-| Can the owner stop watching? | Only for qualified local scopes with complete proof and bounded effects; V1 does not yet justify that claim. |
-| Can another agent recover? | Attempt/effect/usage/decision/candidate receipts precede dispatch; unknown effects are reconciled before new work. |
-| Is multi-agent helping? | Only independent bounded investigation or semantic challenge; one writer and deterministic checking remain default. |
-| What should software enforce? | Identity, grants, budgets, observer execution, freshness, receipts, projection and publication fences. |
-| What remains ceremony? | Any model call producing only a pre-existing status/format, or approval without changed authority/intent/evidence. Remove it. |
-| What premise did evidence invalidate? | An agent registry is not independent review; reading-list/summary persistence is not delivered durable understanding; callback checks are not proven universal containment. |
+| Stage 0 — broad import/view and shared runtime entities | S0 selected WorkRef/contract and baseline; minimal store arrives with S1 |
+| Stage 1 — universal attempt/effect/reservation kernel | S1 coarse native Job boundary, confinement, evidence and first product pilot |
+| Stage 2 — general observer/evidence machinery | Necessary protected checks in S1; additional real-task proof in S2 |
+| Stage 3 — seven-part dossier/compiler/fresh challenger | S2 native resume first, small portable checkpoint and selective challenge |
+| Stage 4 — dependable desktop/phone redesign | Existing surface in S1; conditional mobile/hosting slice in S3 |
+| Stage 5 — bespoke integration journal and broad retirement | Explicit handoff from S1; conditional conventional publication and scoped retirement in S3 |
 
-The independent challenge also corrected this proposal: hash-check-then-write is not OS exclusion; epochs belong to ownership, not every command; every internal paid attempt needs admission; FAST must prove intended control binding, not just edited text; remote owner fields need verifiable provenance; separate receipts may share one owner action; late integration does not reopen closed engineering; adopted work needs V1 server-side exclusion; command dedupe binds actor/payload; and revoke commands survive ordinary progress without targeting successor authority. These corrections are incorporated in the target contracts.
+## 6. Keep, narrow, remove or defer
 
-# ASTRA Recommendation
+| Asset or mechanism | Disposition | Reason and proof needed |
+|---|---|---|
+| PM corpus, domain rules, owner decisions, raw transcripts and postmortems | Keep | Portable intent and evidence survive provider replacement |
+| Scanner/search/UI, safe path/diff helpers, fake-driver seams | Reuse selectively | Verify unchanged input contracts; green tests alone do not justify old semantics |
+| Immutable contract, grant, candidate identity and eligible evidence | Keep | Required relationship between requested work and trustworthy result |
+| Job admission, cost reservation, unknown-state recovery and cancellation fence | Keep at coarse boundaries | Every new/resumed/repair/review dispatch rechecks authority/resources; unknown launch/stop is reconciled |
+| Generic per-tool/per-model-call effect ledger | Remove from default target | Native runtime owns inner engineering; consequential external actions remain separate authorized operations |
+| Four lanes, fixed formatting calls, activity-as-agent catalog | Remove from successor target | Effort/evidence policies and selective specialist jobs replace ceremony; V1 gates stay binding until explicitly changed |
+| Context rotation, occupancy inferred from processed tokens, mandatory dossier producers | Delegate/narrow | Native continuity plus portable checkpoints at meaningful boundaries |
+| Criterion checks and evidence freshness | Keep concrete | Begin with required observers and conservative invalidation; no universal evidence dependency engine |
+| Full identity/adoption migration and wholesale history import | Defer | Selected-item mappings solve the pilot's actual need |
+| Multiple backend parity and automatic switching | Defer | Qualify one backend; preserve exportable contracts/candidates/results |
+| Desktop rewrite and phone grant/key infrastructure | Defer | Reuse existing surface; justify with observed owner-effort benefit |
+| Custom host application journal | Remove as prerequisite | Manual handoff now; established publication path only after policy decision |
+| V1 runtime and legacy desktop files | Retire selectively later | No active dependent work, history/export intact, covered entry paths and restore drill |
 
-**Build V2 at the execution core, migrate incrementally, and reuse V1 assets selectively.** Repairing isolated defects is worthwhile for continued supervised V1 use. It is not the best long-term architecture for the requested autonomy.
+Do not delete current V1 gates, scripts, fixtures or artifacts because the successor plans fewer concepts. Deletion follows cutover evidence. Preserve the negative witnesses from D01–D18 even when the triggering implementation disappears.
 
-| Required decision | Recommendation |
-|---|---|
-| What should survive? | Domain rules and Markdown intent; raw history; scanner/search/UI assets; fake-driver and fault fixtures; useful diff, containment, controls and transcript mechanics; outbound relay pattern. |
-| What should disappear? | Phase-driven runtime authority, ordinal identity, filename-based acceptance, duplicate state/cost interpretations, activity-as-agent catalog, unnecessary paid formatting phases and legacy desktop implementation. |
-| Single most important primitive? | A durable **delivery contract binding intent, authorization, attempted effects, candidate identity and criterion-specific evidence**. |
-| Biggest obstacle today? | The system can record approved ceremony and report completion while losing the connection to the actual proposition/effect. |
-| What most reduces supervision? | Mechanically bounded effects and one truthful result/resumption record, so the owner need not infer reality from transcripts or heartbeat. |
-| Is multi-agent justified? | Selectively for independent questions and adversarial semantic review. Not as the default pipeline, and never as multiple product writers. |
-| Maximum safe autonomy today? | Supervised bounded assistance/execution with independent owner verification; unattended trustworthy completion is not established. |
-| Realistic V2 reach? | Verified handoff for complex work and policy completion for qualified low-risk local work. Production DB changes and release remain owner controlled. |
-| FAST should feel like? | State the change, start once, return to a checked result or one material exception. |
-| DEEP DIVE should feel like? | A durable engineering engagement that investigates, challenges, implements and resumes without making the owner rebuild context. |
-| Only three investments? | (1) Transactional identity/effect kernel plus isolated execution; (2) criterion-specific proof and truthful result/recovery; (3) durable context and shared desktop/phone command/result contracts. |
+## 7. Cutover, rollback and stopping investment
 
-**If building this tool for myself today:** I would build a small local delivery service that runs one capable engineer inside a qualified boundary, remembers the actual investigation, checks explicit claims on immutable candidates, and gives me a concise decision or result from either device. I would spend complexity on effects, proof and recovery, and make the workflow around them as small as possible.
+Before enabling a task profile, demonstrate the applicable invariant/fixture families in [Evidence & Autonomy](<PM Delivery — Evidence & Autonomy.md>): selected identity, unrevoked authority, scratch confinement, recoverable Job dispatch, qualified resources, protected evidence and truthful result. Code, configuration and provider/runtime versions belong in that qualification record. An upgrade or changed trust boundary triggers relevant requalification; the old result does not cover every future version.
+
+Before retiring a V1 entry path, reconcile its active sessions, retain raw history/exports, prove known desktop/phone routes cannot still launch it, and rehearse reopening the supported fallback. Retire by supported entry path or work class, not by converting unfinished sessions. A partly executed V2 job never becomes a new V1 session merely because its UI is easier to operate.
+
+Rollback means disable new launches, revoke future publication authority, stop or reconcile native jobs, preserve unknown reservations and freeze/export candidates/results. A stop request is not proof of termination. Unconfirmed effects remain explicit. Switch dispatch mode back only after V2 writers are confirmed drained/reconciled and the previous profile is safe. Deleting the V2 store, clearing reservations, replaying an unknown launch or overwriting the host checkout is not rollback.
+
+Expansion stops when the supervisor creates false completion, cannot enforce its advertised boundary, cannot reconcile unknown work, or saves little total owner effort. Keep safe result inspection and useful independent assets. A narrower native workflow is an acceptable final product, not a failed migration. Add custom machinery only for a recurring, evidenced gap whose benefit exceeds build and maintenance effort.
+
+## 8. Independent recommendation after refactor
+
+V2 should become the small place where a selected item becomes an accountable commitment, a constrained native job, an independently examined candidate and a truthful outcome. It should not become a competing coding environment. FAST and DEEP share that delivery architecture; their effort, evidence and continuation needs differ.
+
+The next implementation decision, when separately authorized, is **S0 followed by one S1 product pilot**. Preserve V1's memory and operational safety while testing whether supervision removes more owner work than it creates. Continue only on that evidence.

@@ -13,6 +13,8 @@ tags: [pm/checklist, tooling/delivery]
 >
 > Grammar per [_Conventions](<../_Conventions.md>) (prefix `DLV`; `DW` retired, IDs never reused). Shipped items live in the Master Book's Shipped Log — M1–M4 are complete apart from the remnants below. Design debates, cost anatomy and the session postmortems are in the Master Book and `../_Archive/`.
 
+> **V2.1 planning, 2026-09-06:** the accepted documentation refactor is integrated in [Execution Portfolio](<../Autonomous Delivery/PM Delivery — Execution Portfolio.md>) and its linked architecture. Those bounded stages replace the initial V2 proposal; they are not new active checklist tasks. The V1 freeze and operating rules below remain unchanged until implementation is separately authorized.
+
 ---
 
 ## Now

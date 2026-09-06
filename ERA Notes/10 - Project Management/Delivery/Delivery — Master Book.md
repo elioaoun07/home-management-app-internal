@@ -12,20 +12,24 @@ tags:
 
 # Delivery — Master Book
 
-> **V2 research · 2026-09-06:** the owner commissioned an unconstrained architecture study under `docs/ASTRA-PM-COMMAND-CENTER-V2=STUDY.md`. The ten-file [Autonomous Delivery study](<../Autonomous Delivery/PM Delivery — Current System Diagnosis.md>) recommends a new contract/effect/evidence core with selective V1 reuse; [decision and migration](<../Autonomous Delivery/PM Delivery — Migration Strategy.md>). It rechecks earlier ASTRA findings and adds capture visibility, paid-preflight and permission-boundary evidence. Research only: no implementation, migration, gate change or shipped completion; V1 operation and history remain unchanged.
+> **Accepted V2.1 target plan · 2026-09-06:** following the [independent ownership reassessment](<../../../docs/ASTRA-Ideas.MD#point-2-reassessment>), the owner requested an integrated documentation refactor. The ten [Autonomous Delivery documents](<../Autonomous Delivery/PM Delivery — Target Product.md>) now describe one target: **Select Item X → Deliver → a qualified native engineering job → protected verification → truthful disposition**, supervised by ERA at job boundaries. [Architecture](<../Autonomous Delivery/PM Delivery — V2 Architecture.md>) owns the contracts; [Execution Portfolio](<../Autonomous Delivery/PM Delivery — Execution Portfolio.md>) owns the bounded S0–S3 build sequence; [Migration Strategy](<../Autonomous Delivery/PM Delivery — Migration Strategy.md>) owns reuse and cutover. These replace the initial V2 construction prescription, not the historical evidence.
+
+> **Planning status:** documentation only; no V2 implementation, paid pilot, migration, shipped completion or operational policy amendment. V1's gates, freeze, Git/worktree restrictions and production-data rules remain in force. The V1 implementation/history below is not the V2 target specification; new construction must follow the V2.1 portfolio when separately authorized.
 
 > **Campaign:** Delivery · prefix `DLV` (`DW` retired, IDs never reused) · working queue → [4 · Checklist](<4 - Checklist.md>)
 > **What this file is:** the single consolidated record for the agentic Delivery system — the base architecture, the durable-memory layer, the governance campaign, the smoke-test forensics, the design debates, and the cost anatomy.
 
 ## Identity & North Star
 
-Delivery is the agentic execution system: the owner picks a PM checklist item, and a governed session drives it from discovery through spec, plan, build, validation, review and UAT — with three human gates, artifact-first persistence, and hard guardrails.
+**Product goal:** the owner selects a PM item and chooses Deliver; the system handles engineering within authority and returns an evidenced result with minimal supervision. The accepted V2.1 target delegates the engineering loop and owns the commitment, permissions, resources, verification, recovery and result.
+
+**Current V1:** a governed session drives the item through discovery, spec, plan, build, validation, review and UAT — with three human gates, artifact-first persistence and hard guardrails. The state and source descriptions below document that running implementation.
 
 **North star:** *a system the owner can govern* — budget limiters set from the owner's side before a token is spent, right-sized delivery lanes, a scope contract that cannot silently inflate, and a truthful-finish contract so every session ends in a deliberate, honest, recoverable state.
 
 **Source:** `scripts/delivery/` (state machine, packet, classifier, drivers, controls, budgets, validation, transcript, memory, context assembly, server routes, run-session), `scripts/pm/src/features/delivery/` (desktop UI), `scripts/pm/bridge.mjs` (mobile relay), `src/features/pm-live/` + `src/components/pm-live/` (the phone app). Session state lives on disk under `.delivery/sessions/<id>/`.
 
-### The owner non-negotiables (locked 2026-07-11, unchanged)
+### Current V1 owner non-negotiables (locked 2026-07-11, unchanged)
 
 - **No git writes, ever.** Worktrees banned permanently; the read-only allowlist plus post-turn HEAD/ref guards enforce it.
 - **Never `bypassPermissions`.** `assertNeverBypass` in the Claude driver.
@@ -39,7 +43,7 @@ Delivery is the agentic execution system: the owner picks a PM checklist item, a
 
 **Artifact-first persistence is the feature's greatest strength — preserve it in every change.** Everything lives under `.delivery/sessions/<id>/`: `state.json`, `packet.json`, `events.ndjson`, `transcript/turns.ndjson` + per-turn shards + `prompts/`, `memory/ledger.json`, `messages/`, `controls/`, `artifacts/{spec.md,plan.md,plan.json,finish/}`. The entire 2026-07-22 postmortem was reconstructed from files alone.
 
-**Durable-memory layer (the former DW campaign, shipped — all thirteen slices landed):** full transcript capture, a provider-neutral Q&A ledger, pause/resume/abort controls, mid-session model and effort switching via `/api/delivery/control`, and provider handoff/rotation/fork. DLV work builds *on* this machinery, never beside it.
+**Durable-memory layer (the former DW campaign, shipped — all thirteen slices landed):** full transcript capture, a provider-neutral Q&A ledger, pause/resume/abort controls, mid-session model and effort switching via `/api/delivery/control`, and provider handoff/rotation/fork. V1 maintenance builds on this machinery; V2 reuses the useful records and guarantees according to its Migration Strategy rather than inheriting every mechanism.
 
 **Governance (the 10x campaign):** owner-set budget envelopes enforced between turns, a preflight Flight-Check panel, lanes as real policy bundles (effort-per-phase + budget + `maxInternalTurns` + context reading list + validation rungs), a scope contract with runner-derived size classes, an AC coverage matrix the runner confirms rather than the agent claims, a finish package written on every exit, salvage/continuation, automatic PM trace as a state-machine exit effect, fleet metrics, and a triage gate that routes trivial items to INSTANT at launch.
 
@@ -204,6 +208,14 @@ INSTANT is the destination the triage gate routes to. It requires exactly one kn
 - 2026-08-06 — **DLV-86** delivery session `s-20260806-224840-o8xj` ended **paused — needs a decision** at NEEDS_DECISION. 0 file(s) changed. · finish package: `.delivery/sessions/s-20260806-224840-o8xj/artifacts/finish/summary.md`
 
 ## Vision & Decisions
+
+### Accepted V2.1 target — documentation refactor, 2026-09-06
+
+ERA owns selected-work identity, an immutable delivery contract, bounded authority/resources, durable native-job dispatch and reconciliation, frozen candidates, protected evidence and truthful results. The coding environment owns its engineering conversation, tools, compaction and internal task execution. FAST and DEEP DIVE are effort policies over one architecture. Use the existing PM surfaces, one qualified backend and one writer first; defer mobile expansion, managed availability and publication automation until their demonstrated value and permissions justify them.
+
+The [S0–S3 portfolio](<../Autonomous Delivery/PM Delivery — Execution Portfolio.md>) replaces the original V2 build order. Its small native-only comparison explicitly reopens the earlier rejection of a formal benchmark: this is a few comparable real outcomes, including owner preparation/application/maintenance time, not a benchmarking platform. Target autonomy replaces compulsory phase approvals with standing authority and consequential exceptions; V1 still operates under the rules above until an explicit enactment decision. Initial V2 disposition is a verified candidate with owner application/release under current restrictions. No item becomes complete merely because its engineering run ends.
+
+The design debates below record **V1 decisions and their history**. Where they prescribe four lanes, three phase gates or an owned context engine, the V2.1 target supersedes them for future design only. This record neither changes live permissions nor lifts the implementation freeze.
 
 ### Design debates — adopted
 

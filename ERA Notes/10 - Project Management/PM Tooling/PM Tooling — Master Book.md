@@ -12,7 +12,7 @@ tags:
 
 # PM Tooling — Master Book
 
-> **V2 research · 2026-09-06:** the owner commissioned the ten-file [Autonomous Delivery study](<../Autonomous Delivery/PM Delivery — Current System Diagnosis.md>), with freedom to replace V1 architecture. [Target product](<../Autonomous Delivery/PM Delivery — Target Product.md>) and [migration decision](<../Autonomous Delivery/PM Delivery — Migration Strategy.md>) define stable work identity, explicit Markdown/runtime authority, reliable capture/command receipts and desktop/phone result views. Research only; no tooling/UI change or new implementation slot is marked shipped.
+> **Accepted V2.1 target plan · 2026-09-06:** the owner accepted the ownership reassessment and requested one integrated documentation plan. [Target Product](<../Autonomous Delivery/PM Delivery — Target Product.md>) defines Select Item X → Deliver → trustworthy result; [Architecture](<../Autonomous Delivery/PM Delivery — V2 Architecture.md>) assigns native engineering to a qualified backend and delivery authority/evidence to ERA. Reuse current PM selection and result surfaces, retain Markdown intent, and bind only selected work to stable runtime identity. No backlog-wide database adoption or dashboard rewrite is required. Mobile/managed availability remains conditional after the local outcome path proves useful. [Migration Strategy](<../Autonomous Delivery/PM Delivery — Migration Strategy.md>) and [Execution Portfolio](<../Autonomous Delivery/PM Delivery — Execution Portfolio.md>) govern the future build. Documentation only; current tooling and operational restrictions remain unchanged.
 
 > **Campaign:** PM Tooling · prefix `R` (grandfathered) · working queue → [4 · Checklist](<4 - Checklist.md>)
 > **What this file is:** the consolidated record for the PM machine itself — the Command Center dashboard, the parsing/lint core, the conventions enforcement, and the generational audit of how well the PM system is doing its job.
@@ -32,10 +32,10 @@ The PM system is the owner's command centre: a markdown corpus under `ERA Notes/
 
 **Source:** `scripts/pm/` (`scan.mjs`, `lint.mjs`, `mutations.mjs`, `bridge.mjs`, `shared/*.mjs`, `src/` = the Preact SPA), `scripts/pm-server.mjs`, `scripts/build-pm-dashboard.mjs`, `tests/pm-ui/`.
 
-### Scope contract
+### Current implementation scope contract
 
 - Markdown semantics and the seven existing mutation operations stay unchanged.
-- `scripts/delivery/*` remains the authoritative Delivery implementation; the dashboard imports its registry/classifier directly rather than re-implementing them.
+- `scripts/delivery/*` remains the authoritative V1 Delivery implementation; the dashboard imports its registry/classifier directly rather than re-implementing them. Future V2 commands/results use the new boundary defined in its Architecture, with one server-enforced installation dispatch choice after V1 writers drain.
 - The static `_dashboard.html` twin stays offline and read-only.
 - **Git writes remain permanently out of scope.**
 
