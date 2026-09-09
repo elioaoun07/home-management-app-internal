@@ -1,0 +1,127 @@
+{
+  "$comment": [
+    "PM Delivery V2 — Claude local profile.",
+    "This file declares the policy a pilot on the Claude executor WOULD run under. It is not a qualification record.",
+    "A qualification record is written by scripts/delivery-v2/probes/claude-qualification.mjs into",
+    ".delivery/v2/artifacts/qualification/ and is the only thing that may flip a 'qualified' below.",
+    "Every 'qualified: false' is a statement of current fact, not a placeholder. See",
+    "ERA Notes/10 - Project Management/Autonomous Delivery/PM Delivery — Context & Agent Model.md §4.",
+    "Its sibling is profiles/fast-local.json (the Codex executor). The two are evaluated independently:",
+    "neither one's controls, qualification reference or admission has any bearing on the other's."
+  ],
+  "profile_id": "claude-local",
+  "schema": "delivery-v2/profile@1",
+  "revision": 1,
+  "status": "unqualified",
+  "revision_note": "Added 2026-09-09 when the owner asked for both executors to remain selectable. The adapter exists and its interface findings are rechecked against the installed .d.ts; no containment control has been observed.",
+
+  "executor": {
+    "candidate": "claude-agent-sdk",
+    "rationale": "Requested by the owner as the second selectable executor. Context & Agent Model §2 names Codex as the first candidate and permits an equivalent backend 'after the required fixtures pass'; those fixtures have not passed here, which is why this profile is unqualified rather than why it is absent.",
+    "qualified": false,
+    "qualification_ref": null,
+    "qualification_note": "The only harness available is interface-only. Containment cannot be observed for free on this backend: its confinement is a property of a running query, and a query is a paid dispatch.",
+    "adapter": "scripts/delivery-v2/adapters/claude.mjs",
+    "observed_sdk_version": "0.3.207",
+    "reviewed_sdk_version": "0.3.207",
+    "blocked_by": "seven F-ISOLATION controls are unobserved; no containment probe has been run against this backend on this host"
+  },
+
+  "isolation": {
+    "qualified": false,
+    "declared_launch_options": {
+      "permissionMode": "acceptEdits (build) / default (review)",
+      "canUseTool": "harness allowlist — secret paths, allowed roots, git-mutating commands, live-database escapes",
+      "tools": ["Read", "Grep", "Glob", "Edit", "Write", "Bash", "NotebookEdit", "TodoWrite"],
+      "disallowedTools": ["mcp__*"],
+      "strictMcpConfig": true,
+      "skills": [],
+      "settingSources": [],
+      "additionalDirectories": [],
+      "sandbox": { "enabled": true, "failIfUnavailable": true }
+    },
+    "declared_is_not_observed": "Every value above is a launch option ERA writes. None of them is an observation that the resulting process was actually confined.",
+    "never_bypass": "permissionMode 'bypassPermissions' has no code path: buildSessionOptions never emits it and assertNeverBypass throws if it ever appears.",
+    "fail_loud_not_degrade": "sandbox.failIfUnavailable is true, so an unsupported platform produces an error result rather than a silently unsandboxed run. This value must never be flipped to make a launch succeed.",
+    "scratch_root": "outside the host checkout; scripts/delivery-v2/scratch.mjs refuses a root inside it",
+    "era_side_boundary": {
+      "qualified": true,
+      "what": "the trusted loader and scratch provisioner in scripts/delivery-v2/scratch.mjs — shared with the Codex profile and independent of either backend",
+      "does_not_cover": "anything a running process does. This boundary decides what enters the workspace and what is trusted to leave it; it cannot stop a tool that is already executing."
+    },
+    "observed": {
+      "ran": false,
+      "harness": "scripts/delivery-v2/probes/claude-qualification.mjs (mode: interface-only)",
+      "cost": "none — the harness reads the installed type surface and dispatches nothing",
+      "results": {
+        "filesystem.scratchWrite": "UNOBSERVED",
+        "filesystem.outsideScratchWrite": "UNOBSERVED — the only declared control is the harness-level canUseTool allowlist",
+        "filesystem.hostSecretRead": "UNOBSERVED — the only declared control is the harness-level canUseTool allowlist",
+        "filesystem.linkEscape": "UNOBSERVED",
+        "network.egress": "UNOBSERVED",
+        "store.workerAccess": "UNOBSERVED",
+        "process.descendantsAfterStop": "UNOBSERVED"
+      },
+      "conclusion": "Nothing is known about this backend's containment on this host. That is not the same as knowing it is weak, and it is not the same as the Codex finding — where a battery ran and three controls were observed to fail. Both profiles are inadmissible; they are inadmissible for different reasons.",
+      "documentation_finding_not_promoted": "Context & Agent Model §2 records, from vendor documentation, that this SDK's Bash sandbox supports macOS/Linux/WSL2 and not native Windows, and that an appropriate additional execution environment is required here. That is a dated documentation finding. It is NOT recorded as a control observation, and it must not be used as one in either direction.",
+      "consequence": "admitProfile() refuses on profile-unqualified and on confinement-unproven for filesystem.outsideScratchWrite, filesystem.hostSecretRead and store.workerAccess, so no autonomous edit pilot may run on this profile as it stands."
+    },
+    "negative_control": {
+      "ran": false,
+      "detail": "There is no battery to negative-control: no containment canary has been run under this backend."
+    }
+  },
+
+  "resourcePolicy": {
+    "unit": "usd",
+    "nativeUnit": "usd",
+    "strictBound": false,
+    "strictBoundRefusalReason": "REFUSED ON EVIDENCE, not deferred: the installed @anthropic-ai/claude-agent-sdk 0.3.207 SDKResultMessage carries total_cost_usd, so a spend can be READ, and Options carries maxTurns and no monetary ceiling, so a spend cannot be BOUNDED. Reading a cost is not bounding it (Context & Agent Model §7).",
+    "wholeJobCoverage": "unsupported",
+    "enforcementProfile": "post-hoc-cost-reading-only",
+    "costReadingAvailable": true,
+    "costReadingBasis": "SDKResultMessage.total_cost_usd — provider-reported, per turn. This is a different provenance from a reconciled bill and is never presented as one.",
+    "differenceFromCodexProfile": "The Codex profile has no monetary reading at all, so a finished job's reservation there never closes. Here a finished job with a reported cost does close its reservation. Neither profile can cap a job in advance.",
+    "separateProvenance": ["reconciledBilled", "providerReported", "estimatedApiEquivalent", "subscriptionConsumption"],
+    "duplicateReadingRule": "per-turn readings are merged by replacement, never added twice; a counter that decreases is a reset and is not a refund"
+  },
+
+  "lifecyclePolicy": {
+    "inspectByDispatchKey": "derived",
+    "inspectByDispatchKeyConsequence": "the SDK accepts a caller-minted sessionId, so the native session id is a pure function of the job id. A launch whose acknowledgement is lost can be checked against the local session transcript instead of resting unknown forever. The reservation is still held until that check answers.",
+    "inspectByNativeRef": "local-records-only — the session transcript establishes that a dispatch happened; liveness is not exposed",
+    "stop": "requested-only — abortController aborts the local query and returns no provider acknowledgement",
+    "stopConsequence": "a run shows 'Stop requested' until independent evidence establishes stop or containment; publication authority is revoked immediately regardless",
+    "resumeCreatesNewJob": true
+  },
+
+  "evidencePolicy": {
+    "$note": "Identical to profiles/fast-local.json. Evidence rules are properties of the supervisor's verification, not of the executor, and are repeated here so a profile can be read on its own.",
+    "behaviouralObserverRequiredFor": ["interaction", "command"],
+    "forbiddenSubstitutes": {
+      "behaviour": ["source_match", "screenshot"],
+      "exact_change": ["source_match"]
+    },
+    "zeroSelectedTestsIs": "missing",
+    "malformedRequiredReviewIs": "inconclusive",
+    "checkerAuthority": "protected: the writer cannot select checks, alter their configuration or mint a receipt",
+    "candidateIdentity": "assigned by trusted snapshotting of actual bytes; a worker-supplied digest is refused",
+    "repairDispatchLimit": 1,
+    "repairDispatchNote": "Counts supervisor-initiated repair dispatches after a failed protected check, not native inner test/fix iterations."
+  },
+
+  "dispositionPolicy": {
+    "maxAutomaticDisposition": "verified_candidate",
+    "gitWrites": false,
+    "worktrees": false,
+    "permissionBypass": false,
+    "productionDatabaseWrites": false,
+    "releaseAuthority": "owner"
+  },
+
+  "pilotObligations": [
+    "Decide how this backend's containment is to be observed at all. The free battery that qualifies Codex has no equivalent here; the options are a separately authorized paid qualification dispatch, or an OS-level boundary applied from outside the SDK (which is the same work item the Codex read boundary needs).",
+    "Observe process.descendantsAfterStop. abortController stops the query; nothing establishes that descendants exited.",
+    "Obtain separate authorization before any real product dispatch (Execution Portfolio S1.4)."
+  ]
+}

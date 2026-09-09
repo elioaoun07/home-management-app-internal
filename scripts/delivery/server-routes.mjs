@@ -40,6 +40,13 @@ import {
   parsePorcelainPaths,
   runValidationCommands,
 } from "./run-session.mjs";
+// V2 S1.4: the installation-wide dispatch switch. Imported here, rather than
+// checked in pm-server, because Architecture §10 requires the refusal to be
+// server-side at the *entry point* — a dashboard tab opened before the switch
+// still holds a V1 launch button and a valid session id, and the only thing that
+// can stop it is V1's own router. Reading the switch is a small synchronous file
+// read with a v1 default, so V1 behaves exactly as before until someone opts in.
+import { guardV1Route, readDispatchMode } from "../delivery-v2/entry.mjs";
 import { createDriver } from "./drivers/driver.mjs";
 import "./drivers/fake.mjs"; // self-registers; SDK import remains lazy
 import "./drivers/codex.mjs"; // self-registers; SDK import remains lazy
@@ -1947,6 +1954,15 @@ function ok(json) {
  * @param {{ROOT:string, PM_DIR:string, PM_REL:string, SESSIONS_DIR:string}} ctx
  */
 export async function routeDelivery({ method, path, query, body }, ctx) {
+  // V2 S1.4. Checked before anything else so no write-capable V1 route can be
+  // reached in v2 mode, including by a client that never reloaded. Read and
+  // history routes fall through untouched — Architecture §10 keeps historical V1
+  // inspection available and converts no active legacy session.
+  const dispatchGuard = guardV1Route({ mode: readDispatchMode({ root: ctx.ROOT }).mode, method, path });
+  if (!dispatchGuard.allowed) {
+    return { status: dispatchGuard.status, json: { error: dispatchGuard.reason, detail: dispatchGuard.detail } };
+  }
+
   if (method === "GET" && path === "/api/delivery/sessions") return ok(listSessions(ctx));
   if (method === "GET" && path === "/api/delivery/session") return ok(getSession(ctx, query.get("id") || ""));
   if (method === "GET" && path === "/api/delivery/events") {

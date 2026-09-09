@@ -1,0 +1,133 @@
+{
+  "$comment": [
+    "PM Delivery V2 — FAST local profile.",
+    "This file declares the policy a FAST pilot WOULD run under. It is not a qualification record.",
+    "A qualification record is written by scripts/delivery-v2/probes/codex-qualification.mjs into",
+    ".delivery/v2/artifacts/qualification/ and is the only thing that may flip a 'qualified' below.",
+    "Every 'qualified: false' is a statement of current fact, not a placeholder. See",
+    "ERA Notes/10 - Project Management/Autonomous Delivery/PM Delivery — Context & Agent Model.md §4."
+  ],
+  "profile_id": "fast-local",
+  "schema": "delivery-v2/profile@1",
+  "revision": 2,
+  "status": "unqualified",
+  "revision_note": "S1.1 (2026-09-07): the adapter, the scratch boundary and the canary battery exist; the backend's own containment is still unobserved on this host.",
+
+  "executor": {
+    "candidate": "codex-exec-sdk",
+    "rationale": "Context & Agent Model §2 names Codex exec/SDK as the first candidate on the actual Windows host.",
+    "qualified": false,
+    "qualification_ref": "qualification:q-6762c4c68503",
+    "qualification_note": "The battery ran. The profile is still unqualified: process.descendantsAfterStop is unobserved, and three containment controls were observed to FAIL. See isolation.observed.",
+    "adapter": "scripts/delivery-v2/adapters/codex.mjs",
+    "observed_cli_version": "0.145.0",
+    "observed_sdk_version": "0.144.1",
+    "observed_host": "win32 x64, Windows 11 10.0.26200, node v22.20.0",
+    "observed_binary": "C:/Users/aoune/AppData/Roaming/npm/node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe",
+    "sdk_binary_resolvable_from_repo": false,
+    "sdk_binary_note": "@openai/codex-sdk is installed in this checkout but @openai/codex (which carries the platform binary the SDK resolves) is not. The SDK needs codexPathOverride pointed at the CLI above, or that dependency added, before it can launch. A codex binary being on PATH is a different fact and does not satisfy the SDK's own resolution.",
+    "blocked_by": "three F-ISOLATION controls were observed to fail and one is unobserved; see isolation.observed below"
+  },
+
+  "isolation": {
+    "qualified": false,
+    "declared_launch_options": {
+      "sandboxMode": "workspace-write",
+      "approvalPolicy": "never",
+      "networkAccessEnabled": false,
+      "webSearchEnabled": false,
+      "skipGitRepoCheck": true,
+      "additionalDirectories": []
+    },
+    "declared_is_not_observed": "Every value above is a launch option ERA writes. None of them is an observation that the resulting process was actually confined.",
+    "non_git_launch": "skipGitRepoCheck (SDK ThreadOptions) is the supported non-Git option and is set. No .git directory is ever created in a scratch tree to satisfy a repository check.",
+    "scratch_root": "outside the host checkout; scripts/delivery-v2/scratch.mjs refuses a root inside it",
+    "excluded_from_snapshot": [".git", ".hg", ".svn", "node_modules", ".delivery", ".codex", ".claude", ".vscode", ".next", ".vercel", ".env*", "*.pem", "*.key", "*.pfx", "id_rsa*", ".npmrc", ".netrc", "auth.json", "credentials*", "*.sqlite*"],
+    "era_side_boundary": {
+      "qualified": true,
+      "what": "the trusted loader and scratch provisioner in scripts/delivery-v2/scratch.mjs",
+      "proven_by": "tests/delivery-v2/isolation.test.ts against real files, a real Windows junction and real traversal attempts",
+      "covers": ["traversal", "absolute paths", "reparse points and junctions", "case/Unicode name collisions", "reserved device names", ".git and credential-shaped names", "scratch root inside the host checkout"],
+      "does_not_cover": "anything a running process does. This boundary decides what enters the workspace and what is trusted to leave it; it cannot stop a tool that is already executing."
+    },
+    "observed": {
+      "ran": true,
+      "record": ".delivery/v2/artifacts/qualification/q-6762c4c68503.json",
+      "harness": "scripts/delivery-v2/probes/codex-qualification.mjs (mode: sandboxed)",
+      "cost": "none — `codex sandbox` runs a command under the Windows restricted token sandbox with no model involvement",
+      "permission_profile_schema": "[permissions.<id>] { description, extends, workspace_roots, filesystem, network }; filesystem is a map of an absolute path or `<abs>/**` subtree glob to \"read\" | \"write\" | \"deny\". A backslash subtree glob is rejected with \"only supports deny access\", and the elevated Windows backend is required for a restricted read-only policy.",
+      "spawn_trap": "the CLI must be spawned as the vendored codex.exe. Spawning the npm `codex` shim returns ENOENT and spawning `codex.cmd` without a shell returns EINVAL — both instantly, which an earlier version of this harness recorded as eight one-minute timeouts it never actually waited for.",
+      "results": {
+        "filesystem.scratchWrite": "supported — writes inside the workspace succeed",
+        "filesystem.outsideScratchWrite": "supported — a write outside the workspace and an append into a .git/HEAD were both refused with EPERM",
+        "network.egress": "supported — an outbound connect was refused by policy with EACCES",
+        "filesystem.hostSecretRead": "UNSUPPORTED — the sandboxed process read a synthetic host-private secret outside the workspace",
+        "filesystem.linkEscape": "UNSUPPORTED — the sandboxed process followed a real Windows junction planted inside the workspace and read through it",
+        "store.workerAccess": "UNSUPPORTED — the sandboxed process read the supervisor store",
+        "process.descendantsAfterStop": "UNOBSERVED — a detached child was spawned but never wrote its heartbeat, so neither survival nor containment was established"
+      },
+      "conclusion": "This profile confines WRITES and NETWORK. It does not confine READS. Codex's workspace-write sandbox is a write boundary, and the plan's F-ISOLATION credentials case ('tool processes cannot read harness/provider secrets or inherited host-secret canaries') fails against it.",
+      "consequence": "Context & Agent Model §4: 'Profile ineligible for confidential/unattended work.' admitProfile() refuses on filesystem.hostSecretRead and store.workerAccess, so no autonomous edit pilot may run on this profile as it stands. Narrowing the execution mode, moving the supervisor store somewhere the worker genuinely cannot reach, or a different confinement boundary are the available responses; weakening the fixture is not.",
+      "correction_note": "An earlier run of this harness reported process.descendantsAfterStop as 'supported'. It was a false pass: the heartbeat file sat outside the writable workspace, so a living descendant that could not write was read as a dead one. The heartbeat now sits inside the workspace and the outcome is three-valued."
+    },
+    "negative_control": {
+      "ran": true,
+      "result": "valid",
+      "detail": "With no confinement at all, every containment canary escaped: wrote outside the workspace, read the host-private secret, appended to a .git/HEAD, followed a real Windows junction out of the workspace, read the supervisor store, and left a detached descendant running. The battery can therefore detect an escape, which is what makes a future 'denied' meaningful.",
+      "artifact": ".delivery/v2/artifacts/qualification/ (mode: unconfined)"
+    }
+  },
+
+  "resourcePolicy": {
+    "unit": "usd",
+    "nativeUnit": "tokens",
+    "strictBound": false,
+    "strictBoundRefusalReason": "REFUSED ON EVIDENCE, not deferred: the installed @openai/codex-sdk 0.144.1 Usage type carries input_tokens, cached_input_tokens, output_tokens and reasoning_output_tokens and no monetary field, and TurnOptions carries only outputSchema and signal. There is no per-job spend limit to set and no billed amount to read, so no whole-job monetary bound exists for ERA to enforce (Context & Agent Model §7).",
+    "wholeJobCoverage": "unsupported",
+    "enforcementProfile": "token-counters-only",
+    "separateProvenance": ["reconciledBilled", "providerReported", "estimatedApiEquivalent", "subscriptionConsumption"],
+    "note": "These four are never summed into one number. Token counters are throughput, not money; deriving a dollar figure from them would manufacture a 'reconciled billed cost' that does not exist.",
+    "duplicateReadingRule": "per-turn counters are merged by replacement, never added twice; a counter that decreases is a reset and is not a refund"
+  },
+
+  "lifecyclePolicy": {
+    "inspectByDispatchKey": "unsupported",
+    "inspectByDispatchKeyConsequence": "a launch whose acknowledgement is lost before the native thread id arrives stays UNKNOWN with its reservation held. It is never retried.",
+    "inspectByNativeRef": "local-records-only — a persisted native session record establishes that a dispatch happened; liveness is not exposed",
+    "stop": "requested-only — TurnOptions.signal is the only interruption primitive and returns no provider acknowledgement",
+    "stopConsequence": "a run shows 'Stop requested' until independent evidence establishes stop or containment; publication authority is revoked immediately regardless",
+    "resumeCreatesNewJob": true
+  },
+
+  "evidencePolicy": {
+    "behaviouralObserverRequiredFor": ["interaction", "command"],
+    "forbiddenSubstitutes": {
+      "behaviour": ["source_match", "screenshot"],
+      "exact_change": ["source_match"]
+    },
+    "zeroSelectedTestsIs": "missing",
+    "malformedRequiredReviewIs": "inconclusive",
+    "checkerAuthority": "protected: the writer cannot select checks, alter their configuration or mint a receipt",
+    "candidateIdentity": "assigned by trusted snapshotting of actual bytes; a worker-supplied digest is refused",
+    "repairDispatchLimit": 1,
+    "repairDispatchNote": "Counts supervisor-initiated repair dispatches after a failed protected check, not native inner test/fix iterations."
+  },
+
+  "dispositionPolicy": {
+    "maxAutomaticDisposition": "verified_candidate",
+    "gitWrites": false,
+    "worktrees": false,
+    "permissionBypass": false,
+    "productionDatabaseWrites": false,
+    "releaseAuthority": "owner",
+    "note": "Under current V1 operating rules the first useful endpoint is a checked candidate plus a prepared owner handoff. A requested applied_change or verified_deployment stays outstanding in the result."
+  },
+
+  "pilotObligations": [
+    "S1.1: decide the response to the read boundary. This profile does not stop a sandboxed process reading host-private files, following a junction out of the workspace, or reading the supervisor store. Per Context & Agent Model §4 that makes it ineligible for confidential or unattended work until a narrower execution mode or a different confinement boundary is qualified.",
+    "S1.1: observe process.descendantsAfterStop. The spawn canary produced no heartbeat, so descendant survival after a stop is still unknown.",
+    "S1.1: resolve the SDK's binary resolution (add @openai/codex, or pin codexPathOverride) before any real dispatch.",
+    "S0.2: perform the ordinary-native baseline on a separately authorized real product item and record it with an attributed observer.",
+    "S1.4: obtain separate authorization before any real product dispatch."
+  ]
+}

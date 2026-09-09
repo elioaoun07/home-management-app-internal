@@ -53,6 +53,7 @@ import {
   routeDelivery,
   sessionIdFromWatchPath,
 } from "./delivery/server-routes.mjs";
+import { createDeliveryV2Context, routeDeliveryV2 } from "./delivery-v2/service.mjs";
 
 loadDotenv({ path: ".env" });
 
@@ -68,6 +69,15 @@ const ASSET_TYPES = {
   ".js": "text/javascript; charset=utf-8",
 };
 const deliveryCtx = createDeliveryContext({ ROOT, PM_DIR, PM_REL });
+// V2 S1.4. The store opens on first use, so an installation that never switches
+// to v2 dispatch never grows one. `deliver` is built from
+// `.delivery/v2/execution-policy.json` on first use and is null until the owner
+// authorizes one — until then the deliver route refuses, unchanged. The chosen
+// executor (Claude or Codex) is read per request from `.delivery/v2/executor.json`
+// and is never defaulted here. Origins are accepted per-loopback rather than
+// per-port because `listen` retries upward when 4317 is taken, so the port this
+// process ends up on is not known here.
+const deliveryV2Ctx = createDeliveryV2Context({ ROOT, pmRel: PM_REL });
 
 // ---- CLI args ----
 const argv = process.argv.slice(2);
@@ -509,6 +519,17 @@ const server = createServer(async (req, res) => {
         } catch {
           return sendJson(res, 400, { error: "invalid json" });
         }
+      }
+      // V2 S1.4. Checked before the V1 router so the two surfaces cannot collide
+      // on a path, and given the raw headers — the Origin/Sec-Fetch-Site checks
+      // are the reason loopback binding alone is not the authentication story.
+      if (path.startsWith("/api/delivery/v2/")) {
+        const v2 = await routeDeliveryV2(
+          { method: req.method, path, query: u.searchParams, body, headers: req.headers },
+          deliveryV2Ctx,
+        );
+        if (v2) return sendJson(res, v2.status, v2.json);
+        return sendJson(res, 404, { error: "unknown delivery route" });
       }
       const result = await routeDelivery(
         { method: req.method, path, query: u.searchParams, body },

@@ -1,6 +1,6 @@
 ---
 created: 2026-05-30
-updated: 2026-09-06
+updated: 2026-09-07
 type: master-book
 status: active
 owner: Elio
@@ -51,6 +51,11 @@ Today the loop is **open**: you cook without inventory updating, you plan withou
 **Inbound bridge (new, from Healthcare):** recipe detail views now render allergen warnings — `RecipeAllergenWarning.tsx` + `RecipeDetailView.tsx` consume `useHouseholdAllergens`, keyword-matched against ingredients via `src/lib/health/allergenMatch.ts`. **Kitchen's ingredient data is now safety-relevant input to another module** — changing ingredient shape or parsing has a health-warning blast radius.
 
 ## Pain Inventory
+
+> **Catalogue build-plan handoff — 2026-09-07:** [Final specification §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>) defines C01–C03 integrity repairs, C09 library UX, C13 clipping-to-Kitchen promotion and C17 Inventory ownership guard. Keep current backing IDs/tables; Kitchen recipes retain one executable editor and Inventory retains stock/history authority. Ingredient validation and atomic restock remain their existing prerequisites. Documentation only; no source, schema or live data changed.
+
+- 🔴 **Catalogue document signing bypasses the document's record-level visibility contract.** Source review 2026-09-07 at `bc7ccc3`: `src/app/api/catalogue/document-image/signed-url/route.ts:17–47` authorizes a supplied storage path by owner prefix/active partnership, then signs with the admin client; it never resolves the Catalogue row, `is_public`, deletion state or current image association. A known partner-owned path can therefore reach signing independently of record visibility. No production file was accessed; deployed storage/DB state remains unverified. Prioritize a scoped authorization fix before wider document retrieval/extraction. [Assessment §1.6 / P0](<../../../docs/Catalogue — ASTRA Deep Dive.md>).
+- 🟠 **Catalogue Undo can break record links and edits discard unrecognized metadata.** Source review 2026-09-07: `src/features/catalogue/hooks.ts:611–619` implements update Undo as invalidation; `:667–686` recreates a soft-deleted item under a new ID with a subset of fields. `src/components/web/CatalogueItemDialog.tsx:1000–1051` rebuilds metadata from known controls and `src/app/api/catalogue/items/[id]/route.ts:101–102` replaces the whole value. Linked stock/calendar history and unrecognized attributes need preservation in the existing model. [Assessment §9 / owner clarification §9.10](<../../../docs/Catalogue — ASTRA Deep Dive.md>) recommends Catalogue as a lightweight **Global Reference / Definition Library**: preserve current item/reference backing records, keep stock operations/policy in Inventory and richer recipe definitions in Kitchen, and expose existing masters without duplicate editable copies. No blanket product/asset or Documents V2 decomposition. No implementation or new checklist commitment.
 
 - 🟠 **Cooking estimates can return to AI as observed experience.** Proactive discovery 2026-09-06 at `83e44be`: `src/components/web/RecipeCookingMode.tsx:524–551` pre-fills actual prep/cook and difficulty from recipe estimates and submits untouched values; `src/app/api/recipes/[id]/optimize/route.ts:97–112` labels them actual history. Step timers do not populate those fields. Legacy logs cannot distinguish defaults from explicit corrections; retain unknown basis before duration learning. Explicit `would_make_again` is separately supplied and should not be conflated with those defaults. [Study evidence](<../Proactive ERA/Proactive ERA — Intelligence Model.md>). Source finding only; no correction or new checklist item.
 

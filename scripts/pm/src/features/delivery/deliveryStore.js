@@ -56,6 +56,59 @@ export async function loadDeliveryRecommendation(file, cbidx, provider, locatorC
     deliveryRecommendation.value = result;
   } catch { deliveryRecommendation.value = null; } // wizard just hides the card
 }
+// V2 S1.4: the installation-wide v1|v2 dispatch switch. Read-only here — the
+// server is the authority and refuses V1 write routes itself, so this only stops
+// the UI offering an action the server would reject. Defaults to v1 on any
+// failure, matching the server's own default.
+export const deliveryDispatchMode = signal({ mode: "v1", updated_at: null, actor: null });
+export async function loadDeliveryDispatchMode() {
+  if (globalThis.PM_MODE !== "server") return;
+  try {
+    deliveryDispatchMode.value = await apiGet("/api/delivery/v2/mode");
+  } catch {
+    deliveryDispatchMode.value = { mode: "v1", updated_at: null, actor: null };
+  }
+}
+
+// V2: which executor this installation dispatches to, and the catalogue it may
+// choose from. Both come from the server, which is the authority — the UI only
+// stops the owner picking something the server would reject, and never guesses a
+// provider on its own. `backend_id: null` is the real, normal state of an
+// installation that has not chosen: it is shown as "None", never as a default.
+export const deliveryExecutor = signal({
+  selection: { backend_id: null, id: null, label: null, updated_at: null, actor: null, note: null },
+  executors: [],
+});
+export async function loadDeliveryExecutor() {
+  if (globalThis.PM_MODE !== "server") return;
+  try {
+    deliveryExecutor.value = await apiGet("/api/delivery/v2/executor");
+  } catch {
+    deliveryExecutor.value = { selection: { backend_id: null, id: null, label: null }, executors: [] };
+  }
+}
+
+/**
+ * Choose the executor. Explicit, acknowledged, and never silent: a refusal is
+ * surfaced as a toast with the server's own reason rather than swallowed, because
+ * the failure mode this whole feature guards against is an owner believing they
+ * are on one provider while another one runs.
+ */
+export async function setDeliveryExecutor(executorId, actor) {
+  if (globalThis.PM_MODE !== "server") return false;
+  try {
+    const result = await apiPost("delivery/v2/executor", { executor: executorId, actor });
+    deliveryExecutor.value = { ...deliveryExecutor.value, selection: result.selection };
+    showToast(`Executor: ${result.selection.label}`);
+    return true;
+  } catch (error) {
+    const detail = error.payload?.refusals?.[0]?.detail || error.message;
+    showToast(`Executor unchanged — ${detail}`);
+    await loadDeliveryExecutor();
+    return false;
+  }
+}
+
 export async function loadDeliveryPreflight() {
   if (globalThis.PM_MODE !== "server") {
     deliveryPreflight.value = { loading: false, data: null, error: "Delivery preflight requires server mode." };

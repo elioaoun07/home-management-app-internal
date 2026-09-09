@@ -1,6 +1,6 @@
 ---
 created: 2026-05-30
-updated: 2026-09-06
+updated: 2026-09-07
 type: master-book
 status: active
 owner: Elio
@@ -63,6 +63,10 @@ Two things make it strategically important: **it is the spine ERA reads from** (
 **Surface map — one module, seven doors:** Mobile Form (`/expense`, precision create/edit) · `/reminders` (main mobile view) · Today (web) · Calendar Month (most-visited) · Calendar Week (most important — absorbed Focus's job) · Stats (never used, parked) · the retired `/focus` page.
 
 ## Pain Inventory
+
+> **Catalogue build-plan handoff — 2026-09-07:** [Final specification §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), especially C04a–c/C05–C08, preserves Catalogue definitions and all existing Schedule item IDs. It specifies atomic activation/promotion, slot-aware effects, safe pause/stop, future-only defaults and legacy reconciliation. Dock occurrence work to existing SCH-4.2/SCH-4.3b and ASTRA-SCH-1/3; no implementation or new completion claim.
+
+- 🟠 **Catalogue activation state is a separate write from real Schedule execution.** Source review 2026-09-07 at `bc7ccc3`: `AddToCalendarDialog.tsx:364–450` creates an item before updating `linked_item_id`/`is_active_on_calendar`; `api/items/[id]/promote/route.ts:145–169` tolerates reverse-link failure and separately writes history. Catalogue disable similarly splits recurrence/state/history (`api/catalogue/[id]/disable/route.ts:58–153`). Flexible Assign also creates template-derived one-off items, so migrating only the single backlink would lose relationships (`MobileFlexibleAssignmentPage.tsx:465–508`). [Assessment §9.6 / owner clarification §9.10](<../../../docs/Catalogue — ASTRA Deep Dive.md>) **withdraws mandatory Tasks V2 and retains Catalogue ownership of reusable definitions by intent**; Schedule owns activation/execution. Repair in place, preserving IDs, placements, history and Calendar integration. Current Assign reads targets live from Catalogue (`MobileFlexibleAssignmentPage.tsx:285–308`); Catalogue PATCH backfills `is_chore` (`api/catalogue/items/[id]/route.ts:183–189`), so snapshot-by-default remains a proposed contract, not a shipped guarantee. No implementation or production incident verification.
 
 - 🟡 **Historical durations and suggestion confidence are not measured capacity.** Proactive discovery 2026-09-06 at `83e44be`: `src/components/items/ItemDetailModal.tsx:353–380` pre-fills actual task minutes from estimates and excludes chores. The currently unconsumed suggestion endpoint uses date-only conflict avoidance and labels three completions high confidence (`src/app/api/suggest-schedule/route.ts:124–167,247–252`); occupied-date fallback can reuse period start (`:325–354`). Do not activate it or infer available effort from those values. [Study](<../Proactive ERA/Proactive ERA — Architectural Leverage.md>) proposes bounded conditional feasibility and explicit day intent; no new implementation admission.
 

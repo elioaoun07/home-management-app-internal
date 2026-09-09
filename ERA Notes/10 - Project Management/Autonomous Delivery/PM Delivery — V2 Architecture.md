@@ -1,6 +1,6 @@
 ---
 created: 2026-09-06
-updated: 2026-09-06
+updated: 2026-09-09
 type: delivery-plan
 status: active
 owner: Elio
@@ -121,6 +121,22 @@ The adapter surface is deliberately small:
 `executionRef = {backend_id, dispatch_key: job_id, native_ref?}` is persisted before dispatch. The native reference is filled in when observed. If an acknowledgment is lost before that happens, a backend with dispatch-key lookup may reconcile it; otherwise status and reservation stay unknown. Missing `native_ref` never proves that launch did not happen.
 
 `JobRequest` carries job/run/contract/grant revisions, the execution correlation, input manifest, private workspace or native environment ref, Checkpoint ref, approved profile, reserved allowance and native limits. It never contains production credentials. Paid setup, if unavoidable, needs its own admitted boundary; routine auth/version checks should be non-generative.
+
+### 6.1 More than one executor behind the same seam *(implemented 2026-09-09)*
+
+Two backends implement the surface above: `codex-exec-sdk` and `claude-agent-sdk`. There is still one orchestration path — `admitJob`, `dispatchJob`, `recordDispatchResult`, `reconcileOutstanding`, `requestStop` and the Result predicates name no provider — and one registry (`adapters/registry.mjs`) that turns a choice into an adapter. A capability one backend has and the other lacks belongs in the profile or lifecycle report, never in the supervisor: Claude's caller-minted session id surfaces as `lifecycle.inspectByDispatchKey: "derived"`, and its provider-reported cost surfaces as a non-null `usage.costUsd`, both of which the existing code already knew how to read.
+
+**Selection is explicit and installation-wide.** It is persisted in `.delivery/v2/executor.json` and is never defaulted: an absent, unreadable or unrecognised selection means *no executor*, and dispatch refuses. It is never substituted: an unknown id, or an SDK that will not load, is refused rather than replaced by the other provider. It is not a per-request choice — a request naming a different executor than the installation's is refused, so a stale client cannot move it by asking. Each job row records the backend it was dispatched to, so reconciliation, historical runs and cost attribution all read the executor off the job rather than off the current setting.
+
+**Qualification and admission are per executor.** Each backend's profile is built from its own observations, carries its own `profile_id`, and is admitted or refused on its own. Nothing derives one backend's containment status from the other's, and `admitProfile`'s result carries `backend_id` so an admission for one backend cannot authorize a dispatch to the other — checked in `admitJob`, in `dispatchJob`, and in `reconcileOutstanding`, which refuses to inspect a job through an adapter that does not own it.
+
+**Current status of both profiles: inadmissible.** Codex on three observed containment failures; Claude on seven unobserved controls. Neither may run unattended work. See [Execution Portfolio](<PM Delivery — Execution Portfolio.md>) S1.1 and Delivery item DLV-94.
+
+### 6.2 Execution policy *(implemented 2026-09-09; dispatch half deferred)*
+
+The gate policy S1.4 requires to be stated explicitly is a validated document at `.delivery/v2/execution-policy.json` (schema `delivery-v2/execution-policy@1`, `scripts/delivery-v2/policy.mjs`). It states the permitted executors, permitted effects, resource unit/allowance/strictness, per-job reservation basis, grant expiry, a requested-disposition ceiling and the repair-dispatch limit — nearly all of which are Grant fields that already existed and only lacked a place to be written. Four things it structurally cannot express: granting `publish`, disabling the confinement requirement, disabling the qualified-profile requirement, and enabling automatic retry of a possibly-dispatched job. Each is refused with its reason rather than trimmed.
+
+With no policy installed, `POST /api/delivery/v2/deliver` refuses with `no-deliver-policy-configured`, unchanged. With one installed, `deliver` admits a Job and builds its `JobRequest` and **does not dispatch** — so a policy file alone cannot cause paid work. The route from an admitted job to a running one is deferred: DLV-95.
 
 Every start/resume/reviewer/paid repair is admitted against settled consumption + unresolved reservations + the complete next-job allowance. Native inner calls are accounted through the qualified job's totals and controls. ERA does not reconstruct their scheduling or context. Strict versus threshold semantics and whole-job coverage are defined in Context. A check uses the same authority/resource admission principle with its own check receipt, not a pretend model job.
 

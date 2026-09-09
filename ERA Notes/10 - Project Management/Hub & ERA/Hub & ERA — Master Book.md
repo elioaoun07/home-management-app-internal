@@ -1,6 +1,6 @@
 ---
 created: 2026-05-30
-updated: 2026-09-06
+updated: 2026-09-07
 type: master-book
 status: active
 owner: Elio
@@ -54,6 +54,10 @@ Today the Hub is an excellent _reactive_ surface — you talk, it parses, it act
 | Notification visibility policy | 🔵   | `chatNotificationPolicy.ts` (33 lines, pure, tested): private threads excluded from immediate push **and** cron fallback; every public purpose eligible                                                                                                                               |
 
 ## Pain Inventory
+
+> **Catalogue build-plan handoff — 2026-09-07:** [Final specification §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), C10/C11a–b, defines authorized Catalogue/domain retrieval, relevance, disambiguation and owner-directed correction without another truth store. Dock to E-04a/E-08a and M-00/D17; note-store deployment remains an evidence gate. Documentation only; existing execution priorities and completion states are unchanged.
+
+- 🟡 **Brain's persistent memory and advertised Catalogue role have different data owners.** Source review 2026-09-07 at `bc7ccc3`: `faceRegistry.ts:31–38` points Brain at Catalogue, while `intents/resolvers/brain.ts` and the dashboard read `/api/memories`; that route searches household label/value notes by label and recency, with no item PATCH handler. `household_memories` is absent from searched migration SQL/schema and the Aug 4 catalog, so deployment is unverified. Ask AI supplies no Brain context (`api/era/ask/route.ts:154–168`). [Assessment §9 / owner clarification §9.10](<../../../docs/Catalogue — ASTRA Deep Dive.md>) keeps **Catalogue's Global Reference / Definition Library distinct from Brain's personal/conversational memory and retrieval**. Brain may expose and consume Catalogue without copying master facts; retain one saved-note implementation under D17 and keep focus/learned phrases distinct. No new Object Memory service, implementation admission or resolution of D17's deployed-data question.
 
 - 🟠 **ERA capture can clear input without a durable domain write, and classifies unrelated failures as offline.** `useEraBudgetSubmit.ts:154` catches timeout/parse/connectivity failures together; `CommandBar.tsx` clears input before completion. ERA has no `addToQueue` caller; the conversation helper is in-memory ordering, and its raw fetches are GETs, not mutation-rule violations. The explicit failure reply means “silently lost on every path” was too broad. E-01a/HUB-37 owns recoverable refusal; E-09/HUB-46 owns eligible durable capture through existing `transaction`/`item` feature keys (Top Layer A3/A4).
 - 🟡 **Conversation activity freshness needs owner verification.** No source message handler updates `era_conversations.updated_at`; rollover and ordering consume it. The 2026-08-04 DB snapshot predates current ERA storage, so a live timestamp trigger and intent-face CHECK are **UNVERIFIED**, not proved absent. Refresh owner catalog/constraint evidence before E-05a adds anything; E-11b/HUB-47 verifies last-message behavior and removes redundant invalidation only afterward (Top Layer A9/C04).

@@ -11,15 +11,20 @@ import { Icon } from "../../components/Icon.jsx";
 import {
   deliveryCapabilities,
   deliveryData,
+  deliveryDispatchMode,
+  deliveryExecutor,
   deliveryLoading,
   deliveryPost,
   deliveryPreflight,
   deliverEligibility,
   deliveryRecommendation,
   loadDeliveryCapabilities,
+  loadDeliveryDispatchMode,
+  loadDeliveryExecutor,
   loadDeliveryPreflight,
   loadDeliveryRecommendation,
   loadDeliverySessions,
+  setDeliveryExecutor,
 } from "./deliveryStore.js";
 import { CancelSessionDialog } from "./SessionDetail.jsx";
 
@@ -42,8 +47,14 @@ export function DeliveryHome() {
   useEffect(() => {
     loadDeliverySessions();
     loadDeliveryCapabilities();
+    loadDeliveryDispatchMode();
+    loadDeliveryExecutor();
   }, []);
   const configStatus = deliveryCapabilities.value?.config?.status;
+  // V2 S1.4: in v2 mode the server refuses every V1 write route, so offering the
+  // launch button would be offering a dead action. The chip states the mode; the
+  // refusal itself lives server-side.
+  const v2Mode = deliveryDispatchMode.value.mode === "v2";
   return (
     <>
       <header class="page-head">
@@ -52,10 +63,14 @@ export function DeliveryHome() {
           <h1>Delivery</h1>
           <p>Launch, gate, and inspect implementation sessions while the server remains authoritative.</p>
         </div>
-        <button class="button primary" onClick={() => navigate("/delivery/new")}>
-          <Icon name="plus" />
-          New delivery
-        </button>
+        <div class="actions" style={{ alignItems: "center" }}>
+          {v2Mode && <Chip tone="blocker">Dispatch v2</Chip>}
+          {v2Mode && <ExecutorChip />}
+          <button class="button primary" disabled={v2Mode} onClick={() => navigate("/delivery/new")}>
+            <Icon name="plus" />
+            New delivery
+          </button>
+        </div>
       </header>
       {configStatus && !configStatus.healthy && (
         <div class="lock-banner" style={{ borderColor: "var(--era-amber,#e0a852)" }}>
@@ -65,7 +80,7 @@ export function DeliveryHome() {
       {deliveryData.value.buildLockActive && <div class="lock-banner">A session is already past the plan gate. Other plan approvals wait for the build lock.</div>}
       <section class="delivery-launch-panel">
         <div class="delivery-launch-copy"><div class="eyebrow">Execution lanes</div><h2>Choose the smallest lane that can safely ship the work</h2><p>Every lane remains governed by explicit scope, owner gates, budget limits, validation, and an auditable session record.</p></div>
-        <div class="lane-picker">{DELIVERY_LANES.map((lane) => <button class="lane-option" onClick={() => navigate(`/delivery/new?lane=${lane}`)} key={lane}><span class="lane-option-icon"><Icon name="bolt" size={16} /></span><span><strong>{lane[0] + lane.slice(1).toLowerCase()}</strong><small>{LANE_BLURB[lane]}</small></span><Icon name="arrow" size={15} /></button>)}</div>
+        <div class="lane-picker">{DELIVERY_LANES.map((lane) => <button class="lane-option" disabled={v2Mode} onClick={() => navigate(`/delivery/new?lane=${lane}`)} key={lane}><span class="lane-option-icon"><Icon name="bolt" size={16} /></span><span><strong>{lane[0] + lane.slice(1).toLowerCase()}</strong><small>{LANE_BLURB[lane]}</small></span><Icon name="arrow" size={15} /></button>)}</div>
       </section>
       <div class="delivery-tabs">
         <button class={`button ${tab === "sessions" ? "primary" : ""}`} onClick={() => setTab("sessions")}>
@@ -84,6 +99,56 @@ export function DeliveryHome() {
         <AgentCatalog />
       )}
     </>
+  );
+}
+
+/**
+ * V2 executor selection.
+ *
+ * Shown only in v2 dispatch mode, because v1 picks its provider per session in
+ * the launch wizard and this chip would contradict it.
+ *
+ * Three things it will not do, each matching a server-side refusal rather than
+ * merely mirroring one:
+ *   - it offers no default. An installation that has chosen nothing reads
+ *     "Executor: None", and the server refuses to dispatch.
+ *   - it never falls back. A refused change reloads the server's answer and says
+ *     what the server said; the chip does not quietly show the other provider.
+ *   - an SDK this checkout cannot load is shown as unavailable and is not
+ *     selectable, so the choice on screen is a choice that can actually run.
+ */
+function ExecutorChip() {
+  const [open, setOpen] = useState(false);
+  const { selection, executors } = deliveryExecutor.value;
+  const choose = async (id) => {
+    setOpen(false);
+    await setDeliveryExecutor(id, "owner");
+  };
+  return (
+    <div style={{ position: "relative" }}>
+      <button class="button" onClick={() => setOpen(!open)}>
+        Executor: {selection.label || "None"}
+      </button>
+      {open && (
+        <div
+          class="card"
+          style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, zIndex: 20, minWidth: 260, padding: 8 }}
+        >
+          {executors.map((executor) => (
+            <button
+              key={executor.backend_id}
+              class={`button ${selection.backend_id === executor.backend_id ? "primary" : ""}`}
+              style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 4 }}
+              disabled={executor.available === false}
+              onClick={() => choose(executor.id)}
+            >
+              {executor.label}
+              {executor.available === false ? " — not installed" : ""}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

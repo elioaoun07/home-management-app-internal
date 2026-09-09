@@ -1,6 +1,6 @@
 ---
 created: 2026-09-06
-updated: 2026-09-06
+updated: 2026-09-09
 type: delivery-plan
 status: active
 owner: Elio
@@ -30,6 +30,11 @@ Internal native agents are allowed only if their tools, effects and aggregate co
 The [diagnosis D08/D09/D17](<PM Delivery — Current System Diagnosis.md>) records why V1's context rotation, unpopulated memory fields and unaccounted preflights cannot be copied as guarantees. Preserve raw history and useful continuation, not those mechanisms.
 
 ## 2. One executor first; qualification before promises
+
+> **Amended 2026-09-09 (owner decision).** "Do not build both adapters to start" no longer holds: the owner asked for **Claude and Codex to both remain selectable**, and both adapters now exist behind the canonical six-operation boundary. The clause that governs this is the one at the end of this section, and it is unchanged and binding — *an available alternative does not authorize weaker containment or an unknown billing basis*. Accordingly: each backend's profile is built from **its own** observations and carries its own `profile_id`; `admitProfile()` is evaluated per profile; an admission carries `backend_id` so it cannot authorize a dispatch to the other backend; and **both profiles are currently inadmissible** — Codex on three observed containment failures, Claude on seven unobserved controls. Selection is an explicit, persisted, installation-wide choice that never falls back from one provider to the other. See [V2 Architecture §6.1](<PM Delivery — V2 Architecture.md>) and Delivery **DLV-94**.
+>
+> The table below is unchanged and remains what it says it is: **dated documentation findings, not conformance results.** In particular, the Claude Code / Agent SDK row's Windows-sandbox limitation is recorded in the Claude qualification record as a documentation finding and is deliberately **not** promoted to a control observation in either direction.
+
 
 Start by qualifying **Codex exec/SDK on the actual Windows execution environment**, because the accepted reassessment found documented native Windows containment and automation interfaces. This is a candidate selection, not a proven security profile or coder-quality ranking. Prefer a qualified managed executor instead if it meets the same contract with lower total owner effort. Do not build both adapters to start.
 
