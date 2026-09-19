@@ -13,6 +13,15 @@ const mockState = vi.hoisted(() => ({
   candidateQueryFilters: [] as Array<{ column: string; value: unknown }>,
   /** One entry per `from("transactions")` chain, in call order. */
   transactionQueries: [] as Array<Array<{ column: string; value: unknown }>>,
+  /** Partner accounts they made public — writable, but not the caller's rows. */
+  sharedAccounts: [] as Row[],
+}));
+
+vi.mock("@/lib/accountAccess", () => ({
+  listWritableAccounts: vi.fn(async () => [
+    ...(mockState.account ? [mockState.account] : []),
+    ...mockState.sharedAccounts,
+  ]),
 }));
 
 vi.mock("next/headers", () => ({
@@ -112,6 +121,7 @@ beforeEach(() => {
   mockState.candidates = [];
   mockState.candidateQueryFilters = [];
   mockState.transactionQueries = [];
+  mockState.sharedAccounts = [];
 });
 
 const baseBody = {
@@ -205,6 +215,21 @@ describe("POST /api/statement-import/reconcile", () => {
 
     expect(response.status).toBe(403);
     expect(mockState.candidateQueryFilters).toEqual([]);
+  });
+
+  it("imports into a partner's public account but matches only the importer's rows", async () => {
+    const SHARED_ID = "22222222-2222-4222-8222-222222222222";
+    mockState.sharedAccounts = [
+      { id: SHARED_ID, user_id: "partner-1", name: "Italy Trip", type: "expense", currency: "EUR" },
+    ];
+
+    const response = await POST(request({ ...baseBody, account_id: SHARED_ID }));
+
+    expect(response.status).toBe(200);
+    expect(mockState.transactionQueries.length).toBeGreaterThan(0);
+    for (const filters of mockState.transactionQueries) {
+      expect(filters).toContainEqual({ column: "user_id", value: "user-1" });
+    }
   });
 
   it("requires a session", async () => {

@@ -203,10 +203,6 @@ export default function StatementImportPage() {
   const [currencyWarning, setCurrencyWarning] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const account = useMemo(
-    () => accounts.find((a: { id: string }) => a.id === accountId),
-    [accounts, accountId],
-  );
 
   const { data: categories = [] } = useCategories(accountId);
 
@@ -245,6 +241,57 @@ export default function StatementImportPage() {
           name: partner ? `${a.name} · ${partner.displayName}` : a.name,
         })),
     [allHouseholdAccounts, partner],
+  );
+
+  // What a whole statement can land in: own accounts plus the partner's public
+  // ones (same set the expense form offers). Only the TARGET widens — the
+  // import, its matching and every per-row default stay the importer's own.
+  const importTargets = useMemo(
+    () => [
+      ...accounts.map(
+        (a: { id: string; name: string; currency?: string; type: string }) => ({
+          id: a.id,
+          name: a.name,
+          currency: a.currency,
+          type: a.type,
+          partner: false,
+        }),
+      ),
+      ...allHouseholdAccounts
+        .filter(
+          (a) =>
+            !!partner &&
+            a.user_id === partner.id &&
+            a.is_public === true &&
+            a.visible !== false,
+        )
+        .map((a) => ({
+          id: a.id,
+          name: a.name,
+          currency: a.currency ?? undefined,
+          type: a.type as string,
+          partner: true,
+        })),
+    ],
+    [accounts, allHouseholdAccounts, partner],
+  );
+
+  // Per-row destinations in the row sheet: the same set as the statement
+  // picker, partner accounts carrying the partner's name.
+  const rowAccounts = useMemo(
+    () =>
+      importTargets.map((a) => ({
+        id: a.id,
+        name: a.partner && partner ? `${a.name} · ${partner.displayName}` : a.name,
+        currency: a.currency,
+        type: a.type,
+      })),
+    [importTargets, partner],
+  );
+
+  const account = useMemo(
+    () => importTargets.find((a) => a.id === accountId),
+    [importTargets, accountId],
   );
 
   // Where a cash withdrawal can land: the owner's OWN accounts, minus the one
@@ -290,9 +337,18 @@ export default function StatementImportPage() {
   const partnerRing =
     theme === "pink" ? "border-blue-500/40" : "border-pink-500/40";
 
+  // Own accounts drive every per-row default; a shared statement account is
+  // added only so its TYPE is known (suggestAccountForRow reads it).
   const accountRefs = useMemo(
     () =>
-      accounts.map(
+      [
+        ...accounts,
+        ...allHouseholdAccounts.filter(
+          (a) =>
+            a.id === accountId &&
+            !accounts.some((own: { id: string }) => own.id === a.id),
+        ),
+      ].map(
         (a: {
           id: string;
           type: string;
@@ -304,18 +360,16 @@ export default function StatementImportPage() {
           type: a.type as "expense" | "income" | "saving",
           is_default: a.is_default,
           is_default_income: a.is_default_income,
-          currency: a.currency,
+          currency: a.currency ?? undefined,
         }),
       ),
-    [accounts],
+    [accounts, allHouseholdAccounts, accountId],
   );
 
   const accountCurrencyById = useCallback(
     (id: string) =>
-      accounts.find((a: { id: string }) => a.id === id)?.currency as
-        | string
-        | undefined,
-    [accounts],
+      importTargets.find((a) => a.id === id)?.currency as string | undefined,
+    [importTargets],
   );
 
   // No default account, deliberately. This picker chooses where a whole
@@ -1172,13 +1226,17 @@ export default function StatementImportPage() {
                 <SelectValue placeholder="Choose an account" />
               </SelectTrigger>
               <SelectContent>
-                {accounts.map(
-                  (a: { id: string; name: string; currency?: string }) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name} · {a.currency || "USD"}
-                    </SelectItem>
-                  ),
-                )}
+                {importTargets.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name} · {a.currency || "USD"}
+                    {a.partner && partner && (
+                      <span className={partnerText}>
+                        {" "}
+                        · {partner.displayName}
+                      </span>
+                    )}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -2087,7 +2145,12 @@ export default function StatementImportPage() {
           label={openGroup.label}
           rows={openGroup.rows}
           accountId={session.account_id}
-          accounts={accounts}
+          accounts={rowAccounts}
+          // Transfers stay between the importer's OWN accounts — the widened
+          // row list must not offer a partner account as a self-transfer.
+          transferDestinations={accounts
+            .filter((a: { id: string }) => a.id !== session.account_id)
+            .map((a: { id: string; name: string }) => ({ id: a.id, name: a.name }))}
           resolveAccount={(row) => resolveRowAccount(row, session, accountRefs)}
           currency={currency}
           groupCategory={session.group_categories[openGroup.key]}

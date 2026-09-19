@@ -7,6 +7,7 @@ import {
   parseCSV,
   parsePDFTextWithDiagnostics,
 } from "@/lib/bank-statement-parser";
+import { getAccessibleAccount } from "@/lib/accountAccess";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { StatementParseDiagnostics } from "@/types/statement";
 import { createHash } from "node:crypto";
@@ -67,16 +68,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { data: account } = await supabase
-      .from("accounts")
-      .select("id, currency")
-      .eq("id", accountId)
-      .eq("user_id", user.id)
-      .maybeSingle();
+    // Own account, or a partner account they made public. The import itself
+    // (and everything matched against it) stays the caller's own.
+    const account = await getAccessibleAccount(supabase, user.id, accountId, {
+      includeHidden: true,
+    });
 
     if (!account) {
       return NextResponse.json(
-        { error: "Account not found or not owned by you" },
+        { error: "Account not found or not accessible" },
         { status: 403 },
       );
     }

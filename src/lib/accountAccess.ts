@@ -60,6 +60,44 @@ export async function getActiveHouseholdPartnerId(
     : link.owner_user_id;
 }
 
+/**
+ * Every account the caller may write money into: all of their own (hidden
+ * included — an existing import may still reference one) plus the partner's
+ * visible `is_public` accounts, the same set the expense form offers.
+ */
+export async function listWritableAccounts<
+  T extends { id: string; user_id: string } = {
+    id: string;
+    user_id: string;
+    name: string;
+    type: AccountType;
+    currency: string | null;
+  },
+>(
+  supabase: SupabaseLike,
+  userId: string,
+  select = "id, user_id, name, type, currency",
+): Promise<T[]> {
+  const { data: own } = await supabase
+    .from("accounts")
+    .select(select)
+    .eq("user_id", userId);
+
+  const partnerId = await getActiveHouseholdPartnerId(supabase, userId);
+  let shared: unknown[] = [];
+  if (partnerId) {
+    const { data } = await supabase
+      .from("accounts")
+      .select(select)
+      .eq("user_id", partnerId)
+      .eq("is_public", true)
+      .neq("visible", false);
+    shared = data ?? [];
+  }
+
+  return [...((own ?? []) as unknown[]), ...shared] as T[];
+}
+
 export async function getAccessibleAccount(
   supabase: SupabaseLike,
   userId: string,

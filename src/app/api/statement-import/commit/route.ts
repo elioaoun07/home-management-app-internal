@@ -34,6 +34,7 @@ import { adjustAccountBalance } from "@/lib/balance";
 import type { AccountType } from "@/lib/balance-utils";
 import { getBalanceDelta, getTransferDeltas } from "@/lib/balance-utils";
 import { getErrorCode } from "@/lib/errors";
+import { listWritableAccounts } from "@/lib/accountAccess";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -187,7 +188,8 @@ export async function POST(req: NextRequest) {
       account_id: sessionAccountId,
     } = parsed.data;
 
-    // ── Ownership: every account touched must belong to the caller ──────────
+    // ── Access: every account touched must be the caller's own, or a partner
+    //    account they made public (the transactions written stay the caller's)
     const accountIds = [
       ...new Set([
         sessionAccountId,
@@ -207,19 +209,15 @@ export async function POST(req: NextRequest) {
         ),
       ]),
     ];
-    const { data: ownedAccounts } = await supabase
-      .from("accounts")
-      .select("id, type")
-      .eq("user_id", user.id)
-      .in("id", accountIds);
+    const writableAccounts = await listWritableAccounts(supabase, user.id);
 
     const accountTypes = new Map<string, AccountType>();
-    for (const acc of ownedAccounts || []) {
-      accountTypes.set(acc.id, acc.type as AccountType);
+    for (const acc of writableAccounts) {
+      if (accountIds.includes(acc.id)) accountTypes.set(acc.id, acc.type);
     }
     if (accountIds.some((id) => !accountTypes.has(id))) {
       return NextResponse.json(
-        { error: "Account not found or not owned by you" },
+        { error: "Account not found or not accessible" },
         { status: 403 },
       );
     }
@@ -294,7 +292,9 @@ export async function POST(req: NextRequest) {
       const { data: rows } = await supabase
         .from("user_categories")
         .select("id, account_id, parent_id")
-        .eq("user_id", user.id)
+        // Not scoped to user_id: a shared account's categories belong to its
+        // owner. `categoryError` below pins each one to the row's account,
+        // which is already access-checked.
         .in("id", categoryIds);
       for (const c of rows || []) {
         categories.set(c.id, { account_id: c.account_id, parent_id: c.parent_id });

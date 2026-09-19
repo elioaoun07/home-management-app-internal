@@ -34,6 +34,15 @@ const mockState = vi.hoisted(() => ({
   ledgerError: null as { message?: string } | null,
   /** Simulates statement_imports being unwritable. */
   importRecordError: null as { message?: string } | null,
+  /** Partner accounts they made public — writable, but not the caller's rows. */
+  sharedAccounts: [] as Row[],
+}));
+
+vi.mock("@/lib/accountAccess", () => ({
+  listWritableAccounts: vi.fn(async () => [
+    ...mockState.accounts,
+    ...mockState.sharedAccounts,
+  ]),
 }));
 
 vi.mock("next/headers", () => ({ cookies: vi.fn(async () => ({})) }));
@@ -198,6 +207,7 @@ function request(body: Row) {
 beforeEach(() => {
   mockState.user = { id: "user-1" };
   mockState.accounts = [{ id: ACCOUNT_ID, type: "expense" }];
+  mockState.sharedAccounts = [];
   mockState.categories = [
     { id: CAT_FOOD, account_id: ACCOUNT_ID, parent_id: null },
     { id: SUB_FOOD, account_id: ACCOUNT_ID, parent_id: CAT_FOOD },
@@ -422,6 +432,37 @@ describe("POST /api/statement-import/commit", () => {
     expect(response.status).toBe(403);
     expect(mockState.inserted).toEqual([]);
     expect(mockState.balanceCalls).toEqual([]);
+  });
+
+  it("writes into a partner's public account as the importer's own row", async () => {
+    const SHARED_ID = "77777777-7777-4777-8777-777777777777";
+    const SHARED_CAT = "88888888-8888-4888-8888-888888888888";
+    mockState.sharedAccounts = [{ id: SHARED_ID, user_id: "partner-1", type: "expense" }];
+    // The shared account's categories belong to its owner, not the importer.
+    mockState.categories = [{ id: SHARED_CAT, account_id: SHARED_ID, parent_id: null }];
+
+    const response = await POST(
+      request({
+        ...worked,
+        account_id: SHARED_ID,
+        actions: [
+          {
+            ...worked.actions[0],
+            account_id: SHARED_ID,
+            category_id: SHARED_CAT,
+            subcategory_id: null,
+          },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockState.inserted).toEqual([
+      expect.objectContaining({ account_id: SHARED_ID, user_id: "user-1", category_id: SHARED_CAT }),
+    ]);
+    expect(mockState.balanceCalls).toEqual([
+      { accountId: SHARED_ID, delta: -45.5, changeType: "statement_import" },
+    ]);
   });
 
   it("rejects a category from another account per-row without failing the batch", async () => {

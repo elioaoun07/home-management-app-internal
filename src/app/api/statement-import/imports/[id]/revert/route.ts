@@ -42,6 +42,7 @@ import {
   type LedgerEntry,
   type LiveTransaction,
 } from "@/lib/statement-revert";
+import { listWritableAccounts } from "@/lib/accountAccess";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -148,13 +149,10 @@ export async function POST(
     ];
     const accountTypes = new Map<string, AccountType>();
     if (accountIds.length > 0) {
-      const { data: accounts } = await supabase
-        .from("accounts")
-        .select("id, type")
-        .eq("user_id", user.id)
-        .in("id", accountIds);
-      for (const a of accounts || []) {
-        accountTypes.set(a.id, a.type as AccountType);
+      // Own or shared: an import may have landed in a partner's public account.
+      const accounts = await listWritableAccounts(supabase, user.id);
+      for (const a of accounts) {
+        if (accountIds.includes(a.id)) accountTypes.set(a.id, a.type);
       }
     }
 

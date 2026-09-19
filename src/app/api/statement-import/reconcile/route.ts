@@ -16,6 +16,7 @@ import {
   type ImportedTransferRef,
 } from "@/lib/statement-reconcile";
 import type { AccountType } from "@/lib/balance-utils";
+import { listWritableAccounts } from "@/lib/accountAccess";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -70,20 +71,19 @@ export async function POST(req: NextRequest) {
     }
     const { account_id, rows } = parsed.data;
 
-    // Own accounts only — each household member imports their own statements.
-    // Every owned account, not just the statement's: candidates can live in any
-    // of them, and each one's TYPE is needed to read a transaction's direction
-    // (see `movesMoneyIn` in statement-reconcile.ts — `is_debt_return` alone
-    // does not say which way the money went).
-    const { data: ownedAccounts } = await supabase
-      .from("accounts")
-      .select("id, name, type, currency")
-      .eq("user_id", user.id);
+    // Each household member imports their own statements, but may land one in
+    // a partner account that was made public. Every writable account, not just
+    // the statement's: candidates can live in any of them, and each one's TYPE
+    // is needed to read a transaction's direction (see `movesMoneyIn` in
+    // statement-reconcile.ts — `is_debt_return` alone does not say which way
+    // the money went). Candidates themselves stay scoped to the caller's rows:
+    // an import only ever matches what its importer recorded.
+    const ownedAccounts = await listWritableAccounts(supabase, user.id);
 
-    const account = (ownedAccounts || []).find((a) => a.id === account_id);
+    const account = ownedAccounts.find((a) => a.id === account_id);
     if (!account) {
       return NextResponse.json(
-        { error: "Account not found or not owned by you" },
+        { error: "Account not found or not accessible" },
         { status: 403 },
       );
     }
