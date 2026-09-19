@@ -12,9 +12,9 @@ tags:
 
 # Notifications & Alerts · 3 — Action Plan
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Notifications & Alerts/4 - Checklist.md>)
 >
-> **What this file is:** the *why, and in what order* — the call + the sequenced Now/Next/Later queue + the candidate-work table. The flat, phased, checkable version (with IDs) is [4 · Checklist](<4 - Checklist.md>). **Tell me a line (e.g. _1.2_), a group (_Phase 1_), or a phase, and I'll work it.**
+> **What this file is:** the *why, and in what order* — the call + the sequenced Now/Next/Later queue + the candidate-work table. The flat, phased, checkable version (with IDs) is [4 · Checklist](<../../Notifications & Alerts/4 - Checklist.md>). **Tell me a line (e.g. _1.2_), a group (_Phase 1_), or a phase, and I'll work it.**
 >
 > **Status: nothing built yet** (docs created 2026-06-19). This is the queue, not a record of work.
 >
@@ -28,7 +28,7 @@ tags:
 
 The one true 🔴 is the **mis-routed daily items summary** — fix that first; it's small and high-impact. Then the three friction items the user named (calm bell, concise drawer, scannable alerts page), then hygiene + the Should backlog. This mirrors "fix what sends me to the wrong place, then calm what shouts, then declutter."
 
-> **Reminder:** all four user asks (bell, routing, drawer, alerts page) are **Must**. Phases 1–4 in [4 · Checklist](<4 - Checklist.md>) are exactly those four. Phase 5 is the Should/Could backlog.
+> **Reminder:** all four user asks (bell, routing, drawer, alerts page) are **Must**. Phases 1–4 in [4 · Checklist](<../../Notifications & Alerts/4 - Checklist.md>) are exactly those four. Phase 5 is the Should/Could backlog.
 
 ---
 
@@ -59,7 +59,7 @@ The one true 🔴 is the **mis-routed daily items summary** — fix that first; 
 
 **🔜 Later — Backlog (Should → Could).** Grouping (W5), filter segments (W6), empty states (W7), `console.*` cleanup (W8), unify visual language (W9), Undo audit (W10); then quiet hours/DND (W11), bulk actions (W12), weekly digest, severity-aware bell color.
 
-→ Every item phased, with IDs and acceptance criteria: [4 · Checklist](<4 - Checklist.md>).
+→ Every item phased, with IDs and acceptance criteria: [4 · Checklist](<../../Notifications & Alerts/4 - Checklist.md>).
 
 ---
 
@@ -74,7 +74,7 @@ The one true 🔴 is the **mis-routed daily items summary** — fix that first; 
 
 ## How to drive this
 
-- Point at a **line** ("do 1.2"), a **group** ("Phase 1 routing"), or a **phase** ("start Phase 2") — the IDs live in [4 · Checklist](<4 - Checklist.md>).
+- Point at a **line** ("do 1.2"), a **group** ("Phase 1 routing"), or a **phase** ("start Phase 2") — the IDs live in [4 · Checklist](<../../Notifications & Alerts/4 - Checklist.md>).
 - **Phase 1 is the blocker — do it first.** Phases 2–4 are the three named UX asks; Phase 5 is the backlog.
-- As items complete, check them in [4 · Checklist](<4 - Checklist.md>) **and** mark the pain resolved in [1 · Feature State](<1 - Feature State.md>) (Hard Rule #25 — no orphan fixes), with an `*(IMPLEMENTED YYYY-MM-DD)*` note in [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) where a decision is realized.
+- As items complete, check them in [4 · Checklist](<../../Notifications & Alerts/4 - Checklist.md>) **and** mark the pain resolved in [1 · Feature State](<1 - Feature State.md>) (Hard Rule #25 — no orphan fixes), with an `*(IMPLEMENTED YYYY-MM-DD)*` note in [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) where a decision is realized.
 - Any DB change (e.g., a new `notification_type`) needs a migration file first, then `schema.sql` (Hard Rule #24).

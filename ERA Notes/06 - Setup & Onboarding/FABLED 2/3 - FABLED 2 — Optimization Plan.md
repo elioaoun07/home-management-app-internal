@@ -24,7 +24,7 @@ One `Setup — New Machine.md` in this directory: prerequisites (node/pnpm versi
 
 ## O3 — Minimal CI (fixes G3; 20 minutes)
 
-One GitHub Action: install, `pnpm test`, `pnpm docs:check`, `pnpm typecheck` on push. Prerequisite: un-red the suite ([Schedule FABLED 2.3 · O1](<../../10 - Project Management/Schedule/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)) or the first run cries wolf. This unlocks every "green in CI" gate and hosts the future ratchets.
+One GitHub Action: install, `pnpm test`, `pnpm docs:check`, `pnpm typecheck` on push. Prerequisite: un-red the suite ([Schedule FABLED 2.3 · O1](<../../10 - Project Management/_Archive/Schedule/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)) or the first run cries wolf. This unlocks every "green in CI" gate and hosts the future ratchets.
 
 ## O4 — The AI-stack smoke test (fixes G6; a script)
 

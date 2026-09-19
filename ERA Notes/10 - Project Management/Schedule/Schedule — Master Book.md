@@ -1,98 +1,355 @@
 ---
-created: 2026-05-30
-updated: 2026-09-07
+created: 2026-09-10
+updated: 2026-09-10
 type: master-book
 status: active
 owner: Elio
-consolidates: "_index, 1 - Feature State, 2 - Vision & Roadmap, 3 - Action Plan, FABLED, FABLED 2, FABLED 3 (originals in ../_Archive/Schedule/)"
-tags:
-  - pm/master-book
-  - scope/module
-  - module/schedule
 ---
 
 # Schedule — Master Book
 
-> **Campaign:** Schedule · prefix `SCH` · working queue → [4 · Checklist](<4 - Checklist.md>)
-> **What this file is:** the single consolidated record for the Schedule (Items & Reminders) module — state, shipped history, pains, the recurrence audit, decisions, acceptance criteria, and the successor briefing.
+[Backlog](<4 - Checklist.md>) · [PM home](<../_index.md>) · [Governance](<../_Conventions.md>)
 
-> **ASTRA landing — 2026-09-06:** [Study](<ASTRA/Schedule — ASTRA Book.md>) · [Packets](<ASTRA/Schedule — ASTRA Packets.md>), subordinate to the active [ERA Top Layer plan](<../ERA Top Layer — Master Plan (2026-09-02).md>). Repository evidence is fixed at `3106164`; this landing changes documentation only. The dated study and current pain corrections supersede stale operational claims below; historical scores, shipped records and locked decisions are retained. Live DB state remains **UNVERIFIED** without fresh owner evidence.
+## Purpose & ownership
 
-## Identity & North Star
+One coherent time model from capture through occurrence completion. Standalone Items/Schedule with Prerequisites and Plan My Day junctions.
 
-"Schedule" is the user-facing name for the **Items & Reminders** standalone module. It is the household's **time graph** — every dated obligation (reminders, events, recurring chores, flexible routines, payment due-dates) lives here.
+## Current state & evidence
 
-Two things make it strategically important: **it is the spine ERA reads from** (briefings are only as smart as the time graph behind them), and **it already touches money, chores and trips** — mostly one-directionally.
+Stage1 recurrence correctness and shared day delegation exist. Stages2–3 and all-consumer parity remain open; the old known-red WebTodayView claim is stale. The live capture form is MobileReminderForm; source-present parser behavior is not net-new NLP.
 
-**Vision in one line:** *turn Schedule from a calendar you read into a time graph that acts — surfacing the right item, at the right time, with the right context, before you go looking.*
+Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>) preserves detailed older narratives and receipts.
 
-**Source:** `src/features/items/`, `src/app/reminders/`, `src/components/{reminder,items,planner,web}/`, `src/lib/{schedule,utils/dayOccurrences.ts,smartTextParser.ts,gcal}/`. Reads go through the `get_schedule_bundle` RPC (Hard Rule 21). Vault docs: [Items & Reminders / Overview](<../../02 - Standalone Modules/Items & Reminders/Overview.md>) and [Schedule Feature](<../../02 - Standalone Modules/Items & Reminders/Schedule Feature.md>) — the authoritative code map, do not duplicate file tables here.
+## Vision & Decisions
 
-## Current State (verified)
+- Focus is a per-item mode; household co-ownership permits mutual edit/reassign through the shared predicate. *(IMPLEMENTED 2026-06-06)*
+- Capture first, classify last: title-only can save a dateless reminder; structured fields remain editable truth. Form parsing is rule-based/offline-capable; Hub uses Gemini with an explicit long-call timeout. Never reuse money NLP logic wholesale.
+- The former three-type data decision is transitional: the accepted SCH-6.1 retirement supersedes it as the target; do not pretend the DB/type migration has shipped. The live form already presents Reminder/Event.
+- Occurrence menu: Complete, Skip, Move to date, Edit occurrence, Edit/Delete series. Recurring Move uses rescheduled_to; no postpone-to-next-slot duplication. Cancel is for one-off items. Exactly-once actions remain mandatory.
+- No geofencing. Arrive/leave uses existing NFC prerequisites. Do not activate inert evaluators to expand parser vocabulary. DEC-10 preserves the unresolved optional-versus-required time_window conflict.
+- Do not redesign working Month/Week/Today surfaces or split useItems solely for size. Mobile form deletion requires SCH-5.3’s explicit keep/merge/retire decision.
+- Reusable Catalogue definitions never replace execution ownership: Schedule owns activation, occurrence identity and history; edits to a definition do not silently rewrite instances.
 
-**Maturity 5.5 / 10 as of 2026-07-18 (FABLED 3, evidence cutoff `f0a8e19`), +0.2 vs 2026-07-02.**
-
-| Dimension | Score | Evidence |
-|---|---|---|
-| Household semantics | 8 | pass/take-back and idempotent occurrence actions hold, no regressions |
-| Engine correctness | 5 | three expansion engines still diverge; gcal sync wraps items rather than adding a fourth expander |
-| Test protection | 5 | **suite still red**: `expandOccurrences.test.ts` guard vs `WebTodayView.tsx` (no `is_flexible` reference since `5f7c064`, 2026-06-16). A red suite for a month trains everyone to ignore red |
-| Capture UX | 7 | live form + `smartTextParser` (~1,420 LOC) unchanged in window |
-| Code health | 4 | `useItems.ts` 2,665 LOC; dead `MobileItemForm.tsx` (49,943 bytes) on its **fourth** flag |
-| Outward bridges | 4 (+1) | **Google Calendar sync shipped** — OAuth connect/callback/connection routes + `sync-item` + `google_calendar_connections` + `items.google_synced_at` |
-| Handoff readiness | 4 | recurrence anywhere = mid-tier+ with `recurrence-safety` open; the red suite undermines the "run tests" ritual for lower tiers |
-
-**Sub-feature reality:**
-
-| Sub-feature | Tier | Reality | Next step |
-|---|---|---|---|
-| Fixed reminders / events | 🟢 Core | one-shot `reminder_details.due_at` / `event_details.start_at`; mobile quick + full forms, desktop dialog | — stable |
-| RRULE recurring | 🟢 Core | `item_recurrence_rules.rrule` expanded against `start_anchor`, wall-clock DST adjustment, bi-weekly detect + phase-flip, per-occurrence actions in `item_occurrence_actions`, exceptions in `item_recurrence_exceptions`. Expansion is unit-tested — but **the tested engine is wired to nothing** | Stage 2 engine unification (SCH-4.3b) |
-| Flexible routines | 🔵 | "N times per period" with user-picked days (`item_flexible_schedules`). **Universal placement rule:** when `is_flexible`, all views ignore the rrule and inject schedule rows. Overdue look-back ≤3 periods | guard the placement rule with a working test (SCH-4.2) |
-| Subtasks | 🔵 | kanban, priority, nested | — stable |
-| Alerts | 🔵 | `SmartAlertPicker` (absolute/relative, repeat, channels) → `item_alerts`, fired by the `item-reminders` cron; cancelled occurrences suppressed via `item_alert_suppressions` | watch for missed-suppression edge cases |
-| Prerequisites | 🟠 | NFC→item unlock works; **4 evaluators are inert** (`weather`, `time_window`, `schedule`, `custom_formula`) | ship `time_window` first — smallest, highest demo value |
-| Calendar / Today / Week views | 🔵 | month/week/today across web + mobile with recurrence expansion and day-expansion modal | no per-view regression test for the placement rule |
-| `/reminders` Focus page | 🔵 | `WebDayPlanner` owns the Focus tab: selected day as primary panel with next-item focus, Plan in the top action row, Today in day navigation, overdue hidden until opened; mine/partner filter keys on `responsible_user_id` | — stable |
-| Household assignment | 🔵 | `responsible_user_id` — an item you own but assign to your partner shows under "partner" | — stable |
-| Focus insights (AI briefing) | 🟡 | `useFocusInsights` → AI Focus briefing, cached 24 h | enrich with cross-module data |
-| Catalogue templates | 🔵 | items promoted to / created from catalogue templates (`source_catalogue_item_id`); flexible routines originate here | — stable |
-| Plan My Day | 🟡 | Focus tab triages everything landing on a selected day (one-time + recurring + flexible via shared `dayOccurrences.ts`), with push-off, both-direction prepone, ad-hoc tasks and checklist planning; persisted via `day_plans` | mood/energy optimizer deferred — `intent` is stored but unread |
-| Google Calendar sync | 🟡 | outbound one-way push (`src/lib/gcal/sync.ts`, 274 lines), OAuth routes, `cron/gcal-reconcile` two-pass idempotent reconciler | prove the cron actually runs |
-
-**Surface map — one module, seven doors:** Mobile Form (`/expense`, precision create/edit) · `/reminders` (main mobile view) · Today (web) · Calendar Month (most-visited) · Calendar Week (most important — absorbed Focus's job) · Stats (never used, parked) · the retired `/focus` page.
+Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
 
-> **Catalogue build-plan handoff — 2026-09-07:** [Final specification §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), especially C04a–c/C05–C08, preserves Catalogue definitions and all existing Schedule item IDs. It specifies atomic activation/promotion, slot-aware effects, safe pause/stop, future-only defaults and legacy reconciliation. Dock occurrence work to existing SCH-4.2/SCH-4.3b and ASTRA-SCH-1/3; no implementation or new completion claim.
+🟠 **SCH-4.2** Verify cross-view recurrence placement. See [acceptance](<#sch-42>) for the root cause, evidence and gate.
 
-- 🟠 **Catalogue activation state is a separate write from real Schedule execution.** Source review 2026-09-07 at `bc7ccc3`: `AddToCalendarDialog.tsx:364–450` creates an item before updating `linked_item_id`/`is_active_on_calendar`; `api/items/[id]/promote/route.ts:145–169` tolerates reverse-link failure and separately writes history. Catalogue disable similarly splits recurrence/state/history (`api/catalogue/[id]/disable/route.ts:58–153`). Flexible Assign also creates template-derived one-off items, so migrating only the single backlink would lose relationships (`MobileFlexibleAssignmentPage.tsx:465–508`). [Assessment §9.6 / owner clarification §9.10](<../../../docs/Catalogue — ASTRA Deep Dive.md>) **withdraws mandatory Tasks V2 and retains Catalogue ownership of reusable definitions by intent**; Schedule owns activation/execution. Repair in place, preserving IDs, placements, history and Calendar integration. Current Assign reads targets live from Catalogue (`MobileFlexibleAssignmentPage.tsx:285–308`); Catalogue PATCH backfills `is_chore` (`api/catalogue/items/[id]/route.ts:183–189`), so snapshot-by-default remains a proposed contract, not a shipped guarantee. No implementation or production incident verification.
+🟠 **SCH-4.3b** Unify recurrence expansion and occurrence actions. See [acceptance](<#sch-43b>) for the root cause, evidence and gate.
 
-- 🟡 **Historical durations and suggestion confidence are not measured capacity.** Proactive discovery 2026-09-06 at `83e44be`: `src/components/items/ItemDetailModal.tsx:353–380` pre-fills actual task minutes from estimates and excludes chores. The currently unconsumed suggestion endpoint uses date-only conflict avoidance and labels three completions high confidence (`src/app/api/suggest-schedule/route.ts:124–167,247–252`); occupied-date fallback can reuse period start (`:325–354`). Do not activate it or infer available effort from those values. [Study](<../Proactive ERA/Proactive ERA — Architectural Leverage.md>) proposes bounded conditional feasibility and explicit day intent; no new implementation admission.
+🔴 **SCH-7** Refuse unsupported recurrence before capture. See [acceptance](<#sch-7>) for the root cause, evidence and gate.
 
-**ASTRA delta, 2026-09-06:** [Study findings F1–F5](<ASTRA/Schedule — ASTRA Book.md>) are the current source baseline; dated test/DB claims below are not fresh runtime evidence.
+🟠 **SCH-9** Give online and replayed reminders equal alert semantics. Dated source diagnosis; cause and witness limits are in [criteria](<#sch-9>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
 
-- 🟠 **ERA's agenda omits placed flexible routines and mislabels overdue work.** `src/features/era/intents/resolvers/schedule.ts:50–65` passes an empty placements array while `src/components/planner/WebDayPlanner.tsx:749` supplies real placements; `:80–90` derives overdue from alert triggers rather than due/completion state. ASTRA-SCH-3 supplies complete E-04/E-08/E-22 inputs after ASTRA-SCH-1; it does not finish all Schedule bridges.
-- 🟠 **Conversational capture acknowledges recurrence it never writes.** The resolver carries `recurrenceRule` into its result but POST writes only type/title/priority/due time (`src/features/era/intents/resolvers/schedule.ts:170–209`); the pending path uses the same writer (`:237–238`). ASTRA-SCH-2 is the S guard for E-09: refuse unsupported recurrence before any write and keep the structured-form path; full recurrence capture remains under SCH-1b.4/SCH-1c.2.
-- 🟠 **Google receives a weaker recurrence projection.** `src/lib/gcal/sync.ts:64,111` sends the base RRULE without the app's exception, pause or flexible-placement semantics. A healthy scheduled reconciler would not repair that representational gap; source behavior is verified, Google/device execution is UNVERIFIED. Hold projection work until the shared occurrence contract is established.
+The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
-- **Correction 2026-09-06:** the old known-red `WebTodayView` source guard is stale. `src/lib/schedule/expandOccurrences.test.ts:99–114` now accepts delegation to `expandOccurrencesInRange`, which the view uses (`src/components/web/WebTodayView.tsx:111,122`). ASTRA did not execute the suite; neither an expected failure nor a blanket green claim is warranted. SCH-4.2 still owns meaningful per-view behavior protection.
-- 🟠 **The live day engine omits recurrence semantics and mishandles boundaries.** `src/lib/utils/dayOccurrences.ts:55–67` expands without exception/pause/materialization inputs, `:138–141` passes next midnight into the inclusive range in `src/lib/utils/date.ts:240`, `:115` turns hour zero into 09, and `:119` collapses multiple flexible slots by item/day. ASTRA-SCH-1 narrows SCH-4.2/SCH-4.3b to the day adapter first; canonical `src/lib/schedule/expandOccurrences.ts:97–146` also needs placement and legacy-move compatibility before adoption. No claim that every other calendar path is complete.
-- 🟠 **The tested engine isn't the used engine** — false confidence: the test guards code no surface imports.
-- 🟠 **Two diverging occurrence-action UIs** — the calendar's inline modal (`WebEvents.tsx`) and the shared sheet (`ItemActionsSheet.tsx`). Both now distinguish Skip from Cancel correctly, but they are two implementations to keep in sync.
-- 🟠 **The `gcal-reconcile` cron may never run.** It shipped 2026-07-10 and is well-built (two-pass, idempotent, self-reporting via `last_synced_at`) — but there is no `vercel.json` and no scheduler trace in the repo. An unscheduled cron is indistinguishable from a scheduled one by reading code. Until `last_synced_at` is *observed advancing daily in prod*, treat the Google copy as silently diverging — and Healthcare medications plan to trust this layer.
-- 🟠 **Seven surfaces for one module** — cognitive load; no single obvious place to do the thing. Organic growth: each view added without retiring or merging an old one.
-- 🟡 Two representations of "move one occurrence" — a `postponed` action (`postponed_to`) *and* a recurrence exception (`override_payload_json.rescheduled_to`); the canonical engine speaks only the exception dialect, the live UI writes the action dialect.
-- 🟡 `MobileItemForm.tsx` is dead code on its **fourth** generational flag — 49,943 bytes, zero importers. Deleting it is a 2-minute `git rm` + typecheck. (Left in place per an earlier owner decision — do not delete without ticking SCH-5.3.)
-- 🟡 **Google token/cron health remains unobserved in production.** A `sync_error` write already exists (`src/lib/gcal/sync.ts:224`), so "no error state" was too broad. Establish advancing reconciliation timestamps and visible failure behavior with owner/device evidence before treating the projection as current.
-- 🟡 **A time-window predicate alone cannot activate an item when time advances.** Four evaluators remain inert; `src/lib/prerequisites/evaluators/time-window.ts:8–9` returns false and `src/lib/prerequisites/engine.ts:122–189` runs on incoming trigger events, with no clock source among the current cron routes. SCH-4.4 remains conditional on a real caller; its optional checklist wording conflicts with mandatory Definition of Done D2 and awaits owner resolution. Do not ship only the predicate or light up the other stubs.
-- 🟡 `useItems.ts` is ~2,665 LOC — change-risk hotspot. Split when a feature next forces you in, never "just because".
-- 🟡 No reassignment history / audit — disputes ("I thought you had it") have no record.
-- 🟡 Events are easier to log than reminders/tasks — events map to one start time; reminders invite optional recurrence/alert/subtask decisions that slow entry.
-- 🟡 Auto-archive 1-month window duplicated as a constant in two routes plus a manual backfill migration — drift risk.
-- ⚪ `day_plans.intent` is captured but unconsumed; no `getWeekShape()` for ERA.
-- ⚪ Stats surface unused — maintenance with zero payoff; parked.
-- ⚪ **Historical RLS concerns need fresh owner evidence.** Earlier duplicate-policy/private-assignment claims and the 2026-08-04 `item_prerequisites` concern recorded in the Trips book are not current DB proof. Permissive policies OR-combine, but restrictive policies can veto them; inspect a fresh owner snapshot before changing access or claiming the residual drift harmless. ASTRA made no DB calls.
+## Acceptance Criteria Index
+
+### SCH-4.2
+
+**Outcome:** Verify cross-view recurrence placement.
+
+- **Acceptance:** Verify broader per-view placement semantics; WebTodayView now delegates through the shared day path, so the old known-red-source claim is stale. This does not prove pause/exception/flexible parity or close broader coverage.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-4.3b
+
+**Scope split:** this ID owns the shared day/range adapter, expansion core and shared action sheet. SCH-14 owns occurrence identity through side-effects; SCH-8 owns remaining consumer migrations/parity. The former all-surfaces obligation is complete only when all three pass. Execute the bounded adapter first; it is the predecessor meant by SCH-14/SCH-8, not completion of the entire original L-sized refactor.
+
+- **Retained campaign gate (D1):** One expansion engine + one occurrence-action sheet across all surfaces (Stages 2–3 — not started; Stage 1 done 2026-06-19).
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C04a. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Unify recurrence expansion and occurrence actions.
+
+- **Acceptance:** Engine/UI recurrence unification — Stages 2–3 (one expansion engine + one occurrence-action sheet across all surfaces).
+
+- **Acceptance:** skipping a missed past occurrence marks it `skipped`, removes it from view, and creates **no** new or duplicate occurrence; completing an occurrence on `/reminders` moves it into the hideable Completed section; the same item renders identically on calendar, week, planner and today.
+- **Acceptance:** exactly one expansion engine is imported by every surface; `dayOccurrences.ts` and the `WebCalendar` inline loop are gone.
+
+**Retained contract — ASTRA-SCH-1:**
+
+- **Outcome:** Today and Planner preserve pauses, exceptions and valid midnight/flexible placements through one occurrence contract.
+- **Boundary:** Retain dayOccurrences' caller API but replace its RRULE loop with the existing canonical expander. Add missing flexible placement and legacy one-off moved-action compatibility there, preserve handled-state rendering and occurrence origin. Same-day flexible slots remain distinct by placement identity. Use half-open calendar-day bounds, preserve00:30, and central timezone helpers. Fixtures must distinguish skipped origin, moved destination, active pause, edited override and DST. No view layout changes, data migration or blanket dialect deletion.
+- **Money/schedule math?:** Yes: daily09:00 seriesSep6–8, pauseSep7 → only6/8; moveSep6→Sep8 at11 → original6 absent, scheduled8 at09 and moved8 at11 have distinct identities. Sep7 at00 belongs onlySep7; flexible00:30 stays00:30. Preserve same-day distinct slots and origin-based completion.
+- **Gate:** `pnpm exec vitest run src/lib/schedule/ src/lib/utils/dayOccurrences.test.ts --reporter=verbose` → nonzero behavior cases pass, no test-count reduction. Source audit confirms adapter contains no independent RRULE expansion loop. Common gates; owner390×844 Today/Planner captures on same fixture agree.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-7
+
+**Outcome:** Refuse unsupported recurrence before capture.
+
+- **Acceptance:** Unsupported recurrence is refused before creating a one-time reminder or a misleading pending turn; blocks safe E-09 conversational capture.
+
+**Retained contract — ASTRA-SCH-2:**
+
+- **Outcome:** A recurring request cannot be acknowledged as recurring after creating a one-time reminder.
+- **Boundary:** Guard parsed recurrence before writeReminder and before an incomplete request becomes a pending turn; guard the pending answer too. Return existing structured-form handoff/refusal and unsuccessful outcome, with original input recoverable. No POST, no fake recurring success, no new recurrence parser. Preserve explicit one-time requests.
+- **Money/schedule math?:** Yes: “every Monday at9” → zero one-time rows, no false recurring receipt; “Monday at9” → one existing nonrecurring path. Pending-time response containing recurrence likewise writes zero.
+- **Gate:** `pnpm exec vitest run src/features/era/intents/resolveIntent.test.ts --reporter=verbose` → nonzero initial/pending recurrence and one-time control cases pass; mocked POST count0 for unsupported cases. Common gates; 390×844 capture preserves input and existing form door.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-5.5
+
+**Outcome:** Finish mobile reminder form cleanup and verification.
+
+- **Acceptance:** Mobile-form cleanup carried from the R3–R8 rounds: add **Undo** to success toasts (Hard Rule #1), remove the stray `console.error` in the submit/speech handler (Hard Rule #22), drop the unused `missingFieldType` state, and do the real-device visual check across themes.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-1.9
+
+**Outcome:** Document the shipped capture behavior.
+
+- **Acceptance:** Post-ship docs: [Items & Reminders Overview](<../../02 - Standalone Modules/Items & Reminders/Overview.md>) updated with the new capture behaviors. No new route/icon, so Atlas/Routes unchanged.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-1b.4
+
+**Outcome:** Harden conservative recurrence extraction.
+
+- **Acceptance:** Harden recurrence extraction — keep conservative; **gate behind the SCH-4.2 tests** before trusting RRULE writes from text.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-1c.1
+
+**Outcome:** Parse one-line items through Gemini safely.
+
+- **Acceptance:** Wire one-line → structured item via **Gemini**; **pass `timeoutMs`** (Hard Rule #6 — AI calls can exceed the current 8 s default). → `src/lib/ai/gemini.ts`
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-1c.2
+
+**Outcome:** Reuse Hub reminder creation with confirmation.
+
+- **Acceptance:** Reuse/extend the Hub create path ([AddReminderFromMessageModal.tsx](<../../../src/components/hub/AddReminderFromMessageModal.tsx>) · [messageActions.ts](<../../../src/features/hub/messageActions.ts>)) — confirm chip before commit.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-8
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C04c. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Unify canonical agenda consumer semantics.
+
+- **Acceptance:** ASTRA-SCH-3/C04c: after the bounded day adapter, verify pause/exception/flexible placement and consumer parity across agenda, ERA and calendar surfaces. No independent expansion engine.
+- **Depends on:** [SCH-4.3b](<Schedule — Master Book.md#sch-43b>), [SCH-14](<Schedule — Master Book.md#sch-14>).
+
+**Retained contract — ASTRA-SCH-3:**
+
+- **Outcome:** ERA's day answer includes the same scheduled flexible work and due-state interpretation as the planner.
+- **Boundary:** Use existing fetchFlexibleRoutines with the selected date/per-item periods, feeding its scheduled placements into the day adapter. Keep bundle reads and existing household rules. Failed placements/actions/items must prevent a complete-agenda claim. Compute overdue from the same bounded occurrence/completion semantics, not active alert trigger_at. No second overdue engine: reuse the migrated range adapter and existing planner window policy. If no reusable boundary fits, stop and split rather than duplicate.
+- **Money/schedule math?:** Yes: fixed09:00 + flexible11:00 → two shared agenda entries; yesterday's completed occurrence with old active alert → zero overdue; failed placement fetch → unavailable, not one-item complete agenda. Weekly and monthly routines use their own periods.
+- **Gate:** `pnpm exec vitest run tests/era-schedule-parity.test.ts src/features/era/intents/resolveIntent.test.ts --reporter=verbose` → nonzero fixtures pass with mocked identical planner inputs, empty vsfailed distinction and scoped periods. Common gates; same-date ERA/Planner390×844 comparison.
+
+**Provenance:** [Schedule — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-9
+
+**Outcome:** Give online and replayed reminders equal alert semantics.
+
+- **Acceptance:** UU-X2: online draft reminder creation and queued API replay must produce the same intended alerts. Documented online hook omitted the active alert that replay adds; cover retries and offline-to-online transitions.
+
+**Provenance:** [Schedule — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-10
+
+**Outcome:** Verify prerequisite access against current RLS.
+
+- **Acceptance:** H-01 and Aug19 Inbox: owner supplies item_prerequisites and parent/child read-path RLS state. Preserve intended household access and choose an approved hot-child contract only from current evidence.
+
+**Provenance:** [Schedule — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-14
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C04b. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Preserve occurrence identity through every action.
+
+- **Acceptance:** Catalogue C04b: one stable occurrence/slot identity across subtasks, alerts, completion, exceptions and replay. Verify existing series actions and DST boundaries, not just display dates.
+- **Depends on:** [SCH-4.3b](<Schedule — Master Book.md#sch-43b>).
+
+**Provenance:** [Schedule — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-2.1
+
+**Outcome:** Parse "at home" / "when I get home".
+
+- **Acceptance:** Parse "at home" / "when I get home" → set `location_context: "home"`.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-2.2
+
+**Outcome:** Map the phrase "home".
+
+- **Acceptance:** Map the phrase "home" → the user's tag via `nfc_tags.label` → attach an `nfc_state_change` prerequisite (arrive-home). → `src/lib/prerequisites/evaluators/nfc-state.ts`
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-2.3
+
+**Outcome:** Pre-fill the existing `PrerequisitePicker` from parsed text (plumbing already wired in the form).
+
+- **Acceptance:** Pre-fill the existing `PrerequisitePicker` from parsed text (plumbing already wired in the form).
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-3.1
+
+**Outcome:** Lightweight **one-question** clarification for ambiguous phrases ("later".
+
+- **Acceptance:** Lightweight **one-question** clarification for ambiguous phrases ("later" → Tonight / Tomorrow / Pick time); never block a simple save.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-3.2
+
+**Outcome:** Compact, on-brand chip preview obeying the look-and-feel Hard Rules (`useThemeClasses()`, opaque panels via `tc.bgPage` #15, no hardcoded colors #10,….
+
+- **Acceptance:** Compact, on-brand chip preview obeying the look-and-feel Hard Rules (`useThemeClasses()`, opaque panels via `tc.bgPage` #15, no hardcoded colors #10, futuristic SVG icons #4, Undo toast #1, `inputMode="decimal"` #19, mobile-first #5).
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-4.4
+
+- **Retained campaign gate (D2):** DEC-10 must resolve whether time_window is mandatory; the old unconditional DoD is not silently waived or falsely completed.
+
+**Outcome:** `time_window` prerequisite evaluator (one of the 4 inert).
+
+- **Acceptance:** `time_window` prerequisite evaluator (one of the 4 inert) — optional, only if a feature needs it.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-4.5
+
+**Outcome:** Split `useItems.ts` (~2,621 LOC).
+
+- **Acceptance:** Split `useItems.ts` (~2,621 LOC) — only when a feature next forces you in, not "just because."
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-5.2
+
+**Outcome:** Give each surface **one job** per the surface map (Month / Week / Today / Form).
+
+- **Acceptance:** Give each surface **one job** per the surface map (Month / Week / Today / Form).
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-5.3
+
+**Outcome:** Investigate the [MobileReminderForm.tsx](<../../../src/components/reminder/MobileReminderForm.tsx>) vs….
+
+- **Acceptance:** Investigate the [MobileReminderForm.tsx](<../../../src/components/reminder/MobileReminderForm.tsx>) vs [MobileItemForm.tsx](<../../../src/components/items/MobileItemForm.tsx>) **duplication** — decide keep/merge/retire. **No deletion without a decision.**
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-5.4
+
+**Outcome:** Reassignment **history / audit** trail.
+
+- **Acceptance:** Reassignment **history / audit** trail — "who had it when" (W8).
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-6.1
+
+**Outcome:** Retire the task type across storage and surfaces.
+
+- **Acceptance:** *(packet **M-09** of the [ERA Top Layer — Master Plan](<../_Archive/Plans/ERA Top Layer — Master Plan (2026-09-02).md>), Lane M while native waits; split M-09a DB+types / M-09b surfaces+docs)* Retire the `task` type end-to-end (DB + all surfaces + the `ItemType` union + docs). Do this as one dedicated slice before touching the DB.
+
+- **Acceptance:** no `task` value remains in the `ItemType` union, any surface, or the DB; existing `task` rows are migrated with a paired migration file.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-11
+
+**Outcome:** Audit the arrive and leave NFC experience.
+
+- **Acceptance:** Preserve the NFC Inbox proposal: inspect both arrive/leave flows and their UI, then identify a bounded useful change. Schedule owns the behavior with Native consuming existing tags; no new campaign, geofencing or speculative revamp. Native bridge first.
+- **Depends on:** [NAT-6](<../Native App/Native App — Master Book.md#nat-6>).
+
+**Provenance:** [Schedule — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-12
+
+**Outcome:** Separate estimated and observed schedule duration.
+
+- **Acceptance:** PE-X1: defaulted/prefilled actual duration must not count as measured completion evidence. Preserve provenance through writes, reads and calibration; no invented backfill.
+
+**Provenance:** [Schedule — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-13
+
+**Outcome:** Project canonical recurrence into Google Calendar.
+
+- **Acceptance:** After canonical Schedule parity, project supported recurrence/exception semantics without a second engine. NOTIF-6.6 proves delivery/credentials/device alarms and does not alone certify semantic projection.
+- **Depends on:** [SCH-8](<Schedule — Master Book.md#sch-8>).
+
+**Provenance:** [Schedule — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-15
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C05. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Activate reusable definitions atomically.
+
+- **Acceptance:** Catalogue C05: explicit activation checks source rights and destination, commits one execution instance with lineage and handles replay through the existing queue. No phantom success or duplicate activation.
+- **Depends on:** [SCH-14](<Schedule — Master Book.md#sch-14>), [HUB-46](<../Hub & ERA/Hub & ERA — Master Book.md#hub-46>), [KIT-20](<../Kitchen/Kitchen — Master Book.md#kit-20>).
+
+**Provenance:** [Schedule — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-16
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C06. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Promote definitions without rewriting executions.
+
+- **Acceptance:** Catalogue C06: promotion creates a reusable definition while existing execution IDs/history remain unchanged. Permission and revision preconditions apply.
+- **Depends on:** [SCH-15](<Schedule — Master Book.md#sch-15>).
+
+**Provenance:** [Schedule — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-17
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C07. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Pause, stop and resume one activation coherently.
+
+- **Acceptance:** Catalogue C07: preserve one activation’s history and future schedule intent through pause/stop/resume. Existing recurrence exceptions remain authoritative; no cloned execution to simulate resume.
+- **Depends on:** [SCH-15](<Schedule — Master Book.md#sch-15>).
+
+**Provenance:** [Schedule — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-18
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C08. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Apply reusable defaults only to future work.
+
+- **Acceptance:** Catalogue C08: future-only defaults, accurate usage and inverse-source reads preserve completed/past execution values and lineage.
+- **Depends on:** [SCH-16](<Schedule — Master Book.md#sch-16>), [SCH-17](<Schedule — Master Book.md#sch-17>).
+
+**Provenance:** [Schedule — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### SCH-19
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C18. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Offer explicit updates to future activations.
+
+- **Acceptance:** Catalogue C18 P2 held: opt-in future updates only after C04–08 acceptance, with preview, rights and revision checks. Never rewrite existing history or silently propagate template edits.
+- **Depends on:** [SCH-14](<Schedule — Master Book.md#sch-14>), [SCH-15](<Schedule — Master Book.md#sch-15>), [SCH-16](<Schedule — Master Book.md#sch-16>), [SCH-17](<Schedule — Master Book.md#sch-17>), [SCH-18](<Schedule — Master Book.md#sch-18>).
+
+**Provenance:** [Schedule — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
 ## Shipped Log
 
@@ -122,132 +379,8 @@ Two things make it strategically important: **it is the spine ERA reads from** (
 
 *(Delivery runner appends dated progress bullets here automatically.)*
 
-## Vision & Decisions
-
-### Locked decisions
-
-1. **Focus is a per-item mode, not a page** *(IMPLEMENTED 2026-06-06)* — flexible-routine assignment consolidates into the Week view.
-2. **Household co-ownership: shared = co-editable, reassign both ways** *(IMPLEMENTED 2026-06-06)* — edit/delete/reassign/reclaim all use `canMutateItem()`; assigned-out and assigned-to-me are explicit buckets.
-3. **Capture the schema drift back into the repo** *(IMPLEMENTED 2026-06-06)*.
-4. **Occurrence-action writes must be idempotent** *(IMPLEMENTED 2026-06-21)*.
-5. **Type taxonomy — Option A: keep three types in the data, never ask the user to pick one.** A time + alert → reminder; a start + duration/subtasks → task; a start AND end → event; "at home" → `location_context: home` (+ `is_chore` from a chore template). No migration, types stay, the form infers at Save. *(The live form already went further for display: it shows Reminder | Event only and coerces `task → reminder` in the UI. Global `task` retirement is SCH-6.1.)*
-6. **Both capture lanes** *(2026-06-06)* — a natural-language box in the mobile form **and** Hub Chat. **Engine split:** rule-based parser in the form (offline-capable, mirrors `messageTransactionParser.ts`'s *shape*), Gemini in Hub Chat (must pass `timeoutMs`, Hard Rule 6). The form's structured fields stay the source of truth; the parser pre-fills them as editable chips.
-7. **Occurrence actions follow the Google/Outlook standard** *(2026-06-19)* — recurring occurrence menu = Complete · Skip this occurrence · Move to a date · Edit this · Edit/Delete series. "Move" is a recurrence exception with `rescheduled_to`, never a postpone action. "Cancel" only for one-off items. "Postpone → next occurrence" is removed entirely, because postponing a recurring occurrence onto its own next slot **always** duplicates it.
-8. **No geofencing** *(2026-06-06)* — "when I get home" routes through `location_context: home` plus the existing NFC arrive-home prerequisite (`nfc_state_change`, evaluated by `nfc-state.ts`). The only net-new piece is mapping the phrase "home" → the user's tag via `nfc_tags.label`.
-
-### The form blueprint (design intent, mostly shipped)
-
-**Capture first, classify last.** One screen: a title field (the only required one), date chips (`Today / Tomorrow / Pick… / No date`), alert **off by default**, an 🏠 At-home toggle, Save — with everything advanced (end-time, recurrence, subtasks, responsible user, category, priority, prerequisites, description) under a "More" disclosure. Type is inferred at Save, never asked. Title-only save creates a dateless "someday" reminder — capturing *something* beats capturing nothing.
-
-### Track A — internal enhancements
-
-| Enhancement | Today | The dream | Effort |
-|---|---|---|---|
-| Finish Prerequisites evaluators | NFC→item works; 4 stubs | `time_window` ("show meds 7–9am"), `schedule` ("after gym → log meal"), `custom_formula` — conditional automation | M each; `time_window` is S |
-| Recurrence editor UX | single-occurrence vs series edits are subtle | clear "this / this-and-future / all" on every edit and delete | M |
-| Bulk occurrence operations | one at a time | multi-select → bulk complete/postpone/reschedule | M |
-| Smarter overdue handling | flexible look-back ≤3 periods; fixed items just sit | roll-forward suggestions + a single overdue triage view | M |
-| Natural-language entry | `smartTextParser` exists and ships | "every other Thursday at 7", "remind me 2 days before rent" → rrule + alert in one line | M |
-| Test the placement rule | convention across 6+ views | one guard test that actually passes | S |
-| Plan My Day phase 2 | triage shipped | hourly timeline canvas + mood/energy optimizer reading `day_plans.intent` | M / M–L |
-
-### Track B — bridges out of Schedule
-
-- **Schedule → Focus / ERA briefing enrichment** — pull the whole week's shape, not just today's items.
-- **Schedule ↔ Budget (due-dated payments)** — unify so confirming a payment closes the reminder (BUD-3 from the other side).
-- **Schedule ↔ Notifications (smart timing)** — smart offsets, quiet hours, weekly digest instead of daily noise.
-- **Trips → Schedule cascade** — make trip activation/completion side-effects legible from the Schedule side.
-- **Debt → Schedule** — auto-create a reminder on a debt's collection date.
-
-### The bets, in order
-
-1. **Green the suite, then lock the foundation** — the placement-rule guard and recurrence/occurrence tests. Do this before any enhancement that touches views.
-2. **Ship `time_window`** — smallest of the four stubs, highest demo value, proves the conditional-automation engine end-to-end.
-3. **Schedule → briefing enrichment** — the biggest *felt* upgrade; makes ERA visibly smarter by reading the full time graph.
-
-> Resist starting bridges before the foundation tests exist — the recurrence math is exactly where a silent bridge bug would hide.
-
-### Not now / will not do
-
-- ⚪ **Stats redesign** — zero current payoff.
-- ⚪ **`weather` prerequisite** — lowest value-for-effort of the four evaluators.
-- ⚪ **Don't redesign Month / Week / Today** — these are the parts that work.
-- ❌ **Refactor `useItems.ts` "just because"** — only when a feature forces you in.
-- ⛔ **Geofencing / fire-on-arrival location triggers** — doesn't exist, it's a PWA, and the owner said no. `location_context` is a static flag, not a trigger.
-- ⛔ **Reusing the budget NLP wholesale for items** — `messageTransactionParser.ts` is hard-wired to amounts/currencies/spend categories. Reuse its *shape*, not its logic.
-- ⛔ **Ad-hoc deletion of "duplicate/confusing mobile pages"** — surface consolidation is a decision, not a cleanup. No deletion without ticking the item.
-- ⛔ **Lighting up inert evaluators just to widen NLP coverage.**
-- ⚠️ **Never feed an unproven parser into untested recurrence math** — recurrence parsing stays conservative and gated behind tests before it can write an RRULE.
-
-### Staged recurrence refactor (the spine of SCH-4.3b)
-
-- **Stage 1 — correctness** *(shipped 2026-06-19, see Shipped Log)*.
-- **Stage 2 — unify the engine.** Finish `schedule/expandOccurrences.ts` to also inject flexible schedules and (for one-off items) postponed actions; converge recurring single-occurrence moves onto `rescheduled_to` exceptions so the engine needs only one move dialect. Migrate every surface (WebCalendar, WebWeekView, WebDayPlanner, WebTodayView, WebTabletMissionControl, ItemsListView, RemindersInsightsPage) onto it; delete `dayOccurrences.ts` and the inline loops. Lock with an expanded `expandOccurrences.test.ts`.
-- **Stage 3 — unify the action UI.** One shared occurrence-action sheet used by calendar, week, planner and today; delete the inline calendar dialog.
-
-## Acceptance Criteria Index
-
-### SCH-4.2
-- **Acceptance:** `npx vitest run src/lib/schedule/` is green, and the guard either asserts on behavior or names the delegation in a comment when a view delegates its flexible check to a shared helper.
-
-### SCH-4.3b
-- **Acceptance:** skipping a missed past occurrence marks it `skipped`, removes it from view, and creates **no** new or duplicate occurrence; completing an occurrence on `/reminders` moves it into the hideable Completed section; the same item renders identically on calendar, week, planner and today.
-- **Acceptance:** exactly one expansion engine is imported by every surface; `dayOccurrences.ts` and the `WebCalendar` inline loop are gone.
-
-### SCH-6.1
-- **Acceptance:** no `task` value remains in the `ItemType` union, any surface, or the DB; existing `task` rows are migrated with a paired migration file.
-
 ## Successor Briefing
 
-**Who should read this:** you are about to touch items, reminders, recurrence, day plans or calendar sync. The historical failure mode of this cluster is **duplicate occurrence generation** — three diverging expansion engines exist and "skip" once meant "postpone." Everything dangerous here is dangerous quietly.
+Read the checklist, the selected acceptance entry and its dependencies; then use the [Feature Map](<../../01 - Architecture/Feature Map/_index.md>) for source routing and the module architecture docs for invariants. Delta from the source cutoff before implementation. Use current owner-supplied DB evidence for access/application questions; agents never apply production SQL. Record code, applied migration and device/runtime acceptance separately.
 
-**First 10 minutes:**
-
-```bash
-git log --format="%h %ad %s" --date=short --since=2026-07-18 -- src/features/items src/lib/schedule src/lib/gcal src/app/api/gcal src/components/planner
-npx vitest run src/lib/schedule/    # KNOWN STATE 2026-07-18: expandOccurrences guard is RED (WebTodayView). If MORE than that fails, something new broke.
-```
-
-Then read `.claude/skills/recurrence-safety/SKILL.md` (**mandatory**) → `src/lib/gcal/sync.ts` if touching sync.
-
-**Task-tier map:**
-
-| Task archetype | Tier | Route |
-|---|---|---|
-| UI on reminder/planner views, chips, badges | any-model | `ui-guardrails`; no red for item rows (Hard Rule 3); overdue labels `text-white/40` |
-| Item CRUD fields with no recurrence/date semantics | any-model | `add-feature`; reminders have no categories/description |
-| `smartTextParser` additions | any-model | pure function — extend its test table first |
-| Occurrence expansion, skip/postpone/confirm, exceptions, pauses | mid-tier+ | `recurrence-safety` open; identify WHICH engine before editing; **never add a fourth** |
-| gcal sync mapping/reconcile | mid-tier+ | `timezone-handling` + cron template; push-only today — do not invent pull |
-| Unifying the three engines; changing skip semantics; the `WebTodayView` guard diagnosis | human-first | the duplicate-generation scar tissue lives here; propose, don't land |
-
-**Out-of-depth tells — stop if:** you can't name which of the three expansion engines your change runs through; you're about to make "skip" write a date; you're expanding RRULEs in a component (`is_flexible` must be skipped in views); you're using calendar months for anything user-facing (custom month start exists); you're storing a local-time string.
-
-**Trap registry:**
-
-| Trap | Symptom | Guard |
-|---|---|---|
-| Two recurrence systems | edited money recurring thinking it was item recurrence | `recurring_payments` = money, rrule items = schedule — check the table name first |
-| The suite is red by default | "tests fail" panic, or worse, numbness | exactly ONE known failure as of 2026-07-18; treat any second failure as yours |
-| Flexible items in views | duplicate occurrences shown | views must skip `recurrence_rule?.is_flexible` and inject placements |
-| Hot path = bundle RPC | a per-child fetch reintroduces ~200 ms/call | `get_schedule_bundle` (Hard Rule 21); never fan out |
-| RLS truth is the live DB | `schema.sql` shows no RLS for items tables — they HAVE it | `migrations/_verify_schedule_rls.md` |
-| gcal is one-way backup | assuming Google is source of truth | Google is a *copy*; items are truth; drift heals via `cron/gcal-reconcile` — verify it is actually scheduled |
-| Dead file on disk | "fixing" `MobileItemForm.tsx` | it's dead; the live form is `MobileReminderForm` |
-
-**Verification manifest:**
-
-| Claim | Command | Expected |
-|---|---|---|
-| Known-red is exactly one guard | `npx vitest run src/lib/schedule/ 2>&1 \| tail -5` | 1 failed (expandOccurrences) — 0 once SCH-4.2 lands |
-| gcal surface is 4 routes + 2 libs | `find src/app/api/gcal src/lib/gcal -name "*.ts" \| wc -l` | 6 |
-| No fourth engine appeared | `grep -rln "rrulestr\|RRule(" src --include="*.ts" --include="*.tsx" \| wc -l` | stable small set |
-| Dead form status | `ls src/components/items/MobileItemForm.tsx 2>/dev/null` | exists until SCH-5.3 lands |
-| Sync bookkeeping column | `grep -n "google_synced_at" migrations/schema.sql` | present on items |
-
-## Pointers
-
-- Working queue: [4 · Checklist](<4 - Checklist.md>) · conventions: [_Conventions](<../_Conventions.md>)
-- Vault: [Items & Reminders / Overview](<../../02 - Standalone Modules/Items & Reminders/Overview.md>) · [Schedule Feature](<../../02 - Standalone Modules/Items & Reminders/Schedule Feature.md>) · [Plan My Day](<../../03 - Junction Modules/Plan My Day/Overview.md>)
-- Pre-consolidation originals (including the externally-authored "Simplify Mobile Schedule Entry" Codex brief and its full reconciliation): `../_Archive/Schedule/`
-- Skills: `recurrence-safety` (mandatory), `timezone-handling`, `ui-guardrails`
+Finish with the repository playbook and [governance](<../_Conventions.md>): update acceptance/evidence, sweep only completed work, and validate the canonical queue. A completed child does not complete its coordination parent.

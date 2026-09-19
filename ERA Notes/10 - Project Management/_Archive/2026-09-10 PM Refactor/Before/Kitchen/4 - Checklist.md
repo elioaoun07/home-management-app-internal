@@ -1,0 +1,50 @@
+---
+created: 2026-06-20
+updated: 2026-09-06
+type: checklist
+status: active
+owner: Elio
+tags:
+  - pm/checklist
+  - scope/module
+  - module/kitchen
+---
+
+# Kitchen · 4 — Checklist
+
+> **Campaign:** [Kitchen — Master Book](<Kitchen — Master Book.md>) · [4 · Checklist](<4 - Checklist.md>)
+>
+> **What this file is:** the single flat, checkable surface for Kitchen — every open actionable item under **Now / Next / Later**. Grammar: [_Conventions](<../_Conventions.md>) (validated by `pnpm pm:lint`). Completed items are swept into the Master Book's Shipped Log and the line deleted — git history is the rest of the archive.
+>
+> **Legend:** Sev blocker / friction / annoyance / parked. Effort S / M / L.
+> **ID migration (2026-07-15):** N1→KIT-1, X1→KIT-2, L1–L7→KIT-3–KIT-9.
+
+---
+
+## Now
+
+- [ ] **KIT-1** *(packet **M-03** of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>); exports a pure `lowStockItems()` that E-22 reuses as a briefing signal)* Inventory low-stock → Shopping List auto-add (gap 2a) — when stock drops below threshold, the item appears on the shopping list. ⚠️ Respect the **legacy localStorage queue** (Shopping List rides it by design — see [Sync & Offline](<../../03 - Junction Modules/Sync & Offline/Overview.md>)); don't migrate it as a side-effect. _(friction - M)_
+
+## Next
+
+- [ ] **KIT-2** *(packet **M-05** of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>))* Recipe → Inventory deduction (gap 2b) — cooking a recipe deducts its ingredients from inventory, which then feeds KIT-1's low-stock trigger. _(friction - M)_
+
+## Later
+
+**ASTRA wave 1 (2026-09-06)** *(study: [ASTRA Book](<ASTRA/Kitchen — ASTRA Book.md>); sheets: [ASTRA Packets](<ASTRA/Kitchen — ASTRA Packets.md>))*
+
+No new Kitchen ticket is admitted. ASTRA-KIT-1 is the atomic restock/history prerequisite inside KIT-1; current owner RPC/trigger evidence precedes any SQL, and KIT-1 remains open for its separate idempotent shopping-link scope. KIT-2 automatic deduction is held until stable ingredient-to-stock identity and unit rules exist. ASTRA-KIT-2 refines KIT-4 and the read prerequisite for KIT-7. ASTRA-KIT-3 producer validation remains documented without an execution ID; Healthcare owns the consumer's unavailable-feed repair. No new deduction engine or migration of the legacy shopping queue.
+
+- [ ] **KIT-3** Meal plan budget estimate (gap 2c) — show estimated grocery cost per plan. Coordinate with [Budget — Master Book](<../Budget/Budget — Master Book.md>). _(annoyance - M)_
+- [ ] **KIT-4** (ASTRA-KIT-2 prerequisite; E-08/E-22) Scoped meal coverage and existing Chef reads feed kitchen nudges. First verify person/status/leftover interval coverage; a passing helper alone does not complete the nudge or KIT-7 calendar integration. → [Execution sheet](<ASTRA/Kitchen — ASTRA Packets.md>) _(annoyance - M)_
+- [ ] **KIT-5** Pantry-aware recipe suggestions ("what can I make with what I have"). _(annoyance - M)_
+- [ ] **KIT-6** Smarter per-item low-stock thresholds + restock cadence from usage history. _(annoyance - M)_
+- [ ] **KIT-7** Meal Planning → Schedule (planned meals on the calendar/today views). _(annoyance - M)_
+- [ ] **KIT-8** Barcode → catalogue price for cost tracking. _(parked - M)_
+- [ ] **KIT-9** Trips → Kitchen cascade visibility (meal/packing side-effects). _(parked - M)_
+
+## Definition of Done
+
+- [ ] **D1** Dropping an inventory item below threshold puts it on the shopping list automatically (without breaking the legacy queue).
+- [ ] **D2** Completing a recipe in cooking mode deducts its ingredients from inventory.
+- [ ] **D3** [Kitchen — Master Book](<Kitchen — Master Book.md>) updated to mark gap 2a / 2b closed.

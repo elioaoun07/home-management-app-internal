@@ -8,6 +8,9 @@ import { parseQuery } from "../../scripts/pm/src/features/search/queryLang.js";
 import { legacyRouteToHash, parseRoute } from "../../scripts/pm/src/app/router.js";
 
 describe("PM shared parsing", () => {
+  it("reads CRLF status and tags without making superseded documents active", () => {
+    expect(parseFrontmatter("---\r\nstatus: superseded\r\nupdated: 2026-09-10\r\ntags:\r\n  - pm\r\n---\r\n## Now\r\n").meta).toEqual({status:"superseded",updated:"2026-09-10",tags:["pm"]});
+  });
   it("keeps frontmatter, fences, nested checkboxes and task metadata straight", () => {
     const raw = `---\nstatus: active\ntags:\n  - pm\n---\n## Now\n- [ ] **N4** Build it _(blocker - S)_\n  - [x] nested\n\`\`\`md\n- [ ] not real\n\`\`\``;
     expect(parseFrontmatter(raw).meta).toEqual({ status: "active", tags: ["pm"] });
@@ -30,7 +33,8 @@ describe("PM shared parsing", () => {
   it("resolves angle links and slugs", () => {
     expect(resolveRelativeMd("Budget/4 - Checklist.md", "<1 - Feature State.md>")).toEqual({ relPath: "Budget/1 - Feature State.md", anchor: null });
     expect(extractLinks("[State](<1 - Feature State.md>)", "Budget/_index.md")[0].resolved?.relPath).toBe("Budget/1 - Feature State.md");
-    expect(slugify("Now & Next")).toBe("now-next");
+    // GitHub/pm:check-docs form: one hyphen per space, none collapsed.
+    expect(slugify("Now & Next")).toBe("now--next");
   });
 
   it("assigns unique anchors to duplicate headings", () => {

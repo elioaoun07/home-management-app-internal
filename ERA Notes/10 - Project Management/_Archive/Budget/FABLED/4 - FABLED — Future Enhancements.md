@@ -12,7 +12,7 @@ tags:
 
 > **FABLED:** [_index](<_index.md>) · [1 · Implementation](<1 - FABLED — Current Implementation.md>) · [2 · Gaps](<2 - FABLED — Gaps & Missing.md>) · [3 · Optimization](<3 - FABLED — Optimization Plan.md>) · **4 · Enhancements**
 >
-> The 10× ideas, with effort/impact and the *implementation seam* each would use. Expands [file 2 (Future Vision)](<../2 - Future Vision & Roadmap.md>) with the how. Dream here; sequence in [file 3](<../3 - Current — Action Plan.md>).
+> The 10× ideas, with effort/impact and the *implementation seam* each would use. Expands [file 2 (Future Vision)](<../2 - Vision & Roadmap.md>) with the how. Dream here; sequence in [file 3](<../3 - Action Plan.md>).
 
 ---
 
@@ -28,7 +28,7 @@ All inputs already exist: balances (`account_balances`), known future outflows (
 
 ## E2 — Recurring ↔ Schedule due-date unification
 
-**Impact: High · Effort: H · Coordinate with [Schedule FABLED 4](<../Schedule/FABLED/4 - FABLED — Future Enhancements.md>)**
+**Impact: High · Effort: H · Coordinate with [Schedule FABLED 4](<../../Schedule/FABLED/4 - FABLED — Future Enhancements.md>)**
 
 One fact, one record: a recurring payment's due-date materializes as a Schedule item (likely a generated read-model, *not* a duplicated row — Schedule's `expandOccurrences` already does virtual expansion for RRULEs). Confirming the payment completes the occurrence; snoozing the occurrence defers the payment. The trap to avoid: two-way sync between two stores. Pick one owner (Budget owns the fact; Schedule renders a projection of it).
 

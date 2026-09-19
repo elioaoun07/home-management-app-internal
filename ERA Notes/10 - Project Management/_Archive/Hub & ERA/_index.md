@@ -20,7 +20,7 @@ tags:
 | 1   | [Feature State](<1 - Feature State.md>)       | You want the honest, no-hype status of every Hub & ERA sub-feature.  |
 | 2   | [Vision & Roadmap](<2 - Vision & Roadmap.md>) | You want to dream: Hub & ERA enhancements + bridges, prioritized.    |
 | 3   | [Action Plan](<3 - Action Plan.md>)           | The strategic call + candidate work — the *why, and in what order*.  |
-| 4   | [Checklist](<4 - Checklist.md>)               | **Most days.** The flat, checkable list — every task, Now/Next/Later. |
+| 4   | [Checklist](<../../Hub & ERA/4 - Checklist.md>)               | **Most days.** The flat, checkable list — every task, Now/Next/Later. |
 | F   | [FABLED/](<FABLED/_index.md>)                 | *(v1 baseline, frozen 2026-06-10)* — the first-generation deep-dive; kept for lineage. |
 | F2  | [FABLED 2/](<FABLED 2/_index.md>)             | **The living deep-dive (current generation, verified 2026-07-02):** the June additions X-rayed (bulk convert, AnalysisReport engine, third conversation store), scored maturity, gaps, plan, enhancements. |
 
@@ -33,4 +33,4 @@ tags:
 ## Where this fits
 
 - **Up one level:** the global command center → [10 - Project Management/_index.md](<../_index.md>). Read that for whole-app priorities.
-- **Implementation reality (read before coding):** [Hub Chat / Overview](<../../03 - Junction Modules/Hub Chat/Overview.md>) (+ `Voice Conversation.md`, `Voice Messages.md`, `Private Chats.md`), [AI Assistant / Overview](<../../03 - Junction Modules/AI Assistant/Overview.md>) (+ `Gemini API Guidelines.md`), [Message Actions / Overview](<../../03 - Junction Modules/Message Actions/Overview.md>). Those are the file-level source of truth; this folder is **strategy**, not a code map.
+- **Implementation reality (read before coding):** [Hub Chat / Overview](<../../../03 - Junction Modules/Hub Chat/Overview.md>) (+ `Voice Conversation.md`, `Voice Messages.md`, `Private Chats.md`), [AI Assistant / Overview](<../../../03 - Junction Modules/AI Assistant/Overview.md>) (+ `Gemini API Guidelines.md`), [Message Actions / Overview](<../../../03 - Junction Modules/Message Actions/Overview.md>). Those are the file-level source of truth; this folder is **strategy**, not a code map.

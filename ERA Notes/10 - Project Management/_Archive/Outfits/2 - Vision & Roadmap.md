@@ -11,7 +11,7 @@ tags:
 
 # Outfits · 2 — Vision & Roadmap
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Outfits/4 - Checklist.md>)
 >
 > **What this file is:** where Outfits is going — the locked v1 decisions, and the dream backlog beyond it. When a decision is realized, mark it `*(IMPLEMENTED YYYY-MM-DD)*` (Hard Rule 25).
 

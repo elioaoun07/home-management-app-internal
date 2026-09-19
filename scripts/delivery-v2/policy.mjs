@@ -60,9 +60,72 @@ import {
   makeCriterion,
   normalizePath,
 } from "./contracts.mjs";
-import { deliverSelection } from "./entry.mjs";
-import { freezeSelectedItem } from "./work-ref.mjs";
-import { admitExecutorProfile, describeExecutor, resolveExecutorChoice } from "./adapters/registry.mjs";
+import { ENTRY_REFUSALS, deliverSelection } from "./entry.mjs";
+import { ADMISSION_REFUSALS, RESOURCE_UNITS } from "./jobs.mjs";
+import { DEFAULT_CONCURRENCY, WRITER_CEILING } from "./coordination.mjs";
+import { acceptanceText, freezeSelectedItem } from "./work-ref.mjs";
+import {
+  EXECUTOR_REFUSALS,
+  admitExecutorProfile,
+  describeExecutor,
+  resolveExecutorChoice,
+  validateRunSettings,
+} from "./adapters/registry.mjs";
+import { makeBoundaryConfig } from "./worker-boundary.mjs";
+
+/** The two visible work profiles. FAST/DEEP remain the legacy lane names. */
+export const WORK_PROFILES = Object.freeze(["focused", "investigate"]);
+
+/**
+ * These are execution contracts, not presentation names.  They deliberately
+ * live beside policy validation so a profile cannot quietly turn into a label
+ * that follows the same lifecycle as the other one.
+ */
+export const WORK_PROFILE_CONTRACTS = Object.freeze({
+  focused: Object.freeze({
+    label: "Focused",
+    investigation: "compact",
+    maxPlanJobs: 1,
+    maxImplementationJobs: 1,
+    repairDispatchLimit: 0,
+  }),
+  investigate: Object.freeze({
+    label: "Investigate",
+    investigation: "deep",
+    maxPlanJobs: null,
+    maxImplementationJobs: null,
+    repairDispatchLimit: null,
+  }),
+});
+
+/**
+ * Deterministic launch advice.  It consumes only facts the owner has already
+ * supplied (the outcome, acceptance and declared dependency/scope facts); it
+ * never spends a provider call merely to select a provider call.
+ */
+/** @param {{outcome?:string, acceptance?:string, declared?:string[]|null, dependencyIds?:string[], catalog?:object|null, executor?:string|null}} input */
+export function recommendWorkProfile({ outcome = "", acceptance = "", declared = null, dependencyIds = [], catalog = null, executor = null } = {}) {
+  const reasons = [];
+  const words = String(outcome).trim().split(/\s+/u).filter(Boolean).length;
+  const risky = /\b(migration|rls|permission|auth|security|recurr|money|payment|transfer|cross[- ]module|architecture)\b/iu.test(
+    String(outcome) + "\n" + String(acceptance),
+  );
+  const hasDependencies = Array.isArray(dependencyIds) && dependencyIds.length > 0;
+  const scopeKnown = Array.isArray(declared) && declared.length > 0;
+  const profile = risky || hasDependencies || !scopeKnown || words > 24 ? "investigate" : "focused";
+  if (risky) reasons.push("Risk needs an explicit investigation checkpoint");
+  else if (hasDependencies) reasons.push("Dependencies need a scoped plan");
+  else if (!scopeKnown) reasons.push("Scope is not declared");
+  else reasons.push("Narrow declared scope and acceptance");
+  const suggestion = executor && catalog && catalog.profiles && catalog.profiles[profile] ? catalog.profiles[profile][executor] || null : null;
+  return deepFreeze({
+    profile,
+    contract: WORK_PROFILE_CONTRACTS[profile],
+    reasons,
+    source: { words, risky, dependencyCount: hasDependencies ? dependencyIds.length : 0, scopeKnown },
+    settings: suggestion ? { model: suggestion.model, effort: suggestion.effort } : null,
+  });
+}
 
 /** Where the policy lives. One file, owner-authored, gitignored with .delivery/. */
 export const EXECUTION_POLICY_REL = ".delivery/v2/execution-policy.json";
@@ -81,6 +144,10 @@ export const POLICY_REFUSALS = Object.freeze({
   DISPOSITION_TOO_HIGH: "requested-disposition-above-policy-ceiling",
   SOURCE_UNREADABLE: "work-source-unreadable",
   SOURCE_OUTSIDE_ROOT: "work-source-outside-pm-root",
+  NO_EXECUTOR: EXECUTOR_REFUSALS.NONE_SELECTED,
+  UNKNOWN_EXECUTOR: EXECUTOR_REFUSALS.UNKNOWN,
+  SETTINGS: "run-settings-refused",
+  WORK_PROFILE: "unknown-work-profile",
 });
 
 /**
@@ -95,7 +162,7 @@ export const GRANTABLE_EFFECTS = Object.freeze(
 
 /** Dispositions ordered by how much authority delivering them would need. */
 const DISPOSITION_LADDER = Object.freeze([
-  "research_answer",
+  "research",
   "verified_candidate",
   "applied_change",
   "verified_deployment",
@@ -203,6 +270,11 @@ export function validateExecutionPolicy(raw) {
   const resources = isPlainObject(raw.resources) ? raw.resources : {};
   if (!isNonEmptyString(resources.unit)) {
     bad(POLICY_REFUSALS.INVALID, "resources.unit must state the unit the allowance is denominated in (e.g. \"usd\")");
+  } else if (!RESOURCE_UNITS.includes(resources.unit)) {
+    bad(
+      POLICY_REFUSALS.INVALID,
+      "resources.unit must be one of " + RESOURCE_UNITS.join(", ") + "; usage in any other unit could be reserved but never settled",
+    );
   }
   const allowance = resources.allowance == null ? null : Number(resources.allowance);
   if (allowance != null && !(Number.isFinite(allowance) && allowance > 0)) {
@@ -263,6 +335,192 @@ export function validateExecutionPolicy(raw) {
     }
   }
 
+  // --- executor catalog (per-run model/effort) -----------------------------
+  const catalogInput = isPlainObject(executors.catalog) ? executors.catalog : {};
+  const catalog = {
+    revision: Number.isInteger(catalogInput.revision) && catalogInput.revision > 0 ? catalogInput.revision : null,
+    models: {},
+    profiles: {},
+  };
+  if (catalogInput.models != null && !isPlainObject(catalogInput.models)) {
+    bad(POLICY_REFUSALS.INVALID, "executors.catalog.models must map an executor to its supported models");
+  }
+  for (const [id, list] of Object.entries(isPlainObject(catalogInput.models) ? catalogInput.models : {})) {
+    const executor = resolveExecutorChoice(id);
+    if (!executor || !Array.isArray(list)) {
+      bad(POLICY_REFUSALS.INVALID, "executors.catalog.models." + id + " must be a list for a known executor");
+      continue;
+    }
+    catalog.models[executor.id] = [];
+    for (const entry of list) {
+      if (!isPlainObject(entry) || !isNonEmptyString(entry.id)) {
+        bad(POLICY_REFUSALS.INVALID, "each catalog model needs an id");
+        continue;
+      }
+      const efforts = Array.isArray(entry.efforts) ? entry.efforts : null;
+      for (const effort of efforts || []) {
+        if (!executor.supportedEfforts.includes(effort)) {
+          bad(POLICY_REFUSALS.INVALID, "catalog model " + entry.id + " lists effort " + String(effort) + ", which " + executor.label + " does not accept");
+        }
+      }
+      catalog.models[executor.id].push({
+        id: entry.id,
+        label: isNonEmptyString(entry.label) ? entry.label : null,
+        efforts: efforts ? [...efforts] : null,
+        observedAs: Array.isArray(entry.observedAs) ? entry.observedAs.filter(isNonEmptyString) : [],
+      });
+    }
+  }
+  for (const [profileName, byExecutor] of Object.entries(isPlainObject(catalogInput.profiles) ? catalogInput.profiles : {})) {
+    if (!WORK_PROFILES.includes(profileName)) {
+      bad(POLICY_REFUSALS.INVALID, "executors.catalog.profiles." + profileName + " is not a work profile (" + WORK_PROFILES.join(", ") + ")");
+      continue;
+    }
+    catalog.profiles[profileName] = {};
+    for (const [id, suggestion] of Object.entries(isPlainObject(byExecutor) ? byExecutor : {})) {
+      const check = validateRunSettings({ executor: id, model: suggestion && suggestion.model, effort: suggestion && suggestion.effort, catalog });
+      if (!check.ok || !check.settings) {
+        bad(POLICY_REFUSALS.INVALID, "profile " + profileName + " suggestion for " + id + ": " + JSON.stringify(check.refusals));
+        continue;
+      }
+      catalog.profiles[profileName][check.settings.executor] = {
+        model: check.settings.model,
+        effort: check.settings.effort,
+        reason: suggestion && isNonEmptyString(suggestion.reason) ? suggestion.reason : null,
+      };
+    }
+  }
+
+  // --- worker runtime --------------------------------------------------------
+  let runtime = null;
+  if (raw.runtime != null) {
+    if (!isPlainObject(raw.runtime) || raw.runtime.kind !== "container") {
+      bad(POLICY_REFUSALS.INVALID, "runtime.kind must be \"container\"; there is no host execution runtime");
+    } else {
+      try {
+        runtime = makeBoundaryConfig({
+          image: raw.runtime.image,
+          network: raw.runtime.network,
+          limits: isPlainObject(raw.runtime.limits) ? raw.runtime.limits : {},
+          credentials: isPlainObject(raw.runtime.credentials) ? raw.runtime.credentials : {},
+          dependencies: isPlainObject(raw.runtime.dependencies) ? raw.runtime.dependencies : null,
+        });
+      } catch (error) {
+        bad(POLICY_REFUSALS.WEAKENED, "runtime: " + String((error && error.message) || error));
+      }
+    }
+  }
+
+  // --- protected checks ------------------------------------------------------
+  const checksInput = isPlainObject(raw.checks) ? raw.checks : {};
+  const specs = {};
+  for (const [id, spec] of Object.entries(isPlainObject(checksInput.specs) ? checksInput.specs : {})) {
+    if (!isPlainObject(spec) || spec.kind !== "command" || !Array.isArray(spec.argv) || !spec.argv.length || spec.argv.some((arg) => typeof arg !== "string")) {
+      bad(POLICY_REFUSALS.INVALID, "checks.specs." + id + " must be a command with a non-empty argv of strings");
+      continue;
+    }
+    specs[id] = { kind: "command", argv: [...spec.argv], expected: isPlainObject(spec.expected) ? { ...spec.expected } : {} };
+  }
+  for (const criterion of criteria) {
+    const specId = criterion.observer.expected && criterion.observer.expected.spec_id;
+    if (specId && !specs[String(specId)]) {
+      bad(POLICY_REFUSALS.INVALID, "criterion " + criterion.criterion_id + " names check " + String(specId) + ", which checks.specs does not define");
+    }
+  }
+  const checkInputs = Array.isArray(checksInput.inputs) ? checksInput.inputs.filter(isNonEmptyString).map(normalizePath) : [];
+
+  // --- apply (Command Center Phase 4) ------------------------------------------
+  // Only additions to the integrator's built-in protected paths. Nothing here can
+  // remove one, and there is no switch that lets an application run without the
+  // owner's command.
+  const applyInput = isPlainObject(raw.apply) ? raw.apply : {};
+  if (applyInput.protectedPaths != null && !Array.isArray(applyInput.protectedPaths)) {
+    bad(POLICY_REFUSALS.INVALID, "apply.protectedPaths must be a list of repo-relative paths");
+  }
+  const applyProtected = Array.isArray(applyInput.protectedPaths) ? applyInput.protectedPaths.filter(isNonEmptyString).map(normalizePath) : [];
+  if (applyInput.automatic === true) {
+    bad(POLICY_REFUSALS.WEAKENED, "apply.automatic cannot be true. Applying a candidate is an owner command; a policy file cannot pre-approve it.");
+  }
+
+  // --- dispatch limits ---------------------------------------------------------
+  const dispatchInput = isPlainObject(raw.dispatch) ? raw.dispatch : {};
+  const positiveOrNull = (value, field, integer) => {
+    if (value == null) return null;
+    const number = Number(value);
+    if (!(Number.isFinite(number) && number > 0 && (!integer || Number.isInteger(number)))) {
+      bad(POLICY_REFUSALS.INVALID, "dispatch." + field + " must be a positive " + (integer ? "integer" : "number") + " or null");
+      return null;
+    }
+    return number;
+  };
+  const dispatch = {
+    // A stop threshold the executor applies between turns where it supports one.
+    // Never a strict monetary bound; the resources section stays the authority.
+    thresholdUsd: positiveOrNull(dispatchInput.thresholdUsd, "thresholdUsd", false),
+    investigationMaxTurns: positiveOrNull(dispatchInput.investigationMaxTurns, "investigationMaxTurns", true),
+    implementationMaxTurns: positiveOrNull(dispatchInput.implementationMaxTurns, "implementationMaxTurns", true),
+  };
+
+  // --- concurrency (Command Center Phase 5) ------------------------------------
+  // Two writers at most until parallel runs are evidenced; the ceiling is code, not
+  // a policy value. Rule lists only add to the built-in classes in coordination.mjs.
+  const concurrencyInput = isPlainObject(raw.concurrency) ? raw.concurrency : {};
+  const maxWriters = concurrencyInput.maxWriters == null ? DEFAULT_CONCURRENCY.maxWriters : Number(concurrencyInput.maxWriters);
+  const writersValid = Number.isInteger(maxWriters) && maxWriters >= 1;
+  if (!writersValid) {
+    bad(POLICY_REFUSALS.INVALID, "concurrency.maxWriters must be a positive integer");
+  } else if (maxWriters > WRITER_CEILING) {
+    bad(
+      POLICY_REFUSALS.WEAKENED,
+      "concurrency.maxWriters cannot exceed " + WRITER_CEILING + ". The limit rises only after parallel runs are evidenced (DLV-106), and then in code.",
+    );
+  }
+  const maxJobs =
+    concurrencyInput.maxJobs == null ? Math.max(DEFAULT_CONCURRENCY.maxJobs, writersValid ? maxWriters : 0) : Number(concurrencyInput.maxJobs);
+  if (!(Number.isInteger(maxJobs) && maxJobs >= 1)) {
+    bad(POLICY_REFUSALS.INVALID, "concurrency.maxJobs must be a positive integer; it counts every job that may still be running");
+  } else if (writersValid && maxJobs < maxWriters) {
+    bad(POLICY_REFUSALS.INVALID, "concurrency.maxJobs must be at least concurrency.maxWriters; a writer is a job");
+  }
+  const fleetAllowance = concurrencyInput.fleetAllowance == null ? null : Number(concurrencyInput.fleetAllowance);
+  if (fleetAllowance != null && !(Number.isFinite(fleetAllowance) && fleetAllowance > 0)) {
+    bad(POLICY_REFUSALS.INVALID, "concurrency.fleetAllowance must be a positive number in resources.unit, or null");
+  }
+  const pathList = (field) => {
+    const value = concurrencyInput[field];
+    if (value == null) return [];
+    if (!Array.isArray(value)) {
+      bad(POLICY_REFUSALS.INVALID, "concurrency." + field + " must be a list of repo-relative paths");
+      return [];
+    }
+    return value.filter(isNonEmptyString).map(normalizePath);
+  };
+  const checkResources = {};
+  if (concurrencyInput.checkResources != null && !isPlainObject(concurrencyInput.checkResources)) {
+    bad(POLICY_REFUSALS.INVALID, "concurrency.checkResources must map a check spec to the exclusive resources it uses");
+  }
+  for (const [specId, list] of Object.entries(isPlainObject(concurrencyInput.checkResources) ? concurrencyInput.checkResources : {})) {
+    if (!specs[specId]) {
+      bad(POLICY_REFUSALS.INVALID, "concurrency.checkResources." + specId + " names a check that checks.specs does not define");
+      continue;
+    }
+    if (!Array.isArray(list)) {
+      bad(POLICY_REFUSALS.INVALID, "concurrency.checkResources." + specId + " must be a list such as [\"db:test\"]");
+      continue;
+    }
+    checkResources[specId] = [...new Set(list.filter(isNonEmptyString))].sort();
+  }
+  const concurrency = {
+    maxWriters,
+    maxJobs,
+    fleetAllowance,
+    sharedPaths: Object.freeze(pathList("sharedPaths")),
+    schemaPaths: Object.freeze(pathList("schemaPaths")),
+    lockfiles: Object.freeze(pathList("lockfiles")),
+    generated: Object.freeze(pathList("generated")),
+    checkResources,
+  };
+
   if (refusals.length) return deepFreeze({ ok: false, policy: null, refusals });
 
   return deepFreeze({
@@ -279,7 +537,13 @@ export function validateExecutionPolicy(raw) {
         requireQualifiedProfile: true,
         requireConfinement: true,
         strictBoundRequired: Boolean(executors.strictBoundRequired),
+        catalog,
       },
+      runtime,
+      checks: { specs, inputs: Object.freeze(checkInputs) },
+      apply: { protectedPaths: Object.freeze(applyProtected) },
+      dispatch,
+      concurrency,
       grant: {
         permitted_effects: Object.freeze([...effects]),
         expires_at: isNonEmptyString(grant.expires_at) ? grant.expires_at : null,
@@ -310,7 +574,8 @@ export function validateExecutionPolicy(raw) {
           "any git write or release",
           "any production database write",
           "raising execution.maxRequestedDisposition",
-          "changing the selected executor",
+          "approving a plan revision before implementation",
+          "handing a run to another executor",
           "revising this policy",
         ]),
       },
@@ -459,6 +724,14 @@ export function resolveWorkFile({ root, pmRel, file }) {
   return { ok: true, path: candidate, detail: null };
 }
 
+/** The campaign Master Book beside a checklist, as a PM-relative path; null for any other file. */
+export function masterBookFor(file) {
+  const parts = normalizePath(file).split("/");
+  return parts.length === 2 && /^4\s*-\s*Checklist\.md$/iu.test(parts[1])
+    ? parts[0] + "/" + parts[0] + " — Master Book.md"
+    : null;
+}
+
 /**
  * Build the `deliver` function `entry.mjs` calls.
  *
@@ -473,7 +746,10 @@ export function resolveWorkFile({ root, pmRel, file }) {
  *      is frozen, so nothing is downgraded after the fact;
  *   3. read the work source and freeze the contract;
  *   4. describe and admit the *selected* executor's profile — its own
- *      observations, no one else's;
+ *      observations, no one else's — and refuse an unadmitted one before the
+ *      store is opened;
+ *   4b. freeze the witnessed row (never the row that merely occupies the
+ *      clicked ordinal) with its Master Book acceptance revision;
  *   5. build the grant against that exact contract and profile;
  *   6. hand all of it to `deliverSelection`, which owns admission.
  *
@@ -486,10 +762,14 @@ export function resolveWorkFile({ root, pmRel, file }) {
  * therefore never creates) the supervisor database just by being asked whether it
  * has a policy.
  *
+ * `qualify(backend_id)` supplies the executor's bound qualification receipt (see
+ * qualification.mjs); without it every profile is described unobserved and
+ * refuses admission, which is the honest default.
+ *
  * @param {{root:string, pmRel:string, store:(object|Function), policyLoader?:Function,
- *   describeExecutor?:Function, readFile?:Function}} input
+ *   describeExecutor?:Function, readFile?:Function, qualify?:((backend_id:string)=>any)|null}} input
  */
-export function buildDeliver({ root, pmRel, store, policyLoader = null, describeExecutor: describe = null, readFile = null }) {
+export function buildDeliver({ root, pmRel, store, policyLoader = null, describeExecutor: describe = null, readFile = null, qualify = null }) {
   const loaded = (policyLoader || loadExecutionPolicy)({ root });
   if (!loaded.ok) return null;
   const getStore = typeof store === "function" ? store : () => store;
@@ -498,19 +778,47 @@ export function buildDeliver({ root, pmRel, store, policyLoader = null, describe
   const read = readFile || ((p) => readFileSync(p, "utf8"));
 
   /**
-   * @param {{file:string, cbidx:number, requestedDisposition?:string, outcome?:string,
-   *   actor:string, executor:string, command_id?:string, workspace?:object,
-   *   workspaceRoot?:string, instruction?:string}} request
+   * @param {{file:string, cbidx:number, expectLine?:string, expectId?:(string|null),
+   *   witness?:object, requestedDisposition?:string, outcome?:string,
+   *   actor:string, executor?:(string|null), model?:(string|null), effort?:(string|null),
+   *   workProfile?:(string|null), command_id?:string, workspace?:object,
+   *   workspaceRoot?:string, instruction?:string, purpose?:string, access?:string,
+   *   instructionFor?:Function, beforeAdmit?:Function, native_limits?:object}} request
    */
   return async function deliver(request) {
     const refuse = (code, detail) => deepFreeze({ ok: false, refusals: [{ code, detail }], policy_revision: policy.policy_revision });
 
-    const backend_id = String(request.executor || "");
+    // The run names its executor. Nothing is defaulted and nothing is substituted:
+    // an absent or unknown choice refuses before anything else is read.
+    if (request.executor == null || String(request.executor).trim() === "") {
+      return refuse(POLICY_REFUSALS.NO_EXECUTOR, "choose Claude or Codex for this run");
+    }
+    const chosen = resolveExecutorChoice(request.executor);
+    if (!chosen) return refuse(POLICY_REFUSALS.UNKNOWN_EXECUTOR, String(request.executor));
+    const backend_id = chosen.backend_id;
     if (!executorPermitted(policy, backend_id)) {
       return refuse(
         POLICY_REFUSALS.EXECUTOR_NOT_PERMITTED,
         backend_id + " is selected but this policy permits only: " + policy.executors.permitted.join(", "),
       );
+    }
+    const workProfile = request.workProfile == null ? null : String(request.workProfile);
+    if (workProfile && !WORK_PROFILES.includes(workProfile)) {
+      return refuse(POLICY_REFUSALS.WORK_PROFILE, workProfile);
+    }
+    const settingsCheck = validateRunSettings({
+      executor: backend_id,
+      model: request.model ?? null,
+      effort: request.effort ?? null,
+      catalog: policy.executors.catalog,
+    });
+    if (!settingsCheck.ok || !settingsCheck.settings) {
+      return deepFreeze({
+        ok: false,
+        refusals: [{ code: POLICY_REFUSALS.SETTINGS, detail: settingsCheck.refusals }],
+        policy_revision: policy.policy_revision,
+        executor: backend_id,
+      });
     }
 
     const requestedDisposition = isNonEmptyString(request.requestedDisposition)
@@ -527,17 +835,60 @@ export function buildDeliver({ root, pmRel, store, policyLoader = null, describe
     } catch (error) {
       return refuse(POLICY_REFUSALS.SOURCE_UNREADABLE, String((error && error.message) || error));
     }
+    // An unreadable book binds as absent; a later readable section then stales it.
+    const bookRel = masterBookFor(String(request.file));
+    const bookPath = bookRel ? resolveWorkFile({ root, pmRel, file: bookRel }) : null;
+    let bookRaw = null;
+    if (bookPath && bookPath.ok) {
+      try {
+        bookRaw = read(bookPath.path);
+      } catch {
+        bookRaw = null;
+      }
+    }
+    const witness =
+      request.witness !== undefined
+        ? request.witness
+        : request.expectLine != null || request.expectId != null
+          ? { alias: request.expectId ?? null, line: request.expectLine ?? null }
+          : null;
 
     // The selected executor's own profile, from its own adapter. Nothing about
     // the other executor's qualification reaches this call.
-    const described = await describeFn(backend_id);
+    const qualification = typeof qualify === "function" ? await qualify(backend_id) : null;
+    const described = await describeFn(
+      backend_id,
+      qualification && qualification.ok
+        ? {
+            observations: qualification.observations,
+            qualification_ref: qualification.qualification_ref,
+            observed_at: qualification.observed_at,
+            runtime: { binding: qualification.binding },
+          }
+        : {},
+    );
     if (!described.ok) {
       return refuse(described.refusal.code, described.refusal.detail);
     }
     const profileAdmission = admitExecutorProfile(described.profile, {
       requireConfinement: true,
-      strictBoundRequired: policy.executors.strictBoundRequired,
+      // A numeric strict resource policy is a hard-cap claim. Do not dispatch
+      // it through a profile that only reports usage after completion.
+      strictBoundRequired: policy.executors.strictBoundRequired || policy.resources.strict,
     });
+    if (!profileAdmission.admitted) {
+      // The containment gate. No run, WorkRef or command receipt is written for a
+      // dispatch no admitted profile could ever serve.
+      return deepFreeze({
+        ok: false,
+        refusals: [{ code: ADMISSION_REFUSALS.PROFILE, detail: profileAdmission.refusals }],
+        executor: backend_id,
+        policy_revision: policy.policy_revision,
+        profile_id: described.profile.profile_id,
+        qualification: qualification ? { refusals: qualification.refusals || [], considered: qualification.considered || [] } : null,
+        dispatched: false,
+      });
+    }
 
     // Frozen once here to learn the contract identity the grant must bind to.
     // freezeSelectedItem is content-derived and side-effect free, so the second
@@ -546,23 +897,71 @@ export function buildDeliver({ root, pmRel, store, policyLoader = null, describe
       raw,
       file: String(request.file),
       cbidx: Number(request.cbidx),
+      witness,
+      bookRaw,
       outcome: request.outcome || undefined,
       requestedDisposition,
       criteria: policy.criteria,
       scratchScope: policy.scratchScope,
       publicationScope: policy.publicationScope,
     });
-    if (!preview.ok) {
-      return refuse(POLICY_REFUSALS.SOURCE_UNREADABLE, "the selected row could not be frozen: " + String(preview.reason));
+    if (!preview.ok || !preview.workRef || !preview.contract) {
+      return refuse(ENTRY_REFUSALS.SELECTION, preview.reason);
     }
 
     const grant = buildGrant({ policy, contract: preview.contract, profile: described.profile });
+    if (typeof request.beforeAdmit === "function") {
+      const blocked = request.beforeAdmit({ workRef: preview.workRef, contract: preview.contract });
+      if (blocked) return refuse(blocked.code, blocked.detail);
+    }
+    const recommendation = recommendWorkProfile({
+      outcome: preview.contract.outcome,
+      acceptance: acceptanceText({ bookRaw, alias: preview.workRef.alias }),
+      declared: request.recommendationFacts && request.recommendationFacts.declared,
+      dependencyIds: request.recommendationFacts && request.recommendationFacts.dependencyIds,
+      catalog: policy.executors.catalog,
+      executor: chosen.id,
+    });
+    const selectedProfile = workProfile || recommendation.profile;
+    const purpose = isNonEmptyString(request.purpose) ? request.purpose : "investigate";
+    const access = isNonEmptyString(request.access) ? request.access : purpose === "investigate" ? "read-only" : "write";
+    const runSettings = {
+      ...settingsCheck.settings,
+      work_profile: selectedProfile,
+      profile_id: described.profile.profile_id,
+      qualification_ref: described.profile.qualification_ref ?? null,
+      recommendation: {
+        profile: recommendation.profile,
+        reasons: recommendation.reasons,
+        source: recommendation.source,
+        policy_revision: policy.policy_revision,
+        settings: recommendation.settings,
+        selected: { profile: selectedProfile, model: settingsCheck.settings.model, effort: settingsCheck.settings.effort },
+        overridden:
+          selectedProfile !== recommendation.profile ||
+          settingsCheck.settings.model !== (recommendation.settings && recommendation.settings.model) ||
+          settingsCheck.settings.effort !== (recommendation.settings && recommendation.settings.effort),
+      },
+      mismatch_open: false,
+    };
+    const instruction =
+      typeof request.instructionFor === "function"
+        ? request.instructionFor({
+            contract: preview.contract,
+            workRef: preview.workRef,
+            acceptance: acceptanceText({ bookRaw, alias: preview.workRef.alias }),
+          })
+        : isNonEmptyString(request.instruction)
+          ? request.instruction
+          : preview.contract.outcome;
 
     const outcome = deliverSelection({
       store: getStore(),
       raw,
       file: String(request.file),
       cbidx: Number(request.cbidx),
+      witness,
+      bookRaw,
       requestedDisposition,
       outcome: request.outcome || null,
       criteria: policy.criteria,
@@ -576,15 +975,30 @@ export function buildDeliver({ root, pmRel, store, policyLoader = null, describe
         amount: policy.resources.perJobReservation.amount,
         basis: policy.resources.perJobReservation.basis,
       },
-      instruction: isNonEmptyString(request.instruction) ? request.instruction : preview.contract.outcome,
-      workspace: request.workspace || { root: String(request.workspaceRoot || ""), backing: "scratch-snapshot" },
+      instruction,
+      workspace: { ...(request.workspace || { root: String(request.workspaceRoot || ""), backing: "scratch-snapshot" }), access },
       command: {
         command_id: isNonEmptyString(request.command_id) ? request.command_id : "cmd-" + preview.contract.contract_id,
         actor: String(request.actor),
-        payload: { file: request.file, cbidx: request.cbidx, executor: backend_id, requestedDisposition },
+        payload: {
+          file: request.file,
+          cbidx: request.cbidx,
+          witness: { alias: preview.workRef.alias, textFingerprint: preview.workRef.source_fingerprint },
+          acceptance: preview.contract.acceptance_fingerprint,
+          executor: backend_id,
+          model: runSettings.model,
+          effort: runSettings.effort,
+          workProfile: selectedProfile,
+          requestedDisposition,
+        },
       },
       nextJobCost: policy.resources.perJobReservation.amount,
       repairDispatchLimit: policy.execution.repairDispatchLimit,
+      purpose,
+      access,
+      settings: runSettings,
+      native_limits: request.native_limits || {},
+      gate: typeof request.gate === "function" ? request.gate : null,
     });
 
     return deepFreeze({
@@ -593,11 +1007,13 @@ export function buildDeliver({ root, pmRel, store, policyLoader = null, describe
       // policy revision an admission (or a refusal) came from, without inferring
       // it from the installation's current settings.
       executor: backend_id,
+      settings: runSettings,
       policy_revision: policy.policy_revision,
       profile_id: described.profile.profile_id,
+      qualification_ref: described.profile.qualification_ref ?? null,
       dispatched: false,
       dispatchNote:
-        "deliver admits a Job and builds its request. Sending that request to the provider is a separate, separately authorized step; nothing was dispatched and nothing was paid.",
+        "deliver admits a Job and builds its request. Dispatch is a separate step that rechecks source, authority, qualification and resources under an exclusive claim.",
     });
   };
 }
@@ -629,7 +1045,17 @@ export function policyTemplate({ executor = "codex", authorized_by = "<owner>" }
       requireQualifiedProfile: true,
       requireConfinement: true,
       strictBoundRequired: false,
+      // Supported model ids per executor, owner-maintained. Empty means only the
+      // executor's default model can be chosen; efforts come from the SDK.
+      catalog: { revision: 1, models: { claude: [], codex: [] }, profiles: {} },
     },
+    // A container runtime must be configured before anything can dispatch:
+    // { kind: "container", image, network: { mode: "none" | "allowlist-proxy", … } }.
+    checks: { specs: {}, inputs: [] },
+    dispatch: { thresholdUsd: null, investigationMaxTurns: null, implementationMaxTurns: null },
+    // Parallel candidates (DLV-106): two writers at most; every job that may still be
+    // running holds a job slot; a fleet allowance is the owner's amount or null.
+    concurrency: { maxWriters: 2, maxJobs: 3, fleetAllowance: null },
     grant: {
       permitted_effects: ["native_dispatch", "protected_check", "candidate_export", "record_disposition"],
       expires_at: null,

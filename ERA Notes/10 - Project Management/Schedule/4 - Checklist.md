@@ -1,83 +1,53 @@
 ---
-created: 2026-05-30
-updated: 2026-09-06
+created: 2026-09-10
+updated: 2026-09-10
 type: checklist
 status: active
 owner: Elio
-tags:
-  - pm/checklist
-  - scope/module
-  - module/schedule
 ---
 
-# Schedule · 4 — Checklist
+# Schedule — Checklist
 
-> **Campaign:** [Schedule — Master Book](<Schedule — Master Book.md>) · [4 · Checklist](<4 - Checklist.md>)
->
-> **What this file is:** the single flat, checkable surface for Schedule — every open actionable item under **Now / Next / Later**. Grammar: [_Conventions](<../_Conventions.md>) (validated by `pnpm pm:lint`). The narrative *why*, the recurrence audit and the shipped history live in the Master Book; completed items are swept into its Shipped Log and the line deleted.
->
-> **Legend:** Sev blocker / friction / annoyance / parked. Effort S / M / L.
-> **ID migration (2026-07-15):** phase IDs collapsed to `SCH-*`; the six carried "real-device check + Undo + console.error" round items (R3.5/R4.6/R6.7/R7.5/R8.2/5.5) merged into **SCH-5.5**; the "retire `task` type" note became a real item **SCH-6.1**.
+[Master Book](<Schedule — Master Book.md>) · [All campaigns](<../_index.md>) · [Grammar](<../_Conventions.md>)
 
----
+One checkbox per outcome. Follow the ID link for acceptance, dependencies and holds. Lane order is priority, not authorization; owner evidence and policy gates still apply.
 
 ## Now
 
-- [ ] **SCH-4.2** (ASTRA source correction; Phase 4) Verify broader per-view placement semantics; WebTodayView now delegates through the shared day path, so the old known-red-source claim is stale. This does not prove pause/exception/flexible parity or close broader coverage. → [Verified delta](<ASTRA/Schedule — ASTRA Book.md>) _(friction - M)_
-- [ ] **SCH-4.3b** (Phase 4) Engine/UI recurrence unification — Stages 2–3 (one expansion engine + one occurrence-action sheet across all surfaces). → [Master Book](<Schedule — Master Book.md>) _(friction - L)_
-- [ ] **SCH-5.5** (Phase 5) Mobile-form cleanup carried from the R3–R8 rounds: add **Undo** to success toasts (Hard Rule #1), remove the stray `console.error` in the submit/speech handler (Hard Rule #22), drop the unused `missingFieldType` state, and do the real-device visual check across themes. → [MobileReminderForm.tsx](<../../../src/components/reminder/MobileReminderForm.tsx>) _(friction - S)_
-
-> **⚠️ Reality note (2026-06-06):** the live mobile capture form is **[MobileReminderForm.tsx](<../../../src/components/reminder/MobileReminderForm.tsx>)** (mounted in TabContainer under the `reminder` tab) — **not** `MobileItemForm.tsx`, which is dead code (retire under SCH-5.3 below). Most of the old 1a/1b scope already existed; only the docs debt below remains from that slice.
-
-- [ ] **SCH-1.9** (Phase 1a) Post-ship docs: [Items & Reminders Overview](<../../02 - Standalone Modules/Items & Reminders/Overview.md>) updated with the new capture behaviors. No new route/icon, so Atlas/Routes unchanged. _(friction - S)_
+- [ ] **SCH-4.2** Verify cross-view recurrence placement — [criteria](<Schedule — Master Book.md#sch-42>) _(friction - M)_
+- [ ] **SCH-4.3b** Unify recurrence expansion and occurrence actions — [criteria](<Schedule — Master Book.md#sch-43b>) _(friction - L)_
+- [ ] **SCH-7** Refuse unsupported recurrence before capture — [criteria](<Schedule — Master Book.md#sch-7>) _(blocker - S)_
 
 ## Next
 
-**ASTRA prerequisite (2026-09-06)** *(study: [ASTRA Book](<ASTRA/Schedule — ASTRA Book.md>))*
-
-- [ ] **SCH-7** (ASTRA-SCH-2) Unsupported recurrence is refused before creating a one-time reminder or a misleading pending turn; blocks safe E-09 conversational capture. → [Execution sheet](<ASTRA/Schedule — ASTRA Packets.md>) _(blocker - S)_
-
-> **⚠️ Reality note (2026-06-06):** item NLP is **not** net-new — [smartTextParser.ts](<../../../src/lib/smartTextParser.ts>) (~1,420 LOC: type, dates, times, RRULE, priority, categories, confidence) already exists and is wired into the live form. Remaining 1b/1c work is incremental.
-
-- [ ] **SCH-1b.4** (Phase 1b) Harden recurrence extraction — keep conservative; **gate behind the SCH-4.2 tests** before trusting RRULE writes from text. _(friction - M)_
-- [ ] **SCH-1c.1** (Phase 1c) Wire one-line → structured item via **Gemini**; **pass `timeoutMs`** (Hard Rule #6 — AI calls can exceed the current 8 s default). → `src/lib/ai/gemini.ts` _(friction - M)_
-- [ ] **SCH-1c.2** (Phase 1c) Reuse/extend the Hub create path ([AddReminderFromMessageModal.tsx](<../../../src/components/hub/AddReminderFromMessageModal.tsx>) · [messageActions.ts](<../../../src/features/hub/messageActions.ts>)) — confirm chip before commit. _(friction - M)_
+- [ ] **SCH-5.5** Finish mobile reminder form cleanup and verification — [criteria](<Schedule — Master Book.md#sch-55>) _(friction - S)_
+- [ ] **SCH-1.9** Document the shipped capture behavior — [criteria](<Schedule — Master Book.md#sch-19>) _(friction - S)_
+- [ ] **SCH-1b.4** Harden conservative recurrence extraction — [criteria](<Schedule — Master Book.md#sch-1b4>) _(friction - M)_
+- [ ] **SCH-1c.1** Parse one-line items through Gemini safely — [criteria](<Schedule — Master Book.md#sch-1c1>) _(friction - M)_
+- [ ] **SCH-1c.2** Reuse Hub reminder creation with confirmation — [criteria](<Schedule — Master Book.md#sch-1c2>) _(friction - M)_
+- [ ] **SCH-8** Unify canonical agenda consumer semantics — [criteria](<Schedule — Master Book.md#sch-8>) _(friction - M)_
+- [ ] **SCH-9** Give online and replayed reminders equal alert semantics — [criteria](<Schedule — Master Book.md#sch-9>) _(friction - M)_
+- [ ] **SCH-10** Verify prerequisite access against current RLS — [criteria](<Schedule — Master Book.md#sch-10>) _(friction - M)_
+- [ ] **SCH-14** Preserve occurrence identity through every action — [criteria](<Schedule — Master Book.md#sch-14>) _(friction - M)_
 
 ## Later
 
-**ASTRA wave 1 (2026-09-06)** *(study: [ASTRA Book](<ASTRA/Schedule — ASTRA Book.md>); sheets: [ASTRA Packets](<ASTRA/Schedule — ASTRA Packets.md>))*
-
-ASTRA-SCH-1 is the bounded first day-adapter slice of SCH-4.3b; never dispatch the whole L parent as one ASTRA packet or tick it on this child. ASTRA-SCH-3 remains held until that adapter passes, then refines E-04/E-08 under HUB-41/45 with Schedule ownership before a fresh execution ID is admitted. SCH-4.4's optional status conflicts with unconditional D2; the existing requirement is not waived by this study. No new clock-trigger work is queued.
-
-**Phase 2 — Location + NFC-from-text** *(only after Phase 1 ships; no geofencing — routed through the existing arrive/leave-home NFC trigger)*
-
-- [ ] **SCH-2.1** Parse "at home" / "when I get home" → set `location_context: "home"`. _(annoyance - S)_
-- [ ] **SCH-2.2** Map the phrase "home" → the user's tag via `nfc_tags.label` → attach an `nfc_state_change` prerequisite (arrive-home). → `src/lib/prerequisites/evaluators/nfc-state.ts` _(annoyance - M)_
-- [ ] **SCH-2.3** Pre-fill the existing `PrerequisitePicker` from parsed text (plumbing already wired in the form). _(annoyance - S)_
-
-**Phase 3 — Confidence & clarification UX**
-
-- [ ] **SCH-3.1** Lightweight **one-question** clarification for ambiguous phrases ("later" → Tonight / Tomorrow / Pick time); never block a simple save. _(annoyance - M)_
-- [ ] **SCH-3.2** Compact, on-brand chip preview obeying the look-and-feel Hard Rules (`useThemeClasses()`, opaque panels via `tc.bgPage` #15, no hardcoded colors #10, futuristic SVG icons #4, Undo toast #1, `inputMode="decimal"` #19, mobile-first #5). _(annoyance - S)_
-
-**Phase 4 — Foundational hardening (remainder)**
-
-- [ ] **SCH-4.4** `time_window` prerequisite evaluator (one of the 4 inert) — optional, only if a feature needs it. _(parked - M)_
-- [ ] **SCH-4.5** Split `useItems.ts` (~2,621 LOC) — only when a feature next forces you in, not "just because." _(parked - L)_
-
-**Phase 5 — Surface consolidation & assignments** *(the "seven doors for one module" cleanup — mostly decisions before code)*
-
-- [ ] **SCH-5.2** Give each surface **one job** per the surface map (Month / Week / Today / Form). → [Master Book](<Schedule — Master Book.md>) _(friction - M)_
-- [ ] **SCH-5.3** Investigate the [MobileReminderForm.tsx](<../../../src/components/reminder/MobileReminderForm.tsx>) vs [MobileItemForm.tsx](<../../../src/components/items/MobileItemForm.tsx>) **duplication** — decide keep/merge/retire. **No deletion without a decision.** _(friction - S)_
-- [ ] **SCH-5.4** Reassignment **history / audit** trail — "who had it when" (W8). _(friction - M)_
-
-**Phase 6 — Cross-cutting: retire the `task` type**
-
-> User: "I don't want to see Task anymore." Deferred, cross-cutting. Still to do: DB merge (`task` rows → `reminder` or a `kind` flag), other surfaces (`WebEventFormDialog`, `ItemDetailModal`, `ItemsListView`, web calendars, `AddReminderFromMessageModal`, filters/sub-modes), the `ItemType` union, and every Schedule doc that names "Task".
-
-- [ ] **SCH-6.1** *(packet **M-09** of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>), Lane M while native waits; split M-09a DB+types / M-09b surfaces+docs)* Retire the `task` type end-to-end (DB + all surfaces + the `ItemType` union + docs). Do this as one dedicated slice before touching the DB. _(friction - L)_
-
-## Definition of Done
-
-- [ ] **D1** One expansion engine + one occurrence-action sheet across all surfaces (Stages 2–3 — not started; Stage 1 done 2026-06-19).
-- [ ] **D2** `time_window` prerequisite evaluates correctly and is no longer a stub.
+- [ ] **SCH-2.1** Parse "at home" / "when I get home" — [criteria](<Schedule — Master Book.md#sch-21>) _(annoyance - S)_
+- [ ] **SCH-2.2** Map the phrase "home" — [criteria](<Schedule — Master Book.md#sch-22>) _(annoyance - M)_
+- [ ] **SCH-2.3** Pre-fill the existing `PrerequisitePicker` from parsed text (plumbing already wired in the form) — [criteria](<Schedule — Master Book.md#sch-23>) _(annoyance - S)_
+- [ ] **SCH-3.1** Lightweight **one-question** clarification for ambiguous phrases ("later" — [criteria](<Schedule — Master Book.md#sch-31>) _(annoyance - M)_
+- [ ] **SCH-3.2** Compact, on-brand chip preview obeying the look-and-feel Hard Rules (`useThemeClasses()`, opaque panels via `tc.bgPage` #15, no hardcoded colors #10,… — [criteria](<Schedule — Master Book.md#sch-32>) _(annoyance - S)_
+- [ ] **SCH-4.4** `time_window` prerequisite evaluator (one of the 4 inert) — [criteria](<Schedule — Master Book.md#sch-44>) _(parked - M)_
+- [ ] **SCH-4.5** Split `useItems.ts` (~2,621 LOC) — [criteria](<Schedule — Master Book.md#sch-45>) _(parked - L)_
+- [ ] **SCH-5.2** Give each surface **one job** per the surface map (Month / Week / Today / Form) — [criteria](<Schedule — Master Book.md#sch-52>) _(friction - M)_
+- [ ] **SCH-5.3** Investigate the [MobileReminderForm.tsx](<../../../src/components/reminder/MobileReminderForm.tsx>) vs… — [criteria](<Schedule — Master Book.md#sch-53>) _(friction - S)_
+- [ ] **SCH-5.4** Reassignment **history / audit** trail — [criteria](<Schedule — Master Book.md#sch-54>) _(friction - M)_
+- [ ] **SCH-6.1** Retire the task type across storage and surfaces — [criteria](<Schedule — Master Book.md#sch-61>) _(friction - L)_
+- [ ] **SCH-11** Audit the arrive and leave NFC experience — [criteria](<Schedule — Master Book.md#sch-11>) _(friction - M)_
+- [ ] **SCH-12** Separate estimated and observed schedule duration — [criteria](<Schedule — Master Book.md#sch-12>) _(friction - M)_
+- [ ] **SCH-13** Project canonical recurrence into Google Calendar — [criteria](<Schedule — Master Book.md#sch-13>) _(friction - M)_
+- [ ] **SCH-15** Activate reusable definitions atomically — [criteria](<Schedule — Master Book.md#sch-15>) _(friction - M)_
+- [ ] **SCH-16** Promote definitions without rewriting executions — [criteria](<Schedule — Master Book.md#sch-16>) _(friction - M)_
+- [ ] **SCH-17** Pause, stop and resume one activation coherently — [criteria](<Schedule — Master Book.md#sch-17>) _(friction - M)_
+- [ ] **SCH-18** Apply reusable defaults only to future work — [criteria](<Schedule — Master Book.md#sch-18>) _(friction - M)_
+- [ ] **SCH-19** Offer explicit updates to future activations — [criteria](<Schedule — Master Book.md#sch-19>) _(friction - M)_

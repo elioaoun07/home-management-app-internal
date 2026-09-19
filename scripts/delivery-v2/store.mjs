@@ -46,7 +46,21 @@ import { ContractError, canonicalJson, deepFreeze, normalizePath } from "./contr
 
 // 2 adds `work_refs` and `contracts` for the S1.4 entry point. Both are additive
 // `CREATE TABLE IF NOT EXISTS`, so an existing store opens and keeps its rows.
-export const STORE_SCHEMA_VERSION = 2;
+// 3 (Command Center Phase 3) adds the dispatch claim/intent and per-run settings
+// columns plus the interaction and evidence tables. Columns are added by
+// `ensureColumns`, so a schema-2 store migrates in place without losing rows.
+// 4 (Command Center Phase 4) adds `applications`: one owner-triggered Apply of a
+// verified candidate to the host checkout. A partial unique index is the
+// exclusive application claim, so two applications to one destination cannot be
+// in flight at once whatever the callers do.
+// 5 (Command Center Phase 5) adds `runs.coordination_json`: a waiting run's verdict,
+// reasons and the continuation to admit when they clear.
+// 6 keeps cache creation separate from cache reads and adds an application
+// revision. A rollback preview is bound to that revision.
+export const STORE_SCHEMA_VERSION = 6;
+
+/** Application states that hold the destination's exclusive claim. */
+export const ACTIVE_APPLICATION_STATES = Object.freeze(["prepared", "writing", "checking", "rolling-back", "interrupted"]);
 
 /** Where a store and its artifacts live. Gitignored (`/.delivery/` in .gitignore). */
 export const STORE_DIR = ".delivery/v2";
@@ -125,6 +139,7 @@ CREATE TABLE IF NOT EXISTS usage_readings (
   unit             TEXT NOT NULL,
   input            REAL NOT NULL DEFAULT 0,
   cached_input     REAL NOT NULL DEFAULT 0,
+  cache_creation   REAL NOT NULL DEFAULT 0,
   output           REAL NOT NULL DEFAULT 0,
   reasoning_output REAL NOT NULL DEFAULT 0,
   cost_usd         REAL,
@@ -215,7 +230,162 @@ CREATE TABLE IF NOT EXISTS grants (
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL
 );
+
+-- Schema 3. A plan is one readable proposal revision; approval binds to it.
+CREATE TABLE IF NOT EXISTS plans (
+  plan_id           TEXT PRIMARY KEY,
+  run_id            TEXT NOT NULL REFERENCES runs(run_id),
+  revision          INTEGER NOT NULL,
+  contract_id       TEXT NOT NULL,
+  contract_revision INTEGER NOT NULL,
+  job_id            TEXT,
+  body_json         TEXT NOT NULL,
+  body_digest       TEXT NOT NULL,
+  raw_text          TEXT,
+  malformed         INTEGER NOT NULL DEFAULT 0,
+  status            TEXT NOT NULL,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL,
+  UNIQUE (run_id, revision)
+);
+
+CREATE TABLE IF NOT EXISTS questions (
+  question_id   TEXT PRIMARY KEY,
+  run_id        TEXT NOT NULL REFERENCES runs(run_id),
+  plan_revision INTEGER NOT NULL,
+  job_id        TEXT,
+  stage         TEXT NOT NULL,
+  text          TEXT NOT NULL,
+  blocking      INTEGER NOT NULL,
+  status        TEXT NOT NULL,
+  answer        TEXT,
+  answered_by   TEXT,
+  answered_at   TEXT,
+  created_at    TEXT NOT NULL
+);
+
+-- Owner guidance. The status is a receipt, never "read": queued until a job
+-- carries it, delivered once that job's dispatch marker is committed.
+CREATE TABLE IF NOT EXISTS messages (
+  message_id   TEXT PRIMARY KEY,
+  run_id       TEXT NOT NULL REFERENCES runs(run_id),
+  actor        TEXT NOT NULL,
+  body         TEXT NOT NULL,
+  status       TEXT NOT NULL,
+  job_id       TEXT,
+  delivered_at TEXT,
+  created_at   TEXT NOT NULL
+);
+
+-- Observed native activity. Agent identity comes from the executor's own
+-- records; nothing here is inferred from a phase name.
+CREATE TABLE IF NOT EXISTS activity (
+  job_id     TEXT NOT NULL REFERENCES jobs(job_id),
+  seq        INTEGER NOT NULL,
+  run_id     TEXT NOT NULL,
+  at         TEXT,
+  kind       TEXT NOT NULL,
+  agent_json TEXT NOT NULL,
+  summary    TEXT,
+  PRIMARY KEY (job_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS candidates (
+  run_id       TEXT NOT NULL REFERENCES runs(run_id),
+  generation   TEXT NOT NULL,
+  candidate_id TEXT NOT NULL,
+  job_id       TEXT,
+  record_json  TEXT NOT NULL,
+  created_at   TEXT NOT NULL,
+  PRIMARY KEY (run_id, generation)
+);
+
+CREATE TABLE IF NOT EXISTS evidence (
+  evidence_id        TEXT PRIMARY KEY,
+  run_id             TEXT NOT NULL REFERENCES runs(run_id),
+  candidate_id       TEXT NOT NULL,
+  criterion_id       TEXT NOT NULL,
+  criterion_revision INTEGER NOT NULL,
+  state              TEXT NOT NULL,
+  reason             TEXT,
+  receipt_json       TEXT,
+  record_json        TEXT NOT NULL,
+  created_at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS evidence_run ON evidence(run_id, candidate_id);
+
+CREATE TABLE IF NOT EXISTS results (
+  result_id         TEXT NOT NULL,
+  result_version    INTEGER NOT NULL,
+  run_id            TEXT NOT NULL REFERENCES runs(run_id),
+  record_json       TEXT NOT NULL,
+  projection_status TEXT NOT NULL,
+  projection_reason TEXT,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL,
+  PRIMARY KEY (result_id, result_version)
+);
+
+CREATE TABLE IF NOT EXISTS run_events (
+  seq       INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id    TEXT NOT NULL,
+  kind      TEXT NOT NULL,
+  data_json TEXT,
+  at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS run_events_run ON run_events(run_id, seq);
+
+-- Schema 4. One owner-triggered application of a frozen candidate to the host
+-- checkout. The bytes, backups and per-operation journal live outside the checkout
+-- (journal_dir); this row is the claim, the state and the observed outcome.
+CREATE TABLE IF NOT EXISTS applications (
+  application_id TEXT PRIMARY KEY,
+  run_id         TEXT NOT NULL REFERENCES runs(run_id),
+  candidate_id   TEXT NOT NULL,
+  result_ref     TEXT NOT NULL,
+  destination    TEXT NOT NULL,
+  state          TEXT NOT NULL,
+  claim          TEXT,
+  plan_json      TEXT NOT NULL,
+  journal_dir    TEXT,
+  integrated_id  TEXT,
+  outcome_json   TEXT,
+  actor          TEXT NOT NULL,
+  command_id     TEXT NOT NULL,
+  revision       INTEGER NOT NULL DEFAULT 1,
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS applications_run ON applications(run_id, created_at);
+-- The exclusive application claim: at most one in-flight application per destination.
+CREATE UNIQUE INDEX IF NOT EXISTS applications_one_active ON applications(destination)
+  WHERE state IN ('prepared', 'writing', 'checking', 'rolling-back', 'interrupted');
 `;
+
+/**
+ * Columns added after a table first shipped. `CREATE TABLE IF NOT EXISTS` never
+ * alters an existing table, so each is added only where it is missing.
+ */
+const ADDED_COLUMNS = Object.freeze({
+  jobs: [
+    ["access", "TEXT NOT NULL DEFAULT 'write'"],
+    ["settings_json", "TEXT"],
+    ["effective_json", "TEXT"],
+    ["dispatch_claim", "TEXT"],
+    ["dispatch_claimed_at", "TEXT"],
+    ["intent_json", "TEXT"],
+    ["plan_id", "TEXT"],
+    ["stop_requested_at", "TEXT"],
+    ["stop_observed_at", "TEXT"],
+  ],
+  runs: [
+    ["settings_json", "TEXT"],
+    ["base_manifest_json", "TEXT"],
+    ["coordination_json", "TEXT"],
+  ],
+  usage_readings: [["cache_creation", "REAL NOT NULL DEFAULT 0"]],
+  applications: [["revision", "INTEGER NOT NULL DEFAULT 1"]],
+});
 
 const sha256 = (buffer) => "sha256:" + createHash("sha256").update(buffer).digest("hex");
 
@@ -238,11 +408,22 @@ export function payloadDigest(payload) {
 export function openStore({ path, now = () => new Date().toISOString() }) {
   mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path, { enableForeignKeyConstraints: true });
+  // A second process (the bridge, a restarted server) waits for the write lock
+  // instead of failing an admission outright.
+  db.exec("PRAGMA busy_timeout = 5000;");
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA synchronous = FULL;");
   db.exec("PRAGMA foreign_keys = ON;");
   db.exec(SCHEMA);
-  db.prepare("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)").run("schema_version", String(STORE_SCHEMA_VERSION));
+  for (const [table, columns] of Object.entries(ADDED_COLUMNS)) {
+    const present = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((row) => String(row.name)));
+    for (const [name, ddl] of columns) {
+      if (!present.has(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${ddl}`);
+    }
+  }
+  db.prepare(
+    "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+  ).run("schema_version", String(STORE_SCHEMA_VERSION));
 
   const statements = new Map();
   /** Prepared-statement cache; SQLite is happier and the call sites stay short. */
@@ -322,9 +503,10 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
       const current = api.getRun(run_id);
       if (!current) throw new ContractError("unknown run " + run_id);
       const next = { ...current, ...patch, updated_at: now() };
+      const json = (value) => (value == null ? null : typeof value === "string" ? value : JSON.stringify(value));
       sql(
         `UPDATE runs SET lifecycle = ?, closed_outcome = ?, result_ref = ?, waiting_reason = ?,
-           grant_id = ?, grant_revision = ?, updated_at = ? WHERE run_id = ?`,
+           grant_id = ?, grant_revision = ?, settings_json = ?, base_manifest_json = ?, coordination_json = ?, updated_at = ? WHERE run_id = ?`,
       ).run(
         next.lifecycle,
         next.closed_outcome ?? null,
@@ -332,10 +514,17 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
         next.waiting_reason ?? null,
         next.grant_id ?? null,
         next.grant_revision ?? null,
+        json(next.settings_json),
+        json(next.base_manifest_json),
+        json(next.coordination_json),
         next.updated_at,
         run_id,
       );
       return api.getRun(run_id);
+    },
+
+    listRuns() {
+      return sql("SELECT * FROM runs ORDER BY updated_at DESC, run_id").all();
     },
 
     // -- selected work and frozen contracts ---------------------------------
@@ -449,8 +638,8 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
            contract_id, contract_revision, grant_id, grant_revision, profile_id,
            reservation_unit, reservation_amount, reservation_basis, reservation_open,
            dispatch_started_at, request_json, observations_json, reason, publication_revoked,
-           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, NULL, 'reserved', NULL, ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?, NULL, NULL, 0, ?, ?)`,
+           access, settings_json, plan_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, NULL, 'reserved', NULL, ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?, NULL, NULL, 0, ?, ?, ?, ?, ?)`,
       ).run(
         job.job_id,
         job.run_id,
@@ -466,10 +655,90 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
         job.reservation.amount ?? null,
         job.reservation.basis,
         JSON.stringify(job.request ?? null),
+        job.access || "write",
+        job.settings == null ? null : JSON.stringify(job.settings),
+        job.plan_id ?? null,
         at,
         at,
       );
       return api.getJob(job.job_id);
+    },
+
+    /**
+     * Take the exclusive right to dispatch one reserved job.
+     *
+     * The conditional UPDATE is the claim: of two callers racing on the same job,
+     * exactly one sees `changes === 1`. An idempotent dispatch marker cannot do
+     * this, because both callers would find it absent before either set it.
+     * The dispatch intent is recorded in the same statement, so a claim never
+     * exists without the checks it was granted under.
+     *
+     * @returns {{acquired:boolean, holder:(string|null), job:object, reason:(string|null)}}
+     */
+    claimDispatch(job_id, claimant, intent = null) {
+      const job = api.getJob(job_id);
+      if (!job) throw new ContractError(STORE_REFUSALS.UNKNOWN_JOB + ": " + job_id);
+      if (job.dispatch_started_at) return { acquired: false, holder: job.dispatch_claim ?? null, job, reason: "already-dispatched" };
+      // Held already — by anyone, including this claimant. A second call from the
+      // same process is a second dispatch attempt, not an idempotent retry.
+      if (job.dispatch_claim) return { acquired: false, holder: String(job.dispatch_claim), job, reason: "claim-held" };
+      if (job.status !== "reserved") return { acquired: false, holder: null, job, reason: "job-not-reserved" };
+      const at = now();
+      const outcome = sql(
+        `UPDATE jobs SET dispatch_claim = ?, dispatch_claimed_at = ?, intent_json = ?, updated_at = ?
+          WHERE job_id = ? AND dispatch_claim IS NULL AND dispatch_started_at IS NULL AND status = 'reserved'`,
+      ).run(claimant, at, intent == null ? null : JSON.stringify(intent), at, job_id);
+      const after = api.getJob(job_id);
+      return Number(outcome.changes) === 1
+        ? { acquired: true, holder: claimant, job: after, reason: null }
+        : { acquired: false, holder: after.dispatch_claim ?? null, job: after, reason: "claim-held" };
+    },
+
+    /** Record the checks a claim was dispatched under. Only the holder may. */
+    recordDispatchIntent(job_id, claimant, intent) {
+      const at = now();
+      sql("UPDATE jobs SET intent_json = ?, updated_at = ? WHERE job_id = ? AND dispatch_claim = ?").run(
+        JSON.stringify(intent ?? null),
+        at,
+        job_id,
+        claimant,
+      );
+      return api.getJob(job_id);
+    },
+
+    /** Give up a claim that never reached its dispatch marker. */
+    releaseClaim(job_id, claimant = null) {
+      const at = now();
+      const outcome = claimant
+        ? sql(
+            "UPDATE jobs SET dispatch_claim = NULL, dispatch_claimed_at = NULL, updated_at = ? WHERE job_id = ? AND dispatch_claim = ? AND dispatch_started_at IS NULL",
+          ).run(at, job_id, claimant)
+        : sql(
+            "UPDATE jobs SET dispatch_claim = NULL, dispatch_claimed_at = NULL, updated_at = ? WHERE job_id = ? AND dispatch_started_at IS NULL",
+          ).run(at, job_id);
+      return Number(outcome.changes) === 1;
+    },
+
+    /** Reserved jobs whose claim was taken but whose marker never committed. */
+    listClaimedUndispatched() {
+      return sql(
+        "SELECT * FROM jobs WHERE dispatch_claim IS NOT NULL AND dispatch_started_at IS NULL AND status = 'reserved' ORDER BY created_at, job_id",
+      ).all();
+    },
+
+    setJobEffective(job_id, effective) {
+      sql("UPDATE jobs SET effective_json = ?, updated_at = ? WHERE job_id = ?").run(JSON.stringify(effective ?? null), now(), job_id);
+      return api.getJob(job_id);
+    },
+
+    markStopRequested(job_id, at = null) {
+      sql("UPDATE jobs SET stop_requested_at = COALESCE(stop_requested_at, ?), updated_at = ? WHERE job_id = ?").run(at || now(), now(), job_id);
+      return api.getJob(job_id);
+    },
+
+    markStopObserved(job_id, at = null) {
+      sql("UPDATE jobs SET stop_observed_at = COALESCE(stop_observed_at, ?), updated_at = ? WHERE job_id = ?").run(at || now(), now(), job_id);
+      return api.getJob(job_id);
     },
 
     getJob(job_id) {
@@ -483,6 +752,11 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
 
     listJobs(run_id) {
       return sql("SELECT * FROM jobs WHERE run_id = ? ORDER BY created_at, job_id").all(run_id);
+    },
+
+    /** Every job of every run: the fleet a coordination check counts. */
+    listAllJobs() {
+      return sql("SELECT * FROM jobs ORDER BY created_at, job_id").all();
     },
 
     /** Jobs that a restart must reconcile before anything new is dispatched. */
@@ -564,14 +838,15 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
       const before = api.countUsageReadings(job_id);
       sql(
         `INSERT OR IGNORE INTO usage_readings
-           (job_id, reading_key, unit, input, cached_input, output, reasoning_output, cost_usd, observed_at, note)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (job_id, reading_key, unit, input, cached_input, cache_creation, output, reasoning_output, cost_usd, observed_at, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         job_id,
         String(reading.reading_key),
         reading.unit || "tokens",
         Number(reading.input || 0),
         Number(reading.cachedInput || 0),
+        Number(reading.cacheCreation || 0),
         Number(reading.output || 0),
         Number(reading.reasoningOutput || 0),
         reading.costUsd == null ? null : Number(reading.costUsd),
@@ -627,6 +902,10 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
       return deepFreeze({ status: "created", reason: null, receipt: sql("SELECT * FROM commands WHERE command_id = ?").get(command_id) });
     },
 
+    getCommand(command_id) {
+      return sql("SELECT * FROM commands WHERE command_id = ?").get(command_id) || null;
+    },
+
     recordCommandOutcome(command_id, outcome) {
       sql("UPDATE commands SET outcome_json = ? WHERE command_id = ?").run(JSON.stringify(outcome ?? null), command_id);
       return sql("SELECT * FROM commands WHERE command_id = ?").get(command_id);
@@ -680,6 +959,340 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
 
     listDecisions(run_id) {
       return sql("SELECT * FROM decisions WHERE run_id = ? ORDER BY created_at, decision_id").all(run_id);
+    },
+
+    getDecision(decision_id) {
+      return sql("SELECT * FROM decisions WHERE decision_id = ?").get(decision_id) || null;
+    },
+
+    // -- plans, questions and messages (schema 3) -------------------------
+
+    putPlan(plan) {
+      const at = now();
+      sql(
+        `INSERT INTO plans (plan_id, run_id, revision, contract_id, contract_revision, job_id, body_json, body_digest,
+           raw_text, malformed, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        plan.plan_id,
+        plan.run_id,
+        plan.revision,
+        plan.contract_id,
+        plan.contract_revision,
+        plan.job_id ?? null,
+        JSON.stringify(plan.body ?? null),
+        plan.body_digest,
+        plan.raw_text ?? null,
+        plan.malformed ? 1 : 0,
+        plan.status,
+        at,
+        at,
+      );
+      return api.getPlan(plan.plan_id);
+    },
+
+    getPlan(plan_id) {
+      return sql("SELECT * FROM plans WHERE plan_id = ?").get(plan_id) || null;
+    },
+
+    listPlans(run_id) {
+      return sql("SELECT * FROM plans WHERE run_id = ? ORDER BY revision").all(run_id);
+    },
+
+    setPlanStatus(plan_id, status) {
+      sql("UPDATE plans SET status = ?, updated_at = ? WHERE plan_id = ?").run(status, now(), plan_id);
+      return api.getPlan(plan_id);
+    },
+
+    putQuestion(question) {
+      sql(
+        `INSERT OR IGNORE INTO questions (question_id, run_id, plan_revision, job_id, stage, text, blocking, status,
+           answer, answered_by, answered_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?)`,
+      ).run(
+        question.question_id,
+        question.run_id,
+        question.plan_revision,
+        question.job_id ?? null,
+        question.stage,
+        question.text,
+        question.blocking ? 1 : 0,
+        question.status || "open",
+        now(),
+      );
+      return api.getQuestion(question.question_id);
+    },
+
+    getQuestion(question_id) {
+      return sql("SELECT * FROM questions WHERE question_id = ?").get(question_id) || null;
+    },
+
+    listQuestions(run_id) {
+      return sql("SELECT * FROM questions WHERE run_id = ? ORDER BY created_at, question_id").all(run_id);
+    },
+
+    answerQuestion(question_id, { answer, actor, at = null }) {
+      const outcome = sql(
+        "UPDATE questions SET status = 'answered', answer = ?, answered_by = ?, answered_at = ? WHERE question_id = ? AND status = 'open'",
+      ).run(answer, actor, at || now(), question_id);
+      return Number(outcome.changes) === 1;
+    },
+
+    supersedeQuestions(run_id, { beforeRevision = null, stage = null } = {}) {
+      const clauses = ["run_id = ?", "status = 'open'"];
+      const params = [run_id];
+      if (beforeRevision != null) {
+        clauses.push("plan_revision < ?");
+        params.push(beforeRevision);
+      }
+      if (stage) {
+        clauses.push("stage = ?");
+        params.push(stage);
+      }
+      return Number(sql("UPDATE questions SET status = 'superseded' WHERE " + clauses.join(" AND ")).run(...params).changes);
+    },
+
+    putMessage(message) {
+      sql(
+        `INSERT OR IGNORE INTO messages (message_id, run_id, actor, body, status, job_id, delivered_at, created_at)
+         VALUES (?, ?, ?, ?, ?, NULL, NULL, ?)`,
+      ).run(message.message_id, message.run_id, message.actor, message.body, message.status || "queued", now());
+      return sql("SELECT * FROM messages WHERE message_id = ?").get(message.message_id) || null;
+    },
+
+    listMessages(run_id) {
+      return sql("SELECT * FROM messages WHERE run_id = ? ORDER BY created_at, message_id").all(run_id);
+    },
+
+    /** Attach every still-queued message to the job that will carry it. */
+    attachQueuedMessages(run_id, job_id) {
+      sql("UPDATE messages SET status = 'awaiting-dispatch', job_id = ? WHERE run_id = ? AND status = 'queued'").run(job_id, run_id);
+      return sql("SELECT * FROM messages WHERE job_id = ? ORDER BY created_at, message_id").all(job_id);
+    },
+
+    /** The carrying job reached its marker: the text was handed to the executor. */
+    markMessagesDelivered(job_id, at = null) {
+      sql("UPDATE messages SET status = 'delivered', delivered_at = ? WHERE job_id = ? AND status = 'awaiting-dispatch'").run(at || now(), job_id);
+    },
+
+    /** The carrying job never dispatched: its messages return to the queue. */
+    requeueMessages(job_id) {
+      sql("UPDATE messages SET status = 'queued', job_id = NULL WHERE job_id = ? AND status = 'awaiting-dispatch'").run(job_id);
+    },
+
+    // -- observed activity -------------------------------------------------
+
+    appendActivity(run_id, job_id, entries) {
+      const start = Number(sql("SELECT COALESCE(MAX(seq), -1) AS m FROM activity WHERE job_id = ?").get(job_id).m) + 1;
+      const insert = sql(
+        "INSERT OR IGNORE INTO activity (job_id, seq, run_id, at, kind, agent_json, summary) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      );
+      (entries || []).forEach((entry, index) => {
+        insert.run(
+          job_id,
+          start + index,
+          run_id,
+          entry.at ?? null,
+          String(entry.kind || "event"),
+          JSON.stringify(entry.agent ?? { role: "main" }),
+          entry.summary == null ? null : String(entry.summary).slice(0, 400),
+        );
+      });
+    },
+
+    listActivity(run_id, limit = 200) {
+      return sql("SELECT * FROM activity WHERE run_id = ? ORDER BY rowid DESC LIMIT ?").all(run_id, limit).reverse();
+    },
+
+    /** Native subagent activity the executors reported, for fleet accounting. */
+    listSubagentActivity() {
+      return sql(`SELECT DISTINCT job_id, agent_json FROM activity WHERE agent_json LIKE '%"role":"subagent"%'`).all();
+    },
+
+    // -- candidates, evidence and results -----------------------------------
+
+    putCandidate({ run_id, generation, candidate, job_id = null }) {
+      sql(
+        "INSERT OR IGNORE INTO candidates (run_id, generation, candidate_id, job_id, record_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run(run_id, generation, candidate.candidate_id, job_id, JSON.stringify(candidate), now());
+      return api.listCandidates(run_id).find((row) => row.generation === generation) || null;
+    },
+
+    listCandidates(run_id) {
+      return sql("SELECT * FROM candidates WHERE run_id = ? ORDER BY created_at, generation").all(run_id);
+    },
+
+    putEvidence(record) {
+      sql(
+        `INSERT OR REPLACE INTO evidence (evidence_id, run_id, candidate_id, criterion_id, criterion_revision, state, reason,
+           receipt_json, record_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        record.evidence_id,
+        record.run_id,
+        record.candidate_id,
+        record.criterion_id,
+        record.criterion_revision,
+        record.state,
+        record.reason ?? null,
+        record.receipt == null ? null : JSON.stringify(record.receipt),
+        JSON.stringify(record.record ?? null),
+        now(),
+      );
+    },
+
+    listEvidence(run_id, candidate_id = null) {
+      return candidate_id
+        ? sql("SELECT * FROM evidence WHERE run_id = ? AND candidate_id = ? ORDER BY created_at, evidence_id").all(run_id, candidate_id)
+        : sql("SELECT * FROM evidence WHERE run_id = ? ORDER BY created_at, evidence_id").all(run_id);
+    },
+
+    putResult(result) {
+      const at = now();
+      sql(
+        `INSERT OR IGNORE INTO results (result_id, result_version, run_id, record_json, projection_status, projection_reason, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`,
+      ).run(result.result_id, result.result_version, result.run_id, JSON.stringify(result), result.projection_status, at, at);
+      return api.latestResult(result.run_id);
+    },
+
+    latestResult(run_id) {
+      return sql("SELECT * FROM results WHERE run_id = ? ORDER BY created_at DESC, result_version DESC LIMIT 1").get(run_id) || null;
+    },
+
+    listResults(run_id) {
+      return sql("SELECT * FROM results WHERE run_id = ? ORDER BY created_at, result_version").all(run_id);
+    },
+
+    setResultProjection(result_id, result_version, status, reason = null) {
+      sql(
+        "UPDATE results SET projection_status = ?, projection_reason = ?, updated_at = ? WHERE result_id = ? AND result_version = ?",
+      ).run(status, reason, now(), result_id, result_version);
+    },
+
+    // -- run event feed -----------------------------------------------------
+
+    appendRunEvent(run_id, kind, data = null) {
+      sql("INSERT INTO run_events (run_id, kind, data_json, at) VALUES (?, ?, ?, ?)").run(
+        run_id,
+        kind,
+        data == null ? null : JSON.stringify(data),
+        now(),
+      );
+    },
+
+    listRunEvents(run_id, after = 0) {
+      return sql("SELECT * FROM run_events WHERE run_id = ? AND seq > ? ORDER BY seq").all(run_id, Number(after) || 0);
+    },
+
+    // -- applications (schema 4) ----------------------------------------------
+
+    /**
+     * Record a new application and take the destination's exclusive claim.
+     *
+     * The partial unique index refuses a second in-flight application to the same
+     * destination; that refusal is returned, never thrown past the caller, because
+     * "another application is in progress" is an answer the owner needs to see.
+     *
+     * @returns {{acquired:boolean, application:(object|null), holder:(object|null)}}
+     */
+    insertApplication(application) {
+      const at = now();
+      const active = ACTIVE_APPLICATION_STATES.includes(String(application.state));
+      if (active) {
+        const holder = api.activeApplication(application.destination);
+        if (holder) return { acquired: false, application: null, holder };
+      }
+      try {
+        sql(
+          `INSERT INTO applications (application_id, run_id, candidate_id, result_ref, destination, state, claim, plan_json,
+             journal_dir, integrated_id, outcome_json, actor, command_id, revision, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 1, ?, ?)`,
+        ).run(
+          application.application_id,
+          application.run_id,
+          application.candidate_id,
+          application.result_ref,
+          application.destination,
+          application.state,
+          active ? application.claim ?? null : null,
+          JSON.stringify(application.plan ?? null),
+          application.journal_dir ?? null,
+          application.outcome == null ? null : JSON.stringify(application.outcome),
+          application.actor,
+          application.command_id,
+          at,
+          at,
+        );
+      } catch (error) {
+        const holder = active ? api.activeApplication(application.destination) : null;
+        if (holder) return { acquired: false, application: null, holder };
+        throw error;
+      }
+      return { acquired: true, application: api.getApplication(application.application_id), holder: null };
+    },
+
+    getApplication(application_id) {
+      return sql("SELECT * FROM applications WHERE application_id = ?").get(application_id) || null;
+    },
+
+    listApplications(run_id) {
+      return sql("SELECT * FROM applications WHERE run_id = ? ORDER BY created_at, application_id").all(run_id);
+    },
+
+    /** The in-flight application holding a destination's claim, or null. */
+    activeApplication(destination) {
+      return (
+        sql(
+          `SELECT * FROM applications WHERE destination = ? AND state IN ('prepared', 'writing', 'checking', 'rolling-back', 'interrupted')
+            ORDER BY created_at LIMIT 1`,
+        ).get(destination) || null
+      );
+    },
+
+    listActiveApplications() {
+      return sql(
+        "SELECT * FROM applications WHERE state IN ('prepared', 'writing', 'checking', 'rolling-back', 'interrupted') ORDER BY created_at",
+      ).all();
+    },
+
+    /**
+     * Move an application to a new state. `expectState` makes it a compare-and-swap,
+     * so two processes cannot both move one application out of the same state.
+     *
+     * @returns {boolean} whether the row moved
+     */
+    updateApplication(application_id, patch, { expectState = null, expectRevision = null } = {}) {
+      const current = api.getApplication(application_id);
+      if (!current) return false;
+      if (expectState != null && String(current.state) !== String(expectState)) return false;
+      if (expectRevision != null && Number(current.revision) !== Number(expectRevision)) return false;
+      const next = { ...current, ...patch };
+      const active = ACTIVE_APPLICATION_STATES.includes(String(next.state));
+      const json = (value) => (value == null ? null : typeof value === "string" ? value : JSON.stringify(value));
+      let outcome;
+      try {
+        outcome = sql(
+          `UPDATE applications SET state = ?, claim = ?, journal_dir = ?, integrated_id = ?, outcome_json = ?, plan_json = ?, revision = revision + 1, updated_at = ?
+            WHERE application_id = ? AND state = ? AND revision = ?`,
+        ).run(
+          next.state,
+          active ? next.claim ?? null : null,
+          next.journal_dir ?? null,
+          next.integrated_id ?? null,
+          json(next.outcome_json),
+          json(next.plan_json),
+          now(),
+          application_id,
+          current.state,
+          current.revision,
+        );
+      } catch (error) {
+        // Moving into an active state while another application holds the claim.
+        if (/constraint/iu.test(String((error && error.message) || error))) return false;
+        throw error;
+      }
+      return Number(outcome.changes) === 1;
     },
 
     // -- artifacts ----------------------------------------------------------

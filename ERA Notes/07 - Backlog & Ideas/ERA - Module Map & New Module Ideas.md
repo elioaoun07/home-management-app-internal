@@ -163,7 +163,7 @@ These sound like modules but would fragment existing ones. Build them **inside**
 | Shared expenses / IOU tracker | **Debts** | That's literally the Debts module |
 | Warranty tracker | **Home Maintenance** or **Documents Vault** | A field + an expiry alert, not a surface |
 | Tax prep *(Vol. 4 §8)* | **Documents Vault** | In the Lebanese context this is document retention + a yearly checklist, not a continuous engine |
-| Daily briefing / digest | **AI Assistant** (already the [ERA Awakening plan](<../10 - Project Management/ERA Awakening — Master Execution Plan (2026-07-06).md>)'s Program 1) | It's the engine that makes every module above worth building — not a module itself |
+| Daily briefing / digest | **AI Assistant** (already the [ERA Awakening plan](<../10 - Project Management/_Archive/Plans/ERA Awakening — Master Execution Plan (2026-07-06).md>)'s Program 1) | It's the engine that makes every module above worth building — not a module itself |
 
 ### How to sequence (recommendation, not a plan)
 

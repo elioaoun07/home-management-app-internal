@@ -97,13 +97,20 @@ export const CLAUDE_SDK_SURFACE = deepFreeze({
     "maxTurns",
     "sandbox",
     "model",
+    "effort",
+    "hooks",
+    "maxBudgetUsd",
   ],
-  resultFields: ["subtype", "is_error", "num_turns", "total_cost_usd", "usage", "session_id"],
+  resultFields: ["subtype", "is_error", "num_turns", "total_cost_usd", "usage", "session_id", "modelUsage"],
   usageFields: ["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens"],
+  effortLevels: ["low", "medium", "high", "xhigh", "max"],
   // The findings. Each is the presence or absence of something, recorded
   // explicitly because an unwritten one is invisible until someone promises it.
   monetaryUsageField: "total_cost_usd",
   monetaryCeilingOption: null,
+  // `maxBudgetUsd` stops a query after its estimate is exceeded. That is a visible
+  // threshold, not a whole-job bound: the turn that crosses it has already spent.
+  monetaryThresholdOption: "maxBudgetUsd",
   callerMintedSessionId: true,
   lookupByCallerKey: true,
   stopAcknowledgement: false,
@@ -197,8 +204,13 @@ export function deriveNativeSessionId(dispatch_key) {
  * `bypassPermissions` has no code path: `assertNeverBypass` is the V1 guard and
  * this function never emits the mode in the first place.
  *
+ * `effort` is forwarded as `Options.effort`; `thresholdUsd` as `maxBudgetUsd`, a
+ * stop threshold rather than a bound; `observe` receives each tool-use hook input,
+ * which is where the SDK reports the effort actually applied.
+ *
  * @param {{workspaceRoot:string, mode?:"build"|"review", model?:(string|null),
- *   maxTurns?:(number|null), forbiddenPaths?:string[], additionalDirectories?:string[]}} input
+ *   maxTurns?:(number|null), forbiddenPaths?:string[], additionalDirectories?:string[],
+ *   effort?:(string|null), thresholdUsd?:(number|null), observe?:((input:any)=>void)|null}} input
  */
 export function buildSessionOptions({
   workspaceRoot,
@@ -207,6 +219,9 @@ export function buildSessionOptions({
   maxTurns = null,
   forbiddenPaths = [],
   additionalDirectories = [],
+  effort = null,
+  thresholdUsd = null,
+  observe = null,
 }) {
   if (!isNonEmptyString(workspaceRoot)) throw new ContractError("claude adapter: a job needs a workspace root");
   if (mode !== "build" && mode !== "review") throw new ContractError("claude adapter: unknown mode " + mode);
@@ -224,8 +239,50 @@ export function buildSessionOptions({
     sandbox: { enabled: true, failIfUnavailable: true },
   };
   if (model) options.model = model;
+  if (effort) options.effort = effort;
   if (typeof maxTurns === "number" && maxTurns > 0) options.maxTurns = maxTurns;
+  if (typeof thresholdUsd === "number" && Number.isFinite(thresholdUsd) && thresholdUsd > 0) options.maxBudgetUsd = thresholdUsd;
+  if (typeof observe === "function") {
+    options.hooks = {
+      PreToolUse: [
+        {
+          hooks: [
+            async (input) => {
+              observe(input);
+              return { continue: true };
+            },
+          ],
+        },
+      ],
+    };
+  }
   return deepFreeze(assertNeverBypass(options));
+}
+
+/** Record what a hook input reports about the turn's applied effort. */
+export function observeHookInput(state, input) {
+  const level = input && input.effort && typeof input.effort.level === "string" ? input.effort.level : null;
+  if (!level) return;
+  // Subagent turns report their own effort; the run's setting is the main thread's.
+  if (input.agent_id) return;
+  state.effective.effort = level;
+  if (!state.effective.source.includes("hook.effort")) state.effective.source.push("hook.effort");
+}
+
+const ACTIVITY_LIMIT = 200;
+
+function pushActivity(state, entry, now) {
+  state.activity.push({ at: now(), ...entry, summary: entry.summary == null ? null : String(entry.summary).slice(0, 240) });
+  if (state.activity.length > ACTIVITY_LIMIT) state.activity.shift();
+}
+
+function effectiveView(state) {
+  return {
+    model: state.effective.model,
+    effort: state.effective.effort,
+    models: [...state.effective.models],
+    source: state.effective.source.length ? state.effective.source.join(",") : "not reported",
+  };
 }
 
 /**
@@ -262,14 +319,17 @@ export function normalizeClaudeUsage(resultMessage) {
   const usage = message.usage && typeof message.usage === "object" ? message.usage : {};
   const cost = message.total_cost_usd;
   const readable = typeof cost === "number" && Number.isFinite(cost);
+  const included = message.era_billing_basis === "included-subscription";
   return deepFreeze({
-    unit: "usd",
+    unit: included ? "tokens" : "usd",
     input: Number(usage.input_tokens || 0),
-    cachedInput: Number(usage.cache_read_input_tokens || 0) + Number(usage.cache_creation_input_tokens || 0),
+    cachedInput: Number(usage.cache_read_input_tokens || 0),
+    cacheCreation: Number(usage.cache_creation_input_tokens || 0),
     output: Number(usage.output_tokens || 0),
     reasoningOutput: 0,
-    costUsd: readable ? cost : null,
-    basis: readable
+    costUsd: included ? null : readable ? cost : null,
+    ...(included ? { apiEquivalentUsd: readable ? cost : null } : {}),
+    basis: included ? "included subscription usage; total_cost_usd is an API-equivalent estimate, not additional billed spending" : readable
       ? "provider-reported total_cost_usd for this turn; not a reconciled bill"
       : "the result message carried no total_cost_usd; the amount is unknown, not zero",
   });
@@ -290,7 +350,7 @@ export function mergeUsageReadings(readings) {
     const key = reading.turn == null ? byTurn.size : reading.turn;
     const existing = byTurn.get(key);
     if (existing) {
-      const shrank = ["input", "cachedInput", "output", "reasoningOutput"].some(
+    const shrank = ["input", "cachedInput", "cacheCreation", "output", "reasoningOutput"].some(
         (field) => Number(reading.usage[field] || 0) < Number(existing.usage[field] || 0),
       );
       if (shrank) {
@@ -300,14 +360,14 @@ export function mergeUsageReadings(readings) {
     }
     byTurn.set(key, reading);
   }
-  const total = { input: 0, cachedInput: 0, output: 0, reasoningOutput: 0 };
+  const total = { input: 0, cachedInput: 0, cacheCreation: 0, output: 0, reasoningOutput: 0 };
   let costUsd = null;
   for (const reading of byTurn.values()) {
     for (const field of Object.keys(total)) total[field] += Number(reading.usage[field] || 0);
     if (reading.usage.costUsd != null) costUsd = Number(costUsd || 0) + Number(reading.usage.costUsd);
   }
   return deepFreeze({
-    unit: "usd",
+    unit: byTurn.size > 0 && [...byTurn.values()].every(reading => reading.usage.unit === "tokens") ? "tokens" : "usd",
     ...total,
     costUsd,
     readings: byTurn.size,
@@ -380,7 +440,7 @@ export function buildControls(observations) {
       verified: true,
       evidence_ref: "sdk-surface:" + SDK_MODULE_SPECIFIER + "@" + CLAUDE_SDK_SURFACE.reviewed_version + "#Options",
       note:
-        "SDKResultMessage reports total_cost_usd, so a spend can be READ; Options carries maxTurns and no monetary ceiling, so a spend cannot be BOUNDED. Reading a cost is not bounding it.",
+        "SDKResultMessage reports total_cost_usd, so a spend can be READ; Options.maxBudgetUsd stops a query after that estimate is exceeded, which is a threshold and not a whole-job bound. Reading or stopping on a cost is not bounding it.",
     }),
   ];
 }
@@ -512,12 +572,34 @@ export function createClaudeAdapter(options = {}) {
   async function drain(stream, state) {
     for await (const message of stream) {
       state.messageCount += 1;
+      if (!message || typeof message !== "object") continue;
       if (message.type === "system" && message.subtype === "init") {
         state.sessionEstablished = true;
+        if (typeof message.model === "string" && message.model) {
+          state.effective.model = message.model;
+          if (!state.effective.source.includes("init.model")) state.effective.source.push("init.model");
+        }
+      }
+      // Hook observations relayed from a worker process outside this one.
+      if (message.type === "era_observation") {
+        observeHookInput(state, message);
+        continue;
       }
       if (message.type === "assistant" && message.message && Array.isArray(message.message.content)) {
+        const parent = message.parent_tool_use_id ?? null;
+        // Only identities the executor recorded: a parent tool-use id is a real
+        // child, and its absence is the main thread. No team is inferred.
+        const agent = parent
+          ? { role: "subagent", id: String(parent), executor: BACKEND_ID, model: null }
+          : { role: "main", id: null, executor: BACKEND_ID, model: state.effective.model };
         for (const block of message.message.content) {
-          if (block && block.type === "text" && block.text) state.finalText = block.text;
+          if (block && block.type === "text" && block.text) {
+            if (!parent) state.finalText = block.text;
+            pushActivity(state, { kind: "message", agent, summary: block.text }, now);
+          }
+          if (block && block.type === "tool_use") {
+            pushActivity(state, { kind: "tool", agent, summary: String(block.name || "tool") }, now);
+          }
         }
       }
       if (message.type === "result") {
@@ -526,6 +608,9 @@ export function createClaudeAdapter(options = {}) {
         state.terminal = "finished";
         state.failure = message.is_error ? String(message.subtype || "error result") : null;
         if (typeof message.result === "string" && message.result) state.finalText = message.result;
+        if (message.modelUsage && typeof message.modelUsage === "object") {
+          state.effective.models = Object.keys(message.modelUsage);
+        }
       }
     }
   }
@@ -555,7 +640,11 @@ export function createClaudeAdapter(options = {}) {
       failure: null,
       finalText: "",
       sessionEstablished: false,
+      effective: { model: null, effort: null, models: [], source: [] },
+      activity: [],
     };
+    const settings = request.settings || { model: null, effort: null };
+    const readOnly = Boolean(request.workspace && request.workspace.access === "read-only");
 
     const sdk = await importSdk();
     if (!sdk || typeof sdk.query !== "function") {
@@ -573,10 +662,15 @@ export function createClaudeAdapter(options = {}) {
       {
         ...buildSessionOptions({
           workspaceRoot: request.workspace.root,
-          mode: request.purpose === "review" ? "review" : "build",
-          model: runOptions.model || null,
+          // A read-only job gets the three read tools; the environment's read-only
+          // mount is what actually denies a write.
+          mode: request.purpose === "review" || readOnly ? "review" : "build",
+          model: settings.model || runOptions.model || null,
+          effort: settings.effort || runOptions.effort || null,
           maxTurns: request.native_limits && request.native_limits.maxTurns ? request.native_limits.maxTurns : null,
+          thresholdUsd: request.native_limits && request.native_limits.thresholdUsd ? Number(request.native_limits.thresholdUsd) : null,
           forbiddenPaths: runOptions.forbiddenPaths || [],
+          observe: (input) => observeHookInput(state, input),
         }),
         abortController: controller,
       },
@@ -606,6 +700,9 @@ export function createClaudeAdapter(options = {}) {
           nativeMessageCount: state.messageCount,
           finalText: state.finalText,
           reachedProvider: state.sessionEstablished,
+          requested: { model: settings.model, effort: settings.effort },
+          effective: effectiveView(state),
+          activity: state.activity,
         },
         reason: state.sessionEstablished
           ? "the query failed after the native session was established"
@@ -627,6 +724,9 @@ export function createClaudeAdapter(options = {}) {
         finalText: state.finalText,
         failure: state.failure,
         nativeOutcome: state.terminal === "finished" ? (state.failure ? "failed" : "succeeded") : null,
+        requested: { model: settings.model, effort: settings.effort },
+        effective: effectiveView(state),
+        activity: state.activity,
       },
       reason: state.terminal ? null : "the query ended without a result message",
     });

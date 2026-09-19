@@ -12,7 +12,7 @@ tags:
 
 > **FABLED:** [_index](<_index.md>) · [1 · Implementation](<1 - FABLED — Current Implementation.md>) · **2 · Gaps** · [3 · Optimization](<3 - FABLED — Optimization Plan.md>) · [4 · Enhancements](<4 - FABLED — Future Enhancements.md>)
 >
-> Ranked: what's absent, half-built, or stale in the finance cluster. Verified 2026-06-10. New gaps discovered during work go **here** (and into [file 1's](<../1 - Feature State — Current Reality.md>) weak-link list if severe), per Hard Rule #25.
+> Ranked: what's absent, half-built, or stale in the finance cluster. Verified 2026-06-10. New gaps discovered during work go **here** (and into [file 1's](<../1 - Feature State.md>) weak-link list if severe), per Hard Rule #25.
 
 ---
 
@@ -47,7 +47,7 @@ Three facts live in Budget that are *also* time facts, with no link:
 
 ## 🟠 G5 — Analytics is purely historical
 
-Net worth, mini-charts, spend map — all backward-looking. There is **no forward projection** despite the inputs existing (recurring schedule + allocations + balances). The "you'll dip below X on the 24th" warning is impossible today. (Track-A/B headline in [file 2](<../2 - Future Vision & Roadmap.md>).)
+Net worth, mini-charts, spend map — all backward-looking. There is **no forward projection** despite the inputs existing (recurring schedule + allocations + balances). The "you'll dip below X on the 24th" warning is impossible today. (Track-A/B headline in [file 2](<../2 - Vision & Roadmap.md>).)
 
 ## 🟡 G6 — Trip account creation bypasses the accounts API
 
@@ -67,4 +67,4 @@ Budget Allocation envelopes are hand-set; recurring commitments (a known floor f
 
 ## ⚪ G10 — Stale PM claims (corrected 2026-06-10)
 
-Files [1](<../1 - Feature State — Current Reality.md>)/[3](<../3 - Current — Action Plan.md>) said `balance-utils` and recurring next-due were **untested** — they're covered and green since the P0 pass. PM updated this session; recorded here so the next audit doesn't re-flag it.
+Files [1](<../1 - Feature State.md>)/[3](<../3 - Action Plan.md>) said `balance-utils` and recurring next-due were **untested** — they're covered and green since the P0 pass. PM updated this session; recorded here so the next audit doesn't re-flag it.

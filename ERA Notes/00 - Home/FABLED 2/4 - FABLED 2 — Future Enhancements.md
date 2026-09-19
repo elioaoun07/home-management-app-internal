@@ -16,7 +16,7 @@ tags:
 
 ## E1 — Generated Home
 
-When PM frontmatter + the reconciliation script exist ([PM FABLED 2.4 · E1/E2](<../../10 - Project Management/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)), `Dashboard.md`'s status block becomes generated output: campaign health chips, open 🔴 count, staleness warnings, last hygiene-sweep date. Home stops being the stalest page and becomes the freshest — the same inversion the Atlas achieved for screens.
+When PM frontmatter + the reconciliation script exist ([PM FABLED 2.4 · E1/E2](<../../10 - Project Management/_Archive/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)), `Dashboard.md`'s status block becomes generated output: campaign health chips, open 🔴 count, staleness warnings, last hygiene-sweep date. Home stops being the stalest page and becomes the freshest — the same inversion the Atlas achieved for screens.
 
 ## E2 — The visitor's tour
 

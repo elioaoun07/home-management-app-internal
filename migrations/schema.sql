@@ -75,6 +75,10 @@ CREATE TABLE public.transactions (
   deleted_at timestamp with time zone,
   receipt_url text,
   exchange_rate numeric CHECK (exchange_rate > 0::numeric),
+  -- Optional trip tag. Decouples "counts toward this trip" from "sits in the
+  -- trip's linked account" — pre-trip spend (visa, flights) paid from another
+  -- account still belongs to the trip. NULL = untagged.
+  trip_id uuid,
   CONSTRAINT transactions_pkey PRIMARY KEY (id),
   CONSTRAINT transactions_category_fk FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
   CONSTRAINT transactions_subcategory_fk FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
@@ -82,7 +86,9 @@ CREATE TABLE public.transactions (
   CONSTRAINT transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT transactions_collaborator_id_fkey FOREIGN KEY (collaborator_id) REFERENCES auth.users(id),
   CONSTRAINT transactions_collaborator_account_id_fkey FOREIGN KEY (collaborator_account_id) REFERENCES public.accounts(id),
-  CONSTRAINT transactions_parent_transaction_id_fkey FOREIGN KEY (parent_transaction_id) REFERENCES public.transactions(id)
+  CONSTRAINT transactions_parent_transaction_id_fkey FOREIGN KEY (parent_transaction_id) REFERENCES public.transactions(id),
+  -- SET NULL, not CASCADE: deleting a trip must never delete money rows.
+  CONSTRAINT transactions_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id) ON DELETE SET NULL
 );
 -- Statement-import dedupe backstop (23505 → "skipped duplicate" in the import route)
 CREATE INDEX idx_transactions_bank_description
@@ -96,6 +102,10 @@ CREATE UNIQUE INDEX transactions_statement_hash_uniq
 CREATE INDEX idx_transactions_account_date
   ON public.transactions (account_id, date)
   WHERE deleted_at IS NULL;
+-- Trip-expense lookup: transactions explicitly tagged to a trip, any account, any date
+CREATE INDEX idx_transactions_trip_id
+  ON public.transactions (trip_id)
+  WHERE trip_id IS NOT NULL;
 CREATE TABLE public.default_categories (
   id uuid NOT NULL,
   name text NOT NULL,
@@ -1790,9 +1800,9 @@ CREATE TABLE public.pm_live (
 CREATE TABLE public.pm_commands (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL DEFAULT auth.uid(),
-  type text NOT NULL CHECK (type = ANY (ARRAY['capture'::text, 'undo'::text, 'preflight'::text, 'launch'::text, 'pause'::text, 'abort-turn'::text, 'resume'::text, 'cancel'::text, 'answer'::text, 'ask'::text, 'approve'::text, 'accept'::text, 'legacy-tick'::text])),
+  type text NOT NULL CHECK (type = ANY (ARRAY['capture'::text, 'undo'::text, 'preflight'::text, 'launch'::text, 'pause'::text, 'abort-turn'::text, 'resume'::text, 'cancel'::text, 'answer'::text, 'ask'::text, 'approve'::text, 'accept'::text, 'legacy-tick'::text, 'v2-deliver'::text, 'v2-decision'::text, 'v2-answer'::text, 'v2-message'::text, 'v2-control'::text, 'v2-apply'::text])),
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'claimed'::text, 'done'::text, 'failed'::text, 'expired'::text])),
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'claimed'::text, 'done'::text, 'failed'::text, 'expired'::text, 'unknown'::text])),
   result jsonb,
   error text,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -1932,3 +1942,35 @@ CREATE TRIGGER trg_stamp_tx_exchange_rate
   BEFORE INSERT OR UPDATE OF account_id ON public.transactions
   FOR EACH ROW
   EXECUTE FUNCTION public.stamp_transaction_exchange_rate();
+
+-- ===========================================================================
+-- PM RELAY (2026-07-25_pm-mobile-relay.sql; 2026-09-12_pm-v2-relay.sql)
+-- ===========================================================================
+-- End state after the Command Center Phase 4 relay migration. The pm_commands
+-- CHECK constraints are in the table definition above. The bridge writes both
+-- tables with the service role (RLS bypassed); the phone reads its own rows and
+-- inserts only pending, receipt-free commands. Live DB remains authoritative:
+-- verify with the migration's section 6 and migrations/db-state.json.
+--
+-- RLS enabled: pm_live, pm_commands.
+
+CREATE INDEX IF NOT EXISTS pm_live_user_id_pattern_idx ON public.pm_live (user_id, id text_pattern_ops);
+
+CREATE POLICY pm_live_select_own ON public.pm_live
+  FOR SELECT
+  USING (user_id = auth.uid());
+
+CREATE POLICY pm_commands_select_own ON public.pm_commands
+  FOR SELECT
+  USING (user_id = auth.uid());
+
+CREATE POLICY pm_commands_insert_own ON public.pm_commands
+  FOR INSERT
+  WITH CHECK (
+    user_id = auth.uid()
+    AND status = 'pending'
+    AND result IS NULL
+    AND error IS NULL
+    AND claimed_at IS NULL
+    AND completed_at IS NULL
+  );

@@ -98,7 +98,7 @@ Two honest options — decide once, don't drift:
 3. Keep the 3 constants + 5 hook migrations (verified value-preserving).
 4. Write the AC6 mapping section into `ERA Notes/05 - Performance/Performance Optimizations.md` (the `staleTime`/`gcTime`/`refetchOnMount`/`Cache-Control` relationship — material exists in `artifacts/STEP-2-invalidation-analysis.md`).
 5. Run `pnpm typecheck && pnpm lint && pnpm test`; commit the slice.
-6. PM trace: re-scope BUD-11 in [Budget/4](<../Budget/4 - Checklist.md>) — mark the slice done, file the remaining migration as decomposed follow-ups (`BUD-11.1` Schedule/Items, `BUD-11.2` Kitchen/Recipes/Catalogue, `BUD-11.3` remainder + flip the test to repo-wide). Move `artifacts/*.md` audit material somewhere durable (e.g. the Budget campaign folder or delete after filing).
+6. PM trace: re-scope BUD-11 in [Budget/4](<../../Budget/4 - Checklist.md>) — mark the slice done, file the remaining migration as decomposed follow-ups (`BUD-11.1` Schedule/Items, `BUD-11.2` Kitchen/Recipes/Catalogue, `BUD-11.3` remainder + flip the test to repo-wide). Move `artifacts/*.md` audit material somewhere durable (e.g. the Budget campaign folder or delete after filing).
 7. Note: the pre-existing red baseline (`tests/delivery/run-session.test.ts` `onEvent`) is separate — fix under DLV-18 or its own item.
 
 **Option B — Revert everything.** Display-only commands; run manually after review:

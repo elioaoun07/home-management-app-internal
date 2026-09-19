@@ -1,15 +1,21 @@
 {
   "id": "/pm-command-center",
-  "name": "PM Command Center • ERA",
-  "short_name": "PM Center",
-  "description": "Live project management dashboard: campaigns, checklists, bugs, and agent delivery sessions",
+  "name": "ERA — In the making",
+  "short_name": "ERA Project",
+  "description": "Your ERA project, from idea to done.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#0a1628",
-  "theme_color": "#3b82f6",
-  "categories": ["productivity", "utilities"],
+  "theme_color": "#0a1628",
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "/assets/pm-192.png",

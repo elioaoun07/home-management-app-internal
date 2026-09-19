@@ -38,7 +38,7 @@ Recurring due ↔ Schedule occurrence · Debt collection → reminder · Future 
 
 ## 3 · The missing center
 
-Each junction connects **two** modules. Nothing connects **all of them to the user proactively** — that's the signals → composer → policy → delivery spine ([FAR FABLED 2.3](<../../10 - Project Management/Functional Architecture Review/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)). June manufactured its parts in separate modules without assembling them; the assembly is the junction layer's whole next chapter.
+Each junction connects **two** modules. Nothing connects **all of them to the user proactively** — that's the signals → composer → policy → delivery spine ([FAR FABLED 2.3](<../../10 - Project Management/_Archive/Functional Architecture Review/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)). June manufactured its parts in separate modules without assembling them; the assembly is the junction layer's whole next chapter.
 
 ## 4 · Junction-layer test truth
 

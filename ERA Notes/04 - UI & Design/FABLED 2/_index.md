@@ -36,6 +36,6 @@ tags:
 
 ## The next 3 moves
 
-1. **One notification design language** — with the campaign's density redesign ([Notifications FABLED 2.2 · G8](<../../10 - Project Management/Notifications & Alerts/FABLED 2/2 - FABLED 2 — Gaps & Missing.md>)).
+1. **One notification design language** — with the campaign's density redesign ([Notifications FABLED 2.2 · G8](<../../10 - Project Management/_Archive/Notifications & Alerts/FABLED 2/2 - FABLED 2 — Gaps & Missing.md>)).
 2. **The visual-rule audit pass** — Undo/borders/motion/opacity, one checklist run ([file 3 · O1](<3 - FABLED 2 — Optimization Plan.md>)).
-3. **Decide Review v2 vs v3** — two dashboards is a divergence engine ([Budget FABLED 2.3 · O8](<../../10 - Project Management/Budget/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
+3. **Decide Review v2 vs v3** — two dashboards is a divergence engine ([Budget FABLED 2.3 · O8](<../../10 - Project Management/_Archive/Budget/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).

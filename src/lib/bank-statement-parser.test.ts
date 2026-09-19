@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   convertToUITransactions,
   parsePDFText,
+  parsePDFTextWithDiagnostics,
 } from "./bank-statement-parser";
 import { isPersonTransfer, isTransferDescription } from "./statement-reconcile";
 
@@ -361,6 +362,41 @@ describe("parsePDFText — description wraps around a dateless amounts line", ()
     expect(next).toMatchObject({
       date: "2026-06-18",
       moneyOut: 17.04,
+    });
+  });
+});
+
+// A mobile transfer whose description continuation line carries the outgoing
+// amount as text ("via Mobile - Out: 105.02") while the real MONEY OUT / MONEY
+// IN / BALANCE columns sit on the following line. The embedded number must not
+// be mistaken for the amounts column, or the row is dropped and the whole
+// import fails with a 422 (a rejected row blocks the batch).
+describe("parsePDFText — embedded amount in a wrapped description line", () => {
+  const ROWS = [
+    "14/08/2026 Transfer to RACHA SAMIR TOUMA",
+    "via Mobile - Out: 105.02",
+    "31.46 - 323.03",
+  ].join("\n");
+
+  it("reads the real money columns, not the number inside the description", () => {
+    const rows = parsePDFText(ROWS);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      date: "2026-08-14",
+      description: "Transfer to RACHA SAMIR TOUMA via Mobile - Out: 105.02",
+      moneyOut: 31.46,
+      moneyIn: null,
+      balance: 323.03,
+      type: "transfer_out",
+    });
+  });
+
+  it("is not rejected, so the import is not blocked with a 422", () => {
+    const { diagnostics } = parsePDFTextWithDiagnostics(ROWS);
+    expect(diagnostics).toMatchObject({
+      candidate_count: 1,
+      parsed_count: 1,
+      rejected_count: 0,
     });
   });
 });

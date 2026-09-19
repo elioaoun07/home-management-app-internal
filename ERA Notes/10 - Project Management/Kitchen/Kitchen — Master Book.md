@@ -1,83 +1,291 @@
 ---
-created: 2026-05-30
-updated: 2026-09-07
+created: 2026-09-10
+updated: 2026-09-10
 type: master-book
 status: active
 owner: Elio
-consolidates: "_index, 1 - Feature State, 2 - Vision & Roadmap, 3 - Action Plan, FABLED, FABLED 2, FABLED 3 (originals in ../_Archive/Kitchen/)"
-tags:
-  - pm/master-book
-  - scope/module
-  - module/kitchen
 ---
 
 # Kitchen — Master Book
 
-> **Campaign:** Kitchen · prefix `KIT` · working queue → [4 · Checklist](<4 - Checklist.md>)
+[Backlog](<4 - Checklist.md>) · [PM home](<../_index.md>) · [Governance](<../_Conventions.md>)
 
-> **ASTRA landing — 2026-09-06:** [Study](<ASTRA/Kitchen — ASTRA Book.md>) · [Packets](<ASTRA/Kitchen — ASTRA Packets.md>), subordinate to the active [ERA Top Layer plan](<../ERA Top Layer — Master Plan (2026-09-02).md>). Repository evidence is fixed at `3106164`; this landing changes documentation only. The dated study and current pain corrections supersede stale operational claims below; historical scores, shipped records and locked decisions are retained. Live DB state remains **UNVERIFIED** without fresh owner evidence.
+## Purpose & ownership
 
-## Identity & North Star
+Turn food and household references into useful, reversible daily actions. Campaign for Recipes, Inventory and Catalogue standalones plus Meal Planning/Shopping junctions.
 
-"Kitchen" is a convenience grouping of the household food domain — **Recipes** and **Inventory** (standalone), **Meal Planning** and **Shopping List** (junction), plus **Catalogue** in the same neighbourhood. **Chores are owned by Schedule**; their older placement here is historical grouping, not permission for cross-campaign work. The defining trait is that the tools are built but loosely connected.
+## Current state & evidence
 
-Today the loop is **open**: you cook without inventory updating, you plan without knowing the budget, you run out without the list knowing.
+Recipes, cooking, stock, meal planning and Chef reads exist. Automatic low-stock shopping and ingredient consumption are incomplete. Catalogue is an existing module in this campaign, not a new campaign; its accepted Sep7 reference/execution separation is incorporated below.
 
-**Vision in one line:** *turn Kitchen from four separate tools into one closed loop — what you cook, have, plan and buy stay in sync without you reconciling them by hand.*
+Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>) preserves detailed older narratives and receipts.
 
-**Source:** `src/features/{recipes,meal-planning,inventory,catalogue,chores}/`, `src/components/hub/ShoppingListView.tsx`, `src/app/{recipe,catalogue,meal-plan}/`. Vault docs: [Recipes](<../../02 - Standalone Modules/Recipes/Overview.md>) · [Inventory](<../../02 - Standalone Modules/Inventory/Overview.md>) · [Meal Planning](<../../03 - Junction Modules/Meal Planning/Overview.md>) · [Shopping List](<../../03 - Junction Modules/Shopping List/Overview.md>).
+## Vision & Decisions
 
-## Current State (verified)
+- Reuse the Hub shopping offline queue; do not introduce another queue or turn unknown quantities into zero. Stock/history and a genuine inverse must be verified before automation.
+- Low-stock criteria and automatic addition remain DEC-03; ingredient identity/units and confirmation remain DEC-17. Older unconditional D1/D2 checkboxes are criteria of KIT-1/2 under these gates.
+- A planned or cooked meal covers only the intended person, status and actual leftover interval. Existing Chef reads are reused; missing data is not proof of an empty plan.
+- Catalogue stores reusable references; Recipes and Inventory own executable recipes and operational stock. Source privacy, lineage, revision checks and explicit promotions apply at every bridge. The accepted Catalogue final build plan (§10, Sep7) supersedes its earlier study alternatives.
+- Chores/NFC execution belongs to Schedule. Trip cascade visibility is TRIP-7, including the former KIT-9 scope. Allergy knowledge remains Healthcare-owned; ingredient shape validity is not clinical safety.
 
-**Maturity 3.0 / 10 as of 2026-07-18 (FABLED 3), unchanged since 2026-07-02 — `git log c561635..f0a8e19` over every Kitchen path returned zero commits.** This is an honest affirmation generation. The uncomfortable corollary: the gap between Kitchen and its siblings widened again, by standing still.
-
-| Dimension | Score | Evidence |
-|---|---|---|
-| Individual tools | 7 | recipes, meal planning, inventory, shopping all work standalone |
-| Loop closure | 2 | the keystone (low-stock → auto-add) is now **4+ months** flagged |
-| AI surface protection | 3 | extract/optimize/scale/substitute still fixture-less |
-| Outward bridges | 2 | planned meals still invisible to calendar/Today/ERA |
-| Test protection | 1 | still the only campaign domain at **zero tests** |
-| Handoff readiness | 4 | standalone CRUD/UI = any-model; the untested AI surface and loop wiring = mid-tier+; nothing is human-first — which makes Kitchen the best *practice campaign* for a smaller model to build its first tests |
-
-| Sub-feature | Tier | Reality | Next step |
-|---|---|---|---|
-| Recipes | 🔵 | recipe book, ingredients, instructions, cooking mode, version compare, page-flip UI, AI surface (extract/optimize/scale/substitute) | connect to Inventory — cooking should know what's in stock (KIT-2) |
-| Meal Planning | 🔵 | weekly planner, drag-drop, recipe→day, web calendar, add-to-shopping | add budget-impact estimate per plan (KIT-3) |
-| Inventory | 🔵 | stock counts, restock, low-stock, barcode lookup, history, add-to-shopping. **Mounted inside Catalogue — there is no `/inventory` route** | auto-create shopping items on low stock (KIT-1) |
-| Shopping List | 🔵 | Hub ↔ Recipes ↔ Inventory. Uses the **legacy localStorage queue in `SyncContext`** — intentional, the one sanctioned legacy-queue path | wire the low-stock auto-add (KIT-1) |
-| Chores | 🔵 | real code lives in `src/app/reminders/` Chores tab + `src/components/chores/` (`src/app/chores/` is a redirect) | — |
-
-**Inbound bridge (new, from Healthcare):** recipe detail views now render allergen warnings — `RecipeAllergenWarning.tsx` + `RecipeDetailView.tsx` consume `useHouseholdAllergens`, keyword-matched against ingredients via `src/lib/health/allergenMatch.ts`. **Kitchen's ingredient data is now safety-relevant input to another module** — changing ingredient shape or parsing has a health-warning blast radius.
+Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
 
-> **Catalogue build-plan handoff — 2026-09-07:** [Final specification §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>) defines C01–C03 integrity repairs, C09 library UX, C13 clipping-to-Kitchen promotion and C17 Inventory ownership guard. Keep current backing IDs/tables; Kitchen recipes retain one executable editor and Inventory retains stock/history authority. Ingredient validation and atomic restock remain their existing prerequisites. Documentation only; no source, schema or live data changed.
+🟠 **KIT-10** Validate ingredient payloads at every writer. See [acceptance](<#kit-10>) for the root cause, evidence and gate.
 
-- 🔴 **Catalogue document signing bypasses the document's record-level visibility contract.** Source review 2026-09-07 at `bc7ccc3`: `src/app/api/catalogue/document-image/signed-url/route.ts:17–47` authorizes a supplied storage path by owner prefix/active partnership, then signs with the admin client; it never resolves the Catalogue row, `is_public`, deletion state or current image association. A known partner-owned path can therefore reach signing independently of record visibility. No production file was accessed; deployed storage/DB state remains unverified. Prioritize a scoped authorization fix before wider document retrieval/extraction. [Assessment §1.6 / P0](<../../../docs/Catalogue — ASTRA Deep Dive.md>).
-- 🟠 **Catalogue Undo can break record links and edits discard unrecognized metadata.** Source review 2026-09-07: `src/features/catalogue/hooks.ts:611–619` implements update Undo as invalidation; `:667–686` recreates a soft-deleted item under a new ID with a subset of fields. `src/components/web/CatalogueItemDialog.tsx:1000–1051` rebuilds metadata from known controls and `src/app/api/catalogue/items/[id]/route.ts:101–102` replaces the whole value. Linked stock/calendar history and unrecognized attributes need preservation in the existing model. [Assessment §9 / owner clarification §9.10](<../../../docs/Catalogue — ASTRA Deep Dive.md>) recommends Catalogue as a lightweight **Global Reference / Definition Library**: preserve current item/reference backing records, keep stock operations/policy in Inventory and richer recipe definitions in Kitchen, and expose existing masters without duplicate editable copies. No blanket product/asset or Documents V2 decomposition. No implementation or new checklist commitment.
+🟠 **KIT-4** Expose scoped meal coverage to ERA. See [acceptance](<#kit-4>) for the root cause, evidence and gate.
 
-- 🟠 **Cooking estimates can return to AI as observed experience.** Proactive discovery 2026-09-06 at `83e44be`: `src/components/web/RecipeCookingMode.tsx:524–551` pre-fills actual prep/cook and difficulty from recipe estimates and submits untouched values; `src/app/api/recipes/[id]/optimize/route.ts:97–112` labels them actual history. Step timers do not populate those fields. Legacy logs cannot distinguish defaults from explicit corrections; retain unknown basis before duration learning. Explicit `would_make_again` is separately supplied and should not be conflated with those defaults. [Study evidence](<../Proactive ERA/Proactive ERA — Intelligence Model.md>). Source finding only; no correction or new checklist item.
+🟠 **KIT-11** Return the correct cooking count. See [acceptance](<#kit-11>) for the root cause, evidence and gate.
 
-**ASTRA delta, 2026-09-06 — [study F1–F5](<ASTRA/Kitchen — ASTRA Book.md>):** stock functions in the 2026-08-04 catalog are recoverable historical contracts, not proof of today's deployed behavior. Recipe ingredients are JSON arrays with string quantities/units (`migrations/schema.sql:1097–1098`, `src/types/recipe.ts:9–16`), not normalized inventory links. This is not a safe automation practice campaign: quantity integrity, household scope and allergen consumers matter.
+🟠 **KIT-12** Restore cooking and restock changes with real Undo. Dated source diagnosis; cause and witness limits are in [criteria](<#kit-12>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
 
-- 🔴 **Restock can lose increments, accept the wrong input type and lose history.** `src/app/api/inventory/restock/route.ts:29–51` reads and replaces an absolute quantity; concurrent 5+2/+3 can leave 7 or 8, and a string quantity passes loose positivity checks. History insertion errors are unchecked (`:85–93`). ASTRA-KIT-1 is an owner-contract-gated atomic-restock prerequisite to KIT-1/M-03, not completion of low-stock auto-add.
-- 🟠 **Adding stock to shopping has no stable effect identity.** `src/app/api/inventory/add-to-shopping/route.ts:60–95` inserts a message before updating its backlink, without enforcing uniqueness or checking the backlink result; retries/concurrent calls can duplicate the entry. Keep automatic consumers held until idempotence and the existing legacy queue contract are proved.
-- 🟠 **Meal coverage disagrees across Kitchen and ERA.** Chef counts a set of `planned_date` values (`src/features/era/intents/resolvers/chef.ts:192–195`), the calendar expands leftovers (`src/components/web/WebMealPlanCalendar.tsx:64–77`), and hooks use either a fixed 14-day look-back or origin-day selection (`src/features/meal-planning/hooks.ts:23–41`). Status and `for_user` must also agree. ASTRA-KIT-2 refines KIT-4/KIT-7 for E-08/E-22; it does not finish either whole parent.
-- 🔴 **Persisted recipe ingredients can violate the allergen consumer's contract.** Extraction/generation accept unchecked shapes (`src/app/api/recipes/extract-from-url/route.ts:579`, `src/app/api/recipes/[id]/generate/route.ts:126–137`), while `src/lib/health/allergenMatch.ts:96,154,188` calls string methods on ingredient names. ASTRA-KIT-3 validates all four persistence writers; extraction-response checks remain held. This guards structural compatibility, not clinical completeness.
-- 🟠 **Cooking totals and Undo can report effects they did not perform.** `src/app/api/recipes/[id]/cooking-log/route.ts:116–124` requests a head-only count but reads `data.length`, producing `times_cooked = 1`; cooking and restock Undo callbacks only invalidate queries (`src/features/recipes/hooks.ts:287–304`, `src/features/inventory/hooks.ts:224–239`). Count correction and genuine inverse actions remain held, recorded here rather than implied by an unrelated packet.
-- 🟡 **A dormant stock-settings hook sends the wrong identifier.** `src/features/inventory/hooks.ts:118–119` sends the stock-row ID to a route keyed by inventory-item ID. `useUpdateStock` has no live caller at the evidence cutoff (`:245`); hold correction/deletion until its intended consumer is known, rather than describing a witnessed UI failure.
+🟠 **KIT-13** Separate estimated and measured cooking values. Dated source diagnosis; cause and witness limits are in [criteria](<#kit-13>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
 
-- 🟠 **Low-stock auto-add is not a single wiring step (KIT-1).** The implemented low-stock read is based on run-out date/auto-add settings (`src/app/api/inventory/low-stock/route.ts:28–59`), while acceptance says quantity threshold. Resolve that contract and the stock/shopping effect guarantees above before automation. The locked automatic-add outcome remains; a read-only signal does not complete it.
-- 🟠 **Ingredient producer protection is missing.** The three feature directories have no tests at the cutoff, but `src/lib/health/allergenMatch.test.ts` already protects the shared consumer, so "zero tests across the whole domain" is false. Producer-shape fixtures must cover the actual four persistence boundaries, not merely mirror a type declaration.
-- 🟡 The recipe AI surface (extract/optimize/scale/substitute) is fixture-less — prompt drift silently changes extractions with nothing to catch it.
-- **Correction 2026-09-06:** ERA already has meal assignment and gap reads (`src/features/era/intents/resolvers/chef.ts:99,180`, HUB-20). The remaining work is consistent coverage semantics and the direct E-08 read contract, not inventing a Kitchen→ERA bridge.
-- 🟡 **Cooking does not have a safe stock-consumption mapping (KIT-2/M-05).** `src/app/api/recipes/[id]/cooking-log/route.ts:82–143` records cooking and statistics without inventory deduction; ingredient names and string quantities/units do not identify stock rows or normalize amounts. Hold automatic deduction until explicit ingredient→inventory identity, units and an idempotent inverse are defined.
-- ⚪ Shopping List rides the legacy localStorage queue **by design** — a correctness trap if someone "modernizes" it without knowing it's intentional.
+🟠 **KIT-14** Revalidate the dormant stock-update ID path. Dated source diagnosis; cause and witness limits are in [criteria](<#kit-14>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
+
+🟠 **KIT-18** Authorize document signing through its owning record. Dated source diagnosis; cause and witness limits are in [criteria](<#kit-18>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
+
+🟠 **KIT-19** Preserve old document files through replacement and Undo. Dated source diagnosis; cause and witness limits are in [criteria](<#kit-19>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
+
+🟠 **KIT-20** Patch catalogue metadata with revision checks. Dated source diagnosis; cause and witness limits are in [criteria](<#kit-20>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
+
+🟠 **KIT-21** Preserve catalogue identity through delete and restore. Dated source diagnosis; cause and witness limits are in [criteria](<#kit-21>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
+
+The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
+
+## Acceptance Criteria Index
+
+### KIT-10
+
+**Outcome:** Validate ingredient payloads at every writer.
+
+- **Acceptance:** ASTRA-KIT-3: enforce one ingredient schema across all four documented writers, validate external/AI values before storage and preserve unknown ingredient/allergy state. Reverify the current producer inventory.
+
+**Retained contract — ASTRA-KIT-3:**
+
+- **Outcome:** Invalid ingredient objects are rejected before they can corrupt recipe storage or its existing warning consumer.
+- **Boundary:** One installed-Zod ingredient/step schema, with types derived where touched. Nonempty string name and existing string quantity/unit conventions, optional notes/section/optional preserved; do not guess numeric units or strip malformed ingredient rows into an apparently complete recipe. Validate at the four named persistence boundaries before writes; PATCH validates supplied fields without replacing omitted arrays. Model-generated data passes the same validation. External extraction/optimization/scale/substitution response validation is retained follow-up scope; storage validation catches their accepted payloads here. No medical keyword edits or new AI call.
+- **Money/schedule math?:** No. Ingredient quantity remains source text; no stock or nutrition computation.
+- **Gate:** `pnpm exec vitest run tests/recipe-ingredient-contract.test.ts src/lib/health/allergenMatch.test.ts --reporter=verbose` → nonzero cases pass: valid ingredient with optional metadata reaches the existing matcher; null/nonstring name and malformed arrays produce zero DB writes; partial PATCH preserves omitted fields; invalid model data cannot overwrite a recipe. Common gates pass.
+
+**Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-4
+
+**Outcome:** Expose scoped meal coverage to ERA.
+
+- **Acceptance:** Verify person, status and leftover interval coverage and distinguish unavailable from no planned meal. Chef already reads meal data; reuse that path. Complete the consumer adapter before HUB-45/HUB-56; a pure helper alone does not complete the meal surface.
+
+**Retained contract — ASTRA-KIT-2:**
+
+- **Outcome:** A meal's leftovers, status and intended person contribute consistently to calendar and ERA coverage.
+- **Boundary:** Extract existing date expansion into a pure shared contract rather than introducing a competing expansion engine. Separate display membership from edible/planned coverage: skipped rows can stay visible but do not cover a meal; person-specific meals only cover that person, shared meals both. Use date-only local calendar semantics. Fetch actual interval overlap, replacing the arbitrary 14-day lookback and date-only origin read; keep existing auth/household filter. ERA's existing all-day gap remains an all-day gap, not an assertion all meal slots are filled. Preserve per-slot facts for E-08/E-22. Failed retrieval is unavailable, not zero meals. Do not create Items or change calendar layout.
+- **Money/schedule math?:** Yes, calendar coverage: cooked Sep4, eats-through Sep7 → Sep6 covered; same row skipped → uncovered; partner-only → owner uncovered/partner covered. No extra schedule occurrences or stock deduction.
+- **Gate:** `pnpm exec vitest run tests/meal-plan-coverage.test.ts src/features/era/intents/resolveIntent.test.ts --reporter=verbose` → nonzero cases pass for leftovers crossing query boundary, >14-day interval, status, person, leap/month boundary and Beirut DST. Mock route retrieval proves overlap without omitted older rows; empty complete versus failure differ. Common gates; 390×844 calendar capture preserves layout.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-11
+
+**Outcome:** Return the correct cooking count.
+
+- **Acceptance:** Reproduce the documented HEAD/count response handling and use the actual count metadata. Verify zero/error/nonzero without treating absent body data as zero.
+
+**Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-1
+
+- **Retained campaign gate (D3):** After the actual loop/lifecycle witnesses pass, update the Master Book state and shipped evidence; documentation alone does not close this gate.
+
+- **Retained campaign gate (D1):** Dropping an inventory item below threshold puts it on the shopping list automatically (without breaking the legacy queue).
+
+**Outcome:** Add low-stock shopping from an agreed stock rule.
+
+- **Acceptance:** DEC-03 must resolve quantity threshold versus run-out date and automatic-add consent. Then use one pure lowStockItems() reader; restock and the unique shopping backlink must commit together, repeated triggers must not duplicate, and the existing Hub shopping queue must remain compatible. Test failure/retry/offline and an actual below-threshold transition. Do not call the helper alone an end-to-end completion.
+- **Depends on:** [KIT-24](<Kitchen — Master Book.md#kit-24>).
+
+- **Acceptance:** dropping an inventory item below its threshold puts it on the shopping list automatically, without breaking the legacy localStorage queue.
+
+**Retained contract — ASTRA-KIT-1:**
+
+- **Outcome:** Concurrent restocks preserve the total quantity and one matching history record for each accepted increment.
+- **Boundary:** Validate UUID and finite positive numeric quantity using Zod. Replace route-side read/add/write/history with the reviewed existing transaction seam. Derive the authorized owner from authenticated identity; never trust a freely supplied user ID. Within SQL lock the stock row before recording before/after values; handle absent stock through a verified unique owner/item contract, with no destructive dedupe. History failure rolls back the increment. Preserve existing runout behavior only after its current trigger is verified. Use safeFetch for the existing restock mutation; no new offline eligibility or retry queue. Repeated *distinct* restocks are separate operations; request-idempotent replay remains outside this sheet and must precede automated replay.
+- **Money/schedule math?:** No money/occurrence math. Stock example required: 5 units + concurrent 2 and 3 → 10; history forms 5→7→10 or 5→8→10. Failure inserting history leaves quantity unchanged. String `"2"`, infinity and negative input are rejected.
+- **Gate:** `pnpm exec vitest run tests/inventory-restock.test.ts --reporter=verbose` → nonzero mocked route/auth/input cases pass. Owner's isolated SQL fixture proves concurrent increments, absent-row race, history rollback and cross-owner refusal; outputs attached. Common gates pass; migration APPLIED alone is insufficient.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-2
+
+- **Retained campaign gate (D3):** After the actual loop/lifecycle witnesses pass, update the Master Book state and shipped evidence; documentation alone does not close this gate.
+
+- **Retained campaign gate (D2):** Completing a recipe in cooking mode deducts its ingredients from inventory.
+
+**Outcome:** Deduct mapped ingredients when cooking completes.
+
+- **Acceptance:** DEC-17 must settle ingredient↔stock mapping and unit conversion. Unknown mappings/units produce no invented deduction. Cooking confirmation, stock delta and a real Undo inverse are atomic/idempotent, including failure and replay; preserve the owner confirmation choice.
+
+- **Acceptance:** completing a recipe in cooking mode deducts its ingredients from inventory, and that deduction can trigger KIT-1.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-18
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C01a. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Authorize document signing through its owning record.
+
+- **Acceptance:** Catalogue C01a: authorize each private document via its source record before signing; reject arbitrary storage paths and cross-user access. Preserve valid shared-record access.
+- **Depends on:** [HUB-62](<../Hub & ERA/Hub & ERA — Master Book.md#hub-62>).
+
+**Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-19
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C01b. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Preserve old document files through replacement and Undo.
+
+- **Acceptance:** Catalogue C01b: replacement cannot delete the prior binary before commit/Undo eligibility; define cleanup after reference checks and test failed replacement and inverse.
+- **Depends on:** [KIT-18](<Kitchen — Master Book.md#kit-18>).
+
+**Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-20
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C02. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Patch catalogue metadata with revision checks.
+
+- **Acceptance:** Catalogue C02: validate typed partial updates, preserve unrelated metadata and use revision preconditions for stale writes. Safe create/edit foundation precedes promotions and corrections.
+- **Depends on:** [KIT-18](<Kitchen — Master Book.md#kit-18>).
+
+**Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-21
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C03. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Preserve catalogue identity through delete and restore.
+
+- **Acceptance:** Catalogue C03: tombstone/restore preserve ID and backlinks; purge only after the retained-reference contract permits it. Exercise failed and repeated inverse operations.
+- **Depends on:** [KIT-19](<Kitchen — Master Book.md#kit-19>), [KIT-20](<Kitchen — Master Book.md#kit-20>).
+
+**Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-22
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C09. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Browse and edit reference records.
+
+- **Acceptance:** Catalogue C09: reference-only types get compact browsing/forms, typed metadata and permissions without execution controls. Keep executable masters in their owning modules.
+- **Depends on:** [KIT-20](<Kitchen — Master Book.md#kit-20>).
+
+**Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-24
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C17. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Keep catalogue metadata separate from stock ownership.
+
+- **Acceptance:** Catalogue C17: descriptive reference edits cannot overwrite Inventory quantity, unit or history. Require an explicit owner transition for operational stock changes.
+- **Depends on:** [KIT-20](<Kitchen — Master Book.md#kit-20>).
+
+**Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-3
+
+**Outcome:** Meal plan budget estimate (gap 2c).
+
+- **Acceptance:** Meal plan budget estimate (gap 2c) — show estimated grocery cost per plan. Coordinate with [Budget — Master Book](<../Budget/Budget — Master Book.md>).
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-5
+
+**Outcome:** Pantry-aware recipe suggestions ("what can I make with what I have").
+
+- **Acceptance:** Pantry-aware recipe suggestions ("what can I make with what I have").
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-6
+
+**Outcome:** Smarter per-item low-stock thresholds + restock cadence from usage history.
+
+- **Acceptance:** Smarter per-item low-stock thresholds + restock cadence from usage history.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-7
+
+**Outcome:** Meal Planning.
+
+- **Acceptance:** Meal Planning → Schedule (planned meals on the calendar/today views).
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-8
+
+**Outcome:** Barcode.
+
+- **Acceptance:** Barcode → catalogue price for cost tracking.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-12
+
+**Outcome:** Restore cooking and restock changes with real Undo.
+
+- **Acceptance:** Replace cache-only undo with checked domain inverses for cooking/restock. Verify membership/stock/history, repeat/retry and partial failure; coordinate KIT-2 atomic deduction.
+- **Depends on:** [KIT-2](<Kitchen — Master Book.md#kit-2>).
+
+**Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-13
+
+**Outcome:** Separate estimated and measured cooking values.
+
+- **Acceptance:** Duration/difficulty defaults and prefilled values must not be presented as measured actuals. Preserve basis at write/read boundaries and use only observed values for calibration.
+
+**Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-14
+
+**Outcome:** Revalidate the dormant stock-update ID path.
+
+- **Acceptance:** Determine whether useUpdateStock has any live caller; repair the documented wrong ID if reachable, otherwise retire with source evidence. A dormant hook is not a proven production incident.
+
+**Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-15
+
+**Outcome:** Cover recipe AI and scaling boundaries.
+
+- **Acceptance:** Test malformed ingredient/scale payloads, fallback/rate errors and explicit long-call timeouts using fixtures. Unknown conversions remain unknown; no invented allergen safety.
+- **Depends on:** [KIT-10](<Kitchen — Master Book.md#kit-10>).
+
+**Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### KIT-23
+
+**Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C13. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
+
+**Outcome:** Promote recipe clippings into one executable recipe.
+
+- **Acceptance:** Catalogue C13: explicit promotion creates/links one Kitchen recipe with provenance and validated ingredients; repeated activation does not clone masters or overwrite later edits.
+- **Depends on:** [KIT-10](<Kitchen — Master Book.md#kit-10>), [KIT-20](<Kitchen — Master Book.md#kit-20>).
+
+**Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+## Backlog reconciliation
+
+- 2026-09-10 — **KIT-9** → TRIP-7. Scope is retained in the destination criteria; duplicate removed, not shipped.
 
 ## Shipped Log
-
-*(No in-cluster commits between 2026-07-02 and 2026-07-18. Earlier history: the four tools were built and shipped before the campaign layer existed — see git history and the vault docs.)*
 
 - ✅ 2026-07-18 — inbound Healthcare bridge landed in recipe views (`RecipeAllergenWarning.tsx` consuming `useHouseholdAllergens`) — Kitchen gained a junction without gaining a commit
 
@@ -85,95 +293,8 @@ Today the loop is **open**: you cook without inventory updating, you plan withou
 
 *(Delivery runner appends dated progress bullets here automatically.)*
 
-## Vision & Decisions
-
-### Track A — internal enhancements
-
-| Enhancement | Today | The dream | Effort |
-|---|---|---|---|
-| Recipe → Inventory awareness | recipes list ingredients; cooking mode is standalone | cooking mode shows in-stock vs missing; cooking deducts inventory | M |
-| Meal plan budget estimate | plan a week; no cost signal | estimated grocery cost per plan from catalogue/inventory prices | M |
-| Pantry-aware recipe suggestions | browse manually | "you have these 6 ingredients → here's what you can make" | M |
-| Smarter low-stock thresholds | fixed flag | per-item thresholds + restock cadence from usage history | S–M |
-| Barcode → catalogue price | barcode populates inventory | tie scanned items to catalogue prices for cost tracking | M |
-
-### Track B — bridges out of Kitchen
-
-- **Inventory low-stock → Shopping List auto-add** — the keystone; highest leverage (KIT-1).
-- **Recipe → Inventory** — cooking deducts ingredients, which then feeds the low-stock trigger (KIT-2).
-- **Meal Planning → Budget** — surface estimated grocery cost per plan (KIT-3, coordinate with Budget).
-- **Meal Planning → Schedule** — a planned meal is a dated event; surface it on calendar/today (KIT-7).
-- **Kitchen → ERA briefing** — "you're low on 3 staples and have nothing planned for Thursday" (KIT-4).
-- **Trips → Kitchen** — make the trip meal/packing cascade legible from the Kitchen side (KIT-9).
-
-### The bets, in order
-
-1. **Inventory low-stock → Shopping List auto-add** — the single link that starts closing the loop, and the most-felt daily win.
-2. **Recipe → Inventory deduction** — cooking actually changes what you have. With bet 1, the loop is half-automatic.
-3. **Meal plan budget estimate** — bridges Kitchen ↔ Budget and makes meal planning a money decision.
-
-Plus a designated cheap win: **the ingredient-shape contract test** (~30 lines) — it guards the Healthcare bridge from Kitchen-side drift *and* ends the zero-test status in one session. Explicitly delegable to a lower-tier model.
-
-> The domain's payoff is the **loop**, not any single tool. Resist polishing one piece in isolation — every bet above is a link between two pieces. Adding more ideas to a stalled queue is meta-work.
-
-### Not now
-
-- ❌ Don't migrate Shopping List off the legacy localStorage queue — it's intentional.
-- ❌ Don't polish a single tool in isolation while the loop stays open.
-- ❌ Don't start barcode→catalogue pricing before the inventory→shopping link works.
-
-## Acceptance Criteria Index
-
-### KIT-1
-- **Acceptance:** dropping an inventory item below its threshold puts it on the shopping list automatically, without breaking the legacy localStorage queue.
-
-### KIT-2
-- **Acceptance:** completing a recipe in cooking mode deducts its ingredients from inventory, and that deduction can trigger KIT-1.
-
 ## Successor Briefing
 
-**Who should read this:** you are about to touch recipes, meal planning, inventory, catalogue, chores or the shopping list. Good news — **this is the safest campaign in the app**: standalone tools, house patterns, no money, no recurrence engines, nothing human-first. It is deliberately recommended as the practice ground for lower-tier models to ship their first Kitchen tests and loop wiring.
+Read the checklist, the selected acceptance entry and its dependencies; then use the [Feature Map](<../../01 - Architecture/Feature Map/_index.md>) for source routing and the module architecture docs for invariants. Delta from the source cutoff before implementation. Use current owner-supplied DB evidence for access/application questions; agents never apply production SQL. Record code, applied migration and device/runtime acceptance separately.
 
-**First 10 minutes:**
-
-```bash
-git log --format="%h %ad %s" --date=short --since=2026-07-18 -- src/features/recipes src/features/meal-planning src/features/inventory src/features/catalogue src/features/chores
-find src/features/recipes src/features/meal-planning src/features/inventory -name "*.test.*"   # empty as of 2026-07-18 — first hit means the zero-test era ended
-```
-
-**Task-tier map:**
-
-| Task archetype | Tier | Route |
-|---|---|---|
-| Recipe/meal-plan/inventory/chores UI + CRUD | any-model | `add-feature` + `ui-guardrails`; standalone-import rule (no cross-feature imports) |
-| **The ingredient-shape contract test** | any-model — **designated first task** | ~30 lines; fixture the shape `allergenMatch` consumes |
-| Shopping-list logic | mid-tier+ | it's a Junction AND uses the legacy localStorage queue — don't migrate it, don't extend it |
-| Recipe AI surface | mid-tier+ | zero fixtures exist; write the fixture for your path as part of any change; `timeoutMs` on all AI calls |
-| Low-stock → auto-add keystone wiring | mid-tier+ | crosses Inventory→Shopping List; the design is written — execute, don't redesign |
-| Ingredient data-shape changes | mid-tier+ | blast radius includes Healthcare allergen warnings — run `npx vitest run src/lib/health/allergenMatch.test.ts` after |
-
-**Out-of-depth tells — stop if:** you're importing one standalone feature dir from another; you're adding to the legacy localStorage shopping queue; an AI recipe call writes anywhere without user confirmation.
-
-**Trap registry:**
-
-| Trap | Symptom | Guard |
-|---|---|---|
-| Inventory is mounted inside Catalogue | can't find the inventory page | `src/components/inventory/` renders within Catalogue — no `/inventory` route |
-| Shopping list = legacy offline queue | offline edits behave differently | hub-only localStorage queue by design; new offline work uses `src/lib/offlineQueue.ts` |
-| Recipe AI surface is fixture-less | prompt drift silently changes extractions | any AI-surface edit ships with its first fixture |
-| Ingredients feed health warnings | a "harmless" shape refactor breaks allergen matching | the contract test; until it exists, manual check on both accounts |
-| Chores live in Reminders' tab | editing `src/app/chores/` (a redirect) | real code: `src/app/reminders/` Chores tab + `src/components/chores/` |
-
-**Verification manifest:**
-
-| Claim | Command | Expected |
-|---|---|---|
-| Zero-test status | `find src/features/recipes src/features/meal-planning src/features/inventory -name "*.test.*" \| wc -l` | 0 → any hit means rescore Test protection |
-| Allergen bridge intact | `grep -rln "useHouseholdAllergens" src/components/web \| wc -l` | ≥2 |
-| Keystone still unwired | `grep -rn "low.stock\|lowStock" src/components/hub/ShoppingListView.tsx \| wc -l` | 0 = still unwired |
-
-## Pointers
-
-- Working queue: [4 · Checklist](<4 - Checklist.md>) · conventions: [_Conventions](<../_Conventions.md>)
-- Offline note: Shopping List is the only feature still on the legacy localStorage queue — see [Sync & Offline](<../../03 - Junction Modules/Sync & Offline/Overview.md>)
-- Pre-consolidation originals: `../_Archive/Kitchen/`
+Finish with the repository playbook and [governance](<../_Conventions.md>): update acceptance/evidence, sweep only completed work, and validate the canonical queue. A completed child does not complete its coordination parent.

@@ -21,7 +21,7 @@ The vault's only universally-used template is the one a script instantiates. Ext
 
 ## E2 — Frontmatter contracts as the real template
 
-When PM-as-data lands ([PM FABLED 2.4 · E1](<../../10 - Project Management/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)), the binding part of each template becomes its **frontmatter schema** (required keys per doc type, validated by the scanner). The prose sections stay suggestions; the metadata becomes contract — which is the split that actually matters for tooling.
+When PM-as-data lands ([PM FABLED 2.4 · E1](<../../10 - Project Management/_Archive/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)), the binding part of each template becomes its **frontmatter schema** (required keys per doc type, validated by the scanner). The prose sections stay suggestions; the metadata becomes contract — which is the split that actually matters for tooling.
 
 ## E3 — Templates for the machine's documents
 

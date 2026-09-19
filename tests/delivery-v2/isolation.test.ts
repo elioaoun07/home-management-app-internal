@@ -347,6 +347,8 @@ describe("the canary battery can detect an escape", () => {
     expect(byName["git-mutation"].outcome).toBe("escaped");
     expect(byName["store-access"].outcome).toBe("escaped");
     expect(byName["descendant-spawn"].outcome).toBe("escaped");
+    // Survival is only observable if the unconfined descendant actually writes.
+    expect(byName["descendant-spawn"].heartbeatStarted).toBe(true);
     if (linked) expect(byName["link-escape"].outcome).toBe("escaped");
 
     const validation = validateNegativeControl(records);
@@ -384,6 +386,18 @@ describe("the canary battery can detect an escape", () => {
     ]);
     expect(validation.valid).toBe(false);
     expect(validation.failures[0]).toMatchObject({ canary: "outside-write" });
+  });
+
+  it("rejects a negative control whose descendant never started writing", () => {
+    const escapedAll = ["outside-write", "host-secret-read", "git-mutation", "link-escape", "store-access"].map(
+      (canary) => ({ canary, outcome: "escaped" }),
+    );
+    const silent = validateNegativeControl([...escapedAll, { canary: "descendant-spawn", outcome: "escaped", heartbeatStarted: false }]);
+    expect(silent.valid).toBe(false);
+    expect(silent.failures).toEqual([expect.objectContaining({ canary: "descendant-spawn" })]);
+    expect(
+      validateNegativeControl([...escapedAll, { canary: "descendant-spawn", outcome: "escaped", heartbeatStarted: true }]).valid,
+    ).toBe(true);
   });
 });
 

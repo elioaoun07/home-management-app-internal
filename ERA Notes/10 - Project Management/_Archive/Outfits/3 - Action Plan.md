@@ -11,9 +11,9 @@ tags:
 
 # Outfits · 3 — Action Plan
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Outfits/4 - Checklist.md>)
 >
-> **What this file is:** the *why and in what order* for the Outfits build — four phases, each an independently shippable PR in vertical-slice order (DB → API → types → hooks → UI). The checkable version is [4 · Checklist](<4 - Checklist.md>). The full design (DDL, pipeline, UI spec, STOP conditions) is [Outfits / Overview](<../../02 - Standalone Modules/Outfits/Overview.md>) — **implementing agents read its §10 first.**
+> **What this file is:** the *why and in what order* for the Outfits build — four phases, each an independently shippable PR in vertical-slice order (DB → API → types → hooks → UI). The checkable version is [4 · Checklist](<../../Outfits/4 - Checklist.md>). The full design (DDL, pipeline, UI spec, STOP conditions) is [Outfits / Overview](<../../../02 - Standalone Modules/Outfits/Overview.md>) — **implementing agents read its §10 first.**
 
 ---
 

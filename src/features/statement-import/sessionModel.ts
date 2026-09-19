@@ -304,7 +304,17 @@ export function pickAccount(
 /**
  * Where a row should land when the owner has not overridden it.
  *
- * Usually the statement's own account. Two cases where that is wrong:
+ * Usually the statement's own account — a statement is a statement OF an
+ * account, so its rows post there by default. A learned merchant mapping NEVER
+ * routes the account (BUD-23): the row's fingerprint is hashed with the
+ * statement account, so redirecting the row to a mapping's account made the
+ * hash guard a different account than the transaction it described — and, when
+ * importing a fresh account like a trip's, quietly filed the row back on the
+ * old card it was learned on. The mapping supplies a category only (and only
+ * when it was learned on this same account — see the parser).
+ *
+ * Two cases where the statement account itself is wrong — both correctness, not
+ * preference:
  *
  *  1. **A money-OUT row on an income or saving account.** `getBalanceDelta()`
  *     can only ADD on those types, so a debit filed there moves the balance the
@@ -324,13 +334,6 @@ export function suggestAccountForRow(
   statementAccountId: string,
   accounts: AccountRef[],
 ): string {
-  if (
-    row.mapping_account_id &&
-    accounts.some((account) => account.id === row.mapping_account_id)
-  ) {
-    return row.mapping_account_id;
-  }
-
   const statement = accounts.find((a) => a.id === statementAccountId);
   if (!statement) return statementAccountId;
 

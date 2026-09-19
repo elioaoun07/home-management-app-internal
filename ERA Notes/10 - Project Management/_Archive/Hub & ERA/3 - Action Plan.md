@@ -12,9 +12,9 @@ tags:
 
 # Hub & ERA · 3 — Action Plan
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Hub & ERA/4 - Checklist.md>)
 >
-> **What this file is:** the *why, and in what order* for Hub & ERA — the strategic call and the candidate work as narrative. The flat, checkable version of this plan is [4 · Checklist](<4 - Checklist.md>); tick the boxes there.
+> **What this file is:** the *why, and in what order* for Hub & ERA — the strategic call and the candidate work as narrative. The flat, checkable version of this plan is [4 · Checklist](<../../Hub & ERA/4 - Checklist.md>); tick the boxes there.
 
 ---
 
@@ -47,11 +47,11 @@ This mirrors the global theme ("Stabilize, then Connect") — and ERA is where "
 
 **Now — Harden the flagship.** Cover the common intents and make a misrecognized intent fail *safe* (clarify, never confidently mis-act); add voice graceful degradation + wake-word setup docs. The signature feature should never confidently do the wrong thing.
 
-**Next — Make ERA anticipate.** Feed the week's shape into ERA's proactive briefing (coordinate with [Schedule · 4 · Checklist](<../Schedule/4 - Checklist.md>)) and warn before a recurring payment overdraws (coordinate with [Budget · 3 · Action Plan](<../Budget/3 - Action Plan.md>)).
+**Next — Make ERA anticipate.** Feed the week's shape into ERA's proactive briefing (coordinate with [Schedule · 4 · Checklist](<../../Schedule/4 - Checklist.md>)) and warn before a recurring payment overdraws (coordinate with [Budget · 3 · Action Plan](<../Budget/3 - Action Plan.md>)).
 
 **Later — Pay down structural risk.** Decompose `HubPage.tsx` (5,506 LOC) — best done *as* the substrate for in-chat briefings, so the refactor buys a feature.
 
-→ Every item above as a checkable line: [4 · Checklist](<4 - Checklist.md>).
+→ Every item above as a checkable line: [4 · Checklist](<../../Hub & ERA/4 - Checklist.md>).
 
 ---
 

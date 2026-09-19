@@ -38,13 +38,30 @@ import { createClient } from "@supabase/supabase-js";
 import { CAMPAIGNS, lintChecklist, masterBookName } from "./lint.mjs";
 import { fileTasks, severityItems, sumSeverity } from "./shared/tasks.mjs";
 import { parseFrontmatter } from "./shared/frontmatter.mjs";
-import { scanLines } from "./shared/md-scan.mjs";
-import { cleanInlineText } from "./shared/text.mjs";
+import { parseHistory } from "./shared/history.mjs";
 import { appendUnderHeading } from "./mutations.mjs";
 import { DEFAULT_CONFIG } from "../delivery/config.mjs";
 import { textHash } from "../delivery/packet.mjs";
 import { routeDelivery } from "../delivery/server-routes.mjs";
 import { isRunnerAlive } from "../delivery/run-session.mjs";
+import { readDispatchMode, routeDeliveryV2 } from "../delivery-v2/entry.mjs";
+import { pairBridgeSession } from "../delivery-v2/local-auth.mjs";
+import { RELAY_SCHEMA, ROW_KINDS, V2_COMMAND_TYPES, attentionItems, rowId } from "./relay-shared.mjs";
+import {
+  RELAY_DIR,
+  acquireRelayLock,
+  availabilitySummary,
+  buildCorpusRows,
+  capRunDetail,
+  createAttentionLedger,
+  createCommandJournal,
+  executeV2Command,
+  findSecrets,
+  payloadDigest,
+  readInstallation,
+  reconcileClaimedCommand,
+  releaseRelayLock,
+} from "./relay.mjs";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const RUNNER_DEAD_DEBOUNCE_MS = 60_000;
@@ -313,52 +330,31 @@ export function createRollupsSnapshotBuilder({ PM_DIR }) {
 // Pure core 3: completion history (no Supabase, no delivery ctx)
 // ============================================================================
 
-const STAMP_RE = /✅\s*(\d{4}-\d{2}-\d{2})/u;
-const BOLD_ID_RE = /\*\*([A-Z]{1,5}-?\d+[a-z]?(?:\.\d+[a-z]?)?)[:.\s*]/;
-const CELL_ID_RE = /^\s*\|\s*\*{0,2}([A-Z]{1,5}-?\d+[a-z]?(?:\.\d+[a-z]?)?)\*{0,2}\s*\|/;
-
 /**
- * Completion history parsed from each campaign's Master Book Shipped Log
- * done-stamps. Two shapes are in use across the vault and both are supported:
+ * Completion history for the legacy phone view, from the same parser the shared
+ * views use (`shared/history.mjs`, Command Center Phase 6): bullets in each
+ * campaign's `## Shipped Log` only — never a session log, Pain Inventory line or
+ * table cell elsewhere in the book.
  *
- *   prose:  ✅ 2026-07-16 — **DW-1: Flight recorder foundation.** …
- *   table:  | HLTH-1 | Module scaffold … | ✅ 2026-07-17 | evidence |
- *
- * This is the only source of "when did work land" anywhere in the PM corpus —
- * checklist items carry no date — so it is what the burndown/velocity widgets
- * read. Coverage is uneven by campaign (some sweep diligently, some don't), so
- * the series is honest-but-sparse rather than complete.
+ * A completion here is a dated receipt, not a unique completed item: `identity`
+ * says whether it names exactly one work ID (`idChip` is set only then), and a
+ * record without a stated day is counted in `coverage` but placed on no day.
  *
  * @param {{PM_DIR:string}} deps
  */
 export function createHistorySnapshotBuilder({ PM_DIR }) {
-  function completionsForCampaign(campaign, raw) {
-    const out = [];
-    for (const line of scanLines(raw).lines) {
-      if (line.type === "in-fence") continue;
-      const stamp = line.raw.match(STAMP_RE);
-      if (!stamp) continue;
-      const cell = line.raw.match(CELL_ID_RE);
-      const bold = line.raw.match(BOLD_ID_RE);
-      const idChip = (cell && cell[1]) || (bold && bold[1]) || null;
-      // Prose lines carry their title after the stamp; table rows carry it in
-      // the second cell. Fall back to the whole line so nothing is dateless.
-      const text = cell
-        ? cleanInlineText((line.raw.split("|")[2] || "").trim())
-        : cleanInlineText(line.raw.slice((stamp.index || 0) + stamp[0].length).replace(/^\s*[—–-]\s*/u, ""));
-      out.push({ date: stamp[1], campaign, idChip: idChip ? idChip.toUpperCase() : null, text });
-    }
-    return out;
-  }
-
   function buildHistorySnapshot() {
-    const completions = [];
+    const records = [];
     for (const campaign of Object.keys(CAMPAIGNS)) {
       const abs = campaignBookPath(PM_DIR, campaign);
       if (!abs) continue;
-      completions.push(...completionsForCampaign(campaign, readFileSync(abs, "utf8")));
+      const file = `${campaign}/${abs.split(/[\\/]/).pop()}`;
+      records.push(...parseHistory(readFileSync(abs, "utf8"), { campaign, file }).records);
     }
-    completions.sort((a, b) => a.date.localeCompare(b.date));
+    const completions = records
+      .filter((record) => record.datePrecision === "day")
+      .map((record) => ({ date: record.date, campaign: record.campaign, idChip: record.workId, identity: record.identity, text: record.text }))
+      .sort((a, b) => a.date.localeCompare(b.date));
 
     const dayMap = new Map();
     for (const c of completions) {
@@ -372,6 +368,11 @@ export function createHistorySnapshotBuilder({ PM_DIR }) {
       generatedAt: nowIso(),
       completions,
       completedByDay: Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date)),
+      coverage: {
+        records: records.length,
+        placed: completions.length,
+        exact: records.filter((record) => record.identity === "exact").length,
+      },
     };
   }
 
@@ -912,31 +913,52 @@ export function createCommandExecutor({ PM_DIR, deliveryCtx }) {
 // Supabase wiring — publisher + drainer + push + lifecycle
 // ============================================================================
 
+const CAPABILITIES_INTERVAL_MS = 60_000;
+const V2_POLL_MS = 5_000;
+const DOC_UPSERT_BATCH = 5;
+const V2_RUNS_PUBLISHED = 30;
+
 /**
- * @param {{PM_DIR:string, deliveryCtx:object}} deps
+ * @param {{PM_DIR:string, deliveryCtx:any, deliveryV2Ctx?:any, buildData?:(() => any)|null,
+ *   env?:Record<string, string|undefined>, createClientImpl?:any,
+ *   pushImpl?:((push:{title:string, body:string, url:string, tag:string}) => any)|null}} deps
  */
-export function createBridge({ PM_DIR, deliveryCtx }) {
-  const ownerId = process.env.PM_OWNER_USER_ID;
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.NEXT_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildData = null, env = process.env, createClientImpl = createClient, pushImpl = null }) {
+  const ownerId = env.PM_OWNER_USER_ID;
+  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = env.NEXT_SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!ownerId || !supabaseUrl || !serviceKey) {
     console.log(
       "[pm-bridge] disabled — missing PM_OWNER_USER_ID / NEXT_PUBLIC_SUPABASE_URL / NEXT_SUPABASE_SERVICE_ROLE_KEY",
     );
-    return { start() {}, publishTasks() {}, publishSession() {}, publishFleet() {}, stop() {} };
+    return { start() {}, publishTasks() {}, publishSession() {}, publishFleet() {}, publishV2() {}, stop() {} };
   }
 
-  const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+  const ROOT = deliveryCtx.ROOT;
+  const relayDir = join(ROOT, ...RELAY_DIR.split("/"));
+  const supabase = createClientImpl(supabaseUrl, serviceKey, { auth: { persistSession: false } });
   const { buildTasksSnapshot } = createTasksSnapshotBuilder({ PM_DIR });
   const { buildRollupsSnapshot } = createRollupsSnapshotBuilder({ PM_DIR });
   const { buildHistorySnapshot } = createHistorySnapshotBuilder({ PM_DIR });
   const { executeCommand, lastUndoable } = createCommandExecutor({ PM_DIR, deliveryCtx });
+  const { installation_id } = readInstallation({ root: ROOT });
+  const journal = createCommandJournal({ dir: relayDir });
+  const attention = createAttentionLedger({ file: join(relayDir, "attention.json") });
   const revCounters = new Map();
+  const publishedDigests = new Map();
+  const publishedDocs = new Map();
   let lastRunnerDeadPush = 0;
   let pollTimer = null;
   let heartbeatTimer = null;
+  let capabilitiesTimer = null;
+  let v2Timer = null;
   let channel = null;
+  let drainEnabled = false;
+  let credential = null;
+  let availability = null;
+  const drain = { lastClaimAt: null, lastReceiptAt: null, lastCommandId: null };
+  const startedAt = nowIso();
 
   function nextRev(id) {
     const rev = (revCounters.get(id) || 0) + 1;
@@ -944,7 +966,17 @@ export function createBridge({ PM_DIR, deliveryCtx }) {
     return rev;
   }
 
+  /** Nothing carrying a host, provider or release secret value leaves the laptop. */
+  function secretsIn(value) {
+    return findSecrets(JSON.stringify(value ?? null), env, [serviceKey, credential].filter(Boolean));
+  }
+
   async function publishRow(id, kind, payload) {
+    const hits = secretsIn(payload);
+    if (hits.length) {
+      console.error(`[pm-bridge] withheld ${id}: it would disclose ${hits.join(", ")}`);
+      return false;
+    }
     const { error } = await supabase.from("pm_live").upsert({
       id,
       user_id: ownerId,
@@ -954,6 +986,72 @@ export function createBridge({ PM_DIR, deliveryCtx }) {
       updated_at: nowIso(),
     });
     if (error) console.error(`[pm-bridge] publish ${id} failed:`, error.message);
+    return !error;
+  }
+
+  async function publishIfChanged(id, kind, payload) {
+    const digest = payloadDigest(payload);
+    if (publishedDigests.get(id) === digest) return true;
+    const ok = await publishRow(id, kind, payload);
+    if (ok) publishedDigests.set(id, digest);
+    return ok;
+  }
+
+  // ---- publisher: the shared Command Center corpus --------------------------
+
+  let corpusLoaded = false;
+  async function loadPublishedDocs() {
+    if (corpusLoaded) return;
+    corpusLoaded = true;
+    const { data, error } = await supabase
+      .from("pm_live")
+      .select("id, relPath:payload->>relPath, sha:payload->>sha")
+      .eq("user_id", ownerId)
+      .like("id", rowId(installation_id, ROW_KINDS.DOC, "") + "%");
+    if (error || !data) return;
+    for (const row of data) if (row.relPath && row.sha) publishedDocs.set(row.relPath, row.sha);
+  }
+
+  let corpusBusy = false;
+  async function publishCorpus() {
+    if (typeof buildData !== "function" || corpusBusy) return;
+    corpusBusy = true;
+    try {
+      await loadPublishedDocs();
+      const data = buildData();
+      const withheld = [];
+      const files = data.files.filter((file) => {
+        if (!secretsIn(file.raw).length) return true;
+        withheld.push(file.relPath);
+        return false;
+      });
+      if (withheld.length) console.error("[pm-bridge] withheld documents containing a secret value:", withheld.join(", "));
+      const rows = buildCorpusRows({ data: { ...data, files }, installation_id, previous: publishedDocs });
+      for (let index = 0; index < rows.upserts.length; index += DOC_UPSERT_BATCH) {
+        const batch = rows.upserts.slice(index, index + DOC_UPSERT_BATCH);
+        const { error } = await supabase
+          .from("pm_live")
+          .upsert(batch.map((row) => ({ id: row.id, user_id: ownerId, kind: row.kind, payload: row.payload, rev: nextRev(row.id), updated_at: nowIso() })));
+        // Without every document the manifest would describe files the phone cannot read.
+        if (error) {
+          console.error("[pm-bridge] corpus publish failed:", error.message);
+          return;
+        }
+        for (const row of batch) publishedDocs.set(row.payload.relPath, row.payload.sha);
+      }
+      if (rows.deletes.length) {
+        const { error } = await supabase.from("pm_live").delete().eq("user_id", ownerId).in("id", rows.deletes);
+        if (!error) {
+          const gone = new Set(rows.deletes);
+          for (const relPath of [...publishedDocs.keys()]) if (gone.has(rowId(installation_id, ROW_KINDS.DOC, relPath))) publishedDocs.delete(relPath);
+        }
+      }
+      await publishRow(rows.manifest.id, rows.manifest.kind, { ...rows.manifest.payload, withheld });
+    } catch (err) {
+      console.error("[pm-bridge] corpus publish error:", err.message);
+    } finally {
+      corpusBusy = false;
+    }
   }
 
   // The three PM-document publishers always move together: all three read the
@@ -964,6 +1062,7 @@ export function createBridge({ PM_DIR, deliveryCtx }) {
       publishRow("tasks", "tasks", buildTasksSnapshot()),
       publishRow("rollups", "rollups", buildRollupsSnapshot()),
       publishRow("history", "history", buildHistorySnapshot()),
+      publishCorpus(),
     ]);
   }
 
@@ -1035,6 +1134,8 @@ export function createBridge({ PM_DIR, deliveryCtx }) {
       laneDefaults: DEFAULT_CONFIG.budgets.laneDefaults,
       generatedAt: nowIso(),
     });
+    // The shared views read V1 sessions in the local route's own shape.
+    await publishIfChanged(rowId(installation_id, ROW_KINDS.V1RUNS), "cc-" + ROW_KINDS.V1RUNS, { schema: RELAY_SCHEMA, sessions: list.sessions });
     await pruneStaleSessionRows(list.sessions);
   }
 
@@ -1053,16 +1154,86 @@ export function createBridge({ PM_DIR, deliveryCtx }) {
     if (error) console.error("[pm-bridge] prune failed:", error.message);
   }
 
+  // ---- publisher: Delivery V2 runs, capabilities and attention -------------
+
+  const v2Available = () => Boolean(deliveryV2Ctx && typeof deliveryV2Ctx.hasStore === "function" && deliveryV2Ctx.hasStore());
+
+  let v2Busy = false;
+  async function publishV2() {
+    if (v2Busy) return;
+    v2Busy = true;
+    try {
+      if (!v2Available()) {
+        await publishIfChanged(rowId(installation_id, ROW_KINDS.V2RUNS), "cc-" + ROW_KINDS.V2RUNS, { schema: RELAY_SCHEMA, runs: [], queue: null });
+        return;
+      }
+      const journey = deliveryV2Ctx.journey;
+      const runs = journey.list();
+      // The queue rides the runs row (Command Center Phase 5): no new row kind, no relay migration.
+      const queue = typeof journey.queue === "function" ? journey.queue() : null;
+      await publishIfChanged(rowId(installation_id, ROW_KINDS.V2RUNS), "cc-" + ROW_KINDS.V2RUNS, { schema: RELAY_SCHEMA, runs, queue });
+      const entries = [];
+      for (const summary of runs.slice(0, V2_RUNS_PUBLISHED)) {
+        const detail = journey.detail(summary.run_id);
+        entries.push({ summary, detail });
+        if (detail && detail.ok) {
+          await publishIfChanged(rowId(installation_id, ROW_KINDS.V2RUN, summary.run_id), "cc-" + ROW_KINDS.V2RUN, { schema: RELAY_SCHEMA, ...capRunDetail(detail) });
+        }
+      }
+      const items = attentionItems(entries);
+      await publishIfChanged(rowId(installation_id, ROW_KINDS.ATTENTION), "cc-" + ROW_KINDS.ATTENTION, { schema: RELAY_SCHEMA, items });
+      if (attention.isNew()) {
+        // First pass after enabling: remember what already exists, push only what is new from here.
+        attention.markSent(items.map((item) => item.key));
+        return;
+      }
+      const fresh = attention.unsent(items);
+      for (const item of fresh) {
+        await sendPush(item.label, item.title, "/pm/live#/delivery/run/" + encodeURIComponent(item.run_id), "pm-" + item.key);
+      }
+      if (fresh.length) attention.markSent(fresh.map((item) => item.key));
+    } catch (err) {
+      console.error("[pm-bridge] v2 publish error:", err.message);
+    } finally {
+      v2Busy = false;
+    }
+  }
+
+  async function publishCapabilities() {
+    const mode = readDispatchMode({ root: ROOT }).mode;
+    let catalogue = null;
+    let error = null;
+    if (deliveryV2Ctx && typeof deliveryV2Ctx.describeExecutors === "function") {
+      try {
+        catalogue = await deliveryV2Ctx.describeExecutors();
+      } catch (err) {
+        error = String((err && err.message) || err);
+      }
+    }
+    availability = availabilitySummary({ mode, catalogue, error });
+    await publishIfChanged(rowId(installation_id, ROW_KINDS.CAPABILITIES), "cc-" + ROW_KINDS.CAPABILITIES, {
+      schema: RELAY_SCHEMA,
+      installation_id,
+      mode,
+      catalogue,
+      availability,
+      // What this relay can carry. PM checklist writes, V1 launch and V1 detail
+      // stay at the desk; capture and every V2 command are relayed.
+      relay: { planWrites: false, capture: true, v1Launch: false, v1Detail: false, v2: true, apply: true },
+    });
+  }
+
   // ---- push notification hook (Phase 3 consumer) -------------------------
 
   // A gate notification is about ONE session; landing on the fleet list makes
   // the owner find it again by hand. `?view=delivery&session=<id>` is read by
   // the phone app's view state and opens that session's detail directly.
-  const sessionUrl = (sessionId) => `/pm/live?view=delivery&session=${encodeURIComponent(sessionId)}`;
+  const sessionUrl = (sessionId) => `/pm/live?ui=legacy&view=delivery&session=${encodeURIComponent(sessionId)}`;
 
   async function sendPush(title, body, url, tag) {
-    const notifyUrl = process.env.PM_NOTIFY_URL || `${process.env.NEXT_PUBLIC_SITE_URL || ""}`.replace(/\/$/, "") + "/api/pm/notify";
-    const secret = process.env.CRON_SECRET;
+    if (typeof pushImpl === "function") return pushImpl({ title, body, url, tag });
+    const notifyUrl = env.PM_NOTIFY_URL || `${env.NEXT_PUBLIC_SITE_URL || ""}`.replace(/\/$/, "") + "/api/pm/notify";
+    const secret = env.CRON_SECRET;
     if (!secret || !notifyUrl) return;
     try {
       await fetch(notifyUrl, {
@@ -1115,20 +1286,78 @@ export function createBridge({ PM_DIR, deliveryCtx }) {
 
   // ---- drainer -------------------------------------------------------------
 
+  function bridgeCredential() {
+    if (!credential) {
+      const paired = pairBridgeSession({ root: ROOT });
+      if (!paired.ok || !paired.token) throw new Error("bridge credential unavailable");
+      credential = paired.token;
+    }
+    return credential;
+  }
+
+  const statusFor = (outcome) => (outcome && outcome.outcome_unknown ? "unknown" : outcome && outcome.ok !== false ? "done" : "failed");
+
+  /** Write the receipt and record that it was written. Returns false when the relay refused. */
+  async function writeReceipt(id, outcome) {
+    const status = statusFor(outcome);
+    const safe = secretsIn(outcome).length ? { ok: outcome.ok !== false, outcome_unknown: Boolean(outcome.outcome_unknown), withheld: true } : outcome;
+    const result = { ...safe, receipt: { installation_id, at: nowIso() } };
+    const update = {
+      status,
+      result,
+      error: status === "failed" ? String((outcome && outcome.error) || "refused") : status === "unknown" ? "outcome not established" : null,
+      completed_at: nowIso(),
+    };
+    let { error } = await supabase.from("pm_commands").update(update).eq("id", id);
+    if (error && status === "unknown") {
+      // Before the owner runs the Phase 4 migration `unknown` is not an allowed
+      // status: keep the row claimed and say so in its result.
+      ({ error } = await supabase
+        .from("pm_commands")
+        .update({ status: "claimed", result: { ...result, outcome_unknown: true }, error: update.error })
+        .eq("id", id));
+    }
+    if (error) {
+      console.error(`[pm-bridge] receipt for ${id} failed:`, error.message);
+      return false;
+    }
+    journal.record(id, "reported");
+    drain.lastReceiptAt = nowIso();
+    return true;
+  }
+
+  async function runClaimed(cmd) {
+    journal.record(cmd.id, "started", { type: cmd.type });
+    let outcome;
+    try {
+      outcome = V2_COMMAND_TYPES[cmd.type]
+        ? deliveryV2Ctx
+          ? await executeV2Command({ cmd, installation_id, route: (req) => routeDeliveryV2(req, deliveryV2Ctx), credential: bridgeCredential() })
+          : { ok: false, error: "delivery-v2-unavailable" }
+        : await executeCommand(cmd);
+    } catch (err) {
+      outcome = { ok: false, error: err.message };
+    }
+    journal.record(cmd.id, "effected", { outcome });
+    await writeReceipt(cmd.id, outcome);
+  }
+
   let draining = false;
   async function drainOnce() {
-    if (draining) return;
+    if (draining || !drainEnabled) return;
     draining = true;
     try {
       const { data: pending, error } = await supabase
         .from("pm_commands")
-        .select("id, type, payload")
+        .select("id, type, payload, user_id, created_at")
         .eq("user_id", ownerId)
         .eq("status", "pending")
         .order("created_at", { ascending: true })
         .limit(10);
       if (error || !pending || !pending.length) return;
       for (const cmd of pending) {
+        // A V2 command names the installation it was sent to; another laptop's stays pending.
+        if (V2_COMMAND_TYPES[cmd.type] && (!cmd.payload || cmd.payload.installation_id !== installation_id)) continue;
         // Claim atomically: only proceed if this bridge won the race against
         // any other process (there should only ever be one, but this makes
         // it safe if pnpm pm is accidentally started twice).
@@ -1139,22 +1368,17 @@ export function createBridge({ PM_DIR, deliveryCtx }) {
           .eq("status", "pending")
           .select("id");
         if (!claimed || !claimed.length) continue;
-
-        let outcome;
-        try {
-          outcome = await executeCommand(cmd);
-        } catch (err) {
-          outcome = { ok: false, error: err.message };
+        drain.lastClaimAt = nowIso();
+        drain.lastCommandId = cmd.id;
+        const prior = journal.stateOf(cmd.id);
+        if (prior && prior.phases.includes("effected")) {
+          // The same command id came back (a re-sent or reset row): report what it did, never run it again.
+          await writeReceipt(cmd.id, { ...(prior.outcome || { ok: false }), recovered: true });
+          continue;
         }
-        await supabase
-          .from("pm_commands")
-          .update({
-            status: outcome.ok ? "done" : "failed",
-            result: outcome.ok ? outcome : null,
-            error: outcome.ok ? null : outcome.error,
-            completed_at: nowIso(),
-          })
-          .eq("id", cmd.id);
+        journal.record(cmd.id, "claimed", { type: cmd.type });
+
+        await runClaimed(cmd);
 
         // A capture/undo write lands on disk and pm-server's own fs.watch
         // re-publishes tasks; a delivery command changes state.json, which the
@@ -1162,6 +1386,7 @@ export function createBridge({ PM_DIR, deliveryCtx }) {
         // publishSession(). Only the undo offer needs an explicit nudge — it
         // lives on the heartbeat, which is otherwise up to 10s stale.
         if (cmd.type === "capture" || cmd.type === "undo") await publishHeartbeat();
+        if (V2_COMMAND_TYPES[cmd.type]) await publishV2();
       }
     } catch (err) {
       console.error("[pm-bridge] drain error:", err.message);
@@ -1170,20 +1395,68 @@ export function createBridge({ PM_DIR, deliveryCtx }) {
     }
   }
 
+  /**
+   * After a restart: every command this installation claimed and did not report is
+   * settled from its journal — executed if it never started, reported if its
+   * outcome was recorded, looked up by id if it was in flight. Never run twice.
+   */
+  async function reconcileClaimed() {
+    const { data: claimed, error } = await supabase
+      .from("pm_commands")
+      .select("id, type, payload, user_id, result")
+      .eq("user_id", ownerId)
+      .eq("status", "claimed")
+      .order("created_at", { ascending: true })
+      .limit(50);
+    if (error || !claimed) return;
+    const journey = v2Available() ? deliveryV2Ctx.journey : null;
+    for (const cmd of claimed) {
+      if (cmd.result && cmd.result.outcome_unknown) continue;
+      const decision = reconcileClaimedCommand(cmd, journal, journey);
+      if (decision.action === "execute") await runClaimed(cmd);
+      else if (decision.action === "report") await writeReceipt(cmd.id, { ...(decision.outcome || { ok: false }), recovered: true });
+      else if (decision.action === "unknown") {
+        journal.record(cmd.id, "effected", { outcome: decision.outcome });
+        await writeReceipt(cmd.id, decision.outcome);
+      }
+    }
+  }
+
   // ---- lifecycle -------------------------------------------------------------
 
   // `undoable` rides on the heartbeat so the phone always knows whether an
   // Undo is currently offered, and for what, without polling a second row.
   function publishHeartbeat() {
-    return publishRow("bridge", "bridge", { pid: process.pid, startedAt, seenAt: nowIso(), undoable: lastUndoable() });
+    return Promise.all([
+      publishRow("bridge", "bridge", { pid: process.pid, startedAt, seenAt: nowIso(), undoable: lastUndoable() }),
+      publishRow(rowId(installation_id, ROW_KINDS.HEARTBEAT), "cc-" + ROW_KINDS.HEARTBEAT, {
+        schema: RELAY_SCHEMA,
+        installation_id,
+        pid: process.pid,
+        startedAt,
+        seenAt: nowIso(),
+        drain: { enabled: drainEnabled, ...drain },
+        availability,
+      }),
+    ]);
   }
 
   function start() {
+    const lock = acquireRelayLock({ dir: relayDir, installation_id });
+    if (!lock.acquired) {
+      console.log(`[pm-bridge] disabled — another bridge (pid ${lock.holder}) already drains this checkout`);
+      return;
+    }
+    drainEnabled = true;
     heartbeatTimer = setInterval(publishHeartbeat, HEARTBEAT_INTERVAL_MS);
     publishHeartbeat();
 
     publishTasks();
     publishFleet();
+    publishCapabilities().then(publishHeartbeat);
+    capabilitiesTimer = setInterval(publishCapabilities, CAPABILITIES_INTERVAL_MS);
+    publishV2();
+    v2Timer = setInterval(publishV2, V2_POLL_MS);
 
     channel = supabase
       .channel(`pm-commands-${ownerId}`)
@@ -1197,18 +1470,41 @@ export function createBridge({ PM_DIR, deliveryCtx }) {
     // Realtime safety net — a missed event should never silently strand a
     // pending command (e.g. a Pause) with no fallback path.
     pollTimer = setInterval(drainOnce, POLL_FALLBACK_MS);
-    drainOnce();
+    reconcileClaimed()
+      .catch((err) => console.error("[pm-bridge] reconcile error:", err.message))
+      .finally(() => drainOnce());
 
-    console.log("[pm-bridge] started — publishing to Supabase, draining pm_commands");
+    console.log(`[pm-bridge] started — installation ${installation_id}, publishing to Supabase, draining pm_commands`);
   }
 
   function stop() {
     clearInterval(heartbeatTimer);
     clearInterval(pollTimer);
+    clearInterval(capabilitiesTimer);
+    clearInterval(v2Timer);
     if (channel) supabase.removeChannel(channel);
+    if (drainEnabled) releaseRelayLock({ dir: relayDir });
+    drainEnabled = false;
   }
 
-  const startedAt = nowIso();
+  /** For fixtures: enable draining without timers or realtime. */
+  function enableDrainForTest() {
+    drainEnabled = true;
+  }
 
-  return { start, stop, publishTasks, publishSession, publishFleet };
+  return {
+    start,
+    stop,
+    publishTasks,
+    publishSession,
+    publishFleet,
+    publishV2,
+    publishCorpus,
+    publishCapabilities,
+    publishHeartbeat,
+    drainOnce,
+    reconcileClaimed,
+    enableDrainForTest,
+    installation_id,
+  };
 }

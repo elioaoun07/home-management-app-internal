@@ -22,6 +22,7 @@ import {
   createTasksSnapshotBuilder,
   spendByDay,
 } from "../scripts/pm/bridge.mjs";
+import { parseHistory } from "../scripts/pm/shared/history.mjs";
 import { atomicWriteJsonSync } from "../scripts/delivery/fsx.mjs";
 import { textHash } from "../scripts/delivery/packet.mjs";
 import { createDeliveryContext } from "../scripts/delivery/server-routes.mjs";
@@ -391,48 +392,50 @@ describe("campaign rollups snapshot", () => {
 });
 
 describe("completion history snapshot", () => {
-  it("parses prose done-stamps, table done-stamps, and aggregates by day", () => {
+  // Command Center Phase 6: the legacy row uses the shared history parser, so the
+  // phone's old view and the shared views count the same records.
+  it("reads Shipped Log bullets through the shared parser and aggregates by day", () => {
+    const book = [
+      "# Delivery — Master Book",
+      "",
+      "## Pain Inventory",
+      "",
+      "- ✅ 2026-07-15 — **DLV-9** a stamp outside the Shipped Log",
+      "",
+      "## Shipped Log",
+      "",
+      "- ✅ 2026-07-16 — **DLV-1: Flight recorder foundation.** Full-fidelity transcript capture.",
+      "- ✅ 2026-07-17 — **HUB-25 fix** follow-up work on an item",
+      "- ✅ 2026-07-17/19 — **DLV-11** a stated range",
+      "",
+      "## Delivery session log",
+      "",
+      "- ✅ 2026-07-18 — **DLV-12** a session line",
+      "",
+    ].join("\n");
     const pmDir = seedPmDir({
       "Delivery/4 - Checklist.md": VALID_CHECKLIST,
-      "Delivery/Delivery — Master Book.md": [
-        "# Delivery — Master Book",
-        "",
-        "## Shipped Log",
-        "",
-        "✅ 2026-07-16 — **DLV-1: Flight recorder foundation.** Full-fidelity transcript capture.",
-        "✅ 2026-07-17 — **DLV-11: BUD-11 root-cause fixes.** Fixed at the source.",
-        "",
-      ].join("\n"),
-      "Healthcare/4 - Checklist.md": VALID_CHECKLIST,
-      "Healthcare/Healthcare — Master Book.md": [
-        "# Feature State",
-        "",
-        "| ID | Outcome | Status | Evidence |",
-        "| --- | --- | --- | --- |",
-        "| HLTH-1 | Module scaffold | ✅ 2026-07-17 | check-feature-index green |",
-        "",
-      ].join("\n"),
+      "Delivery/Delivery — Master Book.md": book,
     });
 
-    const { completions, completedByDay } = createHistorySnapshotBuilder({ PM_DIR: pmDir }).buildHistorySnapshot();
+    const snapshot = createHistorySnapshotBuilder({ PM_DIR: pmDir }).buildHistorySnapshot();
+    const shared = parseHistory(book, { campaign: "Delivery", file: "Delivery/Delivery — Master Book.md" }).records;
 
-    expect(completions).toHaveLength(3);
-    expect(completions[0]).toMatchObject({ date: "2026-07-16", campaign: "Delivery", idChip: "DLV-1" });
-    expect(completions[0].text).toContain("Flight recorder foundation");
-
-    const table = completions.find((c) => c.idChip === "HLTH-1");
-    expect(table).toMatchObject({ date: "2026-07-17", campaign: "Healthcare" });
-    expect(table?.text).toBe("Module scaffold");
-
-    expect(completedByDay).toEqual([
+    expect(snapshot.completions).toHaveLength(2);
+    expect(snapshot.completions[0]).toMatchObject({ date: "2026-07-16", campaign: "Delivery", idChip: "DLV-1", identity: "exact" });
+    expect(snapshot.completions[0].text).toContain("Flight recorder foundation");
+    expect(snapshot.completions[1]).toMatchObject({ idChip: null, identity: "referenced" });
+    expect(snapshot.coverage).toEqual({ records: shared.length, placed: 2, exact: 2 });
+    expect(snapshot.completedByDay).toEqual([
       { date: "2026-07-16", count: 1, byCampaign: { Delivery: 1 } },
-      { date: "2026-07-17", count: 2, byCampaign: { Delivery: 1, Healthcare: 1 } },
+      { date: "2026-07-17", count: 1, byCampaign: { Delivery: 1 } },
     ]);
   });
 
-  it("ignores stamps inside fenced code and campaigns with no Feature State", () => {
+  it("ignores stamps inside fenced code and books with no Shipped Log", () => {
     const pmDir = seedPmDir({
-      "Budget/1 - Feature State.md": ["# Feature State", "", "```md", "✅ 2026-01-01 — **BUD-99** an example in a docs fence", "```", "", "✅ 2026-07-20 — **BUD-1** the real one", ""].join("\n"),
+      "Budget/1 - Feature State.md": ["# Feature State", "", "## Shipped Log", "", "```md", "- ✅ 2026-01-01 — **BUD-99** an example in a docs fence", "```", "", "- ✅ 2026-07-20 — **BUD-1** the real one", ""].join("\n"),
+      "Kitchen/1 - Feature State.md": ["# Feature State", "", "- ✅ 2026-07-20 — **KIT-1** no log heading", ""].join("\n"),
     });
     const { completions } = createHistorySnapshotBuilder({ PM_DIR: pmDir }).buildHistorySnapshot();
     expect(completions).toHaveLength(1);

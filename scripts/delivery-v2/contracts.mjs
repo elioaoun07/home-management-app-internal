@@ -1,7 +1,7 @@
 // scripts/delivery-v2/contracts.mjs
 // PM Delivery V2 — the single authoritative schema module.
 //
-// Slice S0.1/S0.2 of "ERA Notes/10 - Project Management/Autonomous Delivery/
+// Slice S0.1/S0.2 of "ERA Notes/10 - Project Management/_Archive/Studies/Autonomous Delivery/
 // PM Delivery — Execution Portfolio.md". The canonical record names, enums and
 // lifecycle semantics come from "PM Delivery — V2 Architecture.md" §4/§5, and the
 // criterion/evidence contract from "PM Delivery — Evidence & Autonomy.md" §2/§5.
@@ -99,6 +99,8 @@ export const RESOLUTION_REASONS = Object.freeze({
   STALE_SOURCE: "stale-source",
   BAD_LOCATOR: "bad-locator",
   OUT_OF_RANGE: "out-of-range",
+  MISSING_WITNESS: "missing-selection-witness",
+  AMBIGUOUS_ACCEPTANCE: "ambiguous-acceptance",
 });
 
 // ---------------------------------------------------------------------------
@@ -442,6 +444,7 @@ export function makeResourceBasis({
  * @property {string} work_id
  * @property {number} revision
  * @property {string} source_fingerprint
+ * @property {(string|null)} acceptance_fingerprint Master Book `### <ID>` revision; null when not bound
  * @property {string} outcome
  * @property {readonly string[]} exclusions
  * @property {Record<string, unknown>} scratchScope
@@ -467,7 +470,12 @@ export function makeResourceBasis({
  * A whole-file hash would stale this contract every time an unrelated row in the
  * same checklist changed, which Migration §3 explicitly calls out as fiction.
  *
- * @param {{work_id:string, revision?:number, source_fingerprint:string, outcome:string,
+ * acceptance_fingerprint binds the item's Master Book acceptance/dependency
+ * section: a changed book can change the contract without touching the checkbox
+ * row. It enters the digest only when bound, so unbound contracts keep their ids.
+ *
+ * @param {{work_id:string, revision?:number, source_fingerprint:string,
+ *   acceptance_fingerprint?:(string|null), outcome:string,
  *   exclusions?:string[], scratchScope:Record<string, unknown>,
  *   publicationScope:{allowedPaths?:string[], changeConstraints?:Record<string, unknown>},
  *   criteria_refs?:{criterion_id:string, revision:number}[], requestedDisposition:string,
@@ -479,6 +487,7 @@ export function authorizeContract({
   work_id,
   revision = 1,
   source_fingerprint,
+  acceptance_fingerprint = null,
   outcome,
   exclusions = [],
   scratchScope,
@@ -491,6 +500,9 @@ export function authorizeContract({
   owner_decision_ref = null,
   authorized_at = null,
 }) {
+  if (acceptance_fingerprint !== null && !isNonEmptyString(acceptance_fingerprint)) {
+    throw new ContractError("contract.acceptance_fingerprint must be a fingerprint or null");
+  }
   if (!isNonEmptyString(work_id)) throw new ContractError("contract.work_id is required");
   if (!Number.isInteger(revision) || revision < 1) throw new ContractError("contract.revision must be >= 1");
   if (!isNonEmptyString(source_fingerprint)) throw new ContractError("contract.source_fingerprint is required");
@@ -510,6 +522,7 @@ export function authorizeContract({
     work_id,
     revision,
     source_fingerprint,
+    acceptance_fingerprint: acceptance_fingerprint ?? undefined,
     outcome,
     exclusions: [...exclusions].sort(),
     scratchScope,
@@ -525,6 +538,7 @@ export function authorizeContract({
     work_id,
     revision,
     source_fingerprint,
+    acceptance_fingerprint,
     outcome,
     exclusions: frozenList(exclusions, "contract.exclusions"),
     scratchScope: { ...scratchScope },
@@ -571,6 +585,8 @@ export function reviseContract(previous, changes) {
     work_id: previous.work_id,
     revision: previous.revision + 1,
     source_fingerprint: changes.source_fingerprint ?? previous.source_fingerprint,
+    acceptance_fingerprint:
+      changes.acceptance_fingerprint !== undefined ? changes.acceptance_fingerprint : (previous.acceptance_fingerprint ?? null),
     outcome: changes.outcome ?? previous.outcome,
     exclusions: changes.exclusions ? [...changes.exclusions] : [...previous.exclusions],
     scratchScope: changes.scratchScope ?? previous.scratchScope,
@@ -592,16 +608,27 @@ export function reviseContract(previous, changes) {
  * not an error — it is a supersession obligation the caller must discharge with
  * reviseContract before any further paid dispatch.
  *
+ * A contract bound to a Master Book revision is fresh only when the caller
+ * observed the same revision; an unobserved book cannot confirm it.
+ *
  * @param {Contract} contract
  * @param {string} currentSourceFingerprint
+ * @param {(string|null)} [currentAcceptanceFingerprint]
  */
-export function contractFreshness(contract, currentSourceFingerprint) {
-  const fresh = contract.source_fingerprint === currentSourceFingerprint;
+export function contractFreshness(contract, currentSourceFingerprint, currentAcceptanceFingerprint = undefined) {
+  const boundAcceptance = contract.acceptance_fingerprint ?? null;
+  const observedAcceptance = currentAcceptanceFingerprint ?? null;
+  const sourceFresh = contract.source_fingerprint === currentSourceFingerprint;
+  const acceptanceFresh = boundAcceptance === null || boundAcceptance === observedAcceptance;
+  const fresh = sourceFresh && acceptanceFresh;
   return deepFreeze({
     fresh,
     obligation: fresh ? null : "successor-revision-required",
+    stale: [...(sourceFresh ? [] : ["source"]), ...(acceptanceFresh ? [] : ["acceptance"])],
     boundFingerprint: contract.source_fingerprint,
     observedFingerprint: currentSourceFingerprint,
+    boundAcceptance,
+    observedAcceptance,
   });
 }
 
@@ -854,6 +881,9 @@ export function authorizeGrant({
   }
   const allowance = resource_policy.allowance == null ? null : Number(resource_policy.allowance);
   const strict = Boolean(resource_policy.strict);
+  if (allowance != null && !(Number.isFinite(allowance) && allowance > 0)) {
+    throw new ContractError("a resource allowance must be a finite positive number or null");
+  }
   if (strict && allowance == null) {
     throw new ContractError("a strict resource policy needs a numeric allowance; there is nothing to enforce otherwise");
   }

@@ -50,6 +50,7 @@ allergies / vaccines / medical history / medication           | [standalone/heal
 "the atlas" / "the in-app feature map"                         | [cross-cutting/atlas.md](cross-cutting/atlas.md)
 "the layout" / "header" / "bottom nav" / "FAB"                 | [cross-cutting/layout-and-nav.md](cross-cutting/layout-and-nav.md)
 "the ERAMark logo / animated mark"                             | [cross-cutting/era-mark.md](cross-cutting/era-mark.md)
+"pnpm pm" / "PM Command Center" / "Delivery" / "/pm/live"      | [cross-cutting/pm-command-center.md](cross-cutting/pm-command-center.md)
 
 ---
 
@@ -109,4 +110,5 @@ allergies / vaccines / medical history / medication           | [standalone/heal
 | Atlas               | [cross-cutting/atlas.md](cross-cutting/atlas.md)                |
 | Layout & navigation | [cross-cutting/layout-and-nav.md](cross-cutting/layout-and-nav.md) |
 | ERAMark             | [cross-cutting/era-mark.md](cross-cutting/era-mark.md)          |
+| PM Command Center   | [cross-cutting/pm-command-center.md](cross-cutting/pm-command-center.md) |
 | Conventions         | [_conventions.md](_conventions.md)                              |

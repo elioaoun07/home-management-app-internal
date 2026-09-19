@@ -12,7 +12,7 @@ tags:
 
 > **FABLED 2:** [_index](<_index.md>) · **1 · Implementation** · [2 · Gaps](<2 - FABLED 2 — Gaps & Missing.md>) · [3 · Optimization](<3 - FABLED 2 — Optimization Plan.md>) · [4 · Enhancements](<4 - FABLED 2 — Future Enhancements.md>)
 >
-> Verified 2026-07-02. The campaign [Feature State](<../1 - Feature State.md>) holds the surface-by-surface tier table and pain inventory; the authoritative code map is the [Notifications Overview](<../../../03 - Junction Modules/Notifications/Overview.md>). This is the pipeline X-ray.
+> Verified 2026-07-02. The campaign [Feature State](<../1 - Feature State.md>) holds the surface-by-surface tier table and pain inventory; the authoritative code map is the [Notifications Overview](<../../../../03 - Junction Modules/Notifications/Overview.md>). This is the pipeline X-ray.
 
 ---
 

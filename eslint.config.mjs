@@ -34,6 +34,12 @@ const config = [
     ],
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
+  // The local PM React app is served by Node, with no Next router runtime.
+  // Its document navigation must use native anchors (including the fallback).
+  {
+    files: ["scripts/pm/app/**/*.tsx"],
+    rules: { "@next/next/no-html-link-for-pages": "off" },
+  },
   {
     rules: {
       "@typescript-eslint/no-explicit-any": "error",

@@ -20,14 +20,14 @@ tags:
 >
 > **Why this set exists:** the notification surface *works* but **feels wrong** — the bell rings perpetually and reads as an alarm, one system notification opens the wrong screen, the drawer is too wordy to glance at, and the alerts page is a wall of text. The ask was deliberate — *map every painful thing first, decide the target design, then run a focused overhaul.* This folder is that map plus the build queue.
 >
-> **Status as of 2026-07-10:** the routing 🔴 (fixed 06-19) and the alerts-page/registry/reliability overhaul (fixed 07-10 — see [Checklist Phase 5–6](<4 - Checklist.md>)) are shipped. Still open: bell calm-down (Phase 2), drawer density (Phase 3), cron `console.*` sweep, quiet hours/delivery-policy engine.
+> **Status as of 2026-07-10:** the routing 🔴 (fixed 06-19) and the alerts-page/registry/reliability overhaul (fixed 07-10 — see [Checklist Phase 5–6](<../../Notifications & Alerts/4 - Checklist.md>)) are shipped. Still open: bell calm-down (Phase 2), drawer density (Phase 3), cron `console.*` sweep, quiet hours/delivery-policy engine.
 
 | #   | File                                          | Read it when...                                                                                                          |
 | --- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | 1   | [Feature State](<1 - Feature State.md>)       | You want the honest status of every notification surface **and** the full Pain Inventory (pain, root cause, severity).   |
 | 2   | [Vision & Roadmap](<2 - Vision & Roadmap.md>) | You want where each pain is *heading* — target design + locked decisions + the best-practices brief + the MoSCoW backlog. |
 | 3   | [Action Plan](<3 - Action Plan.md>)           | The call + sequenced Now/Next/Later queue + candidate-work table — the *why, and in what order*.                         |
-| 4   | [Checklist](<4 - Checklist.md>)               | **Most days.** The flat, phased, checkable build list (IDs + severity + effort).                                         |
+| 4   | [Checklist](<../../Notifications & Alerts/4 - Checklist.md>)               | **Most days.** The flat, phased, checkable build list (IDs + severity + effort).                                         |
 | F2  | [FABLED 2/](<FABLED 2/_index.md>)             | **The deep-dive layer (first generation for this module, verified 2026-07-02):** pipeline X-ray, scored maturity, ranked technical gaps, hardening plan, the delivery-policy-engine enhancement ladder. |
 
 ## How to use this set
@@ -40,5 +40,5 @@ tags:
 ## Where this fits
 
 - **Up one level:** the global command center → [10 - Project Management/_index.md](<../_index.md>). Read that for whole-app priorities; the bell/animation cleanup also ladders into the global Hard-Rule-22 (`console.*`) hygiene line.
-- **Implementation reality (read before coding):** [Notifications / Overview](<../../03 - Junction Modules/Notifications/Overview.md>) — the file-level source of truth. This folder is **strategy + audit + queue**, not a code map.
+- **Implementation reality (read before coding):** [Notifications / Overview](<../../../03 - Junction Modules/Notifications/Overview.md>) — the file-level source of truth. This folder is **strategy + audit + queue**, not a code map.
 - **Connected modules' PM:** [Schedule/](<../Schedule/_index.md>) (the daily items summary should route into `/reminders`), [Budget/](<../Budget/_index.md>) (the daily budget reminder opens the mobile expense form).

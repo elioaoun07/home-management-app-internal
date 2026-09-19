@@ -1,19 +1,37 @@
-import { allTasks, files, modal, moduleStats } from "../../app/store.js";
+import { useEffect } from "preact/hooks";
+import { campaigns, ownerDecisions } from "../../app/productStore.js";
+import { hideCompleted, modal } from "../../app/store.js";
 import { route } from "../../app/router.js";
-import { Card, Chip, EmptyState, ProgressBar } from "../../components/Primitives.jsx";
-import { Breadcrumbs } from "../nav/Breadcrumbs.jsx";
+import { Chip, EmptyState } from "../../components/Primitives.jsx";
+import { Icon } from "../../components/Icon.jsx";
+import { Markdown } from "../doc/Markdown.jsx";
+import { WorkRow } from "../tasks/WorkItem.jsx";
+import { OutcomesList } from "../activity/ActivityView.jsx";
+import { deliveryData, loadDeliverySessions } from "../delivery/deliveryStore.js";
+import { sessionStatus } from "../../lib/product.js";
 
-function fileWeight(path) { const name = path.split("/").pop(); if (name === "_index.md") return 0; const match = name.match(/^(\d+)/); return match ? Number(match[1]) : 99; }
+import { localReturn, projectPath } from "../../lib/portfolio.js";
 
 export function ModuleView() {
-  const campaign = route.value.module;
-  const moduleFiles = files.value.filter((file) => file.module === campaign).sort((a,b) => fileWeight(a.relPath)-fileWeight(b.relPath) || a.relPath.localeCompare(b.relPath));
-  const stat = moduleStats.value.find((entry) => entry.module === campaign);
-  const next = allTasks.value.filter((task) => task.module === campaign && task.state === "open" && !task.inFabled).sort((a,b) => a.sectionRank-b.sectionRank).slice(0,5);
-  if (!moduleFiles.length) return <EmptyState title="Campaign not found">The route does not match a PM campaign.</EmptyState>;
-  return <><Breadcrumbs items={[{label:campaign}]}/><header class="page-head" style={{marginTop:18}}><div><div class="eyebrow">Campaign</div><h1>{campaign}</h1><p>{stat?.open || 0} open tasks across {stat?.files || 0} active documents.</p></div><div>{stat && <div style={{minWidth:190}}><ProgressBar value={stat.progress}/><div class="muted" style={{fontSize:11,marginTop:7}}>{stat.progress}% complete</div></div>}{globalThis.PM_MODE==="server"&&<div style={{display:"flex",gap:8,marginTop:12}}><button class="button" onClick={()=>{modal.value={type:"create",dir:campaign}}}>Create</button><button class="button" onClick={()=>{modal.value={type:"reorder",dir:campaign}}}>Reorder</button></div>}</div></header>
-    <div class="grid cards">{moduleFiles.filter((file) => !file.inFabled).map((file) => <a href={`#/doc/${encodeURI(file.relPath)}`} key={file.relPath} style={{color:"inherit"}}><Card interactive><div style={{display:"flex",justifyContent:"space-between",gap:8}}><h3>{file.title}</h3><Chip>{file.tasks.filter((task)=>task.state==="open").length} open</Chip></div><div class="muted" style={{fontSize:11}}>{file.relPath}</div></Card></a>)}</div>
-    {next.length > 0 && <section style={{marginTop:34}}><h2>Next up</h2><div class="grid">{next.map((task) => <a href={`#/doc/${encodeURI(task.file)}?cb=${task.cbidx}`} class="card interactive" key={task.key} style={{color:"inherit"}}><div style={{display:"flex",gap:8}}>{task.idChip && <Chip tone="id">{task.idChip}</Chip>}<span>{task.text}</span><span class="chip" style={{marginLeft:"auto"}}>{task.section}</span></div></a>)}</div></section>}
-    {moduleFiles.some((file)=>file.inFabled) && <details style={{marginTop:34}}><summary class="button">FABLED evidence layers ({moduleFiles.filter((file)=>file.inFabled).length})</summary><div class="grid cards" style={{marginTop:14}}>{moduleFiles.filter((file)=>file.inFabled).map((file)=><a href={`#/doc/${encodeURI(file.relPath)}`} class="card interactive" key={file.relPath}>{file.title}</a>)}</div></details>}
+  const campaign = campaigns.value.find((entry) => entry.name === route.value.module);
+  useEffect(() => { loadDeliverySessions().catch(() => {}); }, []);
+  if (!campaign) return <EmptyState title="Campaign not found"><a href="#/projects">All campaigns</a><a class="button ghost" href="#/search">Search references</a></EmptyState>;
+  const path = `/module/${encodeURIComponent(campaign.name)}`;
+  const tab = ["work", "decisions", "outcomes", "brief"].includes(route.value.query.get("tab")) ? route.value.query.get("tab") : "work";
+  const decisions = ownerDecisions.value.filter((d) => campaign.items.some((task) => task.decisionIds.includes(d.id)));
+  const from = localReturn(route.value.query.get("from"), projectPath({ selection: campaign.name }));
+  const self = path + "?tab=" + tab + "&from=" + encodeURIComponent(from);
+  const sessions = (deliveryData.value.sessions || []).filter((s) => s.item?.campaign === campaign.name);
+  const history = [...campaign.shipped, ...campaign.cancelled].sort((a, b) => b.date.localeCompare(a.date));
+  return <><a class="back-link" href={"#" + from}>← Back to project</a><header class="page-head"><div><div class="eyebrow">Project / Area</div><h1>{campaign.name}</h1><p class="campaign-intro">{campaign.purpose}</p></div>{globalThis.PM_MODE === "server" && <button class="button" onClick={() => { modal.value = { type: "idea" }; }}><Icon name="plus"/>Capture</button>}</header>
+    <div class="metric-strip"><div><b>{campaign.open.length}</b><span>Open</span></div><div><b>{campaign.now.length}</b><span>Now</span></div><div><b>{campaign.held.length}</b><span>Blocked</span></div><div><b>{campaign.shipped.length}</b><span>Shipped records</span></div><div><b>{campaign.cancelled.length}</b><span>Cancelled</span></div></div>
+    <nav class="product-tabs" aria-label="Campaign views">{[["work", "Work", campaign.open.length], ["decisions", "Decisions", decisions.length], ["outcomes", "Outcomes", history.length], ["brief", "Brief", null]].map(([value, label, count]) => <a href={`#${path}?tab=${value}&from=${encodeURIComponent(from)}`} aria-current={tab === value ? "page" : undefined} key={value}>{label}{count != null && <span>{count}</span>}</a>)}</nav>
+    {tab === "work" && <div class="campaign-workspace"><div>{["Now", "Next", "Later"].map((lane) => {
+      const items = campaign.items.filter((task) => task.section === lane && (!hideCompleted.value || task.state !== "done"));
+      return <section class="work-group" key={lane}><div class="section-heading"><h2><span class={`priority-dot ${lane.toLowerCase()}`}/>{lane}<span class="count">{items.length}</span></h2><a href={`#/work?q=${encodeURIComponent(`m:"${campaign.name}" lane:${lane}`)}`}>Open queue</a></div>{items.length ? items.map((task) => <WorkRow task={task} compact from={self} key={task.key}/>) : <p class="quiet-empty">No work in {lane.toLowerCase()}.</p>}</section>;
+    })}</div><aside class="campaign-rail"><section class="rail-card"><h3>Delivery</h3>{sessions.length ? sessions.slice(0, 5).map((session) => <a class="mini-session" href={`#/delivery/session/${session.sessionId}?from=${encodeURIComponent(self)}`} key={session.sessionId}><strong>{session.item.id || "Session"}</strong><span>{sessionStatus(session)}</span></a>) : <p class="muted">No sessions yet.</p>}</section><section class="rail-card"><h3>References</h3>{campaign.book && <a class="reference-link" href={`#/doc/${encodeURI(campaign.book.relPath)}`}><Icon name="file"/>Master Book</a>}<a class="reference-link" href={`#/doc/${encodeURI(campaign.checklist.relPath)}`}><Icon name="tasks"/>Checklist</a></section></aside></div>}
+    {tab === "decisions" && (decisions.length ? decisions.map((decision) => <a class="decision-row" href={`#/decisions?id=${decision.id}&from=${encodeURIComponent(self)}`} key={decision.id}><Chip tone="id">{decision.id}</Chip><strong>{decision.text}</strong><Icon name="arrow"/></a>) : <EmptyState icon="check" title="No linked decisions"/>)}
+    {tab === "outcomes" && <OutcomesList entries={history}/>}
+    {tab === "brief" && <div class="work-brief"><h2>Purpose</h2><p>{campaign.purpose}</p><h2>Decisions & direction</h2><Markdown raw={campaign.decisions} file={campaign.book?.relPath || campaign.checklist.relPath}/></div>}
   </>;
 }

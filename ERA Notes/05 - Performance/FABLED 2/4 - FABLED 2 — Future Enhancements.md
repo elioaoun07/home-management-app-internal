@@ -16,7 +16,7 @@ tags:
 
 ## E1 — The perf dashboard tile (make posture visible weekly)
 
-Once O1's vitals land in Error Logs (or a sink), one PM-dashboard tile: p75 LCP/INP per top route, trend arrow, last build's first-load JS. Performance stops being a special investigation and becomes a glance ([PM FABLED 2.4 · E2](<../../10 - Project Management/FABLED 2/4 - FABLED 2 — Future Enhancements.md>) reconciliation pattern).
+Once O1's vitals land in Error Logs (or a sink), one PM-dashboard tile: p75 LCP/INP per top route, trend arrow, last build's first-load JS. Performance stops being a special investigation and becomes a glance ([PM FABLED 2.4 · E2](<../../10 - Project Management/_Archive/FABLED 2/4 - FABLED 2 — Future Enhancements.md>) reconciliation pattern).
 
 ## E2 — Offline-first reads for the daily loop
 
@@ -26,7 +26,7 @@ The mutation path is offline-hardened; the *read* path still needs the network f
 
 ## E3 — Islanding the megafiles
 
-The HubPage/expense-form decompositions ([Hub & ERA FABLED 2.3 · O2](<../../10 - Project Management/Hub & ERA/FABLED 2/3 - FABLED 2 — Optimization Plan.md>), [Budget FABLED 2.3 · O4](<../../10 - Project Management/Budget/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)) are also chunk-split opportunities: per-view dynamic imports so the alerts view doesn't pay for shopping mode. Ride the decompositions; never split speculatively.
+The HubPage/expense-form decompositions ([Hub & ERA FABLED 2.3 · O2](<../../10 - Project Management/_Archive/Hub & ERA/FABLED 2/3 - FABLED 2 — Optimization Plan.md>), [Budget FABLED 2.3 · O4](<../../10 - Project Management/_Archive/Budget/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)) are also chunk-split opportunities: per-view dynamic imports so the alerts view doesn't pay for shopping mode. Ride the decompositions; never split speculatively.
 
 ## E4 — Edge-cache the read-only public surfaces
 

@@ -13,7 +13,7 @@ tags: [pm/index, tooling/delivery]
 >
 > **Trigger:** forensic postmortem of session `s-20260722-225601-whdv` (BUD-11, Haiku/low) — the *second* BUD-11 incident (the first, `s-20260715-214421-hvfk`, produced the DW-11…13 fixes). The tool's guardrails held perfectly; what was missing was governance, not mechanics. See [5 · Session Postmortem](<5 - Session Postmortem (s-20260722-225601-whdv).md>).
 
-**Campaign prefix: `DLV`** — registered in [_Conventions §5](<../_Conventions.md>).
+**Campaign prefix: `DLV`** — registered in [_Conventions §5](<../../_Conventions.md>).
 
 ## The four milestones
 
@@ -31,7 +31,7 @@ tags: [pm/index, tooling/delivery]
 | 1 | [Feature State](<1 - Feature State.md>) | You need what exists today (verified against code) and the ranked pain clusters. |
 | 2 | [Vision & Architecture](<2 - Vision & Architecture.md>) | You need the 10x target architecture and the owner-decision flags. |
 | 3 | [Action Plan](<3 - Action Plan.md>) | You are implementing a DLV item — design, file anchors, config surface, acceptance. |
-| 4 | [Checklist](<4 - Checklist.md>) | You are executing or picking the next item. |
+| 4 | [Checklist](<../../Delivery/4 - Checklist.md>) | You are executing or picking the next item. |
 | 5 | [Session Postmortem (s-20260722-225601-whdv)](<5 - Session Postmortem (s-20260722-225601-whdv).md>) | You need the evidence: full forensic timeline, failure→DLV traceability, BUD-11 salvage runbook. |
 | 6 | [Design Debates & Rejected Ideas](<6 - Design Debates & Rejected Ideas.md>) | You are about to propose provider fallback, remote gates, benchmarks, an ungated AUTO lane… — read the dispositions first. |
 | 7 | [Cost Anatomy (DLV-28 smoke tests)](<7 - Cost Anatomy (DLV-28 smoke tests).md>) | You need to know what a session actually spends money on, whether cost scales, or whether a given item is worth running through the pipeline at all. |
@@ -59,4 +59,4 @@ Real end-to-end delivery pipeline validation: a FAST-lane session reaching ACCEP
 ## Where this fits
 
 - Up one level: [10 - Project Management/_index.md](<../_index.md>)
-- Grammar: [_Conventions](<../_Conventions.md>)
+- Grammar: [_Conventions](<../../_Conventions.md>)

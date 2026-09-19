@@ -18,7 +18,7 @@ tags:
 
 ## E1 — The spine ⭐ (signals → composer → policy → delivery)
 
-The layer's defining build; ordering and staging at [FAR FABLED 2.3](<../../10 - Project Management/Functional Architecture Review/FABLED 2/3 - FABLED 2 — Optimization Plan.md>); receiving surfaces at [Hub & ERA FABLED 2.4 · E1](<../../10 - Project Management/Hub & ERA/FABLED 2/4 - FABLED 2 — Future Enhancements.md>) and [Notifications FABLED 2.4 · E1](<../../10 - Project Management/Notifications & Alerts/FABLED 2/4 - FABLED 2 — Future Enhancements.md>). Listed here because it *is* the junction layer's next chapter — one spine every module lights up.
+The layer's defining build; ordering and staging at [FAR FABLED 2.3](<../../10 - Project Management/_Archive/Functional Architecture Review/FABLED 2/3 - FABLED 2 — Optimization Plan.md>); receiving surfaces at [Hub & ERA FABLED 2.4 · E1](<../../10 - Project Management/_Archive/Hub & ERA/FABLED 2/4 - FABLED 2 — Future Enhancements.md>) and [Notifications FABLED 2.4 · E1](<../../10 - Project Management/_Archive/Notifications & Alerts/FABLED 2/4 - FABLED 2 — Future Enhancements.md>). Listed here because it *is* the junction layer's next chapter — one spine every module lights up.
 
 ## E2 — The proposal grammar (one UX for every machine suggestion)
 
@@ -28,7 +28,7 @@ Bulk-convert review sheet, drafts drawer, future low-stock proposals, briefing a
 
 ## E3 — The modes engine (Trips generalized)
 
-The reversal-ledger machinery as a generic context-switch engine (sick / guest / crunch modes) — owned at [Trips FABLED 2.4 · E7](<../../10 - Project Management/Trips/FABLED 2/4 - FABLED 2 — Future Enhancements.md>), gated hard on verification + real-trip mileage. The junction layer's most elegant future idea, and the easiest to build too early.
+The reversal-ledger machinery as a generic context-switch engine (sick / guest / crunch modes) — owned at [Trips FABLED 2.4 · E7](<../../10 - Project Management/_Archive/Trips/FABLED 2/4 - FABLED 2 — Future Enhancements.md>), gated hard on verification + real-trip mileage. The junction layer's most elegant future idea, and the easiest to build too early.
 
 ## E4 — Cross-module undo (the ledger pattern, everywhere)
 
@@ -40,7 +40,7 @@ Hard Rule #1 gives per-mutation undo; junction actions (message→transaction, t
 
 **Impact: Low–Med · Effort: S once events exist**
 
-Bridge usage counts (message-actions/week, drafts confirmed vs discarded, proposals accepted vs dismissed) on the dashboard. Bridges are bets; usage data retires the losers. The act/dismiss recording ([Notifications FABLED 2.3 · O4](<../../10 - Project Management/Notifications & Alerts/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)) is the first tributary.
+Bridge usage counts (message-actions/week, drafts confirmed vs discarded, proposals accepted vs dismissed) on the dashboard. Bridges are bets; usage data retires the losers. The act/dismiss recording ([Notifications FABLED 2.3 · O4](<../../10 - Project Management/_Archive/Notifications & Alerts/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)) is the first tributary.
 
 ---
 

@@ -12,7 +12,7 @@ tags:
 
 > **FABLED:** [_index](<_index.md>) · **1 · Implementation** · [2 · Gaps](<2 - FABLED — Gaps & Missing.md>) · [3 · Optimization](<3 - FABLED — Optimization Plan.md>) · [4 · Enhancements](<4 - FABLED — Future Enhancements.md>)
 >
-> Verified against `main` 2026-06-10. The vault doc ([Trips / Overview](<../../../03 - Junction Modules/Trips/Overview.md>)) is the read-before-touching source; this is the X-ray with the load-bearing facts pinned.
+> Verified against `main` 2026-06-10. The vault doc ([Trips / Overview](<../../../../03 - Junction Modules/Trips/Overview.md>)) is the read-before-touching source; this is the X-ray with the load-bearing facts pinned.
 
 ---
 
@@ -46,7 +46,7 @@ src/app/api/trips/       CRUD + [id]/activate · complete · clone · packing(+[
 
 ## 3 · Templates
 
-`is_template = true` trips, cloned via `api/trips/[id]/clone` (3 KB). Expected semantics: clone copies places + packing, never side-effects — flagged for confirmation in [file 1](<../1 - Feature State — Current Reality.md>).
+`is_template = true` trips, cloned via `api/trips/[id]/clone` (3 KB). Expected semantics: clone copies places + packing, never side-effects — flagged for confirmation in [file 1](<../1 - Feature State.md>).
 
 ## 4 · Cross-module blast radius (what to re-read before touching)
 

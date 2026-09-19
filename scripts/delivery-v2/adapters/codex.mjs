@@ -97,18 +97,25 @@ const isNonEmptyString = (value) => typeof value === "string" && value.trim() !=
  * `danger-full-access` is refused here rather than validated away at a higher
  * layer, so that "turn off the sandbox to make it pass" has no code path.
  *
- * @param {{workspaceRoot:string, mode?:string, model?:(string|null),
+ * A read-only job gets Codex's `read-only` sandbox as well as a read-only mount.
+ *
+ * @param {{workspaceRoot:string, mode?:(string|null), access?:string, model?:(string|null),
  *   effort?:(string|null), additionalDirectories?:string[]}} input
  */
 export function buildThreadOptions({
   workspaceRoot,
-  mode = "workspace-write",
+  mode = null,
+  access = "write",
   model = null,
   effort = null,
   additionalDirectories = [],
 }) {
   if (!isNonEmptyString(workspaceRoot)) throw new ContractError("codex adapter: a job needs a workspace root");
+  mode = mode || (access === "read-only" ? "read-only" : "workspace-write");
   if (!SANDBOX_MODES.includes(mode)) throw new ContractError("codex adapter: unknown sandbox mode " + mode);
+  if (access === "read-only" && mode !== "read-only") {
+    throw new ContractError("codex adapter: a read-only job cannot run in " + mode);
+  }
   if (mode === "danger-full-access") {
     throw new ContractError("codex adapter: danger-full-access is not an available profile under this plan");
   }
@@ -140,6 +147,7 @@ export function normalizeCodexUsage(raw) {
     unit: "tokens",
     input: Number(usage.input_tokens || 0),
     cachedInput: Number(usage.cached_input_tokens || 0),
+    cacheCreation: 0,
     output: Number(usage.output_tokens || 0),
     reasoningOutput: Number(usage.reasoning_output_tokens || 0),
     costUsd: null,
@@ -166,7 +174,7 @@ export function mergeUsageReadings(readings) {
     const key = reading.turn == null ? byTurn.size : reading.turn;
     const existing = byTurn.get(key);
     if (existing) {
-      const shrank = ["input", "cachedInput", "output", "reasoningOutput"].some(
+      const shrank = ["input", "cachedInput", "cacheCreation", "output", "reasoningOutput"].some(
         (field) => Number(reading.usage[field] || 0) < Number(existing.usage[field] || 0),
       );
       if (shrank) {
@@ -176,7 +184,7 @@ export function mergeUsageReadings(readings) {
     }
     byTurn.set(key, reading);
   }
-  const total = { input: 0, cachedInput: 0, output: 0, reasoningOutput: 0 };
+  const total = { input: 0, cachedInput: 0, cacheCreation: 0, output: 0, reasoningOutput: 0 };
   for (const reading of byTurn.values()) {
     for (const field of Object.keys(total)) total[field] += Number(reading.usage[field] || 0);
   }
@@ -304,6 +312,71 @@ export function describeProfile({ observations = null, runtime = {}, qualificati
 }
 
 // ---------------------------------------------------------------------------
+// Observed activity and effective settings
+// ---------------------------------------------------------------------------
+
+const ITEM_KINDS = Object.freeze({
+  command_execution: "command",
+  file_change: "edit",
+  mcp_tool_call: "tool",
+  web_search: "search",
+  agent_message: "message",
+});
+
+/**
+ * Read what one event says about activity and applied settings.
+ *
+ * The typed event union at 0.144.1 carries no model or effort, so both stay
+ * unreported unless an event actually includes them. Only the main thread is
+ * observable here; no child agents are inferred.
+ */
+export function observeCodexEvent(state, event, now = () => new Date().toISOString()) {
+  const model = typeof event.model === "string" && event.model ? event.model : null;
+  const effort =
+    typeof event.reasoning_effort === "string"
+      ? event.reasoning_effort
+      : typeof event.model_reasoning_effort === "string"
+        ? event.model_reasoning_effort
+        : null;
+  if (model) {
+    state.effective.model = model;
+    if (!state.effective.source.includes("event:" + event.type)) state.effective.source.push("event:" + event.type);
+  }
+  if (effort) {
+    state.effective.effort = effort;
+    if (!state.effective.source.includes("event:" + event.type)) state.effective.source.push("event:" + event.type);
+  }
+  if (event.type === "item.completed" && event.item && ITEM_KINDS[event.item.type]) {
+    const item = event.item;
+    const summary =
+      item.type === "command_execution"
+        ? item.command
+        : item.type === "file_change" && Array.isArray(item.changes)
+          ? item.changes.map((change) => change && change.path).filter(Boolean).join(", ")
+          : item.type === "mcp_tool_call"
+            ? item.tool
+            : item.text || item.query || null;
+    state.activity.push({
+      at: now(),
+      kind: ITEM_KINDS[item.type],
+      agent: { role: "main", id: null, executor: BACKEND_ID, model: state.effective.model },
+      summary: summary == null ? null : String(summary).slice(0, 240),
+    });
+    if (state.activity.length > 200) state.activity.shift();
+  }
+}
+
+function codexEffectiveView(state) {
+  return {
+    model: state.effective.model,
+    effort: state.effective.effort,
+    source: state.effective.source.length
+      ? state.effective.source.join(",")
+      : "not reported by " + SDK_MODULE_SPECIFIER + " " + CODEX_SDK_SURFACE.reviewed_version + " events",
+  };
+}
+
+// ---------------------------------------------------------------------------
 // The adapter
 // ---------------------------------------------------------------------------
 
@@ -351,6 +424,8 @@ export function createCodexAdapter(options = {}) {
   async function drain(streamed, ref, state) {
     for await (const event of streamed.events) {
       state.events.push(event);
+      if (!event || typeof event !== "object") continue;
+      observeCodexEvent(state, event, now);
       if (event.type === "thread.started" && event.thread_id) {
         state.nativeRef = event.thread_id;
         state.ref = withNativeRef(state.ref, event.thread_id);
@@ -393,7 +468,10 @@ export function createCodexAdapter(options = {}) {
       terminal: null,
       failure: null,
       finalText: "",
+      effective: { model: null, effort: null, source: [] },
+      activity: [],
     };
+    const settings = request.settings || { model: null, effort: null };
 
     if (typeof onDispatchStart === "function") onDispatchStart({ at: now(), job_id: request.job_id });
 
@@ -417,6 +495,9 @@ export function createCodexAdapter(options = {}) {
           nativeEventCount: state.events.length,
           finalText: state.finalText,
           reachedProvider: state.nativeRef != null,
+          requested: { model: settings.model, effort: settings.effort },
+          effective: codexEffectiveView(state),
+          activity: state.activity,
         },
         reason: state.nativeRef
           ? "stream failed after the native session was observed"
@@ -436,6 +517,9 @@ export function createCodexAdapter(options = {}) {
         finalText: state.finalText,
         failure: state.failure,
         nativeOutcome: state.terminal === "failed" ? "failed" : state.terminal === "finished" ? "succeeded" : null,
+        requested: { model: settings.model, effort: settings.effort },
+        effective: codexEffectiveView(state),
+        activity: state.activity,
       },
       reason: state.terminal ? null : "stream ended without a terminal turn event",
     });
@@ -459,10 +543,12 @@ export function createCodexAdapter(options = {}) {
       if (request.executionRef.dispatch_key !== request.job_id) {
         throw new ContractError("codex adapter: dispatch_key must equal job_id");
       }
+      const settings = request.settings || { model: null, effort: null };
       const threadOptions = buildThreadOptions({
         workspaceRoot: request.workspace.root,
-        model: runOptions.model || null,
-        effort: runOptions.effort || null,
+        access: request.workspace.access || "write",
+        model: settings.model || runOptions.model || null,
+        effort: settings.effort || runOptions.effort || null,
       });
       const codex = await newCodex();
       const thread = codex.startThread(threadOptions);
@@ -532,10 +618,12 @@ export function createCodexAdapter(options = {}) {
      */
     async resume(priorRef, request, runOptions = {}) {
       const resumeRequest = makeResumeRequest(priorRef, request);
+      const resumeSettings = resumeRequest.settings || { model: null, effort: null };
       const threadOptions = buildThreadOptions({
         workspaceRoot: resumeRequest.workspace.root,
-        model: runOptions.model || null,
-        effort: runOptions.effort || null,
+        access: resumeRequest.workspace.access || "write",
+        model: resumeSettings.model || runOptions.model || null,
+        effort: resumeSettings.effort || runOptions.effort || null,
       });
       const codex = await newCodex();
       const thread = codex.resumeThread(priorRef.native_ref, threadOptions);

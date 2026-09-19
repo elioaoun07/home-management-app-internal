@@ -78,7 +78,7 @@ CSV/PDF parse → line items → **merchant→category mapping** persisted via `
 | `src/lib/utils/splitBill.test.ts` | Split-bill display ✅ |
 | `src/lib/schedule/expandOccurrences.test.ts` | (Schedule, not Budget) |
 
-**This means the Budget action-plan "Now" foundation items are DONE** — file [3](<../3 - Current — Action Plan.md>) updated 2026-06-10. What remains untested: every API route, the confirm→transaction flow end-to-end, transfers, statement parsing.
+**This means the Budget action-plan "Now" foundation items are DONE** — file [3](<../3 - Action Plan.md>) updated 2026-06-10. What remains untested: every API route, the confirm→transaction flow end-to-end, transfers, statement parsing.
 
 ## 6 · Size & risk map (change-risk hotspots)
 

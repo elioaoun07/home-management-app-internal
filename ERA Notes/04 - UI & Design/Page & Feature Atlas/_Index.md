@@ -81,7 +81,7 @@ tags:
 | `statement-import` | `/statement-import` | [[statement-import]] |
 | `atlas`         | `/atlas`         | [[atlas]]         |
 | `offline`       | `/offline`       | [[offline]]       |
-| `pm`            | `/pm`            | [[pm]]            |
+| `pm`            | `/pm`            | [[pm]] — React local app; hosted Preact reference/export |
 | `pm-live`       | `/pm/live`       | [[pm-live]]       |
 
 ## Feature Modules (Standalone)

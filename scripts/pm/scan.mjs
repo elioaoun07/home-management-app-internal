@@ -10,6 +10,13 @@ import { extname, join, relative, resolve } from "node:path";
 // git for history/grep but is invisible to every PM tool: board, static build, bridge, lint.
 const SKIP_DIR = /^\.|^_Archive$/;
 
+// Explicit read-only history projection. The archive is never traversed or
+// added to files/tasks/search; this one canonical receipt feeds Outcomes only.
+export function readCancelledLog(pmDir) {
+  const path = join(pmDir, "_Archive", "Cancelled Log.md");
+  return existsSync(path) ? readFileSync(path, "utf8") : "";
+}
+
 /**
  * Recursively collect every .md file under `dir`.
  * Returns [{ relPath, raw, mtimeMs, absDir }] with POSIX-style relPaths.

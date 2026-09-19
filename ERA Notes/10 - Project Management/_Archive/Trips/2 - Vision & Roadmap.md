@@ -11,7 +11,7 @@ tags:
 
 # Trips · 2 — Vision & Roadmap
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Trips/4 - Checklist.md>)
 >
 > **What this file is:** the *ambitious* Trips file — where the module could go. Enhancements to what exists **and** richer connections to the rest of the app. This is allowed to dream; [1 · Feature State](<1 - Feature State.md>) is the sober reality. Ladders up to the global [3 · Future Vision](<../3 - Future Vision & Roadmap.md>).
 
@@ -83,4 +83,4 @@ If you point the next stretch at Trips:
 
 > Resist every enhancement until Bet 1 lands. Building on unverified cascades means a reversal bug could hide under new features and surface as a half-travelled household — the worst-feeling class of bug in the app.
 
-→ This period's concrete actions: [3 · Action Plan](<3 - Action Plan.md>); the checkable list: [4 · Checklist](<4 - Checklist.md>).
+→ This period's concrete actions: [3 · Action Plan](<3 - Action Plan.md>); the checkable list: [4 · Checklist](<../../Trips/4 - Checklist.md>).

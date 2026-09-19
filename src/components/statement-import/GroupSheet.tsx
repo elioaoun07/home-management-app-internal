@@ -40,7 +40,7 @@ type Props = {
   /** The account the STATEMENT belongs to — the default target for its rows. */
   accountId: string;
   /** Every account a row can be re-targeted at, for the per-row override. */
-  accounts: Array<{ id: string; name: string; currency?: string }>;
+  accounts: Array<{ id: string; name: string; currency?: string; type?: string }>;
   /** The account a given row will actually be created in. */
   resolveAccount: (row: ParsedTransaction) => string;
   currency: string;
@@ -130,7 +130,22 @@ export function GroupSheet({
       : { category_id: null, subcategory_id: null };
   }, [groupCategory, rows, resolveCategory]);
 
-  const target: GroupCategory = row ? resolveCategory(row) : effective;
+  // A single row that carries its own category override (set when its account
+  // was changed) must be edited as a row: writing the group category would be
+  // shadowed by the row's override and the pick would appear to do nothing.
+  const singleOwnsCategory =
+    single && decisions[rows[0].id]?.category_id !== undefined;
+  const pickerRow = row ?? (singleOwnsCategory ? rows[0] : null);
+
+  // Categories are scoped to an account, so the grid must list the account
+  // the rows will actually land in — not the statement's — once redirected.
+  const pickerAccountId = useMemo(() => {
+    if (row) return resolveAccount(row);
+    const targets = new Set(rows.map((r) => resolveAccount(r)));
+    return targets.size === 1 ? [...targets][0] : accountId;
+  }, [row, rows, resolveAccount, accountId]);
+
+  const target: GroupCategory = pickerRow ? resolveCategory(pickerRow) : effective;
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -182,11 +197,12 @@ export function GroupSheet({
               (single && decisions[rows[0].id]?.action_kind === "transfer")
             ) && (
               <CategoryPicker
-                accountId={row ? resolveAccount(row) : accountId}
+                key={pickerAccountId}
+                accountId={pickerAccountId}
                 categoryId={target.category_id}
                 subcategoryId={target.subcategory_id}
                 onChange={(next) => {
-                  if (row) onRowChange(row.id, next);
+                  if (pickerRow) onRowChange(pickerRow.id, next);
                   else onGroupCategoryChange(next);
                 }}
                 onDone={() => {
@@ -315,7 +331,7 @@ function RowControls({
   row: ParsedTransaction;
   decision: RowDecision | undefined;
   ownCategoryName: string | null;
-  accounts: Array<{ id: string; name: string; currency?: string }>;
+  accounts: Array<{ id: string; name: string; currency?: string; type?: string }>;
   /** Overrides the default "every other account" destination list — see the GroupSheet prop of the same name. */
   transferDestinations?: Array<{ id: string; name: string }>;
   statementAccountId: string;
@@ -433,9 +449,13 @@ function RowControls({
       {actionKind === "transaction" ? (
         <Select
           value={rowAccountId}
+          // Always store the explicit pick. Clearing it when the statement
+          // account was chosen fell back to `suggestAccountForRow`, which
+          // re-picks the suggested account — so choosing the statement
+          // account silently snapped back.
           onValueChange={(next) =>
             onRowChange(row.id, {
-              account_id: next === statementAccountId ? undefined : next,
+              account_id: next,
               category_id: null,
               subcategory_id: null,
             })
@@ -450,8 +470,15 @@ function RowControls({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            {/* A debit can only be filed on an expense account: on income or
+                saving, getBalanceDelta() ADDS, so the charge would raise the
+                balance (see suggestAccountForRow). */}
             {accounts.map((a) => (
-              <SelectItem key={a.id} value={a.id}>
+              <SelectItem
+                key={a.id}
+                value={a.id}
+                disabled={row.type === "debit" && !!a.type && a.type !== "expense"}
+              >
                 {a.id === statementAccountId ? `${a.name} (statement)` : a.name}
               </SelectItem>
             ))}

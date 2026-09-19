@@ -1,149 +1,93 @@
-import { useEffect, useState } from "preact/hooks";
-import { route } from "../../app/router.js";
-import { showToast } from "../../app/store.js";
+import { useEffect, useRef, useState } from "preact/hooks";
+import { route, parseRoute } from "../../app/router.js";
 import { apiGet } from "../../app/api.js";
 import { Chip, EmptyState, Modal } from "../../components/Primitives.jsx";
 import { Icon } from "../../components/Icon.jsx";
-import { Breadcrumbs } from "../nav/Breadcrumbs.jsx";
 import { ContextView } from "./ContextView.jsx";
 import { ConversationView } from "./ConversationView.jsx";
 import { TimelineView } from "./TimelineView.jsx";
 import { UsageView } from "./UsageView.jsx";
-import { deliveryCapabilities, deliveryEvents, deliveryPost, deliveryQuestions, deliverySession, loadDeliveryCapabilities, loadDeliveryQuestions, loadDeliverySession } from "./deliveryStore.js";
+import { SessionWorkspace } from "./SessionWorkspace.jsx";
+import { phaseLabel, gateLabel, taskHref, workTitle } from "../../lib/product.js";
+import { localReturn, projectPath } from "../../lib/portfolio.js";
+import { workItems } from "../../app/productStore.js";
+import { deliveryCapabilities, deliveryPost, deliveryQuestions, deliverySession, sessionError, loadDeliveryCapabilities, loadDeliveryQuestions, loadDeliverySession, loadDeliveryTurns, activeDeliveryId } from "./deliveryStore.js";
 
-const steps=["SELECTED","DISCOVERY","SPEC_READY","PLAN_READY","BUILDING","VALIDATING","REVIEWING","UAT_READY","ACCEPTED","SHIPPED"];
-const terminal=new Set(["SHIPPED","CANCELLED","FAILED"]);
-const gateArtifact={spec:"spec.md",plan:"plan.md",uat:"uat/summary.md"};
-const EFFORT_PHASES=["discovery","plan","building","review"];
-const TABS=["overview","timeline","conversation","questions","context","usage","artifacts"];
-const TAB_LABEL={overview:"Overview",timeline:"Timeline",conversation:"Conversation",questions:"Q&A",context:"Context",usage:"Usage",artifacts:"Artifacts"};
+const terminal = new Set(["SHIPPED", "CANCELLED", "FAILED"]);
+const gateArtifact = { spec: "spec.md", plan: "plan.md", uat: "uat/summary.md" };
+const EFFORT_PHASES = ["discovery", "plan", "building", "review"];
+const TABS = ["overview", "questions", "conversation", "timeline", "context", "usage", "artifacts"];
+const TAB_LABEL = { overview: "Live overview", timeline: "Timeline", conversation: "Conversation", questions: "Questions", context: "Context", usage: "Resources", artifacts: "Evidence" };
 
-// DLV-37: processed tokens = input + cached-read + cache-CREATION + output.
-// Cache creation was previously dropped everywhere it mattered (this header
-// chip, UsageMeter, the budget enforcement it's meant to mirror) — it was
-// the majority of real session cost (Cost Anatomy §3-4). `cachedInput`
-// fallback keeps old v1-shaped sessions from under-reporting to zero.
-function processedTokensOf(total={}){
-  const cachedRead=total.cachedRead!=null?total.cachedRead:(total.cachedInput||0);
-  return (total.input||0)+cachedRead+(total.cacheCreation||0)+(total.output||0);
-}
-
-export function SessionDetail(){
-  const id=route.value.id;const [artifact,setArtifact]=useState(null);const [artifactError,setArtifactError]=useState("");const [configOpen,setConfigOpen]=useState(false);const [abortOpen,setAbortOpen]=useState(false);const [cancelOpen,setCancelOpen]=useState(false);const [tab,setTab]=useState("overview");
-  useEffect(()=>{loadDeliverySession(id,{reset:true}).catch((error)=>showToast(error.message,{type:"error"}));loadDeliveryCapabilities();loadDeliveryQuestions(id);const requested=route.value.query.get("tab");setTab(TABS.includes(requested)?requested:"overview");},[id]);
-  const detail=deliverySession.value;if(!detail)return <div class="empty">Loading session…</div>;
-  const {packet,state,artifacts,runner}=detail;const current=steps.indexOf(state.state);const usage=state.usage?.total||{};
-  const openArtifact=async(path)=>{setArtifact({name:path,content:"Loading…"});setArtifactError("");try{setArtifact(await apiGet(`/api/delivery/artifact?id=${encodeURIComponent(id)}&path=${encodeURIComponent(path)}`));}catch(error){setArtifactError(error.message);}};
-  const paused=!!state.execution?.paused;
-  const togglePause=async()=>{await deliveryPost("control",{id,type:paused?"resume-run":"pause",payload:{}},paused?"Resume requested":"Pause requested — takes effect after the current turn");await loadDeliverySession(id);};
-  const questions=deliveryQuestions.value;const openCount=(questions?.blocking?.length||0)+(questions?.advisory?.length||0);
-  const fork=async()=>{await deliveryPost("control",{id,type:"fork",payload:{}},"Fork queued — a new session branches at the next boundary and this one pauses");await loadDeliverySession(id);};
-  const currentProvider=state.execution?.provider||packet.agent;
-  const supportsAbort=!!deliveryCapabilities.value?.providers?.[currentProvider]?.manifest?.supportsAbort;
-  return <><Breadcrumbs items={[{label:"Delivery",href:"/delivery"},{label:id}]}/><header class="page-head" style={{marginTop:18}}><div><div class="eyebrow">{packet.item.campaign} · {packet.agent}{state.execution?.model?` · ${state.execution.model}`:""}</div><h1>{packet.item.id?`${packet.item.id} — `:""}{packet.item.text}</h1>{(packet.parentSession||state.forks?.length)&&<div class="chip-row" style={{marginTop:4}}>{packet.parentSession&&<a class="nav-link" href={`#/delivery/session/${packet.parentSession}`}>← forked from {packet.parentSession}</a>}{state.forks?.map((forkId)=><a class="nav-link" href={`#/delivery/session/${forkId}`}>→ fork {forkId}</a>)}</div>}<div class="chip-row"><Chip>{state.state}</Chip><Chip>{runner.alive?"runner alive":"runner stale"}</Chip>{paused&&<Chip tone="blocker">paused</Chip>}<Chip>{processedTokensOf(usage)} tok</Chip>{openCount>0&&<Chip tone={questions.blocking.length?"blocker":""}>Questions: {openCount} open{questions.blocking.length?` · ${questions.blocking.length} blocking`:""}</Chip>}{!runner.alive&&!terminal.has(state.state)&&<button class="button" onClick={()=>deliveryPost("resume",{id},"Resume requested").then(()=>loadDeliverySession(id))}>Resume runner</button>}{!terminal.has(state.state)&&<button class="button" onClick={togglePause}>{paused?"Resume run":"Pause"}</button>}{!terminal.has(state.state)&&!paused&&supportsAbort&&<button class="button" onClick={()=>setAbortOpen(true)} title="Immediately stop a turn that's currently running">Abort turn…</button>}{!terminal.has(state.state)&&<button class="button" onClick={()=>setConfigOpen(true)}>Change model…</button>}{!terminal.has(state.state)&&<button class="button" onClick={fork} title="Branch a new independent session from here; this one pauses">Fork</button>}{!terminal.has(state.state)&&<button class="button" onClick={()=>setCancelOpen(true)} title="Abort the whole delivery session — takes effect immediately, even if paused or blocked" style={{color:"var(--era-danger,#e05252)"}}>Cancel session</button>}</div></div></header>
-    <div class="stepper">{steps.map((step,index)=><div class={`step-node ${index<current?"done":index===current?"current":""}`}>{step}</div>)}</div>
-    <StatusHeader state={state} runner={runner} paused={paused} questions={questions} onGoTo={setTab}/>
-    {!runner.alive&&!terminal.has(state.state)&&<RunnerOfflinePanel id={id} state={state} runner={runner}/>}
-    {state.awaiting&&<GatePanel id={id} state={state} openArtifact={openArtifact}/>}
-    <div class="delivery-tabs" style={{marginTop:18}}>{TABS.map((t)=><button class={`button ${tab===t?"primary":""}`} onClick={()=>setTab(t)}>{t==="questions"?`Q&A${openCount?` (${openCount})`:""}`:TAB_LABEL[t]}</button>)}</div>
-    {tab==="overview"&&<div class="delivery-grid" style={{marginTop:12}}><div>{!terminal.has(state.state)&&<MessageComposer id={id}/>}</div><aside><UsageMeter usage={state.usage} budgets={deliveryCapabilities.value?.config?.budgets}/></aside></div>}
-    {tab==="timeline"&&<div style={{marginTop:12}}><TimelineView/></div>}
-    {tab==="conversation"&&<div style={{marginTop:12}}><ConversationView id={id}/></div>}
-    {tab==="questions"&&<div style={{marginTop:12}}><QuestionsCard id={id} questions={questions} terminal={terminal.has(state.state)}/></div>}
-    {tab==="context"&&<div style={{marginTop:12}}><ContextView id={id} terminal={terminal.has(state.state)}/></div>}
-    {tab==="usage"&&<div style={{marginTop:12}}><UsageView id={id} legacyUsage={state.usage} budgets={deliveryCapabilities.value?.config?.budgets}/></div>}
-    {tab==="artifacts"&&<div style={{marginTop:12}}><section class="card"><h2>Artifacts</h2>{artifacts.length?artifacts.map((entry)=><button class="nav-link" onClick={()=>openArtifact(entry.path)}>{entry.path}<span class="count">{entry.size} B</span></button>):<div class="empty">No artifacts yet.</div>}</section></div>}
-    {artifact&&<div class="modal-backdrop" onMouseDown={(event)=>event.target===event.currentTarget&&setArtifact(null)}><section class="modal artifact-viewer" style={{width:"min(1000px,96vw)"}}><div class="page-head"><h2>{artifact.name}</h2><button class="icon-button" onClick={()=>setArtifact(null)}>×</button></div>{artifactError?<div class="empty">{artifactError}</div>:<pre><code>{artifact.lang==="json"?pretty(artifact.content):artifact.content}</code></pre>}</section></div>}
-    {configOpen&&<ConfigDialog id={id} packet={packet} state={state} onClose={()=>setConfigOpen(false)}/>}
-    {abortOpen&&<AbortDialog id={id} onClose={()=>setAbortOpen(false)}/>}
-    {cancelOpen&&<CancelSessionDialog id={id} label={packet.item.id||packet.item.text} onClose={()=>setCancelOpen(false)} onDone={()=>loadDeliverySession(id)}/>}</>;
-}
-
-// DLV-15: what each awaiting-gate actually asks of the owner, in the second
-// person. The gate panel below already renders the controls; this line exists
-// so the answer to "what does it want from me" is legible without scrolling to
-// find out, which is the specific complaint the item records.
-const GATE_ASK={
-  spec:"Review the spec and approve it, or request changes.",
-  plan:"Review the plan and approve it, or request changes.",
-  uat:"Run the UAT package and accept it, or send it back.",
-  question:"Answer the question below before this can continue.",
-  blocked:"Read the error, then retry with a reason — or cancel.",
-  budget:"Raise the authorized budget with a reason, or cancel.",
-  shipped:"Mark it shipped once you have committed the change.",
-};
-
-// Event types worth showing as "what's happening right now". Everything else in
-// the stream is bookkeeping; surfacing all of it would make the line noise.
-const ACTIVITY_LABEL={
-  "phase.transition":(e)=>`Entered ${e.data?.to||"the next phase"}`,
-  "turn.started":(e)=>`Running a ${(e.phase||"").toLowerCase()||"agent"} turn`,
-  "turn.completed":(e)=>`Finished a ${(e.phase||"").toLowerCase()||"agent"} turn`,
-  "validation.command.started":(e)=>`Running validation: ${e.data?.command||"…"}`,
-  "validation.result":(e)=>`Validation ${e.data?.passes?"passed":"failed"}`,
-  "validation.baseline.started":()=>"Capturing the validation baseline (this can take minutes)",
-  "build.step.done":(e)=>`Build step ${e.data?.stepId||""} done`,
-  "question.raised":()=>"Raised a question and stopped",
-  "scope.mismatch":()=>"Measured a larger scope than the item was filed as",
-  "scope.expanded":()=>"Wrote outside the approved plan scope and stopped",
-  "acceptance.incomplete":()=>"Acceptance criteria could not be evidenced",
-  "budget.warning":()=>"Approaching the authorized budget",
-  "budget.exhausted":()=>"Budget exhausted — paused",
-  "context.rotated":()=>"Rotated context at a phase boundary",
-  "error.fatal":(e)=>`Error: ${e.data?.message||"the phase failed"}`,
-  "finish.package.written":()=>"Wrote the finish package",
-};
-
-function latestActivity(events){
-  for(let i=events.length-1;i>=0;i--){
-    const event=events[i];const render=ACTIVITY_LABEL[event.type];
-    if(render)return {text:render(event),at:event.at};
-  }
-  return null;
-}
-
-/**
- * DLV-15 — the persistent "what's happening / what do you need from me" header.
- *
- * Both questions used to require scrolling and inference: the phase was in a
- * stepper, the live activity was buried in the Timeline tab, and whether the
- * session wanted anything was only discoverable by finding the gate panel. This
- * answers both in two lines, and every pending owner action is one click away.
- */
-function StatusHeader({state,runner,paused,questions,onGoTo}){
-  const events=deliveryEvents.value||[];
-  const activity=latestActivity(events);
-  const gate=state.awaiting?.gate||null;
-  const isTerminal=terminal.has(state.state);
-  const openQuestions=(questions?.blocking?.length||0)+(questions?.advisory?.length||0);
-
-  const happening=isTerminal
-    ?`This session is finished (${state.state}). Nothing is running.`
-    :paused
-      ?"Paused. The current turn finished; nothing new will start until you resume."
-      :!runner.alive
-        ?"The runner process is not running. The session is parked exactly where it stopped."
-        :gate
-          ?`Waiting for you at the ${gate} gate. No work is running.`
-          :activity
-            ?activity.text
-            :`Working in ${state.state}.`;
-
-  const needed=[];
-  if(gate)needed.push({label:GATE_ASK[gate]||`Respond at the ${gate} gate.`,action:null});
-  if(!runner.alive&&!isTerminal)needed.push({label:"Resume the runner so work can continue.",action:null});
-  if(questions?.blocking?.length)needed.push({label:`${questions.blocking.length} blocking question${questions.blocking.length===1?"":"s"} on the record.`,action:"questions"});
-  if(!gate&&questions?.advisory?.length)needed.push({label:`${questions.advisory.length} advisory question${questions.advisory.length===1?"":"s"} you can answer at any time.`,action:"questions"});
-
-  return <section class="card" style={{marginTop:14,borderColor:needed.length?"var(--era-border-active)":undefined}}>
-    <div class="eyebrow">What's happening</div>
-    <p style={{margin:"2px 0 0"}}>{happening}</p>
-    {activity?.at&&!gate&&!isTerminal&&<div class="muted" style={{fontSize:11}}>last event {new Date(activity.at).toLocaleTimeString()}</div>}
-    <div class="eyebrow" style={{marginTop:12}}>What it needs from you</div>
-    {needed.length
-      ?<ul style={{margin:"2px 0 0",paddingLeft:18}}>{needed.map((n)=><li key={n.label}>{n.label}{n.action&&<>{" "}<button class="nav-link" style={{display:"inline"}} onClick={()=>onGoTo(n.action)}>Open Q&amp;A →</button></>}</li>)}</ul>
-      :<p class="muted" style={{margin:"2px 0 0"}}>{isTerminal?"Nothing — this session is closed.":openQuestions?"Nothing blocking.":"Nothing right now. It will stop and ask when it needs you."}</p>}
-  </section>;
+export function SessionDetail() {
+  const id = route.value.id;
+  const [artifact, setArtifact] = useState(null);
+  const [artifactError, setArtifactError] = useState("");
+  const artifactRequest = useRef(0);
+  const closeArtifact = () => { artifactRequest.current++; setArtifact(null); };
+  const [configOpen, setConfigOpen] = useState(false);
+  const [abortOpen, setAbortOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [controlBusy, setControlBusy] = useState(false);
+  const requested = route.value.query.get("tab");
+  const tab = TABS.includes(requested) ? requested : "overview";
+  const setTab = (value) => { const params = new URLSearchParams(route.value.query); params.set("tab", value); const hash = `#/delivery/session/${id}?${params}`; history.replaceState(null, "", hash); route.value = parseRoute(hash); };
+  useEffect(() => {
+    let stopped = false, fetching = false;
+    const refresh = async (reset = false) => {
+      if (stopped || fetching) return;
+      fetching = true;
+      try { await loadDeliverySession(id, { reset }); if (!stopped) await Promise.all([loadDeliveryQuestions(id), loadDeliveryTurns(id, { reset })]); }
+      catch { /* the retained snapshot carries a visible refresh error */ }
+      finally { fetching = false; }
+    };
+    refresh(true); loadDeliveryCapabilities();
+    const timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
+    return () => { stopped = true; clearInterval(timer); if (activeDeliveryId.value === id) activeDeliveryId.value = null; };
+  }, [id]);
+  const detail = activeDeliveryId.value === id ? deliverySession.value : null;
+  if (!detail) return activeDeliveryId.value === id && sessionError.value ? <EmptyState icon="bolt" title="Session unavailable"><p>{sessionError.value}</p><button class="button" onClick={() => loadDeliverySession(id, { reset: true }).catch(() => {})}>Retry</button><a class="button ghost" href="#/delivery">All runs</a></EmptyState> : <div class="empty" role="status">Loading session…</div>;
+  const { packet, state, artifacts, runner } = detail;
+  const sourceTask = workItems.value.find((task) => task.module === packet.item.campaign && task.idChip === packet.item.id);
+  const from = localReturn(route.value.query.get("from"), "/delivery");
+  const paused = !!state.execution?.paused;
+  const closed = terminal.has(state.state);
+  const questions = deliveryQuestions.value;
+  const openCount = (questions?.blocking?.length || 0) + (questions?.advisory?.length || 0);
+  const currentProvider = state.execution?.provider || packet.agent;
+  const supportsAbort = !!deliveryCapabilities.value?.providers?.[currentProvider]?.manifest?.supportsAbort;
+  const control = async (type, payload = {}) => {
+    if (controlBusy) return;
+    setControlBusy(true);
+    try { await deliveryPost("control", { id, type, payload }); await loadDeliverySession(id); }
+    catch { /* shared API error notification */ }
+    finally { setControlBusy(false); }
+  };
+  const openArtifact = async (path) => {
+    const request = ++artifactRequest.current;
+    setArtifact({ name: path, content: "Loading…" }); setArtifactError("");
+    try { const result = await apiGet(`/api/delivery/artifact?id=${encodeURIComponent(id)}&path=${encodeURIComponent(path)}`); if (request === artifactRequest.current) setArtifact(result); }
+    catch (error) { if (request === artifactRequest.current) setArtifactError(error.message); }
+  };
+  return <div class="session-page"><a class="back-link" href={`#${from}`}>← {from === "/delivery" ? "Delivery" : "Back to selection"}</a>
+    <header class="page-head session-head"><div><div class="eyebrow"><a href={`#${projectPath({ selection: packet.item.campaign })}`}>Project</a> / <a href={`#/module/${encodeURIComponent(packet.item.campaign)}`}>{packet.item.campaign}</a> / {sourceTask ? <a href={taskHref(sourceTask, from)}>{packet.item.id}</a> : packet.item.id}</div><h1>{workTitle(packet.item)}</h1><div class="chip-row"><Chip>{phaseLabel(state.state)}</Chip>{packet.parentSession && <a href={`#/delivery/session/${packet.parentSession}?from=${encodeURIComponent(from)}`}>Parent run →</a>}{state.forks?.map((forkId) => <a href={`#/delivery/session/${forkId}?from=${encodeURIComponent(from)}`} key={forkId}>Branch →</a>)}</div></div>
+    {!closed && <div class="actions"><button class="button" disabled={controlBusy} onClick={() => control(paused ? "resume-run" : "pause")}>{paused ? "Resume" : "Pause"}</button><details class="run-controls"><summary class="button">Manage <Icon name="arrow" size={14}/></summary><div class="run-controls-menu"><button onClick={() => setConfigOpen(true)}>Change model</button><button disabled={controlBusy} onClick={() => control("fork")}>Branch run</button>{!paused && supportsAbort && <button onClick={() => setAbortOpen(true)}>Stop turn</button>}<button onClick={() => setCancelOpen(true)}>Cancel run</button></div></details></div>}</header>
+    {sessionError.value && <div class="inline-error" role="alert">Live refresh failed: {sessionError.value}<button class="button" onClick={() => loadDeliverySession(id).catch(() => {})}>Retry</button></div>}
+    {!runner.alive && !closed && <RunnerOfflinePanel id={id} state={state} runner={runner}/>}
+    {state.awaiting && <GatePanel key={state.awaiting.gate} id={id} state={state} openArtifact={openArtifact}/>}
+    <nav class="product-tabs run-tabs" aria-label="Session views">{TABS.map((value) => <button class={tab === value ? "active" : ""} aria-pressed={tab === value} onClick={() => setTab(value)} key={value}>{value === "overview" && closed ? "Outcome" : TAB_LABEL[value]}{value === "questions" && openCount > 0 && <span>{openCount}</span>}</button>)}</nav>
+    {tab === "overview" && <><SessionWorkspace id={id} detail={detail} onGoTo={setTab} openArtifact={openArtifact}/>{!closed && <MessageComposer id={id}/>}</>}
+    {tab === "timeline" && <TimelineView/>}
+    {tab === "conversation" && <ConversationView id={id}/>}
+    {tab === "questions" && <QuestionsCard id={id} questions={questions} terminal={closed}/>}
+    {tab === "context" && <ContextView id={id} terminal={closed}/>}
+    {tab === "usage" && <UsageView id={id} legacyUsage={state.usage} budgets={deliveryCapabilities.value?.config?.budgets}/>}
+    {tab === "artifacts" && <section class="work-brief"><h2>Evidence & handoff</h2>{artifacts.length ? artifacts.map((entry) => <button class="artifact-row" onClick={() => openArtifact(entry.path)} key={entry.path}><Icon name="file"/><span>{entry.path}</span><small>{Math.ceil(entry.size / 1024)} KB</small><Icon name="arrow" size={15}/></button>) : <p class="quiet-empty">No evidence recorded yet.</p>}<details class="technical-details"><summary>Session reference</summary><code>{id}</code>{state.driver?.rawTranscript && <pre>{pretty(JSON.stringify(state.driver.rawTranscript))}</pre>}</details></section>}
+    {artifact && <Modal title={artifact.name} onClose={closeArtifact}><div class="artifact-viewer">{artifactError ? <div class="inline-error">{artifactError}</div> : <pre><code>{artifact.lang === "json" ? pretty(artifact.content) : artifact.content}</code></pre>}</div></Modal>}
+    {configOpen && <ConfigDialog id={id} packet={packet} state={state} onClose={() => setConfigOpen(false)}/>}
+    {abortOpen && <AbortDialog id={id} onClose={() => setAbortOpen(false)}/>}
+    {cancelOpen && <CancelSessionDialog id={id} label={packet.item.id || packet.item.text} onClose={() => setCancelOpen(false)} onDone={() => loadDeliverySession(id)}/>}
+  </div>;
 }
 
 /**
@@ -179,10 +123,10 @@ function QuestionsCard({id,questions,terminal}){
   const ask=async()=>{if(!askText.trim())return;await deliveryPost("control",{id,type:"ask",payload:{text:askText.trim()}},"Question added to the record");setAskText("");await loadDeliveryQuestions(id);};
   const submitAnswer=async(questionId)=>{if(!answerText.trim())return;await deliveryPost("control",{id,type:"answer",payload:{questionId,text:answerText.trim()}},"Answer recorded");setAnswering(null);setAnswerText("");await loadDeliveryQuestions(id);};
   return <section class="card" style={{marginTop:18}}><h2>Questions &amp; Answers</h2>
-    {blocking.length>0&&<><div class="eyebrow" style={{color:"var(--era-danger,#e05252)"}}>Blocking — answer via the gate above</div><ul>{blocking.map((q)=><li>{q.text}</li>)}</ul></>}
+    {blocking.length>0&&<><div class="eyebrow" style={{color:"var(--era-danger,#e05252)"}}>Blocking — answer via the gate above</div><ul>{blocking.map((q)=><li key={q.id}>{q.text}</li>)}</ul></>}
     {advisory.length>0&&<><div class="eyebrow" style={{marginTop:blocking.length?10:0}}>Advisory</div>{advisory.map((q)=><div class="event" key={q.id}><div>{q.text}</div>{answering===q.id?<div class="field" style={{marginTop:4}}><textarea rows="2" value={answerText} onInput={(event)=>setAnswerText(event.currentTarget.value)}/><div class="chip-row" style={{marginTop:4}}><button class="button primary" onClick={()=>submitAnswer(q.id)}>Submit</button><button class="button ghost" onClick={()=>setAnswering(null)}>Cancel</button></div></div>:<button class="button" style={{marginTop:4}} onClick={()=>{setAnswering(q.id);setAnswerText("");}}>Answer</button>}</div>)}</>}
     {blocking.length===0&&advisory.length===0&&<div class="empty">No open questions.</div>}
-    {answered.length>0&&<details style={{marginTop:10}}><summary class="muted" style={{cursor:"pointer",fontSize:12}}>{answered.length} answered</summary>{answered.map((q)=><div class="event"><div class="muted" style={{fontSize:11}}>Q: {q.text}</div><div style={{fontSize:12}}>A: {q.answer?.text}</div></div>)}</details>}
+    {answered.length>0&&<details style={{marginTop:10}}><summary class="muted" style={{cursor:"pointer",fontSize:12}}>{answered.length} answered</summary>{answered.map((q)=><div key={q.id} class="event"><div class="muted" style={{fontSize:11}}>Q: {q.text}</div><div style={{fontSize:12}}>A: {q.answer?.text}</div></div>)}</details>}
     {!terminal&&<div class="field" style={{marginTop:10}}><label>Ask a question (for the record)</label><textarea rows="2" value={askText} onInput={(event)=>setAskText(event.currentTarget.value)}/><button class="button" style={{marginTop:4}} onClick={ask}>Ask</button></div>}
   </section>;
 }
@@ -211,13 +155,13 @@ function ConfigDialog({id,packet,state,onClose}){
   };
   return <Modal title="Change model / provider / effort" onClose={onClose}>
     <p class="muted">Applies at the next turn boundary — an in-flight turn always finishes first.</p>
-    <div class="field"><label>Provider</label><div class="chip-row">{["claude","codex"].map((p)=><button class={`button ${provider===p?"primary":""}`} onClick={()=>switchProvider(p)}>{p}</button>)}</div></div>
+    <div class="field"><label>Provider</label><div class="chip-row">{["claude","codex"].map((p)=><button key={p} class={`button ${provider===p?"primary":""}`} onClick={()=>switchProvider(p)}>{p}</button>)}</div></div>
     {isProviderSwitch&&<div class="verdict-block" style={{marginTop:8}}>
       <strong>Switching provider ({currentProvider} → {provider}).</strong> Transfers: decisions, requirements, constraints, Q&A, artifacts (by path). Does NOT transfer: the {currentProvider} session/thread or its prompt cache — the next turn is a full-price, uncached verification turn on {provider}. If it finds gaps, the session pauses on a blocking question instead of continuing silently.
       <div class="field" style={{marginTop:8}}><label>Type SWITCH to confirm</label><input value={switchConfirm} onInput={(event)=>setSwitchConfirm(event.currentTarget.value)} placeholder="SWITCH"/></div>
     </div>}
-    {models.length>0&&<div class="field"><label>Model</label><select value={model} onChange={(event)=>setModel(event.currentTarget.value)}><option value="">Default{providerCaps?.defaultModel?` (${providerCaps.defaultModel})`:""}</option>{models.map((m)=><option value={m.id}>{m.label||m.id}</option>)}</select></div>}
-    {efforts.length>0&&<div class="field"><label>Effort per phase</label><div class="chip-row">{EFFORT_PHASES.map((phase)=><label style={{display:"flex",flexDirection:"column",gap:2,fontSize:10}}><span class="muted">{phase}</span><select value={effort[phase]||""} onChange={(event)=>setEffort({...effort,[phase]:event.currentTarget.value||undefined})}><option value="">{isProviderSwitch?"translate automatically":"unchanged"}</option>{efforts.map((e)=><option value={e}>{e}</option>)}</select></label>)}</div></div>}
+    {models.length>0&&<div class="field"><label>Model</label><select value={model} onChange={(event)=>setModel(event.currentTarget.value)}><option value="">Default{providerCaps?.defaultModel?` (${providerCaps.defaultModel})`:""}</option>{models.map((m)=><option key={m.id} value={m.id}>{m.label||m.id}</option>)}</select></div>}
+    {efforts.length>0&&<div class="field"><label>Effort per phase</label><div class="chip-row">{EFFORT_PHASES.map((phase)=><label key={phase} style={{display:"flex",flexDirection:"column",gap:2,fontSize:10}}><span class="muted">{phase}</span><select value={effort[phase]||""} onChange={(event)=>setEffort({...effort,[phase]:event.currentTarget.value||undefined})}><option value="">{isProviderSwitch?"translate automatically":"unchanged"}</option>{efforts.map((e)=><option key={e} value={e}>{e}</option>)}</select></label>)}</div></div>}
     {cacheCold&&!isProviderSwitch&&<p class="verdict-block" style={{marginTop:8}}>Changing the model invalidates the provider's prompt cache — the next turn re-sends its full context uncached.</p>}
     <button class="button primary button-submit" onClick={apply} disabled={isProviderSwitch&&switchConfirm!=="SWITCH"} style={{marginTop:12}}>{isProviderSwitch?"Switch provider":"Apply"}</button>
   </Modal>;
@@ -256,8 +200,8 @@ function RunnerOfflinePanel({id,state,runner}){
 }
 
 function GatePanel({id,state,openArtifact}){
-  const gate=state.awaiting.gate;const reason=state.awaiting.reason;const reasonInfo=reason&&BLOCKED_REASON_INFO[reason];const [note,setNote]=useState("");const [confirmText,setConfirmText]=useState("");const [answer,setAnswer]=useState("");const [tick,setTick]=useState(true);
-  useEffect(()=>{if(gateArtifact[gate])openArtifact(gateArtifact[gate]);},[gate]);
+  const gate=state.awaiting.gate;const reason=state.awaiting.reason;const reasonInfo=reason&&BLOCKED_REASON_INFO[reason];const [note,setNote]=useState("");const [confirmText,setConfirmText]=useState("");const [answer,setAnswer]=useState("");const [tick,setTick]=useState(true);const [busy,setBusy]=useState(false);
+
   // DLV-73: on INSTANT the merged turn produces spec AND plan together, so the
   // two gates fire back-to-back over one artifact with nothing running between
   // them. `extras` carries the one-click affordances that collapse the dead
@@ -265,9 +209,9 @@ function GatePanel({id,state,openArtifact}){
   const lanePolicy=deliverySession.value?.packet?.lanePolicy||{};
   const canApproveBoth=gate==="spec"&&lanePolicy.lane==="INSTANT"&&lanePolicy.mergedDiscoveryPlan===true;
   const canAcceptProposal=gate==="question"&&state.awaiting.proposalReady===true;
-  const decide=async(decision,extras={})=>{const body={id,gate,decision,note:note||null,...extras};if(gate==="plan"&&decision==="approve")body.confirmText=confirmText;if(gate==="spec"&&extras.alsoApprovePlan&&confirmText)body.confirmText=confirmText;if(gate==="uat"&&decision==="accept")body.tickCheckbox=tick;if(gate==="question")body.answer=answer;await deliveryPost("decision",body,"Decision recorded");await loadDeliverySession(id);};
+  const decide=async(decision,extras={})=>{if(busy)return;setBusy(true);try{const body={id,gate,decision,note:note||null,...extras};if(gate==="plan"&&decision==="approve")body.confirmText=confirmText;if(gate==="spec"&&extras.alsoApprovePlan&&confirmText)body.confirmText=confirmText;if(gate==="uat"&&decision==="accept")body.tickCheckbox=tick;if(gate==="question")body.answer=answer;await deliveryPost("decision",body);await loadDeliverySession(id);}catch{/* shared API error notification */}finally{setBusy(false);}};
   if(gate==="budget")return <BudgetRaisePanel id={id} state={state}/>;
-  return <section class="card" style={{marginTop:18,borderColor:"var(--era-border-active)"}}><div class="eyebrow">Owner gate</div><h2>{reasonInfo?reasonInfo.heading:reason==="retry-exhausted"?"Decision needed: automatic retries exhausted":gate}</h2>{gate==="question"&&state.awaiting.questions&&<ul>{state.awaiting.questions.map((question)=><li>{question.text}</li>)}</ul>}{reasonInfo&&<p class="verdict-block" style={{borderColor:"var(--era-danger,#e05252)"}}>{reasonInfo.note}</p>}{gate==="blocked"&&state.lastError?.resetsAt&&<p class="muted">Provider reset: {state.lastError.resetsAt}</p>}{gate==="blocked"&&<p class="verdict-block">{state.lastError?.message||"Session is blocked."}</p>}{["spec","plan","uat"].includes(gate)&&<button class="button" onClick={()=>openArtifact(gateArtifact[gate])}>Open {gateArtifact[gate]}</button>}{gate==="plan"&&<div class="field"><label>Typed approval when risk-flagged</label><input value={confirmText} onInput={(event)=>setConfirmText(event.currentTarget.value)} placeholder="APPROVE"/></div>}{gate==="question"&&<div class="field"><label>{reason==="retry-exhausted"?"Next-step decision (required)":"Answer"}</label><textarea value={answer} onInput={(event)=>setAnswer(event.currentTarget.value)}/></div>}{(["spec","plan","uat"].includes(gate)||gate==="blocked")&&<div class="field"><label>{gate==="blocked"?"Reason for retry / resume (required)":"Owner note / requested change"}</label><textarea value={note} onInput={(event)=>setNote(event.currentTarget.value)}/></div>}{gate==="uat"&&<label class="button"><input type="checkbox" checked={tick} onChange={(event)=>setTick(event.currentTarget.checked)}/>Tick source checkbox on accept</label>}<div class="chip-row gate-actions" style={{marginTop:12}}>{canApproveBoth&&<><button class="button primary" onClick={()=>decide("approve",{alsoApprovePlan:true})} title="Records both the spec and the plan approval — one artifact, one review, two audited decisions">Approve spec + plan</button><button class="button" onClick={()=>decide("approve")} title="Approve the spec only and review the plan separately">Approve spec only</button><button class="button" onClick={()=>decide("reject")}>Request changes</button></>}{!canApproveBoth&&["spec","plan"].includes(gate)&&<><button class="button primary" onClick={()=>decide("approve")}>Approve</button><button class="button" onClick={()=>decide("reject")}>Request changes</button></>}{gate==="uat"&&<><button class="button primary" onClick={()=>decide("accept")}>Accept</button><button class="button" onClick={()=>decide("reject")}>Request changes</button></>}{canAcceptProposal&&<><button class="button primary" onClick={()=>decide("answer",{acceptProposal:true})} title="Answer the question and approve the spec+plan the turn already produced — no second discovery turn">Answer + approve proposal</button><button class="button" onClick={()=>decide("answer")}>Answer + revise</button></>}{gate==="question"&&!canAcceptProposal&&<button class="button primary" onClick={()=>decide("answer")}>Submit answer</button>}{gate==="blocked"&&<button class="button primary" onClick={()=>decide("retry")}>{reason==="quota-paused"?"Resume with preflight":"Retry"}</button>}{gate==="shipped"&&<button class="button primary" onClick={()=>decide("shipped")}>Mark shipped</button>}</div></section>;
+  return <section class="card" style={{marginTop:18,borderColor:"var(--era-border-active)"}}><div class="eyebrow">Needs your review</div><h2>{reasonInfo?reasonInfo.heading:reason==="retry-exhausted"?"Decision needed: automatic retries exhausted":gateLabel(gate)}</h2>{gate==="question"&&state.awaiting.questions&&<ul>{state.awaiting.questions.map((question)=><li key={question.id || question.text}>{question.text}</li>)}</ul>}{reasonInfo&&<p class="verdict-block" style={{borderColor:"var(--era-danger,#e05252)"}}>{reasonInfo.note}</p>}{gate==="blocked"&&state.lastError?.resetsAt&&<p class="muted">Provider reset: {state.lastError.resetsAt}</p>}{gate==="blocked"&&<p class="verdict-block">{state.lastError?.message||"Session is blocked."}</p>}{["spec","plan","uat"].includes(gate)&&<button class="button" onClick={()=>openArtifact(gateArtifact[gate])}>Open {gateArtifact[gate]}</button>}{gate==="plan"&&<div class="field"><label>Typed approval when risk-flagged</label><input value={confirmText} onInput={(event)=>setConfirmText(event.currentTarget.value)} placeholder="APPROVE"/></div>}{gate==="question"&&<div class="field"><label>{reason==="retry-exhausted"?"Next-step decision (required)":"Answer"}</label><textarea value={answer} onInput={(event)=>setAnswer(event.currentTarget.value)}/></div>}{(["spec","plan","uat"].includes(gate)||gate==="blocked")&&<div class="field"><label>{gate==="blocked"?"Reason for retry / resume (required)":"Owner note / requested change"}</label><textarea value={note} onInput={(event)=>setNote(event.currentTarget.value)}/></div>}{gate==="uat"&&<label class="button"><input type="checkbox" checked={tick} onChange={(event)=>setTick(event.currentTarget.checked)}/>Tick source checkbox on accept</label>}<fieldset disabled={busy} class="chip-row gate-actions" style={{marginTop:12}}>{canApproveBoth&&<><button class="button primary" onClick={()=>decide("approve",{alsoApprovePlan:true})} title="Records both the spec and the plan approval — one artifact, one review, two audited decisions">Approve spec + plan</button><button class="button" onClick={()=>decide("approve")} title="Approve the spec only and review the plan separately">Approve spec only</button><button class="button" onClick={()=>decide("reject")}>Request changes</button></>}{!canApproveBoth&&["spec","plan"].includes(gate)&&<><button class="button primary" onClick={()=>decide("approve")}>Approve</button><button class="button" onClick={()=>decide("reject")}>Request changes</button></>}{gate==="uat"&&<><button class="button primary" onClick={()=>decide("accept")}>Accept</button><button class="button" onClick={()=>decide("reject")}>Request changes</button></>}{canAcceptProposal&&<><button class="button primary" onClick={()=>decide("answer",{acceptProposal:true})} title="Answer the question and approve the spec+plan the turn already produced — no second discovery turn">Answer + approve proposal</button><button class="button" onClick={()=>decide("answer")}>Answer + revise</button></>}{gate==="question"&&!canAcceptProposal&&<button class="button primary" onClick={()=>decide("answer")}>Submit answer</button>}{gate==="blocked"&&<button class="button primary" onClick={()=>decide("retry")}>{reason==="quota-paused"?"Resume with preflight":"Retry"}</button>}{gate==="shipped"&&<button class="button primary" onClick={()=>decide("shipped")}>Mark shipped</button>}</fieldset></section>;
 }
 
 function BudgetRaisePanel({id,state}){
@@ -281,30 +225,6 @@ function BudgetRaisePanel({id,state}){
   return <section class="card" style={{marginTop:18,borderColor:"var(--era-amber,#e0a852)"}}><div class="eyebrow">Governed pause</div><h2>Authorized budget exhausted</h2><p class="verdict-block">The completed turn and its artifacts are safe. The finish package is under <code>artifacts/finish/</code>. Raising the cap is permanent and audited; lowering it is intentionally forbidden.</p><div class="chip-row"><label class="field" style={{flex:"1 1 160px"}}><span>New max tokens</span><input type="text" inputMode="decimal" value={maxTokens} disabled={envelope.maxTokens==null} onInput={(event)=>setMaxTokens(event.currentTarget.value)}/></label><label class="field" style={{flex:"1 1 130px"}}><span>New max USD</span><input type="text" inputMode="decimal" value={maxUsd} disabled={envelope.maxUsd==null} onInput={(event)=>setMaxUsd(event.currentTarget.value)}/></label></div><div class="field"><label>Reason for additional authorization</label><textarea value={reason} onInput={(event)=>setReason(event.currentTarget.value)} placeholder="Why this session needs more budget"/></div><button class="button primary" onClick={raise} disabled={busy||!changed||!reason.trim()}>{busy?"Recordingâ€¦":"Raise budget and resume"}</button></section>;
 }
 
-function MessageComposer({id}){const [text,setText]=useState("");const send=async()=>{if(!text.trim())return;await deliveryPost("message",{id,text:text.trim()},"Message queued for the next boundary");setText("");};return <section class="card" style={{marginTop:18}}><h2>Message the orchestrator</h2><div class="field"><textarea rows="4" value={text} onInput={(event)=>setText(event.currentTarget.value)} placeholder="Guidance is read at the next step boundary."/></div><button class="button" onClick={send}>Queue message</button></section>;}
+function MessageComposer({id}){const [text,setText]=useState("");const send=async()=>{if(!text.trim())return;await deliveryPost("message",{id,text:text.trim()},"Message queued for the next boundary");setText("");};return <section class="card" style={{marginTop:18}}><h2>Guide this run</h2><div class="field"><textarea rows="4" value={text} onInput={(event)=>setText(event.currentTarget.value)} placeholder="Add guidance for the next step"/></div><button class="button" onClick={send}>Send</button></section>;}
 
-// DLV-1/DLV-37: processed tokens = input + cached-read + cache-creation +
-// output, matching the packet-envelope verdict in budgets.mjs. Cache
-// creation used to be silently dropped here (v1-shaped `cachedInput` only) —
-// see Cost Anatomy §4: it was the majority of real session cost.
-function UsageMeter({usage={},budgets={}}){
-  const phases=Object.entries(usage.perPhase||{});
-  const total=usage.total||{};
-  const processedTokens=processedTokensOf(total);
-  const envelope=deliverySession.value?.state?.budget?.current||deliverySession.value?.packet?.budget||budgets;
-  const maxTokens=envelope?.maxTokens??envelope?.maxSessionTokens;const warnTokens=envelope?.warnTokens??envelope?.warnSessionTokens??(typeof maxTokens==="number"&&typeof envelope?.warnPct==="number"?maxTokens*envelope.warnPct:null);
-  const pct=typeof maxTokens==="number"&&maxTokens>0?Math.min(1,processedTokens/maxTokens):null;
-  const over=typeof maxTokens==="number"&&processedTokens>=maxTokens;
-  const warn=!over&&typeof warnTokens==="number"&&processedTokens>=warnTokens;
-  const barColor=over?"var(--era-danger,#e05252)":warn?"var(--era-amber,#e0a852)":"var(--era-accent,#4a9eff)";
-  return <section class="card" style={{marginTop:18}}><h2>Usage</h2><div class="stat-value">{processedTokens}</div><div class="muted">total processed tokens (input+cached-read+cache-write+output)</div>
-    {pct!=null&&<div style={{marginTop:8}}>
-      <div style={{height:6,borderRadius:3,background:"var(--era-border,#333)",overflow:"hidden"}}><div style={{height:"100%",width:`${Math.round(pct*100)}%`,background:barColor}}/></div>
-      <div class="muted" style={{fontSize:11,marginTop:4}}>{processedTokens.toLocaleString()} / {maxTokens.toLocaleString()} session budget{typeof total.costUsd==="number"?` · est. $${total.costUsd.toFixed(2)}`:""}</div>
-      {over&&<div style={{fontSize:11,color:"var(--era-danger,#e05252)",marginTop:2}}>Budget exhausted — paused at the turn boundary</div>}
-      {warn&&<div style={{fontSize:11,color:"var(--era-amber,#e0a852)",marginTop:2}}>Approaching the session budget</div>}
-    </div>}
-    {phases.length>0&&<table class="usage-table"><thead><tr><th>Phase</th><th>Input</th><th>Output</th></tr></thead><tbody>{phases.map(([phase,row])=><tr><td>{phase}</td><td>{row.input||0}</td><td>{row.output||0}</td></tr>)}</tbody></table>}
-  </section>;
-}
 function pretty(text){try{return JSON.stringify(JSON.parse(text),null,2);}catch{return text;}}

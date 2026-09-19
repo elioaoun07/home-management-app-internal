@@ -40,7 +40,7 @@ Seven contexts with Safe variants and mounting subtleties (documented), but no d
 
 ## 🟡 G5 — Realtime is a single-pattern monoculture with no fallback story
 
-Hub realtime rides the browser Supabase singleton; there's no documented degradation (what happens when the websocket dies — polling? silence? stale-forever?). Voice has the same shape ([Hub & ERA FABLED 2.3 · O4](<../../10 - Project Management/Hub & ERA/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)). External-dependency degradation paths are an architectural concern, not per-feature polish.
+Hub realtime rides the browser Supabase singleton; there's no documented degradation (what happens when the websocket dies — polling? silence? stale-forever?). Voice has the same shape ([Hub & ERA FABLED 2.3 · O4](<../../10 - Project Management/_Archive/Hub & ERA/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)). External-dependency degradation paths are an architectural concern, not per-feature polish.
 
 ## 🟡 G6 — `src/lib` is becoming a junk drawer at the top level
 

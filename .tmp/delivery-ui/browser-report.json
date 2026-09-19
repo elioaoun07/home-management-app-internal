@@ -1,0 +1,332 @@
+{
+  "report": [
+    {
+      "scenario": "plan",
+      "width": 1440,
+      "scroll": 1425,
+      "body": "16px",
+      "tab": "Planr1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "checks",
+      "width": 1440,
+      "scroll": 1425,
+      "body": "16px",
+      "tab": "Checks2/2",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "changes",
+      "width": 1440,
+      "scroll": 1425,
+      "body": "16px",
+      "tab": "Changes1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "activity",
+      "width": 1440,
+      "scroll": 1425,
+      "body": "16px",
+      "tab": "Activity",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "plan",
+      "width": 1920,
+      "scroll": 1905,
+      "body": "16px",
+      "tab": "Planr1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "checks",
+      "width": 1920,
+      "scroll": 1905,
+      "body": "16px",
+      "tab": "Checks2/2",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "changes",
+      "width": 1920,
+      "scroll": 1905,
+      "body": "16px",
+      "tab": "Changes1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "activity",
+      "width": 1920,
+      "scroll": 1905,
+      "body": "16px",
+      "tab": "Activity",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "plan",
+      "width": 768,
+      "scroll": 753,
+      "body": "16px",
+      "tab": "Planr1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "checks",
+      "width": 768,
+      "scroll": 753,
+      "body": "16px",
+      "tab": "Checks2/2",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "changes",
+      "width": 768,
+      "scroll": 753,
+      "body": "16px",
+      "tab": "Changes1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "activity",
+      "width": 768,
+      "scroll": 753,
+      "body": "16px",
+      "tab": "Activity",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "plan",
+      "width": 430,
+      "scroll": 415,
+      "body": "16px",
+      "tab": "Planr1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "checks",
+      "width": 430,
+      "scroll": 415,
+      "body": "16px",
+      "tab": "Checks2/2",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "changes",
+      "width": 430,
+      "scroll": 415,
+      "body": "16px",
+      "tab": "Changes1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "activity",
+      "width": 430,
+      "scroll": 415,
+      "body": "16px",
+      "tab": "Activity",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "plan",
+      "width": 390,
+      "scroll": 375,
+      "body": "16px",
+      "tab": "Planr1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "checks",
+      "width": 390,
+      "scroll": 375,
+      "body": "16px",
+      "tab": "Checks2/2",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "changes",
+      "width": 390,
+      "scroll": 375,
+      "body": "16px",
+      "tab": "Changes1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "activity",
+      "width": 390,
+      "scroll": 375,
+      "body": "16px",
+      "tab": "Activity",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "plan",
+      "width": 320,
+      "scroll": 305,
+      "body": "16px",
+      "tab": "Planr1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "checks",
+      "width": 320,
+      "scroll": 305,
+      "body": "16px",
+      "tab": "Checks2/2",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "changes",
+      "width": 320,
+      "scroll": 305,
+      "body": "16px",
+      "tab": "Changes1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "activity",
+      "width": 320,
+      "scroll": 305,
+      "body": "16px",
+      "tab": "Activity",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "plan reader",
+      "dialog": true,
+      "width": 390,
+      "scroll": 390,
+      "body": "16px",
+      "tab": "Planr1",
+      "heading": "Review plan"
+    },
+    {
+      "scenario": "reader escape",
+      "closed": true,
+      "focus": "Open plan.md"
+    },
+    {
+      "scenario": "rollback preview",
+      "calls": [
+        {
+          "path": "apply",
+          "body": {
+            "run_id": "r-uat-preview",
+            "action": "rollback-preview",
+            "application_id": "app-preview"
+          }
+        }
+      ],
+      "focus": "Cancel"
+    },
+    {
+      "scenario": "rollback cancel",
+      "calls": [
+        {
+          "path": "apply",
+          "body": {
+            "run_id": "r-uat-preview",
+            "action": "rollback-preview",
+            "application_id": "app-preview"
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "latest revision",
+      "approve": true
+    },
+    {
+      "scenario": "old revision",
+      "approve": false
+    },
+    {
+      "scenario": "inconclusive default",
+      "width": 390,
+      "scroll": 375,
+      "body": "16px",
+      "tab": "Checks0/2",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "long plan",
+      "steps": 30,
+      "width": 390,
+      "scroll": 375,
+      "body": "16px",
+      "tab": "Planr1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "theme pink",
+      "width": 390,
+      "scroll": 375,
+      "body": "16px",
+      "tab": "Planr1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "diff reader",
+      "diff": "--- a/scripts/pm/app/Work.tsx+++ b/scripts/pm/app/Work.tsx@@ -72,1 +72,1 @@- href={`#${spacePath(campaign)}?view=story`}+ href={`#${spacePath(campaign)}?tab=story`}"
+    },
+    {
+      "scenario": "keyboard tabs",
+      "focus": "delivery-tab-changes",
+      "width": 390,
+      "scroll": 375,
+      "body": "16px",
+      "tab": "Changes1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "tab reload",
+      "width": 390,
+      "scroll": 375,
+      "body": "16px",
+      "tab": "Changes1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "rollback confirm",
+      "calls": [
+        {
+          "path": "apply",
+          "body": {
+            "run_id": "r-uat-preview",
+            "action": "rollback-preview",
+            "application_id": "app-preview"
+          }
+        },
+        {
+          "path": "apply",
+          "body": {
+            "run_id": "r-uat-preview",
+            "action": "rollback",
+            "application_id": "app-preview",
+            "preview_digest": "preview-digest",
+            "expected_revision": 3,
+            "command_id": "da0f031a-03b0-4079-a2e6-7ddff4e62e8a"
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "200 percent equivalent reflow",
+      "width": 720,
+      "scroll": 705,
+      "body": "16px",
+      "tab": "Planr1",
+      "heading": "Rolled back"
+    },
+    {
+      "scenario": "keyboard-sized viewport",
+      "width": 390,
+      "scroll": 375,
+      "body": "16px",
+      "tab": "Planr1",
+      "heading": "Review plan"
+    }
+  ],
+  "errors": []
+}

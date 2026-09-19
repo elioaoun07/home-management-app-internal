@@ -12,7 +12,7 @@ tags:
 
 > **FABLED:** [_index](<_index.md>) · **1 · Implementation** · [2 · Gaps](<2 - FABLED — Gaps & Missing.md>) · [3 · Optimization](<3 - FABLED — Optimization Plan.md>) · [4 · Enhancements](<4 - FABLED — Future Enhancements.md>)
 >
-> How the flagship is *actually* built, verified against `main` 2026-06-10. Authoritative code maps stay in the vault docs ([Hub Chat](<../../../03 - Junction Modules/Hub Chat/Overview.md>), [AI Assistant](<../../../03 - Junction Modules/AI Assistant/Overview.md>)); this is the cluster-level X-ray.
+> How the flagship is *actually* built, verified against `main` 2026-06-10. Authoritative code maps stay in the vault docs ([Hub Chat](<../../../../03 - Junction Modules/Hub Chat/Overview.md>), [AI Assistant](<../../../../03 - Junction Modules/AI Assistant/Overview.md>)); this is the cluster-level X-ray.
 
 ---
 

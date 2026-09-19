@@ -1,39 +1,25 @@
-import { useEffect, useMemo, useState } from "preact/hooks";
-import { files } from "../../app/store.js";
-import { Chip, EmptyState, StatTile } from "../../components/Primitives.jsx";
-import { Icon } from "../../components/Icon.jsx";
+import { useEffect } from "preact/hooks";
+import { route } from "../../app/router.js";
+import { outcomes } from "../../app/productStore.js";
+import { Chip, EmptyState } from "../../components/Primitives.jsx";
+import { Inline } from "../doc/Markdown.jsx";
 import { deliveryData, loadDeliverySessions } from "../delivery/deliveryStore.js";
+import { sessionStatus, timeLabel } from "../../lib/product.js";
+import { localReturn } from "../../lib/portfolio.js";
 
-function sessionStamp(session) {
-  return Date.parse(session.updatedAt || session.lastEventAt || session.startedAt || session.createdAt || "") || 0;
-}
-
-function formatStamp(stamp) {
-  if (!stamp) return "Time not recorded";
-  return new Date(stamp).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+export function OutcomesList({ entries, compact = false }) {
+  if (!entries.length) return <EmptyState icon="archive" title="No outcomes recorded"/>;
+  return <div class={`outcomes-list ${compact ? "compact" : ""}`}>{entries.map((entry) => <article class="outcome-row" key={entry.key}><div class="outcome-date"><span class={`outcome-mark ${entry.status.toLowerCase()}`}>{entry.status === "Shipped" ? "✓" : "×"}</span><time>{entry.date}</time></div><div class="outcome-copy"><div><span>{entry.campaign}</span><Chip tone={entry.status === "Shipped" ? "success" : ""}>{entry.status}</Chip></div><p><Inline text={entry.raw || entry.text} file={entry.file}/></p>{!compact && entry.status === "Shipped" && <a class="reference-link" href={`#/doc/${encodeURI(entry.file)}?h=shipped-log`}>Source record →</a>}</div></article>)}</div>;
 }
 
 export function ActivityView() {
-  const isServer = globalThis.PM_MODE === "server";
-  const [filter, setFilter] = useState("all");
-  useEffect(() => { if (isServer) loadDeliverySessions(); }, []);
-
-  const sessions = isServer ? deliveryData.value.sessions || [] : [];
-  const metrics = deliveryData.value.metrics;
-  const entries = useMemo(() => [
-    ...sessions.map((session) => ({ type: "delivery", stamp: sessionStamp(session), title: `${session.item?.id ? `${session.item.id} · ` : ""}${session.item?.text || "Delivery session"}`, detail: `${session.item?.campaign || "Delivery"} · ${session.state}${session.awaiting ? ` · waiting at ${session.awaiting.gate}` : ""}`, href: `#/delivery/session/${session.sessionId}`, tone: session.awaiting ? "blocker" : session.state === "SHIPPED" ? "success" : "" })),
-    ...files.value.filter((file) => !file.inFabled).map((file) => ({ type: "document", stamp: Number(file.mtimeMs || 0), title: file.title, detail: `${file.module} · Markdown source updated`, href: `#/doc/${encodeURI(file.relPath)}`, tone: "" })),
-  ].sort((a, b) => b.stamp - a.stamp), [sessions, files.value]);
-  const visible = entries.filter((entry) => filter === "all" || entry.type === filter).slice(0, 100);
-  const waiting = sessions.filter((session) => session.awaiting).length;
-
-  return <>
-    <header class="page-head command-head"><div><div class="eyebrow">Audit trail</div><h1>Activity</h1><p>Recent Markdown changes and delivery outcomes in one place. Open any delivery session for its complete timeline, conversation, files, gates, and usage record.</p></div><div class="actions"><a class="button" href="#/search"><Icon name="search" />Search history</a>{isServer && <a class="button primary" href="#/delivery/new"><Icon name="plus" />New session</a>}</div></header>
-
-    <div class="grid stats activity-stats"><StatTile label="Session history" value={sessions.length} detail="Auditable delivery runs" /><StatTile label="Awaiting owner" value={waiting} detail="Questions and approval gates" /><StatTile label="Tracked documents" value={files.value.filter((file) => !file.inFabled).length} detail="Markdown sources" /><StatTile label="Fleet spend" value={typeof metrics?.totalCostUsd === "number" ? `$${metrics.totalCostUsd.toFixed(2)}` : "—"} detail={metrics?.costBasis === "unavailable" ? "Pricing not configured" : "Recorded provider cost"} /></div>
-
-    <div class="activity-layout"><section class="activity-feed-card"><div class="section-heading"><div><div class="eyebrow">History</div><h2>Recent activity</h2></div><div class="project-filters">{[["all", "All"], ["delivery", "Delivery"], ["document", "Markdown"]].map(([value, label]) => <button class="chip toggle" data-active={String(filter === value)} onClick={() => setFilter(value)} key={value}>{label}</button>)}</div></div>{visible.length ? <div class="activity-feed">{visible.map((entry, index) => <a class="activity-entry" href={entry.href} key={`${entry.type}:${entry.href}:${index}`}><span class="activity-entry-icon"><Icon name={entry.type === "delivery" ? "bolt" : "file"} /></span><span class="activity-entry-copy"><strong>{entry.title}</strong><span>{entry.detail}</span></span><span class="activity-entry-tail"><Chip tone={entry.tone}>{entry.type}</Chip><time>{formatStamp(entry.stamp)}</time></span></a>)}</div> : <EmptyState icon="activity" title="No matching activity">Change the filter to see more history.</EmptyState>}</section>
-
-      <aside class="activity-audit-card"><div class="eyebrow">Audit coverage</div><h2>What is preserved</h2><ul><li>Every Markdown task remains traceable to its campaign file.</li><li>Delivery decisions, answers, gates, and artifacts live with the session.</li><li>Budget raises and owner interventions remain explicit and auditable.</li><li>Shipped and discarded queue items retain Undo through snapshots.</li></ul>{isServer && <a class="button" href="#/delivery">Open delivery history</a>}</aside></div>
+  useEffect(() => { loadDeliverySessions().catch(() => {}); }, []);
+  const filter = route.value.query.get("filter") || "all";
+  const campaign = route.value.query.get("campaign") || "";
+  const update = (values) => { const params = new URLSearchParams(route.value.query); Object.entries(values).forEach(([k,v]) => v ? params.set(k,v) : params.delete(k)); location.hash = `/activity?${params}`; };
+  const entries = outcomes.value.filter((entry) => (!campaign || entry.campaign === campaign) && (filter === "all" || entry.status.toLowerCase() === filter));
+  return <>{route.value.query.get("from") && <a class="back-link" href={"#" + localReturn(route.value.query.get("from"))}>← Back to selection</a>}<header class="page-head"><div><div class="eyebrow">Project record</div><h1>Outcomes</h1></div><select class="button" aria-label="Filter outcomes by campaign" value={campaign} onChange={(event) => update({ campaign: event.currentTarget.value })}><option value="">All campaigns</option>{[...new Set(outcomes.value.map((e) => e.campaign))].sort().map((name) => <option key={name}>{name}</option>)}</select></header>
+    <nav class="product-tabs" aria-label="Outcome filters">{[["all", "All"], ["shipped", "Shipped"], ["cancelled", "Cancelled"], ...(globalThis.PM_MODE === "server" ? [["runs", "Delivery runs"]] : [])].map(([value,label]) => <a href={`#/activity?${new URLSearchParams({ ...Object.fromEntries(route.value.query), filter: value })}`} aria-current={filter === value ? "page" : undefined} key={value}>{label}</a>)}</nav>
+    {filter === "runs" ? <div class="work-list">{(deliveryData.value.sessions || []).filter((s) => !campaign || s.item?.campaign === campaign).map((session) => <a class="history-run" href={`#/delivery/session/${session.sessionId}`} key={session.sessionId}><div><span class="mono">{session.item?.id}</span><strong>{session.item?.text}</strong><small>{session.item?.campaign}</small></div><div><Chip>{sessionStatus(session)}</Chip><time>{timeLabel(session.updatedAt || session.createdAt)}</time></div></a>)}</div> : <OutcomesList entries={entries}/>}
   </>;
 }

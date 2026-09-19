@@ -20,11 +20,11 @@ tags:
 
 ## O2 — Rehearse the fact-bridge before building the big one (fixes the §2 backlog safely)
 
-Debt → Reminder first ([Budget FABLED 2.4 · E4](<../../10 - Project Management/Budget/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)): one owner (Budget), one projection (Schedule), link id stored for cleanup, settlement completes the reminder. Every design question Recurring↔Schedule will ask, answered at 1/10 the blast radius. Only then E2/E7.
+Debt → Reminder first ([Budget FABLED 2.4 · E4](<../../10 - Project Management/_Archive/Budget/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)): one owner (Budget), one projection (Schedule), link id stored for cleanup, settlement completes the reminder. Every design question Recurring↔Schedule will ask, answered at 1/10 the blast radius. Only then E2/E7.
 
 ## O3 — Junction smoke tests, one per bridge kind (fixes file 1 §4 cheaply)
 
-Not full integration suites — one table-driven test per *pattern*: message-action → record (created once, replay-safe) · household expansion (O1's test) · draft confirm → record · trip cascade symmetry (post-verification, [Trips FABLED 2.3 · O3](<../../10 - Project Management/Trips/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)'s SQL check). Four tests would have caught three of June's four cross-module bugs.
+Not full integration suites — one table-driven test per *pattern*: message-action → record (created once, replay-safe) · household expansion (O1's test) · draft confirm → record · trip cascade symmetry (post-verification, [Trips FABLED 2.3 · O3](<../../10 - Project Management/_Archive/Trips/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)'s SQL check). Four tests would have caught three of June's four cross-module bugs.
 
 ## O4 — Mark the junction dirs (fixes G4)
 

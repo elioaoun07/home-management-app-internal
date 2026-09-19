@@ -4,6 +4,7 @@ import type { AccountType } from "@/lib/balance-utils";
 import { getBalanceDelta } from "@/lib/balance-utils";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
+import { canAccessTrip } from "@/lib/tripAccess";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -16,6 +17,8 @@ type TransactionUpdateData = {
   category_id?: string | null;
   subcategory_id?: string | null;
   account_id?: string;
+  /** Optional trip tag — independent of account_id, never affects balance. */
+  trip_id?: string | null;
 };
 
 // GET - Fetch a single transaction by ID
@@ -92,6 +95,7 @@ export async function GET(
         is_owner: isOwner,
         split_requested: transaction.split_requested,
         split_completed_at: transaction.split_completed_at,
+        trip_id: transaction.trip_id ?? null,
       },
     });
   } catch {
@@ -127,6 +131,7 @@ export async function PATCH(
       category_id,
       subcategory_id,
       account_id,
+      trip_id,
     } = body;
 
     // Build update object with only provided fields
@@ -138,6 +143,18 @@ export async function PATCH(
     if (subcategory_id !== undefined)
       updateData.subcategory_id = subcategory_id;
     if (account_id !== undefined) updateData.account_id = account_id;
+    // Trip tag: null/"" untags; anything else must name a trip this user can
+    // see (own, or the partner's household-scope trip).
+    if (trip_id !== undefined) {
+      if (trip_id === null || trip_id === "") {
+        updateData.trip_id = null;
+      } else {
+        if (!(await canAccessTrip(supabase, user.id, trip_id))) {
+          return NextResponse.json({ error: "Invalid trip_id" }, { status: 400 });
+        }
+        updateData.trip_id = String(trip_id);
+      }
+    }
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(

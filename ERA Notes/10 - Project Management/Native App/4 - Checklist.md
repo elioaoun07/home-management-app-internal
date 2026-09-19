@@ -1,49 +1,32 @@
 ---
-created: 2026-09-02
-updated: 2026-09-06
+created: 2026-09-10
+updated: 2026-09-10
 type: checklist
 status: active
 owner: Elio
-tags:
-  - pm/checklist
-  - scope/module
-  - module/native
 ---
 
-# Native App · 4 — Checklist
+# Native App — Checklist
 
-> **Campaign:** [Native App — Master Book](<Native App — Master Book.md>) · [4 · Checklist](<4 - Checklist.md>)
->
-> **What this file is:** the single flat, checkable surface for Native App — every open actionable item under **Now / Next / Later**. Grammar: [_Conventions](<../_Conventions.md>) (validated by `pnpm pm:lint`). The narrative *why* is [Native App — Master Book](<Native App — Master Book.md>).
->
-> **Registered 2026-09-02** alongside the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>), which schedules this campaign as its Phase 4 (Dec 8–31), with groundwork (N-00) starting async on Sep 15 because account verification takes weeks. Every item here carries its plan packet ID.
->
-> **Legend:** Sev blocker / friction / annoyance / parked. Effort S / M / L.
+[Master Book](<Native App — Master Book.md>) · [All campaigns](<../_index.md>) · [Grammar](<../_Conventions.md>)
 
----
+One checkbox per outcome. Follow the ID link for acceptance, dependencies and holds. Lane order is priority, not authorization; owner evidence and policy gates still apply.
+
+NAT-1 opens 2026-09-15. The owner prerequisites and actual device witnesses are mandatory.
 
 ## Now
 
-- [ ] **NAT-1** *(packet **N-00** of the [ERA Top Layer — Master Plan](<../ERA Top Layer — Master Plan (2026-09-02).md>), opens 2026-09-15)* Accounts and groundwork: Apple Developer, Play Console, Firebase project (FCM only), `era-mobile` Vercel project with env parity, final mobile domain, Supabase Auth redirect allow-list. Owner-executed, no code, weeks of verification waits — started early precisely because it has no code in it. → [Native App — Master Book](<Native App — Master Book.md>) §"Phase roadmap" Phase 0 _(blocker - S)_
+- [ ] **NAT-1** Prepare native accounts and owner prerequisites — [criteria](<Native App — Master Book.md#nat-1>) _(blocker - S)_
 
 ## Next
 
-*(empty — the shell/push/distribution work in Later has weeks of Now-lane account waits ahead of it; nothing here queues until NAT-1 clears)*
+- [ ] **NAT-7** Pin native prerequisites and scheduler ownership — [criteria](<Native App — Master Book.md#nat-7>) _(friction - M)_
 
 ## Later
 
-**ASTRA wave 1 (2026-09-06)** *(study: [ASTRA Book](<ASTRA/Native App — ASTRA Book.md>) · [execution sheet](<ASTRA/Native App — ASTRA Packets.md>))*
-
-ASTRA-NAT-1 refines NAT-3's existing device acceptance; no new item. Prove remote origin, bridge injection and service-worker offline cold start together before widening the shell. NAT-2's guards must preserve the PWA Non-Interference Contract. Platform alarm capabilities remain version-gated options, without an implementation slot or an inferred override of existing delivery policy.
-
-- [ ] **NAT-2** *(packet **N-01**)* Capacitor shell MVP — Android: `capacitor.config.ts` with `server.url`, committed `android/`, icons/splash/status bar, a new src/lib/native/ bridge skeleton, SW platform guards. Prereq: manifest inventory recorded (16 files under `public/`, not the Master Book's stated 9). _(blocker - M)_
-- [ ] **NAT-3** *(packet **N-02**)* iOS shell + the `WKAppBoundDomains` × `server.url` spike on a real iPhone (SW offline cold start + bridge injection — never verified together). _(blocker - M)_
-- [ ] **NAT-4** *(packet **N-03**)* Native push end-to-end: `native_push.sql` migration, Zod discriminated union on the subscribe route, `pushSender.ts` FCM v1 branch, Android channels, iOS Time Sensitive, tap-through deep links; browser web-push must stay unregressed. Depends on the proactive briefing (E-05 of the Master Plan) existing as the payload worth shipping this for. _(blocker - M)_
-- [ ] **NAT-5** *(packet **N-04**, owner-executed)* Distribution: Play Internal Testing + TestFlight internal; partner onboarded; auto-update proven with a trivial binary bump. _(blocker - S)_
-- [ ] **NAT-6** *(packet **N-05**; plan sacrifice #5 if a gate is missed)* Native wave 1: App/Universal Links, native NFC read into the existing tag flow, haptics shim for iOS. _(annoyance - M)_
-
-## Definition of Done
-
-- [ ] **D1** Both phones (Elio's Android, partner's iPhone) run store-track builds with working login, `/era` (mic functional), hub chat, and offline banner.
-- [ ] **D2** A cron-fired push (at the owner-resolved eligible local hour; Top Layer contradiction C01 remains open) lands on both locked phones with correct sound/priority and deep-links to `/era`; the existing browser web-push path is verified unregressed via the test endpoint.
-- [ ] **D3** The PWA Non-Interference Contract holds — no code or DB change made for native reasons has altered the existing web/PWA deployment's behavior.
+- [ ] **NAT-2** Build and verify the Android shell — [criteria](<Native App — Master Book.md#nat-2>) _(blocker - M)_
+- [ ] **NAT-3** Verify the iOS shell and WebView constraints — [criteria](<Native App — Master Book.md#nat-3>) _(blocker - M)_
+- [ ] **NAT-4** Deliver native push to both locked phones — [criteria](<Native App — Master Book.md#nat-4>) _(blocker - M)_
+- [ ] **NAT-5** Distribute and verify store-track updates — [criteria](<Native App — Master Book.md#nat-5>) _(blocker - S)_
+- [ ] **NAT-6** Add links, NFC and the native haptics bridge — [criteria](<Native App — Master Book.md#nat-6>) _(annoyance - M)_
+- [ ] **NAT-8** Verify web and native install-scope separation — [criteria](<Native App — Master Book.md#nat-8>) _(friction - M)_

@@ -1,0 +1,223 @@
+{
+  "report": [
+    {
+      "name": "Done search 1440",
+      "width": 1440,
+      "scroll": 1440,
+      "heading": "Done",
+      "deliver": false,
+      "text": "Done\nTo do\nDone\nPM Tooling · 2026-09-15\n\nR64 · Make Delivery readable and usable on desktop and phone."
+    },
+    {
+      "name": "Completed detail 1440",
+      "width": 1440,
+      "scroll": 1440,
+      "heading": "Make Delivery readable and usable on desktop and phone.",
+      "deliver": false,
+      "text": "Back\nPM Tooling\nR64\nMake Delivery readable and usable on desktop and phone.\nDone\n2026-09-15\nUAT pending\nCompletion record\n\nR64 Responsive Delivery review workspace implemented and browser-verified at 320 through 1920 px; physical-phone UAT pending. (Reconciled 2026-09-15 from dated implementation/test evidence; UAT.)\n\nView record\nScope and evidence"
+    },
+    {
+      "name": "Back to filtered Done 1440",
+      "width": 1440,
+      "scroll": 1440,
+      "heading": "Done",
+      "deliver": false,
+      "text": "Done\nTo do\nDone\nPM Tooling · 2026-09-15\n\nR64 · Make Delivery readable and usable on desktop and phone."
+    },
+    {
+      "name": "Actionable item 1440",
+      "width": 1440,
+      "scroll": 1440,
+      "heading": "Reject zero-test validation as NOTTESTED",
+      "deliver": true,
+      "text": "Back to your place\nDelivery\nDLV-90\nReject zero-test validation as NOTTESTED\nUp next\nS effort\nDeliver\nOpen in CLI\nWhat done looks like\nReferences"
+    },
+    {
+      "name": "Old done launch 1440",
+      "width": 1440,
+      "scroll": 1440,
+      "deliver": false,
+      "text": "Back\nChoose your next outcome\nExplore"
+    },
+    {
+      "name": "Owner check 1440",
+      "width": 1440,
+      "scroll": 1440,
+      "deliver": false,
+      "text": "Back\nOwner check\nView checklist"
+    },
+    {
+      "name": "Owner check excluded 1440",
+      "width": 1440,
+      "scroll": 1440,
+      "heading": "Find your next move.",
+      "deliver": false,
+      "text": "Find your next move.\nBoard\nTo do\nDone\nAI\nMobile\nOffline\nHousehold\nCatalogue\nAcross your ERA0\nNothing here yet\nStart again"
+    },
+    {
+      "name": "Completed history 1440",
+      "width": 1440,
+      "scroll": 1425,
+      "heading": "Read full plans and frozen diffs before approval.",
+      "deliver": false,
+      "text": "Back\nDelivery\nDLV-116\nRead full plans and frozen diffs before approval.\nDone\n2026-09-15\nUAT pending\nCompletion record\n\nDLV-116 Complete new-plan revisions, Markdown export and bounded current-candidate diffs implemented. Historical/large-artifact paging continues under DLV-121; owner UAT pending. (Reconciled 2026-09-15 from dated implementation/test evidence; UAT.)\n\nView record\nScope and evidence\nDelivery history\nDone\nSynthetic retained attempt\nV2 · Codex"
+    },
+    {
+      "name": "Retained attempt opens 1440",
+      "width": 1440,
+      "scroll": 1425,
+      "heading": "Open completed items in campaign history",
+      "deliver": false,
+      "text": "Back\nDELIVERY · DLV-107\nOpen completed items in campaign history\nr-uat-preview\nFast lane\nRolled back\n\nCodex · gpt-5.6-luna · low\n\n284,243\ntokens · Over threshold\nPlan\nBuild\nCheck\n4\nReview\nPlan\nr1\nChanges\n1\nChecks\n2/2\nActivity\nChanges\nC1 · 1 file\nRolled back\nWork.tsx\nscripts/pm/app\nModified\nROLLED BACK\nApply\nRestored · 1\nApply\nApplication history\n1\nSession details"
+    },
+    {
+      "name": "Done search 390",
+      "width": 390,
+      "scroll": 375,
+      "heading": "Done",
+      "deliver": false,
+      "text": "Done\nTo do\nDone\nPM Tooling · 2026-09-15\n\nR64 · Make Delivery readable and usable on desktop and phone."
+    },
+    {
+      "name": "Completed detail 390",
+      "width": 390,
+      "scroll": 375,
+      "heading": "Make Delivery readable and usable on desktop and phone.",
+      "deliver": false,
+      "text": "Back\nPM Tooling\nR64\nMake Delivery readable and usable on desktop and phone.\nDone\n2026-09-15\nUAT pending\nCompletion record\n\nR64 Responsive Delivery review workspace implemented and browser-verified at 320 through 1920 px; physical-phone UAT pending. (Reconciled 2026-09-15 from dated implementation/test evidence; UAT.)\n\nView record\nScope and evidence"
+    },
+    {
+      "name": "Back to filtered Done 390",
+      "width": 390,
+      "scroll": 375,
+      "heading": "Done",
+      "deliver": false,
+      "text": "Done\nTo do\nDone\nPM Tooling · 2026-09-15\n\nR64 · Make Delivery readable and usable on desktop and phone."
+    },
+    {
+      "name": "Actionable item 390",
+      "width": 390,
+      "scroll": 375,
+      "heading": "Reject zero-test validation as NOTTESTED",
+      "deliver": true,
+      "text": "Back to your place\nDelivery\nDLV-90\nReject zero-test validation as NOTTESTED\nUp next\nS effort\nDeliver\nOpen in CLI\nWhat done looks like\nReferences"
+    },
+    {
+      "name": "Old done launch 390",
+      "width": 390,
+      "scroll": 375,
+      "deliver": false,
+      "text": "Back\nChoose your next outcome\nExplore"
+    },
+    {
+      "name": "Owner check 390",
+      "width": 390,
+      "scroll": 375,
+      "deliver": false,
+      "text": "Back\nOwner check\nView checklist"
+    },
+    {
+      "name": "Owner check excluded 390",
+      "width": 390,
+      "scroll": 375,
+      "heading": "Find your next move.",
+      "deliver": false,
+      "text": "Find your next move.\nBoard\nTo do\nDone\nAI\nMobile\nOffline\nHousehold\nCatalogue\nAcross your ERA0\nNothing here yet\nStart again"
+    },
+    {
+      "name": "Completed history 390",
+      "width": 390,
+      "scroll": 375,
+      "heading": "Read full plans and frozen diffs before approval.",
+      "deliver": false,
+      "text": "Back\nDelivery\nDLV-116\nRead full plans and frozen diffs before approval.\nDone\n2026-09-15\nUAT pending\nCompletion record\n\nDLV-116 Complete new-plan revisions, Markdown export and bounded current-candidate diffs implemented. Historical/large-artifact paging continues under DLV-121; owner UAT pending. (Reconciled 2026-09-15 from dated implementation/test evidence; UAT.)\n\nView record\nScope and evidence\nDelivery history\nDone\nSynthetic retained attempt"
+    },
+    {
+      "name": "Retained attempt opens 390",
+      "width": 390,
+      "scroll": 375,
+      "heading": "Open completed items in campaign history",
+      "deliver": false,
+      "text": "Back\nDELIVERY · DLV-107\nOpen completed items in campaign history\nFast lane\nRolled back\n\nCodex · gpt-5.6-luna · low\n\n284,243\ntokens · Over threshold\nPlan\nChanges\nChecks\nActivity\nChanges\nC1 · 1 file\nRolled back\nWork.tsx\nscripts/pm/app\nModified\nROLLED BACK\nApply\nRestored · 1\nApply\nApplication history\n1\nSession details"
+    },
+    {
+      "name": "Done search 320",
+      "width": 320,
+      "scroll": 305,
+      "heading": "Done",
+      "deliver": false,
+      "text": "Done\nTo do\nDone\nPM Tooling · 2026-09-15\n\nR64 · Make Delivery readable and usable on desktop and phone."
+    },
+    {
+      "name": "Completed detail 320",
+      "width": 320,
+      "scroll": 305,
+      "heading": "Make Delivery readable and usable on desktop and phone.",
+      "deliver": false,
+      "text": "Back\nPM Tooling\nR64\nMake Delivery readable and usable on desktop and phone.\nDone\n2026-09-15\nUAT pending\nCompletion record\n\nR64 Responsive Delivery review workspace implemented and browser-verified at 320 through 1920 px; physical-phone UAT pending. (Reconciled 2026-09-15 from dated implementation/test evidence; UAT.)\n\nView record\nScope and evidence"
+    },
+    {
+      "name": "Back to filtered Done 320",
+      "width": 320,
+      "scroll": 305,
+      "heading": "Done",
+      "deliver": false,
+      "text": "Done\nTo do\nDone\nPM Tooling · 2026-09-15\n\nR64 · Make Delivery readable and usable on desktop and phone."
+    },
+    {
+      "name": "Actionable item 320",
+      "width": 320,
+      "scroll": 305,
+      "heading": "Reject zero-test validation as NOTTESTED",
+      "deliver": true,
+      "text": "Back to your place\nDelivery\nDLV-90\nReject zero-test validation as NOTTESTED\nUp next\nS effort\nDeliver\nOpen in CLI\nWhat done looks like\nReferences"
+    },
+    {
+      "name": "Old done launch 320",
+      "width": 320,
+      "scroll": 305,
+      "deliver": false,
+      "text": "Back\nChoose your next outcome\nExplore"
+    },
+    {
+      "name": "Owner check 320",
+      "width": 320,
+      "scroll": 305,
+      "deliver": false,
+      "text": "Back\nOwner check\nView checklist"
+    },
+    {
+      "name": "Owner check excluded 320",
+      "width": 320,
+      "scroll": 305,
+      "heading": "Find your next move.",
+      "deliver": false,
+      "text": "Find your next move.\nBoard\nTo do\nDone\nAI\nMobile\nOffline\nHousehold\nCatalogue\nAcross your ERA0\nNothing here yet\nStart again"
+    },
+    {
+      "name": "Completed history 320",
+      "width": 320,
+      "scroll": 305,
+      "heading": "Read full plans and frozen diffs before approval.",
+      "deliver": false,
+      "text": "Back\nDelivery\nDLV-116\nRead full plans and frozen diffs before approval.\nDone\n2026-09-15\nUAT pending\nCompletion record\n\nDLV-116 Complete new-plan revisions, Markdown export and bounded current-candidate diffs implemented. Historical/large-artifact paging continues under DLV-121; owner UAT pending. (Reconciled 2026-09-15 from dated implementation/test evidence; UAT.)\n\nView record\nScope and evidence\nDelivery history\nDone\nSynthetic retained attempt"
+    },
+    {
+      "name": "Retained attempt opens 320",
+      "width": 320,
+      "scroll": 305,
+      "heading": "Open completed items in campaign history",
+      "deliver": false,
+      "text": "Back\nDELIVERY · DLV-107\nOpen completed items in campaign history\nFast lane\nRolled back\n\nCodex · gpt-5.6-luna · low\n\n284,243\ntokens · Over threshold\nPlan\nChanges\nChecks\nActivity\nChanges\nC1 · 1 file\nRolled back\nWork.tsx\nscripts/pm/app\nModified\nROLLED BACK\nApply\nRestored · 1\nApply\nApplication history\n1\nSession details"
+    },
+    {
+      "name": "Pink Done",
+      "width": 320,
+      "scroll": 305,
+      "heading": "Done",
+      "deliver": false,
+      "text": "Done\nTo do\nDone\nPM Tooling · 2026-09-15\n\nR64 · Make Delivery readable and usable on desktop and phone."
+    }
+  ],
+  "errors": []
+}

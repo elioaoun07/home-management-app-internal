@@ -20,11 +20,11 @@ A checklist sweep across the main surfaces (expense form, dashboard, reminders, 
 
 ## O2 — Resolve the two divergences (fixes G2)
 
-Notification language: one tokens decision (icon tier, severity palette honoring HR 3, spacing) applied during the campaign's density redesign. Dashboards: the v2/v3 merge decision with a date ([Budget FABLED 2.3 · O8](<../../10 - Project Management/Budget/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
+Notification language: one tokens decision (icon tier, severity palette honoring HR 3, spacing) applied during the campaign's density redesign. Dashboards: the v2/v3 merge decision with a date ([Budget FABLED 2.3 · O8](<../../10 - Project Management/_Archive/Budget/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
 
 ## O3 — Write the motion policy (fixes G3's sharpest edge; one paragraph + one CSS block)
 
-Rule: no infinite attention animations; arrival animations play once; everything respects `prefers-reduced-motion` via a global media-query block in `globals.css` that zeroes the app's keyframes. The bell fix ([Notifications FABLED 2.3 · O1](<../../10 - Project Management/Notifications & Alerts/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)) is its first application.
+Rule: no infinite attention animations; arrival animations play once; everything respects `prefers-reduced-motion` via a global media-query block in `globals.css` that zeroes the app's keyframes. The bell fix ([Notifications FABLED 2.3 · O1](<../../10 - Project Management/_Archive/Notifications & Alerts/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)) is its first application.
 
 ## O4 — Tokenize the top five ad-hoc values (fixes G4 incrementally)
 

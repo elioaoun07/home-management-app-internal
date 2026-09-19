@@ -28,6 +28,8 @@
 
 import { scanLines } from "../pm/shared/md-scan.mjs";
 import { parseTaskMeta } from "../pm/shared/tasks.mjs";
+import { idSections } from "../pm/shared/work-id.mjs";
+import { deliveryBlockReason } from "../pm/shared/work-lifecycle.mjs";
 import {
   ContractError,
   RESOLUTION_REASONS,
@@ -113,6 +115,76 @@ function selectionFailure(reason, candidates = []) {
   return deepFreeze({ ok: false, reason, locator: null, item: null, candidates });
 }
 
+const CHECKBOX_LINE = /^\s*(?:[-*]|\d+\.)\s+\[[ xX]\]\s?(.*)$/u;
+
+/**
+ * What the owner saw when they chose a row: its alias and exact content.
+ *
+ * Built from the raw line (or row content) so the fingerprint rule stays here,
+ * not in a client. An absent or self-contradictory witness is null — a click that
+ * cannot say which row it meant must not be allowed to mean the row that now sits
+ * at its ordinal.
+ *
+ * @param {({alias?:(string|null), line?:(string|null), rest?:(string|null),
+ *   textFingerprint?:(string|null)}|null|undefined)} input
+ * @returns {({alias:(string|null), textFingerprint:string}|null)}
+ */
+export function makeSelectionWitness(input) {
+  if (!input || typeof input !== "object") return null;
+  const content =
+    typeof input.rest === "string"
+      ? input.rest
+      : typeof input.line === "string"
+        ? (input.line.replace(/\r$/u, "").match(CHECKBOX_LINE)?.[1] ?? null)
+        : null;
+  const suppliedFingerprint =
+    typeof input.textFingerprint === "string" && input.textFingerprint.trim() ? input.textFingerprint : null;
+  const textFingerprint = content !== null ? fingerprint(normalizeSourceText(content)) : suppliedFingerprint;
+  if (!textFingerprint) return null;
+  if (suppliedFingerprint && suppliedFingerprint !== textFingerprint) return null;
+  const chip = content !== null ? parseTaskMeta(content).idChip : null;
+  const declared = typeof input.alias === "string" && input.alias.trim() ? input.alias.trim().toUpperCase() : null;
+  if (declared && content !== null && declared !== chip) return null;
+  return deepFreeze({ alias: declared ?? chip ?? null, textFingerprint });
+}
+
+/** Stored when an item has no Master Book section (or no alias to find one by). */
+export const ACCEPTANCE_ABSENT = "none";
+
+/**
+ * The item's Master Book `### <ID>` section text, for the executor to read.
+ * Null when absent or ambiguous — the revision check above owns the refusal.
+ *
+ * @param {{bookRaw:(string|null|undefined), alias:(string|null)}} input
+ */
+export function acceptanceText({ bookRaw, alias }) {
+  if (!alias || typeof bookRaw !== "string") return null;
+  const sections = idSections(bookRaw, alias, 3);
+  return sections.length === 1 ? String(sections[0].body).trim() : null;
+}
+
+/**
+ * The revision of the item's Master Book `### <ID>` section — acceptance,
+ * dependencies and holds. Headings match by normalized ID, so `### SCH-4.3b`
+ * serves `SCH-4.3B`. Two matching headings are refused, never picked between.
+ *
+ * @param {{bookRaw:(string|null|undefined), alias:(string|null)}} input
+ */
+export function acceptanceRevision({ bookRaw, alias }) {
+  if (!alias || typeof bookRaw !== "string") {
+    return deepFreeze({ ok: true, fingerprint: ACCEPTANCE_ABSENT, reason: null });
+  }
+  const sections = idSections(bookRaw, alias, 3);
+  if (sections.length > 1) {
+    return deepFreeze({ ok: false, fingerprint: null, reason: RESOLUTION_REASONS.AMBIGUOUS_ACCEPTANCE });
+  }
+  return deepFreeze({
+    ok: true,
+    fingerprint: sections.length ? fingerprint(normalizeSourceText(sections[0].body)) : ACCEPTANCE_ABSENT,
+    reason: null,
+  });
+}
+
 /**
  * Turn what the owner clicked into a locator that no longer depends on the click.
  *
@@ -121,16 +193,41 @@ function selectionFailure(reason, candidates = []) {
  * carries file, alias and text fingerprint, and never the ordinal. An out-of-range
  * ordinal refuses instead of clamping.
  *
- * @param {{raw:string, file:string, cbidx:number}} input
+ * With a `witness` the ordinal is only a hint. The row there is used when it is
+ * the witnessed row; otherwise the witness is re-resolved by identity, so a
+ * prepended row cannot take over the selection. Stale, unknown and ambiguous
+ * witnesses refuse. Entry points must pass one; `witness: undefined` is the
+ * ordinal-only form kept for pure fixtures.
+ *
+ * @param {{raw:string, file:string, cbidx:number, witness?:(object|null)}} input
  * @returns {SelectionOutcome}
  */
-export function selectWorkItem({ raw, file, cbidx }) {
+export function selectWorkItem({ raw, file, cbidx, witness = undefined }) {
   if (!file || typeof file !== "string") return selectionFailure(RESOLUTION_REASONS.BAD_LOCATOR);
   const items = parseWorkItems(raw);
-  if (!Number.isInteger(cbidx) || cbidx < 0 || cbidx >= items.length) {
-    return selectionFailure(RESOLUTION_REASONS.OUT_OF_RANGE);
+  let item;
+  if (witness === undefined) {
+    if (!Number.isInteger(cbidx) || cbidx < 0 || cbidx >= items.length) {
+      return selectionFailure(RESOLUTION_REASONS.OUT_OF_RANGE);
+    }
+    item = items[cbidx];
+  } else {
+    const seen = makeSelectionWitness(witness);
+    if (!seen) return selectionFailure(RESOLUTION_REASONS.MISSING_WITNESS);
+    const at = Number.isInteger(cbidx) ? items[cbidx] : undefined;
+    if (at && at.textFingerprint === seen.textFingerprint && (seen.alias === null || at.alias === seen.alias)) {
+      item = at;
+    } else {
+      const resolution = resolveWorkRef({
+        raw,
+        locator: makeLocator({ file, alias: seen.alias, textFingerprint: seen.textFingerprint }),
+      });
+      if (!resolution.ok || !resolution.observation) return selectionFailure(resolution.reason, resolution.candidates);
+      item = resolution.observation;
+    }
+    const twins = items.filter((other) => other.textFingerprint === item.textFingerprint);
+    if (!item.alias && twins.length > 1) return selectionFailure(RESOLUTION_REASONS.AMBIGUOUS_TEXT, twins);
   }
-  const item = items[cbidx];
   // Selecting a row whose alias is shared with another row is already ambiguous:
   // binding it now would produce a locator that can never be re-resolved.
   if (item.alias && items.filter((other) => other.alias === item.alias).length > 1) {
@@ -212,7 +309,11 @@ export function resolveWorkRef({ raw, locator }) {
  * current policy can produce; what the executor can reach is a Grant/result
  * question, and Contract.requestedDisposition is not where it is answered.
  *
- * @param {{raw:string, file:string, cbidx:number, outcome?:string,
+ * `bookRaw` (the campaign Master Book, or null when unreadable) binds the item's
+ * acceptance revision into the contract; leaving it undefined binds none.
+ *
+ * @param {{raw:string, file:string, cbidx:number, witness?:(object|null),
+ *   bookRaw?:(string|null), outcome?:string,
  *   requestedDisposition:string, criteria?:import("./contracts.mjs").Criterion[],
  *   scratchScope:Record<string, unknown>,
  *   publicationScope:{allowedPaths?:string[], changeConstraints?:Record<string, unknown>},
@@ -222,6 +323,8 @@ export function freezeSelectedItem({
   raw,
   file,
   cbidx,
+  witness = undefined,
+  bookRaw = undefined,
   outcome,
   requestedDisposition,
   criteria = [],
@@ -231,14 +334,25 @@ export function freezeSelectedItem({
   policy_refs = [],
   authorized_at = null,
 }) {
-  const selection = selectWorkItem({ raw, file, cbidx });
+  const selection = selectWorkItem({ raw, file, cbidx, witness });
   if (!selection.ok || !selection.locator || !selection.item) {
     return deepFreeze({ ok: false, reason: selection.reason, workRef: null, contract: null, item: null });
+  }
+  const blocked = deliveryBlockReason({ file, state: selection.item.state, contract: acceptanceText({ bookRaw, alias: selection.item.alias }) || "" });
+  if (blocked) return deepFreeze({ ok: false, reason: blocked, workRef: null, contract: null, item: null });
+  let acceptance_fingerprint = null;
+  if (bookRaw !== undefined) {
+    const acceptance = acceptanceRevision({ bookRaw, alias: selection.item.alias });
+    if (!acceptance.ok) {
+      return deepFreeze({ ok: false, reason: acceptance.reason, workRef: null, contract: null, item: null });
+    }
+    acceptance_fingerprint = acceptance.fingerprint;
   }
   const workRef = makeWorkRef(selection.locator);
   const contract = authorizeContract({
     work_id: workRef.work_id,
     source_fingerprint: workRef.source_fingerprint,
+    acceptance_fingerprint,
     outcome: outcome && outcome.trim() ? outcome : selection.item.text,
     exclusions,
     scratchScope,
@@ -259,12 +373,23 @@ export function freezeSelectedItem({
  *   - resolved + stale   -> successor-revision-required
  *   - unresolved         -> the refusal reason, with candidates when ambiguous
  *
+ * A contract bound to a Master Book revision also needs `bookRaw`; without it the
+ * acceptance cannot be observed and the contract reads as stale.
+ *
  * @param {{raw:string, workRef:import("./contracts.mjs").WorkRef,
- *   contract:import("./contracts.mjs").Contract}} input
+ *   contract:import("./contracts.mjs").Contract, bookRaw?:(string|null)}} input
  */
-export function recheckContractSource({ raw, workRef, contract }) {
+export function recheckContractSource({ raw, workRef, contract, bookRaw = undefined }) {
   if (contract.work_id !== workRef.work_id) {
     throw new ContractError("contract " + contract.contract_id + " does not belong to work " + workRef.work_id);
+  }
+  let observedAcceptance;
+  if (contract.acceptance_fingerprint != null && bookRaw !== undefined) {
+    const acceptance = acceptanceRevision({ bookRaw, alias: workRef.alias });
+    if (!acceptance.ok) {
+      return deepFreeze({ resolved: false, reason: acceptance.reason, candidates: [], freshness: null });
+    }
+    observedAcceptance = acceptance.fingerprint;
   }
   const resolution = resolveWorkRef({ raw, locator: workRef.locator });
   if (!resolution.ok) {
@@ -273,16 +398,18 @@ export function recheckContractSource({ raw, workRef, contract }) {
       reason: resolution.reason,
       candidates: resolution.candidates,
       freshness: resolution.observation
-        ? contractFreshness(contract, resolution.observation.textFingerprint)
+        ? contractFreshness(contract, resolution.observation.textFingerprint, observedAcceptance)
         : null,
     });
   }
+  const blocked = deliveryBlockReason({ file: workRef.locator.file, state: resolution.observation.state, contract: acceptanceText({ bookRaw, alias: workRef.alias }) || "" });
+  if (blocked) return deepFreeze({ resolved: false, reason: blocked, candidates: [], observation: resolution.observation, freshness: null });
   return deepFreeze({
     resolved: true,
     reason: null,
     candidates: [],
     observation: resolution.observation,
-    freshness: contractFreshness(contract, resolution.observation.textFingerprint),
+    freshness: contractFreshness(contract, resolution.observation.textFingerprint, observedAcceptance),
   });
 }
 

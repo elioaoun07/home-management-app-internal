@@ -19,6 +19,17 @@
 | Document vault + retry state | `src/components/trips/documents/DocumentsView.tsx` |
 | Add/edit document sheet | `src/components/trips/documents/AddDocumentSheet.tsx` |
 
+### Trip spend (transactions tagged to a trip)
+| Intent | File |
+|---|---|
+| Validate a trip a user may tag with | `src/lib/tripAccess.ts` — `canAccessTrip()` |
+| Store/clear the tag on create + update | `src/services/transaction.service.ts` |
+| Store/clear the tag on a single transaction | `src/app/api/transactions/[id]/route.ts` (PATCH) |
+| Client transaction types | `src/features/transactions/useDashboardTransactions.ts` |
+| Tag behavior tests | `src/services/transaction.service.trip-tag.test.ts` |
+
+> A trip's expenses = the trip account's transactions **∪** transactions tagged with `trip_id` (any account, any date), **deduplicated by id**. No UI writes the tag yet (TRIP-35); no rollup reads it yet (TRIP-5).
+
 ### Feature layer
 | Intent | File |
 |---|---|
@@ -54,6 +65,7 @@
 | Intent | File |
 |---|---|
 | Schema + RPCs | `migrations/schema.sql` (bottom — Trips section) |
+| Tag a transaction to a trip | `transactions.trip_id` — `migrations/2026-09-19_transactions-trip-id.sql` (nullable FK, `ON DELETE SET NULL`) |
 | Activation RPC | `activate_trip(p_trip_id uuid)` |
 | Completion RPC | `complete_trip(p_trip_id uuid)` |
 

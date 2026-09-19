@@ -90,6 +90,9 @@ export type Transaction = {
   /** Frozen USD value of 1 unit of the account's currency, stamped at insert time.
    *  null/undefined = pre-migration row or USD account; treat as 1. */
   exchange_rate?: number | null;
+  /** Optional trip tag. Makes this transaction count toward the trip whatever
+   *  account or date it has — null/undefined = untagged. Never affects balance. */
+  trip_id?: string | null;
 };
 
 type TransactionInput = {
@@ -101,6 +104,7 @@ type TransactionInput = {
   subcategory_id?: string | null;
   is_private?: boolean;
   split_requested?: boolean;
+  trip_id?: string | null;
   // Optional display fields for optimistic UI (not sent to server)
   _optimistic?: {
     category_name?: string | null;
@@ -120,6 +124,8 @@ type TransactionUpdateInput = {
   account_id?: string;
   category_id?: string | null;
   subcategory_id?: string | null;
+  /** null or "" untags. */
+  trip_id?: string | null;
 };
 
 type DashboardParams = {

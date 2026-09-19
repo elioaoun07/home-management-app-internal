@@ -110,6 +110,27 @@ Passport/visa/tickets/insurance vault. `doc_type IN ('passport','visa','ticket',
 
 **Storage:** bucket `trip-documents` (private), path `${user_id}/${trip_id}/${uuid}.${ext}`, mirrors the `receipts`/`wardrobe` bucket pattern — the DB stores the path, never a URL; reads go through a batched, trip-scoped signed-URL route (`POST /api/trips/[id]/documents/signed-urls`, `useTripDocumentUrls()`) so a signed URL can never be minted for a path outside the requested trip.
 
+### `transactions.trip_id` *(added 2026-09-19, migration pending — `migrations/2026-09-19_transactions-trip-id.sql`)*
+Not a trip table — a nullable `uuid` column on **`transactions`**, FK to `trips(id)` `ON DELETE SET NULL`, plus the partial index `idx_transactions_trip_id ... WHERE trip_id IS NOT NULL`.
+
+**Why it exists:** a trip's spend is *not* confined to the account activation creates. Pre-trip costs (visa fees, flights, deposits) are paid from a different account, often in a different currency, and still belong to the trip. `trip_id` makes "counts toward this trip" a tag on the transaction, orthogonal to `account_id` and to the trip's date range.
+
+**The rollup contract** (for whoever builds TRIP-5 / TRIP-11): a trip's expenses are the **union** of
+1. transactions whose `account_id` = the trip's `account_id`, and
+2. transactions whose `trip_id` = the trip — *any* account, *any* date,
+
+**deduplicated by transaction id.** A transaction that sits in the trip account **and** carries the tag must be counted **once**. Write that as a single `.or("account_id.eq.X,trip_id.eq.Y")` or a `UNION` on ids — never two queries summed, which is exactly how the double-count gets shipped.
+
+**`ON DELETE SET NULL` is deliberate.** `DELETE /api/trips/[id]` hard-deletes the trip row. `CASCADE` there would delete money rows; the default `NO ACTION` would make the trip undeletable once anything is tagged. Untagging is the only safe behavior — do not "tidy" this to CASCADE.
+
+**Writes are access-validated, not just FK-validated.** `canAccessTrip()` (`src/lib/tripAccess.ts`, wraps `getAccessibleTrip()`) gates every write — own trip always, partner's trip only at `scope='household'` — so a transaction can never be tagged to a solo trip its author can't see. Enforced in `src/services/transaction.service.ts` (create + update) and `PATCH /api/transactions/[id]`; an inaccessible id is rejected with `Invalid trip_id` → 400 before any DB write.
+
+**Tagging is not a money event.** Setting or clearing `trip_id` never calls `adjustAccountBalance()` and never moves a transaction between accounts. Pinned by `src/services/transaction.service.trip-tag.test.ts`.
+
+**No RLS change was needed** — `transactions` policies are row-level on `user_id`/`household_links` (verified in `migrations/db-state.json`, generated 2026-08-04), so the new column inherits them. This is the one place in the trips family where that's true; every *trip child table* still needs its own `trip_is_accessible()` policy (see trap #7).
+
+As of 2026-09-19 no UI writes this column (TRIP-35) and no rollup reads it (TRIP-5).
+
 ### `trip_side_effects`
 Reversal ledger. One row per side effect fired at activation. `previous_value jsonb` stores what was overwritten. Deleted on trip completion. DO NOT query this table for display — it is an internal rollback log only. **Note:** `Trips/4 - Checklist.md` item TRIP-4 calls for a "trip impact panel" that reads this table for display, which directly contradicts the instruction above — unresolved, flagged in the Master Book Pain Inventory, not decided by this doc.
 
@@ -159,6 +180,8 @@ Reversal ledger. One row per side effect fired at activation. `previous_value js
 11. **Trip documents are cross-device shared state** *(2026-08-06)*: `get_trip_bundle()` primes `tripKeys.documents(tripId)` for fast tab changes, but that snapshot must be revalidated when Docs mounts or the app regains focus. A multi-minute `staleTime` here makes a partner's cached empty array hide a document uploaded on the owner's device. Fetch errors must render a retry state, never the same empty state as a legitimate zero-row result.
 12. **Soft delete ⇒ every packing query needs `deleted_at IS NULL`, including RPCs.** `get_trip_bundle()`'s `packing` array filters it explicitly; any new read path added later (another bundle field, a report, etc.) must too, or a deleted item reappears.
 
+13. **A trip's spend ≠ the trip account's spend** *(2026-09-19)*: the dedicated account activation creates is only *part* of a trip's cost. Anything that totals "what did this trip cost" must union the account's transactions with `transactions.trip_id`-tagged ones and dedupe by id — see the `transactions.trip_id` section above. Summing two separate queries double-counts any transaction that is both in the trip account and tagged. Also: the two sides can be in different currencies, and no conversion exists yet.
+
 ## Out of scope (deferred)
 
 - Multi-currency / FX tracking (no per-account currency exists yet) — place costs now render correctly in the place's own currency via `formatCurrency()`, but there is still no conversion between currencies.
@@ -167,4 +190,4 @@ Reversal ledger. One row per side effect fired at activation. `previous_value js
 - Budget allocation per trip (envelope budgeting) — Overview's "Planned spend" card sums `trip_places.cost` only; it is explicitly labelled "not actuals," not a budget.
 - Shopping list generation from packing items
 - Catalogue/inventory picker for packing items (`inventory_item_id`/`catalogue_item_id` are accepted by the API, populated by no UI)
-- Cross-linking the trip account's real balance/transactions into the Overview tab (junction work; deferred by explicit user request 2026-08-03 in favor of standalone-first)
+- Cross-linking the trip account's real balance/transactions into the Overview tab (junction work; deferred by explicit user request 2026-08-03 in favor of standalone-first). *(Partially unblocked 2026-09-19: `transactions.trip_id` now exists, so the union/dedupe data model for the rollup is settled — TRIP-34. The rollup itself, the tagging UI and cross-currency conversion are all still deferred: TRIP-5, TRIP-35.)*

@@ -63,6 +63,8 @@ import {
   routeDeliveryV2,
 } from "../../scripts/delivery-v2/entry.mjs";
 import { runQualification } from "../../scripts/delivery-v2/probes/claude-qualification.mjs";
+import { openStore } from "../../scripts/delivery-v2/store.mjs";
+import { CSRF_HEADER, SESSION_COOKIE, issuePairingCode, pairSession, sessionView } from "../../scripts/delivery-v2/local-auth.mjs";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -380,9 +382,15 @@ describe("execution policy — a document, with structural refusals", () => {
   });
 });
 
-describe("the deliver route — one path, explicit provider", () => {
-  const headers = { "sec-fetch-site": "same-origin" };
+describe("the deliver route — one path, explicit provider per run", () => {
   const PM_REL = join("ERA Notes", "10 - Project Management");
+  let headers: Record<string, string> = {};
+  const pair = (root: string) => {
+    const { code } = issuePairingCode({ root });
+    const paired = pairSession({ root, code });
+    const cookie = SESSION_COOKIE + "=" + paired.token;
+    headers = { "sec-fetch-site": "same-origin", cookie, [CSRF_HEADER]: String(sessionView({ root, headers: { cookie } }).csrf) };
+  };
 
   function installation() {
     const root = tempRoot();
@@ -397,14 +405,16 @@ describe("the deliver route — one path, explicit provider", () => {
       JSON.stringify({ mode: "v2", actor: "elio" }),
       "utf8",
     );
+    pair(root);
     return root;
   }
 
-  it("refuses to dispatch with no executor selected", async () => {
+  it("refuses to dispatch a run that names no executor, even with an old installation selection", async () => {
     const root = installation();
     try {
+      setExecutorSelection({ root, choice: "claude", actor: "elio" });
       const response = await routeDeliveryV2(
-        { method: "POST", path: "/api/delivery/v2/deliver", headers, body: { actor: "elio" } },
+        { method: "POST", path: "/api/delivery/v2/deliver", headers, body: {} },
         { root, store: {}, deliver: async () => ({ ok: true }) },
       );
       expect(response?.status).toBe(409);
@@ -414,33 +424,27 @@ describe("the deliver route — one path, explicit provider", () => {
     }
   });
 
-  it("refuses a per-request executor that disagrees with the installation's choice", async () => {
+  it("refuses an unknown executor instead of resolving it to the other one", async () => {
     const root = installation();
     try {
-      setExecutorSelection({ root, choice: "claude", actor: "elio" });
       const response = await routeDeliveryV2(
-        {
-          method: "POST",
-          path: "/api/delivery/v2/deliver",
-          headers,
-          body: { actor: "elio", executor: "codex" },
-        },
+        { method: "POST", path: "/api/delivery/v2/deliver", headers, body: { executor: "gpt" } },
         { root, store: {}, deliver: async () => ({ ok: true }) },
       );
       expect(response?.status).toBe(409);
-      expect(response?.json.error).toBe(EXECUTOR_REFUSALS.NOT_PERMITTED);
+      expect(response?.json.error).toBe(EXECUTOR_REFUSALS.UNKNOWN);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
-  it("hands the resolved selection to the policy layer, not the request's opinion", async () => {
+  it("hands the run's own executor to the policy layer; the retired selection file is ignored", async () => {
     const root = installation();
     try {
-      setExecutorSelection({ root, choice: "codex", actor: "elio" });
+      setExecutorSelection({ root, choice: "claude", actor: "elio" });
       let seen: string | null = null;
       await routeDeliveryV2(
-        { method: "POST", path: "/api/delivery/v2/deliver", headers, body: { actor: "elio" } },
+        { method: "POST", path: "/api/delivery/v2/deliver", headers, body: { executor: "codex" } },
         {
           root,
           store: {},
@@ -454,6 +458,42 @@ describe("the deliver route — one path, explicit provider", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  it("refuses an effort the chosen executor does not accept, before touching the store", async () => {
+    const root = installation();
+    try {
+      writeFileSync(
+        join(root, ".delivery", "v2", "execution-policy.json"),
+        JSON.stringify({ ...policyTemplate({ executor: "codex", authorized_by: "elio" }), executors: { ...policyTemplate({ executor: "codex" }).executors, permitted: ["codex", "claude"] } }),
+        "utf8",
+      );
+      const deliver = buildDeliver({
+        root,
+        pmRel: PM_REL,
+        store: () => {
+          throw new Error("the store must not be opened for refused settings");
+        },
+      })!;
+      const codexMax = await deliver({ actor: "elio", executor: "codex", effort: "max", file: "Delivery/4 - Checklist.md", cbidx: 0 });
+      expect(codexMax.ok).toBe(false);
+      expect(JSON.stringify(codexMax.refusals)).toMatch(/unsupported-effort/u);
+      const claudeMinimal = await deliver({ actor: "elio", executor: "claude", effort: "minimal", file: "Delivery/4 - Checklist.md", cbidx: 0 });
+      expect(JSON.stringify(claudeMinimal.refusals)).toMatch(/unsupported-effort/u);
+      const unlisted = await deliver({ actor: "elio", executor: "claude", model: "a-model-nobody-listed", file: "Delivery/4 - Checklist.md", cbidx: 0 });
+      expect(JSON.stringify(unlisted.refusals)).toMatch(/model-not-in-catalog/u);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("re-reads both installed SDKs so the offered efforts never outrun them", () => {
+    const claudeDts = readFileSync(join(repoRoot, "node_modules", "@anthropic-ai", "claude-agent-sdk", "sdk.d.ts"), "utf8");
+    expect(claudeDts).toMatch(/export declare type EffortLevel = 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max';/u);
+    expect(EXECUTORS.find((entry) => entry.id === "claude")!.supportedEfforts).toEqual(["low", "medium", "high", "xhigh", "max"]);
+    const codexDts = readFileSync(join(repoRoot, "node_modules", "@openai", "codex-sdk", "dist", "index.d.ts"), "utf8");
+    expect(codexDts).toMatch(/type ModelReasoningEffort = "minimal" \| "low" \| "medium" \| "high" \| "xhigh";/u);
+    expect(EXECUTORS.find((entry) => entry.id === "codex")!.supportedEfforts).toEqual(["minimal", "low", "medium", "high", "xhigh"]);
   });
 
   it("still refuses when a policy is installed but the profile is unqualified", async () => {
@@ -480,6 +520,83 @@ describe("the deliver route — one path, explicit provider", () => {
       expect(outcome.refusals.map((entry: { code: string }) => entry.code)).toContain("profile-not-admitted");
       expect(outcome.executor).toBe("claude-agent-sdk");
       expect(outcome.dispatched).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("freezes the witnessed row and its Master Book revision, never the row now at the ordinal", async () => {
+    const root = installation();
+    try {
+      setExecutorSelection({ root, choice: "claude", actor: "elio" });
+      writeFileSync(
+        join(root, ".delivery", "v2", "execution-policy.json"),
+        JSON.stringify(policyTemplate({ executor: "claude", authorized_by: "elio" })),
+        "utf8",
+      );
+      const selected = "- [ ] **DLV-99** a selectable row _(friction - S)_";
+      // DLV-98 was prepended after the click, so ordinal 0 now names it.
+      writeFileSync(
+        join(root, PM_REL, "Delivery", "4 - Checklist.md"),
+        "# Delivery\n\n## Now\n\n- [ ] **DLV-98** inserted above _(friction - S)_\n" + selected + "\n",
+        "utf8",
+      );
+      writeFileSync(
+        join(root, PM_REL, "Delivery", "Delivery — Master Book.md"),
+        "## Acceptance Criteria Index\n\n### DLV-99\n\n- **Acceptance:** one admitted pilot.\n",
+        "utf8",
+      );
+      // A synthetic admitted profile: this fixture exercises selection, not containment.
+      const profile = {
+        profile_id: "p-synthetic",
+        backend_id: "claude-agent-sdk",
+        qualified: true,
+        unverifiedControls: [],
+        controls: ["filesystem.outsideScratchWrite", "filesystem.hostSecretRead", "store.workerAccess"].map((id) => ({
+          id,
+          verified: true,
+          state: "supported",
+        })),
+        resources: { strictBound: false, strictBoundRefusalReason: null },
+      };
+      const describeExecutor = async () => ({ ok: true, profile });
+      const request = {
+        actor: "elio",
+        executor: "claude-agent-sdk",
+        file: "Delivery/4 - Checklist.md",
+        cbidx: 0,
+        workspace: { root: join(root, "scratch"), backing: "scratch-snapshot" },
+      };
+
+      const blind = await buildDeliver({
+        root,
+        pmRel: PM_REL,
+        describeExecutor,
+        store: () => {
+          throw new Error("the store must not be opened for a witness-less selection");
+        },
+      })!(request);
+      expect(blind.ok).toBe(false);
+      expect(blind.refusals).toEqual([{ code: "selection-refused", detail: "missing-selection-witness" }]);
+
+      const store = openStore({ path: join(root, ".delivery", "v2", "supervisor.sqlite") });
+      try {
+        const outcome = (await buildDeliver({ root, pmRel: PM_REL, describeExecutor, store })!({
+          ...request,
+          expectLine: selected,
+          expectId: "DLV-99",
+        })) as {
+          workRef?: { alias?: string };
+          contract?: { acceptance_fingerprint?: string | null };
+          dispatched?: boolean;
+        };
+        expect(outcome.workRef?.alias).toBe("DLV-99");
+        expect(outcome.contract?.acceptance_fingerprint).toMatch(/^sha256:/u);
+        expect(store.listWorkRefs().map((ref: { alias: unknown }) => String(ref.alias))).toEqual(["DLV-99"]);
+        expect(outcome.dispatched).toBe(false);
+      } finally {
+        store.close();
+      }
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

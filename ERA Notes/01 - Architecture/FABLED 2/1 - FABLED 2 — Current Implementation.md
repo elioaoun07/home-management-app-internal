@@ -41,7 +41,7 @@ Verified June additions all respected it: new logic landed in `src/lib/` (`budge
 | `safeFetch` for mutations (HR 6) | Convention | ❌ 240 raw `fetch(`, ~99 mutation-shaped |
 | Toast ⇒ Undo (HR 1) | Convention | ◐ unaudited app-wide |
 | Invalidation completeness (HR 17) | Convention + skill | ◐ audit P0 names hot gaps |
-| One expansion engine per fact | Convention | ❌ three schedule engines ([Schedule FABLED 2.1 §2](<../../10 - Project Management/Schedule/FABLED 2/1 - FABLED 2 — Current Implementation.md>)) |
+| One expansion engine per fact | Convention | ❌ three schedule engines ([Schedule FABLED 2.1 §2](<../../10 - Project Management/_Archive/Schedule/FABLED 2/1 - FABLED 2 — Current Implementation.md>)) |
 | One spend definition | **Lib function** (since 06-27) | ✅ new — `sumSpending` et al. |
 
 The pattern is unmistakable: **every hook-backed rule holds; every convention-backed rule leaks.** That asymmetry is the architecture's single most actionable fact.
@@ -50,7 +50,7 @@ The pattern is unmistakable: **every hook-backed rule holds; every convention-ba
 
 - Supabase client separation (browser singleton / server / admin) — respected; the June RLS fix went through a proper migration.
 - **The RPC bundle pattern** (Hard Rules 20/21) — `get_schedule_bundle` remains the canonical one-round-trip read; its body is now *in the repo* (schema.sql, 13 policies alongside). No RLS `EXISTS`-subquery policies on hot child tables — the rule that came from real 500ms-per-table pain.
-- Query discipline: `qk.*` keys, documented TTLs (`BALANCE=5min` … `RECURRING=30min`), **persisted cache with buster versioning** (`hm-rq-cache-v3`) — the June incident added the missing rule: schema-shaped changes require a buster bump ([Budget FABLED 2.3 · O6](<../../10 - Project Management/Budget/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
+- Query discipline: `qk.*` keys, documented TTLs (`BALANCE=5min` … `RECURRING=30min`), **persisted cache with buster versioning** (`hm-rq-cache-v3`) — the June incident added the missing rule: schema-shaped changes require a buster bump ([Budget FABLED 2.3 · O6](<../../10 - Project Management/_Archive/Budget/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
 - Offline: IndexedDB queue (`offlineQueue.ts` + `offlineSyncEngine.ts`) everywhere except the sanctioned shopping-list legacy queue; `isReallyOnline()` probes `/api/health`; June's idempotent-upsert fix made offline replay safe for occurrence actions — a pattern worth generalizing ([file 3 · O4](<3 - FABLED 2 — Optimization Plan.md>)).
 
 ## 4 · The AI architecture (newly real)

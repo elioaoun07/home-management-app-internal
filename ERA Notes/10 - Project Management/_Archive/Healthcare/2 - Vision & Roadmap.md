@@ -11,7 +11,7 @@ tags:
 
 # Healthcare · 2 — Vision & Roadmap
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Healthcare/4 - Checklist.md>)
 
 ## Why this module
 
@@ -35,4 +35,4 @@ The household's health facts (allergies, meds, vaccines, doctors, insurance) liv
 | P3 | Catalogue junction: doctors, insurance expiry → reminder items, hospitals | Planned |
 | P4 | Hub Chat "took my pill", briefing signals, meal-plan badges, med stock, `healthcare` domain skill (skill-factory) | Planned |
 
-Full plan of record: approved implementation plan 2026-07-17 (session plan file `run-a-deep-analysis-cosmic-salamander.md`); origin spec [Module Map Tier 1 #1](<../../07 - Backlog & Ideas/ERA - Module Map & New Module Ideas.md>).
+Full plan of record: approved implementation plan 2026-07-17 (session plan file `run-a-deep-analysis-cosmic-salamander.md`); origin spec [Module Map Tier 1 #1](<../../../07 - Backlog & Ideas/ERA - Module Map & New Module Ideas.md>).

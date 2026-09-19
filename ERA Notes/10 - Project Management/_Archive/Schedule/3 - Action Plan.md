@@ -12,9 +12,9 @@ tags:
 
 # Schedule · 3 — Action Plan
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Schedule/4 - Checklist.md>)
 >
-> **What this file is:** the *why, and in what order* — the call + the sequenced Now/Next/Later queue + the candidate-work tables. The flat, phased, checkable surface (the Master Build Checklist) is [4 · Checklist](<4 - Checklist.md>). **Tell me a line (e.g. _1.3_), a group, or a phase, and I'll work it.**
+> **What this file is:** the *why, and in what order* — the call + the sequenced Now/Next/Later queue + the candidate-work tables. The flat, phased, checkable surface (the Master Build Checklist) is [4 · Checklist](<../../Schedule/4 - Checklist.md>). **Tell me a line (e.g. _1.3_), a group, or a phase, and I'll work it.**
 >
 > **Legend:** Sev 🔴 blocker · 🟠 friction · 🟡 annoyance · ⚪ parked. Effort S/M/H.
 >
@@ -30,7 +30,7 @@ Schedule is 🟢 Core and stable, so the danger isn't missing features — it's 
 
 This mirrors the global theme ("Stabilize, then Connect") at the module level: harden the recurrence core, then connect Schedule outward.
 
-> **Shipped ad-hoc, outside the original sequence:** "Plan My Day" (`/today`, now merged into `/reminders`) — a disrupted-day triage planner (push off / both-direction prepone / ad-hoc tasks / checkpoints), shipped 2026-06-16. Phase 1 only — hourly timeline + mood/energy optimizer deferred. See [2 · Vision](<2 - Vision & Roadmap.md>) Track A and [Plan My Day Overview](<../../03 - Junction Modules/Plan My Day/Overview.md>). Doesn't change the foundation-first call.
+> **Shipped ad-hoc, outside the original sequence:** "Plan My Day" (`/today`, now merged into `/reminders`) — a disrupted-day triage planner (push off / both-direction prepone / ad-hoc tasks / checkpoints), shipped 2026-06-16. Phase 1 only — hourly timeline + mood/energy optimizer deferred. See [2 · Vision](<2 - Vision & Roadmap.md>) Track A and [Plan My Day Overview](<../../../03 - Junction Modules/Plan My Day/Overview.md>). Doesn't change the foundation-first call.
 
 ---
 
@@ -83,7 +83,7 @@ This mirrors the global theme ("Stabilize, then Connect") at the module level: h
 
 ---
 
-> → The flat, phased, checkable build list for everything above (with IDs): **[4 · Checklist](<4 - Checklist.md>)**.
+> → The flat, phased, checkable build list for everything above (with IDs): **[4 · Checklist](<../../Schedule/4 - Checklist.md>)**.
 
 ---
 

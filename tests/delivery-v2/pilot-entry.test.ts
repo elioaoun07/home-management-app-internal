@@ -30,8 +30,10 @@ import {
   readDispatchMode,
   routeDeliveryV2,
   setDispatchMode,
+  setExecutorSelection,
 } from "../../scripts/delivery-v2/entry.mjs";
 import { createDeliveryV2Context, listActiveV1Writers } from "../../scripts/delivery-v2/service.mjs";
+import { CSRF_HEADER, SESSION_COOKIE, issuePairingCode, pairSession, sessionView } from "../../scripts/delivery-v2/local-auth.mjs";
 import { routeDelivery } from "../../scripts/delivery/server-routes.mjs";
 
 /**
@@ -53,6 +55,14 @@ const CHECKLIST = [
 ].join("\n");
 
 const EDITED = CHECKLIST.replace("emits 20", "emits 25");
+
+/** What the owner clicked: BUD-14's alias and exact line, not merely its ordinal. */
+const BUD14 = "- [ ] **BUD-14** quick-amount control emits 20 _(friction - S)_";
+const WITNESS = { alias: "BUD-14", line: BUD14 };
+const EDITED_WITNESS = { alias: "BUD-14", line: BUD14.replace("emits 20", "emits 25") };
+const REORDERED = CHECKLIST.replace("- [ ] **BUD-14**", "- [ ] **BUD-99** inserted above _(friction - S)_\n- [ ] **BUD-14**");
+
+const BOOK = ["## Acceptance Criteria Index", "", "### BUD-14", "", "- **Acceptance:** the control emits 20.", ""].join("\n");
 
 let ROOT: string;
 let store: ReturnType<typeof openStore>;
@@ -76,6 +86,8 @@ function deliver(overrides: Record<string, unknown> = {}) {
     raw: CHECKLIST,
     file: "Budget/4 - Checklist.md",
     cbidx: 0,
+    witness: WITNESS,
+    bookRaw: BOOK,
     requestedDisposition: "verified_candidate",
     scratchScope: { root: "scratch" },
     publicationScope: { allowedPaths: ["src/features/amount.ts"] },
@@ -130,6 +142,17 @@ afterEach(() => {
 });
 
 describe("the installation-wide dispatch switch", () => {
+  it.each([
+    { raw: CHECKLIST.replace("- [ ] **BUD-14**", "- [x] **BUD-14**"), reason: "work-completed" },
+    { bookRaw: BOOK + "\n**Execution:** owner\n", reason: "owner-check" },
+    { bookRaw: BOOK + "\n**Implementation:** done\n", reason: "work-completed" },
+    { file: "Plans/UAT.md", reason: "not-actionable-source" },
+  ])("does not create a run for non-actionable work: $reason", ({ reason, ...overrides }) => {
+    const outcome = deliver(overrides);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.refusals).toContainEqual({ code: "selection-refused", detail: reason });
+    expect(store.listRuns()).toHaveLength(0);
+  });
   it("defaults to v1 when no switch has been set", () => {
     const mode = readDispatchMode({ root: ROOT });
     expect(mode.mode).toBe("v1");
@@ -295,32 +318,64 @@ describe("F-ID / F-AUTH — selection reaches admission, or refuses before spend
     expect(store.getContract(outcome.contract!.contract_id, outcome.contract!.revision)).not.toBeNull();
   });
 
-  it("resolves through the alias, not the ordinal", () => {
+  it("re-resolves the witnessed row after a reorder instead of admitting the row now at its ordinal", () => {
     const first = deliver();
-    // A row prepended above the selection. D01's failure was that the ordinal
-    // silently retargeted; here the same cbidx now names a different row, and the
-    // work identity that comes back is that other row's — the *locator* is what
-    // protects a launch, and it is bound at selection time.
-    const reordered = CHECKLIST.replace("- [ ] **BUD-14**", "- [ ] **BUD-99** inserted above\n- [ ] **BUD-14**");
-    const second = deliver({ raw: reordered, command: { command_id: "cmd-2", actor: "owner" } });
-    expect(second.workRef!.alias).toBe("BUD-99");
-    expect(second.workRef!.work_id).not.toBe(first.workRef!.work_id);
-    // And the two runs are distinct, so nothing was retargeted onto the first.
-    expect(second.run_id).not.toBe(first.run_id);
+    // BUD-99 is prepended after the click, so the clicked ordinal 0 now names it.
+    // Plan finding 3: the ordinal used to freeze BUD-99 here. The witness binds
+    // the launch to BUD-14 wherever it now sits.
+    const second = deliver({ raw: REORDERED });
+    expect(second.ok).toBe(true);
+    expect(second.workRef!.alias).toBe("BUD-14");
+    expect(second.workRef!.work_id).toBe(first.workRef!.work_id);
+    expect(second.run_id).toBe(first.run_id);
+    expect(store.listWorkRefs().map((ref: { alias: unknown }) => String(ref.alias))).toEqual(["BUD-14"]);
   });
 
-  it("refuses a launch whose bound row has been edited", () => {
-    const outcome = deliver({ raw: EDITED, command: { command_id: "cmd-stale", actor: "owner" } });
-    // The freeze happens against the text that is there; the recheck then compares
-    // it to what the locator now resolves. An edited intent must not launch under
-    // a contract frozen from different words.
+  it("refuses a selection with no witness before any store write", () => {
+    const outcome = deliver({ raw: REORDERED, witness: null, command: { command_id: "cmd-blind", actor: "owner" } });
+    expect(outcome.ok).toBe(false);
+    expect(outcome.refusals).toEqual([{ code: ENTRY_REFUSALS.SELECTION, detail: "missing-selection-witness" }]);
+    expect(store.listWorkRefs()).toHaveLength(0);
+  });
+
+  it("refuses a launch whose witnessed row has since been edited", () => {
+    // The owner chose the row while it read "emits 25"; it now reads "emits 20".
+    const outcome = deliver({ witness: EDITED_WITNESS, command: { command_id: "cmd-stale", actor: "owner" } });
+    expect(outcome.ok).toBe(false);
+    expect(outcome.refusals).toEqual([{ code: ENTRY_REFUSALS.SELECTION, detail: "stale-source" }]);
+    expect(store.listWorkRefs()).toHaveLength(0);
+  });
+
+  it("refuses a grant frozen against different words", () => {
+    const edited = deliver({ raw: EDITED, witness: EDITED_WITNESS, command: { command_id: "cmd-edited", actor: "owner" } });
+    // An edited intent must not launch under a contract frozen from other words.
     const stale = deliver({
-      raw: CHECKLIST,
       command: { command_id: "cmd-stale-2", actor: "owner" },
-      grant: grantWith({ contract_id: outcome.contract!.contract_id, contract_revision: 1 }),
+      grant: grantWith({ contract_id: edited.contract!.contract_id, contract_revision: 1 }),
     });
     expect(stale.ok).toBe(false);
     expect(JSON.stringify(stale.refusals)).toMatch(/contract-revision-moved|source-stale/u);
+  });
+
+  it("binds the Master Book acceptance: an edited criterion invalidates a grant for the old contract", () => {
+    const original = deliver();
+    expect(original.contract!.acceptance_fingerprint).toMatch(/^sha256:/u);
+    // The checkbox row is untouched; only the book's BUD-14 section changed.
+    const moved = deliver({
+      bookRaw: BOOK.replace("emits 20.", "emits 20 and announces it."),
+      command: { command_id: "cmd-book", actor: "owner" },
+      grant: grantWith({ contract_id: original.contract!.contract_id, contract_revision: 1 }),
+    });
+    expect(moved.contract!.source_fingerprint).toBe(original.contract!.source_fingerprint);
+    expect(moved.contract!.contract_id).not.toBe(original.contract!.contract_id);
+    expect(moved.ok).toBe(false);
+    expect(JSON.stringify(moved.refusals)).toMatch(/contract-revision-moved|source-stale/u);
+  });
+
+  it("refuses when the Master Book holds two sections for the selected ID", () => {
+    const outcome = deliver({ bookRaw: BOOK + "\n### bud-14\n\n- a second copy\n", command: { command_id: "cmd-two-books", actor: "owner" } });
+    expect(outcome.ok).toBe(false);
+    expect(outcome.refusals).toEqual([{ code: ENTRY_REFUSALS.SELECTION, detail: "ambiguous-acceptance" }]);
   });
 
   it("refuses an ambiguous selection before any command is spent", () => {
@@ -440,7 +495,14 @@ describe("F-RESULT — a reload shows the current unknown, decision and result",
 });
 
 describe("the HTTP surface", () => {
-  const headers = { origin: "http://127.0.0.1:4317", "sec-fetch-site": "same-origin", "x-era-actor": "owner" };
+  // A paired browser session: the actor comes from it, never from a header or body.
+  const pairedHeaders = () => {
+    const { code } = issuePairingCode({ root: ROOT });
+    const paired = pairSession({ root: ROOT, code });
+    const cookie = SESSION_COOKIE + "=" + paired.token;
+    const csrf = String(sessionView({ root: ROOT, headers: { cookie } }).csrf);
+    return { origin: "http://127.0.0.1:4317", "sec-fetch-site": "same-origin", cookie, [CSRF_HEADER]: csrf, "x-era-actor": "mallory" };
+  };
   const ctx = () => ({ root: ROOT, store, allowedOrigins: ["http://127.0.0.1:4317"] });
 
   it("serves the mode unauthenticated, because reading it changes nothing", async () => {
@@ -459,19 +521,39 @@ describe("the HTTP surface", () => {
     expect(readDispatchMode({ root: ROOT }).mode).toBe("v1");
   });
 
+  it("refuses a command that only names its actor", async () => {
+    const res = await routeDeliveryV2(
+      { method: "POST", path: "/api/delivery/v2/mode", body: { mode: "v2", actor: "owner" }, headers: { "sec-fetch-site": "same-origin", "x-era-actor": "owner" } },
+      ctx(),
+    );
+    expect(res!.status).toBe(401);
+    expect(readDispatchMode({ root: ROOT }).mode).toBe("v1");
+  });
+
   it("refuses a deliver in v1 mode", async () => {
     const res = await routeDeliveryV2(
-      { method: "POST", path: "/api/delivery/v2/deliver", body: {}, headers },
+      { method: "POST", path: "/api/delivery/v2/deliver", body: {}, headers: pairedHeaders() },
       ctx(),
     );
     expect(res!.status).toBe(409);
     expect(res!.json.error).toBe(ENTRY_REFUSALS.V2_ROUTE_DISABLED);
   });
 
+  it("refuses a deliver that names no executor, whatever the installation once selected", async () => {
+    setDispatchMode({ root: ROOT, mode: "v2", actor: "owner" });
+    setExecutorSelection({ root: ROOT, choice: "codex", actor: "owner" });
+    const res = await routeDeliveryV2(
+      { method: "POST", path: "/api/delivery/v2/deliver", body: {}, headers: pairedHeaders() },
+      ctx(),
+    );
+    expect(res!.status).toBe(409);
+    expect(res!.json.error).toBe(ENTRY_REFUSALS.NO_EXECUTOR);
+  });
+
   it("refuses a deliver in v2 mode when no pilot policy is installed", async () => {
     setDispatchMode({ root: ROOT, mode: "v2", actor: "owner" });
     const res = await routeDeliveryV2(
-      { method: "POST", path: "/api/delivery/v2/deliver", body: {}, headers },
+      { method: "POST", path: "/api/delivery/v2/deliver", body: { executor: "codex" }, headers: pairedHeaders() },
       ctx(),
     );
     // The honest default: wiring the route did not authorize a gate policy.
@@ -479,11 +561,11 @@ describe("the HTTP surface", () => {
     expect(res!.json.error).toBe(ENTRY_REFUSALS.NO_POLICY);
   });
 
-  it("runs an installed policy in v2 mode", async () => {
+  it("runs an installed policy in v2 mode with the run's executor and the session's actor", async () => {
     setDispatchMode({ root: ROOT, mode: "v2", actor: "owner" });
     const seen: Record<string, unknown>[] = [];
     const res = await routeDeliveryV2(
-      { method: "POST", path: "/api/delivery/v2/deliver", body: { file: "x", cbidx: 0 }, headers },
+      { method: "POST", path: "/api/delivery/v2/deliver", body: { file: "x", cbidx: 0, executor: "codex", actor: "mallory" }, headers: pairedHeaders() },
       {
         ...ctx(),
         deliver: async (input: Record<string, unknown>) => {
@@ -494,12 +576,22 @@ describe("the HTTP surface", () => {
     );
     expect(res!.status).toBe(200);
     // The authenticated actor is what the policy receives, not whatever the body
-    // claimed.
+    // or a header claimed.
     expect(seen[0].actor).toBe("owner");
+    expect(seen[0].executor).toBe("codex-exec-sdk");
+  });
+
+  it("retires the installation-wide executor selection route", async () => {
+    const res = await routeDeliveryV2(
+      { method: "POST", path: "/api/delivery/v2/executor", body: { executor: "claude" }, headers: pairedHeaders() },
+      ctx(),
+    );
+    expect(res!.status).toBe(410);
+    expect(res!.json.error).toBe(ENTRY_REFUSALS.SELECTION_PER_RUN);
   });
 
   it("returns null for a path it does not own", async () => {
-    expect(await routeDeliveryV2({ method: "GET", path: "/api/delivery/sessions", headers }, ctx())).toBeNull();
+    expect(await routeDeliveryV2({ method: "GET", path: "/api/delivery/sessions", headers: {} }, ctx())).toBeNull();
   });
 });
 

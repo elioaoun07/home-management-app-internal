@@ -12,9 +12,9 @@ tags:
 
 # Kitchen · 3 — Action Plan
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Kitchen/4 - Checklist.md>)
 >
-> **What this file is:** the *why, and in what order* for Kitchen — the strategic call and the candidate work as narrative. The flat, checkable version of this plan is [4 · Checklist](<4 - Checklist.md>); tick the boxes there.
+> **What this file is:** the *why, and in what order* for Kitchen — the strategic call and the candidate work as narrative. The flat, checkable version of this plan is [4 · Checklist](<../../Kitchen/4 - Checklist.md>); tick the boxes there.
 
 ---
 
@@ -45,13 +45,13 @@ This mirrors the global theme ("Stabilize, then Connect") — here the pieces ar
 
 ## 🗺️ The sequence (narrative)
 
-**Now — The keystone link.** Inventory low-stock → Shopping List auto-add (gap 2a): when stock drops below threshold, the item appears on the shopping list. ⚠️ Shopping List rides the **legacy localStorage queue** by design — respect that path (see [Sync & Offline](<../../03 - Junction Modules/Sync & Offline/Overview.md>)); don't migrate it as a side-effect.
+**Now — The keystone link.** Inventory low-stock → Shopping List auto-add (gap 2a): when stock drops below threshold, the item appears on the shopping list. ⚠️ Shopping List rides the **legacy localStorage queue** by design — respect that path (see [Sync & Offline](<../../../03 - Junction Modules/Sync & Offline/Overview.md>)); don't migrate it as a side-effect.
 
 **Next — Second link.** Recipe → Inventory deduction (gap 2b): cooking a recipe deducts its ingredients, which then feeds the low-stock trigger. Together these make the loop half-automatic.
 
 **Later — Budget- and AI-aware.** Meal plan budget estimate (gap 2c — coordinate with [Budget · 3 · Action Plan](<../Budget/3 - Action Plan.md>)) and Kitchen → ERA nudges ("low on staples, nothing planned Thursday").
 
-→ Every item above as a checkable line: [4 · Checklist](<4 - Checklist.md>).
+→ Every item above as a checkable line: [4 · Checklist](<../../Kitchen/4 - Checklist.md>).
 
 ---
 

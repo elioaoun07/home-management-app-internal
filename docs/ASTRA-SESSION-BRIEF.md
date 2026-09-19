@@ -1,3 +1,5 @@
+> Historical research commission. The [current PM conventions](<../ERA Notes/10 - Project Management/_Conventions.md>) and [PM index](<../ERA Notes/10 - Project Management/_index.md>) supersede its folder-generation, backlog and session-governance instructions. Keep this as source evidence, not a template for another study tree.
+
 # ASTRA Session Brief — ERA Project Enhancement Study
 
 **For:** GPT-6 Codex (Astra) · **Repo:** `budget-app` (ERA) · **Written:** 2026-09-05 · **Owner:** Elio (solo owner-operator, single-household app)
@@ -36,10 +38,10 @@ You are performing a **deep, evidence-based enhancement study** of the ERA proje
 
 1. `CLAUDE.md` (repo root) — the 28 Hard Rules, module model, Feature Index. **This overrides your defaults.**
 2. `ERA Notes/01 - Architecture/Design Doctrine.md` — the Ten Questions, silent-failure taxonomy, standing decisions, tradeoff priority order. This is *how the owner decides*. Mirror its priority order in every ranking you produce.
-3. `ERA Notes/10 - Project Management/ERA Top Layer — Master Plan (2026-09-02).md` — 386 lines, the active contract. Read §1 (verified state), §2 (north star), §3 (decision register), §5.0 (packet template), §6 (gate table), §8 (anti-plan).
+3. `ERA Notes/10 - Project Management/_Archive/Plans/ERA Top Layer — Master Plan (2026-09-02).md` — 386 lines, the active contract. Read §1 (verified state), §2 (north star), §3 (decision register), §5.0 (packet template), §6 (gate table), §8 (anti-plan).
 4. `ERA Notes/10 - Project Management/_Conventions.md` — the item grammar you must obey.
 5. `ERA Notes/10 - Project Management/_index.md` — campaign map.
-6. `ERA Notes/10 - Project Management/FABLE — Testament (2026-07-18).md` — the operating doctrine for AI sessions here.
+6. `ERA Notes/10 - Project Management/_Archive/FABLE — Testament (2026-07-18).md` — the operating doctrine for AI sessions here.
 7. `ERA Notes/01 - Architecture/Feature Map/_index.md` — intent → exact source files. **Use this as your router instead of blind Glob/Grep.**
 8. Per campaign, when you reach it: `<Campaign>/<Campaign> — Master Book.md` then `<Campaign>/4 - Checklist.md`.
 
@@ -260,7 +262,7 @@ A frontier proposal may challenge the current architecture, the roadmap, the age
 
 ### 7.4 The portfolio — `ASTRA — 10x Portfolio.md`
 
-After all workstreams are studied, write `ERA Notes/10 - Project Management/ASTRA — 10x Portfolio.md`. **This is not another roadmap.** It is a one-page decision sheet holding only the **10 highest-leverage changes across the entire ERA ecosystem**, regardless of module.
+After all workstreams are studied, write `ERA Notes/10 - Project Management/_Archive/Studies/ASTRA/ASTRA — 10x Portfolio.md`. **This is not another roadmap.** It is a one-page decision sheet holding only the **10 highest-leverage changes across the entire ERA ecosystem**, regardless of module.
 
 | Rank | Change | User impact | Engineering leverage | Evidence confidence | Effort | Existing packet / NEW |
 |---|---|---|---|---|---|---|
@@ -289,7 +291,7 @@ Ten excellent packets are worth more than fifty reasonable ones. If a campaign g
 
 ## 8 · Cross-cutting output requirements
 
-**Contradiction Register** (`ERA Notes/10 - Project Management/ASTRA — Contradiction Register.md`): every place your findings disagree with a locked decision, a Master Book claim, a Hard Rule, or the Top Layer plan. Each entry: the claim, its source, your evidence, the consequence, and a recommended resolution. **This is the highest-value artifact you will produce** — it is where the owner learns something. Do not soften it, and do not act on it unilaterally.
+**Contradiction Register** (`ERA Notes/10 - Project Management/_Archive/Studies/ASTRA/ASTRA — Contradiction Register.md`): every place your findings disagree with a locked decision, a Master Book claim, a Hard Rule, or the Top Layer plan. Each entry: the claim, its source, your evidence, the consequence, and a recommended resolution. **This is the highest-value artifact you will produce** — it is where the owner learns something. Do not soften it, and do not act on it unilaterally.
 
 **Plan reconciliation table** (in each Packets doc): every proposal is one of —
 - `DOCKS → E-04` — refines an existing Top Layer packet (say how),

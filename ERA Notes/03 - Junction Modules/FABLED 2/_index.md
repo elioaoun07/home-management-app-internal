@@ -14,7 +14,7 @@ tags:
 > ⚠️ **Frozen v2 baseline (2026-07-02)** — superseded 2026-07-18 by [`FABLED 3/`](<../FABLED 3/_index.md>) (model-generation handoff). Do not update; new history goes to the FABLED 3 delta ledger.
 
 
-> The deep-dive over the **junction layer as a whole** — the bridges between standalones, which the FAR correctly identified as where this app's compound advantage lives. Verified against the working tree **2026-07-02**. Per-junction depth: [Hub & ERA](<../../10 - Project Management/Hub & ERA/FABLED 2/_index.md>), [Trips](<../../10 - Project Management/Trips/FABLED 2/_index.md>), [Notifications](<../../10 - Project Management/Notifications & Alerts/FABLED 2/_index.md>), Kitchen's Shopping List ([Kitchen FABLED 2](<../../10 - Project Management/Kitchen/FABLED 2/_index.md>)).
+> The deep-dive over the **junction layer as a whole** — the bridges between standalones, which the FAR correctly identified as where this app's compound advantage lives. Verified against the working tree **2026-07-02**. Per-junction depth: [Hub & ERA](<../../10 - Project Management/_Archive/Hub & ERA/FABLED 2/_index.md>), [Trips](<../../10 - Project Management/_Archive/Trips/FABLED 2/_index.md>), [Notifications](<../../10 - Project Management/_Archive/Notifications & Alerts/FABLED 2/_index.md>), Kitchen's Shopping List ([Kitchen FABLED 2](<../../10 - Project Management/_Archive/Kitchen/FABLED 2/_index.md>)).
 
 | # | File | Read it when… |
 |---|---|---|
@@ -35,6 +35,6 @@ tags:
 
 ## The next 3 moves
 
-1. **Verify the Trips cascade** — the layer's one irreversibility risk ([Trips FABLED 2.3](<../../10 - Project Management/Trips/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
+1. **Verify the Trips cascade** — the layer's one irreversibility risk ([Trips FABLED 2.3](<../../10 - Project Management/_Archive/Trips/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
 2. **Rehearse the fact-bridge pattern small** — Debt→Reminder before Recurring↔Schedule ([file 3 · O2](<3 - FABLED 2 — Optimization Plan.md>)).
-3. **Start the spine policy-first** — delivery policy before composer before signals-store ([FAR FABLED 2.3](<../../10 - Project Management/Functional Architecture Review/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
+3. **Start the spine policy-first** — delivery policy before composer before signals-store ([FAR FABLED 2.3](<../../10 - Project Management/_Archive/Functional Architecture Review/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).

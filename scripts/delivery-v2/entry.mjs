@@ -36,12 +36,23 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { contentId, deepFreeze, normalizePath } from "./contracts.mjs";
+import { ContractError, contentId, deepFreeze, normalizePath } from "./contracts.mjs";
 import { freezeSelectedItem, recheckContractSource } from "./work-ref.mjs";
 import { ADMISSION_REFUSALS, admitJob, resourceSummary } from "./jobs.mjs";
 import { buildResult } from "./results.mjs";
 import { summarizeCriteria } from "./criteria.mjs";
 import { EXECUTOR_REFUSALS, listExecutors, resolveExecutorChoice } from "./adapters/registry.mjs";
+import {
+  SESSION_COOKIE,
+  authenticateLocal,
+  checkOrigin,
+  clearedSessionCookie,
+  pairSession,
+  parseCookies,
+  revokeSession,
+  sessionCookie,
+  sessionView,
+} from "./local-auth.mjs";
 
 /** The installation-wide switch. Exactly two values; there is no per-item choice. */
 export const DISPATCH_MODES = Object.freeze(["v1", "v2"]);
@@ -68,6 +79,7 @@ export const ENTRY_REFUSALS = Object.freeze({
   NO_EXECUTOR: EXECUTOR_REFUSALS.NONE_SELECTED,
   BAD_EXECUTOR: EXECUTOR_REFUSALS.UNKNOWN,
   EXECUTOR_NOT_PERMITTED: EXECUTOR_REFUSALS.NOT_PERMITTED,
+  SELECTION_PER_RUN: "executor-selection-is-per-run",
 });
 
 /**
@@ -423,8 +435,9 @@ export function authenticateCommand({ headers = {}, allowedOrigins = [], actor =
 // ---------------------------------------------------------------------------
 
 /** Deterministic run identity for one contract revision, so a retry finds the same run. */
-export function deriveRunId({ work_id, contract_id, contract_revision }) {
-  return contentId("r", { v: 1, work_id, contract_id, contract_revision });
+export function deriveRunId({ work_id, contract_id, contract_revision, attempt = 0 }) {
+  // Attempt 0 keeps the original identity; a successor after a closed run is 1, 2…
+  return contentId("r", { v: 1, work_id, contract_id, contract_revision, attempt: attempt || undefined });
 }
 
 /**
@@ -440,20 +453,31 @@ export function deriveRunId({ work_id, contract_id, contract_revision }) {
  * adoption registry" clause: no backlog is adopted into a lifecycle database by
  * the act of looking at it.
  *
+ * The click must carry a witness (the row's alias and exact line). The ordinal is
+ * only a hint: a reordered checklist re-resolves the witnessed row or refuses, so
+ * a row prepended above the selection can never be the one admitted. `bookRaw` is
+ * the campaign Master Book (null when unreadable); its `### <ID>` revision is
+ * frozen into the contract, so an acceptance edit invalidates grants bound to it.
+ *
  * @param {{store:object, raw:string, file:string, cbidx:number,
+ *   witness:(object|null), bookRaw:(string|null),
  *   requestedDisposition:string, outcome?:(string|null),
  *   criteria?:object[], scratchScope:object, publicationScope:object,
  *   grant:import("./contracts.mjs").Grant, profileAdmission:object,
  *   backend_id:string, reservation:object, instruction:string,
  *   workspace:{root:string, backing?:string}, command:{command_id:string, actor:string, payload?:object},
  *   now?:(string|null), nextJobCost?:(number|null), repairDispatchLimit?:(number|null),
- *   purpose?:string}} input
+ *   purpose?:string, access?:(string|null), settings?:(Record<string, unknown>|null),
+ *   native_limits?:Record<string, unknown>,
+ *   gate?:(((store:any)=>{code:string, detail:unknown}[])|null)}} input
  */
 export function deliverSelection({
   store,
   raw,
   file,
   cbidx,
+  witness = null,
+  bookRaw,
   requestedDisposition,
   outcome = null,
   criteria = [],
@@ -470,11 +494,20 @@ export function deliverSelection({
   nextJobCost = null,
   repairDispatchLimit = null,
   purpose = "start",
+  access = null,
+  settings = null,
+  native_limits = {},
+  gate = null,
 }) {
+  if (bookRaw === undefined) {
+    throw new ContractError("deliverSelection requires bookRaw (the Master Book text, or null when unreadable)");
+  }
   const frozen = freezeSelectedItem({
     raw,
     file,
     cbidx,
+    witness,
+    bookRaw,
     outcome: outcome || undefined,
     requestedDisposition,
     criteria,
@@ -495,18 +528,41 @@ export function deliverSelection({
 
   // Re-read the bound source through the locator, so the launch is checked
   // against the row as it is *now* rather than as it was when the click landed.
-  const recheck = recheckContractSource({ raw, workRef: frozen.workRef, contract: frozen.contract });
+  const recheck = recheckContractSource({ raw, workRef: frozen.workRef, contract: frozen.contract, bookRaw });
   const sourceFresh = Boolean(recheck.resolved && recheck.freshness && recheck.freshness.fresh);
 
-  const run_id = deriveRunId({
-    work_id: frozen.workRef.work_id,
-    contract_id: frozen.contract.contract_id,
-    contract_revision: frozen.contract.revision,
-  });
+  // A repeated command belongs to the run it first admitted into. Otherwise the
+  // first attempt number whose run is not closed: a closed run is history, and a
+  // later delivery of the same contract is its successor, not a rewrite.
+  const priorCommand = store.getCommand ? store.getCommand(command.command_id) : null;
+  let priorRun = null;
+  if (priorCommand && priorCommand.outcome_json) {
+    try {
+      const recorded = JSON.parse(String(priorCommand.outcome_json));
+      const priorJob = recorded && recorded.job_id ? store.getJob(recorded.job_id) : null;
+      priorRun = priorJob ? String(priorJob.run_id) : null;
+    } catch {
+      priorRun = null;
+    }
+  }
+  let attempt = 0;
+  let run_id = priorRun;
+  while (!run_id) {
+    const candidate = deriveRunId({
+      work_id: frozen.workRef.work_id,
+      contract_id: frozen.contract.contract_id,
+      contract_revision: frozen.contract.revision,
+      attempt,
+    });
+    const existing = store.getRun(candidate);
+    if (!existing || existing.lifecycle !== "CLOSED") run_id = candidate;
+    else attempt += 1;
+  }
 
   return store.transaction(() => {
     store.putWorkRef(frozen.workRef);
     store.putContract(frozen.contract);
+    store.putGrant(grant);
     if (!store.getRun(run_id)) {
       store.insertRun({
         run_id,
@@ -517,6 +573,7 @@ export function deliverSelection({
         grant_revision: grant.revocation_version,
         lifecycle: "ACTIVE",
       });
+      if (settings) store.updateRun(run_id, { settings_json: settings });
     }
 
     const admission = admitJob({
@@ -529,12 +586,15 @@ export function deliverSelection({
       backend_id,
       reservation,
       instruction,
-      workspace,
+      workspace: access ? { ...workspace, access } : workspace,
       command,
       now,
       sourceFresh,
       nextJobCost,
       repairDispatchLimit,
+      settings,
+      native_limits,
+      gate,
     });
 
     const refusals = [...admission.refusals];
@@ -689,10 +749,16 @@ const json = (status, body) => ({ status, json: body });
  * Those are policy, they come from the caller, and keeping the seam explicit is
  * what stops this file from growing a default policy nobody authorized.
  *
- * @param {{method:string, path:string, query?:URLSearchParams, body?:object,
- *   headers?:Record<string, string|undefined>}} req
- * @param {{root:string, store:object, allowedOrigins?:string[], deliver?:Function,
- *   activeV1Writers?:Function, unreconciledV2Jobs?:Function, now?:Function}} ctx
+ * Command Center Phase 3: every consequential request and every run read carries
+ * a paired local session (or the bridge credential); the actor comes from that
+ * credential, never from the body. The executor is chosen per run.
+ *
+ * @param {{method:string, path:string, query?:URLSearchParams, body?:any,
+ *   headers?:Record<string, any>}} req
+ * @param {{root:string, store?:any, allowedOrigins?:string[], deliver?:any, journey?:any,
+ *   describeExecutors?:any, hasStore?:any, listExecutors?:any,
+ *   activeV1Writers?:any, unreconciledV2Jobs?:any, now?:any}} ctx
+ * @returns {Promise<({status:number, json:any, headers?:Record<string, string>}|null)>}
  */
 export async function routeDeliveryV2({ method, path, query, body = {}, headers = {} }, ctx) {
   if (!path.startsWith("/api/delivery/v2/")) return null;
@@ -701,22 +767,82 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
     return json(200, readDispatchMode({ root: ctx.root }));
   }
 
-  // Reading which executor is selected — and what the catalogue offers — is not a
-  // consequential command, so it is unauthenticated like the mode read. Changing
-  // it is, and goes through authenticateCommand below.
-  if (method === "GET" && path === "/api/delivery/v2/executor") {
-    return json(200, {
-      selection: readExecutorSelection({ root: ctx.root }),
-      executors: ctx.listExecutors ? ctx.listExecutors() : listExecutors(),
-    });
+  // Whether this browser is paired, and its CSRF token. Readable only same-origin.
+  if (method === "GET" && path === "/api/delivery/v2/session") {
+    return json(200, sessionView({ root: ctx.root, headers }));
   }
 
-  const auth = authenticateCommand({
-    headers,
-    allowedOrigins: ctx.allowedOrigins || [],
-    actor: body.actor ?? null,
-  });
-  if (!auth.ok) return json(auth.status, { error: auth.refusal.code, detail: auth.refusal.detail });
+  // The executor catalogue with each backend's qualification, supported efforts
+  // and the installation's model list. Not a command, so not authenticated.
+  if (method === "GET" && (path === "/api/delivery/v2/executor" || path === "/api/delivery/v2/executors")) {
+    const catalogue = ctx.describeExecutors
+      ? await ctx.describeExecutors()
+      : { executors: ctx.listExecutors ? ctx.listExecutors() : listExecutors() };
+    return json(200, { ...catalogue, selection: "per-run", legacySelection: readExecutorSelection({ root: ctx.root }) });
+  }
+
+  if (method === "POST" && path === "/api/delivery/v2/session/pair") {
+    const origin = checkOrigin({ headers, allowedOrigins: ctx.allowedOrigins || [] });
+    if (!origin.ok) {
+      return json(403, { error: origin.refusal ? origin.refusal.code : ENTRY_REFUSALS.CROSS_ORIGIN, detail: origin.refusal ? origin.refusal.detail : null });
+    }
+    const paired = pairSession({ root: ctx.root, code: String((body && body.code) || ""), kind: "browser" });
+    if (!paired.ok || !paired.token) {
+      return json(403, { error: paired.refusal ? paired.refusal.code : "pairing-code-invalid", detail: paired.refusal ? paired.refusal.detail : null });
+    }
+    const view = sessionView({ root: ctx.root, headers: { cookie: SESSION_COOKIE + "=" + paired.token } });
+    return { status: 200, json: view, headers: { "Set-Cookie": sessionCookie(paired.token) } };
+  }
+
+  const auth = authenticateLocal({ root: ctx.root, headers, allowedOrigins: ctx.allowedOrigins || [] });
+  if (!auth.ok || !auth.actor) {
+    return json(auth.status, { error: auth.refusal ? auth.refusal.code : ENTRY_REFUSALS.UNAUTHENTICATED, detail: auth.refusal ? auth.refusal.detail : null });
+  }
+
+  if (method === "POST" && path === "/api/delivery/v2/session/revoke") {
+    const lower = {};
+    for (const [key, value] of Object.entries(headers || {})) lower[String(key).toLowerCase()] = value;
+    revokeSession({ root: ctx.root, token: parseCookies(lower.cookie)[SESSION_COOKIE] });
+    return { status: 200, json: { paired: false, actor: null, csrf: null }, headers: { "Set-Cookie": clearedSessionCookie() } };
+  }
+
+  if (method === "GET" && path === "/api/delivery/v2/runs") {
+    const available = ctx.journey && (!ctx.hasStore || ctx.hasStore());
+    return json(200, { runs: available ? ctx.journey.list() : [] });
+  }
+
+  // Command Center Phase 5: slots, waiting items with their verdicts, owner
+  // decisions, and an item's verdict before it launches.
+  if (method === "GET" && path === "/api/delivery/v2/queue") {
+    const available = ctx.journey && (!ctx.hasStore || ctx.hasStore());
+    return json(200, { queue: available ? ctx.journey.queue() : null });
+  }
+
+  if (method === "GET" && path === "/api/delivery/v2/assess") {
+    if (!ctx.journey) return json(404, { error: ENTRY_REFUSALS.UNKNOWN_RUN, detail: null });
+    const outcome = ctx.journey.assess({
+      file: (query && query.get("file")) || "",
+      id: (query && query.get("id")) || "",
+      withoutStore: Boolean(ctx.hasStore && !ctx.hasStore()),
+    });
+    return json(outcome.ok ? 200 : 409, outcome);
+  }
+
+  // The recorded outcome of one command id, so a caller that lost a reply can ask
+  // instead of resending. Only the actor who sent it may read it.
+  if (method === "GET" && path === "/api/delivery/v2/command") {
+    const command_id = (query && query.get("id")) || "";
+    const state = ctx.journey && (!ctx.hasStore || ctx.hasStore()) ? ctx.journey.commandState(command_id) : null;
+    if (!state || state.actor !== auth.actor) return json(404, { error: "unknown-command", detail: command_id });
+    return json(200, state);
+  }
+
+  if (method === "GET" && path === "/api/delivery/v2/run/events") {
+    const run_id = (query && query.get("id")) || "";
+    const after = Number((query && query.get("after")) || 0);
+    if (!ctx.journey) return json(404, { error: ENTRY_REFUSALS.UNKNOWN_RUN, detail: run_id });
+    return json(200, { events: ctx.journey.events(run_id, after) });
+  }
 
   if (method === "POST" && path === "/api/delivery/v2/mode") {
     const outcome = setDispatchMode({
@@ -730,19 +856,17 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
     return json(outcome.ok ? 200 : 409, outcome);
   }
 
+  // Superseded 2026-09-11: the executor belongs to the run, not the installation.
   if (method === "POST" && path === "/api/delivery/v2/executor") {
-    const outcome = setExecutorSelection({
-      root: ctx.root,
-      choice: body.executor ?? body.backend_id ?? body.id ?? null,
-      actor: auth.actor,
-      now: ctx.now ? ctx.now() : null,
+    return json(410, {
+      error: ENTRY_REFUSALS.SELECTION_PER_RUN,
+      detail: "choose the executor, model and effort on each run",
     });
-    return json(outcome.ok ? 200 : 409, outcome);
   }
 
   if (method === "GET" && path === "/api/delivery/v2/run") {
     const run_id = (query && query.get("id")) || "";
-    const projection = projectRun({ store: ctx.store, run_id });
+    const projection = ctx.journey ? ctx.journey.detail(run_id) : projectRun({ store: ctx.store, run_id });
     return json(projection.ok ? 200 : 404, projection);
   }
 
@@ -754,34 +878,31 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
         detail: "this installation is in v1 dispatch mode",
       });
     }
-    // Before anything else: which executor is this? A dispatch with no chosen
-    // provider is refused rather than defaulted, and a request naming an executor
-    // other than the installation's selection is refused rather than honoured —
-    // the selection is the installation's decision, not a per-click one, and a
-    // stale dashboard must not be able to move it by asking.
-    const selection = readExecutorSelection({ root: ctx.root });
-    if (!selection.backend_id) {
-      return json(409, {
-        error: ENTRY_REFUSALS.NO_EXECUTOR,
-        detail: selection.note || "no executor is selected for this installation",
-      });
+    // The run names its executor. There is no installation default to fall back
+    // on, and an unknown name is refused rather than resolved to something.
+    if (body.executor == null || String(body.executor).trim() === "") {
+      return json(409, { error: ENTRY_REFUSALS.NO_EXECUTOR, detail: "choose Claude or Codex for this run" });
     }
-    if (body.executor != null) {
-      const requested = resolveExecutorChoice(body.executor);
-      if (!requested) {
-        return json(409, { error: ENTRY_REFUSALS.BAD_EXECUTOR, detail: String(body.executor) });
-      }
-      if (requested.backend_id !== selection.backend_id) {
-        return json(409, {
-          error: ENTRY_REFUSALS.EXECUTOR_NOT_PERMITTED,
-          detail:
-            "this request asks for " +
-            requested.label +
-            " but the installation is set to " +
-            selection.label +
-            "; change the selection explicitly rather than per dispatch",
-        });
-      }
+    const requested = resolveExecutorChoice(body.executor);
+    if (!requested) {
+      return json(409, { error: ENTRY_REFUSALS.BAD_EXECUTOR, detail: String(body.executor) });
+    }
+    if (ctx.journey) {
+      const outcome = await ctx.journey.deliver({
+        file: body.file,
+        cbidx: body.cbidx,
+        witness: body.witness,
+        expectLine: body.expectLine,
+        expectId: body.expectId,
+        executor: requested.backend_id,
+        model: body.model ?? null,
+        effort: body.effort ?? null,
+        workProfile: body.workProfile ?? null,
+        requestedDisposition: body.requestedDisposition,
+        command_id: body.command_id,
+        actor: auth.actor,
+      });
+      return json(outcome.ok ? 200 : 409, outcome);
     }
     if (typeof ctx.deliver !== "function") {
       // Not an error — the normal state of an installation whose pilot gate
@@ -796,12 +917,77 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
     const outcome = await ctx.deliver({
       ...body,
       actor: auth.actor,
-      installation: auth.installation,
-      // The resolved selection, not the request's opinion of it. The policy layer
-      // never re-reads the choice and never picks one of its own.
-      executor: selection.backend_id,
+      session: auth.session_id,
+      executor: requested.backend_id,
     });
     return json(outcome.ok ? 200 : 409, outcome);
+  }
+
+  if (method === "POST" && ctx.journey) {
+    const actor = auth.actor;
+    const text = (value) => (value == null ? "" : String(value));
+    const reply = (outcome) =>
+      json(
+        outcome.ok ? 200 : outcome.refusals && outcome.refusals.some((entry) => entry.code === ENTRY_REFUSALS.UNKNOWN_RUN) ? 404 : 409,
+        outcome,
+      );
+    if (path === "/api/delivery/v2/apply") {
+      return reply(
+        await ctx.journey.apply({
+          run_id: text(body.run_id),
+          action: text(body.action || "apply"),
+          candidate_id: body.candidate_id == null ? null : String(body.candidate_id),
+          result_ref: body.result_ref == null ? null : String(body.result_ref),
+          application_id: body.application_id == null ? null : String(body.application_id),
+          preview_digest: body.preview_digest == null ? null : String(body.preview_digest),
+          expected_revision: body.expected_revision == null ? null : Number(body.expected_revision),
+          command_id: text(body.command_id),
+          actor,
+        }),
+      );
+    }
+    if (path === "/api/delivery/v2/decision") {
+      return reply(
+        await ctx.journey.decide({
+          run_id: text(body.run_id),
+          plan_id: text(body.plan_id),
+          plan_revision: Number(body.plan_revision),
+          contract_revision: body.contract_revision == null ? null : Number(body.contract_revision),
+          decision: text(body.decision),
+          feedback: body.feedback == null ? null : String(body.feedback),
+          command_id: text(body.command_id),
+          actor,
+        }),
+      );
+    }
+    if (path === "/api/delivery/v2/answer") {
+      return reply(
+        await ctx.journey.answer({
+          run_id: text(body.run_id),
+          question_id: text(body.question_id),
+          plan_revision: Number(body.plan_revision),
+          answer: text(body.answer),
+          command_id: text(body.command_id),
+          actor,
+        }),
+      );
+    }
+    if (path === "/api/delivery/v2/message") {
+      return reply(await ctx.journey.message({ run_id: text(body.run_id), body: text(body.body), command_id: text(body.command_id), actor }));
+    }
+    if (path === "/api/delivery/v2/control") {
+      return reply(
+        await ctx.journey.control({
+          run_id: text(body.run_id),
+          action: text(body.action),
+          command_id: text(body.command_id),
+          actor,
+          executor: body.executor ?? null,
+          model: body.model ?? null,
+          effort: body.effort ?? null,
+        }),
+      );
+    }
   }
 
   return json(404, { error: "unknown v2 delivery route" });

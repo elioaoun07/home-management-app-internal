@@ -44,6 +44,7 @@ The expense form is the precision tool for logging a spend. Pick an account → 
   - `src/app/api/transactions/route.ts` (list + create)
   - `src/app/api/transactions/[id]/route.ts` (update + delete)
 - **DB tables**: `transactions`, `transfers`
+- **Trip tagging**: `transactions.trip_id` (nullable FK → `trips`) lets a transaction count toward a trip without changing its account — see [../junction/trips.md](../junction/trips.md)
 - **Type**: `src/types/transaction.ts` (or similar — confirm in repo)
 
 ## Common edit scenarios
@@ -67,6 +68,7 @@ The expense form is the precision tool for logging a spend. Pick an account → 
 - `safeFetch()` with default 3 s timeout is fine for create/update — but voice-entry endpoints that call AI must pass `timeoutMs: 60_000`.
 - LBP amounts are stored in **thousands** per user preference — see `src/features/preferences/useLbpSettings.ts`.
 - Custom month start day (1–31) affects which month a transaction belongs to — see `startOfCustomMonth(date, monthStartDay)` in `src/lib/utils/date.ts`.
+- `trip_id` is a **tag, not a move** — setting or clearing it never changes `account_id` and never calls `adjustAccountBalance()`. Writes are validated with `canAccessTrip()` (`src/lib/tripAccess.ts`): own trip always, partner's only at `scope='household'`.
 
 ## Connected modules
 

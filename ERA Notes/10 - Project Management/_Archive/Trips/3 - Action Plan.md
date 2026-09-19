@@ -12,9 +12,9 @@ tags:
 
 # Trips · 3 — Action Plan
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Trips/4 - Checklist.md>)
 >
-> **What this file is:** the *why, and in what order* for Trips — the strategic call and the candidate work as narrative. The flat, checkable version of this plan is [4 · Checklist](<4 - Checklist.md>); tick the boxes there.
+> **What this file is:** the *why, and in what order* for Trips — the strategic call and the candidate work as narrative. The flat, checkable version of this plan is [4 · Checklist](<../../Trips/4 - Checklist.md>); tick the boxes there.
 
 ---
 
@@ -45,13 +45,13 @@ This is the deferred item from the global plan, surfaced to the module level: **
 
 ## 🗺️ The sequence (narrative)
 
-**Now — Verify the foundation.** Run a real household trip and a real solo trip through activate→complete; confirm every cascade fires and reverses cleanly via `trip_side_effects`, and confirm `recurring_payments` stay active (deliberate rule). → [Trips / Overview](<../../03 - Junction Modules/Trips/Overview.md>).
+**Now — Verify the foundation.** Run a real household trip and a real solo trip through activate→complete; confirm every cascade fires and reverses cleanly via `trip_side_effects`, and confirm `recurring_payments` stay active (deliberate rule). → [Trips / Overview](<../../../03 - Junction Modules/Trips/Overview.md>).
 
 **Next — Make it legible.** Build the side-effect transparency "trip impact" panel reading `trip_side_effects` — what a trip paused/cancelled/created/reassigned, and what completion will reverse. Doubles as a permanent verification tool.
 
 **Later — Make it richer.** Trip budget rollup / post-trip summary, then per-cascade opt-out — only once the cascades are verified and legible.
 
-→ Every item above as a checkable line: [4 · Checklist](<4 - Checklist.md>).
+→ Every item above as a checkable line: [4 · Checklist](<../../Trips/4 - Checklist.md>).
 
 ---
 

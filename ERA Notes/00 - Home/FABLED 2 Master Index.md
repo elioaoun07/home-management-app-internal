@@ -24,13 +24,13 @@ Scores are each folder's self-assessed **Overall maturity** (0–2 absent · 3�
 
 | Campaign | Overall | Index |
 |---|---|---|
-| Notifications & Alerts | **5.8** *(2026-07-10)* | [Notifications & Alerts/FABLED 2](<../10 - Project Management/Notifications & Alerts/FABLED 2/_index.md>) |
-| Budget | **5.4** | [Budget/FABLED 2](<../10 - Project Management/Budget/FABLED 2/_index.md>) |
-| Schedule | **5.3** | [Schedule/FABLED 2](<../10 - Project Management/Schedule/FABLED 2/_index.md>) |
-| Hub & ERA | **4.0** | [Hub & ERA/FABLED 2](<../10 - Project Management/Hub & ERA/FABLED 2/_index.md>) |
-| Kitchen | **3.0** | [Kitchen/FABLED 2](<../10 - Project Management/Kitchen/FABLED 2/_index.md>) |
-| Trips | **2.8** | [Trips/FABLED 2](<../10 - Project Management/Trips/FABLED 2/_index.md>) |
-| PM system itself | **5.8** | [10 - Project Management/FABLED 2](<../10 - Project Management/FABLED 2/_index.md>) |
+| Notifications & Alerts | **5.8** *(2026-07-10)* | [Notifications & Alerts/FABLED 2](<../10 - Project Management/_Archive/Notifications & Alerts/FABLED 2/_index.md>) |
+| Budget | **5.4** | [Budget/FABLED 2](<../10 - Project Management/_Archive/Budget/FABLED 2/_index.md>) |
+| Schedule | **5.3** | [Schedule/FABLED 2](<../10 - Project Management/_Archive/Schedule/FABLED 2/_index.md>) |
+| Hub & ERA | **4.0** | [Hub & ERA/FABLED 2](<../10 - Project Management/_Archive/Hub & ERA/FABLED 2/_index.md>) |
+| Kitchen | **3.0** | [Kitchen/FABLED 2](<../10 - Project Management/_Archive/Kitchen/FABLED 2/_index.md>) |
+| Trips | **2.8** | [Trips/FABLED 2](<../10 - Project Management/_Archive/Trips/FABLED 2/_index.md>) |
+| PM system itself | **5.8** | [10 - Project Management/FABLED 2](<../10 - Project Management/_Archive/FABLED 2/_index.md>) |
 
 The shape to notice: **Notifications & Alerts moved from weakest-but-one to tied-strongest this session** (registry + unified alerts page + a real bug fix + two new capabilities) — the rest of the ranking still shows the money core strong and the junction-heavy clusters (Hub & ERA, Trips) weakest, exactly inverted from where the product's identity (proactive assistant, cross-module cascades) needs strength.
 
@@ -55,16 +55,16 @@ Same shape again: **junction documentation (03) is the weakest section** while s
 
 ## Review companions (unscored — they audit events, not state)
 
-- [Codebase Audit 2026-07-01/FABLED 2](<../10 - Project Management/Codebase Audit 2026-07-01/FABLED 2/_index.md>)
-- [Functional Architecture Review/FABLED 2](<../10 - Project Management/Functional Architecture Review/FABLED 2/_index.md>)
-- [FAR Execution Checklist/FABLED 2](<../10 - Project Management/FAR Execution Checklist/FABLED 2/_index.md>)
+- [Codebase Audit 2026-07-01/FABLED 2](<../10 - Project Management/_Archive/Codebase Audit 2026-07-01/FABLED 2/_index.md>)
+- [Functional Architecture Review/FABLED 2](<../10 - Project Management/_Archive/Functional Architecture Review/FABLED 2/_index.md>)
+- [FAR Execution Checklist/FABLED 2](<../10 - Project Management/_Archive/FAR Execution Checklist/FABLED 2/_index.md>)
 
 ## Reading paths
 
 - **"What should I work on?"** → campaign table above, lowest score that matters to daily life → its `3 - Optimization Plan`.
 - **"What is X really like right now?"** → that scope's `1 - Current Implementation`, then delta with git.
 - **"What's the 10× idea here?"** → `4 - Future Enhancements` (every idea carries impact/effort **and a kill criterion** — respect them; they encode when *not* to build).
-- **"Why does this feel stuck?"** → [PM system FABLED 2](<../10 - Project Management/FABLED 2/_index.md>) — the execution-coupling diagnosis (score 3/10) is the honest answer, and [Design Doctrine §6](<../01 - Architecture/Design Doctrine.md>) is the counter-protocol.
+- **"Why does this feel stuck?"** → [PM system FABLED 2](<../10 - Project Management/_Archive/FABLED 2/_index.md>) — the execution-coupling diagnosis (score 3/10) is the honest answer, and [Design Doctrine §6](<../01 - Architecture/Design Doctrine.md>) is the counter-protocol.
 
 ## Maintenance protocol
 

@@ -8,7 +8,8 @@
 //     relay bridge for /pm/live (mobile checklist + delivery command surface).
 //     Never widens this server's own 127.0.0.1 binding — see scripts/pm/bridge.mjs.
 //
-// Serves the same UI as the static build, but reads the PM markdown LIVE from disk
+// Serves the React application by default; ?ui=classic opens the Preact reference UI.
+// Reads PM markdown LIVE from disk
 // and exposes a small REST API so checkboxes, moves, renames, reorders, creates and
 // deletes write straight back to the .md files. Bound to localhost only.
 
@@ -43,9 +44,13 @@ import {
 } from "./pm/mutations.mjs";
 import { archiveItem, monthlySweep, restoreSnapshots } from "./pm/archive.mjs";
 import { hostAllowed } from "./pm/net.mjs";
-import { collectSources, readSourceFile, walk } from "./pm/scan.mjs";
+import { collectSources, readCancelledLog, readSourceFile, walk } from "./pm/scan.mjs";
 import { buildHtml, buildHtmlLegacy } from "./pm/ui.mjs";
 import { createBundleWatcher } from "./pm/build.mjs";
+import { createAppWatcher } from "./pm/app-build.mjs";
+import { appAsset, buildAppShell } from "./pm/app-shell.mjs";
+import { routeHealth } from "./pm/health.mjs";
+import { assertExpectedCheckbox, assertRestoreCurrent, guardUndo } from "./pm/write-guards.mjs";
 import { createBridge } from "./pm/bridge.mjs";
 import {
   createDeliveryContext,
@@ -54,6 +59,8 @@ import {
   sessionIdFromWatchPath,
 } from "./delivery/server-routes.mjs";
 import { createDeliveryV2Context, routeDeliveryV2 } from "./delivery-v2/service.mjs";
+import { readDispatchMode } from "./delivery-v2/entry.mjs";
+import { issuePairingCode } from "./delivery-v2/local-auth.mjs";
 
 loadDotenv({ path: ".env" });
 
@@ -84,7 +91,7 @@ const argv = process.argv.slice(2);
 const noOpen = argv.includes("--no-open");
 const portArg = argv.find((a) => a.startsWith("--port="));
 const uiArg = argv.find((a) => a.startsWith("--ui="));
-const UI_MODE = uiArg?.slice(5) === "old" ? "old" : "new";
+const UI_MODE = ["old", "classic"].includes(uiArg?.slice(5)) ? uiArg.slice(5) : "app";
 const PORT = parseInt(
   portArg ? portArg.slice(7) : process.env.PM_PORT || "4317",
   10,
@@ -95,7 +102,9 @@ const HOST = hostArg
   : process.env.PM_HOST || (argv.includes("--lan") ? "0.0.0.0" : "127.0.0.1");
 const LAN_MODE = HOST !== "127.0.0.1" && HOST !== "localhost";
 const BRIDGE_ENABLED = (process.env.PM_BRIDGE === "1" || argv.includes("--bridge")) && !argv.includes("--no-bridge");
-const bridge = BRIDGE_ENABLED ? createBridge({ PM_DIR, deliveryCtx }) : null;
+// Phase 4: the bridge relays the same corpus the local app reads (`buildData`,
+// a hoisted function below) and Delivery V2 commands through the same context.
+const bridge = BRIDGE_ENABLED ? createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx, buildData: () => buildData() }) : null;
 
 // ---- helpers ----
 function pmRel(abs) {
@@ -131,6 +140,7 @@ function buildData() {
   );
   return {
     generatedAt: new Date().toISOString(),
+    cancelledLog: readCancelledLog(PM_DIR),
     repoRootFileUrl: pathToFileURL(ROOT).href.replace(/\/$/, "") + "/",
     repoRootPath: ROOT.replace(/\\/g, "/"),
     pmDirRepoRel: PM_REL.replace(/\\/g, "/"),
@@ -155,10 +165,11 @@ function opToggle(b) {
   const abs = resolveInside(PM_DIR, b.file);
   if (!existsSync(abs)) throw fail(404, "file not found");
   const raw = readFileSync(abs, "utf8");
+  assertExpectedCheckbox(raw, b.cbidx, b.expectLine, { required: true, expectId: b.expectId });
   const r = toggleCheckbox(raw, b.cbidx, b.expectState);
   if (!r.ok) throw fail(409, r.reason);
   writeFileSync(abs, r.raw, "utf8");
-  return { ok: true, raw: r.raw, state: r.state, line: r.line };
+  return { ok: true, raw: r.raw, state: r.state, line: r.line, undo: [{ path: b.file, raw }] };
 }
 
 function opMove(b) {
@@ -291,6 +302,7 @@ function opMoveTask(b) {
   const abs = resolveInside(PM_DIR, b.file);
   if (!existsSync(abs)) throw fail(404, "file not found");
   const raw = readFileSync(abs, "utf8");
+  assertExpectedCheckbox(raw, b.cbidx, b.expectLine, { required: true, expectId: b.expectId });
   const result = moveCheckboxUnderHeading(raw, b.cbidx, lane, b.expectLine);
   if (!result.ok) throw fail(409, result.reason);
   writeFileSync(abs, result.raw, "utf8");
@@ -309,15 +321,18 @@ function opMoveTask(b) {
 const ARCHIVE_CTX = { pmDir: PM_DIR, repoRoot: ROOT, pmRelFromRoot: PM_REL.replace(/\\/g, "/") };
 
 function opShip(b) {
+  assertExpectedCheckbox(readFileSync(resolveInside(PM_DIR, b.file), "utf8"), b.cbidx, b.expectLine, { required: true, expectId: b.expectId });
   return archiveItem({ ...ARCHIVE_CTX, file: b.file, cbidx: b.cbidx, mode: "ship" });
 }
 function opDiscard(b) {
+  assertExpectedCheckbox(readFileSync(resolveInside(PM_DIR, b.file), "utf8"), b.cbidx, b.expectLine, { required: true, expectId: b.expectId });
   return archiveItem({ ...ARCHIVE_CTX, file: b.file, cbidx: b.cbidx, mode: "discard", reason: b.reason });
 }
 function opRestore(b) {
   const snapshots = Array.isArray(b.snapshots) ? b.snapshots : [];
   if (!snapshots.length) throw fail(400, "nothing to restore");
   for (const snapshot of snapshots) resolveInside(PM_DIR, snapshot.path); // path-traversal guard
+  assertRestoreCurrent(PM_DIR, snapshots);
   return restoreSnapshots(PM_DIR, snapshots);
 }
 
@@ -369,8 +384,10 @@ try {
 }
 
 let bundleWatcher;
+let appWatcher;
 try {
   bundleWatcher = await createBundleWatcher(broadcastUi);
+  appWatcher = await createAppWatcher(broadcastUi);
 } catch (error) {
   throw new Error(`PM UI build failed. Run pnpm install, then retry. ${error.message}`);
 }
@@ -417,11 +434,12 @@ try {
 }
 
 // ---- HTTP plumbing ----
-function sendJson(res, status, obj) {
+function sendJson(res, status, obj, extraHeaders = {}) {
   const body = JSON.stringify(obj);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
+    ...extraHeaders,
   });
   res.end(body);
 }
@@ -453,16 +471,25 @@ const server = createServer(async (req, res) => {
     const path = u.pathname;
 
     if (req.method === "GET" && path === "/") {
-      const requestMode = u.searchParams.get("ui") === "old" ? "old" : UI_MODE;
+      const requested = u.searchParams.get("ui");
+      const requestMode = ["old", "classic"].includes(requested) ? requested : UI_MODE;
       const html = requestMode === "old"
         ? buildHtmlLegacy({ mode: "server", dataJson: "null" })
-        : buildHtml({ mode: "server", dataJson: "null", bundle: bundleWatcher.current() });
+        : requestMode === "classic" ? buildHtml({ mode: "server", dataJson: "null", bundle: bundleWatcher.current() }) : buildAppShell();
       res.writeHead(200, {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
       });
       return res.end(html);
     }
+
+    if (req.method === "GET" && path.startsWith("/app/assets/")) {
+      const asset = appAsset(path, appWatcher.current());
+      if (!asset) return sendJson(res, 404, { error: "not found" });
+      res.writeHead(200, { "Content-Type": asset.type, "Cache-Control": "no-store" });
+      return res.end(asset.body);
+    }
+    if (routeHealth(req, res)) return;
 
     if (
       req.method === "GET" &&
@@ -528,7 +555,7 @@ const server = createServer(async (req, res) => {
           { method: req.method, path, query: u.searchParams, body, headers: req.headers },
           deliveryV2Ctx,
         );
-        if (v2) return sendJson(res, v2.status, v2.json);
+        if (v2) return sendJson(res, v2.status, v2.json, v2.headers || {});
         return sendJson(res, 404, { error: "unknown delivery route" });
       }
       const result = await routeDelivery(
@@ -551,7 +578,7 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 400, { error: "invalid json" });
       }
       suppressUntil = Date.now() + 700; // mute our own fs.watch echo
-      const result = handler(body);
+      const result = guardUndo(PM_DIR, handler(body));
       return sendJson(res, 200, result);
     }
 
@@ -606,6 +633,16 @@ function listen(port, attemptsLeft) {
       );
     }
     console.log("Watching: " + PM_DIR);
+    // V2 commands need a paired browser. The code is printed only here, in the
+    // owner's terminal, and only on an installation that switched to v2.
+    if (readDispatchMode({ root: ROOT }).mode === "v2") {
+      try {
+        const pairing = issuePairingCode({ root: ROOT });
+        console.log("Delivery pairing code: " + pairing.code + " (10 minutes; `pnpm pm:pair` for another)");
+      } catch (error) {
+        console.log("[delivery-v2] pairing code unavailable: " + String((error && error.message) || error));
+      }
+    }
     console.log("Press Ctrl+C to stop.");
     if (bridge) bridge.start();
     else if (process.env.PM_BRIDGE === "1") console.log("[pm-bridge] disabled by --no-bridge");

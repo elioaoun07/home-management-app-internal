@@ -3,15 +3,20 @@ import { apiGet, apiPost } from "../../app/api.js";
 import { showToast } from "../../app/store.js";
 
 export const deliveryData = signal({ sessions: [], buildLockActive: false });
+/** @type {import("@preact/signals").Signal<object | null>} */
 export const deliverySession = signal(null);
 export const deliveryEvents = signal([]);
 export const deliveryCursor = signal(0);
 export const deliveryLoading = signal(false);
+export const deliveryError = signal(null);
+export const sessionError = signal(null);
+/** @type {import("@preact/signals").Signal<string | null>} */
 export const activeDeliveryId = signal(null);
 // DW-2: provider/model/effort capability manifests + owner catalog for the launch wizard.
 export const deliveryCapabilities = signal(null);
 // DLV-2: authoritative item/recommendation/context preview for the launch Flight-Check.
 export const deliveryRecommendation = signal(null);
+export const recommendationState = signal({ loading: false, error: null });
 // DLV-5: authoritative workspace + validation snapshot shown before launch.
 export const deliveryPreflight = signal({ loading: false, data: null, error: null });
 // DW-5: the durable Q&A ledger for the active session.
@@ -27,14 +32,16 @@ const terminal = new Set(["SHIPPED", "CANCELLED", "FAILED"]);
 export function deliverEligibility(task, sessions = [], topics = []) {
   if (!task || task.state !== "open") return { eligible: false, reason: "Task is not open" };
   if (!topics.includes(task.module)) return { eligible: false, reason: "Campaign has no delivery checklist" };
-  const active = sessions.find((session) => session.item?.pmFile === task.file && session.item?.cbidx === task.cbidx && !terminal.has(session.state));
+  if (/\bHELD\b/i.test(task.text || "")) return { eligible: false, reason: "Work is held" };
+  const active = sessions.find((session) => session.item?.pmFile === task.file && (task.idChip && session.item?.id ? task.idChip === session.item.id : session.item?.cbidx === task.cbidx) && !terminal.has(session.state));
   return active ? { eligible: false, reason: `Already in delivery (${active.state})`, sessionId: active.sessionId } : { eligible: true, reason: null };
 }
 
 export async function loadDeliverySessions() {
   if (globalThis.PM_MODE !== "server") return;
   deliveryLoading.value = true;
-  try { deliveryData.value = await apiGet("/api/delivery/sessions"); }
+  try { deliveryData.value = await apiGet("/api/delivery/sessions"); deliveryError.value = null; }
+  catch (error) { deliveryError.value = error.message; throw error; }
   finally { deliveryLoading.value = false; }
 }
 export async function loadDeliveryCapabilities() {
@@ -46,27 +53,32 @@ export async function loadDeliveryCapabilities() {
 // DLV-73: `locatorChoice` re-resolves the preview around the file the owner
 // picked from an ambiguous locator shortlist, so the scope, lane recommendation
 // and forecast on screen are the ones the launch will actually use.
-export async function loadDeliveryRecommendation(file, cbidx, provider, locatorChoice = null) {
-  if (globalThis.PM_MODE !== "server" || !file || cbidx == null) { deliveryRecommendation.value = null; return; }
+let recommendationRequest = 0;
+/** @param {string | null} lane */
+export async function loadDeliveryRecommendation(file, cbidx, provider, locatorChoice = null, lane = null) {
+  const request = ++recommendationRequest;
+  if (globalThis.PM_MODE !== "server" || !file || cbidx == null) { deliveryRecommendation.value = null; recommendationState.value = { loading: false, error: null }; return; }
   deliveryRecommendation.value = null;
+  recommendationState.value = { loading: true, error: null };
   try {
     const params = new URLSearchParams({ file, cbidx: String(cbidx), provider });
     if (locatorChoice) params.set("locatorChoice", locatorChoice);
+    if (lane) params.set("lane", lane);
     const result = await apiGet(`/api/delivery/recommendation?${params.toString()}`);
-    deliveryRecommendation.value = result;
-  } catch { deliveryRecommendation.value = null; } // wizard just hides the card
+    if (request === recommendationRequest) { deliveryRecommendation.value = result; recommendationState.value = { loading: false, error: null }; }
+  } catch (error) { if (request === recommendationRequest) { deliveryRecommendation.value = null; recommendationState.value = { loading: false, error: error.message }; } }
 }
 // V2 S1.4: the installation-wide v1|v2 dispatch switch. Read-only here — the
 // server is the authority and refuses V1 write routes itself, so this only stops
-// the UI offering an action the server would reject. Defaults to v1 on any
-// failure, matching the server's own default.
-export const deliveryDispatchMode = signal({ mode: "v1", updated_at: null, actor: null });
+// the UI offering an action the server would reject. A failed read stays
+// unknown until retry; it must not offer an unavailable launch path.
+export const deliveryDispatchMode = signal({ mode: null, updated_at: null, actor: null });
 export async function loadDeliveryDispatchMode() {
   if (globalThis.PM_MODE !== "server") return;
   try {
     deliveryDispatchMode.value = await apiGet("/api/delivery/v2/mode");
-  } catch {
-    deliveryDispatchMode.value = { mode: "v1", updated_at: null, actor: null };
+  } catch (error) {
+    deliveryDispatchMode.value = { mode: null, error: error.message };
   }
 }
 
@@ -124,7 +136,7 @@ export async function loadDeliveryPreflight() {
 }
 export async function loadDeliveryQuestions(id) {
   if (globalThis.PM_MODE !== "server" || !id) return;
-  try { deliveryQuestions.value = await apiGet(`/api/delivery/questions?id=${encodeURIComponent(id)}`); }
+  try { const result = await apiGet(`/api/delivery/questions?id=${encodeURIComponent(id)}`); if (activeDeliveryId.value === id) deliveryQuestions.value = result; }
   catch { /* Q&A card just shows nothing if this fails */ }
 }
 export async function loadDeliveryTurns(id, { reset = false } = {}) {
@@ -132,24 +144,29 @@ export async function loadDeliveryTurns(id, { reset = false } = {}) {
   if (reset) { deliveryTurns.value = []; deliveryTurnsCursor.value = 0; deliveryTranscriptByTurn.value = {}; }
   try {
     const tail = await apiGet(`/api/delivery/turns?id=${encodeURIComponent(id)}&after=${deliveryTurnsCursor.value}`);
-    if (tail.turns.length) deliveryTurns.value = [...deliveryTurns.value, ...tail.turns];
-    deliveryTurnsCursor.value = tail.lastTurn;
+    if (activeDeliveryId.value !== id) return;
+    if (tail.turns.length) deliveryTurns.value = [...new Map([...deliveryTurns.value, ...tail.turns].map((turn) => [turn.turnId, turn])).values()];
+    deliveryTurnsCursor.value = Math.max(deliveryTurnsCursor.value, tail.lastTurn);
   } catch { /* Conversation tab shows nothing new this poll */ }
 }
 export async function loadDeliveryTranscript(id, turnId) {
   if (globalThis.PM_MODE !== "server" || !id || !turnId) return;
   try {
     const result = await apiGet(`/api/delivery/transcript?id=${encodeURIComponent(id)}&turn=${encodeURIComponent(turnId)}`);
+    if (activeDeliveryId.value !== id) return;
     deliveryTranscriptByTurn.value = { ...deliveryTranscriptByTurn.value, [turnId]: result };
   } catch (error) { showToast(error.message, { type: "error" }); }
 }
+let searchRequest = 0;
 export async function searchDeliveryTranscript(id, { q: query, kinds, phase } = {}) {
+  const request = ++searchRequest;
   if (globalThis.PM_MODE !== "server" || !id || !query?.trim()) { deliverySearchResults.value = null; return; }
   try {
     const params = new URLSearchParams({ id, q: query });
     if (kinds) params.set("kinds", kinds);
     if (phase) params.set("phase", phase);
-    deliverySearchResults.value = await apiGet(`/api/delivery/transcript/search?${params.toString()}`);
+    const result = await apiGet(`/api/delivery/transcript/search?${params.toString()}`);
+    if (activeDeliveryId.value === id && request === searchRequest) deliverySearchResults.value = result;
   } catch (error) { showToast(error.message, { type: "error" }); }
 }
 // DLV-16 — the dashboard half of notifications. DLV-22 shipped the web-push
@@ -208,16 +225,24 @@ function toastForGate(sessionId, awaiting) {
   showToast(GATE_COPY[gate] || `Delivery is waiting at the ${gate} gate`, { type: gate === "blocked" ? "error" : "warn" });
 }
 
+let sessionRequest = 0;
 export async function loadDeliverySession(id, { reset = false } = {}) {
-  if (!id) return; activeDeliveryId.value = id; if (reset) { deliveryEvents.value = []; deliveryCursor.value = 0; lastAwaitingGate.delete(id); }
+  if (!id) return;
+  const request = ++sessionRequest;
+  activeDeliveryId.value = id;
+  if (reset) { deliverySession.value = null; sessionError.value = null; deliveryQuestions.value = null; deliveryTurns.value = []; deliveryTurnsCursor.value = 0; deliveryTranscriptByTurn.value = {}; deliverySearchResults.value = null; deliverySearchQuery.value = ""; deliveryEvents.value = []; deliveryCursor.value = 0; lastAwaitingGate.delete(id); }
+  try {
   const [detail, tail] = await Promise.all([
     apiGet(`/api/delivery/session?id=${encodeURIComponent(id)}`),
     apiGet(`/api/delivery/events?id=${encodeURIComponent(id)}&after=${deliveryCursor.value}`),
   ]);
+  if (request !== sessionRequest || activeDeliveryId.value !== id) return;
   toastForNotifications(id, tail.events);
   toastForGate(id, detail.state?.awaiting);
   deliverySession.value = detail;
   deliveryEvents.value = [...deliveryEvents.value, ...tail.events]; deliveryCursor.value = tail.lastSeq;
+  sessionError.value = null;
+  } catch (error) { if (request === sessionRequest && activeDeliveryId.value === id) sessionError.value = error.message; throw error; }
 }
 export async function refreshDelivery(sessionId) {
   await loadDeliverySessions().catch(() => {});

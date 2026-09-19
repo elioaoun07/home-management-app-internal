@@ -93,10 +93,11 @@ function localToggle(raw, cbidx) {
 export async function toggleTask(relPath, cbidx, { quiet = false } = {}) {
   const file = byRelPath.value.get(relPath.toLowerCase()); if (!file || globalThis.PM_MODE !== "server") return;
   if (offlineSnapshot.value) { showToast("Viewing an offline snapshot — reconnect to your laptop to make changes.", { type: "error" }); return; }
-  const expected = scanCheckboxes(file.raw)[cbidx]?.state; if (!expected) return;
+  const box = scanCheckboxes(file.raw)[cbidx]; const expected = box?.state; if (!expected) return;
+  const expectLine = file.raw.split("\n")[box.line];
   const previous = file.raw; replaceRaw(relPath, localToggle(previous, cbidx));
   try {
-    const result = await apiPost("toggle", { file: relPath, cbidx, expectState: expected }); replaceRaw(relPath, result.raw);
+    const result = await apiPost("toggle", { file: relPath, cbidx, expectLine, expectState: expected }); replaceRaw(relPath, result.raw);
     if (!quiet) showToast(expected === "open" ? "Task completed" : "Task reopened", {
       action: { label: "Undo", run: () => toggleTask(relPath, cbidx, { quiet: true }) },
     });
@@ -114,7 +115,10 @@ export async function toggleTask(relPath, cbidx, { quiet = false } = {}) {
  */
 export async function archiveTask(relPath, cbidx, mode, reason) {
   const label = mode === "ship" ? "Shipped" : "Discarded";
-  return runMutation(mode, { file: relPath, cbidx, reason }, (result) => `${label} — ${result.idChip || "item"} → ${result.target.split("/").pop().replace(/\.md$/, "")}`,
+  const file = byRelPath.value.get(relPath.toLowerCase());
+  const box = file ? scanCheckboxes(file.raw)[cbidx] : null;
+  const expectLine = box ? file.raw.split("\n")[box.line] : undefined;
+  return runMutation(mode, { file: relPath, cbidx, expectLine, reason }, (result) => `${label} — ${result.idChip || "item"} → ${result.target.split("/").pop().replace(/\.md$/, "")}`,
     (result) => runMutation("restore", { snapshots: result.undo }, "Restored"));
 }
 

@@ -12,9 +12,9 @@ tags:
 
 # Schedule · 2 — Vision & Roadmap
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Schedule/4 - Checklist.md>)
 >
-> **What this file is:** the full design-of-record for Schedule — **(A)** the ambitious vision + roadmap, **(B)** the target design & decisions, plus the folded-in **Type Taxonomy & Capture Design** and **Recurrence & Occurrence Actions** deep-designs (formerly separate files 3 & 4, consolidated here 2026-06-20). [1 · Feature State](<1 - Feature State.md>) is the sober reality; [3 · Action Plan](<3 - Action Plan.md>) + [4 · Checklist](<4 - Checklist.md>) hold the sequencing.
+> **What this file is:** the full design-of-record for Schedule — **(A)** the ambitious vision + roadmap, **(B)** the target design & decisions, plus the folded-in **Type Taxonomy & Capture Design** and **Recurrence & Occurrence Actions** deep-designs (formerly separate files 3 & 4, consolidated here 2026-06-20). [1 · Feature State](<1 - Feature State.md>) is the sober reality; [3 · Action Plan](<3 - Action Plan.md>) + [4 · Checklist](<../../Schedule/4 - Checklist.md>) hold the sequencing.
 >
 > **Decision legend:** ✅ **Committed** · ❓ **Open** (choose in [3 · Action Plan](<3 - Action Plan.md>)) · 💭 **Direction**.
 
@@ -104,14 +104,14 @@ If you point the next stretch at Schedule:
 
 **Target shape (built):**
 
-- Add a **Focus** action on the item surfaces — [ItemDetailModal.tsx](<../../../src/components/items/ItemDetailModal.tsx>) and [ItemActionsSheet.tsx](<../../../src/components/items/ItemActionsSheet.tsx>) — that enters a focus view for the selected item.
-- Move flexible-routine assignment fully into [WebWeekView.tsx](<../../../src/components/web/WebWeekView.tsx>) (it already hosts the droppable day slots and the catalogue add-dialog).
-- Retire [src/app/focus/page.tsx](<../../../src/app/focus/page.tsx>) and [FocusPage.tsx](<../../../src/components/focus/FocusPage.tsx>) (+ `ScheduleRoutineSheet` / `FlexibleRoutinesPool`).
+- Add a **Focus** action on the item surfaces — [ItemDetailModal.tsx](<../../../../src/components/items/ItemDetailModal.tsx>) and [ItemActionsSheet.tsx](<../../../../src/components/items/ItemActionsSheet.tsx>) — that enters a focus view for the selected item.
+- Move flexible-routine assignment fully into [WebWeekView.tsx](<../../../../src/components/web/WebWeekView.tsx>) (it already hosts the droppable day slots and the catalogue add-dialog).
+- Retire src/app/focus/page.tsx (`../../../src/app/focus/page.tsx`; historical target absent from the current tree) and FocusPage.tsx (`../../../src/components/focus/FocusPage.tsx`; historical target absent from the current tree) (+ `ScheduleRoutineSheet` / `FlexibleRoutinesPool`).
 
 **Cleanup obligations honored when this shipped (project Hard Rules):**
 
 - **Atlas** (Hard Rule #23): remove/replace the Focus page entry in `ERA Notes/04 - UI & Design/Page & Feature Atlas/`; the `public/atlas/atlas.json` regen hook handles the JSON.
-- **Feature Index**: update the **Focus** row in [CLAUDE.md](<../../../CLAUDE.md>) (auto-syncs to `AGENTS.md` / `CODEX.md` / copilot instructions); `pnpm docs:check` validates it against the Feature Map.
+- **Feature Index**: update the **Focus** row in [CLAUDE.md](<../../../../CLAUDE.md>) (auto-syncs to `AGENTS.md` / `CODEX.md` / copilot instructions); `pnpm docs:check` validates it against the Feature Map.
 - **Routes/icons**: update `ERA Notes/04 - UI & Design/App Routes and Icons.md`.
 - Note: `useFocusInsights` (the AI briefing) is **separate** from the Focus *page* — keep it; it feeds Today/ERA, not the retired page.
 
@@ -136,9 +136,9 @@ If you point the next stretch at Schedule:
 
 **Pattern reused (don't reinvent):**
 
-- **Auth shape:** the household-link resolution already in [complete/route.ts:84-104](<../../../src/app/api/items/[id]/complete/route.ts#L84-L104>) is copied into the PATCH/DELETE guard in [src/app/api/items/[id]/route.ts:36](<../../../src/app/api/items/[id]/route.ts#L36>). Same `household_links` `.or(...)` check the [accounts route](<../../../src/app/api/accounts/route.ts>) uses (Hard Rule #13).
-- **Reassignment:** the Trips RPCs already flip `responsible_user_id` both ways (`activate_trip` → partner, `complete_trip` → back) in `migrations/schema.sql`. Mirrored for manual pass/reclaim. The picker UI already exists: [ResponsibleUserPicker.tsx](<../../../src/components/items/ResponsibleUserPicker.tsx>).
-- **Buckets:** the mine/partner filter on `responsible_user_id` in [StandaloneRemindersPage.tsx](<../../../src/components/reminder/StandaloneRemindersPage.tsx>) was the seam for "assigned out (creator = me, responsible = partner)" and "assigned to me (responsible = me, creator = partner)".
+- **Auth shape:** the household-link resolution already in [complete/route.ts:84-104](<../../../../src/app/api/items/[id]/complete/route.ts#L84-L104>) is copied into the PATCH/DELETE guard in [src/app/api/items/[id]/route.ts:36](<../../../src/app/api/items/[id]/route.ts#L36>). Same `household_links` `.or(...)` check the [accounts route](<../../../../src/app/api/accounts/route.ts>) uses (Hard Rule #13).
+- **Reassignment:** the Trips RPCs already flip `responsible_user_id` both ways (`activate_trip` → partner, `complete_trip` → back) in `migrations/schema.sql`. Mirrored for manual pass/reclaim. The picker UI already exists: [ResponsibleUserPicker.tsx](<../../../../src/components/items/ResponsibleUserPicker.tsx>).
+- **Buckets:** the mine/partner filter on `responsible_user_id` in StandaloneRemindersPage.tsx (`../../../src/components/reminder/StandaloneRemindersPage.tsx`; historical target absent from the current tree) was the seam for "assigned out (creator = me, responsible = partner)" and "assigned to me (responsible = me, creator = partner)".
 
 > **Read-path caveat:** *(RESOLVED 2026-06-06)* `get_schedule_bundle` returns `user_id = me OR (partner's AND is_public = true)`. The "Pass to partner" action sets `is_public = true`, so assigned items are always visible to both parties. RPC body captured in `migrations/schema.sql`. Known edge case (parked): a private item assigned to me while `is_public = false` won't surface — assignment picker prevents this state today.
 
@@ -154,11 +154,11 @@ If you point the next stretch at Schedule:
 
 ## ✅ Decision 4 — Occurrence-action writes must be idempotent (insert → upsert) *(IMPLEMENTED 2026-06-21)*
 
-**Call:** All four `item_occurrence_actions` inserts (complete/postpone/cancel/skip, across both [complete/route.ts](<../../../src/app/api/items/[id]/complete/route.ts>) and [actions/route.ts](<../../../src/app/api/items/[id]/actions/route.ts>)) now `.upsert(..., { onConflict: "item_id,occurrence_date,action_type" })` instead of `.insert(...)`.
+**Call:** All four `item_occurrence_actions` inserts (complete/postpone/cancel/skip, across both [complete/route.ts](<../../../../src/app/api/items/[id]/complete/route.ts>) and [actions/route.ts](<../../../../src/app/api/items/[id]/actions/route.ts>)) now `.upsert(..., { onConflict: "item_id,occurrence_date,action_type" })` instead of `.insert(...)`.
 
-**Why:** a real production 500 (`duplicate key value violates unique constraint "item_occurrence_actions_item_id_occurrence_date_action_type_key"`) traced to a double-submit/retry of an already-completed recurring occurrence. The unique constraint itself is correct, but a plain `insert` makes any repeat throw — and the offline sync engine ([offlineSyncEngine.ts:255-287](<../../../src/lib/offlineSyncEngine.ts#L255-L287>)) treats a 500 as transient and **retries indefinitely**, eventually surfacing "max retries exceeded" for an action that had already succeeded. Upserting on the same key makes a repeat a no-op success instead of a permanent failure loop. Same root cause as the corrected display bug below — `responsible_user_id` is always a single real person, and per-occurrence action state should always converge to one row per `(item, occurrence, action_type)`, not error on the second write.
+**Why:** a real production 500 (`duplicate key value violates unique constraint "item_occurrence_actions_item_id_occurrence_date_action_type_key"`) traced to a double-submit/retry of an already-completed recurring occurrence. The unique constraint itself is correct, but a plain `insert` makes any repeat throw — and the offline sync engine ([offlineSyncEngine.ts:255-287](<../../../../src/lib/offlineSyncEngine.ts#L255-L287>)) treats a 500 as transient and **retries indefinitely**, eventually surfacing "max retries exceeded" for an action that had already succeeded. Upserting on the same key makes a repeat a no-op success instead of a permanent failure loop. Same root cause as the corrected display bug below — `responsible_user_id` is always a single real person, and per-occurrence action state should always converge to one row per `(item, occurrence, action_type)`, not error on the second write.
 
-**Also fixed in the same pass:** the "Responsible: All Household" badge ([ItemDetailModal.tsx](<../../../src/components/items/ItemDetailModal.tsx>), [ItemsListView.tsx](<../../../src/components/activity/ItemsListView.tsx>)) was replacing the actual `responsible_user_id` badge whenever `notify_all_household` was true — implying shared/no-owner responsibility when the schema always has exactly one responsible person. Now always shows the real `ResponsibleUserBadge`, with "Notifying household" as a supplementary badge instead of a replacement. `ResponsibleUserPicker`'s own "All Household" trigger label is unchanged — that's an editing-mode toggle, not a misleading read-only display.
+**Also fixed in the same pass:** the "Responsible: All Household" badge ([ItemDetailModal.tsx](<../../../../src/components/items/ItemDetailModal.tsx>), [ItemsListView.tsx](<../../../../src/components/activity/ItemsListView.tsx>)) was replacing the actual `responsible_user_id` badge whenever `notify_all_household` was true — implying shared/no-owner responsibility when the schema always has exactly one responsible person. Now always shows the real `ResponsibleUserBadge`, with "Notifying household" as a supplementary badge instead of a replacement. `ResponsibleUserPicker`'s own "All Household" trigger label is unchanged — that's an editing-mode toggle, not a misleading read-only display.
 
 ---
 
@@ -218,10 +218,10 @@ The habit-killer ([file 1, Cluster 3](<1 - Feature State.md>)). Two directions w
 
 Before judging the mental model, here's what exists — because the schema already made some of these calls for us.
 
-- **Three types, not four:** `ItemType = "reminder" | "event" | "task"`. → [src/types/items.ts:10](<../../../src/types/items.ts#L10>)
-- **Chore is a flag, not a type:** `is_chore?: boolean`, *denormalized from the catalogue template* and used to **exclude the item from schedule-overdue logic**. → [src/types/items.ts:60](<../../../src/types/items.ts#L60>), [:286](<../../../src/types/items.ts#L286>)
-- **"At home" already exists as a flag too:** `location_context: "home" | "outside" | "anywhere"` applies to *all* types. → [src/types/items.ts:52-53](<../../../src/types/items.ts#L52-L53>)
-- **Crucial detail — Task and Reminder share ONE detail table.** Events have their own `event_details` (`start_at` / `end_at` / `all_day`). But **both** reminders *and* tasks hang off `reminder_details` (`due_at` / `completed_at` / `estimate_minutes`). The code already treats Task and Reminder as near-twins at the data layer. → `ReminderDetails` / `EventDetails` in [src/types/items.ts](<../../../src/types/items.ts>); see [Schedule Feature](<../../02 - Standalone Modules/Items & Reminders/Schedule Feature.md>) for the three placement strategies.
+- **Three types, not four:** `ItemType = "reminder" | "event" | "task"`. → [src/types/items.ts:10](<../../../../src/types/items.ts#L10>)
+- **Chore is a flag, not a type:** `is_chore?: boolean`, *denormalized from the catalogue template* and used to **exclude the item from schedule-overdue logic**. → [src/types/items.ts:60](<../../../../src/types/items.ts#L60>), [:286](<../../../../src/types/items.ts#L286>)
+- **"At home" already exists as a flag too:** `location_context: "home" | "outside" | "anywhere"` applies to *all* types. → [src/types/items.ts:52-53](<../../../../src/types/items.ts#L52-L53>)
+- **Crucial detail — Task and Reminder share ONE detail table.** Events have their own `event_details` (`start_at` / `end_at` / `all_day`). But **both** reminders *and* tasks hang off `reminder_details` (`due_at` / `completed_at` / `estimate_minutes`). The code already treats Task and Reminder as near-twins at the data layer. → `ReminderDetails` / `EventDetails` in [src/types/items.ts](<../../../../src/types/items.ts>); see [Schedule Feature](<../../../02 - Standalone Modules/Items & Reminders/Schedule Feature.md>) for the three placement strategies.
 
 ---
 
@@ -272,11 +272,11 @@ Since they already share `reminder_details`, merge them in the UI: everything ti
 
 ---
 
-> **⚠️ Target correction (2026-06-06):** §4 below was written against [`MobileItemForm.tsx`](<../../../src/components/items/MobileItemForm.tsx>), but that file is **dead code** (zero importers). The **live** mobile capture form is [`MobileReminderForm.tsx`](<../../../src/components/reminder/MobileReminderForm.tsx>) (mounted in `TabContainer`), which was **already** single-page with smart NL input ([`smartTextParser.ts`](<../../../src/lib/smartTextParser.ts>)), inferred type, progressive disclosure, and voice — so most of this refactor already existed there. The genuine gaps (title-only save, quick date chips, At-Home/location_context/maps-link) shipped on the live form 2026-06-06. See [file 5, Phase 1a](<3 - Action Plan.md>). The §4 blueprint is preserved as the design intent.
+> **⚠️ Target correction (2026-06-06):** §4 below was written against [`MobileItemForm.tsx`](<../../../../src/components/items/MobileItemForm.tsx>), but that file is **dead code** (zero importers). The **live** mobile capture form is [`MobileReminderForm.tsx`](<../../../../src/components/reminder/MobileReminderForm.tsx>) (mounted in `TabContainer`), which was **already** single-page with smart NL input ([`smartTextParser.ts`](<../../../../src/lib/smartTextParser.ts>)), inferred type, progressive disclosure, and voice — so most of this refactor already existed there. The genuine gaps (title-only save, quick date chips, At-Home/location_context/maps-link) shipped on the live form 2026-06-06. See [file 5, Phase 1a](<3 - Action Plan.md>). The §4 blueprint is preserved as the design intent.
 
 ## 4. The Mobile Item Form refactor (`/expense`) — design blueprint
 
-**Original file:** [src/components/items/MobileItemForm.tsx](<../../../src/components/items/MobileItemForm.tsx>) (dead). The old design branched on `createMode` (reminder/event/task chosen *first*) and walked **5 steps**: `title → datetime → details → priority → confirm` (`FormStep`). That was the heaviness.
+**Original file:** [src/components/items/MobileItemForm.tsx](<../../../../src/components/items/MobileItemForm.tsx>) (dead). The old design branched on `createMode` (reminder/event/task chosen *first*) and walked **5 steps**: `title → datetime → details → priority → confirm` (`FormStep`). That was the heaviness.
 
 ### Principle: **capture first, classify last.** One screen to log; everything else optional and deferred.
 
@@ -340,7 +340,7 @@ Since they already share `reminder_details`, merge them in the UI: everything ti
 `3 - Action Plan.md` is **~70% already planned** and **~30% in tension with the app**.
 
 - The type-merge + form simplification it asks for is **already designed** in Part 1 (keep three types in data, **infer at save, never ask**, one capture screen + "More"). Nothing new to decide there — just build it.
-- ~~Its biggest premise is false: there is no item NLP to "make 10× smarter."~~ **CORRECTION (2026-06-06):** this was **wrong**. Item NLP **already exists** — [`src/lib/smartTextParser.ts`](<../../../src/lib/smartTextParser.ts>) (1,420 lines: type, dates, times, RRULE recurrence, priority, categories) is wired into the **live** form [`MobileReminderForm.tsx`](<../../../src/components/reminder/MobileReminderForm.tsx>). The original grep only checked `src/lib/nlp/` (the *budget* parser) and missed it. So "make NLP smarter" is **incremental hardening**, not net-new. See [file 5, Phase 1b](<3 - Action Plan.md>).
+- ~~Its biggest premise is false: there is no item NLP to "make 10× smarter."~~ **CORRECTION (2026-06-06):** this was **wrong**. Item NLP **already exists** — [`src/lib/smartTextParser.ts`](<../../../../src/lib/smartTextParser.ts>) (1,420 lines: type, dates, times, RRULE recurrence, priority, categories) is wired into the **live** form [`MobileReminderForm.tsx`](<../../../../src/components/reminder/MobileReminderForm.tsx>). The original grep only checked `src/lib/nlp/` (the *budget* parser) and missed it. So "make NLP smarter" is **incremental hardening**, not net-new. See [file 5, Phase 1b](<3 - Action Plan.md>).
 - Its **location-trigger model doesn't exist** (no geofencing; `location_context` is a static flag) and is explicitly **out of scope** — but the *intent* ("remind me when I get home") maps cleanly onto the **NFC arrive/leave-home trigger that already exists**, deferred to Phase 2.
 
 > **Decisions locked this session (2026-06-06):**
@@ -392,14 +392,14 @@ These need no new decision; `3 - Action Plan.md` and the campaign already agree.
 ## C. Reshaped to fit the ecosystem *(the careful part — what changed and why)*
 
 ### C1. "Make NLP 10× smarter" → **harden the parser that already exists** *(corrected 2026-06-06)*
-~~There is no item NLP today.~~ **Correction:** item NLP **already exists and ships** — [`src/lib/smartTextParser.ts`](<../../../src/lib/smartTextParser.ts>) (type, relative/absolute dates, times, RRULE recurrence, priority, categories, confidence scores) is used by the live [`MobileReminderForm.tsx`](<../../../src/components/reminder/MobileReminderForm.tsx>) with manual-override tracking and voice input. (The earlier claim came from only grepping `src/lib/nlp/` — the *budget* parser [`messageTransactionParser.ts`](<../../../src/lib/nlp/messageTransactionParser.ts>) — and missing `smartTextParser.ts`.) So "10×" is the wrong frame: the remaining work is **incremental** (recurrence hardening behind tests, broader phrase coverage), not building from zero.
+~~There is no item NLP today.~~ **Correction:** item NLP **already exists and ships** — [`src/lib/smartTextParser.ts`](<../../../../src/lib/smartTextParser.ts>) (type, relative/absolute dates, times, RRULE recurrence, priority, categories, confidence scores) is used by the live [`MobileReminderForm.tsx`](<../../../../src/components/reminder/MobileReminderForm.tsx>) with manual-override tracking and voice input. (The earlier claim came from only grepping `src/lib/nlp/` — the *budget* parser [`messageTransactionParser.ts`](<../../../../src/lib/nlp/messageTransactionParser.ts>) — and missing `smartTextParser.ts`.) So "10×" is the wrong frame: the remaining work is **incremental** (recurrence hardening behind tests, broader phrase coverage), not building from zero.
 
 ### C2. The NL box is **layered on** the structured form, not the form's replacement
 `3 - Action Plan.md` wants one NL box *as* the primary field. We keep "both lanes," but the form's **structured fields remain the source of truth** — the rule-based parser **pre-fills** them, surfaced as **editable chips**. The user always sees and can correct exactly what will be saved. This honors the "good test of Hub Chat" without turning the *precision* tool into an opaque parser. (Per CLAUDE.md: Hub = quick lane, form = precision tool — keep that spine.)
 
 ### C3. Engine split: **rule-based in the form, Gemini in Hub Chat**
-- **Form** → rule-based parser, mirroring the *structure* of [`messageTransactionParser.ts`](<../../../src/lib/nlp/messageTransactionParser.ts>) (extractors + a confidence score). **Offline-capable** — no network on the hot capture path.
-- **Hub Chat** → **Gemini** via [`src/lib/ai/gemini.ts`](<../../../src/lib/ai/gemini.ts>) (the established AI pattern: budget voice, `suggest-schedule`, ERA chat). **Must pass `timeoutMs`** on the call (Hard Rule #6 — AI calls exceed the 3 s default and would falsely flag offline).
+- **Form** → rule-based parser, mirroring the *structure* of [`messageTransactionParser.ts`](<../../../../src/lib/nlp/messageTransactionParser.ts>) (extractors + a confidence score). **Offline-capable** — no network on the hot capture path.
+- **Hub Chat** → **Gemini** via [`src/lib/ai/gemini.ts`](<../../../../src/lib/ai/gemini.ts>) (the established AI pattern: budget voice, `suggest-schedule`, ERA chat). **Must pass `timeoutMs`** on the call (Hard Rule #6 — AI calls exceed the 3 s default and would falsely flag offline).
 
 ### C4. The chip/preview UI must obey the ERA look-&-feel (so it stays on-brand)
 `3 - Action Plan.md`'s "compact interpretation preview" is welcome, but built against the project's Hard Rules:
@@ -415,7 +415,7 @@ These need no new decision; `3 - Action Plan.md` and the campaign already agree.
 ### D1. "Remind me when I get home" → `location_context` + **NFC**, not geofencing
 The *intent* is valid and maps onto infrastructure that **already exists**:
 - Set `location_context: "home"` (the flag — Part 1 §1).
-- Attach an `nfc_state_change` **prerequisite** bound to the user's **arrive-home** tag. The model exists: `NfcStateChangeConfig { tag_id, target_state }` ([prerequisites.ts:22](<../../../src/types/prerequisites.ts#L22>)), evaluated by [`nfc-state.ts`](<../../../src/lib/prerequisites/evaluators/nfc-state.ts>) against `nfc_tags.current_state`. **The form already wires `PrerequisitePicker`.**
+- Attach an `nfc_state_change` **prerequisite** bound to the user's **arrive-home** tag. The model exists: `NfcStateChangeConfig { tag_id, target_state }` ([prerequisites.ts:22](<../../../../src/types/prerequisites.ts#L22>)), evaluated by [`nfc-state.ts`](<../../../../src/lib/prerequisites/evaluators/nfc-state.ts>) against `nfc_tags.current_state`. **The form already wires `PrerequisitePicker`.**
 - **The only net-new piece** is the parser mapping the phrase "home" → the user's tag (via `nfc_tags.label`). That's **Phase 2** (form parser pre-fills the prerequisite the picker already builds).
 
 ### D2. Confidence / clarification UX — **Phase 3**
@@ -426,8 +426,8 @@ The *intent* is valid and maps onto infrastructure that **already exists**:
 ## E. Will NOT act upon — contradicts the ecosystem *(explicit, as requested)*
 
 - **⛔ Geofencing / fire-on-arrival location triggers.** No geolocation triggering exists in the app; it's a **PWA** (native geofencing deferred — see the Capacitor-shell decision), and the user explicitly said **no geofencing**. `location_context` is a *static flag*, not a trigger. The "when I get home" intent is served by the **NFC** route instead (§D1).
-- **⛔ Reusing the budget NLP wholesale for items.** [`messageTransactionParser.ts`](<../../../src/lib/nlp/messageTransactionParser.ts>) is hard-wired to *amounts, currencies, and spend categories*. Reuse its **shape** (extractor functions + confidence score), **not its logic**.
-- **⛔ Ad-hoc deletion of "duplicate/confusing mobile pages"** (`3 - Action Plan.md` Phase 6). Surface consolidation is [file 5 **W9** = "Later"](<3 - Action Plan.md>) and the `/reminders` role is an open question ([file 2 Direction](<2 - Vision & Roadmap.md>)). **CONFIRMED 2026-06-06:** the live form is [`MobileReminderForm.tsx`](<../../../src/components/reminder/MobileReminderForm.tsx>) (mounted in `TabContainer`); [`MobileItemForm.tsx`](<../../../src/components/items/MobileItemForm.tsx>) is **dead code** (zero importers). Left in place per user decision — **do not delete**; track removal under [file 5 item 5.3](<3 - Action Plan.md>).
+- **⛔ Reusing the budget NLP wholesale for items.** [`messageTransactionParser.ts`](<../../../../src/lib/nlp/messageTransactionParser.ts>) is hard-wired to *amounts, currencies, and spend categories*. Reuse its **shape** (extractor functions + confidence score), **not its logic**.
+- **⛔ Ad-hoc deletion of "duplicate/confusing mobile pages"** (`3 - Action Plan.md` Phase 6). Surface consolidation is [file 5 **W9** = "Later"](<3 - Action Plan.md>) and the `/reminders` role is an open question ([file 2 Direction](<2 - Vision & Roadmap.md>)). **CONFIRMED 2026-06-06:** the live form is [`MobileReminderForm.tsx`](<../../../../src/components/reminder/MobileReminderForm.tsx>) (mounted in `TabContainer`); [`MobileItemForm.tsx`](<../../../../src/components/items/MobileItemForm.tsx>) is **dead code** (zero importers). Left in place per user decision — **do not delete**; track removal under [file 5 item 5.3](<3 - Action Plan.md>).
 - **⛔ Lighting up the inert prerequisite evaluators** (`weather`, `time_window`, `schedule`, `custom_formula`) just to widen NLP coverage. [File 5 "Not now"](<3 - Action Plan.md>); [file 1 weak-link #3](<1 - Feature State.md>). Only `nfc_state_change` + `item_completed` are live.
 - **⚠️ Will not feed an unproven parser into untested recurrence math** ([file 1 weak-link #1](<1 - Feature State.md>) — recurrence + occurrence-action math is the highest-risk, untested logic). Recurrence parsing stays **conservative** and is **gated behind tests** before it can write an RRule.
 
@@ -472,7 +472,7 @@ The *intent* is valid and maps onto infrastructure that **already exists**:
 ## H. PM bookkeeping *(Hard Rule #25)*
 
 - ✅ Reconciliation recorded; refined work items folded into [3 · Action Plan](<3 - Action Plan.md>) as **W10** (form NL box), **W11** (Hub Gemini capture), **W12** (NFC-from-text, Phase 2) — recorded as **refinements of W6**, not replacements.
-- **When Phase 1 ships:** Atlas entry for the form (#23), `App Routes and Icons.md`, and the [Items & Reminders vault docs](<../../02 - Standalone Modules/Items & Reminders/Overview.md>) must be updated in the same session.
+- **When Phase 1 ships:** Atlas entry for the form (#23), `App Routes and Icons.md`, and the [Items & Reminders vault docs](<../../../02 - Standalone Modules/Items & Reminders/Overview.md>) must be updated in the same session.
 
 ---
 
@@ -508,14 +508,14 @@ The control labelled **Skip** is wired to a **postpone-to-next-occurrence**, and
 **Calendar surface (what I actually touched)** — `src/components/web/WebEvents.tsx`:
 - The calendar uses its **own** inline floating detail modal (`WebEvents.tsx:1238-1398`), *not* the shared sheet. Its Postpone button opens the **Postpone Options Dialog** (`:1842-2052`).
 - The recurring-only button (`:1864-1880`) reads **"Skip to next occurrence — Cancel this time and wait for the next scheduled occurrence"** but calls `handlePostponeAction("next_occurrence")` (`:330-349`).
-- `handlePostpone` ([useItemActions.ts:934-993](<../../../src/features/items/useItemActions.ts>)) computes `postponed_to = calculateNextOccurrence(lastSunday, rrule)` = `addWeeks(lastSunday, 1)` = **this Sunday**, then inserts an `item_occurrence_actions` row `action_type:"postponed", postponed_to:thisSunday`.
+- `handlePostpone` ([useItemActions.ts:934-993](<../../../../src/features/items/useItemActions.ts>)) computes `postponed_to = calculateNextOccurrence(lastSunday, rrule)` = `addWeeks(lastSunday, 1)` = **this Sunday**, then inserts an `item_occurrence_actions` row `action_type:"postponed", postponed_to:thisSunday`.
 - The weekly series already lands on this Sunday → the calendar shows the normal occurrence **plus** the postponed copy (amber "Postponed to this day" section in `WebCalendar.tsx`) → **two occurrences**. Exact match.
 
 **Planner / detail surface (same trap + a second bug)** — `src/components/items/ItemActionsSheet.tsx`:
 - Postpone option `next_occurrence` (`:380-385`) is sub-labelled **"Skip this time, mark as incomplete"** → same `onPostpone("next_occurrence")` → same duplicate.
 - The real **"Skip This Time"** button (`:758-780`) calls `handleCancelClick` → `onCancel` → records `action_type:"cancelled"`, **not** `"skipped"`. `ItemActionsSheet` has **no `onSkip` prop**; the correct `handleSkip`/`useSkipItem` path (which *does* write `skipped` + an `item_alert_suppressions` row) is dead code from every sheet.
 
-**One-line root cause:** *"Postpone → next occurrence" is conceptually invalid for recurring items, and the UI mislabels it as "Skip." No true per-occurrence Skip is wired anywhere.* The fragile hand-rolled `calculateNextOccurrence` ([useItemActions.ts:93-120](<../../../src/features/items/useItemActions.ts>) — handles only FREQ DAILY/WEEKLY/MONTHLY/YEARLY, ignores BYDAY/COUNT/UNTIL) exists *solely* to feed this broken option.
+**One-line root cause:** *"Postpone → next occurrence" is conceptually invalid for recurring items, and the UI mislabels it as "Skip." No true per-occurrence Skip is wired anywhere.* The fragile hand-rolled `calculateNextOccurrence` ([useItemActions.ts:93-120](<../../../../src/features/items/useItemActions.ts>) — handles only FREQ DAILY/WEEKLY/MONTHLY/YEARLY, ignores BYDAY/COUNT/UNTIL) exists *solely* to feed this broken option.
 
 ---
 
@@ -546,9 +546,9 @@ Two layers are each implemented 2–3 times and the copies disagree. This is why
 | Postponed-action copy on new date | ✅ (separate section) | ✅ | ❌ |
 | Flexible-schedule injection | ✅ | ✅ | ❌ |
 
-- [`src/lib/utils/date.ts`](<../../../src/lib/utils/date.ts>) — `getOccurrencesInRange`, `adjustOccurrenceToWallClock` (DST wall-clock), `buildFullRRuleString`. Correct low-level primitive.
-- [`src/lib/utils/dayOccurrences.ts`](<../../../src/lib/utils/dayOccurrences.ts>) — used by `WebDayPlanner` and `WebTodayView`. **Ignores exceptions, pauses, rescheduled_to, and per-occurrence overrides** → an edited/paused/rescheduled occurrence renders **wrong on `/reminders` & Today** but **right on the calendar**.
-- [`src/lib/schedule/expandOccurrences.ts`](<../../../src/lib/schedule/expandOccurrences.ts>) (+ `materializeOccurrence.ts`) — the intended single source of truth, **already has tests** (`expandOccurrences.test.ts`), handles exceptions/pauses/overrides — but is **wired to nothing**, and lacks flexible injection + postponed-action handling.
+- [`src/lib/utils/date.ts`](<../../../../src/lib/utils/date.ts>) — `getOccurrencesInRange`, `adjustOccurrenceToWallClock` (DST wall-clock), `buildFullRRuleString`. Correct low-level primitive.
+- [`src/lib/utils/dayOccurrences.ts`](<../../../../src/lib/utils/dayOccurrences.ts>) — used by `WebDayPlanner` and `WebTodayView`. **Ignores exceptions, pauses, rescheduled_to, and per-occurrence overrides** → an edited/paused/rescheduled occurrence renders **wrong on `/reminders` & Today** but **right on the calendar**.
+- [`src/lib/schedule/expandOccurrences.ts`](<../../../../src/lib/schedule/expandOccurrences.ts>) (+ `materializeOccurrence.ts`) — the intended single source of truth, **already has tests** (`expandOccurrences.test.ts`), handles exceptions/pauses/overrides — but is **wired to nothing**, and lacks flexible injection + postponed-action handling.
 - `WebCalendar.tsx:326-569` — the most complete behaviour, but bespoke and duplicated inline.
 
 > ⚠️ **Wiring reality check.** [1 · Feature State](<1 - Feature State.md>) lists RRULE expansion as "unit-tested ✅ (`expandOccurrences.test.ts`)." True — but that engine **is not imported by any surface**. The screens run the *untested* inline/`dayOccurrences` paths. The test guards code nobody uses.
@@ -583,7 +583,7 @@ Consequences: delete `calculateNextOccurrence` and the `next_occurrence` postpon
 
 `WebDayPlanner` builds `dayOccurrences` *including* completed ones and renders them dimmed/strikethrough with **no way to hide them** (`WebDayPlanner.tsx:1114-1205`, list at `:1845-1862`). The calendar already has the pattern: `showCompleted` + Eye/EyeOff toggle (`WebCalendar.tsx:167, 777-801`).
 
-**Fix design:** add a hide/show-completed toggle (default **hide**; persist in `localStorage`) in the `/reminders` FilterBar `extraActions` next to Plan-day / Overdue ([reminders/page.tsx:200-248](<../../../src/app/reminders/page.tsx>)), passed into `WebDayPlanner` as a `showCompleted` prop (mirrors `showOverdue`). Split the day list into open items + a collapsible **"Completed (n)"** section gated by the toggle.
+**Fix design:** add a hide/show-completed toggle (default **hide**; persist in `localStorage`) in the `/reminders` FilterBar `extraActions` next to Plan-day / Overdue ([reminders/page.tsx:200-248](<../../../../src/app/reminders/page.tsx>)), passed into `WebDayPlanner` as a `showCompleted` prop (mirrors `showOverdue`). Split the day list into open items + a collapsible **"Completed (n)"** section gated by the toggle.
 
 ---
 
@@ -628,7 +628,7 @@ All five Stage 1 bullets done:
 - **Next-occurrence trap removed everywhere.** Audit during implementation found it on **four** surfaces, not the two originally scoped: `WebEvents.tsx` postpone dialog, `ItemActionsSheet.tsx` postpone options, `WebTabletMissionControl.tsx` postpone dialog (its own separate inline implementation, not previously audited here), and `ItemDetailModal.tsx`'s "⏭ Next Time" quick-action button. `calculateNextOccurrence` and the `next_occurrence` member of `PostponeType` are deleted from `useItemActions.ts`.
 - **Real Skip wired on every surface.** `ItemActionsSheet` gained an `onSkip` prop (wired to `handleSkip`/`useSkipItem` in all 4 callers); for recurring items the sheet now shows "Skip this occurrence" instead of "Cancel" (Cancel is one-off-only, per §4's target design). `WebTabletMissionControl`'s `handleSkip` — which actually called `itemActions.handleCancel` despite its name — renamed to `handleCancelOrSkip` and now genuinely branches real skip (recurring) vs cancel (one-off). `WebEvents.tsx`'s calendar action bar does the same branch.
 - **`/reminders` completed toggle.** Eye/EyeOff toggle in the FilterBar (default hide, `localStorage`-persisted), `showCompleted` prop threaded into `WebDayPlanner`, day list split into open items + a collapsible "Completed (n)" section.
-- **Unit tests added** — [dayOccurrences.test.ts](<../../../src/lib/utils/dayOccurrences.test.ts>) covers the exact §0 repro (skip a past occurrence → no duplicate on the next occurrence), complete, move-to-a-date, and the postponed/next-occurrence-collision dedup case, plus `isOccurrenceCompleted` per action type. Pure logic, no Supabase mocks, `pnpm test` green for this file.
+- **Unit tests added** — [dayOccurrences.test.ts](<../../../../src/lib/utils/dayOccurrences.test.ts>) covers the exact §0 repro (skip a past occurrence → no duplicate on the next occurrence), complete, move-to-a-date, and the postponed/next-occurrence-collision dedup case, plus `isOccurrenceCompleted` per action type. Pure logic, no Supabase mocks, `pnpm test` green for this file.
 - **Found but explicitly NOT fixed this slice** (logged in [1 · Feature State](<1 - Feature State.md>) Cluster 5): the placement-rule guard test (`expandOccurrences.test.ts`) has a pre-existing failure against `WebTodayView.tsx` — confirmed via `git stash` to predate this session. Unrelated to recurrence/skip correctness; a source-text-regex guard gap, not a flexible-placement bug.
 
 Stage 2 (engine unification) and Stage 3 (shared action UI) are still open — see §7 above.

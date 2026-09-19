@@ -2,15 +2,21 @@
   "id": "/pm-live-app",
   "name": "PM Live • ERA",
   "short_name": "PM Live",
-  "description": "Phone command surface for the PM Command Center — checklist, delivery fleet, and campaigns, live from the laptop bridge.",
+  "description": "Command Center on the phone — work, delivery and results, relayed from the laptop.",
   "start_url": "/pm/live",
   "scope": "/pm/live",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#0a1628",
   "theme_color": "#0a1628",
   "orientation": "portrait-primary",
-  "categories": ["productivity", "utilities"],
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "/pm-192.png",
@@ -33,14 +39,24 @@
   ],
   "shortcuts": [
     {
-      "name": "Board",
-      "url": "/pm/live?view=board",
-      "icons": [{ "src": "/pm-192.png", "sizes": "192x192" }]
+      "name": "Work",
+      "url": "/pm/live#/explore?view=board",
+      "icons": [
+        {
+          "src": "/pm-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Delivery",
-      "url": "/pm/live?view=delivery",
-      "icons": [{ "src": "/pm-192.png", "sizes": "192x192" }]
+      "url": "/pm/live#/delivery",
+      "icons": [
+        {
+          "src": "/pm-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ],
   "screenshots": [],

@@ -1,0 +1,12 @@
+[
+  {
+    "path": "scripts/pm/app/Work.tsx",
+    "kind": "update",
+    "review": {
+      "state": "available",
+      "diff": "--- a/scripts/pm/app/Work.tsx\n+++ b/scripts/pm/app/Work.tsx\n@@ -69,7 +69,7 @@\n       <div className=\"focus-page\">\n         <Back />\n         <Empty title=\"This outcome has moved on\">\n-          <a className=\"secondary\" href={`#${spacePath(campaign)}?view=story`}>\n+          <a className=\"secondary\" href={`#${spacePath(campaign)}?tab=story`}>\n             See what changed\n             <ArrowRight size={16} />\n           </a>",
+      "beforeHash": "sha256:e9fab17fa70c34e773c9266a9d3c1b149e6c7e22abc3a4e128662c91109850fb",
+      "afterHash": "sha256:7585c0fe7728e9286b454bd93712e9ef386cec84f49d3e1ac6298efeaee51446"
+    }
+  }
+]

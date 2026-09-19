@@ -12,15 +12,15 @@ tags:
 
 > **FABLED 2:** [_index](<_index.md>) · **1 · Portfolio** · [2 · Gaps](<2 - FABLED 2 — Gaps & Missing.md>) · [3 · Optimization](<3 - FABLED 2 — Optimization Plan.md>) · [4 · Enhancements](<4 - FABLED 2 — Future Enhancements.md>)
 >
-> Verified 2026-07-02. The global [Feature State](<../../10 - Project Management/2 - Feature State — Current Reality.md>) holds per-module rows; this is the portfolio-level readout.
+> Verified 2026-07-02. The global [Feature State](<../../10 - Project Management/_Archive/2 - Feature State — Current Reality.md>) holds per-module rows; this is the portfolio-level readout.
 
 ---
 
 ## 1 · Composition (32 feature dirs on disk)
 
-- **Finance cluster (11):** accounts, transactions, categories, recurring, balance, budget, transfers, statement-import, debts, future-purchases, drafts → deep-dive: [Budget FABLED 2](<../../10 - Project Management/Budget/FABLED 2/_index.md>).
-- **Schedule cluster (2):** items, day-plan → [Schedule FABLED 2](<../../10 - Project Management/Schedule/FABLED 2/_index.md>).
-- **Kitchen cluster (3):** recipes, meal-planning, inventory → [Kitchen FABLED 2](<../../10 - Project Management/Kitchen/FABLED 2/_index.md>).
+- **Finance cluster (11):** accounts, transactions, categories, recurring, balance, budget, transfers, statement-import, debts, future-purchases, drafts → deep-dive: [Budget FABLED 2](<../../10 - Project Management/_Archive/Budget/FABLED 2/_index.md>).
+- **Schedule cluster (2):** items, day-plan → [Schedule FABLED 2](<../../10 - Project Management/_Archive/Schedule/FABLED 2/_index.md>).
+- **Kitchen cluster (3):** recipes, meal-planning, inventory → [Kitchen FABLED 2](<../../10 - Project Management/_Archive/Kitchen/FABLED 2/_index.md>).
 - **Independent standalones:** catalogue, analytics, preferences, nfc, chores, error-logs (+ pages: dashboard, focus, ai-usage, recycle-bin, watch UI in `components/watch/`, guest portal in `app/g/`).
 - **Junction-owned dirs living here:** hub, era, voice-conversation, trips, memories (see [Junction FABLED 2](<../../03 - Junction Modules/FABLED 2/_index.md>)).
 - **Debt:** blink (empty), today (empty), navigation (misfiled util), dashboard (prefetch-only).

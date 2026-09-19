@@ -25,7 +25,7 @@ Use when the user is adding a **brand-new** feature module — a new `src/featur
 ## What you must do when invoked
 
 ### Step 1 — Read the audit rationale (once)
-This skill exists because of [ERA Notes/10 - Project Management/1 - Codebase & AI Setup Audit.md](<../../../ERA Notes/10 - Project Management/1 - Codebase & AI Setup Audit.md>) §5 #3. The point is *docs never lag code*. Honor that: never hand-create a feature dir without its docs.
+This skill exists because of [ERA Notes/10 - Project Management/1 - Codebase & AI Setup Audit.md](<../../../ERA Notes/10 - Project Management/_Archive/1 - Codebase & AI Setup Audit.md>) §5 #3. The point is *docs never lag code*. Honor that: never hand-create a feature dir without its docs.
 
 ### Step 2 — Gather the inputs
 You need these before running. Ask the user only for what's missing; infer the rest.

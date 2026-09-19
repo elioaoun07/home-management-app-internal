@@ -11,7 +11,7 @@ tags:
 
 # Budget · 2 — Vision & Roadmap
 
-> **Command Center:** [\_index](_index.md) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [\_index](_index.md) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Budget/4 - Checklist.md>)
 >
 > **What this file is:** the _ambitious_ Budget file — where the money domain could go. Enhancements to what exists **and** richer connections to the rest of the app. This is allowed to dream; [1 · Feature State](<1 - Feature State.md>) is the sober reality. Ladders up to the global [3 · Future Vision](<../3 - Future Vision & Roadmap.md>).
 
@@ -49,7 +49,7 @@ Each ladders up to a track in the global [3 · Future Vision](<../3 - Future Vis
 - **Recurring → Schedule (due-dated payments).** A recurring payment's due-date and a Schedule reminder are the same intent — unify so confirming a payment closes the reminder. _(global Track A · Recurring→Budget; Track C · Cashflow)_
 - **Debt → Schedule.** Auto-create a reminder on a debt's collection date. _(global Track A · Debt→Reminder 2e)_
 - **Future Purchase → Transaction.** Linking the actual purchase auto-completes the wishlist item. _(gap 2f)_
-- **Budget → ERA briefing.** Feed cashflow + overspend signals into the proactive briefing so ERA can warn before a problem. _(global Track B · briefing enrichment)_ — _first piece IMPLEMENTED 2026-06-27:_ Budget AI now produces an on-demand **structured spending analysis** (`AnalysisReport`: KPIs, insights, anomalies, recommendations) that renders as a chat answer **and** a dashboard. Follow-up fixes _(IMPLEMENTED 2026-06-27)_: duplicate model category labels are merged before dashboard rendering, and `analysis_report` is persisted on `ai_messages` so historical answers can reopen **View as Dashboard** without another AI call. The structured signals now exist; wiring them into the _proactive_ ERA briefing is the remaining step. See [Spending Analysis Report](<../../03 - Junction Modules/AI Assistant/Spending Analysis Report.md>).
+- **Budget → ERA briefing.** Feed cashflow + overspend signals into the proactive briefing so ERA can warn before a problem. _(global Track B · briefing enrichment)_ — _first piece IMPLEMENTED 2026-06-27:_ Budget AI now produces an on-demand **structured spending analysis** (`AnalysisReport`: KPIs, insights, anomalies, recommendations) that renders as a chat answer **and** a dashboard. Follow-up fixes _(IMPLEMENTED 2026-06-27)_: duplicate model category labels are merged before dashboard rendering, and `analysis_report` is persisted on `ai_messages` so historical answers can reopen **View as Dashboard** without another AI call. The structured signals now exist; wiring them into the _proactive_ ERA briefing is the remaining step. See [Spending Analysis Report](<../../../03 - Junction Modules/AI Assistant/Spending Analysis Report.md>).
 - **Statement Import → Inventory/Catalogue.** Parsed grocery lines could pre-fill inventory or catalogue prices (longer reach).
 
 ---
@@ -85,4 +85,4 @@ If you point the next stretch at Budget:
 
 > Resist building the cashflow forecast before the core tests exist — a silent balance bug would hide exactly there, and a forecast amplifies it.
 
-→ This period's concrete actions: [3 · Action Plan](<3 - Action Plan.md>); the checkable list: [4 · Checklist](<4 - Checklist.md>).
+→ This period's concrete actions: [3 · Action Plan](<3 - Action Plan.md>); the checkable list: [4 · Checklist](<../../Budget/4 - Checklist.md>).

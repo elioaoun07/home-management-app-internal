@@ -346,11 +346,30 @@ const ACCOUNTS: AccountRef[] = [
 ];
 
 describe("suggestAccountForRow", () => {
-  it("keeps a learned cross-account mapping as the default", () => {
+  // BUD-23: a learned merchant mapping supplies a category, never an account.
+  // A money-out row on an income statement still has to leave for an expense
+  // account (a correctness gate), but which one is the DEFAULT expense account
+  // — the mapping's account is ignored, or the fingerprint (hashed with the
+  // statement account) would guard a different account than the row it created.
+  it("never reroutes to a learned mapping's account", () => {
     expect(
       suggestAccountForRow(
         row({ mapping_account_id: ACCOUNT, type: "debit" }),
         SALARY,
+        ACCOUNTS,
+      ),
+    ).toBe(WALLET); // the default expense account, not the mapped ACCOUNT
+  });
+
+  // Regression (trip import): the statement IS an expense account (the trip's
+  // own), a merchant was learned on a DIFFERENT expense card, and the row can
+  // live on the statement account — so it stays there instead of being filed
+  // back on the old card, which the owner had no way to undo.
+  it("keeps a row on an expense statement account despite a cross-account mapping", () => {
+    expect(
+      suggestAccountForRow(
+        row({ mapping_account_id: WALLET, type: "debit" }),
+        ACCOUNT,
         ACCOUNTS,
       ),
     ).toBe(ACCOUNT);

@@ -386,6 +386,24 @@ const TRAILING_AMOUNTS =
 const MONEY_OR_DASH = /([\d,]+\.\d{2}(?!\d)|-)/g;
 
 /**
+ * True when a line is nothing but money columns — values, dashes and
+ * whitespace. It catches a wrapped amounts row that did not fill all three
+ * columns (e.g. "500.00 1,234.56"), while rejecting a description line that
+ * merely carries an embedded number, such as a mobile transfer's
+ * "via Mobile - Out: 105.02" — whose real money columns sit on the next line.
+ */
+function isAmountsOnlyLine(line: string): boolean {
+  if (!MONEY_ANYWHERE.test(line)) return false;
+  return (
+    line
+      .replace(/[\d,]+\.\d{2}(?!\d)/g, " ")
+      .replace(/-/g, " ")
+      .replace(/\s+/g, " ")
+      .trim() === ""
+  );
+}
+
+/**
  * The bank's authenticity/e-signature footer, printed once at the very
  * bottom of the whole statement (these PDFs are one tall page, not paginated
  * — see `pdf-parser.ts`). It carries no date and no money of its own, so
@@ -517,9 +535,15 @@ export function parsePDFTextWithDiagnostics(text: string): PDFTextParseResult {
                 }
                 numbersLine = match[0];
                 break;
-              } else {
+              } else if (isAmountsOnlyLine(nextLine)) {
+                // A bare amounts row that didn't fill all three columns.
                 numbersLine = nextLine;
                 break;
+              } else {
+                // A description line that merely contains an embedded number
+                // (e.g. a mobile transfer's "via Mobile - Out: 105.02"); the
+                // real money columns are on a later line — keep collecting.
+                fullDescription += " " + nextLine;
               }
             } else {
               // More description text
@@ -651,6 +675,18 @@ export function convertToUITransactions(
     const normalizedKey = normalizeMerchant(raw.description);
     const mapping = matchMerchantMapping(raw.merchantPattern, mappingList);
 
+    // A mapping is scoped to the account it was learned on: its category is
+    // valid only there (categories are per-account) and — per BUD-23 — it may
+    // not reroute the row off the statement account. Importing a DIFFERENT
+    // account (e.g. a trip's own account) only the friendly merchant name
+    // carries over; the category stays empty so the row is reviewed against the
+    // account it will actually post to instead of failing commit with a
+    // wrong-account category. A mapping with no recorded account is legacy —
+    // treat it as applying, matching the prior behaviour.
+    const mappingAppliesHere =
+      !!mapping &&
+      (mapping.account_id == null || mapping.account_id === accountId);
+
     // Determine if debit or credit
     const isCredit = raw.moneyIn !== null && raw.moneyIn > 0;
     const amount = isCredit ? raw.moneyIn! : raw.moneyOut || 0;
@@ -676,8 +712,8 @@ export function convertToUITransactions(
       semantic_kind: getSemanticKind(raw),
       merchant_name: mapping?.merchant_name || raw.merchantName,
       normalized_key: normalizedKey,
-      category_id: mapping?.category_id || null,
-      subcategory_id: mapping?.subcategory_id || null,
+      category_id: mappingAppliesHere ? mapping!.category_id || null : null,
+      subcategory_id: mappingAppliesHere ? mapping!.subcategory_id || null : null,
       mapping_account_id: mapping?.account_id || null,
       // The statement belongs to ONE account, and that account is already
       // baked into the hash below. A merchant mapping must never redirect the
@@ -685,7 +721,7 @@ export function convertToUITransactions(
       // account than the transaction it guards.
       account_id: accountId,
       // `matched` means "a learned mapping supplied a category" — nothing else.
-      matched: !!mapping?.category_id,
+      matched: mappingAppliesHere && !!mapping!.category_id,
       selected: !isReversal, // Don't auto-select reversals
       statement_hash: generateStatementHash(
         accountId,

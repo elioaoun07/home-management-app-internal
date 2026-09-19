@@ -1,4 +1,5 @@
 import { getAccessibleAccount } from "@/lib/accountAccess";
+import { canAccessTrip } from "@/lib/tripAccess";
 import { adjustAccountBalance } from "@/lib/balance";
 import type { AccountType } from "@/lib/balance-utils";
 import { getBalanceDelta } from "@/lib/balance-utils";
@@ -23,6 +24,10 @@ export interface CreateTransactionDTO {
   total_bill_amount?: number;
   /** LBP change received (in thousands, e.g., 600 = 600,000 LBP). For Lebanon dual-currency. */
   lbp_change_received?: number | null;
+  /** Optional trip tag. Counts this transaction toward the trip regardless of
+   *  which account it sits in or when it happened (pre-trip visa/flight spend
+   *  paid from another account). null = untagged. Never affects balances. */
+  trip_id?: string | null;
 }
 
 export interface UpdateTransactionDTO {
@@ -34,6 +39,10 @@ export interface UpdateTransactionDTO {
   subcategory_id?: string | null;
   /** LBP change received (in thousands, e.g., 600 = 600,000 LBP). For Lebanon dual-currency. */
   lbp_change_received?: number | null;
+  /** Optional trip tag. Counts this transaction toward the trip regardless of
+   *  which account it sits in or when it happened (pre-trip visa/flight spend
+   *  paid from another account). null = untagged. Never affects balances. */
+  trip_id?: string | null;
 }
 
 export interface TransactionService {
@@ -75,7 +84,7 @@ export class SupabaseTransactionService implements TransactionService {
       .select(
         `id, date, category_id, subcategory_id, amount, description, account_id, inserted_at, user_id, is_private,
         split_requested, collaborator_id, collaborator_amount, collaborator_description, split_completed_at, lbp_change_received,
-        scheduled_date, is_debt_return, parent_transaction_id, receipt_url, exchange_rate,
+        scheduled_date, is_debt_return, parent_transaction_id, receipt_url, exchange_rate, trip_id,
         category:user_categories!transactions_category_fk(name, color),
         subcategory:user_categories!transactions_subcategory_fk(name, color)`,
       )
@@ -323,6 +332,10 @@ export class SupabaseTransactionService implements TransactionService {
         receipt_url: isMasked ? null : (r.receipt_url ?? null),
         // Frozen USD rate at the time this transaction was logged (null = pre-migration/USD = 1)
         exchange_rate: r.exchange_rate ?? null,
+        // Trip tag. Deliberately NOT masked for a partner's private row: like
+        // the amount and top-level category it must still count toward shared
+        // trip totals; it names a trip both of them already share.
+        trip_id: r.trip_id ?? null,
       };
     });
 
@@ -377,6 +390,7 @@ export class SupabaseTransactionService implements TransactionService {
       split_requested,
       total_bill_amount,
       lbp_change_received,
+      trip_id,
     } = data;
 
     // Validate required fields
@@ -391,6 +405,14 @@ export class SupabaseTransactionService implements TransactionService {
     );
     if (!account?.canWrite) {
       throw new Error("Invalid account_id");
+    }
+
+    // A trip tag is independent of the account — but it must name a trip this
+    // user can actually see (own, or the partner's household-scope trip).
+    if (trip_id) {
+      if (!(await canAccessTrip(this.supabase, userId, trip_id))) {
+        throw new Error("Invalid trip_id");
+      }
     }
 
     // If split requested, get the partner's user ID from household link
@@ -466,6 +488,7 @@ export class SupabaseTransactionService implements TransactionService {
       split_requested: split_requested || false,
       collaborator_id: collaboratorId,
       lbp_change_received: lbp_change_received ?? null,
+      trip_id: trip_id ?? null,
     };
 
     const { data: created, error } = await this.supabase
@@ -590,6 +613,7 @@ export class SupabaseTransactionService implements TransactionService {
       category_id,
       subcategory_id,
       lbp_change_received,
+      trip_id,
     } = data;
 
     if (!id) {
@@ -644,6 +668,19 @@ export class SupabaseTransactionService implements TransactionService {
     // Handle LBP change (Lebanon dual-currency tracking)
     if (lbp_change_received !== undefined) {
       updateFields.lbp_change_received = lbp_change_received ?? null;
+    }
+
+    // Trip tag: "" and null both mean untag. A non-empty value must name a trip
+    // this user can see. Changing it never touches the account or the balance.
+    if (trip_id !== undefined) {
+      if (trip_id === null || trip_id === "") {
+        updateFields.trip_id = null;
+      } else {
+        if (!(await canAccessTrip(this.supabase, userId, trip_id))) {
+          throw new Error("Invalid trip_id");
+        }
+        updateFields.trip_id = String(trip_id);
+      }
     }
 
     if (Object.keys(updateFields).length === 0) {

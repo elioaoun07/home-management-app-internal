@@ -35,6 +35,6 @@ tags:
 
 ## The next 3 moves
 
-1. **The voice/Azure runbook** — the known-worst doc gap ([Hub & ERA FABLED 2.3 · O4.3](<../../10 - Project Management/Hub & ERA/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
-2. **Minimal CI** — one workflow: `pnpm test` + `docs:check` ([FAR Checklist FABLED 2.3 · O3](<../../10 - Project Management/FAR Execution Checklist/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
+1. **The voice/Azure runbook** — the known-worst doc gap ([Hub & ERA FABLED 2.3 · O4.3](<../../10 - Project Management/_Archive/Hub & ERA/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
+2. **Minimal CI** — one workflow: `pnpm test` + `docs:check` ([FAR Checklist FABLED 2.3 · O3](<../../10 - Project Management/_Archive/FAR Execution Checklist/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
 3. **The bootstrap checklist** — clone → running app, written while the memory is fresh ([file 3 · O2](<3 - FABLED 2 — Optimization Plan.md>)).

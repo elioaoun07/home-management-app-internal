@@ -60,6 +60,9 @@ export const EXECUTORS = deepFreeze([
     qualificationProbe: "scripts/delivery-v2/probes/codex-qualification.mjs",
     summary:
       "OpenAI Codex exec/SDK under its own Windows sandbox. Confines writes and network; its read boundary is observed to fail. No monetary reading at this SDK version.",
+    // ModelReasoningEffort in @openai/codex-sdk 0.144.1 (re-read by a fixture).
+    supportedEfforts: ["minimal", "low", "medium", "high", "xhigh"],
+    effectiveReported: { model: null, effort: null },
   },
   {
     id: "claude",
@@ -72,8 +75,96 @@ export const EXECUTORS = deepFreeze([
     qualificationProbe: "scripts/delivery-v2/probes/claude-qualification.mjs",
     summary:
       "Anthropic Claude Agent SDK behind the harness-level canUseTool allowlist. Reports a provider cost per turn and reconciles a lost launch by a caller-minted session id; OS-level containment is unobserved on this host.",
+    // EffortLevel in @anthropic-ai/claude-agent-sdk 0.3.207 (re-read by a fixture).
+    supportedEfforts: ["low", "medium", "high", "xhigh", "max"],
+    effectiveReported: { model: "system init message", effort: "tool-use hook input" },
   },
 ]);
+
+/** Why requested run settings were refused. Fixtures match on codes. */
+export const SETTINGS_REFUSALS = Object.freeze({
+  EFFORT: "unsupported-effort",
+  MODEL: "model-not-in-catalog",
+  MODEL_EFFORT: "effort-not-offered-for-model",
+});
+
+/**
+ * Validate one run's requested model and effort for one executor.
+ *
+ * Refuses rather than rounds: an effort this SDK version does not accept is not
+ * mapped to its nearest neighbour, and a model the installation's catalog does
+ * not list is not passed through on hope. Null means "the executor's default",
+ * which is recorded afterwards from what the executor reports.
+ *
+ * @param {{executor:unknown, model?:(string|null), effort?:(string|null),
+ *   catalog?:({revision?:(number|null), models?:Record<string, {id:string, efforts?:string[], observedAs?:string[]}[]>}|null)}} input
+ */
+export function validateRunSettings({ executor, model = null, effort = null, catalog = null }) {
+  const entry = resolveExecutorChoice(executor);
+  if (!entry) {
+    return deepFreeze({
+      ok: false,
+      refusals: [{ code: EXECUTOR_REFUSALS.UNKNOWN, detail: String(executor ?? "(none)") }],
+      settings: null,
+    });
+  }
+  const refusals = [];
+  const cleanModel = isNonEmptyString(model) ? String(model).trim() : null;
+  const cleanEffort = isNonEmptyString(effort) ? String(effort).trim() : null;
+  if (cleanEffort && !entry.supportedEfforts.includes(cleanEffort)) {
+    refusals.push({
+      code: SETTINGS_REFUSALS.EFFORT,
+      detail: cleanEffort + " is not accepted by " + entry.label + "; supported: " + entry.supportedEfforts.join(", "),
+    });
+  }
+  const listed = catalog && catalog.models && Array.isArray(catalog.models[entry.id]) ? catalog.models[entry.id] : [];
+  const modelEntry = cleanModel ? listed.find((candidate) => candidate.id === cleanModel) || null : null;
+  if (cleanModel && !modelEntry) {
+    refusals.push({ code: SETTINGS_REFUSALS.MODEL, detail: cleanModel + " is not in this installation's " + entry.label + " catalog" });
+  }
+  if (modelEntry && cleanEffort && Array.isArray(modelEntry.efforts) && !modelEntry.efforts.includes(cleanEffort)) {
+    refusals.push({ code: SETTINGS_REFUSALS.MODEL_EFFORT, detail: cleanModel + " does not offer " + cleanEffort });
+  }
+  return deepFreeze({
+    ok: refusals.length === 0,
+    refusals,
+    settings: {
+      executor: entry.id,
+      backend_id: entry.backend_id,
+      model: cleanModel,
+      effort: cleanEffort,
+      observedAs: modelEntry && Array.isArray(modelEntry.observedAs) ? [...modelEntry.observedAs] : [],
+      catalog_revision: catalog && Number.isInteger(catalog.revision) ? catalog.revision : null,
+    },
+  });
+}
+
+/**
+ * Compare what a run asked for with what the executor reported it used.
+ *
+ * `unreported` is its own state and never `matched`: an executor that does not
+ * report its effective model has not confirmed the selection.
+ *
+ * @param {{requested:(Record<string, any>|null), effective:(Record<string, any>|null)}} input
+ */
+export function verifyEffectiveSettings({ requested, effective }) {
+  const check = (field) => {
+    const wanted = requested && requested[field] != null ? String(requested[field]) : null;
+    const seen = effective && effective[field] != null ? String(effective[field]) : null;
+    if (seen == null) return { state: "unreported", requested: wanted, effective: null };
+    if (wanted == null) return { state: "default", requested: null, effective: seen };
+    const aliases = field === "model" && requested && Array.isArray(requested.observedAs) ? requested.observedAs : [];
+    return { state: seen === wanted || aliases.includes(seen) ? "matched" : "mismatched", requested: wanted, effective: seen };
+  };
+  const model = check("model");
+  const effort = check("effort");
+  return deepFreeze({
+    model,
+    effort,
+    mismatch: model.state === "mismatched" || effort.state === "mismatched",
+    source: (effective && effective.source) || null,
+  });
+}
 
 /** Canonical backend ids, in declaration order. */
 export const BACKEND_IDS = deepFreeze(EXECUTORS.map((entry) => entry.backend_id));
@@ -121,6 +212,8 @@ export function listExecutors({ isInstalled = null } = {}) {
         summary: entry.summary,
         profileDeclaration: entry.profileDeclaration,
         qualificationProbe: entry.qualificationProbe,
+        supportedEfforts: Object.freeze([...entry.supportedEfforts]),
+        effectiveReported: { ...entry.effectiveReported },
         available: isInstalled ? Boolean(isInstalled(entry)) : null,
       }),
     ),

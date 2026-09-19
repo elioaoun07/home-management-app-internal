@@ -22,7 +22,7 @@ In Supabase SQL Editor: `SELECT pg_get_functiondef(oid) FROM pg_proc WHERE prona
 
 ## O2 — Run the G1 verification round-trips (the deferred item — one focused session)
 
-Use the checklist in [file 2 · G1](<2 - FABLED — Gaps & Missing.md>) verbatim. Practical setup: a throwaway "Test trip" with 1 chore, 1 recurring event, 1 one-time event, 1 meal plan, both modes (household, then solo). Inspect `trip_side_effects` rows after each step — the ledger inspection *is* the verification. Record results in [file 1](<../1 - Feature State — Current Reality.md>) (flip the "unverified" notes) and log any failure as a pain entry per Hard Rule #25.
+Use the checklist in [file 2 · G1](<2 - FABLED — Gaps & Missing.md>) verbatim. Practical setup: a throwaway "Test trip" with 1 chore, 1 recurring event, 1 one-time event, 1 meal plan, both modes (household, then solo). Inspect `trip_side_effects` rows after each step — the ledger inspection *is* the verification. Record results in [file 1](<../1 - Feature State.md>) (flip the "unverified" notes) and log any failure as a pain entry per Hard Rule #25.
 
 ## O3 — Ledger-symmetry assertion (cheap tripwire for G3)
 

@@ -328,7 +328,10 @@ export function spawnExecutor({ argv, cwd, env, timeoutMs = 600_000 }) {
  * nothing.
  */
 export function parseTestCounts(output) {
-  const text = String(output || "");
+  // Vitest colours its terminal summary by default. The terminal escape
+  // sequences sit between the words and numbers the parser needs, so strip
+  // them before interpreting the runner's report.
+  const text = String(output || "").replace(/\u001B\[[0-?]*[ -/]*[@-~]/gu, "");
   // vitest: "Tests  190 passed (190)" / "Tests  no tests"
   const vitest = text.match(/Tests\s+(?:(\d+)\s+failed\s*\|\s*)?(\d+)\s+passed(?:\s*\|\s*(\d+)\s+skipped)?\s*\((\d+)\)/u);
   if (vitest) {
@@ -337,6 +340,15 @@ export function parseTestCounts(output) {
     const skipped = Number(vitest[3] || 0);
     const total = Number(vitest[4] || 0);
     return { selected: total, executed: failed + passed, skipped, failed };
+  }
+  // DLV-107's protected navigation observer intentionally runs six rendered
+  // cases instead of a test framework. It reports its actual case count in a
+  // stable, pinned summary; accept only that exact observer vocabulary so a
+  // green exit code alone can never become evidence.
+  const synthetic = text.match(/(?:History navigation passed|Known bug reproduced):\s*(\d+)\s+synthetic cases\b/iu);
+  if (synthetic) {
+    const count = Number(synthetic[1]);
+    return { selected: count, executed: count, skipped: 0, failed: 0 };
   }
   if (/No test files found|no tests/iu.test(text)) return { selected: 0, executed: 0, skipped: 0, failed: 0 };
   return { selected: null, executed: null, skipped: null, failed: null };

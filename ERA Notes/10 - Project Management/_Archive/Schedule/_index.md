@@ -23,7 +23,7 @@ tags:
 | 1   | [Feature State](<1 - Feature State.md>)       | You want the honest, no-hype status of every Schedule sub-feature **and** the full Pain Inventory (every pain, root cause, severity). |
 | 2   | [Vision & Roadmap](<2 - Vision & Roadmap.md>) | Where the module is *heading* — vision + roadmap, target design & locked decisions, **plus the folded-in Type Taxonomy & Capture Design and Recurrence & Occurrence Actions** deep-designs (the "what are Task/Reminder/Event?" model, the form blueprint, and the Skip/recurrence root cause + staged fix). |
 | 3   | [Action Plan](<3 - Action Plan.md>)           | The call + sequenced Now/Next/Later queue + candidate-work tables (the *why, and in what order*); the originating **My Plan** brief is its appendix. |
-| 4   | [Checklist](<4 - Checklist.md>)               | **Most days.** The flat, phased, checkable Master Build Checklist (IDs + severity + effort). |
+| 4   | [Checklist](<../../Schedule/4 - Checklist.md>)               | **Most days.** The flat, phased, checkable Master Build Checklist (IDs + severity + effort). |
 | F   | [FABLED/](<FABLED/_index.md>)                 | *(v1 baseline, frozen 2026-06-10)* — the first-generation deep-dive; kept for lineage. |
 | F2  | [FABLED 2/](<FABLED 2/_index.md>)             | **The living deep-dive (current generation, verified 2026-07-02):** the three-engine situation pinned, scored maturity, delta ledger vs v1, ranked gaps (incl. the red suite), staged unification plan, enhancements. |
 
@@ -37,4 +37,4 @@ tags:
 ## Where this fits
 
 - **Up one level:** the global command center → [10 - Project Management/_index.md](<../_index.md>). Read that for whole-app priorities.
-- **Implementation reality (read before coding):** [Items & Reminders / Overview](<../../02 - Standalone Modules/Items & Reminders/Overview.md>) and [Schedule Feature](<../../02 - Standalone Modules/Items & Reminders/Schedule Feature.md>). Those are the file-level source of truth; this folder is **strategy + audit + queue**, not a code map.
+- **Implementation reality (read before coding):** [Items & Reminders / Overview](<../../../02 - Standalone Modules/Items & Reminders/Overview.md>) and [Schedule Feature](<../../../02 - Standalone Modules/Items & Reminders/Schedule Feature.md>). Those are the file-level source of truth; this folder is **strategy + audit + queue**, not a code map.

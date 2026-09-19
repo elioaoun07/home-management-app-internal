@@ -60,7 +60,7 @@ Trust a FABLED 3 file **as of its stamp** (2026-07-18, evidence cutoff `f0a8e19`
 
 - **FABLED+ Enhancement Study** — archived 2026-07-30 to `10 - Project Management/_Archive/FABLED+ Enhancement Study/`. It was a study queue rather than an execution authority; its loop-readiness lens fed Handoff readiness and is preserved in git.
 - **Review companions** (Codebase Audit 2026-07-01, Functional Architecture Review, FAR Checklist) — audit events, not state; archived 2026-07-30 to `10 - Project Management/_Archive/`.
-- **FABLE — Final Consultation (2026-07-06)** — the *why* (frozen; archived to `10 - Project Management/_Archive/`). **[FABLE — Testament (2026-07-18)](<../10 - Project Management/FABLE — Testament (2026-07-18).md>)** — the *how*: the operating manual for successor models.
+- **FABLE — Final Consultation (2026-07-06)** — the *why* (frozen; archived to `10 - Project Management/_Archive/`). **[FABLE — Testament (2026-07-18)](<../10 - Project Management/_Archive/FABLE — Testament (2026-07-18).md>)** — the *how*: the operating manual for successor models.
 
 ## Successor reading paths
 

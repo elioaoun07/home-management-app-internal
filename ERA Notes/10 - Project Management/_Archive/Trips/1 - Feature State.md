@@ -11,11 +11,11 @@ tags:
 
 # Trips · 1 — Feature State
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Trips/4 - Checklist.md>)
 >
 > **What this file is:** the *honest, no-hype* state of every Trips sub-feature — what exists, how mature it is, and the single most useful next step. **No imagination here** (that's file 2).
 >
-> **Method & confidence:** a **structural** assessment derived from the module's vault doc ([Trips / Overview](<../../03 - Junction Modules/Trips/Overview.md>)), the DB schema (`trips`, `trip_places`, `trip_packing_items`, `trip_side_effects`), and `src/features/trips/`. It is **not** a line-by-line correctness audit — and crucially the **cascades have not been verified end-to-end** (verify deferred by choice). Treat tiers as "how battle-tested," not "bug-free."
+> **Method & confidence:** a **structural** assessment derived from the module's vault doc ([Trips / Overview](<../../../03 - Junction Modules/Trips/Overview.md>)), the DB schema (`trips`, `trip_places`, `trip_packing_items`, `trip_side_effects`), and `src/features/trips/`. It is **not** a line-by-line correctness audit — and crucially the **cascades have not been verified end-to-end** (verify deferred by choice). Treat tiers as "how battle-tested," not "bug-free."
 >
 > **Module identity:** Trips is a **Junction** module (committed `e058192`, 2026-05-30). At the app level (global [2 · Feature State](<../2 - Feature State — Current Reality.md>)) it is **🟡 New/Thin** — recently shipped, broad blast radius, and its activation/completion cascades are **unverified**. It connects Budget ↔ Items/Chores ↔ Meal Planning ↔ Catalogue.
 
@@ -52,8 +52,8 @@ tags:
 
 Do **not** duplicate file-path tables here — they drift. The authoritative code map lives in:
 
-- [Trips / Overview](<../../03 - Junction Modules/Trips/Overview.md>) — the `trip_side_effects` ledger, the activation/completion RPCs, household vs solo cascade rules, account creation, and templates. **Read this before touching activation/completion logic.**
-- Connected modules whose docs you must read before changing a cascade: [Items & Reminders / Overview](<../../02 - Standalone Modules/Items & Reminders/Overview.md>), [Meal Planning / Overview](<../../03 - Junction Modules/Meal Planning/Overview.md>), [Accounts & Balance / Overview](<../../02 - Standalone Modules/Accounts & Balance/Overview.md>), Chores.
+- [Trips / Overview](<../../../03 - Junction Modules/Trips/Overview.md>) — the `trip_side_effects` ledger, the activation/completion RPCs, household vs solo cascade rules, account creation, and templates. **Read this before touching activation/completion logic.**
+- Connected modules whose docs you must read before changing a cascade: [Items & Reminders / Overview](<../../../02 - Standalone Modules/Items & Reminders/Overview.md>), [Meal Planning / Overview](<../../../03 - Junction Modules/Meal Planning/Overview.md>), [Accounts & Balance / Overview](<../../../02 - Standalone Modules/Accounts & Balance/Overview.md>), Chores.
 
 ---
 
@@ -66,4 +66,4 @@ _(Updated 2026-05-30)_
 3. **The `trip_side_effects` ledger is a single point of correctness.** If a cascade fires without logging, completion can't reverse it. There's no test guarding the log↔reverse symmetry.
 4. **One subtle rule is easy to forget:** `recurring_payments` are intentionally *not* paused. A well-meaning "pause everything on travel" change would break a deliberate decision.
 
-→ The growth opportunities are in [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>); the concrete next steps are in [3 · Action Plan](<3 - Action Plan.md>); the checkable list is [4 · Checklist](<4 - Checklist.md>).
+→ The growth opportunities are in [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>); the concrete next steps are in [3 · Action Plan](<3 - Action Plan.md>); the checkable list is [4 · Checklist](<../../Trips/4 - Checklist.md>).

@@ -13,7 +13,7 @@ tags:
 
 > ⚠️ **Frozen v1 baseline (2026-06-10)** — superseded by `FABLED 2/`; kept for the generational audit protocol. Do not update.
 
-> **FABLED** = the 10× deep-dive layer of the Trips PM folder. Where files [1](<../1 - Feature State — Current Reality.md>)/[2](<../2 - Future Vision & Roadmap.md>)/[3](<../3 - Current — Action Plan.md>) stay short and current, FABLED holds the depth: how the context-switch engine *actually* works, what's missing, how to optimize it, and where it should go. Re-audit per campaign. **When FABLED and the code disagree, the code wins — and FABLED gets the correction.**
+> **FABLED** = the 10× deep-dive layer of the Trips PM folder. Where files [1](<../1 - Feature State.md>)/[2](<../2 - Vision & Roadmap.md>)/[3](<../3 - Action Plan.md>) stay short and current, FABLED holds the depth: how the context-switch engine *actually* works, what's missing, how to optimize it, and where it should go. Re-audit per campaign. **When FABLED and the code disagree, the code wins — and FABLED gets the correction.**
 >
 > Audited against `main` on **2026-06-10** (route/component surface inventoried; migrations folder checked).
 

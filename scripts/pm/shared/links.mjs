@@ -7,9 +7,28 @@ function normalizePosix(path) {
   return parts.join("/");
 }
 
+// GitHub heading slugs: authored links (`#sch-43b`, `#phase-4--deliver-…`) and
+// pm:check-docs use this form, so spaces map one-to-one and hyphens never collapse.
 export function slugify(value) {
   return String(value || "").toLowerCase().replace(/<[^>]+>/g, "")
-    .replace(/[^\p{L}\p{N}\s-]/gu, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+    .replace(/[^\p{L}\p{N}\s_-]/gu, "").trim().replace(/\s/g, "-");
+}
+
+/** Every ATX heading outside code fences, in order, with GitHub's `-1`, `-2` duplicate suffixes. */
+export function headingAnchors(raw) {
+  const seen = new Map();
+  const anchors = [];
+  let fence = false;
+  String(raw || "").split("\n").forEach((line, index) => {
+    if (/^\s*(```|~~~)/.test(line)) { fence = !fence; return; }
+    const match = !fence && line.replace(/\r$/, "").match(/^#{1,6}\s+(.+?)\s*#*\s*$/);
+    if (!match) return;
+    const base = slugify(match[1]);
+    const count = seen.get(base) || 0;
+    seen.set(base, count + 1);
+    anchors.push({ line: index, text: match[1], anchor: count ? `${base}-${count}` : base });
+  });
+  return anchors;
 }
 
 export function resolveRelativeMd(fromRelPath, href) {

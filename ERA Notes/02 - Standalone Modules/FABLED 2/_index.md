@@ -39,4 +39,4 @@ tags:
 2. **Classify the stragglers** — `memories`, `receipts`, `navigation`, `dashboard` prefetch dir ([file 2 · G2](<2 - FABLED 2 — Gaps & Missing.md>)).
 3. **Mechanize the boundary rule** — the 20-line cross-import checker ([Architecture FABLED 2.4 · E6](<../../01 - Architecture/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)).
 
-**Related FABLED 2:** [Architecture](<../../01 - Architecture/FABLED 2/_index.md>) · [Junctions](<../../03 - Junction Modules/FABLED 2/_index.md>) · campaign folders under [10 - Project Management](<../../10 - Project Management/FABLED 2/_index.md>)
+**Related FABLED 2:** [Architecture](<../../01 - Architecture/FABLED 2/_index.md>) · [Junctions](<../../03 - Junction Modules/FABLED 2/_index.md>) · campaign folders under [10 - Project Management](<../../10 - Project Management/_Archive/FABLED 2/_index.md>)

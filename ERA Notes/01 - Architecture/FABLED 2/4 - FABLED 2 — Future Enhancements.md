@@ -18,9 +18,9 @@ tags:
 
 ## E1 — The signals layer ⭐ (the FAR's nervous system, given its architectural home)
 
-**Impact: Highest · Effort: M (assembly — the parts exist, [FAR FABLED 2.3](<../../10 - Project Management/Functional Architecture Review/FABLED 2/3 - FABLED 2 — Optimization Plan.md>))**
+**Impact: Highest · Effort: M (assembly — the parts exist, [FAR FABLED 2.3](<../../10 - Project Management/_Archive/Functional Architecture Review/FABLED 2/3 - FABLED 2 — Optimization Plan.md>))**
 
-Per-module pure `get*Signals()` functions → one composer → policy-gated delivery ([Notifications FABLED 2.4 · E1](<../../10 - Project Management/Notifications & Alerts/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)). Architecturally: signals are **read-models, never new writers** — the same discipline as `getMealsForRange` and `getWeekShape`. Defer the insights *schema* until two producers run in production.
+Per-module pure `get*Signals()` functions → one composer → policy-gated delivery ([Notifications FABLED 2.4 · E1](<../../10 - Project Management/_Archive/Notifications & Alerts/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)). Architecturally: signals are **read-models, never new writers** — the same discipline as `getMealsForRange` and `getWeekShape`. Defer the insights *schema* until two producers run in production.
 **Kill criterion:** none on the concept; on the schema — if function-first works for 3 producers, maybe it keeps working; add the store only when cross-run memory (dedup, feedback) actually demands it.
 
 ## E2 — Module manifests (the Feature Map, machine-readable)
@@ -40,7 +40,7 @@ Zod schemas already define every route's contract. Generate/write table-driven t
 
 **Impact: High eventually · Effort: H — not yet**
 
-Today cross-module effects are direct writes (message action → transaction; trip activation → pauses; future: signals → notifications). A thin append-only `events` table (actor, verb, subject, payload) written *alongside* (not instead of) direct effects would give: the household daily log ([Hub & ERA FABLED 2.4 · E10](<../../10 - Project Management/Hub & ERA/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)) for free, audit trails (reassignment history — a named Schedule gap), anomaly context, and eventually the substrate for undo-anything.
+Today cross-module effects are direct writes (message action → transaction; trip activation → pauses; future: signals → notifications). A thin append-only `events` table (actor, verb, subject, payload) written *alongside* (not instead of) direct effects would give: the household daily log ([Hub & ERA FABLED 2.4 · E10](<../../10 - Project Management/_Archive/Hub & ERA/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)) for free, audit trails (reassignment history — a named Schedule gap), anomaly context, and eventually the substrate for undo-anything.
 **Kill criterion:** do not start before two concrete consumers are scheduled; an event log with one reader is a diary.
 
 ## E5 — Per-module data export/import (household data sovereignty)
@@ -54,7 +54,7 @@ One `GET /api/export` per domain (JSON, RLS-scoped). Motivations: backup indepen
 
 **Impact: Med · Effort: S each**
 
-Tiny scripts asserting structural rules, run in CI: no `features/*` cross-imports (the standalone rule — currently convention), no component imports from `app/api`, every `api/*/route.ts` contains a zod parse, every mutation hook file imports `safeFetch` or is allowlisted. Each is ~20 lines with the repo's existing script culture ([`scripts/pm/scan.mjs`](<../../10 - Project Management/FABLED 2/1 - FABLED 2 — Current Implementation.md>) proves the pattern). The standalone-import rule alone has silently broken in other codebases for months before detection — cheap insurance here.
+Tiny scripts asserting structural rules, run in CI: no `features/*` cross-imports (the standalone rule — currently convention), no component imports from `app/api`, every `api/*/route.ts` contains a zod parse, every mutation hook file imports `safeFetch` or is allowlisted. Each is ~20 lines with the repo's existing script culture ([`scripts/pm/scan.mjs`](<../../10 - Project Management/_Archive/FABLED 2/1 - FABLED 2 — Current Implementation.md>) proves the pattern). The standalone-import rule alone has silently broken in other codebases for months before detection — cheap insurance here.
 
 ---
 

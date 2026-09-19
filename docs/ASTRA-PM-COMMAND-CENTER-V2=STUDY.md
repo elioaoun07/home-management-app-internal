@@ -1,3 +1,5 @@
+> Historical research commission. The [current PM conventions](<../ERA Notes/10 - Project Management/_Conventions.md>) and [PM index](<../ERA Notes/10 - Project Management/_index.md>) supersede its folder-generation, backlog and session-governance instructions. Keep this as source evidence, not a template for another study tree.
+
 # ASTRA — PM Command Center / Autonomous Delivery V2 Study
 
 ## Mission

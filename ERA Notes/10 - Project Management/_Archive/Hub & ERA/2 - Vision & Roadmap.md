@@ -11,7 +11,7 @@ tags:
 
 # Hub & ERA · 2 — Vision & Roadmap
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Hub & ERA/4 - Checklist.md>)
 >
 > **What this file is:** the *ambitious* Hub & ERA file — where the flagship could go. Enhancements to what exists **and** richer connections to the rest of the app. This is allowed to dream; [1 · Feature State](<1 - Feature State.md>) is the sober reality. Ladders up to the global [3 · Future Vision](<../3 - Future Vision & Roadmap.md>).
 
@@ -26,7 +26,7 @@ Hub & ERA is the app's **brain and front door** — the interaction model says t
 
 **The vision in one line:** *Turn ERA from a chat box that answers into a household brain that anticipates — reading the full time + money graph and speaking first, at the right moment, with the right context.*
 
-> **Design study:** [ERA Top View — Design Study (2026-07-17)](<../ERA Top View — Design Study (2026-07-17).md>) — the Hub's L-0 glance surface as the *pull* mouth of the Awakening briefing brain (shared signal registry, single `get_era_topview_bundle()` RPC, drafts-only actions). Packets WP-T1..T5 slot behind Awakening WP-03/04/11; the heartbeat always wins.
+> **Design study:** [ERA Top View — Design Study (2026-07-17)](<../Plans/ERA Top View — Design Study (2026-07-17).md>) — the Hub's L-0 glance surface as the *pull* mouth of the Awakening briefing brain (shared signal registry, single `get_era_topview_bundle()` RPC, drafts-only actions). Packets WP-T1..T5 slot behind Awakening WP-03/04/11; the heartbeat always wins.
 
 ---
 
@@ -85,4 +85,4 @@ If you point the next stretch at Hub & ERA:
 
 > Resist piling proactive features onto an untested intent router — a confidently-wrong assistant erodes trust faster than a quiet one. Harden, then anticipate.
 
-→ This period's concrete actions: [3 · Action Plan](<3 - Action Plan.md>); the checkable list: [4 · Checklist](<4 - Checklist.md>).
+→ This period's concrete actions: [3 · Action Plan](<3 - Action Plan.md>); the checkable list: [4 · Checklist](<../../Hub & ERA/4 - Checklist.md>).

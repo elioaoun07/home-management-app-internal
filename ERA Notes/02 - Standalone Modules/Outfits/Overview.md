@@ -11,7 +11,7 @@ tags:
 
 # Outfits / Wardrobe — Design Study & Implementation Handover
 
-> **Status: PHASES 1 + 3 BUILT (2026-07-18); Phases 2 + 4 remain.** Originally a Fable-authored, execution-ready handover; the Fable foundation session then shipped the wardrobe catalog AND the paper-doll builder together (owner-approved amendment to D3's phase order — AI-tag deferred behind the builder). Reality deltas + what's pending live in [1 · Feature State](<../../10 - Project Management/Outfits/1 - Feature State.md>). ⚠️ The migration `migrations/2026-07-18_outfits-catalog-and-builder.sql` must be run manually in Supabase before any `/api/outfits/*` route works. The execution queue lives in [Outfits · 4 · Checklist](<../../10 - Project Management/Outfits/4 - Checklist.md>); the phase narrative in [Outfits · 3 · Action Plan](<../../10 - Project Management/Outfits/3 - Action Plan.md>).
+> **Status: PHASES 1 + 3 BUILT (2026-07-18); Phases 2 + 4 remain.** Originally a Fable-authored, execution-ready handover; the Fable foundation session then shipped the wardrobe catalog AND the paper-doll builder together (owner-approved amendment to D3's phase order — AI-tag deferred behind the builder). Reality deltas + what's pending live in [1 · Feature State](<../../10 - Project Management/_Archive/Outfits/1 - Feature State.md>). ⚠️ The migration `migrations/2026-07-18_outfits-catalog-and-builder.sql` must be run manually in Supabase before any `/api/outfits/*` route works. The execution queue lives in [Outfits · 4 · Checklist](<../../10 - Project Management/Outfits/4 - Checklist.md>); the phase narrative in [Outfits · 3 · Action Plan](<../../10 - Project Management/_Archive/Outfits/3 - Action Plan.md>).
 >
 > **Implementation notes (2026-07-18, verify in code):** feature dir `src/features/outfits/` (`types` · `queryKeys` · `hooks` · `useSignedUrls`); components `src/components/outfits/` (`OutfitsPage`, `WardrobeGrid`, `AddGarmentSheet`, `GarmentDetailSheet`, `SizingProfileSheet`, `OutfitBuilder`, `SlotSwiper`, `SaveOutfitSheet`, `OutfitsGallery`, shared `OutfitSheet` shell); libs `src/lib/wardrobeImage.ts`, `src/lib/backgroundRemoval.ts`, and **`src/lib/motion.ts` — a NEW app-wide spring/easing preset module (outfits is its first consumer; future modules should import it instead of inlining spring numbers)**. Routes exactly as §7 minus `tag-garment` and `plans` (unbuilt).
 >
@@ -265,7 +265,7 @@ API surface (all: auth → Zod → DB → 23505→409 per the `api-route` skill;
 
 ## 8. Phasing (each an independently shippable PR; DB → API → types → hooks → UI)
 
-See [3 · Action Plan](<../../10 - Project Management/Outfits/3 - Action Plan.md>) for the narrative + per-phase definition of done, and [4 · Checklist](<../../10 - Project Management/Outfits/4 - Checklist.md>) for the checkable queue (OUT-1 …).
+See [3 · Action Plan](<../../10 - Project Management/_Archive/Outfits/3 - Action Plan.md>) for the narrative + per-phase definition of done, and [4 · Checklist](<../../10 - Project Management/Outfits/4 - Checklist.md>) for the checkable queue (OUT-1 …).
 
 1. **Phase 1 — Wardrobe catalog** (scaffold, Migration A, image pipeline, grid + add + detail + profile UI; manual tags only)
 2. **Phase 2 — AI auto-tag** (gemini widening, tag-garment route, button)
@@ -304,6 +304,6 @@ See [3 · Action Plan](<../../10 - Project Management/Outfits/3 - Action Plan.md
    - Calling `tag-garment` without `timeoutMs: 60_000` (falsely flags the app offline).
    - Making a toast without an Undo action (Hard Rule 1) — mark-worn's Undo must call the RPC with `p_worn=false`.
 3. **Each migration pairs with `schema.sql`** in the same session (Hard Rule 24), and each phase ends with the `finish-task` skill (typecheck, lint, PM update — tick the OUT-n items and stamp file 1).
-4. When this doc and reality disagree, reality wins — but record the delta in [1 · Feature State](<../../10 - Project Management/Outfits/1 - Feature State.md>) so the next agent inherits the truth.
+4. When this doc and reality disagree, reality wins — but record the delta in [1 · Feature State](<../../10 - Project Management/_Archive/Outfits/1 - Feature State.md>) so the next agent inherits the truth.
 
 **Research sources:** [imgly/background-removal-js](https://github.com/imgly/background-removal-js) · [Gemini image understanding](https://ai.google.dev/gemini-api/docs/image-understanding) · [Supabase storage limits](https://supabase.com/docs/guides/storage/uploads/file-limits) · [Supabase image transformations (paid-tier only)](https://supabase.com/docs/guides/storage/serving/image-transformations) · [FASHN try-on API](https://fashn.ai/products/api) · [ModelsLab Fashion API](https://modelslab.com/fashion-api)

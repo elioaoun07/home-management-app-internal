@@ -15,7 +15,7 @@
 import { writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { collectSources, walk } from "./pm/scan.mjs";
+import { collectSources, readCancelledLog, walk } from "./pm/scan.mjs";
 import { buildHtml } from "./pm/ui.mjs";
 import { buildBundle } from "./pm/build.mjs";
 
@@ -32,6 +32,7 @@ const sources = collectSources(files, ROOT);
 
 const payload = {
   generatedAt: new Date().toISOString(),
+  cancelledLog: readCancelledLog(PM_DIR),
   repoRootFileUrl: pathToFileURL(ROOT).href.replace(/\/$/, "") + "/",
   repoRootPath: ROOT.replace(/\\/g, "/"),
   pmDirRepoRel: PM_REL.replace(/\\/g, "/"),

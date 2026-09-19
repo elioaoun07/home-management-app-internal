@@ -16,11 +16,11 @@ tags:
 
 ## 🔴 G1 — One unverified heavy cascade (Trips)
 
-The layer's only irreversibility risk, five weeks old, environment moving under it. Fully argued at [Trips FABLED 2.2 · G1/G2](<../../10 - Project Management/Trips/FABLED 2/2 - FABLED 2 — Gaps & Missing.md>) — listed here because it's a *layer* risk: it can corrupt three other modules' data in one call.
+The layer's only irreversibility risk, five weeks old, environment moving under it. Fully argued at [Trips FABLED 2.2 · G1/G2](<../../10 - Project Management/_Archive/Trips/FABLED 2/2 - FABLED 2 — Gaps & Missing.md>) — listed here because it's a *layer* risk: it can corrupt three other modules' data in one call.
 
 ## 🔴 G2 — The spine doesn't exist
 
-No signals, no composer, no policy, no feedback ([file 1 §3](<1 - FABLED 2 — Current Implementation.md>)). The app's identity claim (proactive assistant) lives or dies here, and after three FAR weeks it hasn't started. The July-corrected build order exists ([FAR FABLED 2.3](<../../10 - Project Management/Functional Architecture Review/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)); what's missing is the first session.
+No signals, no composer, no policy, no feedback ([file 1 §3](<1 - FABLED 2 — Current Implementation.md>)). The app's identity claim (proactive assistant) lives or dies here, and after three FAR weeks it hasn't started. The July-corrected build order exists ([FAR FABLED 2.3](<../../10 - Project Management/_Archive/Functional Architecture Review/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)); what's missing is the first session.
 
 ## 🟠 G3 — Household expansion: pervasive, hand-rolled, untested
 
@@ -40,4 +40,4 @@ Sanctioned legacy localStorage queue, documented in CLAUDE.md + Kitchen docs —
 
 ## ⚪ G7 — Prerequisites is a junction with one working edge
 
-NFC→item works; the other evaluator edges are scaffolded stubs. Fine as a staged build — the gap is that its junction table row says "trigger engine" while 4/5 trigger types are inert; keep the claim honest in docs until `time_window` ships ([Schedule FABLED 2.4 · E2](<../../10 - Project Management/Schedule/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)).
+NFC→item works; the other evaluator edges are scaffolded stubs. Fine as a staged build — the gap is that its junction table row says "trigger engine" while 4/5 trigger types are inert; keep the claim honest in docs until `time_window` ships ([Schedule FABLED 2.4 · E2](<../../10 - Project Management/_Archive/Schedule/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)).

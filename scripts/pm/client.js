@@ -1011,8 +1011,9 @@
     if (!f || cbidx == null || isNaN(cbidx)) return;
     var boxes = scanCheckboxes(f.raw);
     var expect = boxes[cbidx] ? boxes[cbidx].state : null;
+    var expectLine = boxes[cbidx] ? f.raw.split("\n")[boxes[cbidx].line] : undefined;
     el.classList.add("cb-busy");
-    apiPost("toggle", { file: fileRel, cbidx: cbidx, expectState: expect })
+    apiPost("toggle", { file: fileRel, cbidx: cbidx, expectLine: expectLine, expectState: expect })
       .then(function (resp) {
         f.raw = resp.raw;
         recomputeFile(f);

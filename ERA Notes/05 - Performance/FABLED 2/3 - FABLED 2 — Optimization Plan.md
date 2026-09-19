@@ -28,7 +28,7 @@ Network-tab (or vitals-sink timing) on cold + warm dashboard load. If floor > ~5
 
 ## O3 — Bundle-size ratchet (fixes G3 permanently, cheaply)
 
-With O1.2's baseline: fail CI/pre-commit if first-load JS for the top routes grows >10% without a recorded ack. Same ratchet philosophy as console/fetch ([Audit FABLED 2.4 · E3](<../../10 - Project Management/Codebase Audit 2026-07-01/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)).
+With O1.2's baseline: fail CI/pre-commit if first-load JS for the top routes grows >10% without a recorded ack. Same ratchet philosophy as console/fetch ([Audit FABLED 2.4 · E3](<../../10 - Project Management/_Archive/Codebase Audit 2026-07-01/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)).
 
 ## O4 — Dynamic-import the obvious three (after O1 confirms)
 

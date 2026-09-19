@@ -16,7 +16,7 @@ tags:
 
 ## 🔴 G1 — The orphan pile is a fixture now
 
-`blink/` (empty), `today/` (empty), `navigation/` (one misfiled prefetch util), `dashboard/` (prefetch-only dir shadowing a real module) — flagged 2026-05-29, re-flagged in the FAR, re-flagged in the audit, verified still present today. Individually trivial; collectively they make every `ls src/features` lie about the portfolio, and empty dirs are exactly the traps agent sessions fall into. One sweep session ([PM FABLED 2.3 · O2](<../../10 - Project Management/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
+`blink/` (empty), `today/` (empty), `navigation/` (one misfiled prefetch util), `dashboard/` (prefetch-only dir shadowing a real module) — flagged 2026-05-29, re-flagged in the FAR, re-flagged in the audit, verified still present today. Individually trivial; collectively they make every `ls src/features` lie about the portfolio, and empty dirs are exactly the traps agent sessions fall into. One sweep session ([PM FABLED 2.3 · O2](<../../10 - Project Management/_Archive/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
 
 ## 🟠 G2 — Unclassified members
 

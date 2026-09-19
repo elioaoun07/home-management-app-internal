@@ -12,9 +12,9 @@ tags:
 
 # Notifications & Alerts · 2 — Vision & Roadmap
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Notifications & Alerts/4 - Checklist.md>)
 >
-> **What this file is:** where each pain in [1 · Feature State](<1 - Feature State.md>) is *heading* — the target design per surface and the calls already locked — plus the **best-practice rationale** behind those designs and the **MoSCoW** backlog that orders the work. [File 1](<1 - Feature State.md>) is the sober reality; [3 · Action Plan](<3 - Action Plan.md>) + [4 · Checklist](<4 - Checklist.md>) hold the sequencing.
+> **What this file is:** where each pain in [1 · Feature State](<1 - Feature State.md>) is *heading* — the target design per surface and the calls already locked — plus the **best-practice rationale** behind those designs and the **MoSCoW** backlog that orders the work. [File 1](<1 - Feature State.md>) is the sober reality; [3 · Action Plan](<3 - Action Plan.md>) + [4 · Checklist](<../../Notifications & Alerts/4 - Checklist.md>) hold the sequencing.
 >
 > **Decision legend:** ✅ **Committed** (decided, just needs building) · ❓ **Open** (trade-offs captured, choose in [3 · Action Plan](<3 - Action Plan.md>)) · 💭 **Direction** (shape agreed, details later).
 
@@ -132,7 +132,7 @@ User contract (2026-07-10): notifications are missed/delayed/messy; wants (a) a 
 
 ## MoSCoW backlog
 
-> Scope mapped onto Must / Should / Could / Won't-now. Each item links to its pain in [1 · Feature State](<1 - Feature State.md>); the target design is above. Sequencing is in [3 · Action Plan](<3 - Action Plan.md>) + [4 · Checklist](<4 - Checklist.md>).
+> Scope mapped onto Must / Should / Could / Won't-now. Each item links to its pain in [1 · Feature State](<1 - Feature State.md>); the target design is above. Sequencing is in [3 · Action Plan](<3 - Action Plan.md>) + [4 · Checklist](<../../Notifications & Alerts/4 - Checklist.md>).
 
 ### 🔴 Must *(the user's four asks + the one hard bug)*
 
@@ -179,4 +179,4 @@ User contract (2026-07-10): notifications are missed/delayed/messy; wants (a) a 
 - **Notifications ↔ Budget.** Spending alerts already exist; align their routing + tone with this calmer design.
 - **Notifications ↔ Hub.** The alerts feed lives in `HubPage`; the redesign should keep the feed and alerts tabs coherent.
 
-→ What to build, and in what order → [3 · Action Plan](<3 - Action Plan.md>); the checkable list → [4 · Checklist](<4 - Checklist.md>).
+→ What to build, and in what order → [3 · Action Plan](<3 - Action Plan.md>); the checkable list → [4 · Checklist](<../../Notifications & Alerts/4 - Checklist.md>).

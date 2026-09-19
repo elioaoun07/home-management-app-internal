@@ -203,4 +203,4 @@ None of these are cost bugs; all three were surfaced by reading the machinery cl
 
 - Campaign index: [_index](<_index.md>)
 - Evidence for the sessions themselves: [5 · Session Postmortem](<5 - Session Postmortem (s-20260722-225601-whdv).md>)
-- The items this file generated: [4 · Checklist](<4 - Checklist.md>) (DLV-30…38)
+- The items this file generated: [4 · Checklist](<../../Delivery/4 - Checklist.md>) (DLV-30…38)

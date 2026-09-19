@@ -39,6 +39,10 @@ interface PmLiveState extends PmLiveSnapshots {
 interface PmLiveActions {
   applyRow: (id: string, payload: unknown) => void;
   applyRows: (rows: { id: string; payload: unknown }[]) => void;
+  /** A complete read: rows it does not contain are gone. */
+  replaceRows: (rows: { id: string; payload: unknown }[]) => void;
+  /** Owner switch or sign-out: nothing of the previous owner remains. */
+  reset: () => void;
   dropRow: (id: string) => void;
   hydrate: (snapshots: Partial<PmLiveSnapshots>) => void;
   setLoading: (loading: boolean) => void;
@@ -90,6 +94,22 @@ export const usePmLiveStore = create<PmLiveState & PmLiveActions>((set) => ({
       if (sessions !== state.sessions) next.sessions = sessions;
       return next;
     }),
+
+  replaceRows: (rows) =>
+    set(() => {
+      const next: PmLiveSnapshots = { tasks: null, rollups: null, history: null, fleet: null, sessions: {}, bridge: null };
+      for (const row of rows) {
+        if (row.id === "tasks") next.tasks = row.payload as TasksSnapshot;
+        else if (row.id === "rollups") next.rollups = row.payload as RollupsSnapshot;
+        else if (row.id === "history") next.history = row.payload as HistorySnapshot;
+        else if (row.id === "fleet") next.fleet = row.payload as FleetSnapshot;
+        else if (row.id === "bridge") next.bridge = row.payload as BridgeHeartbeat;
+        else if (row.id.startsWith("session:")) next.sessions[row.id.slice("session:".length)] = row.payload as SessionSnapshot;
+      }
+      return next;
+    }),
+
+  reset: () => set({ tasks: null, rollups: null, history: null, fleet: null, sessions: {}, bridge: null, userId: null }),
 
   /** The bridge prunes finished sessions; mirror the DELETE so they leave the UI too. */
   dropRow: (id) =>

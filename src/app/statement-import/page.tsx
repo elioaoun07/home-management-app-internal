@@ -34,7 +34,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useHouseholdAccounts, useMyAccounts } from "@/features/accounts/hooks";
-import { useCategories } from "@/features/categories/useCategoriesQuery";
+import {
+  useCategories,
+  useCategoriesForAccounts,
+} from "@/features/categories/useCategoriesQuery";
 import {
   useCommitStatement,
   useParseStatement,
@@ -673,10 +676,23 @@ export default function StatementImportPage() {
     expenseAccountId !== accountId ? expenseAccountId : undefined,
   );
 
+  // …and any account the owner explicitly re-targeted a row at from the row
+  // select (any expense account, not just the default one).
+  const pickedAccountIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const d of Object.values(session?.decisions ?? {})) {
+      if (d.account_id && ![accountId, incomeAccountId, expenseAccountId].includes(d.account_id)) {
+        ids.add(d.account_id);
+      }
+    }
+    return [...ids].sort();
+  }, [session?.decisions, accountId, incomeAccountId, expenseAccountId]);
+  const pickedCategories = useCategoriesForAccounts(pickedAccountIds);
+
   const categoryById = useMemo(() => {
     const map = new Map<string, { name: string; color: string; slug?: string | null }>();
     // Statement account LAST so its own names win any id collision.
-    for (const list of [expenseCategories, incomeCategories, categories]) {
+    for (const list of [pickedCategories, expenseCategories, incomeCategories, categories]) {
       for (const c of list) {
         map.set(c.id, {
           name: c.name,
@@ -686,7 +702,7 @@ export default function StatementImportPage() {
       }
     }
     return map;
-  }, [categories, incomeCategories, expenseCategories, tc.defaultAccentColor]);
+  }, [categories, incomeCategories, expenseCategories, pickedCategories, tc.defaultAccentColor]);
 
   const categoryOf = useCallback(
     (id: string | null | undefined) => (id ? (categoryById.get(id) ?? null) : null),

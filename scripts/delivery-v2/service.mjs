@@ -36,11 +36,16 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
+import { randomUUID } from "node:crypto";
+
 import { TERMINAL_STATES } from "../delivery/state-machine.mjs";
 import { openStore } from "./store.mjs";
 import { readExecutorSelection, routeDeliveryV2 as routeEntry } from "./entry.mjs";
-import { buildDeliver } from "./policy.mjs";
-import { EXECUTORS, createExecutor, listExecutors } from "./adapters/registry.mjs";
+import { buildDeliver, loadExecutionPolicy } from "./policy.mjs";
+import { EXECUTORS, admitExecutorProfile, createExecutor, describeExecutor, listExecutors } from "./adapters/registry.mjs";
+import { createJourney } from "./journey.mjs";
+import { loadQualification } from "./qualification.mjs";
+import { createContainerRuntime } from "./worker-boundary.mjs";
 
 export { routeDeliveryV2 } from "./entry.mjs";
 
@@ -101,9 +106,13 @@ export function listActiveV1Writers({ sessionsDir }) {
  * owner who installs or edits the policy should not have to restart pm-server to
  * see the effect.
  *
+ * The journey (journey.mjs) is built on first use with the worker runtime the
+ * installed policy describes. No policy, or a policy without a runtime, still
+ * yields a journey — one that refuses to dispatch and says why.
+ *
  * @param {{ROOT:string, pmRel?:string, sessionsDir?:string, port?:number,
  *   allowedOrigins?:string[], deliver?:(Function|null), openStore?:Function,
- *   buildDeliver?:Function}} input
+ *   buildDeliver?:Function, runtimeFactory?:Function, journeyFactory?:Function}} input
  */
 export function createDeliveryV2Context({
   ROOT,
@@ -114,11 +123,30 @@ export function createDeliveryV2Context({
   deliver = null,
   openStore: openStoreOverride = null,
   buildDeliver: buildDeliverOverride = null,
+  runtimeFactory = null,
+  journeyFactory = null,
 }) {
   const sessions = sessionsDir || join(ROOT, ".delivery", "sessions");
   const open = openStoreOverride || openStore;
   const build = buildDeliverOverride || buildDeliver;
+  const storePath = join(ROOT, ...STORE_REL.split("/"));
+  // One claimant for this process, so a rebuilt journey never releases claims
+  // its predecessor in the same process still holds.
+  const claimant = "journey:" + process.pid + ":" + randomUUID().slice(0, 8);
   let handle = null;
+  let runtimeHandle = null;
+  let journeyHandle = null;
+  let journeyDigest = undefined;
+  let reconciled = false;
+
+  const runtimeFor = (loaded) => {
+    if (!loaded || !loaded.ok || !loaded.policy.runtime) return null;
+    const boundary = loaded.policy.runtime;
+    if (!runtimeHandle || runtimeHandle.boundary.digest !== boundary.digest) {
+      runtimeHandle = runtimeFactory ? runtimeFactory(boundary) : createContainerRuntime({ boundary, hostRoot: ROOT });
+    }
+    return runtimeHandle;
+  };
 
   const origins =
     allowedOrigins ||
@@ -130,7 +158,7 @@ export function createDeliveryV2Context({
     root: ROOT,
     allowedOrigins: origins,
     get store() {
-      if (!handle) handle = open({ path: join(ROOT, ...STORE_REL.split("/")) });
+      if (!handle) handle = open({ path: storePath });
       return handle;
     },
 
@@ -145,6 +173,84 @@ export function createDeliveryV2Context({
       // The store accessor is passed unevaluated: an installation with no policy
       // file must not grow a supervisor database merely by being asked.
       return build({ root: ROOT, pmRel, store: () => context.store });
+    },
+
+    /** The one V2 run lifecycle for this installation. */
+    get journey() {
+      const loaded = loadExecutionPolicy({ root: ROOT });
+      const runtime = runtimeFor(loaded);
+      const digest = runtime ? runtime.boundary.digest : null;
+      if (!journeyHandle || digest !== journeyDigest) {
+        journeyHandle = (journeyFactory || createJourney)({ root: ROOT, pmRel, store: () => context.store, runtime, claimant });
+        journeyDigest = digest;
+      }
+      // After a restart: release claims left before any marker, and settle what
+      // retained output can settle. Never a relaunch.
+      if (!reconciled && existsSync(storePath)) {
+        reconciled = true;
+        journeyHandle.reconcile().catch(() => {});
+      }
+      return journeyHandle;
+    },
+
+    /** Whether a supervisor store exists yet; reads never create one. */
+    hasStore: () => Boolean(handle) || existsSync(storePath),
+
+    /**
+     * Each executor with its policy permission, bound qualification, supported
+     * efforts and the installation's model catalogue.
+     */
+    async describeExecutors() {
+      const loaded = loadExecutionPolicy({ root: ROOT });
+      const runtime = runtimeFor(loaded);
+      const executors = [];
+      for (const entry of context.listExecutors()) {
+        const binding = runtime ? await runtime.binding(entry.backend_id) : null;
+        const qualification = loadQualification({ root: ROOT, backend_id: entry.backend_id, binding });
+        const described = await describeExecutor(
+          entry.backend_id,
+          qualification.ok
+            ? {
+                observations: qualification.observations,
+                qualification_ref: qualification.qualification_ref,
+                observed_at: qualification.observed_at,
+                runtime: { binding: qualification.binding },
+              }
+            : {},
+        );
+        const admission =
+          described.ok && described.profile
+            ? admitExecutorProfile(described.profile, {
+                requireConfinement: true,
+                strictBoundRequired: loaded.ok ? loaded.policy.executors.strictBoundRequired || loaded.policy.resources.strict : false,
+              })
+            : null;
+        const catalog = loaded.ok ? loaded.policy.executors.catalog : null;
+        const authentication = runtime?.authReadiness ? await runtime.authReadiness(entry.backend_id) : null;
+        executors.push({
+          ...entry,
+          permitted: loaded.ok ? loaded.policy.executors.permitted.includes(entry.backend_id) : false,
+          qualified: Boolean(admission && admission.admitted && authentication?.ok !== false),
+          authentication,
+          refusals: [...(admission ? admission.refusals : described.refusal ? [described.refusal] : []), ...(authentication?.ok === false ? [{ code: "subscription-not-ready", detail: authentication.reason }] : [])],
+          qualification: { ref: qualification.qualification_ref, refusals: qualification.refusals },
+          models: catalog && catalog.models[entry.id] ? catalog.models[entry.id] : [],
+          suggestions: catalog
+            ? Object.fromEntries(Object.entries(catalog.profiles).map(([name, byExecutor]) => [name, byExecutor[entry.id] || null]))
+            : {},
+        });
+      }
+      return {
+        executors,
+        policy: loaded.ok
+          ? {
+              policy_revision: loaded.policy.policy_revision,
+              runtime: runtime ? { kind: runtime.kind, image: loaded.policy.runtime.image, network: loaded.policy.runtime.network.mode } : null,
+              thresholdUsd: loaded.policy.dispatch.thresholdUsd,
+            }
+          : null,
+        refusals: loaded.ok ? (runtime ? [] : [{ code: "no-worker-runtime-configured", detail: null }]) : loaded.refusals,
+      };
     },
 
     /** The owner-facing executor catalogue, with per-entry availability. */

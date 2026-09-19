@@ -1,0 +1,11 @@
+import { DatabaseSync } from 'node:sqlite';
+import { candidateReview } from '../../scripts/delivery-v2/review.mjs';
+import { writeFileSync } from 'node:fs';
+const db=new DatabaseSync('.delivery/v2/supervisor.sqlite',{readOnly:true});
+const run='r-c1d69bb666cf';
+const row=db.prepare('select record_json from candidates where run_id=? order by created_at desc limit 1').get(run);
+const applications=db.prepare('select candidate_id,journal_dir,plan_json from applications where run_id=?').all(run).map(a=>({...a,plan:JSON.parse(a.plan_json)}));
+const files=candidateReview({candidate:JSON.parse(row.record_json),sourceRoot:process.cwd(),applications});
+writeFileSync('.tmp/delivery-ui/recorded-diff.json',JSON.stringify(files,null,2));
+console.log(JSON.stringify(files.map(f=>({path:f.path,kind:f.kind,state:f.review.state,reason:f.review.reason,hasExpectedChange:f.review.diff?.includes('?view=story')&&f.review.diff?.includes('?tab=story')})),null,2));
+db.close();

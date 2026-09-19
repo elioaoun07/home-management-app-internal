@@ -37,4 +37,4 @@ tags:
 
 1. **Instrument before optimizing** — web vitals + route timings, one afternoon ([file 3 · O1](<3 - FABLED 2 — Optimization Plan.md>)).
 2. **Measure the budget read path** — the `get_budget_bundle` decision needs numbers, not faith ([file 3 · O2](<3 - FABLED 2 — Optimization Plan.md>)).
-3. **Split the biggest parse cost when next touched** — HubPage decomposition is also a perf move ([Hub & ERA FABLED 2.3 · O2](<../../10 - Project Management/Hub & ERA/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
+3. **Split the biggest parse cost when next touched** — HubPage decomposition is also a perf move ([Hub & ERA FABLED 2.3 · O2](<../../10 - Project Management/_Archive/Hub & ERA/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).

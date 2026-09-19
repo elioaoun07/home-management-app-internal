@@ -11,7 +11,7 @@ tags:
 
 # Execution · 1 — Master Checklist — By Priority
 
-> ℹ️ **Planning source, not a live lane queue (noted 2026-07-15).** This is the dated FAR execution plan. When you pick an item up, **re-mint it as a campaign item** in the relevant `<Campaign>/4 - Checklist.md` (canonical grammar — [_Conventions](<../_Conventions.md>)) so it shows on the `pnpm pm` board; this file records the plan, the campaign lanes drive the work. Its own `**D1**`-style IDs are intentionally not board items.
+> ℹ️ **Planning source, not a live lane queue (noted 2026-07-15).** This is the dated FAR execution plan. When you pick an item up, **re-mint it as a campaign item** in the relevant `<Campaign>/4 - Checklist.md` (canonical grammar — [_Conventions](<../../_Conventions.md>)) so it shows on the `pnpm pm` board; this file records the plan, the campaign lanes drive the work. Its own `**D1**`-style IDs are intentionally not board items.
 >
 > **Folder:** [_index](<_index.md>) · **1 · Master Checklist** · [2 · Weekly Schedule](<2 - Weekly Schedule — Jun 15 to Sep 13.md>)
 >

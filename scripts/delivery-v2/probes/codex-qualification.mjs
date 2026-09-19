@@ -363,7 +363,7 @@ export async function runOneCanary({ name, env, mode, profileStem = PROFILE_FILE
  * means that canary would have reported "denied" from the sandboxed run for a
  * reason that has nothing to do with the sandbox.
  *
- * @param {{canary:string, outcome:string}[]} records
+ * @param {{canary:string, outcome:string, heartbeatStarted?:boolean}[]} records
  */
 export function validateNegativeControl(records) {
   const byName = new Map(records.map((record) => [record.canary, record]));
@@ -376,6 +376,10 @@ export function validateNegativeControl(records) {
     }
     if (record.outcome !== "escaped") {
       failures.push({ canary: name, reason: "expected escaped with no confinement, observed " + record.outcome });
+    } else if (name === "descendant-spawn" && record.heartbeatStarted !== true) {
+      // A descendant that never wrote cannot show survival, so a later
+      // "no survival" would mean nothing.
+      failures.push({ canary: name, reason: "the unconfined descendant never started its heartbeat; survival is unobservable" });
     }
   }
   const scratch = byName.get("scratch-write");

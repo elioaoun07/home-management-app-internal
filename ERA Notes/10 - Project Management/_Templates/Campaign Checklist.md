@@ -1,35 +1,38 @@
 ---
 created: 2026-07-15
-updated: 2026-07-15
+updated: 2026-09-10
 type: template
 status: template
 owner: Elio
-tags:
-  - pm/template
 ---
 
-# <Campaign> · 4 — Checklist
+# Campaign Checklist template
 
-> **Template.** Copy to `<Campaign>/4 - Checklist.md`, set frontmatter `type: checklist`, `status: active`, `updated:`, and swap `<PREFIX>` for the campaign prefix (see [_Conventions §5](<../_Conventions.md>)). Grammar: [_Conventions](<../_Conventions.md>). Validate with `pnpm pm:lint`. The campaign's other (and only other) file is its Master Book — copy [Campaign Master Book](<Campaign Master Book.md>) for that.
->
-> Header line to keep at the top: `> **Campaign:** [<Campaign> — Master Book](<<Campaign> — Master Book.md>) · [4 · Checklist](<4 - Checklist.md>)`
->
-> **Legend:** Sev blocker / friction / annoyance / parked. Effort S / M / L.
+Copy the fenced content to `<Campaign>/4 - Checklist.md`. Replace placeholders, allocate unused lifetime IDs, remove unused example rows, and keep all three lanes. See [Conventions](<../_Conventions.md>). PM Tooling IDs use `R52`, not `R-52`.
 
+```md
 ---
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+type: checklist
+status: active
+owner: Elio
+---
+
+# <Campaign> — Backlog
+
+> [Master Book](<<Campaign> — Master Book.md>) · [PM home](<../_index.md>)
+> Order: <first prerequisite → next outcome>. Held work is labelled; acceptance lives in the book.
 
 ## Now
 
-- [ ] **<PREFIX>-1** Clear, verifiable outcome → `src/path/if/any.ts` _(blocker - M)_
+- [ ] **PREFIX-1** Verifiable next outcome → [Scope](<<Campaign> — Master Book.md#prefix-1>) _(friction - S)_
 
 ## Next
 
-- [ ] **<PREFIX>-2** The next queued outcome _(friction - S)_
-
 ## Later
 
-- [ ] **<PREFIX>-3** A real but deferred item _(parked - M)_
+- [ ] **PREFIX-2** HELD — Decide the unresolved scope → [Scope](<<Campaign> — Master Book.md#prefix-2>) _(parked - S)_
+```
 
-## Definition of Done
-
-- [ ] **D1** The concrete, testable condition that means this cycle is done.
+Only executable implementation, investigation or automated verification belongs here. Move completed implementation into Done even when owner UAT is pending; retain manual test results in a UAT document. Do not copy owner acceptance checkboxes, research sheets, completed tasks or duplicate cross-campaign outcomes into this queue. Run `pnpm pm:lint` and `pnpm pm:check-docs` after filling it.

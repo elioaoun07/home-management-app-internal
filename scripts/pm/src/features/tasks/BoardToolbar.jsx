@@ -15,7 +15,7 @@ export function BoardToolbar({ state, onChange, shown, total, extra = null }) {
     <div class="board-search">
       <Icon name="search" size={14}/>
       <input value={state.query} onInput={(event) => setQuery(event.currentTarget.value)}
-        placeholder="Search — or m:Budget s:blocker lane:Now e:S id:BUD"
+        placeholder="Search work"
         spellcheck={false} autocapitalize="none" autocorrect="off" aria-label="Filter tasks"/>
       {state.query && <button class="board-search-clear" onClick={() => setQuery("")} aria-label="Clear filter"><Icon name="close" size={14}/></button>}
     </div>

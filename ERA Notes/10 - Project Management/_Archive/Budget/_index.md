@@ -20,7 +20,7 @@ tags:
 | 1   | [Feature State](<1 - Feature State.md>)       | You want the honest, no-hype status of every Budget sub-feature.     |
 | 2   | [Vision & Roadmap](<2 - Vision & Roadmap.md>) | You want to dream: Budget enhancements + bridges, prioritized.       |
 | 3   | [Action Plan](<3 - Action Plan.md>)           | The strategic call + candidate work — the *why, and in what order*.  |
-| 4   | [Checklist](<4 - Checklist.md>)               | **Most days.** The flat, checkable list — every task, Now/Next/Later. |
+| 4   | [Checklist](<../../Budget/4 - Checklist.md>)               | **Most days.** The flat, checkable list — every task, Now/Next/Later. |
 | F   | [FABLED/](<FABLED/_index.md>)                 | *(v1 baseline, frozen 2026-06-10)* — the first-generation deep-dive; kept for lineage. |
 | F2  | [FABLED 2/](<FABLED 2/_index.md>)             | **The living deep-dive (current generation, verified 2026-07-02):** scored maturity model, delta ledger vs v1, implementation X-ray, ranked gaps, optimization plan, enhancements with kill criteria. |
 
@@ -33,4 +33,4 @@ tags:
 ## Where this fits
 
 - **Up one level:** the global command center → [10 - Project Management/_index.md](<../_index.md>). Read that for whole-app priorities.
-- **Implementation reality (read before coding):** the per-module vault docs — [Accounts & Balance / Overview](<../../02 - Standalone Modules/Accounts & Balance/Overview.md>), [Transactions / Overview](<../../02 - Standalone Modules/Transactions/Overview.md>), [Recurring Payments / Overview](<../../02 - Standalone Modules/Recurring Payments/Overview.md>), and the rest under `02 - Standalone Modules/`. Those are the file-level source of truth; this folder is **strategy**, not a code map.
+- **Implementation reality (read before coding):** the per-module vault docs — [Accounts & Balance / Overview](<../../../02 - Standalone Modules/Accounts & Balance/Overview.md>), [Transactions / Overview](<../../../02 - Standalone Modules/Transactions/Overview.md>), [Recurring Payments / Overview](<../../../02 - Standalone Modules/Recurring Payments/Overview.md>), and the rest under `02 - Standalone Modules/`. Those are the file-level source of truth; this folder is **strategy**, not a code map.

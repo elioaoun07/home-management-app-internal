@@ -106,6 +106,10 @@ export function inspectSdkSurface({ repoRoot = process.cwd() } = {}) {
     // or budget limit. Absence is the finding the adapter's strict-bound refusal
     // rests on, so it is searched for rather than assumed.
     monetaryCeilingOption: /\n\s*(maxCostUsd|costLimit|budgetUsd|spendLimit)\??:/u.test(text),
+    // Detected 2026-09-12: stops a query after its estimate is exceeded. A stop
+    // threshold, recorded separately so it is never mistaken for a bound.
+    monetaryThresholdOption: /\n\s*maxBudgetUsd\?: number;/u.test(text),
+    effortOption: /\n\s*effort\?: EffortLevel;/u.test(text),
   };
   return deepFreeze({
     read: true,
@@ -119,6 +123,8 @@ export function inspectSdkSurface({ repoRoot = process.cwd() } = {}) {
         findings.callerMintedSessionId ? null : "Options.sessionId is gone; the derived-session-id reconciliation no longer holds",
         findings.monetaryUsageField ? null : "total_cost_usd is gone; this backend no longer reports a cost",
         findings.monetaryCeilingOption ? "an option that looks like a spend ceiling now exists; the strict-bound refusal must be re-derived" : null,
+        findings.monetaryThresholdOption ? null : "Options.maxBudgetUsd is gone; the visible spend threshold can no longer be forwarded",
+        findings.effortOption ? null : "Options.effort is gone; a requested effort can no longer be forwarded",
         findings.sandboxOption ? null : "Options.sandbox is gone; the launch no longer requests a sandbox at all",
       ].filter(Boolean),
     ),

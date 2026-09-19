@@ -10,7 +10,7 @@ tags:
 
 # <Campaign> · 1 — Feature State
 
-> **Template.** Copy to `<Campaign>/1 - Feature State.md`, set frontmatter `type: status`, `status: living`, `updated:`. This is the _honest, no-hype_ state — what exists and how mature it is. Imagination lives in `2 - Vision & Roadmap.md`. Done-stamps follow [_Conventions §3](<../_Conventions.md>): `✅ YYYY-MM-DD (optional evidence path)`.
+> **Template.** Copy to `<Campaign>/1 - Feature State.md`, set frontmatter `type: status`, `status: living`, `updated:`. This is the _honest, no-hype_ state — what exists and how mature it is. Imagination lives in `2 - Vision & Roadmap.md`. Done-stamps follow [_Conventions §3](<../../_Conventions.md>): `✅ YYYY-MM-DD (optional evidence path)`.
 
 ---
 
@@ -40,4 +40,4 @@ _(Updated YYYY-MM-DD)_
 
 1. 🟠 The biggest real risk, with evidence.
 
-→ Vision in [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>); next steps in [3 · Action Plan](<3 - Action Plan.md>); the checkable list is [4 · Checklist](<4 - Checklist.md>).
+→ Vision in 2 · Vision & Roadmap (`2 - Vision & Roadmap.md`; archived template placeholder); next steps in 3 · Action Plan (`3 - Action Plan.md`; archived template placeholder); the checkable list is 4 · Checklist (`4 - Checklist.md`; archived template placeholder).

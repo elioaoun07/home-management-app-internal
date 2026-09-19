@@ -26,6 +26,8 @@ import { join } from "node:path";
 
 import { resolveInside, toggleCheckbox } from "../pm/mutations.mjs";
 import { masterBookName } from "../pm/lint.mjs";
+import { idSection } from "../pm/shared/work-id.mjs";
+import { deliveryBlockReason } from "../pm/shared/work-lifecycle.mjs";
 import { applyCapabilityDrops, classify, isTrivialLaunchCandidate, ALWAYS_ON_CAPABILITIES } from "./classify.mjs";
 import { atomicWriteJsonSync, readJsonIfExists, readTextIfExists } from "./fsx.mjs";
 import { gitRevParseHead, gitStatusPorcelain } from "./gitread.mjs";
@@ -85,6 +87,13 @@ export class DeliveryRouteError extends Error {
 }
 function fail(status, msg) {
   return new DeliveryRouteError(status, msg);
+}
+
+function assertActionableItem(ctx, item) {
+  const book = item.campaign ? join(ctx.PM_DIR, item.campaign, masterBookName(item.campaign)) : null;
+  const contract = book && existsSync(book) ? idSection(readFileSync(book, "utf8"), item.id)?.body || "" : "";
+  const reason = deliveryBlockReason({ file: item.pmFile, state: /^\s*(?:[-*]|\d+\.)\s*\[ \]/.test(item.lineText) ? "open" : "done", contract }) || (/\bHELD\b/i.test(item.text) ? "work-held" : null);
+  if (reason) throw fail(409, reason);
 }
 
 const BUILD_LOCK_STATES = new Set(["BUILDING", "VALIDATING", "REVIEWING", "UAT_READY", "ACCEPTED"]);
@@ -902,6 +911,7 @@ function getRecommendation(ctx, { file, cbidx, provider, lane = null, locatorCho
   const idResult = buildItemIdentity(raw, cbidxNum, file);
   if (!idResult.ok) throw fail(409, idResult.reason);
   const item = idResult.item;
+  assertActionableItem(ctx, item);
 
   const scopeHints = computeScopeHints(item, { repoRoot: ctx.ROOT, locatorChoice });
   const capabilities = classify({ item, scopeHints });
@@ -1150,6 +1160,7 @@ async function startSession(ctx, body) {
   if (!idResult.ok) throw fail(409, idResult.reason);
   const item = idResult.item;
   if (!item.campaign) throw fail(400, "item is not inside a campaign folder");
+  assertActionableItem(ctx, item);
 
   // DLV-13: resolve the predecessor first — its remaining work narrows this
   // session's acceptance criteria, and its very existence is what makes the

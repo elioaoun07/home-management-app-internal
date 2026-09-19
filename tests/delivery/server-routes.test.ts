@@ -133,6 +133,18 @@ async function startSession(ctx: any, overrides: Record<string, unknown> = {}) {
 
 // ============================================================
 describe("POST /api/delivery/start", () => {
+  it.each([
+    { state: "x", contract: "", reason: /work-completed/ },
+    { state: " ", contract: "**Execution:** owner", reason: /owner-check/ },
+    { state: " ", contract: "**Implementation:** done", reason: /work-completed/ },
+  ])("refuses completed and owner-only work before spawning: $contract $state", async ({ state, contract, reason }) => {
+    const { ctx, pmDir, spawnedRunners } = setup();
+    const line = `- [${state}] **BUD-14** A bounded fix _(friction - S)_`;
+    writeFileSync(join(pmDir, "Budget", "4 - Checklist.md"), `## Now\n${line}\n`);
+    writeFileSync(join(pmDir, "Budget", "Budget — Master Book.md"), `## Acceptance Criteria Index\n### BUD-14\n${contract}\n`);
+    await expectRouteError(startSession(ctx, { expectText: line }), 409, reason);
+    expect(spawnedRunners).toHaveLength(0);
+  });
   it("creates packet.json + state.json and requests a runner spawn", async () => {
     const { ctx, spawnedRunners } = setup();
     const result = await routeDelivery(

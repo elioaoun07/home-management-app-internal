@@ -17,15 +17,15 @@ tags:
 ## O1 — Mechanize the two leaking rules (fixes G1; the highest-leverage architecture change available)
 
 1. **`no-console`** ESLint rule now, with per-file disables for the 162 unswept files (each disable is a visible TODO; new files are protected immediately). Sweep slices remove disables over time.
-2. **Raw-fetch ratchet:** a script (pre-commit or CI) that counts `\bfetch\(` outside an allowlist and fails if the count *rises* above the recorded baseline (240). Conversion proceeds by campaign; regression becomes impossible. (Ratchet design: [Audit FABLED 2.4 · E3](<../../10 - Project Management/Codebase Audit 2026-07-01/FABLED 2/4 - FABLED 2 — Future Enhancements.md>).)
+2. **Raw-fetch ratchet:** a script (pre-commit or CI) that counts `\bfetch\(` outside an allowlist and fails if the count *rises* above the recorded baseline (240). Conversion proceeds by campaign; regression becomes impossible. (Ratchet design: [Audit FABLED 2.4 · E3](<../../10 - Project Management/_Archive/Codebase Audit 2026-07-01/FABLED 2/4 - FABLED 2 — Future Enhancements.md>).)
 
 ## O2 — Run the single-source recipe on the remaining four facts (fixes G2)
 
-The proven sequence from spend unification: *pure lib function → converge consumers → contract test.* Apply to: account creation (`src/lib/accounts/create.ts`, both callers), notification routing (one table, two consumers — [Notifications FABLED 2.3 · O2](<../../10 - Project Management/Notifications & Alerts/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)), conversation-store ownership (decision + doc, [Hub & ERA FABLED 2.3 · O6](<../../10 - Project Management/Hub & ERA/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)), occurrence expansion (the big one, [Schedule FABLED 2.3 · O3](<../../10 - Project Management/Schedule/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
+The proven sequence from spend unification: *pure lib function → converge consumers → contract test.* Apply to: account creation (`src/lib/accounts/create.ts`, both callers), notification routing (one table, two consumers — [Notifications FABLED 2.3 · O2](<../../10 - Project Management/_Archive/Notifications & Alerts/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)), conversation-store ownership (decision + doc, [Hub & ERA FABLED 2.3 · O6](<../../10 - Project Management/_Archive/Hub & ERA/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)), occurrence expansion (the big one, [Schedule FABLED 2.3 · O3](<../../10 - Project Management/_Archive/Schedule/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)).
 
 ## O3 — The repo-fidelity rule (one sentence, then one execution)
 
-Rule: **every live-DB object (function, policy, trigger) exists as a dated migration + its `schema.sql` reflection.** Schedule complies; Trips is the last known offender ([Trips FABLED 2.3 · O1](<../../10 - Project Management/Trips/FABLED 2/3 - FABLED 2 — Optimization Plan.md>) — 30 min). Add the sentence to this directory's DB doc / CLAUDE.md database section so the rule outlives the cleanup.
+Rule: **every live-DB object (function, policy, trigger) exists as a dated migration + its `schema.sql` reflection.** Schedule complies; Trips is the last known offender ([Trips FABLED 2.3 · O1](<../../10 - Project Management/_Archive/Trips/FABLED 2/3 - FABLED 2 — Optimization Plan.md>) — 30 min). Add the sentence to this directory's DB doc / CLAUDE.md database section so the rule outlives the cleanup.
 
 ## O4 — Generalize the idempotent-replay pattern (from June's fix)
 
@@ -33,7 +33,7 @@ The occurrence-action `.upsert(onConflict)` fix is the correct general answer fo
 
 ## O5 — Document the two new AI patterns as architecture (fixes file 1 §4)
 
-`AnalysisReport` contract + face/intent registry → Common Patterns entries (or a new `AI Patterns.md` here), each with: when to use, the invariants (deterministic fallback mandatory; precomputed inputs only; `timeoutMs` per Hard Rule 6), and a pointer to the reference implementation. Do it before the second adopter copies the first divergently ([Kitchen FABLED 2.4 · E9](<../../10 - Project Management/Kitchen/FABLED 2/4 - FABLED 2 — Future Enhancements.md>) is queued).
+`AnalysisReport` contract + face/intent registry → Common Patterns entries (or a new `AI Patterns.md` here), each with: when to use, the invariants (deterministic fallback mandatory; precomputed inputs only; `timeoutMs` per Hard Rule 6), and a pointer to the reference implementation. Do it before the second adopter copies the first divergently ([Kitchen FABLED 2.4 · E9](<../../10 - Project Management/_Archive/Kitchen/FABLED 2/4 - FABLED 2 — Future Enhancements.md>) is queued).
 
 ## O6 — Error taxonomy (fixes G3; one type + one helper)
 

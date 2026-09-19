@@ -198,12 +198,17 @@ const CANARIES = {
    */
   async "descendant-spawn"({ heartbeatPath, descendantSeconds = 20 }) {
     const { spawn } = await import("node:child_process");
+    // The path is embedded, not passed as an argument: under `node -e` the first
+    // extra argument is argv[1], and reading argv[2] (corrected 2026-09-11) left
+    // every heartbeat unwritten, so survival was never observable on any runtime.
     const script =
       "const fs=require('node:fs');const end=Date.now()+" +
       Number(descendantSeconds) * 1000 +
-      ";const t=setInterval(()=>{try{fs.appendFileSync(process.argv[2],Date.now()+'\\n')}catch{};if(Date.now()>end){clearInterval(t)}},200);";
+      ";const t=setInterval(()=>{try{fs.appendFileSync(" +
+      JSON.stringify(String(heartbeatPath)) +
+      ",Date.now()+'\\n')}catch{};if(Date.now()>end){clearInterval(t)}},200);";
     try {
-      const child = spawn(process.execPath, ["-e", script, heartbeatPath], {
+      const child = spawn(process.execPath, ["-e", script], {
         detached: true,
         stdio: "ignore",
       });

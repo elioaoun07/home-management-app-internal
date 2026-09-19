@@ -2,7 +2,7 @@
 
 import { CACHE_TIMES } from "@/lib/queryConfig";
 import { qk } from "@/lib/queryKeys";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 
 // Import the DB (flat) category shape
 import type { Category as DbCategory } from "@/types/domain";
@@ -68,4 +68,30 @@ export function useCategoriesWithHidden(accountId?: string) {
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
+}
+
+/**
+ * Categories for several accounts at once — same cache entries as
+ * `useCategories`, so an account already loaded elsewhere costs nothing.
+ * Returns the combined flat list.
+ */
+export function useCategoriesForAccounts(accountIds: string[]): UICategory[] {
+  return useQueries({
+    queries: accountIds.map((accountId) => ({
+      queryKey: qk.categories(accountId),
+      queryFn: () => fetchCategories(accountId),
+      staleTime: CACHE_TIMES.CATEGORIES,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+    })),
+    combine: combineCategoryLists,
+  });
+}
+
+// Module-level so `combine` keeps a stable identity and TanStack can memoize
+// the flattened list instead of rebuilding it every render.
+function combineCategoryLists(
+  results: Array<{ data?: UICategory[] }>,
+): UICategory[] {
+  return results.flatMap((r) => r.data ?? []);
 }

@@ -13,7 +13,7 @@ tags:
 
 > Written 2026-07-06, my last day in this codebase. Everything below was verified against the working tree this session — file counts counted, commits read, hooks executed, FABLED 2 scores harvested. Where I state a number, I ran the command. Where I give an opinion, it is mine and it is honest, because a flattering handoff would be a betrayal of what you asked for.
 >
-> Companion artifacts left this session: [Design Doctrine](<../01 - Architecture/Design Doctrine.md>) (how to decide), [FABLED 2 Master Index](<../00 - Home/FABLED 2 Master Index.md>) (the whole X-ray on one page), a SessionStart freshness radar, a repaired mirror-sync hook, and delta-stamped FABLED indexes. This file is the *why* behind all of them.
+> Companion artifacts left this session: [Design Doctrine](<../../01 - Architecture/Design Doctrine.md>) (how to decide), [FABLED 2 Master Index](<../../00 - Home/FABLED 2 Master Index.md>) (the whole X-ray on one page), a SessionStart freshness radar, a repaired mirror-sync hook, and delta-stamped FABLED indexes. This file is the *why* behind all of them.
 
 ---
 

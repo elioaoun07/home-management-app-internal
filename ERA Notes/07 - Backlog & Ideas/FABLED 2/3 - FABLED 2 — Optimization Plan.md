@@ -28,4 +28,4 @@ One rule in this directory's future index: **ideas graduate only into a campaign
 
 ## O4 — Merge the four capture files into two (fixes G3)
 
-`Ideas.md` (module-scoped quick capture) + the vision-volume series (cross-module dreaming). Redirect stubs left in the retired files so old links don't dangle ([PM FABLED 2.3 · O3](<../../10 - Project Management/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)'s checker will verify).
+`Ideas.md` (module-scoped quick capture) + the vision-volume series (cross-module dreaming). Redirect stubs left in the retired files so old links don't dangle ([PM FABLED 2.3 · O3](<../../10 - Project Management/_Archive/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)'s checker will verify).

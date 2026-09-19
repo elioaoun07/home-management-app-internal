@@ -52,6 +52,7 @@ export const ADMISSION_REFUSALS = Object.freeze({
   OUTSTANDING_UNKNOWN: "outstanding-unknown-job",
   REPAIR_BUDGET: "repair-dispatch-limit-reached",
   EXECUTOR_MISMATCH: "executor-profile-mismatch",
+  RESOURCES: "resources-refused",
 });
 
 /** How a dispatch may (or may not) be retried. */
@@ -59,7 +60,47 @@ export const RETRY_VERDICTS = Object.freeze({
   ELIGIBLE: "known-undispatched",
   BLOCKED_UNKNOWN: "potentially-dispatched",
   BLOCKED_TERMINAL: "already-terminal",
+  RECONCILED: "reconciled-from-native-record",
+  STILL_RUNNING: "still-running",
 });
+
+/** Why a claimed dispatch did not reach the provider. */
+export const DISPATCH_REFUSALS = Object.freeze({
+  CLAIM_HELD: "dispatch-claim-held",
+  NOT_RESERVED: "job-not-reserved",
+  PRECHECK: "refused-at-dispatch",
+});
+
+/**
+ * Units a resource policy can actually settle. A reading is settled in `usd` only
+ * from a provider-reported amount and in `tokens` only from measured counters;
+ * any other unit would be accepted and never settled, so it is refused instead.
+ */
+export const RESOURCE_UNITS = Object.freeze(["usd", "tokens"]);
+
+/**
+ * Token counters published by both native SDKs have inclusive subsets.  Cache
+ * reads/creation are included in input and reasoning is included in output, so
+ * adding those fields again inflates the only token total we expose or enforce.
+ */
+export const TOKEN_NORMALIZATION_VERSION = "delivery-v2/tokens@1";
+
+export function normalizedTokenTotal(reading) {
+  return Number(reading.input || 0) + Number(reading.output || 0);
+}
+
+/** Why resources refused an admission or a dispatch. */
+export const RESOURCE_REFUSALS = Object.freeze({
+  UNSUPPORTED_UNIT: "unsupported-resource-unit",
+  UNIT_MISMATCH: "reservation-unit-mismatch",
+  NON_FINITE: "non-finite-resource-amount",
+  UNKNOWN_NEXT: "unknown-next-reservation-under-allowance",
+  UNKNOWN_OPEN: "unknown-open-reservation-under-allowance",
+  UNKNOWN_USAGE_STRICT: "unknown-usage-under-strict-allowance",
+});
+
+/** Identity of this supervisor process when a caller supplies none. */
+export const DEFAULT_CLAIMANT = "supervisor:" + process.pid;
 
 const isNonEmptyString = (value) => typeof value === "string" && value.trim() !== "";
 
@@ -92,43 +133,55 @@ export function deriveJobId({ run_id, purpose, contract_id, contract_revision, g
  * actually exist in it.
  *
  * @param {ReturnType<import("./store.mjs").openStore>} store
- * @param {{run_id:string, unit?:string}} input
+ * `jobs` replaces the run's jobs with an explicit set — the fleet, for coordination.
+ *
+ * @param {{run_id?:(string|null), unit?:string, jobs?:(object[]|null)}} input
  */
-export function resourceSummary(store, { run_id, unit = "usd" }) {
-  const jobs = store.listJobs(run_id);
+export function resourceSummary(store, { run_id = null, unit = "usd", jobs: given = null }) {
+  const jobs = given || store.listJobs(run_id);
   let settled = 0;
   let reserved = 0;
+  let providerReportedUsd = null;
   const unknown = [];
-  const nativeTotals = { input: 0, cachedInput: 0, output: 0, reasoningOutput: 0 };
+  const nativeTotals = { input: 0, cachedInput: 0, cacheCreation: 0, output: 0, reasoningOutput: 0 };
+  let openWithoutAmount = 0;
 
   for (const job of jobs) {
     const readings = store.listUsageReadings(job.job_id);
+    let unsettled = null;
     for (const reading of readings) {
       nativeTotals.input += Number(reading.input || 0);
       nativeTotals.cachedInput += Number(reading.cached_input || 0);
+      nativeTotals.cacheCreation += Number(reading.cache_creation || 0);
       nativeTotals.output += Number(reading.output || 0);
       nativeTotals.reasoningOutput += Number(reading.reasoning_output || 0);
+      if (reading.cost_usd != null) providerReportedUsd = Number(providerReportedUsd || 0) + Number(reading.cost_usd);
+      const amount = settledAmount(reading, unit);
+      if (amount == null) unsettled = unsettled || reading;
+      else settled += amount;
     }
 
-    const monetary = readings.filter((reading) => reading.cost_usd != null);
-    if (job.reservation_unit === unit && monetary.length > 0) {
-      settled += monetary.reduce((sum, reading) => sum + Number(reading.cost_usd), 0);
-    } else if (readings.length > 0 || job.dispatch_started_at) {
-      // Work happened (or may have happened) and produced no amount in this unit.
+    if (unsettled) {
       unknown.push({
         job_id: job.job_id,
         status: job.status,
-        reason:
-          readings.length === 0
-            ? "dispatch marked but no usage observed"
-            : "usage observed in " + (readings[0].unit || "?") + " with no amount in " + unit,
+        reason: "usage observed in " + (unsettled.unit || "?") + " with no amount in " + unit,
       });
+    } else if (readings.length === 0 && job.dispatch_started_at) {
+      // Work may have happened and produced nothing readable. Not free.
+      unknown.push({ job_id: job.job_id, status: job.status, reason: "dispatch marked but no usage observed" });
     }
 
     if (job.reservation_open) {
-      reserved += job.reservation_amount == null ? 0 : Number(job.reservation_amount);
-      if (job.reservation_amount == null) {
+      const amount = job.reservation_amount == null ? null : Number(job.reservation_amount);
+      if (job.reservation_unit !== unit) {
+        openWithoutAmount += 1;
+        unknown.push({ job_id: job.job_id, status: job.status, reason: "open reservation held in " + job.reservation_unit + ", not " + unit });
+      } else if (amount == null || !Number.isFinite(amount)) {
+        openWithoutAmount += 1;
         unknown.push({ job_id: job.job_id, status: job.status, reason: "open reservation with no numeric amount" });
+      } else {
+        reserved += amount;
       }
     }
   }
@@ -141,9 +194,74 @@ export function resourceSummary(store, { run_id, unit = "usd" }) {
     // A reservation that is open with no amount cannot be netted off, so an
     // allowance check has to see it as an obstacle rather than as zero.
     openReservations: jobs.filter((job) => job.reservation_open).length,
+    openReservationsWithoutAmount: openWithoutAmount,
     nativeTotals: Object.freeze(nativeTotals),
+    provenance: Object.freeze({
+      providerReportedUsd,
+      providerReportedBasis:
+        providerReportedUsd == null
+          ? "no provider-reported monetary amount was observed"
+          : "sum of provider-reported per-turn amounts; an estimate, not a bill",
+      measuredTokens: Object.freeze({
+        ...nativeTotals,
+        total: nativeTotals.input + nativeTotals.output,
+      }),
+      tokenNormalizationVersion: TOKEN_NORMALIZATION_VERSION,
+      reconciledBilled: null,
+      subscriptionUsage: null,
+      availableQuota: null,
+    }),
     basis: "provider counters and any monetary readings, kept separate; nothing here is a reconciled invoice",
   });
+}
+
+/** The amount one reading settles in `unit`, or null when it has none in that unit. */
+function settledAmount(reading, unit) {
+  if (unit === "usd") return reading.cost_usd == null ? null : Number(reading.cost_usd);
+  if (unit === "tokens") {
+    return (
+      normalizedTokenTotal({ input: reading.input, output: reading.output })
+    );
+  }
+  return null;
+}
+
+/**
+ * Resource checks that must refuse rather than compare their way past a limit.
+ *
+ * `evaluateGrant` adds settled + reserved + next against the allowance, which is
+ * only honest when every term is a finite amount in the grant's unit. These are
+ * the cases where one is not, and each refuses instead of becoming zero.
+ *
+ * @param {{grant:import("./contracts.mjs").Grant, summary:ReturnType<typeof resourceSummary>,
+ *   reservation:{unit:string, amount?:(number|null)}, nextJob?:(number|null)}} input
+ */
+export function evaluateResources({ grant, summary, reservation, nextJob = undefined }) {
+  const refusals = [];
+  const policy = grant.resource_policy;
+  const add = (code, detail) => refusals.push({ code, detail });
+  if (!RESOURCE_UNITS.includes(policy.unit)) {
+    add(RESOURCE_REFUSALS.UNSUPPORTED_UNIT, policy.unit + " cannot be settled; use " + RESOURCE_UNITS.join(" or "));
+  }
+  if (reservation && reservation.unit !== policy.unit) {
+    add(RESOURCE_REFUSALS.UNIT_MISMATCH, "reservation in " + reservation.unit + ", grant in " + policy.unit);
+  }
+  const next = nextJob === undefined ? (reservation ? reservation.amount ?? null : null) : nextJob;
+  if (next != null && !Number.isFinite(Number(next))) {
+    add(RESOURCE_REFUSALS.NON_FINITE, String(next));
+  }
+  if (policy.allowance != null) {
+    if (next == null) {
+      add(RESOURCE_REFUSALS.UNKNOWN_NEXT, "a finite allowance needs a numeric reservation for the next job");
+    }
+    if (summary.openReservationsWithoutAmount > 0) {
+      add(RESOURCE_REFUSALS.UNKNOWN_OPEN, summary.openReservationsWithoutAmount + " open reservation(s) have no amount in " + policy.unit);
+    }
+    if (policy.strict && summary.unknown.length > 0) {
+      add(RESOURCE_REFUSALS.UNKNOWN_USAGE_STRICT, summary.unknown.map((entry) => entry.job_id + ": " + entry.reason));
+    }
+  }
+  return deepFreeze({ ok: refusals.length === 0, refusals: Object.freeze(refusals), next });
 }
 
 /**
@@ -167,8 +285,11 @@ export function resourceSummary(store, { run_id, unit = "usd" }) {
  *   instruction:string, workspace:{root:string, backing?:string},
  *   input_manifest?:object[], checkpoint_ref?:(string|null), native_limits?:object,
  *   command:{command_id:string, actor:string, payload?:object},
- *   now?:string, sourceFresh?:boolean, nextJobCost?:(number|null),
- *   repairDispatchLimit?:(number|null)}} input
+ *   now?:(string|null), sourceFresh?:boolean, nextJobCost?:(number|null),
+ *   repairDispatchLimit?:(number|null), access?:string,
+ *   settings?:(Record<string, unknown>|null), plan_id?:(string|null),
+ *   extraRefusals?:{code:string, detail:unknown}[],
+ *   gate?:(((store:any)=>{code:string, detail:unknown}[])|null)}} input
  */
 export function admitJob({
   store,
@@ -187,8 +308,13 @@ export function admitJob({
   command,
   now = null,
   sourceFresh = true,
-  nextJobCost = null,
+  nextJobCost = undefined,
   repairDispatchLimit = null,
+  access = "write",
+  settings = null,
+  plan_id = null,
+  extraRefusals = [],
+  gate = null,
 }) {
   if (!command || !isNonEmptyString(command.command_id) || !isNonEmptyString(command.actor)) {
     throw new ContractError("admitJob requires an authenticated command_id and actor");
@@ -259,6 +385,7 @@ export function admitJob({
     }
 
     const resources = resourceSummary(store, { run_id, unit: grant.resource_policy.unit });
+    const resourceVerdict = evaluateResources({ grant, summary: resources, reservation, nextJob: nextJobCost });
     const verdict = evaluateGrant(grant, {
       now: now || store.now(),
       contract,
@@ -266,9 +393,14 @@ export function admitJob({
       effect: "native_dispatch",
       settled: resources.settled,
       reserved: resources.reserved,
-      nextJob: nextJobCost,
+      nextJob: resourceVerdict.next,
     });
     if (!verdict.permitted) refusals.push({ code: ADMISSION_REFUSALS.GRANT, detail: verdict.refusals });
+    if (!resourceVerdict.ok) refusals.push({ code: ADMISSION_REFUSALS.RESOURCES, detail: resourceVerdict.refusals });
+    for (const entry of extraRefusals || []) refusals.push(entry);
+    // Coordination (Command Center Phase 5) is evaluated here, inside the admission
+    // transaction, so two admissions cannot both take the last writer slot.
+    if (typeof gate === "function") for (const entry of gate(store) || []) refusals.push(entry);
 
     if (purpose === "repair" && repairDispatchLimit != null) {
       const repairs = store.listJobs(run_id).filter((job) => job.purpose === "repair").length;
@@ -304,11 +436,12 @@ export function admitJob({
       grant: { grant_id: grant.grant_id, revision: grant.revocation_version },
       input_manifest,
       checkpoint_ref,
-      workspace,
+      workspace: { ...workspace, access: workspace.access || access },
       reservation,
       native_limits,
       backend_id,
       instruction,
+      settings,
     });
 
     // The reservation and the executionRef are persisted here, before anything is
@@ -327,6 +460,9 @@ export function admitJob({
       profile_id: profileAdmission.profile_id,
       reservation,
       request,
+      access: request.workspace.access,
+      settings,
+      plan_id,
     });
     store.putReceipt({
       receipt_id: "rc-" + job_id,
@@ -405,6 +541,7 @@ export function recordDispatchResult({ store, job_id, result }) {
         unit: reading.usage.unit,
         input: reading.usage.input,
         cachedInput: reading.usage.cachedInput,
+        cacheCreation: reading.usage.cacheCreation,
         output: reading.usage.output,
         reasoningOutput: reading.usage.reasoningOutput,
         costUsd: reading.usage.costUsd,
@@ -413,13 +550,27 @@ export function recordDispatchResult({ store, job_id, result }) {
       if (outcome.inserted) inserted += 1;
     }
 
-    const monetaryObserved = readings.some((reading) => reading.usage.costUsd != null);
+    // Settled only when every reading carries an amount in the reservation's unit.
+    // One unpriced turn keeps the whole reservation open.
+    const monetaryObserved =
+      readings.length > 0 &&
+      (job.reservation_unit === "tokens" || readings.every((reading) => reading.usage.costUsd != null));
     const terminal = result.status === "finished";
     const nativeOutcome = (result.observations && result.observations.nativeOutcome) || null;
 
+    if (result.observations && result.observations.effective) {
+      store.setJobEffective(job_id, result.observations.effective);
+    }
+    if (result.observations && Array.isArray(result.observations.activity) && result.observations.activity.length) {
+      store.appendActivity(job.run_id, job_id, result.observations.activity);
+    }
+
+    // A stop that was already observed keeps its record: the late end of the
+    // stream adds usage and activity, not a different status.
+    const stopped = Boolean(job.stop_observed_at) && job.status === "finished";
     const next = store.updateJob(job_id, {
-      status: result.status,
-      outcome: terminal ? nativeOutcome : null,
+      status: stopped ? job.status : result.status,
+      outcome: stopped ? job.outcome : terminal ? nativeOutcome : null,
       observations_json: JSON.stringify({ observations: result.observations, claims: result.claims, reason: result.reason }),
       reason: result.reason,
       // Terminal + a monetary reading closes it. Anything else keeps it open.
@@ -461,10 +612,21 @@ export function recordDispatchResult({ store, job_id, result }) {
  * provider turn, and a crash mid-call would roll back the marker that exists
  * precisely to survive it.
  *
- * @param {{store:ReturnType<import("./store.mjs").openStore>, adapter:object,
- *   job_id:string, request:object, priorRef?:(object|null), runOptions?:object}} input
+ * @param {{store:ReturnType<import("./store.mjs").openStore>, adapter:any,
+ *   job_id:string, request:any, priorRef?:(object|null), runOptions?:object,
+ *   claimant?:string, preDispatch?:((job:any)=>any), onDispatchStarted?:((input:{job_id:string, at:string})=>void)}} input
  */
-export async function dispatchJob({ store, adapter, job_id, request, priorRef = null, runOptions = {} }) {
+export async function dispatchJob({
+  store,
+  adapter,
+  job_id,
+  request,
+  priorRef = null,
+  runOptions = {},
+  claimant = DEFAULT_CLAIMANT,
+  preDispatch = null,
+  onDispatchStarted = null,
+}) {
   const job = store.getJob(job_id);
   if (!job) throw new ContractError("dispatchJob: unknown job " + job_id);
   // The job row names the backend the reservation was taken against. Dispatching
@@ -480,16 +642,110 @@ export async function dispatchJob({ store, adapter, job_id, request, priorRef = 
     return deepFreeze({ dispatched: false, eligibility, job });
   }
 
+  // Exclusive claim first. Two callers racing on one reserved job both see an
+  // absent marker; only one can take the claim.
+  const claim = store.transaction(() => store.claimDispatch(job_id, claimant));
+  if (!claim.acquired) {
+    return deepFreeze({
+      dispatched: false,
+      eligibility,
+      job: claim.job,
+      refusals: [{ code: DISPATCH_REFUSALS.CLAIM_HELD, detail: claim.reason, holder: claim.holder }],
+    });
+  }
+
+  // Authority, source and resources are checked again at the last moment before
+  // the provider is contacted, not only when the job was admitted.
+  if (typeof preDispatch === "function") {
+    const verdict = await preDispatch(store.getJob(job_id));
+    if (!verdict || !verdict.ok) {
+      const refusals = (verdict && verdict.refusals) || [{ code: DISPATCH_REFUSALS.PRECHECK, detail: "no verdict" }];
+      const after = store.transaction(() => {
+        const current = store.getJob(job_id);
+        const next = store.updateJob(job_id, {
+          status: "finished",
+          outcome: "cancelled",
+          reason: "refused before dispatch: " + refusals.map((entry) => entry.code).join(", "),
+          observations_json: JSON.stringify({ refusedAtDispatch: refusals }),
+          // Provably undispatched: nothing was sent, so nothing stays reserved.
+          reservation_open: 0,
+          publication_revoked: current.publication_revoked,
+        });
+        store.putReceipt({
+          receipt_id: "rc-" + job_id + "-refused-at-dispatch",
+          kind: "job.refused-at-dispatch",
+          subject_id: job_id,
+          actor: claimant,
+          state_before: current.status,
+          state_after: next.status,
+          observed: { refusals },
+        });
+        return next;
+      });
+      return deepFreeze({ dispatched: false, eligibility, job: after, refusals: [{ code: DISPATCH_REFUSALS.PRECHECK, detail: refusals }] });
+    }
+    store.recordDispatchIntent(job_id, claimant, { ...(verdict.intent || {}), claimant, checked: true });
+  }
+
   const onDispatchStart = ({ at }) => {
     store.markDispatchStarted(job_id, at);
+    if (typeof onDispatchStarted === "function") onDispatchStarted({ job_id, at });
   };
 
-  const result = priorRef
-    ? await adapter.resume(priorRef, request, { ...runOptions, onDispatchStart })
-    : await adapter.start(request, { ...runOptions, onDispatchStart });
+  let result;
+  try {
+    result = priorRef
+      ? await adapter.resume(priorRef, request, { ...runOptions, onDispatchStart })
+      : await adapter.start(request, { ...runOptions, onDispatchStart });
+  } catch (error) {
+    const current = store.getJob(job_id);
+    if (current && current.dispatch_started_at) {
+      // Past the marker: the provider may have been reached. Hold, never retry.
+      store.updateJob(job_id, {
+        status: "unknown",
+        outcome: null,
+        reason: "adapter threw after the dispatch marker: " + String((error && error.message) || error),
+        reservation_open: 1,
+        publication_revoked: current.publication_revoked,
+      });
+    } else {
+      // Before the marker nothing was sent; the claim goes back so the same intent
+      // can be dispatched later.
+      store.releaseClaim(job_id, claimant);
+    }
+    throw error;
+  }
 
   const recorded = recordDispatchResult({ store, job_id, result });
   return deepFreeze({ dispatched: true, eligibility, result, ...recorded });
+}
+
+/**
+ * Release claims left by a supervisor that stopped before its dispatch marker.
+ *
+ * Safe because the marker is the only evidence of a possible send: a claimed job
+ * with no marker is known-undispatched whoever held the claim.
+ *
+ * @param {{store:ReturnType<import("./store.mjs").openStore>, claimant:string}} input
+ */
+export function releaseStaleClaims({ store, claimant }) {
+  const released = [];
+  for (const job of store.listClaimedUndispatched()) {
+    if (job.dispatch_claim === claimant) continue;
+    if (store.releaseClaim(String(job.job_id), String(job.dispatch_claim))) {
+      store.putReceipt({
+        receipt_id: "rc-" + job.job_id + "-claim-released-" + String(job.dispatch_claimed_at || ""),
+        kind: "job.claim-released",
+        subject_id: String(job.job_id),
+        actor: claimant,
+        state_before: "claimed",
+        state_after: "reserved",
+        observed: { previousHolder: job.dispatch_claim, reason: "claimant is not this supervisor and no dispatch marker was committed" },
+      });
+      released.push(String(job.job_id));
+    }
+  }
+  return deepFreeze(released);
 }
 
 /**
@@ -535,18 +791,63 @@ export function resumeRequestFor({ store, priorJobId, request }) {
  * still accepted and now refuses jobs that are not its own rather than
  * confidently inspecting them.
  *
- * @param {{store:ReturnType<import("./store.mjs").openStore>, adapter?:object,
- *   resolveAdapter?:(backend_id:string)=>(object|Promise<object|null>|null)}} input
+ * @param {{store:ReturnType<import("./store.mjs").openStore>, adapter?:any,
+ *   resolveAdapter?:(backend_id:string, job?:any)=>any,
+ *   recover?:((job:any)=>any)}} input
  */
-export async function reconcileOutstanding({ store, adapter = null, resolveAdapter = null }) {
+export async function reconcileOutstanding({ store, adapter = null, resolveAdapter = null, recover = null }) {
   const outcomes = [];
-  const adapterFor = async (backend_id) => {
-    if (resolveAdapter) return (await resolveAdapter(backend_id)) || null;
+  const adapterFor = async (backend_id, job) => {
+    if (resolveAdapter) return (await resolveAdapter(backend_id, job)) || null;
     if (adapter && adapter.backend_id === backend_id) return adapter;
     if (adapter && !adapter.backend_id) return adapter;
     return null;
   };
   for (const job of store.listOutstandingJobs()) {
+    // A native record that still holds the full output (a retained container log,
+    // for instance) settles the job from what actually happened. It is read, never
+    // re-run: `recover` returns an adapter result or null, and dispatches nothing.
+    if (job.dispatch_started_at && typeof recover === "function") {
+      const recovered = await recover(job);
+      if (recovered && recovered.running) {
+        outcomes.push(
+          deepFreeze({
+            job_id: job.job_id,
+            verdict: RETRY_VERDICTS.STILL_RUNNING,
+            status: String(job.status),
+            backend_id: String(job.backend_id),
+            dispatchEstablished: true,
+            reservationHeld: true,
+            detail: "the job's execution environment is still running; it is left alone",
+          }),
+        );
+        continue;
+      }
+      if (recovered && recovered.result) {
+        const recorded = recordDispatchResult({ store, job_id: String(job.job_id), result: recovered.result });
+        store.putReceipt({
+          receipt_id: "rc-" + job.job_id + "-recovered",
+          kind: "job.recovered",
+          subject_id: String(job.job_id),
+          actor: "supervisor",
+          state_before: String(job.status),
+          state_after: String(recorded.job.status),
+          observed: { source: recovered.source || "native record", readingsInserted: recorded.readingsInserted },
+        });
+        outcomes.push(
+          deepFreeze({
+            job_id: job.job_id,
+            verdict: RETRY_VERDICTS.RECONCILED,
+            status: String(recorded.job.status),
+            backend_id: String(job.backend_id),
+            dispatchEstablished: true,
+            reservationHeld: Boolean(recorded.job.reservation_open),
+            detail: "reconciled from " + (recovered.source || "a native record") + "; nothing was dispatched again",
+          }),
+        );
+        continue;
+      }
+    }
     if (!job.dispatch_started_at) {
       outcomes.push(
         deepFreeze({
@@ -566,7 +867,7 @@ export async function reconcileOutstanding({ store, adapter = null, resolveAdapt
       native_ref: job.native_ref,
     });
 
-    const jobAdapter = await adapterFor(String(job.backend_id));
+    const jobAdapter = await adapterFor(String(job.backend_id), job);
     if (!jobAdapter) {
       // Not an error, and emphatically not a reason to guess: an outstanding job
       // whose executor is unavailable stays outstanding with its reservation
@@ -635,9 +936,10 @@ export async function reconcileOutstanding({ store, adapter = null, resolveAdapt
  * primitive there is no acknowledgement, so it stays `unknown` and its
  * reservation stays open.
  *
- * @param {{store:ReturnType<import("./store.mjs").openStore>, adapter:object, job_id:string}} input
+ * @param {{store:ReturnType<import("./store.mjs").openStore>, adapter:any, job_id:string,
+ *   observeStop?:((job:any)=>any)}} input
  */
-export async function requestStop({ store, adapter, job_id }) {
+export async function requestStop({ store, adapter, job_id, observeStop = null }) {
   const job = store.getJob(job_id);
   if (!job) throw new ContractError("requestStop: unknown job " + job_id);
 
@@ -650,6 +952,7 @@ export async function requestStop({ store, adapter, job_id }) {
     reservation_open: job.reservation_open,
     publication_revoked: 1,
   });
+  store.markStopRequested(job_id);
 
   const ref = makeExecutionRef({
     backend_id: job.backend_id,
@@ -658,17 +961,25 @@ export async function requestStop({ store, adapter, job_id }) {
   });
   const result = await adapter.stop(ref);
   const confirmed = Boolean(result.observations && result.observations.providerConfirmed);
+  // The execution environment's own observation: for a container worker, its
+  // removal ends every process it held. That establishes no further local effect,
+  // not that the provider stopped billing.
+  const environment = typeof observeStop === "function" ? await observeStop(store.getJob(job_id)) : null;
+  const observed = confirmed || Boolean(environment && environment.stopObserved);
+  if (observed) store.markStopObserved(job_id);
 
   // A job that already reached a terminal outcome keeps it. Stopping something
   // that has finished revokes its publication authority — it does not un-observe
   // what happened, and it certainly does not relabel a succeeded job "cancelled".
-  const alreadyTerminal = job.status === "finished" && Boolean(job.outcome);
+  const current = store.getJob(job_id);
+  const alreadyTerminal = current.status === "finished" && Boolean(current.outcome);
   const next = store.updateJob(job_id, {
-    status: alreadyTerminal ? job.status : confirmed ? "finished" : "unknown",
-    outcome: alreadyTerminal ? job.outcome : confirmed ? "cancelled" : job.outcome,
-    observations_json: JSON.stringify({ stop: result.observations, reason: result.reason }),
+    status: alreadyTerminal ? current.status : observed ? "finished" : "unknown",
+    outcome: alreadyTerminal ? current.outcome : observed ? "cancelled" : current.outcome,
+    observations_json: JSON.stringify({ stop: result.observations, environment, reason: result.reason }),
     reason: result.reason,
-    reservation_open: alreadyTerminal ? job.reservation_open : confirmed ? job.reservation_open : 1,
+    // Usage that was never read stays reserved even when the stop is observed.
+    reservation_open: alreadyTerminal ? current.reservation_open : 1,
     publication_revoked: 1,
   });
   store.putReceipt({
@@ -678,14 +989,15 @@ export async function requestStop({ store, adapter, job_id }) {
     actor: "supervisor",
     state_before: job.status,
     state_after: next.status,
-    observed: result.observations,
+    observed: { ...result.observations, environment },
   });
 
   return deepFreeze({
     job: next,
     publicationRevoked: true,
     providerConfirmed: confirmed,
-    display: confirmed ? "Stopped" : "Stop requested",
+    stopObserved: observed,
+    display: observed ? "Stopped" : "Stop requested",
     outcomeRetained: alreadyTerminal,
     reason: result.reason,
   });

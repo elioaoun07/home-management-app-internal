@@ -2,7 +2,7 @@
 // PM Delivery V2 — S1.1: the canonical six-operation executor boundary.
 //
 // The six operations and their required behaviour are fixed by
-// "ERA Notes/10 - Project Management/Autonomous Delivery/PM Delivery — Context &
+// "ERA Notes/10 - Project Management/_Archive/Studies/Autonomous Delivery/PM Delivery — Context &
 // Agent Model.md" §3, and repeated as the adapter surface in
 // "PM Delivery — V2 Architecture.md" §6. This module owns the *boundary*:
 // the shapes that cross it, the invariants it refuses to let across, and the
@@ -44,8 +44,18 @@ export const ADAPTER_OPERATIONS = Object.freeze([
   "exportCandidate",
 ]);
 
-/** Why a Job was dispatched. Only these four are paid native dispatches. */
-export const JOB_PURPOSES = Object.freeze(["start", "resume", "repair", "review"]);
+/**
+ * Why a Job was dispatched. Every purpose is a paid native dispatch with its own
+ * admission. `investigate` is the read-only plan job that precedes approval.
+ */
+export const JOB_PURPOSES = Object.freeze(["investigate", "start", "resume", "repair", "review"]);
+
+/**
+ * What the workspace lets a job do. Enforced by the environment (a read-only
+ * mount), not by the instruction: a preapproval write must be denied, not asked
+ * not to happen.
+ */
+export const WORKSPACE_ACCESS = Object.freeze(["read-only", "write"]);
 
 /**
  * What is known about one declared control.
@@ -168,7 +178,8 @@ export function withNativeRef(ref, native_ref) {
  * @property {{grant_id:string, revision:number}} grant
  * @property {readonly {path:string, fingerprint:string}[]} input_manifest
  * @property {(string|null)} checkpoint_ref
- * @property {{root:string, backing:string}} workspace confined scratch reference
+ * @property {{root:string, backing:string, access:string}} workspace confined scratch reference
+ * @property {{model:(string|null), effort:(string|null)}} settings requested per run, forwarded verbatim
  * @property {{unit:string, amount:(number|null), basis:string}} reservation
  * @property {Record<string, unknown>} native_limits
  * @property {ExecutionRef} executionRef
@@ -191,8 +202,9 @@ export function withNativeRef(ref, native_ref) {
  * @param {{job_id:string, run_id:string, purpose?:string,
  *   contract:{contract_id:string, revision:number}, grant:{grant_id:string, revision:number},
  *   input_manifest?:{path:string, fingerprint:string}[], checkpoint_ref?:(string|null),
- *   workspace:{root:string, backing?:string}, reservation:{unit:string, amount?:(number|null), basis:string},
- *   native_limits?:Record<string, unknown>, backend_id:string, instruction:string}} input
+ *   workspace:{root:string, backing?:string, access?:string}, reservation:{unit:string, amount?:(number|null), basis:string},
+ *   native_limits?:Record<string, unknown>, backend_id:string, instruction:string,
+ *   settings?:({model?:(string|null), effort?:(string|null)}|null)}} input
  * @returns {JobRequest}
  */
 export function makeJobRequest({
@@ -208,8 +220,16 @@ export function makeJobRequest({
   native_limits = {},
   backend_id,
   instruction,
+  settings = null,
 }) {
   if (!isNonEmptyString(job_id)) throw new ContractError("jobRequest.job_id is required");
+  const access = (workspace && workspace.access) || "write";
+  if (!WORKSPACE_ACCESS.includes(access)) {
+    throw new ContractError("jobRequest.workspace.access must be one of " + WORKSPACE_ACCESS.join("|"));
+  }
+  if (purpose === "investigate" && access !== "read-only") {
+    throw new ContractError("an investigate job is read-only; implementation needs an approved plan and its own job");
+  }
   if (!isNonEmptyString(run_id)) throw new ContractError("jobRequest.run_id is required");
   if (!JOB_PURPOSES.includes(purpose)) {
     throw new ContractError("jobRequest.purpose must be one of " + JOB_PURPOSES.join("|"));
@@ -240,7 +260,13 @@ export function makeJobRequest({
       input_manifest.map((entry) => Object.freeze({ path: entry.path, fingerprint: entry.fingerprint })),
     ),
     checkpoint_ref: isNonEmptyString(checkpoint_ref) ? checkpoint_ref : null,
-    workspace: { root: workspace.root, backing: workspace.backing || "scratch-snapshot" },
+    workspace: { root: workspace.root, backing: workspace.backing || "scratch-snapshot", access },
+    // Requested per run and forwarded as-is. Null means the executor's own
+    // default, which is then recorded from what the executor reports.
+    settings: {
+      model: settings && isNonEmptyString(settings.model) ? settings.model : null,
+      effort: settings && isNonEmptyString(settings.effort) ? settings.effort : null,
+    },
     reservation: {
       unit: reservation.unit,
       amount: reservation.amount == null ? null : Number(reservation.amount),

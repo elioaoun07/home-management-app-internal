@@ -24,4 +24,4 @@ One `Operating System.md` in Home: the two-index rule, campaign layout, FABLED g
 
 ## O3 — Put Home in the link-checker's path (fixes G1's recurrence)
 
-When the vault link checker ships ([PM FABLED 2.3 · O3](<../../10 - Project Management/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)), Home's pointers get verified with everything else — the first time anything mechanical watches this folder.
+When the vault link checker ships ([PM FABLED 2.3 · O3](<../../10 - Project Management/_Archive/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)), Home's pointers get verified with everything else — the first time anything mechanical watches this folder.

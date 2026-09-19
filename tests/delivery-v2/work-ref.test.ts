@@ -50,6 +50,14 @@ const DUPLICATE = fixture("selection-duplicate-alias.md");
 const SCRATCH = { root: "<scratch>", writable: ["<scratch>"], readable: ["<snapshot>"] };
 const PUBLICATION = { allowedPaths: ["src/components/expense/"], changeConstraints: { maxFiles: 1 } };
 
+it("prevents a queued contract from dispatching after its checklist item is completed", () => {
+  const raw = "## Now\n- [ ] **BUD-14** Fix a bounded issue _(friction - S)_\n";
+  const frozen = freezeSelectedItem({ raw, file: "Budget/4 - Checklist.md", cbidx: 0, bookRaw: null, requestedDisposition: "verified_candidate", scratchScope: SCRATCH, publicationScope: PUBLICATION });
+  const result = recheckContractSource({ raw: raw.replace("[ ]", "[x]"), workRef: must(frozen.workRef, "work"), contract: must(frozen.contract, "contract"), bookRaw: null });
+  expect(result.resolved).toBe(false);
+  expect(result.reason).toBe("work-completed");
+});
+
 /** The R-1 row, selected the way the PM surface reports a click: by ordinal. */
 function selectR1(raw: string) {
   const items = parseWorkItems(raw);
@@ -161,6 +169,98 @@ describe("F-ID — a duplicate human ID is a conflict, not a choice", () => {
     const locator = must(selectR1(BASELINE).locator, "a locator");
     const removed = BASELINE.replace("**R-1**", "**R-42**");
     expect(resolveWorkRef({ raw: removed, locator }).reason).toBe("not-found");
+  });
+});
+
+describe("F-ID — the click carries a witness, so a reorder cannot change what it meant", () => {
+  const R1 = "- [ ] **R-1** Replace the mobile quick-amount preset 25 with 20 _(friction - S)_";
+  const clicked = { alias: "R-1", line: R1 };
+  const R1_CBIDX = must(
+    parseWorkItems(BASELINE).find((item) => item.alias === "R-1"),
+    "an R-1 row in the baseline",
+  ).cbidx;
+  const freezeWith = (overrides: Record<string, unknown> = {}) =>
+    freezeSelectedItem({
+      raw: BASELINE,
+      file: FILE,
+      cbidx: R1_CBIDX,
+      witness: clicked,
+      requestedDisposition: "verified_candidate",
+      scratchScope: SCRATCH,
+      publicationScope: PUBLICATION,
+      ...overrides,
+    });
+
+  it("selects R-1 at its stale ordinal after R-9 is prepended", () => {
+    const outcome = selectWorkItem({ raw: REORDERED, file: FILE, cbidx: R1_CBIDX, witness: clicked });
+    expect(outcome.ok).toBe(true);
+    expect(must(outcome.item, "the witnessed row").alias).toBe("R-1");
+    // The ordinal the owner clicked names R-9 now.
+    expect(parseWorkItems(REORDERED)[R1_CBIDX].alias).toBe("R-9");
+  });
+
+  it("refuses a missing or self-contradictory witness", () => {
+    expect(selectWorkItem({ raw: BASELINE, file: FILE, cbidx: R1_CBIDX, witness: null }).reason).toBe(
+      "missing-selection-witness",
+    );
+    expect(
+      selectWorkItem({ raw: BASELINE, file: FILE, cbidx: R1_CBIDX, witness: { alias: "R-2", line: R1 } }).reason,
+    ).toBe("missing-selection-witness");
+  });
+
+  it("refuses stale, unknown and duplicate witnessed selections", () => {
+    expect(selectWorkItem({ raw: EDITED, file: FILE, cbidx: R1_CBIDX, witness: clicked }).reason).toBe("stale-source");
+    expect(
+      selectWorkItem({ raw: BASELINE, file: FILE, cbidx: R1_CBIDX, witness: { line: R1.replace("R-1", "R-77") } }).reason,
+    ).toBe("not-found");
+    expect(selectWorkItem({ raw: DUPLICATE, file: FILE, cbidx: R1_CBIDX, witness: clicked }).reason).toBe("ambiguous-alias");
+  });
+
+  it("refuses an unaliased row whose text appears twice, even at the clicked ordinal", () => {
+    const row = "- [ ] A row with no ID chip at all, which can only be found by its own text";
+    const raw = BASELINE.replace(row, row + "\n" + row);
+    const cbidx = parseWorkItems(raw).findIndex((item) => item.alias === null);
+    expect(selectWorkItem({ raw, file: FILE, cbidx, witness: { line: row } }).reason).toBe("ambiguous-text");
+  });
+
+  it("binds the Master Book acceptance revision, found by normalized ID", () => {
+    const book = "## Acceptance Criteria Index\n\n### r-1\n\n- **Acceptance:** preset reads 20.\n";
+    const frozen = freezeWith({ bookRaw: book });
+    expect(frozen.ok).toBe(true);
+    const workRef = must(frozen.workRef, "a WorkRef");
+    const contract = must(frozen.contract, "a contract");
+    expect(contract.acceptance_fingerprint).toBe(fingerprint(normalizeSourceText("- **Acceptance:** preset reads 20.")));
+
+    expect(must(recheckContractSource({ raw: REORDERED, workRef, contract, bookRaw: book }).freshness, "freshness").fresh).toBe(
+      true,
+    );
+    expect(
+      recheckContractSource({ raw: BASELINE, workRef, contract, bookRaw: book.replace("reads 20", "reads 20 and says so") })
+        .freshness,
+    ).toMatchObject({ fresh: false, stale: ["acceptance"], obligation: "successor-revision-required" });
+    // A bound revision nobody re-read cannot be confirmed.
+    expect(must(recheckContractSource({ raw: BASELINE, workRef, contract }).freshness, "freshness").fresh).toBe(false);
+
+    // No section binds "none"; a section added later stales it.
+    const bare = freezeWith({ bookRaw: null });
+    expect(must(bare.contract, "a contract").acceptance_fingerprint).toBe("none");
+    expect(
+      must(
+        recheckContractSource({ raw: BASELINE, workRef: must(bare.workRef, "a WorkRef"), contract: must(bare.contract, "c"), bookRaw: book })
+          .freshness,
+        "freshness",
+      ).fresh,
+    ).toBe(false);
+
+    // Unbound contracts keep their previous identity; bound ones do not collide with them.
+    const unbound = freezeWith();
+    expect(must(unbound.contract, "a contract").acceptance_fingerprint).toBeNull();
+    expect(must(unbound.contract, "a contract").contract_id).not.toBe(contract.contract_id);
+  });
+
+  it("refuses two Master Book sections for one ID", () => {
+    const book = "### R-1\n\nFirst.\n\n### r-1\n\nSecond.\n";
+    expect(freezeWith({ bookRaw: book }).reason).toBe("ambiguous-acceptance");
   });
 });
 

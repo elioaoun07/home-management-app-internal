@@ -8,7 +8,8 @@ export function parseFrontmatter(raw) {
   if (end < 0) return { meta: {}, body: String(raw), bodyStartLine: 0 };
   const meta = {};
   let activeList = null;
-  for (const line of lines.slice(1, end)) {
+  for (const rawLine of lines.slice(1, end)) {
+    const line = rawLine.replace(/\r$/, "");
     const item = line.match(/^\s+-\s+(.*)$/);
     if (item && activeList) { meta[activeList].push(item[1].trim()); continue; }
     const pair = line.match(/^([A-Za-z][\w-]*):\s*(.*)$/);

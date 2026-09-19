@@ -22,15 +22,15 @@ Clone → pnpm install → …then what? Which env vars (ENV.md's list current?)
 
 ## 🔴 G2 — Voice/Azure setup lives in an AI memory file, not the vault
 
-The most fragile subsystem (6 moving parts: keys, region, token route, worklet file, AudioContext unlock, wake-model flag) has its accurate documentation in *Claude's memory* while the vault doc lags the May overhaul. An env rotation breaks voice with no human-readable recovery path. ([Hub & ERA FABLED 2.2 · G5](<../../10 - Project Management/Hub & ERA/FABLED 2/2 - FABLED 2 — Gaps & Missing.md>) — flagged there for weeks.)
+The most fragile subsystem (6 moving parts: keys, region, token route, worklet file, AudioContext unlock, wake-model flag) has its accurate documentation in *Claude's memory* while the vault doc lags the May overhaul. An env rotation breaks voice with no human-readable recovery path. ([Hub & ERA FABLED 2.2 · G5](<../../10 - Project Management/_Archive/Hub & ERA/FABLED 2/2 - FABLED 2 — Gaps & Missing.md>) — flagged there for weeks.)
 
 ## 🟠 G3 — No CI
 
-Husky covers commits from the one configured machine; nothing verifies the repo *itself* builds/tests green independent of local state. Plans keep writing "green in CI" ([FAR Checklist FABLED 2.2 · G5](<../../10 - Project Management/FAR Execution Checklist/FABLED 2/2 - FABLED 2 — Gaps & Missing.md>)); the workflow file doesn't exist. One 20-line GitHub Action closes it.
+Husky covers commits from the one configured machine; nothing verifies the repo *itself* builds/tests green independent of local state. Plans keep writing "green in CI" ([FAR Checklist FABLED 2.2 · G5](<../../10 - Project Management/_Archive/FAR Execution Checklist/FABLED 2/2 - FABLED 2 — Gaps & Missing.md>)); the workflow file doesn't exist. One 20-line GitHub Action closes it.
 
 ## 🟠 G4 — Backup/restore is unverified faith
 
-Supabase backups presumably exist on the platform; nobody has ever *restored* one, and the repo-fidelity gap (Trips RPCs live-only) means a restore-from-schema.sql wouldn't reproduce the DB anyway. The RPC snapshot ([Trips FABLED 2.3 · O1](<../../10 - Project Management/Trips/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)) is half the fix; a documented restore drill is the other half.
+Supabase backups presumably exist on the platform; nobody has ever *restored* one, and the repo-fidelity gap (Trips RPCs live-only) means a restore-from-schema.sql wouldn't reproduce the DB anyway. The RPC snapshot ([Trips FABLED 2.3 · O1](<../../10 - Project Management/_Archive/Trips/FABLED 2/3 - FABLED 2 — Optimization Plan.md>)) is half the fix; a documented restore drill is the other half.
 
 ## 🟡 G5 — Six credentialed services, zero rotation runbooks
 

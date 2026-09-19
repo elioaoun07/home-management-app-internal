@@ -130,7 +130,7 @@ tags: [pm/action-plan, tooling/delivery]
 ### DLV-14 · PM trace as a state-machine exit effect
 
 - **Problem:** PM writeback is an agent step it can (and did) skip — BUD-11 has zero PM trace after two sessions.
-- **Evidence:** [Budget/4 · Checklist](<../Budget/4 - Checklist.md>) BUD-11 still `- [ ]`; no Feature State note.
+- **Evidence:** [Budget/4 · Checklist](<../../Budget/4 - Checklist.md>) BUD-11 still `- [ ]`; no Feature State note.
 - **Design:** terminal/paused transitions emit a `pmTrace` effect executed by the runner/server (drift-guarded, like the existing accept-tick writeback): ACCEPTED ⇒ existing checkbox tick; PARTIAL/BLOCKED/CANCELLED ⇒ append a dated progress bullet to the campaign's `1 - Feature State.md` pain/progress section referencing the session id and finish package. Uses the existing `performPendingWritebacks` path in `server-routes.mjs`.
 - **Anchors:** `state-machine.mjs` (effects), `server-routes.mjs` (`performPendingWritebacks`), `pm-server.mjs` (watcher).
 - **Acceptance:** fake session ending PARTIAL appends exactly one drift-guarded Feature State bullet; ACCEPTED still ticks the checkbox; no duplicate writes on re-run (idempotent).

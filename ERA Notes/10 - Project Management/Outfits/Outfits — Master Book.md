@@ -1,53 +1,165 @@
 ---
-created: 2026-07-17
-updated: 2026-09-06
+created: 2026-09-10
+updated: 2026-09-10
 type: master-book
 status: active
 owner: Elio
-consolidates: "_index, 1 - Feature State, 2 - Vision & Roadmap, 3 - Action Plan, 5 - Claude Design Support Plan (originals in ../_Archive/Outfits/)"
-tags:
-  - pm/master-book
-  - scope/module
-  - module/outfits
 ---
 
 # Outfits — Master Book
 
-> **Campaign:** Outfits · prefix `OUT` · working queue → [4 · Checklist](<4 - Checklist.md>)
+[Backlog](<4 - Checklist.md>) · [PM home](<../_index.md>) · [Governance](<../_Conventions.md>)
 
-## Identity & North Star
+## Purpose & ownership
 
-The wardrobe module: a garment catalog with on-device background-removed cutouts, a 2D paper-doll outfit builder, a weekly outfit planner, and a wear/event log with no-repeat warnings.
+Digitize garments, compose outfits, plan and record wear. Standalone; personal per-user ownership is a deliberate sharing exception.
 
-**A game-style avatar screen for your real wardrobe** — photograph clothes once, then compose, plan and remember outfits forever. The functional payoff is **planning the week's outfits ahead** and **never repeating an outfit at consecutive events**: the app remembers what you wore to Sarah's wedding so you don't have to.
+## Current state & evidence
 
-**Source:** `src/features/outfits/`, `src/app/outfits/`, `src/components/outfits/`, `src/lib/{wardrobeImage,backgroundRemoval,motion}.ts`, `src/app/api/outfits/`. Migration: `migrations/2026-07-18_outfits-catalog-and-builder.sql`. **Implementation truth — read §10 (handover notes + STOP conditions) before writing any code:** [Outfits / Overview](<../../02 - Standalone Modules/Outfits/Overview.md>).
+Catalogue/builder and on-device cutouts shipped together. Owner deployment/device proof, complete image signing and transactional composition remain open. Planning/wear, AI tags and optional dreams are distinct phases; authored SQL is not applied SQL.
 
-## Current State (verified)
+Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Outfits/Outfits — Master Book.md>) preserves detailed older narratives and receipts.
 
-Greenfield on 2026-07-17; the catalog and builder shipped together on 2026-07-18 as the Fable foundation session.
+## Vision & Decisions
 
-| Sub-feature | Tier | Reality | Next step |
-|---|---|---|---|
-| Wardrobe catalog (photo → cutout → tags → grid) | 🟡 | full loop shipped: capture → WebP compress (`wardrobeImage.ts`) → on-device cutout (`backgroundRemoval.ts`, lazy imgly) → approve / Keep-original → manual tags → private `wardrobe` bucket + batch signed URLs (50-min client cache) | phone acceptance test |
-| Sizing profile (height/weight/sizes/fit notes) | 🟡 | `wardrobe_profiles` + `SizingProfileSheet` with decimal text inputs (Hard Rule 19), PUT upsert | — |
-| Outfit builder (2D paper doll, per-slot swipe) | 🟡 | `SlotSwiper` = native CSS snap-scroll + framer scale/opacity parallax off one shared `scrollX` motion value (no re-renders during scroll), haptic tick on snap, reduced-motion safe. Shared spring presets live in **`src/lib/motion.ts`** — a new app-wide module, first consumer. Outerwear/accessory overlays crossfade behind a decode-before-swap guard. "Used in N outfits" warning wired in `GarmentDetailSheet` | phone acceptance; multi-accessory + `fullbody` slot stay backlog |
-| AI auto-tag (Gemini vision → pre-filled tags) | ⚫ | needs a small non-breaking `inlineData` widening in `src/lib/ai/gemini.ts`; manual tagging is the primary path, AI is an accelerator. A disabled "Auto-tag — coming soon" affordance already sits where the button lands | OUT-7, OUT-8 |
-| Weekly planner (drag outfit → day) | ⚫ | a direct clone of `WebMealPlanCalendar.tsx` reduced to one slot/day; upsert-by-date | OUT-12, OUT-13 |
-| Wear / event log + no-repeat warning | ⚫ | `outfit_plans` with `status='worn'` **is** the log; a reversible `set_outfit_plan_worn` RPC keeps Undo honest; amber banner on a ≤14-day or same-event repeat | OUT-13, OUT-14 |
+- D1: 2D paper doll. D2: sizing profile only, no body rendering. *(IMPLEMENTED 2026-07-18)*
+- D3: catalogue → builder → planner → wear log; owner amendment July18 shipped catalogue and builder together and deferred AI tagging. The planner remains Phase4.
+- D4: personal per user, no household sharing. D5: free tools, small WebP images, on-device background removal, private bucket and stored paths. D6: no offline write queue in v1.
+- AI accelerates editable manual tagging; quota loss must not remove core functionality. A server background-removal service is not the agreed end state; reopening D5 requires an owner decision.
+- DEC-08 holds complete signing above100 records versus the one-request promise; DEC-09 holds garment delete/restore. OUT-20 atomically saves composition but does not resolve either.
+- Wear history must preserve historical membership, concurrency/retry and last-worn semantics; marking unworn cannot corrupt a different wear record. Visual studies may inspire manually ported changes, never own product behavior.
+
+Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
+
+## Campaign acceptance
+
+- **D1** Every phase ends with the `finish-task` skill: typecheck/lint clean, migration↔schema.sql paired, Atlas current, this checklist ticked and [Outfits — Master Book](<Outfits — Master Book.md>) stamped.
+- **D2** Phase 1 acceptance on a real phone: photo → cutout → tagged garment in the grid in under a minute, with ONE batch signed-URL request per screen.
+- **D3** No STOP condition from [Overview §10](<../../02 - Standalone Modules/Outfits/Overview.md>) violated (alpha-flattening compressor, top-level imgly import, base64/URLs in DB, household joins, EXISTS RLS, unconfirmed AI writes, missing `timeoutMs`, Undo-less toasts).
 
 ## Pain Inventory
 
-**ASTRA reconciliation · 2026-09-06:** [accepted study](<ASTRA/Outfits — ASTRA Book.md>) and [execution sheets](<ASTRA/Outfits — ASTRA Packets.md>) landed against source `3106164`; no product change or migration is marked shipped. The July phone/CSP case study is real debugging evidence, not completed OUT-19 acceptance. D1–D6 remain locked; optional AI and planner work keep their existing gates.
+🔴 **OUT-19** Verify Outfits deployment, privacy and both-phone behavior. See [acceptance](<#out-19>) for the root cause, evidence and gate.
 
-- 🟠 **Signed-image completeness stops at 100 paths.** `src/features/outfits/useSignedUrls.ts:18–20` truncates the sorted input and cache key while `WardrobeGrid.tsx:46,105` renders the complete visible set; path 101 never receives a URL. ASTRA-OUT-2 stays held on the explicit OUT-19/D2 batch-contract decision: bounded batches are proposed, not an approved rewrite of the ONE-request criterion.
-- 🟠 **The authored wear RPC is not concurrent-idempotent or a complete inverse.** The proposed SQL at `ERA Notes/02 - Standalone Modules/Outfits/Overview.md:189–210` checks status without locking, uses mutable current membership, and preserves the newer last-worn date on Undo. Concurrent calls can double-increment; later composition changes can reverse different garments. These are defects in the runbook, not deployed-function claims. Hold OUT-12's “DDL verbatim” instruction and OUT-14 until the owner resolves the historical-wear/inverse contract.
+🟠 **OUT-20** Save outfits and membership atomically. Dated source diagnosis; cause and witness limits are in [criteria](<#out-20>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
 
-- 🟠 **Core migration/storage readiness is UNVERIFIED.** The cited `migrations/2026-07-18_outfits-catalog-and-builder.sql` is absent from the current tree; that does not prove it was never applied or that every route currently returns 500. E-00/OUT-19 requires owner-stamped core APPLIED evidence and fresh DB/storage state before any manual repair. Do not rerun guessed SQL from this old claim.
-- 🟡 **Phone acceptance (D2) is still pending** — the photo → cutout → grid flow has not been verified on a real device, and the ~40 MB first-use model download UX needs a real-network test.
-- 🟠 **Garment hard-delete Undo loses identity and composition as well as photos.** `src/app/api/outfits/items/[id]/route.ts:79–119` removes the row/storage; `src/features/outfits/hooks.ts:242–278` recreates tags without the old ID or image paths, so it cannot restore prior outfit membership. Archive already provides the reversible path. The existing delete policy remains unchanged pending the explicitly held owner decision.
-- 🟠 **Outfit save can mutate metadata before validation and erase prior composition on failure.** `src/app/api/outfits/[id]/route.ts:57–98` updates metadata, validates garments, then deletes/inserts composition; create compensation is also unchecked (`src/app/api/outfits/route.ts:89–109`). Re-saving cannot reconstruct discarded server state. OUT-20 (ASTRA-OUT-1) proposes an atomic save boundary after current owner APPLIED evidence; no migration is applied by this study.
-- ⚪ **Server-side background removal is the clean end-state** but is not built — it would also fix the ~40–80 MB per-device model download and the on-device compute that caused the original "slow" complaint.
+The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
+
+## Acceptance Criteria Index
+
+### OUT-19
+
+**Outcome:** Verify Outfits deployment, privacy and both-phone behavior.
+
+- **Acceptance:** *(bundled into the Phase-0 owner day, packet **E-00**, of the [ERA Top Layer — Master Plan](<../_Archive/Plans/ERA Top Layer — Master Plan (2026-09-02).md>) — its pass/fail gates whether **M-08**/OUT-7 runs in Phase 3)* (Phase 1) Real-phone acceptance: owner verifies core migration APPLIED evidence and applies only missing reviewed SQL, then photo → cutout → tagged garment in the grid in under a minute with ONE batch signed-URL request per screen; measure the first-use model download on a real network
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Outfits/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### OUT-7
+
+**Outcome:** Expand outfit generation parts.
+
+- **Acceptance:** *(packet **M-08** of the [ERA Top Layer — Master Plan](<../_Archive/Plans/ERA Top Layer — Master Plan (2026-09-02).md>); plan sacrifice #2, only runs if OUT-19 passed)* (Phase 2) Widen `GenerateOptions` parts to accept `inlineData` image parts (non-breaking; repo-wide typecheck is the proof) → `src/lib/ai/gemini.ts`
+- **Depends on:** [OUT-19](<Outfits — Master Book.md#out-19>).
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Outfits/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### OUT-8
+
+**Outcome:** Offer editable AI garment tags.
+
+- **Acceptance:** `tag-garment` route (enum-constrained JSON via `generateContentWithFallback`, Zod-parsed, 429→cooldown) + Auto-tag button with `timeoutMs: 60_000` pre-filling editable form fields
+- **Depends on:** [OUT-19](<Outfits — Master Book.md#out-19>).
+
+- **Acceptance:** auto-tag pre-fill works end-to-end into editable fields; a forced 429 shows the cooldown toast with manual tagging unaffected; a repo-wide typecheck proves no existing Gemini caller regressed.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Outfits/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### OUT-20
+
+**Outcome:** Save outfits and membership atomically.
+
+- **Acceptance:** Save an outfit and its garment membership atomically so a failed edit preserves the previous composition.
+
+**Retained contract — ASTRA-OUT-1:**
+
+- **Outcome:** A rejected or failed save leaves the previous outfit metadata and composition intact.
+- **Boundary:** Keep existing Zod/response contract. One authenticated transaction validates all garments, updates/creates metadata and replaces composition; lock an existing outfit before replacement. Enforce the authenticated owner inside the boundary, never a caller-supplied owner or household expansion. Failure rolls back all writes. Preserve slot uniqueness and existing deletion semantics. Reuse a current equivalent DB function if owner evidence reveals one. Do not add a generic outfit service or change image upload.
+- **Money/schedule math?:** No. Integrity fixture: saved metadata A with garments [g1,g2] + invalid g3 or injected insert failure → metadata A and [g1,g2] remain; valid save B/[g2,g4] → both change together. Foreign-owner garments fail without mutation.
+- **Gate:** `pnpm exec vitest run tests/outfit-save.test.ts --reporter=verbose` → nonzero route cases for auth, validation, one atomic call, failure and success pass; common gates. Owner-run DB transaction/concurrent-save fixture from the migration must separately prove rollback, scope and no mixed composition. A mock RPC success does not prove atomicity. OUT-19 phone save→reopen capture at390×844 demonstrates the preserved response shape.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Outfits/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### OUT-12
+
+**Outcome:** Store outfit plans and reversible wear records.
+
+- **Acceptance:** Migration C — `outfit_plans` (unique per user+date) + reversible `set_outfit_plan_worn` SECURITY DEFINER RPC, paired `schema.sql`; review the authored [Overview §4](<../../02 - Standalone Modules/Outfits/Overview.md>) runbook's locking and inverse assumptions before owner application. Current deployment is UNVERIFIED; do not silently amend the accepted wear-stat approximation.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Outfits/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### OUT-13
+
+**Outcome:** Plan one outfit per day.
+
+- **Acceptance:** OutfitPlannerCalendar (one-slot-per-day clone) + plans routes (409-upsert on date collision) + PlanOutfitSheet with the amber no-repeat banner ("Last worn … at …, worn N×"; warns, never blocks) → `src/components/web/WebMealPlanCalendar.tsx`
+- **Depends on:** [OUT-12](<Outfits — Master Book.md#out-12>).
+
+- **Acceptance:** dragging an outfit onto a day plans it; the "last worn" banner appears when applicable; a duplicate-date POST returns 409 and the client upserts.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Outfits/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### OUT-14
+
+**Outcome:** Mark worn with a reversible history update.
+
+- **Acceptance:** Mark-worn flow — status pill → RPC, Undo toast drives `p_worn=false`; wear stats surfaced on garments and outfits
+- **Depends on:** [OUT-12](<Outfits — Master Book.md#out-12>), [OUT-13](<Outfits — Master Book.md#out-13>).
+
+- **Acceptance:** mark-worn increments the outfit and item counters and Undo decrements them via `p_worn=false`.
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Outfits/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### OUT-15
+
+**Outcome:** AI try-on.
+
+- **Acceptance:** AI try-on — photorealistic "me wearing this outfit" via Gemini image generation (sizing profile + cutouts as inputs)
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Outfits/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### OUT-16
+
+**Outcome:** AI outfit suggestions + weather-aware planning.
+
+- **Acceptance:** AI outfit suggestions + weather-aware planning
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Outfits/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### OUT-17
+
+**Outcome:** Trips packing-list bridge + cost-per-wear analytics bridge to Budget.
+
+- **Acceptance:** Trips packing-list bridge + cost-per-wear analytics bridge to Budget
+
+**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Outfits/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+### OUT-21
+
+**Outcome:** Resolve complete image signing above 100 garments.
+
+- **Acceptance:** Held for DEC-08: reconcile the one-request requirement with a complete signed-URL result over100 images. Choose bounded batches or a genuine complete single response, then verify privacy and paging.
+- **Depends on:** [OUT-19](<Outfits — Master Book.md#out-19>).
+
+**Provenance:** [Outfits — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Outfits/Outfits — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+### OUT-22
+
+**Outcome:** Resolve garment deletion and restoration.
+
+- **Acceptance:** Held for DEC-09: decide archive/delete semantics and implement a real identity-preserving Undo with outfit membership/reference checks. OUT-20 atomic outfit save does not supply garment restoration.
+
+**Provenance:** [Outfits — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Outfits/Outfits — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
 ## Shipped Log
 
@@ -63,72 +175,12 @@ Greenfield on 2026-07-17; the catalog and builder shipped together on 2026-07-18
 - ✅ 2026-07-19 — **OUT-18** standalone installable PWA: own manifest (`/manifests/outfits.webmanifest`, id `/outfits-app`, scope `/outfits`), generated icons, layout metadata, wired into `scripts/generate-icons.cjs`. The same pass added Healthcare + ERA manifests/icons/layouts. *(These three plus PM cannot install on-device until the root `manifest.json` `scope: "/"` collision is resolved.)*
 - ✅ 2026-07-19 — on-device background removal fixed after the real-phone test — see the CSP case study below
 
-### Case study: the on-device cutout CSP chain (2026-07-19)
-
-The real-phone D2 test surfaced `removeGarmentBackground` failing every retry. **Four stacked root causes**, each invisible in the thrown error:
-
-1. onnxruntime-web's WASM backend does a nested dynamic `import()` of a `blob:` module, governed by CSP **`script-src`** (not `worker-src`) — silently blocked. Fixed by adding `blob:` + `'wasm-unsafe-eval'`.
-2. `@imgly/background-removal`'s only WASM build **unconditionally** allocates `WebAssembly.Memory({shared: true})`, which needs `SharedArrayBuffer` and therefore cross-origin isolation. There is no non-shared-memory fallback build, so a JS-side thread-count workaround (tried, reverted) cannot work. `COOP: same-origin` was already set; added **`Cross-Origin-Embedder-Policy: credentialless`** (not `require-corp`, to avoid breaking Supabase Storage images and Google Fonts that lack CORP headers). Verified safe against Google Calendar OAuth first — that flow is a full-page redirect, so `window.opener` is never in play.
-3. The ORT WASM loader wraps the fetched binary in a `blob:` URL and re-fetches it to feed the streaming compiler, governed by **`connect-src`** — added `blob:` there too.
-4. Production then threw an `'unsafe-eval'` violation traced (by grepping the actual bundles) not to ORT but to imgly's bundled `ndarray` dep, which generates array accessors via `new Function(...)`. No flag or header avoids it. **Owner decision: accept `'unsafe-eval'`** — marginal added risk given `'unsafe-inline'` was already present and this is a personal household app.
-
-**Lessons worth carrying:** the library needs FOUR CSP grants (`script-src` `blob:` + `'wasm-unsafe-eval'` + `'unsafe-eval'`, `connect-src` `blob:`) plus cross-origin isolation. Its thrown errors ("Failed to create session", "no available backend found", "Failed to fetch") are all generic — **the actual cause only appears in the browser's separate CSP-violation console lines.** On-device cutout is best-effort by design; if the CSP/isolation cost ever outweighs it, server-side is the clean exit.
-
 ## Delivery session log
 
 *(Delivery runner appends dated progress bullets here automatically.)*
 
-## Vision & Decisions
-
-### Locked v1 decisions (owner-approved 2026-07-17 — full rationale in Overview §2)
-
-- **D1 — 2D paper doll**, not a 3D avatar, not AI-try-on-as-core. Cutouts stacked in slots, per-slot swipe. *(IMPLEMENTED 2026-07-18)*
-- **D2 — Sizing profile only** (height/weight/sizes/fit notes); no body rendering. *(IMPLEMENTED 2026-07-18)*
-- **D3 — v1 = catalog → builder → planner → wear log**, phased in that order. *(AMENDED 2026-07-18 by owner: catalog + builder shipped together; AI-tag deferred behind them; planner unchanged as Phase 4)*
-- **D4 — Personal per user**; no household sharing (a deliberate Hard-Rule-13 deviation).
-- **D5 — Free tools, small images** — client WebP compression, on-device background removal, paths-not-base64, private bucket.
-- **D6 — No offline write queue in v1.**
-
-### The call
-
-**Ship the catalog first; the paper doll is worthless until clothes are digitized.** The entire module hinges on one loop being pleasant: photo → cutout → tagged garment in under a minute. That loop carries all the infrastructure (bucket, pipeline, batch signed URLs). Everything after is composition and bookkeeping on clean data. **AI is deliberately an accelerator on manual tagging, never a dependency** — quota exhaustion must cost zero functionality. The planner is last because it is the most template-derived (a meal-plan clone) and needs outfits to exist.
-
-### Dream backlog (no commitments)
-
-- **AI try-on** — photorealistic "me wearing this outfit" via Gemini image generation; the app already holds the sizing profile + cutouts as inputs. The "cool" layer, deferred until the core loop is solid.
-- **AI outfit suggestions** — "suggest an outfit for a smart-casual dinner, 24 °C" from the tagged wardrobe.
-- **Weather-aware planning** — forecast per day, warn on season/formality mismatch.
-- **Trips bridge** — generate a packing list from planned outfits for a trip's date range.
-- **Multiple accessories per outfit** — drop the `UNIQUE(outfit_id, slot)` constraint for the accessory slot.
-- **`fullbody` slot** — dresses/jumpsuits occupying top+bottom simultaneously.
-- **Cost-per-wear analytics** — link garments to purchase transactions; `price / times_worn` leaderboard (bridge to Budget).
-- **ERA Hub integration** — "what should I wear today?" answered from the day's plan.
-
-### Claude Design support (parked runbook)
-
-Use Claude Design only for **visuals outside the app** — paper-doll proportions, `SlotSwiper` cell states, garment card styles, segmented controls and chips across the four themes. **Never for behaviour** (scroll physics, decode-before-swap, haptics) — those only exist in the real app.
-
-Runbook: build a local card bundle in `design-system/outfits/` (one self-contained HTML file per card, first line `<!-- @dsCard group="Outfits" -->`, inlined CSS copying the real tokens from `src/app/globals.css`) → `DesignSync list_projects` → `finalize_plan` (writes = `design-system/outfits/**`) → `write_files`, component-at-a-time, never wholesale. Iterate in the design pane, then **port the winner back by hand** into `src/components/outfits/*` — the sync is one-way inspiration, not codegen. The app repo stays the source of truth; any visual decision that changes a component gets a normal PM trace.
-
-## Acceptance Criteria Index
-
-### OUT-8
-- **Acceptance:** auto-tag pre-fill works end-to-end into editable fields; a forced 429 shows the cooldown toast with manual tagging unaffected; a repo-wide typecheck proves no existing Gemini caller regressed.
-
-### OUT-13
-- **Acceptance:** dragging an outfit onto a day plans it; the "last worn" banner appears when applicable; a duplicate-date POST returns 409 and the client upserts.
-
-### OUT-14
-- **Acceptance:** mark-worn increments the outfit and item counters and Undo decrements them via `p_worn=false`.
-
 ## Successor Briefing
 
-**STOP and re-read [Overview §10](<../../02 - Standalone Modules/Outfits/Overview.md>) if you are about to:** reuse `compressReceiptImage` for cutouts (JPEG flattens alpha) · top-level-import `@imgly/background-removal` · store base64 or signed URLs in DB columns · join `household_links` in any outfits route · write an EXISTS-subquery RLS policy · let AI write tags without user confirmation · call `tag-garment` without `timeoutMs: 60_000` · ship a toast without Undo.
+Read the checklist, the selected acceptance entry and its dependencies; then use the [Feature Map](<../../01 - Architecture/Feature Map/_index.md>) for source routing and the module architecture docs for invariants. Delta from the source cutoff before implementation. Use current owner-supplied DB evidence for access/application questions; agents never apply production SQL. Record code, applied migration and device/runtime acceptance separately.
 
-**Definition of done for every phase:** `finish-task` clean (typecheck/lint), migration ↔ `schema.sql` paired, Atlas current, checklist ticked and this book's Shipped Log stamped.
-
-## Pointers
-
-- Working queue: [4 · Checklist](<4 - Checklist.md>) · conventions: [_Conventions](<../_Conventions.md>)
-- Design + implementation truth: [Outfits / Overview](<../../02 - Standalone Modules/Outfits/Overview.md>)
-- Pre-consolidation originals: `../_Archive/Outfits/`
+Finish with the repository playbook and [governance](<../_Conventions.md>): update acceptance/evidence, sweep only completed work, and validate the canonical queue. A completed child does not complete its coordination parent.

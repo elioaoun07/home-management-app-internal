@@ -9,7 +9,7 @@ tags: [pm/roadmap, tooling/pm-dashboard]
 
 # PM Dashboard Refactor · 2 — Vision & Roadmap
 
-> **Command Center:** [\_index](_index.md) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [\_index](_index.md) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../PM Tooling/4 - Checklist.md>)
 
 ## Remaining cutover work
 

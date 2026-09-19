@@ -11,9 +11,9 @@ tags:
 
 # Outfits · 1 — Feature State
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Outfits/4 - Checklist.md>)
 >
-> **What this file is:** the _honest, no-hype_ state of every Outfits sub-feature. **Greenfield module (2026-07-17): nothing is implemented.** The design, however, is complete and owner-locked — see [Outfits / Overview](<../../02 - Standalone Modules/Outfits/Overview.md>). As phases ship, stamp items here `✅ YYYY-MM-DD` per [_Conventions](<../_Conventions.md>) §3.
+> **What this file is:** the _honest, no-hype_ state of every Outfits sub-feature. **Greenfield module (2026-07-17): nothing is implemented.** The design, however, is complete and owner-locked — see [Outfits / Overview](<../../../02 - Standalone Modules/Outfits/Overview.md>). As phases ship, stamp items here `✅ YYYY-MM-DD` per [_Conventions](<../../_Conventions.md>) §3.
 
 ---
 
@@ -53,4 +53,4 @@ tags:
 
 ## Related code (single source of truth)
 
-Do **not** duplicate file-path tables here. The authoritative design + (future) code map is [Outfits / Overview](<../../02 - Standalone Modules/Outfits/Overview.md>).
+Do **not** duplicate file-path tables here. The authoritative design + (future) code map is [Outfits / Overview](<../../../02 - Standalone Modules/Outfits/Overview.md>).

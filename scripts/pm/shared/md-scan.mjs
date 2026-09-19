@@ -31,7 +31,8 @@ function scanCore(raw, classify) {
       lines.push(classify(rawLine, index, "in-fence", { inFence: true }));
       continue;
     }
-    const checkbox = rawLine.match(/^(\s*)(?:[-*]|\d+\.)\s+\[([ xX])\]\s?(.*)$/);
+    // Keep raw bytes/line positions, but do not let a CRLF terminator hide a row.
+    const checkbox = rawLine.replace(/\r$/, "").match(/^(\s*)(?:[-*]|\d+\.)\s+\[([ xX])\]\s?(.*)$/);
     if (checkbox) {
       lines.push(classify(rawLine, index, "checkbox", {
         indent: checkbox[1].length,

@@ -11,7 +11,7 @@ tags:
 
 # Budget · 1 — Feature State
 
-> **Command Center:** [\_index](_index.md) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [\_index](_index.md) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Budget/4 - Checklist.md>)
 >
 > **What this file is:** the _honest, no-hype_ state of every Budget sub-feature — what exists, how mature it is, and the single most useful next step. **No imagination here** (that's file 2).
 >
@@ -55,10 +55,10 @@ tags:
 
 Do **not** duplicate file-path tables here — they drift. The authoritative code maps live in the per-module vault docs:
 
-- [Accounts & Balance / Overview](<../../02 - Standalone Modules/Accounts & Balance/Overview.md>) (+ `Balance System.md`, `Default Account.md`, `Income Expense System.md`)
-- [Transactions / Overview](<../../02 - Standalone Modules/Transactions/Overview.md>) (+ `Voice Draft Transactions.md`, `Expense Form Design Guide.md`)
-- [Categories / Overview](<../../02 - Standalone Modules/Categories/Overview.md>) · [Recurring Payments / Overview](<../../02 - Standalone Modules/Recurring Payments/Overview.md>)
-- [Budget Allocation](<../../02 - Standalone Modules/Budget Allocation/>) · [Transfers](<../../02 - Standalone Modules/Transfers/>) · [Statement Import](<../../02 - Standalone Modules/Statement Import/>) · [Analytics](<../../02 - Standalone Modules/Analytics/>) · [Debts](<../../02 - Standalone Modules/Debts/>) · [Future Purchases](<../../02 - Standalone Modules/Future Purchases/>) · [Drafts](<../../02 - Standalone Modules/Drafts/>)
+- [Accounts & Balance / Overview](<../../../02 - Standalone Modules/Accounts & Balance/Overview.md>) (+ `Balance System.md`, `Default Account.md`, `Income Expense System.md`)
+- [Transactions / Overview](<../../../02 - Standalone Modules/Transactions/Overview.md>) (+ `Voice Draft Transactions.md`, `Expense Form Design Guide.md`)
+- [Categories / Overview](<../../../02 - Standalone Modules/Categories/Overview.md>) · [Recurring Payments / Overview](<../../../02 - Standalone Modules/Recurring Payments/Overview.md>)
+- [Budget Allocation](<../../../02 - Standalone Modules/Budget Allocation>) · [Transfers](<../../../02 - Standalone Modules/Transfers>) · [Statement Import](<../../../02 - Standalone Modules/Statement Import>) · [Analytics](<../../../02 - Standalone Modules/Analytics>) · [Debts](<../../../02 - Standalone Modules/Debts>) · [Future Purchases](<../../../02 - Standalone Modules/Future Purchases>) · [Drafts](<../../../02 - Standalone Modules/Drafts>)
 - Schema source of truth: `migrations/schema.sql` (Finance domain tables). Balance direction: `src/lib/balance-utils.ts`.
 
 ---
@@ -71,4 +71,4 @@ _(Updated 2026-07-13)_
 2. **Bridges are mostly one-directional.** Recurring due-dates, debt collection dates, and future-purchase completions are facts that _also_ live (or should) in Schedule / Transactions — see file 2.
 3. ✅ 2026-07-21 (`src/lib/accountAccess.test.ts`) Household transfers now authorize a visible private partner account only as the destination of an explicit household transfer; ordinary partner account writes remain public-only.
 
-→ The growth opportunities are in [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>); the concrete next steps are in [3 · Action Plan](<3 - Action Plan.md>); the checkable list is [4 · Checklist](<4 - Checklist.md>).
+→ The growth opportunities are in [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>); the concrete next steps are in [3 · Action Plan](<3 - Action Plan.md>); the checkable list is [4 · Checklist](<../../Budget/4 - Checklist.md>).

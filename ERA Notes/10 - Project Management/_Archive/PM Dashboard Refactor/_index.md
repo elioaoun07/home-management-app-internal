@@ -16,7 +16,7 @@ tags: [pm/index, tooling/pm-dashboard]
 | 1 | [Feature State](<1 - Feature State.md>) | You need shipped reality and evidence. |
 | 2 | [Vision & Roadmap](<2 - Vision & Roadmap.md>) | You need decisions and remaining polish. |
 | 3 | [Action Plan](<3 - Action Plan.md>) | You need the implementation sequence. |
-| 4 | [Checklist](<4 - Checklist.md>) | You are executing or validating a phase. |
+| 4 | [Checklist](<../../PM Tooling/4 - Checklist.md>) | You are executing or validating a phase. |
 
 ## Scope contract
 

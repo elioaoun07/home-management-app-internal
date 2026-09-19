@@ -1,203 +1,152 @@
 ---
 created: 2026-07-15
-updated: 2026-09-06
+updated: 2026-09-12
 type: reference
 status: living
 owner: Elio
-tags:
-  - pm/reference
-  - pm/conventions
 ---
 
-# PM Command Center — Item Conventions
+# PM Knowledge System — Conventions
 
-> **What this file is:** the single grammar every campaign checklist item and done-stamp follows, so the `pnpm pm` Task board can show all campaigns in one consolidated view and you can jump item → item. **Enforced by `pnpm pm:lint`.** The parser homes are `scripts/pm/shared/tasks.mjs` (dashboard) and `scripts/delivery/packet.mjs` (delivery) — change both in lockstep if the grammar ever moves.
->
-> **Campaign layout (amended 2026-09-06):** every campaign root holds exactly two files — `<Campaign> — Master Book.md` (state, shipped log, pains, vision, acceptance criteria, successor briefing) and `4 - Checklist.md` (the working queue). The sanctioned `ASTRA/` subfolder holds the study pair (§8). Everything superseded lives in `_Archive/`, which no PM tool scans.
+The campaign checklists together are **one implementation backlog**. Work contains actionable changes, investigations and automated verification. Manual owner acceptance belongs in a UAT document, never in the Deliver queue.
 
----
+## 1. Checklist item
 
-## 1. Checklist item (in `<Campaign>/4 - Checklist.md` only)
+Only `<Campaign>/4 - Checklist.md` owns pending work:
 
-```
-- [ ] **PREFIX-n** Clear, verifiable outcome → target _(severity - effort)_
+```md
+- [ ] **BUD-67** Verify the transfer migration and owner acceptance → [Scope](<Budget — Master Book.md#bud-67>) _(blocker - S)_
 ```
 
-- **`- [ ]` / `- [x]`** — open / done. Indent 0, directly under a lane heading. Sub-points are plain `-` bullets, never nested checkboxes (a nested `- [ ]` becomes its own board task with no lane).
-- **`**PREFIX-n**`** — the ID chip. `PREFIX` is the campaign's (table below); allocate above the highest integer already used anywhere in that campaign's whole Master Book and checklist, including history and references. Sub-items of a shipped parent use `.n` (`SCH-1c.1`); variants use a trailing lowercase letter (`SCH-4.3b`). IDs are **never reused**. **PM Tooling overrides the hyphenated example:** its grandfathered IDs are `R` immediately followed by digits, such as `R51`; `R-51` fails linter rule E4.
-- **body** — the outcome, phrased so "done / not done" is unambiguous. Provenance goes in parentheses at the **start** of the body (`(Phase 4) Universal placement-rule guard test …`), never in the meta suffix.
-- **`→ target`** (optional) — where the work lives:
-  - a doc: `→ [Trips Overview](<../03 - Junction Modules/Trips/Overview.md>)` (angle-bracket relative markdown link — resolve from the containing document; this example is relative to this conventions file)
-  - code: `` → `src/app/api/cron/daily-items-reminder/route.ts` `` (backticked repo-relative path, optional `:line` — renders as a source-preview chip)
-- **`_(severity - effort)_`** — required trailing meta. Exactly one space – hyphen – space between the two words.
-
-### Vocabulary
-
-| Severity | Meaning | Feature-State emoji |
-|---|---|---|
-| `blocker` | must fix; blocks the campaign | 🔴 |
-| `friction` | real drag on daily use | 🟠 |
-| `annoyance` | minor; would be nice | 🟡 |
-| `parked` | deferred on purpose | ⚪ |
-
-| Effort | Rough size |
-|---|---|
-| `S` | ≤ half a day |
-| `M` | 1–2 days |
-| `L` | 3+ days |
-
-**No ranges** (`S-M` is invalid — round **up** to `M`). **No `H`** (the parser never understood it — use `L`). Severity is **always** a lowercase word, never an emoji, inside the meta tag.
-
-**ASTRA sizing is narrower (§8):** both S and M execution sheets must fit one 2–4-hour session; no ASTRA L sheets. The general M estimate above remains 1–2 days for the broader repository queue. A packet that cannot meet the ASTRA session limit must be split before dispatch, even when its parent is M or L.
-
-### Valid / invalid
-
-```
-✅  - [ ] **NOTIF-1.2** Update the cron to the new type → `src/app/api/cron/daily-items-reminder/route.ts` _(blocker - S)_
-✅  - [x] **BUD-1** Merchant-match voice drafts _(annoyance - S)_
-✅  - [ ] **SCH-1c.1** (Phase 1c) Wire one-line → structured item via Gemini _(friction - M)_
-
-❌  - [ ] **N1** … _(🔴 · M)_          emoji + middle-dot in meta
-❌  - [ ] **1.2** …  _(S)_             no campaign prefix; severity missing
-❌  - [ ] **BUD-3** … _(annoyance - S-M)_   effort range
-❌    - [ ] nested under a lane item    nested checkbox
-```
-
----
+- One verifiable outcome, one owning campaign, one lifetime ID. Use a short title; keep detailed acceptance, evidence, dependencies and provenance in the Master Book's matching ID section.
+- Allocate above the highest number used in the campaign's checklist, book, archived history and recorded aliases. Never reuse a completed, cancelled or merged ID. `R51`, without a hyphen, is the PM Tooling exception.
+- Use top-level checkboxes only. Supporting bullets are plain text. No task checkboxes in plans, research, Master Books or navigation. Inbox `New` captures are the sole exception.
+- End with exactly `_(severity - effort)_`. Severity: `blocker` (prevents safe progress), `friction` (daily drag), `annoyance` (minor), `parked` (intentionally deferred). Effort: `S` (small bounded change), `M` (one coherent implementation slice), `L` (split before dispatch). No ranges. Re-estimate against current scope before dispatch; accepted execution sheets may impose a tighter timebox.
+- A large parent can own several bounded execution sheets. Record their sequence and acceptance under that parent; completion of one sheet never completes the parent. Split independently valuable outcomes into distinct IDs when useful.
+- `HELD — <decision ID or prerequisite>` means recorded work with no dispatch eligibility. Severity is not permission, priority is not a calendar promise, and age is not evidence of completion.
 
 ## 2. Lanes
 
-Exactly one each, H2, this exact text, in this order:
+Exactly these H2 headings, once each and in order:
 
-```
-## Now      — in flight / next up this cycle
-## Next     — queued after Now clears
-## Later    — real but deferred
-## Definition of Done   (optional, after Later)
-```
-
-- **No headings inside a lane.** Any heading resets the board's section, so phase/round context is written as a **bold paragraph** (`**Phase 4 — foundational hardening** *(carried)*`) or a `> ⚠️ …` blockquote, never as `###`.
-- **Definition of Done** items use `**D1**, **D2**, …` (prefix-exempt; they stay off the board by design).
-- **No `## Done` lane.** Sweep instead: tick `[x]`; the record moves to the campaign's **Master Book › Shipped Log** with a dated stamp (§3) and the checklist line is deleted. Git history + the Shipped Log are the archive. **The sweep is automated — see §2.1.**
-
-### 2.1 Sweep & discard (automated)
-
-Two ways an item leaves a checklist. Both are reversible.
-
-| Action | Where the item goes | How to trigger |
-|---|---|---|
-| **Ship** (item is `[x]`) | Master Book › **Shipped Log**, `- ✅ YYYY-MM-DD — **ID** text` (§3) | 🗄 icon on the checklist row / **Ship** on the task card · `pnpm pm:archive` · the monthly auto-sweep |
-| **Discard** (any state) | `_Archive/Cancelled Log.md`, under a `## <Campaign>` heading, `- ❌ YYYY-MM-DD — **ID** text _(cancelled: reason)_` | 🚫 icon on the checklist row / **Discard** on the task card |
-
-- **Monthly auto-sweep.** The first `pnpm pm` boot of each calendar month ships every ticked item in every `4 - Checklist.md`, then stamps `.pm/archive-stamp.json` (gitignored) so it runs once per month. The console prints what moved.
-- **Dates are git-derived, not "today".** Each swept line is binary-searched through the checklist's recent history for the commit where it first appears as `[x]`, so a monthly sweep doesn't flatten four weeks of work onto the 1st. Uncommitted ticks (and anything git can't answer) fall back to today.
-- **Definition of Done items are never swept.** `**D1**, **D2**, …` are acceptance criteria: ticking one records a fact about the campaign, so the sweep skips that lane entirely.
-- **Undo.** The dashboard shows an Undo toast that restores every touched file byte-for-byte (including deleting a Cancelled Log the first Discard created). For the CLI/auto sweep: `pnpm pm:archive --undo`. Preview first with `pnpm pm:archive --dry-run`.
-- **Cancelled work is invisible to tooling, not lost.** `_Archive/` is skipped by `scan.mjs`, so a discarded item leaves the board, the burndown and the linter — but stays readable, greppable, and one Undo (or one `git revert`) from coming back.
-- Engine: `scripts/pm/archive.mjs` (pure helpers + fs ops + CLI), server ops `ship` / `discard` / `restore` in `scripts/pm-server.mjs`, tests in `tests/pm-ui/archive.test.ts`.
-
----
-
-## 3. Shipped Log stamp (in `<Campaign> — Master Book.md`)
-
-```
-✅ YYYY-MM-DD
-✅ YYYY-MM-DD (`src/lib/balance.test.ts`)     ← with evidence
+```md
+## Now
+## Next
+## Later
 ```
 
-One space after `✅`, ISO date, optional backticked evidence path in parentheses. Shipped Log lines carry the ID chip too — `- ✅ 2026-07-18 — **BUD-12** deleted the debug routes` — so the burndown can attribute them.
+**Now:** the next executable slice. **Next:** committed follow-on work, in dependency order. **Later:** deferred improvements, conditional work and unresolved design choices. Keep Now short (normally up to three outcomes per campaign); list any necessary exception in its header. Do not promote a blocked dependent because it is severe.
 
-Three formats in a Master Book are **parser-load-bearing**, so keep them exactly:
+Use bold paragraphs for grouping within lanes; deeper headings reset the parser's lane. Empty lanes are valid; a lint W2 warning is not a reason to invent work. Campaign-wide acceptance belongs in the book as plain bullets, not duplicate `D1` tasks. Legacy `## Definition of Done` is parser-supported but no longer used for new checklists.
 
-| Section | Format | Read by |
-|---|---|---|
-| `## Shipped Log` | `- ✅ YYYY-MM-DD — **ID** text` | the completion-history snapshot (velocity / burndown) |
-| `## Pain Inventory` | bullets with an **emoji** severity lead (`🔴 🟠 🟡 ⚪`) at line start | the Bugs view + per-campaign rollups |
-| `## Acceptance Criteria Index` | `### <ID>` followed by `- **Acceptance:** …` bullets | the delivery flight check's pre-launch criteria |
+### 2.1 Completion, merge and cancellation
 
-In the Master Book's **Vision & Decisions** section, a realized decision is marked `*(IMPLEMENTED YYYY-MM-DD)*` (Hard Rule 25).
+| Disposition | Record |
+|---|---|
+| Completed | Tick, verify, then sweep to the book's `## Shipped Log`; remove the checklist line. |
+| Merged/renamed | Remove the duplicate checkbox immediately. In the book's `## Backlog reconciliation`, record old ID → surviving ID, date and preserved scope. This is not shipped work. |
+| Already completed elsewhere | Link the original shipped evidence and remove the stale checkbox. Do not claim a new implementation or fabricate today's completion date. |
+| Cancelled | Record original ID, outcome, date and reason in `_Archive/Cancelled Log.md`; remove the checkbox. |
+| Owner acceptance only | Remove the Delivery checkbox; retain its ID and scope in the book with `**Execution:** owner`, and link the pending UAT row. This is neither completed implementation nor cancellation. |
+| Uncertain | Keep a bounded executable investigation when code evidence is needed; put owner-only evidence requests in UAT. Never guess completion. |
 
----
+`pnpm pm:archive --dry-run` previews completed-item sweeps; `pnpm pm:archive` applies them; `--undo` restores the last sweep. The dashboard Ship/Discard actions use the same engine. On the first `pnpm pm` boot of a month, completed lines are swept automatically. Dates come from git when available, otherwise today. Review before a sweep: `[x]` means the recorded implementation scope is complete and verified. Owner UAT, deployment and manual SQL application have separate statuses; pending acceptance does not reopen completed implementation. Split remaining engineering into a precise follow-up before completing a broad item. The CLI's file restoration is not a substitute for checking later edits before Undo.
 
-## 4. Cross-campaign references
+## 3. Master Books and sources of truth
 
-Link by name **and** cite the target ID in prose:
+| Information | Canonical home |
+|---|---|
+| Pending scope, priority, ownership and task identity | Campaign `4 - Checklist.md` |
+| Purpose, dated state, active pains, decisions, acceptance, handoff, shipped evidence | Campaign `<Campaign> — Master Book.md` |
+| Cross-campaign unresolved owner choices | `_Decisions.md`, with affected task IDs |
+| Accepted multi-campaign design and sequencing constraints | `Plans/`; each packet maps to a campaign ID |
+| Unadopted options, hypotheses and experiment admission | `Research/Options.md`; original evidence linked from `_Archive/` |
+| Raw thoughts | `0 - Inbox.md` › New |
+| PM rules and reusable forms | This file and `_Templates/` |
+| Product architecture, source routing and domain invariants | Feature Map and existing module vault docs outside PM |
+| Historical studies, superseded plans, cancelled work, refactor provenance | `_Archive/` |
+| Runtime/job state | The relevant runtime store; Markdown records intent and accepted outcomes, not invented runtime truth |
 
+Each campaign root has exactly two files: its book and checklist. Do not recreate ASTRA/FABLED generations, per-module roadmaps, independent action plans or status reports. Optional substantial research/specification belongs under the shared `Research/` or `Plans/` area only when it answers a distinct question the book cannot contain economically.
+
+Keep these parser contracts exact:
+
+```md
+## Shipped Log
+- ✅ 2026-09-10 — **R52** Outcome (evidence)
+
+## Pain Inventory
+- 🟠 **R53 — Observable problem.** Cause if known; dated evidence. No duplicate execution checkbox.
+
+## Acceptance Criteria Index
+### R53
+- **Acceptance:** Observable pass condition, including the failure case.
+
+## Delivery session log
 ```
-Coordinate with [Hub & ERA · 4 · Checklist](<../Hub & ERA/4 - Checklist.md>) (HUB-10).
-```
 
-IDs are per-campaign, so always name the campaign — `L1` alone is ambiguous across folders.
+**Lifecycle declarations:** `**Execution:** delivery` (default) or `owner`; `**Implementation:** done` for completed implementation; `**UAT:** pending` or an evidenced result. Owner checks never enter Work or dispatch. Completed implementation is swept to the Shipped Log and appears under Work > Done; this records local implementation, not deployment. `pm:check-docs` rejects owner-only rows and open rows marked implemented.
 
----
+Optional declared lines in a Master Book `### <ID>` section are read by tooling, never guessed: `**Kind:**` (feature, bug, maintenance, investigation or verification), `**Depends on:**` prerequisite IDs, and `**Touches:**` the repo-relative paths an item expects to change (`none` when it changes no file). Without a `Touches` line an item's scope is unknown, and Delivery V2 will not let it write beside another reserved change (DLV-106).
+
+State claims need an evidence date/cutoff and a distinction between source-present, fixture-verified, owner-applied and device-verified. `updated:` is the document maintenance date, never a new runtime certification. Maturity scores are optional historical measurements, not mandatory decoration. Do not copy source file inventories from the Feature Map.
+
+Keep open-item acceptance in the active index. Completed criteria can remain with shipped evidence or in history. Mark implemented decisions `*(IMPLEMENTED YYYY-MM-DD)*` only when evidence supports it. A pending owner migration or device check belongs in the UAT/runbook with an expected result and actual status, not an open Delivery item. Automated verification that an executor can perform remains actionable work.
+
+## 4. Cross-campaign work
+
+Choose the campaign that owns the outcome. Consumers link to that ID; they do not duplicate its checkbox. When producer and consumer can be accepted separately, create distinct outcomes and write `Depends on: <campaign/ID>` in their acceptance sections. Name both the campaign and ID in cross-links.
+
+Examples: Notifications owns shared delivery policy (NOTIF-19); Hub consumes it. Budget owns trip reconciliation matching/reporting; Trips owns its entry point. Schedule owns occurrence identity; ERA consumes its read/capture contract. PM Tooling owns documentation and PM surfaces; Delivery owns execution control. A new campaign is justified by durable ownership, not a new screen, an audit author or a research commission.
 
 ## 5. Campaign ID prefixes
 
-| Campaign folder | Prefix |
-|---|---|
-| `Budget/` | `BUD` |
-| `Schedule/` | `SCH` |
-| `Kitchen/` | `KIT` |
-| `Trips/` | `TRIP` |
-| `Hub & ERA/` | `HUB` |
-| `Notifications & Alerts/` | `NOTIF` |
-| `Healthcare/` | `HLTH` |
-| `PM Tooling/` | `R` (grandfathered) |
-| `Delivery/` | `DLV` |
-| `Outfits/` | `OUT` |
-| `Native App/` | `NAT` |
+| Campaign | Prefix | Scope |
+|---|---|---|
+| Budget | BUD | Accounts, transactions, transfers, recurring payments, debt, allocations, analytics, imports, money restore |
+| Schedule | SCH | Items, reminders, Plan My Day, chores, Focus, prerequisites and physical arrival/departure workflows |
+| Kitchen | KIT | Recipes, meals, inventory, shopping and shared Catalogue workflows |
+| Trips | TRIP | Travel lifecycle, planning, packing and trip-facing integrations |
+| Hub & ERA | HUB | Chat, assistant, voice, ERA top layer, guest entry, shared household/offline coordination |
+| Notifications & Alerts | NOTIF | Delivery policy, notification surfaces and calendar delivery/device verification |
+| Healthcare | HLTH | Health records, medications, privacy and medical catalogue/reminder integrations |
+| Outfits | OUT | Wardrobe, composition, outfit planning and wear |
+| PM Tooling | R | PM documents, governance, scanner/dashboard and documentation tooling |
+| Delivery | DLV | V1/V2 execution, evidence, qualification and result control |
+| Native App | NAT | Phone shells, native push, platform integration and watch surface follow-ons |
 
-**Grandfathered spelling:** PM Tooling uses `R1`, `R49`, `R51`, with no hyphen between prefix and integer. This exception takes precedence over §1's generic `PREFIX-n` notation; `scripts/pm/lint.mjs:124` rejects `R-51` with E4.
+`DW` is retired (Delivery Workspace); its shipped IDs remain reserved. The eleven campaign folders and prefixes must match `CAMPAIGNS` in `scripts/pm/lint.mjs`. Folder renames require updating every consumer and reference in the same change. Research labels such as E-05, S1.4, ASTRA-KIT-3, UU-X1 and BET-1 are source-local labels, not globally unique task IDs.
 
-`Native App/` registered 2026-09-02 — its `4 - Checklist.md` exists (created by the [ERA Top Layer — Master Plan](<ERA Top Layer — Master Plan (2026-09-02).md>)'s Phase-4 packets, N-00…N-05).
+## 6. Verification and maintenance
 
-**Retired prefixes (never reused):** `DW` (Delivery Workspace — merged into `Delivery`, 2026-07-30).
+- Run `pnpm pm:lint` for task grammar and `pnpm pm:check-docs` for structure, active links, duplicate identities and task acceptance.
+- Rebuild the local read-only view with `pnpm pm:dashboard` after structural PM changes. Hosted `/pm` is refreshed by its normal build; a local rebuild does not deploy it.
+- `_Archive/` and dot-folders are not scanned. The product Outcomes view explicitly reads only `_Archive/Cancelled Log.md` as read-only history; it never enters the scanned file list, search, backlog or dispatch. Template metadata is hidden by the normal view. Plans/research contain no task checkboxes and are never independent execution queues.
+- Before closing a work session, reconcile the touched campaign: shipped work, pending owner verification, open pains and links. Once a week, review Now, new Inbox captures, held decisions and old small tasks; check evidence before changing status.
+- A PM/tooling-only session names the product or operational outcome it unblocks. After two consecutive ordinary meta-only sessions, take a product session before more discretionary meta-work. Explicit owner commissions, including this knowledge-system refactor, are scoped exceptions; do not reinterpret them as permission to implement backlog features.
+- Keep useful delivery session summaries in the book. At campaign review, move closed session narratives older than 90 days to dated archive material if they obscure current state; retain shipped evidence, decisions, unresolved incidents and pointers. Do not alter live runtime retention from a documentation policy.
+- Editing `CLAUDE.md` requires `pnpm sync:ai`. Generated mirrors are not independently authored.
 
-The prefix table and `CAMPAIGNS` in `scripts/pm/lint.mjs` must agree. Renaming a campaign folder means editing both **and** every relative link that points into it, in the same pass.
+## 7. Idea Inbox
 
----
-
-## 6. Enforcement & tooling
-
-- **`pnpm pm:lint`** — validates the eleven checklists above: grammar, lanes, ID prefix + uniqueness, and that every `→` link resolves. Run it after editing any `4 - Checklist.md` (finish-task Gate E).
-- **`pnpm pm`** — the consolidated Task board / table. Every parseable item shows with ID / severity / effort chips, filterable (`m:Budget s:blocker is:open`), click-through to the exact doc line.
-- **`pnpm pm:archive`** — sweeps every ticked checklist item into its Master Book's Shipped Log (§2.1). `--dry-run` to preview, `--undo` to revert the last sweep. Runs automatically on the first `pnpm pm` boot of each month.
-- **`_Archive/` is never scanned by any PM tool.** The skip lives in `scripts/pm/scan.mjs`, so the server, the static build, the bridge and the linter all inherit it. Archived docs stay in git for history and `rg`, and are reachable by opening the file directly — they are simply not part of the corpus the tools see. Move a doc there when it is superseded rather than deleting it.
-- **Hidden layers** — any doc with frontmatter `status: superseded | baseline-frozen | template` is hidden from the board's default view (toggle "archived docs" to reveal). They are reference layers, not execution queues.
-
----
-
-## 7. Idea Inbox (`0 - Inbox.md`)
-
-The capture surface for raw, not-yet-canonical thoughts — ideas, bugs, checklist candidates in the owner's own words. **Exempt from `pnpm pm:lint`** (it is not a `4 - Checklist.md`); its grammar is deliberately loose:
-
-```
+```md
 ## New
-- [ ] YYYY-MM-DD — raw text in the owner's own words
+- [ ] YYYY-MM-DD — Original capture
 
 ## Processed
-- YYYY-MM-DD — original text → **BUD-15** in [Budget/4](<Budget/4 - Checklist.md>) (+ Feature State 🟠) (triaged YYYY-MM-DD)
+- YYYY-MM-DD — Original capture → **HUB-59**, or decision **DEC-01** (triaged YYYY-MM-DD)
 ```
 
-- **New** entries are checkboxes so they surface chip-less in the `pnpm pm` Task table — the visible untriaged queue. They never appear on the Task board (board = `4 - Checklist.md` files only).
-- Capture paths: write the line by hand, or the 💡 button in the dashboard topbar (server mode).
-- **Triage** is done by the `/triage-inbox` Claude Code skill (`.claude/skills/triage-inbox/SKILL.md`): it elaborates each entry (clarifying questions for bugs), files a canonical §1 item in the right campaign, adds a Feature State pain bullet for bugs, and moves the entry to **Processed** as a **plain bullet** (no checkbox — drops out of task views) keeping the original wording plus a `→` pointer to where it landed.
-- Processed is swept (deleted) past ~20 bullets, **only with owner approval** — git is the archive.
+Preserve the owner's wording. Search the active backlog, shipped history and aliases before allocating an ID. File a clear outcome into the owning checklist; add bug evidence to the book. For ambiguous intent, record the question in `_Decisions.md` and a linked held outcome if it is legitimate future work. Do not invent a product requirement. Move the capture to Processed with its destination; never retain both a raw checkbox and its canonical duplicate. New captures are not yet prioritized execution work.
 
----
+Processed entries may be moved, without deleting their wording or destination, to a dated archive receipt when they exceed 20 entries. Do not create a second active inbox. `/triage-inbox` follows these conventions; owner clarification is needed only where the answer changes the intended outcome.
 
-## 8. ASTRA studies (sanctioned 2026-09-06)
+## 8. Studies, plans and archive lifecycle
 
-The owner commissioned ASTRA as an enhancement layer subordinate to the [ERA Top Layer — Master Plan](<ERA Top Layer — Master Plan (2026-09-02).md>). It does not replace that execution contract or create another queue.
+Create a supporting document only for a named decision or a substantial accepted specification. Use `_Templates/Supporting Document.md`; name by subject (`Plans/Delivery V2.md`), not the author/model, audit wave, or dramatic project title. Include owner, evidence cutoff, canonical IDs, scope/non-goals and a retirement condition. A commissioning request authorizes research, not every feature proposed by it.
 
-Each of the eleven campaign roots retains exactly the two files described above. Its sanctioned `ASTRA/` subfolder contains exactly `<Campaign> — ASTRA Book.md` and `<Campaign> — ASTRA Packets.md`. The Book carries verified deltas, findings and held defects; Packets carries bounded proposed execution sheets. `Top Layer/` and `Command Center/` are cross-cutting study folders, **not campaigns**: neither gains a checklist or ID prefix. Their work lands in the existing owning campaign.
+Research ends with one explicit disposition per meaningful finding: incorporated into an existing ID, new accepted outcome, held decision, unadopted option, disproved, or superseded. Preserve the original source/label and the destination. Unadopted ideas stay discoverable in `Research/Options.md`; no speculative implementation gets a Now slot merely by appearing in a study.
 
-Every ASTRA document uses `type: astra-study`, `status: active`, `owner: Elio`, and ISO `created:` / `updated:` stamps (the initial landing is `2026-09-06`). Its header explicitly names the active plan as superior, separates the repository evidence cutoff from inspection/runtime evidence, and links its owning queue or studies. Active metadata makes the studies visible to PM tooling; it does not make their proposals executable. A Master Book's updated stamp records PM reconciliation, not a new runtime or DB verification date.
+When a study or plan has been incorporated, move its evidence to `_Archive/Studies/<subject>/` or its superseded plan to `_Archive/Plans/`. Update incoming and internal links. Canonical books and current plans carry the surviving constraints; archived prose cannot overrule them. Do not declare an old plan 'completed' just because its dates elapsed. Delete only empty scaffolding or byte-identical redundant output with traceable retention; preserve substantive history.
 
-**Execution remains in the existing Now / Next / Later lanes.** Do not add study checkboxes, another checklist, or a fourth lane. Every proposal maps to an existing plan/campaign ID or is marked `NEW`; a locked-decision conflict is recorded in the [Contradiction Register](<ASTRA — Contradiction Register.md>) and remains unresolved until the owner decides. Held work is not dispatch-approved. Every ASTRA S/M sheet must fit one 2–4-hour session, with dependencies, evidence gates and file boundaries honored; a completed child sheet does not tick a broader parent unless all of that parent's acceptance criteria are satisfied.
-
-**Phase 5 allocation record:** nine new canonical IDs were selected: BUD-63–BUD-66, HUB-57–HUB-58, SCH-7, HLTH-21 and OUT-20. Only BUD-66 and SCH-7 enter Next as concrete E-04/E-08/E-09 blockers; the other seven enter Later. Other refinements stay attached to existing parents or held in the study. Renaming the reused open PM Tooling R7 to **R51** repairs its identity; it is not a tenth new outcome. The competing CI use of R49 is absorbed by canonical **HUB-37 / E-01**. Historical records retain their original IDs and are cross-referenced rather than rewritten.
-
-**Delivery's freeze remains:** new delivery machinery waits for two real product completions under the existing DLV-92/DLV-93 gate. A study landing, lint pass or tooling child completion does not satisfy that gate. The [10x Portfolio](<ASTRA — 10x Portfolio.md>) is a ranked decision sheet, and [Coverage & Orphans](<ASTRA — Coverage & Orphans.md>) is an ownership map; neither authorizes dispatch or replaces the canonical lanes.
-
-**Proactive discovery study (owner-commissioned 2026-09-06):** [Proactive ERA](<Proactive ERA/Proactive ERA — Intelligence Model.md>) is a cross-cutting research folder containing the six artifacts explicitly requested in `docs/ASTRA-PROACTIVE-ERA-STUDY.md`: Intelligence Model, Signal & Knowledge Graph, Opportunity Portfolio, Silence/Trust/Intervention, Architectural Leverage and Experiments. This specific commission authorizes its six-file structure; it is not a campaign, checklist, prefix or new execution queue. Source defects receive dated Pain Inventory traces; proposed capabilities/experiments do not receive automatic tasks or capacity. Conflicts with standing decisions remain in the Contradiction Register until the owner decides.
+The 2026-09-10 consolidation receipt and manifest in `_Archive/2026-09-10 PM Refactor/` record predecessor paths, item dispositions and evidence. Future routine work needs ordinary book/Inbox provenance, not another global refactor report. Graphs and dashboards are derived navigation aids; confirm source identity and content before treating an edge or rendered status as evidence.

@@ -12,9 +12,9 @@ tags:
 
 # Budget - 3 - Action Plan
 
-> **Command Center:** [\_index](_index.md) - [1 - Feature State](<1 - Feature State.md>) - [2 - Vision & Roadmap](<2 - Vision & Roadmap.md>) - [3 - Action Plan](<3 - Action Plan.md>) - [4 - Checklist](<4 - Checklist.md>)
+> **Command Center:** [\_index](_index.md) - [1 - Feature State](<1 - Feature State.md>) - [2 - Vision & Roadmap](<2 - Vision & Roadmap.md>) - [3 - Action Plan](<3 - Action Plan.md>) - [4 - Checklist](<../../Budget/4 - Checklist.md>)
 >
-> **What this file is:** the why, and in what order for Budget - the strategic call and the candidate work as narrative. The flat, checkable version of this plan is [4 - Checklist](<4 - Checklist.md>); tick the boxes there.
+> **What this file is:** the why, and in what order for Budget - the strategic call and the candidate work as narrative. The flat, checkable version of this plan is [4 - Checklist](<../../Budget/4 - Checklist.md>); tick the boxes there.
 
 ---
 
@@ -54,12 +54,12 @@ after the recurring commitment pass; it is now the sharper remaining Budget
 entry-flow pain.
 
 **Later - Connect outward.** Open the Recurring -> Schedule due-date bridge
-(coordinate with [Schedule - 4 - Checklist](<../Schedule/4 - Checklist.md>)),
+(coordinate with [Schedule - 4 - Checklist](<../../Schedule/4 - Checklist.md>)),
 then the cashflow forecast -> ERA briefing - only after the core tests exist.
 Resist building the forecast before the core tests exist: a silent balance bug
 would hide there, and a forecast amplifies it.
 
-Every item above as a checkable line (with IDs, severity, effort): [4 - Checklist](<4 - Checklist.md>).
+Every item above as a checkable line (with IDs, severity, effort): [4 - Checklist](<../../Budget/4 - Checklist.md>).
 
 ---
 

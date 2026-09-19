@@ -27,7 +27,7 @@ Every module declares one of: `active` (campaign-owned) · `stable` (maintained,
 
 **Impact: Med · Effort: S after the reconciliation script**
 
-The [file 1](<1 - FABLED 2 — Current Implementation.md>) matrices, computed: doc? tests? campaign? LOC hotspots? last-touched? One dashboard table replacing hand-audits like this folder's. The FABLED 2 recon did it manually; the script makes it a button ([PM FABLED 2.4 · E2](<../../10 - Project Management/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)).
+The [file 1](<1 - FABLED 2 — Current Implementation.md>) matrices, computed: doc? tests? campaign? LOC hotspots? last-touched? One dashboard table replacing hand-audits like this folder's. The FABLED 2 recon did it manually; the script makes it a button ([PM FABLED 2.4 · E2](<../../10 - Project Management/_Archive/FABLED 2/4 - FABLED 2 — Future Enhancements.md>)).
 
 ## E3 — The module template gets a "day-2 kit"
 

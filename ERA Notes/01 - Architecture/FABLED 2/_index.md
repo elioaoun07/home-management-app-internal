@@ -40,4 +40,4 @@ tags:
 2. **Close the single-source violations already decided** — one spend definition (done), one expansion engine (Schedule Stage 2), one account-creation function ([file 3 · O2](<3 - FABLED 2 — Optimization Plan.md>)).
 3. **Adopt the repo-fidelity rule** — every live-DB object (RPC, policy) exists as a dated migration + `schema.sql` entry; Trips is the last offender ([file 3 · O3](<3 - FABLED 2 — Optimization Plan.md>)).
 
-**Related FABLED 2:** [PM system](<../../10 - Project Management/FABLED 2/_index.md>) · [Standalone portfolio](<../../02 - Standalone Modules/FABLED 2/_index.md>) · [Junction health](<../../03 - Junction Modules/FABLED 2/_index.md>) · [Performance](<../../05 - Performance/FABLED 2/_index.md>)
+**Related FABLED 2:** [PM system](<../../10 - Project Management/_Archive/FABLED 2/_index.md>) · [Standalone portfolio](<../../02 - Standalone Modules/FABLED 2/_index.md>) · [Junction health](<../../03 - Junction Modules/FABLED 2/_index.md>) · [Performance](<../../05 - Performance/FABLED 2/_index.md>)

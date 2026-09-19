@@ -1,5 +1,8 @@
 import { scanLines } from "./md-scan.mjs";
 import { cleanInlineText } from "./text.mjs";
+import { CHIP_ID_SOURCE, normalizeWorkId } from "./work-id.mjs";
+
+const CHIP_ID = new RegExp(String.raw`(?:^|\s)\*\*(${CHIP_ID_SOURCE})\*\*`, "i");
 
 /** The working-queue file — the only place Ship / Discard / the sweep operate. */
 export const isChecklistPath = (path) => /(?:^|\/)4\s*-\s*Checklist\.md$/i.test(String(path || ""));
@@ -10,14 +13,14 @@ export function sectionRank(section) {
 
 export function parseTaskMeta(rest) {
   const source = String(rest || "");
-  const idMatch = source.match(/(?:^|\s)\*\*([A-Z]{1,5}-?\d+[a-z]?(?:\.\d+[a-z]?)?)\*\*/i);
+  const idMatch = source.match(CHIP_ID);
   const metaMatch = source.match(/_\(\s*([\w -]+?)\s*-\s*([XSML]|\d+h?)\s*\)_\s*$/i);
   const word = (metaMatch?.[1] || "").trim().toLowerCase();
   const severity = /blocker|critical/.test(word) ? "blocker"
     : /friction|high/.test(word) ? "friction"
       : /annoyance|medium/.test(word) ? "annoyance"
         : /parked|low/.test(word) ? "parked" : null;
-  return { idChip: idMatch ? idMatch[1].toUpperCase() : null, severity,
+  return { idChip: idMatch ? normalizeWorkId(idMatch[1]) : null, idLabel: idMatch ? idMatch[1] : null, severity,
     effort: metaMatch ? metaMatch[2].toUpperCase() : null, text: cleanInlineText(source) };
 }
 

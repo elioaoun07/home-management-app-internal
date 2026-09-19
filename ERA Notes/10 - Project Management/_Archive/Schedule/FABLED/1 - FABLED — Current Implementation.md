@@ -12,7 +12,7 @@ tags:
 
 > **FABLED:** [_index](<_index.md>) · **1 · Implementation** · [2 · Gaps](<2 - FABLED — Gaps & Missing.md>) · [3 · Optimization](<3 - FABLED — Optimization Plan.md>) · [4 · Enhancements](<4 - FABLED — Future Enhancements.md>)
 >
-> Verified against `main` 2026-06-10. The vault docs ([Overview](<../../../02 - Standalone Modules/Items & Reminders/Overview.md>), [Schedule Feature](<../../../02 - Standalone Modules/Items & Reminders/Schedule Feature.md>)) hold the file-level code map; this is the architecture X-ray with the traps marked.
+> Verified against `main` 2026-06-10. The vault docs ([Overview](<../../../../02 - Standalone Modules/Items & Reminders/Overview.md>), [Schedule Feature](<../../../../02 - Standalone Modules/Items & Reminders/Schedule Feature.md>)) hold the file-level code map; this is the architecture X-ray with the traps marked.
 
 ---
 

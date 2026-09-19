@@ -1,12 +1,12 @@
 // PM Command Center service worker.
-// Network-first with a cache fallback for the app shell ("/") and the PM data
-// feed ("/api/data") only. Every successful load refreshes the cache, so
+// Network-first with a cache fallback for the React shell, local JS/CSS and
+// the PM data feed. Every successful load refreshes the cache, so
 // opening the installed PWA away from your laptop (or with it off) falls back
 // to the last-synced snapshot instead of failing outright — read-only, same
 // UI. Everything else (mutations, SSE, source previews, delivery API) passes
 // straight through untouched: those only make sense against a live server.
-const CACHE = "pm-offline-v1";
-const CACHEABLE = ["/", "/api/data"];
+const CACHE = "pm-offline-v2";
+const CACHEABLE = ["/", "/api/data", "/app/assets/pm.js", "/app/assets/pm.css"];
 
 // The page load that registers this worker is never itself intercepted by
 // it (standard SW behavior) — without this, the very first visit would
@@ -19,7 +19,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith("pm-offline-") && key !== CACHE).map((key) => caches.delete(key))))
       .then(() => self.clients.claim()),
   );
 });

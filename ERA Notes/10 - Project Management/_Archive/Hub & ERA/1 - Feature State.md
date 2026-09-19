@@ -11,11 +11,11 @@ tags:
 
 # Hub & ERA · 1 — Feature State
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<../../Hub & ERA/4 - Checklist.md>)
 >
 > **What this file is:** the *honest, no-hype* state of every Hub & ERA sub-feature — what exists, how mature it is, and the single most useful next step. **No imagination here** (that's file 2).
 >
-> **Method & confidence:** a **structural** assessment derived from the modules' vault docs ([Hub Chat](<../../03 - Junction Modules/Hub Chat/Overview.md>), [AI Assistant](<../../03 - Junction Modules/AI Assistant/Overview.md>)), live route/API surface, and `src/features/hub/` + `src/features/era/`. It is **not** a line-by-line correctness audit. Treat tiers as "how battle-tested," not "bug-free."
+> **Method & confidence:** a **structural** assessment derived from the modules' vault docs ([Hub Chat](<../../../03 - Junction Modules/Hub Chat/Overview.md>), [AI Assistant](<../../../03 - Junction Modules/AI Assistant/Overview.md>)), live route/API surface, and `src/features/hub/` + `src/features/era/`. It is **not** a line-by-line correctness audit. Treat tiers as "how battle-tested," not "bug-free."
 >
 > **Module identity:** "Hub & ERA" groups the conversational flagship — **Hub Chat** (the top-layer primary interface, per CLAUDE.md), **Message Actions**, the **ERA AI Assistant**, and **Voice Conversation**. At the app level (global [2 · Feature State](<../2 - Feature State — Current Reality.md>)) it spans **🟢 Core (Hub Chat)** down to **🟡 New/Thin (ERA, Voice)** — the most differentiated work in the app, and the **least protected**.
 
@@ -50,9 +50,9 @@ tags:
 
 Do **not** duplicate file-path tables here — they drift. The authoritative code maps live in:
 
-- [Hub Chat / Overview](<../../03 - Junction Modules/Hub Chat/Overview.md>) (+ `Voice Conversation.md`, `Voice Messages.md`, `Private Chats.md`, `Chat to Transaction Quickstart.md`)
-- [AI Assistant / Overview](<../../03 - Junction Modules/AI Assistant/Overview.md>) (+ `Gemini API Guidelines.md`) — intent router, faces, widgets, wake listener, household context.
-- [Message Actions / Overview](<../../03 - Junction Modules/Message Actions/Overview.md>) — chat → transaction/reminder/item.
+- [Hub Chat / Overview](<../../../03 - Junction Modules/Hub Chat/Overview.md>) (+ `Voice Conversation.md`, `Voice Messages.md`, `Private Chats.md`, `Chat to Transaction Quickstart.md`)
+- [AI Assistant / Overview](<../../../03 - Junction Modules/AI Assistant/Overview.md>) (+ `Gemini API Guidelines.md`) — intent router, faces, widgets, wake listener, household context.
+- [Message Actions / Overview](<../../../03 - Junction Modules/Message Actions/Overview.md>) — chat → transaction/reminder/item.
 - AI generation calls must pass a long `timeoutMs` to `safeFetch` (CLAUDE.md Hard Rule 6) — the 3 s default would kill them and falsely flag offline.
 
 ---
@@ -66,4 +66,4 @@ _(Updated 2026-05-30)_
 3. **Voice is external-dependency fragile.** Azure STT/TTS/wake + wake-word external setup means failures are often environmental, not code — graceful degradation and setup docs matter more than features here.
 4. **ERA is strong reactively, shallow proactively.** It parses user messages well but its proactive briefings barely read the household graph — the biggest *felt* upgrade is making it read Schedule + Budget deeply (file 2).
 
-→ The growth opportunities are in [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>); the concrete next steps are in [3 · Action Plan](<3 - Action Plan.md>); the checkable list is [4 · Checklist](<4 - Checklist.md>).
+→ The growth opportunities are in [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>); the concrete next steps are in [3 · Action Plan](<3 - Action Plan.md>); the checkable list is [4 · Checklist](<../../Hub & ERA/4 - Checklist.md>).

@@ -16,7 +16,7 @@ tags:
 
 ## E1 — The quarterly idea review (the ritual that keeps O1 done)
 
-Twenty minutes, once a quarter, ideally feeding the FAR-cadence review: skim `status: raw` entries, promote/park/reject in batch. Pairs with the PM dashboard listing raw-idea counts so the backlog's untriaged mass is visible ([PM FABLED 2.4 · E1](<../../10 - Project Management/FABLED 2/4 - FABLED 2 — Future Enhancements.md>) frontmatter makes it queryable).
+Twenty minutes, once a quarter, ideally feeding the FAR-cadence review: skim `status: raw` entries, promote/park/reject in batch. Pairs with the PM dashboard listing raw-idea counts so the backlog's untriaged mass is visible ([PM FABLED 2.4 · E1](<../../10 - Project Management/_Archive/FABLED 2/4 - FABLED 2 — Future Enhancements.md>) frontmatter makes it queryable).
 
 ## E2 — Capture from the Hub (ideas are household chat too)
 

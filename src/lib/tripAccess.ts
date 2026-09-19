@@ -41,3 +41,18 @@ export async function getAccessibleTrip(
 
   return { trip, isOwner: false };
 }
+
+/**
+ * Can this user tag something (e.g. a transaction) with this trip?
+ *
+ * Same access rule as `getAccessibleTrip` — own trip always, partner's trip only
+ * at household scope — reduced to a boolean for callers that just need to
+ * validate a `trip_id` before writing it.
+ */
+export async function canAccessTrip(
+  supabase: SupabaseLike,
+  userId: string,
+  tripId: string,
+): Promise<boolean> {
+  return (await getAccessibleTrip(supabase, userId, tripId)) !== null;
+}
