@@ -1,5 +1,7 @@
 # Delivery — owner UAT
 
+**2026-09-20 optimization closeout:** the [new draft test sequence](<../ERA Notes/10 - Project Management/Plans/Delivery Optimization Closeout.md>) proposes two isolated KIT-11 attempts (staged Focused versus prepared Focused), then one reviewed Apply/rollback cycle. It updates the optimization experiment sequence without replacing the existing acceptance obligations below. Task-specific policy/oracle preparation and owner review are still required; no new session has run. Record separate results for measured savings, Apply/rollback, terminal-job recovery, token-stop enforcement and physical phone operation. Every new actual result remains **Pending**.
+
 2026-09-15 · [Request → delivered](Delivery-Requests.md) · [Delivery checklist](<../ERA Notes/10 - Project Management/Delivery/4 - Checklist.md>)
 
 **Decision now: UI changes ready for owner UAT; unattended Delivery is not accepted.** DLV-114 still lacks qualified in-job token stopping. The new UI labels a dispatch threshold honestly; it is not a hard token cap.

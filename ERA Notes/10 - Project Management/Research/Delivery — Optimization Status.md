@@ -8,6 +8,16 @@ owner: Elio
 
 # Delivery — Optimization Status
 
+## Follow-up after activation — 2026-09-20
+
+**Read this correction before the earlier table.** The implementation is now committed through `6342346b`. The subscription-window defect is fixed (`974b8cae`): missing reset identities, different resets and decreasing readings no longer produce a delta. Docker now lists the rebuilt worker `749107ee3705` (2026-09-20 13:36 +03); policy revision 6 pins it, and fresh Claude/Codex qualification receipts exist. The Master Book records the supervisor restart. Therefore the earlier “all uncommitted”, “nothing activated” and null-window-defect claims below are historical, not current blockers. Phone bridge/deployment remains pending.
+
+**Still missing:** no optimized execution or savings evidence (read-only local store: three closed runs, four old jobs, zero prepared plans, zero subscription records); no opted-in prepared task; installed scope/checks still target BUD-83. Major delivery gaps also include terminal-job recovery (DLV-108), in-job stopping (DLV-114), checker isolation/diagnostics (DLV-133/120), the bounded failure/revision path and real phone acceptance. Keep historical accounting and cosmetic cleanup outside this closeout.
+
+The requested [Delivery Optimization Closeout draft](<../Plans/Delivery Optimization Closeout.md>) supplies the major-gap sequence, a KIT-11 staged-versus-prepared trial, Apply/rollback checks and separate reliability/phone acceptance. Fresh targeted verification: **147 tests passed across 10 files**. No provider job or policy change was performed by this follow-up review. The original review below is retained at its stated evidence cutoff; its action list is superseded by the draft's current delta.
+
+## Original review — before commit and activation
+
 Evidence-based status of the Delivery consumption-optimization work. **Review only — no code, policy, checklist status, approval or session was changed; no Delivery job, AI worker, provider call, deployment or service restart was started; no credential was accessed.**
 
 ## Review context
