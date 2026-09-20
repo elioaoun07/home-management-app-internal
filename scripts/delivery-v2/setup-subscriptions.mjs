@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildWorkerImage, createDockerCli, makeBoundaryConfig, readEgressBinding, authProbeArgs } from "./worker-boundary.mjs";
 import { subscriptionCredential } from "./worker/subscription.mjs";
+import { writeCredentialScript } from "./credential-sync.mjs";
 const BACKENDS = ["claude-agent-sdk", "codex-exec-sdk"];
 const TAG = "era-delivery-v2-worker:subscriptions";
 const HOSTS = ["api.anthropic.com", "auth.openai.com", "chatgpt.com", "claude.ai", "console.anthropic.com", "platform.claude.com"];
@@ -32,7 +33,7 @@ export function setupSubscriptions({ root = process.cwd(), docker = createDocker
     const credential = subscriptionCredential(backend, JSON.parse(readFileSync(path, "utf8")));
     const volume = boundary.credentials[backend].volume;
     run(["volume", "create", "--label", "era.delivery.role=subscription", volume]);
-    const script = "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{const fs=require('fs');JSON.parse(s);fs.chownSync('/dst',0,0);const p='/dst/" + backend + ".json';if(fs.existsSync(p))fs.chownSync(p,0,0);fs.writeFileSync(p,s,{mode:0o600});fs.chownSync(p,10001,10001);fs.chmodSync('/dst',0o700);fs.chownSync('/dst',10001,10001);});";
+    const script = writeCredentialScript(backend);
     run(["run", "--rm", "-i", "--network", "none", "--user", "0:0", "--read-only", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--cap-add", "FOWNER", "--mount", "type=volume,source=" + volume + ",target=/dst", imageId, "node", "-e", script], { input: JSON.stringify(credential) });
   }
   const path = join(root, ".delivery/v2/preparations/subscription-boundary.json");

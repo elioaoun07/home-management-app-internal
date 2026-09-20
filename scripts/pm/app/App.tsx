@@ -5,7 +5,8 @@ import {
   MotionConfig,
   useReducedMotion,
 } from "framer-motion";
-import { Compass, Home as HomeIcon, Palette, Search, Zap } from "lucide-react";
+import { Compass, Home as HomeIcon, Palette, Search, Settings as SettingsIcon, Zap } from "lucide-react";
+import { SettingsSheet } from "./Settings";
 import { client, pmKeys, useRoute, useWorld } from "./state";
 import { transport } from "./transport";
 import { RunV2 } from "./DeliveryV2";
@@ -52,6 +53,7 @@ export function App() {
   const { world, runs, connected, readError, connection } = useWorld();
   const capabilities = transport().capabilities;
   const [capture, setCapture] = useState(false);
+  const [settings, setSettings] = useState(false);
   const [theme, setTheme] = useState(() => {
     try {
       // Retire the reboot's light/green palettes, including saved preferences.
@@ -222,6 +224,9 @@ export function App() {
           >
             <Palette size={18} />
           </button>
+          <button className="icon-button" aria-label="Settings" title="Settings" onClick={() => setSettings(true)}>
+            <SettingsIcon size={18} />
+          </button>
         </div>
       </header>
       {!connected && (
@@ -272,6 +277,7 @@ export function App() {
         ))}
       </nav>
       <Capture open={capture} onClose={() => setCapture(false)} />
+      <SettingsSheet open={settings} onClose={() => setSettings(false)} />
     </MotionConfig>
   );
 }

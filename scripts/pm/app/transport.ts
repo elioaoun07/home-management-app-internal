@@ -4,7 +4,7 @@
 // against the Node server and on the phone against the authenticated relay. The
 // views never build a URL or assume a permission; they ask the transport, and they
 // read `capabilities` to decide what to offer.
-import type { RunSummary, Snapshot, V2Assessment, V2Catalogue, V2Queue, V2RunDetail, V2RunSummary, V2Session } from "./types";
+import type { RunSummary, Snapshot, V2Assessment, V2Catalogue, V2Queue, V2Allowances, V2TestGate, V2RunDetail, V2RunSummary, V2Session } from "./types";
 
 export class PmError extends Error {
   constructor(
@@ -86,6 +86,10 @@ export interface Transport {
   v2Executors(signal?: AbortSignal): Promise<V2Catalogue>;
   /** Slots, waiting items with their verdicts, decisions and pairwise verdicts. Null before any V2 record exists. */
   v2Queue(signal?: AbortSignal): Promise<V2Queue | null>;
+  /** Owner allowance settings; null where this transport cannot read them. */
+  v2Allowances(signal?: AbortSignal): Promise<V2Allowances | null>;
+  /** Owner test gate; null where this transport cannot read it. */
+  v2TestGate(signal?: AbortSignal): Promise<V2TestGate | null>;
   /** An item's verdict before launch; null where this transport cannot evaluate one. */
   v2Assess(file: string, id: string, signal?: AbortSignal): Promise<V2Assessment | null>;
   /** One V2 command. `body.command_id` is minted before the first send and reused on retry. */

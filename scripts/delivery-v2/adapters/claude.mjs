@@ -58,6 +58,8 @@ import {
   withNativeRef,
 } from "./adapter.mjs";
 import { ContractError, deepFreeze } from "../contracts.mjs";
+import { COUNTER_SEMANTICS } from "../usage-normalization.mjs";
+import { subscriptionRecord } from "../subscription-window.mjs";
 import { rejectWorkerIdentity } from "../candidate.mjs";
 import {
   assertNeverBypass,
@@ -314,6 +316,15 @@ export function withSessionIdentity(options, ref, resuming) {
  * `cache_creation_input_tokens` is kept rather than dropped — V1's DLV-37 found
  * that bucket was the majority of real session cost and was recorded nowhere.
  */
+/**
+ * What a Claude result message's usage counts: that turn, and nothing before it.
+ *
+ * The agent SDK emits one `result` message per turn carrying that turn's usage,
+ * and a resumed session does not restate earlier turns. So these readings are
+ * summed as they arrive and no baseline is subtracted.
+ */
+export const CLAUDE_COUNTER_SEMANTICS = COUNTER_SEMANTICS.PER_TURN;
+
 export function normalizeClaudeUsage(resultMessage) {
   const message = resultMessage && typeof resultMessage === "object" ? resultMessage : {};
   const usage = message.usage && typeof message.usage === "object" ? message.usage : {};
@@ -329,6 +340,9 @@ export function normalizeClaudeUsage(resultMessage) {
     reasoningOutput: 0,
     costUsd: included ? null : readable ? cost : null,
     ...(included ? { apiEquivalentUsd: readable ? cost : null } : {}),
+    // Per-turn, and stated rather than assumed: the Codex counter is cumulative
+    // for its thread, and nothing here may inherit that rule by proximity.
+    counterSemantics: CLAUDE_COUNTER_SEMANTICS,
     basis: included ? "included subscription usage; total_cost_usd is an API-equivalent estimate, not additional billed spending" : readable
       ? "provider-reported total_cost_usd for this turn; not a reconciled bill"
       : "the result message carried no total_cost_usd; the amount is unknown, not zero",
@@ -372,6 +386,7 @@ export function mergeUsageReadings(readings) {
     costUsd,
     readings: byTurn.size,
     resets: Object.freeze(resets),
+    counterSemantics: CLAUDE_COUNTER_SEMANTICS,
     basis:
       costUsd == null
         ? "sum of distinct per-turn provider counters; no monetary amount was reported"
@@ -585,6 +600,12 @@ export function createClaudeAdapter(options = {}) {
         observeHookInput(state, message);
         continue;
       }
+      // Plan-window observations bracketing the job: recorded beside the usage
+      // counters, never added to them.
+      if (message.type === "era_subscription" && message.observation) {
+        state.subscription[message.phase === "before" ? "before" : "after"] = message.observation;
+        continue;
+      }
       if (message.type === "assistant" && message.message && Array.isArray(message.message.content)) {
         const parent = message.parent_tool_use_id ?? null;
         // Only identities the executor recorded: a parent tool-use id is a real
@@ -635,6 +656,7 @@ export function createClaudeAdapter(options = {}) {
       ref,
       messageCount: 0,
       usageReadings: [],
+      subscription: { before: null, after: null },
       turn: 0,
       terminal: null,
       failure: null,
@@ -697,6 +719,7 @@ export function createClaudeAdapter(options = {}) {
           error: String((error && error.message) || error),
           usage: mergeUsageReadings(state.usageReadings),
           usageReadings: state.usageReadings,
+          subscription: subscriptionRecord(state.subscription),
           nativeMessageCount: state.messageCount,
           finalText: state.finalText,
           reachedProvider: state.sessionEstablished,
@@ -720,6 +743,7 @@ export function createClaudeAdapter(options = {}) {
       observations: {
         usage: mergeUsageReadings(state.usageReadings),
         usageReadings: state.usageReadings,
+        subscription: subscriptionRecord(state.subscription),
         nativeMessageCount: state.messageCount,
         finalText: state.finalText,
         failure: state.failure,

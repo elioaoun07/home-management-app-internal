@@ -71,6 +71,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Reverify the producer inventory first — the documented "four writers" undercounts. Verified 2026-09-20, ten routes touch ingredients and **none of them imports zod**: `src/app/api/recipes/route.ts`, `recipes/[id]/route.ts`, `recipes/extract-from-url/route.ts`, `recipes/[id]/generate|optimize|scale|substitute|versions/route.ts`, plus `src/app/api/meal-plans/add-to-shopping/route.ts` and `src/app/api/guest-portal/bot/route.ts`. That is a Hard Rule #12 gap on every one. Define the schema once (a shared module under `src/types/` or `src/lib/`, derived with `z.infer<>`) and import it at each writer; the pattern is `.claude/skills/api-route/SKILL.md` with `src/app/api/accounts/route.ts` as the canonical route. The AI-sourced writers (`extract-from-url`, `generate`, `substitute`) are the ones the acceptance means by "external/AI values". "Preserve unknown ingredient/allergy state" ties to HLTH-21 — an unparseable ingredient must stay unknown, never become empty, because `matchRecipeIngredients()` in `src/lib/health/allergenMatch.ts` is the downstream consumer.
+
 ### KIT-4
 
 **Outcome:** Expose scoped meal coverage to ERA.
@@ -86,6 +88,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** "Chef already reads meal data; reuse that path" is the instruction — find it before writing a helper. The AI context assembler is `src/lib/ai/context.ts`; read what it currently pulls for meals, then widen it rather than adding a parallel reader. Data side: `src/app/api/meal-plans/route.ts` and `src/features/meal-planning/hooks.ts`, whose window comment already notes it extends the range by 14 days to catch leftovers — that interval is the leftover-coverage logic you must not duplicate. Calendar surface: `src/components/web/WebMealPlanCalendar.tsx`. The distinguishing requirement matches HLTH-21's: unavailable must not read as "no planned meal", so carry query status through the adapter rather than defaulting to an empty array. A pure helper alone does not complete this; the consumer adapter must land before HUB-45/HUB-56.
+
 ### KIT-11
 
 **Outcome:** Return the correct cooking count.
@@ -93,6 +97,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Reproduce the documented HEAD/count response handling and use the actual count metadata. Verify zero/error/nonzero without treating absent body data as zero.
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** The defect is two adjacent lines, verified 2026-09-20 in `src/app/api/recipes/[id]/cooking-log/route.ts`: line ~118 queries `.select("id", { count: "exact", head: true })` — a HEAD request, so PostgREST returns the number in the response *metadata* and `data` is null — and line ~124 then does `times_cooked: (countData as any)?.length ?? 1`, reading `.length` off that null and falling back to 1. Use the `count` field the same call already returns, and keep zero distinguishable from an error: an absent body is not zero. The `as any` is also a live instance of the type debt DLV-52 tracks. Consumer of the value: `times_cooked` in the list `select` of `src/app/api/recipes/route.ts` and the recipe cards.
 
 ### KIT-1
 
@@ -116,6 +122,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Blocked on DEC-03 (quantity threshold vs run-out date, and whether adding is automatic) — record that before coding. The pieces already exist: `useLowStockItems(days)` and `useAddToShopping()` in `src/features/inventory/hooks.ts` over `src/app/api/inventory/low-stock/route.ts` and `inventory/add-to-shopping/route.ts`, with `useRestockItem()` and `src/app/api/inventory/restock/route.ts` on the write side. Note `useLowStockItems` is parameterised by *days*, which is one side of DEC-03 already baked in. The compatibility trap is explicit in CLAUDE.md: the Hub shopping list still uses the **legacy localStorage queue** in `SyncContext`, not the IndexedDB queue — `src/components/hub/ShoppingListView.tsx` is the consumer — so do not migrate it as a side effect. "Restock and the unique shopping backlink must commit together" plus "repeated triggers must not duplicate" means a unique constraint and 409 handling (Hard Rule #9). Depends on KIT-24.
+
 ### KIT-2
 
 - **Retained campaign gate (D3):** After the actual loop/lifecycle witnesses pass, update the Master Book state and shipped evidence; documentation alone does not close this gate.
@@ -130,6 +138,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Blocked on DEC-17 (ingredient↔stock mapping and unit conversion); no mapping table exists to guess from. The two ends are `src/app/api/recipes/[id]/cooking-log/route.ts` (cooking completion) and `src/app/api/inventory/restock/route.ts` / `inventory/stock/[itemId]/route.ts` (stock delta), with `src/features/inventory/hooks.ts` on the client. "Unknown mappings/units produce no invented deduction" is the safety rule — the same unknown-stays-unknown discipline as KIT-10 and KIT-15. Atomic and idempotent across confirmation, delta and inverse means a SECURITY DEFINER RPC rather than sequential PostgREST calls (`.claude/skills/db-migration/SKILL.md`; Hard Rules #24/#26). The Undo inverse is KIT-12's scope — coordinate, do not duplicate. Preserve the owner confirmation choice: this must not become a silent write.
+
 ### KIT-18
 
 **Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C01a. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
@@ -140,6 +150,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [HUB-62](<../Hub & ERA/Hub & ERA — Master Book.md#hub-62>).
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Catalogue C01a, and the hole is visible: `src/app/api/catalogue/document-image/signed-url/route.ts` takes a raw `?path=` query parameter, splits it on `/`, and authorizes by comparing the first segment against `household_links` before calling `.storage.from("documents").createSignedUrl(...)`. Authorization is therefore by path string, not by the owning record — which is exactly what "reject arbitrary storage paths" means. Fix by resolving the document's source row first (`src/app/api/catalogue/items/[id]/document-image/route.ts` is where the record↔file relation lives) and signing only what that row permits. Household expansion follows Hard Rule #13 (`src/app/api/accounts/route.ts` is the reference). Preserve valid shared-record access — this is a narrowing, not a lockout. Depends on HUB-62; KIT-19 and KIT-21 build on it.
 
 ### KIT-19
 
@@ -152,6 +164,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Catalogue C01b, depends on KIT-18. The replacement path is `src/app/api/catalogue/items/[id]/document-image/route.ts` — read what it does with the previous storage object before writing the new one; the failure mode is deleting the old binary before the new write commits or before Undo can still need it. Compare with the equivalent problem already solved in Outfits (`src/app/api/outfits/items/[id]/route.ts` DELETE also does storage cleanup) and with `src/features/recycle-bin/` for the app's retention model. Cleanup after reference checks means KIT-21's tombstone contract has to exist conceptually first, even though KIT-21 depends on this. Test the failed replacement and the inverse.
+
 ### KIT-20
 
 **Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C02. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
@@ -162,6 +176,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [KIT-18](<Kitchen — Master Book.md#kit-18>).
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Catalogue C02, and it gates KIT-21/22/24, HLTH-23 and TRIP-33 — so it is the foundation item. The defect is concrete: `src/app/api/catalogue/items/[id]/route.ts` PATCH assigns `updates.metadata_json = body.metadata_json` wholesale, with no zod import in the file and no revision precondition. That means an untyped partial write clobbers unrelated metadata, and two concurrent edits silently last-write-wins. The typed metadata interfaces already exist in `src/types/catalogue.ts` (`DocumentItemMetadata` and siblings) — derive the Zod schemas from them so the two cannot drift, per Hard Rule #12. A revision precondition needs a column and a conditional update (Hard Rules #24/#26); a stale write should surface as a conflict, not a 500. Client mutation: `useUpdateItem()` in `src/features/catalogue/hooks.ts`.
 
 ### KIT-21
 
@@ -174,6 +190,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Catalogue C03, depends on KIT-19 and KIT-20. Tombstone/restore preserving the ID is the crux — today `src/app/api/catalogue/items/[id]/route.ts` DELETE and `src/app/api/catalogue/[id]/disable/route.ts` are the two existing exits, and `useDeleteItem()` in `src/features/catalogue/hooks.ts` is the client. Read both before choosing, and compare with `src/features/recycle-bin/` and `src/app/api/recycle-bin/`, which is the app's existing soft-delete-and-restore model — a third model would be the wrong outcome. Backlinks that must survive are `source_catalogue_item_id` on `items` (see `src/app/api/items/[id]/promote/route.ts`) and whatever TRIP-33/TRIP-10 add. "Purge only after the retained-reference contract permits it" means a reference check before hard delete — which is also KIT-19's file-retention question. Exercise failed and repeated inverses; Hard Rule #1 for the toast.
+
 ### KIT-22
 
 **Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C09. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
@@ -184,6 +202,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [KIT-20](<Kitchen — Master Book.md#kit-20>).
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Catalogue C09, depends on KIT-20's typed-patch foundation. The distinction to hold: a reference-only type gets browsing and a form, but no execution controls — executable masters stay in their owning modules (a recipe is executed in Recipes, an item in Schedule). The category/type vocabulary is `src/types/catalogue.ts` (`CatalogueCategory` and its label/icon/colour maps); browsing is `src/app/catalogue/` with `src/features/catalogue/hooks.ts` (`useCatalogueModules`, `useCatalogueCategories`, `useCatalogueItems`, `useCatalogueItem`, `useCatalogueSubItems`). Compact forms and permissions are the deliverable; Hard Rules #5 (mobile-first), #15 (opaque floating panels) and #28 (no explanatory prose) all apply to the forms.
 
 ### KIT-24
 
@@ -196,6 +216,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Catalogue C17, depends on KIT-20, and it gates KIT-1. The invariant is an ownership boundary: a catalogue record is *descriptive* metadata, an inventory row is *operational* stock (quantity, unit, history). Today they are separate — catalogue writes go through `src/app/api/catalogue/items/[id]/route.ts`, stock through `src/app/api/inventory/items/route.ts`, `inventory/stock/[itemId]/route.ts`, `inventory/restock/route.ts` and `inventory/history/route.ts` — so the work is proving and enforcing that a catalogue edit cannot reach the second set, and defining the explicit owner transition when a reference becomes stocked. TRIP-10 needs the same distinction for its packing picker. `src/features/inventory/hooks.ts` and `src/features/catalogue/hooks.ts` are the two client sides.
+
 ### KIT-3
 
 **Outcome:** Meal plan budget estimate (gap 2c).
@@ -203,6 +225,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Meal plan budget estimate (gap 2c) — show estimated grocery cost per plan. Coordinate with [Budget — Master Book](<../Budget/Budget — Master Book.md>).
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Depends on ingredient data being trustworthy (KIT-10) and on a price source — check whether one exists before designing: `src/types/catalogue.ts` and the inventory item shape are where a price would live, and KIT-8 (barcode → catalogue price) is the parked item that would supply it. Plan data is `src/app/api/meal-plans/route.ts` and `src/features/meal-planning/hooks.ts`; the estimate surfaces on `src/components/web/WebMealPlanCalendar.tsx`. It is money on screen, so `.claude/skills/money-rules/SKILL.md` applies — and an *estimate* must be labelled as one at the read boundary, which is the same basis-preservation problem as KIT-13. Coordinate with the Budget campaign.
 
 ### KIT-5
 
@@ -212,6 +236,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Needs the ingredient↔stock mapping that DEC-17 (KIT-2) settles; without it "what can I make" is keyword matching on free text, with the same false-confidence risk as allergen matching. Read `src/lib/health/allergenMatch.ts` for how this repo already does cautious ingredient text matching, then `src/features/inventory/hooks.ts` (`useInventoryItems`, `useInventoryStock`) and `src/app/api/recipes/route.ts` for the two data sets. Suggestions are advisory, never a guarantee.
+
 ### KIT-6
 
 **Outcome:** Smarter per-item low-stock thresholds + restock cadence from usage history.
@@ -219,6 +245,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Smarter per-item low-stock thresholds + restock cadence from usage history.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Depends on usage history existing and being meaningful: `src/app/api/inventory/history/route.ts` and `useRestockHistory()` in `src/features/inventory/hooks.ts` are the source — check how many rows actually exist before fitting anything to them. The current threshold model is the `days` parameter on `useLowStockItems(days)` / `src/app/api/inventory/low-stock/route.ts`, which DEC-03 (KIT-1) is already deciding the shape of — settle that first so this does not become a third rule. Per-item thresholds mean a column on the inventory item (Hard Rules #24/#26).
 
 ### KIT-7
 
@@ -228,6 +256,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Planned meals on the calendar and today views — a Meal Planning → Schedule bridge, so read both vault docs first (`ERA Notes/03 - Junction Modules/Meal Planning/` and `ERA Notes/02 - Standalone Modules/Items & Reminders/`) and remember a standalone feature dir cannot import another's; shared code goes in `src/components/` or `src/lib/`. Sources: `src/app/api/meal-plans/route.ts` + `src/features/meal-planning/hooks.ts` (note the 14-day leftover window in its comment); destinations: `src/app/reminders/` and the dashboard/today surfaces. Do not materialize meals as `items` rows — display them, or you create a fourth thing to keep in sync. KIT-4 supplies the scoped coverage this should reuse.
+
 ### KIT-8
 
 **Outcome:** Barcode.
@@ -235,6 +265,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Barcode → catalogue price for cost tracking.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Parked. The read path already exists — `src/app/api/inventory/barcode/[barcode]/route.ts` and `useItemByBarcode()` in `src/features/inventory/hooks.ts` — so the missing half is a price on the catalogue record and an external lookup, neither of which exists. Deciding the price source (and whether an external barcode API is authorized at all) is the first step, not a detail. Feeds KIT-3.
 
 ### KIT-12
 
@@ -245,6 +277,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Depends on KIT-2. The acceptance's phrase "cache-only undo" is the diagnosis: check the mutation hooks in `src/features/inventory/hooks.ts` (`useRestockItem`, `useUpdateStock`) and the cooking path around `src/app/api/recipes/[id]/cooking-log/route.ts` for toasts whose Undo rolls back the TanStack cache rather than issuing a real inverse write. Hard Rule #1 requires the Undo button; this item requires it to mean something. The model to copy is `src/components/notifications/CriticalAlertGate.tsx`, which does a checked domain inverse. What must be verified on inverse: membership, stock quantity and the history row — so the inverse has to be atomic with KIT-2's deduction, not a second best-effort call. Cover repeat, retry and partial failure.
+
 ### KIT-13
 
 **Outcome:** Separate estimated and measured cooking values.
@@ -252,6 +286,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Duration/difficulty defaults and prefilled values must not be presented as measured actuals. Preserve basis at write/read boundaries and use only observed values for calibration.
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** A provenance problem, not a UI one: defaults and prefilled durations/difficulties are currently indistinguishable from measured actuals once written. Read the write boundary — `src/app/api/recipes/[id]/cooking-log/route.ts` — and the recipe fields it updates (`times_cooked`, `last_cooked_at`, `average_rating`, and the duration/difficulty columns in `migrations/schema.sql`). The fix is to carry a basis flag from write through read so calibration uses only observed values; that is the same estimate-versus-measured separation Delivery made for token counters and KIT-3 needs for cost. Prefill sites: the cooking-mode UI under `src/features/recipes/` and `src/app/recipe/`.
 
 ### KIT-14
 
@@ -261,6 +297,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Answer the question before repairing anything. Verified 2026-09-20: `useUpdateStock()` at `src/features/inventory/hooks.ts:245` has **no caller anywhere in `src/`** — its only occurrence is its own definition. So the documented wrong-ID bug is unreachable, and the acceptance's own words apply: a dormant hook is not a proven production incident. The live stock writers are `useRestockItem()` in the same file over `src/app/api/inventory/restock/route.ts`, and the route `src/app/api/inventory/stock/[itemId]/route.ts`. Either retire the hook citing that evidence, or — if you make it reachable — fix the ID first.
+
 ### KIT-15
 
 **Outcome:** Cover recipe AI and scaling boundaries.
@@ -269,6 +307,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [KIT-10](<Kitchen — Master Book.md#kit-10>).
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Depends on KIT-10 landing the schema; these are the boundary tests over it. The AI recipe routes are `src/app/api/recipes/extract-from-url/route.ts`, `recipes/[id]/generate/route.ts`, `optimize/`, `substitute/` and `scale/` — all currently zod-free. The model layer is `src/lib/ai/gemini.ts` (`generateContentWithFallback`, `isDailyQuotaError` for the daily-versus-per-minute 429 discrimination) and `src/lib/ai/rateLimit.ts`. "Explicit long-call timeouts" is Hard Rule #6: an AI call must pass `timeoutMs` to `safeFetch()` or it aborts at 8 s, and a timeout must not be classified as offline. Use fixtures, not live calls. Two invariants to assert rather than assume: an unknown unit conversion stays unknown, and nothing here may invent allergen safety.
 
 ### KIT-23
 
@@ -280,6 +320,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [KIT-10](<Kitchen — Master Book.md#kit-10>), [KIT-20](<Kitchen — Master Book.md#kit-20>).
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Catalogue C13, depends on KIT-10 (validated ingredients) and KIT-20 (safe typed patch). The promotion precedent already exists and should be read first: `src/app/api/items/[id]/promote/route.ts` promotes an item to a catalogue record and writes `source_catalogue_item_id` as lineage — this is the reverse direction over the same relation. Recipe creation is `src/app/api/recipes/route.ts`; catalogue reads are `src/features/catalogue/hooks.ts`. The two failure modes named in the acceptance map to one rule: promotion is explicit and idempotent, so repeated activation must find the existing link rather than cloning the master or overwriting later edits — a unique constraint plus 409 (Hard Rule #9). Ingredients arriving from a clipping are external input and must go through KIT-10's schema before storage.
 
 ## Backlog reconciliation
 

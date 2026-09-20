@@ -69,6 +69,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Hub & ERA — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Owner-supplied DB evidence; agents do not apply migrations (Hard Rule #26). **Read `migrations/db-state.json` first** — per Hard Rule #27 it is the only repo artifact that is evidence about RLS, policies, cascades, triggers and SECURITY DEFINER bodies; written SQL and `migrations/schema.sql` are not deployment proof. DEC-18 (`household_members` retain/drop) must be recorded in `_Decisions.md` before anything acts on it; the live household mechanism in code is `household_links` + `profiles` (Hard Rule #13, canonical usage in `src/app/api/accounts/route.ts`), so confirm which of the two the DB actually has. This gates KIT-18 and several Catalogue slices.
+
 ### HUB-37
 
 **Outcome:** Verify CI and recoverable capture failures.
@@ -77,6 +79,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Two halves. **CI does not exist for this**: `.github/workflows/` contains only `check-docs-sync.yml` (verified 2026-09-20) — there is no typecheck/test/lint workflow, so that is net-new. The commands it must run are the repo's own (`pnpm typecheck`, `pnpm lint`, `pnpm test`) plus `pnpm pm:lint` and `pnpm docs:check`, which pre-commit already runs (`.claude/hooks/pre-commit.sh`). The capture half is about `safeFetch` classification: read `src/lib/safeFetch.ts` and `src/lib/connectivityManager.ts` (`isReallyOnline`) — a timeout is *not* offline (Hard Rule #6), and the three states the acceptance wants distinguished are exactly offline / timeout / uncertain. Capture entry points: `src/components/era/CommandBar.tsx` and `src/features/era/useEraTurn.ts` (`runTurn`). "No git write is part of this packet."
+
 ### HUB-38
 
 **Outcome:** Record authenticated cadence-aware cron liveness.
@@ -84,6 +88,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Owner-verified cron ledger and six wrappers provide authenticated cadence-aware liveness; record APPLIED migrations separately. E-02a follows ledger implementation. Cron logging reconciliation remains held under NOTIF-5.4; this packet waives neither applicable rule.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** There is no cron ledger today — grep for `cron_runs`/`last_run` under `src/app/api/cron/` returns nothing (verified 2026-09-20). The six routes are `chat-notifications`, `daily-items-reminder`, `daily-reminder`, `gcal-reconcile`, `item-reminders`, `purge-recycle-bin`; each already has the `Bearer CRON_SECRET` check, `supabaseAdmin()` and `maxDuration = 60` per Hard Rule #8 — read one (`src/app/api/cron/gcal-reconcile/route.ts`) as the wrapper template. The liveness problem is structural: there is no `vercel.json`, so nothing proves a cron ran; a ledger row written by each wrapper is what makes "how do I know it ran" answerable. Cadence-aware means the ledger records expected versus observed interval. A ledger table is a migration (Hard Rules #24/#26/#27 — policy in the same migration). Cron *logging* stays held under NOTIF-5.4; this packet waives nothing.
 
 ### HUB-39
 
@@ -94,6 +100,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Owner configuration on top of HUB-38's ledger, gated also on NOTIF-19's recipient policy. The scheduling primitives to reuse rather than reinvent: `src/lib/utils/date.ts` for IANA-local-date handling and `startOfCustomMonth`, plus `.claude/skills/timezone-handling/SKILL.md` — DST is the named risk and a polled scheduler makes duplicate ticks the second one, so eligibility must be idempotent per local date, not per invocation. The briefing slot stays inactive until DEC-C01 (eligible hour) and DEC-C03 (partner sequencing) are recorded. Delivery target is HUB-42's stored briefing.
+
 ### HUB-40
 
 **Outcome:** Complete the assistant treaty and verified retirement.
@@ -101,6 +109,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Retain the M-00 treaty: ERA owns general conversation, Chef keeps Kitchen specialty, Brain keeps bounded memory, and the floating assistant retires only after its report is reachable. Remove only source-proven dead routes/helpers; no ERA layout redesign. Historical manifest/line counts are evidence cutoffs, not acceptance thresholds. Existing plan supersession is complete.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** A boundary treaty plus a narrow deletion, with two explicit prohibitions: no ERA layout redesign, and remove only *source-proven* dead routes/helpers. The four parties are real code: ERA general conversation (`src/app/api/era/ask/route.ts`, `src/features/era/intentRouter.ts`, `src/features/era/intents/`), Chef (`src/features/era/intents/chef.ts` + `resolvers/chef.ts` + `formatters/chef.ts`), Brain (`intents/brain.ts`, `src/features/era/focusMemory.ts`), and the floating assistant `src/components/ai/AIChatAssistant.tsx` (lazy-loaded via `src/components/DeferredComponents.tsx`) over `src/app/api/ai-chat/`. The assistant retires only once its report is reachable from ERA — that is HUB-48's `analysis.report` capability, so sequence after it. Historical line counts are evidence cutoffs, not thresholds.
 
 ### HUB-41
 
@@ -112,6 +122,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [BUD-66](<../Budget/Budget — Master Book.md#bud-66>), [SCH-8](<../Schedule/Schedule — Master Book.md#sch-8>).
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Depends on BUD-66 and SCH-8 — the acceptance says their summaries are not certified until those pass, so build the provenance machinery now and mark the money/schedule signals uncertified until then. The three-state vocabulary (complete / partial / unavailable) is the same distinction HLTH-21 and KIT-4 are making, and it is the opposite of defaulting to an empty array. Canonical inputs: money via `src/lib/balance-utils.ts` and `startOfCustomMonth` in `src/lib/utils/date.ts`; schedule via the single expansion engine SCH-4.3b is landing. The ERA read side is `src/features/era/intents/resolvers/` (`budget.ts`, `schedule.ts`) with formatters alongside. Existing recurring-dues/overdraw scope stays as-is. Feeds HUB-42, HUB-54, HUB-56.
 
 ### HUB-42
 
@@ -126,6 +138,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** The most gated item here: HUB-39, HUB-41, NOTIF-19 and NOTIF-21 all precede it, and it activates only at an owner-resolved hour. "Once per eligible local date and recipient" is an exactly-once problem, not a scheduling one — read `.claude/skills/recurrence-safety/SKILL.md` for the claim/idempotence discipline and NOTIF-21 for the durable per-recipient claim it must share rather than duplicate. Local-date eligibility comes from HUB-39; the delivery path is `src/lib/pushSender.ts` under NOTIF-19's policy. Storage is a new briefing table (Hard Rules #24/#26/#27). The AI Assistant vault doc has a Focus-briefing cache hard rule — read `ERA Notes/03 - Junction Modules/AI Assistant/` before caching anything.
+
 ### HUB-43
 
 **Outcome:** Measure briefing feedback and vital signs.
@@ -134,6 +148,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Feedback plus a vital-signs tile block in the Activity view. The ERA action/outcome trail already exists: `src/features/era/logEraAction.ts` and `src/features/era/missTracking.ts` (with its test) are where SFR and precision would be computed from, and `src/app/api/era/actions/route.ts` is the write path — read those before adding a metric store. Cron liveness is HUB-38's ledger, so depend on it rather than inventing a second signal. Card/tile components: `src/components/era/dashboards/EraStatCard.tsx`. Charts follow the `dataviz` skill; Hard Rule #3 (no red on individual rows) and #28 (numbers and labels, no explanation).
+
 ### HUB-44
 
 **Outcome:** Attribute model usage and enforce degradation controls.
@@ -141,6 +157,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Dispatch the M provider/model/usage-attribution sheet first, then the retained quota gauge, degradation matrix and `AI_MODEL`/`AI_FALLBACK_MODEL` pin/kill-switch obligations. One bounded child per session; E-07a alone does not close the parent. Must ship before new Gemini consumers (HUB-45).
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Must ship before any new Gemini consumer, which explicitly includes HUB-45. The model layer is `src/lib/ai/gemini.ts` — `generateContentWithFallback()` with a fallback model on a separate quota bucket and daily-versus-per-minute 429 discrimination (`isDailyQuotaError`) — plus `src/lib/ai/rateLimit.ts` and `src/lib/ai/tokenUtils.ts`. The existing usage surface is the AI Usage module (`src/types/aiUsage.ts` and its page), which is deliberately outside the CLAUDE.md Feature Index. `AI_MODEL`/`AI_FALLBACK_MODEL` are env pins — see `docs/ENV.md`. The obligation is attribution per provider/model/call and an enforced degradation matrix, so read what is already recorded before adding fields. One bounded child per session; E-07a alone does not close the parent.
 
 ### HUB-45
 
@@ -151,6 +169,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Depends on HUB-44 (attribution first), KIT-4 (meal coverage) and BUD-66 (canonical money). "Reuse the existing Chef meal read" is the instruction — that path is `src/features/era/intents/chef.ts` with `resolvers/chef.ts` and `formatters/chef.ts`, and the AI context assembler `src/lib/ai/context.ts`. The money read is `src/features/era/intents/resolvers/budget.ts` and must use `src/lib/balance-utils.ts` plus `startOfCustomMonth` rather than its own arithmetic. "Bounded context" is a token cost, so keep it to the facts the answer needs — see the same bounding discipline in Delivery's DLV-118. A trusted answer waits on its prerequisites; an untrusted one must say so (HUB-41's provenance states).
+
 ### HUB-46
 
 **Outcome:** Make conversational capture durable and idempotent.
@@ -158,6 +178,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Durable queue acknowledgment, idempotent draft/nonrecurring-item endpoints and owner-bound reconciliation precede income/event extensions. Dispatch one bounded child sheet per session; reuse existing queue feature keys. Parent remains open until every retained criterion passes.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Capture durability, and it gates SCH-15. Three parts, each with a home. Durable queue acknowledgment: `src/lib/offlineQueue.ts` (`addToQueue`, `findPendingOperation`, `updateQueuedOperation`, `cancelCreateDeletePair`) and `src/lib/offlineSyncEngine.ts` — the acceptance says reuse existing queue feature keys, so do not add a parallel store; background in `ERA Notes/01 - Architecture/Sync and Offline.md`. Idempotent endpoints: the draft path (`src/features/drafts/`, `src/app/api/transactions/`) and non-recurring item creation (`src/app/api/items/route.ts`) — idempotence means a unique key plus 409 (Hard Rule #9), not a pre-check. Owner-bound reconciliation: whose queue replayed what. Capture surface: `src/features/era/useEraTurn.ts` (`runTurn`) and `src/components/era/CommandBar.tsx`. Income/event extensions come after.
 
 ### HUB-47
 
@@ -167,6 +189,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** The learning loop must not count unverified outcomes. Read `src/features/era/logEraAction.ts` (what an action records), `src/features/era/missTracking.ts`, and the template learner `src/features/era/templates/` — `learn.ts`, `matcher.ts`, `normalize.ts`, `vocabGrowth.ts`, each with its own test, plus `useEraTemplates.ts`/`useTaughtPhrases.ts` and the API at `src/app/api/era/templates/`. The rule is that only a *verified* action feeds `learn.ts`; failed, pending and uncertain must be inert. Activity coverage means the Activity view shows capability outcomes and links to the real destination (see `ERA_CAPABILITIES` in `src/features/era/capabilities/registry.ts` — 13 capabilities today). Verify current behaviour with owner evidence; any migration belongs to E-05a, not a guessed trigger. HUB-64 depends on this.
+
 ### HUB-59
 
 **Outcome:** Use the source message date for transaction conversion.
@@ -174,6 +198,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** H-03 and Aug1 Inbox: default to the selected message’s created_at local date, preserving explicit user date overrides and UTC storage. Test old threads and timezone boundaries.
 
 **Provenance:** [Hub & ERA — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Small and precisely scoped: a chat→transaction conversion should default to the **source message's** `created_at` local date, not today. The conversion surface is `src/components/hub/AddTransactionFromMessageModal.tsx` with `src/features/hub/messageActions.ts` (`useCreateMessageAction`) and the API `src/app/api/hub/message-actions/route.ts`; the transaction write is `src/app/api/transactions/route.ts`. The whole item is a timezone problem — storage stays UTC, display and default are local — so read `.claude/skills/timezone-handling/SKILL.md` and use `src/lib/utils/date.ts`, never raw `Date` arithmetic. Preserve an explicit user override. Test old threads and a midnight boundary, which is where this silently goes wrong.
 
 ### HUB-61
 
@@ -183,6 +209,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Hub & ERA — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** A visibility question, so Hard Rule #27's gate applies: **get the DB's RLS state before reading route code**, and treat the historical "RLS disabled on guest_drinks" claim as a hypothesis, not a fact — `migrations/db-state.json` is the only repo artifact that counts. The code path is `src/app/api/guest-portal/drinks/route.ts` with the public views under `src/app/g/[tag]/` and `src/components/guest/`; Guest Portal has its own slug-URL hard rule in `ERA Notes/02 - Standalone Modules/Guest Portal/`. The tension to resolve is deliberate: a guest must read without an account while household scope still applies. Deliverable is a manual runbook if one is needed — agents never apply it (Hard Rule #26).
+
 ### HUB-64
 
 **Outcome:** Reject learned actions with unsafe referents.
@@ -191,6 +219,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [HUB-47](<Hub & ERA — Master Book.md#hub-47>).
 
 **Provenance:** [Hub & ERA — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Depends on HUB-47. The failure is a chain, so the fix is at three points, all in `src/features/era/`: learning (`templates/learn.ts`, `normalize.ts`), routing (`intentRouter.ts`, `intents/resolveIntent.ts`, `intents/rootIntentRouter.test.ts`) and dispatch (`capabilities/registry.ts` — `ERA_CAPABILITIES`, `getCapability`, and `capabilities/types.ts` for the slot shape). The rule: a capability invocation with an unresolved or ambiguous target slot must refuse and ask, never fall back to a zero-slot variant or a nearest match — the synthetic incident turned a named-dentist request into a zero-slot focus action and deleted an unrelated reminder. Destructive capabilities (`reminderDelete`, `reminderComplete`) need the strictest grounding. A wrong-target action must also be excluded from training (HUB-47). No claim of live incidence — this is a hardening item.
 
 ### HUB-57
 
@@ -207,6 +237,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Small truthfulness fix. The conversion writes a link row through `src/features/hub/messageActions.ts` (`useCreateMessageAction`) and `src/app/api/hub/message-actions/route.ts`; the draft is created by the transactions/drafts path (`src/features/drafts/`, `src/app/api/transactions/`). The bug shape is linking a synthesized or assumed ID instead of the one the create actually returned, and then recreating a draft when the link fails. Use the returned ID, and on link failure report it — do not recreate (the recreate is how duplicates appear). The future-payment surface is `src/components/expense/FuturePaymentsDrawer.tsx` and the conversion modal `src/components/hub/AddTransactionFromMessageModal.tsx`. Feeds HUB-67.
+
 ### HUB-58
 
 **Outcome:** Report bulk Undo failures honestly.
@@ -222,6 +254,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Bulk Undo must check every inverse result before acknowledging. The surface is `src/components/hub/BulkConvertReviewSheet.tsx` with `useDeleteMessageAction()` in `src/features/hub/messageActions.ts`. Two rules: stop at the first failed inverse rather than continuing into further destructive steps, and never show a success toast for a partial inverse — Hard Rule #1 requires Undo to exist, this item requires it to be honest. The same truthfulness problem appears in TRIP-29 (zero-row writes reported as success); read it for the pattern. Feeds HUB-67.
+
 ### HUB-2
 
 - **Retained campaign gate (D2):** Voice degrades gracefully with no Azure connection, and the setup is documented. *(→ HUB-2/E-17)*
@@ -234,6 +268,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Voice degradation, not wake-word — wake is explicitly out of scope (owner decision 2026-09-02 D2). The pipeline is `src/features/voice-conversation/`: `azureTTS.ts`, `azureSTT.ts`, `sttCapture.ts`, `audioContext.ts`, `vadGate.ts`, `ttsQueue.ts` (with its test) and `conversationEngine.ts`. The seam the acceptance names exists: `useEraReplyTTS()` in `src/features/voice-conversation/hooks/useEraReplyTTS.ts`, consumed by `src/components/era/CommandBar.tsx` as `play: speakReply` — promote a single `speak()` from there with a browser `speechSynthesis` fallback. The four distinct failure states (token mint, SDK, worklet, mid-stream) surface on the orb: `src/components/era/EraDots.tsx` / `EraShell.tsx`. Azure keys are in `docs/ENV.md`; with none configured the path must degrade visibly and not crash, and a degradation test is part of the acceptance.
+
 ### HUB-48
 
 **Outcome:** Add briefing status and retire the floating report assistant.
@@ -241,6 +277,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** *(E-10)* Status line + in-hub briefing card (additive, doesn't move the orb/widgets/nav) + `analysis.report` capability so the floating `AIChatAssistant` can be retired once the report is reachable from ERA.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Two additive pieces and one retirement. The capability is genuinely missing: `ERA_CAPABILITIES` in `src/features/era/capabilities/registry.ts` holds 13 entries (schedule, reminder CRUD, spend, drafts, recipes, meals, memory) and no `analysis.report` (verified 2026-09-20) — add it there with a type in `capabilities/types.ts`; the report itself is `src/lib/ai/analysisReport.ts`. The status line and in-hub briefing card must be additive — the acceptance says they do not move the orb, widgets or nav (`src/components/era/EraShell.tsx`, `HubScatterWidgets.tsx`), and the ERA layout freeze plus "no unrequested UI redesign" both apply. Only once the report is reachable from ERA may `src/components/ai/AIChatAssistant.tsx` retire (HUB-40 owns that deletion).
 
 ### HUB-16
 
@@ -250,6 +288,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** The one sanctioned `HubPage.tsx` rider this window — voice reminders lose their time and fail to save. The fix is to give HubPage's voice engine the shared turn engine: `runTurn` from `src/features/era/useEraTurn.ts` (already used by `src/components/era/CommandBar.tsx`), replacing `src/features/voice-conversation/intentClassifier.ts` and the five legacy callbacks in `src/components/hub/HubPage.tsx` (6,275 lines — verified 2026-09-20). Check every importer of `intentClassifier.ts` before deleting it (`conversationEngine.ts`, `hooks/useConversationMode.ts`, `index.ts`). The lost value is a time, so `.claude/skills/timezone-handling/SKILL.md` and `src/lib/utils/date.ts` apply; the reminder write is `src/app/api/items/route.ts`. Because it is a rider, HUB-5's rule applies: the file's line count must go *down* in this session.
+
 ### HUB-49
 
 **Outcome:** Bundle the Top View data read.
@@ -257,6 +297,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** *(E-14)* `get_era_topview_bundle()` RPC — collapses the four widget hooks' ~7 round trips into 1 *(absorbs **HUB-7**'s "fresh cache" half)*.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** A textbook Hard Rule #21 case: four widget hooks doing ~7 round trips at ~170–200 ms each. Collapse into one SECURITY DEFINER RPC `get_era_topview_bundle()` returning JSON aggregates — `get_schedule_bundle` is the canonical example, and `get_health_bundle` / `get_trip_bundle` are working instances to copy (`src/app/api/healthcare/route.ts`, `src/app/api/trips/[id]/bundle/route.ts`). The widgets are `src/components/era/face-widgets/` (`BudgetWidget`, `ScheduleWidget`, `ChefWidget`, `BrainWidget`, `EraFaceWidget`) — find their hooks and the query keys in `src/features/era/queryKeys.ts` before changing the read shape, and see `.claude/skills/cache-invalidation/SKILL.md` for collapsing several keys into one. Hard Rules #20 (no EXISTS policies on hot children — own the WHERE inside the function), #24 and #26. Absorbs HUB-7's fresh-cache half.
 
 ### HUB-50
 
@@ -266,6 +308,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** "Data is always awake; only the conversational layer sleeps" is the whole design rule. Read `src/components/era/EraShell.tsx` for what sleep currently gates, then render the vitals strip outside that gate. Sources should be HUB-49's bundle once it exists — build against the widget hooks now and migrate, rather than adding a fifth round trip. Mobile-first (Hard Rule #5), opaque panels via `tc.bgPage` if anything floats (#15), fixed-header offset (#16), and the ERA layout freeze means additive only. Hard Rule #28: numbers and labels, no captions.
+
 ### HUB-51
 
 **Outcome:** Deliver partner preferences and persistent person colors.
@@ -273,6 +317,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Implement persistent person identity colors across blue/pink/frost/calm, the partner’s own briefing hour/toggle and her chosen flow. Current role-relative theme fallbacks are insufficient. DEC-01/02 must settle sequencing and color derivation; the Sep2 personal-first decision is not permission to skip partner acceptance.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Two halves, and the colour half has a repo-wide rule. Hard Rule #14 is the authority: colour identity is **person-absolute**, not role-relative — blue-theme user is `blue-400/500` on both phones always, derived from `useTheme()`, with the full account in `ERA Notes/01 - Architecture/Color Identity.md`. "Current role-relative theme fallbacks are insufficient" means find and remove those fallbacks; `src/contexts/ThemeContext.tsx` and `src/lib/theme-colors.ts` are the machinery, and a theme change invalidates all queries (Hard Rule #10). The partner-preferences half is per-recipient briefing hour and toggle, which is NOTIF-19's per-recipient policy and HUB-42's per-recipient delivery — store it with those, not in a third place. DEC-01/02 settle sequencing and derivation; the personal-first decision is not permission to skip partner acceptance.
 
 ### HUB-52
 
@@ -282,6 +328,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Sessions picker, reopen, and deterministic titles — the acceptance says **no LLM** for the title, so derive it from the first user message plus a date using plain string logic. The storage already exists: `src/app/api/era/conversations/route.ts` and `src/app/api/era/messages/route.ts`; read their shapes and `src/features/era/queryKeys.ts` before adding fields. UI is `src/components/era/EraChatDrawer.tsx` / `EraShell.tsx`. Determinism means the same conversation always yields the same title — no timestamp-of-render, no random tiebreak. Hard Rule #28 for the picker's chrome.
+
 ### HUB-54
 
 **Outcome:** Connect signal cards to confirmed actions and real destinations.
@@ -290,6 +338,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** "Draft-only, never a direct write" is the load-bearing clause and it matches the app-wide rule that AI proposes and the human confirms. Signal data comes from HUB-41 (with its complete/partial/unavailable provenance); the card actions must create a draft through the existing drafts contract (`src/features/drafts/`, `src/app/api/transactions/`) or an equivalent proposal, never call a domain mutation. "Doors from every tile" means each card routes to the real destination — the route vocabulary already exists as `resolveRoute` in `src/lib/notifications/registry.tsx` and `VALID_PAGE_ROUTES`; reuse that idea rather than hardcoding paths. Surfaces: `src/components/era/HubScatterWidgets.tsx`, `face-widgets/`, `dashboards/`.
+
 ### HUB-55
 
 **Outcome:** Turn a transaction anomaly into one policy-gated proposal.
@@ -297,6 +347,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** *(E-21)* Anomaly → proposal: outlier transaction gets exactly one policy-gated card with a "why" line.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** "Exactly one policy-gated card" — the anomaly detector already exists: `src/lib/utils/anomalyDetection.ts` (with `anomalyDetection.test.ts`, which the repo notes stresses a bimodal-threshold fixture). Read it before adding detection logic. The proposal must be a draft, not a write (HUB-54's rule), and the "why" line is one clause, not a paragraph (Hard Rule #28). Policy gating means the same recipient/quiet-hours/severity policy NOTIF-19 centralizes — do not add a second gate. Money framing must use `src/lib/balance-utils.ts` and the custom billing period (`startOfCustomMonth`); `.claude/skills/money-rules/SKILL.md` applies to anything that states an amount.
 
 ### HUB-56
 
@@ -307,6 +359,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Depends on KIT-4 and HLTH-21, and both dependencies are the same reason: those modules must first distinguish unavailable from empty, or the signals will confidently report "nothing planned" / "no allergies" on a failed read. Sources: Kitchen via the Chef meal read (`src/features/era/intents/chef.ts`, `src/app/api/meal-plans/route.ts`), Trips via `get_trip_bundle` (`src/app/api/trips/[id]/bundle/route.ts`) and `src/features/trips/tripPhase.ts`, Healthcare via `get_health_bundle` (`src/app/api/healthcare/route.ts`) — and Healthcare carries PHI, so respect `shared_with_household` and do not surface a private condition in a household signal. Build on HUB-41's provenance states and HUB-54's draft-only actions. Absorbs HUB-9.
+
 ### HUB-23
 
 **Outcome:** Rank signals using explicit feedback.
@@ -314,6 +368,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** *(E-23)* Feedback-weighted ranker — 👎 history halves a signal type's rank. *(Plan sacrifice #4 if a gate is missed.)*
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Ranking over HUB-43's feedback and HUB-41's signals — do not start before both exist, or there is nothing to weight. The rule is narrow: a 👎 history halves that signal *type's* rank. Type identity should come from the signal registry HUB-41 establishes; the feedback store is HUB-43's. Keep the function pure and tested, in the style of `src/features/era/templates/vocabGrowth.ts` and `missTracking.ts`. Plan sacrifice #4 — droppable if a gate is missed.
 
 ### HUB-5
 
@@ -325,6 +381,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Not a standalone packet by owner decision D10: `src/components/hub/HubPage.tsx` (6,275 lines, verified 2026-09-20) shrinks only as a rider on a real feature, and HUB-16/E-13 is the sanctioned rider this window. The acceptance is measurable and strict — each extraction moves **one pure concern** out with its own test, and the file's line count must go down in that session. Read `ERA Notes/01 - Architecture/Common Patterns.md` first; the risk in extracting from this file is the Framer-Motion-versus-HTML5-drag conflict and the optimistic-mutation/ID-only-state idioms, not the size. Hub Chat is a Junction module (`ERA Notes/03 - Junction Modules/Hub Chat/`) bridging Budget, Items and the Shopping List — trace before moving anything.
+
 ### HUB-6
 
 **Outcome:** Expense-split from chat (gap 8a).
@@ -332,6 +390,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Expense-split from chat (gap 8a) — untouched by this plan; still Later.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Untouched by the current plan and still Later — do not absorb it into HUB-22, which says so explicitly. When it starts: the split-bill machinery already exists end to end — `src/lib/utils/splitBill.ts` (`getTransactionDisplayAmount`, `getTransactionDisplayDescription`), `src/app/api/transactions/split-bill/route.ts`, `src/contexts/SplitBillContext.tsx` and `src/components/expense/SplitBillModal.tsx` — so this is a chat entry point onto it, not new money logic. The conversion path is `src/features/hub/messageActions.ts` and `src/components/hub/AddTransactionFromMessageModal.tsx`. BUD-83 is changing the split tag semantics and BUD-76 holds the currency contract; both land first. `.claude/skills/money-rules/SKILL.md`.
 
 ### HUB-21
 
@@ -341,6 +401,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Verification, and the acceptance is explicit that CI alone is insufficient and that no agent runs a production experiment. Record the actual served revision — which is a deployment fact, not a repo fact — and both-device acceptance for the original ERA slice (`src/app/era/page.tsx`, `src/components/era/EraShell.tsx`, `CommandBar.tsx`). Any old test-data cleanup requires fresh owner inspection and a manual runbook produced with `.claude/skills/data-repair/SKILL.md`; the agent writes the SQL, the owner runs it (Hard Rule #26).
+
 ### HUB-22
 
 **Outcome:** Add debt settlement and recurring-payment actions.
@@ -348,6 +410,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Propose and confirm debt settlement and recurring-payment add/skip through existing domain contracts. Expense splitting is owned only by HUB-6; do not duplicate it here.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Two new ERA capabilities over **existing** domain contracts — the acceptance says propose and confirm, so both go through the draft/confirmation pattern, never a direct write. Register them in `ERA_CAPABILITIES` (`src/features/era/capabilities/registry.ts`, 13 entries today) with slots typed in `capabilities/types.ts`, resolvers under `src/features/era/intents/resolvers/budget.ts` and formatters alongside. Debt settlement's existing contract is `src/features/debts/`, `src/app/api/debts/` and `src/components/expense/DebtSettlementModal.tsx` — fix BUD-68's write-on-read before building on that GET. Recurring add/skip is `src/features/recurring/` and `src/app/api/recurring/`; `.claude/skills/recurrence-safety/SKILL.md` — skip is not postpone. Expense splitting belongs to HUB-6 only. Grounded target slots per HUB-64. `.claude/skills/money-rules/SKILL.md`.
 
 ### HUB-60
 
@@ -358,6 +422,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Hub & ERA — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Depends on BUD-24, and for a good reason: "restore must use domain inverses, not generic money row insertion" is the same exactly-once inverse problem. Read `src/lib/balance-utils.ts` (`getBalanceDelta`, `getTransferDeltas`) and `src/features/recycle-bin/` for what a domain inverse looks like today. Export scope is the household, so `household_links` + `profiles` (Hard Rule #13) define the boundary, and secrets exclusion means no tokens, no push subscriptions, no Google refresh tokens — check `migrations/schema.sql` for which tables hold credentials before enumerating. Rehearse on isolated data; the agent never runs it against production (Hard Rule #26). Schemas and relationships in the export means the FK/cascade facts, which live in `migrations/db-state.json`, not `schema.sql` (Hard Rule #27).
+
 ### HUB-63
 
 **Outcome:** Align chat receipts and badges with notification policy.
@@ -367,6 +433,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Hub & ERA — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Depends on NOTIF-19. The policy module already exists and is already the boundary in one place: `src/features/hub/chatNotificationPolicy.ts` (with `chatNotificationPolicy.test.ts`), imported by `src/app/api/hub/messages/route.ts` (verified 2026-09-20). The mismatch to fix is other surfaces computing delivered/unread independently — read `src/app/api/hub/mark-read/route.ts`, `src/app/api/hub/stats/route.ts`, `src/app/api/hub/feed/route.ts` and the badge counts in `src/components/hub/HubPage.tsx`, and make them all consult the same policy. Household cases follow Hard Rule #13; reconnect cases are the realtime/offline path (`src/contexts/SyncContext.tsx`). Note the private-thread exclusion already enforced on both the immediate push path and the cron — do not regress it.
+
 ### HUB-65
 
 **Outcome:** Resolve household identity across unlink and relink.
@@ -375,6 +443,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Hub & ERA — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Held for DEC-13, and the prohibition is pointed: do not migrate household ownership from stale prose. The choice is a stable household container versus link-epoch identity, and what makes it hard is retained data — every module's household reads go through `household_links` today (Hard Rule #13, canonical in `src/app/api/accounts/route.ts`), so an unlink/relink either preserves or severs visibility of everything shared before. Get the current DB shape from `migrations/db-state.json` (Hard Rule #27), including whether `household_members` exists at all — DEC-18 under HUB-62 is deciding that. Write the decision, with a worked before/after for one shared record, into `_Decisions.md` before any migration.
+
 ### HUB-66
 
 **Outcome:** Choose keep, maintain or park for the module estate.
@@ -382,6 +452,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Top Layer phase2 owner census: record one disposition per existing module and which daily flow justifies it. Preserve data/history for parked modules; no speculative new campaign or deletion.
 
 **Provenance:** [Hub & ERA — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** A census, not engineering: one recorded disposition (keep / maintain / park) per module, each justified by a daily flow. The module list is CLAUDE.md's Feature Index and `ERA Notes/01 - Architecture/Feature Map/_index.md`; the per-page inventory is `ERA Notes/04 - UI & Design/Page & Feature Atlas/_Index.md` and `public/atlas/atlas.json`. Two constraints: parked modules keep their data and history (no deletion), and this produces no new campaign. Record dispositions in the PM vault per `ERA Notes/10 - Project Management/_Conventions.md`, not in code.
 
 ### HUB-67
 
@@ -392,6 +464,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Hub & ERA — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Depends on HUB-57, HUB-58 and BUD-63 — and the acceptance is explicit that truthful acknowledgments (57/58) do not prove atomicity. The conversion/link/inverse triple lives in `src/features/hub/messageActions.ts` (`useCreateMessageAction`, `useDeleteMessageAction`), `src/app/api/hub/message-actions/route.ts` and the bulk surface `src/components/hub/BulkConvertReviewSheet.tsx`, with the created object on the Budget side (`src/features/drafts/`, `src/app/api/transactions/`). Atomic means the draft/transaction and its link row commit together — which is BUD-63's shared boundary and should reuse it, not a second mechanism. "Exact retry" means idempotent under replay (`src/lib/offlineQueue.ts`), and "real inverse on partial failure" means the domain inverse, not a cache rollback.
+
 ### HUB-68
 
 **Outcome:** Resolve existing floating-panel debt within the style freeze.
@@ -399,6 +473,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Held for DEC-23: inventory source-present translucent overlays and agree the bounded correction compatible with the accepted ERA layout freeze. Future new panels already obey Hard Rule15; do not use this debt as permission to redesign.
 
 **Provenance:** [Hub & ERA — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Held for DEC-23, and the first deliverable is an inventory, not a fix: find the source-present translucent overlays. The rule they violate is Hard Rule #15 — a panel floating above page content must use `tc.bgPage` from `useThemeClasses()`, never `neo-card`, because glass/blur bleeds text through. Grep for `neo-card` in floating contexts across `src/components/` (`src/components/hub/`, `src/components/era/`, dropdowns and command palettes are the likely holders). The correction must stay compatible with the accepted ERA layout freeze, and the acceptance says explicitly this debt is not permission to redesign. New panels already obey the rule. `.claude/skills/ui-guardrails/SKILL.md`.
 
 ### HUB-69
 
@@ -411,6 +487,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Hub & ERA — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Catalogue C10, depends on KIT-20 and KIT-22. "Bounded lexical search" is deliberate — no embeddings, no model in the retrieval path; the risk being managed is hallucinated document contents, so the adapter returns **references with source IDs and availability**, never content it synthesized. Read `src/features/catalogue/hooks.ts` (`useCatalogueItems`, `useCatalogueItem`, `useCatalogueSubItems`) and `src/app/api/catalogue/items/route.ts` for the permission model, plus `src/types/catalogue.ts` for what a reference is. Source-owner permissions must survive the adapter — the same private-leakage constraint as KIT-18, TRIP-33 and HLTH-23. Register it as an ERA capability (`src/features/era/capabilities/registry.ts`). Gates HUB-70/71.
+
 ### HUB-70
 
 **Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C11a. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
@@ -422,6 +500,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Hub & ERA — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Catalogue C11a, depends on KIT-20 and HUB-69. The rule is precision about *which* record: exact source ID, revision preconditions (KIT-20's deliverable — do not invent a second staleness scheme), complete paging, and a confirmation that names the actual target. "No correction from truncated search" means HUB-69's adapter must expose whether the result set was complete, and a correction must refuse when it was not — the same complete/partial/unavailable discipline as HUB-41. The write path is `src/app/api/catalogue/items/[id]/route.ts` (today an untyped whole-object `metadata_json` assignment) via `useUpdateItem()` in `src/features/catalogue/hooks.ts`. "Use the deployed D17 branch" — confirm what is actually deployed before building on it.
+
 ### HUB-71
 
 **Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C11b. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
@@ -432,6 +512,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [HUB-69](<Hub & ERA — Master Book.md#hub-69>), [HUB-70](<Hub & ERA — Master Book.md#hub-70>).
 
 **Provenance:** [Hub & ERA — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Catalogue C11b, depends on HUB-69 and HUB-70 — read both guides first; this is their generalization. Two invariants. Visible lineage: a retrieved or corrected reference states its source record, which is the `source_catalogue_item_id` pattern (`src/app/api/items/[id]/promote/route.ts`). Never taking ownership from the source module: ERA may read and propose a correction, but the owning module keeps the write authority and its own validation — so corrections route through that module's API (`src/app/api/catalogue/items/[id]/route.ts`, or the owning module's route for an executable master), never a generic ERA writer. Partial/unavailable evidence must surface rather than be smoothed (HUB-41's states). Capability registration and grounded target slots per HUB-64.
 
 ## Backlog reconciliation
 

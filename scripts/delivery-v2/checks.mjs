@@ -350,6 +350,15 @@ export function parseTestCounts(output) {
     const count = Number(synthetic[1]);
     return { selected: count, executed: count, skipped: 0, failed: 0 };
   }
+  // Protected delivery oracles (tests/delivery-oracles/, e.g. BUD-83) end with
+  // "<executed> of <selected> tests passed"; they throw on the first failing case,
+  // so a printed summary means every executed case passed.
+  const oracle = text.match(/^(\d+) of (\d+) tests passed$/mu);
+  if (oracle) {
+    const executed = Number(oracle[1]);
+    const selected = Number(oracle[2]);
+    return { selected, executed, skipped: selected - executed, failed: 0 };
+  }
   if (/No test files found|no tests/iu.test(text)) return { selected: 0, executed: 0, skipped: 0, failed: 0 };
   return { selected: null, executed: null, skipped: null, failed: null };
 }

@@ -16,6 +16,8 @@ Produce useful product outcomes with bounded authority and truthful evidence. To
 
 ## Current state & evidence
 
+**2026-09-20 — bounded DLV-118 implementation:** resolved Focused profile propagation, selected-item recoverable briefs, versioned advisory separation and an explicit eligible prepared-plan route are implemented locally. Prepared plans create no AI planning job and still require owner approval before one engineering job, the existing checks/review and explicit Apply. DLV-118 stays open, with DLV-114/117 dependencies and unmeasured savings unchanged; DLV-134's inferred acceptance stays unapproved. No live runs, installed policy changes, historical rewrites or deployments were performed. See [implementation and validation evidence](<../Research/Delivery — Consumption Optimization Implementation.md>); image rebuild/requalification and service reload remain owner activation steps.
+
 **2026-09-15 lifecycle correction:** the earlier rule kept code-complete work open pending owner acceptance. The checklist now contains remaining executable work; done scopes have exact Shipped Log receipts, and owner-only checks retain their IDs under [UAT](<../../../docs/Delivery-UAT.md>). Done means implemented locally with recorded verification, not deployed or owner-accepted. Historical status narratives below must be read at their evidence dates.
 
 **2026-09-15 owner-requested review refactor (local implementation; owner UAT pending):** the shared V2 session is now a Plan / Changes / Checks / Activity workspace with URL-preserved tabs, a compact mobile header, current application state and normalized usage/overrun. Plans have a revision selector, readable Markdown/export and approval below the selected latest plan; new stored plans retain all steps, long text and questions instead of clipping at 20/800/8,000. Changed files open a bounded diff reader: both sides must match the frozen manifest hashes; the base may be recovered from hash-matching source bytes or the matching protected Apply journal, never substituted with later edits. Latest checks are grouped by criterion with earlier receipts retained. Rollback uses the existing Radix dialog with Cancel focus, focus restoration and explicit inverse receipts. Backend authority, subscription enforcement and dispatch contracts remain unchanged.
@@ -58,6 +60,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 ## Vision & Decisions
 
+- Owner-approved 2026-09-20 bounded DLV-118 slice: reuse complete owner-reviewed low-risk task material as a proposed plan even when no AI authored it; preserve plan approval, one-engineering-job limits, verification and Apply. Explicit advisory versioning applies only to new contracts; legacy meaning is unchanged. *(IMPLEMENTED 2026-09-20 locally; live comparison and complete DLV-118 acceptance remain separately gated.)*
+
 - Owner decision 2026-09-15: Work/Deliver contains actionable implementation only; completed source appears as Done, with UAT pending separately. Owner-only gates leave the backlog and remain in the UAT. Partial scope is split into explicit remaining engineering. *(IMPLEMENTED 2026-09-15: lifecycle reconciliation; PM Tooling R65 owns the app and guards.)*
 
 - Owner follow-up (2026-09-15): make Delivery a readable application with minimal text, repair the phone session and plan.md review, supply a small request-to-change table and real-item UAT with expected/actual and ship/hotfix/rollback decisions. *(IMPLEMENTED 2026-09-15 — shared session workspace and both requested documents; owner UAT remains pending.)*
@@ -81,6 +85,12 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+🟠 **Claude extra usage enabled — 2026-09-19.** The Claude account reports usage credits on (monthly cap USD 50, USD 12.96 used), contradicting the 09-13 "credits disabled" check (DLV-110). The worker guard refuses every Claude launch until the owner disables extra usage in claude.ai → Settings → Usage. Evidence: `/api/oauth/usage` `extra_usage.is_enabled: true`, `spend.enabled: true`.
+
+🟡 **DLV-133 — 2026-09-20: the deterministic typecheck runs on the host, not in the protected checker.** The checker container has neither TypeScript nor the source closure (`/deps` holds 41 packages: vitest, React, no `typescript`), so DLV-131's compile runs on the host against the current working tree. It is deterministic, outside the model and outside the writer's authority, but it sits outside the checker's isolation boundary and its baseline includes uncommitted work. Cost is ~3–4 minutes per verification (two compiles, no incremental reuse). Moving it inside means building a dependency volume with `typescript` plus the full source closure. Evidence: [Token Consumption Fixes §3/§7](<../Research/Delivery — Token Consumption Fixes.md>); docker inspection of `era-dlv107-dependencies` 2026-09-20.
+
+🟠 **DLV-122 — 2026-09-19: a lifetime token allowance silently blocks every new run.** `concurrency.fleetAllowance` 200,000 is compared with *settled* lifetime tokens (DLV-107 settled 284,243), so the DLV-90 run `r-8e7f635c1466` waits as "Capacity full" beside Writers 0/1 · Jobs 0/1. The screen does not name tokens as the cause, the allowance never resets, and a waiting run has no Cancel. Evidence: `coordination.mjs:545-569` (capacityReasons FLEET), owner UAT walkthrough 2026-09-19.
 
 🔴 **DLV-114 / DLV-119 — 2026-09-14: token threshold overrun and inflated totals.** The two jobs report 281,732 input and 2,511 output tokens plus cached/reasoning subsets. Current settlement/display adds all four categories (482,416); the input-plus-output interpretation is 284,243, still 42.1% above the 200,000 threshold. Per-job reservation is 50,000 and `strict: false`; no in-job stop was observed. Preserve raw receipts and prove provider-specific normalization before changing admission. [Run evidence and implementation](<../Plans/Delivery First-Run Hotfix.md>).
 
@@ -125,6 +135,49 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Acceptance Criteria Index
 
+### DLV-133
+
+**Outcome:** Run the deterministic typecheck inside the protected checker instead of on the host.
+**Kind:** improvement
+**Execution:** delivery
+**Touches:** `scripts/delivery-v2/worker-boundary.mjs`, `scripts/delivery-v2/typecheck.mjs`, `scripts/delivery-v2/typecheck-runner.mjs`
+
+- **Acceptance:** The typecheck compiles the candidate against a complete program inside the checker container — a dependency volume carrying `typescript` and the source closure — with the same inconclusive-not-pass rules, and the host path is removed or kept only as an explicit fallback that labels itself. A verification's environment record says which one produced it.
+- **Provenance:** DLV-131 shipped 2026-09-20 on the host because `era-dlv107-dependencies` holds 41 packages (vitest, React) and no `typescript`, and the candidate volume is a 29-file snapshot rather than a program. See [Token Consumption Fixes §3/§7](<../Research/Delivery — Token Consumption Fixes.md>).
+- **Reading guide:** `typecheck.mjs` holds the whole rule set — `runTypecheckVerification()`, `spawnTypecheck()` (the host/checker seam) and `candidateOverlay()`; `environmentVerdict()` with `ENVIRONMENT_DIAGNOSTIC_CODES` is the existing "cannot compile ≠ fails" rule to preserve. `typecheck-runner.mjs` (`main()`, `readConfig()`) is the program a checker image must be able to load. Container side: `worker-boundary.mjs` — `checkerRunArgs()`, `makeBoundaryConfig({dependencies})`, `createContainerRuntime()`, and `workerDockerfile()`/`buildWorkerImage()` for how an image gains packages. Tests: `tests/delivery-v2/typecheck.test.ts`, `worker-boundary.test.ts`, docker-gated `worker-boundary.docker.test.ts`.
+
+### DLV-134
+
+**Outcome:** Normalize historical usage readings recorded before the cumulative-counter fix.
+**Kind:** bug
+**Execution:** delivery
+**Touches:** `scripts/delivery-v2/usage-normalization.mjs`, `scripts/delivery-v2/store.mjs`, `scripts/delivery-v2/jobs.mjs`, `scripts/pm/app/deliveryReviewModel.ts`, `tests/delivery-v2/`
+
+- **Acceptance:** readings written before DLV-119's normalization carry a normalization record under the current version, so every consumer reads one interpretation. Raw receipts are preserved and no historical Result is silently rewritten.
+- **Reading guide:** `usage-normalization.mjs` is the rule set: a legacy row is one where `usage_readings.normalization_json IS NULL` (`parseNormalization()`), counted as `normalizationHealth().legacyRows`. Schema and migration list: `store.mjs` — the `usage_readings` table (`raw_*` columns, `counter_semantics`, `normalization_json`, `PRIMARY KEY (job_id, reading_key)`) and its `recordUsageReading`/`listUsageReadings`/`countUsageReadings` accessors. Consumers to keep consistent: `jobs.mjs normalizedTokenTotal()`/`resourceSummary()` and `deliveryReviewModel.ts normalizationNote()`/`tokenSplit()`. Bump `USAGE_NORMALIZATION_VERSION` if the derivation changes; a backfill must add a versioned record, not overwrite a reading. Tests: `tests/delivery-v2/usage-normalization.test.ts`, `store.test.ts`, `tests/pm-ui/delivery-review.test.ts`.
+- **Provenance:** 2026-09-20 split from DLV-119's shipped normalization; the backfill of pre-fix rows was never done.
+
+### DLV-122
+**Outcome:** Let the owner cancel a waiting run.
+**Kind:** bug
+**Execution:** delivery
+**Touches:** `scripts/delivery-v2/`, `scripts/pm/app/`, `tests/delivery-v2/`, `tests/pm-ui/`
+
+- **Acceptance:** The owner can cancel a waiting run from its page with no provider dispatch, and cancelling releases its reservation. *(Visibility and lifetime-vs-period window delivered by DLV-124 on 2026-09-19; the run page still offers no Cancel — the 2026-09-19 DLV-90 run was stopped through the control route.)*
+- **Provenance:** 2026-09-19 owner UAT walkthrough (U1–U7); DLV-90 run `r-8e7f635c1466` stuck in Waiting.
+- **Reading guide:** the run-verb set is `journey.mjs control()` — a `switch (action)` with `pause`/`stop`/`resume`/`close`/`release` and no `cancel`; `stop` already revokes the grant and calls `stopActiveJobs()`. Waiting state and its reservation: `isWaiting`, `WAITING_REASONS`, `queueRun()`, `clearWaiting()`, `reservingRuns()`. Why it waits: `coordination.mjs capacityReasons()`, the `REASONS.FLEET` branch comparing settled+reserved against `concurrency.fleetAllowance`. The owner-facing wording is `v2model.ts reasonLabel()` case `"fleet-resources"` → "Allowance used", which is why tokens are not named. Command plumbing: `entry.mjs routeDeliveryV2()`, `DeliveryV2.tsx useV2Command()`/`Attention()`. `allowances.mjs` (`applyAllowanceChange`, `fleetWindow`) is DLV-124's shipped window work — reuse, don't redo. Tests: `tests/delivery-v2/journey.test.ts`, `coordination.test.ts`, `parallel.test.ts`, `tests/pm-ui/coordination-model.test.ts`.
+
+### DLV-123
+
+**Outcome:** Fix four small review-screen defects found in UAT.
+**Kind:** bug
+**Execution:** delivery
+**Touches:** `scripts/pm/app/`, `tests/pm-ui/`
+
+- **Acceptance:** (1) Run titles keep underscores (`NOT_TESTED` renders as written, not as "NOTTESTED"). (2) Verification shows no empty time-only row under a current result. (3) The item page shows its Delivery history without expanding "Scope and evidence". (4) A Conflict candidate does not present Apply as the primary action.
+- **Provenance:** 2026-09-19 owner UAT walkthrough (U3, U6 and the DLV-90 title).
+- **Reading guide:** one anchor per defect. (1) `scripts/pm/shared/text.mjs cleanInlineText()` strips backticks, asterisks, underscores and tildes wholesale in its last-but-one `.replace()` — the only place underscores are lost, and shared by every PM title reader. (2) `DeliveryReview.tsx ChecksReview()` renders `<div className="check-result"><time>…` unconditionally while its siblings are conditional. (3) `Work.tsx`, the `<summary>Scope and evidence</summary>` `<details>` that hides Delivery history. (4) `v2model.ts applyControls()` — `"conflict"` sits in the `retryable` list, so `canApply` stays true; change the projection, not the button. Tests: `tests/pm-ui/shared-parsing.test.ts`, `delivery-review.test.ts`, `work-lifecycle.test.ts`.
+
 ### DLV-121
 
 **Outcome:** Page frozen diffs and older candidate artifacts.
@@ -134,6 +187,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Acceptance:** Expose hash-bound paged reads for older candidate generations and previews beyond the existing file/text budget. Keep every page tied to candidate/base identity; label binary/unavailable bytes, refuse unsafe paths, and preserve the working plan reader and current-candidate preview from DLV-116.
 - **Provenance:** 2026-09-15 split of incomplete engineering from already implemented review scope. Owner acceptance remains in the UAT.
+- **Reading guide:** `review.mjs candidateReview()` is the entire current reader and holds every bound to be paged — `index >= 20`, `remaining = 64 * 1024`, `MAX_FILE_BYTES` (128 KiB) — plus `readBytes()`'s hash gate and `resolveInside()` path safety. It reads only the *current* candidate plus hash-matching Apply-journal bytes, which is why older generations are unavailable. Identity and manifests: `candidate.mjs` (`freezeCandidate`, `candidateChangedPaths`, `candidateFreshness`). Bounded artifact storage already exists: `store.mjs publishArtifact()`/`readArtifact()`. Exposure runs `journey.mjs detail()` → `entry.mjs routeDeliveryV2()`; render is `DeliveryReview.tsx ChangesReview()`/`ChangedFile()` over `V2ChangedFile` in `types.ts`. Keep the DLV-116 labels (`preview-limit`, `base-unavailable`, `binary`, `too-large`, `unsafe-path`). Tests: `tests/delivery-v2/review.test.ts`, `apply.test.ts`, `tests/pm-ui/delivery-review.test.ts`.
 
 ### DLV-120
 
@@ -144,6 +198,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Acceptance:** Persist bounded protected-check output with criterion/revision identity, expose it in Checks over local/relay transports, and distinguish missing runner, unreadable output and test failures. Preserve existing count parsing and current/previous grouping from DLV-112; no repeated parser rewrite.
 - **Provenance:** 2026-09-15 split of incomplete engineering from already implemented review scope. Owner acceptance remains in the UAT.
+- **Reading guide:** the retention decision is one place — `checks.mjs runCheck()` computes `outputHash = sha256(stdout+stderr)` and records `redaction: "stdout and stderr are hashed, not stored…"`, with `raw_refs: []` on every observation. `raw_refs` (see `criteria.mjs makeObservation()`/`commandObservation()`) is the existing hook for an artifact reference, and `store.mjs publishArtifact()`/`readArtifact()` the existing bounded store. The missing-runner distinction already exists as `raw.spawnError` → `outcome: "interrupted"`; extend that vocabulary rather than adding a parallel one. Do **not** touch `parseTestCounts()` — DLV-112 shipped its ANSI/observer/oracle patterns. Display: `deliveryReviewModel.ts checkGroups()`/`checkTitle()`/`checkReason()` and `DeliveryReview.tsx ChecksReview()`; relay parity via `transport.ts`/`localTransport.ts`. Tests: `tests/delivery-v2/evidence.test.ts`, `criteria.test.ts`, `tests/pm-ui/delivery-review.test.ts`.
 
 ### DLV-119
 
@@ -200,6 +255,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Touches:** `scripts/delivery-v2/service.mjs`, `scripts/delivery-v2/policy.mjs`, `scripts/delivery-v2/work-ref.mjs`, `scripts/delivery-v2/coordination.mjs`, `scripts/delivery-v2/journey.mjs`, `scripts/pm/app/DeliveryV2.tsx`, `scripts/pm/app/types.ts`, `tests/delivery-v2/`, `tests/pm-ui/`
 
 - **Acceptance:** deterministic item-aware model/effort/profile recommendation drawn only from qualified subscription-ready catalog entries; explicit selection and preserved overrides, source facts/revision recorded. Focused/Deep labels map to compatible stored values. Missing suggestions and stale capabilities cannot silently use a default. Lone-run readiness is clear and capacity details name blockers/units. [Hotfix packet F](<../Plans/Delivery First-Run Hotfix.md>).
+- **Reading guide:** the deterministic recommender already exists — `policy.mjs recommendWorkProfile()`, returning `{profile, contract, reasons, source, settings}`, where `settings` is filled only when `catalog.profiles[profile][executor]` exists (hence the Focused-only suggestion). The catalog and per-entry availability are assembled in `service.mjs createDeliveryV2Context()` and validated by `policy.mjs validateExecutionPolicy()`; qualification facts come from `qualification.mjs` and `journey.mjs qualify()`/`profileFor()`. Requested-vs-effective persistence: `entry.mjs readExecutorSelection()`/`setExecutorSelection()`/`deliverSelection()`. Launch screen: `DeliveryV2.tsx LaunchV2()` with `PROFILES` and `startBlocker()`, plus `v2model.ts launchState()`/`effortsFor()`/`executorBlockMessage()`. Capacity wording is `v2model.ts reasonLabel()`, shared with DLV-122. Tests: `tests/delivery-v2/executor-selection.test.ts`, `qualification.test.ts`, `pilot-entry.test.ts`, `tests/pm-ui/delivery-eligibility.test.ts`.
 
 ### DLV-118
 
@@ -211,6 +267,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Evidence:** both profiles use the same investigation flow; native build attempted unavailable tools. This run's corrected baseline and attribution limits are in [hotfix packet F](<../Plans/Delivery First-Run Hotfix.md>).
 - **Acceptance:** resolved profiles govern context/check inventory and bounded job/repair policy; Focused uses known scope, compact required context and a prepared checker without repeated unavailable tool attempts. Measure fewer wasted commands and lower usage against the same acceptance fixture; preserve approvals, invariants and qualification. Deep remains bounded investigation before approval, not unlimited work. No invented estimate becomes a cap.
+- **Reading guide:** every prompt lives in `interaction.mjs`: `investigationInstruction()`, `implementationInstruction()`, `repairInstruction()`, plus the shared `NO_TEST_RUNS` and `WORKSPACE_FACTS` strings that already exist to stop wasted commands. **Verified 2026-09-20:** `journey.mjs instructionFor()` passes `profile` to `implementationInstruction` but *not* to `investigationInstruction`, so every run investigates as `investigate` whatever the stored profile says — the mechanical half of "both profiles share one investigation path". The profile contract is `policy.mjs WORK_PROFILE_CONTRACTS` (`investigation`, `maxPlanJobs`, `maxImplementationJobs`, `repairDispatchLimit`), read through `journey.mjs profileContract()`. Check preparation: `checks.mjs pinCheckPlan()` and `worker-boundary.mjs checkerRunArgs()`. Tests: `tests/delivery-v2/instructions.test.ts`, `journey.test.ts`.
 
 ### DLV-112
 
@@ -240,6 +297,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Evidence (2026-09-14):** the run screen always accepts Guidance, but `queueMessage()` persists it as `queued` until a later native job carries it. A `checks-inconclusive` result offers only Recheck or Close and is not resumable, so the message is stranded and the owner has no action that turns findings into a revised plan/candidate.
 - **Acceptance:** at candidate review, the owner can submit findings, see whether they are recorded and dispatchable, and explicitly choose a bounded revision path. The existing candidate remains immutable, no job dispatches without that owner action, and resource/policy refusal is stated before work begins. Cover queued, dispatched, refused and repeated-command cases.
 - **Hotfix delta (2026-09-14):** bind findings to check/candidate evidence, preserve C1 while creating C2, report actual guidance delivery and support a linked successor for closed runs. Scope/model/resource changes renew necessary approval. [Packet E](<../Plans/Delivery First-Run Hotfix.md>).
+- **Reading guide:** the stranding point is `interaction.mjs queueMessage()` + `messageReceipt()` — guidance persists as `queued` and is only carried by a later job. Its consumer is `journey.mjs instructionFor()` (the `messages` argument to `investigationInstruction`/`implementationInstruction`/`repairInstruction`). `journey.mjs admitContinuation()` is the existing bounded "another job under the same run" path — reuse it rather than inventing one. The dead end is `evaluate()`/`resultFor()` producing `checks-inconclusive` and `ownerActionFor()` then offering only Recheck/Close. Candidate immutability (C1 surviving C2) is `candidate.mjs freezeCandidate()`/`candidateFreshness()`. UI: `DeliveryV2.tsx Attention()`/`useV2Command()`. Tests: `tests/delivery-v2/journey.test.ts`, `results.test.ts`, `tests/pm-ui/delivery-v2-model.test.ts`.
 
 ### DLV-114
 
@@ -252,6 +310,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Evidence (2026-09-14):** DLV-107 used 482,416 settled token counters against its 200,000-token policy. Admission reserved 50,000 per job and correctly blocked only the next dispatch once reported use exceeded the allowance; it could not stop the running implementation, which alone settled 388,470 counters. No monetary charge was reported, but the owner requires included-subscription use only and needs a real consumption ceiling.
 - **Accounting correction (2026-09-14):** 482,416 is the historical additive counter, not a deduplicated token total. Input-plus-output is 284,243 overall / 220,586 Build, still above the threshold. DLV-119 owns normalization. No further native dispatch after the overrun appears in this run; future-dispatch refusal is code behavior, not a separately exercised event in this trial.
 - **Acceptance:** explicit per-run owner limit and evidence-backed enforcement mode, warning, in-job stop at observed crossing, observed termination and durable partial artifacts. A requested hard cap refuses unless a whole-job bound is proved; no silent threshold fallback. Owner-only audited increases/model escalation, unknown usage and fleet reservations preserved. Subscription zero-extra-spend and token ceilings remain separate guarantees. Cover both providers, end-only usage refusal, overshoot, restart, duplicate events and no automatic redispatch. Detailed seams and capability matrix: [packet B](<../Plans/Delivery First-Run Hotfix.md>).
+- **Reading guide:** admission already works — `jobs.mjs evaluateResources()` and `admitJob()`, with the settled figure from `resourceSummary()` and `normalizedTokenTotal()`; land DLV-119/DLV-134 semantics before adding any stop. The missing seam is inside the stream: `adapters/claude.mjs` carries an `observe` callback and a per-dispatch `AbortController` (pulled by its `stop()`), and `adapters/codex.mjs` mirrors both; each accumulates per-turn usage before the stream ends. The policy→adapter path for a native limit already exists: `journey.mjs nativeLimitsFor()` → `thresholdUsd` → Claude's `maxBudgetUsd` — a precedent, but a threshold, not a whole-job bound. Policy shape: `policy.mjs validateExecutionPolicy()` (`resources`, `perJobReservation`). The adapters' own capability strings are where the "no proved bound" claim is recorded; keep them honest. Tests: `tests/delivery-v2/jobs.test.ts`, `journey.test.ts`, `dispatch-claims.test.ts`.
 
 ### DLV-110
 
@@ -275,6 +334,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Evidence (2026-09-13):** preparation supplies a scoped credential snapshot to a read-only named volume. The guard checks provider quota before the native SDK starts, so an expired snapshot fails closed instead of reaching the SDK's refresh path. Account checks and both native SDK controls pass now; that is not evidence of future unattended renewal.
 - **Acceptance:** refresh only through the native subscription login/control flow without inference or paid credentials; preserve a refreshed worker session across jobs; expired/revoked credentials report a short reconnect action. Test expiry, revocation and a stopped/restarted host. Do not add API-key fallback, token-pasting instructions or remote exposure of host credential directories. Coordinate remote owner-device acceptance with DLV-104.
+- **Reading guide:** **partly built already — read it before designing anything.** `scripts/delivery-v2/credential-sync.mjs` (header dated 2026-09-19, "DLV-111, desktop part") holds `HOST_CREDENTIAL`, `credentialExpiry()`, `readHostCredential()`, `MIN_REMAINING_MS` and `createCredentialSync({boundary, docker, …})`, copying the host sign-in into the read-only volume before a probe or job, with the worker never writing back. The guard it feeds is `worker/subscription.mjs prepareSubscription()`/`includedUsage()`/`readSubscriptionWindows()`; volume preparation is `setup-subscriptions.mjs setupSubscriptions()` and `worker-boundary.mjs makeBoundaryConfig({credentials})`. Remaining scope is the unattended/remote half and owner-facing reconnect status (auth readiness in `service.mjs`'s catalog; `v2model.ts executorBlockMessage()`), coordinated with DLV-104. Tests: `tests/delivery-v2/credential-sync.test.ts`, `subscription.test.ts`, `subscription-window.test.ts`.
 
 ### DLV-107
 
@@ -322,6 +382,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Related cleanup ordering:** during recovery, `journey.mjs:1739` releases retained output before `jobs.mjs:811` durably records the recovered result. Preserve replay material until recording succeeds.
 - **Acceptance:** persist and replay unfinished post-job transitions even when a job is terminal; recover investigation → plan and implementation → candidate/checks/result across injected failures before and after each durable boundary. Repeated reconciliation creates one plan/result transition, does not duplicate checks/usage/PM projection, and never redispatches the provider. A failed recovery write keeps retained output available. Cover both executors using scripted SDKs and a reopened store.
 - **Scope limit:** recovery ordering and durable completion markers only; no policy relaxation, new engine or live provider required. Any store schema work is local Delivery SQLite, not Supabase.
+- **Reading guide:** the ordering is visible at the tail of `journey.mjs dispatch()` — `runtime.release(after)` and the `job.recorded` event run *before* `afterJob(job_id)` creates the next durable run state. Recovery scans `jobs.mjs reconcileOutstanding()` over `coordination.mjs OUTSTANDING_JOB_STATUSES` (`reserved`/`active`/`paused`/`unknown`), which is exactly why a `finished/succeeded` job is invisible to it. Read `afterJob()`, `freezeAndCheck()`, `evaluate()` and `project()` as the transitions that must be replayable, and `store.mjs openStore()`'s migration list plus `verifyRestore()` for where a durable completion marker belongs. Entry points: `journey.mjs reconcile()` and `control({action:"reconcile"})`. Idempotence guards that already exist: `once()` and `store.mjs payloadDigest()`. Tests: `tests/delivery-v2/journey.test.ts`, `jobs.test.ts`, `store.test.ts`.
 
 ### DLV-109
 
@@ -333,6 +394,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Evidence (2026-09-13):** Claude's adapter drains the stream before returning its buffered activity (`adapters/claude.mjs:680–702`); Codex follows the same pattern (`adapters/codex.mjs:475–521`). `jobs.mjs:550–551` persists activity only with the dispatch result, and `journey.mjs:2520` renders that persisted list. A held-open fake Claude stream emitted Read while the real job remained active: `runDetail.activity` was empty. After the stream ended, Read appeared. Local probe: `.tmp/delivery-review-activity.mjs`; receipt `.tmp/delivery-review-activity.log`.
 - **Acceptance:** an observed tool/agent event becomes visible through the existing run-detail polling while the stream is still active; use the same bounded persistence path for both executors. A reconnect/replay does not duplicate activity. Preserve order and attribution; never invent unreported model/effort, tool completion or cost. Cover active, resumed and interrupted streams with fake SDK fixtures.
 - **Scope limit:** activity delivery only; no new chat protocol or UI redesign.
+- **Reading guide:** both adapters buffer — `adapters/claude.mjs` pushes into `state.activity` (capped by `ACTIVITY_LIMIT`) and returns it only with the final result; `adapters/codex.mjs` mirrors it. `jobs.mjs recordDispatchResult()` holds the single `store.appendActivity(...)` call, so nothing reaches the store until the stream ends. The durable and render sides already exist: `store.mjs appendActivity()`/`listActivity()` → `journey.mjs detail()` → `DeliveryReview.tsx ActivityReview()` with `v2model.ts activityTime()`. The cleanest seam is the `observe` callback already threaded into Claude's query options and its Codex equivalent. Reconnect dedupe should follow the same reading-key discipline as usage rows (`store.mjs` `PRIMARY KEY (job_id, reading_key)`). Tests: `tests/delivery-v2/journey.test.ts`, `jobs.test.ts`, `tests/pm-ui/delivery-review.test.ts`.
 
 ### DLV-96
 
@@ -391,6 +453,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** `scripts/delivery/recommendation.mjs` — `FORECAST_PHASES`, `estPhaseUsage(tier, phase, history)`, its median-eligibility helper, and `forecastByPhase()`, where `perTraversal` vs phase totals is the actual unit confusion. Receipt provenance comes from `scripts/delivery/usage.mjs` (`reduceUsageByPhase()`, `toUsageTotalsV2()`, `addUsageV2()`). Blocked on DLV-87/88 for clean receipts; the obsolete aggregate constant in `scripts/delivery/config.mjs` is explicitly not to be retuned. Tests: `tests/delivery/recommendation.test.ts`, `usage.test.ts`.
+
 ### DLV-87
 
 **Outcome:** Reject launches with unknown or unpriced cost.
@@ -401,6 +465,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** one function — `scripts/delivery/budgets.mjs checkSessionBudget()`, with `totalProcessedTokens()` and `createBudgetEnvelope()` beside it. Pricing tables are in `scripts/delivery/config.mjs` (the `codex: {models: []}` entry is what makes Codex unlaunchable once this lands — the accepted consequence). V2's half is already done in `jobs.mjs evaluateResources()`; mirror its refusal vocabulary rather than inventing one (`tests/delivery-v2/dispatch-claims.test.ts` shows the shape). Tests: `tests/delivery/budgets.test.ts`, `config.test.ts`.
+
 ### DLV-88
 
 **Outcome:** Separate API cost, estimates and subscription usage.
@@ -410,6 +476,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** `scripts/delivery/usage.mjs` is where the three numbers are currently one — `estimateCostUsd()`, `addUsageV2(prev, usage, costUsd, costEstUsd)` and `computeOccupancy(usage, windowTokens)`; occupancy is already the rate-limit-window measure the acceptance asks for. The ledger surface is `scripts/delivery/server-routes.mjs`. V2 already keeps the fields separate — `jobs.mjs resourceSummary()` and `v2model.ts costRows()` — so reuse those names instead of coining new ones. Tests: `tests/delivery/usage.test.ts`, `budgets.test.ts`.
+
 ### DLV-89
 
 **Outcome:** Resolve V1 approval interaction costs.
@@ -417,6 +485,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Resolve the proposed interaction-cost experiment for DLV-92 against the three-gate non-negotiable. Existing qualifying INSTANT gate compression remains valid; no general typed-approval, budget or gate waiver is authorized by this study.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** decision work, not code work — the deliverable is a recorded decision (DEC-21 in `_Decisions.md`), not an edit. For context on what the three gates actually are in V1, read `scripts/delivery/state-machine.mjs` and `scripts/delivery/controls.mjs`, plus the qualifying INSTANT compression in `scripts/delivery/instant.mjs`.
 
 ### DLV-90
 
@@ -427,6 +497,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** `scripts/delivery/run-session.mjs` — `runValidationCommands()`, `VALIDATION_COMMANDS` and `targetedTestCommand()` already record `{skipped, reason}` per rung but have no zero-selected concept; `NOT_TESTED` exists nowhere in V1 yet, so it is a new state rather than a rename. Classification lives in `scripts/delivery/validation-baseline.mjs` (`countValidationFailures()`, `classifyValidationFailure()`); the INSTANT gate is `scripts/delivery/instant.mjs`. V2 already has the rule — `checks.mjs parseTestCounts()` plus `criteria.mjs`'s "missing/zero counts cannot pass" — so copy those semantics. Tests: `tests/delivery/run-session.test.ts`, `validation-baseline.test.ts`, `instant.test.ts`.
+
 ### DLV-91
 
 **Outcome:** Release abandoned session locks safely.
@@ -434,6 +506,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Safe session-lock handling: store lock ownership plus a heartbeat, expire abandoned leases, check whether the owning process still exists, and allow an audited manual force-release. `s-20260725-181118-xdl9` sat ACCEPTED-not-shipped for 4 days holding the global build lock; a crashed first real run must not block Delivery for days
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** the lock is derived, not stored — `scripts/delivery/server-routes.mjs` `isBuildLockActive()` over `BUILD_LOCK_STATES`, which includes `ACCEPTED`; that is why an accepted-not-shipped session held it for four days. Liveness already exists as `run-session.mjs isRunnerAlive(sessionDir)`, used at the salvage/force paths in the same routes file — build on it rather than adding a second heartbeat. An audited force-release should emit through `scripts/delivery/events.mjs`. DLV-68 shares this ground. Tests: `tests/delivery/server-routes.test.ts`, `server-routes-salvage.test.ts`, `failure-scenarios.test.ts`.
 
 ### DLV-92
 
@@ -510,6 +584,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** the launch-time envelope is the `instant` entry in `scripts/delivery/config.mjs` (`maxUsd`, `maxTokens`, `warnPct`, `maxInternalTurns`). The switch to measurement is already written: `scripts/delivery/recommendation.mjs` `estPhaseUsage(tier, phase, history)` uses medians once enough samples exist, with a helper that reports whether it will. So the work is supplying three clean completions and re-tuning from them, not writing a new estimator. Tests: `tests/delivery/recommendation.test.ts`, `instant.test.ts`.
+
 ### DLV-68
 
 **Outcome:** Repair abandoned attempt observability.
@@ -517,6 +593,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Reuse existing heartbeat and PID checks. Add missing attempt identity/open-stub closure and progress-aware watchdog behavior demonstrated by a real failure. DLV-91 owns leases/lock release; do not build a second heartbeat subsystem.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** same liveness primitives as DLV-91 — `run-session.mjs isRunnerAlive()`, the `runner-crash` awaiting/blocked shape near the top of the same file, and `scripts/delivery/events.mjs`. The missing pieces are attempt identity and open-stub closure: read `scripts/delivery/state-machine.mjs` and the session-artifact writers in `run-session.mjs`. DLV-91 owns leases and lock release; do not build a second heartbeat subsystem. Tests: `tests/delivery/runner-crash.test.ts`, `state-machine.test.ts`, `failure-scenarios.test.ts`.
 
 ### DLV-69
 
@@ -526,6 +604,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** the continuation path is the launch handler in `scripts/delivery/server-routes.mjs` — the `continuationOf` block that builds `continuation = {predecessorSessionId, remainingWork, salvagedAt}`, carries the predecessor's `memory/ledger.json`, and calls `markSuperseded()`. Context assembly is `scripts/delivery/context-assembly.mjs` (`buildContextPackage()`, `buildMechanicalDigest()`); the ledger model is `scripts/delivery/memory.mjs`. The distinction to add is "latest owner request" versus already-processed traffic, with the digest attached once. Tests: `tests/delivery/server-routes.test.ts`, `run-session-context.test.ts`, `memory.test.ts`.
+
 ### DLV-70
 
 **Outcome:** (rest of DLV-40) Surface the raw-SDK transcript pointer in the desktop session detail.
@@ -533,6 +613,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** (rest of DLV-40) Surface the raw-SDK transcript pointer in the desktop session detail — the `state.driver.rawTranscript` field with its hash and existence check is written but rendered nowhere
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** pure rendering gap, verified 2026-09-20: `withRawTranscriptLinkage()` in `scripts/delivery/run-session.mjs` writes `state.driver.rawTranscript` (pointer + hash + existence check, Claude-only), `scripts/delivery/transcript.mjs` owns the pointer, and `grep rawTranscript scripts/pm/app/` returns nothing. The desktop session detail is `scripts/pm/app/Run.tsx` — `RunStory()` for the detail body and `Transcript()` for the existing per-turn reader over `/api/delivery/transcript`; shape the field in `scripts/pm/app/model.ts`/`types.ts`. Tests: `tests/delivery/transcript.test.ts`, `tests/pm-ui/session-model.test.ts`.
 
 ### DLV-99
 
@@ -558,6 +640,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** measure before planning — `pnpm lint` and `pnpm typecheck` are the baseline and the counts quoted here are stale. The rule is per-call-site: replace each `no-explicit-any` with the type its own call site already implies, never `unknown` and never a suppression. `exhaustive-deps` belongs to DLV-84, not here. `tests/pm-ui/lint-rules.test.ts` guards the PM app's own rules.
+
 ### DLV-84
 
 **Outcome:** Burn down `react-hooks/exhaustive-deps` (50 across 25 files).
@@ -565,6 +649,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Burn down `react-hooks/exhaustive-deps` (50 across 25 files) — deliberately excluded from DLV-83 because each fix **changes runtime behaviour**: these sit in `SyncContext`, `HubPage` and `MobileExpenseForm`, where a wrong dependency is an infinite render loop in the offline sync engine or a money form. Needs per-site judgment plus real in-app verification on mobile, one file at a time, never a batch — a green typecheck proves nothing here
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** do not batch. The named risk sites are `src/contexts/SyncContext.tsx`, `src/components/hub/HubPage.tsx` (mounted by `src/app/chat/page.tsx` and `src/app/alerts/page.tsx`) and `src/components/expense/MobileExpenseForm.tsx` — a wrong dependency there is a render loop in the offline sync engine or in the money form. Re-measure with `pnpm lint` first; each fix needs in-app verification on a mobile viewport, one file at a time. `ERA Notes/01 - Architecture/Common Patterns.md` and `.claude/skills/cache-invalidation/SKILL.md` cover the mutation/state idioms these hooks sit in.
 
 ### DLV-100
 
@@ -626,6 +712,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [DLV-102](<Delivery — Master Book.md#dlv-102>).
 
 **Provenance:** [Delivery — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/Delivery — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** conditional and gated on DLV-102 — nothing to build yet. The V1/V2 switch is `entry.mjs`: `readDispatchMode()`, `setDispatchMode()` (which refuses while V1 writers or unreconciled V2 jobs exist) and `guardV1Route()`; V1 writer detection is `service.mjs listActiveV1Writers()`. V1's own routes are `scripts/delivery/server-routes.mjs`, and history readers are `scripts/pm/app/Run.tsx` plus `scripts/pm/shared/history.mjs`. Retirement means draining and preserving those readers, not deleting them. Tests: `tests/delivery-v2/pilot-entry.test.ts`, `tests/pm-ui/session-model.test.ts`.
 
 ### DLV-104
 
@@ -707,6 +795,26 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - 2026-09-11 — Command Center §7 mapped once: identity/source/witness repairs → PM Tooling R59 (shipped) and R51; V2 selection witness, per-run executor, approvals, resources, dispatch claim and local authentication → DLV-97; isolation → DLV-96; unknown cost → DLV-87/88; phone recovery → DLV-104; phone presentation → R63; Apply → DLV-105; parallel candidates → DLV-106; Home/Work → R60; sprints → R61; metrics → R62; native baseline, trial and retirement stay DLV-98/102/103.
 
 ## Shipped Log
+
+- ✅ 2026-09-20 — **DLV-118** Bounded slice only: resolved-profile consistency, recoverable selected-task input, versioned advisory separation and no-planning-job preparation with normal approval/check/Apply protections. Canonical item remains open. Evidence: [Consumption Optimization Implementation](<../Research/Delivery — Consumption Optimization Implementation.md>); deterministic fixtures only, no measured consumption reduction.
+
+- ✅ 2026-09-20 — **DLV-132** Confirmed prompt waste removed from executor instructions. Every prompt now states that `/work` is a file snapshot with no Git metadata (run r-83dddb67fea9 spent a whole request on `git diff --check/--stat/diff`, all refused) and names who does verify, so "do not run tests" does not read as "nothing is checked". On a genuine thread resume the approved plan is referenced rather than re-sent (≈0.4k × 11–13 requests on that run); the decision is made at dispatch, where the resumed thread is known, and every uncertain case — fresh thread, continuity fallback, a plan from a different job, a repair — keeps the full JSON. The rewritten instruction is persisted to `request_json`. Resume strategy, planning, model and effort unchanged; `NO_TEST_RUNS` unchanged. Evidence: `scripts/delivery-v2/interaction.mjs` (`WORKSPACE_FACTS`), `journey.mjs` (`planReferenceRequest`), `store.mjs` (`setJobRequest`); tests `tests/delivery-v2/instructions.test.ts` (6 passed). No saving is claimed without a measurement — see [Token Consumption Fixes §6](<../Research/Delivery — Token Consumption Fixes.md>).
+
+- ✅ 2026-09-20 — **DLV-131** Deterministic typecheck outside the model, and Apply refuses without it. The checker compiles the host checkout with the candidate's bytes overlaid in a TypeScript CompilerHost (`typecheck-runner.mjs`) — nothing copied, checkout never written; an earlier staged-copy version spent over twelve minutes on I/O alone and was abandoned. An incomplete environment (compiler absent, no tsconfig, environment-shaped baseline diagnostics, unreadable exit, or a candidate that touches tsconfig/package.json/node_modules) is **inconclusive, never a pass**, so baseline subtraction cannot manufacture one. The verdict binds to the candidate id and its exact changed paths and re-runs at Apply preview; `candidateVerified` requires it and `applyCandidate` separately refuses `required-verification-missing-failed-or-stale` for a result recorded before it existed. Bounded sanitized diagnostics are retained at `.delivery/v2/artifacts/typecheck/`, not hashes, and never reach the model. Proof: an isolated real-`tsc` fixture, plus a live run against this checkout — a synthetic candidate carrying `supabaseAdmin.from(...)` produced `src/lib/utils/splitBill.ts(95,24): error TS2339`, the exact defect that reached `verified_candidate` on 2026-09-19, while a harmless candidate passed (186 s / 232 s). The DLV-128 laptop gate is unchanged and still runs after Apply. Enabled as `required` in policy revision 5. Evidence: `scripts/delivery-v2/typecheck.mjs`, `typecheck-runner.mjs`, `journey.mjs`, `policy.mjs`; tests `tests/delivery-v2/typecheck.test.ts` (22), `verification-gate.test.ts` (8). Runs on the host, not in the checker container (no TypeScript and no source closure in `/deps`) — stated as a limit, not solved.
+
+- ✅ 2026-09-20 — **DLV-130** Subscription-window observations recorded and labelled as shared. The preflight's `used_percent` was read and discarded; the worker now normalizes it in-process (percentages, window identity, reset instant, plan tier — the raw payload never crosses the boundary) and takes a second read-only probe after the job. Both ends and their comparison are stored on the job (`jobs.subscription_json`); a window that reset between readings yields a note, not a negative "saving", and an unavailable reading is recorded as unavailable, never 0%. Every label says these are shared plan windows whose difference is an upper bound, attributable only if nothing else used the account. Budget honesty in the same pass: the allowance reads "admission limit" (checked at admission, does not stop a running job), a reservation is tagged `admission-estimate` (50,000 against ~398,000 actually spent on the investigated build), and `maxTurns` is no longer recorded as a limit for Codex, which never receives it. No live enforcement and no reservation multiplier — in-job stopping stays DLV-114. Evidence: `scripts/delivery-v2/subscription-window.mjs`, `worker/subscription.mjs`, `worker/runner.mjs`, `worker-boundary.mjs`, `jobs.mjs`, `journey.mjs`; tests `tests/delivery-v2/subscription-window.test.ts` (7 passed).
+
+- ✅ 2026-09-20 — **DLV-129** Codex token accounting corrected: `turn.completed.usage` is **thread-cumulative**, not per-turn, so a resumed build restated its planning job's usage and the session was counted twice. Settled from the pinned implementation, not from plausibility: the exec processor emits `ThreadTokenUsage.total` (`event_processor_with_jsonl_output.rs:117-126, 520-521`), that total accumulates every request (`protocol.rs:2066-2069`), and a resumed session reloads it from the rollout (`core/src/session/mod.rs:1368-1372, 1496-1501`); 332 local rollouts corroborate, six of them opening with an inherited total. Run r-83dddb67fea9 is therefore **493,436**, not 589,176 (build's own spend 397,696). Readings are now normalized per reading against the correct previous reading for that thread, with raw values, counter semantics and the normalization basis stored beside them (store schema 7); missing baselines, counter resets and undeclared semantics are flagged and never summed into a total that reads like a measurement. Claude stays per-turn, declared explicitly. UI shows uncached · cached · out (reasoning as a subset) with the provider counter beside the normalized total. Historical rows are labelled, not rewritten. Evidence: `scripts/delivery-v2/usage-normalization.mjs`, `adapters/codex.mjs`, `adapters/claude.mjs`, `jobs.mjs`, `store.mjs`; tests `tests/delivery-v2/usage-normalization.test.ts` (18 passed). Full report: [Token Consumption Fixes](<../Research/Delivery — Token Consumption Fixes.md>).
+
+- ✅ 2026-09-19 — **DLV-128** Outcome tab, owner test gate and no executor test runs. Outcome (first tab; default once a result exists) shows the verdict, what went well / needs attention (recorded facts only), links to spec, plan, verification, conversation and changes, artifacts and a fresh / cached / output token split; the status card adds "fresh · cached". Executors are instructed not to run test, lint, typecheck or build commands (`NO_TEST_RUNS` in `interaction.mjs`); protected checks still run. After any Apply that leaves files written, Deliver stays locked (server refusal `tests-unconfirmed` plus disabled Start) until the owner records Passed; Failed keeps it locked unless the owner confirms Proceed anyway, recorded in `.delivery/v2/test-gate.json` with a `tests.recorded` event. Evidence: `scripts/delivery-v2/test-gate.mjs`, `scripts/pm/app/OutcomeReview.tsx`, `scripts/pm/app/TestGate.tsx`; tests `tests/delivery-v2/test-gate.test.ts`, `tests/pm-ui/delivery-review.test.ts`; delivery-v2 + pm-ui 681 passed; typecheck and lint clean; browser check of BUD-83 Outcome. Owner UAT pending.
+
+- ✅ 2026-09-19 — **DLV-127** Protected-check count parser accepts the exact delivery-oracle summary line `<n> of <m> tests passed` (whole line only). BUD-83 run r-83dddb67fea9 had both checks exit 0, but the oracle criterion was filed inconclusive ("receipt omits selected/executed counts") because the oracle's summary was not a recognized vocabulary. Evidence: `scripts/delivery-v2/checks.mjs` parseTestCounts; `tests/delivery-v2/evidence.test.ts`; delivery-v2 suite 509 passed. Also observed on that run: build job used 487,742 input / 5,694 output tokens (589,176 total with planning) — about 2× the Fast lane estimate; and the container cannot typecheck the app, so a `supabaseAdmin.from` (function not called) defect reached the candidate undetected — see DLV-118.
+
+- ✅ 2026-09-19 — **DLV-126** Live proof-of-work card on the run page while a job plans, builds or checks: elapsed clock from the recorded `job.dispatched` event, a heartbeat trace that spikes once per recorded activity/event, the last three recorded steps sliding in, a step count and "last signal" age; after 90 s without a record it reads Quiet in amber instead of animating. Uses the existing 4 s run poll — no new server route. Partial DLV-109 (stored activity shown during the run; true streaming still open). Evidence: `scripts/pm/app/LivePulse.tsx`, `tests/pm-ui/live-pulse.test.ts`; browser replay of run r-83dddb67fea9's recorded planning activity. Owner UAT pending.
+
+- ✅ 2026-09-19 — **DLV-125** Desktop sign-in renewal and full model catalogue. Both executors showed Unavailable because the worker volumes held expired copies (Claude expired 09-13, Codex 09-16). `scripts/delivery-v2/credential-sync.mjs` now copies the host sign-in into the volume before every auth probe and job when it changed, refuses a copy with under 45 minutes left, and never writes back, so the host CLI stays the only refresher. Policy rev 4 offers Claude Haiku 4.5 / Sonnet 5 / Opus 5 and Codex GPT-5.6 Luna / Terra / Sol and GPT-6 Astra (Codex list from the native account catalogue), each with selectable effort. Live: Codex subscription probe passed. Claude probe now reaches the account and correctly refuses because extra usage (paid credits, USD 50/month cap, USD 12.96 used) is enabled on the account — owner must turn it off. Tests: `tests/delivery-v2/credential-sync.test.ts`; delivery-v2 + pm-ui 674 passed; typecheck clean. Remote/unattended renewal stays DLV-111.
+
+- ✅ 2026-09-19 — **DLV-124** Delivery Settings panel (header gear; right-hand panel on desktop, bottom sheet on phone): shared token allowance with Today / Until-reset window, +50k/+100k/+250k, Reset and a typed limit; per-task default; top-up (+25k/+50k/+100k) or reset for each open task, including a running one; recent changes. Settings live in `.delivery/v2/allowances.json` and overlay the policy/grant at every admission and dispatch check, so no `policy-moved` refusal; retried commands are no-ops. Token-held runs now read "Allowance used". Evidence: `scripts/delivery-v2/allowances.mjs`, `scripts/pm/app/Settings.tsx`; tests `tests/delivery-v2/allowances.test.ts` + journey hold/release case in `parallel.test.ts`; delivery-v2 + pm-ui suites 671 passed; typecheck and lint clean; desktop and 390px browser check. A running native job is not interrupted mid-job (DLV-114). Owner UAT pending.
 
 - ✅ 2026-09-14 — **DLV-119** Provider-aware token normalization shared by admission, settlement, UI and metrics; raw historical readings retained; owner UAT pending. (Reconciled 2026-09-15 from dated implementation/test evidence; [UAT](<../../../docs/Delivery-UAT.md>).)
 
@@ -804,6 +912,7 @@ DW-3 conversation search/highlighting shipped 2026-07-16; removed the stale DLV-
 ## Delivery session log
 
 *(Delivery runner appends dated progress bullets here automatically.)*
+- 2026-09-19 — **DLV-90** V2 run `r-8e7f635c1466` · cancelled · codex gpt-5.6-luna <!-- v2:res-170c951a1030@1 -->
 - 2026-09-15 — **DLV-107** V2 run `r-c1d69bb666cf` · not applied; conflicts with the current checkout · codex gpt-5.6-luna <!-- v2-apply:app-29460c358b3f@conflict -->
 - 2026-09-15 — **DLV-107** V2 run `r-c1d69bb666cf` · not applied; conflicts with the current checkout · codex gpt-5.6-luna <!-- v2-apply:app-271fa2a0f86c@conflict -->
 - 2026-09-15 — **DLV-107** V2 run `r-c1d69bb666cf` · not applied; conflicts with the current checkout · codex gpt-5.6-luna <!-- v2-apply:app-bf21902e6f34@conflict -->

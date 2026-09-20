@@ -16,7 +16,9 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { prepareSubscription } from "./subscription.mjs";
+import { prepareSubscription, readSubscriptionWindows } from "./subscription.mjs";
+import { subscriptionObservation } from "../subscription-window.mjs";
+import { installTaskBrief, withTaskBriefRead } from "./task-brief.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ERA_ROOT = resolve(HERE, "..", "..", "..");
@@ -28,6 +30,30 @@ function packageVersion(name) {
   } catch {
     return null;
   }
+}
+
+/**
+ * The preflight record, carrying the plan-window observation the gate read.
+ *
+ * Only the normalized observation crosses the boundary: the raw usage payload
+ * stays in this process, so nothing beyond percentages, window identities and a
+ * plan tier can reach the supervisor's store.
+ */
+function readyRecord(backend_id, prepared) {
+  const { usageSnapshot, ...provenance } = prepared;
+  return {
+    era: "subscription-ready",
+    backend_id,
+    ...provenance,
+    observation: subscriptionObservation(backend_id, usageSnapshot, { at: new Date().toISOString() }),
+  };
+}
+
+/** A standalone window observation, taken after the job. Never throws. */
+async function windowRecord(backend_id, phase) {
+  const { usage, error } = await readSubscriptionWindows(backend_id);
+  const observation = subscriptionObservation(backend_id, usage, { at: new Date().toISOString() });
+  return { era: "subscription-window", backend_id, phase, observation: error ? { ...observation, error } : observation };
 }
 
 async function main() {
@@ -48,13 +74,14 @@ async function main() {
     return;
   }
   if (process.argv[2] === "--auth-probe") {
-    emit({ era: "subscription-ready", backend_id: process.argv[3], ...await prepareSubscription(process.argv[3]) });
+    emit(readyRecord(process.argv[3], await prepareSubscription(process.argv[3])));
     return;
   }
   if (process.argv[2] === "--probe") {
     const canary = join(ERA_ROOT, "scripts", "delivery-v2", "probes", "canary.mjs");
     emit({
       era: "probe",
+      task_brief_version: 1,
       sdk: {
         "claude-agent-sdk": packageVersion("@anthropic-ai/claude-agent-sdk"),
         "codex-exec-sdk": packageVersion("@openai/codex-sdk"),
@@ -94,15 +121,16 @@ async function main() {
     return;
   }
 
+  const briefPath = installTaskBrief(payload.taskBrief);
   if (payload.backend_id === "claude-agent-sdk") {
-    emit({ era: "subscription-ready", backend_id: payload.backend_id, ...await prepareSubscription(payload.backend_id) });
+    emit(readyRecord(payload.backend_id, await prepareSubscription(payload.backend_id)));
     const sdk = await import("@anthropic-ai/claude-agent-sdk");
     const { buildCanUseTool } = await import("../../delivery/drivers/claude.mjs");
     const options = {
       ...payload.options,
       env: { ...process.env },
       cwd: "/work",
-      canUseTool: buildCanUseTool({ cwd: "/work", sessionDir: null, forbiddenPaths: payload.forbiddenPaths || [] }),
+      canUseTool: withTaskBriefRead(buildCanUseTool({ cwd: "/work", sessionDir: null, forbiddenPaths: payload.forbiddenPaths || [] }), briefPath),
     };
     if (payload.observe && payload.observe.effort) {
       options.hooks = {
@@ -120,7 +148,7 @@ async function main() {
     }
     for await (const message of sdk.query({ prompt: payload.prompt, options })) emit({ era: "sdk-message", message });
   } else if (payload.backend_id === "codex-exec-sdk") {
-    emit({ era: "subscription-ready", backend_id: payload.backend_id, ...await prepareSubscription(payload.backend_id) });
+    emit(readyRecord(payload.backend_id, await prepareSubscription(payload.backend_id)));
     const { Codex } = await import("@openai/codex-sdk");
     const codex = new Codex({ env: { ...process.env }, config: { forced_login_method: "chatgpt" } });
     const options = { ...payload.threadOptions, workingDirectory: "/work" };
@@ -130,6 +158,11 @@ async function main() {
   } else {
     throw new Error("unknown backend " + String(payload.backend_id));
   }
+  // The second half of the bracket. The job is over, so this read cannot gate
+  // anything and must not be able to fail it: `readSubscriptionWindows` returns
+  // its error instead of throwing, and an unavailable reading is recorded as
+  // unavailable rather than as an unchanged window.
+  emit(await windowRecord(payload.backend_id, "after"));
   emit({ era: "runner-finished" });
 }
 

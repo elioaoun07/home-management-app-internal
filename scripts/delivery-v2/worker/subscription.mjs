@@ -72,15 +72,42 @@ export function usageJSON(url, headers, proxy = process.env.HTTPS_PROXY) {
   });
 }
 
+/** The endpoint and headers one backend's usage read needs. Credentials stay here. */
+function usageRequest(backend, credential) {
+  const claude = backend === "claude-agent-sdk";
+  const auth = claude ? credential.claudeAiOauth : credential.tokens;
+  return {
+    url: claude ? "https://api.anthropic.com/api/oauth/usage" : "https://chatgpt.com/backend-api/wham/usage",
+    headers: claude
+      ? { Authorization: "Bearer " + auth.accessToken, "anthropic-beta": "oauth-2025-04-20" }
+      : { Authorization: "Bearer " + auth.access_token, "ChatGPT-Account-Id": auth.account_id },
+  };
+}
+
+/**
+ * Read the subscription's plan windows again, without gating anything.
+ *
+ * Used for the post-job observation (Investigation F9): the preflight above
+ * refuses a launch, this one only records. A failure here is recorded as an
+ * unavailable observation and never fails the job — the work is already done and
+ * losing the record of it would be the only harm.
+ */
+export async function readSubscriptionWindows(backend, { credentialRoot = "/run/era-credentials", readUsage = usageJSON } = {}) {
+  try {
+    const credential = subscriptionCredential(backend, JSON.parse(readFileSync(join(credentialRoot, backend + ".json"), "utf8")));
+    const { url, headers } = usageRequest(backend, credential);
+    return { usage: await readUsage(url, headers), error: null };
+  } catch (error) {
+    return { usage: null, error: String((error && error.message) || error) };
+  }
+}
+
 export async function prepareSubscription(backend, { credentialRoot = "/run/era-credentials", home = process.env.HOME, env = process.env, readUsage = usageJSON } = {}) {
   assertSubscriptionEnvironment(env);
   const credential = subscriptionCredential(backend, JSON.parse(readFileSync(join(credentialRoot, backend + ".json"), "utf8")));
   const claude = backend === "claude-agent-sdk";
-  const auth = claude ? credential.claudeAiOauth : credential.tokens;
-  const headers = claude
-    ? { Authorization: "Bearer " + auth.accessToken, "anthropic-beta": "oauth-2025-04-20" }
-    : { Authorization: "Bearer " + auth.access_token, "ChatGPT-Account-Id": auth.account_id };
-  const usage = await readUsage(claude ? "https://api.anthropic.com/api/oauth/usage" : "https://chatgpt.com/backend-api/wham/usage", headers);
+  const { url, headers } = usageRequest(backend, credential);
+  const usage = await readUsage(url, headers);
   const provenance = includedUsage(backend, usage);
   const dir = join(home, claude ? ".claude" : ".codex");
   mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -92,5 +119,8 @@ export async function prepareSubscription(backend, { credentialRoot = "/run/era-
     env.CODEX_HOME = dir;
     writeFileSync(join(dir, "config.toml"), 'forced_login_method = "chatgpt"\ncli_auth_credentials_store = "file"\n');
   }
-  return { ...provenance, checkedAt: new Date().toISOString() };
+  // The percentages travel with the gate decision rather than being discarded.
+  // They are the only way to ask later what a run cost the plan; the supervisor
+  // normalizes them (`subscription-window.mjs`) and labels them as shared.
+  return { ...provenance, checkedAt: new Date().toISOString(), usageSnapshot: usage };
 }

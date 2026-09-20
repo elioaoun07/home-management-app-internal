@@ -182,6 +182,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [R60](<#r60>).
 - **Delivery Phase 5 note (2026-09-12):** parallel coordination landed before this item ([Delivery/DLV-106](<../Delivery/Delivery — Master Book.md#dlv-106>)). "Can it run now?" should call `scripts/delivery-v2/coordination.mjs` (`itemReasons`, `coordinate`) rather than restate prerequisite and scope rules. Prerequisites and `**Touches:**` are read through `scripts/pm/shared/declarations.mjs`. No sprint view shows parallel verdicts yet.
 - **Provenance:** [Command Center Phase 2](<../Plans/Command Center.md#phase-2--add-practical-sprints-deliverables-and-readiness>).
+- **Reading guide:** Large, unstarted, and the file it is named after does not exist — verified 2026-09-20, there is no `ERA Notes/10 - Project Management/_Planning.json` and nothing in `scripts/pm/` references one. Read three things before designing it. (1) `scripts/pm/shared/metrics.mjs` already has `sprintProgress(planning)` expecting a planning object, plus `openWork()`, `workOutcomes()`, `PRIORITIES`, `SEVERITIES` — that is the contract to satisfy. (2) Readiness must not restate prerequisite rules: call `scripts/delivery-v2/coordination.mjs` (`itemReasons`, `coordinate`, `dependencyState`), which already answers "can it run now?", and read declarations through `scripts/pm/shared/declarations.mjs` (`Depends on`, `Touches`). (3) The no-copying constraint is the design crux — `_Planning.json` holds references only, so the checklist stays the single source of truth for titles, acceptance and lanes. Concurrent-edit conflict means a revision check on write; the write discipline is in `scripts/pm/write-guards.mjs` and `scripts/pm/mutations.mjs`. Depends on R60.
 
 ### R62
 
@@ -199,6 +200,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Verified (2026-09-12):** `tests/pm-ui/metrics.test.ts` (12: identity and date rules, section scoping, dedup/reopened/unswept outcomes, weekly reconciliation with no placed record outside its stated week, Board reconciliation for every campaign and lane, explicit bugs, attempts never changing work outcomes, unit separation and coverage, URL round-trip, identical metrics from a relay-assembled corpus, and a read-only live-corpus reconciliation at 8/16/26/all weeks); updated `tests/pm-bridge.test.ts` history cases. `tests/pm-ui` 145/145 in 24 files including the React, classic and static builds; delivery-v2 and relay suites 565 passed with 4 opt-in skipped; `pnpm typecheck` exit 0; ESLint on every changed file clean. **Live corpus (read-only):** 240 open (28 Now / 86 Next / 126 Later), 83 blocked, no duplicate IDs; 262 history records — 169 exact, 15 referenced, 78 unidentified; 260 dated to a day, 1 range, 1 undated; 3 notes; 167 completed exact IDs, 1 cancelled, 93 records without an exact ID, 1 Reopened (HUB-23, Pain Inventory); `**Kind:**` declared on 0 of 240 open items. **Rendered:** the real bundle over the live corpus and local V1 sessions in headless Edge with device-metric emulation at 1280, 390 and 320 px (Blue) and 390 px (Pink): no horizontal overflow and no control under 24 px; at 390 px the busiest week (Jul 27: 52 completed, 1 cancelled, 5 without an exact ID) drilled into 52, 1 and 5 listed records, and the table footers matched the tiles (240, 167, 1). The V2 panel was rendered only from synthetic runs.
 - **Pending:** a sprint scope chart (R61 has no planning file); delivery and resource comparisons from real runs ([Delivery/DLV-102](<../Delivery/Delivery — Master Book.md#dlv-102>): no V2 run exists); a non-empty bug chart needs owner-declared kinds; a live relay read of the Dashboard on a real phone (parity is fixture-level); `next build` was not rerun after adding the dashboard stylesheet import to `CommandCenterLive.tsx`.
 - **Provenance:** [Command Center Phase 6](<../Plans/Command Center.md#phase-6--finish-the-dashboard-calibrate-value-and-retire-duplication>).
+- **Reading guide:** Phase 6, and it depends on R60 for current metrics, R61 for sprint charts and Delivery's DLV-102 for comparable-run receipts — none of which are all in place, so read the dependency states before scoping. The shared parser already exists and is the contract: `scripts/pm/shared/metrics.mjs` — `HISTORY_CATEGORIES`, `ATTEMPT_OUTCOMES`, `openWork()`, `workOutcomes()`, `bugs()`, `outcomeSeries()`, `weekOf()`/`localDayKey()`, `sprintProgress()`, `v1Outcome()`/`v2Outcome()`/`v2Disposition()` — fed by `scripts/pm/shared/history.mjs`. "Shared locally and by the relay" means `scripts/pm/relay-shared.mjs` and `src/features/pm-live/relay/` import the same module, not a copy. Bug kind must come from the explicit `**Kind:**` declaration (`scripts/pm/shared/declarations.mjs`), never from title keywords — `work-lifecycle.mjs` says so in its first line. Charts follow the `dataviz` skill. Two prohibitions to keep: no project percentage, no fabricated dates; incomplete coverage must be visible rather than smoothed. Tests: `tests/pm-ui/metrics.test.ts`, `portfolio.test.ts`.
 
 ### R63
 
@@ -275,7 +277,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Review delta (2026-09-13):** `scripts/pm/app/state.tsx:143` / `:181` expose only V1 sessions through `useWorld().runs`; `Home.tsx:15`, `model.ts:129` and WorkView's `runFor` consume them. `Delivery.tsx` separately queries V2. Acceptance must also cover Home/attention and Work's Follow delivery action for an active or review-waiting V2 run, locally and over relay, with stable campaign/item identity and no duplicate display beside V1 history. Source-verified gap; no real V2 session exists to provide device evidence.
 - **Phase 3 presentation landed (2026-09-12), acceptance still held:** `scripts/pm/app/DeliveryV2.tsx` + `v2model.ts` read `journey.mjs` projections over paired-session routes (`api.ts` `v2Read`/`v2Post` send `x-era-csrf`; command ids minted per intent and reused on retry). Launch in v2 mode offers Claude/Codex with a one-word refusal when unqualified/unpermitted, Focused/Investigate, catalog model and SDK-supported effort; `#/delivery/run/<id>` shows the stage projection, blocking questions and plan Approve/Revise above activity, observed agents only, “Not tested” for zero-test checks, Result obligations, unknown cost as “Unknown”, guidance receipts and Pause/Resume/Stop/Reconcile/Retry writeback. The Delivery list shows V2 runs beside V1 sessions with explicit engine labels (`V1 ·` / `V2 ·`); V1 views are unchanged. Evidence: `tests/pm-ui/delivery-v2-model.test.ts` (8), pm-ui 128/128 incl. both builds, typecheck and ESLint clean; in a real browser against a synthetic fixture server (real bundle, V2 routes and journey; scripted executors), pairing by code loaded the run, and `#/delivery`, both run states and `#/deliver/Budget/BUD-14` had no horizontal overflow or sub-36 px controls at 390 and 320 px (same-origin iframe probe; window resizing had no effect, as in R60). **Not yet evidenced:** real event shapes from an admitted pilot (none can run until DLV-96/97 qualify an executor), phone/PWA. See [Delivery DLV-97](<../Delivery/Delivery — Master Book.md#dlv-97>).
 - **Provenance:** R54 product implementation exposed this dependency; dispatch/qualification remain owned by Delivery.
-
+- **Reading guide:** Presentation landed 2026-09-12; only paging and filtering remain, and the acceptance is held on an admitted pilot that cannot run until DLV-96/97. The views are `scripts/pm/app/Work.tsx` (`WorkView`, `selectionFromRoute`), `scripts/pm/app/Home.tsx` (`Home`) and `scripts/pm/app/Delivery.tsx`, over `scripts/pm/app/model.ts` / `v2model.ts` / `types.ts` and query keys in `state.tsx`. V2 history comes from `journey.mjs list()`/`detail()`/`events()` and the row readers in `scripts/delivery-v2/store.mjs`; V1 history comes from `scripts/pm/shared/history.mjs`. Relay parity means the same shapes through `scripts/pm/relay-shared.mjs` and `src/features/pm-live/relay/`. Reuse the R54 layout, keep V1 readable, and never invent a running job after admission. Delivery's DLV-121 is the same paging problem on candidate artifacts — check it before designing a second scheme. Tests: `tests/pm-ui/delivery-v2-model.test.ts`, `session-model.test.ts`.
 
 ### R43
 
@@ -285,6 +287,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Evidence-gathering, not code. Hard Rule #27 governs the whole item: **`migrations/db-state.json` is the only repo artifact permitted as evidence about RLS** — generated by the owner running `migrations/db-state.sql`, validated by `pnpm db:verify-rls`, and reported on by the SessionStart hook `.claude/hooks/session-brief.sh`. `schema.sql` is tables-only and has actively lied here before. The hot child tables Hard Rule #20 names are `item_alerts`, `item_subtasks`, `reminder_details`, `event_details`, `item_recurrence_rules`, `recurrence_pauses`; the two sanctioned patterns are a SECURITY DEFINER bundle RPC (`get_schedule_bundle`, `get_health_bundle`, `get_household_allergens` are the live examples) or a denormalized `user_id` with a direct policy. Read the bundle read paths in `src/app/api/` that consume them before proposing any amendment. No policy rewrite and no denormalization on a guess.
+
 ### R44
 
 **Outcome:** Guard new client mutations against raw fetch.
@@ -293,6 +297,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Small and precisely located: `eslint.config.mjs`. It already has the scoped-override shape you need — there is a `files: [...] / rules: {...}` block near the end scoping `react-hooks/exhaustive-deps` to the client directories, and another scoping `@typescript-eslint/no-explicit-any`. Copy that structure for a `no-restricted-syntax` rule over `src/components/`, `src/features/`, `src/hooks/`, `src/contexts/`. What it must catch is `fetch()` with a mutating method, per Hard Rule #6; the sanctioned replacement is `safeFetch()` from `src/lib/safeFetch.ts` — read its header for why a timeout is not an offline signal. Warn-level only until R48 reaches zero. `tests/pm-ui/lint-rules.test.ts` is where PM-side lint expectations are asserted.
+
 ### R47
 
 **Outcome:** Enforce the client-only console rule.
@@ -300,6 +306,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** *(bundled with R44 into hygiene packet **H-02**)* Scoped `no-console` eslint rule matching Hard Rule 22's corrected client-only wording, warn-level over the client directories (202 sites); server routes stay exempt by design → `eslint.config.mjs`
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Same file and same shape as R44: a scoped override block in `eslint.config.mjs` turning `no-console` on for `src/components/`, `src/features/`, `src/hooks/`, `src/contexts/` and `page.tsx` files only. The rule's wording matters — Hard Rule #22 was *corrected* on 2026-08-01 to client-only, and `console.error` under `src/app/api/` is permitted by design (it is the Vercel log stream), so the override must not reach server routes. The stated 202 sites are a historical count, not a target; recount before claiming progress. Warn-level.
 
 ### R6
 
@@ -317,6 +325,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Deletion gated on verification. The files to retire exist and are real: `scripts/pm/client.js`, `scripts/pm/styles.css`, `scripts/pm/body.html`, and the escape hatch is documented in `scripts/pm/ui.mjs` ("`--ui=old` or `?ui=old` keeps the proven legacy surface available during final parity QA") — grep `ui=old` there before deleting anything, because the flag is also plumbed through the server. The replacement is the React app under `scripts/pm/app/` built by `scripts/pm/build.mjs` and served via `scripts/pm/app-shell.mjs`. Existing coverage to lean on: `tests/pm-ui/build-smoke.test.ts`, `react-app-build.test.ts`, `static-twin.test.ts`. The 390 px visual UAT and the fake-driver walkthrough are the two things no test currently proves — do them before the delete, not after.
+
 ### R45
 
 **Outcome:** Resolve the mutation-toast Undo rule.
@@ -324,6 +334,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Held for DEC-07: distinguish confirmation toasts from error/information toasts, then owner changes the global rule and the gap is measured against the agreed scope. This PM refactor does not waive Hard Rule1.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Held for DEC-07; the deliverable is a recorded owner decision, not an edit. Hard Rule #1 currently says *all* toasts carry Undo, and the question is whether a pure confirmation or error toast should. Survey before proposing: the toast vocabulary is `ToastIcons` in `src/lib/toastIcons.tsx`, and the best-behaved examples are `src/components/notifications/CriticalAlertGate.tsx` and the optimistic mutations in `src/features/*/hooks.ts`. Record the resolution in `_Decisions.md`; this PM refactor does not waive the rule in the meantime.
 
 ### R42
 
@@ -345,6 +357,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** The recurring review ritual is defined in _Conventions.md. Remaining work: existing session-brief freshness radar identifies the oldest open S-effort item; use current backlog identity, no new subsystem.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Small, and it attaches to something that already exists: `.claude/hooks/session-brief.sh` is the SessionStart hook that injects the freshness brief (it already reports DB-snapshot staleness for Hard Rule #27). Add the oldest open S-effort item to it. Backlog identity comes from the existing parsers — `scripts/pm/shared/tasks.mjs` and `scripts/pm/shared/work-id.mjs` parse `- [ ] **ID** title _(severity - effort)_`, and `scripts/pm/shared/metrics.mjs` `openWork()` already enumerates open work with `SEVERITIES`. "No new subsystem" is the constraint: read the checklists through the existing scanner, do not add a second one.
 
 ### R51
 
@@ -374,6 +388,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** A PostToolUse hook, and the acceptance names its template: `.claude/hooks/check-migration.sh`. Read that plus `.claude/hooks/check-pm-update.sh` (which shows the once-per-turn, non-looping discipline) before writing anything; both are registered in `.claude/settings.json`. The check itself is textual: a file under `src/app/api/` exporting `POST`/`PATCH`/`PUT` with no `zod` import violates Hard Rule #12. The canonical compliant route is `src/app/api/accounts/route.ts`; `.claude/skills/api-route/SKILL.md` has the template. The 113-of-170 count is historical — recount when you land it. Warn, do not block.
+
 ### R48
 
 **Outcome:** Replace raw client mutation fetch calls.
@@ -381,6 +397,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Recount current raw mutating fetch calls; replace with safeFetch starting with Hub shopping and notification writers. Pass explicit timeoutMs for AI/uploads/external latency; timeout is not offline and must not enqueue duplicates. Flip R44 guard to error only after the current scope reaches zero. Historical counts 98/13/8 are not targets.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** The burn-down half of R44, and the acceptance is explicit that the historical 98/13/8 counts are not targets — recount first with a grep for mutating `fetch(` under `src/components/`, `src/features/`, `src/hooks/`, `src/contexts/`. Read `src/lib/safeFetch.ts` before replacing anything: it does a pre-flight online check, defaults to an 8 s timeout, and — the subtle part — treats a timeout as latency, not disconnection, probing `/api/health` before `markOffline()`, so `isOfflineError()` stays false for endpoint timeouts and they cannot enqueue a duplicate mutation. That is why AI calls, uploads and external APIs must pass an explicit `timeoutMs` (Hard Rule #6). Start where the acceptance says: the Hub shopping writers in `src/components/hub/ShoppingListView.tsx` and the notification writers in `src/hooks/useNotifications.ts`. Offline queue background: `ERA Notes/01 - Architecture/Sync and Offline.md`. Flip R44 to error only at zero.
 
 ### R36
 
@@ -396,6 +414,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Scope has drifted: the acceptance says "five files of pure functions", but `scripts/pm/shared/` now holds twelve — `md-scan.mjs`, `tasks.mjs`, `text.mjs`, `work-id.mjs`, `work-lifecycle.mjs`, `declarations.mjs`, `frontmatter.mjs`, `history.mjs`, `links.mjs`, `metrics.mjs`, `portfolio.mjs`, `product.mjs` (verified 2026-09-20). Re-scope before starting. The mechanism: `tsconfig.json` already sets `allowJs: true`, and **no file in `scripts/pm/` currently carries `@ts-check`**, including the `lint.mjs` the acceptance calls the template — so check what "the lint.mjs fix" actually refers to rather than assuming it is done. `md-scan.mjs` (`scanCore`, `scanLines`) is the root everything else trusts, so type it first. Existing behavioural cover: `tests/pm-ui/shared-parsing.test.ts`, `work-identity.test.ts`, `ordinal-parity.test.ts`.
+
 ### R37
 
 **Outcome:** Verify local shell and static data provenance.
@@ -410,6 +430,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Two separable claims, and the acceptance says the existing tests do not prove them. Read `scripts/pm/app-shell.mjs` first — its opening line is the provenance statement ("The local app fetches canonical Markdown through /api/data; HTML contains no snapshot") — with `appAsset()` and `buildAppShell()`, and `scripts/pm/build.mjs` (`buildBundle`, `createBundleWatcher`) for how the bundle is produced. Existing tests that are *not* sufficient on their own: `tests/pm-ui/static-twin.test.ts`, `ordinal-parity.test.ts`, `build-smoke.test.ts`. What is missing is a build/cache fixture: a stale cached shell against fresh data must refuse writes. The write path to refuse in is `scripts/pm/mutations.mjs` with `scripts/pm/write-guards.mjs` (`assertExpectedCheckbox`, `guardUndo`, `assertRestoreCurrent`). R53 depends on this.
+
 ### R38
 
 **Outcome:** Surface retained session histories in the freshness radar.
@@ -417,6 +439,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** The 90-day closed-history retention convention is implemented. Remaining work: existing freshness radar identifies histories eligible for archival without archiving an open decision, active incident or evidence needed by pending work.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** The retention convention is written; the radar work is not. The brief is `.claude/hooks/session-brief.sh` (shared with R34 — do both in one pass if you touch it). Closed session histories are parsed by `scripts/pm/shared/history.mjs`, and `scripts/pm/archive.mjs` is the existing archival mechanism (`pnpm pm:archive`, with `--undo`). The safety clause is the real work: eligible-for-archival must exclude an open decision, an active incident, or evidence a pending item still cites — `scripts/pm/shared/links.mjs` is how cross-references are resolved, and `_Archive/` is invisible to every PM tool, so archiving something still referenced makes it unreadable.
 
 ### R8
 
@@ -426,6 +450,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Measurement, not a change. The index is the React app under `scripts/pm/app/` (search is `Explore.tsx` with `tests/pm-ui/search.test.ts`); the "complete static twin" is the fixture exercised by `tests/pm-ui/static-twin.test.ts`. Largest note: find it with a size sort over `ERA Notes/` rather than assuming. Record numbers; R9 only unparks if this proves offline load materially slow.
+
 ### R9
 
 **Outcome:** Font subsetting.
@@ -433,6 +459,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Font subsetting — only if offline load proves materially slow
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Parked and conditional on R8 — do not start it without that measurement. Fonts are loaded in the PM app's own stylesheets (`scripts/pm/app/styles.css`, `brand.css`) and the bundle is built by `scripts/pm/build.mjs`; the main web app's fonts are separate and out of scope here.
 
 ### R53
 
@@ -442,6 +470,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [R37](<PM Tooling — Master Book.md#r37>).
 
 **Provenance:** [PM Tooling — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/PM Tooling — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Depends on R37 (provenance/cache), and the symptom is a read-model gap, not a write failure — so confirm the capture actually persists before touching the UI. The Inbox file is `ERA Notes/10 - Project Management/0 - Inbox.md`; the readers are `scripts/pm/app/Auxiliary.tsx` (the desktop view), `scripts/pm/check-docs.mjs` and `scripts/pm/bridge.mjs` (the phone relay). Note there is also a legacy `scripts/pm/src/features/inbox/InboxView.jsx` under the old UI — R6 is retiring that surface, so do not fix it there. Stable identity plus a receipt after refresh is the same durability problem the relay solves elsewhere: read `src/features/pm-live/relay/` and the bridge's command journal. Owner-bound cache semantics must be preserved. Filing raw captures is `.claude/skills/triage-inbox/SKILL.md` — this item is about visibility, not triage.
 
 ## Backlog reconciliation
 

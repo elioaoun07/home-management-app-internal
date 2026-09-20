@@ -46,6 +46,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Native App/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Owner-executed; nothing in the repo changes. The only repo-side facts to check before starting are the env surface in `docs/ENV.md` (what a second `era-mobile` Vercel project must reach parity on) and the existing auth redirect usage under `src/app/auth/`. Do not create `capacitor.config.ts`, `android/` or `src/lib/native/` here — that is NAT-2.
+
 ### NAT-7
 
 **Outcome:** Pin native prerequisites and scheduler ownership.
@@ -53,6 +55,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Pin the supported Node/toolchain setup and document the existing web-only scheduler of record. Native shell setup must not silently move cron ownership or change PWA behavior.
 
 **Provenance:** [Native App — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Native App/Native App — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Two things to pin, both already true in the repo and undocumented. (1) Toolchain: `package.json` declares neither `engines` nor `packageManager` (verified 2026-09-20) — that is the gap. (2) Scheduler of record: there is no `vercel.json`; the six routes under `src/app/api/cron/` (`chat-notifications`, `daily-items-reminder`, `daily-reminder`, `gcal-reconcile`, `item-reminders`, `purge-recycle-bin`) only run when an external scheduler calls them with `Bearer CRON_SECRET` (Hard Rule #8). Document that as-is; a native shell must not move cron ownership.
 
 ### NAT-2
 
@@ -67,6 +71,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Native App/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Greenfield — verified 2026-09-20 that `capacitor.config.ts`, `android/` and `src/lib/native/` do not exist. What already exists and must not move: `public/sw.js` (1.4k lines; its `install`/`activate`/`fetch` handlers are where a platform guard belongs) and the PWA manifest set. The stated inventory is right: `public/manifest.json` (root, `scope: "/"`), `public/pm.webmanifest`, and 14 files in `public/manifests/` = 16. Per-route manifests are wired through `metadata.manifest` in each route's `layout.tsx` (see `src/app/outfits/layout.tsx`, `src/app/era/layout.tsx`). The PWA Non-Interference Contract (gate D3) is measured against exactly these files.
+
 ### NAT-3
 
 - **Retained campaign gate (D1):** Both phones (Elio's Android, partner's iPhone) run store-track builds with working login, `/era` (mic functional), hub chat, and offline banner.
@@ -77,6 +83,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [NAT-2](<Native App — Master Book.md#nat-2>).
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Native App/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** The spike is SW cold start × bridge injection under `WKAppBoundDomains` + `server.url`, and neither half exists yet. The web half to read is `public/sw.js` — `install`, `activate` and the `fetch` handler (its offline/cache path), plus the `message` handler that the shell would talk through. Nothing here is verifiable without a real iPhone; the repo can only tell you what must keep working.
 
 ### NAT-4
 
@@ -89,6 +97,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Native App/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** The whole browser path already exists and is the unregression baseline. Sender: `src/lib/pushSender.ts` — `ensureVapidConfigured()`, `sendPushToUser()`, the `PushResult` shape; an FCM v1 branch goes beside the VAPID one, not instead of it. Routes: `src/app/api/notifications/subscribe/route.ts` (the Zod discriminated union lands here), plus `unsubscribe/`, `subscription-health/` and `push-logs/`. Client: `src/hooks/usePushNotifications.ts` and `src/hooks/useNotifications.ts`. Service worker: `public/sw.js` `push`, `notificationclick`, `notificationclose` and `pushsubscriptionchange` handlers — deep-link tap-through is the `notificationclick` handler. Logging: `src/lib/pushLogger.ts`. The migration must follow Hard Rule #24 (file first, then `schema.sql`, owner runs it).
+
 ### NAT-5
 
 - **Retained campaign gate (D1):** Both phones (Elio's Android, partner's iPhone) run store-track builds with working login, `/era` (mic functional), hub chat, and offline banner.
@@ -100,6 +110,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Native App/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Owner-executed distribution; no repo change. The only in-repo dependency is that NAT-2/NAT-3 produced buildable shells.
+
 ### NAT-6
 
 **Outcome:** Add links, NFC and the native haptics bridge.
@@ -108,6 +120,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [NAT-5](<Native App — Master Book.md#nat-5>).
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Native App/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Three separate bridges over existing web flows. NFC: the tag flow is `src/app/nfc/[tag]/`, `src/app/nfc/nfc-admin-client.tsx`, `src/features/nfc/hooks.ts` and `src/app/api/nfc/` — native read should feed the same slug route, not a parallel one (NFC Tags has its own slug-URL hard rule in its vault doc). App/Universal Links: the same slug routes plus `src/app/g/[tag]/` for the guest portal. Haptics: `src/hooks/useLongPress.ts` is the only current `vibrate` caller — shim there rather than scattering calls.
 
 ### NAT-8
 
@@ -119,6 +133,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [NAT-2](<Native App — Master Book.md#nat-2>).
 
 **Provenance:** [Native App — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Native App/Native App — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** The scope collision is concrete and already documented: `public/manifest.json` has `scope: "/"` and `id: "/budget-app"`, while each sub-app manifest in `public/manifests/` narrows both (e.g. `outfits.webmanifest` → `id: "/outfits-app"`, `scope: "/outfits"`). Wiring is `metadata.manifest` in each route's `layout.tsx`. The root scope shadowing new sub-apps, and the owner's chosen install-order workaround, are prior art — check it before proposing scope narrowing or subdomains. Registration guards live in `public/sw.js`. Acceptance needs both phones; a source change alone is not an install witness.
 
 ## Shipped Log
 

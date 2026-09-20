@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-15
+updated: 2026-09-20
 type: checklist
 status: active
 owner: Elio
@@ -10,12 +10,17 @@ owner: Elio
 
 [Master Book](<Delivery — Master Book.md>) · [All campaigns](<../_index.md>) · [Grammar](<../_Conventions.md>)
 
-One checkbox per outcome. Follow the ID link for acceptance, dependencies and holds. Lane order is priority, not authorization; owner evidence and policy gates still apply.
+One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds and its **Reading guide** (where to start in the code). Lane order is priority, not authorization; owner evidence and policy gates still apply.
 
 The owner-requested [first-run hotfix](<../Plans/Delivery First-Run Hotfix.md>) is the first lane. V1 remains frozen to the bounded real-product trial and its prerequisites; planning does not authorize native dispatch.
 
 ## Now
 
+- [ ] **DLV-133** Run the deterministic typecheck inside the protected checker — [criteria](<Delivery — Master Book.md#dlv-133>) _(friction - L)_
+- [ ] **DLV-134** Normalize historical usage readings recorded before the cumulative-counter fix — [criteria](<Delivery — Master Book.md#dlv-134>) _(annoyance - S)_
+
+- [ ] **DLV-122** Let the owner cancel a waiting run — [criteria](<Delivery — Master Book.md#dlv-122>) _(friction - M)_
+- [ ] **DLV-123** Fix four small review-screen defects found in UAT — [criteria](<Delivery — Master Book.md#dlv-123>) _(annoyance - S)_
 - [ ] **DLV-121** Page frozen diffs and older candidate artifacts — [criteria](<Delivery — Master Book.md#dlv-121>) _(friction - M)_
 
 - [ ] **DLV-120** Retain protected-check logs with precise failure details — [criteria](<Delivery — Master Book.md#dlv-120>) _(friction - M)_

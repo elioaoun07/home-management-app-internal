@@ -45,6 +45,8 @@ export const pmKeys = {
   v2run: (id: string) => ["pm-app", "v2", "run", id] as const,
   v2executors: ["pm-app", "v2", "executors"] as const,
   v2queue: ["pm-app", "v2", "queue"] as const,
+  v2allowances: ["pm-app", "v2", "allowances"] as const,
+  v2testgate: ["pm-app", "v2", "test-gate"] as const,
   v2assess: (file: string, id: string) => ["pm-app", "v2", "assess", file, id] as const,
 };
 export const client = new QueryClient({

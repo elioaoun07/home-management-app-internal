@@ -24,11 +24,16 @@ import {
   checkGroups,
   checkReason,
   checkTitle,
+  compact,
   planMarkdown,
+  normalizationNote,
+  planWindowMovement,
+  tokenSplit,
 } from "./deliveryReviewModel";
 import type {
   V2ChangedFile,
   V2Evidence,
+  V2Job,
   V2Plan,
   V2Resources,
   V2RunDetail,
@@ -147,6 +152,9 @@ export function PlanReview({
     );
   const current = plan.plan_id === latest?.plan_id;
   const planSections = [
+    ["Acceptance", plan.body.acceptance || []],
+    ["Invariants", plan.body.invariants || []],
+    ["Exclusions", plan.body.exclusions || []],
     ["Risks", plan.body.risks],
     ["Unknowns", plan.body.unknowns],
     ["Questions", plan.body.questions.map((question) => question.text)],
@@ -161,6 +169,7 @@ export function PlanReview({
           <h2>Plan</h2>
           <span className="review-meta">
             {plan.status} · revision {plan.revision}
+            {plan.body.preparation && <span title={plan.body.preparation.provenance}> · From task</span>}
           </span>
         </div>
         <div className="review-tools">
@@ -245,7 +254,7 @@ export function PlanReview({
               )}
               <div className="plan-major-sections">
                 {planSections.map(([label, entries]) =>
-                  label === "Questions" && entries.length === 0 ? null : (
+                  entries.length === 0 && label !== "Risks" && label !== "Unknowns" ? null : (
                     <section className="plan-major-section" key={label}>
                       <h3>{label}</h3>
                       {entries.length ? (
@@ -636,11 +645,14 @@ export function ActivityReview({
   );
 }
 
-export function UsageSummary({ resources }: { resources: V2Resources | null }) {
+export function UsageSummary({ resources, jobs = [] }: { resources: V2Resources | null; jobs?: V2Job[] }) {
+  const window = planWindowMovement(jobs);
   const used = resources?.provenance.measuredTokens.total;
   const allowance = resources?.unit === "tokens" ? resources.allowance : null;
   const exceeded = used != null && allowance != null && used > allowance;
   const over = exceeded ? used - allowance : null;
+  const split = tokenSplit(resources);
+  const note = normalizationNote(resources);
   return (
     <div className="usage-summary" data-exceeded={exceeded}>
       <span>Tokens</span>
@@ -654,9 +666,35 @@ export function UsageSummary({ resources }: { resources: V2Resources | null }) {
             max={allowance}
             value={used || 0}
           />
-          <span>{allowance.toLocaleString()} threshold</span>
+          {/* Checked when a job is admitted, not while it runs: a job already
+              dispatched is never interrupted by it. Saying "threshold" implied
+              a live ceiling this system does not have. */}
+          <span title="Checked when a job is admitted; a running job is not stopped by it">
+            {allowance.toLocaleString()} admission limit
+          </span>
           {over != null && <b>+{over.toLocaleString()}</b>}
         </div>
+      )}
+      {split && (split.cached > 0 || split.output > 0) && (
+        <small className="usage-split">
+          {compact(split.fresh)} uncached · {compact(split.cached)} cached · {compact(split.output)} out
+          {split.reasoning > 0 && <> ({compact(split.reasoning)} reasoning)</>}
+        </small>
+      )}
+      {split?.raw != null && (
+        <small className="usage-split" title="The provider's counter is cumulative for a resumed thread, so it restates the earlier job's usage">
+          provider counter {compact(split.raw)}
+        </small>
+      )}
+      {note && (
+        <small className="usage-split" data-flagged="true" title="Some readings could not be normalized, so this total is an upper bound">
+          {note}
+        </small>
+      )}
+      {window && (
+        <small className="usage-split" title="A shared plan window, moved by everything on the account during this run — not this run's consumption">
+          plan window {window.before}% → {window.after}%
+        </small>
       )}
     </div>
   );

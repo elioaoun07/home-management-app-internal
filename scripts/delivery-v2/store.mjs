@@ -57,7 +57,12 @@ import { ContractError, canonicalJson, deepFreeze, normalizePath } from "./contr
 // reasons and the continuation to admit when they clear.
 // 6 keeps cache creation separate from cache reads and adds an application
 // revision. A rollback preview is bound to that revision.
-export const STORE_SCHEMA_VERSION = 6;
+// 7 separates a usage reading's raw provider counters from the normalized
+// (incremental) values, records which counter semantics produced them, and keeps
+// the subscription-window observations bracketing a job. Rows written before it
+// carry no `raw_*`; `normalization_json IS NULL` is how a legacy row says "these
+// are the provider's own numbers, uninterpreted".
+export const STORE_SCHEMA_VERSION = 7;
 
 /** Application states that hold the destination's exclusive claim. */
 export const ACTIVE_APPLICATION_STATES = Object.freeze(["prepared", "writing", "checking", "rolling-back", "interrupted"]);
@@ -137,6 +142,10 @@ CREATE TABLE IF NOT EXISTS usage_readings (
   -- cumulative counter share it, so the second insert is a no-op.
   reading_key      TEXT NOT NULL,
   unit             TEXT NOT NULL,
+  -- The five counters below are the NORMALIZED (incremental) values: what this
+  -- job spent. Under a thread-cumulative provider they are the raw reading minus
+  -- the previous reading on the same thread. The raw_ columns keep what the
+  -- provider said, because the next job's baseline is the raw value, not this.
   input            REAL NOT NULL DEFAULT 0,
   cached_input     REAL NOT NULL DEFAULT 0,
   cache_creation   REAL NOT NULL DEFAULT 0,
@@ -377,13 +386,27 @@ const ADDED_COLUMNS = Object.freeze({
     ["plan_id", "TEXT"],
     ["stop_requested_at", "TEXT"],
     ["stop_observed_at", "TEXT"],
+    // Subscription-window observations bracketing this job: shared plan windows,
+    // not per-job consumption. See `subscription-window.mjs`.
+    ["subscription_json", "TEXT"],
   ],
   runs: [
     ["settings_json", "TEXT"],
     ["base_manifest_json", "TEXT"],
     ["coordination_json", "TEXT"],
   ],
-  usage_readings: [["cache_creation", "REAL NOT NULL DEFAULT 0"]],
+  usage_readings: [
+    ["cache_creation", "REAL NOT NULL DEFAULT 0"],
+    // Nullable on purpose: a NULL raw_* is how a row written before schema 7
+    // says "no separate raw reading was kept", which is different from zero.
+    ["raw_input", "REAL"],
+    ["raw_cached_input", "REAL"],
+    ["raw_cache_creation", "REAL"],
+    ["raw_output", "REAL"],
+    ["raw_reasoning_output", "REAL"],
+    ["counter_semantics", "TEXT"],
+    ["normalization_json", "TEXT"],
+  ],
   applications: [["revision", "INTEGER NOT NULL DEFAULT 1"]],
 });
 
@@ -836,10 +859,12 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
      */
     recordUsageReading(job_id, reading) {
       const before = api.countUsageReadings(job_id);
+      const raw = reading.raw || null;
       sql(
         `INSERT OR IGNORE INTO usage_readings
-           (job_id, reading_key, unit, input, cached_input, cache_creation, output, reasoning_output, cost_usd, observed_at, note)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (job_id, reading_key, unit, input, cached_input, cache_creation, output, reasoning_output, cost_usd, observed_at, note,
+            raw_input, raw_cached_input, raw_cache_creation, raw_output, raw_reasoning_output, counter_semantics, normalization_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         job_id,
         String(reading.reading_key),
@@ -852,8 +877,48 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
         reading.costUsd == null ? null : Number(reading.costUsd),
         reading.observed_at || now(),
         reading.note ?? null,
+        raw ? Number(raw.input || 0) : null,
+        raw ? Number(raw.cachedInput || 0) : null,
+        raw ? Number(raw.cacheCreation || 0) : null,
+        raw ? Number(raw.output || 0) : null,
+        raw ? Number(raw.reasoningOutput || 0) : null,
+        reading.counterSemantics ?? null,
+        reading.normalization ? JSON.stringify(reading.normalization) : null,
       );
       return { inserted: api.countUsageReadings(job_id) > before };
+    },
+
+    /**
+     * Record the subscription-window observations bracketing a job.
+     *
+     * These are readings of a *shared* plan window, not a per-job meter, so they
+     * are kept beside the job rather than folded into its usage.
+     */
+    recordSubscriptionObservations(job_id, observations) {
+      if (!api.getJob(job_id)) throw new ContractError(STORE_REFUSALS.UNKNOWN_JOB + ": " + job_id);
+      sql("UPDATE jobs SET subscription_json = ?, updated_at = ? WHERE job_id = ?").run(
+        observations == null ? null : JSON.stringify(observations),
+        now(),
+        job_id,
+      );
+      return api.getJob(job_id);
+    },
+
+    /**
+     * Replace a reserved job's request, before it is dispatched.
+     *
+     * The stored request is the record of what was *sent*, so the one case this
+     * exists for — the dispatcher shortening an instruction once it knows the
+     * provider thread is really being resumed — has to write it back. Refused
+     * after dispatch: rewriting the record of a request that already left would
+     * make the evidence a lie.
+     */
+    setJobRequest(job_id, request) {
+      const job = api.getJob(job_id);
+      if (!job) throw new ContractError(STORE_REFUSALS.UNKNOWN_JOB + ": " + job_id);
+      if (job.dispatch_started_at) throw new ContractError("a dispatched job's request is a record, not a draft: " + job_id);
+      sql("UPDATE jobs SET request_json = ?, updated_at = ? WHERE job_id = ?").run(JSON.stringify(request), now(), job_id);
+      return api.getJob(job_id);
     },
 
     countUsageReadings(job_id) {
@@ -1248,6 +1313,11 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
             ORDER BY created_at LIMIT 1`,
         ).get(destination) || null
       );
+    },
+
+    /** Every application across runs, oldest first (owner test gate). */
+    listAllApplications() {
+      return sql("SELECT * FROM applications ORDER BY created_at, application_id").all();
     },
 
     listActiveApplications() {

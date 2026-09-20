@@ -10,7 +10,7 @@ owner: Elio
 
 [Master Book](<Native App — Master Book.md>) · [All campaigns](<../_index.md>) · [Grammar](<../_Conventions.md>)
 
-One checkbox per outcome. Follow the ID link for acceptance, dependencies and holds. Lane order is priority, not authorization; owner evidence and policy gates still apply.
+One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds and its **Reading guide** (where to start in the code). Lane order is priority, not authorization; owner evidence and policy gates still apply.
 
 NAT-1 opens 2026-09-15. The owner prerequisites and actual device witnesses are mandatory.
 

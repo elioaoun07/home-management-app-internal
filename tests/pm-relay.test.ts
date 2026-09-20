@@ -37,7 +37,8 @@ import {
 } from "../scripts/pm/relay.mjs";
 import { createDeliveryContext } from "../scripts/delivery/server-routes.mjs";
 import { openStore } from "../scripts/delivery-v2/store.mjs";
-import { PM_REL, journeyFor, makeHarness, plannedRun, seedRoot, writePolicy, type Loose } from "./delivery-v2/fixtures/v2-harness";
+import { setDispatchMode } from "../scripts/delivery-v2/entry.mjs";
+import { PM_REL, BOOK, SELECT, bookPathIn, journeyFor, makeHarness, plannedRun, seedRoot, writePolicy, type Loose } from "./delivery-v2/fixtures/v2-harness";
 
 const INST = "inst-0123456789ab";
 const OWNER = "8a1f2b3c-4d5e-6f70-8192-a3b4c5d6e7f8";
@@ -416,6 +417,33 @@ describe("the bridge relays V2 commands exactly once", () => {
     expect(receiptState(supabase.tables.pm_commands.get(id)!)).toMatchObject({ state: "done", outcome: { recovered: true } });
     expect(store.listDecisions(run_id).filter((entry: Loose) => entry.kind === "plan-approval")).toHaveLength(1);
     expect(store.listJobs(run_id)).toHaveLength(jobsAfterApproval);
+  });
+
+  it("prepares from the phone without a job and replays launch and approval exactly once", async () => {
+    setDispatchMode({ root: ROOT, mode: "v2", actor: "owner" });
+    const material = { outcome: "The control emits 20", scope: ["src/amount.ts"], steps: ["Change the constant to 20"], acceptance: ["The control emits 20"], invariants: ["Keep configuration unchanged"], exclusions: ["No other controls"], checks: ["amount-check"], risks: [], unknowns: [], dependencies: [], risk: "low", ownerReviewed: true, provenance: "Owner-reviewed fixture" };
+    writeFileSync(bookPathIn(ROOT), BOOK.replace("\n## Delivery session log", "\n**Touches:** `src/amount.ts`\n```delivery-plan-v1\n" + JSON.stringify(material) + "\n```\n\n## Delivery session log"));
+    const supabase = createFakeSupabase({ allowedStatuses: ["pending", "claimed", "done", "failed", "expired", "unknown"] });
+    const h = makeHarness(ROOT);
+    const journey = journeyFor({ root: ROOT, data: DATA, store, harness: h });
+    const bridge = bridgeFor({ supabase, journey });
+    const launchId = insertCommand(supabase, "v2-deliver", { ...SELECT, executor: "claude", model: "claude-test", effort: "low", workProfile: "focused" }, bridge.installation_id);
+    await bridge.drainOnce(); await journey.idle();
+    expect(receiptState(supabase.tables.pm_commands.get(launchId)!), JSON.stringify(supabase.tables.pm_commands.get(launchId))).toMatchObject({ state: "done" });
+    expect(h.calls).toHaveLength(0);
+    const run = store.listRuns()[0];
+    expect(store.listJobs(String(run.run_id))).toHaveLength(0);
+    Object.assign(supabase.tables.pm_commands.get(launchId)!, { status: "pending", result: null });
+    await bridge.drainOnce(); await journey.idle();
+    expect(store.listRuns()).toHaveLength(1);
+    const plan = journey.detail(String(run.run_id)).plans[0];
+    const approveId = insertCommand(supabase, "v2-decision", { run_id: run.run_id, plan_id: plan.plan_id, plan_revision: plan.revision, decision: "approve" }, bridge.installation_id);
+    await bridge.drainOnce(); await journey.idle();
+    expect(h.calls).toHaveLength(1);
+    Object.assign(supabase.tables.pm_commands.get(approveId)!, { status: "pending", result: null });
+    await bridge.drainOnce(); await journey.idle();
+    expect(h.calls).toHaveLength(1);
+    expect(store.listDecisions(String(run.run_id)).filter((d: Loose) => d.kind === "plan-approval")).toHaveLength(1);
   });
 
   it("recovers a command whose receipt was lost when the bridge died, without running it again", async () => {

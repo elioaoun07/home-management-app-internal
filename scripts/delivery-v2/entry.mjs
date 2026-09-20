@@ -36,7 +36,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { ContractError, contentId, deepFreeze, normalizePath } from "./contracts.mjs";
+import { ContractError, contentId, deepFreeze, normalizePath, evaluateGrant } from "./contracts.mjs";
+import { recordPlan } from "./interaction.mjs";
 import { freezeSelectedItem, recheckContractSource } from "./work-ref.mjs";
 import { ADMISSION_REFUSALS, admitJob, resourceSummary } from "./jobs.mjs";
 import { buildResult } from "./results.mjs";
@@ -468,7 +469,7 @@ export function deriveRunId({ work_id, contract_id, contract_revision, attempt =
  *   workspace:{root:string, backing?:string}, command:{command_id:string, actor:string, payload?:object},
  *   now?:(string|null), nextJobCost?:(number|null), repairDispatchLimit?:(number|null),
  *   purpose?:string, access?:(string|null), settings?:(Record<string, unknown>|null),
- *   native_limits?:Record<string, unknown>,
+ *   native_limits?:Record<string, unknown>, acceptanceVersion?:number, preparedPlan?:object|null,
  *   gate?:(((store:any)=>{code:string, detail:unknown}[])|null)}} input
  */
 export function deliverSelection({
@@ -498,6 +499,8 @@ export function deliverSelection({
   settings = null,
   native_limits = {},
   gate = null,
+  acceptanceVersion = 1,
+  preparedPlan = null,
 }) {
   if (bookRaw === undefined) {
     throw new ContractError("deliverSelection requires bookRaw (the Master Book text, or null when unreadable)");
@@ -508,6 +511,7 @@ export function deliverSelection({
     cbidx,
     witness,
     bookRaw,
+    acceptanceVersion,
     outcome: outcome || undefined,
     requestedDisposition,
     criteria,
@@ -540,7 +544,7 @@ export function deliverSelection({
     try {
       const recorded = JSON.parse(String(priorCommand.outcome_json));
       const priorJob = recorded && recorded.job_id ? store.getJob(recorded.job_id) : null;
-      priorRun = priorJob ? String(priorJob.run_id) : null;
+      priorRun = priorJob ? String(priorJob.run_id) : recorded?.run_id || null;
     } catch {
       priorRun = null;
     }
@@ -560,6 +564,29 @@ export function deliverSelection({
   }
 
   return store.transaction(() => {
+    if (preparedPlan) {
+      const admitted = store.admitCommand({ ...command, kind: "Deliver:prepare", subject_id: run_id });
+      if (admitted.status === "conflict") return deepFreeze({ ok: false, refusals: [{ code: ADMISSION_REFUSALS.COMMAND_CONFLICT, detail: admitted.reason }], run_id, job: null });
+      if (admitted.status === "duplicate") return deepFreeze({ ...admitted.outcome, duplicate: true });
+      // No provider/job reservation is created. Real dispatch repeats grant,
+      // qualification, resources, holds and coordination through admitContinuation.
+      const authority = evaluateGrant(grant, { now: now || store.now(), contract: frozen.contract, executor_profile_id: profileAdmission.profile_id, effect: "native_dispatch", settled: 0, reserved: 0, nextJob: 0 });
+      if (!sourceFresh || !authority.permitted) {
+        const rejected = { ok: false, refusals: [{ code: !sourceFresh ? ENTRY_REFUSALS.STALE_SOURCE : ADMISSION_REFUSALS.GRANT, detail: authority.refusals }], run_id: null, job: null };
+        store.recordCommandOutcome(command.command_id, rejected);
+        return deepFreeze(rejected);
+      }
+      store.putWorkRef(frozen.workRef);
+      store.putContract(frozen.contract);
+      store.putGrant(grant);
+      store.insertRun({ run_id, work_id: frozen.workRef.work_id, contract_id: frozen.contract.contract_id, contract_revision: frozen.contract.revision, grant_id: grant.grant_id, grant_revision: grant.revocation_version, lifecycle: "WAITING", waiting_reason: "plan-review" });
+      store.updateRun(run_id, { settings_json: settings, waiting_reason: "plan-review" });
+      const proposed = recordPlan({ store, run: store.getRun(run_id), contract: frozen.contract, job_id: null, replyText: JSON.stringify({ ...preparedPlan, preparation: { kind: "selected-item", provenance: preparedPlan.provenance, risk: preparedPlan.risk, ownerReviewed: preparedPlan.ownerReviewed, dependencies: preparedPlan.dependencies, acceptance_fingerprint: frozen.contract.acceptance_fingerprint } }) });
+      store.appendRunEvent(run_id, "plan.prepared", { plan_id: proposed.plan.plan_id, source: frozen.contract.acceptance_fingerprint, provenance: preparedPlan.provenance, actor: command.actor });
+      const answer = { ok: true, prepared: true, duplicate: false, refusals: [], run_id, workRef: frozen.workRef, contract: frozen.contract, job: null, request: null, sourceFresh };
+      store.recordCommandOutcome(command.command_id, answer);
+      return deepFreeze(answer);
+    }
     store.putWorkRef(frozen.workRef);
     store.putContract(frozen.contract);
     store.putGrant(grant);
@@ -818,6 +845,18 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
     return json(200, { queue: available ? ctx.journey.queue() : null });
   }
 
+  // Owner test gate: whether a new delivery waits for the laptop test result.
+  if (method === "GET" && path === "/api/delivery/v2/test-gate") {
+    const available = ctx.journey && (!ctx.hasStore || ctx.hasStore());
+    return json(200, { gate: available ? ctx.journey.testGate() : { locked: false, application: null, record: null } });
+  }
+
+  // Owner allowance settings (Settings panel): shared window, task default, per-run top-ups.
+  if (method === "GET" && path === "/api/delivery/v2/allowances") {
+    const available = ctx.journey && (!ctx.hasStore || ctx.hasStore());
+    return json(200, { allowances: available ? ctx.journey.allowances() : null });
+  }
+
   if (method === "GET" && path === "/api/delivery/v2/assess") {
     if (!ctx.journey) return json(404, { error: ENTRY_REFUSALS.UNKNOWN_RUN, detail: null });
     const outcome = ctx.journey.assess({
@@ -974,6 +1013,31 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
     }
     if (path === "/api/delivery/v2/message") {
       return reply(await ctx.journey.message({ run_id: text(body.run_id), body: text(body.body), command_id: text(body.command_id), actor }));
+    }
+    if (path === "/api/delivery/v2/test-gate") {
+      return reply(
+        ctx.journey.recordTests({
+          application_id: text(body.application_id),
+          result: text(body.result),
+          proceed: body.proceed === true,
+          note: body.note == null ? null : String(body.note),
+          command_id: text(body.command_id) || null,
+          actor,
+        }),
+      );
+    }
+    if (path === "/api/delivery/v2/allowances") {
+      return reply(
+        ctx.journey.changeAllowance({
+          action: text(body.action),
+          limit: body.limit ?? null,
+          period: body.period ?? null,
+          run_id: body.run_id == null ? null : String(body.run_id),
+          amount: body.amount ?? null,
+          command_id: text(body.command_id) || null,
+          actor,
+        }),
+      );
     }
     if (path === "/api/delivery/v2/control") {
       return reply(

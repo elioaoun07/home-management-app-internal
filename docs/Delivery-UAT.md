@@ -4,6 +4,8 @@
 
 **Decision now: UI changes ready for owner UAT; unattended Delivery is not accepted.** DLV-114 still lacks qualified in-job token stopping. The new UI labels a dispatch threshold honestly; it is not a hard token cap.
 
+**2026-09-19 owner decision:** UI refactor **accepted on laptop** (U1–U7; U7a not run; phone pending relay migration). Findings logged as DLV-122 (token allowance blocks runs silently, no Cancel for a waiting run) and DLV-123 (four small screen defects).
+
 ## Step 1 — Test the implemented interface (no new Delivery session)
 
 **Work > To do = remaining implementation. Work > Done = completed implementation and its evidence.** UAT rows are manual checks, with implementation status and your actual test result recorded separately. UAT Pending never means you should Deliver a completed item again.
@@ -18,14 +20,14 @@ Record each result as `PASS / FAIL / BLOCKED`, with a screenshot or short observ
 
 | ID / implemented scope | Do this | Expected result | Implementation | Owner UAT result |
 |---|---|---|---|---|
-| U1 · R64/R66 | Open the session on desktop and phone. | Readable status and Plan → Verification → Activity → Changes tabs. Changes is last. No sideways page scrolling or content hidden by bottom navigation. | Done | Pending |
-| U2 · DLV-116/R66 | Open Plan, then plan.md from Artifacts; download and close it. | Scope, Steps, Checks, Risks and Unknowns are visible without expanding rows. Artifacts sit at right on desktop and below the plan on phone. The reader shows the same revision without internal IDs/digests. | Done | Pending |
-| U3 · DLV-112/R66 | Open Verification. | One current result per criterion with a plain test count/status. Previous runs are visible below it; no receipt IDs, runner names or output-retention prose. | Done | Pending |
-| U4 · DLV-116 | Changes → Work.tsx. | Modified file; recorded change is `view=story` → `tab=story`. A diff appears only when both hashes verify; otherwise a specific unavailable state. | Done | Pending |
-| U5 · DLV-119/R66 | Read Tokens in the status card. | **284,243** against **200,000 threshold**, with **+84,243** visible. No Estimated/Unknown/Reserved/Allowance rows. | Done | Pending |
-| U6 · R55/R64 | Switch tabs → refresh → Back/Forward → return to the item and reopen the attempt. | Selected tab and item context survive; previous applications remain reachable. | Done | Pending |
-| U7 · R64/R66 (stored activity) | Activity → Messages / All activity. | Readable messages and events, plus visible status, timestamps, executor settings and run ID. No Session details or Jobs disclosure. Live streaming remains DLV-109 / U12. | Done | Pending |
-| U7a · R66 | Open DLV-90 launch and tap Claude while it is unavailable. | No recommendation/scope/fleet/helper copy. The Claude card says Unavailable; tapping it states the actual worker or subscription blocker and offers Retry. | Done | Pending |
+| U1 · R64/R66 | Open the session on desktop and phone. | Readable status and Plan → Verification → Activity → Changes tabs. Changes is last. No sideways page scrolling or content hidden by bottom navigation. | Done | PASS desktop (agent-run 2026-09-19, owner glance) · phone BLOCKED: relay migration unapplied |
+| U2 · DLV-116/R66 | Open Plan, then plan.md from Artifacts; download and close it. | Scope, Steps, Checks, Risks and Unknowns are visible without expanding rows. Artifacts sit at right on desktop and below the plan on phone. The reader shows the same revision without internal IDs/digests. | Done | PASS — Download not clicked (file download needs owner OK) |
+| U3 · DLV-112/R66 | Open Verification. | One current result per criterion with a plain test count/status. Previous runs are visible below it; no receipt IDs, runner names or output-retention prose. | Done | PASS — nit: empty timestamp-only row under each current result |
+| U4 · DLV-116 | Changes → Work.tsx. | Modified file; recorded change is `view=story` → `tab=story`. A diff appears only when both hashes verify; otherwise a specific unavailable state. | Done | PASS — view=story → tab=story diff shown |
+| U5 · DLV-119/R66 | Read Tokens in the status card. | **284,243** against **200,000 threshold**, with **+84,243** visible. No Estimated/Unknown/Reserved/Allowance rows. | Done | PASS — 284,243 / 200,000 / +84,243 |
+| U6 · R55/R64 | Switch tabs → refresh → Back/Forward → return to the item and reopen the attempt. | Selected tab and item context survive; previous applications remain reachable. | Done | PASS — nit: item page hides the attempt link inside collapsed Scope and evidence |
+| U7 · R64/R66 (stored activity) | Activity → Messages / All activity. | Readable messages and events, plus visible status, timestamps, executor settings and run ID. No Session details or Jobs disclosure. Live streaming remains DLV-109 / U12. | Done | PASS |
+| U7a · R66 | Open DLV-90 launch and tap Claude while it is unavailable. | No recommendation/scope/fleet/helper copy. The Claude card says Unavailable; tapping it states the actual worker or subscription blocker and offers Retry. | Done | NOT RUN — a DLV-90 run is already queued (Waiting · Capacity full) |
 
 ## Step 2 — Run new sessions on open backlog items
 

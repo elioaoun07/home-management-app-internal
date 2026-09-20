@@ -326,13 +326,20 @@ describe("F-COST — the strict monetary bound is refused, with the reason on th
     expect(merged.readings).toBe(1);
   });
 
-  it("sums distinct turns but treats a counter reset as a reset, not a refund", () => {
+  // Changed 2026-09-20 with the Codex counter semantics. This fixture used to
+  // assert that distinct turns are SUMMED (100 + 50 = 150). They must not be:
+  // `turn.completed.usage` carries the thread's cumulative total, so turn 1
+  // already contains turn 0 and adding them invents spend. The dispatch's raw
+  // state is its largest reading; the per-job increment is derived later, in
+  // usage-normalization.mjs, against the parent job's baseline.
+  it("does not sum distinct turns of a cumulative counter, and records a reset as a reset", () => {
     const merged = mergeUsageReadings([
       { turn: 0, usage: normalizeCodexUsage({ input_tokens: 100, output_tokens: 10 }) },
-      { turn: 1, usage: normalizeCodexUsage({ input_tokens: 50, output_tokens: 5 }) },
+      { turn: 1, usage: normalizeCodexUsage({ input_tokens: 150, output_tokens: 15 }) },
       { turn: 1, usage: normalizeCodexUsage({ input_tokens: 1, output_tokens: 0 }) },
     ]);
     expect(merged.input).toBe(150);
+    expect(merged.output).toBe(15);
     expect(merged.resets).toHaveLength(1);
     expect(merged.resets[0].reason).toMatch(/not a refund/u);
   });

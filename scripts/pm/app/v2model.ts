@@ -270,12 +270,13 @@ export function coordinationStatus(
 ) {
   if (
     reasons.some((reason) =>
-      ["fleet-resources", "writer-slots-full", "job-slots-full"].includes(
-        reason.code,
-      ),
+      ["writer-slots-full", "job-slots-full"].includes(reason.code),
     )
   )
     return "Capacity full";
+  // The token allowance, not a slot: the owner can change it in Settings.
+  if (reasons.some((reason) => reason.code === "fleet-resources"))
+    return "Allowance used";
   if (reasons.some((reason) => reason.code === "scope-unknown"))
     return "Scope required";
   if (reasons.some((reason) => reason.code.startsWith("dependency-")))
@@ -323,7 +324,7 @@ export function reasonLabel(reason: V2Reason) {
     case "job-slots-full":
       return "Jobs " + reason.used + "/" + reason.max;
     case "fleet-resources":
-      return "Capacity full";
+      return "Allowance used";
     default:
       return reason.code.replace(/-/gu, " ");
   }

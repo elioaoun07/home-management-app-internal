@@ -36,6 +36,8 @@ import {
 } from "./adapter.mjs";
 import { ContractError, deepFreeze } from "../contracts.mjs";
 import { rejectWorkerIdentity } from "../candidate.mjs";
+import { COUNTER_SEMANTICS, USAGE_FIELDS } from "../usage-normalization.mjs";
+import { subscriptionRecord } from "../subscription-window.mjs";
 
 export const BACKEND_ID = "codex-exec-sdk";
 const SDK_MODULE_SPECIFIER = "@openai/codex-sdk";
@@ -151,32 +153,54 @@ export function normalizeCodexUsage(raw) {
     output: Number(usage.output_tokens || 0),
     reasoningOutput: Number(usage.reasoning_output_tokens || 0),
     costUsd: null,
-    basis: "provider token counters; this interface reports no monetary amount",
+    counterSemantics: CODEX_COUNTER_SEMANTICS,
+    basis:
+      "provider token counters, cumulative for the whole Codex thread (turn.completed carries ThreadTokenUsage.total, which resume seeds from the rollout); this interface reports no monetary amount",
   });
 }
 
 /**
- * Add a later cumulative reading to an earlier one without double counting.
+ * What a Codex `turn.completed.usage` counts.
  *
- * Codex reports per-turn usage, but a caller that inspects twice, or that banks a
- * reading from a dying stream and then sees the same turn's `turn.completed`,
- * would otherwise count it twice. Readings are therefore keyed by turn ordinal
- * within a dispatch and merged by *replacement*, which is also the behaviour
- * F-COST asks for: "duplicate-usage does not double-count cumulative readings".
- *
- * A counter that goes *down* between readings is a reset, not a refund
- * (Context §7), so the earlier value is retained and the reset is recorded.
+ * Established from the pinned implementation, not from the SDK's doc comment —
+ * which says "during a turn" and is what made this look per-turn for two runs.
+ * The chain is quoted in `usage-normalization.mjs`; the short form is that the
+ * exec JSON processor emits `ThreadTokenUsage.total`, that total accumulates
+ * every request, and a resumed thread reloads it from the rollout. So the second
+ * job on a resumed thread restates the first job's usage and must be normalized
+ * against it before anything is summed.
  */
-export function mergeUsageReadings(readings) {
+export const CODEX_COUNTER_SEMANTICS = COUNTER_SEMANTICS.THREAD_CUMULATIVE;
+
+/**
+ * Collapse a dispatch's readings into one dispatch-level view, without double
+ * counting.
+ *
+ * Two different mistakes are possible here and this function exists to avoid
+ * both. A caller that inspects twice, or that banks a reading from a dying
+ * stream and then sees the same turn's `turn.completed`, would count that turn
+ * twice; readings are therefore keyed by turn ordinal and merged by
+ * *replacement* — the behaviour F-COST asks for ("duplicate-usage does not
+ * double-count cumulative readings").
+ *
+ * The second mistake is summing turns. Codex's counter is cumulative for the
+ * whole thread, so turn 2 already contains turn 1 and adding them inflates the
+ * dispatch. Under `THREAD_CUMULATIVE` the dispatch's raw state is therefore the
+ * *last* (largest) reading, not the sum. This view is still raw: subtracting the
+ * parent job's baseline is the supervisor's job, in `usage-normalization.mjs`.
+ *
+ * A counter that goes *down* between readings of the same turn is a reset, not a
+ * refund (Context §7), so the earlier value is retained and the reset recorded.
+ */
+/** @param {any[]} readings @param {{semantics?:string}} [options] */
+export function mergeUsageReadings(readings, { semantics = CODEX_COUNTER_SEMANTICS } = {}) {
   const byTurn = new Map();
   const resets = [];
   for (const reading of readings || []) {
     const key = reading.turn == null ? byTurn.size : reading.turn;
     const existing = byTurn.get(key);
     if (existing) {
-      const shrank = ["input", "cachedInput", "cacheCreation", "output", "reasoningOutput"].some(
-        (field) => Number(reading.usage[field] || 0) < Number(existing.usage[field] || 0),
-      );
+      const shrank = USAGE_FIELDS.some((field) => Number(reading.usage[field] || 0) < Number(existing.usage[field] || 0));
       if (shrank) {
         resets.push({ turn: key, reason: "counter decreased between readings; a reset is not a refund" });
         continue;
@@ -184,9 +208,13 @@ export function mergeUsageReadings(readings) {
     }
     byTurn.set(key, reading);
   }
+  const cumulative = semantics === COUNTER_SEMANTICS.THREAD_CUMULATIVE;
   const total = { input: 0, cachedInput: 0, cacheCreation: 0, output: 0, reasoningOutput: 0 };
   for (const reading of byTurn.values()) {
-    for (const field of Object.keys(total)) total[field] += Number(reading.usage[field] || 0);
+    for (const field of USAGE_FIELDS) {
+      const value = Number(reading.usage[field] || 0);
+      total[field] = cumulative ? Math.max(total[field], value) : total[field] + value;
+    }
   }
   return deepFreeze({
     unit: "tokens",
@@ -194,7 +222,10 @@ export function mergeUsageReadings(readings) {
     costUsd: null,
     readings: byTurn.size,
     resets: Object.freeze(resets),
-    basis: "sum of distinct per-turn provider counters; no monetary amount is available from this interface",
+    counterSemantics: semantics,
+    basis: cumulative
+      ? "the thread's latest cumulative provider counter for this dispatch, before any baseline is subtracted; no monetary amount is available from this interface"
+      : "sum of distinct per-turn provider counters; no monetary amount is available from this interface",
   });
 }
 
@@ -430,6 +461,11 @@ export function createCodexAdapter(options = {}) {
         state.nativeRef = event.thread_id;
         state.ref = withNativeRef(state.ref, event.thread_id);
       }
+      // Kept beside the token counters, never inside them: a plan window is
+      // shared with everything else on the account.
+      if (event.type === "era_subscription" && event.observation) {
+        state.subscription[event.phase === "before" ? "before" : "after"] = event.observation;
+      }
       if (event.type === "turn.completed") {
         state.usageReadings.push({ turn: state.turn, usage: normalizeCodexUsage(event.usage) });
         state.turn += 1;
@@ -464,6 +500,7 @@ export function createCodexAdapter(options = {}) {
       nativeRef: request.executionRef.native_ref,
       events: [],
       usageReadings: [],
+      subscription: { before: null, after: null },
       turn: 0,
       terminal: null,
       failure: null,
@@ -492,6 +529,7 @@ export function createCodexAdapter(options = {}) {
           error: String((error && error.message) || error),
           usage: mergeUsageReadings(state.usageReadings),
           usageReadings: state.usageReadings,
+          subscription: subscriptionRecord(state.subscription),
           nativeEventCount: state.events.length,
           finalText: state.finalText,
           reachedProvider: state.nativeRef != null,
@@ -513,6 +551,7 @@ export function createCodexAdapter(options = {}) {
       observations: {
         usage: mergeUsageReadings(state.usageReadings),
         usageReadings: state.usageReadings,
+        subscription: subscriptionRecord(state.subscription),
         nativeEventCount: state.events.length,
         finalText: state.finalText,
         failure: state.failure,

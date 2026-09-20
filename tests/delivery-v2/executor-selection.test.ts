@@ -591,7 +591,7 @@ describe("the deliver route — one path, explicit provider per run", () => {
           dispatched?: boolean;
         };
         expect(outcome.workRef?.alias).toBe("DLV-99");
-        expect(outcome.contract?.acceptance_fingerprint).toMatch(/^sha256:/u);
+        expect(outcome.contract?.acceptance_fingerprint).toMatch(/^binding-v2:sha256:/u);
         expect(store.listWorkRefs().map((ref: { alias: unknown }) => String(ref.alias))).toEqual(["DLV-99"]);
         expect(outcome.dispatched).toBe(false);
       } finally {

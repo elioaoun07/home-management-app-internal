@@ -37,6 +37,7 @@ import { assertScratchOutsideHost, provisionScratch } from "./scratch.mjs";
 import { importTrustedCandidate } from "./checks.mjs";
 import { normalizeHosts, PROXY_PORT } from "./worker/egress.mjs";
 import { nestedSandboxDigest, nestedSandboxJSON } from "./worker/seccomp.mjs";
+import { createCredentialSync } from "./credential-sync.mjs";
 
 export const BOUNDARY_SCHEMA = "delivery-v2/worker-boundary@1";
 export const WORKER_USER = "10001:10001";
@@ -352,14 +353,26 @@ function serializableOptions(options) {
  *
  * @param {string} backend_id
  * @param {(payload:object, signal:(AbortSignal|null))=>AsyncIterable<any>} source
+ * @param {{text:string, digest:string, path:string}|null} [taskBrief]
  */
-export function sdkFromRunnerStream(backend_id, source) {
+export function sdkFromRunnerStream(backend_id, source, taskBrief = null) {
   const relay = async function* (payload, signal) {
     let includedSubscription = false;
-    for await (const record of source(payload, signal)) {
+    for await (const record of source({ ...payload, ...(taskBrief ? { taskBrief } : {}) }, signal)) {
       if (!record || typeof record !== "object") continue;
       if (record.era === "subscription-ready" && record.additionalSpendAllowed === false) includedSubscription = true;
       if (record.era === "runner-error") throw new ContractError("worker runner: " + String(record.message));
+      // Plan-window observations bracketing the job. They are not SDK events, so
+      // they are relayed as a marked shape the adapters record beside the usage
+      // counters rather than inside them: a shared window is not a per-job meter.
+      if (record.era === "subscription-ready" && record.observation) {
+        yield { type: "era_subscription", phase: "before", observation: record.observation };
+        continue;
+      }
+      if (record.era === "subscription-window" && record.observation) {
+        yield { type: "era_subscription", phase: String(record.phase || "after"), observation: record.observation };
+        continue;
+      }
       if (record.era === "sdk-message" && record.message) yield includedSubscription && record.message.type === "result" ? { ...record.message, era_billing_basis: "included-subscription" } : record.message;
       else if (record.era === "sdk-event" && record.event) yield record.event;
       else if (record.era === "observation") yield { type: "era_observation", ...(record.data || {}) };
@@ -446,6 +459,7 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
 
   function containerSource({ run_id, job_id, access, backend_id }) {
     return (payload, signal) => {
+      if (credentials) credentials.sync(backend_id);
       const args = workerRunArgs({ boundary, run_id, job_id, access, backend_id, payload });
       docker.run(["rm", "-f", containerNameFor(job_id)]);
       return (async function* () {
@@ -464,13 +478,15 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
 
   const bindingMemo = new Map();
   const authMemo = new Map();
+  // DLV-111: the host sign-in is copied in before a probe or job (credential-sync.mjs).
+  const credentials = boundary.synthetic ? null : createCredentialSync({ boundary, docker });
 
   function readBinding(backend_id) {
     const image = docker.run(["image", "inspect", "--format", "{{.Id}}", boundary.image]);
     if (image.status !== 0) return null;
     const probe = docker.run(["run", "--rm", "--network", "none", "--user", WORKER_USER, "--read-only", boundary.image, "node", RUNNER_PATH, "--probe"]);
     const facts = String(probe.stdout).split("\n").map(parseLine).filter(Boolean).pop();
-    if (!facts || !facts.sdk || !isNonEmptyString(facts.sdk[backend_id]) || !isNonEmptyString(facts.battery_digest)) return null;
+    if (!facts || facts.task_brief_version !== 1 || !facts.sdk || !isNonEmptyString(facts.sdk[backend_id]) || !isNonEmptyString(facts.battery_digest)) return null;
     let egressId;
     try { egressId = readEgressBinding(boundary, (args) => docker.run(args)); } catch { return null; }
     return deepFreeze({
@@ -490,6 +506,12 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
       const memo = authMemo.get(backend);
       if (memo && Date.now() - memo.at < 60000) return memo.value;
       let value;
+      const renewed = credentials ? credentials.sync(backend) : { ok: true };
+      if (!renewed.ok) {
+        value = { ok: false, reason: renewed.reason };
+        authMemo.set(backend, { at: Date.now(), value });
+        return value;
+      }
       try {
         const result = docker.run(authProbeArgs(boundary, backend), { timeout: 45000 });
         const facts = result.stdout.split("\n").map(parseLine).filter(Boolean).pop();
@@ -503,6 +525,7 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
     workspaceFor({ access }) {
       return deepFreeze({ root: WORKDIR, backing: "container-volume", access });
     },
+    taskBriefs: true,
 
     /** The binding a qualification receipt must match, or null when it cannot be established. Memoized briefly. */
     async binding(backend_id) {
@@ -543,7 +566,7 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
         workspace: { root: WORKDIR, backing: "container-volume", access },
         base_manifest,
         refusals,
-        importSdk: async () => sdkFromRunnerStream(String(job.backend_id), containerSource({ run_id, job_id: String(job.job_id), access, backend_id: String(job.backend_id) })),
+        importSdk: async () => sdkFromRunnerStream(String(job.backend_id), containerSource({ run_id, job_id: String(job.job_id), access, backend_id: String(job.backend_id) }), JSON.parse(String(job.request_json || "{}")).task_brief || null),
       });
     },
 

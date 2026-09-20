@@ -64,6 +64,8 @@ import { ENTRY_REFUSALS, deliverSelection } from "./entry.mjs";
 import { ADMISSION_REFUSALS, RESOURCE_UNITS } from "./jobs.mjs";
 import { DEFAULT_CONCURRENCY, WRITER_CEILING } from "./coordination.mjs";
 import { acceptanceText, freezeSelectedItem } from "./work-ref.mjs";
+import { splitTaskInput, preparedPlanFor } from "./task-input.mjs";
+import { inspectDestination, hashFile } from "./apply.mjs";
 import {
   EXECUTOR_REFUSALS,
   admitExecutorProfile,
@@ -429,6 +431,32 @@ export function validateExecutionPolicy(raw) {
   }
   const checkInputs = Array.isArray(checksInput.inputs) ? checksInput.inputs.filter(isNonEmptyString).map(normalizePath) : [];
 
+  // --- required verifications -------------------------------------------------
+  // Checks that apply to EVERY candidate regardless of what the work item
+  // declared, because they answer a question no work item thinks to ask ("does
+  // this compile where it is going"). Unlike a criterion, one of these cannot be
+  // selected away by a contract: it is either configured, or explicitly absent
+  // and reported as a gap. Only `typecheck` exists today.
+  const verificationsInput = isPlainObject(checksInput.requiredVerifications) ? checksInput.requiredVerifications : {};
+  let typecheck = null;
+  if (isPlainObject(verificationsInput.typecheck)) {
+    const entry = verificationsInput.typecheck;
+    const argv = Array.isArray(entry.argv) ? entry.argv.filter((arg) => typeof arg === "string") : [];
+    if (entry.enabled !== false && (!argv.length || argv.length !== (entry.argv || []).length)) {
+      bad(POLICY_REFUSALS.INVALID, "checks.requiredVerifications.typecheck.argv must be a non-empty list of strings");
+    } else {
+      typecheck = {
+        enabled: entry.enabled !== false,
+        argv: Object.freeze([...argv]),
+        include: Object.freeze(Array.isArray(entry.include) ? entry.include.filter(isNonEmptyString).map(normalizePath) : []),
+        // `required` blocks a candidate from being verified; `advisory` records
+        // the verdict and blocks nothing. Anything else is a typo, and a typo
+        // must not silently downgrade a gate.
+        enforcement: entry.enforcement === "advisory" ? "advisory" : "required",
+      };
+    }
+  }
+
   // --- apply (Command Center Phase 4) ------------------------------------------
   // Only additions to the integrator's built-in protected paths. Nothing here can
   // remove one, and there is no switch that lets an application run without the
@@ -540,7 +568,7 @@ export function validateExecutionPolicy(raw) {
         catalog,
       },
       runtime,
-      checks: { specs, inputs: Object.freeze(checkInputs) },
+      checks: { specs, inputs: Object.freeze(checkInputs), requiredVerifications: Object.freeze({ typecheck }) },
       apply: { protectedPaths: Object.freeze(applyProtected) },
       dispatch,
       concurrency,
@@ -783,7 +811,8 @@ export function buildDeliver({ root, pmRel, store, policyLoader = null, describe
    *   actor:string, executor?:(string|null), model?:(string|null), effort?:(string|null),
    *   workProfile?:(string|null), command_id?:string, workspace?:object,
    *   workspaceRoot?:string, instruction?:string, purpose?:string, access?:string,
-   *   instructionFor?:Function, beforeAdmit?:Function, native_limits?:object}} request
+   *   instructionFor?:Function, beforeAdmit?:Function, native_limits?:object, nativeLimitsFor?:Function,
+   *   recommendationFacts?:object, gate?:Function}} request
    */
   return async function deliver(request) {
     const refuse = (code, detail) => deepFreeze({ ok: false, refusals: [{ code, detail }], policy_revision: policy.policy_revision });
@@ -899,6 +928,7 @@ export function buildDeliver({ root, pmRel, store, policyLoader = null, describe
       cbidx: Number(request.cbidx),
       witness,
       bookRaw,
+      acceptanceVersion: 2,
       outcome: request.outcome || undefined,
       requestedDisposition,
       criteria: policy.criteria,
@@ -914,9 +944,10 @@ export function buildDeliver({ root, pmRel, store, policyLoader = null, describe
       const blocked = request.beforeAdmit({ workRef: preview.workRef, contract: preview.contract });
       if (blocked) return refuse(blocked.code, blocked.detail);
     }
+    const taskInput = splitTaskInput(acceptanceText({ bookRaw, alias: preview.workRef.alias }));
     const recommendation = recommendWorkProfile({
       outcome: preview.contract.outcome,
-      acceptance: acceptanceText({ bookRaw, alias: preview.workRef.alias }),
+      acceptance: taskInput.binding,
       declared: request.recommendationFacts && request.recommendationFacts.declared,
       dependencyIds: request.recommendationFacts && request.recommendationFacts.dependencyIds,
       catalog: policy.executors.catalog,
@@ -928,6 +959,7 @@ export function buildDeliver({ root, pmRel, store, policyLoader = null, describe
     const runSettings = {
       ...settingsCheck.settings,
       work_profile: selectedProfile,
+      task_input: taskInput,
       profile_id: described.profile.profile_id,
       qualification_ref: described.profile.qualification_ref ?? null,
       recommendation: {
@@ -949,12 +981,27 @@ export function buildDeliver({ root, pmRel, store, policyLoader = null, describe
         ? request.instructionFor({
             contract: preview.contract,
             workRef: preview.workRef,
-            acceptance: acceptanceText({ bookRaw, alias: preview.workRef.alias }),
+            acceptance: taskInput.binding,
+            profile: selectedProfile,
           })
         : isNonEmptyString(request.instruction)
           ? request.instruction
           : preview.contract.outcome;
 
+    const prepared = preparedPlanFor({
+      input: taskInput, alias: preview.workRef.alias, profile: selectedProfile, contract: preview.contract,
+      policy, facts: request.recommendationFacts || {},
+      sourceExists: (path) => { const found = inspectDestination(root, path); return found.ok && found.exists; },
+    });
+    if (prepared.eligible) {
+      // No worker is needed to witness the authorized source before approval.
+      // The selected PM texts are bound semantically by WorkRef/Contract instead.
+      const selectedDocs = [normalizePath(join(pmRel, String(request.file))), bookRel ? normalizePath(join(pmRel, bookRel)) : null];
+      runSettings.prepared_source = (policy.scratchScope.include || []).filter(path => !selectedDocs.includes(normalizePath(path))).map(path => {
+        const found = inspectDestination(root, path);
+        return { path, sha256: found.ok && found.exists && found.abs ? hashFile(found.abs) : null };
+      });
+    }
     const outcome = deliverSelection({
       store: getStore(),
       raw,
@@ -962,6 +1009,8 @@ export function buildDeliver({ root, pmRel, store, policyLoader = null, describe
       cbidx: Number(request.cbidx),
       witness,
       bookRaw,
+      acceptanceVersion: 2,
+      preparedPlan: prepared.eligible ? prepared.body : null,
       requestedDisposition,
       outcome: request.outcome || null,
       criteria: policy.criteria,
@@ -997,7 +1046,7 @@ export function buildDeliver({ root, pmRel, store, policyLoader = null, describe
       purpose,
       access,
       settings: runSettings,
-      native_limits: request.native_limits || {},
+      native_limits: typeof request.nativeLimitsFor === "function" ? request.nativeLimitsFor(runSettings, backend_id) : request.native_limits || {},
       gate: typeof request.gate === "function" ? request.gate : null,
     });
 
@@ -1051,7 +1100,7 @@ export function policyTemplate({ executor = "codex", authorized_by = "<owner>" }
     },
     // A container runtime must be configured before anything can dispatch:
     // { kind: "container", image, network: { mode: "none" | "allowlist-proxy", … } }.
-    checks: { specs: {}, inputs: [] },
+    checks: { specs: {}, inputs: [], requiredVerifications: { typecheck: null } },
     dispatch: { thresholdUsd: null, investigationMaxTurns: null, implementationMaxTurns: null },
     // Parallel candidates (DLV-106): two writers at most; every job that may still be
     // running holds a job slot; a fleet allowance is the owner's amount or null.

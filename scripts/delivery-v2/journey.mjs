@@ -66,6 +66,9 @@ import {
   verifyEffectiveSettings,
 } from "./adapters/registry.mjs";
 import { loadQualification } from "./qualification.mjs";
+import { gateState, readTestGate, recordTestResult, TEST_GATE_REFUSALS } from "./test-gate.mjs";
+import { BINDING_VERSION, splitTaskInput, makeTaskBrief, briefInstruction } from "./task-input.mjs";
+import { applyAllowanceChange, effectiveGrant, effectivePolicy, fleetWindow, readAllowances, runAllowance, writeAllowances } from "./allowances.mjs";
 import {
   STAGES,
   answerQuestion,
@@ -86,6 +89,14 @@ import {
   stageProjection,
 } from "./interaction.mjs";
 import { CHECK_REFUSALS, pinCheckPlan, restrictedEnv, runCheck, verifyReceipt } from "./checks.mjs";
+import {
+  TYPECHECK_CRITERION_ID,
+  TYPECHECK_STATE,
+  runTypecheckVerification,
+  spawnTypecheck,
+  verificationIsFresh,
+  writeTypecheckArtifact,
+} from "./typecheck.mjs";
 import { evaluateCriterion, summarizeCriteria } from "./criteria.mjs";
 import { candidateChangedPaths, candidateFreshness, checkPublicationScope } from "./candidate.mjs";
 import { candidateReview } from "./review.mjs";
@@ -140,6 +151,7 @@ export const JOURNEY_REFUSALS = Object.freeze({
   ERROR: "journey-error",
   CONTRACT_MOVED: "contract-revision-moved",
   APPLY_NOT_VERIFIED: "no-verified-candidate-to-apply",
+  APPLY_UNVERIFIED_TYPECHECK: "required-verification-missing-failed-or-stale",
   APPLY_STALE: "apply-approval-stale",
   APPLY_ALREADY: "candidate-already-applied",
   APPLY_REFUSED: "application-refused",
@@ -300,7 +312,13 @@ export function createJourney({
   applicationsRoot = join(defaultDataRoot(root), "applications"),
   stagingRoot = join(defaultDataRoot(root), "staging"),
   applyFaults = {},
+  // The deterministic typecheck runs on the host, outside the model, against the
+  // integration target. Injected so fixtures script it without a compiler.
+  typecheckExecutor = spawnTypecheck,
+  artifactsRoot = join(defaultDataRoot(root), "artifacts"),
   now = () => new Date().toISOString(),
+  loadAllowances = readAllowances,
+  saveAllowances = writeAllowances,
 }) {
   const getStore = typeof store === "function" ? store : () => store;
   const pending = new Set();
@@ -326,7 +344,14 @@ export function createJourney({
   }
 
   const schedule = (job_id) => track(() => dispatch(String(job_id)));
-  const policyNow = () => loadPolicy({ root });
+  // Owner allowance settings overlay the policy amounts at every check (allowances.mjs).
+  const allowancesNow = () => loadAllowances({ root }).settings;
+  const fleetSince = () => fleetWindow({ settings: allowancesNow(), now: now() }).since;
+  const policyNow = () => {
+    const loaded = loadPolicy({ root });
+    if (!loaded.ok) return loaded;
+    return { ...loaded, policy: effectivePolicy(loaded.policy, { settings: allowancesNow(), now: now() }) };
+  };
 
   // -------------------------------------------------------------------------
   // Coordination (Command Center Phase 5, DLV-106)
@@ -345,11 +370,29 @@ export function createJourney({
   const reservationOf = (policy) => ({ unit: policy.resources.unit, amount: policy.resources.perJobReservation.amount });
   const defaultKind = (purpose, access) => (access !== "write" ? "investigate" : purpose === "repair" ? "repair" : "implement");
   const profileContract = (settings) => WORK_PROFILE_CONTRACTS[settings && settings.work_profile] || WORK_PROFILE_CONTRACTS.investigate;
-  const nativeLimitsFor = (policy, settings, access) => {
+  /**
+   * The limits this dispatch will actually carry — and, when a backend cannot
+   * carry one, the fact that it cannot.
+   *
+   * `maxTurns` reaches the Claude SDK and is enforced there. It is never passed
+   * to Codex, whose exec interface has no such option and for whom a whole job
+   * is one turn anyway, so recording a number for it states a bound that does
+   * not exist (Investigation §5.6, F10). `unsupported` is what the UI reads to
+   * avoid showing an inert limit as a live one.
+   */
+  const nativeLimitsFor = (policy, settings, access, backend_id = null) => {
     const configured = access === "write" ? policy.dispatch.implementationMaxTurns : policy.dispatch.investigationMaxTurns;
     // Focused is a bounded lane even when a legacy policy omitted turn limits.
     const maxTurns = profileContract(settings).investigation === "compact" ? (configured == null ? 12 : Math.min(configured, 12)) : configured;
-    return { maxTurns, thresholdUsd: policy.dispatch.thresholdUsd };
+    const turnsEnforced = String(backend_id || "") !== "codex-exec-sdk";
+    return {
+      maxTurns: turnsEnforced ? maxTurns : null,
+      thresholdUsd: policy.dispatch.thresholdUsd,
+      unsupported: turnsEnforced ? [] : ["maxTurns"],
+      basis: turnsEnforced
+        ? "maxTurns is passed to the executor SDK"
+        : "this executor's interface has no turn limit, so none is sent and none is enforced",
+    };
   };
   const scheduleDrain = () => track(() => drainQueue());
   const EMPTY_SELF = Object.freeze({ key: null, alias: null, dependencyIds: [], footprint: makeFootprint(), consumes: [], checkResources: [] });
@@ -462,7 +505,7 @@ export function createJourney({
       self,
       others: pairwise ? reservingRuns(String(run_id)).map((other) => runFacts(other, policy)) : [],
       backlog: item ? backlogNow() : null,
-      fleet: capacity ? fleetOf({ store: s, unit: policy.resources.unit }) : null,
+      fleet: capacity ? fleetOf({ store: s, unit: policy.resources.unit, since: fleetSince() }) : null,
       concurrency: policy.concurrency,
       rules: coordinationRules(policy.concurrency),
       access,
@@ -480,7 +523,7 @@ export function createJourney({
   function evaluateCapacity({ access, policy, run_id = null }) {
     return coordinate({
       self: EMPTY_SELF,
-      fleet: fleetOf({ store: getStore(), unit: policy.resources.unit }),
+      fleet: fleetOf({ store: getStore(), unit: policy.resources.unit, since: fleetSince() }),
       concurrency: policy.concurrency,
       access,
       run_id,
@@ -553,7 +596,7 @@ export function createJourney({
       if (next.kind === "handoff") {
         const decision = [...s.listDecisions(run_id)].reverse().find((entry) => entry.kind === "executor-handoff");
         const checkpoint = decision ? (parseJson(decision.evidence_seen, {}) || {}).checkpoint : null;
-        if (checkpoint) return handoffInstruction({ checkpoint, plan: latest, contract: ctx.contract });
+        if (checkpoint) return handoffInstruction({ checkpoint, plan: latest, contract: ctx.contract, profile: ctx.settings.work_profile });
       }
       return investigationInstruction({
         contract: ctx.contract,
@@ -563,6 +606,7 @@ export function createJourney({
         answers,
         feedback: next.feedback || null,
         previous: latest,
+        profile: ctx.settings.work_profile,
       });
     };
   }
@@ -796,8 +840,10 @@ export function createJourney({
           }),
         )
       : null;
-    const grant = run.grant_id ? s.getGrant(String(run.grant_id)) : null;
-    return { store: s, run, contract, workRef, grant, settings: parseJson(run.settings_json, {}) || {} };
+    const rawGrant = run.grant_id ? s.getGrant(String(run.grant_id)) : null;
+    // Checks see the owner-adjusted allowance; persistence (revocation) uses rawGrant.
+    const grant = rawGrant ? effectiveGrant(rawGrant, { settings: allowancesNow(), run_id: String(run.run_id) }) : null;
+    return { store: s, run, contract, workRef, grant, rawGrant, settings: parseJson(run.settings_json, {}) || {} };
   }
 
   function readSources(file) {
@@ -829,15 +875,20 @@ export function createJourney({
     const sources = readSources(ctx.workRef.locator.file);
     if (!sources.ok || sources.raw == null) return { fresh: false, reason: sources.reason, bookRaw: null };
     const recheck = recheckContractSource({ raw: sources.raw, workRef: ctx.workRef, contract: ctx.contract, bookRaw: sources.bookRaw });
-    const fresh = Boolean(recheck.resolved && recheck.freshness && recheck.freshness.fresh);
+    const changedInputs = (ctx.settings.prepared_source || []).filter(entry => {
+      const found = inspectDestination(root, entry.path);
+      const current = found.ok && found.exists && found.abs ? hashFile(found.abs) : null;
+      return current !== entry.sha256;
+    }).map(entry => entry.path);
+    const fresh = Boolean(recheck.resolved && recheck.freshness && recheck.freshness.fresh && !changedInputs.length);
     return {
       fresh,
-      reason: fresh ? null : recheck.reason || (recheck.freshness ? "changed: " + recheck.freshness.stale.join(", ") : "unresolved"),
+      reason: fresh ? null : changedInputs.length ? "prepared source changed: " + changedInputs.join(", ") : recheck.reason || (recheck.freshness ? "changed: " + recheck.freshness.stale.join(", ") : "unresolved"),
       bookRaw: sources.bookRaw,
     };
   }
 
-  const acceptanceNow = (ctx) => (ctx.workRef ? acceptanceText({ bookRaw: readSources(ctx.workRef.locator.file).bookRaw, alias: ctx.workRef.alias }) : null);
+  const acceptanceNow = (ctx) => ctx.settings.task_input?.binding ?? (ctx.workRef ? acceptanceText({ bookRaw: readSources(ctx.workRef.locator.file).bookRaw, alias: ctx.workRef.alias }) : null);
 
   const answeredQuestions = (run_id) =>
     getStore()
@@ -873,6 +924,9 @@ export function createJourney({
     if (!loaded.ok) return refuse(JOURNEY_REFUSALS.NO_POLICY, loaded.refusals);
     if (!runtime) return refuse(JOURNEY_REFUSALS.NO_RUNTIME, "configure a container runtime in the execution policy");
     if (!isNonEmptyString(request.command_id)) return refuse(JOURNEY_REFUSALS.COMMAND_REQUIRED, "deliver");
+    // Owner test gate: after an Apply, the owner records the laptop test result first.
+    const gate = testGate();
+    if (gate.locked) return refuse(TEST_GATE_REFUSALS.LOCKED, gate.application);
     const policy = loaded.policy;
     const deliverFn = buildDeliver({ root, pmRel, store: getStore, policyLoader: () => loaded, describeExecutor: describe, readFile, qualify });
     if (!deliverFn) return refuse(JOURNEY_REFUSALS.NO_POLICY, loaded.refusals);
@@ -884,8 +938,8 @@ export function createJourney({
       purpose: "investigate",
       access: "read-only",
       workspace: runtime.workspaceFor({ access: "read-only" }),
-      native_limits: nativeLimitsFor(policy, { work_profile: request.workProfile }, "read-only"),
-      instructionFor: ({ contract, workRef, acceptance }) => investigationInstruction({ contract, alias: workRef.alias, acceptance, profile: request.workProfile || "investigate" }),
+      nativeLimitsFor: (settings, backend_id) => nativeLimitsFor(policy, settings, "read-only", backend_id),
+      instructionFor: ({ contract, workRef, acceptance, profile }) => investigationInstruction({ contract, alias: workRef.alias, acceptance, profile }),
       beforeAdmit: ({ workRef }) => {
         const s = getStore();
         if (s.getCommand(request.command_id)) return null;
@@ -936,6 +990,10 @@ export function createJourney({
           refusals: outcome.refusals,
         });
       }
+    }
+    if (outcome.ok && outcome.prepared) {
+      if (!outcome.duplicate) event(outcome.run_id, "run.delivered", { job_id: null, prepared: true, executor: outcome.executor, actor: request.actor });
+      return deepFreeze({ ok: true, prepared: true, duplicate: Boolean(outcome.duplicate), run_id: String(outcome.run_id), job_id: null, executor: outcome.executor, settings: outcome.settings, refusals: [] });
     }
     if (!outcome.ok || !outcome.job) return outcome;
     const s = getStore();
@@ -1066,6 +1124,7 @@ export function createJourney({
     };
   }
 
+  /** Dispatch supplies a recoverable, revision-bound brief, including on resume. */
   async function dispatch(job_id) {
     const s = getStore();
     const job = s.getJob(job_id);
@@ -1076,11 +1135,30 @@ export function createJourney({
     const request = parseJson(job.request_json);
     const jobSettings = parseJson(job.settings_json, {}) || {};
 
+    const prior = jobSettings.continues_job_id ? s.getJob(String(jobSettings.continues_job_id)) : null;
+    const priorRef = prior && prior.native_ref && String(prior.backend_id) === String(job.backend_id)
+      ? makeExecutionRef({ backend_id: String(prior.backend_id), dispatch_key: String(prior.dispatch_key), native_ref: String(prior.native_ref) }) : null;
+    const taskInput = ctx.settings.task_input || splitTaskInput(acceptanceNow(ctx), ctx.contract.acceptance_fingerprint?.startsWith(BINDING_VERSION) === true);
+    const plan = planView(job.plan_id ? s.getPlan(String(job.plan_id)) : latestPlan(s, run_id));
+    const failed = job.purpose === "repair" ? s.listCandidates(run_id).at(-1) : null;
+    const brief = makeTaskBrief({ input: taskInput, contract: ctx.contract, alias: ctx.workRef?.alias, plan, answers: answeredQuestions(run_id), failedCandidate: failed ? { candidate_id: failed.candidate_id, generation: failed.generation } : null });
+    const priorBrief = parseJson(prior?.request_json, {})?.task_brief;
+    const planKnown = !plan || s.getPlan(plan.plan_id)?.job_id === prior?.job_id || (priorBrief && parseJson(priorBrief.text, {})?.plan?.revision === plan.revision);
+    const effectiveRequest = {
+      ...request,
+      task_brief: brief,
+      instruction_source: request.instruction_source || request.instruction,
+      instruction: briefInstruction({ instruction: request.instruction_source || request.instruction, brief, input: taskInput, plan, continued: Boolean(priorRef && planKnown), recoverable: runtime.taskBriefs === true }),
+    };
+    // Persist the exact prompt AND authoritative recovery bytes before crossing
+    // the worker boundary. The native session is never the only copy.
+    s.setJobRequest(job_id, effectiveRequest);
+
     let provisioned;
     try {
       provisioned = await runtime.provision({
         run_id,
-        job,
+        job: s.getJob(job_id),
         include: (ctx.contract.scratchScope && ctx.contract.scratchScope.include) || [],
       });
     } catch (error) {
@@ -1090,18 +1168,27 @@ export function createJourney({
     if (provisioned.base_manifest && !ctx.run.base_manifest_json) {
       s.updateRun(run_id, { base_manifest_json: provisioned.base_manifest });
     }
+    if (ctx.settings.prepared_source) {
+      const supplied = provisioned.base_manifest || parseJson(ctx.run.base_manifest_json, []) || [];
+      const mismatch = ctx.settings.prepared_source.filter(entry => (supplied.find(row => row.path === entry.path)?.sha256 || null) !== entry.sha256);
+      if (mismatch.length) {
+        cancelUndispatched(job, "prepared snapshot changed: " + mismatch.map(entry => entry.path).join(", "));
+        return;
+      }
+    }
     const built = await createAdapter(String(job.backend_id), { importSdk: provisioned.importSdk, now });
     if (!built.ok || !built.adapter) {
       cancelUndispatched(job, (built.refusal && built.refusal.detail) || "executor unavailable");
       return;
     }
-    const prior = jobSettings.continues_job_id ? s.getJob(String(jobSettings.continues_job_id)) : null;
-    const priorRef =
-      prior && prior.native_ref && String(prior.backend_id) === String(job.backend_id)
-        ? makeExecutionRef({ backend_id: String(prior.backend_id), dispatch_key: String(prior.dispatch_key), native_ref: String(prior.native_ref) })
-        : null;
     if (jobSettings.continues_job_id && !priorRef) {
       event(run_id, "job.continuity-unavailable", { job_id, prior: jobSettings.continues_job_id });
+    }
+
+    // The worker receives the same authoritative brief even when the model
+    // prompt uses its recovery reference instead of repeating the content.
+    if (priorRef && runtime.taskBriefs === true) {
+      event(run_id, "job.plan-by-reference", { job_id, plan_revision: jobSettings.plan_revision ?? null });
     }
 
     inFlight.set(job_id, built.adapter);
@@ -1111,7 +1198,7 @@ export function createJourney({
         store: s,
         adapter: built.adapter,
         job_id,
-        request,
+        request: effectiveRequest,
         priorRef,
         claimant,
         preDispatch,
@@ -1244,6 +1331,12 @@ export function createJourney({
     }
     s.putCandidate({ run_id, generation, candidate, job_id: String(job.job_id) });
     event(run_id, "candidate.frozen", { generation, candidate_id: candidate.candidate_id, changed: candidateChangedPaths(candidate).length });
+    const outsidePlan = preparedScopeViolations(run_id, candidate);
+    if (outsidePlan.length) {
+      s.updateRun(run_id, { lifecycle: "WAITING", waiting_reason: "plan-scope-changed" });
+      event(run_id, "plan.scope-changed", { candidate_id: candidate.candidate_id, paths: outsidePlan });
+      return null;
+    }
     // The writer may have changed paths nobody declared or approved. That scope is
     // re-evaluated against every other reservation before the candidate goes on;
     // a conflict pauses it with its bytes kept, and it resumes when that clears.
@@ -1264,13 +1357,19 @@ export function createJourney({
     return evaluate(run_id, candidate, { allowRepair: true });
   }
 
+  function preparedScopeViolations(run_id, candidate) {
+    const plan = planView(latestPlan(getStore(), run_id));
+    if (!plan?.body?.preparation) return [];
+    return candidateChangedPaths(candidate).map(change => String(change.path)).filter(path => !plan.body.scope.some(root => path === root || path.startsWith(root.replace(/\/$/u, "") + "/")));
+  }
+
   function evidenceFor({ run_id, candidate, policy, contract, base }) {
     const s = getStore();
     const criteria = policy.criteria.filter((criterion) =>
       contract.criteria_refs.some((ref) => ref.criterion_id === criterion.criterion_id && ref.revision === criterion.revision),
     );
     const records = [];
-    const integrity = [];
+    const integrity = preparedScopeViolations(run_id, candidate).map(path => "candidate exceeds the approved prepared plan: " + path);
     if (!criteria.length) return { criteria, records, integrity };
     const plan = pinCheckPlan({
       criteria,
@@ -1317,7 +1416,104 @@ export function createJourney({
         record,
       });
     }
+
+    const typechecked = typecheckEvidence({ run_id, candidate, policy });
+    if (typechecked) {
+      criteria.push(typechecked.criterion);
+      records.push(typechecked.record);
+    }
     return { criteria, records, integrity };
+  }
+
+  /**
+   * Run the deterministic typecheck over this candidate and turn it into a
+   * criterion the result layer already knows how to weigh.
+   *
+   * It is appended to the run's criteria rather than selected by the contract,
+   * because "does this compile where it is going" is not a question a work item
+   * should be able to decline. Under `enforcement: "required"` it is required
+   * for the candidate, so an inconclusive or failed typecheck leaves the run
+   * `checks-inconclusive` and Apply refuses — which is the whole point: run
+   * r-83dddb67fea9 shipped a TS2339 to `verified_candidate` because nothing in
+   * the pipeline ever compiled the candidate (F8).
+   *
+   * Returns null when the owner has not configured it, and the absence is
+   * reported by `applyCandidate` rather than passing silently.
+   */
+  function typecheckEvidence({ run_id, candidate, policy }) {
+    const configured = policy.checks && policy.checks.requiredVerifications ? policy.checks.requiredVerifications.typecheck : null;
+    if (!configured || !configured.enabled) return null;
+    const s = getStore();
+
+    let verification;
+    try {
+      verification = runTypecheckVerification({
+        hostRoot: root,
+        candidate,
+        argv: [...configured.argv],
+        execute: typecheckExecutor,
+        env: restrictedEnv(),
+        now,
+      });
+    } catch (error) {
+      verification = {
+        criterion_id: TYPECHECK_CRITERION_ID,
+        state: TYPECHECK_STATE.INCONCLUSIVE,
+        reason: "typecheck-error",
+        detail: errorText(error),
+        candidate_id: String(candidate.candidate_id),
+        checked_inputs: null,
+        counts: {},
+        diagnostics: [],
+        verification_id: contentId("tc", { run_id, candidate: String(candidate.candidate_id), error: errorText(error) }),
+      };
+    }
+
+    let artifact = null;
+    try {
+      artifact = writeTypecheckArtifact({ dir: join(artifactsRoot, "typecheck"), verification });
+    } catch (error) {
+      event(run_id, "typecheck.artifact-failed", { error: errorText(error) });
+    }
+    event(run_id, "typecheck." + verification.state, {
+      candidate_id: String(candidate.candidate_id),
+      introduced: verification.counts ? verification.counts.introduced : null,
+      reason: verification.reason,
+    });
+
+    const criterion = {
+      criterion_id: TYPECHECK_CRITERION_ID,
+      revision: 1,
+      proposition: "The candidate introduces no new TypeScript diagnostic in the checkout it would be applied to.",
+      // Advisory records the verdict and blocks nothing; required is a gate.
+      required_for: configured.enforcement === "advisory" ? "informational" : "candidate",
+      observer: { kind: "command", expected: { spec_id: TYPECHECK_CRITERION_ID } },
+      oracle_ref: "tsc --noEmit over the host checkout with the candidate laid over it",
+      freshness_inputs: ["candidate", "integration-target"],
+    };
+    const record = {
+      criterion_id: TYPECHECK_CRITERION_ID,
+      criterion_revision: 1,
+      state: verification.state,
+      reason: verification.reason || verification.detail || null,
+      evidence_id: String(verification.verification_id),
+      verification,
+      artifact,
+    };
+    s.putEvidence({
+      evidence_id: record.evidence_id,
+      run_id,
+      candidate_id: candidate.candidate_id,
+      criterion_id: record.criterion_id,
+      criterion_revision: record.criterion_revision,
+      state: record.state,
+      reason: record.reason,
+      // Not a protected-checker receipt: this observer runs on the host, so it
+      // is recorded as what it is rather than borrowing that attribution.
+      receipt: null,
+      record,
+    });
+    return { criterion, record };
   }
 
   function resultFor(ctx, { candidate, criteria, records, integrity, observedDisposition, closed_outcome }) {
@@ -1501,7 +1697,7 @@ export function createJourney({
         qualification_ref: profile.profile ? profile.profile.qualification_ref : null,
       },
       plan_id,
-      native_limits: nativeLimitsFor(policy, ctx.settings, access),
+      native_limits: nativeLimitsFor(policy, ctx.settings, access, backend_id),
       extraRefusals,
       // Command Center Phase 5: held work, prerequisites, reservations and fleet
       // limits, evaluated inside this admission's transaction.
@@ -1629,7 +1825,7 @@ export function createJourney({
               command_id: command_id + ":continue",
               actor,
               continues_job_id,
-              instructionFor: (messages) => implementationInstruction({ plan: planView(approval.plan), contract: ctx.contract, messages, answers }),
+              instructionFor: (messages) => implementationInstruction({ plan: planView(approval.plan), contract: ctx.contract, messages, answers, profile: ctx.settings.work_profile }),
             })
           : refuse(JOURNEY_REFUSALS.APPROVAL, approval.refusal);
       }
@@ -1793,7 +1989,7 @@ export function createJourney({
         case "stop": {
           if (ctx.run.lifecycle === "CLOSED") return refuse(JOURNEY_REFUSALS.RUN_CLOSED, ctx.run.closed_outcome);
           // Authority goes first: nothing further dispatches or publishes under this grant.
-          if (!ctx.grant.revocation_version) s.putGrant(revokeGrant(ctx.grant));
+          if (!ctx.rawGrant.revocation_version) s.putGrant(revokeGrant(ctx.rawGrant));
           s.updateRun(run_id, { lifecycle: "WAITING", waiting_reason: "stop-requested" });
           event(run_id, "run.stop-requested", { actor });
           const stops = await stopActiveJobs(context(run_id));
@@ -1996,6 +2192,8 @@ export function createJourney({
       settings_json: {
         ...settings.settings,
         work_profile: ctx.settings.work_profile ?? null,
+        task_input: ctx.settings.task_input ?? null,
+        prepared_source: ctx.settings.prepared_source ?? null,
         profile_id: profile.profile.profile_id,
         qualification_ref: profile.profile.qualification_ref ?? null,
         mismatch_open: false,
@@ -2010,7 +2208,7 @@ export function createJourney({
       command_id: command_id + ":handoff",
       actor,
       continues_job_id: null,
-      instructionFor: () => handoffInstruction({ checkpoint, plan: planView(plan), contract: ctx.contract }),
+      instructionFor: () => handoffInstruction({ checkpoint, plan: planView(plan), contract: ctx.contract, profile: ctx.settings.work_profile }),
     });
     if (!continuation.ok && !continuation.queued) s.updateRun(run_id, { lifecycle: "WAITING", waiting_reason: "continuation-refused" });
     const accepted = continuation.ok || Boolean(continuation.queued);
@@ -2171,6 +2369,42 @@ export function createJourney({
     return deepFreeze({ ok: true, application_id, state: nextState, refusals: [] });
   }
 
+  /**
+   * Is the policy's required verification present, passing and about THIS
+   * candidate?
+   *
+   * The three failure modes are kept apart because they mean different things to
+   * the owner: not configured (a gap in the pipeline, stated), never recorded
+   * for this candidate (the result predates the verification, so it proves
+   * nothing about it), and recorded but failed or inconclusive (the checker
+   * spoke and the answer was not yes).
+   */
+  function requiredVerificationGate({ run_id, policy, record, candidate }) {
+    const configured = policy.checks && policy.checks.requiredVerifications ? policy.checks.requiredVerifications.typecheck : null;
+    if (!configured || !configured.enabled || configured.enforcement === "advisory") return { ok: true, detail: null };
+
+    const state = (record.criterion_states || []).find((entry) => entry.criterion_id === TYPECHECK_CRITERION_ID);
+    if (!state) {
+      return { ok: false, detail: "this result carries no " + TYPECHECK_CRITERION_ID + " verification, so the candidate has never been typechecked" };
+    }
+    if (state.state !== TYPECHECK_STATE.SATISFIED) {
+      return { ok: false, detail: TYPECHECK_CRITERION_ID + " is " + state.state + (state.reason ? " (" + state.reason + ")" : "") };
+    }
+
+    const evidence = getStore()
+      .listEvidence(run_id, String(candidate.candidate_id))
+      .map((row) => parseJson(row.record_json, null))
+      .filter((entry) => entry && entry.criterion_id === TYPECHECK_CRITERION_ID && entry.verification);
+    const latest = evidence.length ? evidence[evidence.length - 1].verification : null;
+    const fresh = verificationIsFresh({
+      verification: latest,
+      candidate_id: String(candidate.candidate_id),
+      changed: candidateChangedPaths(candidate).map((change) => String(change.path)),
+    });
+    if (!fresh.fresh) return { ok: false, detail: fresh.reason };
+    return { ok: true, detail: null };
+  }
+
   async function applyCandidate(ctx, { candidate_id, result_ref, command_id, actor }) {
     const s = ctx.store;
     const run_id = String(ctx.run.run_id);
@@ -2194,6 +2428,14 @@ export function createJourney({
     if (!candidate) return refuse(JOURNEY_REFUSALS.APPLY_NOT_VERIFIED, "the candidate record is missing");
     const loaded = policyNow();
     if (!loaded.ok) return refuse(JOURNEY_REFUSALS.NO_POLICY, loaded.refusals);
+
+    // A required verification is checked here as well as in the result, and not
+    // as a duplicate: `candidateVerified` was computed when the checks ran, and
+    // a result recorded before this verification existed carries no trace of it
+    // at all. Missing, failed and stale are three different sentences here and
+    // none of them is a pass.
+    const verificationGate = requiredVerificationGate({ run_id, policy: loaded.policy, record, candidate });
+    if (!verificationGate.ok) return refuse(JOURNEY_REFUSALS.APPLY_UNVERIFIED_TYPECHECK, verificationGate.detail);
 
     const destination = destinationOf();
     const application_id = contentId("app", { v: 1, run_id, candidate_id, command_id });
@@ -2489,6 +2731,7 @@ export function createJourney({
       return { kind: "none", label: run.closed_outcome === "cancelled" ? "Cancelled" : "Review result" };
     }
     if (run.waiting_reason === "checks-inconclusive") return { kind: "review-result", label: "Review result" };
+    if (run.waiting_reason === "plan-scope-changed") return { kind: "review-result", label: "Review scope" };
     if (RESUMABLE_REASONS.includes(String(run.waiting_reason))) return { kind: "resume", label: run.waiting_reason === "paused" ? "Resume" : "Retry" };
     return { kind: "none", label: "Working" };
   }
@@ -2677,7 +2920,18 @@ export function createJourney({
           stop: job.stop_requested_at ? (job.stop_observed_at ? "Stopped" : "Stop requested") : null,
           requested: { model: settings.model ?? null, effort: settings.effort ?? null },
           effective: effective ? { model: effective.model ?? null, effort: effective.effort ?? null, source: effective.source ?? null, verification: effective.verification ?? null } : null,
-          reservation: { unit: String(job.reservation_unit), amount: job.reservation_amount == null ? null : Number(job.reservation_amount), open: Boolean(job.reservation_open) },
+          reservation: {
+            unit: String(job.reservation_unit),
+            amount: job.reservation_amount == null ? null : Number(job.reservation_amount),
+            open: Boolean(job.reservation_open),
+            // An estimate used at admission, not a cap on the running job. The
+            // investigated build's 50k reservation under-predicted its own use
+            // by roughly ten times and stopped nothing.
+            kind: "admission-estimate",
+          },
+          // Shared plan-window readings bracketing this job, when the worker
+          // could take them. Not per-job consumption; see subscription-window.mjs.
+          subscription: parseJson(job.subscription_json, null),
           reason: job.reason ? String(job.reason) : null,
           created_at: String(job.created_at),
         };
@@ -2763,7 +3017,7 @@ export function createJourney({
     const loaded = policyNow();
     const concurrency = loaded.ok ? loaded.policy.concurrency : DEFAULT_CONCURRENCY;
     const unit = loaded.ok ? loaded.policy.resources.unit : "usd";
-    const fleet = fleetOf({ store: s, unit });
+    const fleet = fleetOf({ store: s, unit, since: fleetSince() });
     const runById = new Map(fleet.runs.map((run) => [String(run.run_id), run]));
     const views = new Map();
     const viewOf = (run) => {
@@ -2849,7 +3103,7 @@ export function createJourney({
       // A new run of the same item supersedes that item's earlier candidate.
       others: s ? reservingRuns(null).filter((run) => !sameItemRun(run, key)).map((run) => runFacts(run, policy)) : [],
       backlog: backlogNow(),
-      fleet: s ? fleetOf({ store: s, unit: policy.resources.unit }) : null,
+      fleet: s ? fleetOf({ store: s, unit: policy.resources.unit, since: fleetSince() }) : null,
       concurrency: policy.concurrency,
       rules,
       access: "write",
@@ -2880,9 +3134,97 @@ export function createJourney({
     });
   }
 
+  /**
+   * Owner allowance settings (Settings panel): the shared window and its usage, the
+   * default per-task allowance, and every open run's allowance with its top-up.
+   */
+  function allowances() {
+    const s = getStore();
+    const read = loadAllowances({ root });
+    const settings = read.settings;
+    const loaded = loadPolicy({ root });
+    const unit = loaded.ok ? loaded.policy.resources.unit : "tokens";
+    const policyFleet = loaded.ok ? loaded.policy.concurrency.fleetAllowance : null;
+    const window = fleetWindow({ settings, policyFleetAllowance: policyFleet, now: now() });
+    const fleet = fleetOf({ store: s, unit, since: window.since });
+    const running = new Set(fleet.running.map((job) => String(job.run_id)));
+    const runs = fleet.runs
+      .filter((run) => run.lifecycle !== "CLOSED")
+      .map((run) => {
+        const run_id = String(run.run_id);
+        const ctx = context(run_id);
+        const view = summaryOf(run);
+        const limits = runAllowance({ settings, grantAllowance: ctx.rawGrant ? ctx.rawGrant.resource_policy.allowance : null, run_id });
+        const used = resourceSummary(s, { run_id, unit });
+        return {
+          run_id,
+          alias: view.alias,
+          title: view.title,
+          campaign: view.campaign,
+          lifecycle: String(run.lifecycle),
+          running: running.has(run_id),
+          ...limits,
+          used: used.settled,
+          reserved: used.reserved,
+        };
+      });
+    return deepFreeze({
+      ok: true,
+      readable: read.ok,
+      error: read.error,
+      unit,
+      fleet: { ...window, policyLimit: policyFleet == null ? null : Number(policyFleet), used: fleet.resources.settled, reserved: fleet.resources.reserved },
+      task: { limit: settings.task.limit, policyLimit: loaded.ok ? loaded.policy.resources.allowance : null },
+      runs,
+      history: settings.history.slice(-12).reverse(),
+    });
+  }
+
+  /** Owner test gate: the newest written application and the owner's result for it. */
+  function testGate() {
+    return gateState({ applications: getStore().listAllApplications(), records: readTestGate({ root }).records });
+  }
+
+  /** Record the owner's laptop test result for the newest written application. */
+  function recordTests({ actor, ...change }) {
+    const outcome = recordTestResult({ root, applications: getStore().listAllApplications(), change, actor, now: now() });
+    if (outcome.ok && !outcome.repeated) {
+      const record = readTestGate({ root }).records.slice(-1)[0];
+      event(record.run_id, "tests.recorded", { actor, result: record.result, proceed: record.proceed, application_id: record.application_id });
+    }
+    return deepFreeze(outcome);
+  }
+
+  /** One owner change to the allowance settings; waiting runs are re-evaluated after it. */
+  function changeAllowance({ actor, ...change }) {
+    const s = getStore();
+    const read = loadAllowances({ root });
+    if (!read.ok) return refuse("allowance-settings-unreadable", read.error);
+    const loaded = loadPolicy({ root });
+    const unit = loaded.ok ? loaded.policy.resources.unit : "tokens";
+    const outcome = applyAllowanceChange(read.settings, change, {
+      actor,
+      now: now(),
+      usedFor: (run_id) => resourceSummary(s, { run_id, unit }).settled,
+      knownRun: (run_id) => Boolean(s.getRun(run_id)),
+    });
+    if (!outcome.ok) return deepFreeze(outcome);
+    if (!outcome.repeated) {
+      saveAllowances({ root, settings: outcome.settings });
+      const last = outcome.settings.history[outcome.settings.history.length - 1];
+      if (change.run_id) event(String(change.run_id), "run.allowance-changed", { actor, action: last.action, detail: last.detail });
+      scheduleDrain();
+    }
+    return deepFreeze({ ok: true, repeated: outcome.repeated, allowances: allowances() });
+  }
+
   return {
     claimant,
     failures,
+    allowances,
+    changeAllowance,
+    testGate,
+    recordTests,
     idle,
     deliver,
     decide,

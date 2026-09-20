@@ -17,6 +17,9 @@ describe("coordination labels", () => {
   it("does not call a capacity-blocked run ready", () => {
     expect(
       coordinationStatus("together", [{ code: "fleet-resources", with: null }]),
+    ).toBe("Allowance used");
+    expect(
+      coordinationStatus("together", [{ code: "writer-slots-full", with: null }, { code: "fleet-resources", with: null }]),
     ).toBe("Capacity full");
   });
 

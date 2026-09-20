@@ -41,6 +41,13 @@ import {
   evaluateGrant,
 } from "./contracts.mjs";
 import { makeExecutionRef, makeJobRequest, makeResumeRequest } from "./adapters/adapter.mjs";
+import {
+  COUNTER_SEMANTICS,
+  normalizationHealth,
+  normalizeJobReadings,
+  parseNormalization,
+  threadBaselineFor,
+} from "./usage-normalization.mjs";
 
 /** Why an admission refused. Fixtures match on codes, not prose. */
 export const ADMISSION_REFUSALS = Object.freeze({
@@ -89,6 +96,32 @@ export function normalizedTokenTotal(reading) {
   return Number(reading.input || 0) + Number(reading.output || 0);
 }
 
+/**
+ * The counter semantics every reading of one dispatch agrees on.
+ *
+ * A dispatch whose readings disagree is not interpreted: `unknown` keeps the raw
+ * values and flags them, which is the honest outcome of "the adapter said two
+ * different things".
+ */
+function declaredSemantics(readings) {
+  const declared = new Set((readings || []).map((reading) => String((reading.usage && reading.usage.counterSemantics) || COUNTER_SEMANTICS.UNKNOWN)));
+  if (declared.size !== 1) return COUNTER_SEMANTICS.UNKNOWN;
+  const [only] = [...declared];
+  return Object.values(COUNTER_SEMANTICS).includes(only) ? only : COUNTER_SEMANTICS.UNKNOWN;
+}
+
+/** The job this one continues, when the store still holds it. */
+function parentJobOf(store, job) {
+  let settings = null;
+  try {
+    settings = job.settings_json ? JSON.parse(job.settings_json) : null;
+  } catch {
+    settings = null;
+  }
+  const parent_id = settings && settings.continues_job_id ? String(settings.continues_job_id) : null;
+  return parent_id ? store.getJob(parent_id) || null : null;
+}
+
 /** Why resources refused an admission or a dispatch. */
 export const RESOURCE_REFUSALS = Object.freeze({
   UNSUPPORTED_UNIT: "unsupported-resource-unit",
@@ -135,21 +168,32 @@ export function deriveJobId({ run_id, purpose, contract_id, contract_revision, g
  * @param {ReturnType<import("./store.mjs").openStore>} store
  * `jobs` replaces the run's jobs with an explicit set — the fleet, for coordination.
  *
- * @param {{run_id?:(string|null), unit?:string, jobs?:(object[]|null)}} input
+ * @param {{run_id?:(string|null), unit?:string, jobs?:(object[]|null), since?:(string|null)}} input
  */
-export function resourceSummary(store, { run_id = null, unit = "usd", jobs: given = null }) {
+export function resourceSummary(store, { run_id = null, unit = "usd", jobs: given = null, since = null }) {
   const jobs = given || store.listJobs(run_id);
   let settled = 0;
   let reserved = 0;
   let providerReportedUsd = null;
   const unknown = [];
   const nativeTotals = { input: 0, cachedInput: 0, cacheCreation: 0, output: 0, reasoningOutput: 0 };
+  // The provider's own numbers before normalization, kept so a total can be
+  // shown next to what the backend actually said rather than replacing it.
+  const rawTotals = { input: 0, cachedInput: 0, cacheCreation: 0, output: 0, reasoningOutput: 0 };
+  const allReadings = [];
   let openWithoutAmount = 0;
 
   for (const job of jobs) {
-    const readings = store.listUsageReadings(job.job_id);
+    // `since` (owner allowance window) counts only readings observed from that instant.
+    const readings = store.listUsageReadings(job.job_id).filter((reading) => !since || String(reading.observed_at) >= since);
     let unsettled = null;
     for (const reading of readings) {
+      allReadings.push(reading);
+      rawTotals.input += Number(reading.raw_input ?? reading.input ?? 0);
+      rawTotals.cachedInput += Number(reading.raw_cached_input ?? reading.cached_input ?? 0);
+      rawTotals.cacheCreation += Number(reading.raw_cache_creation ?? reading.cache_creation ?? 0);
+      rawTotals.output += Number(reading.raw_output ?? reading.output ?? 0);
+      rawTotals.reasoningOutput += Number(reading.raw_reasoning_output ?? reading.reasoning_output ?? 0);
       nativeTotals.input += Number(reading.input || 0);
       nativeTotals.cachedInput += Number(reading.cached_input || 0);
       nativeTotals.cacheCreation += Number(reading.cache_creation || 0);
@@ -170,6 +214,20 @@ export function resourceSummary(store, { run_id = null, unit = "usd", jobs: give
     } else if (readings.length === 0 && job.dispatch_started_at) {
       // Work may have happened and produced nothing readable. Not free.
       unknown.push({ job_id: job.job_id, status: job.status, reason: "dispatch marked but no usage observed" });
+    }
+
+    // A reading whose normalization could not be completed is not a measurement.
+    // It stays in the totals — the tokens were spent — but the run carries the
+    // qualification, so nothing downstream can present the number as settled.
+    for (const reading of readings) {
+      const record = parseNormalization(reading);
+      if (record && record.complete === false) {
+        unknown.push({
+          job_id: job.job_id,
+          status: job.status,
+          reason: "usage reading " + String(reading.reading_key) + " could not be normalized: " + String(record.status),
+        });
+      }
     }
 
     if (job.reservation_open) {
@@ -206,6 +264,15 @@ export function resourceSummary(store, { run_id = null, unit = "usd", jobs: give
         ...nativeTotals,
         total: nativeTotals.input + nativeTotals.output,
       }),
+      // What the backends reported before normalization. Under a
+      // thread-cumulative counter this over-counts a resumed job on purpose: it
+      // is the provider's statement, not a measurement of the work.
+      rawProviderTokens: Object.freeze({
+        ...rawTotals,
+        total: rawTotals.input + rawTotals.output,
+        basis: "provider counters as received, with a resumed thread's restatement still included",
+      }),
+      normalization: normalizationHealth(allReadings),
       tokenNormalizationVersion: TOKEN_NORMALIZATION_VERSION,
       reconciledBilled: null,
       subscriptionUsage: null,
@@ -534,18 +601,50 @@ export function recordDispatchResult({ store, job_id, result }) {
     }
 
     const readings = (result.observations && result.observations.usageReadings) || [];
+    // What the provider's counter means decides whether these numbers are this
+    // job's spend or a restatement of its parent's. Under a thread-cumulative
+    // backend a resumed job's reading contains everything the thread has ever
+    // spent, so it is stored raw *and* as a delta against the parent's last raw
+    // reading. Without this, two jobs on one Codex thread count the first job
+    // twice — which is exactly what run r-83dddb67fea9 recorded.
+    const semantics = declaredSemantics(readings);
+    const parent = parentJobOf(store, job);
+    const baseline = threadBaselineFor({
+      job: store.getJob(job_id) || job,
+      parent,
+      parentReadings: parent ? store.listUsageReadings(String(parent.job_id)) : [],
+    });
+    const normalized = normalizeJobReadings({
+      semantics,
+      readings,
+      baseline: baseline.baseline,
+      baselineRequired: baseline.required,
+    });
+
     let inserted = 0;
-    for (const reading of readings) {
+    for (const entry of normalized.readings) {
+      const reading = entry.reading;
+      const values = entry.normalized.values;
       const outcome = store.recordUsageReading(job_id, {
         reading_key: "turn:" + String(reading.turn ?? 0),
         unit: reading.usage.unit,
-        input: reading.usage.input,
-        cachedInput: reading.usage.cachedInput,
-        cacheCreation: reading.usage.cacheCreation,
-        output: reading.usage.output,
-        reasoningOutput: reading.usage.reasoningOutput,
+        input: values.input,
+        cachedInput: values.cachedInput,
+        cacheCreation: values.cacheCreation,
+        output: values.output,
+        reasoningOutput: values.reasoningOutput,
         costUsd: reading.usage.costUsd,
         note: reading.usage.basis,
+        raw: entry.normalized.raw,
+        counterSemantics: semantics,
+        normalization: {
+          status: entry.normalized.status,
+          complete: entry.normalized.complete,
+          basis: entry.normalized.basis,
+          version: entry.normalized.version,
+          baseline_job_id: baseline.parent_job_id,
+          baseline_absent_reason: baseline.baseline ? null : baseline.reason,
+        },
       });
       if (outcome.inserted) inserted += 1;
     }
@@ -560,6 +659,12 @@ export function recordDispatchResult({ store, job_id, result }) {
 
     if (result.observations && result.observations.effective) {
       store.setJobEffective(job_id, result.observations.effective);
+    }
+    // Shared plan-window observations, kept apart from the token counters
+    // because they measure a different thing and are attributable to this job
+    // only when nothing else used the account (F9).
+    if (result.observations && result.observations.subscription) {
+      store.recordSubscriptionObservations(job_id, result.observations.subscription);
     }
     if (result.observations && Array.isArray(result.observations.activity) && result.observations.activity.length) {
       store.appendActivity(job.run_id, job_id, result.observations.activity);

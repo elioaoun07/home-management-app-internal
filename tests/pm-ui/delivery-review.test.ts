@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   checkGroups,
   defaultReviewTab,
+  outcomeSummary,
+  tokenSplit,
   planMarkdown,
   reviewStatus,
   reviewTabs,
@@ -18,16 +20,28 @@ import { normalizePlanBody } from "../../scripts/delivery-v2/interaction.mjs";
 
 describe("Delivery decision workspace", () => {
   it("keeps Changes as the final review step", () => {
-    expect(reviewTabs).toEqual(["plan", "checks", "activity", "changes"]);
+    expect(reviewTabs).toEqual(["outcome", "plan", "checks", "activity", "changes"]);
   });
   it("opens the work needing attention and distinguishes rolled-back from verified", () => {
     const d = deliveryReviewFixture();
-    expect(defaultReviewTab(d)).toBe("changes");
+    // A recorded result opens Outcome; application checks still open Verification.
+    expect(defaultReviewTab(d)).toBe("outcome");
     expect(reviewStatus(d)).toBe("Rolled back");
-    d.ownerAction = { kind: "review-result", label: "Review" };
+    d.ownerAction = { kind: "application-checks", label: "Checks" };
     expect(defaultReviewTab(d)).toBe("checks");
     d.plans[0].status = "proposed";
     expect(defaultReviewTab(d)).toBe("plan");
+  });
+  it("summarizes the outcome from recorded facts only", () => {
+    const d = deliveryReviewFixture();
+    const summary = outcomeSummary(d);
+    expect(["verified", "inconclusive", "failed", "closed", "in-progress"]).toContain(summary.verdict);
+    expect(summary.good.length + summary.attention.length).toBeGreaterThan(0);
+    d.resources = { ...(d.resources as NonNullable<typeof d.resources>), provenance: { ...(d.resources as NonNullable<typeof d.resources>).provenance, measuredTokens: { input: 487742, cachedInput: 425472, output: 5694 } } };
+    // Uncached, cached and output kept apart, with reasoning identified as a
+    // subset of output. `raw` is null here: this fixture's provenance carries no
+    // separate provider counter, so there is nothing to contrast.
+    expect(tokenSplit(d.resources)).toEqual({ fresh: 62270, cached: 425472, output: 5694, reasoning: 0, total: 493436, raw: null });
   });
   it("uses the latest criterion revision and observation without dropping history", () => {
     const d = deliveryReviewFixture();
@@ -77,6 +91,22 @@ describe("Delivery decision workspace", () => {
     expect(markdown).not.toContain(d.plans[0].plan_id);
     expect(markdown).not.toContain("[object Object]");
   });
+  it("shows prepared material before approval and preserves it in the plan export", () => {
+    const d = deliveryReviewFixture();
+    const plan = d.plans.at(-1)!;
+    plan.body.preparation = { kind: "selected-item", provenance: "Owner-reviewed task", acceptance_fingerprint: "binding-v2:fixture" };
+    plan.body.acceptance = ["The label opens the selected record"];
+    plan.body.invariants = ["Preserve keyboard activation"];
+    plan.body.exclusions = ["No other labels"];
+    const html = renderToStaticMarkup(createElement(PlanReview, { detail: d }, createElement("button", null, "Approve")));
+    expect(html).toContain("From task");
+    for (const text of [...plan.body.acceptance, ...plan.body.invariants, ...plan.body.exclusions]) {
+      expect(html).toContain(text);
+      expect(html.indexOf(text)).toBeLessThan(html.indexOf("Approve"));
+      expect(planMarkdown(plan)).toContain(text);
+    }
+    expect(planMarkdown(plan)).toContain("Source: Owner-reviewed task");
+  });
   it("shows one readable token comparison without receipt fields", () => {
     const html = renderToStaticMarkup(
       createElement(UsageSummary, {
@@ -85,7 +115,9 @@ describe("Delivery decision workspace", () => {
     );
     expect(html).toContain("Tokens");
     expect(html).toContain("284,243");
-    expect(html).toContain("200,000 threshold");
+    // "threshold" implied a live ceiling. The allowance is checked when a job is
+    // admitted and never interrupts one that is running (F10).
+    expect(html).toContain("200,000 admission limit");
     expect(html).toContain("+84,243");
     expect(html).not.toContain("Estimated");
     expect(html).not.toContain("Reserved");

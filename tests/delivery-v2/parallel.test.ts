@@ -592,6 +592,29 @@ describe("discovered overlap, fleet limits and recovery", () => {
     expect(h.calls).toHaveLength(0);
   });
 
+  it("holds a run under an owner allowance setting and re-admits it when the owner lifts it", async () => {
+    const { h } = makeHarness();
+    const journey = journeyWith(h);
+    // Owner limit from the Settings panel; the policy itself claims no fleet allowance.
+    expect(journey.changeAllowance({ action: "fleet", limit: 5, period: "reset", command_id: "a-1", actor: "owner" })).toMatchObject({ ok: true });
+    const outcome = await journey.deliver({ ...select("BUD-14"), ...SETTINGS, command_id: cmd(), actor: "owner" });
+    expect(outcome).toMatchObject({ ok: true, queued: true });
+    expect(journey.detail(outcome.run_id).coordination.reasons[0].code).toBe("fleet-resources");
+    const view = journey.allowances();
+    expect(view.fleet).toMatchObject({ limit: 5, source: "settings", policyLimit: null });
+    expect(view.runs.map((run: Loose) => run.run_id)).toContain(outcome.run_id);
+    await journey.idle();
+    expect(h.calls).toHaveLength(0);
+
+    // A retried command is a no-op; lifting the limit re-evaluates the queue without a new command.
+    expect(journey.changeAllowance({ action: "fleet", limit: 5, period: "reset", command_id: "a-1", actor: "owner" })).toMatchObject({ ok: true, repeated: true });
+    expect(journey.changeAllowance({ action: "fleet", limit: null, command_id: "a-2", actor: "owner" })).toMatchObject({ ok: true, repeated: false });
+    await journey.idle();
+    expect(journey.detail(outcome.run_id).coordination.state).not.toBe("queued");
+    expect(h.calls.length).toBeGreaterThan(0);
+    expect(journey.allowances().history.map((entry: Loose) => entry.command_id)).toEqual(["a-2", "a-1"]);
+  });
+
   it("recovers a dead supervisor's claim without a second writer, and a replayed approval admits nothing", async () => {
     const { h } = makeHarness();
     const first = journeyWith(h);

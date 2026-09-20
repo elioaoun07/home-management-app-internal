@@ -4,6 +4,7 @@ import {
   Activity,
   ArrowRight,
   Check,
+  ClipboardCheck,
   FileText,
   GitBranch,
   ListChecks,
@@ -49,6 +50,9 @@ import {
   type ReviewTab,
 } from "./deliveryReviewModel";
 import "./delivery-review.css";
+import { LivePulse } from "./LivePulse";
+import { OutcomeReview } from "./OutcomeReview";
+import { TestGateCard, useTestGate } from "./TestGate";
 import type { V2Executor, V2Reason, V2RunDetail, Work } from "./types";
 
 type Body = Record<string, unknown>;
@@ -109,7 +113,7 @@ function Verdict({
       className="verdict"
       data-verdict={verdict}
       data-blocked={
-        status === "Capacity full" || status === "Scope required"
+        status === "Capacity full" || status === "Allowance used" || status === "Scope required"
           ? "true"
           : undefined
       }
@@ -387,7 +391,8 @@ function startBlocker(reasons: V2Reason[]) {
   const reason = reasons[0];
   if (!reason) return "Unavailable";
   if (reason.code === "scope-unknown") return "Scope required";
-  if (["fleet-resources", "writer-slots-full", "job-slots-full"].includes(reason.code))
+  if (reason.code === "fleet-resources") return "Allowance used";
+  if (["writer-slots-full", "job-slots-full"].includes(reason.code))
     return "Capacity full";
   if (reason.code.startsWith("dependency-"))
     return `Waiting for ${reason.with || reason.first || "prerequisite"}`;
@@ -409,6 +414,8 @@ export function LaunchV2({ work }: { work: Work }) {
   const [effort, setEffort] = useState("");
   const [blockedExecutor, setBlockedExecutor] = useState<V2Executor | null>(null);
   const start = useV2Command();
+  const testGate = useTestGate();
+  const testsLocked = !!testGate.data?.locked;
   const itemId = String(work.idChip || work.id || "");
   const assessment = useQuery({
     queryKey: pmKeys.v2assess(work.file, itemId),
@@ -550,9 +557,12 @@ export function LaunchV2({ work }: { work: Work }) {
         onCheck={start.retry}
         busy={start.isPending}
       />
+      {testGate.data?.locked && <TestGateCard gate={testGate.data} />}
       <div className="launch-footer">
         <span>
-          {noRuntime
+          {testsLocked
+            ? "Tests not confirmed"
+            : noRuntime
             ? "Worker unavailable"
             : assessment.data?.startable === false
               ? startBlocker(assessment.data.reasons)
@@ -567,7 +577,8 @@ export function LaunchV2({ work }: { work: Work }) {
             noRuntime ||
             start.isPending ||
             work.state !== "open" ||
-            assessment.data?.startable === false
+            assessment.data?.startable === false ||
+            testsLocked
           }
           onClick={deliver}
         >
@@ -658,6 +669,11 @@ export function RunV2Story({
   const busy = detail.jobs.some(
     (job) => job.status === "active" || job.status === "reserved",
   );
+  const activeJob = detail.jobs.find((job) => job.status === "active" || job.status === "reserved");
+  const checking = !closed && ["checking", "repairing"].includes(String(detail.run.waiting_reason));
+  const livePhase = checking
+    ? detail.run.waiting_reason === "repairing" ? "Repairing" : "Checking"
+    : activeJob?.access === "write" ? "Building" : "Planning";
   const disabled = !connected || !!refreshError || command.isPending;
   const requested = route.query.get("tab");
   const tab = reviewTabs.includes(requested as ReviewTab)
@@ -685,6 +701,12 @@ export function RunV2Story({
   );
   const groups = checkGroups(detail.evidence);
   const tabs = [
+    {
+      key: "outcome" as const,
+      label: "Outcome",
+      icon: ClipboardCheck,
+      count: null,
+    },
     {
       key: "plan" as const,
       label: "Plan",
@@ -749,7 +771,7 @@ export function RunV2Story({
           <h2>{reviewStatus(detail)}</h2>
           <p>{settingsLine(detail.settings)}</p>
         </div>
-        <UsageSummary resources={detail.resources} />
+        <UsageSummary resources={detail.resources} jobs={detail.jobs} />
         {!closed && busy && (
           <button
             className="round-button"
@@ -785,6 +807,7 @@ export function RunV2Story({
           </li>
         ))}
       </ol>
+      {connected && !refreshError && (busy || checking) && <LivePulse detail={detail} phase={livePhase} />}
       {detail.coordination?.state && (
         <section className="gate-panel">
           <span className="eyebrow">
@@ -816,13 +839,13 @@ export function RunV2Story({
               const i = reviewTabs.indexOf(key);
               const next =
                 e.key === "ArrowRight"
-                  ? reviewTabs[(i + 1) % 4]
+                  ? reviewTabs[(i + 1) % reviewTabs.length]
                   : e.key === "ArrowLeft"
-                    ? reviewTabs[(i + 3) % 4]
+                    ? reviewTabs[(i + reviewTabs.length - 1) % reviewTabs.length]
                     : e.key === "Home"
                       ? reviewTabs[0]
                       : e.key === "End"
-                        ? reviewTabs[3]
+                        ? reviewTabs[reviewTabs.length - 1]
                         : null;
               if (next) {
                 e.preventDefault();
@@ -843,6 +866,7 @@ export function RunV2Story({
         aria-labelledby={`delivery-tab-${tab}`}
         tabIndex={0}
       >
+        {tab === "outcome" && <OutcomeReview detail={detail} openTab={selectTab} />}
         {tab === "plan" && (
           <PlanReview key={run_id} detail={detail}>
             {attention("plan")}
@@ -1397,7 +1421,7 @@ function Attention({
       )}
       {area === "other" && kind === "review-result" && (
         <section className="gate-panel">
-          <h2>Review checks</h2>
+          <h2>{detail.run.waiting_reason === "plan-scope-changed" ? "Review scope" : "Review checks"}</h2>
           <div className="gate-actions">
             <button
               className="primary"

@@ -380,6 +380,9 @@ export function createRelayTransport({
       return payloadOf<{ queue?: V2Queue | null }>(ROW_KINDS.V2RUNS)?.queue || null;
     },
     v2Assess: async () => null,
+    // Allowance settings are read and changed on the laptop server only.
+    v2Allowances: async () => null,
+    v2TestGate: async () => null,
 
     async v2Executors(): Promise<V2Catalogue> {
       await readyPromise;

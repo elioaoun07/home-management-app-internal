@@ -10,7 +10,7 @@ owner: Elio
 
 [Master Book](<PM Tooling — Master Book.md>) · [All campaigns](<../_index.md>) · [Grammar](<../_Conventions.md>)
 
-One checkbox per outcome. Follow the ID link for acceptance, dependencies and holds. Lane order is priority, not authorization; owner evidence and policy gates still apply.
+One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds and its **Reading guide** (where to start in the code). Lane order is priority, not authorization; owner evidence and policy gates still apply.
 
 ## Now
 

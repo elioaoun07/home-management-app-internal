@@ -87,6 +87,12 @@ export function normalizePlanBody(value) {
     unknowns: completeList(value && value.unknowns),
     checks: completeList(value && value.checks),
     questions: extractQuestions(value, { complete: true }),
+    ...(value?.preparation?.kind === "selected-item" ? {
+      preparation: value.preparation,
+      acceptance: completeList(value.acceptance),
+      invariants: completeList(value.invariants),
+      exclusions: completeList(value.exclusions),
+    } : {}),
   };
   const readable = Boolean(body.outcome || body.steps.length);
   return deepFreeze({ readable, body });
@@ -293,6 +299,32 @@ export function messageReceipt(status) {
 const PLAN_SHAPE =
   '{"outcome": string, "scope": [path], "steps": [string], "risks": [string], "unknowns": [string], "checks": [string], "questions": [{"text": string, "blocking": boolean}]}';
 
+// Owner rule (2026-09-19): the owner runs typecheck, lint and tests on the laptop after
+// Apply, so the executor spends no turns (tokens) on them. The protected checker still runs
+// the policy's pinned checks.
+export const NO_TEST_RUNS =
+  " Do not run test, lint, typecheck or build commands (pnpm/npm/npx test, vitest, jest, eslint, tsc, next build): the owner runs them after Apply and protected checks run separately.";
+
+/**
+ * What the workspace actually is, so the executor stops paying for commands that
+ * cannot work in it.
+ *
+ * Run r-83dddb67fea9 spent a whole request on `git diff --check`, `git diff
+ * --stat` and `git diff`, all of which failed with "not a Git repository", and
+ * part of another on a typecheck whose compiler was not installed (Investigation
+ * §4.5, F6). Neither was the model's mistake: the prompt said "run the checks you
+ * need" and never said what the environment was. This sentence is the fix, and
+ * it is one sentence because the alternative — a list of everything absent —
+ * would cost more than the commands it prevents.
+ *
+ * It also states who verifies what, because "no git, no tests" without that
+ * reads as "nothing is checked" and invites the executor to improvise a
+ * substitute.
+ */
+export const WORKSPACE_FACTS =
+  " The workspace is a file snapshot with no Git metadata and no .git directory: git commands (diff, status, log, stash) all fail here, so do not run them — report changes in your reply instead." +
+  " Verification is not yours: a protected checker re-runs the declared criteria and a deterministic typecheck on the frozen candidate after you finish, outside this session.";
+
 function section(title, lines) {
   const kept = lines.filter(isNonEmptyString);
   return kept.length ? "\n\n" + title + ":\n" + kept.map((line) => "- " + line).join("\n") : "";
@@ -304,6 +336,8 @@ export function investigationInstruction({ contract, alias, acceptance, messages
     "Investigate one work item" +
     (alias ? " (" + alias + ")" : "") +
     " in this workspace and propose a plan. The workspace is read-only for this job; do not attempt to edit files." +
+    NO_TEST_RUNS +
+    WORKSPACE_FACTS +
     (profile === "focused" ? " This is Focused delivery: use the declared scope, avoid broad exploration, and produce one proportionate plan." : " This is Investigate delivery: establish scope and risks before proposing the plan.") +
     "\n\nOutcome: " +
     contract.outcome +
@@ -318,17 +352,29 @@ export function investigationInstruction({ contract, alias, acceptance, messages
   );
 }
 
-/** The approved implementation turn. */
-export function implementationInstruction({ plan, contract, messages = [], answers = [], profile = "investigate" }) {
+/**
+ * The approved implementation turn.
+ *
+ * The legacy planAlreadyInThread option remains for callers that know lineage.
+ * Production dispatch now converts the full default instruction into a task
+ * brief or a recoverable reference; native continuity alone cannot prove that
+ * compaction retained the plan. Fresh and uncertain contexts get the full brief.
+ */
+export function implementationInstruction({ plan, contract, messages = [], answers = [], profile = "investigate", planAlreadyInThread = false }) {
   return (
     "Implement the approved plan (revision " +
     plan.revision +
-    ") in this workspace. Stay inside its scope; run the checks you need." +
+    ") in this workspace. Stay inside its scope." +
+    NO_TEST_RUNS +
+    WORKSPACE_FACTS +
     (profile === "focused" ? " This is the one Focused implementation attempt; do not start an automatic repair loop." : "") +
     "\n\nOutcome: " +
     contract.outcome +
-    "\n\nPlan:\n" +
-    JSON.stringify(plan.body) +
+    (planAlreadyInThread
+      ? "\n\nPlan: the approved plan is revision " +
+        plan.revision +
+        ", the one you produced earlier in this same conversation. It is unchanged; use it as written."
+      : "\n\nPlan:\n" + JSON.stringify(plan.body)) +
     section("Owner answers", answers.map((entry) => entry.text + " → " + entry.answer)) +
     section("Owner messages", messages.map((entry) => entry.body)) +
     '\n\nIf you cannot continue without the owner, stop and reply with ```json {"questions": [{"text": string, "blocking": true}]}```.'
@@ -341,15 +387,20 @@ export function repairInstruction({ plan, failures, messages = [] }) {
     "Protected checks failed on the candidate. Repair within the approved plan (revision " +
     plan.revision +
     ") and stop." +
+    NO_TEST_RUNS +
+    WORKSPACE_FACTS +
     section("Failed checks", failures.map((entry) => entry.criterion_id + ": " + entry.state + (entry.reason ? " (" + entry.reason + ")" : ""))) +
     section("Owner messages", messages.map((entry) => entry.body))
   );
 }
 
 /** A fresh session after an explicit executor handoff. */
-export function handoffInstruction({ checkpoint, plan, contract }) {
+export function handoffInstruction({ checkpoint, plan, contract, profile = "investigate" }) {
   return (
     "Continue this work from a handoff. Nothing from the previous session is available except what is below." +
+    NO_TEST_RUNS +
+    WORKSPACE_FACTS +
+    (profile === "focused" ? " This is Focused delivery: validate the known scope before proposing a plan." : "") +
     "\n\nOutcome: " +
     contract.outcome +
     (plan ? "\n\nApproved plan (revision " + plan.revision + "):\n" + JSON.stringify(plan.body) : "") +

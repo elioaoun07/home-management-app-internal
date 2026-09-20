@@ -53,6 +53,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Owner-supplied DB evidence, not code. Hard Rule #27 exists partly because of this family: on 2026-08-04 three documents asserted "no RLS on the trips family" and all three were wrong. **Read `migrations/db-state.json` before anything else** — it is the only repo artifact that is evidence about RLS, policies, cascades and SECURITY DEFINER bodies; `migrations/schema.sql` cannot answer this. The tables in scope are the packing family (`trip_packing_items`, its categories, the checkpoint snapshot table) and the recycle-bin path. Routes that read/write them: `src/app/api/trips/[id]/packing/` (`route.ts`, `bulk/`, `categories/`, `reorder/`, `deleted/`, `[itemId]/`, `[itemId]/restore/`) and `checkpoint/` + `checkpoint/revert/`. Agents never apply SQL (Hard Rule #26). TRIP-29 and TRIP-32 both depend on this landing first.
+
 ### TRIP-1
 
 - **Retained campaign gate (D3):** After the actual loop/lifecycle witnesses pass, update the Master Book state and shipped evidence; documentation alone does not close this gate.
@@ -74,6 +76,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Verification against a live household trip; no code change, and explicitly no agent production experiment. The contract lives in two SECURITY DEFINER RPCs, not in the routes: `activate_trip` (called from `src/app/api/trips/[id]/activate/route.ts`) and `complete_trip` (`.../complete/route.ts`). Their bodies are in `migrations/db-state.json`, which is the only place the repo records them — read them there rather than inferring cascades from route code. `trip_side_effects` is the ledger every cascade must write and completion must reverse; note it appears nowhere in `src/` (verified 2026-09-20), so it is written entirely inside the RPCs. The five cascades to witness are chores skipped, recurring events paused via `recurrence_pauses`, one-time events cancelled, meal plans skipped, trip account created — the first three belong to Items/Schedule, so `.claude/skills/recurrence-safety/SKILL.md` applies to reading the pause semantics. UI entry points: `src/components/trips/TripActivateSheet.tsx` and `TripCompleteSheet.tsx`.
+
 ### TRIP-2
 
 - **Retained campaign gate (D3):** After the actual loop/lifecycle witnesses pass, update the Master Book state and shipped evidence; documentation alone does not close this gate.
@@ -88,6 +92,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Same RPCs and same evidence rules as TRIP-1 — read that guide first. The solo-specific claim is a `responsible_user_id` flip on the traveller's items and *no* meal-planning change; both are decided inside `activate_trip`/`complete_trip`, so verify from `migrations/db-state.json` plus a real trip, not from `src/app/api/trips/[id]/activate/route.ts`, which only calls the RPC. `responsible_user_id` lives on `items` — see `src/features/items/` and `src/components/items/` for where it surfaces. Household-versus-solo is a property of the trip row; `src/lib/tripAccess.ts` (`AccessibleTrip`, `getAccessibleTrip`) is how the rest of the app decides scope.
+
 ### TRIP-3
 
 - **Retained campaign gate (D2):** Confirmed `recurring_payments` stay active during a trip.
@@ -100,6 +106,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** A guard, not a feature, and the deliberate rule is the point: bills stay due while travelling. Verify that `recurring_payments` rows are untouched across activate→complete — again from the RPC bodies in `migrations/db-state.json`, since nothing in `src/app/api/trips/` writes them. The module that owns those rows is `src/features/recurring/` and `src/app/api/recurring/`; `.claude/skills/recurrence-safety/SKILL.md` is explicit that recurring *payments* and item *recurrence* are two engines that share vocabulary — this item is about the first, while TRIP-1's `recurrence_pauses` cascade is about the second. The regression guard should fail loudly, so a test asserting non-mutation is the deliverable.
+
 ### TRIP-4
 
 **Outcome:** Explain verified lifecycle side-effects.
@@ -111,6 +119,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Depends on TRIP-1/2/3 producing a verified contract — the panel presents that contract, it does not establish it. The data source is `trip_side_effects`, reachable through `get_trip_bundle` (`src/app/api/trips/[id]/bundle/route.ts`) if it is included there; check the bundle's shape first, and widen the RPC rather than adding a second query (Hard Rule #21). Render in `src/components/trips/TripDetail.tsx` / `overview/OverviewTab.tsx` with hooks from `src/features/trips/hooks.ts` and keys from `queryKeys.ts`. Grouping by type and stating what completion reverses is the whole UI; Hard Rule #28 keeps it to labels, not explanations. Planner-only work stays independent.
+
 ### TRIP-28
 
 **Outcome:** Open statement audit scoped to a trip.
@@ -121,6 +131,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** a completed trip offers "Reconcile this trip"; it opens statement import in audit mode with the trip's date window, both candidate accounts and `trips.currency` pre-applied, returns the exception report for that trip only, and finishes having created **zero** transactions.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** A composition of two existing modules, gated on BUD-26/27/28 landing audit mode in Statement Import. Read `src/features/statement-import/sessionModel.ts` (and its test) plus `hooks.ts` before designing the entry point — the pre-scoping is a session-model concern, not a Trips one. The trip-side inputs all exist on the trip row: `trips.account_id`, `trips.currency`, the date range, and the card account the statement belongs to; `src/lib/tripAccess.ts` `getAccessibleTrip()` is how you fetch it safely. Entry point goes in `src/app/trips/[id]/page.tsx` / `src/components/trips/TripDetail.tsx`, offered only on a completed or end-dated trip — phase logic is already in `src/features/trips/tripPhase.ts` (with `tripPhase.test.ts`). The acceptance's hardest clause is "creates **zero** transactions", so audit mode must be read-only end to end; `.claude/skills/money-rules/SKILL.md` applies.
 
 ### TRIP-29
 
@@ -138,6 +150,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Trips — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/Trips — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Depends on TRIP-18. The defect is a truthfulness one: `src/app/api/trips/[id]/packing/checkpoint/route.ts` POST reads the previous snapshot, collects items, then writes — and `checkpoint/revert/route.ts` applies one back. Read both and check what each does with Supabase's returned row count: a zero-row update is not an error in PostgREST, so a restore that matched nothing can currently return 200. The fix is to compare requested targets against actually-updated rows and report a partial or failed restore honestly. `getAccessibleTrip()` from `src/lib/tripAccess.ts` already guards access, so this is about the write acknowledgement, not authorization. Note RLS can also silently remove rows (Hard Rule #27) — which is why TRIP-18's evidence comes first. Client: `src/components/trips/TripPackingList.tsx`.
+
 ### TRIP-31
 
 **Outcome:** Cover trip ownership predicates.
@@ -145,6 +159,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Pure tripAccess tests cover owner, active partner, unlinked user and source-private attachments. Tests of repo predicates do not establish production RLS.
 
 **Provenance:** [Trips — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/Trips — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Pure unit tests over one small file: `src/lib/tripAccess.ts` — `AccessibleTrip`, `getAccessibleTrip()` and `canAccessTrip()`. Its callers show the four cases worth covering: `src/app/api/transactions/[id]/route.ts` (partner-scope validation on `trip_id`), the documents routes (`[id]/documents/`, `documents/[docId]/`, `documents/signed-urls/`) for source-private attachments, and the packing routes for owner/partner reads. Household linking follows the `household_links` pattern in Hard Rule #13 (`src/app/api/accounts/route.ts` is the canonical example). The acceptance's caveat is the important one: these are tests of a repo predicate and prove nothing about production RLS — that is TRIP-18.
 
 ### TRIP-32
 
@@ -154,6 +170,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [TRIP-18](<Trips — Master Book.md#trip-18>).
 
 **Provenance:** [Trips — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/Trips — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Owner verification against the served revision; do not rebuild shipped paths. Docs: `src/app/api/trips/[id]/documents/` (list/create), `documents/[docId]/` and `documents/signed-urls/` — all three guard through `getAccessibleTrip()` from `src/lib/tripAccess.ts`; client side is `src/components/trips/documents/DocumentsView.tsx` and `AddDocumentSheet.tsx` with `src/features/trips/documentQueries.ts` (which has its own test). Money setup: `trips.account_id` and `trips.currency`, set through `src/components/trips/TripFormSheet.tsx` and the trip routes; manual FX rounding is money math, so `.claude/skills/money-rules/SKILL.md` applies to any change. Depends on TRIP-18 for the partner-read evidence.
 
 ### TRIP-5
 
@@ -165,6 +183,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Depends on TRIP-34 (shipped 2026-09-19), which added `transactions.trip_id` — so the rollup finally has a real join. Today's Overview shows a placeholder: `src/components/trips/overview/OverviewTab.tsx` sums `places.reduce((sum, p) => sum + (p.cost ?? 0), 0)` under the `Planned spend` label. Actuals come from transactions tagged to the trip plus the trip's own account; read `src/lib/balance-utils.ts` for direction semantics (`expense`/`income`/`saving`) before summing anything, and `.claude/skills/money-rules/SKILL.md` requires a worked before/after example and a test. TRIP-11 replaces the placeholder itself; TRIP-28 feeds reconciled actuals in. Multi-currency trips make `trips.currency` load-bearing.
+
 ### TRIP-6
 
 **Outcome:** Per-cascade opt-out (choose which cascades fire per trip).
@@ -172,6 +192,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Per-cascade opt-out (choose which cascades fire per trip).
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Per-trip cascade preferences, which means the choice has to reach `activate_trip` — read that RPC's body in `migrations/db-state.json` first, because the cascades are decided inside it and a UI toggle that the function ignores is the obvious failure. Expect a new column or a JSON preferences field on `trips` plus a parameter on the RPC (Hard Rules #24/#26: migration file, then `schema.sql`, then hand the SQL to the owner). The UI lands in `src/components/trips/TripActivateSheet.tsx` / `TripFormSheet.tsx`. Completion must reverse only what fired, which `trip_side_effects` already records. TRIP-1/2/3 should establish the current cascade set before you make it optional.
 
 ### TRIP-7
 
@@ -181,6 +203,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Presentation of an already-verified contract from three other modules' pages, and it absorbs KIT-9. Trips is a Junction module, so read `ERA Notes/03 - Junction Modules/Trips/` and the connected standalones' docs before importing anything — a standalone feature dir may not import another standalone's, so any shared reader belongs in `src/components/` or `src/lib/`. The surfaces are the schedule/chores views under `src/app/reminders/`, meal planning (`src/features/meal-planning/`, `src/components/web/WebMealPlanCalendar.tsx`) and Kitchen packing contexts. Source of truth is `trip_side_effects` via `get_trip_bundle`; the acceptance forbids inventing cascade state or independently reversing it — link back to the trip and let `complete_trip` do the inverse. Depends in practice on TRIP-4 having surfaced the contract once.
+
 ### TRIP-8
 
 **Outcome:** Richer template library (weekend / abroad / business) with cascade prefs.
@@ -189,6 +213,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Parked. Templates today are the clone path — `src/app/api/trips/[id]/clone/route.ts` — plus whatever `TripFormSheet.tsx` offers at creation; read those before designing a library. Cascade prefs make it depend on TRIP-6 existing. No template data model exists yet, so the first step is deciding where templates live (a `catalogue` category is the app's existing answer for saved templates — see `src/features/catalogue/`) rather than inventing a Trips-only store.
+
 ### TRIP-9
 
 **Outcome:** Trips.
@@ -196,6 +222,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Trips → ERA re-entry briefing ("you're back tomorrow — N items resume").
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** A re-entry briefing ("you're back tomorrow — N items resume"), so it is an AI Assistant/proactive surface, not a Trips page. Read `ERA Notes/03 - Junction Modules/AI Assistant/` for the briefing model and its Focus-briefing cache hard rule, and `src/lib/ai/` for the generation path. The content is derivable from `trip_side_effects` (what completion will reverse) plus `trips.end_date`; `src/features/trips/tripPhase.ts` already computes trip phase. Whatever schedules it is a cron concern — there is no `vercel.json`, so nothing time-triggered can be assumed live.
 
 ### TRIP-10
 
@@ -207,6 +235,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Catalogue C16, and the acceptance's first demand is conceptual: a catalogue *record* and an inventory *stock row* are different things, and the picker must send the right id (`catalogue_item_id` versus `inventory_item_id`). Read `src/types/catalogue.ts` and `src/features/catalogue/`, then `src/features/inventory/`. The packing rows and their API fields are `src/app/api/trips/[id]/packing/route.ts` (+ `bulk/`, `[itemId]/`); the UI is `src/components/trips/TripPackingList.tsx`. "Existing API fields alone do not prove UI completion" — check whether the columns are actually written and read. Display labels must resolve without leaking source-private data, the same constraint TRIP-33 and HLTH-23 carry.
+
 ### TRIP-11
 
 **Outcome:** Replace Overview's "Planned spend" placeholder (sums `trip_places.cost` only) with the trip account's real balance/transactions once actuals matter.
@@ -214,6 +244,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Replace Overview's "Planned spend" placeholder (sums `trip_places.cost` only) with the trip account's real balance/transactions once actuals matter.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** The placeholder is exact and verified 2026-09-20: `src/components/trips/overview/OverviewTab.tsx` computes `places.reduce((sum, p) => sum + (p.cost ?? 0), 0)` and labels it `Planned spend`. Replacing it means reading the trip account's real balance and the transactions tagged with `transactions.trip_id` (TRIP-34, shipped) — balance direction rules are in `src/lib/balance-utils.ts` and the `account_type` CHECK constraints in `migrations/schema.sql`. `.claude/skills/money-rules/SKILL.md` is mandatory here: a worked before/after example and a test. Prefer widening `get_trip_bundle` (`src/app/api/trips/[id]/bundle/route.ts`) over adding a second round trip (Hard Rule #21). Shares its outcome with TRIP-5.
 
 ### TRIP-30
 
@@ -223,6 +255,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [TRIP-1](<Trips — Master Book.md#trip-1>), [TRIP-2](<Trips — Master Book.md#trip-2>), [TRIP-3](<Trips — Master Book.md#trip-3>).
 
 **Provenance:** [Trips — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/Trips — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Held for DEC-04 — record the decision before writing anything. The repair target is the pair of SECURITY DEFINER RPCs `activate_trip` / `complete_trip` (called from `src/app/api/trips/[id]/activate/route.ts` and `complete/route.ts`), whose bodies are only in `migrations/db-state.json`. "Atomically under an agreed inverse" means the ledger semantics of `trip_side_effects` — origin, scope, retry and inverse — must survive; a blind reversal policy is explicitly not authorized. `.claude/skills/data-repair/SKILL.md` is the discipline (inspect → backup → fix → verify → rollback) and its output is a runbook for the owner, never an executed script (Hard Rule #26). Depends on TRIP-1/2/3 having produced the falsifiable account first; those witnesses stay distinct from this repair.
 
 ### TRIP-33
 
@@ -235,6 +269,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Trips — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Trips/Trips — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Catalogue C14, depends on KIT-20. The word is *snapshot*: an immutable copy with lineage, so the trip stays readable after the source changes — the existing precedent for a lineage column is `source_catalogue_item_id` (see `src/app/api/items/[id]/promote/route.ts`). Trip documents already exist and are the surface to extend: `src/app/api/trips/[id]/documents/` (+ `[docId]/`, `signed-urls/`), `src/features/trips/documentQueries.ts`, `src/components/trips/documents/DocumentsView.tsx` and `AddDocumentSheet.tsx`, all guarded by `getAccessibleTrip()` from `src/lib/tripAccess.ts`. Source-private leakage is the failure mode TRIP-10 and HLTH-23 share — enforce it in the copy step and the type, not the UI.
+
 ### TRIP-35
 
 **Outcome:** Tag a transaction to a trip from the expense form and the transaction editor.
@@ -243,6 +279,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** TRIP-34 (shipped 2026-09-19 — column, validation and API support already exist; this is UI only).
 
 **Provenance:** Owner request 2026-09-19 (Italy trip: visa and flights paid from the USD account while daily spend sits in the EUR trip account).
+
+- **Reading guide:** UI only — TRIP-34 already shipped the column, validation and API. Verified 2026-09-20: `src/app/api/transactions/[id]/route.ts` accepts `trip_id`, treats `null`/`""` as clearing it, and validates any non-empty value with `canAccessTrip(supabase, user.id, trip_id)` from `src/lib/tripAccess.ts` (which is what makes a partner's household-scope trip assignable). **The create path does not accept it** — `src/app/api/transactions/route.ts` never mentions `trip_id` (verified 2026-09-20), so logging a new transaction with a trip needs that route widened with the same `canAccessTrip` validation, or a follow-up PATCH. Two client surfaces: logging is `src/components/expense/MobileExpenseForm.tsx` (the live mobile form) with shared state in `ExpenseFormContext.tsx`, and editing is `src/components/dashboard/TransactionDetailModal.tsx`. Trip options come from `src/features/trips/hooks.ts`. Clearing must be reachable, the control must not touch account/amount/date, and Hard Rule #28 forbids explanatory prose — a label and a picker.
 
 ## Backlog reconciliation
 

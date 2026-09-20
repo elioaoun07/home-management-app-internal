@@ -299,6 +299,9 @@ describe("F-EVIDENCE — the named ways of proving nothing", () => {
     expect(parseTestCounts("Tests  190 passed (190)")).toMatchObject({ selected: 190, executed: 190 });
     expect(parseTestCounts("\u001b[32mTests\u001b[0m  \u001b[32m12 passed\u001b[0m (12)")).toMatchObject({ selected: 12, executed: 12 });
     expect(parseTestCounts("History navigation passed: 6 synthetic cases")).toMatchObject({ selected: 6, executed: 6 });
+    // Protected delivery oracles: exact line only, never a loose "passed" mention.
+    expect(parseTestCounts("6 of 6 tests passed\n")).toEqual({ selected: 6, executed: 6, skipped: 0, failed: 0 });
+    expect(parseTestCounts("note: 6 of 6 tests passed later")).toEqual({ selected: null, executed: null, skipped: null, failed: null });
     // Unreadable output yields nulls, which criteria.mjs turns into inconclusive.
     expect(parseTestCounts("something else entirely")).toMatchObject({ selected: null, executed: null });
   });

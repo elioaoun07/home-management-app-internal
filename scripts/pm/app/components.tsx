@@ -223,18 +223,21 @@ export function Sheet({
   onClose,
   children,
   returnFocus,
+  side = false,
 }: {
   title: string;
   open: boolean;
   onClose: () => void;
   children: ReactNode;
   returnFocus?: RefObject<HTMLElement | null>;
+  /** A right-hand panel on desktop; the phone keeps the bottom sheet. */
+  side?: boolean;
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={(value) => !value && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="sheet-shade" />
-        <Dialog.Content className="sheet" aria-describedby={undefined} onCloseAutoFocus={(event) => {
+        <Dialog.Content className={side ? "sheet sheet-side" : "sheet"} aria-describedby={undefined} onCloseAutoFocus={(event) => {
           if (returnFocus?.current) { event.preventDefault(); returnFocus.current.focus(); }
         }}>
           <div className="sheet-title">

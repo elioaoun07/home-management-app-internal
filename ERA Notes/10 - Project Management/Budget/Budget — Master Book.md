@@ -68,6 +68,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Reproduce before changing anything — the acceptance says preserve fingerprint semantics until a witness shows a defect, and explicitly forbids clearing hashes to force insertion. The matcher is `src/lib/statement-reconcile.ts`: read `RowStatus`/`RowClassification`, the window constants `MATCH_WINDOW_BACK_DAYS` (7) / `MATCH_WINDOW_FORWARD_DAYS` (1), and the tolerance constants `AMOUNT_EPSILON`, `AMOUNT_TOLERANCE_MIN`, `AMOUNT_TOLERANCE_PCT`; its test is `src/lib/statement-reconcile.test.ts`. The exact-hash comparison against deleted rows happens on the route side — `src/app/api/statement-import/reconcile/route.ts` — and the restore/re-import choice surfaces through `src/features/statement-import/sessionModel.ts` (`getBucket`, `isRestored`, `RowDecision`). Soft-delete semantics: `src/features/recycle-bin/`. This gates BUD-67, BUD-39 and BUD-36; `.claude/skills/money-rules/SKILL.md` applies to anything you change.
+
 ### BUD-67
 
 **Outcome:** Verify statement and default-income deployment.
@@ -76,6 +78,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [BUD-32](<Budget — Master Book.md#bud-32>).
 
 **Provenance:** [Budget — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/Budget — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Owner verification; code-shipped is not migration-applied. Read `migrations/` for the BUD-56 fingerprint and BUD-62 default-income SQL and their end state in `migrations/schema.sql`, and use `migrations/db-state.json` for anything about policies or triggers (Hard Rule #27). The Salary preference lives in `src/features/preferences/` — note Hard Rule: LBP amounts are stored in thousands, so a currency check here is easy to misread. Re-import receipt and transfer witness come through `src/app/api/statement-import/imports/` and `src/features/transfers/`. Agents never apply the SQL (Hard Rule #26). Depends on BUD-32's semantics being settled first.
 
 ### BUD-39
 
@@ -86,6 +90,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** A data-repair runbook the **owner** executes, never the agent — `.claude/skills/data-repair/SKILL.md` is the shape (inspect + count → backup → idempotent fix → verification query → rollback) and Hard Rule #26 makes the deliverable SQL text, not an action. Every historical number in the acceptance is a lead, not a fact: re-count before writing anything. The duplicate identity is the import fingerprint — see `src/lib/statement-reconcile.ts` and the hash columns in `migrations/schema.sql`. "Preserve legitimate FX rows" is the trap: two same-day rows differing only by exchange rate are not duplicates, so read `toUsd()` in `src/lib/balance-utils.ts` and the currency fields before grouping. Balances must be re-verified after (`getBalanceDelta`, `getTransferDeltas`). Depends on BUD-32 and BUD-67.
+
 ### BUD-36
 
 **Outcome:** Verify historical re-import recovery month by month.
@@ -94,6 +100,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [BUD-39](<Budget — Master Book.md#bud-39>).
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Owner-driven, month by month, and the acceptance forbids reconstructing unprovable fingerprints or auto-running a repair — the historical 157/152 hash counts are not an inventory. The rekey/stamp contract lives in `src/app/api/statement-import/imports/` and `imports/[id]/route.ts`, with `commit/route.ts` on the write side and `imports/[id]/revert/route.ts` as the inverse. The receipt fields you are inspecting (created / matched / re-fingerprinted) come from `ReconcileSummary` in `src/lib/statement-reconcile.ts`. The acceptance's end state — a full-year re-upload creating nothing — is the real test of idempotence. Depends on BUD-39.
 
 ### BUD-66
 
@@ -110,6 +118,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** The canonical-facts item that BUD-26, BUD-69 and the ERA money answers all wait on. Four semantics to unify, each with a home: account type direction is `src/lib/balance-utils.ts` (`AccountType`, `getBalanceDelta`, `getTransferDeltas`) plus the CHECK constraints in `migrations/schema.sql`; currency is `toUsd(amount, exchangeRate)` in the same file, and the LBP-in-thousands rule from Preferences; ownership is the `household_links` + `ownOnly` pattern of Hard Rule #13, canonically `src/app/api/accounts/route.ts`; and the custom billing period is `startOfCustomMonth(date, monthStartDay)` in `src/lib/utils/date.ts` — never a calendar month. The consumer is the AI context assembler `src/lib/ai/context.ts` and `src/features/era/`. `.claude/skills/money-rules/SKILL.md` is mandatory: a worked before/after example and a test.
+
 ### BUD-24
 
 **Outcome:** Restore money with exactly-once inverse effects.
@@ -117,6 +127,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Domain restore must reapply money exactly once: transfers currently lack their inverse, and transaction undelete followed by balance adjustment can partly commit. Inspect current owner DB contracts; split by domain before implementation.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Two named defects, split by domain before implementing. Transfers lack an inverse — `src/features/transfers/` and `getTransferDeltas()` in `src/lib/balance-utils.ts` show that a transfer is two deltas, so a restore must reverse both or neither. Transaction undelete followed by a balance adjustment can partly commit — the sequence is in `src/app/api/transactions/[id]/route.ts` (see its delete branch, which already hand-reverses a completed split's collaborator balance) and `src/features/recycle-bin/` / `src/app/api/recycle-bin/`. "Exactly once" under replay means the offline queue too (`src/lib/offlineQueue.ts`). Atomicity across a write and its balance effect is BUD-63's shared boundary — coordinate rather than building a second transaction. `.claude/skills/money-rules/SKILL.md`; owner DB evidence first (Hard Rule #26).
 
 ### BUD-1
 
@@ -128,6 +140,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Small and additive. `matchMerchantMapping()` lives in `src/lib/merchantMatch.ts` (with `resolveCategoryRef` and its own `merchantMatch.test.ts`) and is already used by `src/components/expense/MobileExpenseForm.tsx` and `src/lib/bank-statement-parser.ts` — the voice/draft path does not call it (verified 2026-09-20). The speech parser is `src/lib/nlp/speechExpense.ts`, which does its own fuzzy category matching with explicit thresholds; merchant mapping layers **on top of** that, so decide precedence rather than replacing it. Drafts review UI: `src/features/drafts/` and `src/components/expense/DraftTransactionsDialog.tsx` / `DraftsDrawer.tsx`. The draft is a proposal — pre-select, never auto-commit.
+
 ### BUD-2
 
 **Outcome:** Apply merchant mappings to Hub transaction conversion.
@@ -136,6 +150,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - Absorbs HUB-10: Merchant-match in "Add as Transaction" — untouched by this plan; still Later. Counterpart of [Budget · 4 · Checklist](<4 - Checklist.md>) BUD-2.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** The same `matchMerchantMapping()` from `src/lib/merchantMatch.ts`, applied at the Hub conversion point instead. That path is the Message Actions junction: `src/features/hub/messageActions.ts` plus the action sheet in `src/components/hub/`. Read the Hub Chat and Message Actions vault docs first (`ERA Notes/03 - Junction Modules/`) — a junction change can cascade into Budget, Items and the Shopping List. Coordinate with HUB-10; pre-select Category/Subcategory in the sheet, leaving the human to confirm. Shares its guide with BUD-1.
 
 ### BUD-26
 
@@ -148,6 +164,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** The matcher is already balance-neutral — `src/app/api/statement-import/reconcile/route.ts` over `src/lib/statement-reconcile.ts` — so the work is a **session mode** that stops before commit and a result surface that reads as a report. Mode belongs in `src/features/statement-import/sessionModel.ts` (`Bucket`, `getBucket`, `RowDecision` are the existing vocabulary) and must be chosen at upload and visible on the review screen at all times, per the acceptance. The three things that must not happen are each a separate call site: `src/app/api/statement-import/commit/route.ts` (no `statement_import_entries` rows), the balance writes it triggers (`balance_deltas`), and merchant learning (`src/lib/merchantMatch.ts` write path). Prove it by comparing account balances before and after. Page: `src/app/statement-import/page.tsx`. Depends on BUD-66; feeds BUD-27, BUD-28 and TRIP-28.
+
 ### BUD-27
 
 **Outcome:** Match trip transactions across FX and accounts.
@@ -159,6 +177,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** The acceptance already contains the design; the code it names is real. `src/lib/statement-reconcile.ts` holds all three limits as exported constants — `MATCH_WINDOW_BACK_DAYS` (7) / `MATCH_WINDOW_FORWARD_DAYS` (1), `AMOUNT_TOLERANCE_MIN` (1) / `AMOUNT_TOLERANCE_PCT` (0.1) / `AMOUNT_EPSILON`, and a candidate pool hard-filtered to the statement's account (`CandidateTx`, `MatchCandidate`, `RowClassification`). The instruction is explicitly *not* to widen `AMOUNT_TOLERANCE_PCT`: cluster implied rates (`statement_amount / logged_amount`) across the trip and flag outliers. The second account is `trips.account_id`, created by `activate_trip` (see TRIP-1) and reachable via `src/lib/tripAccess.ts`. Currency conversion helper: `toUsd()` in `src/lib/balance-utils.ts` — and never sum currencies (BUD-76). The named test file `src/lib/statement-reconcile.test.ts` exists; add the worked EUR/USD case and the rate outlier there. `.claude/skills/money-rules/SKILL.md` is mandatory.
+
 ### BUD-28
 
 **Outcome:** Report reconciliation exceptions in both directions.
@@ -169,6 +189,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** the report opens with total statement vs total logged and one gap number, then lists exceptions in both directions (statement row with no log, logged transaction with no statement row); confirming or rejecting a `probable`/`ambiguous` pair resolves it and still writes no transaction.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** The report surface for BUD-26's audit run; depends on BUD-27's matching. Data comes from `ReconcileSummary` and `RowClassification` in `src/lib/statement-reconcile.ts` — the `probable`/`ambiguous` statuses are already in `RowStatus`, so the ranking is a presentation of existing verdicts, not new matching. Both directions means you also need logged transactions with no statement row, which the current row-driven shape may not produce — check before designing. Components go in `src/components/statement-import/` with session state in `src/features/statement-import/sessionModel.ts`. Confirm/reject must resolve a pair and still write no transaction — that is BUD-26's invariant, so route it through the same audit-mode guard. Hard Rules #3 (no red on individual rows; the gap header may) and #28 (the gap is one number, not a paragraph). TRIP-28 consumes this scoped to a trip.
 
 ### BUD-63
 
@@ -185,6 +207,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** The shared-boundary item that BUD-64, BUD-65 and BUD-71 all wait on: a balance delta and its required history row must commit together, and a failed update must not be reported as applied. Read `src/lib/balance-utils.ts` (`getBalanceDelta`, `getTransferDeltas`) for what a delta is, then the writers — `src/app/api/transactions/route.ts`, `transactions/[id]/route.ts`, `src/app/api/statement-import/commit/route.ts` — for the current sequential PostgREST pattern that cannot be atomic. The fix is a SECURITY DEFINER RPC (`.claude/skills/db-migration/SKILL.md`, Hard Rule #20 for why not a child-table policy; Hard Rules #24/#26 — migration file, then `schema.sql`, then hand it to the owner). "Concurrent accepted deltas both count" means row locking, not read-modify-write. Owner DB evidence precedes the migration. `.claude/skills/money-rules/SKILL.md`.
+
 ### BUD-68
 
 **Outcome:** Keep debt reads free of mutations.
@@ -192,6 +216,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Reproduce the documented unpaid-debt autoarchive on GET and remove the write from retrieval. Explicit paid/archive/overdue transitions remain distinct; verify account effects and repeated reads.
 
 **Provenance:** [Budget — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/Budget — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Verified 2026-09-20 and it is exactly as documented: `src/app/api/debts/route.ts` **GET** runs an `.update({ status: "archived", archived_at: ... })` before its select — a write inside a read. Remove it and give archiving an explicit transition; the deliberate ones to keep distinct are paid, archived and overdue (see the `status` query parameter the same handler already accepts, and `src/app/api/debts/[id]/` plus `debts/standalone/`). Check account effects: settling a debt moves money (`src/features/debts/`, `src/components/expense/DebtSettlementModal.tsx`), so verify that removing the auto-archive does not strand a balance change — `.claude/skills/money-rules/SKILL.md`. Repeated reads must be stable, which is the point of the fix.
 
 ### BUD-69
 
@@ -202,6 +228,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Budget — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/Budget — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Depends on BUD-66. The unsupported assumption is a literal constant: `const frontLoadPercentage = 0.55;` in `src/app/api/future-purchases/[id]/analysis/route.ts`, feeding an `affordableMonths` calculation and a recommendation string a few lines below. Replace it with an agreed affordability contract rather than a different magic number. "Separate currencies" means never summing across them (`toUsd()` in `src/lib/balance-utils.ts`, and BUD-76's held decision); "report failed/partial reads" is the same unavailable-vs-zero rule as HLTH-21 and KIT-4 — an incomplete balance read must suppress the recommendation, not quietly lower it. Client: `src/features/future-purchases/hooks.ts`. Worked allocation examples and a test are required by `.claude/skills/money-rules/SKILL.md`.
+
 ### BUD-70
 
 **Outcome:** Match commitments exclusively with account provenance.
@@ -210,6 +238,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Budget — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/Budget — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** "At most the intended commitment" is an exclusivity invariant: one transaction may not satisfy two commitments, and matching must not be broadened for convenience. The four dimensions to check are account, currency, ownership and the selected transaction's provenance — account/currency from `src/lib/balance-utils.ts` and the account row, ownership from the `household_links` pattern (Hard Rule #13, `src/app/api/accounts/route.ts`), provenance from whether the row came from statement import or manual entry (`src/lib/statement-reconcile.ts`). The commitment side is `src/features/recurring/` and `src/app/api/recurring/`; note `.claude/skills/recurrence-safety/SKILL.md` — recurring *payments* are a different engine from item recurrence. Tolerance and duplicate cases need worked examples (`.claude/skills/money-rules/SKILL.md`).
+
 ### BUD-74
 
 **Outcome:** Cover core money route contracts.
@@ -217,6 +247,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Reverify current accounts/transactions tests, then cover authentication, household/ownOnly visibility, Zod rejection, duplicate409 and money invariants where missing. Stale audit route/test counts are not a current baseline.
 
 **Provenance:** [Budget — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/Budget — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Re-inventory first; the acceptance says stale route/test counts are not a baseline. The canonical correct route is `src/app/api/accounts/route.ts` — auth → Zod → `household_links` expansion honouring `ownOnly` → DB → `23505` mapped to 409 — and `.claude/skills/api-route/SKILL.md` has the template. The money routes to cover are `src/app/api/transactions/` (+ `[id]/`, `split-bill/`), `accounts/`, `transfers/`, `recurring/`, `debts/`, `budget-allocations/` and `statement-import/`. Four axes: authentication, household/`ownOnly` visibility, Zod rejection (Hard Rule #12 — several money routes may have none; check before assuming), duplicate → 409 (Hard Rule #9), and money invariants from `src/lib/balance-utils.ts`. PM Tooling R46 is building the lint that finds the Zod gaps.
 
 ### BUD-64
 
@@ -234,6 +266,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Depends on BUD-63 being applied and tested — do not build a second atomicity mechanism here. The invariant is that a draft's status change and its balance effect commit together or not at all. Read `src/features/drafts/` and the draft confirmation path in `src/app/api/transactions/route.ts` / `transactions/[id]/route.ts` (`is_draft` is the flag the delete branch already reads). Under the offline queue a confirm can replay, so exactly-once means idempotent on replay (`src/lib/offlineQueue.ts`, `src/lib/offlineSyncEngine.ts`), not merely transactional. `.claude/skills/money-rules/SKILL.md`.
+
 ### BUD-65
 
 **Outcome:** Commit imported rows and balance effects atomically.
@@ -250,6 +284,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Depends on BUD-63. Three things must commit together on the import create branch: the transaction row, its inverse/rollback evidence, and the balance effect. The branch is in `src/app/api/statement-import/commit/route.ts`, with the inverse consumed by `src/app/api/statement-import/imports/[id]/revert/route.ts` — read the revert path first, because it defines what evidence the create branch owes it. BUD-71 extends this to the confirm/stamp/rekey/transfer branches, so build the boundary so those can reuse it. `.claude/skills/money-rules/SKILL.md`.
+
 ### BUD-3
 
 **Outcome:** Project recurring dues into Schedule.
@@ -257,6 +293,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Budget owns due-date semantics and payment confirmation; Schedule consumes a read projection through the existing occurrence surfaces. Confirming a payment follows the existing money draft/confirmation contract. Never merge recurring payments with item recurrence or add another expansion engine.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** An ownership boundary more than a feature: Budget keeps due-date semantics and payment confirmation, Schedule only *consumes a read projection*. The two prohibitions are explicit — never merge `recurring_payments` with item recurrence, never add another expansion engine — so read `.claude/skills/recurrence-safety/SKILL.md` first; it is the authority on the two systems that share vocabulary and not engines. Budget side: `src/features/recurring/`, `src/app/api/recurring/`, and the forecast drawer `src/components/expense/FuturePaymentsDrawer.tsx`. Schedule side: the occurrence surfaces SCH-4.3b is unifying — project into them, do not materialize `items` rows. Payment confirmation follows the existing draft/confirmation contract (BUD-64).
 
 ### BUD-4
 
@@ -266,6 +304,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** The full forecast, and HUB-41's cheaper signal does not close it. Five things must be canonical first, which is BUD-66's job: balances, account type direction (`getBalanceDelta` in `src/lib/balance-utils.ts`), currencies (`toUsd` — and no mixed-currency sum, BUD-76), the custom billing period (`startOfCustomMonth` in `src/lib/utils/date.ts`, never a calendar month), and recurring commitments (`src/features/recurring/`). "Explicit coverage" means the forecast states what it could not see rather than implying zero — the same unavailable-vs-zero rule as BUD-69. Surfaces: `src/features/analytics/`, `src/app/dashboard/`, `src/components/web/WebDashboard.tsx`. Money-path tests precede trust (`.claude/skills/money-rules/SKILL.md`).
+
 ### BUD-5
 
 **Outcome:** 50/30/20 budgeting templates + Dashboard V2 widgets.
@@ -273,6 +313,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** 50/30/20 budgeting templates + Dashboard V2 widgets.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Templates over the existing envelope model — read `src/features/budget/` and its vault doc (`ERA Notes/02 - Standalone Modules/Budget Allocation/`) before inventing a second allocation concept; 50/30/20 is a preset over allocations, not a new table. Category grouping comes from `src/features/categories/` (note Categories has a cross-user slug-matching hard rule). Widgets land on `src/app/dashboard/` / `src/components/web/WebDashboard.tsx`, and the editable widget grid is `src/components/expense/EditableWidgetGrid.tsx`. Charts follow the `dataviz` skill; Hard Rules #10 (no hardcoded colours) and #14 (person-absolute identity) apply.
 
 ### BUD-6
 
@@ -282,6 +324,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** A funding redesign, not a hint — the acceptance is explicit. The chain is Salary income → Wallet allocation → envelopes, so read all three: the Salary/default-income preference (`src/features/preferences/`, and BUD-67 verifies its migration), account types and direction (`src/lib/balance-utils.ts` — `income` accounts move balance the other way), and envelopes (`src/features/budget/`). Recurring-commitment suggestions come from `src/features/recurring/`. Allocations must stay editable and every step needs a worked balance effect — `.claude/skills/money-rules/SKILL.md` requires the before/after example and a test. Transfers between accounts already exist (`src/features/transfers/`, `getTransferDeltas`): reuse that, do not write a parallel mover.
+
 ### BUD-7
 
 **Outcome:** Future Purchase.
@@ -289,6 +333,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Future Purchase → Transaction auto-complete on linked purchase.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Future Purchase → Transaction auto-complete on a linked purchase. The link is the missing piece: check `src/app/api/future-purchases/` and `migrations/schema.sql` for whether a purchase can reference a transaction at all before designing. Reads are `src/features/future-purchases/hooks.ts`; the transaction side is `src/app/api/transactions/`. "Auto-complete" must not move money — completing a wish records that the purchase happened, it does not create the expense; the expense already exists and is what triggers it. BUD-69's truthfulness rules and BUD-77's promotion lineage both touch this record.
 
 ### BUD-8
 
@@ -298,6 +344,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Debt → Schedule auto-reminder on the collection date. Debts are `src/features/debts/` and `src/app/api/debts/` (fix BUD-68's write-on-read first — an auto-reminder built on a GET that mutates will misfire). The Schedule side is item creation via `src/app/api/items/route.ts`, which already auto-creates a push alert when `due_at` is present and `alerts` is absent — read that branch (`resolveAlertBaseTime`) rather than inventing alert logic. Debts and Items are both standalone, so the bridge belongs in `src/lib/` or an API route, never a cross-feature import. Idempotence matters: a debt edited twice must not produce two reminders.
+
 ### BUD-9
 
 **Outcome:** Split the expense + recurring mega-forms into testable units (only when next touched).
@@ -306,6 +354,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Parked with an explicit trigger — split only when a feature next forces you in. The two mega-forms are `src/components/expense/MobileExpenseForm.tsx` (the live mobile expense form, also named in DLV-84 as a render-loop risk site) and the recurring form under `src/features/recurring/` / `src/app/recurring/`. Shared state is `src/components/expense/ExpenseFormContext.tsx`. Before splitting, read `ERA Notes/01 - Architecture/Common Patterns.md` and `.claude/skills/cache-invalidation/SKILL.md`: the risk is diverging mutation/invalidation behaviour, not line count. Any split must preserve Hard Rule #19 (`type="text"` + `inputMode="decimal"`) on every amount field.
+
 ### BUD-10
 
 **Outcome:** Statement Import.
@@ -313,6 +363,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Statement Import → Inventory/Catalogue price pre-fill.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Statement Import → Inventory/Catalogue price pre-fill; parked. The parser already resolves merchants — `src/lib/bank-statement-parser.ts` calls `matchMerchantMapping()` from `src/lib/merchantMatch.ts` — so the missing half is a price field on the catalogue/inventory record, which is also KIT-8's blocker. Check `src/types/catalogue.ts` and the inventory item shape before designing. Statement Import, Inventory and Catalogue are three standalones: the bridge goes in `src/lib/` or a route. Nothing here may write money (BUD-26's audit invariant).
 
 ### BUD-71
 
@@ -323,6 +375,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Budget — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/Budget — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Depends on BUD-63 and BUD-65; it extends their guarantee to the branches the create-only repair did not cover. Each has a file: confirm and stamp/rekey in `src/app/api/statement-import/imports/[id]/route.ts` and `commit/route.ts`, recovery in `imports/[id]/revert/route.ts`, transfers in `src/features/transfers/` with `getTransferDeltas()` from `src/lib/balance-utils.ts` (two deltas, so two things to keep atomic). Transfer detection during import is `treatsAsTransfer()` in `src/features/statement-import/sessionModel.ts`. For each branch the same triple must hold: the row, its inverse evidence, and the balance effect commit together. `.claude/skills/money-rules/SKILL.md`.
+
 ### BUD-72
 
 **Outcome:** Resolve populated account type and currency edits.
@@ -330,6 +384,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Held for DEC-12. Decide historical transaction semantics before allowing populated account type/currency edits; no silent reinterpretation of existing money.
 
 **Provenance:** [Budget — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/Budget — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Held for DEC-12 — record the decision before coding; the prohibition is silent reinterpretation of existing money. The stakes are visible in `src/lib/balance-utils.ts`: `AccountType` is `expense | income | saving` and `getBalanceDelta()` uses it to choose sign, so changing the type of a populated account re-signs every historical transaction on it. Currency is worse: amounts are stored raw with an `exchange_rate` (`toUsd()`), and LBP is stored in thousands per the Preferences hard rule. The edit path is `src/app/api/accounts/[id]/route.ts` and `src/components/expense/AccountCurrencyDialog.tsx`. Write the decision into `_Decisions.md` with a worked example of what happens to existing rows under each option.
 
 ### BUD-73
 
@@ -339,6 +395,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Budget — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/Budget — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Held for DEC-11 — the whole item is deciding what "requires both comments" means, and the acceptance says preserve that Inbox wording while resolving it. Four sub-questions: comments versus approvals, which transactions are eligible, and what pending money does in the meantime. Context to read: the household model (`household_links`, Hard Rule #13, `src/app/api/accounts/route.ts`), the existing two-party money flow that already exists — split bills (`src/app/api/transactions/split-bill/route.ts`, `src/lib/utils/splitBill.ts`) — and the draft/pending pattern in `src/features/drafts/`. Do not implement an approval mechanism before the definition is recorded in `_Decisions.md`.
+
 ### BUD-75
 
 **Outcome:** Resolve income-draft available-balance semantics.
@@ -347,6 +405,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Budget — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/Budget — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Held for DEC-19 and the acceptance warns against flipping a sign or a shared helper blindly — the helper in question is `getBalanceDelta()` in `src/lib/balance-utils.ts`, where `income` accounts already move the other way, and a change there touches every money surface. The worked example (stored 100 + pending income 2000 displayed as −1900) needs an explicit definition of *available* versus *projected* balance before any edit. Where pending money lives: `src/features/drafts/` (`is_draft` on transactions) and the balance card in `src/features/balance/` / `src/components/expense/AccountBalance.tsx`. Record the definition in `_Decisions.md`, then apply it once at the display boundary rather than in the shared delta helper if that is what the decision implies.
+
 ### BUD-76
 
 **Outcome:** Define currency contracts for debt, split and NFC consumers.
@@ -354,6 +414,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Held for DEC-20. Agree supported currencies, FX provenance/rounding and comparison rules across debt/split/NFC consumers before wiring money suggestions; do not sum currencies.
 
 **Provenance:** [Budget — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/Budget — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Held for DEC-20; the cross-cutting rule is already stated — do not sum currencies. The primitives are `toUsd(amount, exchangeRate)` in `src/lib/balance-utils.ts` and the LBP-in-thousands convention from Preferences (`src/features/preferences/`, and see `ERA Notes/02 - Standalone Modules/Preferences/`). The three consumers to give an agreed contract are debts (`src/features/debts/`, `src/app/api/debts/`), split bills (`src/lib/utils/splitBill.ts`, `src/app/api/transactions/split-bill/route.ts`) and NFC wallet prompts (`src/components/expense/NfcWalletTransferPrompt.tsx`, `src/features/nfc/`). Supported set, FX provenance, rounding and comparison rules all go in `_Decisions.md` first; BUD-27's implied-rate matching depends on this being settled.
 
 ### BUD-77
 
@@ -365,6 +427,28 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [KIT-20](<../Kitchen/Kitchen — Master Book.md#kit-20>).
 
 **Provenance:** [Budget — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Budget/Budget — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Catalogue C12, depends on KIT-20's typed patch and revision checks. The rule is a clean separation: promotion creates a Budget goal with lineage and **moves no money** and infers no purchase. The lineage precedent is `source_catalogue_item_id` (see `src/app/api/items/[id]/promote/route.ts` for the existing promotion shape to copy). The wish side is `src/features/future-purchases/` and `src/app/api/future-purchases/`; the goal side is `src/features/budget/`. Zero initial progress plus a positive target and date are validation, so Zod them (Hard Rule #12). Repeated promotion must link, not duplicate — a unique constraint and 409 (Hard Rule #9).
+
+### BUD-83
+
+**Kind:** feature
+
+**Outcome:** Show the Split tag in transaction details and remove a pending split.
+
+- **Acceptance:** `TransactionDetailModal` shows a checked **Split** tag when `split_requested` is true and no Split tag when it is false. Hard Rule #28: the label is only "Split", with no helper text.
+- **Acceptance:** the owner can uncheck the tag only while the split is pending (`split_completed_at` is null). Unchecking clears `split_requested`, `collaborator_id`, `collaborator_amount`, `collaborator_description` and `collaborator_account_id`. No account balance or balance history changes.
+- **Acceptance:** a completed split still shows the tag, but it is locked. The server also refuses: the PATCH update is conditional on `split_completed_at IS NULL` and the owner's `user_id`, and a completed or missing row returns 409/404 instead of 500. A partner or collaborator viewing the transaction sees the tag read-only.
+- **Acceptance:** after removal, the partner's pending split list (`GET /api/transactions/split-bill`) no longer shows it, and their pending split notification is dismissed. That notification row belongs to the partner: RLS `notifications` UPDATE is `auth.uid() = user_id` (db-state snapshot 2026-08-04). Dismiss it server-side, scoped to `transaction_id` + the former `collaborator_id`.
+- **Acceptance:** the removal uses `safeFetch` through the existing transaction mutation hook, with the cache invalidated. The toast has **Undo** (Hard Rule #1), and Undo re-requests the split for the same collaborator so it shows as pending again.
+- **Acceptance (money-rules):** `src/lib/utils/splitBill.ts` exports `canRemoveSplit(transaction)`: true only when `split_requested` is true, `split_completed_at` is empty and `is_owner` is not false. The UI and the PATCH route both use it. The protected Delivery check `tests/delivery-oracles/bud83-split-removal.mjs` verifies it (the writer cannot edit that file); existing `src/lib/utils/splitBill.test.ts` still passes. The PATCH update itself stays conditional on `split_completed_at IS NULL`.
+- **Race note:** the collaborator's completion is already guarded at DB level. RLS "Collaborators can update split amounts" requires `split_requested = true AND split_completed_at IS NULL`, so a completion after removal matches zero rows and moves no balance. Do not change `split-bill/route.ts` for this item.
+
+**Touches:** `src/components/dashboard/TransactionDetailModal.tsx`, `src/app/api/transactions/[id]/route.ts`, `src/features/transactions/useDashboardTransactions.ts`, `src/lib/utils/splitBill.ts`, `src/lib/utils/splitBill.test.ts`
+
+**Provenance:** owner request 2026-09-19 — "if i set it to split by mistake i can remove the tag"; owner scoped removal to pending splits only. Selected as a Delivery V2 Fast lane product trial.
+
+- **Reading guide:** Well specified already; here is where each clause lands. Display and the checkbox: `src/components/dashboard/TransactionDetailModal.tsx`, reading `split_requested` / `split_completed_at` — the display helpers that already branch on that pair are `getTransactionDisplayAmount()` and `getTransactionDisplayDescription()` in `src/lib/utils/splitBill.ts` (with `splitBill.test.ts`). Server: `src/app/api/transactions/[id]/route.ts` — its PATCH is where the conditional update on `split_completed_at IS NULL` + owner `user_id` goes, and its DELETE branch already shows the completed-split balance reversal you must **not** trigger here (removal of a *pending* split changes no balance). Partner's pending list: `src/app/api/transactions/split-bill/route.ts`. The notification dismissal is cross-user, and the acceptance is right that `notifications` UPDATE is `auth.uid() = user_id` — so it must be done server-side scoped to `transaction_id` + the former `collaborator_id`; re-check `migrations/db-state.json` rather than trusting the quoted snapshot (Hard Rule #27). Client mutation: `src/features/transactions/useDashboardTransactions.ts`, through `safeFetch` (Hard Rule #6) with Undo re-requesting the split (Hard Rule #1). Hard Rule #28: the label is "Split", nothing more.
 
 ## Backlog reconciliation
 
@@ -447,6 +531,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ## Delivery session log
 
 *(Delivery runner appends dated progress bullets here automatically.)*
+- 2026-09-19 — **BUD-83** V2 run `r-83dddb67fea9` · candidate verified; not applied · codex gpt-5.6-luna <!-- v2:res-fc5b50822f64@2 -->
+- 2026-09-19 — **BUD-83** V2 run `r-83dddb67fea9` · not verified (criterion, disposition) · codex gpt-5.6-luna <!-- v2:res-fc5b50822f64@1 -->
 - 2026-07-30 — **BUD-11** delivery session `s-20260715-214421-hvfk` ended **cancelled** at CANCELLED. 0 file(s) changed.
 - 2026-07-30 — **BUD-11** delivery session `s-20260722-203135-cv12` ended **cancelled** at CANCELLED. 0 file(s) changed.
 - 2026-07-30 — **BUD-11** delivery session `s-20260722-205308-8sgn` ended **cancelled** at CANCELLED. 0 file(s) changed.

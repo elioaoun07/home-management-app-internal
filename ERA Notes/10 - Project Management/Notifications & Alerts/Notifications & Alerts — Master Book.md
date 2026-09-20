@@ -50,6 +50,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** `src/lib/pushSender.ts` is the right chokepoint and currently enforces nothing but VAPID config and 410/404 deactivation — read `ensureVapidConfigured()`, `sendPushToUser()` and the `PushResult` shape. Eight real producers call it (verified 2026-09-20): the four crons `chat-notifications`, `daily-items-reminder`, `daily-reminder`, `item-reminders`, plus `src/app/api/hub/messages/route.ts`, `src/app/api/notifications/in-app/route.ts`, `.../notifications/test/route.ts` and `src/app/api/pm/notify/route.ts`. **`quiet_start`/`quiet_end` already exist in `src/app/api/notifications/preferences/route.ts`'s Zod schema and are read nowhere else in `src/` — the preference is stored and ignored.** Severity/class vocabulary to reuse rather than reinvent: `src/lib/notifications/registry.tsx` (`NotificationTypeSpec`, `NotificationClass`, `takeoverEligible`). Beirut quiet hours must go through `src/lib/utils/date.ts`, not raw `Date` (Hard Rule #18). DEC-01 gates activation; durable send recovery is NOTIF-21, not this.
+
 ### NOTIF-2.1
 
 - **Retained campaign gate (D2):** *(Phase 2)* The bell no longer animates perpetually (finite-on-arrival only), respects `prefers-reduced-motion`, and the unread signal is calm but unambiguous.
@@ -61,6 +63,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** the bell animates once on arrival and then rests; no animation plays while merely unread; `prefers-reduced-motion` yields a static dot/count.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Verification-first — the behaviour is already implemented, so reproduce before editing. `src/components/notifications/NotificationBell.tsx` holds all of it: the `prefers-reduced-motion` media query, the `prevCountRef` effect that sets `justArrived` only when the count *rises*, the `animate-notification-ring` / `animate-notification-badge` classes, and the `Notifications, N unread` aria-label with its urgent suffix. Count source is `useUnreadNotificationCount()` in `src/hooks/useNotifications.ts`. The keyframes live in the global stylesheet, not the component. Implement only a reproduced discrepancy, and verify under all four themes on a mobile viewport (Hard Rules #5, #10).
 
 ### NOTIF-3.1
 
@@ -74,6 +78,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** The drawer is `src/components/notifications/NotificationCenter.tsx` (row rendering, empty state) with `src/components/notifications/NotificationModal.tsx` for the expanded view; both are exported via `src/components/notifications/index.ts`. Row content vocabulary — icon, title, class, route — comes from `src/lib/notifications/registry.tsx` (`NotificationIconSpec`, `resolveRoute`), so change the registry rather than adding per-row conditionals. Hard Rule #15 applies literally: a floating drawer uses `tc.bgPage` from `useThemeClasses()`, never `neo-card`. Action controls belong to NOTIF-3.2 and Undo semantics to NOTIF-5.6 — don't absorb them.
+
 ### NOTIF-3.2
 
 - **Retained campaign gate (D3):** *(Phase 3)* Drawer rows are one tier with icon/compact actions; Undo intact; verified on mobile.
@@ -83,6 +89,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Convert quick actions to **icon-only/compact** controls with `aria-label`/tooltip; one primary inline, secondary in an overflow. → `src/hooks/useNotifications.ts`, `src/components/notifications/NotificationModal.tsx`
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Quick actions are typed in `src/lib/notifications/registry.tsx` (`QuickActionId`, `QuickAction`, and each type's action list) and executed by `useCompleteNotificationAction()` in `src/hooks/useNotifications.ts`; the rendering surfaces are `src/components/notifications/NotificationModal.tsx` and the row actions in `NotificationCenter.tsx`. Pick the primary from the registry entry rather than hardcoding per type. Icon-only controls still need Undo on anything destructive (Hard Rule #1, `ToastIcons` from `src/lib/toastIcons.tsx`), and labels follow Hard Rule #28 — a verb, not a sentence.
 
 ### NOTIF-6.6
 
@@ -94,6 +102,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Blocked on credentials; this is a live-verification outcome, not a code change. Read this so you can tell a real failure from a missing credential: `src/lib/gcal/client.ts` (`isGoogleCalendarConfigured()`, `getOAuth2Client()`, `getAuthUrl()`, `exchangeCodeForTokens()`, `getCalendarClientForUser()`, `isGoogleNotFoundError()`) and `src/lib/gcal/sync.ts` (`syncItemToGoogleCalendar()`, `deleteItemFromGoogleCalendar()`). Which notification types sync at all is the `calendarSync` flag in `src/lib/notifications/registry.tsx`. The drift healer is `src/app/api/cron/gcal-reconcile/route.ts` — it has `maxDuration = 60` and the `Bearer CRON_SECRET` check, but there is no `vercel.json`, so it runs only if an external scheduler calls it. That is exactly why the acceptance demands a recorded last-run trace.
+
 ### NOTIF-21
 
 **Outcome:** Recover recipient-event delivery durably.
@@ -102,6 +112,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [NOTIF-19](<Notifications & Alerts — Master Book.md#notif-19>).
 
 **Provenance:** [Notifications & Alerts — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/Notifications & Alerts — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Depends on NOTIF-19 and is a different problem: policy eligibility versus exactly-once arrival. There is no claim record today — `sendPushToUser()` in `src/lib/pushSender.ts` loops subscriptions in-process, counts `sent`/`failed`, deactivates on 410/404 and optionally stamps `notifications.push_status`; a crash mid-loop leaves no durable per-recipient state. Read that loop, `src/lib/pushLogger.ts` (`logPushEvent`, the existing observation trail) and `src/app/api/notifications/subscription-health/route.ts`. The exactly-once discipline to copy is the one in `.claude/skills/recurrence-safety/SKILL.md`: a claim row, idempotent replay, no silent redelivery. Any new table follows Hard Rules #24 and #27 — give it a policy in the same migration.
 
 ### NOTIF-4.1
 
@@ -113,6 +125,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** The page is `src/app/alerts/page.tsx`, a single file rendering the date-grouped, `group_key`-deduped list off the same source as the bell (`useInAppNotifications()` in `src/hooks/useNotifications.ts`). Card icon/class/title vocabulary is `src/lib/notifications/registry.tsx`. Three hard rules bind at once: #3 (no red on individual rows — container headers may; overdue labels `text-white/40`), #14 (person-absolute colour derived from `useTheme()`), #16 (fixed header needs matching top padding). Preserve the existing empty state.
+
 ### NOTIF-4.3
 
 **Outcome:** Keep the action-first transaction-reminder card but tighten its text + button copy.
@@ -120,6 +134,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Keep the action-first transaction-reminder card but tighten its text + button copy.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Copy-only, and Hard Rule #28 is the whole brief: one- or two-word verbs, no reassurance text, no rationale on screen. The card lives in `src/app/alerts/page.tsx`; its action set and labels come from the transaction-reminder entry in `src/lib/notifications/registry.tsx` (`QuickAction` labels), so change them there and the drawer stays consistent. Do not restructure the action-first layout — that is the part the owner wants kept.
 
 ### NOTIF-5.4
 
@@ -130,6 +146,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Held for DEC-06: global Hard Rule22 allows server diagnostics while the module’s older locked decision removes all cron logs. Neither is silently waived. Record the owner resolution before the corresponding scoped change.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Held for DEC-06; the deliverable is a recorded owner decision, not an edit. Both sides of the tension are current: Hard Rule #22 permits `console.error` under `src/app/api/` (the Vercel log stream), while this module's older locked decision removed all cron logging. Read the six routes under `src/app/api/cron/` for what diagnostics exist today, and `src/lib/pushLogger.ts` for the structured alternative that already exists. Record the resolution in `_Decisions.md` before any scoped change.
 
 ### NOTIF-5.6
 
@@ -143,6 +161,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Audit first, fix only real gaps. The mutations are all in `src/hooks/useNotifications.ts`: `useDismissNotification()`, `useSnoozeNotification()`, `useArchiveNotification()`, `useCompleteNotificationAction()`. Each PATCHes a flag (`is_dismissed`, `snoozed_until`), so an inverse has to restore *domain* state — invalidating the query cache is not an inverse. `src/components/notifications/CriticalAlertGate.tsx` already implements Undo correctly; read it as the model and do not duplicate it. Toasts follow Hard Rule #1 with `ToastIcons` from `src/lib/toastIcons.tsx`.
+
 ### NOTIF-5.8
 
 - **Retained campaign gate (D5):** Retain and triage every remaining Phase5 outcome; do not call the entire phase complete while its canonical items are open.
@@ -153,6 +173,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Reading guide:** Build on the single-row mutations in `src/hooks/useNotifications.ts` (`useSnoozeNotification`, `useDismissNotification`) and the existing all-rows precedent `useMarkAllNotificationsRead()` — the closest thing to a bulk endpoint today; check whether it batches server-side or loops. Category comes from the registry type/class in `src/lib/notifications/registry.tsx`, which the filter chips on `src/app/alerts/page.tsx` already group by. A bulk action is the worst place to skip Undo (Hard Rule #1), and `.claude/skills/cache-invalidation/SKILL.md` applies — one invalidation after the batch, not per row.
+
 ### NOTIF-20
 
 **Outcome:** Resolve shortcut Done occurrence semantics.
@@ -161,6 +183,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** [SCH-14](<../Schedule/Schedule — Master Book.md#sch-14>).
 
 **Provenance:** [Notifications & Alerts — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/Notifications & Alerts — Master Book.md>). The source is historical; this entry owns the retained outcome.
+
+- **Reading guide:** Held for DEC-05 and depends on SCH-14; decide before coding. This is a recurrence-semantics question, so read `.claude/skills/recurrence-safety/SKILL.md` first — the historical failure mode is a shortcut that silently completes the series instead of the occurrence. The shortcut path is the quick actions in `src/lib/notifications/registry.tsx` plus `useCompleteNotificationAction()` in `src/hooks/useNotifications.ts`; the occurrence machinery it would delegate to is under `src/lib/schedule/` (`materializeOccurrence.ts`, `alertResolution.ts`). Record the decision in `_Decisions.md` first.
 
 ## Backlog reconciliation
 

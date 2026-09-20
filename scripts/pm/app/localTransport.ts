@@ -3,7 +3,7 @@
 import { RequestTimeoutError, safeFetch } from "@/lib/safeFetch";
 import { isReallyOnline, startProbing } from "@/lib/connectivityManager";
 import { PendingCommand, PmError, type ConnectionState, type Transport, type TransportEvent } from "./transport";
-import type { Snapshot, V2Assessment, V2Queue, V2Session } from "./types";
+import type { Snapshot, V2Assessment, V2Queue, V2Allowances, V2TestGate, V2Session } from "./types";
 
 function refusalText(payload: Record<string, unknown>, status: number) {
   const first = Array.isArray(payload.refusals) ? (payload.refusals[0] as Record<string, unknown> | undefined) : undefined;
@@ -120,6 +120,8 @@ export function createLocalTransport(): Transport {
     v2Run: (id, signal) => v2Read("/api/delivery/v2/run?id=" + encodeURIComponent(id), signal),
     v2Executors: (signal) => read("/api/delivery/v2/executors", signal),
     v2Queue: async (signal) => (await v2Read<{ queue: V2Queue | null }>("/api/delivery/v2/queue", signal)).queue,
+    v2TestGate: async (signal) => (await v2Read<{ gate: V2TestGate | null }>("/api/delivery/v2/test-gate", signal)).gate,
+    v2Allowances: async (signal) => (await v2Read<{ allowances: V2Allowances | null }>("/api/delivery/v2/allowances", signal)).allowances,
     v2Assess: (file, id, signal) =>
       v2Read<V2Assessment>("/api/delivery/v2/assess?file=" + encodeURIComponent(file) + "&id=" + encodeURIComponent(id), signal),
 

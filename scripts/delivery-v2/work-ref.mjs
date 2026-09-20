@@ -30,6 +30,7 @@ import { scanLines } from "../pm/shared/md-scan.mjs";
 import { parseTaskMeta } from "../pm/shared/tasks.mjs";
 import { idSections } from "../pm/shared/work-id.mjs";
 import { deliveryBlockReason } from "../pm/shared/work-lifecycle.mjs";
+import { BINDING_VERSION, bindingFingerprint } from "./task-input.mjs";
 import {
   ContractError,
   RESOLUTION_REASONS,
@@ -168,9 +169,9 @@ export function acceptanceText({ bookRaw, alias }) {
  * dependencies and holds. Headings match by normalized ID, so `### SCH-4.3b`
  * serves `SCH-4.3B`. Two matching headings are refused, never picked between.
  *
- * @param {{bookRaw:(string|null|undefined), alias:(string|null)}} input
+ * @param {{bookRaw:(string|null|undefined), alias:(string|null), version?:number}} input
  */
-export function acceptanceRevision({ bookRaw, alias }) {
+export function acceptanceRevision({ bookRaw, alias, version = 1 }) {
   if (!alias || typeof bookRaw !== "string") {
     return deepFreeze({ ok: true, fingerprint: ACCEPTANCE_ABSENT, reason: null });
   }
@@ -180,7 +181,7 @@ export function acceptanceRevision({ bookRaw, alias }) {
   }
   return deepFreeze({
     ok: true,
-    fingerprint: sections.length ? fingerprint(normalizeSourceText(sections[0].body)) : ACCEPTANCE_ABSENT,
+    fingerprint: sections.length ? (version === 2 ? bindingFingerprint(sections[0].body) : fingerprint(normalizeSourceText(sections[0].body))) : ACCEPTANCE_ABSENT,
     reason: null,
   });
 }
@@ -317,7 +318,7 @@ export function resolveWorkRef({ raw, locator }) {
  *   requestedDisposition:string, criteria?:import("./contracts.mjs").Criterion[],
  *   scratchScope:Record<string, unknown>,
  *   publicationScope:{allowedPaths?:string[], changeConstraints?:Record<string, unknown>},
- *   exclusions?:string[], policy_refs?:string[], authorized_at?:(string|null)}} input
+ *   exclusions?:string[], policy_refs?:string[], authorized_at?:(string|null), acceptanceVersion?:number}} input
  */
 export function freezeSelectedItem({
   raw,
@@ -333,6 +334,7 @@ export function freezeSelectedItem({
   exclusions = [],
   policy_refs = [],
   authorized_at = null,
+  acceptanceVersion = 1,
 }) {
   const selection = selectWorkItem({ raw, file, cbidx, witness });
   if (!selection.ok || !selection.locator || !selection.item) {
@@ -342,7 +344,7 @@ export function freezeSelectedItem({
   if (blocked) return deepFreeze({ ok: false, reason: blocked, workRef: null, contract: null, item: null });
   let acceptance_fingerprint = null;
   if (bookRaw !== undefined) {
-    const acceptance = acceptanceRevision({ bookRaw, alias: selection.item.alias });
+    const acceptance = acceptanceRevision({ bookRaw, alias: selection.item.alias, version: acceptanceVersion });
     if (!acceptance.ok) {
       return deepFreeze({ ok: false, reason: acceptance.reason, workRef: null, contract: null, item: null });
     }
@@ -385,7 +387,7 @@ export function recheckContractSource({ raw, workRef, contract, bookRaw = undefi
   }
   let observedAcceptance;
   if (contract.acceptance_fingerprint != null && bookRaw !== undefined) {
-    const acceptance = acceptanceRevision({ bookRaw, alias: workRef.alias });
+    const acceptance = acceptanceRevision({ bookRaw, alias: workRef.alias, version: contract.acceptance_fingerprint.startsWith(BINDING_VERSION) ? 2 : 1 });
     if (!acceptance.ok) {
       return deepFreeze({ resolved: false, reason: acceptance.reason, candidates: [], freshness: null });
     }

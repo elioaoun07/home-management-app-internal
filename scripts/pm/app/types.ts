@@ -359,6 +359,10 @@ export interface V2Plan {
     risks: string[];
     unknowns: string[];
     checks: string[];
+    preparation?: { kind: "selected-item"; provenance: string; acceptance_fingerprint: string };
+    acceptance?: string[];
+    invariants?: string[];
+    exclusions?: string[];
     questions: { text: string; blocking: boolean }[];
   };
   raw_text: string | null;
@@ -405,9 +409,23 @@ export interface V2Job {
     source: string | null;
     verification: { model: V2SettingCheck; effort: V2SettingCheck; mismatch: boolean; source: string | null } | null;
   } | null;
-  reservation: { unit: string; amount: number | null; open: boolean };
+  /** `kind` says what the amount is: an admission-time estimate, not a live cap. */
+  reservation: { unit: string; amount: number | null; open: boolean; kind?: string };
+  /** Shared subscription-window readings bracketing the job; never per-job consumption. */
+  subscription?: {
+    before: SubscriptionObservation | null;
+    after: SubscriptionObservation | null;
+    comparison: { deltas: { id: string; before: number; after: number; delta_percent: number }[]; notes: string[]; basis: string };
+  } | null;
   reason: string | null;
   created_at: string;
+}
+export interface SubscriptionObservation {
+  status: string;
+  observed_at: string;
+  plan: string | null;
+  windows: { id: string; used_percent: number; window_minutes: number | null; resets_at: string | null }[];
+  error?: string | null;
 }
 export interface V2Agent {
   role: string;
@@ -460,7 +478,16 @@ export interface V2Resources {
   openReservations: number;
   provenance: {
     providerReportedUsd: number | null;
+    /** Normalized: what these jobs spent, after a resumed thread's restatement is removed. */
     measuredTokens: Record<string, number>;
+    /** What the provider's counters said, restatement included. Never the settled figure. */
+    rawProviderTokens?: Record<string, number | string>;
+    /** Whether every reading could be normalized, and what was flagged if not. */
+    normalization?: {
+      complete: boolean;
+      legacyRows: number;
+      flagged: { status: string; count: number; basis: string | null }[];
+    };
     tokenNormalizationVersion?: string;
     reconciledBilled: number | null;
     subscriptionUsage: unknown;
@@ -586,4 +613,36 @@ export interface V2Catalogue {
   executors: V2Executor[];
   policy: { policy_revision: number; runtime: { kind: string; image: string; network: string } | null; thresholdUsd: number | null } | null;
   refusals: { code: string; detail: unknown }[];
+}
+
+/** Owner allowance settings (GET /api/delivery/v2/allowances). */
+export interface V2AllowanceRun {
+  run_id: string;
+  alias: string | null;
+  title: string;
+  campaign: string | null;
+  lifecycle: string;
+  running: boolean;
+  base: number | null;
+  extra: number;
+  allowance: number | null;
+  used: number;
+  reserved: number;
+}
+export interface V2Allowances {
+  ok: boolean;
+  readable: boolean;
+  error: string | null;
+  unit: string;
+  fleet: { limit: number | null; source: "settings" | "policy" | null; period: "day" | "reset"; since: string | null; policyLimit: number | null; used: number; reserved: number };
+  task: { limit: number | null; policyLimit: number | null };
+  runs: V2AllowanceRun[];
+  history: { at: string; actor: string; action: string; detail: Record<string, unknown> | null; command_id: string | null }[];
+}
+
+/** Owner test gate (GET /api/delivery/v2/test-gate). */
+export interface V2TestGate {
+  locked: boolean;
+  application: { application_id: string; run_id: string; state: string; at: string } | null;
+  record: { result: "passed" | "failed"; proceed: boolean; at: string; note: string | null } | null;
 }

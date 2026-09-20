@@ -1,6 +1,6 @@
 ---
 created: 2026-09-06
-updated: 2026-09-12
+updated: 2026-09-20
 type: delivery-plan
 status: active
 owner: Elio
@@ -22,6 +22,16 @@ plan_revision: "2.2"
 **Phase 5 (2026-09-12, code and synthetic evidence):** up to two independent candidates can write at once (DLV-106). Rule-based admission yields Can run together, Must follow or Needs scope check, with reasons. Waiting runs are queued, a writer that grows into another reservation pauses, and applications are serialized and rechecked on the changed source. One writer per candidate, a derived lease and V1's lock are unchanged. No real pair has run. Status: [Command Center Phase 5](<Command Center.md#phase-5--enable-dependable-parallel-items>).
 
 ## Operating boundary
+
+### Bounded Focused extension — 2026-09-20
+
+Owner-approved implementation of the [Consumption Optimization Plan](<../Research/Delivery — Consumption Optimization Plan.md>) adds a prepared-plan alternative within V2. It does not authorize live runs/comparisons or complete DLV-118. The resolved profile now governs initial, queued, revised and resumed instructions and supported native limits. Dispatch persists a selected-item task brief with binding text, criteria/scope references, current plan, owner answers and frozen advisory guidance; a content-addressed worker file supports recovery after native context loss. Fresh/uncertain contexts receive the brief explicitly. Known continuations receive its recovery reference. Inspect current code and necessary dependencies; missing inputs or a material mismatch require a blocking question.
+
+New acceptance fingerprints use `binding-v2:`. Only a single explicitly adopted `<!-- delivery:advisory:v1 -->` … `<!-- /delivery:advisory -->` block is advisory. Keep acceptance, invariants, dependencies, holds and permissions outside it. Ordinary Reading guide bullets remain binding; malformed delimiters bind everything. Legacy contracts retain whole-section fingerprints and binding treatment. No historical approval is migrated or cleared.
+
+To reuse an existing owner-reviewed plan, its selected Master Book section must contain exactly one `delivery-plan-v1` JSON fence with explicit `outcome`, nonempty string arrays `acceptance`, `scope`, `steps`, `invariants`, `exclusions`, `checks` (policy criterion IDs), string arrays `risks`, `unknowns`, `dependencies`, plus `risk: "low"`, `ownerReviewed: true` and nonempty `provenance`. Unknowns and dependencies must be empty, including declared item dependencies. Scope must fit declared Touches, publication authority and exact snapshot entries; required candidate checks and their runnable pinned inputs must already exist. Money, recurrence, auth/RLS, migrations, indicated cross-module work and DLV-134 are initially excluded. This is explicit existing material, never inferred readiness from Touches or an AI-generated gap fill. Ineligible work follows normal investigation; no active item was opted in by this implementation.
+
+Eligible work creates a proposed plan with provenance and no planning job. Unsupported source fields make the task ineligible; its prepared brief keeps reviewed material once in `plan.body`, with surrounding binding text retained. The existing desktop/phone Plan review must approve it before one engineering job can dispatch. Qualification, holds/dependencies, grants, fleet/resources, checks, review and explicit Apply still apply. Source hashes captured at preparation must match both current source and the supplied snapshot. Missing/stale authority or evidence refuses continuation/Apply. A prepared candidate outside approved scope stops at **Review scope**; Recheck cannot certify it. Use existing Close and a newly authorized Investigate attempt when the one-attempt allowance is exhausted; post-candidate revision remains separate work. Full implementation/test evidence and runtime activation requirements: [Implementation report](<../Research/Delivery — Consumption Optimization Implementation.md>). Consumption savings remain unmeasured.
 
 V1 remains the running dispatch path with its existing three recorded gate decisions, scoped INSTANT interaction exception, owner shipping, and no Git writes/worktrees/permission bypass. Its August 6 freeze remains: DLV-92/93 require two real product completions and limit intervening fixes to one reliability, one simplification and one validation remedy. An ACCEPTED HUB-1 attempt with inconsistent finish artifacts is not evidence that this threshold passed.
 

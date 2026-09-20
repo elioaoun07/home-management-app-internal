@@ -493,9 +493,12 @@ export function relate(a, b, rules) {
 /**
  * The fleet as the store records it. Writers are runs with a write job that may
  * still be running, or inside their approved check/repair loop. Every possibly
- * running job holds a job slot, whatever its purpose.
+ * running job holds a job slot, whatever its purpose. `since` limits settled usage
+ * to the owner's allowance window (allowances.mjs).
+ *
+ * @param {{store:any, unit:string, since?:(string|null)}} input
  */
-export function fleetOf({ store, unit }) {
+export function fleetOf({ store, unit, since = null }) {
   const runs = store.listRuns();
   const jobs = store.listAllJobs();
   const running = jobs.filter(possiblyRunning);
@@ -506,7 +509,7 @@ export function fleetOf({ store, unit }) {
       return run.lifecycle === "ACTIVE" && writes.length > 0 && ["checking", "repairing"].includes(String(run.waiting_reason));
     })
     .map((run) => String(run.run_id));
-  const summary = resourceSummary(store, { unit, jobs });
+  const summary = resourceSummary(store, { unit, jobs, since });
   const live = new Set(jobs.filter((job) => job.reservation_open || possiblyRunning(job)).map((job) => String(job.job_id)));
   const subagents = {};
   for (const row of store.listSubagentActivity()) {
