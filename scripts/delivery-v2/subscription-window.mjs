@@ -14,9 +14,9 @@
 //   - observed at one instant, not metered per job.
 //
 // Two observations bracketing a job are therefore evidence, not arithmetic. The
-// difference between them is an upper bound on what the job consumed and is only
-// attributable to the job when nothing else used the account in between — which
-// this module cannot know and does not claim. Everything here is named so that a
+// difference between them is an observed shared-window change, not per-job
+// consumption; it is only computed when both readings identify the same valid
+// window, and this module cannot know what else used the account in between. Everything here is named so that a
 // reader cannot mistake it for a per-job meter.
 //
 // Nothing in a window observation is a credential: percentages, window lengths,
@@ -123,8 +123,16 @@ export function compareObservations({ before = null, after = null }) {
         notes.push("window " + post.id + " was not observed before the job");
         continue;
       }
+      if (!validIdentity(pre.resets_at) || !validIdentity(post.resets_at)) {
+        notes.push("window " + post.id + " has no reset identity on one or both observations, so no difference can be read");
+        continue;
+      }
       if (pre.resets_at !== post.resets_at) {
         notes.push("window " + post.id + " reset between the two observations, so no difference can be read");
+        continue;
+      }
+      if (post.used_percent < pre.used_percent) {
+        notes.push("window " + post.id + " reading decreased within the same window, so no difference can be read");
         continue;
       }
       deltas.push({ id: post.id, before: pre.used_percent, after: post.used_percent, delta_percent: round(post.used_percent - pre.used_percent) });
@@ -135,10 +143,12 @@ export function compareObservations({ before = null, after = null }) {
     version: SUBSCRIPTION_OBSERVATION_VERSION,
     deltas: Object.freeze(deltas),
     notes: Object.freeze(notes),
-    basis:
-      "shared subscription-window observations bracketing this job; the difference is an upper bound on what this job consumed and is attributable to it only if nothing else used the account in between",
+    basis: "Observed shared-window change; not exact per-job consumption.",
   });
 }
+
+/** A reset instant is an identity only when it is a non-empty value. */
+const validIdentity = (value) => typeof value === "string" && value.trim() !== "";
 
 const round = (value) => Math.round(value * 100) / 100;
 

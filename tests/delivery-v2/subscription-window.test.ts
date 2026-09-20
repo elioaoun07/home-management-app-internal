@@ -62,7 +62,7 @@ describe("subscriptionObservation", () => {
 });
 
 describe("compareObservations", () => {
-  it("reports a bracketed difference and says it is only an upper bound", () => {
+  it("reports a bracketed difference labelled as a shared-window change", () => {
     const record: Loose = subscriptionRecord({
       before: subscriptionObservation("codex-exec-sdk", codexUsage(12, 3), { at: "2026-09-19T13:14:00Z" }),
       after: subscriptionObservation("codex-exec-sdk", codexUsage(31, 4), { at: "2026-09-19T15:11:00Z" }),
@@ -71,8 +71,41 @@ describe("compareObservations", () => {
       { id: "primary", before: 12, after: 31, delta_percent: 19 },
       { id: "secondary", before: 3, after: 4, delta_percent: 1 },
     ]);
-    expect(record.comparison.basis).toMatch(/upper bound/u);
-    expect(record.comparison.basis).toMatch(/nothing else used the account/u);
+    expect(record.comparison.basis).toBe("Observed shared-window change; not exact per-job consumption.");
+    expect(record.comparison.basis).not.toMatch(/upper bound/iu);
+  });
+
+  it("computes no delta when either reset identity is missing", () => {
+    const usage = (resets: unknown): Loose => ({
+      plan_type: "plus",
+      rate_limit: { primary_window: { used_percent: 10, window_minutes: 300, resets_at: resets } },
+    });
+    for (const [a, b] of [[null, null], [null, 5], [5, null], ["", ""]] as const) {
+      const comparison: Loose = compareObservations({
+        before: subscriptionObservation("codex-exec-sdk", usage(a), { at: "a" }),
+        after: subscriptionObservation("codex-exec-sdk", usage(b), { at: "b" }),
+      });
+      expect(comparison.deltas).toEqual([]);
+      expect(comparison.notes.join(" ")).toMatch(/no reset identity/u);
+    }
+  });
+
+  it("computes no delta for a decreasing reading in the same window", () => {
+    const comparison: Loose = compareObservations({
+      before: subscriptionObservation("codex-exec-sdk", codexUsage(40, 5), { at: "a" }),
+      after: subscriptionObservation("codex-exec-sdk", codexUsage(30, 5), { at: "b" }),
+    });
+    expect(comparison.deltas).toEqual([{ id: "secondary", before: 5, after: 5, delta_percent: 0 }]);
+    expect(comparison.notes.join(" ")).toMatch(/decreased/u);
+  });
+
+  it("keeps the raw observations untouched on the record", () => {
+    const before = subscriptionObservation("codex-exec-sdk", codexUsage(88, 20, 1_000), { at: "a" });
+    const after = subscriptionObservation("codex-exec-sdk", codexUsage(4, 21, 2_000), { at: "b" });
+    const record: Loose = subscriptionRecord({ before, after });
+    expect(record.before).toBe(before);
+    expect(record.after).toBe(after);
+    expect(record.comparison.deltas).toEqual([]);
   });
 
   it("refuses to subtract across a window that reset", () => {
