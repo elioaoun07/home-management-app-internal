@@ -19,11 +19,13 @@ tags:
 
 ## Files
 
+**Shared navigation (2026-09-26, R69):** Home / Work / Delivery / Analytics share the desktop and phone views. The header uses the existing ERA Memory mark. Home shows the four work queues and all module cards; Analytics owns In focus, the last fourteen days and daily receipt drilldowns alongside the existing detailed metrics. `#/analytics` is canonical; `#/dashboard` remains an alias. Work cards expose source IDs, and search/filter context survives To do / Done and Board / List navigation. These are local implementation facts, not a new deployment or physical-phone witness.
+
 **Work lifecycle (2026-09-15, R65):** the shared Work page has To do / Done navigation and searchable completed outcomes; exact history links retain scope, completion evidence and available session history. UAT-pending metadata stays separate from implementation Done. Owner-only UAT rows cannot be selected for Delivery; the server rechecks eligibility on commands. Reads continue from the same-owner cached snapshot; new commands still require connectivity. Local build/browser fixtures do not certify a deployed physical phone.
 
 - **Page**: `src/app/pm/live/page.tsx` — server wrapper; `?ui=legacy` or `?session=` → legacy `PmLiveApp`, otherwise `CommandCenterEntry`.
 - **Shared app mount**: `src/app/pm/live/CommandCenterEntry.tsx` (client, `next/dynamic` with `ssr:false`) → `CommandCenterLive.tsx` (sets the relay transport, maps old `?view=` shortcuts to hash routes, imports the PM app CSS so it only loads with this chunk).
-- **Shared views**: `scripts/pm/app/` — `Dashboard.tsx` (`#/dashboard`, same metrics as the laptop from the relay corpus and run rows; Command Center Phase 6), `CommandCenter.tsx`, `transport.ts` (interface, capabilities, `PendingCommand`), `DeliveryV2.tsx` (plan/questions/controls, receipts, Apply panel), `App.tsx` (connection strip on the relay).
+- **Shared views**: `scripts/pm/app/` — `Home.tsx`, `Explore.tsx`, `explore-state.ts`, `Board.tsx`, `Dashboard.tsx` + `AnalyticsOverview.tsx` (`#/analytics`, `#/dashboard` alias; same metrics as the laptop from the relay corpus and run rows), `CommandCenter.tsx`, `transport.ts` (interface, capabilities, `PendingCommand`), `DeliveryV2.tsx` (plan/questions/controls, receipts, Apply panel), `DeliveryQuestion.tsx` + `deliveryQuestionModel.ts` (explicit supplied answer options), `App.tsx` (shared navigation and connection strip on the relay).
 - **Relay transport (phone)**: `src/features/pm-live/relay/transport.ts`, `commands.ts` (durable intents + receipt recovery), `cache.ts` (owner/installation/schema-bound IndexedDB copy).
 - **Relay contract (both ends)**: `scripts/pm/relay-shared.mjs`; laptop cores `scripts/pm/relay.mjs`; wiring `scripts/pm/bridge.mjs`.
 - **Layout / tokens**: `src/app/pm/live/layout.tsx`, `pm-live.css` (legacy view tokens, `[data-pm-live]`-scoped).
@@ -48,6 +50,8 @@ tags:
 
 ## What the phone shows
 
+Home opens Now / Up next / Waiting / Someday in Work and exposes every module card without horizontal shelf navigation. Analytics uses campaign-filtered records; its fourteen-day view counts dated shipped receipts and opens the selected day's entries. To do / Done and layout changes preserve the search term; visible work IDs retain their source spelling. When a Delivery question already includes explicit choices, tapping a card fills the editable answer and a separately tapped Send uses the original command. Only a supplied recommendation is labeled and placed first. Freeform questions stay freeform; the UI does not create substantive answers or change worker instructions to guarantee choices.
+
 The shared V2 run uses Plan / Verification / Activity / Changes (`?tab=` in the hash), with Changes and Apply last. Plan artifacts stack below the visible plan sections on phone. Verification history, application history, usage comparison and run facts do not require disclosures. Rollback opens a Cancel-focused dialog and returns focus on dismissal. The relay carries the same optional `candidate.changed[].review` projection; a saved older payload shows an unavailable diff. No relay schema/migration changed. Physical phone and transport acceptance remain in `docs/Delivery-UAT.md`.
 
 | Element | Source |
@@ -69,7 +73,7 @@ Checklist writes (complete, move, ship, discard), V1 launch and V1 session detai
 
 - `ERA Notes/10 - Project Management/Plans/Command Center.md` (Phase 4)
 - `ERA Notes/06 - Setup & Onboarding/PM Relay Setup.md`
-- PM Tooling R63; Delivery DLV-104, DLV-105
+- PM Tooling R63, R69; Delivery DLV-104, DLV-105
 
 ## Notes
 

@@ -1,9 +1,10 @@
-import { useState, type DragEvent } from "react";
+import { useDeferredValue, useState, type DragEvent } from "react";
 import { useCommand, useRoute, useWorld, go, type UndoSnapshot } from "./state";
 import { transport } from "./transport";
 import {
   activityBadges,
-  boardQueryString,
+  bucketOf,
+  discover,
   KIND_OPTIONS,
   laneGroups,
   laneOf,
@@ -15,7 +16,8 @@ import {
   type Status,
   workPath,
 } from "./model";
-import { Empty, ErrorNotice, SpaceIcon } from "./components";
+import { Empty, ErrorNotice, SpaceIcon, WorkHeading } from "./components";
+import { boardFilterPath, boardVisibleLane, exploreBucket, exploreViewPath } from "./explore-state";
 import { UndoNotice } from "./Work";
 import type { RunSummary, Work } from "./types";
 
@@ -51,13 +53,7 @@ function BoardCard({
     >
       <a href={`#${workPath(work, from)}`}>
         <SpaceIcon name={work.module} size={17} />
-        <span>
-          <small>
-            {work.module}
-            {work.effort ? ` · ${work.effort}` : ""}
-          </small>
-          <strong>{work.title}</strong>
-        </span>
+        <WorkHeading work={work} detail={work.effort} />
       </a>
       {badges.length > 0 && (
         <div className="board-badges">
@@ -108,14 +104,20 @@ export function Board({
   const command = useCommand();
   const [undo, setUndo] = useState<UndoSnapshot[] | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
+  const term = useDeferredValue(route.query.get("q") || "");
+  const bucket = exploreBucket(route.query);
   const filters = parseBoardQuery(route.query);
-  const setFilters = (patch: Partial<BoardFilters>) =>
-    go(`${basePath}${boardQueryString({ ...filters, ...patch })}`);
+  const setFilters = (patch: Partial<BoardFilters>) => {
+    const path = boardFilterPath(basePath, route.query, patch);
+    go(basePath === "/explore" && patch.status === "review"
+      ? exploreViewPath(new URLSearchParams(path.split("?")[1]), "done")
+      : path);
+  };
   const campaigns = lockCampaign
     ? []
     : [...new Set(work.map((item) => item.module))].sort();
-  const filtered = work.filter((item) =>
-    matchesBoardFilters(item, runs, filters),
+  const filtered = discover(work, term).filter((item) =>
+    matchesBoardFilters(item, runs, filters) && (!bucket || bucketOf(item) === bucket),
   );
   // Checklist moves stay at the desk when the transport cannot write the checklist.
   const canMove = transport().capabilities.planWrites;
@@ -167,6 +169,7 @@ export function Board({
     );
   }
   const groups = laneGroups(filtered);
+  const visibleLane = boardVisibleLane(route.query, filtered);
   const empty = !filtered.length;
   return (
     <div className="board">
@@ -203,7 +206,7 @@ export function Board({
             {LANES.map((lane) => (
               <button
                 key={lane}
-                aria-pressed={filters.lane === lane}
+                aria-pressed={visibleLane === lane}
                 onClick={() => setFilters({ lane })}
               >
                 {lane}
@@ -216,7 +219,7 @@ export function Board({
               <section
                 key={lane}
                 className="board-column"
-                data-active={filters.lane === lane}
+                data-active={visibleLane === lane}
                 onDragOver={(event) => {
                   if (dragKey) event.preventDefault();
                 }}

@@ -40,9 +40,10 @@ import {
   Syringe,
   Trash2,
   Users,
-  X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Modal, inputCls, labelCls } from "./healthUi";
+import { MedicationsSection } from "./MedicationsSection";
 
 const SEVERITIES: AllergySeverity[] = ["mild", "moderate", "severe", "anaphylaxis"];
 const BLOOD_TYPES: BloodType[] = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
@@ -60,46 +61,6 @@ const SEVERITY_STYLES: Record<AllergySeverity, string> = {
   severe: "bg-orange-500/10 text-orange-300",
   anaphylaxis: "bg-red-500/10 text-red-300",
 };
-
-const inputCls =
-  "w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/30";
-const labelCls = "block text-xs text-white/60 mb-1";
-
-function Modal({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  const tc = useThemeClasses();
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      {/* Floating panel: opaque page background (Hard Rule 15 — never glass). */}
-      <div
-        className={cn(
-          "relative w-full sm:max-w-md max-h-[85vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-white/10 p-5",
-          tc.bgPage,
-        )}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-medium text-white">{title}</h2>
-          <button
-            onClick={onClose}
-            className="p-2 -m-2 text-white/60 hover:text-white"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 // ── Profile form ─────────────────────────────────────────────────────────────
 
@@ -649,6 +610,13 @@ export default function HealthcareClient() {
   const vaccines = (bundle?.vaccines ?? []).filter(
     (v) => !activeProfile || v.profile_id === activeProfile.id,
   );
+  const medications = (bundle?.medications ?? []).filter(
+    (m) => !activeProfile || m.profile_id === activeProfile.id,
+  );
+  const medicationIds = new Set(medications.map((m) => m.id));
+  const medicationLogs = (bundle?.medication_logs ?? []).filter((l) =>
+    medicationIds.has(l.medication_id),
+  );
 
   if (isLoading) {
     return (
@@ -666,7 +634,7 @@ export default function HealthcareClient() {
           <div>
             <h1 className="text-xl font-semibold text-white">Health</h1>
             <p className="text-sm text-white/50">
-              Profiles, allergies, medical history & vaccines
+              Medications, allergies, history & vaccines
             </p>
           </div>
         </div>
@@ -751,6 +719,12 @@ export default function HealthcareClient() {
                   </div>
                 </div>
               </Card>
+
+              <MedicationsSection
+                profile={activeProfile}
+                medications={medications}
+                logs={medicationLogs}
+              />
 
               {/* Allergies */}
               <Card className={cn("p-4", tc.surfaceBg, "border-white/10")}>

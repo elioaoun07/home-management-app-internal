@@ -45,6 +45,7 @@ allergies / vaccines / medical history / medication           | [standalone/heal
 "offline mode" / "sync queue" / "indexeddb"                    | [junction/sync-and-offline.md](junction/sync-and-offline.md)
 "message-to-transaction" / "message-to-reminder"               | [junction/message-actions.md](junction/message-actions.md)
 "prerequisites" / "NFC unlocks an item"                        | [junction/prerequisites.md](junction/prerequisites.md)
+activity log                                                  | [junction/activity-log.md](junction/activity-log.md)
 ---                                                            | ---
 "theme switching" / "blue / pink / frost / calm"               | [cross-cutting/theming.md](cross-cutting/theming.md)
 "the atlas" / "the in-app feature map"                         | [cross-cutting/atlas.md](cross-cutting/atlas.md)
@@ -101,6 +102,7 @@ allergies / vaccines / medical history / medication           | [standalone/heal
 | Sync & Offline     | ALL mutations — IndexedDB queue + `OfflineSyncEngine`.                            | [junction/sync-and-offline.md](junction/sync-and-offline.md)                      |
 | Message Actions    | Hub message → Transaction / Reminder / Item.                                      | [junction/message-actions.md](junction/message-actions.md)                        |
 | Prerequisites      | NFC Tags + Items (dormant items become pending when prerequisites met).           | [junction/prerequisites.md](junction/prerequisites.md)                            |
+| Activity Log      | Household source activity across 12 modules; current source privacy applies | [junction/activity-log.md](junction/activity-log.md)                     |
 
 ## Cross-cutting (system, not a feature)
 

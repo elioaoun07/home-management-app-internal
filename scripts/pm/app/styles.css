@@ -235,27 +235,8 @@ details > p {
   font-size: 11px;
   letter-spacing: 0.2px;
 }
-.brand-symbol {
-  height: 32px;
-  width: 32px;
-  border-radius: 11px;
-  background: var(--accent-gradient);
-  color: var(--accent-ink);
-  font-size: 27px;
-  line-height: 30px;
-  text-align: center;
-  position: relative;
-  font-weight: 600;
-  transform: rotate(-8deg);
-}
-.brand-symbol > span {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--theme-bg);
-  right: 3px;
-  top: 5px;
+.wordmark .era-mark {
+  flex-shrink: 0;
 }
 .desktop-nav {
   display: flex;
@@ -1271,3 +1252,25 @@ details > p {
   width: 14px;
   min-height: 14px;
 }
+
+/* Home is a launchpad: every queue and space stays directly reachable. */
+.home-queues .work-collections { margin-bottom: 22px; }
+.home-queues .work-collection { gap: 20px; border: 1px solid var(--line); }
+.home-queues .work-collection:hover { box-shadow: inset 0 0 0 1px var(--accent); }
+.home-queues .work-collection strong { margin: 0; font-size: 18px; }
+.queue-card-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--accent); }
+.queue-card-top b { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.home-decisions { display: flex; align-items: center; gap: 12px; min-height: 48px; margin-bottom: 28px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 14px; }
+.home-decisions strong { flex: 1; font-size: 13px; font-weight: 400; }
+.home-decisions span { color: var(--ink-muted); }
+.today-page .space-shelf { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; padding: 4px 0; margin: 0; overflow: visible; }
+.today-page .shelf-controls { display: none; }
+.today-page .space-cover { min-width: 0; min-height: 0; padding: 18px; border-radius: 18px; }
+.today-page .cover-art { height: 58px; }
+.today-page .cover-art svg { width: 30px; height: 30px; }
+.today-page .space-cover-main > strong { font-size: 15px; }
+.today-page .space-cover-main > span:last-child { font-size: 12px; }
+.today-page .space-cover-action { min-height: 44px; font-size: 12px; }
+.explore-active-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 14px 0 20px; }
+.explore-active-filters:empty { display: none; }
+.work-id { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--accent); }

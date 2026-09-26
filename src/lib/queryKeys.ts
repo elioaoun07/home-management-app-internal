@@ -26,6 +26,10 @@ export const qk = {
   hubThreads: () => ["hub", "threads"] as const,
   hubMessages: (threadId: string) => ["hub", "messages", threadId] as const,
 
+  // Schedule items root (== itemsKeys.all in src/features/items) — for
+  // cross-module invalidation, e.g. Healthcare medication reminders.
+  scheduleItems: () => ["items"] as const,
+
   // NFC tags
   nfcTags: () => ["nfc-tags"] as const,
   nfcTag: (slug: string) => ["nfc-tags", { slug }] as const,

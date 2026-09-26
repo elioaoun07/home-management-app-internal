@@ -874,3 +874,30 @@
     opacity: 0.5;
   }
 }
+
+/* Four primary destinations and compact, fully visible space cards. */
+@media (min-width: 701px) and (max-width: 950px) {
+  .app-header { padding-inline: 24px; gap: 12px; }
+  .desktop-nav a { padding-inline: 12px; }
+  .header-tools { gap: 4px; }
+  .header-tools .capture-button { display: none; }
+  .today-page .space-shelf { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .mobile-nav { padding-inline: 10px; }
+  .mobile-nav > a { width: 25%; }
+  .mobile-nav strong { font-size: 11px; }
+  .header-tools .icon-button { min-width: 40px; }
+  .home-queues .work-collections { gap: 10px; margin-bottom: 18px; }
+  .home-queues .work-collection { padding: 16px; min-height: 120px; gap: 14px; }
+  .home-queues .work-collection strong { font-size: 16px; }
+  .home-queues .work-collection > svg { right: 15px; bottom: 19px; width: 14px; }
+  .queue-card-top b { font-size: 28px; }
+  .today-page .space-shelf { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .today-page .space-cover { padding: 14px; }
+  .today-page .cover-art { height: 44px; }
+  .today-page .space-cover-main > strong { font-size: 13px; overflow-wrap: anywhere; }
+  .today-page .space-cover-action { -webkit-line-clamp: 2; }
+  .explore-active-filters .secondary { min-height: 40px; }
+  .outcome-link small { font-size: 11px; }
+}

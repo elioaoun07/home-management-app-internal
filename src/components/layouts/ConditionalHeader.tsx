@@ -132,6 +132,7 @@ export default function ConditionalHeader({
       pathname?.startsWith("/nfc/") ||
       pathname?.startsWith("/watch") ||
       pathname?.startsWith("/pm/live") ||
+      pathname?.startsWith("/activity-log") ||
       viewMode === "watch" ||
       viewMode === "web" ||
       (pathname?.startsWith("/chat") && isThreadOpen));

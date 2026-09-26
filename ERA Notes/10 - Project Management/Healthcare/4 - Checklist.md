@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-10
+updated: 2026-09-26
 type: checklist
 status: active
 owner: Elio
@@ -14,16 +14,16 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 
 ## Now
 
+- [ ] **HLTH-25** Apply the medications migration and accept doses + reminders on phone — [criteria](<Healthcare — Master Book.md#hlth-25>) _(blocker - S)_
 - [ ] **HLTH-7** Verify core deployment, household privacy and mobile use — [criteria](<Healthcare — Master Book.md#hlth-7>) _(blocker - S)_
 - [ ] **HLTH-19** Establish medication safety and privacy contracts — [criteria](<Healthcare — Master Book.md#hlth-19>) _(friction - M)_
-- [ ] **HLTH-21** Distinguish unavailable allergy evidence from a completed check — [criteria](<Healthcare — Master Book.md#hlth-21>) _(friction - M)_
 
 ## Next
 
-- [ ] **HLTH-8** Define idempotent medication storage and materialization — [criteria](<Healthcare — Master Book.md#hlth-8>) _(blocker - M)_
-- [ ] **HLTH-9** Create per-dose reminders with verified calendar sync — [criteria](<Healthcare — Master Book.md#hlth-9>) _(blocker - L)_
+- [ ] **HLTH-21** Distinguish unavailable allergy evidence from a completed check — [criteria](<Healthcare — Master Book.md#hlth-21>) _(friction - M)_
+- [ ] **HLTH-9** Verify medication calendar sync with status bookkeeping — [criteria](<Healthcare — Master Book.md#hlth-9>) _(blocker - M)_
 - [ ] **HLTH-10** Reconcile medication calendar status — [criteria](<Healthcare — Master Book.md#hlth-10>) _(blocker - S)_
-- [ ] **HLTH-11** Add medication and adherence controls — [criteria](<Healthcare — Master Book.md#hlth-11>) _(blocker - M)_
+- [ ] **HLTH-11** Show medication calendar status and Connect Google — [criteria](<Healthcare — Master Book.md#hlth-11>) _(friction - S)_
 - [ ] **HLTH-12** Verify dose, edit, replay and physical alarm behavior — [criteria](<Healthcare — Master Book.md#hlth-12>) _(blocker - M)_
 - [ ] **HLTH-22** Cover core healthcare route contracts — [criteria](<Healthcare — Master Book.md#hlth-22>) _(friction - M)_
 

@@ -37,6 +37,9 @@ export function ArtifactsView() {
 
   return (
     <div className="flex flex-col gap-4 px-4 py-3 pb-6">
+      <button type="button" onClick={() => router.push("/activity-log")} className="min-h-11 self-start text-sm text-cyan-400">
+        Household activity →
+      </button>
       <div className="grid grid-cols-2 gap-3">
         <EraStatCard
           hue={HUE}

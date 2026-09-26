@@ -129,6 +129,7 @@ export default function AIChatAssistant() {
     "/era",
     "/today",
     "/trips",
+    "/activity-log",
     "/pm/",
   ];
   const isStandalonePage =

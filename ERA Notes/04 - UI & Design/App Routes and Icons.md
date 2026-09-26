@@ -38,6 +38,7 @@ tags:
 | `/reminders` | Reminders          | `CalendarClockIcon`        | `from-amber-400 to-amber-600`     |
 | `/recurring` | Recurring Payments | `CalendarClockIcon`        | Theme-based                       |
 | `/trips`     | Trips              | `Plane` (lucide)           | `from-cyan-400 to-sky-500`        |
+| `/activity-log` | Activity Log    | Custom timeline install icon / `Activity` (lucide) | Theme-based UI; cyan install icon |
 | `/today`     | Plan My Day        | `CalendarOff` (lucide)     | `from-pink-400 to-amber-400`      |
 | `/healthcare` | Health            | `HeartPulse` (lucide)      | `from-rose-400 to-pink-500`       |
 | `/statement-import` | Statement Import | `Upload` / `FileText` (lucide) | `from-sky-400 to-indigo-500` |
@@ -93,6 +94,25 @@ tags:
 | `/atlas`         | Page & Feature Atlas viewer | `Network` (lucide) |
 | `/qr/expense`    | QR code expense entry       | N/A                |
 | `/g/[tag]`       | Guest portal (public)       | N/A                |     | `/nfc/[tag]` | NFC tag interaction (authenticated) | `DoorOpen` / `Home` (lucide) |
+
+---
+
+## Activity Log installation
+
+`/manifests/activity-log.webmanifest` has start URL `/activity-log` and ID `/activity-log-app`; SVG source `public/activity-log-icon.svg` supplies 180/192/512 PNG and maskable variants. Open from the user menu or ERA Artifacts. The page supplies its own header and hides the global header, mobile nav and floating assistant. PM: HUB-72.
+
+## PM Command Center (shared local and phone navigation)
+
+`pnpm pm` and `/pm/live` mount the same React navigation from `scripts/pm/app/App.tsx`. These are hash destinations within the existing shell, not new Next.js pages. The wordmark uses `ERAMark module="memory"` from `src/components/shared/ERAMark.tsx`.
+
+| Hash route | Destination | Icon (lucide-react) |
+| --- | --- | --- |
+| `#/` | Home | `Home` |
+| `#/explore` | Work | `Compass` |
+| `#/delivery` | Delivery | `Zap` |
+| `#/analytics` | Analytics | `ChartNoAxesCombined` |
+
+`#/dashboard` remains an alias for Analytics. Home queue links open Work with `lane=now`, `next`, `waiting` or `later`; module cards open the corresponding Work space. See [PM Live](<Page & Feature Atlas/pm-live.md>) and PM Tooling R69 for the shared desktop/phone presentation scope.
 
 ---
 

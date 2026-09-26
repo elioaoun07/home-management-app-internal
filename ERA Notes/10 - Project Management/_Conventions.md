@@ -1,6 +1,6 @@
 ---
 created: 2026-07-15
-updated: 2026-09-12
+updated: 2026-09-26
 type: reference
 status: living
 owner: Elio
@@ -150,3 +150,21 @@ Research ends with one explicit disposition per meaningful finding: incorporated
 When a study or plan has been incorporated, move its evidence to `_Archive/Studies/<subject>/` or its superseded plan to `_Archive/Plans/`. Update incoming and internal links. Canonical books and current plans carry the surviving constraints; archived prose cannot overrule them. Do not declare an old plan 'completed' just because its dates elapsed. Delete only empty scaffolding or byte-identical redundant output with traceable retention; preserve substantive history.
 
 The 2026-09-10 consolidation receipt and manifest in `_Archive/2026-09-10 PM Refactor/` record predecessor paths, item dispositions and evidence. Future routine work needs ordinary book/Inbox provenance, not another global refactor report. Graphs and dashboards are derived navigation aids; confirm source identity and content before treating an edge or rendered status as evidence.
+
+## 9. Item execution plans
+
+The 2026-09-26 planning pass covers **all open items**, starting with Now and Next (the UI's Up Next), then the remaining Later items at the owner's request. Each plan stays inside its existing Master Book `### <ID>` section. The owner confirmed **Approach B** means an embedded plan per item, following KIT-11's structure. Checklists still own priority and completion. Plans are reference material until reviewed; they do not declare work implemented or authorize a Delivery run.
+
+**Read one item at a time.** Start with its current acceptance, Reading guide, Readiness, Verify and plan. Load the linked dependency sections and relevant Feature Map/vault rules only when needed. Do not inject every campaign book, the coverage index, historical studies or other items into a worker prompt. Revalidate the small source footprint and changes since the plan's evidence date before editing. If the plan disagrees with current code or accepted scope, record the specific difference and revise that slice rather than restarting a portfolio audit.
+
+Use the [Item Execution Plan template](<_Templates/Item Execution Plan.md>). Keep the added plan normally within **200–350 words**: a brief outcome, a few distinguishing acceptance cases, intended write paths, 3–5 ordered steps, essential invariants/exclusions, verification and real unknowns. Existing acceptance stays authoritative and is not copied in full. Broad directory scope is a planning boundary, not a frozen dispatch allowlist; narrow it to exact files before execution. Split large parents into ordered bounded slices while retaining the parent's full completion gate.
+
+The JSON uses KIT-11's `delivery-plan-v1` fields. **Every newly authored plan starts with `ownerReviewed: false`.** `checks` contains only actual protected **policy criterion IDs**, never shell commands or invented oracle names. An empty `checks` array means the protected checks are not prepared; executable verification commands and cases belong in **Verify**. `risk`, dependencies and unknowns must remain truthful. The current prepared path excludes money, recurrence, auth/RLS, migrations and indicated cross-module work; a detailed plan does not remove these exclusions. Such plans guide ordinary investigation and execution.
+
+Promotion to prepared Focused requires the actual `preparedPlanFor` gates: explicit owner review, eligible low risk, no unresolved dependencies/unknowns, exact authorized snapshot/Touches scope, and runnable pinned protected checks. Then the normal plan approval, qualified executor, verification and Apply still apply. Never set `ownerReviewed: true` because an AI wrote the plan or because the owner commissioned this analysis. Creating a plan changes that item's binding fingerprint; existing runs must use normal current-source revalidation, never a patched historical approval.
+
+**Readiness is explanatory, not a second status engine:** implementation draft; investigation first; split first; decision held; owner evidence/setup. Record the exact decision ID or evidence needed. Owner SQL, real-device observations, deployment and local implementation remain separate. A plan for an owner-only or already-implemented queue row must say so; it must not invent engineering work to fit the queue. Resolve those lifecycle mismatches through the existing conventions with actual evidence.
+
+**Later remains Later.** A plan for a parked or conditional item starts with its actual admission gate: evidence, an owner decision, a prerequisite or the next real feature touching that code. Do not turn an exploratory title into an adopted provider, data policy or feature expansion. A researched outcome may be to retain the current behavior or leave an option parked. Complete/shipped records need no retrospective execution plan merely to fill coverage.
+
+The [coverage and findings record](<Plans/Now and Next Execution Plans.md>) is navigation and a dated analysis receipt, not a queue. Update the selected plan when its contract changes; refresh the coverage record only when needed. Actual consumption savings require comparable run receipts; compact plans alone prove no token or cache savings.

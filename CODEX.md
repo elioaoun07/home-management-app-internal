@@ -195,6 +195,7 @@ Bridge between Standalone modules. May import from any standalone feature direct
 | Sync & Offline | ALL modules — IndexedDB queue + `OfflineSyncEngine` |
 | Prerequisites | NFC Tags + Items (trigger engine for dormant → pending activation) |
 | Plan My Day | Items/Schedule (one-time, recurring, flexible placement) ↔ `day_plans` table |
+| Activity Log | Source activity across Budget, Schedule/NFC, Chat, Kitchen, Catalogue, Trips, Healthcare, Outfits, ERA, Guest Portal, Notifications and Settings |
 
 ---
 
@@ -294,6 +295,7 @@ DB changes = SQL run manually in the Supabase SQL Editor. New tables must includ
 | Plan My Day | `src/app/reminders/` (Focus tab), `src/app/today/` (redirect), `src/components/planner/`, `src/features/day-plan/` | `ERA Notes/03 - Junction Modules/Plan My Day/` | Junction |
 | Healthcare | `src/features/healthcare/` | `ERA Notes/02 - Standalone Modules/Healthcare/` | Standalone |
 | Outfits | `src/features/outfits/`, `src/app/outfits/`, `src/components/outfits/` | `ERA Notes/02 - Standalone Modules/Outfits/` | Standalone |
+| Activity Log             | `src/features/activity-log/`                                      | `ERA Notes/03 - Junction Modules/Activity Log/`         | Junction   |
 
 > **Note:** this table is validated against the **Feature Map** (`ERA Notes/01 - Architecture/Feature Map/_index.md`) by `pnpm docs:check`, which runs during `pnpm sync:ai` and pre-commit. **AI Usage is intentionally excluded** from this Feature Index because it is not part of the application.
 

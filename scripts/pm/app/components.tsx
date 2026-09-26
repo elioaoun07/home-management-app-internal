@@ -316,15 +316,24 @@ export function WorkLink({
       whileTap={{ scale: 0.99 }}
     >
       <SpaceIcon name={work.module} size={19} />
-      <span>
-        <small>
-          {work.module}
-          {work.blocked ? " · Waiting" : ""}
-        </small>
-        <strong>{work.title}</strong>
-      </span>
+      <WorkHeading work={work} detail={work.blocked ? "Waiting" : undefined} />
       <ArrowRight size={18} />
     </motion.a>
+  );
+}
+export function WorkHeading({ work, detail }: { work: Work; detail?: string | null }) {
+  const id = work.idChip || work.id;
+  const repeated = work.title.slice(0, id.length).toUpperCase() === id.toUpperCase()
+    && /^[\s·:—–]/u.test(work.title.slice(id.length));
+  const title = repeated ? work.title.slice(id.length).replace(/^[\s·:—–-]+/u, "") : work.title;
+  return (
+    <span>
+      <small>
+        <span className="work-id">{work.label}</span> · {work.module}
+        {detail ? ` · ${detail}` : ""}
+      </small>
+      <strong>{title}</strong>
+    </span>
   );
 }
 export function Distribution({

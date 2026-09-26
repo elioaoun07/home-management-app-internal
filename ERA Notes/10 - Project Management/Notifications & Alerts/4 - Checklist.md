@@ -22,7 +22,7 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **NOTIF-3.1** Simplify and verify the notification drawer — [criteria](<Notifications & Alerts — Master Book.md#notif-31>) _(friction - M)_
 - [ ] **NOTIF-3.2** Convert quick actions to **icon-only/compact** controls with `aria-label`/tooltip; one primary inline, secondary in an overflow — [criteria](<Notifications & Alerts — Master Book.md#notif-32>) _(friction - M)_
 - [ ] **NOTIF-6.6** Live-verify Google Calendar sync end-to-end once credentials are set (connect — [criteria](<Notifications & Alerts — Master Book.md#notif-66>) _(friction - M)_
-- [ ] **NOTIF-21** Recover recipient-event delivery durably — [criteria](<Notifications & Alerts — Master Book.md#notif-21>) _(friction - M)_
+- [ ] **NOTIF-21** Recover recipient-event delivery durably — [criteria](<Notifications & Alerts — Master Book.md#notif-21-1>) _(friction - M)_
 
 ## Later
 

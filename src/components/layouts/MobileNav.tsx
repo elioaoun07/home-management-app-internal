@@ -133,6 +133,7 @@ export default function MobileNav() {
     "/outfits",
     "/healthcare",
     "/pm/live",
+    "/activity-log",
     // Focused workbench with its own sticky commit bar at the bottom.
     "/statement-import",
   ];

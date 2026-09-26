@@ -52,6 +52,7 @@ import {
 import "./delivery-review.css";
 import { LivePulse } from "./LivePulse";
 import { OutcomeReview } from "./OutcomeReview";
+import { DeliveryQuestion } from "./DeliveryQuestion";
 import { TestGateCard, useTestGate } from "./TestGate";
 import type { V2Executor, V2Reason, V2RunDetail, Work } from "./types";
 
@@ -1262,50 +1263,30 @@ function Attention({
     <>
       {area === "plan" &&
         blocking.map((question) => (
-          <section className="gate-panel" key={question.question_id}>
-            <span className="eyebrow">
-              Question · r{question.plan_revision}
-            </span>
-            <h2>{question.text}</h2>
-            <label>
-              Answer
-              <textarea
-                rows={3}
-                value={answers[question.question_id] || ""}
-                onChange={(event) =>
-                  setAnswers({
-                    ...answers,
-                    [question.question_id]: event.target.value,
-                  })
-                }
-              />
-            </label>
-            <div className="gate-actions">
-              <button
-                className="primary"
-                disabled={
-                  disabled || !(answers[question.question_id] || "").trim()
-                }
-                onClick={() =>
-                  send(
-                    "answer",
-                    "answer:" +
-                      question.question_id +
-                      ":" +
-                      answers[question.question_id],
-                    {
-                      run_id,
-                      question_id: question.question_id,
-                      plan_revision: question.plan_revision,
-                      answer: answers[question.question_id],
-                    },
-                  )
-                }
-              >
-                Send
-              </button>
-            </div>
-          </section>
+          <DeliveryQuestion
+            key={question.question_id}
+            question={question}
+            answer={answers[question.question_id] || ""}
+            disabled={disabled}
+            onAnswerChange={(answer) =>
+              setAnswers({ ...answers, [question.question_id]: answer })
+            }
+            onSend={() =>
+              send(
+                "answer",
+                "answer:" +
+                  question.question_id +
+                  ":" +
+                  answers[question.question_id],
+                {
+                  run_id,
+                  question_id: question.question_id,
+                  plan_revision: question.plan_revision,
+                  answer: answers[question.question_id],
+                },
+              )
+            }
+          />
         ))}
       {area === "plan" &&
         !blocking.length &&

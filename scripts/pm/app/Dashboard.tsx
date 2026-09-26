@@ -2,7 +2,8 @@ import { useId, useMemo, useState, type ReactNode } from "react";
 import { go, useRoute, useWorld } from "./state";
 import { transport } from "./transport";
 import { useV2Runs, useV2Session } from "./DeliveryV2";
-import { Back, PageTitle } from "./components";
+import { PageTitle } from "./components";
+import { AnalyticsOverview } from "./AnalyticsOverview";
 import {
   boardQueryString,
   dashboardQueryString,
@@ -152,7 +153,7 @@ export function Dashboard() {
   const { world, runs, connected } = useWorld();
   const route = useRoute();
   const query = parseDashboardQuery(route.query);
-  const set = (patch: Partial<DashboardQuery>) => go(`/dashboard${dashboardQueryString({ ...query, ...patch })}`);
+  const set = (patch: Partial<DashboardQuery>) => go(`/analytics${dashboardQueryString({ ...query, ...patch })}`);
   const session = useV2Session();
   const v2 = useV2Runs();
   const campaign = query.campaign;
@@ -188,8 +189,7 @@ export function Dashboard() {
 
   return (
     <div className="dashboard-page">
-      <Back label="Home" />
-      <PageTitle eyebrow="Dashboard" title="Progress" />
+      <PageTitle title="Analytics" />
 
       <div className="dash-filters">
         <select aria-label="Campaign" value={campaign || ""} onChange={(event) => set({ campaign: event.target.value || null, week: null, set: null })}>
@@ -208,6 +208,13 @@ export function Dashboard() {
           ))}
         </select>
       </div>
+
+      <AnalyticsOverview
+        key={campaign || "all"}
+        work={campaign ? world.work.filter((item) => item.module === campaign) : world.work}
+        history={campaign ? world.history.filter((entry) => entry.campaign === campaign) : world.history}
+        campaign={campaign}
+      />
 
       <div className="dash-tiles">
         <Tile label="Open" value={open.total} href={boardHref(campaign)} />

@@ -20,7 +20,7 @@ import { useOnboarding } from "@/features/preferences/useOnboarding";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { safeFetch } from "@/lib/safeFetch";
 import { createClient } from "@supabase/supabase-js";
-import { WifiOff } from "lucide-react";
+import { Activity, WifiOff } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import LinkHouseholdDialog from "./LinkHouseholdDialog";
@@ -176,6 +176,10 @@ export default function UserMenuClient({ name, email, avatarUrl }: Props) {
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => router.push("/activity-log")}>
+            <Activity className={`h-4 w-4 ${themeClasses.labelText}`} />
+            <span>Activity</span>
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
             <SettingsIcon
               className={`h-4 w-4 ${themeClasses.labelText}`}

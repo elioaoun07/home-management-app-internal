@@ -554,8 +554,10 @@ CREATE TABLE public.items (
   location_text text,
   is_chore boolean NOT NULL DEFAULT false,
   google_synced_at timestamp with time zone,
+  source_medication_id uuid,
   CONSTRAINT items_pkey PRIMARY KEY (id),
   CONSTRAINT items_source_catalogue_item_fkey FOREIGN KEY (source_catalogue_item_id) REFERENCES public.catalogue_items(id),
+  CONSTRAINT items_source_medication_fkey FOREIGN KEY (source_medication_id) REFERENCES public.health_medications(id),
   CONSTRAINT items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT items_responsible_user_fkey FOREIGN KEY (responsible_user_id) REFERENCES auth.users(id)
 );
@@ -1727,6 +1729,41 @@ CREATE TABLE public.health_vaccines (
   CONSTRAINT health_vaccines_catalogue_item_id_fkey FOREIGN KEY (catalogue_item_id) REFERENCES public.catalogue_items(id),
   CONSTRAINT health_vaccines_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.health_profiles(id)
 );
+CREATE TABLE public.health_medications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  profile_id uuid NOT NULL,
+  managing_user_id uuid NOT NULL,
+  name text NOT NULL,
+  dosage text,
+  mode text NOT NULL DEFAULT 'course'::text CHECK (mode = ANY (ARRAY['course'::text, 'as_needed'::text])),
+  food_timing text NOT NULL DEFAULT 'any'::text CHECK (food_timing = ANY (ARRAY['any'::text, 'empty_stomach'::text, 'with_food'::text])),
+  dose_times ARRAY NOT NULL DEFAULT '{}'::text[] CHECK (array_to_string(dose_times, ','::text) ~ '^((([01][0-9]|2[0-3]):[0-5][0-9])(,([01][0-9]|2[0-3]):[0-5][0-9])*)?$'::text),
+  timezone text NOT NULL DEFAULT 'UTC'::text,
+  starts_at timestamp with time zone NOT NULL DEFAULT now(),
+  ends_at timestamp with time zone,
+  min_hours_between numeric CHECK (min_hours_between IS NULL OR min_hours_between > 0::numeric),
+  max_per_day integer CHECK (max_per_day IS NULL OR max_per_day > 0),
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  deleted_at timestamp with time zone,
+  CONSTRAINT health_medications_pkey PRIMARY KEY (id),
+  CONSTRAINT health_medications_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.health_profiles(id),
+  CONSTRAINT health_medications_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id),
+  CONSTRAINT health_medications_course_times_check CHECK (mode <> 'course'::text OR cardinality(dose_times) > 0),
+  CONSTRAINT health_medications_window_check CHECK (ends_at IS NULL OR ends_at > starts_at)
+);
+CREATE TABLE public.health_medication_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  medication_id uuid NOT NULL,
+  managing_user_id uuid NOT NULL,
+  scheduled_at timestamp with time zone,
+  taken_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT health_medication_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT health_medication_logs_medication_id_fkey FOREIGN KEY (medication_id) REFERENCES public.health_medications(id),
+  CONSTRAINT health_medication_logs_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.wardrobe_profiles (
   user_id uuid NOT NULL,
   height_cm numeric,
@@ -1974,3 +2011,49 @@ CREATE POLICY pm_commands_insert_own ON public.pm_commands
     AND claimed_at IS NULL
     AND completed_at IS NULL
   );
+
+
+-- Household Activity Log (HUB-72) table snapshot
+-- Registry, trigger and function bodies: 2026-09-26_household-activity-log.sql.
+-- Written end state only; application to production is owner-verified.
+CREATE TABLE public.activity_log_sources (
+  table_name text PRIMARY KEY,
+  module text NOT NULL,
+  feature text NOT NULL,
+  label text NOT NULL,
+  policy text NOT NULL,
+  parent_table text,
+  parent_key text,
+  id_column text NOT NULL DEFAULT 'id'
+);
+
+CREATE TABLE public.household_activity (
+  sequence bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  occurred_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  module text NOT NULL,
+  feature text NOT NULL,
+  action text NOT NULL,
+  source_table text NOT NULL,
+  source_id uuid NOT NULL,
+  owner_user_id uuid NOT NULL,
+  actor_user_id uuid,
+  audience uuid[] NOT NULL,
+  title text NOT NULL,
+  changed_fields text[] NOT NULL DEFAULT '{}',
+  context jsonb NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS household_activity_owner_sequence_idx
+  ON public.household_activity (owner_user_id, sequence DESC);
+CREATE INDEX IF NOT EXISTS household_activity_module_sequence_idx
+  ON public.household_activity (module, sequence DESC);
+CREATE INDEX IF NOT EXISTS household_activity_source_sequence_idx
+  ON public.household_activity (source_table, source_id, sequence DESC);
+CREATE INDEX IF NOT EXISTS household_activity_time_idx
+  ON public.household_activity (occurred_at DESC);
+
+ALTER TABLE public.household_activity ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.activity_log_sources ENABLE ROW LEVEL SECURITY;
+-- Deliberately no direct policies/grants: the authenticated read RPC owns all
+-- access checks. No per-row parent-join RLS on the ledger or source child tables.
+REVOKE ALL ON public.household_activity, public.activity_log_sources FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON SEQUENCE public.household_activity_sequence_seq FROM PUBLIC, anon, authenticated;

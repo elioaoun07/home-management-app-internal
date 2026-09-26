@@ -67,6 +67,7 @@ tags:
 | `expense-drafts` | `/expense/drafts` | [[expense-drafts]] |
 | `outfits`        | `/outfits`        | [[outfits]]        |
 | `trips`          | `/trips`          | [[trips]]          |
+| `activity-log`   | `/activity-log`   | [[activity-log]]   |
 | `trips-id`       | `/trips/[id]`     | [[trips-id]]       |
 
 ## Utility Routes
@@ -82,7 +83,7 @@ tags:
 | `atlas`         | `/atlas`         | [[atlas]]         |
 | `offline`       | `/offline`       | [[offline]]       |
 | `pm`            | `/pm`            | [[pm]] — React local app; hosted Preact reference/export |
-| `pm-live`       | `/pm/live`       | [[pm-live]]       |
+| `pm-live`       | `/pm/live`       | [[pm-live]] — shared Home / Work / Delivery / Analytics |
 
 ## Feature Modules (Standalone)
 
@@ -114,6 +115,7 @@ tags:
 | `feature-transfers`        | `src/features/transfers/`        | [[feature-transfers]]        |
 | `feature-outfits`          | `src/features/outfits/`          | [[feature-outfits]]          |
 | `feature-trips`            | `src/features/trips/`            | [[feature-trips]]            |
+| `feature-activity-log`     | `src/features/activity-log/` (junction) | [[feature-activity-log]] |
 
 ---
 

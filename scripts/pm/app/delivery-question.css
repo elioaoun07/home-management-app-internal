@@ -1,0 +1,39 @@
+.delivery-question h2 {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.question-choices {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+.question-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  min-height: 48px;
+  padding: 13px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.question-choice > span {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.question-choice:hover,
+.question-choice[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+.question-choice[aria-pressed="true"] {
+  box-shadow: inset 3px 0 var(--accent);
+}
+.question-choice small {
+  color: var(--accent);
+  font-size: 12px;
+}

@@ -1,3 +1,4 @@
+import { rebuildProfileMedicationReminders } from "@/lib/health/medicationServer";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -92,6 +93,9 @@ export async function DELETE(
   if (!data) {
     return NextResponse.json({ error: "Profile not found" }, { status: 404 });
   }
+  // A deleted profile's medication reminders must stop firing; Undo brings
+  // them back.
+  await rebuildProfileMedicationReminders(supabase, id, restore);
   return NextResponse.json(
     { profile: data },
     { headers: { "Cache-Control": "no-store" } },

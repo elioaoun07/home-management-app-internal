@@ -115,7 +115,7 @@
 }
 .board-card small {
   display: block;
-  font-size: 9px;
+  font-size: 11px;
   color: var(--ink-muted);
   margin-bottom: 3px;
 }

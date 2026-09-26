@@ -3,6 +3,7 @@
 
 import { isReallyOnline } from "@/lib/connectivityManager";
 import { CACHE_TIMES } from "@/lib/queryConfig";
+import { qk } from "@/lib/queryKeys";
 import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,13 +12,18 @@ import { healthcareKeys, householdAllergenKeys } from "./queryKeys";
 import type {
   CreateHealthAllergyDTO,
   CreateHealthConditionDTO,
+  CreateHealthMedicationDTO,
   CreateHealthProfileDTO,
   CreateHealthVaccineDTO,
   HealthAllergy,
   HealthBundle,
   HealthCondition,
+  HealthMedication,
+  HealthMedicationLog,
   HealthProfile,
   HealthVaccine,
+  SaveHealthMedicationDTO,
+  SetMedicationDoseDTO,
   UpdateHealthAllergyDTO,
   UpdateHealthConditionDTO,
   UpdateHealthProfileDTO,
@@ -29,17 +35,25 @@ const EMPTY_BUNDLE: HealthBundle = {
   allergies: [],
   conditions: [],
   vaccines: [],
+  medications: [],
+  medication_logs: [],
 };
+
+// Medication writes also create/replace reminder items and sync them to
+// Google Calendar server-side — well past safeFetch's 8 s default.
+const REMINDER_SYNC_TIMEOUT_MS = 30_000;
 
 async function requestJson<T>(
   url: string,
   method: "POST" | "PATCH" | "DELETE",
   body?: unknown,
+  timeoutMs?: number,
 ): Promise<T> {
   const res = await safeFetch(url, {
     method,
     headers: { "Content-Type": "application/json" },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    ...(timeoutMs ? { timeoutMs } : {}),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -57,7 +71,8 @@ async function fetchHealthBundle(): Promise<HealthBundle> {
   const res = await fetch("/api/healthcare");
   if (!res.ok) throw new Error("Failed to fetch health data");
   const data = await res.json();
-  return data.bundle ?? EMPTY_BUNDLE;
+  // Spread so a bundle from an older RPC (pre-medications) still has every key.
+  return { ...EMPTY_BUNDLE, ...(data.bundle ?? {}) };
 }
 
 export function useHealthBundle() {
@@ -79,6 +94,16 @@ function useInvalidateHealth() {
   return () => {
     queryClient.invalidateQueries({ queryKey: healthcareKeys.all });
     queryClient.invalidateQueries({ queryKey: householdAllergenKeys.all });
+  };
+}
+
+/** Medication writes change Schedule reminder items too. */
+function useInvalidateHealthAndSchedule() {
+  const queryClient = useQueryClient();
+  const invalidateHealth = useInvalidateHealth();
+  return () => {
+    invalidateHealth();
+    queryClient.invalidateQueries({ queryKey: qk.scheduleItems() });
   };
 }
 
@@ -143,10 +168,16 @@ export function useUpdateHealthProfile() {
 }
 
 export function useDeleteHealthProfile() {
-  const invalidate = useInvalidateHealth();
+  // Deleting a profile also stops its medication reminders.
+  const invalidate = useInvalidateHealthAndSchedule();
   return useMutation({
     mutationFn: (id: string) =>
-      requestJson<{ profile: HealthProfile }>(`/api/healthcare/profiles/${id}`, "DELETE"),
+      requestJson<{ profile: HealthProfile }>(
+        `/api/healthcare/profiles/${id}`,
+        "DELETE",
+        undefined,
+        REMINDER_SYNC_TIMEOUT_MS,
+      ),
     onSuccess: ({ profile }) => {
       toast.success(`Profile "${profile.name}" deleted`, {
         icon: ToastIcons.delete,
@@ -158,6 +189,8 @@ export function useDeleteHealthProfile() {
             await requestJson(
               `/api/healthcare/profiles/${profile.id}?restore=true`,
               "DELETE",
+              undefined,
+              REMINDER_SYNC_TIMEOUT_MS,
             );
             invalidate();
           },
@@ -441,4 +474,211 @@ export function useDeleteHealthVaccine() {
       toast.error(err instanceof Error ? err.message : "Failed to delete vaccine"),
     onSettled: invalidate,
   });
+}
+
+// ── Medications ──────────────────────────────────────────────────────────────
+
+/** The full editable payload of an existing medication (for Undo). */
+export function medicationToSaveDTO(m: HealthMedication): SaveHealthMedicationDTO {
+  return {
+    name: m.name,
+    dosage: m.dosage,
+    mode: m.mode,
+    food_timing: m.food_timing,
+    dose_times: m.dose_times,
+    timezone: m.timezone,
+    starts_at: new Date(m.starts_at).toISOString(),
+    ends_at: m.ends_at ? new Date(m.ends_at).toISOString() : null,
+    min_hours_between: m.min_hours_between,
+    max_per_day: m.max_per_day,
+    notes: m.notes,
+  };
+}
+
+export function useCreateHealthMedication() {
+  const invalidate = useInvalidateHealthAndSchedule();
+  return useMutation({
+    mutationFn: (payload: CreateHealthMedicationDTO) =>
+      requestJson<{ medication: HealthMedication }>(
+        "/api/healthcare/medications",
+        "POST",
+        payload,
+        REMINDER_SYNC_TIMEOUT_MS,
+      ),
+    onSuccess: ({ medication }) => {
+      toast.success(`${medication.name} added`, {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            await requestJson(
+              `/api/healthcare/medications/${medication.id}`,
+              "DELETE",
+              undefined,
+              REMINDER_SYNC_TIMEOUT_MS,
+            );
+            invalidate();
+          },
+        },
+      });
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Failed to add medication"),
+    onSettled: invalidate,
+  });
+}
+
+export function useUpdateHealthMedication() {
+  const invalidate = useInvalidateHealthAndSchedule();
+  return useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: SaveHealthMedicationDTO;
+      previous: SaveHealthMedicationDTO;
+    }) =>
+      requestJson<{ medication: HealthMedication }>(
+        `/api/healthcare/medications/${id}`,
+        "PATCH",
+        data,
+        REMINDER_SYNC_TIMEOUT_MS,
+      ),
+    onSuccess: ({ medication }, { id, previous }) => {
+      toast.success(`${medication.name} updated`, {
+        icon: ToastIcons.update,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            await requestJson(
+              `/api/healthcare/medications/${id}`,
+              "PATCH",
+              previous,
+              REMINDER_SYNC_TIMEOUT_MS,
+            );
+            invalidate();
+          },
+        },
+      });
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Failed to update medication"),
+    onSettled: invalidate,
+  });
+}
+
+export function useDeleteHealthMedication() {
+  const invalidate = useInvalidateHealthAndSchedule();
+  return useMutation({
+    mutationFn: (id: string) =>
+      requestJson<{ medication: HealthMedication }>(
+        `/api/healthcare/medications/${id}`,
+        "DELETE",
+        undefined,
+        REMINDER_SYNC_TIMEOUT_MS,
+      ),
+    onSuccess: ({ medication }) => {
+      toast.success(`${medication.name} removed`, {
+        icon: ToastIcons.delete,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            // Soft delete → restore brings the reminders back; history was kept.
+            await requestJson(
+              `/api/healthcare/medications/${medication.id}?restore=true`,
+              "DELETE",
+              undefined,
+              REMINDER_SYNC_TIMEOUT_MS,
+            );
+            invalidate();
+          },
+        },
+      });
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Failed to remove medication"),
+    onSettled: invalidate,
+  });
+}
+
+function sameInstant(a: string | null, b: string | null | undefined): boolean {
+  return !!a && !!b && new Date(a).getTime() === new Date(b).getTime();
+}
+
+/**
+ * Mark / un-mark a dose. Optimistic on the bundle so the checkbox flips
+ * instantly. Course doses get no toast (the checkbox is its own undo); an
+ * as-needed "Take" gets one with Undo.
+ */
+export function useSetMedicationDose() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateHealthAndSchedule();
+
+  const mutation = useMutation({
+    mutationFn: ({
+      medication_id,
+      taken,
+      scheduled_at,
+      log_id,
+      taken_at,
+    }: SetMedicationDoseDTO & { label?: string }) =>
+      requestJson<{ log: HealthMedicationLog | null }>(
+        `/api/healthcare/medications/${medication_id}/doses`,
+        "POST",
+        { taken, scheduled_at, log_id, taken_at },
+      ),
+    onMutate: async (dto) => {
+      await queryClient.cancelQueries({ queryKey: healthcareKeys.bundle() });
+      const prev = queryClient.getQueryData<HealthBundle>(healthcareKeys.bundle());
+      if (prev) {
+        const logs = prev.medication_logs ?? [];
+        const now = new Date().toISOString();
+        const next = dto.taken
+          ? [
+              {
+                id: dto.log_id ?? `optimistic-${dto.medication_id}-${dto.scheduled_at}`,
+                medication_id: dto.medication_id,
+                managing_user_id: "",
+                scheduled_at: dto.scheduled_at ?? null,
+                taken_at: dto.taken_at ?? now,
+                created_at: now,
+              },
+              ...logs,
+            ]
+          : logs.filter(
+              (l) =>
+                l.medication_id !== dto.medication_id ||
+                (dto.scheduled_at
+                  ? !sameInstant(l.scheduled_at, dto.scheduled_at)
+                  : l.id !== dto.log_id),
+            );
+        queryClient.setQueryData<HealthBundle>(healthcareKeys.bundle(), {
+          ...prev,
+          medication_logs: next,
+        });
+      }
+      return { prev };
+    },
+    onSuccess: (_res, dto) => {
+      if (!dto.taken || dto.scheduled_at) return;
+      toast.success(`${dto.label ?? "Dose"} taken`, {
+        icon: ToastIcons.success,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => mutation.mutate({ ...dto, taken: false }),
+        },
+      });
+    },
+    onError: (err, _dto, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(healthcareKeys.bundle(), ctx.prev);
+      toast.error(err instanceof Error ? err.message : "Failed to update dose");
+    },
+    onSettled: invalidate,
+  });
+  return mutation;
 }

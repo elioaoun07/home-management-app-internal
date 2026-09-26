@@ -5,7 +5,8 @@ import {
   MotionConfig,
   useReducedMotion,
 } from "framer-motion";
-import { Compass, Home as HomeIcon, Palette, Search, Settings as SettingsIcon, Zap } from "lucide-react";
+import { ChartNoAxesCombined, Compass, Home as HomeIcon, Palette, Search, Settings as SettingsIcon, Zap } from "lucide-react";
+import { ERAMark } from "@/components/shared/ERAMark";
 import { SettingsSheet } from "./Settings";
 import { client, pmKeys, useRoute, useWorld } from "./state";
 import { transport } from "./transport";
@@ -47,6 +48,7 @@ const links = [
   { path: "/", label: "Home", icon: HomeIcon },
   { path: "/explore", label: "Work", icon: Compass },
   { path: "/delivery", label: "Delivery", icon: Zap },
+  { path: "/analytics", label: "Analytics", icon: ChartNoAxesCombined },
 ];
 export function App() {
   const route = useRoute();
@@ -69,7 +71,9 @@ export function App() {
     ? "/delivery"
     : ["explore", "space", "work", "module", "project"].includes(root)
       ? "/explore"
-      : "/";
+      : ["analytics", "dashboard"].includes(root)
+        ? "/analytics"
+        : "/";
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document
@@ -156,6 +160,7 @@ export function App() {
     case "outcomes":
       view = <Activity />;
       break;
+    case "analytics":
     case "dashboard":
       view = <Dashboard />;
       break;
@@ -187,11 +192,8 @@ export function App() {
       </a>
       <header className="app-header">
         <a className="wordmark" href="#/" aria-label="ERA Home">
-          <span className="brand-symbol">
-            e<span />
-          </span>
+          <ERAMark module="memory" size={38} />
           <b>era</b>
-          <small>in the making</small>
         </a>
         <nav className="desktop-nav" aria-label="Main navigation">
           {links.map((link) => (

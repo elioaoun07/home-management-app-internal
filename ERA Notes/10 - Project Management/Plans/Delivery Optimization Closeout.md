@@ -1,6 +1,6 @@
 ---
 created: 2026-09-20
-updated: 2026-09-20
+updated: 2026-09-26
 type: plan
 status: draft
 owner: Elio
@@ -8,6 +8,8 @@ evidence_cutoff: "2026-09-20; source 3461c777 plus the local DLV-108/120/133/114
 ---
 
 # Delivery Optimization Closeout
+
+**2026-09-26 status correction:** KIT-11 is implemented and retained in source at `45b28899`; its [Kitchen receipt](<../Kitchen/Kitchen — Master Book.md#shipped-log>) and session log record subsequent runs, verification and Apply history. The September 20 statements below that it is open, has no prepared block or has never run are historical. **Do not relaunch the old comparison packet against a completed item.** [DLV-118's current plan](<../Delivery/Delivery — Master Book.md#dlv-118>) first reconciles existing receipts and their comparability. This documentation review does not establish subscription savings, current installed policy or full owner acceptance.
 
 ## Decision and ownership
 
