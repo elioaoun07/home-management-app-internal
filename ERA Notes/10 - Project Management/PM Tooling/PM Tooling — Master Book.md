@@ -340,7 +340,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ### R42
 
 **Execution:** owner
-**UAT:** pending
+**UAT:** cancelled 2026-09-26 — the swipe lives in the V1 session view; V1 is frozen (owner scope decision 2026-09-26)
 
 **2026-09-15 reconciliation:** Owner acceptance/runbook step in [Delivery UAT](<../../../docs/Delivery-UAT.md#owner-run-checks>). Removed from Delivery scope; original requirements below remain pending.
 

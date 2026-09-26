@@ -455,7 +455,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ### DLV-98
 
 **Execution:** owner
-**UAT:** pending
+**UAT:** replaced 2026-09-26 by the KIT-11 A→B trial (DLV-118; [Delivery Optimization Closeout](<../Plans/Delivery Optimization Closeout.md>))
 
 **2026-09-15 reconciliation:** Owner acceptance/runbook step in [Delivery UAT](<../../../docs/Delivery-UAT.md#owner-run-checks>). Removed from Delivery scope; original requirements below remain pending.
 
@@ -534,7 +534,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ### DLV-92
 
 **Execution:** owner
-**UAT:** pending
+**UAT:** cancelled 2026-09-26 — V1 is frozen and replaced by Delivery V2; owner scope decision 2026-09-26
 
 **2026-09-15 reconciliation:** Owner acceptance/runbook step in [Delivery UAT](<../../../docs/Delivery-UAT.md#owner-run-checks>). Removed from Delivery scope; original requirements below remain pending.
 
@@ -548,7 +548,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ### DLV-93
 
 **Execution:** owner
-**UAT:** pending
+**UAT:** cancelled 2026-09-26 — V1 is frozen and replaced by Delivery V2; owner scope decision 2026-09-26
 
 **2026-09-15 reconciliation:** Owner acceptance/runbook step in [Delivery UAT](<../../../docs/Delivery-UAT.md#owner-run-checks>). Removed from Delivery scope; original requirements below remain pending.
 
@@ -562,7 +562,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ### DLV-72
 
 **Execution:** owner
-**UAT:** pending
+**UAT:** cancelled 2026-09-26 — V1 is frozen and replaced by Delivery V2; owner scope decision 2026-09-26
 
 **2026-09-15 reconciliation:** Owner acceptance/runbook step in [Delivery UAT](<../../../docs/Delivery-UAT.md#owner-run-checks>). Removed from Delivery scope; original requirements below remain pending.
 
@@ -575,7 +575,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ### DLV-77
 
 **Execution:** owner
-**UAT:** pending
+**UAT:** pending — folded into the 2026-09-26 phone pass
 
 **2026-09-15 reconciliation:** Owner acceptance/runbook step in [Delivery UAT](<../../../docs/Delivery-UAT.md#owner-run-checks>). Removed from Delivery scope; original requirements below remain pending.
 
@@ -588,7 +588,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ### DLV-78
 
 **Execution:** owner
-**UAT:** pending
+**UAT:** cancelled 2026-09-26 — V1 is frozen and replaced by Delivery V2; owner scope decision 2026-09-26
 
 **2026-09-15 reconciliation:** Owner acceptance/runbook step in [Delivery UAT](<../../../docs/Delivery-UAT.md#owner-run-checks>). Removed from Delivery scope; original requirements below remain pending.
 
@@ -641,7 +641,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ### DLV-99
 
 **Execution:** owner
-**UAT:** pending
+**UAT:** replaced 2026-09-26 by the KIT-11 A→B trial (DLV-118; [Delivery Optimization Closeout](<../Plans/Delivery Optimization Closeout.md>))
 
 **2026-09-15 reconciliation:** Owner acceptance/runbook step in [Delivery UAT](<../../../docs/Delivery-UAT.md#owner-run-checks>). Removed from Delivery scope; original requirements below remain pending.
 
@@ -677,7 +677,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ### DLV-100
 
 **Execution:** owner
-**UAT:** pending
+**UAT:** pending — parked to Later as an enhancement (owner 2026-09-26)
 
 **2026-09-15 reconciliation:** Owner acceptance/runbook step in [Delivery UAT](<../../../docs/Delivery-UAT.md#owner-run-checks>). Removed from Delivery scope; original requirements below remain pending.
 
@@ -691,7 +691,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ### DLV-101
 
 **Execution:** owner
-**UAT:** pending
+**UAT:** pending — parked to Later as an enhancement (owner 2026-09-26)
 
 **2026-09-15 reconciliation:** Owner acceptance/runbook step in [Delivery UAT](<../../../docs/Delivery-UAT.md#owner-run-checks>). Removed from Delivery scope; original requirements below remain pending.
 
@@ -705,7 +705,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ### DLV-102
 
 **Execution:** owner
-**UAT:** pending
+**UAT:** replaced 2026-09-26 by the KIT-11 A→B trial (DLV-118; [Delivery Optimization Closeout](<../Plans/Delivery Optimization Closeout.md>))
 
 **2026-09-15 reconciliation:** Owner acceptance/runbook step in [Delivery UAT](<../../../docs/Delivery-UAT.md#owner-run-checks>). Removed from Delivery scope; original requirements below remain pending.
 
@@ -810,6 +810,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Backlog reconciliation
 
+- 2026-09-26 — Owner scope decision (supervised use, laptop + phone): **DLV-98 / DLV-99 / DLV-102** owner trials are replaced by the KIT-11 A→B trial under **DLV-118**; V1 items **DLV-68/69/70/79/86/87/88/89/90/91** and owner checks **DLV-72/78/92/93** cancelled; **DLV-134** cancelled (inferred acceptance never approved); **DLV-100/101** and engineering **DLV-111/113/114/117/121/133** parked to Later; **DLV-77** folded into the phone pass. See `_Archive/Cancelled Log.md`.
 - 2026-09-10 — Current open **DLV-94 → DLV-96** and **DLV-95 → DLV-97**. Historical Aug22 DLV-94/95 receipts keep their original identities.
 - 2026-09-10 — **DLV-71 → DW-3** (shipped 2026-07-16); stale search/highlight item removed.
 - 2026-09-11 — **DEC-15 resolved** (was: "After the V2 value trial, choose whether mobile access or a managed executor solves a measured burden"): phone use is a core milestone of the adopted Command Center, owned by DLV-104 and PM Tooling R63; managed hosting stays optional.

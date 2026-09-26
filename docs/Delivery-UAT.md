@@ -93,17 +93,17 @@ These retained IDs describe manual acceptance or operating trials. They are **no
 
 | Retained ID | Owner action / expected result | Actual |
 |---|---|---|
-| [DLV-72](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-72>) | Verify the retained V1 phone drill-down, question answer, push link and bounded snapshot. Applies to the legacy view only. | Pending |
-| [DLV-77](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-77>) | Supply the current relay command constraint; confirm allowed command types before any manual migration. | Pending |
-| [DLV-78](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-78>) | Run the isolated V1 INSTANT witness only if its existing holds are cleared; record escalation and all limits. | Pending |
-| [DLV-92](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-92>) | Measure one eligible V1 product delivery, with owner attention, elapsed time and useful result. | Pending |
-| [DLV-93](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-93>) | After the first V1 trial, respect the bounded fix allowance and measure a second product item. | Pending |
-| [DLV-98](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-98>) | Record the native baseline for the same eligible product task, with provenance and owner time. | Pending |
-| [DLV-99](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-99>) | Run the eligible product item through V2, then compare its reviewed result with the baseline. | Pending |
-| [DLV-100](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-100>) | Exercise the isolated real-boundary failure matrix; no duplicate effects or fabricated success. | Pending |
-| [DLV-101](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-101>) | Interrupt/resume an admitted Deep dive; preserve progress and fresh authorization. | Pending |
-| [DLV-102](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-102>) | Compare all three Fast lane results, including failures, plus baseline and Deep dive; record continue/hold. | Pending |
-| [R42](<../ERA Notes/10 - Project Management/PM Tooling/PM Tooling — Master Book.md#r42>) | Verify legacy mobile swipe, haptics, safe areas and PWA install if retaining that view. | Pending |
+| [DLV-72](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-72>) | Verify the retained V1 phone drill-down, question answer, push link and bounded snapshot. Applies to the legacy view only. | Cancelled 2026-09-26 (V1 frozen) |
+| [DLV-77](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-77>) | Supply the current relay command constraint; confirm allowed command types before any manual migration. | Pending — part of the phone pass |
+| [DLV-78](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-78>) | Run the isolated V1 INSTANT witness only if its existing holds are cleared; record escalation and all limits. | Cancelled 2026-09-26 (V1 frozen) |
+| [DLV-92](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-92>) | Measure one eligible V1 product delivery, with owner attention, elapsed time and useful result. | Cancelled 2026-09-26 (V1 frozen) |
+| [DLV-93](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-93>) | After the first V1 trial, respect the bounded fix allowance and measure a second product item. | Cancelled 2026-09-26 (V1 frozen) |
+| [DLV-98](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-98>) | Record the native baseline for the same eligible product task, with provenance and owner time. | Replaced 2026-09-26 by the KIT-11 A→B trial |
+| [DLV-99](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-99>) | Run the eligible product item through V2, then compare its reviewed result with the baseline. | Replaced 2026-09-26 by the KIT-11 A→B trial |
+| [DLV-100](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-100>) | Exercise the isolated real-boundary failure matrix; no duplicate effects or fabricated success. | Later (enhancement, 2026-09-26) |
+| [DLV-101](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-101>) | Interrupt/resume an admitted Deep dive; preserve progress and fresh authorization. | Later (enhancement, 2026-09-26) |
+| [DLV-102](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-102>) | Compare all three Fast lane results, including failures, plus baseline and Deep dive; record continue/hold. | Replaced 2026-09-26 by the KIT-11 A→B trial |
+| [R42](<../ERA Notes/10 - Project Management/PM Tooling/PM Tooling — Master Book.md#r42>) | Verify legacy mobile swipe, haptics, safe areas and PWA install if retaining that view. | Cancelled 2026-09-26 (V1 frozen) |
 
 Additional acceptance of completed implementation: **R51** stale task action/Undo preserves newer edits; **R63/DLV-104** real phone relay shows the same data and resolves the same command after reconnect; **DLV-106** two independently scoped real runs remain isolated and their applications serialize. Implementation: Done. Owner results: Pending. Do not start a session on those completed IDs to perform these checks.
 
