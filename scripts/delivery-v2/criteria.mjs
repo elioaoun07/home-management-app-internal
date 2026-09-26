@@ -86,9 +86,15 @@ export function makeObservation({
  * a green exit code cannot stand in for behaviour: a run that selected nothing
  * proves nothing, whatever it printed.
  *
+ * `failure` (DLV-120) names which shape of non-pass this was — a missing runner,
+ * unreadable output, zero selection or genuinely failing tests. It is carried
+ * beside the counts rather than replacing them: evaluation still reads only
+ * exitCode/selected/executed, so this cannot change a verdict, only explain one.
+ *
  * @param {{argv:string[], cwd?:string, exitCode:number, selected?:(number|null),
  *   executed?:(number|null), skipped?:(number|null), inputs?:Record<string, string>,
- *   attribution?:string, raw_refs?:string[]}} input
+ *   attribution?:string, raw_refs?:string[], failure?:(string|null),
+ *   failureDetail?:(string|null)}} input
  */
 export function commandObservation({
   argv,
@@ -100,13 +106,15 @@ export function commandObservation({
   inputs = {},
   attribution = "delivery-v2/checker",
   raw_refs = [],
+  failure = null,
+  failureDetail = null,
 }) {
   return makeObservation({
     kind: "command",
     inputs,
     attribution,
     raw_refs,
-    detail: { argv: [...argv], cwd, exitCode, selected, executed, skipped },
+    detail: { argv: [...argv], cwd, exitCode, selected, executed, skipped, failure, failureDetail },
   });
 }
 

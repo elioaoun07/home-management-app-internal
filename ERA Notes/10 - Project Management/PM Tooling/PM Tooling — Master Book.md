@@ -480,6 +480,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Shipped Log
 
+- ✅ 2026-09-22 — **R67** Muted text readable on `/pm/live`: the Next app's `:root[data-theme="blue"] { --muted: #1a2942 }` (a surface shade, specificity 0,2,0) beat the PM app's `:root { --muted: #94a3b8 }`, so every secondary label — bottom nav included — rendered near-background. Renamed the PM token to `--ink-muted` in all six `scripts/pm/app/*.css` files so it can't collide. (Grep: 0 remaining `--muted` in `scripts/pm/app`; phone check pending.)
+
 - ✅ 2026-09-15 — **R66** Removed Delivery launch/footer noise and rebuilt review hierarchy around visible plan sections, verification history, run facts and final Changes/Apply; unavailable executors now reveal their actual blocker. (Targeted tests, React bundle, typecheck and lint; browser UAT pending.)
 
 - ✅ 2026-09-15 — **R65** Actionable To do, searchable Done, completed scope/session history, separate owner UAT, and shared V1/V2 launch guards. Reconciled 11 prior implementations and 11 manual checks; split remaining engineering. (800 passing tests, typecheck/lint, 28 browser observations; [UAT](<../../../docs/Delivery-UAT.md>).)

@@ -20,6 +20,12 @@ describe("PM shared parsing", () => {
     expect(parseTaskMeta("**N4** Build it _(blocker - S)_").text).toBe("N4 Build it");
   });
 
+  it("keeps identifier underscores while dropping emphasis underscores", () => {
+    // DLV-123 (1): DLV-90's title rendered as "NOTTESTED".
+    expect(parseTaskMeta("**DLV-90** Reject zero-test validation as NOT_TESTED _(friction - S)_").text).toBe("DLV-90 Reject zero-test validation as NOT_TESTED");
+    expect(parseTaskMeta("**N5** Keep _this_ and __that__ plain _(annoyance - S)_").text).toBe("N5 Keep this and that plain");
+  });
+
   it("parses canonical prefixed / hyphenated / lettered IDs", () => {
     expect(parseTaskMeta("**BUD-3** Merchant-match voice drafts _(annoyance - S)_").idChip).toBe("BUD-3");
     expect(parseTaskMeta("**SCH-1c.1** Wire Gemini capture _(friction - M)_").idChip).toBe("SCH-1C.1");

@@ -39,13 +39,13 @@
   flex-wrap: wrap;
   gap: 6px 12px;
   margin: 10px 0;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 12px;
 }
 .run-recommendation span { color: var(--accent); }
 .run-provider {
   font-size: 10px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .more-runs {
   padding: 12px 23px 12px 5px;
@@ -91,7 +91,7 @@
 }
 .queue-slots span {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-muted);
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 4px 10px;
@@ -113,7 +113,7 @@
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--ink-muted);
   margin: 4px 0 2px;
 }
 .queue-row {
@@ -139,7 +139,7 @@
 }
 .queue-side {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-muted);
   white-space: nowrap;
 }
 .queue-row small,
@@ -148,7 +148,7 @@
 }
 .queue-row small {
   font-size: 10px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .verdict {
   display: flex;
@@ -172,18 +172,18 @@
 }
 .verdict[data-verdict="scope"] strong {
   border-style: dashed;
-  color: var(--muted);
-  border-color: var(--muted);
+  color: var(--ink-muted);
+  border-color: var(--ink-muted);
 }
 .verdict[data-blocked="true"] strong {
   background: transparent;
   border-style: dashed;
-  color: var(--muted);
-  border-color: var(--muted);
+  color: var(--ink-muted);
+  border-color: var(--ink-muted);
 }
 .verdict span {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-muted);
   overflow-wrap: anywhere;
   min-width: 0;
 }
@@ -237,7 +237,7 @@
   letter-spacing: -1px;
 }
 .delivery-empty p {
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 12px;
   margin-top: 12px;
 }
@@ -254,14 +254,14 @@
   display: flex;
   gap: 12px;
   align-items: center;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 11px;
 }
 .launch-progress {
   display: flex;
   align-items: center;
   gap: 15px;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 11px;
   margin: 6px 0 36px;
 }
@@ -347,7 +347,7 @@
 .recommendation-line {
   margin-top: 14px;
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .budget-fields {
   display: grid;
@@ -375,7 +375,7 @@
 }
 .launch-footer > span {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .launch-summary {
   display: flex;
@@ -395,7 +395,7 @@
 }
 .launch-summary p {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .flight-review {
   padding: 10px 0;
@@ -414,7 +414,7 @@
   gap: 20px;
   min-height: 160px;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .run-heading {
   display: flex;
@@ -451,7 +451,7 @@
 }
 .run-moment p {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .journey {
   display: flex;
@@ -477,7 +477,7 @@
   align-items: center;
   flex-direction: column;
   gap: 12px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .journey span {
   width: 29px;
@@ -564,7 +564,7 @@
 }
 .provider-choices button small {
   font-size: 10px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .executor-block-message {
   margin: 4px 0 0;
@@ -619,7 +619,7 @@
   overflow-wrap: anywhere;
 }
 .v2-list small {
-  color: var(--muted);
+  color: var(--ink-muted);
   white-space: nowrap;
 }
 .story-tabs {
@@ -631,7 +631,7 @@
 .story-tabs button {
   min-height: 48px;
   position: relative;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 13px;
   padding: 0 0 16px;
 }
@@ -709,7 +709,7 @@
 .run-steps summary {
   min-height: 30px;
   font-size: 9px;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-weight: 400;
   justify-content: start;
 }
@@ -719,7 +719,7 @@
 .run-steps details p {
   font-size: 10px;
   white-space: pre-wrap;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .run-checks {
   padding-left: 30px;
@@ -738,13 +738,13 @@
 .check-row strong {
   font-size: 10px;
   font-weight: 400;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .check-row strong[data-pass="true"] {
   color: var(--accent);
 }
 .resource-line span {
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .resource-line strong {
   font-size: 12px;
@@ -801,7 +801,7 @@ progress::-moz-progress-bar {
 }
 .recorded-activity time {
   font-size: 10px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .guidance {
   padding: 18px 24px;
@@ -977,7 +977,7 @@ progress::-moz-progress-bar {
 .empty-state {
   padding: 60px 20px;
   text-align: center;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .empty-state > svg {
   margin-bottom: 18px;
@@ -1089,13 +1089,13 @@ progress::-moz-progress-bar {
 }
 .settings-since,
 .settings-empty {
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 12px;
   margin-top: -6px;
 }
 .settings-info {
   display: inline-flex;
-  color: var(--muted);
+  color: var(--ink-muted);
   cursor: help;
   border-radius: 50%;
 }
@@ -1114,7 +1114,7 @@ progress::-moz-progress-bar {
   padding: 4px 12px;
   border-radius: 16px;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .segmented button[aria-checked="true"] {
   color: var(--accent-ink);
@@ -1137,7 +1137,7 @@ progress::-moz-progress-bar {
   letter-spacing: -0.6px;
 }
 .allowance-figures span {
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 13px;
 }
 .allowance-figures b {
@@ -1250,7 +1250,7 @@ progress::-moz-progress-bar {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.8px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .allowance-run-title {
   font-size: 13px;
@@ -1285,7 +1285,7 @@ progress::-moz-progress-bar {
   font-size: 12px;
 }
 .settings-history time {
-  color: var(--muted);
+  color: var(--ink-muted);
   white-space: nowrap;
 }
 .settings-loading {
@@ -1425,7 +1425,7 @@ progress::-moz-progress-bar {
   align-items: center;
   gap: 9px;
   font-size: 13px;
-  color: var(--muted);
+  color: var(--ink-muted);
   min-width: 0;
 }
 .live-feed li:last-child {
@@ -1445,7 +1445,7 @@ progress::-moz-progress-bar {
   justify-content: space-between;
   gap: 12px;
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-variant-numeric: tabular-nums;
 }
 @media (prefers-reduced-motion: reduce) {

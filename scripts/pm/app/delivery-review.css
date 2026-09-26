@@ -51,11 +51,11 @@
 }
 .delivery-status-copy p {
   font-size: 14px;
-  color: var(--muted);
+  color: var(--ink-muted);
   overflow-wrap: anywhere;
 }
 .delivery-workspace .review-meta {
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -71,7 +71,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 12px;
 }
 .delivery-stages li > span {
@@ -107,7 +107,7 @@
   gap: 9px;
   min-height: 46px;
   border-radius: 9px;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 14px;
 }
 .delivery-tabs button[aria-selected="true"] {
@@ -119,7 +119,7 @@
   font-size: 12px;
   padding: 0 6px;
   background: var(--theme-bg);
-  color: var(--muted);
+  color: var(--ink-muted);
   border-radius: 5px;
 }
 .review-card {
@@ -178,7 +178,7 @@
 }
 .delivery-workspace .review-label {
   display: block;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -301,7 +301,7 @@
 .plan-check-marker {
   width: 16px;
   height: 16px;
-  border: 1px solid var(--muted);
+  border: 1px solid var(--ink-muted);
   border-radius: 4px;
   margin-top: 5px;
   flex-shrink: 0;
@@ -350,14 +350,14 @@
   flex-direction: column;
 }
 .plan-artifacts small {
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .plan-artifact-file {
   display: flex;
   align-items: flex-start;
   gap: 9px;
   padding: 12px 2px 0;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 12px;
   overflow-wrap: anywhere;
 }
@@ -415,7 +415,7 @@
   background: var(--theme-bg);
 }
 .apply-details dt {
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 11px;
 }
 .apply-details dd {
@@ -437,7 +437,7 @@
   padding: 5px 9px;
   font-size: 12px;
   border-radius: 7px;
-  color: var(--muted);
+  color: var(--ink-muted);
   background: var(--theme-bg);
   white-space: nowrap;
 }
@@ -489,13 +489,33 @@
   gap: 12px;
   border-top: 1px solid var(--line);
   padding: 10px 16px;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 12px;
 }
 .delivery-workspace .review-notice {
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 14px;
   margin: 18px 0;
+}
+/* DLV-120: the retained checker output, closed by default. */
+.check-log {
+  border-top: 1px solid var(--line);
+  padding: 10px 16px;
+}
+.check-log > summary {
+  cursor: pointer;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+.check-log > pre {
+  margin: 10px 0 0;
+  max-height: 40vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.5;
 }
 .check-history {
   padding: 14px 16px 16px;
@@ -519,7 +539,7 @@
   grid-template-columns: minmax(90px, auto) 1fr auto;
   gap: 12px;
   padding: 8px 0;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 12px;
 }
 .check-history li span:first-child {
@@ -548,7 +568,7 @@
 }
 .review-technical {
   margin-top: 18px;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 12px;
   overflow-wrap: anywhere;
 }
@@ -646,7 +666,7 @@
   margin: 24px 0;
 }
 .activity-filter button {
-  color: var(--muted);
+  color: var(--ink-muted);
   border-radius: 9px;
   padding: 0 14px;
 }
@@ -687,13 +707,13 @@
   font-size: 14px;
 }
 .delivery-timeline time {
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 12px;
   flex-shrink: 0;
 }
 .activity-event {
   margin: 0;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 14px;
   line-height: 1.6;
   overflow-wrap: anywhere;
@@ -716,7 +736,7 @@
   min-width: 0;
 }
 .run-details dt {
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 11px;
 }
 .run-details dd {
@@ -743,7 +763,7 @@
 }
 .usage-summary > span {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .usage-summary[data-exceeded="true"] .usage-number {
   color: var(--warning-ink);
@@ -755,7 +775,7 @@
   width: 100%;
   margin-top: 7px;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .usage-threshold progress {
   grid-column: 1 / -1;
@@ -999,7 +1019,7 @@
   color: var(--ink);
 }
 .outcome-verdict small {
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 12px;
 }
 .outcome-verdict[data-verdict="inconclusive"],
@@ -1028,7 +1048,7 @@
   font-weight: 600;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .outcome-list ul,
 .outcome-links ul {
@@ -1081,7 +1101,7 @@
 }
 .outcome-links li small {
   margin-left: auto;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 11px;
 }
 .outcome-tokens {
@@ -1098,7 +1118,7 @@
 }
 .outcome-tokens dt {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .outcome-tokens dd {
   margin: 2px 0 0;
@@ -1108,7 +1128,7 @@
 }
 .usage-split {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-variant-numeric: tabular-nums;
 }
 @media (max-width: 700px) {
@@ -1149,7 +1169,7 @@
   align-items: baseline;
 }
 .test-gate-head small {
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 11px;
 }
 .test-gate-actions {

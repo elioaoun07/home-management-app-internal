@@ -394,6 +394,29 @@ export function repairInstruction({ plan, failures, messages = [] }) {
   );
 }
 
+/** True for a job the owner authorized as a candidate revision. */
+export function isRevisionJob(job) {
+  try {
+    return Boolean(job && job.settings_json && JSON.parse(job.settings_json).revision === true);
+  } catch {
+    return false;
+  }
+}
+
+/** One owner-authorized revision of a candidate that failed or could not be verified. */
+export function revisionInstruction({ plan, findings, failures = [], messages = [] }) {
+  return (
+    "The owner reviewed the checked candidate and asks for one revision within the approved plan (revision " +
+    plan.revision +
+    "). Make the change and stop." +
+    NO_TEST_RUNS +
+    WORKSPACE_FACTS +
+    section("Owner findings", [findings]) +
+    section("Check results", failures.map((entry) => entry.criterion_id + ": " + entry.state + (entry.reason ? " (" + entry.reason + ")" : ""))) +
+    section("Owner messages", messages.map((entry) => entry.body))
+  );
+}
+
 /** A fresh session after an explicit executor handoff. */
 export function handoffInstruction({ checkpoint, plan, contract, profile = "investigate" }) {
   return (
@@ -429,7 +452,7 @@ export function stageProjection({ run, plans, jobs, candidates, result, applied 
   // Applied only when the protected integrator observed it: an applied-change
   // Result, or an application whose integrated checks passed.
   if ((result && result.observedDisposition === "applied_change") || (applied && result && candidates.length)) current = 4;
-  if (writeJobs.some((job) => (job.status === "active" || job.status === "reserved") && job.purpose === "repair")) current = 1;
+  if (writeJobs.some((job) => (job.status === "active" || job.status === "reserved") && (job.purpose === "repair" || isRevisionJob(job)))) current = 1;
   const unknown = jobs.some((job) => job.status === "unknown");
   const stopRequested = jobs.some((job) => job.stop_requested_at && !job.stop_observed_at);
   const branch =

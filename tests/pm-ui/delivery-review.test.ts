@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   checkGroups,
+  checkLog,
+  checkOutcome,
   defaultReviewTab,
   outcomeSummary,
   tokenSplit,
@@ -72,6 +74,42 @@ describe("Delivery decision workspace", () => {
     expect(html).toContain("No test count");
     expect(html).not.toContain("Receipt");
     expect(html).not.toContain("stdout and stderr");
+    // DLV-123: a passing check has no time-only row under it; its time sits in the summary.
+    expect(html).not.toContain('class="check-result"');
+    expect(html).toMatch(/class="review-meta">[^<]*·\s*<time>/);
+  });
+  it("offers the retained checker log on a check that is not a pass, and never on one that is", () => {
+    // DLV-120. U3's complaint was output-retention prose on every row, so the
+    // log is a closed disclosure that appears only where there is something to
+    // read: no retained text, no pass, no disclosure.
+    const d = deliveryReviewFixture();
+    expect(checkLog(d.evidence[1])).toBeNull();
+    const failing = {
+      ...d.evidence[0],
+      state: "failed",
+      reason: "nonzero-exit",
+      outcome: "tests-failed",
+      exitCode: 1,
+      counts: { selected: 10, executed: 10, skipped: 0 },
+      output: ["--- stdout ---", "Tests  2 failed | 8 passed (10)", "FAIL <candidate>/src/amount.test.ts"].join("\n"),
+    };
+    expect(checkLog(failing)).toContain("2 failed | 8 passed");
+    expect(checkOutcome(failing)).toBe("Tests failed");
+    expect(checkOutcome({ ...failing, outcome: "runner-missing" })).toBe("Runner never started");
+    expect(checkOutcome({ ...failing, outcome: "output-unreadable" })).toBe("Output unreadable");
+    expect(checkOutcome(d.evidence[1])).toBeNull();
+
+    const html = renderToStaticMarkup(
+      createElement(ChecksReview, { detail: { ...d, evidence: [failing] } }),
+    );
+    expect(html).toContain("<summary>Log</summary>");
+    expect(html).toContain("2 failed | 8 passed");
+    expect(html).toContain("Tests failed");
+    expect(html).toContain('class="check-result"');
+    // The candidate's absolute root never reached the screen.
+    expect(html).toContain("&lt;candidate&gt;/src/amount.test.ts");
+    // A passing check keeps the screen exactly as it was.
+    expect(renderToStaticMarkup(createElement(ChecksReview, { detail: d }))).not.toContain("<summary>Log</summary>");
   });
   it("places approval after all plan content and exposes an actual plan export", () => {
     const d = deliveryReviewFixture();

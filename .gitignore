@@ -50,6 +50,9 @@ nul
 # Agentic Delivery Workspace — local session store (packet/state/events/artifacts), never committed
 /.delivery/
 
+# Delivery-v2 checker scratch (oracle baselines/controls, candidate routes, stubs) — regenerated per run, never committed
+/.tmp/
+
 # Monthly checklist-sweep state (last-run stamp + the undo snapshot for
 # `pnpm pm:archive --undo`) — machine-local, and the snapshot duplicates whole files.
 ERA Notes/10 - Project Management/.pm/

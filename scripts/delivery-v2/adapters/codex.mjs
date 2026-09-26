@@ -332,7 +332,18 @@ export function describeProfile({ observations = null, runtime = {}, qualificati
     },
     controls: buildControls(observations),
     lifecycle: buildLifecycle(),
-    resources: { unit: "usd", nativeUnit: "tokens" },
+    resources: {
+      unit: "usd",
+      nativeUnit: "tokens",
+      // DLV-114: `turn.completed` carries that turn's cumulative thread usage and
+      // is yielded into the open event stream, so a crossing is readable before
+      // the next turn starts and `TurnOptions.signal` can end it from inside the
+      // loop. That qualifies a stop threshold only; `resource.wholeJobBound`
+      // above is unsupported and no ceiling is promised over it.
+      inJobReadings: "per-turn",
+      inJobReadingsBasis:
+        "ThreadEvent turn.completed carries usage and is yielded into the open stream; TurnOptions.signal can end the turn from inside the loop",
+    },
     qualification_ref,
     observed_at,
     notes: [
@@ -387,13 +398,28 @@ export function observeCodexEvent(state, event, now = () => new Date().toISOStri
           : item.type === "mcp_tool_call"
             ? item.tool
             : item.text || item.query || null;
-    state.activity.push({
+    // `seq` is the dispatch's own ordinal, not the buffer index: the buffer is
+    // capped and shifts, and a key that renumbers itself would let the same event
+    // be stored twice. It is the reading-key discipline usage rows already use,
+    // applied to activity — which is what makes the live relay below and the
+    // final batch the same rows rather than two copies (DLV-109).
+    const record = {
+      seq: state.activitySeq || 0,
       at: now(),
       kind: ITEM_KINDS[item.type],
       agent: { role: "main", id: null, executor: BACKEND_ID, model: state.effective.model },
       summary: summary == null ? null : String(summary).slice(0, 240),
-    });
+    };
+    state.activitySeq = record.seq + 1;
+    state.activity.push(record);
     if (state.activity.length > 200) state.activity.shift();
+    if (typeof state.relay === "function") {
+      try {
+        state.relay(record);
+      } catch {
+        /* the supervisor's persistence problem is not this stream's to resolve */
+      }
+    }
   }
 }
 
@@ -435,6 +461,16 @@ export function createCodexAdapter(options = {}) {
   /** Live abort handles, keyed by dispatch key, so stop() has something to pull. */
   const inFlight = new Map();
 
+  /** Our own controller, aborted by us or by a caller-supplied signal. */
+  const linkedController = (signal) => {
+    const controller = new AbortController();
+    if (signal) {
+      if (signal.aborted) controller.abort();
+      else signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+    return controller;
+  };
+
   async function newCodex() {
     const sdk = await importSdk();
     if (!sdk || typeof sdk.Codex !== "function") {
@@ -467,9 +503,30 @@ export function createCodexAdapter(options = {}) {
         state.subscription[event.phase === "before" ? "before" : "after"] = event.observation;
       }
       if (event.type === "turn.completed") {
-        state.usageReadings.push({ turn: state.turn, usage: normalizeCodexUsage(event.usage) });
+        const reading = { turn: state.turn, usage: normalizeCodexUsage(event.usage) };
+        state.usageReadings.push(reading);
         state.turn += 1;
         state.terminal = "finished";
+        // DLV-114. The counter is read here, inside the loop, because this is the
+        // only place it exists before the job is over. A stop verdict aborts the
+        // turn from within its own iteration: everything already observed stays,
+        // and `stoppedStream` records that the stream was still open when we
+        // asked - which is the difference between an interruption and a label on
+        // a finished overrun.
+        if (typeof state.observeUsage === "function") {
+          let outcome = null;
+          try {
+            outcome = state.observeUsage({ key: "turn:" + reading.turn, usage: reading.usage, job_id: state.job_id });
+          } catch {
+            outcome = null;
+          }
+          if (outcome && outcome.stop) {
+            state.budget = { ...outcome, requestedAt: now(), reading_key: "turn:" + reading.turn, stoppedStream: true };
+            state.terminal = "stopped";
+            if (typeof state.abort === "function") state.abort();
+            return;
+          }
+        }
       }
       if (event.type === "turn.failed") {
         state.terminal = "failed";
@@ -494,9 +551,10 @@ export function createCodexAdapter(options = {}) {
    * it to commit `dispatch_started_at`, and the guarantee it needs is that a crash
    * anywhere after this point may have reached the provider.
    */
-  async function dispatch({ thread, request, onDispatchStart, signal }) {
+  async function dispatch({ thread, request, onDispatchStart, signal, abort = null, runOptions = {} }) {
     const state = {
       ref: request.executionRef,
+      job_id: request.job_id,
       nativeRef: request.executionRef.native_ref,
       events: [],
       usageReadings: [],
@@ -507,6 +565,15 @@ export function createCodexAdapter(options = {}) {
       finalText: "",
       effective: { model: null, effort: null, source: [] },
       activity: [],
+      activitySeq: 0,
+      // DLV-109: each observed item is handed over as it happens, so the run view
+      // shows work in progress instead of a blank panel until the stream ends.
+      // DLV-114: each usage reading is offered to the supervisor's budget monitor,
+      // which may ask for the abort performed just above.
+      relay: typeof runOptions.observeActivity === "function" ? runOptions.observeActivity : null,
+      observeUsage: typeof runOptions.observeUsage === "function" ? runOptions.observeUsage : null,
+      abort,
+      budget: null,
     };
     const settings = request.settings || { model: null, effort: null };
 
@@ -536,17 +603,23 @@ export function createCodexAdapter(options = {}) {
           requested: { model: settings.model, effort: settings.effort },
           effective: codexEffectiveView(state),
           activity: state.activity,
+          budget: state.budget,
         },
-        reason: state.nativeRef
-          ? "stream failed after the native session was observed"
-          : "stream failed before any native identity was observed; dispatch outcome is unknown",
+        reason: state.budget
+          ? "the observed token limit was crossed and the turn was aborted from inside the stream; the provider's own stop is not acknowledged by this interface"
+          : state.nativeRef
+            ? "stream failed after the native session was observed"
+            : "stream failed before any native identity was observed; dispatch outcome is unknown",
       });
     }
 
     return bindAdapterResult({
       operation: request.purpose === "resume" ? "resume" : "start",
       executionRef: state.ref,
-      status: state.terminal === "failed" ? "finished" : state.terminal || "unknown",
+      // A budget stop is `unknown`, not `finished`: we aborted our own turn and
+      // this interface returns no provider acknowledgement. The supervisor turns
+      // it terminal only once the environment observes termination.
+      status: state.terminal === "failed" || state.terminal === "finished" ? "finished" : "unknown",
       dispatchAttempted,
       observations: {
         usage: mergeUsageReadings(state.usageReadings),
@@ -559,8 +632,13 @@ export function createCodexAdapter(options = {}) {
         requested: { model: settings.model, effort: settings.effort },
         effective: codexEffectiveView(state),
         activity: state.activity,
+        budget: state.budget,
       },
-      reason: state.terminal ? null : "stream ended without a terminal turn event",
+      reason: state.budget
+        ? "the observed token limit was crossed and the turn was aborted from inside the stream; the provider's own stop is not acknowledged by this interface"
+        : state.terminal
+          ? null
+          : "stream ended without a terminal turn event",
     });
   }
 
@@ -591,11 +669,20 @@ export function createCodexAdapter(options = {}) {
       });
       const codex = await newCodex();
       const thread = codex.startThread(threadOptions);
-      const controller = runOptions.signal ? null : new AbortController();
-      const signal = runOptions.signal || (controller && controller.signal);
-      if (controller) inFlight.set(request.job_id, controller);
+      // Always our own controller. A caller-supplied signal is chained into it
+      // rather than replacing it, because an in-stream budget stop needs a handle
+      // to pull and stop() needs one to find in `inFlight`.
+      const controller = linkedController(runOptions.signal);
+      inFlight.set(request.job_id, controller);
       try {
-        return await dispatch({ thread, request, onDispatchStart: runOptions.onDispatchStart, signal });
+        return await dispatch({
+          thread,
+          request,
+          onDispatchStart: runOptions.onDispatchStart,
+          signal: controller.signal,
+          abort: () => controller.abort(),
+          runOptions,
+        });
       } finally {
         inFlight.delete(request.job_id);
       }
@@ -666,15 +753,16 @@ export function createCodexAdapter(options = {}) {
       });
       const codex = await newCodex();
       const thread = codex.resumeThread(priorRef.native_ref, threadOptions);
-      const controller = runOptions.signal ? null : new AbortController();
-      const signal = runOptions.signal || (controller && controller.signal);
-      if (controller) inFlight.set(resumeRequest.job_id, controller);
+      const controller = linkedController(runOptions.signal);
+      inFlight.set(resumeRequest.job_id, controller);
       try {
         return await dispatch({
           thread,
           request: resumeRequest,
           onDispatchStart: runOptions.onDispatchStart,
-          signal,
+          signal: controller.signal,
+          abort: () => controller.abort(),
+          runOptions,
         });
       } finally {
         inFlight.delete(resumeRequest.job_id);

@@ -37,7 +37,7 @@ import { assertScratchOutsideHost, provisionScratch } from "./scratch.mjs";
 import { importTrustedCandidate } from "./checks.mjs";
 import { normalizeHosts, PROXY_PORT } from "./worker/egress.mjs";
 import { nestedSandboxDigest, nestedSandboxJSON } from "./worker/seccomp.mjs";
-import { createCredentialSync } from "./credential-sync.mjs";
+import { createCredentialSync, revokedRefusal } from "./credential-sync.mjs";
 
 export const BOUNDARY_SCHEMA = "delivery-v2/worker-boundary@1";
 export const WORKER_USER = "10001:10001";
@@ -45,6 +45,19 @@ export const WORKER_HOME = "/home/era";
 export const WORKDIR = "/work";
 export const RUNNER_PATH = "/opt/era/scripts/delivery-v2/worker/runner.mjs";
 export const CANARY_PATH = "/opt/era/scripts/delivery-v2/probes/canary.mjs";
+/**
+ * The type checker's program, inside the checker (DLV-133).
+ *
+ * `/program` is a read-only volume holding the pinned source closure and its
+ * tsconfig — a *program*, not the 29-file candidate snapshot, which cannot
+ * compile because a curated snapshot is not a program. `/candidate` stays what
+ * it always was, and the runner overlays one on the other. The runner itself is
+ * the image's copy at a fixed path: a candidate that shipped its own
+ * `typecheck-runner.mjs` would never be the thing that runs.
+ */
+export const PROGRAM_PATH = "/program";
+export const CANDIDATE_PATH = "/candidate";
+export const TYPECHECK_RUNNER_PATH = "/opt/era/scripts/delivery-v2/typecheck-runner.mjs";
 export const CREDENTIAL_ROOT = "/run/era-credentials";
 export const NETWORK_MODES = Object.freeze(["none", "allowlist-proxy", "namespace-proxy"]);
 
@@ -227,28 +240,62 @@ export function authProbeArgs(boundary, backend) {
 /**
  * `docker run` argv for one protected check against a frozen candidate volume.
  *
+ * `programVolume` is DLV-133's addition: a second read-only volume carrying the
+ * pinned program the type checker compiles. It is optional because every other
+ * check runs against the candidate alone; only the typecheck needs a program to
+ * lay the candidate over.
+ *
  * @param {{boundary:ReturnType<typeof makeBoundaryConfig>, name:string, candidateVolume:string,
- *   outVolume:string, argv:string[], env?:Record<string, string>}} input
+ *   outVolume:string, argv:string[], env?:Record<string, string>,
+ *   programVolume?:(string|null), workdir?:string}} input
  */
-export function checkerRunArgs({ boundary, name, candidateVolume, outVolume, argv, env = {} }) {
+export function checkerRunArgs({ boundary, name, candidateVolume, outVolume, argv, env = {}, programVolume = null, workdir = CANDIDATE_PATH }) {
   const allowed = ["CI", "NODE_ENV", "LANG"];
+  if (programVolume && !VOLUME_NAME.test(String(programVolume))) throw new ContractError(BOUNDARY_REFUSALS.VOLUME + ": program");
   const args = [
     "run",
     "--rm",
     "--name", name,
     ...hardenedFlags(boundary, { network: false }),
-    "--mount", "type=volume,source=" + candidateVolume + ",target=/candidate,readonly",
+    "--mount", "type=volume,source=" + candidateVolume + ",target=" + CANDIDATE_PATH + ",readonly",
     "--mount", "type=volume,source=" + outVolume + ",target=/out",
+    ...(programVolume ? ["--mount", "type=volume,source=" + programVolume + ",target=" + PROGRAM_PATH + ",readonly"] : []),
     ...(boundary.dependencies ? ["--mount", "type=volume,source=" + boundary.dependencies.volume + ",target=/deps,readonly"] : []),
     "--env", "HOME=/tmp",
     ...Object.entries(env)
       .filter(([key]) => allowed.includes(key))
       .flatMap(([key, value]) => ["--env", key + "=" + value]),
-    "--workdir", "/candidate",
+    "--workdir", workdir,
     boundary.image,
     ...argv,
   ];
   return assertNoHostAuthority(args);
+}
+
+/**
+ * The container argv for one phase of the deterministic typecheck.
+ *
+ * Built here rather than taken from the policy, deliberately. The policy's
+ * `argv` names the host runner (`node scripts/delivery-v2/typecheck-runner.mjs`)
+ * and is what the fallback path spawns; inside the checker the only acceptable
+ * runner is the image's own copy, at a path no candidate and no policy edit can
+ * point elsewhere. The phase is the *only* difference between the two runs, which
+ * is what makes their difference attributable to the candidate.
+ *
+ * @param {{phase:string, changed?:string[], deleted?:string[]}} input
+ */
+export function typecheckArgv({ phase, changed = [], deleted = [] }) {
+  const argv = ["node", TYPECHECK_RUNNER_PATH, "--root", PROGRAM_PATH];
+  if (phase !== "candidate") return argv;
+  argv.push("--candidate", CANDIDATE_PATH);
+  if (changed.length) argv.push("--changed", [...changed].join(","));
+  if (deleted.length) argv.push("--deleted", [...deleted].join(","));
+  return argv;
+}
+
+/** The content-addressed name of a staged program volume. */
+export function programVolumeName(manifestFingerprint) {
+  return "era-v2-program-" + String(manifestFingerprint || "").replace(/^sha256:/u, "").slice(0, 32);
 }
 
 // ---------------------------------------------------------------------------
@@ -418,9 +465,9 @@ export function sdkFromRunnerStream(backend_id, source, taskBrief = null) {
 
 /**
  * @param {{boundary:ReturnType<typeof makeBoundaryConfig>, hostRoot:string, workRoot?:string,
- *   docker?:ReturnType<typeof createDockerCli>}} input
+ *   docker?:ReturnType<typeof createDockerCli>, credentialSync?:{sync:(backend:string)=>object}|null}} input
  */
-export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmpdir(), "era-delivery-v2"), docker = createDockerCli() }) {
+export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmpdir(), "era-delivery-v2"), docker = createDockerCli(), credentialSync = null }) {
   mkdirSync(workRoot, { recursive: true });
   assertScratchOutsideHost({ scratchRoot: workRoot, hostRoot });
 
@@ -459,7 +506,10 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
 
   function containerSource({ run_id, job_id, access, backend_id }) {
     return (payload, signal) => {
-      if (credentials) credentials.sync(backend_id);
+      // An expired or revoked sign-in refuses here, before any container starts:
+      // no probe, no inference, no other executor or paid route in its place.
+      const renewed = credentials ? credentials.sync(backend_id) : { ok: true };
+      if (!renewed.ok) throw new ContractError("subscription sign-in: " + renewed.reason);
       const args = workerRunArgs({ boundary, run_id, job_id, access, backend_id, payload });
       docker.run(["rm", "-f", containerNameFor(job_id)]);
       return (async function* () {
@@ -479,7 +529,7 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
   const bindingMemo = new Map();
   const authMemo = new Map();
   // DLV-111: the host sign-in is copied in before a probe or job (credential-sync.mjs).
-  const credentials = boundary.synthetic ? null : createCredentialSync({ boundary, docker });
+  const credentials = boundary.synthetic ? null : credentialSync || createCredentialSync({ boundary, docker });
 
   function readBinding(backend_id) {
     const image = docker.run(["image", "inspect", "--format", "{{.Id}}", boundary.image]);
@@ -508,14 +558,20 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
       let value;
       const renewed = credentials ? credentials.sync(backend) : { ok: true };
       if (!renewed.ok) {
-        value = { ok: false, reason: renewed.reason };
+        value = { ok: false, reason: renewed.reason, code: renewed.code, reconnect: renewed.reconnect };
         authMemo.set(backend, { at: Date.now(), value });
         return value;
       }
       try {
         const result = docker.run(authProbeArgs(boundary, backend), { timeout: 45000 });
         const facts = result.stdout.split("\n").map(parseLine).filter(Boolean).pop();
-        value = result.status === 0 && facts?.era === "subscription-ready" ? { ok: true, ...facts } : { ok: false, reason: facts?.message || "Worker subscription check failed" };
+        const reason = facts?.message || "Worker subscription check failed";
+        value =
+          result.status === 0 && facts?.era === "subscription-ready"
+            ? { ok: true, ...facts }
+            : /HTTP 40[13](?![0-9])/u.test(reason)
+              ? { ok: false, ...revokedRefusal(backend) }
+              : { ok: false, reason };
       } catch (error) { value = { ok: false, reason: error.message }; }
       authMemo.set(backend, { at: Date.now(), value });
       return value;
@@ -629,38 +685,201 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
      * @param {{run_id:string, candidate:{root:string, candidate_id:string, generation:string}}} input
      */
     checkExecutor({ run_id, candidate }) {
-      const candidateVolume = "era-v2-" + run_id + "-cand-" + candidate.generation;
-      const outVolume = "era-v2-" + run_id + "-out-" + candidate.generation;
-      if (!exists("volume", candidateVolume)) {
-        docker.run(["volume", "create", candidateVolume]);
-        const staging = mkdtempSync(join(workRoot, "candidate-"));
-        try {
-          cpSync(candidate.root, staging, { recursive: true });
-          importDirToVolume({ dir: staging, volume: candidateVolume });
-        } finally {
-          rmSync(staging, { recursive: true, force: true });
-        }
-      }
-      if (!exists("volume", outVolume)) {
-        docker.run(["volume", "create", outVolume]);
-        const owned = docker.run(["run", "--rm", "--network", "none", "--user", "0:0", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--mount", "type=volume,source=" + outVolume + ",target=/dst", boundary.image, "chown", WORKER_USER, "/dst"]);
-        if (owned.status !== 0) throw new ContractError("could not initialize checker output volume");
-      }
+      const { candidateVolume, outVolume } = checkVolumes({ run_id, candidate });
       let sequence = 0;
       return ({ argv, env }) => {
         sequence += 1;
         const name = "era-v2-check-" + run_id + "-" + candidate.generation + "-" + sequence;
-        const result = docker.run(checkerRunArgs({ boundary, name, candidateVolume, outVolume, argv, env }), { timeout: 900_000 });
-        return {
-          exitCode: result.error ? null : result.status,
-          signal: null,
-          stdout: result.stdout,
-          stderr: result.stderr,
-          spawnError: result.error,
-        };
+        return checkerResult(checkerRunArgs({ boundary, name, candidateVolume, outVolume, argv, env }));
       };
     },
+
+    /**
+     * An executor for `runTypecheckVerification` that compiles inside the
+     * checker instead of on the host (DLV-133).
+     *
+     * Three things have to be true before this can claim isolation, and each is
+     * checked rather than assumed: the pinned program stages into a read-only
+     * volume, the dependency volume actually resolves `typescript`, and the
+     * runner is the image's. When any of them fails this returns `ok: false`
+     * with the reason — never a quiet fall back to the host, because a
+     * verification that silently changed environments is the thing the
+     * environment record exists to prevent.
+     *
+     * @param {{run_id:string, candidate:{root:string, candidate_id:string, generation:string},
+     *   include:string[]}} input
+     * @returns {{ok:boolean, reason?:(string|undefined), execute?:(Function|undefined),
+     *   program?:(Record<string, any>|undefined), producer?:(Record<string, any>|undefined)}}
+     */
+    typecheckExecutor({ run_id, candidate, include }) {
+      if (!Array.isArray(include) || include.length === 0) {
+        return deepFreeze({ ok: false, reason: "no program file list was pinned for the checker to compile" });
+      }
+      let program;
+      try {
+        program = stageProgram({ include });
+      } catch (error) {
+        return deepFreeze({ ok: false, reason: "the pinned program could not be staged: " + String((error && error.message) || error) });
+      }
+      if (!program.files) {
+        return deepFreeze({ ok: false, reason: "the pinned program staged zero files; " + program.refusals.length + " path(s) were refused" });
+      }
+
+      const { candidateVolume, outVolume } = checkVolumes({ run_id, candidate });
+      const dependencies = probeCheckerDependencies({ programVolume: program.volume, candidateVolume, outVolume });
+      if (!dependencies.ok) return deepFreeze({ ok: false, reason: dependencies.reason, program });
+
+      let sequence = 0;
+      const execute = ({ phase, changed = [], deleted = [], env = {} }) => {
+        sequence += 1;
+        const name = "era-v2-tsc-" + run_id + "-" + candidate.generation + "-" + sequence;
+        return checkerResult(
+          checkerRunArgs({
+            boundary,
+            name,
+            candidateVolume,
+            outVolume,
+            programVolume: program.volume,
+            workdir: PROGRAM_PATH,
+            argv: typecheckArgv({ phase, changed, deleted }),
+            env,
+          }),
+        );
+      };
+
+      return deepFreeze({
+        ok: true,
+        execute,
+        program,
+        // Exactly what `typecheck.mjs` records as the verification's environment.
+        producer: {
+          producer: "protected-checker",
+          isolated: true,
+          detail:
+            "compiled inside the checker container (no network, read-only rootfs, no host mount) over a pinned program of " +
+            program.files +
+            " file(s) with typescript " +
+            dependencies.typescript +
+            " from volume " +
+            String(boundary.dependencies && boundary.dependencies.volume),
+          program: { volume: program.volume, fingerprint: program.fingerprint, files: program.files, root: PROGRAM_PATH, config: "tsconfig.json" },
+          dependencies: { volume: String(boundary.dependencies && boundary.dependencies.volume), typescript: dependencies.typescript, node: dependencies.node },
+          image: String(boundary.image),
+        },
+      });
+    },
   };
+
+  /** The frozen candidate and scratch output volumes every check shares. */
+  function checkVolumes({ run_id, candidate }) {
+    const candidateVolume = "era-v2-" + run_id + "-cand-" + candidate.generation;
+    const outVolume = "era-v2-" + run_id + "-out-" + candidate.generation;
+    if (!exists("volume", candidateVolume)) {
+      docker.run(["volume", "create", candidateVolume]);
+      const staging = mkdtempSync(join(workRoot, "candidate-"));
+      try {
+        cpSync(candidate.root, staging, { recursive: true });
+        importDirToVolume({ dir: staging, volume: candidateVolume });
+      } finally {
+        rmSync(staging, { recursive: true, force: true });
+      }
+    }
+    if (!exists("volume", outVolume)) {
+      docker.run(["volume", "create", outVolume]);
+      const owned = docker.run(["run", "--rm", "--network", "none", "--user", "0:0", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--mount", "type=volume,source=" + outVolume + ",target=/dst", boundary.image, "chown", WORKER_USER, "/dst"]);
+      if (owned.status !== 0) throw new ContractError("could not initialize checker output volume");
+    }
+    return { candidateVolume, outVolume };
+  }
+
+  // A function declaration, not a const: these helpers sit after the returned
+  // object and are called from its methods long after this body has run.
+  function checkerResult(args) {
+    const result = docker.run(args, { timeout: 900_000 });
+    return {
+      exitCode: result.error ? null : result.status,
+      signal: null,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      spawnError: result.error,
+    };
+  }
+
+  /**
+   * Stage the pinned program into a content-addressed read-only volume.
+   *
+   * Content-addressed so the cost is paid once per source revision rather than
+   * once per check: the same checkout produces the same fingerprint and reuses
+   * the volume, and a changed checkout produces a different one rather than
+   * quietly compiling yesterday's program. A failed import removes the volume, so
+   * a retry restages instead of compiling half a tree.
+   */
+  function stageProgram({ include }) {
+    const staging = mkdtempSync(join(workRoot, "program-"));
+    try {
+      const supplied = provisionScratch({ scratchRoot: staging, hostRoot, include });
+      const volume = programVolumeName(supplied.manifest_fingerprint);
+      if (!exists("volume", volume)) {
+        docker.run(["volume", "create", volume]);
+        try {
+          importDirToVolume({ dir: staging, volume });
+        } catch (error) {
+          docker.run(["volume", "rm", "-f", volume]);
+          throw error;
+        }
+      }
+      return deepFreeze({
+        volume,
+        fingerprint: supplied.manifest_fingerprint,
+        files: supplied.supplied.length,
+        refusals: Object.freeze(supplied.refusals.map((entry) => Object.freeze({ ...entry }))),
+      });
+    } finally {
+      rmSync(staging, { recursive: true, force: true });
+    }
+  }
+
+  /**
+   * Does the dependency volume actually carry a compiler?
+   *
+   * Asked before compiling, because the alternative is a baseline full of
+   * TS2307s that `environmentVerdict` correctly refuses to grade — correct, but
+   * after two full compiles and with "environment incomplete" as the only
+   * explanation. One `require.resolve` answers it in a second and names the
+   * volume that needs provisioning.
+   */
+  function probeCheckerDependencies({ programVolume, candidateVolume, outVolume }) {
+    if (!boundary.dependencies) {
+      return { ok: false, reason: "this boundary mounts no dependency volume, so the checker has no typescript to compile with" };
+    }
+    const probe = checkerResult(
+      checkerRunArgs({
+        boundary,
+        name: "era-v2-tsc-probe-" + String(process.pid),
+        candidateVolume,
+        outVolume,
+        programVolume,
+        workdir: PROGRAM_PATH,
+        argv: ["node", "-e", "process.stdout.write(JSON.stringify({typescript:require('typescript').version,node:process.version}))"],
+      }),
+    );
+    if (probe.exitCode !== 0) {
+      return {
+        ok: false,
+        reason:
+          "the checker dependency volume " +
+          String(boundary.dependencies.volume) +
+          " does not resolve typescript: " +
+          String(probe.stderr || probe.spawnError || "exit " + String(probe.exitCode)).slice(0, 400),
+      };
+    }
+    try {
+      const facts = JSON.parse(probe.stdout.trim());
+      return { ok: true, typescript: String(facts.typescript), node: String(facts.node) };
+    } catch {
+      return { ok: false, reason: "the checker dependency probe printed nothing readable" };
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

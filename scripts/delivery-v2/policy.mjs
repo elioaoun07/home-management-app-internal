@@ -62,6 +62,7 @@ import {
 } from "./contracts.mjs";
 import { ENTRY_REFUSALS, deliverSelection } from "./entry.mjs";
 import { ADMISSION_REFUSALS, RESOURCE_UNITS } from "./jobs.mjs";
+import { DEFAULT_WARN_PERCENT, ENFORCEMENT_MODES } from "./budget.mjs";
 import { DEFAULT_CONCURRENCY, WRITER_CEILING } from "./coordination.mjs";
 import { acceptanceText, freezeSelectedItem } from "./work-ref.mjs";
 import { splitTaskInput, preparedPlanFor } from "./task-input.mjs";
@@ -296,6 +297,25 @@ export function validateExecutionPolicy(raw) {
   if (reservationAmount != null && !(Number.isFinite(reservationAmount) && reservationAmount >= 0)) {
     bad(POLICY_REFUSALS.INVALID, "resources.perJobReservation.amount must be a non-negative number or null");
   }
+  // DLV-114. What the allowance is allowed to *do* to a running job, which is a
+  // separate question from its number. `advisory` is the default and the only
+  // mode that promises nothing: admission still refuses the next dispatch, and
+  // nothing interrupts the current one. A stronger mode is checked against the
+  // selected executor's own interface at dispatch (budget.mjs resolveEnforcement)
+  // and refuses there rather than quietly falling back to a weaker one.
+  const enforcement = resources.enforcement == null ? "advisory" : String(resources.enforcement);
+  if (!ENFORCEMENT_MODES.includes(enforcement)) {
+    bad(POLICY_REFUSALS.INVALID, "resources.enforcement must be one of " + ENFORCEMENT_MODES.join(", "));
+  } else if (enforcement !== "advisory" && allowance == null) {
+    bad(
+      POLICY_REFUSALS.INVALID,
+      "resources.enforcement \"" + enforcement + "\" needs a numeric allowance; there would be nothing to cross",
+    );
+  }
+  const warnAtPercent = resources.warnAtPercent == null ? DEFAULT_WARN_PERCENT : Number(resources.warnAtPercent);
+  if (!(Number.isFinite(warnAtPercent) && warnAtPercent > 0 && warnAtPercent <= 100)) {
+    bad(POLICY_REFUSALS.INVALID, "resources.warnAtPercent must be a number greater than 0 and at most 100");
+  }
 
   // --- execution -----------------------------------------------------------
   const execution = isPlainObject(raw.execution) ? raw.execution : {};
@@ -445,6 +465,18 @@ export function validateExecutionPolicy(raw) {
     if (entry.enabled !== false && (!argv.length || argv.length !== (entry.argv || []).length)) {
       bad(POLICY_REFUSALS.INVALID, "checks.requiredVerifications.typecheck.argv must be a non-empty list of strings");
     } else {
+      // DLV-133: where the compile runs. `checker` is the isolated container
+      // with a pinned program and pinned dependencies, and refuses to grade
+      // anywhere else; `prefer-checker` uses it when the runtime offers one and
+      // falls back to the labelled host path otherwise; `host` is the original
+      // DLV-131 path. An unrecognized spelling means `prefer-checker` rather
+      // than the weakest option, because a typo must not silently un-isolate a
+      // verification.
+      const isolationInput = String(entry.isolation || "prefer-checker");
+      const isolation = ["checker", "prefer-checker", "host"].includes(isolationInput) ? isolationInput : "prefer-checker";
+      const programInput = isPlainObject(entry.program) ? entry.program : {};
+      const programRoots = Array.isArray(programInput.roots) ? programInput.roots.filter(isNonEmptyString).map(normalizePath) : [];
+      const programExtensions = Array.isArray(programInput.extensions) ? programInput.extensions.filter(isNonEmptyString) : [];
       typecheck = {
         enabled: entry.enabled !== false,
         argv: Object.freeze([...argv]),
@@ -453,6 +485,10 @@ export function validateExecutionPolicy(raw) {
         // the verdict and blocks nothing. Anything else is a typo, and a typo
         // must not silently downgrade a gate.
         enforcement: entry.enforcement === "advisory" ? "advisory" : "required",
+        isolation,
+        // Empty means "use typecheck.mjs's DEFAULT_PROGRAM"; the policy does not
+        // duplicate that list so the two cannot drift apart.
+        program: Object.freeze({ roots: Object.freeze(programRoots), extensions: Object.freeze(programExtensions) }),
       };
     }
   }
@@ -580,6 +616,8 @@ export function validateExecutionPolicy(raw) {
         unit: resources.unit,
         allowance,
         strict: Boolean(resources.strict),
+        enforcement,
+        warnAtPercent,
         perJobReservation: { amount: reservationAmount, basis: reservation.basis },
       },
       execution: {
@@ -903,7 +941,8 @@ export function buildDeliver({ root, pmRel, store, policyLoader = null, describe
       requireConfinement: true,
       // A numeric strict resource policy is a hard-cap claim. Do not dispatch
       // it through a profile that only reports usage after completion.
-      strictBoundRequired: policy.executors.strictBoundRequired || policy.resources.strict,
+      strictBoundRequired:
+        policy.executors.strictBoundRequired || policy.resources.strict || policy.resources.enforcement === "hard-cap",
     });
     if (!profileAdmission.admitted) {
       // The containment gate. No run, WorkRef or command receipt is written for a
@@ -1113,6 +1152,9 @@ export function policyTemplate({ executor = "codex", authorized_by = "<owner>" }
       unit: "usd",
       allowance: null,
       strict: false,
+      // Counted and warned about; nothing in this default stops a running job.
+      enforcement: "advisory",
+      warnAtPercent: DEFAULT_WARN_PERCENT,
       perJobReservation: {
         amount: null,
         basis: "no monetary ceiling is claimed; the reservation stays open until a cost is observed",

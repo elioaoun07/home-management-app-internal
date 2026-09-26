@@ -180,3 +180,81 @@ describe("Apply refuses an unverified candidate", () => {
     expect(applied.ok).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// DLV-133 — which environment the journey actually asks for, and what it says
+// ---------------------------------------------------------------------------
+
+describe("the journey prefers the protected checker and records which one ran", () => {
+  /** A runtime offering an isolated checker whose compiler is scripted. */
+  const withChecker = (h: Loose, candidateStdout: string) => {
+    const calls: Loose[] = [];
+    let call = 0;
+    h.runtime.typecheckExecutor = ({ include }: Loose) => ({
+      ok: true,
+      program: { volume: "era-v2-program-fixture", fingerprint: "sha256:fixture", files: include.length },
+      producer: {
+        producer: "protected-checker",
+        isolated: true,
+        detail: "fixture checker",
+        program: { volume: "era-v2-program-fixture", fingerprint: "sha256:fixture", files: include.length, root: "/program", config: "tsconfig.json" },
+        dependencies: { volume: "era-v2-deps-fixture", typescript: "5.9.2", node: process.version },
+        image: "sha256:fixture",
+      },
+      execute: (input: Loose) => {
+        calls.push(input);
+        call += 1;
+        const stdout = call % 2 === 1 ? "" : candidateStdout;
+        return { exitCode: stdout ? 2 : 0, stdout, stderr: "", spawnError: null, signal: null };
+      },
+    });
+    return calls;
+  };
+
+  it("uses the checker when the runtime offers one, and the verdict says so", async () => {
+    writePolicy(ROOT, withTypecheck());
+    const h = makeHarness(ROOT);
+    const calls = withChecker(h, "");
+    // No typecheckExecutor override: the container is preferred only when the
+    // host executor was not injected.
+    const journey = journeyWith(h);
+    const { run_id } = await verifiedRun(journey, cmd);
+    expect(calls.map((entry) => entry.phase)).toEqual(["baseline", "candidate"]);
+    const evidence = (journey.detail(run_id).evidence as Loose[]).find((entry) => entry.criterion_id === TYPECHECK_CRITERION_ID);
+    expect(evidence!.environment).toMatchObject({ producer: "protected-checker", isolated: true });
+    const events = journey.detail(run_id).events as Loose[];
+    expect(events.some((entry) => entry.kind === "typecheck.checker-ready")).toBe(true);
+    expect(events.find((entry) => entry.kind === "typecheck.satisfied")!.data).toMatchObject({ producer: "protected-checker", isolated: true });
+  });
+
+  it("falls back to the labelled host path and records why the checker was unavailable", async () => {
+    writePolicy(ROOT, withTypecheck());
+    const h = makeHarness(ROOT);
+    h.runtime.typecheckExecutor = () => ({ ok: false, reason: "the checker dependency volume era-deps does not resolve typescript" });
+    const journey = journeyWith(h, { typecheckExecutor: scriptedTypecheck("") });
+    const { run_id } = await verifiedRun(journey, cmd);
+    const evidence = (journey.detail(run_id).evidence as Loose[]).find((entry) => entry.criterion_id === TYPECHECK_CRITERION_ID);
+    expect(evidence!.environment).toMatchObject({ producer: "host-checkout", isolated: false });
+    const unavailable = (journey.detail(run_id).events as Loose[]).find((entry) => entry.kind === "typecheck.checker-unavailable");
+    expect(unavailable!.data.reason).toMatch(/does not resolve typescript/u);
+  });
+
+  it("refuses to verify at all when the policy requires isolation and the checker is unavailable", async () => {
+    const required = withTypecheck();
+    writePolicy(ROOT, {
+      checks: {
+        ...required.checks,
+        requiredVerifications: { typecheck: { ...required.checks.requiredVerifications.typecheck, isolation: "checker" } },
+      },
+    });
+    const h = makeHarness(ROOT);
+    h.runtime.typecheckExecutor = () => ({ ok: false, reason: "no compiler in the dependency volume" });
+    const journey = journeyWith(h);
+    const { view } = await checkedRun(journey);
+    const state = typecheckState(view);
+    expect(state).toMatchObject({ state: "inconclusive", reason: "typecheck-did-not-run-in-the-protected-checker" });
+    // Inconclusive is not a pass: the candidate is not verified and Apply has
+    // nothing to act on.
+    expect(view.result.candidateVerified).toBe(false);
+  });
+});

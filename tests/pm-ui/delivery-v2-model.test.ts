@@ -145,3 +145,26 @@ describe("delivery v2 presentation", () => {
     expect(branchLabel(null)).toBeNull();
   });
 });
+
+describe("executor reconnect message", () => {
+  it("shows the reconnect action for an expired sign-in", () => {
+    expect(
+      executorBlockMessage(
+        executor({ qualified: false, refusals: [{ code: "subscription-not-ready", detail: "sign-in expired", action: "open Claude Code once" }] }),
+      ),
+    ).toBe("Reconnect needed. Open Claude Code once.");
+  });
+
+  it("names an offline worker instead of the sign-in refresh it also breaks", () => {
+    // Observed 2026-09-26 with Docker stopped: both codes present, sign-in was blamed.
+    expect(
+      executorBlockMessage(
+        executor({
+          qualified: false,
+          refusals: [{ code: "subscription-not-ready", detail: "could not refresh the worker sign-in", action: "open Claude Code once" }],
+          qualification: { ref: null, refusals: [{ code: "runtime-binding-unavailable", detail: null }] },
+        }),
+      ),
+    ).toBe("Its Delivery worker is offline.");
+  });
+});

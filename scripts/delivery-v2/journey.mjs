@@ -66,6 +66,7 @@ import {
   verifyEffectiveSettings,
 } from "./adapters/registry.mjs";
 import { loadQualification } from "./qualification.mjs";
+import { COUNTABLE_UNIT, createBudgetMonitor, normalizedReading, resolveEnforcement } from "./budget.mjs";
 import { gateState, readTestGate, recordTestResult, TEST_GATE_REFUSALS } from "./test-gate.mjs";
 import { BINDING_VERSION, splitTaskInput, makeTaskBrief, briefInstruction } from "./task-input.mjs";
 import { applyAllowanceChange, effectiveGrant, effectivePolicy, fleetWindow, readAllowances, runAllowance, writeAllowances } from "./allowances.mjs";
@@ -80,6 +81,8 @@ import {
   investigationInstruction,
   latestPlan,
   messageReceipt,
+  revisionInstruction,
+  isRevisionJob,
   openBlockingQuestions,
   parseEngineerReply,
   queueMessage,
@@ -90,8 +93,10 @@ import {
 } from "./interaction.mjs";
 import { CHECK_REFUSALS, pinCheckPlan, restrictedEnv, runCheck, verifyReceipt } from "./checks.mjs";
 import {
+  HOST_PRODUCER,
   TYPECHECK_CRITERION_ID,
   TYPECHECK_STATE,
+  programFileList,
   runTypecheckVerification,
   spawnTypecheck,
   verificationIsFresh,
@@ -124,7 +129,7 @@ import {
   verdictFromRefusals,
   verdictOf,
 } from "./coordination.mjs";
-import { ACTIVE_APPLICATION_STATES } from "./store.mjs";
+import { ACTIVE_APPLICATION_STATES, AFTER_JOB_STATES, publishArtifact, readArtifact } from "./store.mjs";
 import { fileTasks } from "../pm/shared/tasks.mjs";
 import { normalizeWorkId } from "../pm/shared/work-id.mjs";
 
@@ -163,7 +168,16 @@ export const JOURNEY_REFUSALS = Object.freeze({
   ROLLBACK_PREVIEW_REQUIRED: "rollback-preview-required",
   ROLLBACK_PREVIEW_STALE: "rollback-preview-stale",
   NOT_RELEASABLE: "no-candidate-to-release",
+  REVISION_UNAUTHORIZED: "revision-not-authorized",
+  REVISION_FINDINGS: "revision-findings-required",
+  REVISION_STATE: "run-not-awaiting-revision",
+  REVISION_LIMIT: "revision-limit-reached",
 });
+
+/** Owner-authorized revision dispatches one run may spend; each needs its own command. */
+export const REVISION_LIMIT = 2;
+/** The continuation kind of an owner revision; stored on its job as `settings.revision`. */
+const REVISE_KIND = "revise-candidate";
 
 /** Application states after which a new application of the same candidate may be attempted. */
 const RETRYABLE_APPLICATION_STATES = Object.freeze(["refused", "conflict", "failed", "rolled-back", "reassessment-failed"]);
@@ -196,6 +210,27 @@ const START_BLOCKERS = Object.freeze([
 ]);
 
 const OUTSTANDING_STATUSES = Object.freeze(["reserved", "active", "paused", "unknown"]);
+
+/**
+ * Run positions under which a settled job's follow-on waits rather than runs.
+ *
+ * The owner asked the run to hold, or coordination is holding it. Either way the
+ * job's post-processing is owed but not now, so it is recorded `deferred` and
+ * re-driven when the position changes — never marked done, which would lose it.
+ */
+const DEFERRING_REASONS = Object.freeze(["paused", "stop-requested", "queued", "scope-conflict"]);
+
+/**
+ * The run is holding because its own token limit was reached (DLV-114).
+ *
+ * Deliberately not `stop-requested`: that reason means the owner asked, and
+ * `closeIfStopped` closes the run under it. A budget stop leaves the run open
+ * with its partial candidate kept, because the next move is the owner's decision
+ * — raise the limit, review what exists, or close it — and nothing here is
+ * allowed to make it for them by dispatching again.
+ */
+const BUDGET_EXHAUSTED = "budget-exhausted";
+
 const RESUMABLE_REASONS = Object.freeze([
   "paused",
   "refused-at-dispatch",
@@ -312,8 +347,11 @@ export function createJourney({
   applicationsRoot = join(defaultDataRoot(root), "applications"),
   stagingRoot = join(defaultDataRoot(root), "staging"),
   applyFaults = {},
-  // The deterministic typecheck runs on the host, outside the model, against the
-  // integration target. Injected so fixtures script it without a compiler.
+  // The deterministic typecheck's fallback executor: the host path, outside the
+  // model, against the integration target. The isolated checker is preferred at
+  // call time when the runtime offers one (DLV-133); this stays injectable so
+  // fixtures can script two outputs without a compiler, and an injected value
+  // always wins over the container.
   typecheckExecutor = spawnTypecheck,
   artifactsRoot = join(defaultDataRoot(root), "artifacts"),
   now = () => new Date().toISOString(),
@@ -394,6 +432,37 @@ export function createJourney({
         : "this executor's interface has no turn limit, so none is sent and none is enforced",
     };
   };
+  /**
+   * The token limit in force for a run, and what the policy asks it to do.
+   *
+   * The number is the *effective* grant allowance — the policy's, with the
+   * owner's Settings overlay and this run's top-up already applied
+   * (allowances.mjs) — so a top-up granted mid-run raises the ceiling the next
+   * reading is measured against instead of being invisible until the next
+   * admission.
+   */
+  const budgetPolicyFor = (ctx) => {
+    const loaded = policyNow();
+    const grant = ctx.grant || null;
+    return {
+      mode: loaded.ok ? String(loaded.policy.resources.enforcement || "advisory") : "advisory",
+      warnAtPercent: loaded.ok ? Number(loaded.policy.resources.warnAtPercent) : undefined,
+      limit: grant ? grant.resource_policy.allowance : null,
+      unit: grant ? String(grant.resource_policy.unit) : COUNTABLE_UNIT,
+    };
+  };
+
+  /**
+   * What this run's executor may actually be promised, given its interface.
+   *
+   * `capability` comes from the adapter's own profile `resources` — interface
+   * findings (is there a whole-job bound? when do counters become readable?),
+   * not host observations, so this is answerable before any qualification run
+   * and identically at admission, at the last-moment check and in the run view.
+   */
+  const enforcementOf = (ctx, capability = null) =>
+    resolveEnforcement({ ...budgetPolicyFor(ctx), capability: capability || {} });
+
   const scheduleDrain = () => track(() => drainQueue());
   const EMPTY_SELF = Object.freeze({ key: null, alias: null, dependencyIds: [], footprint: makeFootprint(), consumes: [], checkResources: [] });
 
@@ -557,12 +626,32 @@ export function createJourney({
     if (changed) event(run_id, "coordination.waiting", { state, verdict: verdict.verdict, reasons });
   }
 
+  /**
+   * Re-open the follow-on for jobs deferred under a position the run has left.
+   *
+   * `deferred` is a statement about the run, not the job: the work is still owed.
+   * Clearing the marker when the run moves puts those jobs back in front of the
+   * recovery scan instead of leaving them permanently parked (DLV-108).
+   */
+  function reopenDeferred(run_id) {
+    const s = getStore();
+    for (const job of s.listJobs(String(run_id))) {
+      if (!job.settled_at || String(job.after_state) !== AFTER_JOB_STATES.DEFERRED) continue;
+      // A cancelled job owes nothing but the receipt it already has. Reopening it
+      // would leave the run offering Reconcile forever for work that does not
+      // exist, so it is closed out here instead of handed back to the scan.
+      s.markAfterJob(String(job.job_id), job.outcome === "cancelled" ? AFTER_JOB_STATES.DONE : null);
+    }
+  }
+
   function clearWaiting(run_id) {
     const s = getStore();
     const run = s.getRun(String(run_id));
     const prior = coordinationOf(run);
     if (!prior.state) return;
     s.updateRun(String(run_id), { coordination_json: { ...prior, state: null, verdict: null, reasons: [], since: null, next: null } });
+    // The hold is gone, so anything it deferred is owed again.
+    reopenDeferred(run_id);
     event(run_id, "coordination.admitted", { after: prior.state });
   }
 
@@ -588,7 +677,11 @@ export function createJourney({
       const approval = approvalFor({ store: s, run: ctx.run, contract: ctx.contract, grant: ctx.grant });
       const latest = planView(latestPlan(s, run_id));
       const plan = approval.ok ? planView(approval.plan) : latest;
-      if ((next.kind === "implement" || next.kind === "repair") && plan) {
+      if ((next.kind === "implement" || next.kind === "repair" || next.kind === REVISE_KIND) && plan) {
+        if (next.kind === REVISE_KIND) {
+          const seen = s.latestResult(run_id) ? parseJson(s.latestResult(run_id).record_json, {}) : {};
+          return revisionInstruction({ plan, findings: String(next.feedback || ""), failures: (seen.criterion_states || []).filter((entry) => entry.state !== "satisfied"), messages });
+        }
         if (next.kind === "implement") return implementationInstruction({ plan, contract: ctx.contract, messages, answers, profile: ctx.settings.work_profile });
         const record = s.latestResult(run_id) ? parseJson(s.latestResult(run_id).record_json, {}) : {};
         return repairInstruction({ plan, failures: (record.criterion_states || []).filter((entry) => entry.state === "failed"), messages });
@@ -812,7 +905,11 @@ export function createJourney({
     if (!described.ok) return { ok: false, refusal: described.refusal, admission: null, profile: null, qualification };
     const admission = admitExecutorProfile(described.profile, {
       requireConfinement: true,
-      strictBoundRequired: policy.executors.strictBoundRequired || policy.resources.strict,
+      // A hard-cap enforcement mode is the same claim a strict numeric policy
+      // makes, so it clears the same gate: a profile that only reports usage
+      // after completion cannot serve either (DLV-114).
+      strictBoundRequired:
+        policy.executors.strictBoundRequired || policy.resources.strict || policy.resources.enforcement === "hard-cap",
     });
     return {
       ok: admission.admitted,
@@ -1100,6 +1197,16 @@ export function createJourney({
       }
     }
     if (ctx.settings.mismatch_open) refusals.push({ code: JOURNEY_REFUSALS.SETTINGS_MISMATCH, detail: "an earlier job reported different settings" });
+    // DLV-114: the requested enforcement mode against the selected executor's own
+    // interface, checked here so an unserveable one refuses *before* anything is
+    // dispatched. A hard cap over an unbounded executor and a stop threshold over
+    // end-of-job-only counters both land here, and neither is downgraded to the
+    // weaker mode that would have run — the owner asked for a ceiling and would
+    // otherwise have been handed a counter.
+    if (profile && profile.profile) {
+      const enforcement = enforcementOf(ctx, profile.profile.resources);
+      if (!enforcement.ok) refusals.push(...enforcement.refusals);
+    }
     if (loaded.ok) {
       // Coordination under the claim: a HELD marker, an unmet prerequisite or a
       // reservation that appeared since admission stops this dispatch. Slots were
@@ -1140,7 +1247,7 @@ export function createJourney({
       ? makeExecutionRef({ backend_id: String(prior.backend_id), dispatch_key: String(prior.dispatch_key), native_ref: String(prior.native_ref) }) : null;
     const taskInput = ctx.settings.task_input || splitTaskInput(acceptanceNow(ctx), ctx.contract.acceptance_fingerprint?.startsWith(BINDING_VERSION) === true);
     const plan = planView(job.plan_id ? s.getPlan(String(job.plan_id)) : latestPlan(s, run_id));
-    const failed = job.purpose === "repair" ? s.listCandidates(run_id).at(-1) : null;
+    const failed = job.purpose === "repair" || isRevisionJob(job) ? s.listCandidates(run_id).at(-1) : null;
     const brief = makeTaskBrief({ input: taskInput, contract: ctx.contract, alias: ctx.workRef?.alias, plan, answers: answeredQuestions(run_id), failedCandidate: failed ? { candidate_id: failed.candidate_id, generation: failed.generation } : null });
     const priorBrief = parseJson(prior?.request_json, {})?.task_brief;
     const planKnown = !plan || s.getPlan(plan.plan_id)?.job_id === prior?.job_id || (priorBrief && parseJson(priorBrief.text, {})?.plan?.revision === plan.revision);
@@ -1192,6 +1299,60 @@ export function createJourney({
     }
 
     inFlight.set(job_id, built.adapter);
+
+    // DLV-114. The monitor is the supervisor's, not the adapter's: the limit is
+    // the run's, so what this job may still spend is the allowance minus what the
+    // run already banked. The adapter calls `observe` from inside its own stream;
+    // everything durable — the warning event, the stop request, the run's
+    // position — happens here, where the store is.
+    const budgetPolicy = budgetPolicyFor(ctx);
+    const banked = ctx.grant ? resourceSummary(s, { run_id, unit: String(ctx.grant.resource_policy.unit) }).settled : 0;
+    // Under a thread-cumulative backend a resumed job's first reading restates
+    // everything the thread has already spent. That earlier spend is already in
+    // `banked`, so it is subtracted here rather than counted twice — the same
+    // baseline `recordDispatchResult` applies when it settles the readings.
+    const threadBaseline = prior
+      ? s
+          .listUsageReadings(String(prior.job_id))
+          .reduce((peak, row) => Math.max(peak, normalizedReading({ input: row.raw_input ?? row.input, output: row.raw_output ?? row.output })), 0)
+      : 0;
+    const monitor = createBudgetMonitor({ ...budgetPolicy, banked, threadBaseline });
+    let budgetStopped = false;
+    const observeUsage = (reading) => {
+      const verdict = monitor.observe(reading);
+      if (verdict.warn) {
+        event(run_id, "budget.warn", { job_id, used: verdict.used, limit: verdict.limit, percent: verdict.percent, mode: verdict.mode });
+      }
+      if (verdict.stop) {
+        budgetStopped = true;
+        // Revokes publication and records the request durably before the abort
+        // returns, so a crash between the crossing and the stream's end still
+        // finds a job that asked to stop rather than one that may be redispatched.
+        s.markStopRequested(job_id);
+        s.updateJob(job_id, {
+          status: s.getJob(job_id).status,
+          outcome: s.getJob(job_id).outcome,
+          observations_json: s.getJob(job_id).observations_json,
+          reason: "the observed token limit was reached during the job",
+          reservation_open: 1,
+          publication_revoked: 1,
+        });
+        event(run_id, "budget.stop", { job_id, used: verdict.used, limit: verdict.limit, percent: verdict.percent, mode: verdict.mode });
+      }
+      return verdict;
+    };
+    // DLV-109: persist each observed event as it happens, under the dispatch's
+    // own ordinal, so the run view shows work in progress. The adapter still
+    // returns the whole buffer at the end; the same ordinals make that a no-op
+    // rather than a second copy.
+    const observeActivity = (entry) => {
+      try {
+        s.appendActivity(run_id, job_id, [entry]);
+      } catch {
+        /* a live relay is a convenience; the final batch is the durable path */
+      }
+    };
+
     let outcome;
     try {
       outcome = await dispatchJob({
@@ -1202,6 +1363,7 @@ export function createJourney({
         priorRef,
         claimant,
         preDispatch,
+        runOptions: { observeUsage, observeActivity },
         onDispatchStarted: () => {
           s.markMessagesDelivered(job_id);
           event(run_id, "job.dispatched", { job_id });
@@ -1231,7 +1393,16 @@ export function createJourney({
       return;
     }
 
-    // A stop requested while the stream was still open is observed now.
+    // What the budget did, kept whether or not it stopped anything, so a run
+    // that finished under its limit still says what the limit was.
+    if (budgetPolicy.limit != null) {
+      s.setJobBudget(job_id, monitor.record({ stopped: budgetStopped }));
+    }
+
+    // A stop requested while the stream was still open is observed now. A budget
+    // crossing arrives through exactly this door: the adapter aborted its own
+    // query, which establishes that we asked, and the environment's removal is
+    // what turns it into an observed termination.
     const after = s.getJob(job_id);
     if (after && after.stop_requested_at && !after.stop_observed_at && runtime.stop) {
       const environment = await runtime.stop(after);
@@ -1246,6 +1417,16 @@ export function createJourney({
     }
     const recorded = s.getJob(job_id);
     event(run_id, "job.recorded", { job_id, status: recorded.status, outcome: recorded.outcome });
+    if (budgetStopped) {
+      // The run's own position, set before `afterJob` so nothing downstream reads
+      // this as an ordinary completion and schedules a repair or a continuation.
+      // It is not `stop-requested`, which would let `closeIfStopped` close a run
+      // whose partial work the owner has not seen yet.
+      const current = s.getRun(run_id);
+      if (current && current.lifecycle !== "CLOSED") {
+        s.updateRun(run_id, { lifecycle: "WAITING", waiting_reason: BUDGET_EXHAUSTED });
+      }
+    }
     await afterJob(job_id);
     await closeIfStopped(run_id);
     scheduleDrain();
@@ -1255,13 +1436,49 @@ export function createJourney({
   // After a job
   // -------------------------------------------------------------------------
 
+  /**
+   * Everything a settled job owes, run to a durable conclusion (DLV-108).
+   *
+   * This is the second half of a dispatch, and the dispatch marker does not
+   * cover it: by the time it runs the job already has a terminal outcome and its
+   * usage is banked, so it is invisible to `listOutstandingJobs`. A crash
+   * anywhere inside it therefore used to strand the run — the artifacts it owed
+   * (plan, candidate, evidence, result, writeback) were never created and no
+   * recovery scan could see that they were missing.
+   *
+   * It is now driven by `reconcile()` as well as by `dispatch()`, so it must be
+   * safe to call any number of times on the same job. Two properties make that
+   * true, and both matter:
+   *
+   *   - It never dispatches. Recovery re-derives artifacts from the job's own
+   *     retained observations and the frozen candidate bytes; no provider is
+   *     contacted, so no usage can double. A repair, which *is* a dispatch, is
+   *     admitted under a content-derived command id and so finds its own receipt
+   *     instead of launching twice.
+   *   - It *resumes* rather than restarts. The old guards ("a plan already exists
+   *     for this job → return") were written for re-entrancy inside one process,
+   *     where anything already recorded meant everything after it had happened
+   *     too. Across a crash that is exactly wrong: a recorded plan with the run
+   *     never moved to review, or a frozen candidate with no result, is the
+   *     normal shape of the interrupted case. Each branch now picks up from the
+   *     last durable artifact instead of declaring itself finished.
+   *
+   * Returns the `after_state` recorded for the job: `done` when nothing further
+   * is owed, `deferred` when the run's own position declines the follow-on for
+   * now, and null when the job is not settled and belongs to the outstanding
+   * scan instead.
+   */
   async function afterJob(job_id) {
     const s = getStore();
     const job = s.getJob(job_id);
-    if (!job) return;
+    if (!job) return null;
     const run_id = String(job.run_id);
     const ctx = context(run_id);
-    if (!ctx) return;
+    if (!ctx) return null;
+    const settle = (state) => {
+      if (job.settled_at) s.markAfterJob(job_id, state);
+      return state;
+    };
 
     const requested = parseJson(job.settings_json, {}) || {};
     const effective = parseJson(job.effective_json, null);
@@ -1270,34 +1487,62 @@ export function createJourney({
     if (verification.mismatch) {
       s.updateRun(run_id, { lifecycle: "WAITING", waiting_reason: "settings-mismatch", settings_json: { ...ctx.settings, mismatch_open: true } });
       event(run_id, "settings.mismatch", { job_id, verification });
-      return;
+      return settle(AFTER_JOB_STATES.DONE);
     }
     // A pause or stop the owner asked for stays the run's stated position; an
-    // unknown job under it is shown as its own obligation.
-    if (["paused", "stop-requested"].includes(String(ctx.run.waiting_reason)) || ctx.run.lifecycle === "CLOSED") return;
+    // unknown job under it is shown as its own obligation. A coordination hold is
+    // the same kind of thing: the queue owns the run until it clears. None of
+    // these means "nothing further is owed", so the job is marked deferred and
+    // re-driven when the position changes rather than written off.
+    if (DEFERRING_REASONS.includes(String(ctx.run.waiting_reason)) || ctx.run.lifecycle === "CLOSED") return settle(AFTER_JOB_STATES.DEFERRED);
     if (job.status === "unknown") {
       s.updateRun(run_id, { lifecycle: "WAITING", waiting_reason: "reconcile" });
-      return;
+      return null;
     }
-    if (job.status !== "finished" || job.outcome === "cancelled") return;
+    if (job.status !== "finished") return null;
+    if (job.outcome === "cancelled") {
+      // A job stopped by its own token limit is cancelled, but its bytes are not
+      // worthless: whatever the writer had produced when the crossing landed is
+      // frozen so the owner can read it. Freezing costs no provider tokens, and
+      // nothing after it is scheduled — no checks, no repair, no continuation.
+      // That is the "no automatic redispatch" half of DLV-114, and it lives here
+      // because this is the one place a settled job decides what happens next.
+      if (job.budget_json && job.access === "write") await freezePartial(run_id, job);
+      return settle(AFTER_JOB_STATES.DONE);
+    }
 
     const observations = (parseJson(job.observations_json, {}) || {}).observations || {};
     const finalText = String(observations.finalText || "");
 
     if (job.access === "read-only") {
-      if (s.listPlans(run_id).some((plan) => plan.job_id === job_id)) return;
+      const recorded = s.listPlans(run_id).find((plan) => plan.job_id === job_id);
+      if (recorded) {
+        // The plan itself is already durable; only the run's position may be
+        // missing, and only while that plan is still the one awaiting an answer.
+        // Once it has been approved or superseded the run has moved on under its
+        // own power and must not be pulled back to review.
+        if (String(recorded.status) === "proposed" && ctx.run.lifecycle !== "CLOSED") {
+          const blocked = openBlockingQuestions(s, run_id, "plan").length > 0;
+          s.updateRun(run_id, { lifecycle: "WAITING", waiting_reason: blocked ? "question" : "plan-review" });
+        }
+        return settle(AFTER_JOB_STATES.DONE);
+      }
       if (job.outcome !== "succeeded") {
         s.updateRun(run_id, { lifecycle: "WAITING", waiting_reason: "investigation-failed" });
         event(run_id, "investigation.failed", { job_id, reason: job.reason });
-        return;
+        return settle(AFTER_JOB_STATES.DONE);
       }
-      const recorded = recordPlan({ store: s, run: ctx.run, contract: ctx.contract, job_id, replyText: finalText });
-      const blocking = recorded.questions.some((question) => question.blocking);
+      const proposed = recordPlan({ store: s, run: ctx.run, contract: ctx.contract, job_id, replyText: finalText });
+      const blocking = proposed.questions.some((question) => question.blocking);
       s.updateRun(run_id, { lifecycle: "WAITING", waiting_reason: blocking ? "question" : "plan-review" });
-      return;
+      return settle(AFTER_JOB_STATES.DONE);
     }
 
-    if (s.listCandidates(run_id).some((row) => row.job_id === job_id)) return;
+    const frozen = s.listCandidates(run_id).find((row) => row.job_id === job_id);
+    if (frozen) {
+      await resumeFrozenCandidate(run_id, frozen);
+      return settle(AFTER_JOB_STATES.DONE);
+    }
     const parsed = parseEngineerReply(finalText);
     const questions = parsed.ok ? extractQuestions(parsed.value).filter((question) => question.blocking) : [];
     if (questions.length) {
@@ -1305,9 +1550,93 @@ export function createJourney({
       recordBuildQuestions({ store: s, run: ctx.run, job_id, plan_revision: plan ? Number(plan.revision) : 0, questions });
       s.updateRun(run_id, { lifecycle: "WAITING", waiting_reason: "question" });
       event(run_id, "question.raised", { job_id, count: questions.length });
-      return;
+      return settle(AFTER_JOB_STATES.DONE);
     }
     await freezeAndCheck(run_id, job);
+    return settle(AFTER_JOB_STATES.DONE);
+  }
+
+  /**
+   * Keep the bytes a stopped job had already written.
+   *
+   * Export and freeze only. `freezeAndCheck` would run the protected checks and,
+   * on a failure, admit a repair — a new provider dispatch, which is exactly what
+   * a run that just hit its limit must not do. Partial work is evidence, not a
+   * candidate for acceptance: it is recorded, and the owner decides.
+   *
+   * Idempotent: a candidate already frozen for this job is left alone, so a
+   * second reconciliation pass adds nothing.
+   */
+  async function freezePartial(run_id, job) {
+    const s = getStore();
+    const ctx = context(run_id);
+    if (!ctx || s.listCandidates(run_id).some((row) => String(row.job_id) === String(job.job_id))) return null;
+    const generation = "C" + (s.listCandidates(run_id).length + 1);
+    let candidate;
+    try {
+      candidate = await runtime.exportCandidate({
+        run_id,
+        job_id: String(job.job_id),
+        generation,
+        generationsRoot: join(generationsRoot, run_id),
+        base_manifest: parseJson(ctx.run.base_manifest_json, []) || [],
+      });
+    } catch (error) {
+      // The partial bytes are a courtesy; failing to keep them does not turn a
+      // stopped run into a failed one, and it certainly does not authorize a retry.
+      event(run_id, "candidate.partial-export-failed", { job_id: String(job.job_id), error: errorText(error) });
+      return null;
+    }
+    s.putCandidate({ run_id, generation, candidate, job_id: String(job.job_id) });
+    event(run_id, "candidate.partial", {
+      generation,
+      candidate_id: candidate.candidate_id,
+      changed: candidateChangedPaths(candidate).length,
+      reason: BUDGET_EXHAUSTED,
+    });
+    return candidate;
+  }
+
+  /**
+   * Finish a candidate that was frozen but whose checking never concluded.
+   *
+   * The candidate's bytes are already on disk and already hashed, so the crash
+   * cost the checking, not the work. Two shapes:
+   *
+   *   - no result names this candidate → the crash landed between the freeze and
+   *     the result. The protected checks are re-run over the same frozen bytes
+   *     and produce the run's one result; the checker is local and deterministic,
+   *     so this spends no provider tokens.
+   *   - a result already names it → that result *is* the completion, and a second
+   *     `evaluate` would mint `result_version` 2 for facts already recorded. The
+   *     run's terminal position and its writeback are re-applied from the stored
+   *     record instead, which is what the crash may actually have lost.
+   */
+  async function resumeFrozenCandidate(run_id, frozen) {
+    const s = getStore();
+    const latest = s.latestResult(run_id);
+    const record = latest ? parseJson(latest.record_json, {}) : null;
+    if (!record || String(record.candidate_ref) !== String(frozen.candidate_id)) {
+      // `allowRepair: false` on purpose. This function is only ever reached on a
+      // recovery pass — an uninterrupted dispatch freezes and evaluates in one
+      // go and never sees its own candidate already recorded — and a repair is a
+      // *new provider dispatch*. Recovery is not allowed to spend tokens the
+      // owner did not watch it decide to spend, so a candidate that fails its
+      // checks here stops at `checks-inconclusive` with all its evidence kept,
+      // and Resume is the explicit control that asks for another attempt.
+      await evaluate(run_id, parseJson(frozen.record_json), { allowRepair: false });
+      return;
+    }
+    const run = s.getRun(run_id);
+    const ref = String(latest.result_id) + "@" + String(latest.result_version);
+    if (run && run.lifecycle !== "CLOSED" && !run.result_ref) {
+      if (record.closed_outcome) s.updateRun(run_id, { lifecycle: "CLOSED", closed_outcome: record.closed_outcome, waiting_reason: null, result_ref: ref });
+      else s.updateRun(run_id, { lifecycle: "WAITING", waiting_reason: "checks-inconclusive", result_ref: ref });
+    }
+    // A writeback that never ran is pending, not failed: retry it from the
+    // recorded result rather than repeating any engineering.
+    if (String(latest.projection_status) !== "current") await project(run_id, record);
+    event(run_id, "result.recovered", { result_version: record.result_version, candidate_id: String(frozen.candidate_id) });
   }
 
   async function freezeAndCheck(run_id, job) {
@@ -1354,7 +1683,9 @@ export function createJourney({
         }
       }
     }
-    return evaluate(run_id, candidate, { allowRepair: true });
+    // A revision is the owner's one explicit attempt: a second failure returns to
+    // review, never to the automatic repair.
+    return evaluate(run_id, candidate, { allowRepair: !isRevisionJob(job) });
   }
 
   function preparedScopeViolations(run_id, candidate) {
@@ -1379,10 +1710,19 @@ export function createJourney({
       environmentDescription: String(runtime.kind || "unknown") + " checker; read-only candidate; no network; restricted environment",
     });
     const execute = runtime.checkExecutor({ run_id, candidate });
+    // DLV-120: the checker's own text, bounded and redacted, published into the
+    // existing artifact store and referenced from the receipt. The blob is
+    // written and read back before the row is recorded, so a dependent receipt
+    // never cites a file that is not there (store.mjs publishArtifact).
+    const retain = ({ artifact_id, kind, bytes }) => {
+      const published = publishArtifact({ dir: join(artifactsRoot, "checks"), artifact_id, kind, bytes });
+      s.putArtifactRow(published);
+      return published.artifact_id;
+    };
     for (const criterion of criteria) {
       let outcome;
       try {
-        outcome = runCheck({ plan, candidate, criterion, execute, env: restrictedEnv(), now });
+        outcome = runCheck({ plan, candidate, criterion, execute, env: restrictedEnv(), now, retain, hostRoot: root });
       } catch (error) {
         outcome = { receipt: null, observation: null, refused: "check-error", detail: errorText(error) };
       }
@@ -1440,6 +1780,74 @@ export function createJourney({
    * Returns null when the owner has not configured it, and the absence is
    * reported by `applyCandidate` rather than passing silently.
    */
+  /**
+   * Pick the environment this verification will be produced in, and say so.
+   *
+   * The isolated checker is preferred whenever the policy allows it and the
+   * runtime offers one. When it cannot be stood up — no dependency volume, no
+   * typescript in it, a program that would not stage — the reason is recorded as
+   * an event and the host fallback is used, *labelled as the fallback*. Under
+   * `isolation: "checker"` no fallback happens at all: the verification refuses
+   * before compiling, because "it compiled on the host instead" is not a
+   * verdict that policy asked for.
+   *
+   * `typecheckExecutor` is the fallback's executor, not an override of the
+   * choice: a fixture scripts two outputs through it and, having no runtime
+   * checker, gets exactly that.
+   */
+  function typecheckEnvironment({ run_id, candidate, configured }) {
+    const isolation = String(configured.isolation || "prefer-checker");
+    const hostChoice = { execute: typecheckExecutor, producer: HOST_PRODUCER, requireIsolation: isolation === "checker" };
+    if (isolation === "host") return hostChoice;
+    if (!runtime || typeof runtime.typecheckExecutor !== "function") {
+      event(run_id, "typecheck.checker-unavailable", { reason: "this runtime has no protected checker" });
+      return hostChoice;
+    }
+    const program = programFileList({
+      hostRoot: root,
+      program: configured.program && configured.program.roots.length ? configured.program : undefined,
+    });
+    let offered;
+    try {
+      offered = runtime.typecheckExecutor({ run_id, candidate, include: [...program.files] });
+    } catch (error) {
+      offered = { ok: false, reason: errorText(error) };
+    }
+    if (!offered || !offered.ok) {
+      event(run_id, "typecheck.checker-unavailable", { reason: offered ? offered.reason : "the runtime declined to provide a checker" });
+      return hostChoice;
+    }
+    event(run_id, "typecheck.checker-ready", {
+      program_fingerprint: offered.program ? offered.program.fingerprint : null,
+      files: offered.program ? offered.program.files : null,
+      typescript: offered.producer.dependencies ? offered.producer.dependencies.typescript : null,
+    });
+    return { execute: offered.execute, producer: offered.producer, requireIsolation: isolation === "checker" };
+  }
+
+  /**
+   * The text an owner actually reads for one piece of evidence.
+   *
+   * Three sources, in the order of how directly they were produced: a retained
+   * check blob (verified on read — a corrupt or missing blob says so rather than
+   * rendering as an empty log), the typecheck's inline retained output, and
+   * finally the receipt's retention note, which is the honest statement that
+   * there is nothing to show.
+   */
+  function retainedCheckOutput(receipt, record) {
+    const refs = (receipt && Array.isArray(receipt.raw_refs) ? receipt.raw_refs : []).filter(Boolean);
+    for (const ref of refs) {
+      const read = readArtifact({ row: getStore().getArtifactRow(String(ref)) });
+      if (read.ok) return read.bytes.toString("utf8");
+      return "The retained check output could not be read back (" + read.reason + ").";
+    }
+    if (record && record.verification && record.verification.output && isNonEmptyString(record.verification.output.text)) {
+      return record.verification.output.text;
+    }
+    if (receipt) return String(receipt.redaction || "Output unavailable");
+    return record && record.verification ? String(record.verification.redaction || "No check receipt") : "No check receipt";
+  }
+
   function typecheckEvidence({ run_id, candidate, policy }) {
     const configured = policy.checks && policy.checks.requiredVerifications ? policy.checks.requiredVerifications.typecheck : null;
     if (!configured || !configured.enabled) return null;
@@ -1447,13 +1855,16 @@ export function createJourney({
 
     let verification;
     try {
+      const chosen = typecheckEnvironment({ run_id, candidate, configured });
       verification = runTypecheckVerification({
         hostRoot: root,
         candidate,
         argv: [...configured.argv],
-        execute: typecheckExecutor,
+        execute: chosen.execute,
         env: restrictedEnv(),
         now,
+        producer: chosen.producer,
+        requireIsolation: chosen.requireIsolation,
       });
     } catch (error) {
       verification = {
@@ -1479,6 +1890,8 @@ export function createJourney({
       candidate_id: String(candidate.candidate_id),
       introduced: verification.counts ? verification.counts.introduced : null,
       reason: verification.reason,
+      producer: verification.environment ? verification.environment.producer : null,
+      isolated: verification.environment ? verification.environment.isolated : null,
     });
 
     const criterion = {
@@ -1488,7 +1901,9 @@ export function createJourney({
       // Advisory records the verdict and blocks nothing; required is a gate.
       required_for: configured.enforcement === "advisory" ? "informational" : "candidate",
       observer: { kind: "command", expected: { spec_id: TYPECHECK_CRITERION_ID } },
-      oracle_ref: "tsc --noEmit over the host checkout with the candidate laid over it",
+      oracle_ref:
+        "tsc --noEmit over the pinned program with the candidate laid over it, in " +
+        String((verification.environment && verification.environment.producer) || "an unrecorded environment"),
       freshness_inputs: ["candidate", "integration-target"],
     };
     const record = {
@@ -1531,7 +1946,9 @@ export function createJourney({
       evidence_refs: records.map((record) => record.evidence_id),
       job_receipt_refs: jobs.map((job) => String(job.job_id)),
       unknownJobs: jobs.filter((job) => job.status === "unknown").map((job) => ({ job_id: String(job.job_id), reason: String(job.reason || "outstanding dispatch") })),
-      resourceSummary: { ...resources, enforcementProfile: ctx.grant.resource_policy.strict ? "strict" : "threshold" },
+      // The mode actually in force, not a guess from `strict`. Calling an
+      // advisory allowance a "threshold" is the label DLV-114 exists to remove.
+      resourceSummary: { ...resources, enforcementProfile: enforcementOf(ctx).mode },
       publicationScopeCheck: candidate ? checkPublicationScope(candidate, ctx.contract.publicationScope) : null,
       integrityViolations: [...integrity, ...(ctx.settings.mismatch_open ? ["effective executor settings did not match the selection"] : [])],
       owner_decision_refs: s.listDecisions(run_id).map((decision) => String(decision.decision_id)),
@@ -1694,6 +2111,7 @@ export function createJourney({
         effort: ctx.settings.effort ?? null,
         observedAs: ctx.settings.observedAs || [],
         continues_job_id,
+        ...(kind === REVISE_KIND ? { revision: true } : {}),
         qualification_ref: profile.profile ? profile.profile.qualification_ref : null,
       },
       plan_id,
@@ -1922,6 +2340,12 @@ export function createJourney({
   async function reconcile() {
     const s = getStore();
     const interruptedApplications = recoverApplications();
+    // Containers whose retained log was replayed but whose record has not been
+    // committed yet. `release` removes the container, and the container log *is*
+    // the replay material, so dropping it before the write lands would make a
+    // failed recovery permanent. They are released below, once the store has
+    // durably accepted the outcome.
+    const replayed = new Set();
     const released = releaseStaleClaims({ store: s, claimant });
     const outcomes = await reconcileOutstanding({
       store: s,
@@ -1950,7 +2374,7 @@ export function createJourney({
                 {},
               )
             : await built.adapter.start(request, {});
-        if (runtime.release) await runtime.release(job);
+        replayed.add(String(job.job_id));
         return { result, source: found.source };
       },
     });
@@ -1959,9 +2383,27 @@ export function createJourney({
       if (!job) continue;
       event(job.run_id, "job.reconcile", { job_id: String(job.job_id), verdict: outcome.verdict, detail: outcome.detail });
       if (outcome.verdict === RETRY_VERDICTS.RECONCILED) {
+        // The outcome is now durable, so the container it was read from is no
+        // longer the only copy and may go. The candidate is exported from the
+        // run's work volume, which container removal does not touch.
+        if (replayed.delete(String(job.job_id)) && runtime.release) await runtime.release(job);
         await afterJob(String(job.job_id));
         await closeIfStopped(String(job.run_id));
       }
+    }
+    // DLV-108: the far side of the dispatch. A job that settled but never
+    // finished what it owed is invisible to the outstanding scan above, because
+    // its status is terminal and its usage is already banked. It is completed
+    // here from its own retained observations and frozen bytes — `afterJob`
+    // dispatches nothing, so this pass cannot reach a provider or double a
+    // reading, and the `after_state` it records makes a second pass a no-op.
+    const settled = [];
+    for (const job of s.listSettledUnprocessedJobs()) {
+      const state = await afterJob(String(job.job_id));
+      if (!state) continue;
+      settled.push({ job_id: String(job.job_id), run_id: String(job.run_id), after_state: state });
+      event(job.run_id, "job.after-recovered", { job_id: String(job.job_id), after_state: state });
+      await closeIfStopped(String(job.run_id));
     }
     for (const job of s.listOutstandingJobs()) {
       if (job.status !== "reserved" || job.dispatch_started_at || job.dispatch_claim) continue;
@@ -1969,11 +2411,11 @@ export function createJourney({
       if (run && run.lifecycle !== "CLOSED" && !["paused", "stop-requested"].includes(String(run.waiting_reason))) schedule(job.job_id);
     }
     scheduleDrain();
-    return deepFreeze({ released, outcomes, interruptedApplications });
+    return deepFreeze({ released, outcomes, settled, interruptedApplications });
   }
 
-  async function control({ run_id, action, command_id, actor, executor = null, model = null, effort = null }) {
-    return once({ command_id, kind: "V2:control:" + String(action), actor, payload: { run_id, action, executor, model, effort } }, async () => {
+  async function control({ run_id, action, command_id, actor, executor = null, model = null, effort = null, findings = null, authorize_revision = false }) {
+    return once({ command_id, kind: "V2:control:" + String(action), actor, payload: { run_id, action, executor, model, effort, ...(action === "revise" ? { findings, authorize_revision } : {}) } }, async () => {
       const ctx = context(run_id);
       if (!ctx || !ctx.contract || !ctx.grant) return refuse(JOURNEY_REFUSALS.UNKNOWN_RUN, run_id);
       const s = ctx.store;
@@ -2004,6 +2446,8 @@ export function createJourney({
           await closeIfStopped(run_id);
           return deepFreeze({ ok: true, released: reconciled.released, outcomes: reconciled.outcomes.filter((entry) => s.getJob(String(entry.job_id)).run_id === run_id), refusals: [] });
         }
+        case "revise":
+          return reviseCandidate(ctx, { findings, authorize_revision, actor, command_id });
         case "recheck": {
           if (ctx.run.lifecycle === "CLOSED") return refuse(JOURNEY_REFUSALS.RUN_CLOSED, ctx.run.closed_outcome);
           const candidates = s.listCandidates(run_id);
@@ -2087,6 +2531,60 @@ export function createJourney({
     });
   }
 
+  /**
+   * The owner's explicit, bounded revision of a checked candidate. The candidate
+   * and every result about it stay exactly as recorded; a dispatch produces the
+   * next generation beside them. Nothing here is automatic: it needs
+   * `authorize_revision: true` on this command, spends one of REVISION_LIMIT, and
+   * its own failure returns to review instead of repairing.
+   */
+  async function reviseCandidate(ctx, { findings, authorize_revision, actor, command_id }) {
+    const s = ctx.store;
+    const run_id = String(ctx.run.run_id);
+    if (authorize_revision !== true) return refuse(JOURNEY_REFUSALS.REVISION_UNAUTHORIZED, "a revision dispatches only on an explicit owner command");
+    const body = typeof findings === "string" ? findings.trim().slice(0, 4000) : "";
+    if (!body) return refuse(JOURNEY_REFUSALS.REVISION_FINDINGS, "record what needs to change");
+    if (ctx.run.lifecycle === "CLOSED") return refuse(JOURNEY_REFUSALS.RUN_CLOSED, ctx.run.closed_outcome);
+    const latest = s.latestResult(run_id);
+    const candidates = s.listCandidates(run_id);
+    const candidate = candidates.length ? candidates[candidates.length - 1] : null;
+    const record = latest ? parseJson(latest.record_json, {}) : null;
+    if (ctx.run.waiting_reason !== "checks-inconclusive" || !candidate || !record || String(record.candidate_ref) !== String(candidate.candidate_id)) {
+      return refuse(JOURNEY_REFUSALS.REVISION_STATE, ctx.run.waiting_reason || ctx.run.lifecycle);
+    }
+    const spent = s.listJobs(run_id).filter((job) => isRevisionJob(job)).length;
+    if (spent >= REVISION_LIMIT) return refuse(JOURNEY_REFUSALS.REVISION_LIMIT, spent + " of " + REVISION_LIMIT);
+    const failures = (record.criterion_states || []).filter((entry) => entry.state !== "satisfied");
+    const approval = approvalFor({ store: s, run: ctx.run, contract: ctx.contract, grant: ctx.grant });
+    if (!approval.ok) return refuse(JOURNEY_REFUSALS.APPROVAL, approval.refusal);
+    const lastWrite = [...s.listJobs(run_id)].reverse().find((job) => job.access === "write");
+    const ref = String(latest.result_id) + "@" + String(latest.result_version);
+    const continuation = await admitContinuation(run_id, {
+      kind: REVISE_KIND,
+      purpose: "resume",
+      access: "write",
+      command_id: command_id + ":revise",
+      actor,
+      continues_job_id: lastWrite ? String(lastWrite.job_id) : null,
+      feedback: body,
+      instructionFor: (messages) => revisionInstruction({ plan: planView(approval.plan), findings: body, failures, messages }),
+    });
+    if (!continuation.ok && !continuation.queued) return deepFreeze({ ok: false, continuation, refusals: continuation.refusals });
+    s.putDecision({
+      decision_id: contentId("d", { v: 1, run_id, kind: "revise", command_id }),
+      run_id,
+      subject_id: String(candidate.candidate_id),
+      subject_revision: ctx.contract.revision,
+      kind: "revision-authorized",
+      requested: "revise",
+      actor,
+      answer: "authorized",
+      evidence_seen: { result: ref, candidate_id: String(candidate.candidate_id), generation: String(candidate.generation), findings: body },
+    });
+    event(run_id, "revision.authorized", { result: ref, candidate_id: String(candidate.candidate_id), queued: Boolean(continuation.queued) });
+    return deepFreeze({ ok: true, queued: Boolean(continuation.queued), continuation, from_candidate: String(candidate.candidate_id), refusals: [] });
+  }
+
   async function resumeRun(ctx, { actor, command_id }) {
     const s = ctx.store;
     const run_id = String(ctx.run.run_id);
@@ -2097,6 +2595,7 @@ export function createJourney({
     const jobs = s.listJobs(run_id);
     const outstanding = jobs.filter((job) => OUTSTANDING_STATUSES.includes(String(job.status)));
     if (outstanding.length) return refuse(JOURNEY_REFUSALS.OUTSTANDING, outstanding.map((job) => String(job.job_id)));
+    reopenDeferred(run_id);
     const lastWrite = [...jobs].reverse().find((job) => job.access === "write");
     const lastNative = [...jobs].reverse().find((job) => job.native_ref);
     s.updateRun(run_id, { lifecycle: "ACTIVE", waiting_reason: null });
@@ -2708,6 +3207,11 @@ export function createJourney({
     if (application && application.state === "interrupted") return { kind: "resolve-application", label: "Resolve apply" };
     if (application && ["prepared", "writing", "checking", "rolling-back"].includes(application.state)) return { kind: "none", label: "Applying" };
     if (jobs.some((job) => job.status === "unknown")) return { kind: "reconcile", label: "Reconcile" };
+    // Settled, but what it owed was never written: a restart-recoverable state,
+    // and Reconcile is the control that recovers it without dispatching.
+    if (run.lifecycle !== "CLOSED" && jobs.some((job) => job.settled_at && job.after_state == null)) {
+      return { kind: "reconcile", label: "Reconcile" };
+    }
     if (jobs.some((job) => job.stop_requested_at && !job.stop_observed_at && job.status !== "finished")) return { kind: "wait", label: "Stop requested" };
     if (isWaiting(run)) return { kind: "waiting", label: "Waiting" };
     if (settings.mismatch_open) return { kind: "settings", label: "Settings mismatch" };
@@ -2730,6 +3234,7 @@ export function createJourney({
       }
       return { kind: "none", label: run.closed_outcome === "cancelled" ? "Cancelled" : "Review result" };
     }
+    if (run.waiting_reason === BUDGET_EXHAUSTED) return { kind: "budget", label: "Limit reached" };
     if (run.waiting_reason === "checks-inconclusive") return { kind: "review-result", label: "Review result" };
     if (run.waiting_reason === "plan-scope-changed") return { kind: "review-result", label: "Review scope" };
     if (RESUMABLE_REASONS.includes(String(run.waiting_reason))) return { kind: "resume", label: run.waiting_reason === "paused" ? "Resume" : "Retry" };
@@ -2835,9 +3340,33 @@ export function createJourney({
             exitCode: receipt ? receipt.exitCode : null,
             runner: receipt ? String(receipt.produced_by || "checker") : null,
             command: record && record.observation && record.observation.detail && record.observation.detail.argv ? record.observation.detail.argv : null,
-            // Check output is intentionally hashed rather than persisted.  State
-            // that evidence gap honestly instead of showing an invented log.
-            output: receipt ? String(receipt.redaction || "Output unavailable") : "No check receipt",
+            // DLV-120: the checker's own bounded, redacted text when it was
+            // retained, read back through the store's integrity check. When it
+            // was not, the receipt's retention note states the evidence gap
+            // honestly rather than showing an invented log.
+            output: retainedCheckOutput(receipt, record),
+            // Which shape this execution was — a runner that never started, a
+            // process whose output said nothing, zero selection, genuinely
+            // failing tests, or a pass. Five different next actions, never
+            // collapsed into one "failed".
+            outcome:
+              (receipt && receipt.outcome) ||
+              (record && record.observation && record.observation.detail && record.observation.detail.failure) ||
+              null,
+            outcomeDetail:
+              (receipt && receipt.outcomeDetail) ||
+              (record && record.observation && record.observation.detail && record.observation.detail.failureDetail) ||
+              null,
+            // Where a typecheck verdict was produced, so an isolated compile and
+            // a host fallback are never shown as the same evidence.
+            environment:
+              record && record.verification && record.verification.environment
+                ? {
+                    producer: String(record.verification.environment.producer || "unknown"),
+                    isolated: Boolean(record.verification.environment.isolated),
+                    detail: String(record.verification.environment.detail || ""),
+                  }
+                : null,
             created_at: String(row.created_at),
           };
         })
@@ -2932,6 +3461,9 @@ export function createJourney({
           // Shared plan-window readings bracketing this job, when the worker
           // could take them. Not per-job consumption; see subscription-window.mjs.
           subscription: parseJson(job.subscription_json, null),
+          // DLV-114: what the in-job monitor saw against the run's limit while
+          // this job ran. Null means no limit was in force for it.
+          budget: parseJson(job.budget_json, null),
           reason: job.reason ? String(job.reason) : null,
           created_at: String(job.created_at),
         };
@@ -2990,6 +3522,15 @@ export function createJourney({
             allowance: ctx.grant.resource_policy.allowance,
             strict: ctx.grant.resource_policy.strict,
             thresholdUsd: loaded.ok ? loaded.policy.dispatch.thresholdUsd : null,
+            // DLV-114. What the allowance is permitted to do, stated rather than
+            // implied: `advisory` counts and warns, `threshold` asks a running
+            // job to stop at the observed crossing. The view must not call an
+            // admission limit a live ceiling.
+            enforcement: loaded.ok ? String(loaded.policy.resources.enforcement || "advisory") : "advisory",
+            warnAtPercent: loaded.ok ? Number(loaded.policy.resources.warnAtPercent) : null,
+            // The most recent job's in-job observation, so "how close are we" is
+            // answerable while a stream is still open rather than only after it.
+            budget: jobs.map((job) => parseJson(job.budget_json, null)).filter(Boolean).at(-1) || null,
           }
         : null,
       coordination: { ...coordinationView(ctx.run), holding: holdingFor(ctx) },

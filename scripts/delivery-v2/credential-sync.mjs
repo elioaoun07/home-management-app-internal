@@ -42,23 +42,34 @@ export function credentialExpiry(backend, credential) {
   return jwtExpiry(credential.tokens.access_token);
 }
 
+// A refusal always names the reconnect action; it never suggests an API key or a paid route.
+const refuse = (code, reason, entry, expiresAt) => ({
+  ok: false,
+  code,
+  reason: reason + " (" + entry.renew + ")",
+  reconnect: entry.renew,
+  ...(expiresAt == null ? {} : { expiresAt }),
+});
+
+/** Sign-in rejected by the provider (HTTP 401/403): revoked or expired server-side. */
+export const revokedRefusal = (backend) => refuse("revoked", "sign-in was rejected by the provider", HOST_CREDENTIAL[backend]);
+
 /** Read and validate the host sign-in. `{ok, credential, expiresAt, fingerprint}` or `{ok:false, reason}`. */
 export function readHostCredential(backend, { home = homedir(), now = Date.now() } = {}) {
   const entry = HOST_CREDENTIAL[backend];
   if (!entry) return { ok: false, reason: "unknown executor" };
   const path = join(home, entry.rel);
-  if (!existsSync(path)) return { ok: false, reason: "not signed in on this laptop (" + entry.renew + ")" };
+  if (!existsSync(path)) return refuse("not-signed-in", "not signed in on this laptop", entry);
   let credential;
   try {
     credential = subscriptionCredential(backend, JSON.parse(readFileSync(path, "utf8")));
   } catch (error) {
-    return { ok: false, reason: String((error && error.message) || error) };
+    return refuse("unreadable", String((error && error.message) || error), entry);
   }
   const expiresAt = credentialExpiry(backend, credential);
-  if (expiresAt == null) return { ok: false, reason: "sign-in expiry unreadable (" + entry.renew + ")" };
-  if (expiresAt - now < MIN_REMAINING_MS) {
-    return { ok: false, reason: "sign-in expires soon; " + entry.renew + " to refresh it", expiresAt };
-  }
+  if (expiresAt == null) return refuse("unreadable", "sign-in expiry unreadable", entry);
+  if (expiresAt <= now) return refuse("expired", "sign-in expired", entry, expiresAt);
+  if (expiresAt - now < MIN_REMAINING_MS) return refuse("expiring", "sign-in expires soon", entry, expiresAt);
   const body = JSON.stringify(credential);
   return { ok: true, credential, body, expiresAt, fingerprint: createHash("sha256").update(body).digest("hex") };
 }
@@ -78,7 +89,7 @@ export function createCredentialSync({ boundary, docker, home = homedir(), now =
   return {
     sync(backend) {
       const volume = boundary.credentials && boundary.credentials[backend] && boundary.credentials[backend].volume;
-      if (!volume) return { ok: false, reason: "subscription login has not been connected to this worker" };
+      if (!volume) return { ok: false, code: "not-connected", reason: "subscription login has not been connected to this worker", reconnect: HOST_CREDENTIAL[backend]?.renew };
       const host = readHostCredential(backend, { home, now: now() });
       if (!host.ok) return host;
       if (synced.get(backend) === host.fingerprint) return { ok: true, copied: false, expiresAt: host.expiresAt };
@@ -89,7 +100,7 @@ export function createCredentialSync({ boundary, docker, home = homedir(), now =
         boundary.image, "node", "-e", writeCredentialScript(backend),
       ];
       const result = docker.run(args, { input: host.body, timeout: 60000 });
-      if (result.status !== 0) return { ok: false, reason: "could not refresh the worker sign-in" };
+      if (result.status !== 0) return { ok: false, code: "sync-failed", reason: "could not refresh the worker sign-in", reconnect: HOST_CREDENTIAL[backend].renew };
       synced.set(backend, host.fingerprint);
       return { ok: true, copied: true, expiresAt: host.expiresAt };
     },

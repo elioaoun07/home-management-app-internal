@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { MIN_REMAINING_MS, createCredentialSync, readHostCredential } from "../../scripts/delivery-v2/credential-sync.mjs";
+import { createContainerRuntime, makeBoundaryConfig } from "../../scripts/delivery-v2/worker-boundary.mjs";
 
 type Loose = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -36,6 +37,7 @@ function homeWith({ claudeExpires, codexExpires }: { claudeExpires?: number; cod
   return home;
 }
 
+const HOST = mkdtempSync(join(tmpdir(), "era-host-"));
 const boundary = { image: "sha256:img", credentials: { "claude-agent-sdk": { volume: "vol-claude" }, "codex-exec-sdk": { volume: "vol-codex" } } };
 const fakeDocker = () => {
   const calls: Loose[] = [];
@@ -72,5 +74,53 @@ describe("credential sync", () => {
     writeFileSync(join(home, ".codex", "auth.json"), JSON.stringify({ auth_mode: "apikey", OPENAI_API_KEY: "sk-x" }));
     expect(readHostCredential("codex-exec-sdk", { home, now: NOW }).ok).toBe(false);
     expect(readHostCredential("claude-agent-sdk", { home, now: NOW })).toMatchObject({ ok: false });
+  });
+});
+
+describe("expired and revoked sign-ins refuse with a reconnect action", () => {
+  it("names the reconnect action and a distinct code for each failure", () => {
+    const expired = homeWith({ claudeExpires: NOW - 1 });
+    expect(readHostCredential("claude-agent-sdk", { home: expired, now: NOW })).toMatchObject({ ok: false, code: "expired", reconnect: "open Claude Code once" });
+    const soon = homeWith({ codexExpires: NOW + MIN_REMAINING_MS - 1 });
+    expect(readHostCredential("codex-exec-sdk", { home: soon, now: NOW })).toMatchObject({ ok: false, code: "expiring", reconnect: "run codex once" });
+    expect(readHostCredential("codex-exec-sdk", { home: homeWith({}), now: NOW })).toMatchObject({ ok: false, code: "not-signed-in", reconnect: "run codex once" });
+  });
+
+  it("never mentions an API key or paid route in a refusal", () => {
+    const result: Loose = readHostCredential("claude-agent-sdk", { home: homeWith({ claudeExpires: NOW - 1 }), now: NOW });
+    expect(result.reason).not.toMatch(/api|key|paid|credit|token/iu);
+  });
+});
+
+describe("container runtime with an unusable sign-in", () => {
+  const runtimeWith = (sync: Loose) => {
+    const calls: string[][] = [];
+    const docker: Loose = { run: (args: string[]) => (calls.push(args), { status: 0, stdout: "", stderr: "" }), lines: async function* () { calls.push(["lines"]); } };
+    const runtime = createContainerRuntime({ boundary: makeBoundaryConfig({ image: "img", credentials: boundary.credentials }), hostRoot: HOST, workRoot: join(HOST, "..", "era-cred-scratch"), docker, credentialSync: sync });
+    return { runtime, calls };
+  };
+  const expiredSync = { sync: () => ({ ok: false, code: "expired", reason: "sign-in expired (open Claude Code once)", reconnect: "open Claude Code once" }) };
+
+  it("reports not ready with the reconnect action, and never probes the provider", async () => {
+    const { runtime, calls } = runtimeWith(expiredSync);
+    expect(await runtime.authReadiness("claude-agent-sdk")).toMatchObject({ ok: false, code: "expired", reconnect: "open Claude Code once" });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("refuses a job dispatch before any container starts", async () => {
+    const { runtime, calls } = runtimeWith(expiredSync);
+    const provisioned: Loose = await runtime.provision({ run_id: "run-1", job: { job_id: "j1", backend_id: "claude-agent-sdk", access: "write", request_json: "{}" }, include: [] });
+    const sdk: Loose = await provisioned.importSdk();
+    const before = calls.length;
+    await expect((async () => { for await (const _ of sdk.query({ prompt: "x", options: {} })) void _; })()).rejects.toThrow(/sign-in expired.*open Claude Code once/u);
+    expect(calls.slice(before).some((args) => args[0] === "run" || args[0] === "lines")).toBe(false);
+  });
+
+  it("treats a provider 401 as a revoked sign-in with a reconnect action, not a paid fallback", async () => {
+    const docker: Loose = {
+      run: () => ({ status: 1, stdout: JSON.stringify({ era: "runner-error", message: "subscription status unavailable (HTTP 401)" }) + "\n", stderr: "" }),
+    };
+    const runtime = createContainerRuntime({ boundary: makeBoundaryConfig({ image: "img", credentials: boundary.credentials }), hostRoot: HOST, workRoot: join(HOST, "..", "era-cred-scratch"), docker, credentialSync: { sync: () => ({ ok: true, copied: false, expiresAt: NOW + 86_400_000 }) } });
+    expect(await runtime.authReadiness("codex-exec-sdk")).toMatchObject({ ok: false, code: "revoked", reconnect: "run codex once" });
   });
 });

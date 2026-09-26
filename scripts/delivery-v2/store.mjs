@@ -62,7 +62,33 @@ import { ContractError, canonicalJson, deepFreeze, normalizePath } from "./contr
 // the subscription-window observations bracketing a job. Rows written before it
 // carry no `raw_*`; `normalization_json IS NULL` is how a legacy row says "these
 // are the provider's own numbers, uninterpreted".
-export const STORE_SCHEMA_VERSION = 7;
+// 8 (DLV-108) closes the crash window on the *far* side of a dispatch.
+// `dispatch_started_at` marks "the request may have been sent"; `settled_at`
+// marks "this job has a terminal outcome", and `after_state` marks "everything
+// owed after that outcome — plan, candidate, checks, result — has reached a
+// durable conclusion". A job that is settled but not yet post-processed is
+// invisible to `listOutstandingJobs` (it is no longer reserved/active/paused/
+// unknown), so before schema 8 a crash in that window left the run stranded with
+// no recovery scan that could see it. Both columns are stamped in the same
+// commit as the state they describe. Rows written before schema 8 carry
+// `settled_at IS NULL` and are deliberately never scanned: an old finished job
+// has already been post-processed by definition, and re-driving it would mint a
+// second result for a closed run.
+// 9 (DLV-114) adds `jobs.budget_json`: what the in-job token monitor observed
+// against the run's limit while the job was still running — mode, limit, banked
+// and observed counts, whether a warning or a stop was requested, and the
+// overshoot the crossing turn had already spent. NULL means no limit was in
+// force for that job, which is a different fact from a limit that held.
+export const STORE_SCHEMA_VERSION = 9;
+
+/** A job status from which no further provider work follows. */
+export const TERMINAL_JOB_STATUSES = Object.freeze(["finished"]);
+
+/** What a settled job still owes. `null` means "not yet post-processed". */
+export const AFTER_JOB_STATES = Object.freeze({
+  DONE: "done",
+  DEFERRED: "deferred",
+});
 
 /** Application states that hold the destination's exclusive claim. */
 export const ACTIVE_APPLICATION_STATES = Object.freeze(["prepared", "writing", "checking", "rolling-back", "interrupted"]);
@@ -389,6 +415,16 @@ const ADDED_COLUMNS = Object.freeze({
     // Subscription-window observations bracketing this job: shared plan windows,
     // not per-job consumption. See `subscription-window.mjs`.
     ["subscription_json", "TEXT"],
+    // Schema 8 (DLV-108). NULL on a legacy row means "written before this
+    // boundary existed", which is why the recovery scan requires a non-NULL
+    // `settled_at` rather than treating every finished job as unprocessed.
+    ["settled_at", "TEXT"],
+    ["after_state", "TEXT"],
+    // Schema 9 (DLV-114). What the in-job token monitor observed for this job:
+    // mode, limit, banked and observed counts, whether a warning or a stop was
+    // requested, and the overshoot the crossing turn had already spent. NULL
+    // means no limit was in force, which is different from a limit that held.
+    ["budget_json", "TEXT"],
   ],
   runs: [
     ["settings_json", "TEXT"],
@@ -827,13 +863,25 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
       return api.getJob(job_id);
     },
 
+    /**
+     * Apply a job patch, stamping the settlement boundary in the same UPDATE.
+     *
+     * `settled_at` is written here rather than by the caller for the same reason
+     * `dispatch_key = job_id` is a CHECK constraint: every path that can make a
+     * job terminal — a normal dispatch, a reconciliation from a retained native
+     * log, an observed stop — goes through this one statement, and recovery must
+     * be able to trust the marker whoever wrote the row. It is COALESCEd, so the
+     * earliest terminal moment stays the true one and a late-arriving stream that
+     * re-writes a finished job does not move the boundary.
+     */
     updateJob(job_id, patch) {
       const job = api.getJob(job_id);
       if (!job) throw new ContractError(STORE_REFUSALS.UNKNOWN_JOB + ": " + job_id);
       const next = { ...job, ...patch };
+      const at = now();
       sql(
         `UPDATE jobs SET status = ?, outcome = ?, observations_json = ?, reason = ?,
-           reservation_open = ?, publication_revoked = ?, updated_at = ? WHERE job_id = ?`,
+           reservation_open = ?, publication_revoked = ?, settled_at = ?, updated_at = ? WHERE job_id = ?`,
       ).run(
         next.status,
         next.outcome ?? null,
@@ -841,10 +889,50 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
         next.reason ?? null,
         next.reservation_open ? 1 : 0,
         next.publication_revoked ? 1 : 0,
-        now(),
+        job.settled_at || (TERMINAL_JOB_STATUSES.includes(String(next.status)) ? at : null),
+        at,
         job_id,
       );
       return api.getJob(job_id);
+    },
+
+    /**
+     * Record what a settled job still owes.
+     *
+     * `done` means every durable artifact that follows the outcome — plan,
+     * questions, candidate, evidence, result, projection attempt — has been
+     * written or deliberately declined. `deferred` means the run's own stated
+     * position (paused, stop-requested, closed, or held by coordination) declines
+     * the follow-on for now; the marker is cleared when that position changes so
+     * the work is picked up again rather than silently dropped.
+     */
+    markAfterJob(job_id, state) {
+      const job = api.getJob(job_id);
+      if (!job) throw new ContractError(STORE_REFUSALS.UNKNOWN_JOB + ": " + job_id);
+      sql("UPDATE jobs SET after_state = ?, updated_at = ? WHERE job_id = ?").run(state ?? null, now(), job_id);
+      return api.getJob(job_id);
+    },
+
+    /**
+     * Jobs that reached a terminal outcome but never finished what follows it.
+     *
+     * The counterpart to `listOutstandingJobs`: that scan covers the window
+     * between "we may have dispatched" and "we know the outcome", this one covers
+     * the window between "we know the outcome" and "the outcome has been turned
+     * into durable artifacts". A crash between them used to be unrecoverable
+     * because neither scan could see the job (DLV-108).
+     *
+     * `settled_at IS NOT NULL` excludes rows written before schema 8, whose
+     * post-processing completed under the old code and must not be re-driven.
+     */
+    listSettledUnprocessedJobs() {
+      return sql(
+        `SELECT * FROM jobs
+          WHERE settled_at IS NOT NULL
+            AND after_state IS NULL
+            AND status IN (${TERMINAL_JOB_STATUSES.map(() => "?").join(", ")})
+          ORDER BY created_at, job_id`,
+      ).all(...TERMINAL_JOB_STATUSES);
     },
 
     // -- usage --------------------------------------------------------------
@@ -886,6 +974,23 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
         reading.normalization ? JSON.stringify(reading.normalization) : null,
       );
       return { inserted: api.countUsageReadings(job_id) > before };
+    },
+
+    /**
+     * Record what the in-job token monitor observed for a job (DLV-114).
+     *
+     * Beside the usage rows rather than inside them: those are the provider's
+     * readings, this is the supervisor's interpretation of them against a limit,
+     * and the two must stay separable when the interpretation is later revised.
+     */
+    setJobBudget(job_id, record) {
+      if (!api.getJob(job_id)) throw new ContractError(STORE_REFUSALS.UNKNOWN_JOB + ": " + job_id);
+      sql("UPDATE jobs SET budget_json = ?, updated_at = ? WHERE job_id = ?").run(
+        record == null ? null : JSON.stringify(record),
+        now(),
+        job_id,
+      );
+      return api.getJob(job_id);
     },
 
     /**
@@ -1147,6 +1252,19 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
 
     // -- observed activity -------------------------------------------------
 
+    /**
+     * Record observed activity.
+     *
+     * An entry that carries its own `seq` is stored under it. That is what makes
+     * the live relay idempotent (DLV-109): the adapter hands each event over as
+     * it happens *and* returns the whole buffer with the dispatch result, so the
+     * same event arrives twice by design. Under the dispatch's own ordinal the
+     * second arrival is the `INSERT OR IGNORE` no-op it should be, and a replayed
+     * or reconciled stream reproduces the same ordinals rather than a second copy.
+     *
+     * An entry with no `seq` keeps the old append-after-the-last behaviour, so
+     * rows written before the adapters stamped one are unaffected.
+     */
     appendActivity(run_id, job_id, entries) {
       const start = Number(sql("SELECT COALESCE(MAX(seq), -1) AS m FROM activity WHERE job_id = ?").get(job_id).m) + 1;
       const insert = sql(
@@ -1155,7 +1273,7 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
       (entries || []).forEach((entry, index) => {
         insert.run(
           job_id,
-          start + index,
+          Number.isInteger(entry && entry.seq) ? entry.seq : start + index,
           run_id,
           entry.at ?? null,
           String(entry.kind || "event"),

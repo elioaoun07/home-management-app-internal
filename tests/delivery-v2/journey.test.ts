@@ -156,6 +156,10 @@ function makeHarness() {
       writeIn(dir, access, "src/amount.ts", script.buildContent ?? "export const amount = 20;\n");
       return "done";
     }
+    if (prompt.startsWith("The owner reviewed the checked candidate")) {
+      writeIn(dir, access, "src/amount.ts", script.repairContent ?? "export const amount = 20;\n");
+      return "revised";
+    }
     if (prompt.startsWith("Protected checks failed")) {
       writeIn(dir, access, "src/amount.ts", script.repairContent ?? "export const amount = 20;\n");
       return "repaired";
@@ -416,8 +420,17 @@ describe.each(["claude", "codex"] as const)("one dependable journey on %s", (exe
       diff: "--- a/src/amount.ts\n+++ b/src/amount.ts\n@@ -1,1 +1,1 @@\n-export const amount = 25;\n+export const amount = 20;",
     } }]);
     expect(view.candidates).toEqual([expect.objectContaining({ generation: "C1", changed: [{ path: "src/amount.ts", kind: "update" }] })]);
+    // DLV-120: the checker's own output is retained and read back from the
+    // artifact store, not hashed away. `outcome` says which shape this was.
     expect(view.evidence).toEqual([
-      expect.objectContaining({ criterion_id: "amount-check", criterion_revision: 1, state: "satisfied", runner: "delivery-v2/protected-checker", output: expect.stringContaining("hashed") }),
+      expect.objectContaining({
+        criterion_id: "amount-check",
+        criterion_revision: 1,
+        state: "satisfied",
+        runner: "delivery-v2/protected-checker",
+        outcome: "passed",
+        output: expect.stringContaining("Tests  1 passed (1)"),
+      }),
     ]);
     expect(view.result.candidateVerified).toBe(true);
     expect(view.result.observedDisposition).toBe("verified_candidate");
@@ -908,5 +921,501 @@ describe("pause and resume", () => {
     expect(h.calls[1].kind).toBe("resume");
     expect(h.calls[1].access).toBe("read-only");
     expect(view.plans).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DLV-108 — recovery after a job has finished.
+//
+// `dispatch_started_at` closes the window before the provider call. This suite
+// covers the window *after* the outcome is known: settlement is committed and
+// the usage is banked, but the artifacts the outcome owes — plan, candidate,
+// evidence, result, writeback — are written outside that transaction. A job in
+// that window is terminal, so the outstanding scan cannot see it, and before
+// schema 8 nothing else could either.
+//
+// Each test drops the process at one boundary, reopens the store in a new
+// supervisor, and reconciles TWICE. They assert the same four properties,
+// because they are what "recovered" has to mean here:
+//
+//   exactly-once completion  one plan / one candidate / one result, at result
+//                            version 1 — never a second transition for facts
+//                            already recorded
+//   no redispatch            `h.calls` does not grow; no adapter is entered
+//   no doubled usage         the run's banked token and cost totals are the
+//                            same numbers after recovery as before it
+//   recoverable artifacts    the candidate bytes, evidence and PM writeback the
+//                            crash interrupted all exist afterwards
+//
+// The second reconcile is not decoration: it is the difference between "the
+// recovery worked" and "the recovery is idempotent", and an unattended restart
+// loop needs the second one.
+// ---------------------------------------------------------------------------
+
+/** A store that loses the process immediately before one chosen write. */
+function crashingStore(real: Loose, fire: (method: string, args: Loose[]) => boolean): Loose {
+  let fired = false;
+  return new Proxy(real, {
+    get(target: Loose, prop: string | symbol) {
+      const value = target[prop as string];
+      if (typeof value !== "function") return value;
+      return (...args: Loose[]) => {
+        if (!fired && fire(String(prop), args)) {
+          fired = true;
+          // Everything committed before this point survives; this call and
+          // everything after it does not. That is the crash.
+          throw new Error("process lost before " + String(prop));
+        }
+        return value.apply(target, args);
+      };
+    },
+  }) as Loose;
+}
+
+/** What the run has actually banked, across every job. */
+function spendOf(run_id: string) {
+  const readings = store.listJobs(run_id).flatMap((job: Loose) => store.listUsageReadings(String(job.job_id)) as Loose[]);
+  return {
+    rows: readings.length,
+    input: readings.reduce((total: number, row: Loose) => total + Number(row.input || 0), 0),
+    output: readings.reduce((total: number, row: Loose) => total + Number(row.output || 0), 0),
+    costUsd: readings.reduce((total: number, row: Loose) => total + Number(row.cost_usd || 0), 0),
+  };
+}
+
+const storePath = () => join(ROOT, ".delivery", "v2", "supervisor.sqlite");
+const SQLITE_MODULE: string = "node:sqlite";
+
+/** A fresh supervisor process over the same on-disk store. */
+function restart(h: ReturnType<typeof makeHarness>) {
+  store.close();
+  store = openStore({ path: storePath() });
+  return journeyWith(h);
+}
+
+describe.each(["claude", "codex"] as const)("DLV-108 terminal-job recovery on %s", (executor) => {
+  it("recovers an investigation lost between settlement and its plan", async () => {
+    const h = makeHarness();
+    // The environment cleanup that runs between the outcome and the follow-on.
+    h.runtime.release = async () => {
+      throw new Error("process lost during cleanup");
+    };
+    const journey = journeyWith(h);
+    const delivered = (await journey.deliver({ ...SELECT_14, ...SETTINGS[executor], command_id: cmd(), actor: "owner" })) as Loose;
+    const run_id = String(delivered.run_id);
+    await journey.idle();
+
+    // The interrupted shape: terminal and paid for, with nothing to show for it.
+    const job = store.listJobs(run_id)[0];
+    expect(job.status).toBe("finished");
+    expect(job.settled_at).not.toBeNull();
+    expect(job.after_state).toBeNull();
+    expect(store.listPlans(run_id)).toHaveLength(0);
+    const banked = spendOf(run_id);
+    expect(banked.rows).toBeGreaterThan(0);
+    // Invisible to the scan that exists for the other side of the dispatch.
+    expect(store.listOutstandingJobs()).toEqual([]);
+    expect(store.listSettledUnprocessedJobs().map((row: Loose) => String(row.job_id))).toEqual([String(job.job_id)]);
+
+    h.runtime.release = async () => undefined;
+    const restarted = restart(h);
+    expect(detailOf(restarted, run_id).ownerAction.label).toBe("Reconcile");
+
+    const first = (await restarted.reconcile()) as Loose;
+    await restarted.idle();
+    expect(first.settled).toEqual([{ job_id: String(job.job_id), run_id, after_state: "done" }]);
+
+    let view = detailOf(restarted, run_id);
+    expect(view.plans).toHaveLength(1);
+    expect(view.plans[0].body.steps).toEqual([{ title: "change the constant" }]);
+    expect(view.run.waiting_reason).toBe("plan-review");
+    expect(view.ownerAction.label).toBe("Review plan");
+    expect(h.calls).toHaveLength(1);
+    expect(spendOf(run_id)).toEqual(banked);
+    const recovered = view.plans[0].plan_id;
+
+    // Twice. Nothing is proposed again, nothing is charged again.
+    const second = (await restarted.reconcile()) as Loose;
+    await restarted.idle();
+    expect(second.settled).toEqual([]);
+    view = detailOf(restarted, run_id);
+    expect(view.plans).toHaveLength(1);
+    expect(view.plans[0].plan_id).toBe(recovered);
+    expect(store.listJobs(run_id)).toHaveLength(1);
+    expect(h.calls).toHaveLength(1);
+    expect(spendOf(run_id)).toEqual(banked);
+    expect(store.getJob(String(job.job_id))!.after_state).toBe("done");
+  });
+
+  it("does not propose a second plan when only the run's position was lost", async () => {
+    const h = makeHarness();
+    // The plan's own transaction commits; the run never reaches review.
+    const crashed = crashingStore(store, (method, args) => method === "updateRun" && String((args[1] as Loose)?.waiting_reason) === "plan-review");
+    const journey = journeyWith(h, { store: () => crashed });
+    const delivered = (await journey.deliver({ ...SELECT_14, ...SETTINGS[executor], command_id: cmd(), actor: "owner" })) as Loose;
+    const run_id = String(delivered.run_id);
+    await journey.idle();
+
+    expect(store.listPlans(run_id)).toHaveLength(1);
+    expect(store.getRun(run_id)!.waiting_reason).not.toBe("plan-review");
+    expect(store.listJobs(run_id)[0].after_state).toBeNull();
+    const banked = spendOf(run_id);
+
+    const restarted = restart(h);
+    for (const pass of [1, 2]) {
+      await restarted.reconcile();
+      await restarted.idle();
+      const view = detailOf(restarted, run_id);
+      expect(view.plans, "pass " + pass).toHaveLength(1);
+      expect(view.plans[0].revision).toBe(1);
+      expect(view.run.waiting_reason).toBe("plan-review");
+      expect(h.calls).toHaveLength(1);
+      expect(spendOf(run_id)).toEqual(banked);
+    }
+
+    // And the recovered plan is a real one: it can still be approved and built on.
+    const view = detailOf(restarted, run_id);
+    await restarted.decide({ run_id, plan_id: view.plans[0].plan_id, plan_revision: 1, decision: "approve", command_id: cmd(), actor: "owner" });
+    await restarted.idle();
+    expect(detailOf(restarted, run_id).run.closed_outcome).toBe("verified_candidate");
+  });
+
+  it("recovers an implementation lost between settlement and its candidate", async () => {
+    const h = makeHarness();
+    const journey = journeyWith(h);
+    const delivered = await deliverPlan(journey, executor);
+    const run_id = String(delivered.run_id);
+    const plan = latestPlanOf(journey, run_id);
+
+    // Cleanup fails only on the implementation job, after its outcome is banked.
+    h.runtime.release = async () => {
+      throw new Error("process lost during cleanup");
+    };
+    await journey.decide({ run_id, plan_id: plan.plan_id, plan_revision: 1, decision: "approve", command_id: cmd(), actor: "owner" });
+    await journey.idle();
+
+    const build = store.listJobs(run_id).find((row: Loose) => row.access === "write")!;
+    expect(build.status).toBe("finished");
+    expect(build.settled_at).not.toBeNull();
+    expect(build.after_state).toBeNull();
+    expect(store.listCandidates(run_id)).toHaveLength(0);
+    expect(store.listResults(run_id)).toHaveLength(0);
+    const banked = spendOf(run_id);
+    const calls = h.calls.length;
+
+    h.runtime.release = async () => undefined;
+    const restarted = restart(h);
+    await restarted.reconcile();
+    await restarted.idle();
+
+    let view = detailOf(restarted, run_id);
+    expect(view.candidates).toHaveLength(1);
+    expect(view.candidate.changed).toEqual([{ path: "src/amount.ts", kind: "update", review: expect.objectContaining({ state: "available" }) }]);
+    expect(view.evidence).toEqual([expect.objectContaining({ criterion_id: "amount-check", state: "satisfied" })]);
+    expect(view.result.result_version).toBe(1);
+    expect(view.run.closed_outcome).toBe("verified_candidate");
+    expect(view.ownerAction.label).toBe("Apply");
+    // The writeback the crash swallowed is written now, from the recovered result.
+    expect(readFileSync(bookPath(), "utf8")).toMatch(new RegExp("\\*\\*BUD-14\\*\\* V2 run `" + run_id + "`"));
+    expect(h.calls).toHaveLength(calls);
+    expect(spendOf(run_id)).toEqual(banked);
+
+    await restarted.reconcile();
+    await restarted.idle();
+    view = detailOf(restarted, run_id);
+    expect(store.listCandidates(run_id)).toHaveLength(1);
+    expect(store.listResults(run_id)).toHaveLength(1);
+    expect(view.result.result_version).toBe(1);
+    expect(store.listJobs(run_id)).toHaveLength(2);
+    expect(h.calls).toHaveLength(calls);
+    expect(spendOf(run_id)).toEqual(banked);
+  });
+
+  it("checks a frozen candidate rather than re-running the work that produced it", async () => {
+    const h = makeHarness();
+    // The candidate is frozen and hashed; the result never lands.
+    const crashed = crashingStore(store, (method) => method === "putResult");
+    const journey = journeyWith(h, { store: () => crashed });
+    const delivered = await deliverPlan(journey, executor);
+    const run_id = String(delivered.run_id);
+    const plan = latestPlanOf(journey, run_id);
+    await journey.decide({ run_id, plan_id: plan.plan_id, plan_revision: 1, decision: "approve", command_id: cmd(), actor: "owner" });
+    await journey.idle();
+
+    expect(store.listCandidates(run_id)).toHaveLength(1);
+    expect(store.listResults(run_id)).toHaveLength(0);
+    const frozen = store.listCandidates(run_id)[0];
+    expect(store.listJobs(run_id).find((row: Loose) => row.access === "write")!.after_state).toBeNull();
+    const banked = spendOf(run_id);
+    const calls = h.calls.length;
+    const checksBefore = h.checks.length;
+
+    const restarted = restart(h);
+    await restarted.reconcile();
+    await restarted.idle();
+
+    let view = detailOf(restarted, run_id);
+    // The same bytes: recovery checked the candidate, it did not rebuild it.
+    expect(store.listCandidates(run_id)).toHaveLength(1);
+    expect(store.listCandidates(run_id)[0].candidate_id).toBe(frozen.candidate_id);
+    expect(view.result.result_version).toBe(1);
+    expect(view.result.candidateVerified).toBe(true);
+    expect(view.run.closed_outcome).toBe("verified_candidate");
+    // The local checker ran; no adapter did.
+    expect(h.checks.length).toBeGreaterThan(checksBefore);
+    expect(h.calls).toHaveLength(calls);
+    expect(spendOf(run_id)).toEqual(banked);
+    const evidenceAfter = store.listEvidence(run_id).length;
+    expect(evidenceAfter).toBeGreaterThan(0);
+
+    const checksAfter = h.checks.length;
+    await restarted.reconcile();
+    await restarted.idle();
+    view = detailOf(restarted, run_id);
+    expect(store.listResults(run_id)).toHaveLength(1);
+    expect(view.result.result_version).toBe(1);
+    // A result that already names this candidate is the completion: the second
+    // pass re-checks nothing and re-writes nothing.
+    expect(h.checks).toHaveLength(checksAfter);
+    expect(store.listEvidence(run_id)).toHaveLength(evidenceAfter);
+    expect(h.calls).toHaveLength(calls);
+    expect(spendOf(run_id)).toEqual(banked);
+  });
+
+  it("keeps the retained container output until the recovered outcome is durable", async () => {
+    const h = makeHarness();
+    // The job dies mid-stream, so it settles as `unknown` and must be recovered
+    // from the container log — the material `release` destroys.
+    h.script.dieAfterStart = true;
+    const journey = journeyWith(h);
+    const delivered = await deliverPlan(journey, executor);
+    const run_id = String(delivered.run_id);
+    const job = store.listJobs(run_id)[0];
+    expect(job.status).toBe("unknown");
+
+    const plan = '```json\n{"outcome":"emit 20","steps":["change the constant"]}\n```';
+    h.retained.set(
+      String(job.job_id),
+      executor === "claude"
+        ? [
+            { type: "system", subtype: "init", model: "claude-test", session_id: job.native_ref },
+            { type: "assistant", parent_tool_use_id: null, message: { content: [{ type: "text", text: plan }] } },
+            { type: "result", subtype: "success", is_error: false, result: plan, total_cost_usd: 0.02, usage: { input_tokens: 10 } },
+          ]
+        : [
+            { type: "thread.started", thread_id: job.native_ref },
+            { type: "item.completed", item: { type: "agent_message", text: plan } },
+            { type: "turn.completed", usage: { input_tokens: 10, cached_input_tokens: 0, output_tokens: 2, reasoning_output_tokens: 0 } },
+          ],
+    );
+    h.script.dieAfterStart = false;
+
+    // Every release, with the job's status at the moment the container went.
+    const releases: Loose[] = [];
+    h.runtime.release = async (released: Loose) => {
+      releases.push({ job_id: String(released.job_id), statusAtRelease: String(store.getJob(String(released.job_id))!.status) });
+    };
+
+    const restarted = restart(h);
+    await restarted.reconcile();
+    await restarted.idle();
+
+    // The container is dropped only after the store has accepted the outcome, so
+    // a write that failed would still have the log to replay from.
+    expect(releases).toContainEqual({ job_id: String(job.job_id), statusAtRelease: "finished" });
+    expect(releases.every((entry: Loose) => entry.statusAtRelease !== "unknown")).toBe(true);
+    expect(detailOf(restarted, run_id).plans).toHaveLength(1);
+    expect(h.calls).toHaveLength(1);
+  });
+
+  it("does not mint a second result when only the closing transition was lost", async () => {
+    const h = makeHarness();
+    // The result is recorded; the run is never closed against it.
+    const crashed = crashingStore(store, (method, args) => method === "updateRun" && String((args[1] as Loose)?.lifecycle) === "CLOSED");
+    const journey = journeyWith(h, { store: () => crashed });
+    const delivered = await deliverPlan(journey, executor);
+    const run_id = String(delivered.run_id);
+    const plan = latestPlanOf(journey, run_id);
+    await journey.decide({ run_id, plan_id: plan.plan_id, plan_revision: 1, decision: "approve", command_id: cmd(), actor: "owner" });
+    await journey.idle();
+
+    expect(store.listResults(run_id)).toHaveLength(1);
+    expect(store.getRun(run_id)!.lifecycle).not.toBe("CLOSED");
+    expect(store.getRun(run_id)!.result_ref).toBeNull();
+    const banked = spendOf(run_id);
+    const calls = h.calls.length;
+
+    const restarted = restart(h);
+    for (const pass of [1, 2]) {
+      await restarted.reconcile();
+      await restarted.idle();
+      const view = detailOf(restarted, run_id);
+      expect(store.listResults(run_id), "pass " + pass).toHaveLength(1);
+      expect(view.result.result_version).toBe(1);
+      expect(view.run.lifecycle).toBe("CLOSED");
+      expect(view.run.closed_outcome).toBe("verified_candidate");
+      expect(view.result.projection_status).toBe("current");
+      expect(store.listCandidates(run_id)).toHaveLength(1);
+      expect(h.calls).toHaveLength(calls);
+      expect(spendOf(run_id)).toEqual(banked);
+    }
+    expect(readFileSync(bookPath(), "utf8")).toMatch(new RegExp("\\*\\*BUD-14\\*\\* V2 run `" + run_id + "`"));
+  });
+
+  it("holds a settled job's follow-on while the owner has paused the run, and never loses it", async () => {
+    const h = makeHarness();
+    h.script.hang = true;
+    const journey = journeyWith(h);
+    const delivered = (await journey.deliver({ ...SELECT_14, ...SETTINGS[executor], command_id: cmd(), actor: "owner" })) as Loose;
+    const run_id = String(delivered.run_id);
+    for (let tries = 0; tries < 200 && store.listJobs(run_id)[0]?.status !== "active"; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    await journey.control({ run_id, action: "pause", command_id: cmd(), actor: "owner" });
+    await journey.idle();
+
+    // Settled by the observed stop, under a position that declines the follow-on.
+    const job = store.listJobs(run_id)[0];
+    expect(job.status).toBe("finished");
+    expect(job.settled_at).not.toBeNull();
+    expect(store.getRun(run_id)!.waiting_reason).toBe("paused");
+
+    const restarted = restart(h);
+    await restarted.reconcile();
+    await restarted.idle();
+    // Deferred, not done: the work is owed, the run is simply not taking it now.
+    expect(store.getJob(String(job.job_id))!.after_state).toBe("deferred");
+    expect(store.listSettledUnprocessedJobs()).toEqual([]);
+    expect(detailOf(restarted, run_id).run.waiting_reason).toBe("paused");
+    expect(detailOf(restarted, run_id).ownerAction.label).toBe("Resume");
+    expect(h.calls).toHaveLength(1);
+
+    // Leaving that position releases the hold without leaving a phantom obligation.
+    h.script.hang = false;
+    await restarted.control({ run_id, action: "resume", command_id: cmd(), actor: "owner" });
+    await restarted.idle();
+    const view = detailOf(restarted, run_id);
+    expect(view.plans).toHaveLength(1);
+    expect(view.ownerAction.label).toBe("Review plan");
+    expect(store.listSettledUnprocessedJobs()).toEqual([]);
+  });
+});
+
+describe("DLV-108 settlement marker", () => {
+  it("never re-drives a job that settled before the marker existed", async () => {
+    const h = makeHarness();
+    const journey = journeyWith(h);
+    const delivered = await deliverPlan(journey, "claude");
+    const run_id = String(delivered.run_id);
+    const plan = latestPlanOf(journey, run_id);
+    await journey.decide({ run_id, plan_id: plan.plan_id, plan_revision: 1, decision: "approve", command_id: cmd(), actor: "owner" });
+    await journey.idle();
+    expect(detailOf(journey, run_id).run.closed_outcome).toBe("verified_candidate");
+
+    // Rewrite the rows as schema 7 wrote them: finished, with no settlement
+    // marker and no after-state. Their post-processing completed under the old
+    // code, so the scan must ignore them — re-driving a closed run would mint a
+    // second result for facts that are already recorded.
+    store.close();
+    // The store's own binding, reached without a static specifier: @types/node 20
+    // has no `node:sqlite` declarations and the runtime is Node 22.
+    const { DatabaseSync } = (await import(SQLITE_MODULE)) as Loose;
+    const raw = new DatabaseSync(storePath());
+    raw.exec("UPDATE jobs SET settled_at = NULL, after_state = NULL");
+    raw.close();
+    store = openStore({ path: storePath() });
+    expect(store.listSettledUnprocessedJobs()).toEqual([]);
+
+    const restarted = journeyWith(h);
+    await restarted.reconcile();
+    await restarted.idle();
+    expect(store.listResults(run_id)).toHaveLength(1);
+    expect(detailOf(restarted, run_id).result.result_version).toBe(1);
+    expect(detailOf(restarted, run_id).run.closed_outcome).toBe("verified_candidate");
+  });
+});
+
+describe("owner-authorized revision of a checked candidate (DLV-113)", () => {
+  async function inconclusive(h: ReturnType<typeof makeHarness>) {
+    h.zeroTests = true;
+    const journey = journeyWith(h);
+    const delivered = await deliverPlan(journey, "claude");
+    const run_id = String(delivered.run_id);
+    await journey.decide({ run_id, plan_id: latestPlanOf(journey, run_id).plan_id, plan_revision: 1, decision: "approve", command_id: cmd(), actor: "owner" });
+    await journey.idle();
+    expect(detailOf(journey, run_id).run.waiting_reason).toBe("checks-inconclusive");
+    return { journey, run_id };
+  }
+
+  it("refuses without explicit authorization or findings, and dispatches nothing", async () => {
+    const h = makeHarness();
+    const { journey, run_id } = await inconclusive(h);
+    const jobs = store.listJobs(run_id).length;
+    const bare = (await journey.control({ run_id, action: "revise", findings: "fix it", command_id: cmd(), actor: "owner" })) as Loose;
+    expect(bare.refusals[0].code).toBe("revision-not-authorized");
+    const empty = (await journey.control({ run_id, action: "revise", findings: "  ", authorize_revision: true, command_id: cmd(), actor: "owner" })) as Loose;
+    expect(empty.refusals[0].code).toBe("revision-findings-required");
+    await journey.message({ run_id, body: "please fix", command_id: cmd(), actor: "owner" });
+    await journey.idle();
+    expect(store.listJobs(run_id)).toHaveLength(jobs);
+    expect(store.listCandidates(run_id)).toHaveLength(1);
+  });
+
+  it("keeps C1 and its result, binds findings to them, and produces C2", async () => {
+    const h = makeHarness();
+    const { journey, run_id } = await inconclusive(h);
+    const c1 = store.listCandidates(run_id)[0] as Loose;
+    const before = store.listResults(run_id).length;
+    h.zeroTests = false;
+    const command_id = cmd();
+    const revised = (await journey.control({ run_id, action: "revise", findings: "amount must be 20", authorize_revision: true, command_id, actor: "owner" })) as Loose;
+    expect(revised.ok).toBe(true);
+    await journey.idle();
+    const candidates = store.listCandidates(run_id) as Loose[];
+    expect(candidates.map((row) => row.generation)).toEqual(["C1", "C2"]);
+    expect(candidates[0].candidate_id).toBe(c1.candidate_id);
+    expect(store.listResults(run_id).length).toBeGreaterThan(before);
+    expect(store.listJobs(run_id).map((job: Loose) => job.purpose)).toEqual(["investigate", "resume", "resume"]);
+    const decision = (store.listDecisions(run_id) as Loose[]).find((entry) => entry.kind === "revision-authorized");
+    expect(decision).toBeTruthy();
+    const seen = typeof decision!.evidence_seen === "string" ? JSON.parse(decision!.evidence_seen) : decision!.evidence_seen;
+    expect(seen).toMatchObject({ candidate_id: c1.candidate_id, generation: "C1", findings: "amount must be 20" });
+    expect(h.calls.some((call) => /Owner findings/u.test(String(call.prompt)) && /amount must be 20/u.test(String(call.prompt)))).toBe(true);
+    expect(detailOf(journey, run_id).run.closed_outcome).toBe("verified_candidate");
+  });
+
+  it("does not launch twice on a replayed command", async () => {
+    const h = makeHarness();
+    const { journey, run_id } = await inconclusive(h);
+    h.zeroTests = false;
+    const command_id = cmd();
+    const body = { run_id, action: "revise", findings: "amount must be 20", authorize_revision: true, command_id, actor: "owner" };
+    await journey.control(body);
+    await journey.idle();
+    await journey.control(body);
+    await journey.idle();
+    expect(store.listJobs(run_id).filter((job: Loose) => String(job.settings_json).includes('"revision":true'))).toHaveLength(1);
+  });
+
+  it("does not repair automatically when the revision fails", async () => {
+    const h = makeHarness();
+    const { journey, run_id } = await inconclusive(h);
+    h.zeroTests = false;
+    h.script.repairContent = "export const amount = 22;\n";
+    await journey.control({ run_id, action: "revise", findings: "amount must be 20", authorize_revision: true, command_id: cmd(), actor: "owner" });
+    await journey.idle();
+    const purposes = store.listJobs(run_id).map((job: Loose) => job.purpose);
+    expect(purposes).toEqual(["investigate", "resume", "resume"]);
+    expect(purposes).not.toContain("repair");
+    expect(store.listCandidates(run_id)).toHaveLength(2);
+  });
+
+  it("refuses a run that is not awaiting revision", async () => {
+    const h = makeHarness();
+    const journey = journeyWith(h);
+    const delivered = await deliverPlan(journey, "claude");
+    const run_id = String(delivered.run_id);
+    const refused = (await journey.control({ run_id, action: "revise", findings: "x", authorize_revision: true, command_id: cmd(), actor: "owner" })) as Loose;
+    expect(refused.refusals[0].code).toBe("run-not-awaiting-revision");
   });
 });

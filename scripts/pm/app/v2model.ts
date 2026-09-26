@@ -112,16 +112,19 @@ export function executorBlockMessage(executor: V2Executor) {
     ...executor.refusals.map((entry) => entry.code),
     ...executor.qualification.refusals.map((entry) => entry.code),
   ]);
+  // An offline worker also fails the sign-in refresh, so it is named first.
+  if (codes.has("runtime-binding-unavailable"))
+    return "Its Delivery worker is offline.";
   if (codes.has("subscription-not-ready")) {
-    const detail = executor.refusals.find(
+    const refusal = executor.refusals.find(
       (entry) => entry.code === "subscription-not-ready",
-    )?.detail;
+    );
+    const detail = refusal?.detail;
+    if (refusal?.action) return "Reconnect needed. " + refusal.action[0].toUpperCase() + refusal.action.slice(1) + ".";
     if (/429/iu.test(String(detail || "")))
       return "Its subscription check was rate-limited.";
     return "Its subscription sign-in needs refreshing.";
   }
-  if (codes.has("runtime-binding-unavailable"))
-    return "Its Delivery worker is offline.";
   if (
     codes.has("qualification-binding-mismatch") ||
     codes.has("no-qualification-receipt") ||
@@ -248,6 +251,8 @@ export function applyControls(detail: Pick<V2RunDetail, "run" | "result" | "cand
   return {
     latest,
     canApply: verified && retryable,
+    // A conflict can be retried once the checkout is fixed, but Apply is not the obvious next step.
+    applyPrimary: verified && retryable && latest?.state !== "conflict",
     canResume: latest?.state === "interrupted",
     canRollback: !!latest && ["applied", "checks-failed", "checks-inconclusive", "checks-pending", "interrupted", "partly-restored"].includes(latest.state),
     canRecheck: !!latest && ["checks-pending", "checks-failed", "checks-inconclusive"].includes(latest.state),

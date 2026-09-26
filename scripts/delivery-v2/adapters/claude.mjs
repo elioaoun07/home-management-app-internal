@@ -273,9 +273,35 @@ export function observeHookInput(state, input) {
 
 const ACTIVITY_LIMIT = 200;
 
+/**
+ * Record one observed event, and hand it to the supervisor before the stream ends.
+ *
+ * `seq` is the dispatch's own ordinal, not the buffer index: the buffer is
+ * capped and shifts, and a key that renumbers itself would let the same event be
+ * stored twice. It is the reading-key discipline `store.recordUsageReading` uses,
+ * applied to activity — which is what makes the live relay and the final batch
+ * the same rows rather than two copies (DLV-109).
+ *
+ * `relay` is best-effort and never allowed to break a dispatch: an event the
+ * supervisor could not persist is still buffered and still returned at the end.
+ */
 function pushActivity(state, entry, now) {
-  state.activity.push({ at: now(), ...entry, summary: entry.summary == null ? null : String(entry.summary).slice(0, 240) });
+  const record = {
+    seq: state.activitySeq,
+    at: now(),
+    ...entry,
+    summary: entry.summary == null ? null : String(entry.summary).slice(0, 240),
+  };
+  state.activitySeq += 1;
+  state.activity.push(record);
   if (state.activity.length > ACTIVITY_LIMIT) state.activity.shift();
+  if (typeof state.relay === "function") {
+    try {
+      state.relay(record);
+    } catch {
+      /* the supervisor's persistence problem is not this stream's to resolve */
+    }
+  }
 }
 
 function effectiveView(state) {
@@ -521,6 +547,14 @@ export function describeProfile({
       nativeUnit: "usd",
       costReadingAvailable: true,
       costReadingBasis: "SDKResultMessage.total_cost_usd (provider-reported, not a reconciled bill)",
+      // DLV-114: when a counter becomes readable, which is a different question
+      // from whether anything bounds it. Each `result` message carries that
+      // turn's usage and arrives while the query is still being drained, so a
+      // crossing can be acted on before the next turn starts. That qualifies a
+      // stop threshold and nothing more — `wholeJobBound` above stays unsupported.
+      inJobReadings: "per-turn",
+      inJobReadingsBasis:
+        "SDKResultMessage carries per-turn usage and is yielded into the open stream; abortController can end the query from inside the loop",
     },
     qualification_ref,
     observed_at,
@@ -624,13 +658,34 @@ export function createClaudeAdapter(options = {}) {
         }
       }
       if (message.type === "result") {
-        state.usageReadings.push({ turn: state.turn, usage: normalizeClaudeUsage(message) });
+        const reading = { turn: state.turn, usage: normalizeClaudeUsage(message) };
+        state.usageReadings.push(reading);
         state.turn += 1;
         state.terminal = "finished";
         state.failure = message.is_error ? String(message.subtype || "error result") : null;
         if (typeof message.result === "string" && message.result) state.finalText = message.result;
         if (message.modelUsage && typeof message.modelUsage === "object") {
           state.effective.models = Object.keys(message.modelUsage);
+        }
+        // DLV-114. The counter is read here, inside the loop, because this is the
+        // only place it exists before the job is over. A stop verdict aborts the
+        // query from within its own iteration: everything already observed stays,
+        // and `stoppedStream` records that the stream was still open when we
+        // asked — which is the difference between an interruption and a label on
+        // a finished overrun.
+        if (typeof state.observeUsage === "function") {
+          let outcome = null;
+          try {
+            outcome = state.observeUsage({ key: "turn:" + reading.turn, usage: reading.usage, job_id: state.job_id });
+          } catch {
+            outcome = null;
+          }
+          if (outcome && outcome.stop) {
+            state.budget = { ...outcome, requestedAt: now(), reading_key: "turn:" + reading.turn, stoppedStream: true };
+            state.terminal = "stopped";
+            state.controller.abort();
+            return;
+          }
         }
       }
     }
@@ -654,6 +709,7 @@ export function createClaudeAdapter(options = {}) {
 
     const state = {
       ref,
+      job_id: request.job_id,
       messageCount: 0,
       usageReadings: [],
       subscription: { before: null, after: null },
@@ -664,6 +720,15 @@ export function createClaudeAdapter(options = {}) {
       sessionEstablished: false,
       effective: { model: null, effort: null, models: [], source: [] },
       activity: [],
+      activitySeq: 0,
+      // DLV-109: each observed event is handed over as it happens, so the run
+      // view shows work in progress instead of a blank panel until the stream
+      // ends. DLV-114: each usage reading is offered to the supervisor's budget
+      // monitor, which may ask for the stop performed just below.
+      relay: typeof runOptions.observeActivity === "function" ? runOptions.observeActivity : null,
+      observeUsage: typeof runOptions.observeUsage === "function" ? runOptions.observeUsage : null,
+      controller: null,
+      budget: null,
     };
     const settings = request.settings || { model: null, effort: null };
     const readOnly = Boolean(request.workspace && request.workspace.access === "read-only");
@@ -679,6 +744,7 @@ export function createClaudeAdapter(options = {}) {
       else runOptions.signal.addEventListener("abort", () => controller.abort(), { once: true });
     }
     inFlight.set(request.job_id, controller);
+    state.controller = controller;
 
     const sessionOptions = withSessionIdentity(
       {
@@ -726,10 +792,13 @@ export function createClaudeAdapter(options = {}) {
           requested: { model: settings.model, effort: settings.effort },
           effective: effectiveView(state),
           activity: state.activity,
+          budget: state.budget,
         },
-        reason: state.sessionEstablished
-          ? "the query failed after the native session was established"
-          : "the query failed before the session was established; the dispatch outcome is unknown, and the derived session id is the reconciliation handle",
+        reason: state.budget
+          ? "the observed token limit was crossed and the query was aborted from inside the stream; the provider's own stop is not acknowledged by this interface"
+          : state.sessionEstablished
+            ? "the query failed after the native session was established"
+            : "the query failed before the session was established; the dispatch outcome is unknown, and the derived session id is the reconciliation handle",
       });
     } finally {
       inFlight.delete(request.job_id);
@@ -738,7 +807,7 @@ export function createClaudeAdapter(options = {}) {
     return bindAdapterResult({
       operation,
       executionRef: state.ref,
-      status: state.terminal || "unknown",
+      status: state.terminal === "finished" ? "finished" : "unknown",
       dispatchAttempted: true,
       observations: {
         usage: mergeUsageReadings(state.usageReadings),
@@ -751,8 +820,16 @@ export function createClaudeAdapter(options = {}) {
         requested: { model: settings.model, effort: settings.effort },
         effective: effectiveView(state),
         activity: state.activity,
+        // A budget stop is `unknown`, not `finished`: we aborted our own query
+        // and this interface returns no provider acknowledgement. The supervisor
+        // turns it terminal only once the environment observes termination.
+        budget: state.budget,
       },
-      reason: state.terminal ? null : "the query ended without a result message",
+      reason: state.budget
+        ? "the observed token limit was crossed and the query was aborted from inside the stream; the provider's own stop is not acknowledged by this interface"
+        : state.terminal
+          ? null
+          : "the query ended without a result message",
     });
   }
 

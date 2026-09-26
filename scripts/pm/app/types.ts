@@ -417,8 +417,33 @@ export interface V2Job {
     after: SubscriptionObservation | null;
     comparison: { deltas: { id: string; before: number; after: number; delta_percent: number }[]; notes: string[]; basis: string };
   } | null;
+  /** What the in-job token monitor observed for this job; null when no limit was in force. */
+  budget?: V2Budget | null;
   reason: string | null;
   created_at: string;
+}
+/**
+ * DLV-114. A count taken while the job ran, against the run's limit.
+ *
+ * `overshoot` is the part the crossing turn had already spent before the stop
+ * could be asked for. It is reported, never netted off.
+ */
+export interface V2Budget {
+  mode: string;
+  unit: string;
+  limit: number | null;
+  warnAtPercent: number;
+  banked: number;
+  observed: number;
+  used: number;
+  percent: number | null;
+  level: string;
+  readings: number;
+  warned: boolean;
+  stopRequested: boolean;
+  overshoot: number;
+  basis: string;
+  stopped?: boolean;
 }
 export interface SubscriptionObservation {
   status: string;
@@ -453,8 +478,16 @@ export interface V2Evidence {
   exitCode: number | null;
   runner: string | null;
   command: string[] | null;
-  /** Output is intentionally not persisted; this explains the evidence gap. */
+  /**
+   * The checker's bounded, redacted output (DLV-120), or — when nothing was
+   * retained — the receipt's note explaining the evidence gap.
+   */
   output: string;
+  /** Which shape this execution was: runner-missing / output-unreadable / no-tests-selected / tests-failed / passed. */
+  outcome?: string | null;
+  outcomeDetail?: string | null;
+  /** Where a typecheck verdict was produced (DLV-133); null for ordinary checks. */
+  environment?: { producer: string; isolated: boolean; detail: string } | null;
   created_at: string;
 }
 export interface V2Result {
@@ -496,6 +529,11 @@ export interface V2Resources {
   allowance: number | null;
   strict: boolean;
   thresholdUsd: number | null;
+  /** What the allowance is permitted to do: `advisory`, `threshold` or `hard-cap`. */
+  enforcement?: string;
+  warnAtPercent?: number | null;
+  /** The most recent job's in-job observation, readable while a stream is open. */
+  budget?: V2Budget | null;
 }
 export interface V2RunDetail {
   ok: true;
@@ -604,7 +642,7 @@ export interface V2Executor {
   available: boolean | null;
   permitted: boolean;
   qualified: boolean;
-  refusals: { code: string; detail: unknown }[];
+  refusals: { code: string; detail: unknown; action?: string }[];
   qualification: { ref: string | null; refusals: { code: string; detail: unknown }[] };
   models: { id: string; label: string | null; efforts: string[] | null }[];
   suggestions: Record<string, { model: string | null; effort: string | null; reason: string | null } | null>;

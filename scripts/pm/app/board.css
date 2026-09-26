@@ -20,7 +20,7 @@
   padding: 8px 16px;
   font-size: 12px;
   background: var(--surface);
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .board-view-toggle button[aria-pressed="true"] {
   background: var(--accent);
@@ -51,7 +51,7 @@
   border-radius: 14px;
   padding: 9px 0;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--ink-muted);
   display: flex;
   justify-content: center;
   gap: 6px;
@@ -77,7 +77,7 @@
 .board-column > h3 {
   font-size: 12px;
   font-weight: 500;
-  color: var(--muted);
+  color: var(--ink-muted);
   display: flex;
   gap: 8px;
   align-items: center;
@@ -89,7 +89,7 @@
 }
 .board-empty {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-muted);
   padding: 12px 0;
 }
 .board-card {
@@ -116,7 +116,7 @@
 .board-card small {
   display: block;
   font-size: 9px;
-  color: var(--muted);
+  color: var(--ink-muted);
   margin-bottom: 3px;
 }
 .board-card strong {
@@ -139,7 +139,7 @@
   padding: 2px 8px;
   border-radius: 10px;
   background: var(--line);
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .board-badge-blocked {
   color: var(--warning, #f59e0b);
@@ -158,7 +158,7 @@
   align-items: center;
   gap: 6px;
   font-size: 9px;
-  color: var(--muted);
+  color: var(--ink-muted);
   margin-top: 8px;
 }
 .board-move select {
@@ -177,7 +177,7 @@
 .board-list-section > h3 {
   font-size: 12px;
   font-weight: 500;
-  color: var(--muted);
+  color: var(--ink-muted);
   margin-bottom: 8px;
 }
 .board-list-section > h3 span {

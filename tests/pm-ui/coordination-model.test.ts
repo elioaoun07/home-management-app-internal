@@ -69,5 +69,20 @@ describe("coordination labels", () => {
       ownerAction: { kind: "apply", label: "Apply" },
     } as Pick<V2RunDetail, "run" | "result" | "candidate" | "applications" | "ownerAction">;
     expect(applyControls(detail).canApply).toBe(true);
+    expect(applyControls(detail).applyPrimary).toBe(true);
+  });
+
+  it("keeps a conflicted candidate retryable without making Apply the primary action", () => {
+    // DLV-123 (4): DLV-107's conflicted candidate still led with a primary Apply.
+    const detail = {
+      run: { run_id: "r", lifecycle: "CLOSED", closed_outcome: "verified_candidate", waiting_reason: null, created_at: "", updated_at: "" },
+      result: { result_id: "res", result_version: 1, candidateVerified: true } as V2RunDetail["result"],
+      candidate: { candidate_id: "c", generation: "C1", changed: [], refusals: [] },
+      applications: [{ application_id: "a", candidate_id: "c", state: "conflict" }] as V2RunDetail["applications"],
+      ownerAction: { kind: "apply", label: "Apply" },
+    } as Pick<V2RunDetail, "run" | "result" | "candidate" | "applications" | "ownerAction">;
+    expect(applyControls(detail).canApply).toBe(true);
+    expect(applyControls(detail).applyPrimary).toBe(false);
+    expect(applyControls({ ...detail, applications: [] }).applyPrimary).toBe(true);
   });
 });

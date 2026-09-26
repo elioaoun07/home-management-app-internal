@@ -79,6 +79,39 @@ export function checkReason(reason: string | null) {
   );
 }
 
+/**
+ * The retained check output, when there is any to show (DLV-120).
+ *
+ * Null for a pass and null when nothing was retained, so the screen gains a
+ * disclosure exactly where it helps and stays unchanged everywhere else — U3's
+ * complaint was output-retention *prose* on every row, not the log itself.
+ */
+export function checkLog(entry: V2Evidence) {
+  if (entry.state === "satisfied") return null;
+  const text = (entry.output || "").trim();
+  if (!text || !text.includes("---")) return null;
+  return text;
+}
+
+/**
+ * Why this check is not a pass, in the checker's own vocabulary.
+ *
+ * A missing runner, unreadable output and failing tests are three different
+ * next actions; the state alone renders the first two identically.
+ */
+export function checkOutcome(entry: V2Evidence) {
+  return (
+    (
+      {
+        "runner-missing": "Runner never started",
+        "output-unreadable": "Output unreadable",
+        "no-tests-selected": "No tests selected",
+        "tests-failed": "Tests failed",
+      } as Record<string, string>
+    )[entry.outcome || ""] || null
+  );
+}
+
 /** Export the selected stored revision, never the current checkout or an AI rewrite. */
 export function planMarkdown(plan: V2Plan) {
   const b = plan.body;

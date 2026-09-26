@@ -1049,6 +1049,8 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
           executor: body.executor ?? null,
           model: body.model ?? null,
           effort: body.effort ?? null,
+          findings: typeof body.findings === "string" ? body.findings : null,
+          authorize_revision: body.authorize_revision === true,
         }),
       );
     }

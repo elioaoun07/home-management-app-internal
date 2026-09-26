@@ -20,13 +20,16 @@ The owner-requested [first-run hotfix](<../Plans/Delivery First-Run Hotfix.md>) 
 - [ ] **DLV-134** Normalize historical usage readings recorded before the cumulative-counter fix — [criteria](<Delivery — Master Book.md#dlv-134>) _(annoyance - S)_
 
 - [ ] **DLV-122** Let the owner cancel a waiting run — [criteria](<Delivery — Master Book.md#dlv-122>) _(friction - M)_
-- [ ] **DLV-123** Fix four small review-screen defects found in UAT — [criteria](<Delivery — Master Book.md#dlv-123>) _(annoyance - S)_
 - [ ] **DLV-121** Page frozen diffs and older candidate artifacts — [criteria](<Delivery — Master Book.md#dlv-121>) _(friction - M)_
-
-- [ ] **DLV-120** Retain protected-check logs with precise failure details — [criteria](<Delivery — Master Book.md#dlv-120>) _(friction - M)_
 
 Review workspace implemented locally on 2026-09-15; [owner UAT and real lane examples](<../../../docs/Delivery-UAT.md>) now guide acceptance. Completed implementation appears in Work > Done; manual acceptance stays in UAT. Only remaining engineering is listed below.
 
+**DLV-133 — 2026-09-20 partial.** The checker path, the pinned program and the environment record are implemented and demonstrated with a real compiler; two steps are left and both are the owner's: run `node scripts/delivery-v2/setup-checker-deps.mjs` to stage `typescript` and the type declarations into `era-dlv107-dependencies`, then set `checks.requiredVerifications.typecheck.isolation` to `"checker"` in the execution policy. Until then the policy default (`prefer-checker`) falls back to the labelled host path and records why. The in-container witness is written and **unrun**: `ERA_V2_DOCKER=1 pnpm exec vitest run tests/delivery-v2/typecheck.docker.test.ts`. See the Master Book's dated note.
+
+
+**DLV-114 / DLV-109 — 2026-09-20 partial.** In-job stopping and live activity are implemented and covered by 25 isolated cases (`npx vitest run tests/delivery-v2/budget-stop.test.ts`), each confirmed to fail against the unfixed source. Both stay open on purpose: the bounded **real stop witness** (UAT U20) needs a provider job only the owner can run, and `resources.enforcement` stays `advisory` until the owner sets `"threshold"` with a limit. Out of scope of this slice and still owed by DLV-114: a wall-time limit and the `Increase limit` / `Change model` / `Reduce scope` escalation actions. See the Master Book's dated note.
+
+**DLV-118 — 2026-09-20 preparation done, nothing launched.** KIT-11 is prepared as the prepared-vs-staged measurement task: a protected behavioural oracle over the real route (`tests/delivery-oracles/kit11-cooking-count.mjs`, discriminating on a host checkout and inside the pinned worker image), a validated **but uninstalled** execution policy revision 7, one `delivery-plan-v1` body, both arms' Master Book section text generated from it, and verified eligibility — `no-single-prepared-plan` for the staged arm, eligible for the prepared arm once the owner sets `ownerReviewed`. `ownerReviewed` is still `false` on disk. Zero provider jobs, runs, reservations or tokens. Everything remaining is owner-only: install the policy, review the plan, choose the qualified selection and limits, launch. Packet: `.delivery/v2/preparations/kit11/LAUNCH-PACKET.md`. It also records a blocker for DLV-133: `setup-checker-deps.mjs` would recreate the dependency volume without `esbuild` and stop both oracles running.
 
 ## Next
 
@@ -35,8 +38,7 @@ Review workspace implemented locally on 2026-09-15; [owner UAT and real lane exa
 - [ ] **DLV-117** Recommend qualified models and effort for each item — [criteria](<Delivery — Master Book.md#dlv-117>) _(friction - M)_
 - [ ] **DLV-118** Prepare runnable checks and bounded context for Fast lane — [criteria](<Delivery — Master Book.md#dlv-118>) _(friction - M)_
 
-- [ ] **DLV-111** Refresh subscription sign-ins before unattended remote launches — [criteria](<Delivery — Master Book.md#dlv-111>) _(friction - M)_
-- [ ] **DLV-108** Recover completed jobs into plans and results after restart — [criteria](<Delivery — Master Book.md#dlv-108>) _(blocker - M)_
+- [ ] **DLV-111** Refresh subscription sign-ins before unattended remote launches *(refusal + reconnect action fixture-tested 2026-09-20; phone UAT U22 and idle refresh open)* — [criteria](<Delivery — Master Book.md#dlv-111>) _(friction - M)_
 - [ ] **DLV-109** Show observed activity while an executor is running — [criteria](<Delivery — Master Book.md#dlv-109>) _(friction - M)_
 - [ ] **DLV-86** Correct forecast units from clean receipt provenance — [criteria](<Delivery — Master Book.md#dlv-86>) _(blocker - M)_
 - [ ] **DLV-87** Reject launches with unknown or unpriced cost — [criteria](<Delivery — Master Book.md#dlv-87>) _(blocker - S)_

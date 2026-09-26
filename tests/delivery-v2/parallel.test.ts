@@ -550,6 +550,37 @@ describe("discovered overlap, fleet limits and recovery", () => {
     expect(journey.detail(queued.run_id).plans).toHaveLength(1);
   });
 
+  it("cancels a waiting run without dispatch, drops its queue position, and repeated commands change nothing (DLV-122)", async () => {
+    writePolicy({ maxWriters: 1, maxJobs: 1 });
+    const { h, startedFor } = makeHarness();
+    const journey = journeyWith(h);
+    const holdInvestigation = deferred();
+    h.holds.set("BUD-14:read", holdInvestigation);
+    expect((await journey.deliver({ ...select("BUD-14"), ...SETTINGS, command_id: cmd(), actor: "owner" })).ok).toBe(true);
+    await startedFor("BUD-14:read").promise;
+    const waiting = await journey.deliver({ ...select("BUD-15"), ...SETTINGS, command_id: cmd(), actor: "owner" });
+    expect(waiting).toMatchObject({ queued: true, job_id: null });
+    const run_id = String(waiting.run_id);
+
+    const stopCommand = cmd();
+    const first = await journey.control({ run_id, action: "stop", command_id: stopCommand, actor: "owner" });
+    expect(first).toMatchObject({ ok: true, closed: true });
+    expect(store.listJobs(run_id)).toHaveLength(0);
+    expect(store.getRun(run_id)).toMatchObject({ lifecycle: "CLOSED", closed_outcome: "cancelled" });
+    expect(journey.detail(run_id).coordination.state).toBeFalsy();
+
+    // Same command id replayed, then a fresh command: neither reopens nor dispatches.
+    expect(await journey.control({ run_id, action: "stop", command_id: stopCommand, actor: "owner" })).toMatchObject({ ok: true });
+    expect((await journey.control({ run_id, action: "stop", command_id: cmd(), actor: "owner" })).refusals[0].code).toBe("run-closed");
+
+    // Freeing the slot must not admit the cancelled run.
+    holdInvestigation.resolve();
+    await journey.idle();
+    expect(store.listJobs(run_id)).toHaveLength(0);
+    expect(store.getRun(run_id)).toMatchObject({ lifecycle: "CLOSED", closed_outcome: "cancelled" });
+    expect(h.calls.filter((entry: Loose) => entry.alias === "BUD-15")).toHaveLength(0);
+  });
+
   it("keeps a writer slot for an unknown job and for a stop not yet observed; an observed stop frees it", async () => {
     writePolicy({ maxWriters: 1, maxJobs: 3 });
     const { h } = makeHarness();

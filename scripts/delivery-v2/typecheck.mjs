@@ -19,23 +19,35 @@
 //      yields a clean "no new errors" that means nothing. `environmentVerdict`
 //      looks for that shape explicitly and refuses to grade the run.
 //   2. **The candidate must not be able to configure its own checker.** The
-//      program is assembled from the *host* tsconfig and the host's installed
-//      typescript; a candidate that touches tsconfig, package.json or
-//      node_modules makes the check inconclusive instead of being allowed to
-//      weaken it.
+//      program is assembled from a tsconfig and a typescript the candidate never
+//      supplied; a candidate that touches tsconfig, package.json or node_modules
+//      makes the check inconclusive instead of being allowed to weaken it.
+//
+// Where it compiles (DLV-133)
+// ---------------------------
+// Two producers, and every verdict names which one made it. `protected-checker`
+// stages a pinned program into a read-only volume and compiles it inside the
+// checker container with a pinned `typescript` from the dependency volume —
+// isolated, reproducible, and blind to uncommitted work. `host-checkout` is the
+// original path: the machine's typescript over the live working tree. It is kept
+// as an explicit fallback and labels itself as one in `environment.producer`,
+// and a policy asking for isolation turns it into `inconclusive` rather than a
+// pass. Nothing infers isolation from the shape of an argv.
 //
 // What it does not do: run tsc itself (the caller injects an executor, so
 // fixtures need no compiler), decide acceptance (criteria.mjs does that), or
-// feed anything back to the model. Diagnostics are retained as a bounded,
-// sanitized artifact beside the evidence — hashes alone would leave the owner
-// with "something failed" and nothing to act on.
+// feed anything back to the model. Diagnostics and the compilers' own bounded,
+// redacted text are retained beside the evidence — hashes alone would leave the
+// owner with "something failed" and nothing to act on.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { ContractError, contentId, deepFreeze, normalizePath } from "./contracts.mjs";
 import { candidateChangedPaths } from "./candidate.mjs";
+import { retainOutput, retentionNote } from "./diagnostics.mjs";
+import { walkTrusted } from "./scratch.mjs";
 
 /** The criterion id this verification reports under. Required for candidate. */
 export const TYPECHECK_CRITERION_ID = "delivery-typecheck";
@@ -54,6 +66,38 @@ export const TYPECHECK_REFUSALS = Object.freeze({
   NO_RUNNER: "no-typecheck-runner-available",
   UNREADABLE: "typecheck-output-could-not-be-parsed",
   STAGING: "typecheck-program-could-not-be-staged",
+  NOT_ISOLATED: "typecheck-did-not-run-in-the-protected-checker",
+});
+
+/**
+ * Who compiled this — and therefore what the verdict is a verdict *about*.
+ *
+ * `protected-checker` is the isolated one: a pinned program and pinned
+ * dependencies inside the checker container, with no host authority and no
+ * network. `host-checkout` is the original DLV-131 path, which compiles the live
+ * working tree with the host's installed typescript; it is deterministic and
+ * outside the model, but its baseline includes whatever is uncommitted and its
+ * toolchain is whatever the machine happens to have. It is kept only as a
+ * fallback, and it says so in every verdict it produces.
+ */
+export const TYPECHECK_PRODUCERS = Object.freeze({
+  CHECKER: "protected-checker",
+  HOST: "host-checkout",
+});
+
+/**
+ * The environment record of a host-checkout run: the explicit self-label the
+ * fallback path is required to carry.
+ */
+export const HOST_PRODUCER = deepFreeze({
+  producer: TYPECHECK_PRODUCERS.HOST,
+  isolated: false,
+  detail:
+    "compiled on the host against the live checkout with the machine's installed typescript; " +
+    "the baseline includes uncommitted work and the toolchain is not pinned",
+  program: null,
+  dependencies: null,
+  image: null,
 });
 
 /**
@@ -86,6 +130,25 @@ export const ENVIRONMENT_DIAGNOSTIC_CODES = Object.freeze([
 
 /** Hard ceiling on what is retained, so a broken run cannot fill the disk. */
 export const ARTIFACT_LIMITS = Object.freeze({ diagnostics: 200, messageChars: 400, outputChars: 20_000 });
+
+/**
+ * What the isolated checker compiles, when the policy does not say otherwise.
+ *
+ * Narrower than this repo's `tsconfig.json`, which includes `**\/*.ts` and
+ * therefore drags in `build/`, `.tmp/` and `graphify-out/` — roughly 30 MB of
+ * scratch that no candidate can affect and that has to be copied into a volume.
+ * The roots below are the ones a candidate's changes can actually reach: a new
+ * error introduced in `src/` surfaces in `src/`, `tests/` or `scripts/`.
+ *
+ * **Named limitation:** an error introduced *only* in a directory outside these
+ * roots is invisible to the isolated checker. Both phases compile the identical
+ * program, so this cannot manufacture a pass out of a broken baseline; it can
+ * only fail to look somewhere. Widen `program.roots` in the policy to change it.
+ */
+export const DEFAULT_PROGRAM = deepFreeze({
+  roots: Object.freeze(["tsconfig.json", "next-env.d.ts", "src", "tests", "scripts", "types"]),
+  extensions: Object.freeze([".ts", ".tsx", ".mts", ".cts", ".json"]),
+});
 
 const isNonEmptyString = (value) => typeof value === "string" && value.trim() !== "";
 
@@ -208,6 +271,47 @@ export function environmentVerdict({ baseline, diagnostics, configPath, candidat
   return deepFreeze({ complete: reasons.length === 0, reasons: Object.freeze(reasons) });
 }
 
+/**
+ * The explicit file list the isolated checker's program is staged from.
+ *
+ * Explicit, not a directory mirror, for the same reason `provisionScratch` takes
+ * a list: a fingerprint over a named set is a complete statement of what was
+ * compiled, and nothing can widen it by creating a file where a copier would
+ * have looked. A root that is itself a file (tsconfig.json) contributes itself.
+ *
+ * @param {{hostRoot:string, program?:{roots?:string[], extensions?:string[]},
+ *   walk?:Function, stat?:Function}} input
+ */
+export function programFileList({ hostRoot, program = DEFAULT_PROGRAM, walk = walkTrusted, stat = statSync }) {
+  if (!isNonEmptyString(hostRoot)) throw new ContractError("programFileList: a host root is required");
+  const roots = (program && program.roots) || DEFAULT_PROGRAM.roots;
+  const extensions = (program && program.extensions) || DEFAULT_PROGRAM.extensions;
+  const wanted = (path) => extensions.some((extension) => path.toLowerCase().endsWith(extension));
+
+  const files = new Set();
+  const missing = [];
+  for (const root of roots) {
+    const rel = normalizePath(root);
+    const absolute = join(hostRoot, ...rel.split("/"));
+    let entry;
+    try {
+      entry = stat(absolute);
+    } catch {
+      missing.push(rel);
+      continue;
+    }
+    if (entry.isFile()) {
+      files.add(rel);
+      continue;
+    }
+    for (const found of walk({ root: absolute }).entries) {
+      const path = rel + "/" + found.path;
+      if (wanted(path)) files.add(path);
+    }
+  }
+  return deepFreeze({ files: Object.freeze([...files].sort()), missing: Object.freeze(missing), roots: Object.freeze([...roots]) });
+}
+
 /** Which of the candidate's changed paths would configure the checker. */
 export function checkerConfigurationChanges(candidate) {
   const changed = candidateChangedPaths(candidate).map((change) => normalizePath(change.path));
@@ -286,8 +390,16 @@ export function spawnTypecheck({ argv, cwd, env = {}, phase, hostRoot, candidate
  * checkout, differing only by the candidate — and if the first is not a sound
  * baseline, the second is never graded.
  *
+ * `producer` describes the environment that will actually compile. It is data,
+ * not a switch: the caller picks the executor and states which one it picked,
+ * and the verdict carries that statement so nobody has to infer isolation from
+ * the shape of an argv. `requireIsolation` is the matching refusal — under it, a
+ * host-checkout run is inconclusive rather than a pass, because "it compiled
+ * somewhere" is not the claim the policy asked for.
+ *
  * @param {{hostRoot:string, candidate:Record<string, any>, argv:string[],
- *   execute?:Function, env?:object, now?:Function}} input
+ *   execute?:Function, env?:object, now?:Function,
+ *   producer?:Record<string, any>, requireIsolation?:boolean}} input
  */
 export function runTypecheckVerification({
   hostRoot,
@@ -296,11 +408,26 @@ export function runTypecheckVerification({
   execute = spawnTypecheck,
   env = {},
   now = () => new Date().toISOString(),
+  producer = HOST_PRODUCER,
+  requireIsolation = false,
 }) {
+  const who = normalizeProducer(producer);
   if (typeof execute !== "function") {
-    return verdict({ state: TYPECHECK_STATE.INCONCLUSIVE, reason: TYPECHECK_REFUSALS.NO_RUNNER, detail: "no executor was provided", now });
+    return verdict({ state: TYPECHECK_STATE.INCONCLUSIVE, reason: TYPECHECK_REFUSALS.NO_RUNNER, detail: "no executor was provided", now, producer: who });
   }
   if (!isNonEmptyString(hostRoot)) throw new ContractError("runTypecheckVerification: a host root is required");
+  if (requireIsolation && !who.isolated) {
+    // Refused before anything compiles. A run that is going to be rejected for
+    // where it ran should not first spend three minutes running there.
+    return verdict({
+      state: TYPECHECK_STATE.INCONCLUSIVE,
+      reason: TYPECHECK_REFUSALS.NOT_ISOLATED,
+      detail: "the policy requires the protected checker, and this verification would have been produced by " + who.producer + ": " + who.detail,
+      now,
+      candidate,
+      producer: who,
+    });
+  }
 
   const configChanges = checkerConfigurationChanges(candidate);
   const overlay = candidateOverlay({ candidate });
@@ -319,12 +446,33 @@ export function runTypecheckVerification({
   const started_at = now();
   const baselineRun = run("baseline");
   const baselineDiagnostics = parseTypescriptDiagnostics(String(baselineRun.stdout || "") + "\n" + String(baselineRun.stderr || ""));
+  // The isolated producer stages its own program, so it — not this process's
+  // filesystem — is the authority on whether that program had a config.
+  const configPath = who.program && isNonEmptyString(who.program.config)
+    ? String(who.program.config)
+    : existsSync(join(hostRoot, "tsconfig.json"))
+      ? "tsconfig.json"
+      : null;
   const environment = environmentVerdict({
     baseline: baselineRun,
     diagnostics: baselineDiagnostics,
-    configPath: existsSync(join(hostRoot, "tsconfig.json")) ? "tsconfig.json" : null,
+    configPath,
     candidateTouchesConfig: configChanges,
   });
+  /** @type {{exitCode:(number|null), stdout?:string, stderr?:string, spawnError?:(string|null)}|null} */
+  let candidateRun = null;
+  // Both compilers' text, bounded and redacted, so a failed verification hands
+  // the owner something readable instead of a count and a hash (DLV-120).
+  const retainedOutput = () =>
+    retainOutput({
+      stdout: "=== baseline ===\n" + String(baselineRun.stdout || "") + "\n=== candidate ===\n" + String((candidateRun && candidateRun.stdout) || "(not run)"),
+      stderr: "=== baseline ===\n" + String(baselineRun.stderr || "") + "\n=== candidate ===\n" + String((candidateRun && candidateRun.stderr) || "(not run)"),
+      roots: [
+        { token: "<program>", path: String((who.program && who.program.root) || hostRoot) },
+        { token: "<checkout>", path: String(hostRoot) },
+        { token: "<candidate>", path: String((candidate && candidate.root) || "") },
+      ],
+    });
 
   if (!environment.complete) {
     return verdict({
@@ -337,10 +485,12 @@ export function runTypecheckVerification({
       environment,
       baselineDiagnostics,
       overlay,
+      producer: who,
+      retained: retainedOutput(),
     });
   }
 
-  const candidateRun = run("candidate");
+  candidateRun = run("candidate");
   if (candidateRun.spawnError) {
     return verdict({
       state: TYPECHECK_STATE.INCONCLUSIVE,
@@ -352,6 +502,8 @@ export function runTypecheckVerification({
       environment,
       baselineDiagnostics,
       overlay,
+      producer: who,
+      retained: retainedOutput(),
     });
   }
   const candidateDiagnostics = parseTypescriptDiagnostics(String(candidateRun.stdout || "") + "\n" + String(candidateRun.stderr || ""));
@@ -366,6 +518,8 @@ export function runTypecheckVerification({
       environment,
       baselineDiagnostics,
       overlay,
+      producer: who,
+      retained: retainedOutput(),
     });
   }
 
@@ -387,6 +541,8 @@ export function runTypecheckVerification({
       candidateDiagnostics,
       split,
       overlay,
+      producer: who,
+      retained: retainedOutput(),
     });
   }
 
@@ -403,6 +559,8 @@ export function runTypecheckVerification({
     split,
     overlay,
     exitCode: candidateRun.exitCode,
+    producer: who,
+    retained: retainedOutput(),
   });
 }
 
@@ -419,7 +577,10 @@ function verdict({
   split = null,
   overlay = null,
   exitCode = null,
+  producer = HOST_PRODUCER,
+  retained = null,
 }) {
+  const who = normalizeProducer(producer);
   const body = {
     criterion_id: TYPECHECK_CRITERION_ID,
     state,
@@ -438,7 +599,15 @@ function verdict({
           ),
         }
       : null,
-    environment: environment || { complete: false, reasons: ["the environment was never probed"] },
+    // Two separate questions, deliberately both answered: `complete` is "can
+    // this verdict be believed at all", and `producer` is "who produced it and
+    // was that environment isolated". A complete verdict from an unpinned host
+    // is still a real verdict; it is just not the one an isolation policy asked
+    // for, and nothing downstream should have to guess which it got.
+    environment: {
+      ...(environment || { complete: false, reasons: ["the environment was never probed"] }),
+      ...who,
+    },
     counts: {
       baseline: baselineDiagnostics.length,
       candidate: candidateDiagnostics.length,
@@ -448,11 +617,45 @@ function verdict({
     },
     diagnostics: Object.freeze((split ? split.introduced : []).slice(0, ARTIFACT_LIMITS.diagnostics).map(sanitize)),
     truncated: split ? Math.max(0, split.introduced.length - ARTIFACT_LIMITS.diagnostics) : 0,
+    // The compilers' own text, bounded and redacted. Structured diagnostics
+    // cover the codes; this covers everything a broken toolchain prints that
+    // never parses into one — which is exactly the case DLV-133 is about.
+    output: retained
+      ? {
+          text: retained.text,
+          bytes: retained.bytes,
+          droppedLines: retained.droppedLines,
+          clippedLines: retained.clippedLines,
+          truncatedChars: retained.truncatedChars,
+          redactedSecrets: retained.redactedSecrets,
+          sourceHash: retained.sourceHash,
+        }
+      : null,
+    redaction: retentionNote(retained),
     exitCode,
     started_at,
     finished_at: now(),
   };
   return deepFreeze({ ...body, verification_id: contentId("tc", body) });
+}
+
+/**
+ * Coerce a producer description into the shape every verdict carries.
+ *
+ * Unknown input becomes the host label rather than an empty one: a verification
+ * that cannot say where it ran must not read as isolated by omission.
+ */
+function normalizeProducer(producer) {
+  const input = producer && typeof producer === "object" ? producer : {};
+  const name = isNonEmptyString(input.producer) ? String(input.producer) : TYPECHECK_PRODUCERS.HOST;
+  return {
+    producer: name,
+    isolated: name === TYPECHECK_PRODUCERS.CHECKER && input.isolated !== false,
+    detail: isNonEmptyString(input.detail) ? String(input.detail) : HOST_PRODUCER.detail,
+    program: input.program || null,
+    dependencies: input.dependencies || null,
+    image: isNonEmptyString(input.image) ? String(input.image) : null,
+  };
 }
 
 /**

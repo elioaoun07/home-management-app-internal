@@ -232,7 +232,7 @@ export function createDeliveryV2Context({
           permitted: loaded.ok ? loaded.policy.executors.permitted.includes(entry.backend_id) : false,
           qualified: Boolean(admission && admission.admitted && authentication?.ok !== false),
           authentication,
-          refusals: [...(admission ? admission.refusals : described.refusal ? [described.refusal] : []), ...(authentication?.ok === false ? [{ code: "subscription-not-ready", detail: authentication.reason }] : [])],
+          refusals: [...(admission ? admission.refusals : described.refusal ? [described.refusal] : []), ...(authentication?.ok === false ? [{ code: "subscription-not-ready", detail: authentication.reason, ...(authentication.reconnect ? { action: authentication.reconnect } : {}) }] : [])],
           qualification: { ref: qualification.qualification_ref, refusals: qualification.refusals },
           models: catalog && catalog.models[entry.id] ? catalog.models[entry.id] : [],
           suggestions: catalog

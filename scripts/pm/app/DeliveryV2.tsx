@@ -820,6 +820,15 @@ export function RunV2Story({
             reasons={detail.coordination.reasons}
             limit={6}
           />
+          {!closed && detail.coordination.state === "queued" && (
+            <button
+              className="text-button stop-delivery"
+              disabled={disabled}
+              onClick={() => control("stop")}
+            >
+              Cancel
+            </button>
+          )}
         </section>
       )}
       {!["review-result", "application-checks"].includes(
@@ -1027,7 +1036,7 @@ function ApplyPanel({
       <span className="eyebrow">
         {latest ? applicationLabel(latest.state) : detail.candidate?.generation}
       </span>
-      <h2>{controls.canApply ? "Apply" : applicationLabel(latest!.state)}</h2>
+      <h2>{controls.applyPrimary ? "Apply" : applicationLabel(latest!.state)}</h2>
       {latest && !!latest.conflicts.length && (
         <ul className="v2-list">
           {latest.conflicts.map((conflict) => (
@@ -1097,7 +1106,7 @@ function ApplyPanel({
       <div className="gate-actions">
         {controls.canApply && detail.candidate && controls.resultRef && (
           <button
-            className="primary"
+            className={controls.applyPrimary ? "primary" : "secondary"}
             disabled={disabled}
             onClick={() =>
               act("apply", {
@@ -1438,6 +1447,9 @@ function Attention({
               Close
             </button>
           </div>
+          {detail.run.waiting_reason === "checks-inconclusive" && (
+            <ReviseFindings disabled={disabled} control={control} />
+          )}
         </section>
       )}
       {area === "other" &&
@@ -1460,5 +1472,34 @@ function Attention({
           </section>
         )}
     </>
+  );
+}
+
+function ReviseFindings({
+  disabled,
+  control,
+}: {
+  disabled: boolean;
+  control: (action: string, extra?: Body) => void;
+}) {
+  const [findings, setFindings] = useState("");
+  return (
+    <div className="gate-actions">
+      <textarea
+        aria-label="Findings"
+        placeholder="Findings"
+        value={findings}
+        onChange={(event) => setFindings(event.target.value)}
+      />
+      <button
+        className="secondary"
+        disabled={disabled || !findings.trim()}
+        onClick={() =>
+          control("revise", { findings: findings.trim(), authorize_revision: true })
+        }
+      >
+        Revise
+      </button>
+    </div>
   );
 }

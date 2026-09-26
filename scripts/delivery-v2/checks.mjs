@@ -39,6 +39,7 @@ import { cpSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { ContractError, contentId, deepFreeze, normalizePath } from "./contracts.mjs";
+import { CHECK_OUTCOMES, classifyCheckOutcome, retainOutput, retentionNote } from "./diagnostics.mjs";
 import { commandObservation, interactionObservation, makeObservation } from "./criteria.mjs";
 import { candidateFreshness, freezeCandidate } from "./candidate.mjs";
 import { classifyRelativePath, walkTrusted } from "./scratch.mjs";
@@ -372,6 +373,15 @@ export function parseTestCounts(output) {
  * @property {string} candidate_id
  * @property {string} criterion_id
  * @property {number} criterion_revision
+ * @property {(number|null)} exitCode
+ * @property {{selected:(number|null), executed:(number|null), skipped:(number|null)}} counts
+ * @property {string} outputHash sha256 of the ORIGINAL bytes, kept beside the retained text
+ * @property {(string|null)} outcome which shape this execution was (CHECK_OUTCOMES)
+ * @property {(string|null)} outcomeDetail one readable sentence about that shape
+ * @property {(boolean|null)} aboutTheCandidate false for a missing runner or unreadable output
+ * @property {readonly string[]} raw_refs reference(s) to the retained redacted output
+ * @property {(object|null)} output what was retained, and what was dropped to retain it
+ * @property {string} redaction the honest note about what is and is not kept
  */
 
 /**
@@ -392,10 +402,18 @@ export function parseTestCounts(output) {
  * that comparison is what turns a mutated candidate into `stale` rather than into
  * a pass nobody re-examined.
  *
+ * `retain` is the seam DLV-120 added: given the bounded, redacted text this
+ * check produced, it stores it somewhere durable and returns a reference. It is
+ * injected rather than written here because `checks.mjs` owns no store, and
+ * because a fixture must be able to assert what *would* be retained without a
+ * filesystem. When no retainer is supplied the text is classified and counted
+ * but not kept, and the receipt says so rather than implying a log exists.
+ *
  * @param {{plan:ReturnType<typeof pinCheckPlan>, candidate:import("./candidate.mjs").Candidate,
  *   criterion:import("./contracts.mjs").Criterion, execute?:Function,
  *   env?:Record<string, (string|undefined)>, now?:Function, interaction?:Function,
- *   dependsOnInputs?:(string[]|null)}} input
+ *   dependsOnInputs?:(string[]|null), retain?:(Function|null),
+ *   hostRoot?:(string|null)}} input
  * @returns {{receipt:(CheckReceipt|null), observation:(import("./criteria.mjs").Observation|null),
  *   refused:(string|null), detail:(string|null),
  *   drift?:ReturnType<typeof detectOracleDrift>,
@@ -410,6 +428,8 @@ export function runCheck({
   now = () => new Date().toISOString(),
   interaction = null,
   dependsOnInputs = null,
+  retain = null,
+  hostRoot = null,
 }) {
   const assignment = plan.assignments[criterion.criterion_id];
   if (!assignment || assignment.revision !== criterion.revision) {
@@ -458,22 +478,86 @@ export function runCheck({
   const started_at = now();
   let observation;
   let raw;
+  /** @type {ReturnType<typeof retainOutput>|null} */
+  let retained = null;
+  /** @type {ReturnType<typeof classifyCheckOutcome>|null} */
+  let classified = null;
+  /** @type {string|null} */
+  let rawRef = null;
+
+  /**
+   * Keep this execution's text, once, under a content-addressed id.
+   *
+   * The id is derived from the plan digest, the candidate, the criterion at its
+   * exact revision and the hash of the original bytes, so re-running the same
+   * check over the same candidate overwrites its own artifact instead of growing
+   * a pile, while a *different* revision keeps its own — which is what DLV-112's
+   * current/previous grouping needs in order to stay honest.
+   */
+  const keep = (source) => {
+    retained = retainOutput({
+      stdout: source.stdout,
+      stderr: source.stderr,
+      roots: [
+        { token: "<candidate>", path: String(candidate.root || "") },
+        ...(isNonEmptyString(hostRoot) ? [{ token: "<checkout>", path: String(hostRoot) }] : []),
+      ],
+    });
+    if (typeof retain !== "function" || retained.empty) return;
+    const artifact_id = contentId("chk", {
+      plan_digest: plan.plan_digest,
+      candidate_id: candidate.candidate_id,
+      criterion_id: criterion.criterion_id,
+      revision: criterion.revision,
+      source: retained.sourceHash,
+    });
+    try {
+      const ref = retain({
+        artifact_id,
+        kind: "check-output",
+        bytes: retained.text,
+        criterion_id: criterion.criterion_id,
+        criterion_revision: criterion.revision,
+        candidate_id: candidate.candidate_id,
+        plan_id: plan.plan_id,
+        spec_id: spec.spec_id,
+      });
+      rawRef = isNonEmptyString(ref) ? String(ref) : artifact_id;
+    } catch {
+      // A store that refused the blob must not turn a real check result into a
+      // crash. The receipt reports no reference, which reads as "not retained".
+      rawRef = null;
+    }
+  };
 
   if (spec.kind === "interaction") {
     if (typeof interaction !== "function") {
       throw new ContractError("an interaction check needs an interaction runner");
     }
     raw = interaction({ spec, candidate });
+    keep({ stdout: raw.stdout || "", stderr: raw.stderr || "" });
     observation = interactionObservation({
       procedure: spec.procedure || spec.spec_id,
       observed: raw.observed || {},
       inputs,
       attribution: CHECKER_ID,
-      raw_refs: [],
+      raw_refs: rawRef ? [rawRef] : [],
     });
   } else {
     raw = execute({ argv: [...spec.argv], cwd: candidate.root, env });
     const counts = parseTestCounts(String(raw.stdout || "") + "\n" + String(raw.stderr || ""));
+    const selected = raw.selected ?? counts.selected;
+    const executed = raw.executed ?? counts.executed;
+    const skipped = raw.skipped ?? counts.skipped;
+    keep(raw);
+    // Three different facts, three different next actions: a runner that never
+    // started, a process whose output says nothing about what it selected, and a
+    // run whose tests genuinely failed. Only the third is about the candidate.
+    classified = classifyCheckOutcome({
+      spawnError: raw.spawnError,
+      exitCode: raw.exitCode ?? null,
+      counts: { selected, executed, failed: raw.failed ?? counts.failed },
+    });
     // A spawn that never produced a process is not a failing check; it is no
     // check at all, and the receipt has to say so.
     if (raw.spawnError) {
@@ -482,19 +566,30 @@ export function runCheck({
         outcome: "interrupted",
         inputs,
         attribution: CHECKER_ID,
-        detail: { argv: [...spec.argv], cwd: candidate.root, exitCode: null, selected: null, executed: null },
+        raw_refs: rawRef ? [rawRef] : [],
+        detail: {
+          argv: [...spec.argv],
+          cwd: candidate.root,
+          exitCode: null,
+          selected: null,
+          executed: null,
+          failure: classified.outcome,
+          failureDetail: classified.detail,
+        },
       });
     } else {
       observation = commandObservation({
         argv: [...spec.argv],
         cwd: candidate.root,
         exitCode: raw.exitCode,
-        selected: raw.selected ?? counts.selected,
-        executed: raw.executed ?? counts.executed,
-        skipped: raw.skipped ?? counts.skipped,
+        selected,
+        executed,
+        skipped,
         inputs,
         attribution: CHECKER_ID,
-        raw_refs: [],
+        raw_refs: rawRef ? [rawRef] : [],
+        failure: classified.outcome === CHECK_OUTCOMES.PASSED ? null : classified.outcome,
+        failureDetail: classified.outcome === CHECK_OUTCOMES.PASSED ? null : classified.detail,
       });
     }
   }
@@ -523,7 +618,26 @@ export function runCheck({
       skipped: observation.detail.skipped ?? null,
     },
     outputHash,
-    redaction: "stdout and stderr are hashed, not stored, and no environment values are recorded",
+    // What actually happened to this check, kept separate from what the counts
+    // say, so "no runner" can never render as "0 tests passed".
+    outcome: classified ? classified.outcome : null,
+    outcomeDetail: classified ? classified.detail : null,
+    aboutTheCandidate: classified ? classified.aboutTheCandidate : null,
+    // DLV-120: the bounded redacted text, by reference, with its identity.
+    raw_refs: rawRef ? [rawRef] : [],
+    output: retained
+      ? {
+          ref: rawRef,
+          retained: Boolean(rawRef),
+          empty: retained.empty,
+          bytes: retained.bytes,
+          droppedLines: retained.droppedLines,
+          clippedLines: retained.clippedLines,
+          truncatedChars: retained.truncatedChars,
+          redactedSecrets: retained.redactedSecrets,
+        }
+      : null,
+    redaction: retentionNote(retained),
     oracle_ref: criterion.oracle_ref,
     freshnessInputs: inputs,
   };
@@ -534,6 +648,9 @@ export function runCheck({
     refused: null,
     detail: null,
     drift,
+    // The retained text itself, so a fixture can assert what redaction produced
+    // without standing up a store. Nothing persists this; `retain` does.
+    output: retained,
   });
 }
 

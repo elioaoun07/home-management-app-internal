@@ -22,6 +22,8 @@ import {
 } from "./v2model";
 import {
   checkGroups,
+  checkLog,
+  checkOutcome,
   checkReason,
   checkTitle,
   compact,
@@ -388,7 +390,10 @@ export function ChecksReview({
             </span>
             <span className="check-summary">
               <strong>{checkTitle(current)}</strong>
-              <span className="review-meta">{checkCountLine(current)}</span>
+              <span className="review-meta">
+                {checkCountLine(current)} ·{" "}
+                <time>{activityTime(current.created_at)}</time>
+              </span>
             </span>
             <span
               className="review-badge"
@@ -397,12 +402,21 @@ export function ChecksReview({
               {evidenceLabel(current)}
             </span>
             </header>
-            <div className="check-result">
-              <time>{activityTime(current.created_at)}</time>
-              {current.exitCode != null && current.exitCode !== 0 && (
-                <span>Exit {current.exitCode}</span>
-              )}
-            </div>
+            {((current.exitCode != null && current.exitCode !== 0) ||
+              checkOutcome(current)) && (
+              <div className="check-result">
+                {current.exitCode != null && current.exitCode !== 0 && (
+                  <span>Exit {current.exitCode}</span>
+                )}
+                {checkOutcome(current) && <span>{checkOutcome(current)}</span>}
+              </div>
+            )}
+            {checkLog(current) && (
+              <details className="check-log">
+                <summary>Log</summary>
+                <pre>{checkLog(current)}</pre>
+              </details>
+            )}
             {!!previous.length && (
               <section className="check-history">
                 <h3>Previous runs</h3>
@@ -651,6 +665,8 @@ export function UsageSummary({ resources, jobs = [] }: { resources: V2Resources 
   const allowance = resources?.unit === "tokens" ? resources.allowance : null;
   const exceeded = used != null && allowance != null && used > allowance;
   const over = exceeded ? used - allowance : null;
+  const live = resources?.enforcement === "threshold";
+  const stopped = Boolean(resources?.budget?.stopRequested);
   const split = tokenSplit(resources);
   const note = normalizationNote(resources);
   return (
@@ -666,14 +682,20 @@ export function UsageSummary({ resources, jobs = [] }: { resources: V2Resources 
             max={allowance}
             value={used || 0}
           />
-          {/* Checked when a job is admitted, not while it runs: a job already
-              dispatched is never interrupted by it. Saying "threshold" implied
-              a live ceiling this system does not have. */}
-          <span title="Checked when a job is admitted; a running job is not stopped by it">
-            {allowance.toLocaleString()} admission limit
+          {/* Two different promises, never one label. `advisory` is checked when
+              a job is admitted and never interrupts one already running;
+              `threshold` asks a running job to stop at the observed crossing,
+              which the turn that crossed has already been paid for (DLV-114). */}
+          <span title={live ? "Asks a running job to stop at the observed crossing" : "Checked when a job is admitted; a running job is not stopped by it"}>
+            {allowance.toLocaleString()} {live ? "stop limit" : "admission limit"}
           </span>
           {over != null && <b>+{over.toLocaleString()}</b>}
         </div>
+      )}
+      {stopped && (
+        <small className="usage-split" data-flagged="true" title={resources?.budget?.basis || undefined}>
+          Stopped at limit · {(resources?.budget?.overshoot || 0).toLocaleString()} over
+        </small>
       )}
       {split && (split.cached > 0 || split.output > 0) && (
         <small className="usage-split">
