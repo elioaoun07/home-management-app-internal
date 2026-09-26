@@ -17,6 +17,7 @@ import type {
   Snapshot,
   Space,
   Work,
+  V2RunSummary,
   World,
 } from "./types";
 export const buckets: { id: Bucket; label: string; note: string }[] = [
@@ -128,6 +129,23 @@ export function discover(work: Work[], query: string): Work[] {
 }
 export const liveRuns = (runs: RunSummary[]) =>
   runs.filter((run) => !isTerminal(run.state));
+/** Where a finished delivery ended, for the Earlier deliveries filter. A V2 run
+ *  closed on a verified candidate stays "apply" until its application lands. */
+export type PastOutcome = "apply" | "applied" | "cancelled" | "other";
+export const pastOutcomes: { id: PastOutcome; label: string }[] = [
+  { id: "apply", label: "To apply" },
+  { id: "applied", label: "Applied" },
+  { id: "cancelled", label: "Cancelled" },
+  { id: "other", label: "Other" },
+];
+export function pastOutcomeV1(run: Pick<RunSummary, "state">): PastOutcome {
+  return run.state === "SHIPPED" ? "applied" : run.state === "CANCELLED" ? "cancelled" : "other";
+}
+export function pastOutcomeV2(run: Pick<V2RunSummary, "closed_outcome" | "application">): PastOutcome {
+  if (run.application?.state === "applied") return "applied";
+  if (run.closed_outcome === "verified_candidate") return "apply";
+  return run.closed_outcome === "cancelled" ? "cancelled" : "other";
+}
 export const runFor = (work: Work, runs: RunSummary[]) =>
   liveRuns(runs).find(
     (run) => run.item.id === work.id && run.item.campaign === work.module,

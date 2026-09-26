@@ -11,7 +11,16 @@ import { isTerminal } from "../shared/product.mjs";
 import { read, post } from "./api";
 import { client, go, pmKeys, useRoute, useWorld } from "./state";
 import { transport } from "./transport";
-import { bucketOf, canDeliver, liveRuns, workPath } from "./model";
+import {
+  bucketOf,
+  canDeliver,
+  liveRuns,
+  pastOutcomeV1,
+  pastOutcomeV2,
+  pastOutcomes,
+  workPath,
+  type PastOutcome,
+} from "./model";
 import {
   Back,
   Empty,
@@ -28,6 +37,7 @@ import type { Capabilities, Preflight, Recommendation, Work } from "./types";
 export function Delivery() {
   const { runs, runError, world } = useWorld();
   const [history, setHistory] = useState(false);
+  const [outcome, setOutcome] = useState<PastOutcome | "all">("all");
   const active = liveRuns(runs);
   const past = runs.filter((run) => isTerminal(run.state));
   // V2 runs sit beside V1 sessions; each link names its engine.
@@ -35,6 +45,10 @@ export function Delivery() {
   const v2Runs = v2.data?.runs || [];
   const v2Active = v2Runs.filter((run) => run.lifecycle !== "CLOSED");
   const v2Past = v2Runs.filter((run) => run.lifecycle === "CLOSED");
+  const counts = { apply: 0, applied: 0, cancelled: 0, other: 0 };
+  for (const run of past) counts[pastOutcomeV1(run)]++;
+  for (const run of v2Past) counts[pastOutcomeV2(run)]++;
+  const shown = (kind: PastOutcome) => outcome === "all" || outcome === kind;
   return (
     <div>
       <PageTitle
@@ -96,14 +110,39 @@ export function Delivery() {
               <ChevronRight size={17} />
             </span>
           </button>
+          {history && (
+            <div
+              className="segmented history-filter"
+              role="radiogroup"
+              aria-label="Outcome"
+            >
+              {[
+                { id: "all" as const, label: "All", count: past.length + v2Past.length },
+                ...pastOutcomes
+                  .map((o) => ({ ...o, count: counts[o.id] }))
+                  .filter((o) => o.count),
+              ].map((o) => (
+                <button
+                  key={o.id}
+                  role="radio"
+                  aria-checked={outcome === o.id}
+                  onClick={() => setOutcome(o.id)}
+                >
+                  {o.label} <small>{o.count}</small>
+                </button>
+              ))}
+            </div>
+          )}
           {history &&
             v2Past
+              .filter((run) => shown(pastOutcomeV2(run)))
               .slice(0, 30)
               .map((run) => (
                 <V2RunLink key={run.run_id} run={run} from="/delivery" />
               ))}
           {history &&
             past
+              .filter((run) => shown(pastOutcomeV1(run)))
               .slice(0, 30)
               .map((run) => (
                 <RunLink key={run.sessionId} run={run} from="/delivery" />

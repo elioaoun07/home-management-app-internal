@@ -1,14 +1,16 @@
 /* Dashboard (Command Center Phase 6). Series colors were checked with the dataviz
    validator against each theme's surface: priorities as a one-hue ordinal ramp,
    completed/cancelled as a categorical pair. Text never wears a series color. */
-:root {
+:root,
+[data-pm-live] {
   --viz-now: #bae6fd;
   --viz-next: #38bdf8;
   --viz-later: #0284c7;
   --viz-done: #3987e5;
   --viz-cancel: #d95926;
 }
-:root[data-theme="pink"] {
+:root[data-theme="pink"],
+[data-theme="pink"] [data-pm-live] {
   --viz-now: #fbcfe8;
   --viz-next: #f472b6;
   --viz-later: #be185d;

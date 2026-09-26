@@ -480,6 +480,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Shipped Log
 
+- ✅ 2026-09-26 — **R68** Active highlights readable on `/pm/live` + Earlier deliveries filter. Same class as R67: the Next app's `:root[data-theme="blue"]` (and `.dark`) `--accent: #f1f5f9` out-ranked the PM app's bare `:root { --accent }`, so the selected bottom-nav tab, the selected Delivery tab (Outcome/Plan/…) and every accent icon (Spec/Plan rows) rendered light grey. Fix: `styles.css`/`dashboard.css` token blocks now also declare on `[data-pm-live]` (element-level beats any inherited `:root` value), incl. pink. Collision sweep of every PM token vs `src/**/*.css`: only `--accent`, `--chart-2`, `--chart-3` collided — all covered. Earlier deliveries gained an outcome filter (All / To apply / Applied / Cancelled / Other, zero-count chips hidden) via `pastOutcomeV1/V2` in `model.ts`. (`tests/pm-ui/app-model.test.ts` 6/6, typecheck clean; phone check pending.)
+
 - ✅ 2026-09-22 — **R67** Muted text readable on `/pm/live`: the Next app's `:root[data-theme="blue"] { --muted: #1a2942 }` (a surface shade, specificity 0,2,0) beat the PM app's `:root { --muted: #94a3b8 }`, so every secondary label — bottom nav included — rendered near-background. Renamed the PM token to `--ink-muted` in all six `scripts/pm/app/*.css` files so it can't collide. (Grep: 0 remaining `--muted` in `scripts/pm/app`; phone check pending.)
 
 - ✅ 2026-09-15 — **R66** Removed Delivery launch/footer noise and rebuilt review hierarchy around visible plan sections, verification history, run facts and final Changes/Apply; unavailable executors now reveal their actual blocker. (Targeted tests, React bundle, typecheck and lint; browser UAT pending.)

@@ -12,7 +12,12 @@
   font-weight: 600 800;
   font-display: swap;
 }
-:root {
+/* The tokens are also declared on [data-pm-live] (the /pm/live wrapper): there the
+   host app's globals.css defines `--accent` etc. under `:root[data-theme="blue"]`
+   (+ `.dark`), which out-rank a bare `:root` and turned every active highlight
+   light grey. A declaration on the element beats any inherited :root value. */
+:root,
+[data-pm-live] {
   font-family: Geist, system-ui, sans-serif;
   font-size: 14px;
   color-scheme: dark;
@@ -37,7 +42,8 @@
   background: var(--theme-bg);
   color: var(--ink);
 }
-:root[data-theme="pink"] {
+:root[data-theme="pink"],
+[data-theme="pink"] [data-pm-live] {
   /* ERA Pink: the existing app's alternate dark palette. */
   --theme-bg: #1a0a14;
   --surface: #2d1b29;
