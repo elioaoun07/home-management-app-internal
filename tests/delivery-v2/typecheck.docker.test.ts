@@ -161,8 +161,8 @@ describe.skipIf(!enabled)("typecheck inside the protected checker", () => {
     });
   }
 
-  function verify(candidate: ReturnType<typeof freezeCandidate>) {
-    const offered = runtime.typecheckExecutor({ run_id: RUN, candidate, include });
+  async function verify(candidate: ReturnType<typeof freezeCandidate>) {
+    const offered = await runtime.typecheckExecutor({ run_id: RUN, candidate, include });
     expect(offered.ok, offered.reason).toBe(true);
     // Pinned, and the verdict says with what.
     expect(offered.producer.dependencies.typescript).toMatch(/^\d+\.\d+/u);
@@ -176,8 +176,8 @@ describe.skipIf(!enabled)("typecheck inside the protected checker", () => {
     });
   }
 
-  it("the deliberate failure: the container checker catches supabaseAdmin.from", () => {
-    const verification = verify(candidateFor("C1", DEFECTIVE));
+  it("the deliberate failure: the container checker catches supabaseAdmin.from", async () => {
+    const verification = await verify(candidateFor("C1", DEFECTIVE));
     expect(verification.environment.complete).toBe(true);
     expect(verification.environment.producer).toBe(TYPECHECK_PRODUCERS.CHECKER);
     expect(verification.environment.isolated).toBe(true);
@@ -187,14 +187,14 @@ describe.skipIf(!enabled)("typecheck inside the protected checker", () => {
     expect(verification.output!.text).not.toContain(HOST);
   }, 900_000);
 
-  it("the passing control: the same route written correctly, same pinned program", () => {
-    const verification = verify(candidateFor("C2", CORRECT));
+  it("the passing control: the same route written correctly, same pinned program", async () => {
+    const verification = await verify(candidateFor("C2", CORRECT));
     expect(verification.state).toBe(TYPECHECK_STATE.SATISFIED);
     expect(verification.counts.introduced).toBe(0);
     expect(verification.environment.isolated).toBe(true);
   }, 900_000);
 
-  it("refuses, rather than grading, when the dependency volume carries no compiler", () => {
+  it("refuses, rather than grading, when the dependency volume carries no compiler", async () => {
     const bare = "era-v2-tsc-bare-" + String(process.pid);
     docker(["volume", "create", bare]);
     try {
@@ -203,7 +203,7 @@ describe.skipIf(!enabled)("typecheck inside the protected checker", () => {
         hostRoot: HOST,
         workRoot: WORK,
       });
-      const offered = without.typecheckExecutor({ run_id: RUN + "-bare", candidate: candidateFor("C3", CORRECT), include });
+      const offered = await without.typecheckExecutor({ run_id: RUN + "-bare", candidate: candidateFor("C3", CORRECT), include });
       expect(offered.ok).toBe(false);
       expect(offered.reason).toMatch(/does not resolve typescript/u);
     } finally {

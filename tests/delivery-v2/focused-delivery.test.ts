@@ -78,6 +78,21 @@ describe("prepared Focused lifecycle", () => {
     expect(applied.ok).toBe(true);
     expect(readFileSync(join(root, "src/amount.ts"), "utf8")).toContain("= 20;");
   });
+  it("applies after an unrelated source edit: only the writer's own changes are held to the prepared plan", async () => {
+    // KIT-11 run B, 2026-09-26: the Master Book changed after the snapshot, the
+    // re-check on Apply counted it as the candidate leaving its plan and refused.
+    const { journey } = harness();
+    const delivered = await launch(journey); await journey.idle();
+    await approve(journey, delivered.run_id); await journey.idle();
+    const view = journey.detail(delivered.run_id);
+    expect(view.run.closed_outcome).toBe("verified_candidate");
+    const config = join(root, "src/config.ts");
+    writeFileSync(config, readFileSync(config, "utf8") + "\n// owner edit after the run\n");
+    const applied = await journey.apply({ run_id: delivered.run_id, candidate_id: view.candidate.candidate_id, result_ref: view.result.result_id + "@" + view.result.result_version, command_id: cmd(), actor: "owner", action: "apply" });
+    expect(applied).toMatchObject({ ok: true });
+    expect(readFileSync(join(root, "src/amount.ts"), "utf8")).toContain("= 20;");
+    expect(readFileSync(config, "utf8")).toContain("owner edit after the run");
+  });
   it.each(["steps", "checks", "invariants"])("uses investigation when %s is missing", async field => {
     writeFileSync(bookPathIn(root), source(true, { [field]: [] }));
     const { h, journey } = harness(); const delivered = await launch(journey); await journey.idle();

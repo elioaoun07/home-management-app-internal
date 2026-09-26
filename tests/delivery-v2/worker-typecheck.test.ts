@@ -25,12 +25,12 @@ const mounts = (args: string[]) => args.flatMap((arg, index) => (arg === "--moun
 const flagValue = (args: string[], flag: string) => args[args.indexOf(flag) + 1];
 
 describe("typecheckArgv", () => {
-  it("runs the image's own runner over the pinned program, with no candidate in the baseline", () => {
+  it("runs the image's own runner over the pinned program, with no candidate in the baseline", async () => {
     const baseline = typecheckArgv({ phase: "baseline", changed: ["src/a.ts"], deleted: ["src/b.ts"] });
     expect(baseline).toEqual(["node", TYPECHECK_RUNNER_PATH, "--root", PROGRAM_PATH]);
   });
 
-  it("lays the frozen candidate over that same program for the candidate phase", () => {
+  it("lays the frozen candidate over that same program for the candidate phase", async () => {
     expect(typecheckArgv({ phase: "candidate", changed: ["src/a.ts", "src/b.ts"], deleted: ["src/c.ts"] })).toEqual([
       "node",
       TYPECHECK_RUNNER_PATH,
@@ -45,7 +45,7 @@ describe("typecheckArgv", () => {
     ]);
   });
 
-  it("names a program volume from its manifest, so the same source reuses it and a changed one does not", () => {
+  it("names a program volume from its manifest, so the same source reuses it and a changed one does not", async () => {
     expect(programVolumeName("sha256:" + "a".repeat(64))).toBe(programVolumeName("sha256:" + "a".repeat(64)));
     expect(programVolumeName("sha256:" + "a".repeat(64))).not.toBe(programVolumeName("sha256:" + "b".repeat(64)));
     expect(programVolumeName("sha256:" + "a".repeat(64))).toMatch(/^era-v2-program-[a-f0-9]{32}$/u);
@@ -112,14 +112,14 @@ describe("typecheckExecutor", () => {
     return { ...candidate, root };
   };
 
-  it("stages the pinned program into a content-addressed read-only volume and mounts it beside the candidate", () => {
+  it("stages the pinned program into a content-addressed read-only volume and mounts it beside the candidate", async () => {
     const docker = fakeDocker();
-    const offered = runtimeWith(docker).typecheckExecutor({ run_id: "r-1", candidate: withCandidate(), include: ["tsconfig.json", "src/a.ts"] });
+    const offered = await runtimeWith(docker).typecheckExecutor({ run_id: "r-1", candidate: withCandidate(), include: ["tsconfig.json", "src/a.ts"] });
     expect(offered.ok).toBe(true);
     expect(offered.program!.files).toBe(2);
     expect(offered.program!.volume).toMatch(/^era-v2-program-[a-f0-9]{32}$/u);
 
-    offered.execute!({ phase: "candidate", changed: ["src/a.ts"], deleted: [] });
+    await offered.execute!({ phase: "candidate", changed: ["src/a.ts"], deleted: [] });
     const run = docker.calls.find((args) => args.includes(TYPECHECK_RUNNER_PATH));
     expect(run).toBeDefined();
     const args = run as string[];
@@ -134,39 +134,39 @@ describe("typecheckExecutor", () => {
     expect(args.slice(args.indexOf("node"))).toEqual(["node", TYPECHECK_RUNNER_PATH, "--root", PROGRAM_PATH, "--candidate", CANDIDATE_PATH, "--changed", "src/a.ts"]);
   });
 
-  it("reuses the volume for an unchanged program and stages a new one when the source moves", () => {
+  it("reuses the volume for an unchanged program and stages a new one when the source moves", async () => {
     const existing = new Set<string>();
-    const first = runtimeWith(fakeDocker({ existing })).typecheckExecutor({ run_id: "r-1", candidate: withCandidate(), include: ["tsconfig.json", "src/a.ts"] });
-    const again = runtimeWith(fakeDocker({ existing })).typecheckExecutor({ run_id: "r-2", candidate: withCandidate(), include: ["tsconfig.json", "src/a.ts"] });
+    const first = await runtimeWith(fakeDocker({ existing })).typecheckExecutor({ run_id: "r-1", candidate: withCandidate(), include: ["tsconfig.json", "src/a.ts"] });
+    const again = await runtimeWith(fakeDocker({ existing })).typecheckExecutor({ run_id: "r-2", candidate: withCandidate(), include: ["tsconfig.json", "src/a.ts"] });
     expect(again.program!.volume).toBe(first.program!.volume);
 
     writeFileSync(join(HOST, "src", "a.ts"), "export const a = 99;\n", "utf8");
-    const moved = runtimeWith(fakeDocker({ existing })).typecheckExecutor({ run_id: "r-3", candidate: withCandidate(), include: ["tsconfig.json", "src/a.ts"] });
+    const moved = await runtimeWith(fakeDocker({ existing })).typecheckExecutor({ run_id: "r-3", candidate: withCandidate(), include: ["tsconfig.json", "src/a.ts"] });
     expect(moved.program!.volume).not.toBe(first.program!.volume);
   });
 
-  it("refuses rather than compiling when the dependency volume has no typescript", () => {
+  it("refuses rather than compiling when the dependency volume has no typescript", async () => {
     const docker = fakeDocker({ probe: { status: 1, stdout: "", stderr: "Cannot find module 'typescript'" } });
-    const offered = runtimeWith(docker).typecheckExecutor({ run_id: "r-1", candidate: withCandidate(), include: ["tsconfig.json", "src/a.ts"] });
+    const offered = await runtimeWith(docker).typecheckExecutor({ run_id: "r-1", candidate: withCandidate(), include: ["tsconfig.json", "src/a.ts"] });
     expect(offered.ok).toBe(false);
     expect(offered.reason).toMatch(/era-dlv107-dependencies/u);
     expect(offered.reason).toMatch(/does not resolve typescript/u);
   });
 
-  it("refuses a boundary that mounts no dependency volume at all", () => {
-    const offered = runtimeWith(fakeDocker(), null).typecheckExecutor({ run_id: "r-1", candidate: withCandidate(), include: ["tsconfig.json"] });
+  it("refuses a boundary that mounts no dependency volume at all", async () => {
+    const offered = await runtimeWith(fakeDocker(), null).typecheckExecutor({ run_id: "r-1", candidate: withCandidate(), include: ["tsconfig.json"] });
     expect(offered.ok).toBe(false);
     expect(offered.reason).toMatch(/no dependency volume/u);
   });
 
-  it("refuses an empty program instead of compiling nothing and calling it clean", () => {
-    const offered = runtimeWith(fakeDocker()).typecheckExecutor({ run_id: "r-1", candidate: withCandidate(), include: [] });
+  it("refuses an empty program instead of compiling nothing and calling it clean", async () => {
+    const offered = await runtimeWith(fakeDocker()).typecheckExecutor({ run_id: "r-1", candidate: withCandidate(), include: [] });
     expect(offered.ok).toBe(false);
     expect(offered.reason).toMatch(/no program file list/u);
   });
 
-  it("reports the checker's environment in the shape the verdict records", () => {
-    const offered = runtimeWith(fakeDocker()).typecheckExecutor({ run_id: "r-1", candidate: withCandidate(), include: ["tsconfig.json", "src/a.ts"] });
+  it("reports the checker's environment in the shape the verdict records", async () => {
+    const offered = await runtimeWith(fakeDocker()).typecheckExecutor({ run_id: "r-1", candidate: withCandidate(), include: ["tsconfig.json", "src/a.ts"] });
     expect(offered.producer!).toMatchObject({
       producer: "protected-checker",
       isolated: true,

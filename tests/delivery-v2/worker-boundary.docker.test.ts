@@ -136,22 +136,22 @@ describe.skipIf(!enabled)("container worker and checker on synthetic assets", ()
     // The host checkout was never written.
     expect(readFileSync(join(HOST, "src", "amount.ts"), "utf8")).toBe("export const amount = 25;\n");
 
-    const execute = runtime.checkExecutor({ run_id: RUN, candidate });
-    const passed = execute({
+    const execute = await runtime.checkExecutor({ run_id: RUN, candidate });
+    const passed = await execute({
       argv: ["node", "-e", "require('fs').readFileSync('/candidate/src/amount.ts','utf8').includes('= 20;') ? console.log('Tests  1 passed (1)') : process.exit(1)"],
       env: { CI: "1", ANTHROPIC_API_KEY: "must-not-arrive" },
     });
     expect(passed.exitCode).toBe(0);
     expect(passed.stdout).toMatch(/Tests {2}1 passed \(1\)/u);
-    const noWrite = execute({ argv: ["node", "-e", "require('fs').writeFileSync('/candidate/src/amount.ts','x')"], env: {} });
+    const noWrite = await execute({ argv: ["node", "-e", "require('fs').writeFileSync('/candidate/src/amount.ts','x')"], env: {} });
     expect(noWrite.exitCode).not.toBe(0);
     expect(noWrite.stderr).toMatch(/EROFS/u);
-    const noNetwork = execute({
+    const noNetwork = await execute({
       argv: ["node", "-e", "require('net').connect(443,'1.1.1.1').on('error',e=>{console.log(e.code);process.exit(0)}).on('connect',()=>{console.log('CONNECTED');process.exit(0)})"],
       env: {},
     });
     expect(noNetwork.stdout).not.toMatch(/CONNECTED/u);
-    const noCredential = execute({ argv: ["node", "-e", "console.log(String(process.env.ANTHROPIC_API_KEY))"], env: { ANTHROPIC_API_KEY: "must-not-arrive" } });
+    const noCredential = await execute({ argv: ["node", "-e", "console.log(String(process.env.ANTHROPIC_API_KEY))"], env: { ANTHROPIC_API_KEY: "must-not-arrive" } });
     expect(noCredential.stdout.trim()).toBe("undefined");
   }, 600_000);
 

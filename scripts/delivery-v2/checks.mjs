@@ -34,7 +34,6 @@
 // is how a checker ends up able to certify itself.
 
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
@@ -43,6 +42,7 @@ import { CHECK_OUTCOMES, classifyCheckOutcome, retainOutput, retentionNote } fro
 import { commandObservation, interactionObservation, makeObservation } from "./criteria.mjs";
 import { candidateFreshness, freezeCandidate } from "./candidate.mjs";
 import { classifyRelativePath, walkTrusted } from "./scratch.mjs";
+import { runProcess } from "./process.mjs";
 
 /** Who produced a receipt. A receipt claiming any other producer is not trusted. */
 export const CHECKER_ID = "delivery-v2/protected-checker";
@@ -307,9 +307,9 @@ export function restrictedEnv(base = process.env) {
  * spawning anything; the real one exists so the receipt can carry a genuine argv,
  * cwd and exit status rather than a description of one.
  */
-export function spawnExecutor({ argv, cwd, env, timeoutMs = 600_000 }) {
+export async function spawnExecutor({ argv, cwd, env, timeoutMs = 600_000 }) {
   const [command, ...args] = argv;
-  const result = spawnSync(command, args, { cwd, env, encoding: "utf8", timeout: timeoutMs });
+  const result = await runProcess(command, args, { cwd, env, timeout: timeoutMs, maxBuffer: 1024 * 1024 });
   return {
     exitCode: result.status,
     signal: result.signal ?? null,
@@ -351,10 +351,10 @@ export function parseTestCounts(output) {
     const count = Number(synthetic[1]);
     return { selected: count, executed: count, skipped: 0, failed: 0 };
   }
-  // Protected delivery oracles (tests/delivery-oracles/, e.g. BUD-83) end with
-  // "<executed> of <selected> tests passed"; they throw on the first failing case,
-  // so a printed summary means every executed case passed.
-  const oracle = text.match(/^(\d+) of (\d+) tests passed$/mu);
+  // Protected delivery oracles (tests/delivery-oracles/) end with "<executed> of
+  // <selected> tests passed" (BUD-83) or "... checks passed" (KIT-11); they throw
+  // on a failing case, so a printed summary means every executed case passed.
+  const oracle = text.match(/^(\d+) of (\d+) (?:tests|checks) passed$/mu);
   if (oracle) {
     const executed = Number(oracle[1]);
     const selected = Number(oracle[2]);
@@ -414,12 +414,12 @@ export function parseTestCounts(output) {
  *   env?:Record<string, (string|undefined)>, now?:Function, interaction?:Function,
  *   dependsOnInputs?:(string[]|null), retain?:(Function|null),
  *   hostRoot?:(string|null)}} input
- * @returns {{receipt:(CheckReceipt|null), observation:(import("./criteria.mjs").Observation|null),
+ * @returns {Promise<{receipt:(CheckReceipt|null), observation:(import("./criteria.mjs").Observation|null),
  *   refused:(string|null), detail:(string|null),
  *   drift?:ReturnType<typeof detectOracleDrift>,
- *   freshness?:ReturnType<import("./candidate.mjs").candidateFreshness>}}
+ *   freshness?:ReturnType<import("./candidate.mjs").candidateFreshness>}>}
  */
-export function runCheck({
+export async function runCheck({
   plan,
   candidate,
   criterion,
@@ -544,7 +544,7 @@ export function runCheck({
       raw_refs: rawRef ? [rawRef] : [],
     });
   } else {
-    raw = execute({ argv: [...spec.argv], cwd: candidate.root, env });
+    raw = await execute({ argv: [...spec.argv], cwd: candidate.root, env });
     const counts = parseTestCounts(String(raw.stdout || "") + "\n" + String(raw.stderr || ""));
     const selected = raw.selected ?? counts.selected;
     const executed = raw.executed ?? counts.executed;

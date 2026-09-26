@@ -45,30 +45,39 @@ const fakeDocker = () => {
 };
 
 describe("credential sync", () => {
-  it("copies a valid host sign-in once, and again only after it changes", () => {
+  it("copies a valid host sign-in once, and again only after it changes", async () => {
     const home = homeWith({ codexExpires: NOW + 10 * 86_400_000 });
     const docker = fakeDocker();
     const sync = createCredentialSync({ boundary, docker, home, now: () => NOW });
-    expect(sync.sync("codex-exec-sdk")).toMatchObject({ ok: true, copied: true });
-    expect(sync.sync("codex-exec-sdk")).toMatchObject({ ok: true, copied: false });
+    expect(await sync.sync("codex-exec-sdk")).toMatchObject({ ok: true, copied: true });
+    expect(await sync.sync("codex-exec-sdk")).toMatchObject({ ok: true, copied: false });
     expect(docker.calls).toHaveLength(1);
     expect(docker.calls[0].args).toContain("type=volume,source=vol-codex,target=/dst");
     expect(docker.calls[0].args).toContain("none");
     writeFileSync(join(home, ".codex", "auth.json"), JSON.stringify({ auth_mode: "chatgpt", tokens: { access_token: jwt(NOW + 9 * 86_400_000), refresh_token: "r2", account_id: "acct" } }));
-    expect(sync.sync("codex-exec-sdk")).toMatchObject({ ok: true, copied: true });
+    expect(await sync.sync("codex-exec-sdk")).toMatchObject({ ok: true, copied: true });
     expect(docker.calls).toHaveLength(2);
   });
 
-  it("refuses a sign-in about to expire, so a job never needs to refresh it", () => {
+  it("shares one copy between concurrent callers, so two writers never race on one sign-in file", async () => {
+    const home = homeWith({ codexExpires: NOW + 10 * 86_400_000 });
+    const docker = fakeDocker();
+    const sync = createCredentialSync({ boundary, docker, home, now: () => NOW });
+    const [first, second] = await Promise.all([sync.sync("codex-exec-sdk"), sync.sync("codex-exec-sdk")]);
+    expect(first).toBe(second);
+    expect(docker.calls).toHaveLength(1);
+  });
+
+  it("refuses a sign-in about to expire, so a job never needs to refresh it", async () => {
     const home = homeWith({ claudeExpires: NOW + MIN_REMAINING_MS - 1 });
     const docker = fakeDocker();
-    const result: Loose = createCredentialSync({ boundary, docker, home, now: () => NOW }).sync("claude-agent-sdk");
+    const result: Loose = await createCredentialSync({ boundary, docker, home, now: () => NOW }).sync("claude-agent-sdk");
     expect(result).toMatchObject({ ok: false });
     expect(result.reason).toMatch(/open Claude Code once/u);
     expect(docker.calls).toHaveLength(0);
   });
 
-  it("refuses API-key or missing sign-ins without touching the volume", () => {
+  it("refuses API-key or missing sign-ins without touching the volume", async () => {
     const home = homeWith({});
     mkdirSync(join(home, ".codex"), { recursive: true });
     writeFileSync(join(home, ".codex", "auth.json"), JSON.stringify({ auth_mode: "apikey", OPENAI_API_KEY: "sk-x" }));
@@ -78,7 +87,7 @@ describe("credential sync", () => {
 });
 
 describe("expired and revoked sign-ins refuse with a reconnect action", () => {
-  it("names the reconnect action and a distinct code for each failure", () => {
+  it("names the reconnect action and a distinct code for each failure", async () => {
     const expired = homeWith({ claudeExpires: NOW - 1 });
     expect(readHostCredential("claude-agent-sdk", { home: expired, now: NOW })).toMatchObject({ ok: false, code: "expired", reconnect: "open Claude Code once" });
     const soon = homeWith({ codexExpires: NOW + MIN_REMAINING_MS - 1 });
@@ -86,7 +95,7 @@ describe("expired and revoked sign-ins refuse with a reconnect action", () => {
     expect(readHostCredential("codex-exec-sdk", { home: homeWith({}), now: NOW })).toMatchObject({ ok: false, code: "not-signed-in", reconnect: "run codex once" });
   });
 
-  it("never mentions an API key or paid route in a refusal", () => {
+  it("never mentions an API key or paid route in a refusal", async () => {
     const result: Loose = readHostCredential("claude-agent-sdk", { home: homeWith({ claudeExpires: NOW - 1 }), now: NOW });
     expect(result.reason).not.toMatch(/api|key|paid|credit|token/iu);
   });
@@ -114,6 +123,22 @@ describe("container runtime with an unusable sign-in", () => {
     const before = calls.length;
     await expect((async () => { for await (const _ of sdk.query({ prompt: "x", options: {} })) void _; })()).rejects.toThrow(/sign-in expired.*open Claude Code once/u);
     expect(calls.slice(before).some((args) => args[0] === "run" || args[0] === "lines")).toBe(false);
+  });
+
+  it("shares one sign-in probe between concurrent readiness checks", async () => {
+    const probes: string[][] = [];
+    const docker: Loose = {
+      run: async (args: string[]) => {
+        probes.push(args);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return { status: 0, stdout: JSON.stringify({ era: "subscription-ready" }) + "\n", stderr: "" };
+      },
+    };
+    const runtime = createContainerRuntime({ boundary: makeBoundaryConfig({ image: "img", credentials: boundary.credentials }), hostRoot: HOST, workRoot: join(HOST, "..", "era-cred-scratch"), docker, credentialSync: { sync: () => ({ ok: true, copied: false, expiresAt: NOW + 86_400_000 }) } });
+    const [first, second] = await Promise.all([runtime.authReadiness("codex-exec-sdk"), runtime.authReadiness("codex-exec-sdk")]);
+    expect(first).toMatchObject({ ok: true });
+    expect(second).toBe(first);
+    expect(probes).toHaveLength(1);
   });
 
   it("treats a provider 401 as a revoked sign-in with a reconnect action, not a paid fallback", async () => {

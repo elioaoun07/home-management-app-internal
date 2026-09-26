@@ -810,7 +810,7 @@ export function createJourney({
    * Re-observe a candidate's criteria on the source an application would produce.
    * Runs in the checker on a preview generation outside the checkout; writes nothing.
    */
-  function reassess(ctx, candidate, policy) {
+  async function reassess(ctx, candidate, policy) {
     const run_id = String(ctx.run.run_id);
     if (!runtime || typeof runtime.checkExecutor !== "function") return { state: "not-run", reason: "no checker runtime" };
     // Evaluated under this application's claim, so its own row is already counted.
@@ -824,7 +824,7 @@ export function createJourney({
     const deleted = new Set(candidateChangedPaths(candidate).filter((change) => change.kind === "delete").map((change) => change.path));
     const gaps = preview.refusals.filter((entry) => !(entry.reason === "missing" && (deleted.has(entry.path) || !candidate.manifest.some((file) => file.path === entry.path))));
     const base = parseJson(ctx.run.base_manifest_json, []) || [];
-    const { criteria, records, integrity } = evidenceFor({ run_id, candidate: preview.candidate, policy, contract: ctx.contract, base });
+    const { criteria, records, integrity } = await evidenceFor({ run_id, candidate: preview.candidate, scopeCandidate: candidate, policy, contract: ctx.contract, base });
     if (!criteria.length) return { state: "not-run", reason: "no criteria", generation };
     const summary = summarizeCriteria(criteria, records);
     const passed = summary.candidate.outstanding.length === 0 && integrity.length === 0 && gaps.length === 0;
@@ -1694,13 +1694,15 @@ export function createJourney({
     return candidateChangedPaths(candidate).map(change => String(change.path)).filter(path => !plan.body.scope.some(root => path === root || path.startsWith(root.replace(/\/$/u, "") + "/")));
   }
 
-  function evidenceFor({ run_id, candidate, policy, contract, base }) {
+  // A preview or integrated snapshot also carries source changes made since the
+  // run's snapshot; only the writer's own changes are held to the prepared plan.
+  async function evidenceFor({ run_id, candidate, scopeCandidate = candidate, policy, contract, base }) {
     const s = getStore();
     const criteria = policy.criteria.filter((criterion) =>
       contract.criteria_refs.some((ref) => ref.criterion_id === criterion.criterion_id && ref.revision === criterion.revision),
     );
     const records = [];
-    const integrity = preparedScopeViolations(run_id, candidate).map(path => "candidate exceeds the approved prepared plan: " + path);
+    const integrity = preparedScopeViolations(run_id, scopeCandidate).map(path => "candidate exceeds the approved prepared plan: " + path);
     if (!criteria.length) return { criteria, records, integrity };
     const plan = pinCheckPlan({
       criteria,
@@ -1709,7 +1711,7 @@ export function createJourney({
       toolchain: { runtime: String(runtime.kind || "unknown"), image: runtime.boundary ? runtime.boundary.image : null },
       environmentDescription: String(runtime.kind || "unknown") + " checker; read-only candidate; no network; restricted environment",
     });
-    const execute = runtime.checkExecutor({ run_id, candidate });
+    const execute = await runtime.checkExecutor({ run_id, candidate });
     // DLV-120: the checker's own text, bounded and redacted, published into the
     // existing artifact store and referenced from the receipt. The blob is
     // written and read back before the row is recorded, so a dependent receipt
@@ -1722,7 +1724,7 @@ export function createJourney({
     for (const criterion of criteria) {
       let outcome;
       try {
-        outcome = runCheck({ plan, candidate, criterion, execute, env: restrictedEnv(), now, retain, hostRoot: root });
+        outcome = await runCheck({ plan, candidate, criterion, execute, env: restrictedEnv(), now, retain, hostRoot: root });
       } catch (error) {
         outcome = { receipt: null, observation: null, refused: "check-error", detail: errorText(error) };
       }
@@ -1757,7 +1759,7 @@ export function createJourney({
       });
     }
 
-    const typechecked = typecheckEvidence({ run_id, candidate, policy });
+    const typechecked = await typecheckEvidence({ run_id, candidate, policy });
     if (typechecked) {
       criteria.push(typechecked.criterion);
       records.push(typechecked.record);
@@ -1795,7 +1797,7 @@ export function createJourney({
    * choice: a fixture scripts two outputs through it and, having no runtime
    * checker, gets exactly that.
    */
-  function typecheckEnvironment({ run_id, candidate, configured }) {
+  async function typecheckEnvironment({ run_id, candidate, configured }) {
     const isolation = String(configured.isolation || "prefer-checker");
     const hostChoice = { execute: typecheckExecutor, producer: HOST_PRODUCER, requireIsolation: isolation === "checker" };
     if (isolation === "host") return hostChoice;
@@ -1809,7 +1811,7 @@ export function createJourney({
     });
     let offered;
     try {
-      offered = runtime.typecheckExecutor({ run_id, candidate, include: [...program.files] });
+      offered = await runtime.typecheckExecutor({ run_id, candidate, include: [...program.files] });
     } catch (error) {
       offered = { ok: false, reason: errorText(error) };
     }
@@ -1848,15 +1850,15 @@ export function createJourney({
     return record && record.verification ? String(record.verification.redaction || "No check receipt") : "No check receipt";
   }
 
-  function typecheckEvidence({ run_id, candidate, policy }) {
+  async function typecheckEvidence({ run_id, candidate, policy }) {
     const configured = policy.checks && policy.checks.requiredVerifications ? policy.checks.requiredVerifications.typecheck : null;
     if (!configured || !configured.enabled) return null;
     const s = getStore();
 
     let verification;
     try {
-      const chosen = typecheckEnvironment({ run_id, candidate, configured });
-      verification = runTypecheckVerification({
+      const chosen = await typecheckEnvironment({ run_id, candidate, configured });
+      verification = await runTypecheckVerification({
         hostRoot: root,
         candidate,
         argv: [...configured.argv],
@@ -1970,7 +1972,7 @@ export function createJourney({
     }
     const policy = loaded.policy;
     const base = parseJson(ctx.run.base_manifest_json, []) || [];
-    const { criteria, records, integrity } = evidenceFor({ run_id, candidate, policy, contract: ctx.contract, base });
+    const { criteria, records, integrity } = await evidenceFor({ run_id, candidate, policy, contract: ctx.contract, base });
     const preliminary = resultFor(ctx, { candidate, criteria, records, integrity, observedDisposition: "none", closed_outcome: null });
     // The protected checker is the observer of a verified candidate; nothing else is.
     const observedDisposition = preliminary.candidateVerified ? "verified_candidate" : "none";
@@ -2823,7 +2825,7 @@ export function createJourney({
     const deleted = new Set((view.plan.ops || []).filter((op) => op.kind === "delete").map((op) => op.path));
     const gaps = snapshot.refusals.filter((entry) => !(entry.reason === "missing" && (deleted.has(entry.path) || !candidate.manifest.some((file) => file.path === entry.path))));
     const base = parseJson(ctx.run.base_manifest_json, []) || [];
-    const { criteria, records, integrity } = evidenceFor({ run_id, candidate: snapshot.candidate, policy: loaded.policy, contract: ctx.contract, base });
+    const { criteria, records, integrity } = await evidenceFor({ run_id, candidate: snapshot.candidate, scopeCandidate: candidate, policy: loaded.policy, contract: ctx.contract, base });
     const summary = summarizeCriteria(criteria, records);
     const passed = criteria.length > 0 && summary.candidate.outstanding.length === 0 && integrity.length === 0 && gaps.length === 0;
     const failed = records.some((record) => record.state === "failed");
@@ -2976,7 +2978,7 @@ export function createJourney({
     // source it would produce — under the claim, before any byte is written.
     let reassessment = null;
     if (plan.unrelatedDrift.length) {
-      reassessment = reassess(ctx, candidate, loaded.policy);
+      reassessment = await reassess(ctx, candidate, loaded.policy);
       event(run_id, "application.reassessed", { application_id, state: reassessment.state, drift: plan.unrelatedDrift });
       if (reassessment.state === "failed" || reassessment.state === "inconclusive") {
         s.updateApplication(application_id, { state: "reassessment-failed", outcome_json: { reassessment } }, { expectState: "prepared" });

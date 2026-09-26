@@ -81,28 +81,39 @@ export const writeCredentialScript = (backend) =>
   ".json';if(fs.existsSync(p))fs.chownSync(p,0,0);fs.writeFileSync(p,s,{mode:0o600});fs.chownSync(p,10001,10001);fs.chmodSync('/dst',0o700);fs.chownSync('/dst',10001,10001);});";
 
 /**
- * A syncer bound to one boundary. `sync(backend)` copies the host sign-in into the
- * backend's volume when it changed since the last copy made by this process.
+ * A syncer bound to one boundary. `sync(backend)` resolves once the host sign-in
+ * is in the backend's volume, copying only when it changed since the last copy
+ * made by this process.
  */
 export function createCredentialSync({ boundary, docker, home = homedir(), now = () => Date.now() }) {
   const synced = new Map();
+  // One copy per backend at a time: two writers into one credential file could
+  // hand a starting job a half-written sign-in.
+  const copying = new Map();
+  async function copy(backend) {
+    const volume = boundary.credentials && boundary.credentials[backend] && boundary.credentials[backend].volume;
+    if (!volume) return { ok: false, code: "not-connected", reason: "subscription login has not been connected to this worker", reconnect: HOST_CREDENTIAL[backend]?.renew };
+    const host = readHostCredential(backend, { home, now: now() });
+    if (!host.ok) return host;
+    if (synced.get(backend) === host.fingerprint) return { ok: true, copied: false, expiresAt: host.expiresAt };
+    const args = [
+      "run", "--rm", "-i", "--network", "none", "--user", "0:0", "--read-only", "--cap-drop", "ALL",
+      "--cap-add", "CHOWN", "--cap-add", "FOWNER",
+      "--mount", "type=volume,source=" + volume + ",target=/dst",
+      boundary.image, "node", "-e", writeCredentialScript(backend),
+    ];
+    const result = await docker.run(args, { input: host.body, timeout: 60000 });
+    if (result.status !== 0) return { ok: false, code: "sync-failed", reason: "could not refresh the worker sign-in", reconnect: HOST_CREDENTIAL[backend].renew };
+    synced.set(backend, host.fingerprint);
+    return { ok: true, copied: true, expiresAt: host.expiresAt };
+  }
   return {
     sync(backend) {
-      const volume = boundary.credentials && boundary.credentials[backend] && boundary.credentials[backend].volume;
-      if (!volume) return { ok: false, code: "not-connected", reason: "subscription login has not been connected to this worker", reconnect: HOST_CREDENTIAL[backend]?.renew };
-      const host = readHostCredential(backend, { home, now: now() });
-      if (!host.ok) return host;
-      if (synced.get(backend) === host.fingerprint) return { ok: true, copied: false, expiresAt: host.expiresAt };
-      const args = [
-        "run", "--rm", "-i", "--network", "none", "--user", "0:0", "--read-only", "--cap-drop", "ALL",
-        "--cap-add", "CHOWN", "--cap-add", "FOWNER",
-        "--mount", "type=volume,source=" + volume + ",target=/dst",
-        boundary.image, "node", "-e", writeCredentialScript(backend),
-      ];
-      const result = docker.run(args, { input: host.body, timeout: 60000 });
-      if (result.status !== 0) return { ok: false, code: "sync-failed", reason: "could not refresh the worker sign-in", reconnect: HOST_CREDENTIAL[backend].renew };
-      synced.set(backend, host.fingerprint);
-      return { ok: true, copied: true, expiresAt: host.expiresAt };
+      const inFlight = copying.get(backend);
+      if (inFlight) return inFlight;
+      const pending = copy(backend).finally(() => copying.delete(backend));
+      copying.set(backend, pending);
+      return pending;
     },
   };
 }

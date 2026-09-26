@@ -38,6 +38,7 @@ import { importTrustedCandidate } from "./checks.mjs";
 import { normalizeHosts, PROXY_PORT } from "./worker/egress.mjs";
 import { nestedSandboxDigest, nestedSandboxJSON } from "./worker/seccomp.mjs";
 import { createCredentialSync, revokedRefusal } from "./credential-sync.mjs";
+import { runProcess } from "./process.mjs";
 
 export const BOUNDARY_SCHEMA = "delivery-v2/worker-boundary@1";
 export const WORKER_USER = "10001:10001";
@@ -136,17 +137,34 @@ export function boundaryBindingDigest(boundary, imageId, egressId = null) {
   return fingerprint(canonicalJson({ boundary: boundary.digest, image_id: String(imageId || ""), ...(egressId ? { egress_id: egressId } : {}) }));
 }
 
-/** Inspect the actual namespace owner. A stopped/replaced proxy invalidates admission. */
-export function readEgressBinding(boundary, run) {
-  if (boundary.network.mode !== "namespace-proxy") return null;
-  const inspected = run(["inspect", boundary.network.name]);
+const egressHealthArgs = (boundary) => ["exec", "--user", WORKER_USER, boundary.network.name, "node", "-e", "fetch('http://127.0.0.1:3128/__era/ready').then(r=>r.json()).then(x=>process.stdout.write(JSON.stringify(x)))"];
+
+function egressContainer(boundary, inspected) {
   if (inspected.status !== 0) throw new ContractError("delivery egress container is unavailable");
   const [item] = JSON.parse(inspected.stdout);
   if (!item?.State?.Running || item.Image !== boundary.network.imageId || item.HostConfig.Privileged || item.HostConfig.NetworkMode === "host" || item.Mounts.length) throw new ContractError("delivery egress boundary does not match configuration");
   if (!item.HostConfig.ReadonlyRootfs || canonicalJson((item.HostConfig.CapAdd || []).map(cap => cap.replace(/^CAP_/u, "")).sort()) !== canonicalJson(["NET_ADMIN", "SETGID", "SETUID"]) || !(item.HostConfig.CapDrop || []).includes("ALL") || item.Config.Cmd?.[1] !== "/opt/era/scripts/delivery-v2/worker/egress.mjs") throw new ContractError("delivery egress process does not match configuration");
-  const health = run(["exec", "--user", WORKER_USER, boundary.network.name, "node", "-e", "fetch('http://127.0.0.1:3128/__era/ready').then(r=>r.json()).then(x=>process.stdout.write(JSON.stringify(x)))"]);
+  return item;
+}
+
+function assertEgressReady(boundary, health) {
   const facts = JSON.parse(health.stdout || "null");
   if (health.status !== 0 || !facts?.ready || facts.proxyUid !== 10002 || facts.firewall !== "uid-proxy-only@1" || canonicalJson(facts.allowHosts) !== canonicalJson(boundary.network.allowHosts)) throw new ContractError("delivery egress firewall is not ready");
+}
+
+/** Inspect the actual namespace owner. A stopped/replaced proxy invalidates admission. */
+export function readEgressBinding(boundary, run) {
+  if (boundary.network.mode !== "namespace-proxy") return null;
+  const item = egressContainer(boundary, run(["inspect", boundary.network.name]));
+  assertEgressReady(boundary, run(egressHealthArgs(boundary)));
+  return item.Id;
+}
+
+/** readEgressBinding for the in-server runtime, over the non-blocking docker CLI. */
+export async function readEgressBindingAsync(boundary, run) {
+  if (boundary.network.mode !== "namespace-proxy") return null;
+  const item = egressContainer(boundary, await run(["inspect", boundary.network.name]));
+  assertEgressReady(boundary, await run(egressHealthArgs(boundary)));
   return item.Id;
 }
 
@@ -304,15 +322,20 @@ export function programVolumeName(manifestFingerprint) {
 
 /** The only place a docker process is spawned. Injected everywhere for fixtures. */
 export function createDockerCli({ bin = "docker", spawnFn = spawn, spawnSyncFn = spawnSync } = {}) {
+  const shape = (result) => ({
+    status: result.status,
+    stdout: String(result.stdout || ""),
+    stderr: String(result.stderr || ""),
+    error: result.error ? String(result.error.code || result.error.message) : null,
+  });
   return {
-    run(args, { input = undefined, timeout = 300_000 } = {}) {
-      const result = spawnSyncFn(bin, args, { encoding: "utf8", input, timeout, windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
-      return {
-        status: result.status,
-        stdout: String(result.stdout || ""),
-        stderr: String(result.stderr || ""),
-        error: result.error ? String(result.error.code || result.error.message) : null,
-      };
+    /** Non-blocking: the runtime lives in the PM server, whose one thread also answers the browser. */
+    async run(args, { input = undefined, timeout = 300_000 } = {}) {
+      return shape(await runProcess(bin, args, { input, timeout, spawnFn }));
+    },
+    /** Blocking; only for the standalone setup scripts. */
+    runSync(args, { input = undefined, timeout = 300_000 } = {}) {
+      return shape(spawnSyncFn(bin, args, { encoding: "utf8", input, timeout, windowsHide: true, maxBuffer: 64 * 1024 * 1024 }));
     },
     /** Spawn and yield stdout lines as they arrive. */
     async *lines(args, { signal = null, onAbort = null, input = null } = {}) {
@@ -471,48 +494,48 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
   mkdirSync(workRoot, { recursive: true });
   assertScratchOutsideHost({ scratchRoot: workRoot, hostRoot });
 
-  const exists = (kind, name) => docker.run([kind, "inspect", name]).status === 0;
+  const exists = async (kind, name) => (await docker.run([kind, "inspect", name])).status === 0;
 
-  function importDirToVolume({ dir, volume }) {
+  async function importDirToVolume({ dir, volume }) {
     const helper = "era-v2-helper-" + volume;
-    docker.run(["rm", "-f", helper]);
-    const created = docker.run(["create", "--name", helper, "--network", "none", "--mount", "type=volume,source=" + volume + ",target=/dst", boundary.image, "true"]);
+    await docker.run(["rm", "-f", helper]);
+    const created = await docker.run(["create", "--name", helper, "--network", "none", "--mount", "type=volume,source=" + volume + ",target=/dst", boundary.image, "true"]);
     if (created.status !== 0) throw new ContractError("could not stage volume " + volume + ": " + created.stderr);
     try {
-      const copied = docker.run(["cp", dir + "/.", helper + ":/dst"]);
+      const copied = await docker.run(["cp", dir + "/.", helper + ":/dst"]);
       if (copied.status !== 0) throw new ContractError("could not copy into " + volume + ": " + copied.stderr);
     } finally {
-      docker.run(["rm", "-f", helper]);
+      await docker.run(["rm", "-f", helper]);
     }
-    const owned = docker.run([
+    const owned = await docker.run([
       "run", "--rm", "--user", "0:0", "--network", "none", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--cap-add", "FOWNER",
       "--mount", "type=volume,source=" + volume + ",target=/dst", boundary.image, "chown", "-R", WORKER_USER, "/dst",
     ]);
     if (owned.status !== 0) throw new ContractError("could not hand " + volume + " to the worker user: " + owned.stderr);
   }
 
-  function exportVolumeToDir({ volume, dir }) {
+  async function exportVolumeToDir({ volume, dir }) {
     const helper = "era-v2-export-" + volume;
-    docker.run(["rm", "-f", helper]);
-    const created = docker.run(["create", "--name", helper, "--network", "none", "--mount", "type=volume,source=" + volume + ",target=/src,readonly", boundary.image, "true"]);
+    await docker.run(["rm", "-f", helper]);
+    const created = await docker.run(["create", "--name", helper, "--network", "none", "--mount", "type=volume,source=" + volume + ",target=/src,readonly", boundary.image, "true"]);
     if (created.status !== 0) throw new ContractError("could not open " + volume + " for export: " + created.stderr);
     try {
-      const copied = docker.run(["cp", helper + ":/src/.", dir]);
+      const copied = await docker.run(["cp", helper + ":/src/.", dir]);
       if (copied.status !== 0) throw new ContractError("could not export " + volume + ": " + copied.stderr);
     } finally {
-      docker.run(["rm", "-f", helper]);
+      await docker.run(["rm", "-f", helper]);
     }
   }
 
   function containerSource({ run_id, job_id, access, backend_id }) {
-    return (payload, signal) => {
-      // An expired or revoked sign-in refuses here, before any container starts:
-      // no probe, no inference, no other executor or paid route in its place.
-      const renewed = credentials ? credentials.sync(backend_id) : { ok: true };
-      if (!renewed.ok) throw new ContractError("subscription sign-in: " + renewed.reason);
-      const args = workerRunArgs({ boundary, run_id, job_id, access, backend_id, payload });
-      docker.run(["rm", "-f", containerNameFor(job_id)]);
-      return (async function* () {
+    return (payload, signal) =>
+      (async function* () {
+        // An expired or revoked sign-in refuses here, before any container starts:
+        // no probe, no inference, no other executor or paid route in its place.
+        const renewed = credentials ? await credentials.sync(backend_id) : { ok: true };
+        if (!renewed.ok) throw new ContractError("subscription sign-in: " + renewed.reason);
+        const args = workerRunArgs({ boundary, run_id, job_id, access, backend_id, payload });
+        await docker.run(["rm", "-f", containerNameFor(job_id)]);
         for await (const line of docker.lines(args, { signal, input: JSON.stringify({ ...payload, backend_id }), onAbort: () => docker.run(["rm", "-f", containerNameFor(job_id)]) })) {
           const record = parseLine(line);
           if (record?.era === "subscription-ready") {
@@ -523,7 +546,6 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
           if (record) yield record;
         }
       })();
-    };
   }
 
   const bindingMemo = new Map();
@@ -531,14 +553,32 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
   // DLV-111: the host sign-in is copied in before a probe or job (credential-sync.mjs).
   const credentials = boundary.synthetic ? null : credentialSync || createCredentialSync({ boundary, docker });
 
-  function readBinding(backend_id) {
-    const image = docker.run(["image", "inspect", "--format", "{{.Id}}", boundary.image]);
+  /** One probe per key at a time, reused for 60 s: concurrent readiness polls share it. */
+  function memoized(memo, key, read) {
+    const entry = memo.get(key);
+    if (entry && (entry.pending || Date.now() - entry.at < 60_000)) return entry.value;
+    const value = read().then(
+      (result) => {
+        memo.set(key, { at: Date.now(), value: Promise.resolve(result), pending: false });
+        return result;
+      },
+      (error) => {
+        memo.delete(key);
+        throw error;
+      },
+    );
+    memo.set(key, { at: Date.now(), value, pending: true });
+    return value;
+  }
+
+  async function readBinding(backend_id) {
+    const image = await docker.run(["image", "inspect", "--format", "{{.Id}}", boundary.image]);
     if (image.status !== 0) return null;
-    const probe = docker.run(["run", "--rm", "--network", "none", "--user", WORKER_USER, "--read-only", boundary.image, "node", RUNNER_PATH, "--probe"]);
+    const probe = await docker.run(["run", "--rm", "--network", "none", "--user", WORKER_USER, "--read-only", boundary.image, "node", RUNNER_PATH, "--probe"]);
     const facts = String(probe.stdout).split("\n").map(parseLine).filter(Boolean).pop();
     if (!facts || facts.task_brief_version !== 1 || !facts.sdk || !isNonEmptyString(facts.sdk[backend_id]) || !isNonEmptyString(facts.battery_digest)) return null;
     let egressId;
-    try { egressId = readEgressBinding(boundary, (args) => docker.run(args)); } catch { return null; }
+    try { egressId = await readEgressBindingAsync(boundary, (args) => docker.run(args)); } catch { return null; }
     return deepFreeze({
       backend_id,
       sdk_version: facts.sdk[backend_id],
@@ -553,28 +593,22 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
 
     async authReadiness(backend) {
       if (boundary.synthetic) return { ok: true, synthetic: true };
-      const memo = authMemo.get(backend);
-      if (memo && Date.now() - memo.at < 60000) return memo.value;
-      let value;
-      const renewed = credentials ? credentials.sync(backend) : { ok: true };
-      if (!renewed.ok) {
-        value = { ok: false, reason: renewed.reason, code: renewed.code, reconnect: renewed.reconnect };
-        authMemo.set(backend, { at: Date.now(), value });
-        return value;
-      }
-      try {
-        const result = docker.run(authProbeArgs(boundary, backend), { timeout: 45000 });
-        const facts = result.stdout.split("\n").map(parseLine).filter(Boolean).pop();
-        const reason = facts?.message || "Worker subscription check failed";
-        value =
-          result.status === 0 && facts?.era === "subscription-ready"
+      return memoized(authMemo, backend, async () => {
+        const renewed = credentials ? await credentials.sync(backend) : { ok: true };
+        if (!renewed.ok) return { ok: false, reason: renewed.reason, code: renewed.code, reconnect: renewed.reconnect };
+        try {
+          const result = await docker.run(authProbeArgs(boundary, backend), { timeout: 45000 });
+          const facts = result.stdout.split("\n").map(parseLine).filter(Boolean).pop();
+          const reason = facts?.message || "Worker subscription check failed";
+          return result.status === 0 && facts?.era === "subscription-ready"
             ? { ok: true, ...facts }
             : /HTTP 40[13](?![0-9])/u.test(reason)
               ? { ok: false, ...revokedRefusal(backend) }
               : { ok: false, reason };
-      } catch (error) { value = { ok: false, reason: error.message }; }
-      authMemo.set(backend, { at: Date.now(), value });
-      return value;
+        } catch (error) {
+          return { ok: false, reason: error.message };
+        }
+      });
     },
 
     /** Where a job's workspace appears inside its worker. */
@@ -585,11 +619,7 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
 
     /** The binding a qualification receipt must match, or null when it cannot be established. Memoized briefly. */
     async binding(backend_id) {
-      const memo = bindingMemo.get(backend_id);
-      if (memo && Date.now() - memo.at < 60_000) return memo.value;
-      const value = readBinding(backend_id);
-      bindingMemo.set(backend_id, { at: Date.now(), value });
-      return value;
+      return memoized(bindingMemo, backend_id, () => readBinding(backend_id));
     },
 
     /**
@@ -598,21 +628,21 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
      * @param {{run_id:string, job:any, include:string[]}} input
      */
     async provision({ run_id, job, include }) {
-      readEgressBinding(boundary, (args) => docker.run(args));
+      await readEgressBindingAsync(boundary, (args) => docker.run(args));
       const volumes = volumesFor(run_id);
       let base_manifest = null;
       let refusals = [];
-      if (!exists("volume", volumes.work)) {
-        docker.run(["volume", "create", volumes.work]);
-        docker.run(["volume", "create", volumes.session]);
-        const homeOwner = docker.run(["run", "--rm", "--network", "none", "--user", "0:0", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--mount", "type=volume,source=" + volumes.session + ",target=/dst", boundary.image, "chown", WORKER_USER, "/dst"]);
+      if (!(await exists("volume", volumes.work))) {
+        await docker.run(["volume", "create", volumes.work]);
+        await docker.run(["volume", "create", volumes.session]);
+        const homeOwner = await docker.run(["run", "--rm", "--network", "none", "--user", "0:0", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--mount", "type=volume,source=" + volumes.session + ",target=/dst", boundary.image, "chown", WORKER_USER, "/dst"]);
         if (homeOwner.status !== 0) throw new ContractError("could not initialize worker session volume");
         const staging = mkdtempSync(join(workRoot, "snapshot-"));
         try {
           const supplied = provisionScratch({ scratchRoot: staging, hostRoot, include });
           base_manifest = supplied.supplied;
           refusals = [...supplied.refusals];
-          importDirToVolume({ dir: staging, volume: volumes.work });
+          await importDirToVolume({ dir: staging, volume: volumes.work });
         } finally {
           rmSync(staging, { recursive: true, force: true });
         }
@@ -629,15 +659,15 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
     /** Stop means removal; observed only when inspect no longer finds the container. */
     async stop(job) {
       const name = containerNameFor(String(job.job_id));
-      const removed = docker.run(["rm", "-f", name]);
-      const gone = !exists("container", name);
+      const removed = await docker.run(["rm", "-f", name]);
+      const gone = !(await exists("container", name));
       return deepFreeze({ stopObserved: gone, detail: gone ? "container removed" : "container still present: " + removed.stderr });
     },
 
     /** Read-only look at a job's container after a restart. Never starts anything. */
     async recover(job) {
       const name = containerNameFor(String(job.job_id));
-      const state = docker.run(["inspect", "--format", "{{json .State}}", name]);
+      const state = await docker.run(["inspect", "--format", "{{json .State}}", name]);
       if (state.status !== 0) return null;
       let parsed = null;
       try {
@@ -646,7 +676,7 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
         parsed = null;
       }
       if (parsed && parsed.Running) return deepFreeze({ running: true });
-      const logs = docker.run(["logs", name]);
+      const logs = await docker.run(["logs", name]);
       const records = String(logs.stdout).split("\n").map(parseLine).filter(Boolean);
       return deepFreeze({
         running: false,
@@ -660,7 +690,7 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
 
     /** Remove a job's container once its output is recorded. */
     async release(job) {
-      docker.run(["rm", "-f", containerNameFor(String(job.job_id))]);
+      await docker.run(["rm", "-f", containerNameFor(String(job.job_id))]);
     },
 
     /**
@@ -671,7 +701,7 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
     async exportCandidate({ run_id, job_id, generation, generationsRoot, base_manifest }) {
       const staging = mkdtempSync(join(workRoot, "export-"));
       try {
-        exportVolumeToDir({ volume: volumesFor(run_id).work, dir: staging });
+        await exportVolumeToDir({ volume: volumesFor(run_id).work, dir: staging });
         return importTrustedCandidate({ sourceRoot: staging, generationsRoot, generation, job_id, base_manifest }).candidate;
       } finally {
         rmSync(staging, { recursive: true, force: true });
@@ -684,8 +714,8 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
      *
      * @param {{run_id:string, candidate:{root:string, candidate_id:string, generation:string}}} input
      */
-    checkExecutor({ run_id, candidate }) {
-      const { candidateVolume, outVolume } = checkVolumes({ run_id, candidate });
+    async checkExecutor({ run_id, candidate }) {
+      const { candidateVolume, outVolume } = await checkVolumes({ run_id, candidate });
       let sequence = 0;
       return ({ argv, env }) => {
         sequence += 1;
@@ -708,16 +738,16 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
      *
      * @param {{run_id:string, candidate:{root:string, candidate_id:string, generation:string},
      *   include:string[]}} input
-     * @returns {{ok:boolean, reason?:(string|undefined), execute?:(Function|undefined),
-     *   program?:(Record<string, any>|undefined), producer?:(Record<string, any>|undefined)}}
+     * @returns {Promise<{ok:boolean, reason?:(string|undefined), execute?:(Function|undefined),
+     *   program?:(Record<string, any>|undefined), producer?:(Record<string, any>|undefined)}>}
      */
-    typecheckExecutor({ run_id, candidate, include }) {
+    async typecheckExecutor({ run_id, candidate, include }) {
       if (!Array.isArray(include) || include.length === 0) {
         return deepFreeze({ ok: false, reason: "no program file list was pinned for the checker to compile" });
       }
       let program;
       try {
-        program = stageProgram({ include });
+        program = await stageProgram({ include });
       } catch (error) {
         return deepFreeze({ ok: false, reason: "the pinned program could not be staged: " + String((error && error.message) || error) });
       }
@@ -725,8 +755,8 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
         return deepFreeze({ ok: false, reason: "the pinned program staged zero files; " + program.refusals.length + " path(s) were refused" });
       }
 
-      const { candidateVolume, outVolume } = checkVolumes({ run_id, candidate });
-      const dependencies = probeCheckerDependencies({ programVolume: program.volume, candidateVolume, outVolume });
+      const { candidateVolume, outVolume } = await checkVolumes({ run_id, candidate });
+      const dependencies = await probeCheckerDependencies({ programVolume: program.volume, candidateVolume, outVolume });
       if (!dependencies.ok) return deepFreeze({ ok: false, reason: dependencies.reason, program });
 
       let sequence = 0;
@@ -771,22 +801,22 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
   };
 
   /** The frozen candidate and scratch output volumes every check shares. */
-  function checkVolumes({ run_id, candidate }) {
+  async function checkVolumes({ run_id, candidate }) {
     const candidateVolume = "era-v2-" + run_id + "-cand-" + candidate.generation;
     const outVolume = "era-v2-" + run_id + "-out-" + candidate.generation;
-    if (!exists("volume", candidateVolume)) {
-      docker.run(["volume", "create", candidateVolume]);
+    if (!(await exists("volume", candidateVolume))) {
+      await docker.run(["volume", "create", candidateVolume]);
       const staging = mkdtempSync(join(workRoot, "candidate-"));
       try {
         cpSync(candidate.root, staging, { recursive: true });
-        importDirToVolume({ dir: staging, volume: candidateVolume });
+        await importDirToVolume({ dir: staging, volume: candidateVolume });
       } finally {
         rmSync(staging, { recursive: true, force: true });
       }
     }
-    if (!exists("volume", outVolume)) {
-      docker.run(["volume", "create", outVolume]);
-      const owned = docker.run(["run", "--rm", "--network", "none", "--user", "0:0", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--mount", "type=volume,source=" + outVolume + ",target=/dst", boundary.image, "chown", WORKER_USER, "/dst"]);
+    if (!(await exists("volume", outVolume))) {
+      await docker.run(["volume", "create", outVolume]);
+      const owned = await docker.run(["run", "--rm", "--network", "none", "--user", "0:0", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--mount", "type=volume,source=" + outVolume + ",target=/dst", boundary.image, "chown", WORKER_USER, "/dst"]);
       if (owned.status !== 0) throw new ContractError("could not initialize checker output volume");
     }
     return { candidateVolume, outVolume };
@@ -794,8 +824,8 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
 
   // A function declaration, not a const: these helpers sit after the returned
   // object and are called from its methods long after this body has run.
-  function checkerResult(args) {
-    const result = docker.run(args, { timeout: 900_000 });
+  async function checkerResult(args) {
+    const result = await docker.run(args, { timeout: 900_000 });
     return {
       exitCode: result.error ? null : result.status,
       signal: null,
@@ -814,17 +844,17 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
    * quietly compiling yesterday's program. A failed import removes the volume, so
    * a retry restages instead of compiling half a tree.
    */
-  function stageProgram({ include }) {
+  async function stageProgram({ include }) {
     const staging = mkdtempSync(join(workRoot, "program-"));
     try {
       const supplied = provisionScratch({ scratchRoot: staging, hostRoot, include });
       const volume = programVolumeName(supplied.manifest_fingerprint);
-      if (!exists("volume", volume)) {
-        docker.run(["volume", "create", volume]);
+      if (!(await exists("volume", volume))) {
+        await docker.run(["volume", "create", volume]);
         try {
-          importDirToVolume({ dir: staging, volume });
+          await importDirToVolume({ dir: staging, volume });
         } catch (error) {
-          docker.run(["volume", "rm", "-f", volume]);
+          await docker.run(["volume", "rm", "-f", volume]);
           throw error;
         }
       }
@@ -848,14 +878,15 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
    * explanation. One `require.resolve` answers it in a second and names the
    * volume that needs provisioning.
    */
-  function probeCheckerDependencies({ programVolume, candidateVolume, outVolume }) {
+  async function probeCheckerDependencies({ programVolume, candidateVolume, outVolume }) {
     if (!boundary.dependencies) {
       return { ok: false, reason: "this boundary mounts no dependency volume, so the checker has no typescript to compile with" };
     }
-    const probe = checkerResult(
+    const probe = await checkerResult(
       checkerRunArgs({
         boundary,
-        name: "era-v2-tsc-probe-" + String(process.pid),
+        // Per candidate: checks for two runs can now be in flight together.
+        name: "era-v2-tsc-probe-" + String(process.pid) + "-" + candidateVolume.slice("era-v2-".length),
         candidateVolume,
         outVolume,
         programVolume,
@@ -939,7 +970,7 @@ export function buildWorkerImage({ tag, repoRoot = REPO_ROOT, docker = createDoc
     for (const file of ["scripts/pm/mutations.mjs", "scripts/pm/lint.mjs"]) {
       cpSync(join(repoRoot, ...file.split("/")), join(context, ...file.split("/")));
     }
-    const built = docker.run(["build", "-q", "-t", tag, context], { timeout: 1_800_000 });
+    const built = docker.runSync(["build", "-q", "-t", tag, context], { timeout: 1_800_000 });
     return deepFreeze({ ok: built.status === 0, tag, stdout: built.stdout.trim(), stderr: built.stderr.slice(0, 2000), context: normalizePath(context) });
   } finally {
     rmSync(context, { recursive: true, force: true });

@@ -8,7 +8,7 @@ owner: Elio
 
 # Kitchen — Master Book
 
-[Backlog](<4 - Checklist.md>) · [PM home](<../_index.md>) · [Governance](<../_Conventions.md>)
+[Backlog](<4 - Checklist.md>) · [PM home](../_index.md) · [Governance](../_Conventions.md)
 
 ## Purpose & ownership
 
@@ -28,29 +28,29 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 - Catalogue stores reusable references; Recipes and Inventory own executable recipes and operational stock. Source privacy, lineage, revision checks and explicit promotions apply at every bridge. The accepted Catalogue final build plan (§10, Sep7) supersedes its earlier study alternatives.
 - Chores/NFC execution belongs to Schedule. Trip cascade visibility is TRIP-7, including the former KIT-9 scope. Allergy knowledge remains Healthcare-owned; ingredient shape validity is not clinical safety.
 
-Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
+Unresolved policy choices live in the [decision register](../_Decisions.md); original exploratory ideas live in [Research options](../Research/Options.md). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
 
-🟠 **KIT-10** Validate ingredient payloads at every writer. See [acceptance](<#kit-10>) for the root cause, evidence and gate.
+🟠 **KIT-10** Validate ingredient payloads at every writer. See [acceptance](#kit-10) for the root cause, evidence and gate.
 
-🟠 **KIT-4** Expose scoped meal coverage to ERA. See [acceptance](<#kit-4>) for the root cause, evidence and gate.
+🟠 **KIT-4** Expose scoped meal coverage to ERA. See [acceptance](#kit-4) for the root cause, evidence and gate.
 
-🟠 **KIT-11** Return the correct cooking count. See [acceptance](<#kit-11>) for the root cause, evidence and gate.
+🟠 **KIT-11** Return the correct cooking count. See [acceptance](#kit-11) for the root cause, evidence and gate.
 
-🟠 **KIT-12** Restore cooking and restock changes with real Undo. Dated source diagnosis; cause and witness limits are in [criteria](<#kit-12>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
+🟠 **KIT-12** Restore cooking and restock changes with real Undo. Dated source diagnosis; cause and witness limits are in [criteria](#kit-12) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
 
-🟠 **KIT-13** Separate estimated and measured cooking values. Dated source diagnosis; cause and witness limits are in [criteria](<#kit-13>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
+🟠 **KIT-13** Separate estimated and measured cooking values. Dated source diagnosis; cause and witness limits are in [criteria](#kit-13) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
 
-🟠 **KIT-14** Revalidate the dormant stock-update ID path. Dated source diagnosis; cause and witness limits are in [criteria](<#kit-14>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
+🟠 **KIT-14** Revalidate the dormant stock-update ID path. Dated source diagnosis; cause and witness limits are in [criteria](#kit-14) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
 
-🟠 **KIT-18** Authorize document signing through its owning record. Dated source diagnosis; cause and witness limits are in [criteria](<#kit-18>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
+🟠 **KIT-18** Authorize document signing through its owning record. Dated source diagnosis; cause and witness limits are in [criteria](#kit-18) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
 
-🟠 **KIT-19** Preserve old document files through replacement and Undo. Dated source diagnosis; cause and witness limits are in [criteria](<#kit-19>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
+🟠 **KIT-19** Preserve old document files through replacement and Undo. Dated source diagnosis; cause and witness limits are in [criteria](#kit-19) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
 
-🟠 **KIT-20** Patch catalogue metadata with revision checks. Dated source diagnosis; cause and witness limits are in [criteria](<#kit-20>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
+🟠 **KIT-20** Patch catalogue metadata with revision checks. Dated source diagnosis; cause and witness limits are in [criteria](#kit-20) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
 
-🟠 **KIT-21** Preserve catalogue identity through delete and restore. Dated source diagnosis; cause and witness limits are in [criteria](<#kit-21>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
+🟠 **KIT-21** Preserve catalogue identity through delete and restore. Dated source diagnosis; cause and witness limits are in [criteria](#kit-21) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
 
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
@@ -95,10 +95,58 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Outcome:** Return the correct cooking count.
 
 - **Acceptance:** Reproduce the documented HEAD/count response handling and use the actual count metadata. Verify zero/error/nonzero without treating absent body data as zero.
+- **Touches:** `src/app/api/recipes/[id]/cooking-log/route.ts`
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
-- **Reading guide:** The defect is two adjacent lines, verified 2026-09-20 in `src/app/api/recipes/[id]/cooking-log/route.ts`: line ~118 queries `.select("id", { count: "exact", head: true })` — a HEAD request, so PostgREST returns the number in the response *metadata* and `data` is null — and line ~124 then does `times_cooked: (countData as any)?.length ?? 1`, reading `.length` off that null and falling back to 1. Use the `count` field the same call already returns, and keep zero distinguishable from an error: an absent body is not zero. The `as any` is also a live instance of the type debt DLV-52 tracks. Consumer of the value: `times_cooked` in the list `select` of `src/app/api/recipes/route.ts` and the recipe cards.
+- **Reading guide:** The defect is two adjacent lines, verified 2026-09-20 in `src/app/api/recipes/[id]/cooking-log/route.ts`: line ~118 queries `.select("id", { count: "exact", head: true })` — a HEAD request, so PostgREST returns the number in the response _metadata_ and `data` is null — and line ~124 then does `times_cooked: (countData as any)?.length ?? 1`, reading `.length` off that null and falling back to 1. Use the `count` field the same call already returns, and keep zero distinguishable from an error: an absent body is not zero. The `as any` is also a live instance of the type debt DLV-52 tracks. Consumer of the value: `times_cooked` in the list `select` of `src/app/api/recipes/route.ts` and the recipe cards.
+
+```delivery-plan-v1
+{
+  "outcome": "The recipe's cooking count reflects the number of logs recorded for that recipe.",
+  "acceptance": [
+    "Posting a cooking log writes the number of logs the count query reported into the recipe's times_cooked.",
+    "A reported count of zero is written as zero.",
+    "A count that is not reported, or a count query that fails, leaves times_cooked unwritten rather than replacing it with an invented number.",
+    "The log that was already written is still returned, so the caller does not retry into a second log.",
+    "The rating average and the two timestamps written by the same call are unchanged."
+  ],
+  "scope": [
+    "src/app/api/recipes/[id]/cooking-log/route.ts"
+  ],
+  "steps": [
+    "Read the recipe statistics update at the end of the POST handler.",
+    "Take the number from the count field that the existing head request already returns, instead of reading length off its empty body.",
+    "Build the update payload so times_cooked is present only when a number was reported and the query did not fail.",
+    "Leave the log insert, the rating average and both timestamps exactly as they are."
+  ],
+  "invariants": [
+    "One log row is written per request.",
+    "Exactly one recipe update per request.",
+    "A reported zero is a value, not an absence.",
+    "An unknown count never becomes a written number.",
+    "No file is created, renamed or deleted, and no other file changes."
+  ],
+  "exclusions": [
+    "The list route and the recipe cards that read the value.",
+    "The GET handler in the same file.",
+    "The shape of the log row and the response status.",
+    "Repairing rows already stored as one.",
+    "Wider type cleanup beyond the two lines in question."
+  ],
+  "checks": [
+    "kit11-cooking-count"
+  ],
+  "risks": [
+    "The count field and the response body are easy to confuse; reading the wrong one reproduces the defect unchanged."
+  ],
+  "unknowns": [],
+  "dependencies": [],
+  "risk": "low",
+  "ownerReviewed": true,
+  "provenance": "Prepared 2026-09-20 from the item's own reading guide and a line-by-line read of the route. The protected oracle separates the current code from a corrected control on a host checkout and inside the checker container."
+}
+```
 
 ### KIT-1
 
@@ -116,13 +164,13 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Retained contract — ASTRA-KIT-1:**
 
 - **Outcome:** Concurrent restocks preserve the total quantity and one matching history record for each accepted increment.
-- **Boundary:** Validate UUID and finite positive numeric quantity using Zod. Replace route-side read/add/write/history with the reviewed existing transaction seam. Derive the authorized owner from authenticated identity; never trust a freely supplied user ID. Within SQL lock the stock row before recording before/after values; handle absent stock through a verified unique owner/item contract, with no destructive dedupe. History failure rolls back the increment. Preserve existing runout behavior only after its current trigger is verified. Use safeFetch for the existing restock mutation; no new offline eligibility or retry queue. Repeated *distinct* restocks are separate operations; request-idempotent replay remains outside this sheet and must precede automated replay.
+- **Boundary:** Validate UUID and finite positive numeric quantity using Zod. Replace route-side read/add/write/history with the reviewed existing transaction seam. Derive the authorized owner from authenticated identity; never trust a freely supplied user ID. Within SQL lock the stock row before recording before/after values; handle absent stock through a verified unique owner/item contract, with no destructive dedupe. History failure rolls back the increment. Preserve existing runout behavior only after its current trigger is verified. Use safeFetch for the existing restock mutation; no new offline eligibility or retry queue. Repeated _distinct_ restocks are separate operations; request-idempotent replay remains outside this sheet and must precede automated replay.
 - **Money/schedule math?:** No money/occurrence math. Stock example required: 5 units + concurrent 2 and 3 → 10; history forms 5→7→10 or 5→8→10. Failure inserting history leaves quantity unchanged. String `"2"`, infinity and negative input are rejected.
 - **Gate:** `pnpm exec vitest run tests/inventory-restock.test.ts --reporter=verbose` → nonzero mocked route/auth/input cases pass. Owner's isolated SQL fixture proves concurrent increments, absent-row race, history rollback and cross-owner refusal; outputs attached. Common gates pass; migration APPLIED alone is insufficient.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
-- **Reading guide:** Blocked on DEC-03 (quantity threshold vs run-out date, and whether adding is automatic) — record that before coding. The pieces already exist: `useLowStockItems(days)` and `useAddToShopping()` in `src/features/inventory/hooks.ts` over `src/app/api/inventory/low-stock/route.ts` and `inventory/add-to-shopping/route.ts`, with `useRestockItem()` and `src/app/api/inventory/restock/route.ts` on the write side. Note `useLowStockItems` is parameterised by *days*, which is one side of DEC-03 already baked in. The compatibility trap is explicit in CLAUDE.md: the Hub shopping list still uses the **legacy localStorage queue** in `SyncContext`, not the IndexedDB queue — `src/components/hub/ShoppingListView.tsx` is the consumer — so do not migrate it as a side effect. "Restock and the unique shopping backlink must commit together" plus "repeated triggers must not duplicate" means a unique constraint and 409 handling (Hard Rule #9). Depends on KIT-24.
+- **Reading guide:** Blocked on DEC-03 (quantity threshold vs run-out date, and whether adding is automatic) — record that before coding. The pieces already exist: `useLowStockItems(days)` and `useAddToShopping()` in `src/features/inventory/hooks.ts` over `src/app/api/inventory/low-stock/route.ts` and `inventory/add-to-shopping/route.ts`, with `useRestockItem()` and `src/app/api/inventory/restock/route.ts` on the write side. Note `useLowStockItems` is parameterised by _days_, which is one side of DEC-03 already baked in. The compatibility trap is explicit in CLAUDE.md: the Hub shopping list still uses the **legacy localStorage queue** in `SyncContext`, not the IndexedDB queue — `src/components/hub/ShoppingListView.tsx` is the consumer — so do not migrate it as a side effect. "Restock and the unique shopping backlink must commit together" plus "repeated triggers must not duplicate" means a unique constraint and 409 handling (Hard Rule #9). Depends on KIT-24.
 
 ### KIT-2
 
@@ -216,7 +264,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
-- **Reading guide:** Catalogue C17, depends on KIT-20, and it gates KIT-1. The invariant is an ownership boundary: a catalogue record is *descriptive* metadata, an inventory row is *operational* stock (quantity, unit, history). Today they are separate — catalogue writes go through `src/app/api/catalogue/items/[id]/route.ts`, stock through `src/app/api/inventory/items/route.ts`, `inventory/stock/[itemId]/route.ts`, `inventory/restock/route.ts` and `inventory/history/route.ts` — so the work is proving and enforcing that a catalogue edit cannot reach the second set, and defining the explicit owner transition when a reference becomes stocked. TRIP-10 needs the same distinction for its packing picker. `src/features/inventory/hooks.ts` and `src/features/catalogue/hooks.ts` are the two client sides.
+- **Reading guide:** Catalogue C17, depends on KIT-20, and it gates KIT-1. The invariant is an ownership boundary: a catalogue record is _descriptive_ metadata, an inventory row is _operational_ stock (quantity, unit, history). Today they are separate — catalogue writes go through `src/app/api/catalogue/items/[id]/route.ts`, stock through `src/app/api/inventory/items/route.ts`, `inventory/stock/[itemId]/route.ts`, `inventory/restock/route.ts` and `inventory/history/route.ts` — so the work is proving and enforcing that a catalogue edit cannot reach the second set, and defining the explicit owner transition when a reference becomes stocked. TRIP-10 needs the same distinction for its packing picker. `src/features/inventory/hooks.ts` and `src/features/catalogue/hooks.ts` are the two client sides.
 
 ### KIT-3
 
@@ -226,7 +274,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
-- **Reading guide:** Depends on ingredient data being trustworthy (KIT-10) and on a price source — check whether one exists before designing: `src/types/catalogue.ts` and the inventory item shape are where a price would live, and KIT-8 (barcode → catalogue price) is the parked item that would supply it. Plan data is `src/app/api/meal-plans/route.ts` and `src/features/meal-planning/hooks.ts`; the estimate surfaces on `src/components/web/WebMealPlanCalendar.tsx`. It is money on screen, so `.claude/skills/money-rules/SKILL.md` applies — and an *estimate* must be labelled as one at the read boundary, which is the same basis-preservation problem as KIT-13. Coordinate with the Budget campaign.
+- **Reading guide:** Depends on ingredient data being trustworthy (KIT-10) and on a price source — check whether one exists before designing: `src/types/catalogue.ts` and the inventory item shape are where a price would live, and KIT-8 (barcode → catalogue price) is the parked item that would supply it. Plan data is `src/app/api/meal-plans/route.ts` and `src/features/meal-planning/hooks.ts`; the estimate surfaces on `src/components/web/WebMealPlanCalendar.tsx`. It is money on screen, so `.claude/skills/money-rules/SKILL.md` applies — and an _estimate_ must be labelled as one at the read boundary, which is the same basis-preservation problem as KIT-13. Coordinate with the Budget campaign.
 
 ### KIT-5
 
@@ -333,10 +381,18 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Delivery session log
 
-*(Delivery runner appends dated progress bullets here automatically.)*
+- 2026-09-26 — **KIT-11** V2 run `r-fa5c81702ec7` · applied; integrated checks passed · codex gpt-5.6-luna <!-- v2-apply:app-d34c1586e1d3@applied -->
+- 2026-09-26 — **KIT-11** V2 run `r-fa5c81702ec7` · rolled back; candidate still available · codex gpt-5.6-luna <!-- v2-apply:app-bbf1a8c1e241@rolled-back -->
+- 2026-09-26 — **KIT-11** V2 run `r-fa5c81702ec7` · applied; integrated checks passed · codex gpt-5.6-luna <!-- v2-apply:app-bbf1a8c1e241@applied -->
+- 2026-09-26 — **KIT-11** V2 run `r-fa5c81702ec7` · not applied; checks fail on current source · codex gpt-5.6-luna <!-- v2-apply:app-a99ce06c1b91@reassessment-failed -->
+- 2026-09-26 — **KIT-11** V2 run `r-fa5c81702ec7` · candidate verified; not applied · codex gpt-5.6-luna <!-- v2:res-51697160b6fe@1 -->
+_(Delivery runner appends dated progress bullets here automatically.)_
+
+- 2026-09-26 — **KIT-11** V2 run `r-54d5cf10d995` · candidate verified; not applied · codex gpt-5.6-luna <!-- v2:res-3710e8238bc2@2 -->
+- 2026-09-26 — **KIT-11** V2 run `r-54d5cf10d995` · not verified (criterion, disposition) · codex gpt-5.6-luna <!-- v2:res-3710e8238bc2@1 -->
 
 ## Successor Briefing
 
 Read the checklist, the selected acceptance entry and its dependencies; then use the [Feature Map](<../../01 - Architecture/Feature Map/_index.md>) for source routing and the module architecture docs for invariants. Delta from the source cutoff before implementation. Use current owner-supplied DB evidence for access/application questions; agents never apply production SQL. Record code, applied migration and device/runtime acceptance separately.
 
-Finish with the repository playbook and [governance](<../_Conventions.md>): update acceptance/evidence, sweep only completed work, and validate the canonical queue. A completed child does not complete its coordination parent.
+Finish with the repository playbook and [governance](../_Conventions.md): update acceptance/evidence, sweep only completed work, and validate the canonical queue. A completed child does not complete its coordination parent.

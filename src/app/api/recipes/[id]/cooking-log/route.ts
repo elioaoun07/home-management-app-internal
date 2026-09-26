@@ -113,19 +113,23 @@ export async function POST(
         10
       : null;
 
-  const { data: countData } = await supabase
+  const { count, error: countError } = await supabase
     .from("cooking_logs")
     .select("id", { count: "exact", head: true })
     .eq("recipe_id", id);
 
+  const recipeStats = {
+    ...(countError || typeof count !== "number"
+      ? {}
+      : { times_cooked: count }),
+    last_cooked_at: new Date().toISOString(),
+    average_rating: avgRating,
+    updated_at: new Date().toISOString(),
+  };
+
   await supabase
     .from("recipes")
-    .update({
-      times_cooked: (countData as any)?.length ?? 1,
-      last_cooked_at: new Date().toISOString(),
-      average_rating: avgRating,
-      updated_at: new Date().toISOString(),
-    })
+    .update(recipeStats)
     .eq("id", id);
 
   return NextResponse.json(log, { status: 201 });

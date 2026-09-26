@@ -92,7 +92,10 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟡 **KIT-11 oracle count is hardcoded — 2026-09-26 review.** `tests/delivery-oracles/kit11-cooking-count.mjs` invokes `check()` 13 times but line 229 prints `12 of 12 checks passed`; the protected checker therefore records 12 rather than the actual assertion count. Failed assertions still throw before that summary: a fresh local replay against the unchanged checkout failed the four count cases, while both hash-verified frozen candidates (`r-54d5cf10d995`, `r-fa5c81702ec7`) passed. This is an evidence-count defect, not evidence of a false passing candidate. Derive the summary from executed assertions and retain this behavioral regression in routine checks after KIT-11 lands (the oracle is deliberately outside normal Vitest discovery). Do not silently edit a pinned oracle beneath the pending candidates; changed oracle bytes need fresh verification. No candidate, policy or application was changed in this review.
+
 🟠 **`pnpm pm` starts the production relay bridge — 2026-09-26.** `.env` sets `PM_BRIDGE=1`, so any `pnpm pm` (including an agent's local UI check) publishes to `pm_live` and drains `pm_commands` on the live project. Observed 2026-09-26: an agent ran it for ~3 min (installation `inst-46f97a160108`); no command was claimed (no relay journal entry), no run or job created; stopped and redone with `node scripts/pm-server.mjs --no-bridge`. Agents must always pass `--no-bridge` (Hard Rule #26); the owner starts the bridge.
+  **2026-09-26 evidence clarification:** `feedback.md` says nothing was written, but an empty command journal does not establish that. `scripts/pm/bridge.mjs:1444` starts heartbeat/task/fleet/V2 publication independently of command draining, and `publishRow()` at line 974 upserts `pm_live`. Actual successful production writes during that earlier incident were not established by this read-only local review; neither zero writes nor successful writes is claimed. No bridge or production inspection was started for this review.
 
 🟠 **DLV-133 — 2026-09-20: staging the checker's compiler would break every command-spec oracle.** `era-dlv107-dependencies` currently holds 41 packages including **esbuild 0.25.12 with its linux-x64 binary** — which `tests/delivery-oracles/bud83-split-removal.mjs` and `tests/delivery-oracles/kit11-cooking-count.mjs` both need in order to run at all — and **no `typescript`, no `next`**. `setup-checker-deps.mjs` deletes and recreates that volume from `CHECKER_DEPENDENCY_PACKAGES`, which does not list `esbuild`: running it adds the compiler and removes the bundler, and both oracles stop running. Adding `esbuild` to the list is not sufficient either — the script copies packages out of *this* checkout, and this checkout is Windows (`@esbuild/win32-x64` only), so there is no linux binary to copy. Root cause: one volume serves two unrelated needs (compile the program, bundle a candidate) and is provisioned by host-copy from a foreign platform. Options, undecided: pin `esbuild` + `@esbuild/linux-x64` and install the linux binary in this checkout, or build the volume inside the image instead of copying from the host. Evidence: `docker run -v era-dlv107-dependencies:/deps` inspection 2026-09-20 (`@esbuild/linux-x64` present, `typescript`/`next` absent); `setup-checker-deps.mjs:120-124` (`volume rm -f` then recreate). **Until this is decided, do not run `setup-checker-deps.mjs`** — the KIT-11 trial depends on the volume as it stands.
 
@@ -145,6 +148,28 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### DLV-136
+
+**Outcome:** Apply a prepared run after unrelated source edits. *(IMPLEMENTED 2026-09-26)*
+**Kind:** bug
+**Execution:** delivery
+**Touches:** `scripts/delivery-v2/journey.mjs`, `tests/delivery-v2/`
+
+- **Acceptance:** The re-check on Apply, and the integrated check after it, hold only the writer's own changes to the prepared plan; a file edited in the checkout since the snapshot is not reported as the candidate leaving its plan.
+- **Provenance:** 2026-09-26 KIT-11 run B Apply: `reassessment-failed` with both checks satisfied, integrity "candidate exceeds the approved prepared plan: Kitchen — Master Book.md" (changed by Delivery's own projection after the snapshot).
+- **Reading guide:** `journey.mjs evidenceFor()` ran `preparedScopeViolations()` on the preview / integrated snapshot, which includes checkout drift; it now takes `scopeCandidate` (the frozen candidate) from `reassess()` and `integrateAndCheck()`. Test: `focused-delivery.test.ts` "applies after an unrelated source edit".
+
+### DLV-135
+
+**Outcome:** Keep the PM server answering while Delivery runs Docker, checks and the typecheck. *(IMPLEMENTED 2026-09-26)*
+**Kind:** bug
+**Execution:** delivery
+**Touches:** `scripts/delivery-v2/`, `tests/delivery-v2/`
+
+- **Acceptance:** While a run builds, checks or re-checks on Apply, the Command Center never shows Offline because the laptop server is busy; `/api/health` answers within the browser's 3 s probe; Stop and status reads still reach the server. Concurrent readiness polls share one sign-in probe and one credential copy.
+- **Provenance:** 2026-09-26 KIT-11 run A: "Offline · viewing last known work" during Build while `pnpm pm` was running. One `/api/health` probe took 3.98 s against a 3.0 s browser timeout.
+- **Reading guide:** the container runtime lives inside the PM server (`service.mjs` → `createContainerRuntime`), and every `docker` call went through `spawnSync` (`worker-boundary.mjs createDockerCli().run`), as did the host check (`checks.mjs spawnExecutor`) and the host typecheck (`typecheck.mjs spawnTypecheck`, up to 15 min per phase). Each froze the server's only thread. Fix: `process.mjs runProcess()` (spawnSync's result shape, non-blocking), `docker.run` async with `runSync` kept for the setup scripts, `runCheck` / `runTypecheckVerification` / `evidenceFor` / `reassess` awaited, in-flight de-duplication for `authReadiness`, `binding` and `credentials.sync`. Tests: `tests/delivery-v2/process.test.ts`, `credential-sync.test.ts`.
 
 ### DLV-133
 
@@ -934,6 +959,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-07-30 — **DLV-18** `failure-scenarios.test.ts` drives each governance behaviour against the failure it exists to prevent — every one of which happened at least once in the BUD-11 forensics
 - ✅ 2026-07-30 — **DLV-19** fleet metrics computed from the session directories at request time: outcome distribution, owner decisions per session, first-pass validation rate. Every input already existed on disk and had simply never been added up
 - ✅ 2026-09-26 — **DLV-123** review-screen defects closed: `cleanInlineText()` keeps intra-word underscores (`NOT_TESTED`), a passing check shows its time in the summary line with no empty row, and a Conflict candidate keeps a secondary Apply (`applyControls().applyPrimary`); (3) item-page history was already visible. Also U7a: `executorBlockMessage()` names an offline worker before the sign-in refresh it breaks (seen with Docker stopped). Regression tests in `shared-parsing`, `delivery-review`, `coordination-model`, `delivery-v2-model`; `tests/pm-ui` + `tests/delivery-v2` 933 passed; headless check on run `r-c1d69bb666cf` at 1440/390 px — [criteria](<Delivery — Master Book.md#dlv-123>)
+- ✅ 2026-09-26 — **DLV-135** the PM server no longer freezes while Delivery works: every Docker, check and typecheck process in the in-server runtime is non-blocking (`process.mjs runProcess()`), with concurrent sign-in probes and credential copies de-duplicated. Found on KIT-11 run A (Offline banner during Build; one health probe 3.98 s > 3 s). `tests/delivery-v2` 739 passed (new `process.test.ts`, credential-sync concurrency cases), full suite 3002 passed (2 load timeouts pass alone), typecheck clean. Live witness: restart `pnpm pm` after run A, U23 during run B — [criteria](<Delivery — Master Book.md#dlv-135>)
+- ✅ 2026-09-26 — **DLV-136** Apply no longer refuses a prepared run because of unrelated checkout edits: only the frozen candidate's own changes are held to the prepared plan (`evidenceFor({ scopeCandidate })`). Found on KIT-11 run B Apply (`app-a99ce06c1b91`, both checks satisfied, refused on the Master Book). New test fails without the fix; `tests/delivery-v2` + `tests/pm-ui` 914 passed — [criteria](<Delivery — Master Book.md#dlv-136>)
 
 DW-3 conversation search/highlighting shipped 2026-07-16; removed the stale DLV-71 duplicate on 2026-09-10. This is a reconciliation, not a second implementation.
 

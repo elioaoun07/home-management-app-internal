@@ -91,7 +91,7 @@ describe("programFileList", () => {
     writeFileSync(target, contents, "utf8");
   };
 
-  it("pins an explicit list and leaves everything outside the roots behind", () => {
+  it("pins an explicit list and leaves everything outside the roots behind", async () => {
     const hostRoot = join(ROOT, "pin-host");
     write(hostRoot, "tsconfig.json", "{}");
     write(hostRoot, "src/a.ts", "export const a = 1;\n");
@@ -105,7 +105,7 @@ describe("programFileList", () => {
     expect(pinned.missing).toEqual([]);
   });
 
-  it("reports a root that is not there instead of silently compiling less", () => {
+  it("reports a root that is not there instead of silently compiling less", async () => {
     const hostRoot = join(ROOT, "pin-missing");
     write(hostRoot, "tsconfig.json", "{}");
     expect(programFileList({ hostRoot, program: { roots: ["tsconfig.json", "types"], extensions: [".ts"] } }).missing).toEqual(["types"]);
@@ -117,10 +117,10 @@ describe("programFileList", () => {
 // ---------------------------------------------------------------------------
 
 describe("where a verdict was produced", () => {
-  it("refuses a host verdict under an isolation policy, without compiling anything", () => {
+  it("refuses a host verdict under an isolation policy, without compiling anything", async () => {
     const { hostRoot, candidate } = scenario({ "src/a.ts": "export const a = 2;\n" });
     let calls = 0;
-    const verification = runTypecheckVerification({
+    const verification = await runTypecheckVerification({
       hostRoot,
       candidate,
       argv: ["tsc"],
@@ -137,18 +137,18 @@ describe("where a verdict was produced", () => {
     expect(calls).toBe(0);
   });
 
-  it("labels the host fallback in every verdict it produces", () => {
+  it("labels the host fallback in every verdict it produces", async () => {
     const { hostRoot, candidate } = scenario({ "src/a.ts": "export const a = 2;\n" });
-    const verification = runTypecheckVerification({ hostRoot, candidate, argv: ["tsc"], execute: scripted([{ exitCode: 0, stdout: "" }]) });
+    const verification = await runTypecheckVerification({ hostRoot, candidate, argv: ["tsc"], execute: scripted([{ exitCode: 0, stdout: "" }]) });
     expect(verification.state).toBe(TYPECHECK_STATE.SATISFIED);
     expect(verification.environment.producer).toBe(TYPECHECK_PRODUCERS.HOST);
     expect(verification.environment.isolated).toBe(false);
     expect(verification.environment.detail).toMatch(/uncommitted work/u);
   });
 
-  it("does not let a producer that omits its name read as isolated", () => {
+  it("does not let a producer that omits its name read as isolated", async () => {
     const { hostRoot, candidate } = scenario({ "src/a.ts": "export const a = 2;\n" });
-    const verification = runTypecheckVerification({
+    const verification = await runTypecheckVerification({
       hostRoot,
       candidate,
       argv: ["tsc"],
@@ -263,9 +263,9 @@ describe.runIf(existsSync(runnerPath))("isolated checker over a pinned program",
     image: "sha256:fixture",
   });
 
-  it("the deliberate failure: the isolated checker catches supabaseAdmin.from", () => {
+  it("the deliberate failure: the isolated checker catches supabaseAdmin.from", async () => {
     const { programRoot, candidate, staged } = pinnedFixture(DEFECTIVE);
-    const verification = runTypecheckVerification({
+    const verification = await runTypecheckVerification({
       hostRoot: programRoot,
       candidate,
       argv: ["node", runnerPath],
@@ -286,9 +286,9 @@ describe.runIf(existsSync(runnerPath))("isolated checker over a pinned program",
     expect(verification.redaction).toMatch(/retained/u);
   }, 300_000);
 
-  it("the passing control: the same route written correctly, same pinned program", () => {
+  it("the passing control: the same route written correctly, same pinned program", async () => {
     const { programRoot, candidate, staged } = pinnedFixture(CORRECT.replace("const admin", "const admin /* control */"));
-    const verification = runTypecheckVerification({
+    const verification = await runTypecheckVerification({
       hostRoot: programRoot,
       candidate,
       argv: ["node", runnerPath],
@@ -301,7 +301,7 @@ describe.runIf(existsSync(runnerPath))("isolated checker over a pinned program",
     expect(verification.environment.isolated).toBe(true);
   }, 300_000);
 
-  it("compiles the pinned program, not the working tree it was staged from", () => {
+  it("compiles the pinned program, not the working tree it was staged from", async () => {
     const { hostRoot, programRoot, candidate, staged } = pinnedFixture(CORRECT.replace("const admin", "const admin /* control */"));
     // The uncommitted work DLV-133 exists to exclude: a fresh error written into
     // the checkout after staging. A host-checkout run would carry it into the
@@ -310,7 +310,7 @@ describe.runIf(existsSync(runnerPath))("isolated checker over a pinned program",
     expect(existsSync(join(programRoot, "src", "lib", "broken.ts"))).toBe(false);
     expect(existsSync(join(programRoot, "build", "junk.ts"))).toBe(false);
 
-    const verification = runTypecheckVerification({
+    const verification = await runTypecheckVerification({
       hostRoot: programRoot,
       candidate,
       argv: ["node", runnerPath],

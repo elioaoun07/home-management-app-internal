@@ -527,6 +527,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-09-11 — **R58** Restore ERA's theme and correct PM connectivity detection — [evidence](<PM Tooling — Master Book.md#r58>)
 - ✅ 2026-09-11 — **R59** Repaired canonical work identity, acceptance lookup and source/history links; checkbox writes refuse stale, duplicate and witness-less targets — [evidence](<PM Tooling — Master Book.md#r59>)
 - ✅ 2026-09-11 — **R60** Completed Home, Work Board/List and module views: badges (not lanes) for blocked/active/review, shareable filtered URLs, checklist-row highlighting, distinct Checklist/Brief links and an Open-in-CLI handoff — [evidence](<PM Tooling — Master Book.md#r60>)
+- ✅ 2026-09-26 — **R68** Phone content no longer hides behind the fixed bottom nav: `.app-main` reserves the nav height plus the safe area (`scripts/pm/app/responsive.css`); the clearance had lived on `.app-footer`, which the app no longer renders. Verified at 390 px on Home, Work and Delivery (last content above the nav). Reported by the owner on `/pm/live`.
 
 ## Delivery session log
 

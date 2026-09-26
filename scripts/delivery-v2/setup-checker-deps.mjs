@@ -114,20 +114,20 @@ export function provisionCheckerDependencies({
     }
 
     const run = (args, options) => {
-      const result = docker.run(args, options);
+      const result = docker.runSync(args, options);
       if (result.status !== 0) throw new Error("docker " + args.slice(0, 2).join(" ") + " failed: " + String(result.stderr).slice(0, 500));
       return result;
     };
-    docker.run(["volume", "rm", "-f", volume]);
+    docker.runSync(["volume", "rm", "-f", volume]);
     run(["volume", "create", "--label", "era.delivery.role=checker-dependencies", volume]);
 
     const helper = "era-v2-deps-helper-" + String(process.pid);
-    docker.run(["rm", "-f", helper]);
+    docker.runSync(["rm", "-f", helper]);
     run(["create", "--name", helper, "--network", "none", "--mount", "type=volume,source=" + volume + ",target=/dst", image, "true"]);
     try {
       run(["cp", staging + "/.", helper + ":/dst"], { timeout: 1_800_000 });
     } finally {
-      docker.run(["rm", "-f", helper]);
+      docker.runSync(["rm", "-f", helper]);
     }
     run([
       "run", "--rm", "--user", "0:0", "--network", "none", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--cap-add", "FOWNER",
@@ -135,7 +135,7 @@ export function provisionCheckerDependencies({
     ], { timeout: 1_800_000 });
 
     // Prove it, rather than assume it: the same probe the runtime runs.
-    const probe = docker.run([
+    const probe = docker.runSync([
       "run", "--rm", "--network", "none", "--user", WORKER_USER, "--read-only",
       "--mount", "type=volume,source=" + volume + ",target=/deps,readonly",
       image, "node", "-e", "process.stdout.write(require('typescript').version)",

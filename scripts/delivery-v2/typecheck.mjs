@@ -40,7 +40,6 @@
 // redacted text are retained beside the evidence — hashes alone would leave the
 // owner with "something failed" and nothing to act on.
 
-import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -48,6 +47,7 @@ import { ContractError, contentId, deepFreeze, normalizePath } from "./contracts
 import { candidateChangedPaths } from "./candidate.mjs";
 import { retainOutput, retentionNote } from "./diagnostics.mjs";
 import { walkTrusted } from "./scratch.mjs";
+import { runProcess } from "./process.mjs";
 
 /** The criterion id this verification reports under. Required for candidate. */
 export const TYPECHECK_CRITERION_ID = "delivery-typecheck";
@@ -356,14 +356,14 @@ export function candidateOverlay({ candidate }) {
  * @param {{argv:string[], cwd:string, env?:object, phase:string, hostRoot:string,
  *   candidateRoot?:(string|null), changed?:string[], deleted?:string[], timeoutMs?:number}} input
  */
-export function spawnTypecheck({ argv, cwd, env = {}, phase, hostRoot, candidateRoot = null, changed = [], deleted = [], timeoutMs = 900_000 }) {
+export async function spawnTypecheck({ argv, cwd, env = {}, phase, hostRoot, candidateRoot = null, changed = [], deleted = [], timeoutMs = 900_000 }) {
   const args = [...argv.slice(1), "--root", hostRoot];
   if (phase === "candidate" && candidateRoot) {
     args.push("--candidate", candidateRoot);
     if (changed.length) args.push("--changed", changed.join(","));
     if (deleted.length) args.push("--deleted", deleted.join(","));
   }
-  const result = spawnSync(argv[0], args, { cwd, env, encoding: "utf8", timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 });
+  const result = await runProcess(argv[0], args, { cwd, env, timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 });
   return {
     exitCode: result.status,
     signal: result.signal ?? null,
@@ -401,7 +401,7 @@ export function spawnTypecheck({ argv, cwd, env = {}, phase, hostRoot, candidate
  *   execute?:Function, env?:object, now?:Function,
  *   producer?:Record<string, any>, requireIsolation?:boolean}} input
  */
-export function runTypecheckVerification({
+export async function runTypecheckVerification({
   hostRoot,
   candidate,
   argv,
@@ -444,7 +444,7 @@ export function runTypecheckVerification({
     });
 
   const started_at = now();
-  const baselineRun = run("baseline");
+  const baselineRun = await run("baseline");
   const baselineDiagnostics = parseTypescriptDiagnostics(String(baselineRun.stdout || "") + "\n" + String(baselineRun.stderr || ""));
   // The isolated producer stages its own program, so it — not this process's
   // filesystem — is the authority on whether that program had a config.
@@ -490,7 +490,7 @@ export function runTypecheckVerification({
     });
   }
 
-  candidateRun = run("candidate");
+  candidateRun = await run("candidate");
   if (candidateRun.spawnError) {
     return verdict({
       state: TYPECHECK_STATE.INCONCLUSIVE,

@@ -100,7 +100,7 @@ afterEach(() => {
 });
 
 describe("trusted import — the checker does not validate a tree the writer can edit", () => {
-  it("copies into an immutable generation and derives identity from the copied bytes", () => {
+  it("copies into an immutable generation and derives identity from the copied bytes", async () => {
     writerTree({ "src/amount.ts": "export const QUICK = 20;\n" });
     const imported = importTrustedCandidate({ sourceRoot: WRITER, generationsRoot: GENERATIONS });
     expect(imported.candidate.root).toContain("C1");
@@ -118,7 +118,7 @@ describe("trusted import — the checker does not validate a tree the writer can
     expect(imported.candidate.manifest[0].sha256).not.toBe(reimported.candidate.manifest[0].sha256);
   });
 
-  it("leaves .git, secrets and links out of the imported generation", () => {
+  it("leaves .git, secrets and links out of the imported generation", async () => {
     writerTree({
       "src/amount.ts": "export const QUICK = 20;\n",
       ".git/config": "[remote]\n",
@@ -129,7 +129,7 @@ describe("trusted import — the checker does not validate a tree the writer can
     expect(imported.importRefusals.map((entry) => entry.path)).toEqual(expect.arrayContaining([".env", ".git"]));
   });
 
-  it("ignores whatever the worker claimed about its own output", () => {
+  it("ignores whatever the worker claimed about its own output", async () => {
     writerTree({ "src/amount.ts": "export const QUICK = 20;\n" });
     const imported = importTrustedCandidate({
       sourceRoot: WRITER,
@@ -142,7 +142,7 @@ describe("trusted import — the checker does not validate a tree the writer can
 });
 
 describe("F-EVIDENCE — the candidate cannot redefine check selection", () => {
-  it("refuses a criterion the pinned plan does not name", () => {
+  it("refuses a criterion the pinned plan does not name", async () => {
     writerTree({ "src/amount.ts": "1\n" });
     const { candidate } = importTrustedCandidate({ sourceRoot: WRITER, generationsRoot: GENERATIONS });
     const plan = planFor([AC_SUITE]);
@@ -154,22 +154,22 @@ describe("F-EVIDENCE — the candidate cannot redefine check selection", () => {
       oracle_ref: "the candidate",
       freshness_inputs: ["candidate"],
     });
-    expect(() => runCheck({ plan, candidate, criterion: smuggled, execute: scripted({ exitCode: 0 }) })).toThrow(
+    await expect(runCheck({ plan, candidate, criterion: smuggled, execute: scripted({ exitCode: 0 }) })).rejects.toThrow(
       new RegExp(CHECK_REFUSALS.NOT_IN_PLAN, "u"),
     );
   });
 
-  it("refuses a criterion whose revision has moved past the pinned plan", () => {
+  it("refuses a criterion whose revision has moved past the pinned plan", async () => {
     writerTree({ "src/amount.ts": "1\n" });
     const { candidate } = importTrustedCandidate({ sourceRoot: WRITER, generationsRoot: GENERATIONS });
     const plan = planFor([AC_SUITE]);
     const revised = makeCriterion({ ...AC_SUITE, revision: 2 });
-    expect(() => runCheck({ plan, candidate, criterion: revised, execute: scripted({ exitCode: 0 }) })).toThrow(
+    await expect(runCheck({ plan, candidate, criterion: revised, execute: scripted({ exitCode: 0 }) })).rejects.toThrow(
       new RegExp(CHECK_REFUSALS.NOT_IN_PLAN, "u"),
     );
   });
 
-  it("refuses at pin time a criterion naming an observer spec the plan does not hold", () => {
+  it("refuses at pin time a criterion naming an observer spec the plan does not hold", async () => {
     const orphan = makeCriterion({
       criterion_id: "AC-orphan",
       proposition: "x",
@@ -185,7 +185,7 @@ describe("F-EVIDENCE — the candidate cannot redefine check selection", () => {
 });
 
 describe("F-EVIDENCE — the candidate cannot silently weaken its oracle", () => {
-  it("detects a checker input the candidate rewrote", () => {
+  it("detects a checker input the candidate rewrote", async () => {
     writerTree({ "src/amount.ts": "1\n", "tests/amount.test.ts": "expect(1).toBe(1);\n" });
     const { candidate } = importTrustedCandidate({ sourceRoot: WRITER, generationsRoot: GENERATIONS });
     // Pinned from the base: the test as it was BEFORE the candidate existed.
@@ -196,18 +196,18 @@ describe("F-EVIDENCE — the candidate cannot silently weaken its oracle", () =>
     expect(drift.drifted[0]).toMatchObject({ path: "tests/amount.test.ts", kind: "changed" });
   });
 
-  it("detects a checker input the candidate deleted", () => {
+  it("detects a checker input the candidate deleted", async () => {
     writerTree({ "src/amount.ts": "1\n" });
     const { candidate } = importTrustedCandidate({ sourceRoot: WRITER, generationsRoot: GENERATIONS });
     const plan = planFor([AC_SUITE], [{ path: "tests/amount.test.ts", sha256: "sha256:the-original" }]);
     expect(detectOracleDrift({ plan, candidate }).drifted[0]).toMatchObject({ kind: "removed" });
   });
 
-  it("refuses to run a check that depends on a drifted input", () => {
+  it("refuses to run a check that depends on a drifted input", async () => {
     writerTree({ "src/amount.ts": "1\n", "tests/amount.test.ts": "expect(true).toBe(true);\n" });
     const { candidate } = importTrustedCandidate({ sourceRoot: WRITER, generationsRoot: GENERATIONS });
     const plan = planFor([AC_SUITE], [{ path: "tests/amount.test.ts", sha256: "sha256:the-original" }]);
-    const outcome = runCheck({
+    const outcome = await runCheck({
       plan,
       candidate,
       criterion: AC_SUITE,
@@ -218,11 +218,11 @@ describe("F-EVIDENCE — the candidate cannot silently weaken its oracle", () =>
     expect(outcome.receipt).toBeNull();
   });
 
-  it("still runs a check that does not depend on the drifted input, and records the drift", () => {
+  it("still runs a check that does not depend on the drifted input, and records the drift", async () => {
     writerTree({ "src/amount.ts": "1\n", "tests/other.test.ts": "x\n" });
     const { candidate } = importTrustedCandidate({ sourceRoot: WRITER, generationsRoot: GENERATIONS });
     const plan = planFor([AC_SUITE], [{ path: "tests/other.test.ts", sha256: "sha256:the-original" }]);
-    const outcome = runCheck({
+    const outcome = await runCheck({
       plan,
       candidate,
       criterion: AC_SUITE,
@@ -236,11 +236,11 @@ describe("F-EVIDENCE — the candidate cannot silently weaken its oracle", () =>
 });
 
 describe("F-EVIDENCE — the candidate cannot mint a trusted receipt", () => {
-  it("accepts only receipts the checker produced for this exact plan", () => {
+  it("accepts only receipts the checker produced for this exact plan", async () => {
     writerTree({ "src/amount.ts": "1\n" });
     const { candidate } = importTrustedCandidate({ sourceRoot: WRITER, generationsRoot: GENERATIONS });
     const plan = planFor();
-    const outcome = runCheck({
+    const outcome = await runCheck({
       plan,
       candidate,
       criterion: AC_SUITE,
@@ -259,7 +259,7 @@ describe("F-EVIDENCE — the candidate cannot mint a trusted receipt", () => {
     });
   });
 
-  it("keeps a writer-supplied log as an attributed input, not as a check", () => {
+  it("keeps a writer-supplied log as an attributed input, not as a check", async () => {
     const supplied = attributeSuppliedLog({ path: "logs/tests.txt", contents: "Tests 190 passed (190)\n" });
     expect(supplied.attribution).toBe("native-engineer");
     // The weakest kind, so a behavioural criterion rejects it outright.
@@ -271,11 +271,11 @@ describe("F-EVIDENCE — the candidate cannot mint a trusted receipt", () => {
 });
 
 describe("F-EVIDENCE — the named ways of proving nothing", () => {
-  it("does not satisfy a behavioural criterion with zero selected tests", () => {
+  it("does not satisfy a behavioural criterion with zero selected tests", async () => {
     writerTree({ "src/amount.ts": "1\n" });
     const { candidate } = importTrustedCandidate({ sourceRoot: WRITER, generationsRoot: GENERATIONS });
     const plan = planFor();
-    const outcome = runCheck({
+    const outcome = await runCheck({
       plan,
       candidate,
       criterion: AC_SUITE,
@@ -289,7 +289,7 @@ describe("F-EVIDENCE — the named ways of proving nothing", () => {
     expect(evidence.reason).toBe("zero-executed");
   });
 
-  it("reads a runner that reports no test files as zero selected", () => {
+  it("reads a runner that reports no test files as zero selected", async () => {
     expect(parseTestCounts("No test files found, exiting with code 0")).toEqual({
       selected: 0,
       executed: 0,
@@ -301,12 +301,14 @@ describe("F-EVIDENCE — the named ways of proving nothing", () => {
     expect(parseTestCounts("History navigation passed: 6 synthetic cases")).toMatchObject({ selected: 6, executed: 6 });
     // Protected delivery oracles: exact line only, never a loose "passed" mention.
     expect(parseTestCounts("6 of 6 tests passed\n")).toEqual({ selected: 6, executed: 6, skipped: 0, failed: 0 });
+    // KIT-11's oracle says "checks"; run A read it as unreadable output (2026-09-26).
+    expect(parseTestCounts("12 of 12 checks passed\n")).toEqual({ selected: 12, executed: 12, skipped: 0, failed: 0 });
     expect(parseTestCounts("note: 6 of 6 tests passed later")).toEqual({ selected: null, executed: null, skipped: null, failed: null });
     // Unreadable output yields nulls, which criteria.mjs turns into inconclusive.
     expect(parseTestCounts("something else entirely")).toMatchObject({ selected: null, executed: null });
   });
 
-  it("does not satisfy a criterion with an arbitrary proof file's existence", () => {
+  it("does not satisfy a criterion with an arbitrary proof file's existence", async () => {
     writerTree({ "src/amount.ts": "1\n", "docs/proof.md": "I did the work.\n" });
     const { candidate } = importTrustedCandidate({ sourceRoot: WRITER, generationsRoot: GENERATIONS });
     const presence = filePresenceObservation({ path: "docs/proof.md", root: candidate.root });
@@ -316,7 +318,7 @@ describe("F-EVIDENCE — the named ways of proving nothing", () => {
     expect(presence.detail.note).toBe(CHECK_REFUSALS.FILE_PRESENCE);
   });
 
-  it("leaves a malformed required review inconclusive, never failed and never passed", () => {
+  it("leaves a malformed required review inconclusive, never failed and never passed", async () => {
     const review = malformedReviewObservation({ reviewer: "fresh-challenger", raw: "{ verdict: yes" });
     const evidence = evaluateCriterion(AC_REVIEW, review, { currentInputs: {} });
     expect(evidence.state).toBe("inconclusive");
@@ -326,11 +328,11 @@ describe("F-EVIDENCE — the named ways of proving nothing", () => {
     expect(summary.candidate.satisfied).toBe(false);
   });
 
-  it("stales a receipt once the candidate has moved", () => {
+  it("stales a receipt once the candidate has moved", async () => {
     writerTree({ "src/amount.ts": "export const QUICK = 20;\n" });
     const { candidate } = importTrustedCandidate({ sourceRoot: WRITER, generationsRoot: GENERATIONS });
     const plan = planFor();
-    const outcome = runCheck({
+    const outcome = await runCheck({
       plan,
       candidate,
       criterion: AC_SUITE,
@@ -351,21 +353,21 @@ describe("F-EVIDENCE — the named ways of proving nothing", () => {
     expect(stale.reason).toBe("stale-input");
   });
 
-  it("refuses to check a generation that changed underneath it", () => {
+  it("refuses to check a generation that changed underneath it", async () => {
     writerTree({ "src/amount.ts": "1\n" });
     const { candidate } = importTrustedCandidate({ sourceRoot: WRITER, generationsRoot: GENERATIONS });
     // Someone edits the frozen generation directly — the case the copy exists to
     // make detectable rather than impossible.
     writeFileSync(join(candidate.root, "src", "amount.ts"), "2\n", "utf8");
-    const outcome = runCheck({ plan: planFor(), candidate, criterion: AC_SUITE, execute: scripted({ exitCode: 0 }) });
+    const outcome = await runCheck({ plan: planFor(), candidate, criterion: AC_SUITE, execute: scripted({ exitCode: 0 }) });
     expect(outcome.refused).toBe(CHECK_REFUSALS.CANDIDATE_MUTATED);
     expect(outcome.receipt).toBeNull();
   });
 
-  it("records a spawn that never produced a process as interrupted, not as a failure", () => {
+  it("records a spawn that never produced a process as interrupted, not as a failure", async () => {
     writerTree({ "src/amount.ts": "1\n" });
     const { candidate } = importTrustedCandidate({ sourceRoot: WRITER, generationsRoot: GENERATIONS });
-    const outcome = runCheck({
+    const outcome = await runCheck({
       plan: planFor(),
       candidate,
       criterion: AC_SUITE,
@@ -380,7 +382,7 @@ describe("F-EVIDENCE — the named ways of proving nothing", () => {
 });
 
 describe("F-PUBLISH — the check environment cannot publish", () => {
-  it("refuses to run with publication credentials in the environment", () => {
+  it("refuses to run with publication credentials in the environment", async () => {
     expect(() => assertRestrictedEnvironment({ SUPABASE_SERVICE_ROLE_KEY: "sk-live" })).toThrow(
       new RegExp(CHECK_REFUSALS.PUBLICATION_CREDENTIALS, "u"),
     );
@@ -388,7 +390,7 @@ describe("F-PUBLISH — the check environment cannot publish", () => {
     expect(() => assertRestrictedEnvironment({ PATH: "/usr/bin" })).not.toThrow();
   });
 
-  it("builds the check environment from an allowlist, not a denylist", () => {
+  it("builds the check environment from an allowlist, not a denylist", async () => {
     const env = restrictedEnv({
       PATH: "/usr/bin",
       SUPABASE_SERVICE_ROLE_KEY: "sk-live",
@@ -400,11 +402,11 @@ describe("F-PUBLISH — the check environment cannot publish", () => {
     expect(env.SOME_FUTURE_SECRET).toBeUndefined();
   });
 
-  it("refuses a check whose environment carries credentials, before running anything", () => {
+  it("refuses a check whose environment carries credentials, before running anything", async () => {
     writerTree({ "src/amount.ts": "1\n" });
     const { candidate } = importTrustedCandidate({ sourceRoot: WRITER, generationsRoot: GENERATIONS });
     let ran = false;
-    expect(() =>
+    await expect(
       runCheck({
         plan: planFor(),
         candidate,
@@ -415,13 +417,13 @@ describe("F-PUBLISH — the check environment cannot publish", () => {
           return { exitCode: 0, stdout: "", stderr: "", signal: null };
         },
       }),
-    ).toThrow(new RegExp(CHECK_REFUSALS.PUBLICATION_CREDENTIALS, "u"));
+    ).rejects.toThrow(new RegExp(CHECK_REFUSALS.PUBLICATION_CREDENTIALS, "u"));
     expect(ran).toBe(false);
   });
 });
 
 describe("the minimal canonical Checkpoint", () => {
-  it("binds identity, inputs, decisions and the next action", () => {
+  it("binds identity, inputs, decisions and the next action", async () => {
     const checkpoint = makeCheckpoint({
       run_id: "r-1",
       contract_revision: 1,
@@ -457,7 +459,7 @@ describe("the minimal canonical Checkpoint", () => {
     ]);
   });
 
-  it("refuses a finding with no provenance", () => {
+  it("refuses a finding with no provenance", async () => {
     expect(() =>
       makeCheckpoint({
         run_id: "r-1",
@@ -470,7 +472,7 @@ describe("the minimal canonical Checkpoint", () => {
     ).toThrow(/a finding with no source reference is a claim/u);
   });
 
-  it("refuses a decision reconstructed from prose", () => {
+  it("refuses a decision reconstructed from prose", async () => {
     expect(() =>
       makeCheckpoint({
         run_id: "r-1",
@@ -483,7 +485,7 @@ describe("the minimal canonical Checkpoint", () => {
     ).toThrow(/not prose/u);
   });
 
-  it("is deterministic, so an unchanged checkpoint is the same checkpoint", () => {
+  it("is deterministic, so an unchanged checkpoint is the same checkpoint", async () => {
     const build = () =>
       makeCheckpoint({
         run_id: "r-1",

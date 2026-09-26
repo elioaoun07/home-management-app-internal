@@ -79,14 +79,14 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("retainOutput", () => {
-  it("keeps both streams labelled instead of concatenating them into one story", () => {
+  it("keeps both streams labelled instead of concatenating them into one story", async () => {
     const retained = retainOutput({ stdout: "Tests  1 passed (1)", stderr: "a warning" });
     expect(retained.text).toMatch(/--- stdout ---/u);
     expect(retained.text).toMatch(/--- stderr ---/u);
     expect(retained.empty).toBe(false);
   });
 
-  it("replaces absolute roots and the home directory with stable tokens", () => {
+  it("replaces absolute roots and the home directory with stable tokens", async () => {
     const retained = retainOutput({
       stdout: "FAIL C:/work/candidate/src/a.ts\nalso C:\\work\\candidate\\src\\a.ts",
       roots: [{ token: "<candidate>", path: "C:/work/candidate" }],
@@ -96,11 +96,11 @@ describe("retainOutput", () => {
     expect(retained.text).toMatch(/<candidate>\/src\/a\.ts/u);
   });
 
-  it("strips terminal colour so a coloured log is not stored as escape soup", () => {
+  it("strips terminal colour so a coloured log is not stored as escape soup", async () => {
     expect(retainOutput({ stdout: "\u001B[32mTests\u001B[0m  1 passed (1)" }).text).toMatch(/^--- stdout ---\nTests {2}1 passed \(1\)$/u);
   });
 
-  it("drops the middle of a runaway log and says how much", () => {
+  it("drops the middle of a runaway log and says how much", async () => {
     const lines = Array.from({ length: RETENTION_LIMITS.headLines + RETENTION_LIMITS.tailLines + 500 }, (_, index) => "line " + index);
     const retained = retainOutput({ stdout: lines.join("\n") });
     expect(retained.droppedLines).toBe(500);
@@ -110,13 +110,13 @@ describe("retainOutput", () => {
     expect(retained.text).toMatch(/line 699$/u);
   });
 
-  it("clips a single enormous line rather than storing it whole", () => {
+  it("clips a single enormous line rather than storing it whole", async () => {
     const retained = retainOutput({ stdout: "x".repeat(RETENTION_LIMITS.lineChars + 50) });
     expect(retained.clippedLines).toBe(1);
     expect(retained.text.length).toBeLessThan(RETENTION_LIMITS.lineChars + 60);
   });
 
-  it("keeps the hash of the original bytes, so a receipt can still be compared", () => {
+  it("keeps the hash of the original bytes, so a receipt can still be compared", async () => {
     const a = retainOutput({ stdout: "same" });
     const b = retainOutput({ stdout: "same" });
     expect(a.sourceHash).toBe(b.sourceHash);
@@ -138,19 +138,19 @@ describe("redactSecrets", () => {
     expect(redactedSecrets).toBeGreaterThan(0);
   });
 
-  it("leaves ordinary compiler output alone", () => {
+  it("leaves ordinary compiler output alone", async () => {
     const line = "src/a.ts(1,14): error TS2322: Type 'number' is not assignable to type 'string'.";
     expect(redactSecrets(line).text).toBe(line);
   });
 });
 
 describe("retentionNote", () => {
-  it("states the gap honestly when nothing was retained", () => {
+  it("states the gap honestly when nothing was retained", async () => {
     expect(retentionNote(null)).toMatch(/not retained/u);
     expect(retentionNote(retainOutput({ stdout: "", stderr: "" }))).toMatch(/no output/u);
   });
 
-  it("names every bound it applied", () => {
+  it("names every bound it applied", async () => {
     const lines = Array.from({ length: RETENTION_LIMITS.headLines + RETENTION_LIMITS.tailLines + 5 }, () => "x");
     const note = retentionNote(retainOutput({ stdout: lines.join("\n") + "\nsk-ant-api03-" + "A".repeat(40) }));
     expect(note).toMatch(/line\(s\) omitted/u);
@@ -164,32 +164,32 @@ describe("retentionNote", () => {
 // ---------------------------------------------------------------------------
 
 describe("classifyCheckOutcome", () => {
-  it("separates a runner that never started from a check that failed", () => {
+  it("separates a runner that never started from a check that failed", async () => {
     expect(classifyCheckOutcome({ spawnError: "ENOENT", exitCode: null, counts: {} })).toMatchObject({
       outcome: CHECK_OUTCOMES.RUNNER_MISSING,
       aboutTheCandidate: false,
     });
   });
 
-  it("separates unreadable output from both of those", () => {
+  it("separates unreadable output from both of those", async () => {
     expect(classifyCheckOutcome({ exitCode: 1, counts: { selected: null, executed: null } })).toMatchObject({
       outcome: CHECK_OUTCOMES.OUTPUT_UNREADABLE,
       aboutTheCandidate: false,
     });
   });
 
-  it("separates zero selection from a real failure", () => {
+  it("separates zero selection from a real failure", async () => {
     expect(classifyCheckOutcome({ exitCode: 0, counts: { selected: 0, executed: 0 } }).outcome).toBe(CHECK_OUTCOMES.NO_TESTS_SELECTED);
   });
 
-  it("calls a nonzero exit with readable counts what it is, and only that a statement about the candidate", () => {
+  it("calls a nonzero exit with readable counts what it is, and only that a statement about the candidate", async () => {
     const failed = classifyCheckOutcome({ exitCode: 1, counts: { selected: 10, executed: 10, failed: 2 } });
     expect(failed.outcome).toBe(CHECK_OUTCOMES.TESTS_FAILED);
     expect(failed.aboutTheCandidate).toBe(true);
     expect(classifyCheckOutcome({ exitCode: 0, counts: { selected: 10, executed: 10, failed: 0 } }).outcome).toBe(CHECK_OUTCOMES.PASSED);
   });
 
-  it("treats a green exit with failing cases as a failure, not a pass", () => {
+  it("treats a green exit with failing cases as a failure, not a pass", async () => {
     expect(classifyCheckOutcome({ exitCode: 0, counts: { selected: 10, executed: 10, failed: 3 } }).outcome).toBe(CHECK_OUTCOMES.TESTS_FAILED);
   });
 });
@@ -199,10 +199,10 @@ describe("classifyCheckOutcome", () => {
 // ---------------------------------------------------------------------------
 
 describe("runCheck retains its output", () => {
-  it("hands the retainer bounded redacted text tagged with the criterion at its revision", () => {
+  it("hands the retainer bounded redacted text tagged with the criterion at its revision", async () => {
     const candidate = candidateFor();
     const kept: Record<string, unknown>[] = [];
-    const outcome = runCheck({
+    const outcome = await runCheck({
       plan: planFor(),
       candidate,
       criterion: AC_SUITE,
@@ -228,7 +228,7 @@ describe("runCheck retains its output", () => {
     expect(outcome.observation!.raw_refs).toEqual([kept[0].artifact_id]);
   });
 
-  it("addresses the artifact by content, so a re-run overwrites and a new revision does not", () => {
+  it("addresses the artifact by content, so a re-run overwrites and a new revision does not", async () => {
     const candidate = candidateFor();
     const ids: string[] = [];
     const capture = (entry: { artifact_id: string }) => {
@@ -237,13 +237,13 @@ describe("runCheck retains its output", () => {
     };
     const run = (criterion = AC_SUITE) =>
       runCheck({ plan: planFor(), candidate, criterion, execute: scripted({ exitCode: 0, stdout: "Tests  1 passed (1)" }), retain: capture });
-    run();
-    run();
+    await run();
+    await run();
     expect(ids[0]).toBe(ids[1]);
   });
 
-  it("still produces a receipt when the store refuses the blob, and says nothing was retained", () => {
-    const outcome = runCheck({
+  it("still produces a receipt when the store refuses the blob, and says nothing was retained", async () => {
+    const outcome = await runCheck({
       plan: planFor(),
       candidate: candidateFor(),
       criterion: AC_SUITE,
@@ -257,8 +257,8 @@ describe("runCheck retains its output", () => {
     expect((outcome.receipt!.output as { retained: boolean }).retained).toBe(false);
   });
 
-  it("keeps the old hash beside the retained text rather than replacing it", () => {
-    const outcome = runCheck({
+  it("keeps the old hash beside the retained text rather than replacing it", async () => {
+    const outcome = await runCheck({
       plan: planFor(),
       candidate: candidateFor(),
       criterion: AC_SUITE,
@@ -277,29 +277,29 @@ describe("runCheck distinguishes the failure shapes on the receipt", () => {
     [{ exitCode: 0, stdout: "No test files found" }, CHECK_OUTCOMES.NO_TESTS_SELECTED, false],
     [{ exitCode: 1, stdout: "Tests  2 failed | 8 passed (10)" }, CHECK_OUTCOMES.TESTS_FAILED, true],
     [{ exitCode: 0, stdout: "Tests  10 passed (10)" }, CHECK_OUTCOMES.PASSED, true],
-  ])("records %j as %s", (result, outcome, aboutTheCandidate) => {
-    const receipt = runCheck({
+  ])("records %j as %s", async (result, outcome, aboutTheCandidate) => {
+    const receipt = (await runCheck({
       plan: planFor(),
       candidate: candidateFor(),
       criterion: AC_SUITE,
       execute: scripted(result as Record<string, unknown>),
       retain: (entry: { artifact_id: string }) => entry.artifact_id,
-    }).receipt!;
+    })).receipt!;
     expect(receipt.outcome).toBe(outcome);
     expect(receipt.aboutTheCandidate).toBe(aboutTheCandidate);
     expect(receipt.outcomeDetail).toEqual(expect.any(String));
   });
 
-  it("does not let the new vocabulary change any verdict DLV-112 already decided", () => {
+  it("does not let the new vocabulary change any verdict DLV-112 already decided", async () => {
     const candidate = candidateFor();
-    const verdicts = (result: Record<string, unknown>) => {
-      const outcome = runCheck({ plan: planFor(), candidate, criterion: AC_SUITE, execute: scripted(result) });
+    const verdicts = async (result: Record<string, unknown>) => {
+      const outcome = await runCheck({ plan: planFor(), candidate, criterion: AC_SUITE, execute: scripted(result) });
       return evaluateCriterion(AC_SUITE, outcome.observation, { candidate_ref: candidate.candidate_id, currentInputs: outcome.observation!.inputs });
     };
-    expect(verdicts({ exitCode: 0, stdout: "Tests  10 passed (10)" }).state).toBe("satisfied");
-    expect(verdicts({ exitCode: 1, stdout: "Tests  2 failed | 8 passed (10)" }).state).toBe("failed");
-    expect(verdicts({ exitCode: 0, stdout: "No test files found" }).state).toBe("missing");
-    expect(verdicts({ exitCode: 1, stdout: "something exploded" }).state).toBe("inconclusive");
-    expect(verdicts({ spawnError: "ENOENT", exitCode: null }).state).toBe("inconclusive");
+    expect((await verdicts({ exitCode: 0, stdout: "Tests  10 passed (10)" })).state).toBe("satisfied");
+    expect((await verdicts({ exitCode: 1, stdout: "Tests  2 failed | 8 passed (10)" })).state).toBe("failed");
+    expect((await verdicts({ exitCode: 0, stdout: "No test files found" })).state).toBe("missing");
+    expect((await verdicts({ exitCode: 1, stdout: "something exploded" })).state).toBe("inconclusive");
+    expect((await verdicts({ spawnError: "ENOENT", exitCode: null })).state).toBe("inconclusive");
   });
 });

@@ -80,14 +80,14 @@ function planFor(criteria = [AC_SUITE]) {
 }
 
 /** Freeze a candidate and run its unit check, returning everything the Result needs. */
-function verifiedCandidate(execResult: Record<string, unknown> = { exitCode: 0, selected: 12, executed: 12 }) {
+async function verifiedCandidate(execResult: Record<string, unknown> = { exitCode: 0, selected: 12, executed: 12 }) {
   writerTree({ "src/amount.ts": "export const QUICK = 20;\n" });
   const { candidate } = importTrustedCandidate({
     sourceRoot: WRITER,
     generationsRoot: GENERATIONS,
     base_manifest: [{ path: "src/amount.ts", sha256: "sha256:base", size: 1 }],
   });
-  const outcome = runCheck({
+  const outcome = await runCheck({
     plan: planFor(),
     candidate,
     criterion: AC_SUITE,
@@ -116,8 +116,8 @@ afterEach(() => {
 });
 
 describe("candidateVerified", () => {
-  it("is true only when the required candidate criteria are satisfied by fresh evidence", () => {
-    const { candidate, evidence } = verifiedCandidate();
+  it("is true only when the required candidate criteria are satisfied by fresh evidence", async () => {
+    const { candidate, evidence } = await verifiedCandidate();
     const result = buildResult({
       contract: contractFor("verified_candidate"),
       run_id: "r-1",
@@ -133,8 +133,8 @@ describe("candidateVerified", () => {
     expect(result.remaining_obligations).toEqual([]);
   });
 
-  it("is false with no candidate at all", () => {
-    const { evidence } = verifiedCandidate();
+  it("is false with no candidate at all", async () => {
+    const { evidence } = await verifiedCandidate();
     const result = buildResult({
       contract: contractFor("verified_candidate"),
       run_id: "r-1",
@@ -144,8 +144,8 @@ describe("candidateVerified", () => {
     expect(result.candidateVerified).toBe(false);
   });
 
-  it("is false over an empty criterion set rather than vacuously true", () => {
-    const { candidate } = verifiedCandidate();
+  it("is false over an empty criterion set rather than vacuously true", async () => {
+    const { candidate } = await verifiedCandidate();
     const result = buildResult({
       contract: contractFor("verified_candidate", []),
       run_id: "r-1",
@@ -157,8 +157,8 @@ describe("candidateVerified", () => {
     expect(result.candidateVerified).toBe(false);
   });
 
-  it("is false when a criterion has no evidence at all", () => {
-    const { candidate } = verifiedCandidate();
+  it("is false when a criterion has no evidence at all", async () => {
+    const { candidate } = await verifiedCandidate();
     const result = buildResult({
       contract: contractFor("verified_candidate"),
       run_id: "r-1",
@@ -172,8 +172,8 @@ describe("candidateVerified", () => {
     });
   });
 
-  it("is false when the only evidence is a waiver", () => {
-    const { candidate } = verifiedCandidate();
+  it("is false when the only evidence is a waiver", async () => {
+    const { candidate } = await verifiedCandidate();
     const waived = waiveCriterion(AC_SUITE, {
       owner_decision_ref: "dec-1",
       limitation: "no test environment for this control yet",
@@ -189,8 +189,8 @@ describe("candidateVerified", () => {
     expect(result.criterion_states[0].state).toBe("waived");
   });
 
-  it("is false when the candidate went stale", () => {
-    const { candidate, evidence } = verifiedCandidate();
+  it("is false when the candidate went stale", async () => {
+    const { candidate, evidence } = await verifiedCandidate();
     const result = buildResult({
       contract: contractFor("verified_candidate"),
       run_id: "r-1",
@@ -202,14 +202,14 @@ describe("candidateVerified", () => {
     expect(result.next_safe_action).toMatch(/re-freeze the candidate/u);
   });
 
-  it("is false when the candidate touched a file outside publicationScope", () => {
+  it("is false when the candidate touched a file outside publicationScope", async () => {
     writerTree({ "src/amount.ts": "export const QUICK = 20;\n", "src/surplus.ts": "export const X = 1;\n" });
     const { candidate } = importTrustedCandidate({
       sourceRoot: WRITER,
       generationsRoot: GENERATIONS,
       base_manifest: [{ path: "src/amount.ts", sha256: "sha256:base", size: 1 }],
     });
-    const outcome = runCheck({
+    const outcome = await runCheck({
       plan: planFor(),
       candidate,
       criterion: AC_SUITE,
@@ -232,8 +232,8 @@ describe("candidateVerified", () => {
     expect(result.remaining_obligations.some((entry) => entry.kind === OBLIGATION_KINDS.SCOPE)).toBe(true);
   });
 
-  it("is false when a referenced artifact is missing", () => {
-    const { candidate, evidence } = verifiedCandidate();
+  it("is false when a referenced artifact is missing", async () => {
+    const { candidate, evidence } = await verifiedCandidate();
     const result = buildResult({
       contract: contractFor("verified_candidate"),
       run_id: "r-1",
@@ -245,8 +245,8 @@ describe("candidateVerified", () => {
     expect(result.next_safe_action).toMatch(/restore or re-produce the missing artifact a-transcript/u);
   });
 
-  it("is false when an integrity or authority violation is unresolved", () => {
-    const { candidate, evidence } = verifiedCandidate();
+  it("is false when an integrity or authority violation is unresolved", async () => {
+    const { candidate, evidence } = await verifiedCandidate();
     const result = buildResult({
       contract: contractFor("verified_candidate"),
       run_id: "r-1",
@@ -258,8 +258,8 @@ describe("candidateVerified", () => {
     expect(result.next_safe_action).toMatch(/integrity\/authority violation/u);
   });
 
-  it("stays true while cost reconciliation is still outstanding, but the work does not complete", () => {
-    const { candidate, evidence } = verifiedCandidate();
+  it("stays true while cost reconciliation is still outstanding, but the work does not complete", async () => {
+    const { candidate, evidence } = await verifiedCandidate();
     const result = buildResult({
       contract: contractFor("verified_candidate"),
       run_id: "r-1",
@@ -285,9 +285,9 @@ describe("candidateVerified", () => {
 });
 
 describe("F-RESULT — build:null cannot resurrect completed work", () => {
-  it("does not satisfy a criterion from a check that never executed", () => {
-    const { candidate } = verifiedCandidate();
-    const outcome = runCheck({
+  it("does not satisfy a criterion from a check that never executed", async () => {
+    const { candidate } = await verifiedCandidate();
+    const outcome = await runCheck({
       plan: planFor(),
       candidate,
       criterion: AC_SUITE,
@@ -308,8 +308,8 @@ describe("F-RESULT — build:null cannot resurrect completed work", () => {
     expect(result.workComplete).toBe(false);
   });
 
-  it("does not let an empty re-evaluation revive an earlier completion", () => {
-    const { candidate, evidence } = verifiedCandidate();
+  it("does not let an empty re-evaluation revive an earlier completion", async () => {
+    const { candidate, evidence } = await verifiedCandidate();
     const contract = contractFor("verified_candidate");
     const complete = buildResult({
       contract,
@@ -339,8 +339,8 @@ describe("F-RESULT — build:null cannot resurrect completed work", () => {
 });
 
 describe("F-PUBLISH — a verified candidate is not a deployment", () => {
-  it("leaves a requested deployment outstanding on a fully verified candidate", () => {
-    const { candidate, evidence } = verifiedCandidate();
+  it("leaves a requested deployment outstanding on a fully verified candidate", async () => {
+    const { candidate, evidence } = await verifiedCandidate();
     const contract = contractFor("verified_deployment", [AC_SUITE, AC_DEPLOYED]);
     const result = buildResult({
       contract,
@@ -359,7 +359,7 @@ describe("F-PUBLISH — a verified candidate is not a deployment", () => {
     expect(result.next_safe_action).toMatch(/verified_deployment remains outstanding/u);
   });
 
-  it("refuses to record a disposition from a click", () => {
+  it("refuses to record a disposition from a click", async () => {
     expect(() =>
       recordDisposition({
         disposition: "verified_deployment",
@@ -380,8 +380,8 @@ describe("F-PUBLISH — a verified candidate is not a deployment", () => {
     ).toThrow(/needs build_ref/u);
   });
 
-  it("appends a later disposition as a new version without rewriting the engineering", () => {
-    const { candidate, evidence } = verifiedCandidate();
+  it("appends a later disposition as a new version without rewriting the engineering", async () => {
+    const { candidate, evidence } = await verifiedCandidate();
     const contract = contractFor("verified_deployment", [AC_SUITE, AC_DEPLOYED]);
     const deployedEvidence = evaluateCriterion(
       AC_DEPLOYED,
@@ -436,8 +436,8 @@ describe("F-PUBLISH — a verified candidate is not a deployment", () => {
     expect(second.closed_outcome).toBe(first.closed_outcome);
   });
 
-  it("refuses an appended disposition with no attributed receipt", () => {
-    const { candidate, evidence } = verifiedCandidate();
+  it("refuses an appended disposition with no attributed receipt", async () => {
+    const { candidate, evidence } = await verifiedCandidate();
     const result = buildResult({
       contract: contractFor("verified_deployment", [AC_SUITE, AC_DEPLOYED]),
       run_id: "r-1",
@@ -449,8 +449,8 @@ describe("F-PUBLISH — a verified candidate is not a deployment", () => {
     ).toThrow(/a click is not proof/u);
   });
 
-  it("refuses to un-observe an established disposition", () => {
-    const { candidate, evidence } = verifiedCandidate();
+  it("refuses to un-observe an established disposition", async () => {
+    const { candidate, evidence } = await verifiedCandidate();
     const result = buildResult({
       contract: contractFor("verified_deployment", [AC_SUITE, AC_DEPLOYED]),
       run_id: "r-1",
@@ -465,8 +465,8 @@ describe("F-PUBLISH — a verified candidate is not a deployment", () => {
 });
 
 describe("F-RESULT — a failed projection does not erase verified engineering", () => {
-  it("changes only projection_status", () => {
-    const { candidate, evidence } = verifiedCandidate();
+  it("changes only projection_status", async () => {
+    const { candidate, evidence } = await verifiedCandidate();
     const result = buildResult({
       contract: contractFor("verified_candidate"),
       run_id: "r-1",
@@ -485,8 +485,8 @@ describe("F-RESULT — a failed projection does not erase verified engineering",
 });
 
 describe("F-RESULT — malformed engineer prose changes nothing", () => {
-  it("does not invalidate otherwise sufficient trusted evidence", () => {
-    const { candidate, evidence } = verifiedCandidate();
+  it("does not invalidate otherwise sufficient trusted evidence", async () => {
+    const { candidate, evidence } = await verifiedCandidate();
     const contract = contractFor("verified_candidate");
     const withProse = buildResult({
       contract,
@@ -517,8 +517,8 @@ describe("F-RESULT — malformed engineer prose changes nothing", () => {
 });
 
 describe("F-RESULT — an unknown job blocks completion", () => {
-  it("keeps an unreconciled dispatch visible and outstanding", () => {
-    const { candidate, evidence } = verifiedCandidate();
+  it("keeps an unreconciled dispatch visible and outstanding", async () => {
+    const { candidate, evidence } = await verifiedCandidate();
     const result = buildResult({
       contract: contractFor("verified_candidate"),
       run_id: "r-1",
@@ -536,8 +536,8 @@ describe("F-RESULT — an unknown job blocks completion", () => {
 });
 
 describe("the one post-check repair the FAST policy allows", () => {
-  function resultWith(state: "failed" | "missing") {
-    const { candidate, evidence } = verifiedCandidate(
+  async function resultWith(state: "failed" | "missing") {
+    const { candidate, evidence } = await verifiedCandidate(
       state === "failed" ? { exitCode: 1, selected: 12, executed: 12 } : { exitCode: 0, selected: 0, executed: 0 },
     );
     expect(evidence.state).toBe(state);
@@ -551,8 +551,8 @@ describe("the one post-check repair the FAST policy allows", () => {
 
   const permitted = { permitted: true, refusals: [] };
 
-  it("permits exactly one repair after a check actually failed", () => {
-    const result = resultWith("failed");
+  it("permits exactly one repair after a check actually failed", async () => {
+    const result = await resultWith("failed");
     const first = postCheckRepairPolicy({ result, repairsDispatched: 0, grantVerdict: permitted });
     expect(first.permitted).toBe(true);
     expect(first.failedCriteria).toEqual(["AC-suite"]);
@@ -562,15 +562,15 @@ describe("the one post-check repair the FAST policy allows", () => {
     expect(second.refusals[0].code).toBe("repair-budget-spent");
   });
 
-  it("refuses a repair when nothing failed — a missing check is an obligation, not a defect", () => {
-    const result = resultWith("missing");
+  it("refuses a repair when nothing failed — a missing check is an obligation, not a defect", async () => {
+    const result = await resultWith("missing");
     const policy = postCheckRepairPolicy({ result, grantVerdict: permitted });
     expect(policy.permitted).toBe(false);
     expect(policy.refusals[0].code).toBe("no-failed-check");
   });
 
-  it("refuses a repair the current Grant does not permit", () => {
-    const result = resultWith("failed");
+  it("refuses a repair the current Grant does not permit", async () => {
+    const result = await resultWith("failed");
     const policy = postCheckRepairPolicy({
       result,
       grantVerdict: { permitted: false, refusals: [{ code: "allowance-exhausted", detail: "no headroom" }] },
@@ -579,14 +579,14 @@ describe("the one post-check repair the FAST policy allows", () => {
     expect(JSON.stringify(policy.refusals)).toMatch(/allowance-exhausted/u);
   });
 
-  it("counts supervisor dispatches, not the native job's own test/fix loop", () => {
-    const result = resultWith("failed");
+  it("counts supervisor dispatches, not the native job's own test/fix loop", async () => {
+    const result = await resultWith("failed");
     expect(postCheckRepairPolicy({ result, grantVerdict: permitted }).note).toMatch(/inside its bound/u);
   });
 });
 
 describe("the Result refuses to be built from nothing", () => {
-  it("requires the contract, the run and a criteria summary", () => {
+  it("requires the contract, the run and a criteria summary", async () => {
     const contract = contractFor("verified_candidate");
     expect(() => buildResult({ contract, run_id: "", criteriaSummary: summarizeCriteria([], []) })).toThrow(
       ContractError,
@@ -595,7 +595,7 @@ describe("the Result refuses to be built from nothing", () => {
     expect(() => buildResult({ contract, run_id: "r-1" })).toThrow(/silence is not a pass/u);
   });
 
-  it("derives a stable identity for the same work, contract and run", () => {
+  it("derives a stable identity for the same work, contract and run", async () => {
     const contract = contractFor("verified_candidate");
     writerTree({ "src/amount.ts": "export const QUICK = 20;\n" });
     const candidate = freezeCandidate({ root: WRITER });
