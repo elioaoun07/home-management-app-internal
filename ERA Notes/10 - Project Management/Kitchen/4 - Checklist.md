@@ -16,7 +16,6 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 
 - [ ] **KIT-10** Validate ingredient payloads at every writer — [criteria](<Kitchen — Master Book.md#kit-10>) _(friction - M)_
 - [ ] **KIT-4** Expose scoped meal coverage to ERA — [criteria](<Kitchen — Master Book.md#kit-4>) _(annoyance - M)_
-- [ ] **KIT-11** Return the correct cooking count — [criteria](<Kitchen — Master Book.md#kit-11>) _(friction - M)_
 
 ## Next
 

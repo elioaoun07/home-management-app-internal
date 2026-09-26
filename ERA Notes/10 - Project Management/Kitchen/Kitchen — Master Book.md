@@ -378,6 +378,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ## Shipped Log
 
 - ✅ 2026-07-18 — inbound Healthcare bridge landed in recipe views (`RecipeAllergenWarning.tsx` consuming `useHouseholdAllergens`) — Kitchen gained a junction without gaining a commit
+- ✅ 2026-09-26 — **KIT-11** Return the correct cooking count — [criteria](<Kitchen — Master Book.md#kit-11>)
 
 ## Delivery session log
 
