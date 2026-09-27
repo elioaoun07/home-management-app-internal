@@ -383,13 +383,23 @@ describe("resolveIntent — reminderComplete", () => {
 });
 
 describe("resolveIntent — reminderDelete", () => {
-  it("soft-deletes via the same DELETE route the app's own delete button uses", async () => {
+  // HUB-76 — deletes confirm: the router path returns a card and deletes
+  // nothing; the tap runs reminder.delete (see nativeActions.test.ts).
+  it("returns a confirm card and makes zero DELETE calls", async () => {
     mockFetch(() => ({ json: { success: true, action: "deleted" } }));
     const result = await resolveIntent(deleteIntent("item-1", "Water the plants"));
 
-    expect(callTo("/api/items/item-1", "DELETE")).toBeDefined();
+    expect(callTo("/api/items/item-1", "DELETE")).toBeUndefined();
+    expect(calls).toHaveLength(0);
     expect(result.text).toContain("Water the plants");
-    expect(result.metadata).toMatchObject({ deletedItemId: "item-1" });
+    expect(result.proposal).toMatchObject({
+      kind: "native_action",
+      action: {
+        type: "capability",
+        capabilityId: "reminder.delete",
+        slots: { itemId: "item-1", title: "Water the plants" },
+      },
+    });
   });
 
   it("asks instead of guessing when focus memory has no candidate (itemId null)", async () => {
@@ -798,6 +808,7 @@ const OK_RESULT: EraBudgetSubmitResult = {
   ok: true,
   draftId: "draft-9",
   accountId: "acct-1",
+  currency: "USD",
   parsed: {
     description: "I paid $25 on fuel",
     amount: 25,

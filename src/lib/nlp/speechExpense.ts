@@ -59,7 +59,9 @@ const CHANGE_WORDS = [
   "returned",
   "gave me back",
 ];
-const SEP_REGEX = /[\s,]+/g;
+// Split on whitespace and on commas that are NOT thousands separators, so
+// "2,000" stays one token (HUB-77 Gym: "paid $2,000 for rent" drafted $2).
+const SEP_REGEX = /\s+|,(?!\d{3}(?!\d))/g;
 
 // Date parsing helpers
 function parseRelativeDate(sentence: string): Date | null {
@@ -233,10 +235,12 @@ function parseNumbers(sentence: string) {
 
   // digit numbers - handle commas in thousands
   tokens.forEach((tok, i) => {
-    const m = tok.match(/^[\d,]+(?:\.\d+)?$/);
+    const m = tok.match(/^([\d,]+(?:\.\d+)?)(k)?$/);
     if (m) {
-      const cleaned = m[0].replace(/,/g, "");
-      numbers.push({ index: i, value: parseFloat(cleaned) });
+      const cleaned = m[1].replace(/,/g, "");
+      // HUB-75 — "500k" is the household's thousands shorthand.
+      const value = parseFloat(cleaned) * (m[2] ? 1000 : 1);
+      numbers.push({ index: i, value });
     }
   });
 

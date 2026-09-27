@@ -11,15 +11,15 @@
 // resulting transaction shows up in the existing Drafts review screen.
 
 import { useMyAccounts } from "@/features/accounts/hooks";
+import type { UICategory } from "@/features/categories/useCategoriesQuery";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
+import { extractAmount } from "@/lib/nlp/amount";
 import type { ParsedExpense } from "@/lib/nlp/speechExpense";
 import { parseSpeechExpense } from "@/lib/nlp/speechExpense";
 import { qk } from "@/lib/queryKeys";
-import { safeFetch } from "@/lib/safeFetch";
-import { ToastIcons } from "@/lib/toastIcons";
+import { RequestTimeoutError, safeFetch } from "@/lib/safeFetch";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { toast } from "sonner";
 
 export type EraBudgetSubmitResult =
   | {
@@ -27,12 +27,54 @@ export type EraBudgetSubmitResult =
       draftId: string;
       parsed: ParsedExpense;
       accountId: string;
+      currency: string;
     }
   | {
       ok: false;
-      reason: "no-account" | "no-amount" | "request-failed" | "offline";
+      reason:
+        | "no-account"
+        | "no-currency-account"
+        | "currency-unclear"
+        | "no-amount"
+        | "request-failed"
+        | "offline"
+        | "uncertain";
       message: string;
     };
+
+/**
+ * HUB-75 — amounts are native-currency (`500k lbp` = 500000 LBP), and an
+ * account's balance is kept in its own currency, so a marked amount may only
+ * land on an account in that currency. No conversion is ever inferred: with
+ * no matching account the capture fails honestly instead of drafting 500000
+ * on a USD account. An unmarked `k` amount on a non-LBP default asks for the
+ * currency rather than guessing.
+ */
+export function pickDraftAccount(
+  accounts: DraftAccount[],
+  sentence: string,
+):
+  | { ok: true; accountId: string }
+  | { ok: false; reason: "no-account" | "no-currency-account" | "currency-unclear"; currency?: string } {
+  // A bare `k` amount ("taxi 250k") must be seen here too, or it would fall
+  // through to the USD default as 250,000 dollars (HUB-78 Gym gate).
+  const bare = extractAmount(sentence, { allowBare: true });
+  const found = extractAmount(sentence) ?? (bare?.kShorthand ? bare : undefined);
+  if (found?.currency) {
+    const inCurrency = accounts.filter((a) => (a.currency ?? "USD") === found.currency);
+    const id = pickDefaultAccount(inCurrency);
+    return id
+      ? { ok: true, accountId: id }
+      : { ok: false, reason: "no-currency-account", currency: found.currency };
+  }
+  const id = pickDefaultAccount(accounts);
+  if (!id) return { ok: false, reason: "no-account" };
+  if (found?.kShorthand) {
+    const acct = accounts.find((a) => a.id === id);
+    if ((acct?.currency ?? "USD") !== "LBP") return { ok: false, reason: "currency-unclear" };
+  }
+  return { ok: true, accountId: id };
+}
 
 /**
  * Pick the account ERA should use for budget drafts. Preference:
@@ -40,9 +82,9 @@ export type EraBudgetSubmitResult =
  * 2. The first visible expense account
  * 3. The first visible account of any kind
  */
-function pickDefaultAccount(
-  accounts: Array<{ id: string; type?: string; is_default?: boolean }>,
-): string | null {
+type DraftAccount = { id: string; type?: string; is_default?: boolean; currency?: string };
+
+function pickDefaultAccount(accounts: DraftAccount[]): string | null {
   if (!accounts.length) return null;
   const flagged = accounts.find((a) => a.is_default);
   if (flagged) return flagged.id;
@@ -66,7 +108,7 @@ export function useEraBudgetSubmit() {
 
   const submit = useCallback(
     async (sentence: string): Promise<EraBudgetSubmitResult> => {
-      if (!accountId) {
+      if (!accountId || !accounts) {
         return {
           ok: false,
           reason: "no-account",
@@ -74,7 +116,29 @@ export function useEraBudgetSubmit() {
         };
       }
 
-      const parsed = parseSpeechExpense(sentence, categories ?? []);
+      const target = pickDraftAccount(accounts, sentence);
+      if (!target.ok) {
+        return {
+          ok: false,
+          reason: target.reason,
+          message:
+            target.reason === "no-currency-account"
+              ? `No ${target.currency} account.`
+              : target.reason === "currency-unclear"
+                ? "Which currency?"
+                : "No account available to draft a transaction.",
+        };
+      }
+      const draftAccountId = target.accountId;
+
+      // Categories are per-account. A currency-routed draft on another
+      // account uses that account's cached categories, or none — never the
+      // default account's category IDs.
+      const draftCategories =
+        draftAccountId === accountId
+          ? (categories ?? [])
+          : (queryClient.getQueryData<UICategory[]>(qk.categories(draftAccountId)) ?? []);
+      const parsed = parseSpeechExpense(sentence, draftCategories);
 
       if (!parsed.amount || parsed.amount <= 0) {
         return {
@@ -89,7 +153,7 @@ export function useEraBudgetSubmit() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            account_id: accountId,
+            account_id: draftAccountId,
             amount: parsed.amount,
             category_id: parsed.categoryId || null,
             subcategory_id: parsed.subcategoryId || null,
@@ -117,41 +181,23 @@ export function useEraBudgetSubmit() {
         queryClient.invalidateQueries({ queryKey: qk.drafts() });
         queryClient.invalidateQueries({ queryKey: ["account-balance"] });
 
-        // Hard Rule #1 — every toast must have Undo.
-        toast.success("Draft saved", {
-          icon: ToastIcons.success,
-          duration: 4000,
-          description: parsed.categoryName
-            ? `${parsed.amount.toFixed(2)} · ${parsed.categoryName}${
-                parsed.subcategoryName ? ` / ${parsed.subcategoryName}` : ""
-              }`
-            : `${parsed.amount.toFixed(2)}`,
-          action: {
-            label: "Undo",
-            onClick: async () => {
-              try {
-                await safeFetch(`/api/drafts/${data.draft.id}`, {
-                  method: "DELETE",
-                });
-                queryClient.invalidateQueries({ queryKey: qk.drafts() });
-                queryClient.invalidateQueries({
-                  queryKey: ["account-balance"],
-                });
-                toast.success("Draft removed");
-              } catch {
-                toast.error("Couldn't undo — open Drafts to remove it.");
-              }
-            },
-          },
-        });
+        // HUB-78 — the receipt (Undo + Change) is shown by useEraTurn, which
+        // owns the handoff message id the Change button opens.
 
         return {
           ok: true,
           draftId: data.draft.id,
           parsed,
-          accountId,
+          accountId: draftAccountId,
+          currency: accounts.find((a) => a.id === draftAccountId)?.currency ?? "USD",
         };
       } catch (err) {
+        // HUB-37 — a timeout AFTER the request left may have created the
+        // draft: "uncertain", never retried. Only a refusal before sending
+        // is "offline" (the caller keeps the text for a retry).
+        if (err instanceof RequestTimeoutError) {
+          return { ok: false, reason: "uncertain", message: "Not sure it saved. Check Drafts." };
+        }
         return {
           ok: false,
           reason: "offline",
@@ -162,7 +208,7 @@ export function useEraBudgetSubmit() {
         };
       }
     },
-    [accountId, categories, queryClient],
+    [accountId, accounts, categories, queryClient],
   );
 
   return {

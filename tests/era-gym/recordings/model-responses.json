@@ -1,0 +1,369 @@
+{
+  "meta": {
+    "recordedAt": "2026-09-27T15:35:25.021Z",
+    "model": "gemini-3.8-flash",
+    "calls": 45
+  },
+  "entries": {
+    "A:export-009:0": {
+      "text": "{\"kind\":\"prose\",\"text\":\"Got it. Let me know if you need to confirm a pending transaction or check your spending.\"}",
+      "ms": 3397,
+      "inTok": 583,
+      "outTok": 28,
+      "model": "gemini-3.8-flash",
+      "hash": "70c69ed3687a0cf9"
+    },
+    "A:export-072:0": {
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"I cannot record expenses directly, but I can check your monthly spending or help with drafts and reminders if you need.\"\n}",
+      "ms": 3287,
+      "inTok": 582,
+      "outTok": 41,
+      "model": "gemini-3.8-flash",
+      "hash": "138ec772ca3abee6"
+    },
+    "A:budget-011:0": {
+      "text": "{\n  \"kind\": \"propose_action\",\n  \"text\": \"Checking your spending for this month.\",\n  \"capabilityId\": \"spend.month\",\n  \"slotsJson\": \"{\\\"scope\\\":\\\"self\\\"}\"\n}",
+      "ms": 1256,
+      "inTok": 577,
+      "outTok": 51,
+      "model": "gemini-3.8-flash",
+      "hash": "2c33a91009d30105"
+    },
+    "A:budget-039:0": {
+      "text": "{\"kind\":\"prose\",\"text\":\"Nice! Always good when payday rolls around.\"}",
+      "ms": 4137,
+      "inTok": 578,
+      "outTok": 18,
+      "model": "gemini-3.8-flash",
+      "hash": "c80136503acbee9b"
+    },
+    "A:budget-040:0": {
+      "text": "{\"kind\":\"prose\",\"text\":\"Nice! Did you want to track how much you spent on them?\"}",
+      "ms": 2083,
+      "inTok": 579,
+      "outTok": 23,
+      "model": "gemini-3.8-flash",
+      "hash": "6a7dccae51460223"
+    },
+    "A:budget-041:0": {
+      "text": "{\"kind\":\"prose\",\"text\":\"Nice job getting those two hours in. Hope it was productive!\"}",
+      "ms": 2441,
+      "inTok": 579,
+      "outTok": 22,
+      "model": "gemini-3.8-flash",
+      "hash": "d0fe094b3d5f7dcd"
+    },
+    "A:speech-act-056:0": {
+      "text": "{\"kind\":\"prose\",\"text\":\"Did you want me to note that down, or were you looking to check how that impacts your budget?\"}",
+      "ms": 2721,
+      "inTok": 582,
+      "outTok": 30,
+      "model": "gemini-3.8-flash",
+      "hash": "ac6aa7bdf11ae56e"
+    },
+    "A:speech-act-057:0": {
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"Got it. I can't log expenses directly, but let me know if you'd like me to save that to memory or set a reminder.\"\n}",
+      "ms": 4200,
+      "inTok": 582,
+      "outTok": 49,
+      "model": "gemini-3.8-flash",
+      "hash": "afdf8627964b768d"
+    },
+    "A:speech-act-059:0": {
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"If you have enough buffer to cover your upcoming expenses, putting that 200 aside is a great idea.\"\n}",
+      "ms": 1793,
+      "inTok": 584,
+      "outTok": 41,
+      "model": "gemini-3.8-flash",
+      "hash": "eeb7fb3eb61541f7"
+    },
+    "A:speech-act-060:0": {
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"Got it. Did you want me to record that expense",
+      "ms": 4972,
+      "inTok": 586,
+      "outTok": 27,
+      "model": "gemini-3.8-flash",
+      "hash": "ec798992a1b17cbb"
+    },
+    "A:voice-080:0": {
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"I can't log individual expenses right now, but I can help you check your monthly spending if you'd like.\"\n}",
+      "ms": 2800,
+      "inTok": 579,
+      "outTok": 43,
+      "model": "gemini-3.8-flash",
+      "hash": "adb0a1f7cc4af272"
+    },
+    "A:voice-081:0": {
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"I don't have a way to log expenses directly yet, but I can check your spending or drafts if you'd like.\"\n}",
+      "ms": 2613,
+      "inTok": 580,
+      "outTok": 45,
+      "model": "gemini-3.8-flash",
+      "hash": "173d2c0b7246541d"
+    },
+    "C:export-001:0": {
+      "text": "{\n  \"tool\": \"clarify\",\n  \"argsJson\": \"{\\\"missing\\\":\\\"dish\\\",\\\"options\\\":[\\\"Lasagna\\\",\\\"Chicken curry\\\",\\\"Tabbouleh\\\"]}\",\n  \"say\": \"Which recipe would you like to schedule?\"\n}",
+      "ms": 2536,
+      "inTok": 755,
+      "outTok": 54,
+      "model": "gemini-3.8-flash",
+      "hash": "a3c282b1cd80f3c2"
+    },
+    "C:export-002:0": {
+      "text": "{\n  \"tool\": \"no_action\",\n  \"argsJson\": \"{}\",\n  \"say\": \"Understood.\"\n}",
+      "ms": 1372,
+      "inTok": 734,
+      "outTok": 30,
+      "model": "gemini-3.8-flash",
+      "hash": "d9441a7a73596347"
+    },
+    "C:export-004:0": {
+      "text": "{\"tool\":\"no_action\",\"argsJson\":\"{}\",\"say\":\"I didn't catch that.\"}",
+      "ms": 1674,
+      "inTok": 735,
+      "outTok": 22,
+      "model": "gemini-3.8-flash",
+      "hash": "97a89f5666a993a3"
+    },
+    "C:export-009:0": {
+      "text": "{\n  \"tool\": \"clarify",
+      "ms": 2891,
+      "inTok": 736,
+      "outTok": 9,
+      "model": "gemini-3.8-flash",
+      "hash": "4402950b0c82e6a8"
+    },
+    "C:export-015:0": {
+      "text": "{\n  ",
+      "ms": 4277,
+      "inTok": 736,
+      "outTok": 3,
+      "model": "gemini-3.8-flash",
+      "hash": "27923cde40715abb"
+    },
+    "C:export-027:0": {
+      "text": "{\"tool\":\"no_action\",\"argsJson\":\"{}\",\"say\":\"Hello! How can I help you today?\"}",
+      "ms": 2266,
+      "inTok": 728,
+      "outTok": 24,
+      "model": "gemini-3.8-flash",
+      "hash": "4523ac56e19d464e"
+    },
+    "C:export-030:0": {
+      "text": "{\"tool\":\"no_action\",\"argsJson\":\"{}\",\"say\":\"Goodbye!\"}",
+      "ms": 1728,
+      "inTok": 728,
+      "outTok": 17,
+      "model": "gemini-3.8-flash",
+      "hash": "86e2bb71bd236984"
+    },
+    "C:export-032:0": {
+      "text": "{\n  \"",
+      "ms": 2809,
+      "inTok": 729,
+      "outTok": 4,
+      "model": "gemini-3.8-flash",
+      "hash": "2848fa68086299a8"
+    },
+    "C:export-035:0": {
+      "text": "{\n  \"tool\": \"no_action\",\n  \"argsJson\": \"{}\",\n  \"say\": \"Hello! How can I help you today?\"\n}",
+      "ms": 1507,
+      "inTok": 729,
+      "outTok": 36,
+      "model": "gemini-3.8-flash",
+      "hash": "4dc8a7b8254decaa"
+    },
+    "C:export-044:0": {
+      "text": "{\"tool\":\"navigate\",\"argsJson\":\"{\\\"to\\\":\\\"/expense\\\"}\",\"say\":\"Opening expenses.\"}",
+      "ms": 2984,
+      "inTok": 728,
+      "outTok": 22,
+      "model": "gemini-3.8-flash",
+      "hash": "8eaed24649fa5bd3"
+    },
+    "C:export-047:0": {
+      "text": "{\n  \"tool",
+      "ms": 3208,
+      "inTok": 745,
+      "outTok": 5,
+      "model": "gemini-3.8-flash",
+      "hash": "6b8a58a6c805b5fd"
+    },
+    "C:export-072:0": {
+      "text": "{\n  \"tool\": \"transaction.draft\",\n  \"argsJson\": \"{\\\"amount\\\":5,\\\"note\\\":\\\"groceries dekken\\\"}\",\n  \"say\": \"Drafted 5 for groceries dekken.\"\n}",
+      "ms": 3260,
+      "inTok": 751,
+      "outTok": 48,
+      "model": "gemini-3.8-flash",
+      "hash": "ef93f0cdac7013a5"
+    },
+    "C:budget-011:0": {
+      "text": "{\n  \"tool\": \"spend",
+      "ms": 2622,
+      "inTok": 730,
+      "outTok": 8,
+      "model": "gemini-3.8-flash",
+      "hash": "9e41d61302bc7aa6"
+    },
+    "C:schedule-016:0": {
+      "text": "{\n  \"tool\": \"reminder.create\",\n  \"argsJson\": \"{\\\"title\\\":\\\"Dentist appointment\\\",\\\"when\\\":\\\"October 3 at 4:00 PM\\\"}\",\n  \"say\": \"Added dentist appointment for October 3 at 4:00 PM.\"\n}",
+      "ms": 2448,
+      "inTok": 755,
+      "outTok": 62,
+      "model": "gemini-3.8-flash",
+      "hash": "79cdf1b763e4bd53"
+    },
+    "C:household-021:0": {
+      "text": "{\"tool\":\"answer\",\"argsJson\":\"{}\",\"say\":\"I can't undo that automatically. Let me know what you'd like to change or delete.\"}",
+      "ms": 4892,
+      "inTok": 729,
+      "outTok": 34,
+      "model": "gemini-3.8-flash",
+      "hash": "00f62173729c92ed"
+    },
+    "C:budget-039:0": {
+      "text": "{\n  \"tool\": \"answer\",\n  \"argsJson\": \"{}\",\n  \"say\": \"Congrats! I can only track expenses right now, not income.\"\n}",
+      "ms": 2572,
+      "inTok": 731,
+      "outTok": 38,
+      "model": "gemini-3.8-flash",
+      "hash": "b52f0f9a66e69407"
+    },
+    "C:budget-040:0": {
+      "text": "{\n  \"tool\": \"clarify\",\n  \"argsJson\": \"{\\\"missing\\\":\\\"amount\\\",\\\"options\\\":[]}\",\n  \"say\": \"How much did you pay for the shirts?\"\n}",
+      "ms": 2284,
+      "inTok": 732,
+      "outTok": 43,
+      "model": "gemini-3.8-flash",
+      "hash": "323a7dc33690ab23"
+    },
+    "C:budget-041:0": {
+      "text": "{\"tool\":\"no_action\",\"argsJson\":\"{}\",\"say\":\"Noted!\"}",
+      "ms": 1385,
+      "inTok": 732,
+      "outTok": 18,
+      "model": "gemini-3.8-flash",
+      "hash": "6c4c4a8b1f263da2"
+    },
+    "C:franco-050:0": {
+      "text": "{\n  \"tool\": \"transfer.create\",\n  \"argsJson\": \"{\\\"amount\\\":100,\\\"from\\\":\\\"a2\\\",\\\"to\\\":\\\"a1\\\"}\",\n  \"say\": \"Transferring $100 from Drawer to Wallet.\"\n}",
+      "ms": 1662,
+      "inTok": 758,
+      "outTok": 55,
+      "model": "gemini-3.8-flash",
+      "hash": "f298e3cdaad830c2"
+    },
+    "C:franco-051:0": {
+      "text": "{\n  \"tool\": \"reminder.create\",\n  \"argsJson\": \"{\\\"title\\\":\\\"Et7ayyak la mama\\\",\\\"when\\\":\\\"tomorrow at 5 PM\\\"}\",\n  \"say\": \"Tekram, zadtellak tezkir la boukra 3al 5.\"\n}",
+      "ms": 2296,
+      "inTok": 743,
+      "outTok": 64,
+      "model": "gemini-3.8-flash",
+      "hash": "32d45eec1d431d35"
+    },
+    "C:franco-052:0": {
+      "text": "{\n  \"tool\": \"transaction.draft\",\n  \"argsJson\": \"{\\\"amount\\\":20,\\\"currency\\\":\\\"USD\\\",\\\"note\\\":\\\"بنزين\\\"}\",\n  \"say\": \"سجلت ٢٠$ بنزين.\"\n}",
+      "ms": 1489,
+      "inTok": 734,
+      "outTok": 52,
+      "model": "gemini-3.8-flash",
+      "hash": "45f7e27e316933c1"
+    },
+    "C:franco-053:0": {
+      "text": "{\n  \"tool\": \"spend.month\",\n  \"argsJson\": \"{\\\"scope\\\":\\\"self\\\"}\",\n  \"say\": \"3am shuf masroufak hal chahr.\"\n}",
+      "ms": 1671,
+      "inTok": 734,
+      "outTok": 43,
+      "model": "gemini-3.8-flash",
+      "hash": "9acc5d6550561675"
+    },
+    "C:speech-act-054:0": {
+      "text": "{\n  \"tool\": \"no_action\",\n  \"argsJson\": \"{}\",\n  \"say\": \"Cancelled. No transfer made.\"\n}",
+      "ms": 6335,
+      "inTok": 755,
+      "outTok": 33,
+      "model": "gemini-3.8-flash",
+      "hash": "386efc18d244b6dd"
+    },
+    "C:speech-act-055:0": {
+      "text": "{\n  \"tool\": \"answer\",\n  \"argsJson\": \"{}\",\n  \"say\": \"That would move $300 from Drawer to Wallet. Let me know if you want me to do that.\"\n}",
+      "ms": 1966,
+      "inTok": 756,
+      "outTok": 48,
+      "model": "gemini-3.8-flash",
+      "hash": "49cd34b7b9f8c35f"
+    },
+    "C:speech-act-056:0": {
+      "text": "{\n  \"tool\": \"no_action\",\n  \"argsJson\": \"{}\",\n  \"say\": \"Let me know if you'd like me to log that expense.\"\n}",
+      "ms": 2276,
+      "inTok": 751,
+      "outTok": 41,
+      "model": "gemini-3.8-flash",
+      "hash": "4c368c2b78cdf027"
+    },
+    "C:speech-act-057:0": {
+      "text": "{\n  \"tool\": \"no_action\",\n  \"argsJson\": \"{}\",\n  \"say\": \"Noted.\"\n}",
+      "ms": 3128,
+      "inTok": 751,
+      "outTok": 30,
+      "model": "gemini-3.8-flash",
+      "hash": "9d0f828fcc4e44b7"
+    },
+    "C:speech-act-058:0": {
+      "text": "{\n  \"tool\": \"no_action\",\n  \"argsJson\": \"{}\",\n  \"say\": \"Understood, won't delete it.\"\n}",
+      "ms": 1142,
+      "inTok": 763,
+      "outTok": 36,
+      "model": "gemini-3.8-flash",
+      "hash": "2f0038207e4e04bb"
+    },
+    "C:speech-act-059:0": {
+      "text": "{\n  \"tool\": \"answer\",\n  \"argsJson\": \"{}\",\n  \"say\": \"That depends on your upcoming expenses, but putting $200 aside is a great habit if your wallet allows.\"\n}",
+      "ms": 2014,
+      "inTok": 753,
+      "outTok": 48,
+      "model": "gemini-3.8-flash",
+      "hash": "52a793919d11a505"
+    },
+    "C:speech-act-060:0": {
+      "text": "{\n  \"tool\": \"no_action\",\n  \"argsJson\": \"{}\",\n  \"say\": \"Noted. Let me know if you want me to log this expense.\"\n}",
+      "ms": 3833,
+      "inTok": 755,
+      "outTok": 42,
+      "model": "gemini-3.8-flash",
+      "hash": "674c3a0e9f07511e"
+    },
+    "C:voice-080:0": {
+      "text": "{\n  \"tool\": \"transaction.draft\",\n  \"argsJson\": \"{\\\"amount\\\":12,\\\"currency\\\":\\\"USD\\\",\\\"note\\\":\\\"coffee\\\"}\",\n  \"say\": \"Drafted $12 for coffee.\"\n}",
+      "ms": 1110,
+      "inTok": 732,
+      "outTok": 49,
+      "model": "gemini-3.8-flash",
+      "hash": "9b4df3c00e7f8fa8"
+    },
+    "C:voice-081:0": {
+      "text": "{\n  \"tool\": \"transaction.draft\",\n  \"argsJson\": \"{\\\"amount\\\": 45, \\\"note\\\": \\\"gas\\\"}\",\n  \"say\": \"Drafted 45 for gas.\"\n}",
+      "ms": 1698,
+      "inTok": 733,
+      "outTok": 48,
+      "model": "gemini-3.8-flash",
+      "hash": "7cda67ce6d5b98af"
+    },
+    "C:voice-083:0": {
+      "text": "{\n  \"tool\": \"transfer.create\",\n  \"argsJson\": \"{\\\"amount\\\":50,\\\"from\\\":\\\"a1\\\",\\\"to\\\":\\\"a3\\\"}\",\n  \"say\": \"Transferring $50 from Wallet to Savings.\"\n}",
+      "ms": 1315,
+      "inTok": 734,
+      "outTok": 53,
+      "model": "gemini-3.8-flash",
+      "hash": "e68317131aa3ef50"
+    },
+    "C:correction-085:1": {
+      "text": "{\n  \"tool\":",
+      "ms": 3349,
+      "inTok": 732,
+      "outTok": 6,
+      "model": "gemini-3.8-flash",
+      "hash": "fb89fa2f7ee43da4"
+    }
+  }
+}

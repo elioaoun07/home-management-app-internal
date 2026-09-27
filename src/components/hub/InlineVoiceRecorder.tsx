@@ -1,6 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { safeFetch } from "@/lib/safeFetch";
+import { ToastIcons } from "@/lib/toastIcons";
 import { PauseIcon, PlayIcon, SendIcon, Trash2Icon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -160,8 +162,7 @@ export default function InlineVoiceRecorder({
         if (SpeechRecognitionImpl) {
           startSpeechRecognition();
         }
-      } catch (err) {
-        console.error("Error starting recording:", err);
+      } catch {
         toast.error("Could not access microphone");
         onCancel();
       }
@@ -271,9 +272,10 @@ export default function InlineVoiceRecorder({
       formData.append("transcript", transcriptRef.current || "");
       formData.append("duration", recordingTime.toString());
 
-      const res = await fetch("/api/hub/voice-message", {
+      const res = await safeFetch("/api/hub/voice-message", {
         method: "POST",
         body: formData,
+        timeoutMs: 60_000,
       });
 
       if (!res.ok) {
@@ -286,10 +288,29 @@ export default function InlineVoiceRecorder({
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
 
-      toast.success("Voice message sent!");
+      const { message } = (await res.json()) as { message: { id: string } };
+      toast.success("Voice message sent", {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              const undo = await safeFetch("/api/hub/messages", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ messageIds: [message.id] }),
+              });
+              if (!undo.ok) throw new Error("Undo failed");
+              onSent();
+            } catch {
+              toast.error("Undo failed", { icon: ToastIcons.error });
+            }
+          },
+        },
+      });
       onSent();
     } catch (err) {
-      console.error("Send error:", err);
       toast.error(
         err instanceof Error ? err.message : "Failed to send voice message",
       );
@@ -313,20 +334,20 @@ export default function InlineVoiceRecorder({
       )}
 
       {/* Recording controls */}
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         {/* Cancel button */}
         <button
           type="button"
           onClick={handleCancel}
           disabled={isSending}
-          className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors disabled:opacity-50"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white/70 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-50"
           title="Cancel"
         >
           <Trash2Icon className="w-5 h-5" />
         </button>
 
         {/* Recording indicator and waveform area */}
-        <div className="flex-1 flex items-center gap-3 px-4 py-2 rounded-xl bg-white/5 border border-white/10">
+        <div className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3">
           {/* Recording dot */}
           <div
             className={cn(
@@ -336,12 +357,12 @@ export default function InlineVoiceRecorder({
           />
 
           {/* Timer */}
-          <span className="text-sm font-medium text-white/80 tabular-nums w-12">
+          <span className="w-10 shrink-0 tabular-nums text-sm font-medium text-white/80">
             {formatTime(recordingTime)}
           </span>
 
           {/* Waveform visualization */}
-          <div className="flex-1 flex items-center justify-center gap-0.5 h-6 overflow-hidden">
+          <div className="flex h-6 min-w-0 flex-1 items-center justify-center gap-0.5 overflow-hidden">
             {Array.from({ length: 24 }).map((_, i) => (
               <div
                 key={i}
@@ -364,7 +385,7 @@ export default function InlineVoiceRecorder({
             type="button"
             onClick={togglePause}
             disabled={isSending}
-            className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors disabled:opacity-50"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/70 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-50"
             title={isPaused ? "Resume" : "Pause"}
           >
             {isPaused ? (
@@ -380,18 +401,14 @@ export default function InlineVoiceRecorder({
           type="button"
           onClick={handleSend}
           disabled={isSending || recordingTime < 1}
-          className="p-2.5 rounded-full text-white transition-all disabled:opacity-50"
-          style={{
-            background: themeColor
-              ? `linear-gradient(135deg, ${themeColor}, ${themeColor}dd)`
-              : "linear-gradient(135deg, #22c55e, #16a34a)",
-          }}
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-500 text-white transition-colors hover:brightness-110 disabled:opacity-50"
+          style={themeColor ? { backgroundColor: themeColor } : undefined}
           title="Send"
         >
           {isSending ? (
-            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white" />
           ) : (
-            <SendIcon className="w-5 h-5" />
+            <SendIcon className="h-6 w-6" />
           )}
         </button>
       </div>

@@ -6,7 +6,7 @@ import { useTab } from "@/contexts/TabContext";
 import { useViewMode } from "@/hooks/useViewMode";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 // Lazy load non-default tabs for faster initial load
 // MobileExpenseForm is the default start page, so it's loaded eagerly
@@ -53,9 +53,16 @@ const WALLET_TRANSFER_SHORTCUTS = new Set([
 
 export default function TabContainer() {
   const { viewMode } = useViewMode();
-  const { activeTab, isHydrated } = useTab();
+  const { activeTab, isHydrated, setActiveTab } = useTab();
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // HUB-78 — an ERA handoff (`?era=<messageId>`) always lands on the expense
+  // form, whichever tab was last open.
+  const eraHandoffId = searchParams.get("era");
+  useEffect(() => {
+    if (eraHandoffId) setActiveTab("expense");
+  }, [eraHandoffId, setActiveTab]);
   const [dismissedShortcutKey, setDismissedShortcutKey] = useState<
     string | null
   >(null);

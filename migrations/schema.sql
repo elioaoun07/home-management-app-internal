@@ -1532,6 +1532,26 @@ CREATE TABLE public.era_templates (
   CONSTRAINT era_templates_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT era_templates_unique_pattern UNIQUE (user_id, capability_id, pattern_text)
 );
+CREATE TABLE public.era_lexicon (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  kind text NOT NULL CHECK (kind = ANY (ARRAY['alias'::text, 'default'::text, 'example'::text])),
+  capability text NOT NULL,
+  phrase text,
+  slot text,
+  conditions jsonb NOT NULL DEFAULT '{}'::jsonb,
+  value jsonb NOT NULL DEFAULT '{}'::jsonb,
+  depends_on uuid[] NOT NULL DEFAULT '{}'::uuid[],
+  source_message_id uuid,
+  use_count integer NOT NULL DEFAULT 0 CHECK (use_count >= 0),
+  last_used_at timestamp with time zone,
+  revoked_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT era_lexicon_pkey PRIMARY KEY (id),
+  CONSTRAINT era_lexicon_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE,
+  CONSTRAINT era_lexicon_source_message_id_fkey FOREIGN KEY (source_message_id) REFERENCES public.era_messages(id) ON DELETE SET NULL
+);
 CREATE TABLE public.item_alert_suppressions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   item_id uuid NOT NULL,
@@ -2065,3 +2085,18 @@ ALTER TABLE public.activity_log_sources ENABLE ROW LEVEL SECURITY;
 -- access checks. No per-row parent-join RLS on the ledger or source child tables.
 REVOKE ALL ON public.household_activity, public.activity_log_sources FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON SEQUENCE public.household_activity_sequence_seq FROM PUBLIC, anon, authenticated;
+
+-- ===========================================================================
+-- ERA LEXICON (2026-09-27_era-lexicon.sql, HUB-80)
+-- ===========================================================================
+CREATE INDEX IF NOT EXISTS era_lexicon_user_capability_idx
+  ON public.era_lexicon (user_id, capability)
+  WHERE revoked_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS era_lexicon_live_default_uidx
+  ON public.era_lexicon (user_id, capability, slot, conditions)
+  WHERE kind = 'default' AND revoked_at IS NULL;
+ALTER TABLE public.era_lexicon ENABLE ROW LEVEL SECURITY;
+CREATE POLICY era_lexicon_self ON public.era_lexicon
+  FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);

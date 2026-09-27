@@ -28,6 +28,7 @@ interface RouteCase {
   readonly reason?: "ambiguous" | "weak";
   readonly face?: FaceKey;
   readonly amount?: number;
+  readonly currency?: string;
   readonly scope?: "self" | "partner" | "household";
   readonly categoryHint?: RegExp;
   readonly dish?: string;
@@ -105,10 +106,11 @@ const CASES: readonly RouteCase[] = [
   },
   // ── Budget — cross-face fallback (active is NOT budget) ───────────────────
   {
-    name: "cross-face: strong budget noun switches to budget",
+    // HUB-79 — a balance question is now answered, not just a face switch.
+    name: "cross-face: balance question reads the balance",
     text: "show my account balance",
     active: "schedule",
-    kind: "switchFace",
+    kind: "balanceRead",
     face: "budget",
   },
 
@@ -592,6 +594,53 @@ const CASES: readonly RouteCase[] = [
     amount: 50,
   },
 
+  // ── HUB-75 — household amount notation through the shared extractor ─────
+  {
+    name: "HUB-75: suffix dollar sign before 'on' (`12$`)",
+    text: "spent 12$ on coffee",
+    active: "budget",
+    kind: "draftTransaction",
+    amount: 12,
+    currency: "USD",
+  },
+  {
+    name: "HUB-75: sentence-final suffix dollar (`300$`)",
+    text: "paid 300$",
+    active: "budget",
+    kind: "draftTransaction",
+    amount: 300,
+  },
+  {
+    name: "HUB-75: verbless marked capture on Budget (`coffee 4$`)",
+    text: "coffee 4$",
+    active: "budget",
+    kind: "draftTransaction",
+    amount: 4,
+  },
+  {
+    name: "HUB-75: `500k lbp` reads as 500,000 native LBP",
+    text: "500k lbp groceries",
+    active: "budget",
+    kind: "draftTransaction",
+    amount: 500000,
+    currency: "LBP",
+  },
+  {
+    name: "HUB-75: suffix dollar reaches Budget from another face",
+    text: "spent 12$ on coffee",
+    active: "schedule",
+    kind: "draftTransaction",
+    amount: 12,
+  },
+  {
+    name: "HUB-75: transfer with `k` shorthand",
+    text: "move 500k lbp from drawer to wallet",
+    active: "budget",
+    kind: "transfer",
+    amount: 500000,
+    currency: "LBP",
+  },
+
   // ── HUB-35 coverage pass — Chef: consolidated recipe patterns ─────────────
   {
     name: "'show me a recipe for X' — unanchored RECIPE_FOR_RE",
@@ -666,6 +715,9 @@ describe("rootIntentRouter", () => {
       if (expected.amount !== undefined) {
         expect(intent).toMatchObject({ amount: expected.amount });
       }
+      if (expected.currency !== undefined) {
+        expect(intent).toMatchObject({ currency: expected.currency });
+      }
       if (expected.scope !== undefined) {
         expect(intent).toMatchObject({ scope: expected.scope });
       }
@@ -706,6 +758,84 @@ describe("rootIntentRouter", () => {
     const intent = rootIntentRouter.parse("spent 2 hours studying");
     expect(intent.kind).not.toBe("draftTransaction");
     expect(intent).not.toHaveProperty("amount");
+  });
+
+  // HUB-78 — engine pilot grammar.
+  it.each([
+    ["I took 300$ from Drawer", "budget", { kind: "transfer", amount: 300, fromHint: "Drawer" }],
+    ["put 200 in savings", "budget", { kind: "transfer", amount: 200, toHint: "savings" }],
+    ["add 5 eggs to the shopping list", "budget", { kind: "addShopping" }],
+    ["add milk and eggs to the shopping list", "chef", { kind: "addShopping", items: ["Milk", "Eggs"] }],
+    ["we're out of olive oil", "schedule", { kind: "addShopping", items: ["Olive oil"] }],
+    ["move the dentist to Friday", "schedule", { kind: "reminderReschedule", itemId: null, targetHint: "the dentist" }],
+    ["done with laundry", "schedule", { kind: "reminderComplete", itemId: null, targetHint: "laundry" }],
+    ["delete water", "schedule", { kind: "reminderDelete", itemId: null, targetHint: "water" }],
+    ["taxi 250k", "budget", { kind: "draftTransaction", amount: 250000 }],
+    ["Gaz yaris 38", "budget", { kind: "draftTransaction", amount: 38 }],
+    ["15$ pharmacy folic acid vitamin d muscerol", "budget", { kind: "draftTransaction", amount: 15 }],
+    ["Hello ERA", "budget", { kind: "greeting" }],
+    ["Cordon bleu", "chef", { kind: "recipeSearch", dish: "Cordon bleu" }],
+  ] as const)("HUB-78: %s [active=%s]", (text, active, expected) => {
+    useEraStore.setState({ activeFaceKey: active });
+    expect(rootIntentRouter.parse(text)).toMatchObject(expected);
+  });
+
+  it.each([
+    ["Nudge it to 7pm!", "7pm"],
+    ["Postpone the reminder to 6pm.", "6pm"],
+  ])("HUB-78: pronoun follow-up %s reschedules the focus item", (text, when) => {
+    useEraStore.setState({ activeFaceKey: "schedule" });
+    useEraStore.getState().pushFocusEntity({ id: "rem-test", type: "reminder", title: "Test", addedAt: Date.now() });
+    expect(rootIntentRouter.parse(text)).toMatchObject({ kind: "reminderReschedule", itemId: "rem-test", whenText: when });
+  });
+
+  it.each([
+    ["room 12", "budget"],
+    ["7awwel 100$ men el drawer 3al wallet", "budget"],
+    ["I took 300$ from Drawer", "budget"],
+  ])("HUB-78: %s never drafts a spend", (text, active) => {
+    useEraStore.setState({ activeFaceKey: active as "budget" });
+    expect(rootIntentRouter.parse(text).kind).not.toBe("draftTransaction");
+  });
+
+  // HUB-76 — speech-act gate: none of these may produce a write intent.
+  it.each([
+    ["Don't transfer $300 from Drawer to Wallet", "budget", "negated", "transfer"],
+    ["What if I transfer $300 from Drawer to Wallet?", "budget", "hypothetical", "transfer"],
+    ["If I paid 50 for gas", "budget", "conditional", "draftTransaction"],
+    ["Rita said she spent 20$", "budget", "reported", "draftTransaction"],
+    ["don't delete it", "schedule", "negated", undefined],
+  ] as const)("HUB-76: %s [active=%s] → clarify(%s), no write", (text, active, act, blocked) => {
+    useEraStore.setState({ activeFaceKey: active });
+    const intent = rootIntentRouter.parse(text);
+    expect(intent.kind).toBe("clarify");
+    expect(intent).toMatchObject({ reason: "speechAct", act });
+    if (blocked) expect(intent).toMatchObject({ blocked });
+  });
+
+  it.each([
+    ["Transfer $300 from Drawer to Wallet", "budget", "transfer"],
+    ["don't forget to call mom tomorrow at 5pm", "schedule", "draftReminder"],
+    ["can you remind me to call mom tomorrow at 5pm?", "schedule", "draftReminder"],
+    ["remind me to check if the oven is off at 9pm", "schedule", "draftReminder"],
+    ["how much did I spend this month?", "budget", "monthSpend"],
+  ] as const)("HUB-76: plain command or read passes: %s", (text, active, kind) => {
+    useEraStore.setState({ activeFaceKey: active });
+    expect(rootIntentRouter.parse(text).kind).toBe(kind);
+  });
+
+  it.each([
+    ["spent 2 hours studying", "budget"],
+    ["I bought 2 shirts", "budget"],
+    ["rent is 500$", "budget"],
+    ["coffee 4$", "schedule"],
+    ["is 50$ too much for shoes?", "budget"],
+    // HUB-77 Gym: verbless capture must not swallow a transfer or a correction.
+    ["I took 300$ from Drawer", "budget"],
+    ["make it 20$ instead", "budget"],
+  ] as const)("HUB-75: %s [active=%s] creates no draft", (text, active) => {
+    useEraStore.setState({ activeFaceKey: active });
+    expect(rootIntentRouter.parse(text).kind).not.toBe("draftTransaction");
   });
 
   it("REGRESSION: a weak money word does not confidently switch faces", () => {
@@ -874,13 +1004,13 @@ describe("rootIntentRouter — Stage 4 taught-phrase matching (Layer 2)", () => 
       {
         id: "tpl-1",
         capabilityId: "reminder.reschedule",
-        patternText: "nudge it to {whenText}",
+        patternText: "shunt it to {whenText}",
         slotNames: ["whenText"],
         enabled: true,
       },
     ]);
 
-    const intent = rootIntentRouter.parse("nudge it to 5pm");
+    const intent = rootIntentRouter.parse("shunt it to 5pm");
     expect(intent).toMatchObject({
       kind: "capabilityAction",
       face: "schedule",
@@ -895,13 +1025,13 @@ describe("rootIntentRouter — Stage 4 taught-phrase matching (Layer 2)", () => 
       {
         id: "tpl-1",
         capabilityId: "reminder.reschedule",
-        patternText: "nudge it to {whenText}",
+        patternText: "shunt it to {whenText}",
         slotNames: ["whenText"],
         enabled: true,
       },
     ]);
     // No focus entity pushed — nothing to resolve "it" against.
-    const intent = rootIntentRouter.parse("nudge it to 5pm");
+    const intent = rootIntentRouter.parse("shunt it to 5pm");
     expect(intent.kind).toBe("unknown");
   });
 
@@ -916,12 +1046,12 @@ describe("rootIntentRouter — Stage 4 taught-phrase matching (Layer 2)", () => 
       {
         id: "tpl-1",
         capabilityId: "reminder.reschedule",
-        patternText: "nudge it to {whenText}",
+        patternText: "shunt it to {whenText}",
         slotNames: ["whenText"],
         enabled: false,
       },
     ]);
-    expect(rootIntentRouter.parse("nudge it to 5pm").kind).toBe("unknown");
+    expect(rootIntentRouter.parse("shunt it to 5pm").kind).toBe("unknown");
   });
 
   it("a confident built-in match wins even when a template would also match", () => {
@@ -975,13 +1105,13 @@ describe("rootIntentRouter — Stage 4 taught-phrase matching (Layer 2)", () => 
       {
         id: "tpl-1",
         capabilityId: "reminder.reschedule",
-        patternText: "nudge {target} to {whenText}",
+        patternText: "shunt {target} to {whenText}",
         slotNames: ["target", "whenText"],
         enabled: true,
       },
     ]);
 
-    const intent = rootIntentRouter.parse("nudge the dentist reminder to 5pm");
+    const intent = rootIntentRouter.parse("shunt the dentist reminder to 5pm");
     expect(intent).toMatchObject({
       kind: "capabilityAction",
       capabilityId: "reminder.reschedule",
@@ -1007,13 +1137,13 @@ describe("rootIntentRouter — Stage 4 taught-phrase matching (Layer 2)", () => 
       {
         id: "tpl-1",
         capabilityId: "reminder.reschedule",
-        patternText: "nudge {title} to {whenText}",
+        patternText: "shunt {title} to {whenText}",
         slotNames: ["title", "whenText"],
         enabled: true,
       },
     ]);
 
-    const intent = rootIntentRouter.parse("nudge the dentist reminder to 5pm");
+    const intent = rootIntentRouter.parse("shunt the dentist reminder to 5pm");
     expect(intent).toMatchObject({
       kind: "capabilityAction",
       slots: { itemId: "dentist-id" },

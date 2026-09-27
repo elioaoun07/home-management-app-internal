@@ -33,6 +33,8 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟠 **BUD-85** `POST /api/recurring-payments/[id]/mark-covered` advances `next_due_date` on every call with no duplicate guard, so a repeated or replayed cover skips a real period (recurrence-safety: exactly-once coverage). Found 2026-09-27 while building ERA's "mark rent as paid" (HUB-79). Evidence: the route recomputes `advanceRecurringPastDate` from the current `next_due_date` each time and never checks whether this transaction already covered it. ERA works around it by re-checking the snapshot on tap; the Recurring page has no guard. Fix: key coverage on (payment, period) or reject a transaction already linked.
+
 🟠 **BUD-32** Verify deleted-row recognition and restore choice. See [acceptance](<#bud-32>) for the root cause, evidence and gate.
 
 🟠 **BUD-67** Verify statement and default-income deployment. See [acceptance](<#bud-67>) for the root cause, evidence and gate.
@@ -60,6 +62,14 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### BUD-85
+
+**Outcome:** Covering a recurring payment advances it exactly once per period, however many times the cover is sent.
+
+- **Acceptance:** `mark-covered` refuses (or no-ops) a transaction that already covers the payment, and a second call for the same period does not advance `next_due_date` again. Undo still restores both dates.
+- **Evidence:** 2026-09-27 source read during HUB-79 — the route recomputes the next due date from the current one on every call.
+- **Reading guide:** `src/app/api/recurring-payments/[id]/mark-covered/route.ts`, `src/features/recurring/commitments.ts` (`advanceRecurringPastDate`), `src/features/recurring/useRecurringPayments.ts` (Undo). Follow `recurrence-safety` and `money-rules`; test "cover the same period twice".
 
 All open items include [item execution plans](<../_Conventions.md#9-item-execution-plans>). Read only the chosen ID and its prerequisites. These are unreviewed implementation references; the checklist remains the sole queue and owner evidence remains separate.
 

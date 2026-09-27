@@ -19,8 +19,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import type { AskAIResult } from "@/lib/ai/eraAskProposal";
 import { safeFetch } from "@/lib/safeFetch";
+import { ToastIcons } from "@/lib/toastIcons";
+import { toast } from "sonner";
 import { getCapability } from "./capabilities/registry";
-import { logEraCapabilityAction, logEraNfcReminder } from "./logEraAction";
+import {
+  logEraAction,
+  logEraCapabilityAction,
+  logEraNfcReminder,
+} from "./logEraAction";
+import { executeNativeAction } from "./nativeActions";
 import { eraKeys } from "./queryKeys";
 import { learnTemplateFromProposal, shouldLearnFrom } from "./templates/learn";
 import type { EraActiveProposal } from "./types";
@@ -30,6 +37,8 @@ import {
   useEraMessages,
 } from "./useEraConversation";
 import { useEraStore } from "./useEraStore";
+
+const TEMPLATES_FROZEN = true;
 
 export function useEraAskAI() {
   const activeFaceKey = useEraStore((s) => s.activeFaceKey);
@@ -96,7 +105,9 @@ export function useEraAskAI() {
         // reminder so the server can resolve a "FOCUS" sentinel in a
         // propose_action proposal (see eraAskProposal.ts). `useEraStore`
         // already keeps this pruned/de-duped/newest-first.
-        const focusEntity = focusEntities[0] ?? null;
+        // HUB-84 — focus now holds every result type; the model's
+        // "current focus reminder" must be the most recent REMINDER.
+        const focusEntity = focusEntities.find((e) => e.type === "reminder") ?? null;
 
         const res = await safeFetch("/api/era/ask", {
           method: "POST",
@@ -105,7 +116,8 @@ export function useEraAskAI() {
             message: question,
             face: activeFaceKey,
             history,
-            pendingReminderTitle: pendingTurn?.title,
+            pendingReminderTitle:
+              pendingTurn?.kind === "draftReminder" ? pendingTurn.title : undefined,
             focusEntity,
             auto,
           }),
@@ -178,8 +190,65 @@ export function useEraAskAI() {
     if (!proposal) return;
     setActiveProposal(null);
 
+    // HUB-78 — a handoff card's only action opens the prefilled form.
+    if (proposal.kind === "handoff") {
+      proposal.open();
+      return;
+    }
+
     const conversationId = activeConversation?.id ?? null;
     let replyText: string;
+
+    // HUB-76 — a native router write held behind its tier. Executes through
+    // the native resolvers (never a template, never Ask AI's catalog); the
+    // receipt carries Undo only where an inverse exists.
+    if (proposal.kind === "native_action") {
+      const { action } = proposal;
+      try {
+        const result = await executeNativeAction(action, queryClient);
+        replyText = result.text;
+        if (result.outcome === "done") {
+          if (action.type === "capability") {
+            logEraCapabilityAction(action.capabilityId, result.metadata, queryClient);
+          } else if (action.type === "reminderSeries" || action.type === "reminderOccurrence" || action.type === "reminderSkip") {
+            logEraCapabilityAction("reminder.reschedule", result.metadata, queryClient);
+          } else if (action.type === "recurringCover" || action.type === "shoppingGroupCreate" || action.type === "shoppingRemove") {
+            // Activity log has no recurring entity type yet; the Recurring page shows it.
+          } else {
+            logEraAction(action.type, result.metadata, queryClient);
+          }
+          const undo = result.undo;
+          if (undo) {
+            toast.success(proposal.text, {
+              icon: ToastIcons.success,
+              duration: 4000,
+              action: {
+                label: "Undo",
+                onClick: async () => {
+                  const ok = await undo().catch(() => false);
+                  if (ok) toast.success("Undone", { icon: ToastIcons.success });
+                  else toast.error("Couldn't undo");
+                },
+              },
+            });
+          }
+        }
+      } catch {
+        replyText = "That didn't go through — try it from the app directly.";
+      }
+
+      setEraReply(replyText);
+      if (conversationId) {
+        void createMessage
+          .mutateAsync({
+            conversation_id: conversationId,
+            role: "assistant",
+            content: replyText,
+          })
+          .catch(() => {});
+      }
+      return;
+    }
 
     if (proposal.kind === "propose_action") {
       // Stage 3 (HUB-29) — slots were already validated + entity-resolved
@@ -204,7 +273,12 @@ export function useEraAskAI() {
         // text, not throwing, so `result.ok` is the only reliable success
         // signal) teaches nothing either — a phrasing that didn't actually
         // work must never get memorized as if it did.
-        const learned = shouldLearnFrom(result)
+        // HUB-80 — templates are FROZEN: no new era_templates rows. Existing
+        // templates still match (HUB-64 safety intact); learning moves to the
+        // household lexicon (era_lexicon).
+        const learned = TEMPLATES_FROZEN
+          ? null
+          : shouldLearnFrom(result)
           ? learnTemplateFromProposal(
               proposal.sourceText,
               proposal.slots,

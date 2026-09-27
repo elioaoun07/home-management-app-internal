@@ -115,6 +115,15 @@ const CLARIFY_WEAK = [
   "Close, but I don't want to guess. Say it a little more directly and I'll handle it.",
 ] as const;
 
+/** HUB-76 — a negated write ("don't transfer…"): acknowledge, do nothing. */
+const SPEECH_ACT_NEGATED = ["Okay.", "Got it.", "Okay — nothing done."] as const;
+
+/** HUB-76 — hypothetical / question / conditional / reported write. */
+const SPEECH_ACT_HOLD = [
+  "Say it as a request and I'll do it.",
+  "Nothing done. Say it as a request if you want it.",
+] as const;
+
 export function formatReply(intent: Intent): string {
   switch (intent.kind) {
     case "switchFace":
@@ -147,6 +156,11 @@ export function formatReply(intent: Intent): string {
       return greeting();
 
     case "clarify":
+      if (intent.reason === "speechAct") {
+        return intent.act === "negated"
+          ? pick(SPEECH_ACT_NEGATED)
+          : pick(SPEECH_ACT_HOLD);
+      }
       return intent.reason === "ambiguous"
         ? pick(CLARIFY_AMBIGUOUS)
         : pick(CLARIFY_WEAK);
@@ -170,5 +184,29 @@ export function formatReply(intent: Intent): string {
       return pick(SAVING_MEMORY);
     case "memoryRecall":
       return pick(RECALLING_MEMORY);
+    // HUB-78 — resolved by their own resolvers; these are fallbacks only.
+    case "slotAnswer":
+      return "Okay.";
+    case "addShopping":
+      return "Adding that.";
+    case "captureIncome":
+    case "splitExpense":
+    case "balanceRead":
+    case "coverRecurring":
+      return "One moment.";
+    case "reminderSkip":
+      return "One moment.";
+    case "navigate":
+      return intent.label;
+    case "forgetRule":
+      return "Forgotten.";
+    case "defineAlias":
+    case "amendLast":
+      return "One moment.";
+    case "activityRead":
+    case "futurePurchasesRead":
+      return "One moment.";
+    case "timeNow":
+      return new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   }
 }

@@ -21,7 +21,7 @@ tags: []
 - **Sub-components**:
   - `src/components/hub/AddTransactionFromMessageModal.tsx` — single-message → transaction
   - `src/components/hub/AddReminderFromMessageModal.tsx` — single-message → reminder/event
-  - `src/components/hub/BulkConvertReviewSheet.tsx` — multi-select "Multi-add" review sheet (transactions or schedule items, confirm-or-draft per row)
+  - `src/components/hub/BulkConvertReviewSheet.tsx` — selected-message review sheet (transactions or schedule items, confirm-or-draft per row)
   - `src/components/items/DraftRemindersDrawer.tsx` — review surface for draft reminders (`items.status='draft'`) created via bulk convert
 
 ## Hooks
@@ -52,7 +52,7 @@ tags: []
 ## What it links to
 
 - Thread → full-screen conversation (same route, internal state — not a sub-route)
-- Long-press a message → action menu → **Add as Transaction** / **Add as Reminder** / **Multi-add…** (enters bulk-select mode)
+- Long-press a message → action menu → **Add as Transaction** / **Add as Reminder** / **Select messages** / **Delete**. Selection offers **Add all** where eligible and **Delete all**; deletion asks **for me** or **for everyone** (own messages only).
 - Converted/drafted messages are hidden in-thread (existing `hasAnyAction` filter) once a message-action is linked
 
 ## Related vault doc
@@ -71,6 +71,8 @@ tags: []
 
 - **Full-screen in-thread**: the global `ConditionalHeader`/`MobileNav` hide while a thread is open (via `chatFullscreenStore`), since the thread is internal `HubPage` state, not its own route. Thread list keeps the standard header.
 - **Edge-swipe back**: a left-edge touch drag (armed only when the gesture starts within ~30px of the left edge) animates the thread out and returns to the thread list — thread → list only, disabled during selection mode or with a sheet/modal open.
-- **Bulk convert ("Multi-add")**: long-press → Multi-add enters selection mode; "Select all" auto-checks only numeric rows for budget threads (`parseMessageForTransaction`), all eligible rows for reminder threads (`parseSmartText`). The review sheet (`BulkConvertReviewSheet`) prefills each row and routes it to a full record or a draft based on a per-row Confirm toggle (budget rows are also forced to draft if future-dated). One account applies to the whole batch for budget rows (not per-row).
+- **Message selection**: long-press → Select messages checks the starting row. The fixed header has a separate full-width selection toolbar so actions remain visible on a phone. Select all checks visible messages; Add all is enabled only if every selected row can be converted. The review sheet (`BulkConvertReviewSheet`) prefills each row and routes it to a full record or a draft based on a per-row Confirm toggle (budget rows are also forced to draft if future-dated). One account applies to the whole batch for budget rows (not per-row). Delete all opens a scope choice and offers Undo.
+- **Mobile header**: Back, thread title, Search and Chat options stay in the top row. Filters, voice mode, appearance and sync live in the opaque Chat options panel.
+- **Mobile composer**: color tag, flexible input, and one large mic/send action fit the phone width. The mic becomes Send when text is entered; voice recording uses the same button sizing.
 - **Draft schedule items**: reminders created unconfirmed get `items.status='draft'` (never `'event'` — `event_details` requires non-null start/end). They never auto-create push alerts (suppressed in `useCreateReminder`/`useCreateEvent`/`useCreateTask` while `status==='draft'`) and are excluded from the normal schedule/reminder lists. Reviewed via the amber "Draft Reminders" pill in `ItemsDashboard.tsx`'s header (mirrors the transaction Drafts pill in `AccountBalance.tsx`) → confirm sets `status:'pending'`, delete removes it.
 - Bulk-convert save has a one-tap Undo (toast, 4s) that deletes the created message-actions and the underlying records (transaction/draft/item) and invalidates every affected query.

@@ -1,16 +1,9 @@
 "use client";
 
-import { CANCEL_WORDS, SLEEP_WORDS, classifyIntent, type Intent } from "./intentClassifier";
+import { CANCEL_WORDS, NO_WORDS, SLEEP_WORDS, YES_WORDS } from "./controlWords";
 import { createAzureSTT, type AzureSTTCapture as STTCapture } from "./azureSTT";
 import { createTTSQueue, type TTSQueue } from "./ttsQueue";
-import {
-  CANCEL_ACK,
-  confirmTemplate,
-  DIG_DEEPER_PROMPT,
-  getWakeGreeting,
-  SLEEP_ACK,
-  successTemplate,
-} from "./speechTemplates";
+import { CANCEL_ACK, DIG_DEEPER_PROMPT, getWakeGreeting, SLEEP_ACK } from "./speechTemplates";
 import { getCachedGreeting } from "./greetingCache";
 import { getAudioContext } from "./audioContext";
 
@@ -43,25 +36,23 @@ export interface ConversationHandlers {
    * useEraTurn already auto-escalates a language-gap miss and sets
    * `aiHandled: true`, so this only still offers for a capability gap).
    */
-  runTurn?: (text: string) => Promise<{ reply: string; kind: string; aiHandled?: boolean }>;
+  runTurn?: (text: string) => Promise<{ reply: string; kind: string; aiHandled?: boolean; awaitingConfirm?: boolean }>;
   /**
    * Stage C2 — ERA's registry-aware "Ask AI" (`useEraAskAI.askAI`), wired
    * only on the ERA engine instance (EraShell) alongside `runTurn`. When
-   * present, the spoken "yes, dig deeper" confirmation calls THIS instead of
-   * `invokeAI`'s `/api/ai-chat/stream` fetch below — so a voice escalation
-   * can propose a real action and learn a taught template (HUB-30) exactly
-   * like a typed one, instead of only ever getting prose back. Absent on the
-   * legacy HubPage/`/chat` engine instance, which has no capability registry
-   * to propose against — `invokeAI` stays that instance's only path.
+   * present, the spoken "yes, dig deeper" confirmation calls THIS — the same
+   * registry-aware Ask AI a typed tap uses. HUB-82: wired on every engine
+   * instance (ERA and Hub); the old `/api/ai-chat/stream` voice path is gone.
    */
   askAI?: (text: string) => Promise<string>;
-  /** Legacy native action callbacks — implement these in HubPage to write to DB */
-  onLogExpense?: (intent: Extract<Intent, { kind: "log_expense" }>) => Promise<void>;
-  onSetReminder?: (intent: Extract<Intent, { kind: "set_reminder" }>) => Promise<void>;
-  onAddToShopping?: (intent: Extract<Intent, { kind: "add_to_shopping" }>) => Promise<void>;
-  onQueryBalance?: () => Promise<string>;
-  onQueryItems?: (filter: "today" | "overdue" | "open") => Promise<string>;
-  /** Fetch available categories for intent classification */
+  /**
+   * HUB-82 — the turn left a confirm card (money, delete): a spoken "yes"
+   * confirms it, "no" dismisses. `confirmProposal` resolves to the reply to
+   * speak. Wired on every engine instance next to `runTurn`.
+   */
+  confirmProposal?: () => Promise<string>;
+  dismissProposal?: () => void;
+  /** Category names used only as STT phrase hints. */
   getCategories?: () => Array<{ id: string; name: string; parent_id?: string | null; subcategories?: Array<{ id: string; name: string }> }>;
   /** Session ID for AI message logging */
   sessionId?: string;
@@ -73,8 +64,6 @@ interface EngineConfig {
   continuationWindowMs?: number;
   /** Ms to wait for yes/no confirmation before treating as "no". Default 5000. */
   confirmationTimeoutMs?: number;
-  /** High confidence threshold — auto-execute above this. Default 0.85. */
-  highConfidenceThreshold?: number;
   /** User's first name — personalizes the wake greeting. */
   userName?: string;
   /**
@@ -84,9 +73,6 @@ interface EngineConfig {
    */
   onWake?: (source: "speech" | "trigger") => void;
 }
-
-/** Confidence below which we ask "want me to dig deeper?" rather than confirm. */
-const AI_FALLBACK_THRESHOLD = 0.50;
 
 /**
  * Wake phrase pattern. Accepts: "ERA", "Hey ERA", "Hi ERA", "Hello ERA", "OK ERA".
@@ -117,7 +103,6 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
     handlers,
     continuationWindowMs = 12_000,
     confirmationTimeoutMs = 5_000,
-    highConfidenceThreshold = 0.85,
     userName,
     onWake,
   } = config;
@@ -127,11 +112,8 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
   let tts: TTSQueue | null = null;
   let continuationTimer: ReturnType<typeof setTimeout> | null = null;
   let confirmationTimer: ReturnType<typeof setTimeout> | null = null;
-  let pendingIntent: Intent | null = null;
-  let pendingConfirmIsDigDeeper = false;
-  /** Set only by the unified runTurn path (see handleUnifiedTurn) — the
-   *  legacy path still carries its dig-deeper transcript on pendingIntent. */
-  let pendingDigDeeperTranscript: string | null = null;
+  /** What a spoken yes/no answers: a dig-deeper offer or a confirm card. */
+  let pendingConfirm: { kind: "digDeeper"; transcript: string } | { kind: "proposal" } | null = null;
   let isStopped = false;
 
   function setState(s: ConversationState) {
@@ -205,8 +187,7 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
     stt?.abort();
     stt = null;
     tts?.stop();
-    pendingIntent = null;
-    pendingDigDeeperTranscript = null;
+    pendingConfirm = null;
     onWake?.(source);
     setState("listening");
 
@@ -250,15 +231,24 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
   async function handleUnifiedTurn(transcript: string) {
     setState("executing");
     try {
-      const { reply, kind, aiHandled } = await handlers.runTurn!(transcript);
+      const { reply, kind, aiHandled, awaitingConfirm } = await handlers.runTurn!(transcript);
 
       // Stage C — a language-gap miss was already auto-escalated by
       // useEraTurn; `reply` is the AI's real answer, so just speak it below
       // instead of offering an escalation that already happened.
       if (kind === "unknown" && !aiHandled) {
-        pendingDigDeeperTranscript = transcript;
-        pendingConfirmIsDigDeeper = true;
+        pendingConfirm = { kind: "digDeeper", transcript };
         speak(DIG_DEEPER_PROMPT, () => {
+          setState("confirming");
+          startConfirmationTimer();
+        });
+        return;
+      }
+
+      // HUB-82 — a confirm card is up: read it out, then take yes/no.
+      if (awaitingConfirm && handlers.confirmProposal) {
+        pendingConfirm = { kind: "proposal" };
+        speak(reply, () => {
           setState("confirming");
           startConfirmationTimer();
         });
@@ -280,63 +270,11 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
   }
 
   /**
-   * Legacy path (HubPage/`/chat` only — see `runTurn` on ConversationHandlers).
-   * Only claims success for an intent whose handler actually exists and ran;
-   * previously every kind spoke `successTemplate` unconditionally, so an
-   * intent with no wired handler (e.g. ERA Hub before this fix) reported
-   * "Added $25 to Fuel" having written nothing.
-   */
-  async function executeNativeIntent(intent: Intent) {
-    setState("executing");
-    try {
-      let handled = false;
-
-      if (intent.kind === "log_expense" && handlers.onLogExpense) {
-        await handlers.onLogExpense(intent);
-        handled = true;
-      } else if (intent.kind === "set_reminder" && handlers.onSetReminder) {
-        await handlers.onSetReminder(intent);
-        handled = true;
-      } else if (intent.kind === "add_to_shopping" && handlers.onAddToShopping) {
-        await handlers.onAddToShopping(intent);
-        handled = true;
-      } else if (intent.kind === "query_balance" && handlers.onQueryBalance) {
-        const result = await handlers.onQueryBalance();
-        if (result) {
-          speak(result, () => { setState("listening"); startListeningSTT(); armContinuationWindow(); });
-          return;
-        }
-      } else if (intent.kind === "query_items" && handlers.onQueryItems) {
-        const result = await handlers.onQueryItems(intent.filter);
-        if (result) {
-          speak(result, () => { setState("listening"); startListeningSTT(); armContinuationWindow(); });
-          return;
-        }
-      }
-
-      const confirmation = handled
-        ? successTemplate(intent)
-        : "I can't do that from here. Try it from the app.";
-      speak(confirmation, () => {
-        setState("listening");
-        startListeningSTT();
-        armContinuationWindow();
-      });
-    } catch {
-      speak("Something went wrong. Try again.", () => {
-        setState("listening");
-        startListeningSTT();
-        armContinuationWindow();
-      });
-    }
-  }
-
-  /**
    * Stage C2 — the ERA engine instance's dig-deeper path (a capability-gap
    * miss; a language-gap one never reaches here — see handleUnifiedTurn).
    * Calls the SAME `useEraAskAI.askAI` a typed "Ask AI" tap uses, so a voice
    * escalation can render a real proposal and learn a taught template
-   * (HUB-30) instead of only ever getting prose back from `/api/ai-chat/stream`.
+   * (HUB-30) instead of only ever getting prose back.
    * Not streamed (askAI awaits one JSON response) — the visual state and
    * error handling otherwise mirror `invokeAI` below.
    */
@@ -350,75 +288,6 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
         armContinuationWindow();
       });
     } catch {
-      speak("I couldn't reach the AI right now.", () => {
-        setState("listening");
-        startListeningSTT();
-        armContinuationWindow();
-      });
-    }
-  }
-
-  async function invokeAI(transcript: string) {
-    setState("ai_streaming");
-    tts = createTTSQueue({
-      onDone: () => {
-        if (isStopped) return;
-        setState("listening");
-        startListeningSTT();
-        armContinuationWindow();
-      },
-    });
-
-    try {
-      const response = await fetch("/api/ai-chat/stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: transcript,
-          sessionId: handlers.sessionId,
-          chatHistory: [],
-        }),
-        signal: AbortSignal.timeout(60_000),
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error("AI stream unavailable");
-      }
-
-      setState("speaking");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n\n");
-        buf = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const event = JSON.parse(line.slice(6)) as { type: string; text?: string; error?: string };
-            if (event.type === "chunk" && event.text) tts?.push(event.text);
-            if (event.type === "done") tts?.flush();
-            if (event.type === "error") {
-              tts?.stop();
-              speak("I couldn't reach the AI. Try again.", () => {
-                setState("listening");
-                startListeningSTT();
-                armContinuationWindow();
-              });
-              return;
-            }
-          } catch {
-            // ignore malformed event
-          }
-        }
-      }
-      tts?.flush();
-    } catch {
-      tts?.stop();
       speak("I couldn't reach the AI right now.", () => {
         setState("listening");
         startListeningSTT();
@@ -443,43 +312,33 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
 
     clearTimers();
 
-    // If in CONFIRMING state, interpret new speech as yes/no answer
-    if (state === "confirming" && pendingIntent) {
+    // CONFIRMING: the next utterance answers the open yes/no.
+    if (state === "confirming" && pendingConfirm) {
       // Wake phrase escapes confirmation — user is re-addressing ERA
       if (WAKE_PATTERN.test(transcript.trim())) {
         activateListening("speech");
         return;
       }
       const lower = transcript.toLowerCase().trim();
-      const isYes = /^(yes|yeah|yep|sure|do it|go ahead|confirm|ok|okay|correct|right)\b/i.test(lower);
-      const isNo = /^(no|nope|never mind|cancel|don'?t|stop)\b/i.test(lower);
-
-      if (isYes) {
-        if (pendingConfirmIsDigDeeper) {
-          const t =
-            pendingDigDeeperTranscript ??
-            (pendingIntent as Extract<Intent, { kind: "unknown" }> | null)?.transcript ??
-            "";
-          pendingIntent = null;
-          pendingDigDeeperTranscript = null;
-          // Stage C2 — the ERA engine instance has a registry-aware Ask AI;
-          // use it so this can propose/learn instead of only ever prose.
-          if (handlers.askAI) {
-            invokeEraAskAI(t);
-          } else {
-            invokeAI(t);
-          }
-        } else if (pendingIntent) {
-          const intent = pendingIntent;
-          pendingIntent = null;
-          executeNativeIntent(intent);
+      const open = pendingConfirm;
+      if (YES_WORDS.test(lower)) {
+        pendingConfirm = null;
+        if (open.kind === "proposal") {
+          void confirmProposalByVoice();
+        } else if (handlers.askAI) {
+          invokeEraAskAI(open.transcript);
+        } else {
+          speak("I can't dig deeper here.", () => {
+            setState("listening");
+            startListeningSTT();
+            armContinuationWindow();
+          });
         }
         return;
       }
-
-      if (isNo) {
-        pendingIntent = null;
-        pendingDigDeeperTranscript = null;
+      if (NO_WORDS.test(lower)) {
+        pendingConfirm = null;
+        if (open.kind === "proposal") handlers.dismissProposal?.();
         speak(CANCEL_ACK, () => {
           setState("listening");
           startListeningSTT();
@@ -487,15 +346,15 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
         });
         return;
       }
-      // Not a clear yes/no — treat as new utterance
+      // Not a clear yes/no — treat as a new utterance (the card stays up).
+      pendingConfirm = null;
     }
 
     setState("classifying");
     tts?.stop(); // Barge-in: stop TTS the moment we start classifying
 
-    // Cancel/sleep are voice-session control, not household actions — check
-    // them ahead of BOTH the unified and legacy paths so the two never
-    // disagree on what ends a turn (see CANCEL_WORDS/SLEEP_WORDS export note).
+    // Cancel/sleep are voice-session control, not household actions — never
+    // sent to the ERA router (see controlWords.ts).
     const lower = transcript.toLowerCase().trim();
     if (CANCEL_WORDS.test(lower)) {
       speak(CANCEL_ACK, () => {
@@ -515,45 +374,34 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
       return;
     }
 
-    // ------------------------------------------------------------------
-    // Legacy path — used only where `runTurn` isn't wired up (HubPage/`/chat`).
-    // ------------------------------------------------------------------
-    const categories = handlers.getCategories?.() ?? [];
-    const intent = classifyIntent(transcript, categories);
+    speak("Voice isn't connected to ERA here.", () => {
+      setState("listening");
+      startListeningSTT();
+      armContinuationWindow();
+    });
+  }
 
-    if (intent.confidence >= highConfidenceThreshold) {
-      executeNativeIntent(intent);
-      return;
+  async function confirmProposalByVoice() {
+    setState("executing");
+    try {
+      const reply = await handlers.confirmProposal!();
+      speak(reply || "Done.", () => {
+        setState("listening");
+        startListeningSTT();
+        armContinuationWindow();
+      });
+    } catch {
+      speak("That didn't go through.", () => {
+        setState("listening");
+        startListeningSTT();
+        armContinuationWindow();
+      });
     }
-
-    if (intent.confidence >= AI_FALLBACK_THRESHOLD) {
-      pendingIntent = intent;
-      pendingConfirmIsDigDeeper = false;
-      const question = confirmTemplate(intent);
-      setState("confirming");
-      speak(question, () => { startConfirmationTimer(); });
-      return;
-    }
-
-    if (intent.kind === "unknown") {
-      pendingIntent = intent;
-      pendingConfirmIsDigDeeper = true;
-      setState("confirming");
-      speak(DIG_DEEPER_PROMPT, () => { startConfirmationTimer(); });
-      return;
-    }
-
-    pendingIntent = intent;
-    pendingConfirmIsDigDeeper = false;
-    const question = confirmTemplate(intent);
-    setState("confirming");
-    speak(question, () => { startConfirmationTimer(); });
   }
 
   function startConfirmationTimer() {
     confirmationTimer = setTimeout(() => {
-      pendingIntent = null;
-      pendingDigDeeperTranscript = null;
+      pendingConfirm = null;
       setState("listening");
       startListeningSTT();
       armContinuationWindow();

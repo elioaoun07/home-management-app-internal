@@ -13,6 +13,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getFace } from "@/features/era/faceRegistry";
 import { useEraAskAI } from "@/features/era/useEraAskAI";
+import { saveLexiconRule } from "@/features/era/useEraLexicon";
 import {
   useActiveEraConversation,
   useEraMessages,
@@ -33,6 +34,7 @@ import { ChefDashboard } from "./dashboards/ChefDashboard";
 import { BrainDashboard } from "./dashboards/BrainDashboard";
 import { ArtifactsView } from "./dashboards/ArtifactsView";
 import { CommandBar } from "./CommandBar";
+import { EraAskChips } from "./EraAskChips";
 import { EraChatDrawer } from "./EraChatDrawer";
 import { EraDots } from "./EraDots";
 import { EraFaceNav } from "./EraFaceNav";
@@ -93,7 +95,7 @@ export function EraShell() {
   // so a voice dig-deeper escalation goes through the same registry-aware
   // path a typed "Ask AI" tap does (EraProposalCard renders whatever
   // proposal either one produces, via the shared store).
-  const { askAI } = useEraAskAI();
+  const { askAI, confirmProposal, dismissProposal } = useEraAskAI();
 
   const firstName = user?.name?.split(" ")[0] ?? "";
   const setVoiceReplyEnabled = useEraStore((s) => s.setVoiceReplyEnabled);
@@ -135,8 +137,15 @@ export function EraShell() {
       // prompt (Stage C already auto-escalated a language-gap miss).
       runTurn: async (text) => {
         const { reply, intent, aiHandled } = await runTurn(text);
-        return { reply, kind: intent.kind, aiHandled };
+        // HUB-82 — a confirm card is up: voice takes yes/no for it.
+        const awaitingConfirm = useEraStore.getState().activeProposal?.kind === "native_action";
+        return { reply, kind: intent.kind, aiHandled, awaitingConfirm };
       },
+      confirmProposal: async () => {
+        await confirmProposal();
+        return useEraStore.getState().eraReply;
+      },
+      dismissProposal,
       // Stage C2 — the capability-gap dig-deeper path; skipUserMessage
       // because runTurn already persisted this transcript as a user turn.
       askAI: (text) => askAI(text, { skipUserMessage: true }),
@@ -357,6 +366,7 @@ export function EraShell() {
           action awaiting confirmation, not a chat surface. */}
       <AnimatePresence>
         {isAwake && <EraProposalCard key="era-proposal" />}
+        {isAwake && <EraAskChips key="era-ask-chips" />}
       </AnimatePresence>
 
       {/* ── Floating command bar — same gating as the thread above ── */}
@@ -502,9 +512,25 @@ export function EraThreadTranscript({
 // yet; Confirm performs the real writes (POST /api/items, POST
 // .../prerequisites), Dismiss just clears it. Renders only while
 // `activeProposal` is set — the manual-handoff pattern's one shipped kind.
-function EraProposalCard() {
+//
+// `embedded` renders it inside the mobile EraChatDrawer, which sits above the
+// shell (z-50) and would otherwise hide the floating card entirely.
+export function EraProposalCard({
+  variant = "floating",
+}: {
+  variant?: "floating" | "embedded";
+}) {
   const { activeProposal, confirmProposal, dismissProposal } = useEraAskAI();
+  // HUB-80 — "Always" (plan §5: ☐ Always beside Confirm). Only offered when
+  // the same choice was made before; saving happens on Confirm, never alone.
+  const [always, setAlways] = useState(false);
   if (!activeProposal) return null;
+  const offer = activeProposal.kind === "native_action" ? activeProposal.offerAlways : undefined;
+  const confirm = () => {
+    if (offer && always) void saveLexiconRule({ kind: "default", ...offer });
+    setAlways(false);
+    void confirmProposal();
+  };
 
   return (
     <motion.div
@@ -512,7 +538,11 @@ function EraProposalCard() {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 8 }}
       transition={{ duration: 0.24, ease: "easeOut" }}
-      className="absolute inset-x-0 z-25 flex justify-center px-5 bottom-[148px] md:bottom-[76px]"
+      className={
+        variant === "embedded"
+          ? "flex justify-center px-3 pb-2"
+          : "absolute inset-x-0 z-25 flex justify-center px-5 bottom-[148px] md:bottom-[76px]"
+      }
     >
       <div
         className="flex w-full max-w-[560px] flex-col gap-3 rounded-2xl px-4 py-3"
@@ -524,7 +554,40 @@ function EraProposalCard() {
         <p className="text-[13px] leading-relaxed" style={{ color: "var(--era-accent)" }}>
           {activeProposal.text}
         </p>
-        <div className="flex justify-end gap-2">
+        {activeProposal.kind === "handoff" ? (
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={dismissProposal}
+              className="rounded-full px-3 py-1.5 text-xs text-white/60 transition-opacity hover:opacity-80"
+            >
+              Dismiss
+            </button>
+            <button
+              type="button"
+              onClick={confirmProposal}
+              className="rounded-full px-3 py-1.5 text-xs font-medium"
+              style={{ background: "var(--era-accent, white)", color: "#0d1220" }}
+            >
+              Open
+            </button>
+          </div>
+        ) : (
+        <div className="flex items-center justify-end gap-2">
+          {offer && (
+            <button
+              type="button"
+              aria-pressed={always}
+              onClick={() => setAlways((v) => !v)}
+              className="mr-auto rounded-full border px-3 py-1.5 text-xs transition-opacity hover:opacity-80"
+              style={{
+                borderColor: "var(--era-border-subtle, rgba(255,255,255,0.2))",
+                color: always ? "var(--era-accent)" : "rgba(255,255,255,0.6)",
+              }}
+            >
+              {always ? "✓ Always" : "Always"}
+            </button>
+          )}
           <button
             type="button"
             onClick={dismissProposal}
@@ -534,7 +597,7 @@ function EraProposalCard() {
           </button>
           <button
             type="button"
-            onClick={confirmProposal}
+            onClick={confirm}
             className="rounded-full px-3 py-1.5 text-xs font-medium"
             style={{
               background: "var(--era-accent, white)",
@@ -544,6 +607,7 @@ function EraProposalCard() {
             Confirm
           </button>
         </div>
+        )}
       </div>
     </motion.div>
   );

@@ -8,6 +8,7 @@ export const eraKeys = {
   messages: (conversationId: string | null) =>
     [...eraKeys.all, "messages", conversationId ?? "none"] as const,
   templates: () => [...eraKeys.all, "templates"] as const,
+  lexicon: () => [...eraKeys.all, "lexicon"] as const,
   widgets: {
     schedule: () => [...(["era"] as const), "widget", "schedule"] as const,
     budget: () => [...(["era"] as const), "widget", "budget"] as const,

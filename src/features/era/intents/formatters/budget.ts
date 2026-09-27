@@ -308,12 +308,25 @@ const DRAFT_OFFLINE = [
 ] as const;
 
 export function formatDraftTransactionError(
-  reason: "no-account" | "no-amount" | "request-failed" | "offline",
+  reason:
+    | "no-account"
+    | "no-currency-account"
+    | "currency-unclear"
+    | "no-amount"
+    | "request-failed"
+    | "offline"
+    | "uncertain",
   message?: string,
 ): string {
   switch (reason) {
+    case "uncertain":
+      return message ?? "Not sure it saved. Check Drafts.";
     case "no-account":
       return pick(DRAFT_NO_ACCOUNT);
+    // HUB-75 — honest limits from currency routing; the hook's message is the reply.
+    case "no-currency-account":
+    case "currency-unclear":
+      return message ?? pick(DRAFT_NO_ACCOUNT);
     case "no-amount":
       return pick(DRAFT_NO_AMOUNT);
     case "offline":
@@ -338,14 +351,21 @@ const TRANSFER_DONE = [
   "Done — {amount} from {from} into {to}.",
 ] as const;
 
+/** HUB-75 — native-currency amount: "$300" or "500,000 LBP". */
+export function moneyIn(amount: number, currency?: string | null): string {
+  if (!currency || currency === "USD") return money(amount);
+  return `${amount.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${currency}`;
+}
+
 export function formatTransferCreated(data: {
   amount: number;
+  currency?: string;
   fromName: string;
   toName: string;
 }): string {
   return say(TRANSFER_DONE, {
     ack: pick(ACK_DONE),
-    amount: money(data.amount),
+    amount: moneyIn(data.amount, data.currency),
     from: data.fromName,
     to: data.toName,
   });
@@ -367,16 +387,44 @@ const TRANSFER_ACCOUNT_NOT_FOUND = [
   "No account named anything like \"{hint}\" — have a look in Accounts.",
 ] as const;
 
+/**
+ * HUB-76 — confirm-card line (Hard Rule #28: minimum words). Plan §5:
+ * "Drawer → Wallet · $300".
+ */
+export function formatTransferProposal(data: {
+  amount: number;
+  currency?: string;
+  fromName: string;
+  toName: string;
+}): string {
+  return `${data.fromName} → ${data.toName} · ${moneyIn(data.amount, data.currency)}`;
+}
+
+/** HUB-76 — a POST that timed out after leaving the device. Never retried. */
+export function formatMoneyUncertain(what: "transfer" | "debt"): string {
+  return what === "transfer"
+    ? "Not sure that transfer went through. Check Transfers before retrying."
+    : "Not sure that debt saved. Check Debts before retrying.";
+}
+
 const TRANSFER_SAME_ACCOUNT = [
   "That's the same account twice — I need two different ones.",
   "Both of those matched the same account. Pick two different ones.",
 ] as const;
 
 export function formatTransferError(
-  reason: "no-amount" | "no-accounts" | "same-account" | "account-not-found" | "request-failed",
+  reason:
+    | "no-amount"
+    | "no-accounts"
+    | "same-account"
+    | "account-not-found"
+    | "currency-mismatch"
+    | "request-failed",
   detail?: string,
 ): string {
   switch (reason) {
+    case "currency-mismatch":
+      return "Different currencies — use Transfers for that one.";
     case "no-amount":
       return pick(TRANSFER_NO_AMOUNT);
     case "no-accounts":
@@ -412,15 +460,21 @@ export function formatDebtRecorded(data: { debtorName: string; amount: number })
   });
 }
 
+/** HUB-76 — confirm-card line. */
+export function formatDebtProposal(data: { debtorName: string; amount: number }): string {
+  return `${data.debtorName} owes you · ${money(data.amount)}`;
+}
+
 const DEBT_MISSING_FIELDS = [
   'I need who owes you and how much — try "John owes me $30 for lunch".',
   'Missing a name or an amount there. Something like "Sara owes 20" works.',
 ] as const;
 
 export function formatRecordDebtError(
-  reason: "missing-fields" | "request-failed",
+  reason: "missing-fields" | "usd-only" | "request-failed",
   detail?: string,
 ): string {
+  if (reason === "usd-only") return "Debts are in USD only.";
   return reason === "missing-fields"
     ? pick(DEBT_MISSING_FIELDS)
     : errorReply(

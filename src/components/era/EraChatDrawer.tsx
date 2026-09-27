@@ -11,7 +11,8 @@
 import { motion } from "framer-motion";
 import { MessageCircle, X } from "lucide-react";
 import { CommandBar } from "./CommandBar";
-import { EraThreadTranscript } from "./EraShell";
+import { EraAskChips } from "./EraAskChips";
+import { EraProposalCard, EraThreadTranscript } from "./EraShell";
 
 export function EraChatDrawer({
   open,
@@ -89,6 +90,10 @@ export function EraChatDrawer({
         <div className="min-h-[120px] flex-1 overflow-y-auto">
           <EraThreadTranscript variant="embedded" />
         </div>
+
+        {/* HUB-76 — the confirm card must be reachable while this sheet is open. */}
+        {open && <EraProposalCard variant="embedded" />}
+        {open && <EraAskChips variant="embedded" />}
 
         <div className="p-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
           <CommandBar variant="embedded" />

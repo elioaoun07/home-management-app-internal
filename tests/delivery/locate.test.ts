@@ -346,6 +346,6 @@ describe("locate (real repo)", () => {
     // (prompts.mjs READ_WINDOW_BEFORE=40) covers the real site — asserting the
     // exact line would make this test a tripwire for unrelated edits.
     expect(result.hits[0].line).toBeGreaterThan(1000);
-    expect(result.hits[0].line).toBeLessThan(1200);
+    expect(result.hits[0].line).toBeLessThan(1400); // widened 2026-09-27: the chips moved with unrelated additions
   });
 });

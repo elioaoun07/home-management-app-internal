@@ -23,13 +23,29 @@
 // across a tie — same "never guess when ambiguous" rule this file already
 // enforces for the pronoun tier.
 
-export type FocusEntityType = "reminder";
+/**
+ * HUB-84 — every result a follow-up can edit registers here with its type,
+ * not just reminders: "make it under Spinneys" means the shopping item ERA
+ * just added, "no, 15" the draft it just made, "make it 200" the transfer
+ * card on screen. The follow-up's meaning comes from the referent's type.
+ */
+export type FocusEntityType = "reminder" | "shopping" | "draft" | "transfer_card";
 
 export interface FocusEntity {
   id: string;
   type: FocusEntityType;
   title: string;
   addedAt: number;
+  /** Type-specific facts the edit contract needs (ids, previous values). */
+  meta?: Record<string, unknown>;
+}
+
+/** HUB-84 — the most recent live result of ANY type (the referent of a bare "it"). */
+export function mostRecentEntity(
+  entities: readonly FocusEntity[],
+  now: number = Date.now(),
+): FocusEntity | null {
+  return pruneExpired(entities, now)[0] ?? null;
 }
 
 /** Keep at most this many entities, newest first. */

@@ -4,8 +4,6 @@ export { useConversationMode } from "./hooks/useConversationMode";
 export type { UseConversationModeOptions, UseConversationModeResult } from "./hooks/useConversationMode";
 export { ConversationOrb } from "./components/ConversationOrb";
 export { ConversationToggle } from "./components/ConversationToggle";
-export { classifyIntent } from "./intentClassifier";
-export type { Intent } from "./intentClassifier";
 export { isAzureSTTSupported, prewarmAzureSpeech } from "./azureSTT";
 export { prewarmTTSWorklet } from "./azureTTS";
 export { useEraReplyTTS } from "./hooks/useEraReplyTTS";

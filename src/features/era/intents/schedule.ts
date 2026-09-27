@@ -124,6 +124,9 @@ function scheduleDateISO(text: string): string | undefined {
 
 /** Named-target regex match, gated by OTHER_FACE_RE — see its doc comment. */
 function namedMatch(text: string, re: RegExp): RegExpMatchArray | null {
+  // HUB-78 — creation wording always wins over a named follow-up: "remind me
+  // to check if the oven is off" is a new reminder, not "complete 'if the oven…'".
+  if (REMINDER_CREATE_RE.test(text)) return null;
   return OTHER_FACE_RE.test(text) ? null : text.match(re);
 }
 
@@ -182,7 +185,7 @@ export const scheduleRouter: FaceIntentRouter = {
     // Ask AI / clarify handle it rather than guessing.
     const rescheduleMatch =
       text.match(
-        /\b(?:change|move|push|reschedule|shift|postpone|snooze|delay|bump|make)\b[\s\S]*?\b(?:it|that|this(?:\s+one)?)\b\s+(?:back\s+)?to\s+(.+?)[\s.!?]*$/i,
+        /\b(?:change|move|push|reschedule|shift|postpone|snooze|delay|bump|make|nudge)\b[\s\S]*?\b(?:it|that|this(?:\s+one)?|(?:the|my)\s+reminder)\b\s+(?:back\s+)?to\s+(.+?)[\s.!?]*$/i,
       ) ||
       // Elliptical "make it 11" (no "to") — a common idiom for "change it
       // to 11". Deliberately narrow to "make" + pronoun only; "move it 11"
@@ -207,7 +210,7 @@ export const scheduleRouter: FaceIntentRouter = {
     // Named target: "Move dentist reminder to 5" or "Move dentist to 5"
     const namedRescheduleMatch = namedMatch(
       text,
-      /\b(?:change|move|push|reschedule|shift|postpone|snooze|delay|bump)\b\s+(.+?)\b(?:\s+reminder)?\s+(?:back\s+)?to\s+(.+?)[\s.!?]*$/i,
+      /\b(?:change|move|push|reschedule|shift|postpone|snooze|delay|bump|nudge)\b\s+(.+?)\b(?:\s+reminder)?\s+(?:back\s+)?to\s+(.+?)[\s.!?]*$/i,
     );
     if (namedRescheduleMatch) {
       const targetRef = namedRescheduleMatch[1].trim();
@@ -226,8 +229,17 @@ export const scheduleRouter: FaceIntentRouter = {
           rawText: text,
         };
       }
-      // If focus is null, fall through — ambiguous or not found,
-      // let Ask AI / clarify handle it
+      // HUB-78 — not in focus: the resolver looks the name up among the
+      // speaker's reminders and asks only when it is ambiguous.
+      return {
+        kind: "reminderReschedule",
+        face: "schedule",
+        itemId: null,
+        title: null,
+        targetHint: targetRef,
+        whenText: namedRescheduleMatch[2].trim(),
+        rawText: text,
+      };
     }
 
     // Complete: pronouns or named targets
@@ -266,15 +278,48 @@ export const scheduleRouter: FaceIntentRouter = {
         "reminder",
         useEraStore.getState().focusEntities,
       );
-      if (focus) {
-        return {
-          kind: "reminderComplete",
-          face: "schedule",
-          itemId: focus.id,
-          title: focus.title,
-          rawText: text,
-        };
-      }
+      return {
+        kind: "reminderComplete",
+        face: "schedule",
+        itemId: focus?.id ?? null,
+        title: focus?.title ?? null,
+        ...(focus ? {} : { targetHint: targetRef }),
+        rawText: text,
+      };
+    }
+
+    // HUB-78 (owner export) — "done with laundry".
+    const doneWith = namedMatch(text, /^\s*(?:i'?m\s+)?done\s+with\s+(?:the\s+|my\s+)?(.+?)[\s.!?]*$/i);
+    if (doneWith) {
+      const focus = resolveEntityRef(doneWith[1].trim(), "reminder", useEraStore.getState().focusEntities);
+      return {
+        kind: "reminderComplete",
+        face: "schedule",
+        itemId: focus?.id ?? null,
+        title: focus?.title ?? null,
+        ...(focus ? {} : { targetHint: doneWith[1].trim() }),
+        rawText: text,
+      };
+    }
+
+    // HUB-79 — skip the next occurrence: "skip it", "skip gym class this week".
+    const skipMatch = text.match(
+      /^\s*(?:please\s+)?skip\s+(?:the\s+|my\s+)?(.+?)(?:\s+(?:this|next)\s+(?:week|time|one)|\s+(?:today|tomorrow|tonight))?[\s.!?]*$/i,
+    );
+    if (skipMatch && !OTHER_FACE_RE.test(text)) {
+      const ref = skipMatch[1].trim();
+      const pronoun = /^(?:it|that|this(?:\s+one)?)$/i.test(ref);
+      const focus = pronoun
+        ? resolveFocusRef("it", "reminder", useEraStore.getState().focusEntities)
+        : resolveEntityRef(ref, "reminder", useEraStore.getState().focusEntities);
+      return {
+        kind: "reminderSkip",
+        face: "schedule",
+        itemId: focus?.id ?? null,
+        title: focus?.title ?? null,
+        ...(focus || pronoun ? {} : { targetHint: ref }),
+        rawText: text,
+      };
     }
 
     // Delete: pronouns or named targets
@@ -309,15 +354,14 @@ export const scheduleRouter: FaceIntentRouter = {
         "reminder",
         useEraStore.getState().focusEntities,
       );
-      if (focus) {
-        return {
-          kind: "reminderDelete",
-          face: "schedule",
-          itemId: focus.id,
-          title: focus.title,
-          rawText: text,
-        };
-      }
+      return {
+        kind: "reminderDelete",
+        face: "schedule",
+        itemId: focus?.id ?? null,
+        title: focus?.title ?? null,
+        ...(focus ? {} : { targetHint: targetRef }),
+        rawText: text,
+      };
     }
 
     // Reminder draft — explicit creation markers only (see

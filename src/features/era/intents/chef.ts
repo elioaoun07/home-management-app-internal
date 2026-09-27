@@ -1,5 +1,6 @@
 // Per-face intent router — Chef face
 import type { FaceIntentRouter } from "./schedule";
+import { splitShoppingItems } from "./resolvers/shopping";
 
 /**
  * A captured "dish"/target must plausibly be food. The old cook-verb
@@ -52,8 +53,53 @@ const SCHEDULE_DOMAIN_RE =
   /\b(?:reminder|reminders|appointment|appointments|meeting|meetings|dentist|doctor|task|tasks|todo|to-do|alarm|deadline)\b/i;
 
 export const chefRouter: FaceIntentRouter = {
-  parse(text) {
+  parse(text, ctx) {
     const lo = text.toLowerCase();
+
+    // HUB-79 (owner export) — a bare dish name while Chef is open ("Cordon
+    // bleu") is a recipe lookup. Short, no verbs, plausible dish only.
+    if (
+      ctx?.activeFaceKey === "chef" &&
+      /^[\p{L}' -]{2,40}$/u.test(text.trim()) &&
+      text.trim().split(/\s+/).length <= 4 &&
+      !/\b(?:add|put|buy|need|out|what|how|show|list|plan|meal|meals|week|today|tomorrow|shopping|grocery|recipe|recipes|for|cook|make|bake|give|get)\b/i.test(text) &&
+      isPlausibleDish(text.trim())
+    ) {
+      return { kind: "recipeSearch", face: "chef", dish: text.trim(), rawText: text };
+    }
+
+    // HUB-78 — explicit shopping-list additions only (DEC-03 governs
+    // automatic ones): "add milk and eggs to the shopping list", "put bread
+    // on the grocery list", "we're out of olive oil", "add to my grocery
+    // list: salt".
+    const shop =
+      text.match(/\b(?:add|put)\s+(.+?)\s+(?:to|on)\s+(?:the|my|our)?\s*(?:shopping|grocery|groceries)\s+list\b/i)?.[1] ??
+      text.match(/\badd\s+to\s+(?:the|my|our)?\s*(?:shopping|grocery|groceries)\s+list\b[:\s]*(.+)$/i)?.[1] ??
+      text.match(/\bwe(?:'re|\s+are)\s+(?:out\s+of|running\s+low\s+on)\s+(.+?)[.!]*$/i)?.[1];
+    if (shop) {
+      // HUB-84 — "… under Spinneys", "… in the Spinneys group": the group
+      // rides the same field model the follow-up edit uses.
+      const groupMatch =
+        text.match(/\bunder\s+(?:the\s+)?(\S+)\s+group\b/i) ??
+        text.match(/\bin\s+(?:the\s+)?([\w' -]{1,30}?)\s+group\b/i) ??
+        text.match(/\bunder\s+(?:the\s+)?(.+?)(?:\s+group)?(?:\s+(?:list|section))?[.!]*$/i);
+      const groupHint = groupMatch?.[1]?.trim();
+      // Remove only the exact group phrase — never the item that follows it
+      // ("… under spinneys group Salt").
+      const items = splitShoppingItems(groupMatch ? shop.replace(groupMatch[0], " ") : shop);
+      if (items.length > 0) {
+        return { kind: "addShopping", face: "chef", items, ...(groupHint ? { groupHint } : {}), rawText: text };
+      }
+    }
+    // HUB-84 — "add salt under Spinneys" (no "shopping list" words): the
+    // explicit "under" makes it a grouped list add.
+    const underOnly = text.match(/^\s*(?:please\s+)?add\s+(.+?)\s+under\s+(?:the\s+)?(.+?)(?:\s+group)?[.!]*$/i);
+    if (underOnly && !/\$|\d/.test(underOnly[1])) {
+      const items = splitShoppingItems(underOnly[1]);
+      if (items.length > 0) {
+        return { kind: "addShopping", face: "chef", items, groupHint: underOnly[2].trim(), rawText: text };
+      }
+    }
 
     for (const re of [RECIPE_FOR_RE, HOW_TO_RE, COOK_VERB_RE, RECIPE_SEARCH_VERB_RE]) {
       const m = text.match(re);

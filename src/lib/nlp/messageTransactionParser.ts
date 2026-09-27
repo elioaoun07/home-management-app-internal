@@ -1,8 +1,13 @@
 // src/lib/nlp/messageTransactionParser.ts
 // Parse chat messages to extract transaction information
 
+import type { AmountCurrency } from "./amount";
+import { extractAmount } from "./amount";
+
 export interface ParsedMessageTransaction {
   amount: number | null;
+  /** HUB-75 — currency named by an explicit marker ($, lbp, €…); null = unmarked. */
+  currency: AmountCurrency | null;
   categoryId: string | null;
   subcategoryId: string | null;
   categoryName: string | null;
@@ -34,8 +39,11 @@ export function parseMessageForTransaction(
 ): ParsedMessageTransaction {
   const normalized = message.toLowerCase().trim();
 
-  // Extract amount (supports $20, 20$, 20 dollars, 20usd, etc.)
-  const amount = extractAmount(normalized);
+  // HUB-75 — the shared extractor ERA also uses ($20, 20$, 20 dollars,
+  // 500k lbp). A bare number still counts in a budget thread ("20 fuel
+  // today"), since users don't always type a currency.
+  const extracted = extractAmount(normalized, { allowBare: true });
+  const amount = extracted?.value ?? null;
 
   // Extract date (supports today, yesterday, last friday, etc.)
   const date = extractDate(normalized);
@@ -54,6 +62,7 @@ export function parseMessageForTransaction(
 
   return {
     amount,
+    currency: extracted?.currency ?? null,
     categoryId: categoryMatch.categoryId,
     subcategoryId: categoryMatch.subcategoryId,
     categoryName: categoryMatch.categoryName,
@@ -62,41 +71,6 @@ export function parseMessageForTransaction(
     date,
     confidence: calculateConfidence(amount, categoryMatch),
   };
-}
-
-/**
- * Extract amount from message text
- */
-function extractAmount(text: string): number | null {
-  // Patterns: $20, 20$, 20 dollars, 20.50$, 20,50€, etc.
-  const patterns = [
-    /\$\s*(\d+(?:[.,]\d{1,2})?)/i, // $20 or $ 20
-    /(\d+(?:[.,]\d{1,2})?)\s*\$/i, // 20$ or 20 $
-    /(\d+(?:[.,]\d{1,2})?)\s*(?:dollar|dollars|usd|lbp|eur|euro)/i, // 20 dollars
-  ];
-
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match) {
-      const numStr = match[1].replace(",", ".");
-      const num = parseFloat(numStr);
-      if (!isNaN(num) && num > 0) {
-        return num;
-      }
-    }
-  }
-
-  // Fallback: a bare number is good enough in a budget thread — users don't
-  // always type "$" or "dollars" (e.g. "20 fuel today").
-  const bareMatch = text.match(/\b(\d+(?:[.,]\d{1,2})?)\b/);
-  if (bareMatch) {
-    const num = parseFloat(bareMatch[1].replace(",", "."));
-    if (!isNaN(num) && num > 0) {
-      return num;
-    }
-  }
-
-  return null;
 }
 
 /**

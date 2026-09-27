@@ -21,6 +21,7 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 
 ## Next
 
+- [ ] **BUD-85** Make recurring coverage exactly-once per period — [criteria](<Budget — Master Book.md#bud-85>) _(friction - S)_
 - [ ] **BUD-36** Verify historical re-import recovery month by month — [criteria](<Budget — Master Book.md#bud-36>) _(blocker - M)_
 - [ ] **BUD-66** Provide canonical money facts to ERA — [criteria](<Budget — Master Book.md#bud-66>) _(blocker - M)_
 - [ ] **BUD-24** Restore money with exactly-once inverse effects — [criteria](<Budget — Master Book.md#bud-24>) _(friction - M)_

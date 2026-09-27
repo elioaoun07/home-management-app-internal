@@ -17,6 +17,7 @@ tags:
 
 - [[Gemini API Guidelines]]
 - [[Spending Analysis Report]] — strict structured report → markdown chat answer + on-demand dashboard
+- [[ERA Reach Matrix]] — generated per-module reach (navigation / prefill / inline / verified), HUB-81
 
 ## Key Concepts
 

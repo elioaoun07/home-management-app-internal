@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-11
+updated: 2026-09-27
 type: research-register
 status: active
 owner: Elio
@@ -11,6 +11,10 @@ owner: Elio
 [PM home](<../_index.md>) · [Admission rules](<../_Conventions.md#8-studies-plans-and-archive-lifecycle>)
 
 This is the retained option set, not another backlog. No row here authorizes execution. A useful option is admitted by allocating one campaign ID with a bounded outcome, criteria and a priority; then replace its disposition here with that ID. Keep the original evidence and kill criterion. Rejected premises are not open bugs.
+
+## ERA understanding (capability study, Understanding Engine study, counter-review)
+
+**Adopted 2026-09-27** — no longer an option. The owner commissioned a final challenge of all three and a single plan. Rulings, corrections and the Understanding track (U0–U5 → HUB-75–82, DEC-24) now live in [ERA Top Layer §2 and §8](<../Plans/ERA Top Layer.md#2-final-challenge-rulings-on-the-four-sources>). The source studies, including the counter-review appendix and probe evidence, are archived under [_Archive/Studies/ERA Understanding](<../_Archive/Studies/ERA Understanding/ERA Understanding Engine.md>). Kill criteria carried into the plan: a component with no Gym delta, a model-path p50 above 2.5 s, or more than 2 sessions per new capability family after the pilot.
 
 ## Command Center product direction
 

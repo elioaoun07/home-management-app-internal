@@ -1,14 +1,14 @@
 // Schedule resolver — fetches a day's items + overdue via the shared items
 // bundle, and creates real reminders from natural language (draftReminder).
-import { fetchAllOccurrenceActions } from "@/features/items/useItemActions";
+import { fetchAllOccurrenceActions, normalizeToLocalDateString } from "@/features/items/useItemActions";
 import { fetchItems } from "@/features/items/useItems";
 import { safeFetch } from "@/lib/safeFetch";
 import { parseSmartText } from "@/lib/smartTextParser";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatDate, localToISO } from "@/lib/utils/date";
-import { getOccurrencesForDay } from "@/lib/utils/dayOccurrences";
+import { expandOccurrencesInRange, getOccurrencesForDay } from "@/lib/utils/dayOccurrences";
 import type { ItemPriority } from "@/types/items";
-import type { EraPendingTurn } from "../../types";
+import type { EraActiveProposal, EraPendingReminder, EraPendingTurn } from "../../types";
 import {
   formatAskReminderTime,
   formatFocusMissing,
@@ -229,7 +229,7 @@ async function writeReminder(
  * silently discarded or, worse, misread as a fresh unrelated command.
  */
 export async function resolvePendingReminderAnswer(
-  pending: EraPendingTurn,
+  pending: EraPendingReminder,
   answerText: string,
 ): Promise<ResolveResult> {
   const parsed = parseSmartText(answerText);
@@ -287,6 +287,104 @@ function embedOne<T>(value: T | T[] | null | undefined): T | null {
  * date is kept and only the time shifts — "change it to 11" means "same day,
  * new time", not "today at 11".
  */
+/**
+ * Free-text new day/time → ISO. A bare time keeps the reference's date.
+ * "at " lets a bare time ("11", "10 AM") hit parseTime's `at N` pattern;
+ * parseRelativeDate finds date words anywhere in the string regardless.
+ * parseSmartText's type detector can read whenText as an event noun (e.g.
+ * "appointment") and route the parse into start/end fields instead of due.
+ */
+export function whenToISO(whenText: string, referenceISO: string | null): string | null {
+  const parsed = parseSmartText(`at ${whenText}`);
+  const parsedDate = parsed.dueDate ?? parsed.startDate;
+  const parsedTime = parsed.dueTime ?? parsed.startTime;
+  if (parsed.confidence.date > 0 && parsedDate) return localToISO(parsedDate, parsedTime || "12:00");
+  if (parsed.confidence.time > 0 && parsedTime && referenceISO) {
+    return localToISO(formatDate(new Date(referenceISO)), parsedTime);
+  }
+  return null;
+}
+
+/**
+ * HUB-78 — "this one" for a recurring reminder: postpone the NEXT open
+ * occurrence through the same occurrence-action route the app uses
+ * (`POST /api/items/[id]/actions`, action "postpone"), which writes an
+ * occurrence exception and never touches the rule (recurrence-safety).
+ * The occurrence comes from `expandOccurrencesInRange` — the existing
+ * expansion engine, not a new one. Runs only from a confirm card.
+ */
+/** HUB-79 — skip the next open occurrence; same route and engine as postpone. */
+export async function skipNextOccurrence(
+  itemId: string,
+  title: string,
+): Promise<ResolveResult & { outcome: "done" | "failed" | "uncertain" }> {
+  try {
+    const [items, actions] = await Promise.all([
+      fetchItems({ type: "reminder" }),
+      fetchAllOccurrenceActions(),
+    ]);
+    const item = items.find((i) => i.id === itemId);
+    if (!item?.recurrence_rule?.rrule) return { text: `${title} doesn't repeat.`, ok: false, outcome: "failed" };
+    const now = new Date();
+    const horizon = new Date(now.getTime() + 120 * 24 * 60 * 60 * 1000);
+    const next = expandOccurrencesInRange([item], now, horizon, actions).find((o) => !o.isCompleted);
+    if (!next) return { text: `Nothing coming up for ${title}.`, ok: false, outcome: "failed" };
+    const occurrence = normalizeToLocalDateString(next.occurrenceDate);
+    const res = await safeFetch(`/api/items/${itemId}/actions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "skip", occurrence_date: occurrence, is_recurring: true }),
+      timeoutMs: 8_000,
+    });
+    if (!res.ok) return { text: `Couldn't skip ${title}.`, ok: false, outcome: "failed" };
+    return { text: `Skipped · ${title} · ${occurrence}`, metadata: { itemId, title, occurrence }, outcome: "done" };
+  } catch {
+    return { text: `Not sure ${title} was skipped.`, ok: false, outcome: "uncertain" };
+  }
+}
+
+export async function postponeNextOccurrence(
+  itemId: string,
+  title: string,
+  whenText: string,
+): Promise<ResolveResult & { outcome: "done" | "failed" | "uncertain" }> {
+  try {
+    const [items, actions] = await Promise.all([
+      fetchItems({ type: "reminder" }),
+      fetchAllOccurrenceActions(),
+    ]);
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return { text: formatReminderActionError(title, "reschedule"), ok: false, outcome: "failed" };
+    const now = new Date();
+    const horizon = new Date(now.getTime() + 120 * 24 * 60 * 60 * 1000);
+    const next = expandOccurrencesInRange([item], now, horizon, actions).find((o) => !o.isCompleted);
+    if (!next) return { text: formatReminderActionError(title, "reschedule"), ok: false, outcome: "failed" };
+    const postponedTo = whenToISO(whenText, next.occurrenceDate.toISOString());
+    if (!postponedTo) return { text: formatReminderActionError(title, "reschedule"), ok: false, outcome: "failed" };
+
+    const res = await safeFetch(`/api/items/${itemId}/actions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "postpone",
+        occurrence_date: normalizeToLocalDateString(next.occurrenceDate),
+        is_recurring: true,
+        postponed_to: postponedTo,
+        postpone_type: "custom",
+      }),
+      timeoutMs: 8_000,
+    });
+    if (!res.ok) return { text: formatReminderActionError(title, "reschedule"), ok: false, outcome: "failed" };
+    return {
+      text: formatReminderRescheduled({ title, dueAt: postponedTo }),
+      metadata: { itemId, title, dueAt: postponedTo, occurrence: normalizeToLocalDateString(next.occurrenceDate) },
+      outcome: "done",
+    };
+  } catch {
+    return { text: formatReminderActionError(title, "reschedule"), ok: false, outcome: "uncertain" };
+  }
+}
+
 export async function resolveReminderReschedule(
   itemId: string | null,
   title: string | null,
@@ -307,22 +405,8 @@ export async function resolveReminderReschedule(
     // Non-fatal — a full date in whenText still resolves without this.
   }
 
-  // "at " lets a bare time ("11", "10 AM") hit parseTime's `at N` pattern;
-  // parseRelativeDate finds date words anywhere in the string regardless.
-  const parsed = parseSmartText(`at ${whenText}`);
-  // parseSmartText's type detector can read whenText as an event noun (e.g.
-  // "appointment") and route the parse into start*/end* instead of due*.
-  const parsedDate = parsed.dueDate ?? parsed.startDate;
-  const parsedTime = parsed.dueTime ?? parsed.startTime;
-
-  let dueAt: string;
-  if (parsed.confidence.date > 0 && parsedDate) {
-    dueAt = localToISO(parsedDate, parsedTime || "12:00");
-  } else if (parsed.confidence.time > 0 && parsedTime && existingDueAt) {
-    dueAt = localToISO(formatDate(new Date(existingDueAt)), parsedTime);
-  } else {
-    return { text: formatReminderActionError(title, "reschedule"), ok: false };
-  }
+  const dueAt = whenToISO(whenText, existingDueAt);
+  if (!dueAt) return { text: formatReminderActionError(title, "reschedule"), ok: false };
 
   try {
     const res = await safeFetch(`/api/items/${itemId}`, {
@@ -335,7 +419,8 @@ export async function resolveReminderReschedule(
 
     return {
       text: formatReminderRescheduled({ title: title ?? "that reminder", dueAt }),
-      metadata: { itemId, title, dueAt },
+      // HUB-78 — previousDueAt is the demonstrated inverse (Undo re-PATCHes it).
+      metadata: { itemId, title, dueAt, previousDueAt: existingDueAt },
     };
   } catch {
     return { text: formatReminderActionError(title, "reschedule"), ok: false };
@@ -389,6 +474,31 @@ export async function resolveReminderComplete(
   } catch {
     return { text: formatReminderActionError(title, "complete"), ok: false };
   }
+}
+
+/**
+ * HUB-76 — "delete it" / "cancel that" never deletes on the spot: it returns
+ * a confirm card (Plan §5: deletes confirm). The card executes the registry's
+ * `reminder.delete` capability (→ `resolveReminderDelete`) on tap.
+ */
+export function prepareReminderDelete(
+  itemId: string | null,
+  title: string | null,
+  rawText = "",
+  capabilityId = "reminder.delete",
+): ResolveResult & { proposal?: EraActiveProposal } {
+  if (!itemId) return { text: formatFocusMissing("delete"), ok: false };
+  const text = `Delete · ${title ?? "reminder"}`;
+  return {
+    text,
+    metadata: { proposed: "reminderDelete", title },
+    proposal: {
+      kind: "native_action",
+      text,
+      sourceText: rawText,
+      action: { type: "capability", capabilityId, slots: { itemId, ...(title ? { title } : {}) } },
+    },
+  };
 }
 
 /**

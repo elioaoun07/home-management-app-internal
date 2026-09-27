@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-26
+updated: 2026-09-27
 type: master-book
 status: active
 owner: Elio
@@ -22,7 +22,13 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 ## Vision & Decisions
 
+- **HUB-74 — Phone-width chat composer.** Keep the draft field flexible and use one prominent mic/send action; voice recording controls follow the same edge sizing. *(IMPLEMENTED 2026-09-27 — repository; device acceptance pending.)*
+
+- **HUB-73 — Compact chat selection.** Long press starts message selection; the toolbar exposes bulk add and delete, while mobile secondary controls move to Chat options. Deletion asks for viewer scope and keeps Undo. *(IMPLEMENTED 2026-09-27 — repository; device acceptance pending.)*
+
 - **HUB-72 — Household activity.** Owner adopted a standalone, installable `/activity-log` for household source changes on 2026-09-26. Capture in source transactions, with module/feature/person/date filters; partner-private budget entries are hidden entirely. Snapshot audience intersects current source/parent privacy. Existing HUB-25 assistant Artifacts remain separate. *(IMPLEMENTED 2026-09-26 — repository; owner SQL application and device acceptance pending.)*
+
+- **Understanding track — ERA Top Layer revision 2026-09-27.** The owner commissioned a final challenge of the capability study, the Understanding Engine study and its counter-review, and one plan. [Plan §2](<../Plans/ERA Top Layer.md#2-final-challenge-rulings-on-the-four-sources>) records the rulings; phases U0–U5 are HUB-75–82 with evidence gates and session budgets. Decisions U-1–U-7 are resolved there. DEC-24 (model-interpreted one-time reminders as Act + Undo) stays with the owner, and until it is decided they need Confirm. *(DEC-24 decided 2026-09-27 by the owner: keep Confirm.)* *(U0 partial: HUB-75 and HUB-76 IMPLEMENTED 2026-09-27 — repository; device acceptance pending. HUB-77 IMPLEMENTED 2026-09-27 — U-1's model-first condition failed on the owner export, so ERA keeps "model on miss or conflict only"; see [HUB-77](#hub-77). U0 complete except device witnesses.)*
 
 - The accepted Top Layer plan governs the product target; checklists own status. Preserve D1–D18, including the existing ERA layout freeze, personal-first sequencing and the owner’s no-wake-word/no-geofencing exclusions.
 - ERA is the top interface. Chef remains the Kitchen specialist; Brain retains bounded memory; standalone forms are precision tools. Retire floating/Focus surfaces only after the replacement is reachable.
@@ -34,6 +40,16 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+🟠 **HUB-84** A follow-up about something that isn't a reminder was read as a reschedule. Owner screenshot 2026-09-27: "Add salt to my shopping list" → "Added · Salt"; "make it under Spinneys group" → "I'm not sure what \"that\" refers to — what should I reschedule?". Cause: focus memory only held reminders, the "make it …" grammar was fixed to reminder reschedule, and the shopping adapter had no edit contract. Resolved in repository 2026-09-27 (typed focus + per-type edit contracts); device witness in HUB-83.
+
+🔴 **HUB-76** ERA treats negated and hypothetical money sentences as commands. With a reset ERA store, `Don't transfer $300 from Drawer to Wallet` and `What if I transfer $300 from Drawer to Wallet?` produce the same transfer intent as the affirmative command. Cause: the transfer grammar in `src/features/era/intents/budget.ts` (~line 107) matches the substring with no speech-act guard, and the native resolver POSTs `/api/transfers` with no confirm or inline Undo. The same direct-write path applies to native debt record and reminder delete. Evidence: 2026-09-27 counter-review probes (5 isolated probes plus the router suite, 110 tests). No resolver ran and no production transfer occurred. [Reproduction inputs](<../_Archive/Studies/ERA Understanding/ERA Understanding Engine.md#r2--the-proposed-fast-path-needs-speech-act-guards>). Resolved in repository 2026-09-27 (speech-act gate + native confirm card); device witness pending.
+
+🟠 **HUB-74** The chat send action appeared clipped at the right edge on a narrow phone. Owner screenshot on 2026-09-27 shows the input, mic and a sliver of the send control. Source cause: the input lacked `min-w-0` while a second conversation toggle and layered mic/send/fallback buttons occupied the same flex row. Resolved in repository; mobile runtime witness pending.
+
+🟠 **HUB-73** Mobile chat header crowded out the bulk-add control, and long-press deletion split single and bulk paths. Source evidence: `HubPage.tsx` held selection controls beside the title plus search, filter, voice, settings and sync; bulk deletion was limited to shopping/notes selection while Budget/Reminder selection offered add only. Resolved in repository; mobile runtime witness pending.
+
+🟠 **HUB-75** ERA misses amounts written the household's way. `spent 12$ on coffee`, `paid 300$` and `coffee 4$` return clarify, and `500k lbp groceries` is unread. Hub chat's `messageTransactionParser` reads the same `12$` sentences. Cause: `MARKED_AMOUNT_RE` in `src/features/era/intents/budget.ts` ends with `\b`, which needs a word character after `$`/`€`/`£`; the positional fallback then fails because `$` follows the digits. Neither parser supports the `k` thousands shorthand. Evidence: temporary router probe on 2026-09-27, recorded in [archived probe §1.2](<../_Archive/Studies/ERA Understanding/ERA Understanding Engine.md#12-amount-format-two-parsers-disagree-on-the-households-own-notation>). Resolved in repository 2026-09-27 (`src/lib/nlp/amount.ts`); device witness pending.
 
 🟠 **HUB-62** Record current schema and application evidence. See [acceptance](<#hub-62>) for the root cause, evidence and gate.
 
@@ -60,6 +76,210 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### HUB-84
+
+**Outcome:** A follow-up edits the last result, whatever its type.
+
+- **Acceptance:** "make it / put it / change it / under X / no, 15 / to savings instead / call it … / remove it" resolve against the most recent result of any type and apply through that type's edit contract; values resolve against real data (one → apply, several → chips, none → offer to create behind a card); Undo only where demonstrated; money keeps its tier; unsupported types get an honest limit, never a wrong-domain question; the same fields work in the first sentence.
+- **Evidence:** `src/features/era/intents/resolvers/amend.test.ts` (27 cases incl. the owner's sequence and export sentence); Gym pilot 8 follow-up sequences; the old correction gap (`spent 12$` → `no, 15`) is closed, fast path zero wrong money effects.
+- **Reading guide:** `focusMemory.ts`, `intents/followUp.ts`, `intents/index.ts` (`amendLast`), `intents/resolvers/amend.ts`, `resolvers/shopping.ts` (groups), `useEraTurn.ts` (`registerResultFocus`, Undo receipt).
+
+### HUB-83
+
+**Outcome:** The lexicon table exists in production and today's ERA flows are witnessed on both phones.
+
+- **Acceptance (owner):**
+  - Run `migrations/2026-09-27_era-lexicon.sql` in the Supabase SQL Editor and paste its two verify queries' output.
+  - On each phone after deploy: `I took 300$ from Drawer` → chips → Wallet → Confirm → Undo restores; `Don't transfer…` does nothing; `move the dentist to Friday` (a real reminder name); `taxi 250k` → Open → form prefilled; `mark internet as paid` (or a real recurring name); `add milk to the shopping list`; the "Always" toggle after choosing the same destination twice; `Add salt to my shopping list` → `make it under Spinneys` (and Undo); `spent 12$ on coffee` → `no, 15`.
+- **Why an ID:** D12 — applied SQL and device acceptance stay distinct from implementation history.
+
+### HUB-76
+
+**Outcome:** No ERA interpreter moves money or deletes records without the tier its effect requires. Negated and hypothetical sentences never execute.
+
+- **Acceptance:**
+  - A speech-act gate classifies negation, hypothetical/question form, conditional, and quoted or reported speech. None of these can produce a fast-path write.
+  - Native transfer and debt record render the same confirm card as AI proposals, and show Undo after execution.
+  - Native reminder delete requires Confirm.
+  - Router rows cover `Don't transfer $300 from Drawer to Wallet`, `What if I transfer $300 from Drawer to Wallet?`, `If I paid 50 for gas` and `Rita said she spent 20$`.
+- **Money math:** Drawer $1,000 / Wallet $100.
+  - The negated sentence gives no card and no change.
+  - `Transfer $300 from Drawer to Wallet` gives a card. Balances stay $1,000/$100 until the tap, then become $700/$400.
+  - Undo restores $1,000/$100 exactly once.
+  - A timeout after the POST reports `uncertain` and never retries on its own.
+- **Gate:** router suite plus a resolver test with mocked `safeFetch` showing zero POSTs before confirm. `pnpm typecheck` passes.
+- **Reading guide:** `src/features/era/intents/budget.ts` (transfer/debt grammars), `intents/resolvers/budget.ts` (`resolveTransfer`, `resolveRecordDebt`), `intents/resolvers/schedule.ts` (`resolveReminderDelete`), and the `useEraAskAI` confirm card to reuse. Plan: [§5](<../Plans/ERA Top Layer.md#5-effect-policy>). Follow `money-rules`.
+
+### HUB-77
+
+**Outcome:** An ERA Gym measures correct final state, and a recorded three-way routing comparison decides the model's role.
+
+- **Acceptance:**
+  - `tests/era-gym/*.jsonl` sequences carry full context (face, page, turn state, focus, lexicon, clock/timezone, actor) plus the expected final state and tier.
+  - The seed is the 47 synthetic sentences plus the owner's export. It includes the mandatory slices in plan §7: `300$`, `500k`, Arabic/Franco, speech acts, corrections, partner cases, response loss and voice.
+  - A development-time script runs paths A, B and C with a live model at no more than 500 calls per run, records the responses, and replays them in CI.
+  - The report covers correct final state, wrong money effects, questions per task, p50/p95 latency and tokens.
+  - The plan §7 decision rule result is recorded in this book.
+- **Owner export (Hard Rule #26: the owner runs it; read-only):**
+
+  ```sql
+  select u.created_at, u.user_id, u.content as said, u.intent_kind as routed,
+         a.content as replied, a.intent_payload as outcome
+  from public.era_messages u
+  left join lateral (
+    select content, intent_payload from public.era_messages a
+    where a.conversation_id = u.conversation_id and a.role = 'assistant'
+      and a.created_at >= u.created_at
+    order by a.created_at limit 1) a on true
+  where u.role = 'user'
+  order by u.created_at desc limit 500;
+
+  select hm.created_at, hm.sender_user_id, hm.content, ma.action_type
+  from public.hub_message_actions ma
+  join public.hub_messages hm on hm.id = ma.message_id
+  order by hm.created_at desc limit 300;
+  ```
+
+- **Depends:** HUB-37 for CI.
+- **Reading guide:** `src/features/era/intents/rootIntentRouter.test.ts` (fixture style), `src/lib/ai/eraAskProposal.ts`, `src/lib/ai/gemini.ts`. Plan: [§7](<../Plans/ERA Top Layer.md#7-measurement--the-era-gym>).
+- **Status 2026-09-27 — complete; decision recorded (see Final below).**
+  - Built: `tests/era-gym/` — `synthetic.jsonl` (87 full-context cases, 43 held out, all mandatory slices; reconstructed from the study's recorded examples because the original 47 were not retained), `gym.ts` (real router + real pure resolvers against a fake household; effect-level final state), `understand.ts` (path C prototype of plan §4 component 4), `gym.test.ts` (CI replay + release gates), `record.test.ts` (`ERA_GYM_RECORD=1`, ≤500 calls), `recordings/model-responses.json`, `REPORT.md`. CI wiring still rides HUB-37; the replay runs in `pnpm test`.
+  - Live run 2026-09-27, `gemini-3.8-flash`, 51 calls, synthetic corpus only:
+
+    | Path | Correct (all) | Held-out | Wrong money | Questions/task | p50 / p95 ms | Tokens in / out |
+    |---|---|---|---|---|---|---|
+    | A today | 58/87 (66.7%) | 27/43 (62.8%) | 1 | 0.10 | 2721 / 4972 | 7547 / 460 |
+    | B fast path | 53/87 (60.9%) | 25/43 (58.1%) | 1 | 0.11 | – | 0 |
+    | C fast path + model | 70/87 (80.5%) | 35/43 (81.4%) | 2 | 0.09 | 2519 / 4892 | 28166 / 1217 |
+
+  - **Decision rule (plan §7), provisional: keep "model on miss or conflict only".** C − A = +18.6 held-out points (needs ≥ 20); C wrong money = 2 (needs 0: one is the shared HUB-78 correction gap, the other `mark rent as paid` → `reminder.complete` on "rent", caught behind a confirm card); C p50 = 2519 ms (needs ≤ 2500). The verdict holds with or without the shared gap. Per the rule, HUB-79 effort goes to adapters and handoff. Re-run with the owner export before HUB-78 extends past its pilot; the export can change the verdict.
+  - Gym findings fixed the same day: `I took 300$ from Drawer` and `make it 20$ instead` drafted spends (HUB-75's verbless capture, tightened); `paid $2,000 for rent` drafted **$2** (pre-existing: `parseSpeechExpense` split thousands commas — the router read 2000, the draft wrote 2).
+  - **Final 2026-09-27 (owner export ingested).** `migrations/output.md` → `tests/era-gym/household.jsonl` (72 cases: 51 ERA turns, 21 Hub budget conversions; actor from sender id). Re-recorded: 159 cases, 79 held out, 72 live calls in total.
+
+    | Path | Held-out | Wrong money | p50 / p95 ms |
+    |---|---|---|---|
+    | A today | 60/79 (75.9%) | 1 (shared correction gap) | 2800 / 4972 |
+    | B fast path | 58/79 (73.4%) | 1 (same) | – |
+    | C fast path + model | 68/79 (86.1%) | 3 | 2448 / 4277 |
+
+    **Decision recorded: keep "model on miss or conflict only" (U-1 condition not met).** C − A = +10.2 held-out points (needs ≥ 20); C wrong money = 3 — `Elio pay 5 groceries dekken` (Racha's note to Elio) drafted $5, plus `mark rent as paid` → `reminder.complete` and the shared correction gap. Real usage is dominated by what the fast path already reads (reminders, pronoun reschedules, fuel drafts with change, transfers, recipes), so HUB-79 effort goes to fast-path grammar, adapters and handoff. The model stays on misses; re-run the Gym when the prompt, catalog or model changes.
+  - Real-data fast-path misses queued for HUB-79: `Nudge it to 7pm!`, `Postpone the reminder to 6pm.`, `Hello ERA`/`hello yeah`, bare `Cordon bleu` on Chef, a 7-word `15$ pharmacy …` capture, `Gaz yaris 38`, and shopping-add.
+
+### HUB-78
+
+**Outcome:** The shared Understanding engine is proven through three unlike flows. The marginal cost of the next capability is measured.
+
+- **Acceptance:** Plan §4 components 1–9 extend `src/features/era/` and its registry; there is no parallel registry. These flows pass as Gym sequences:
+  - **Transfer:** `I took 300$ from Drawer` → destination chips → Confirm → verified outcome, and a timeout gives `uncertain`.
+  - **Reminder by name:** `move the dentist to Friday` with no focus resolves among authorized items. A recurring item asks *this one / series*. `make it 5 instead` then corrects the same item.
+  - **Handoff:** a spend "Change" and an unresolvable spend open `/expense` prefilled through `?era=<messageId>`, which survives reload. The transfer handoff reuses the existing shortcut.
+  - **Marginal cost:** shopping-add is built on the finished engine, and its hours are recorded.
+- **Budget:** 5 sessions, hard stop at 6. At the checkpoint, record the marginal hours and re-estimate HUB-79–82 in this book. If a new family costs more than 2 sessions, HUB-79 becomes handoff-first.
+- **Depends:** HUB-76; HUB-77's decision rule (routing mode); HUB-47 consumes this outcome contract.
+- **Checkpoint 2026-09-27 — pilot complete in one session (repository; device witness pending).**
+  - Components: turn state = `EraPendingTurn` `slot` kind + chip taps (`EraAskChips`, structured, never re-parsed; non-answers are new requests); speech-act gate (HUB-76); fast path = routers; model on miss only (HUB-77 decision); adapters = resolvers + `nativeActions.ts` + `resolvers/shopping.ts`; effect tiers + `deriveOutcome` in `engine.ts`; outcome persisted on every assistant row; handoff = `era_messages` row + `GET/POST /api/era/messages/[id]` (owner RLS, expiry, append-only consumption) + `useEraHandoff` in the expense form.
+  - Flows (Gym `pilot.jsonl`, 15/15): `I took 300$ from Drawer` → [Wallet][Savings][Other] → Confirm, timeout → uncertain; `move the dentist to Friday` (no focus) → by-name lookup among own reminders, recurring → This one / Series (both Confirm; "this one" writes an occurrence exception through `/api/items/[id]/actions`, rule untouched), `make it 5 instead` → same item; unresolvable spend and draft "Change" → `/expense?era=<id>`; transfer "Other" reuses the `refill-wallet` shortcut.
+  - **Marginal cost:** shopping-add on the finished engine ≈ 0.3 session (adapter ~70 lines, one grammar, tests). Below the 2-session threshold, so HUB-79 stays inline-first.
+  - Re-estimate: HUB-79 ≈ 3 sessions, HUB-80 ≈ 3 (+ owner migration run), HUB-81 ≈ 3, HUB-82 ≈ 2.
+  - Gym after the pilot: fast path B 82.6% held-out (was 73.4%), zero non-gap wrong money effects. Two money bugs caught by the gate before they shipped (`taxi 250k` → $250,000; Franco transfer drafted as spend).
+- **Money math:** as HUB-76.
+- **Reading guide:**
+  - `useEraTurn.ts`, `intents/index.ts`, `capabilities/registry.ts`, `useEraAskAI.ts`, `/api/era/ask/route.ts`
+  - `src/features/transfers/hooks.ts`, `src/components/layouts/TabContainer.tsx:63-70`
+  - items routes, `src/lib/smartTextParser.ts`
+  - Plan: [§4](<../Plans/ERA Top Layer.md#4-architecture--one-pipeline>).
+
+### HUB-79
+
+**Outcome:** ERA reaches every Budget, Schedule and Kitchen operation family, and completes the ten most frequent inline.
+
+- **Acceptance:**
+  - Families are ordered by the HUB-77 export frequency. Every family reaches at least useful prefill, and the top 10 complete inline through source-owned adapters.
+  - It delivers the chat side of HUB-22 (debt settle; recurring covered, which separates *link existing* from *create then link*) and HUB-6 (split), whose acceptance stays with their IDs.
+  - Skip and pause go through Schedule's occurrence contract (`recurrence-safety`).
+  - Shopping and pantry additions happen only on an explicit request; DEC-03 governs automatic ones.
+  - Every money family carries a `money-rules` worked example and a test.
+  - Production AI caps change only through HUB-44.
+- **Gate:**
+  - held-out correctness at least 75% (only if route C was adopted)
+  - zero wrong money effects
+  - reach matrix recorded
+- **Depends:** HUB-78; HUB-44 for cap changes.
+- **Status 2026-09-27 — most families done; two blocked.**
+  - Done (repository): top-10 by export frequency complete inline; plus `spend.day` (today / yesterday / this week), `balance.read`, `time.now`, `reminder.skip` (occurrence exception, Confirm), `recurring.cover` (links an existing transaction behind a re-checked Confirm card with Undo; no match → `/expense` prefilled), income → `/expense` on the default income account and split → `/expense` with the Split toggle on (owner decisions 2026-09-27), long amount-first captures, bare trailing amounts on Budget, greetings, bare dish names on Chef. Gate: zero non-gap wrong money effects; reach matrix recorded (`ERA Reach Matrix.md`); the 75% gate does not apply (route C not adopted).
+  - Blocked: debt settle waits on BUD-68 (debt reads mutate); pantry/stock reads wait on KIT-1/KIT-2; recurring **add** from chat not built. Found BUD-85 (mark-covered advances on every call).
+
+### HUB-80
+
+**Outcome:** ERA learns household aliases and defaults through a semantic lexicon that re-binds every turn, replacing phrase templates.
+
+- **Acceptance:**
+  - Migration and storage:
+    - A `migrations/YYYY-MM-DD_era-lexicon.sql` file creates `era_lexicon` with its RLS policy in the same file (Hard Rules #24/#27). `schema.sql` reflects the end state. The owner runs the migration.
+    - Templates are frozen (no new rows) and then converted only where their meaning can be recovered. The rest stay as evidence.
+    - HUB-64's criteria still pass.
+  - Rule kinds and learning:
+    - Supported rule kinds: aliases, conditional defaults and corrected examples.
+    - The cache stores interpretations and re-binds actor, focus, clock, permissions and defaults.
+    - Always/Forget work, and a repeated choice offers "Always" once.
+    - A correction is an example, not permission for a default.
+  - Scope and invalidation:
+    - The partner never inherits a person's rules.
+    - Account deletion, access loss or household unlink invalidates dependent rules.
+- **Gate:** sequence cases first try → correction → Always → paraphrase → override → forget. Zero repeated questions after Always, and zero partner-default misuse.
+- **Depends:** HUB-78, HUB-47, HUB-64.
+- **Status 2026-09-27 — implemented in the repository; owner migration pending (HUB-83).** `migrations/2026-09-27_era-lexicon.sql` (+ `schema.sql`) creates `era_lexicon` with owner-only RLS. `/api/era/lexicon` (GET/POST/DELETE-as-revoke; 503 until the table exists), `useEraLexicon` mirror, pure rules in `lexicon.ts` re-bound to current accounts every turn. Kinds: alias ("the box means Drawer"), default (the card's "Always", offered only after a repeated choice), example (every chip choice — evidence, never a default). "Forget that" revokes the last applied rule. A default fills the slot but the result is still a Confirm card. Templates frozen (no new rows; existing ones still match, HUB-64 intact). Gate test `lexicon.test.ts`: first try → choice → repeat → Always → paraphrase (no question) → override → forget; partner and deleted-account rules are inert.
+
+### HUB-81
+
+**Outcome:** Every Feature Index module is reachable from ERA, and two named cross-module workflows report per-step outcomes.
+
+- **Acceptance:**
+  - A reach matrix (navigation, useful prefill, inline, verified final state) is generated from the registry.
+  - Every module reaches at least navigation, and at least useful prefill where a form exists.
+  - Reads cover Trips, Healthcare (after HLTH-25), Catalogue (HUB-69), Chores, NFC history, Activity and Future Purchases.
+  - Workflows:
+    - Meal + shopping: unknown stock stays unknown and partial results are reported honestly. Depends on KIT-1/KIT-2 contracts.
+    - Trip departure preparation: depends on TRIP-1–3 and DEC-04.
+  - Page context acts as a ranking signal only.
+- **Gate:** held-out correctness at least 90%.
+- **Depends:** HUB-79.
+- **Status 2026-09-27 — navigation floor reached; reads and workflows partly blocked.** `src/features/era/reach.ts` is the registry; `reach.test.ts` checks every Feature Index module has a row and regenerates the vault `ERA Reach Matrix.md`. Every owner-facing module reaches navigation through "open X" (explicit) or implicit doors from real usage (Outfits, Trips, wishlist, meds, chores, pantry); Guest Portal and Sync & Offline are n/a with reasons. New reads: household activity (needs HUB-72's SQL) and future purchases. Blocked: Trips reads (TRIP-1–3), Healthcare (HLTH-25), Catalogue search (HUB-69 ← KIT-20/22), meal+shopping workflow (KIT-1/2), trip departure workflow (TRIP-1–3, DEC-04). Page-context ranking not built (ERA runs from `/era`; faces already rank). The 90% gate is for route C, not adopted.
+
+### HUB-82
+
+**Outcome:** One interpretation path serves typed, voice and Hub message input.
+
+- **Acceptance:**
+  - Voice turns (HUB-16) and Hub message conversion route through the engine.
+  - The legacy voice `intentClassifier` is removed after parity, keeping greeting variants (D10/D16).
+  - `/api/ai-chat` retires after HUB-48 parity.
+  - `vocab.ts`/`missTracking.ts` are replaced by outcome telemetry.
+  - A grep verification shows a single router.
+- **Depends:** HUB-78, HUB-16, HUB-48.
+- **Status 2026-09-27 — voice unified; two paths left.** Typed ERA, ERA voice and Hub `/chat` voice now share `runTurn` (one router, one set of resolvers, model on misses via `/api/era/ask`); `intentClassifier.ts`, the five Hub voice callbacks and the voice `/api/ai-chat/stream` path are deleted; spoken yes/no answers a confirm card. Grep (2026-09-27): zero `intentClassifier`/`classifyIntent` references. Left: Hub long-press conversion prefill still categorizes through `messageTransactionParser` (kept — the partner's daily Hub captures; unify only with evidence), the floating `/api/ai-chat` assistant (HUB-48), and `vocab.ts`/`missTracking.ts` still gate escalation (outcome telemetry is now recorded on every turn but not yet the gate).
+
+### HUB-75
+
+**Outcome:** ERA reads suffix-currency and `k`-thousands amounts through one shared amount extractor.
+
+- **Acceptance:** `spent 12$ on coffee`, `paid 300$` and `coffee 4$` parse to 12/300/4 on every face that reaches the budget router. `500k lbp groceries` gives 500,000 LBP, stored under the LBP-in-thousands preference rule *(corrected 2026-09-27: accounts store native amounts, so it is 500000 on an LBP account; the thousands rule covers only the exchange rate and LBP-change field)*. `spent 2 hours studying` and `I bought 2 shirts` still create no draft. ERA and Hub chat share one extractor instead of two regex copies.
+- **Money math:** parsing only. Account $100 plus `spent 12$ on coffee` gives one $12 expense draft, and the balance stays $100 until the draft is confirmed.
+- **Gate:** existing `rootIntentRouter.test.ts` and `messageTransactionParser` tests pass, with added rows for `12$`, `300$`, `4$`, `500k lbp` and the non-money counterexamples.
+- **Reading guide:** `src/features/era/intents/budget.ts` (`MARKED_AMOUNT_RE`, `extractAmount`) and `src/lib/nlp/messageTransactionParser.ts` (`extractAmount`). Confirm the LBP storage convention in the Preferences vault doc before scaling `k`.
+
+### HUB-74
+
+- At 320–390 px, the color control, message field and 48px action remain on screen. Empty Budget/Reminder input shows Mic; entered text shows Send; sending disables the action while pending.
+- Voice recording keeps Cancel, waveform/timer/pause and Send within the same width. Upload uses `safeFetch` with a long-call timeout, and Undo removes the returned message ID. The fixed composer leaves room for the device safe area and for the last message to scroll above it.
+- Repository evidence: typecheck and changed-file lint pass on 2026-09-27; authenticated device visual verification is pending.
+
+### HUB-73
+
+- Long press a Budget or Reminder message, select several visible rows, and review them through Add all. Selection also offers Delete all; delete scope distinguishes personal hiding from deleting own messages for everyone. Undo restores either action.
+- At 390 px, the thread title, search and Chat options remain on screen; selection controls occupy their own row without horizontal clipping. The new chat button remains visible in the thread list.
+- Repository evidence: `pnpm typecheck` clean on 2026-09-27. Device and authenticated end-to-end verification remain pending.
 
 Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execution-plans>). Read only the selected ID, its declared dependencies and relevant source; planning does not certify deployment or mark work complete.
 
@@ -125,6 +345,7 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Outcome:** Verify CI and recoverable capture failures.
 
 - **Acceptance:** CI runs typecheck/test/lint on push and PR; ERA preserves recoverable input on rejected capture and distinguishes offline, timeout and uncertain results. HEAD is already committed; no git write is part of this packet.
+- **Status 2026-09-27 — repository complete; first CI run pending (owner push).** `.github/workflows/ci.yml` runs typecheck, lint, tests (incl. the ERA Gym replay — no model calls), `pm:lint` and `docs:check` on push to main and on PRs; full lint has 0 errors on a clean checkout (the one local error lives in git-ignored `.tmp/`). Capture: a draft refused before sending (offline) keeps its text in the command bar (`keepInput`); a timeout after sending is `uncertain` ("Not sure it saved. Check Drafts."), never restored or retried; money POSTs already report uncertain (HUB-76). Test: `src/features/era/engine.test.ts`.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
@@ -1947,6 +2168,7 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Outcome:** Add debt settlement and recurring-payment actions.
 
 - **Acceptance:** Propose and confirm debt settlement and recurring-payment add/skip through existing domain contracts. Expense splitting is owned only by HUB-6; do not duplicate it here.
+- **Status 2026-09-27:** recurring **covered** from chat is built (HUB-79: links an existing transaction behind a re-checked Confirm card with Undo; no match → prefilled form). Still open: debt settle (waits on BUD-68), recurring add and recurring-payment skip from chat.
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
@@ -2617,6 +2839,18 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - ✅ 2026-08-31 — **HUB-33** closed the four real gaps in HUB-27..31's "native miss → Ask AI → learn → native next time" loop that a fresh audit found (owner asked to revisit the whole pipeline against the original spec — see the session's own plan file, `i-need-to-revisit-optimized-rocket.md`, for the full before/after map):
 - ✅ 2026-08-31 — **HUB-34** two verified defects in HUB-33's taught-template loop, surfaced by an owner-requested second-opinion review of the whole pipeline (checked claim-by-claim against the code first — most of the review's other suggestions, e.g. new `slot_types`/`confidence`/`specificity` columns, were speculative or already true and deliberately NOT taken; see the session's own plan file for the full accept/reject table):
 - ✅ 2026-08-31 — **HUB-35** native-router coverage + collision hardening pass across all three per-face Layer 1 routers (`intents/{schedule,budget,chef}.ts`), requested as a standalone audit rather than a bug report. The HUB-27 named-target enhancement (same day) had shipped with no new tests; this pass closed the gaps that left plus two money-wrong false positives and several unguarded cross-face collisions:
+- ✅ 2026-09-27 — **HUB-73** Unified message selection for bulk add/delete, deletion scope with Undo, and a compact mobile thread header. Typecheck passed; authenticated mobile runtime acceptance pending. [Criteria](<Hub & ERA — Master Book.md#hub-73>).
+- ✅ 2026-09-27 — **HUB-74** Replaced the layered mic/send/fallback controls with one 48px action, allowed the input to shrink, removed the duplicate conversation toggle from the row, and aligned voice recorder controls. Voice upload now uses `safeFetch` with a 60-second timeout and an Undo action. Typecheck and changed-file lint pass; device visual acceptance pending. [Criteria](<Hub & ERA — Master Book.md#hub-74>).
+- ✅ 2026-09-27 — **HUB-75** One shared amount extractor (`src/lib/nlp/amount.ts`) for ERA's budget router, Hub `messageTransactionParser` and the voice classifier: `12$`, `300$`, `4$`, `500k lbp` (500000 native LBP), `20 euros`; transfer/debt grammars read the same phrase. Verbless marked capture (`coffee 4$`) drafts only on the Budget face. ERA drafts a marked amount only on an own account in that currency and asks "Which currency?" for an unmarked `k` amount on a non-LBP default. Evidence: `amount.test.ts` + router rows; full suite 3160 passed; typecheck clean. Drift corrected: the acceptance's "stored under the LBP-in-thousands rule" is wrong — accounts store native amounts; thousands applies only to the exchange rate and LBP-change field. [Criteria](<Hub & ERA — Master Book.md#hub-75>).
+- ✅ 2026-09-27 — **HUB-75** follow-up from the HUB-77 Gym: 🔴 `paid $2,000 for rent` drafted $2 because `parseSpeechExpense` (the draft write path and the mic) split thousands commas — fixed in its tokenizer; verbless capture no longer drafts `I took 300$ from Drawer` or `make it 20$ instead`. Regression rows in `amount.test.ts` and the router suite; Gym B gate has zero non-gap wrong money effects.
+- ✅ 2026-09-27 — **HUB-84** follow-up from the owner's second test: "make it under Spinneys group" with nothing in focus now asks "Change what?" AND waits — chips list the newest open list items, and a typed name ("Salt") completes the edit; edits that name the item ("Move salt under spinneys group") find it on the list by name; "it" is rebuilt from the conversation's saved results after a reload (`focusRehydrate.ts`, 30-minute window). Tests: `amend.test.ts` (32), Gym pilot +2.
+- ✅ 2026-09-27 — **HUB-84** Follow-ups edit the last result, whatever its type: typed focus memory, `followUp.ts` field parser, `amendLast` routing by referent type, edit contracts for shopping (group/quantity/rename/remove), drafts (amount/category, replace create-then-delete) and transfer cards (amount/destination → new Confirm card); group in the first sentence; "New group · X?" when none matches. Gym: fast path 90.1% held-out, zero wrong money effects (correction gap closed). Device witness in HUB-83. [Criteria](<Hub & ERA — Master Book.md#hub-84>).
+- ✅ 2026-09-27 — **HUB-16** Hub `/chat` voice uses the shared ERA turn engine (`runTurn`), so voice reminders keep their time; `intentClassifier.ts` and the five legacy callbacks deleted; `HubPage.tsx` 6,004 → 5,972 lines (rider rule). Voice now confirms/dismisses cards by "yes"/"no". Device witness in HUB-83. [Criteria](<Hub & ERA — Master Book.md#hub-16>).
+- ✅ 2026-09-27 — **HUB-80** Household lexicon (repository): `era_lexicon` migration + owner-only RLS, `/api/era/lexicon`, aliases / "Always" defaults / examples / "Forget", re-bound every turn; templates frozen. Gate test passes; owner migration and device witness are HUB-83. [Criteria](<Hub & ERA — Master Book.md#hub-80>).
+- ✅ 2026-09-27 — **HUB-6** Split from chat: "split 60$ dinner with Racha" opens `/expense?era=<id>` with the Split toggle on and the total filled; Budget keeps every split rule (owner decision 2026-09-27: open the existing form). [Criteria](<Hub & ERA — Master Book.md#hub-6>).
+- ✅ 2026-09-27 — **HUB-78** Understanding engine pilot: chip turn state, by-name reminders with this one / series, `?era=` handoff to `/expense`, shopping-add, outcome on every turn; Gym pilot 15/15, fast path 82.6% held-out; mobile confirm card fixed (it rendered behind the chat sheet). Device witness pending. [Criteria](<Hub & ERA — Master Book.md#hub-78>).
+- ✅ 2026-09-27 — **HUB-77** ERA Gym: `tests/era-gym/` (159 full-context cases — 87 synthetic, 72 from the owner export — all mandatory slices), real router + pure resolvers against a fake household, path C Understand prototype, record/replay (72 live calls, `gemini-3.8-flash`), `REPORT.md`. Decision: keep model on miss/conflict only (C − A = +10.2 held-out points, 3 wrong money). Found and fixed two money bugs (HUB-75 follow-up). CI wiring rides HUB-37; replay runs in `pnpm test`. [Criteria](<Hub & ERA — Master Book.md#hub-77>).
+- ✅ 2026-09-27 — **HUB-76** Speech-act gate (`intents/speechAct.ts`) on every routed write: negated/hypothetical/question/conditional/reported → `clarify{speechAct}`, negations never escalate. Native transfer, debt record and reminder delete (plus destructive taught templates) now return a `native_action` confirm card; `nativeActions.ts` executes on tap with Undo (transfer DELETE, debt DELETE, Recycle Bin restore; Undo runs once). A timeout after a money POST replies *uncertain*, never retried. Cross-currency transfers and non-USD debts are refused. Evidence: `nativeActions.test.ts` asserts Drawer $1,000/Wallet $100 → card with zero POSTs → $700/$400 after tap → $1,000/$100 after one Undo, second Undo no-op; `speechAct.test.ts`; four acceptance router rows. Typecheck clean; not exercised on a device (local dev points at the production DB). [Criteria](<Hub & ERA — Master Book.md#hub-76>).
 
 ## Delivery session log
 

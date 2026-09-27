@@ -80,7 +80,7 @@ export type AskAIResult =
 
 // ─────────────────────── Gemini structured-output schema ───────────────────────
 
-const ASK_AI_RESPONSE_SCHEMA: Schema = {
+export const ASK_AI_RESPONSE_SCHEMA: Schema = {
   type: Type.OBJECT,
   propertyOrdering: [
     "kind",
@@ -140,7 +140,8 @@ function describeCapabilities(): string {
     .join("\n");
 }
 
-function buildSystemPrompt(args: {
+/** Exported for the ERA Gym (HUB-77), which replays this exact prompt. */
+export function buildSystemPrompt(args: {
   face: "budget" | "schedule" | "chef" | "brain";
   budgetContext?: BudgetContext;
   scheduleContext?: ScheduleContext;

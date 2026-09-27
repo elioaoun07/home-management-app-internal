@@ -4,6 +4,8 @@
 // Phase 2 swaps the stub IntentRouter for a Gemini-backed implementation.
 
 import type { ERAModuleKey } from "@/components/shared/ERAMark";
+import type { AmountCurrency } from "@/lib/nlp/amount";
+import type { SpeechAct } from "./intents/speechAct";
 import type { ItemPriority } from "@/types/items";
 
 /**
@@ -46,6 +48,8 @@ export type Intent =
       kind: "draftTransaction";
       face: "budget";
       amount?: number;
+      /** HUB-75 — currency named by an explicit marker; absent = unmarked. */
+      currency?: AmountCurrency;
       description?: string;
       rawText: string;
     }
@@ -67,6 +71,8 @@ export type Intent =
       face: "schedule";
       itemId: string | null;
       title: string | null;
+      /** HUB-78 — a named target not in focus ("the dentist"); the resolver looks it up. */
+      targetHint?: string;
       /** Trailing text naming the new day/time, e.g. "11" or "tomorrow at 5". */
       whenText: string;
       rawText: string;
@@ -76,6 +82,8 @@ export type Intent =
       face: "schedule";
       itemId: string | null;
       title: string | null;
+      /** HUB-78 — a named target not in focus ("the dentist"); the resolver looks it up. */
+      targetHint?: string;
       rawText: string;
     }
   | {
@@ -83,6 +91,8 @@ export type Intent =
       face: "schedule";
       itemId: string | null;
       title: string | null;
+      /** HUB-78 — a named target not in focus ("the dentist"); the resolver looks it up. */
+      targetHint?: string;
       rawText: string;
     }
   | { kind: "showAnalytics"; face: "budget"; rawText: string }
@@ -104,6 +114,8 @@ export type Intent =
       face: "budget";
       scope: "self" | "partner" | "household";
       categoryHint?: string;
+      /** HUB-79 — "how much did I pay today": a shorter window than the billing month. */
+      period?: "today" | "yesterday" | "week";
       rawText: string;
     }
   // Slice 2 — Budget capability set
@@ -111,6 +123,7 @@ export type Intent =
       kind: "transfer";
       face: "budget";
       amount?: number;
+      currency?: AmountCurrency;
       fromHint?: string;
       toHint?: string;
       rawText: string;
@@ -120,6 +133,7 @@ export type Intent =
       face: "budget";
       debtorName?: string;
       amount?: number;
+      currency?: AmountCurrency;
       notes?: string;
       rawText: string;
     }
@@ -168,7 +182,43 @@ export type Intent =
   // and we cannot know which was meant; `weak` = a single incidental keyword
   // match too soft to act on confidently. Deliberately carries no `face`, so
   // downstream consumers treat it like `unknown` (no face switch, no draft).
+  //
+  // HUB-76 — `speechAct` = the sentence would have been a write, but it is
+  // negated / hypothetical / a question / conditional / reported speech, so
+  // the router refuses to act on it (see intents/speechAct.ts). `act` says
+  // which; a negation is answered deterministically and never escalated.
   | { kind: "clarify"; reason: "ambiguous" | "weak"; rawText: string }
+  | {
+      kind: "clarify";
+      reason: "speechAct";
+      act: Exclude<SpeechAct, "command">;
+      /** The write the router would otherwise have produced. */
+      blocked: Intent["kind"];
+      rawText: string;
+    }
+  // HUB-78 — the turn answered an outstanding chip question (EraPendingSlot).
+  | { kind: "slotAnswer"; face: FaceKey; capability: string; rawText: string }
+  // HUB-79 — core coverage families.
+  | { kind: "captureIncome"; face: "budget"; amount?: number; currency?: AmountCurrency; rawText: string }
+  | { kind: "splitExpense"; face: "budget"; amount?: number; withName?: string; rawText: string }
+  | { kind: "balanceRead"; face: "budget"; accountHint?: string; rawText: string }
+  | { kind: "coverRecurring"; face: "budget"; nameHint: string; rawText: string }
+  | { kind: "timeNow"; rawText: string }
+  /** HUB-80 — "forget that": revoke the rule the last turn applied. Faceless. */
+  | { kind: "forgetRule"; rawText: string }
+  /** HUB-80 — "the box means Drawer": a personal alias for an account. */
+  | { kind: "defineAlias"; face: "budget"; phrase: string; target: string; rawText: string }
+  /** HUB-81 — estate reads. */
+  | { kind: "activityRead"; face: "brain"; actor?: "me" | "partner"; window: "today" | "recent"; rawText: string }
+  | { kind: "futurePurchasesRead"; face: "budget"; rawText: string }
+  /** HUB-81 — open a module's page (reach level "navigation"). Faceless. */
+  | { kind: "navigate"; to: string; label: string; module: string; rawText: string }
+  /** HUB-79 — skip the next occurrence of a recurring reminder (an exception, never a rule edit). */
+  | { kind: "reminderSkip"; face: "schedule"; itemId: string | null; title: string | null; targetHint?: string; rawText: string }
+  // HUB-78 — marginal-cost capability: add items to the household shopping list.
+  | { kind: "addShopping"; face: "chef"; items: string[]; groupHint?: string; rawText: string }
+  /** HUB-84 — edit the last result (any type) through its edit contract. */
+  | { kind: "amendLast"; face: FaceKey; focusId: string | null; focusType: string | null; targetHint?: string; rawText: string }
   | { kind: "unknown"; rawText: string };
 
 /**
@@ -178,12 +228,61 @@ export type Intent =
  * Lives in-memory (`useEraStore`), not persisted: a page reload loses the
  * pending question, same as any other in-flight browser state.
  */
-export interface EraPendingTurn {
+export type EraPendingTurn = EraPendingReminder | EraPendingSlot;
+
+export interface EraPendingReminder {
   kind: "draftReminder";
   title: string;
   priority: ItemPriority;
   rawText: string;
   createdAt: number;
+}
+
+/**
+ * HUB-78 — plan §4 component 1 (turn state). ERA asked ONE question and
+ * offered chips. A chip tap answers it structurally (never re-parsed); typed
+ * text is matched against the options, and anything that is not an answer is
+ * handled as a new request (the question is dropped, nothing is consumed).
+ */
+export interface EraPendingSlot {
+  kind: "slot";
+  capability: "transfer.create" | "reminder.pick" | "reminder.scope" | "recurring.link" | "shopping.group" | "amend.target";
+  /** Arguments already resolved (ids, amounts, whenText, action). */
+  args: Record<string, unknown>;
+  /** The argument the chips fill. */
+  slot: string;
+  options: EraChipOption[];
+  /** Short question line shown above the chips. */
+  question: string;
+  rawText: string;
+  createdAt: number;
+}
+
+export interface EraChipOption {
+  label: string;
+  /** Structured value; `nav:/path` opens a page instead of answering. */
+  value: string;
+}
+
+/** HUB-78 — plan §4 component 8. Exactly one per turn; learning reads only this. */
+export type EraOutcomeStatus =
+  | "answered"
+  | "done"
+  | "drafted"
+  | "needs_input"
+  | "awaiting_confirm"
+  | "queued"
+  | "uncertain"
+  | "failed"
+  | "partial"
+  | "handed_off";
+
+export interface EraOutcome {
+  status: EraOutcomeStatus;
+  capability: string | null;
+  entityIds: string[];
+  /** Present only where an inverse is demonstrated. */
+  inverse: string | null;
 }
 
 /**
@@ -213,6 +312,68 @@ export type EraActiveProposal =
       capabilityId: string;
       slots: Record<string, unknown>;
       sourceText: string;
+    }
+  // HUB-76 — a NATIVE router write held behind its effect tier (Plan §5):
+  // money movement and deletes always confirm. Same card as an AI proposal,
+  // but executed by the native resolvers, never learned as a template, and
+  // never exposed to the Ask AI catalog (ERA_CAPABILITIES has no transfer).
+  | {
+      kind: "native_action";
+      text: string;
+      action: EraNativeAction;
+      sourceText: string;
+      /** HUB-80 — the same choice was made before: the card offers "Always". */
+      offerAlways?: EraLexiconOffer;
+    }
+  // HUB-78 — ERA can't finish this; the precision form opens prefilled.
+  | { kind: "handoff"; text: string; open: () => void };
+
+export interface EraLexiconOffer {
+  capability: string;
+  slot: string;
+  conditions: Record<string, unknown>;
+  value: Record<string, unknown>;
+  depends_on: string[];
+}
+
+export type EraTransferAction = Extract<EraNativeAction, { type: "transfer" }>;
+
+export type EraNativeAction =
+  | {
+      type: "transfer";
+      amount: number;
+      currency: string;
+      fromAccountId: string;
+      toAccountId: string;
+      fromName: string;
+      toName: string;
+    }
+  | { type: "recordDebt"; debtorName: string; amount: number; notes: string | null }
+  /** A destructive registry capability (reminder.delete) reached natively or via a taught template. */
+  | { type: "capability"; capabilityId: string; slots: Record<string, unknown> }
+  /** HUB-78 — move a recurring reminder's whole series (re-anchors due_at; rule untouched). */
+  | { type: "reminderSeries"; itemId: string; title: string; whenText: string }
+  /** HUB-78 — postpone ONE occurrence (an occurrence exception; the rule is untouched). */
+  | { type: "reminderOccurrence"; itemId: string; title: string; whenText: string }
+  /** HUB-84 — create a shopping group, then move the items into it. */
+  | { type: "shoppingGroupCreate"; threadId: string; name: string; messageIds: string[]; previousGroupId: string | null }
+  /** HUB-84 — remove shopping items (soft delete; no demonstrated restore → Confirm). */
+  | { type: "shoppingRemove"; messageIds: string[]; label: string }
+  /** HUB-79 — skip the next open occurrence (idempotent upsert; rule untouched). */
+  | { type: "reminderSkip"; itemId: string; title: string }
+  /**
+   * HUB-79 / HUB-22 — link an EXISTING transaction as this period's payment
+   * (mark-covered creates no spend). The snapshot is re-checked on tap.
+   */
+  | {
+      type: "recurringCover";
+      paymentId: string;
+      name: string;
+      amount: number;
+      transactionId: string;
+      txDate: string;
+      previousLastProcessed: string | null;
+      previousNextDue: string;
     };
 
 /**

@@ -1,26 +1,37 @@
 // Budget resolver — fetches MTD transactions and aggregates
-import { safeFetch } from "@/lib/safeFetch";
+import { OfflineError, RequestTimeoutError, safeFetch } from "@/lib/safeFetch";
 import { getCachedPreferences } from "@/lib/queryConfig";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { getDefaultDateRange } from "@/lib/utils/date";
+import { formatDate, getDefaultDateRange } from "@/lib/utils/date";
 import {
   formatAnalytics,
   formatAnalyticsError,
   formatBudgetError,
   formatConfirmDraftError,
+  formatDebtProposal,
   formatDebtRecorded,
   formatDraftConfirmed,
   formatDraftsList,
   formatDraftTransaction,
   formatDraftTransactionError,
   formatListDraftsError,
+  formatMoneyUncertain,
   formatMonthSpend,
   formatRecordDebtError,
   formatTransferCreated,
   formatTransferError,
+  formatTransferProposal,
+  moneyIn,
   monthKeyToLabel,
 } from "../formatters/budget";
+import type { EraActiveProposal, EraNativeAction, EraPendingTurn } from "../../types";
+import { transferSlot } from "./slotBuilders";
+import { findDefault, resolveAlias } from "../../lexicon";
+import { forgetLexiconRule, saveLexiconRule } from "../../useEraLexicon";
+import { useEraStore } from "../../useEraStore";
 import type { EraBudgetSubmitResult } from "../../useEraBudgetSubmit";
+import { extractAmount } from "@/lib/nlp/amount";
+import { HANDOFF_TTL_MS, type EraHandoff } from "../../engine";
 
 interface ResolveResult {
   text: string;
@@ -31,6 +42,7 @@ interface ResolveResult {
 
 interface PeriodTransaction {
   amount: number;
+  date?: string;
   user_id: string;
   category?: { name: string } | null;
 }
@@ -94,11 +106,30 @@ function scopeTransactions(
 export async function resolveMonthSpend(
   scope: "self" | "partner" | "household",
   categoryHint?: string,
+  window?: "today" | "yesterday" | "week",
 ): Promise<ResolveResult> {
   try {
     const period = await fetchCurrentPeriodTransactions();
     if (!period) return { text: formatBudgetError(), ok: false };
     const { start, end, currentUserId } = period;
+    // HUB-79 — a shorter window filters the same billing-month fetch by date.
+    if (window) {
+      const today = new Date();
+      const iso = (d: Date) => formatDate(d);
+      const from = new Date(today);
+      if (window === "yesterday") from.setDate(today.getDate() - 1);
+      if (window === "week") from.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+      const to = window === "yesterday" ? iso(from) : iso(today);
+      const inWindow = scopeTransactions(period.transactions, scope, currentUserId).filter(
+        (t) => typeof t.date === "string" && t.date >= iso(from) && t.date <= to,
+      );
+      const total = inWindow.reduce((sum, t) => sum + (t.amount ?? 0), 0);
+      const label = window === "week" ? "this week" : window;
+      return {
+        text: `${label.charAt(0).toUpperCase()}${label.slice(1)} · ${moneyIn(total)}`,
+        metadata: { total, scope, window, count: inWindow.length },
+      };
+    }
 
     // "self"/"partner" require knowing who "self" is — without it we cannot
     // honestly split the household total, and showing it under either label
@@ -282,31 +313,66 @@ export async function resolveShowAnalytics(): Promise<ResolveResult> {
 export async function resolveDraftTransaction(
   rawText: string,
   submitDraft?: (sentence: string) => Promise<EraBudgetSubmitResult>,
-): Promise<ResolveResult> {
+): Promise<ResolveResult & { handoff?: EraHandoff }> {
   if (!submitDraft) {
     return { text: formatDraftTransactionError("no-account") };
   }
 
   const result = await submitDraft(rawText);
+  const expiresAt = new Date(Date.now() + HANDOFF_TTL_MS).toISOString();
 
   if (!result.ok) {
+    // HUB-78 — a spend ERA can't finish (currency unclear, no account in that
+    // currency, no amount) hands off to /expense prefilled instead of dying.
+    const found = extractAmount(rawText);
+    const handoff: EraHandoff | undefined =
+      result.reason === "request-failed" || result.reason === "offline" || result.reason === "uncertain"
+        ? undefined
+        : {
+            kind: "spend",
+            amount: found?.value,
+            currency: found?.currency ?? undefined,
+            description: rawText,
+            expiresAt,
+          };
     return {
       text: formatDraftTransactionError(result.reason, result.message),
-      metadata: { draftFailed: result.reason },
+      metadata: {
+        draftFailed: result.reason,
+        ...(result.reason === "uncertain" ? { uncertain: true } : {}),
+        ...(result.reason === "offline" ? { retryable: true } : {}),
+      },
+      ok: false,
+      handoff,
     };
   }
 
+  const amount = result.parsed.amount ?? 0;
   return {
     text: formatDraftTransaction({
-      amount: result.parsed.amount ?? 0,
+      amount,
       categoryName: result.parsed.categoryName,
       subcategoryName: result.parsed.subcategoryName,
     }),
     metadata: {
       draftId: result.draftId,
       accountId: result.accountId,
-      amount: result.parsed.amount ?? 0,
+      amount,
+      currency: result.currency,
       categoryName: result.parsed.categoryName ?? null,
+    },
+    // "Change" on the receipt opens this; the form deletes the draft on save.
+    handoff: {
+      kind: "spend",
+      amount,
+      currency: result.currency,
+      accountId: result.accountId,
+      categoryId: result.parsed.categoryId,
+      subcategoryId: result.parsed.subcategoryId,
+      description: rawText,
+      date: result.parsed.date,
+      draftId: result.draftId,
+      expiresAt,
     },
   };
 }
@@ -319,6 +385,7 @@ interface AccountLite {
   id: string;
   name: string;
   type?: string;
+  currency?: string;
 }
 
 /**
@@ -332,6 +399,12 @@ function fuzzyMatchAccount(accounts: AccountLite[], hint: string): AccountLite |
   const h = hint.trim().toLowerCase();
   if (!h) return null;
 
+  // HUB-80 — a personal alias ("the box" → Drawer) wins, re-bound to the
+  // accounts the speaker can use right now.
+  const aliasId = resolveAlias(useEraStore.getState().lexicon, "transfer.create", h.replace(/^(?:the|my)\s+/, ""), new Set(accounts.map((a) => a.id)));
+  const aliased = aliasId ? accounts.find((a) => a.id === aliasId) : undefined;
+  if (aliased) return aliased;
+
   const exact = accounts.find((a) => a.name.toLowerCase() === h);
   if (exact) return exact;
 
@@ -342,121 +415,334 @@ function fuzzyMatchAccount(accounts: AccountLite[], hint: string): AccountLite |
 }
 
 /**
- * "Transfer $50 from wallet to savings" -> a real transfer between the
- * user's own accounts. Household transfers (to a partner) need recipient
- * resolution and fee/returned-amount handling the router doesn't attempt to
- * parse from one utterance -- this resolver only ever creates `transfer_type:
- * "self"`. Undo is intentionally NOT offered here (no toast fired) -- same
- * precedent as resolveDraftReminder: a real, immediate write confirmed by
- * the spoken reply, undoable from the Transfers page's own delete action.
+ * HUB-76 — outcome of a money POST. A timeout or network drop AFTER the
+ * request left the device is `uncertain`: the server may have committed it,
+ * so ERA says so and never retries on its own (a retry could move the money
+ * twice). Only a pre-flight offline refusal is a definite `failed` — nothing
+ * was sent.
  */
-export async function resolveTransfer(
+export type MoneyPostOutcome<T> =
+  | { status: "done"; data: T }
+  | { status: "failed"; error?: string }
+  | { status: "uncertain" };
+
+async function postMoney<T>(url: string, body: unknown): Promise<MoneyPostOutcome<T>> {
+  try {
+    const res = await safeFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      timeoutMs: 8_000,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: undefined }));
+      return { status: "failed", error: err.error };
+    }
+    return { status: "done", data: (await res.json()) as T };
+  } catch (err) {
+    if (err instanceof RequestTimeoutError) return { status: "uncertain" };
+    if (err instanceof OfflineError && /pre-flight/i.test(err.message)) {
+      return { status: "failed" };
+    }
+    // A drop mid-request is indistinguishable from a lost response.
+    return { status: "uncertain" };
+  }
+}
+
+export type WithProposalResult = ResolveResult & {
+  proposal?: EraActiveProposal;
+  pending?: EraPendingTurn | null;
+};
+type WithProposal = WithProposalResult;
+
+/**
+ * "Transfer $50 from wallet to savings" → a CONFIRM CARD, never a write
+ * (HUB-76; Plan §5: money movement always confirms). Resolves both accounts
+ * and validates everything the card shows; the POST happens only in
+ * `executeTransfer`, after the tap. Only `transfer_type: "self"` between the
+ * user's own accounts — household transfers need recipient/fee handling.
+ * Cross-currency is refused: the route needs a `to_amount` ERA cannot know,
+ * and posting the same number on both sides would be a wrong money effect.
+ */
+export async function prepareTransfer(
   amount: number | undefined,
+  currency: string | undefined,
   fromHint: string | undefined,
   toHint: string | undefined,
-): Promise<ResolveResult> {
+  rawText = "",
+): Promise<WithProposal> {
   if (!amount || amount <= 0) {
-    return { text: formatTransferError("no-amount") };
+    return { text: formatTransferError("no-amount"), ok: false };
   }
-  if (!fromHint || !toHint) {
-    return { text: formatTransferError("no-accounts") };
+  if (!fromHint && !toHint) {
+    return { text: formatTransferError("no-accounts"), ok: false };
   }
 
   try {
     const accountsRes = await safeFetch("/api/accounts?own=true", {
       timeoutMs: 8_000,
     });
-    if (!accountsRes.ok) return { text: formatTransferError("request-failed") };
+    if (!accountsRes.ok) return { text: formatTransferError("request-failed"), ok: false };
     const accounts: AccountLite[] = await accountsRes.json();
 
+    // HUB-78 — one side named ("I took 300$ from Drawer"): ask for the other
+    // as chips, limited to own accounts in the same currency.
+    if (!fromHint || !toHint) {
+      const known = fuzzyMatchAccount(accounts, (fromHint ?? toHint)!);
+      if (!known) {
+        return { text: formatTransferError("account-not-found", fromHint ?? toHint), ok: false };
+      }
+      const knownCurrency = known.currency ?? "USD";
+      if (currency && currency !== knownCurrency) {
+        return { text: formatTransferError("currency-mismatch"), ok: false };
+      }
+      const candidates = accounts
+        .filter((a) => a.id !== known.id && (a.currency ?? "USD") === knownCurrency)
+        .map((a) => ({ name: a.name }));
+
+      // HUB-80 — an "Always" default fills the missing side (re-bound to the
+      // current accounts; a deleted/unshared account makes it inert). The
+      // result is still a Confirm card: a default never lowers the tier.
+      const store = useEraStore.getState();
+      const missingSlot = fromHint ? "to" : "from";
+      const def = findDefault(
+        store.lexicon,
+        "transfer.create",
+        missingSlot,
+        { [fromHint ? "from" : "to"]: known.id },
+        new Set(accounts.map((a) => a.id)),
+      );
+      const defAccount = def ? accounts.find((a) => a.id === def.value.accountId) : undefined;
+      if (def && defAccount && (defAccount.currency ?? "USD") === knownCurrency && defAccount.id !== known.id) {
+        store.setLastAppliedRuleId(def.id);
+        const [fromAcc, toAcc] = fromHint ? [known, defAccount] : [defAccount, known];
+        const text = formatTransferProposal({ amount, currency: knownCurrency, fromName: fromAcc.name, toName: toAcc.name });
+        return {
+          text,
+          metadata: { proposed: "transfer", amount, appliedRuleId: def.id },
+          proposal: {
+            kind: "native_action",
+            text,
+            sourceText: rawText,
+            action: {
+              type: "transfer",
+              amount,
+              currency: knownCurrency,
+              fromAccountId: fromAcc.id,
+              toAccountId: toAcc.id,
+              fromName: fromAcc.name,
+              toName: toAcc.name,
+            },
+          },
+        };
+      }
+      const money = formatTransferProposal({ amount, currency: knownCurrency, fromName: "", toName: "" })
+        .split(" · ")
+        .pop();
+      return transferSlot({
+        amount,
+        currency: knownCurrency,
+        fromName: fromHint ? known.name : undefined,
+        toName: toHint ? known.name : undefined,
+        candidates,
+        rawText,
+        question: fromHint ? `${known.name} → ? · ${money}` : `? → ${known.name} · ${money}`,
+      });
+    }
+
     const fromAccount = fuzzyMatchAccount(accounts, fromHint);
-    if (!fromAccount) return { text: formatTransferError("account-not-found", fromHint) };
+    if (!fromAccount) return { text: formatTransferError("account-not-found", fromHint), ok: false };
     const toAccount = fuzzyMatchAccount(accounts, toHint);
-    if (!toAccount) return { text: formatTransferError("account-not-found", toHint) };
+    if (!toAccount) return { text: formatTransferError("account-not-found", toHint), ok: false };
     if (fromAccount.id === toAccount.id) {
-      return { text: formatTransferError("same-account") };
+      return { text: formatTransferError("same-account"), ok: false };
     }
 
-    const res = await safeFetch("/api/transfers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from_account_id: fromAccount.id,
-        to_account_id: toAccount.id,
-        amount,
-      }),
-      timeoutMs: 8_000,
+    const fromCurrency = fromAccount.currency ?? "USD";
+    const toCurrency = toAccount.currency ?? "USD";
+    if (fromCurrency !== toCurrency || (currency && currency !== fromCurrency)) {
+      return { text: formatTransferError("currency-mismatch"), ok: false };
+    }
+
+    const text = formatTransferProposal({
+      amount,
+      currency: fromCurrency,
+      fromName: fromAccount.name,
+      toName: toAccount.name,
     });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: undefined }));
-      return { text: formatTransferError("request-failed", err.error) };
-    }
-
-    const transfer = await res.json();
-
     return {
-      text: formatTransferCreated({
-        amount,
-        fromName: fromAccount.name,
-        toName: toAccount.name,
-      }),
+      text,
       metadata: {
-        transferId: transfer.id,
+        proposed: "transfer",
         amount,
         fromAccountId: fromAccount.id,
         toAccountId: toAccount.id,
-        fromName: fromAccount.name,
-        toName: toAccount.name,
+      },
+      proposal: {
+        kind: "native_action",
+        text,
+        sourceText: rawText,
+        action: {
+          type: "transfer",
+          amount,
+          currency: fromCurrency,
+          fromAccountId: fromAccount.id,
+          toAccountId: toAccount.id,
+          fromName: fromAccount.name,
+          toName: toAccount.name,
+        },
       },
     };
   } catch {
-    return { text: formatTransferError("request-failed") };
+    return { text: formatTransferError("request-failed"), ok: false };
   }
 }
+
+export interface NativeExecuteResult extends ResolveResult {
+  outcome: "done" | "failed" | "uncertain";
+}
+
+/** Runs ONLY from the confirm card. The route re-validates ownership. */
+export async function executeTransfer(
+  action: Extract<EraNativeAction, { type: "transfer" }>,
+): Promise<NativeExecuteResult> {
+  const outcome = await postMoney<{ id: string }>("/api/transfers", {
+    from_account_id: action.fromAccountId,
+    to_account_id: action.toAccountId,
+    amount: action.amount,
+  });
+  if (outcome.status === "uncertain") {
+    return { text: formatMoneyUncertain("transfer"), ok: false, outcome: "uncertain" };
+  }
+  if (outcome.status === "failed") {
+    return {
+      text: formatTransferError("request-failed", outcome.error),
+      ok: false,
+      outcome: "failed",
+    };
+  }
+  return {
+    text: formatTransferCreated({
+      amount: action.amount,
+      currency: action.currency,
+      fromName: action.fromName,
+      toName: action.toName,
+    }),
+    metadata: {
+      transferId: outcome.data.id,
+      amount: action.amount,
+      fromAccountId: action.fromAccountId,
+      toAccountId: action.toAccountId,
+      fromName: action.fromName,
+      toName: action.toName,
+    },
+    outcome: "done",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// defineAlias (HUB-80)
+// ---------------------------------------------------------------------------
+
+/** "the box means Drawer" → a personal alias. Act + Undo (the inverse is Forget). */
+export async function resolveDefineAlias(phrase: string, target: string): Promise<ResolveResult> {
+  try {
+    const res = await safeFetch("/api/accounts?own=true", { timeoutMs: 8_000 });
+    if (!res.ok) return { text: "Couldn't read your accounts.", ok: false };
+    const accounts: AccountLite[] = await res.json();
+    const t = target.trim().toLowerCase();
+    const exact = accounts.filter((a) => a.name.toLowerCase() === t);
+    const matches = exact.length ? exact : accounts.filter((a) => a.name.toLowerCase().includes(t));
+    if (matches.length !== 1) {
+      return { text: matches.length ? `Which one — ${matches.map((m) => m.name).join(", ")}?` : `No account called "${target}".`, ok: false };
+    }
+    const account = matches[0];
+    const key = phrase.trim().toLowerCase().replace(/^(?:the|my)\s+/, "");
+    const rule = await saveLexiconRule({
+      kind: "alias",
+      capability: "transfer.create",
+      phrase: key,
+      slot: null,
+      conditions: {},
+      value: { id: account.id, name: account.name },
+      depends_on: [account.id],
+    });
+    if (!rule) return { text: "Couldn't save that yet.", ok: false };
+    useEraStore.getState().setLastAppliedRuleId(rule.id);
+    return { text: `${phrase} = ${account.name}`, metadata: { ruleId: rule.id, accountId: account.id } };
+  } catch {
+    return { text: "Couldn't save that yet.", ok: false };
+  }
+}
+
+export { forgetLexiconRule };
 
 // ---------------------------------------------------------------------------
 // recordDebt
 // ---------------------------------------------------------------------------
 
 /**
- * "John owes me $30 for lunch" -> a standalone debt (no linked transaction,
- * no balance effect -- a pure receivable, via `/api/debts/standalone`). The
- * richer flow (an expense you paid that a friend partially owes back) needs
- * an account and category the router can't reliably parse from one
- * utterance -- that stays a manual /expense + Debts task.
+ * "John owes me $30 for lunch" → a CONFIRM CARD (HUB-76). On tap,
+ * `executeRecordDebt` creates a standalone debt (no linked transaction, no
+ * balance effect — a pure receivable, via `/api/debts/standalone`). Debts
+ * carry no currency column (USD), so a non-USD amount is refused rather than
+ * stored as dollars. The richer flow (an expense a friend partially owes
+ * back) stays a manual /expense + Debts task.
  */
-export async function resolveRecordDebt(
+export function prepareRecordDebt(
   debtorName: string | undefined,
   amount: number | undefined,
   notes: string | undefined,
-): Promise<ResolveResult> {
+  currency?: string,
+  rawText = "",
+): WithProposal {
   if (!debtorName || !amount || amount <= 0) {
-    return { text: formatRecordDebtError("missing-fields") };
+    return { text: formatRecordDebtError("missing-fields"), ok: false };
   }
+  if (currency && currency !== "USD") {
+    return { text: formatRecordDebtError("usd-only"), ok: false };
+  }
+  const text = formatDebtProposal({ debtorName, amount });
+  return {
+    text,
+    metadata: { proposed: "recordDebt", debtorName, amount },
+    proposal: {
+      kind: "native_action",
+      text,
+      sourceText: rawText,
+      action: { type: "recordDebt", debtorName, amount, notes: notes ?? null },
+    },
+  };
+}
 
-  try {
-    const res = await safeFetch("/api/debts/standalone", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ debtor_name: debtorName, amount, notes: notes || null }),
-      timeoutMs: 8_000,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: undefined }));
-      return { text: formatRecordDebtError("request-failed", err.error) };
-    }
-
-    const { debt } = (await res.json()) as { debt: { id: string } };
-
+/** Runs ONLY from the confirm card. */
+export async function executeRecordDebt(
+  action: Extract<EraNativeAction, { type: "recordDebt" }>,
+): Promise<NativeExecuteResult> {
+  const outcome = await postMoney<{ debt: { id: string } }>("/api/debts/standalone", {
+    debtor_name: action.debtorName,
+    amount: action.amount,
+    notes: action.notes || null,
+  });
+  if (outcome.status === "uncertain") {
+    return { text: formatMoneyUncertain("debt"), ok: false, outcome: "uncertain" };
+  }
+  if (outcome.status === "failed") {
     return {
-      text: formatDebtRecorded({ debtorName, amount }),
-      metadata: { debtId: debt.id, debtorName, amount },
+      text: formatRecordDebtError("request-failed", outcome.error),
+      ok: false,
+      outcome: "failed",
     };
-  } catch {
-    return { text: formatRecordDebtError("request-failed") };
   }
+  return {
+    text: formatDebtRecorded({ debtorName: action.debtorName, amount: action.amount }),
+    metadata: {
+      debtId: outcome.data.debt.id,
+      debtorName: action.debtorName,
+      amount: action.amount,
+    },
+    outcome: "done",
+  };
 }
 
 // ---------------------------------------------------------------------------

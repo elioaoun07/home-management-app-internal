@@ -31,6 +31,18 @@ ERA is the proactive AI co-pilot. It lives across all modules: a command bar par
   - `src/features/era/useEraHousehold.ts`
   - `src/features/era/useEraWakeListener.ts`
   - `src/features/era/useEraAskAI.ts` — "Ask AI" (Slice 4): `askAI()` calls `/api/era/ask`; `confirmProposal()`/`dismissProposal()` act on `activeProposal`
+  - `src/features/era/engine.ts` — outcome contract, effect tiers, `?era=` handoff shape (HUB-78)
+  - `src/features/era/nativeActions.ts` — executes native confirm cards + their Undo (HUB-76/78/79)
+  - `src/features/era/intents/speechAct.ts` — speech-act gate on every write (HUB-76)
+  - `src/features/era/intents/resolvers/slots.ts`, `slotBuilders.ts`, `reminderLookup.ts` — chip questions, reminders by name (HUB-78)
+  - `src/features/era/intents/resolvers/budgetFamilies.ts`, `shopping.ts`, `estate.ts` — income/split handoff, balance, recurring cover, shopping-add, activity/purchases reads (HUB-79/81)
+  - `src/features/era/lexicon.ts`, `useEraLexicon.ts`, `src/app/api/era/lexicon/route.ts` — household lexicon (HUB-80)
+  - `src/features/era/reach.ts` — module reach registry; generates `ERA Reach Matrix.md` (HUB-81)
+  - `src/features/era/useEraHandoff.ts`, `src/app/api/era/messages/[id]/route.ts` — precision-form handoff (HUB-78)
+  - `src/lib/nlp/amount.ts` — the one amount extractor (HUB-75)
+  - `src/features/era/intents/followUp.ts`, `intents/resolvers/amend.ts` — follow-ups edit the last result by its type (HUB-84)
+  - `src/components/era/EraAskChips.tsx` — chip row for one-question turns (HUB-78)
+  - `tests/era-gym/` — ERA Gym corpus, harness, record/replay (HUB-77)
 - **Intent layer**:
   - `src/features/era/intentRouter.ts`
   - `src/features/era/useEraTurn.ts` — **the one entry point from "a sentence" to "a reply"** (HUB-17). Classifies via `rootIntentRouter`, resolves via `resolveIntent`, renders transcript rows optimistically, persists them in order without holding up the reply, and updates the store. `CommandBar` (typed) and `EraShell`'s voice wiring (spoken, via `ConversationHandlers.runTurn`) both call this and nothing else.

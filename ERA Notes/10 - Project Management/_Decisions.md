@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-10
+updated: 2026-09-27
 type: decision-register
 status: active
 owner: Elio
@@ -34,7 +34,7 @@ Only unresolved choices live here. Checklists own the associated work; selecting
 | DEC-19 | Define available versus projected balance for pending income drafts. | BUD-75 retains the stored100 / pendingincome2000 / displayed−1900 example as a contract question. | ASTRA B08 |
 | DEC-20 | Define currency/FX contracts for debt, split and NFC consumers. | BUD-76 prevents implicit mixed-currency arithmetic or unsupported recommendations. | Budget ASTRA consumer audit |
 | DEC-21 | Change or retain V1’s three-gate interaction model for the real-product experiment. | DLV-89 stays held; existing INSTANT exception is narrower and remains valid. | Command Center ASTRA C04 |
-| DEC-22 | Choose the sacrifice order if the Top Layer calendar gates are missed. | Original §4 and §5.8 disagree; dates are historical targets, not permission to silently drop a retained item. | Sep2 accepted plan |
+| DEC-22 | Choose the sacrifice order if the Top Layer calendar gates are missed. *(2026-09-27: the revised plan §8 adopts the stated E-18 → M-08 → M-07 → E-23 → N-05 order and evidence gates for the Understanding track; only the conflicting native-slide wording remains open.)* | Original §4 and §5.8 disagree; dates are historical targets, not permission to silently drop a retained item. | Sep2 accepted plan |
 | DEC-23 | Admit a bounded correction of existing floating-panel debt under the ERA style freeze. | HUB-68 preserves both constraints until scope is chosen; future new panels already follow Hard Rule15. | ASTRA C11 |
 
 ## Reconciled facts and authority
@@ -42,6 +42,7 @@ Only unresolved choices live here. Checklists own the associated work; selecting
 - **Owner constraint 2026-09-13 (DEC-14 / Delivery):** no API keys and no additional costs; use existing Claude and ChatGPT subscriptions through their native SDKs. The proposed USD 2 trial allowance is withdrawn, not awaiting approval. Time/turn/concurrency limits remain separate operational choices; SDK API-equivalent estimates are not invoices. DLV-110 owns subscription authentication and no-paid-fallback enforcement; DLV-96/97 still gate launch. Do not solicit a paid allowance to resolve DEC-14 for this trial.
 - **One queue owner:** NOTIF-19 owns E-19 delivery policy; HUB-53 and NOTIF-5.7 are aliases. BUD-2 owns merchant matching in the Hub action; HUB-10 is a dependency alias. Original scope survives in the owning book.
 - **Plan authority:** the accepted Top Layer specification keeps its substantive constraints and historical target dates; campaign queues own current status and execution order. Superseded Awakening/Top View/FAR schedules do not add missed-date tasks.
+- **Resolved 2026-09-27:** DEC-24 — the owner kept Confirm for model-interpreted one-time reminder create/reschedule (Doctrine Q10 unchanged); recorded in the [Hub & ERA Master Book](<Hub & ERA/Hub & ERA — Master Book.md>) Vision & Decisions. Same day the owner chose handoff-first for ERA income (default income account) and split (existing Split toggle).
 - **Resolved 2026-09-11:** DEC-15 (phone use is a core milestone) and DEC-16 (eventual owner-triggered protected Apply) moved to the [Delivery reconciliation history](<Delivery/Delivery — Master Book.md#backlog-reconciliation>) on adoption of [Command Center](<Plans/Command Center.md>).
 - **Delivery generations:** accepted V2 design and separately authorized September construction do not repeal V1's operating freeze. The current open uses of DLV-94/95 become DLV-96/97; the original historical IDs stay unchanged.
 - **Evidence boundaries:** a source-present bell needs device acceptance, not another implementation. A missing migration file does not prove production SQL is unapplied. Shipped code with owner verification outstanding keeps a separate open verification item.

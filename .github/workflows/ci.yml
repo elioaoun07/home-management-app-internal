@@ -1,0 +1,46 @@
+# HUB-37 — CI: typecheck, lint, tests (incl. the ERA Gym replay) and the
+# PM/doc checks pre-commit already runs. The Gym replays recorded model
+# responses (tests/era-gym/recordings) — CI never calls Gemini.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.16.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Tests (includes the ERA Gym replay)
+        run: pnpm test
+
+      - name: PM lint
+        run: pnpm pm:lint
+
+      - name: Feature Index ↔ Feature Map
+        run: pnpm docs:check

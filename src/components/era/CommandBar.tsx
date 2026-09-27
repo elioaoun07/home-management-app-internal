@@ -98,9 +98,12 @@ export function CommandBar({
       setBusy(true);
       setPendingTranscript("");
 
-      const { reply } = await runTurn(text).catch(() => ({
+      const { reply, keepInput } = await runTurn(text).catch(() => ({
         reply: "Something went wrong. Try again.",
+        keepInput: true,
       }));
+      // HUB-37 — a capture that never left the device keeps its text.
+      if (keepInput) setPendingTranscript(text);
 
       if (voiceReplyEnabled) {
         speakReply(reply);

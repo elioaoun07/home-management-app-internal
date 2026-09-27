@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { useEraHandoff } from "@/features/era/useEraHandoff";
 import {
   BillIcon,
   CalculatorIcon,
@@ -299,6 +300,26 @@ function MobileExpenseFormContent() {
     exitEditModeRef,
   } = useExpenseForm();
 
+  // HUB-78 — ERA handoff: `/expense?era=<messageId>` opens this form
+  // prefilled from the owner-bound proposal. Applied once, and never over
+  // unsaved edits; a successful save consumes it (see useEraHandoff).
+  const eraHandoff = useEraHandoff();
+  const eraApplied = useRef(false);
+  useEffect(() => {
+    const h = eraHandoff.handoff;
+    if (!h || eraApplied.current) return;
+    eraApplied.current = true;
+    if (amount || description) return;
+    if (h.accountId) setSelectedAccountId(h.accountId);
+    if (h.amount) setAmount(String(h.amount));
+    if (h.description) setDescription(h.description);
+    if (h.categoryId) setSelectedCategoryId(h.categoryId);
+    if (h.subcategoryId) setSelectedSubcategoryId(h.subcategoryId);
+    if (h.date) setDate(new Date(`${h.date}T12:00:00`));
+    setStep(h.categoryId ? "confirm" : h.amount && h.accountId ? "category" : h.amount ? "account" : "amount");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply once per handoff
+  }, [eraHandoff.handoff]);
+
   const { data: sectionOrder, isLoading: sectionOrderLoading } =
     useSectionOrder();
 
@@ -346,6 +367,15 @@ function MobileExpenseFormContent() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [isSplitBill, setIsSplitBill] = useState(false);
   const [splitBillTotal, setSplitBillTotal] = useState("");
+
+  // HUB-79 / HUB-6 — a split handoff turns the Split toggle on with the whole
+  // bill; the owner reviews and saves through the existing split-bill path.
+  useEffect(() => {
+    const h = eraHandoff.handoff;
+    if (h?.kind !== "split" || !h.totalBill) return;
+    setIsSplitBill(true);
+    setSplitBillTotal(String(h.totalBill));
+  }, [eraHandoff.handoff]);
   const [isDebt, setIsDebt] = useState(false);
   const [debtorName, setDebtorName] = useState("");
   const [debtAmount, setDebtAmount] = useState(""); // how much the friend owes (defaults to full amount)
@@ -1030,6 +1060,9 @@ function MobileExpenseFormContent() {
             });
             return;
           }
+
+          // HUB-78 — this save finishes an ERA handoff: drop its draft, mark it used.
+          if (eraHandoff.handoff) void eraHandoff.consume(newTransaction?.id ?? null);
 
           // Upload pending receipt (fire-and-forget; user is notified on error only)
           if (capturedReceiptFile && newTransaction?.id && !newTransaction._offline) {

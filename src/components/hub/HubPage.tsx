@@ -1,5 +1,10 @@
 "use client";
 
+import { EraAskChips } from "@/components/era/EraAskChips";
+import { EraProposalCard } from "@/components/era/EraShell";
+import { useEraAskAI } from "@/features/era/useEraAskAI";
+import { useEraStore } from "@/features/era/useEraStore";
+import { useEraTurn } from "@/features/era/useEraTurn";
 import {
   AlertBellIcon,
   CheckIcon,
@@ -72,6 +77,8 @@ import {
 } from "@/features/hub/messageColors";
 import { useConversationMode } from "@/features/voice-conversation";
 import { safeFetch } from "@/lib/safeFetch";
+import { qk } from "@/lib/queryKeys";
+import { ToastIcons } from "@/lib/toastIcons";
 import { useChatFullscreenStore } from "@/lib/stores/chatFullscreenStore";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -86,9 +93,12 @@ import {
   Filter,
   Link as LinkIcon,
   ListChecks,
+  Mic,
+  MoreHorizontal,
   Palette,
   Pin,
   RefreshCw,
+  Send,
   Settings,
   Star,
   Target,
@@ -148,13 +158,9 @@ const VoiceMessagePlayer = dynamic(
   { ssr: false },
 );
 
-// Lazy load ERA conversation mode components
+// Lazy load ERA conversation mode orb
 const ConversationOrb = dynamic(
   () => import("@/features/voice-conversation").then((m) => ({ default: m.ConversationOrb })),
-  { ssr: false },
-);
-const ConversationToggle = dynamic(
-  () => import("@/features/voice-conversation").then((m) => ({ default: m.ConversationToggle })),
   { ssr: false },
 );
 
@@ -625,8 +631,8 @@ function ChatView({
       {/* Search + New Chat Row - Sticky Header */}
       {householdId && (
         <div className="shrink-0 px-4 py-2 bg-background border-b border-white/5">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
+           <div className="flex min-w-0 items-center gap-2">
+             <div className="relative min-w-0 flex-1">
               <input
                 type="text"
                 placeholder="Search..."
@@ -654,7 +660,7 @@ function ChatView({
             </div>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white shrink-0"
+               className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white shrink-0"
               title="New Chat"
             >
               <PlusIcon className="w-5 h-5" />
@@ -1760,7 +1766,10 @@ function ThreadConversation({
     new Set(),
   );
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
   const [showBulkConvertSheet, setShowBulkConvertSheet] = useState(false);
+  const [showHeaderTools, setShowHeaderTools] = useState(false);
+  const [isDeletingMessages, setIsDeletingMessages] = useState(false);
 
   // Per-message color tag (HUB-11) — active filter + the "pen" color applied
   // to the next message sent. The compose color is sticky per-thread so the
@@ -1821,61 +1830,26 @@ function ThreadConversation({
     (t: HubChatThread) => t.purpose === "shopping",
   );
 
+  // HUB-16 / HUB-82 — Hub voice uses the same ERA engine as typed and ERA
+  // voice: one router, one set of resolvers, confirm cards for money.
+  const { runTurn: eraRunTurn } = useEraTurn();
+  const { askAI: eraAskAI, confirmProposal, dismissProposal } = useEraAskAI();
   const convMode = useConversationMode({
     enabled: isConvModeEnabled,
     handlers: {
       getCategories: () => categories as any[],
       sessionId: `voice-${threadId}`,
-      onLogExpense: async (intent) => {
-        try {
-          const content = intent.amount
-            ? `Spent $${intent.amount}${intent.category ? ` on ${intent.category}` : ""}`
-            : "Voice expense";
-          const result = await sendMessage.mutateAsync({ content, thread_id: threadId });
-          const msgId = result?.message?.id;
-          if (msgId && intent.amount) {
-            setTransactionModalData({
-              messageId: msgId,
-              amount: intent.amount,
-              description: intent.category ?? "Voice expense",
-              categoryId: intent.categoryId,
-              subcategoryId: intent.subcategoryId,
-              date: intent.date,
-            });
-          }
-        } catch { /* ignore */ }
+      runTurn: async (text) => {
+        const { reply, intent, aiHandled } = await eraRunTurn(text);
+        const awaitingConfirm = useEraStore.getState().activeProposal?.kind === "native_action";
+        return { reply, kind: intent.kind, aiHandled, awaitingConfirm };
       },
-      onSetReminder: async (intent) => {
-        try {
-          const result = await sendMessage.mutateAsync({
-            content: `Reminder: ${intent.title}`,
-            thread_id: threadId,
-          });
-          const msgId = result?.message?.id;
-          if (msgId) {
-            setReminderModalData({ messageId: msgId, title: intent.title, description: "" });
-          }
-        } catch { /* ignore */ }
+      askAI: (text) => eraAskAI(text, { skipUserMessage: true }),
+      confirmProposal: async () => {
+        await confirmProposal();
+        return useEraStore.getState().eraReply;
       },
-      onAddToShopping: async (intent) => {
-        if (!shoppingThread) return;
-        for (const item of intent.items) {
-          await sendMessage.mutateAsync({ content: item, thread_id: shoppingThread.id }).catch(() => {});
-        }
-      },
-      onQueryBalance: async () => {
-        const acct = (accounts as any[]).find((a) => a.is_default) || (accounts as any[])[0];
-        if (!acct) return "No accounts found.";
-        const fmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
-        return `Your ${acct.name} balance is ${fmt.format(acct.balance ?? 0)}.`;
-      },
-      onQueryItems: async (filter) => {
-        return filter === "today"
-          ? "Let me check your schedule for today."
-          : filter === "overdue"
-            ? "You have some overdue items — check the reminders tab."
-            : "Let me pull up your open reminders.";
-      },
+      dismissProposal,
     },
   });
 
@@ -2639,6 +2613,86 @@ function ThreadConversation({
     }
   };
 
+  const selectableMessageIds = colorFilteredMessages
+    .filter((msg) => !msg.deleted_at && !msg.is_hidden_by_me)
+    .map((msg) => msg.id);
+  const allVisibleSelected =
+    selectableMessageIds.length > 0 &&
+    selectableMessageIds.every((id) => selectedMessages.has(id));
+  const addableIds = new Set(getSelectAllEligibleIds());
+  const canAddSelected =
+    isConvertSelection &&
+    selectedMessages.size > 0 &&
+    [...selectedMessages].every((id) => addableIds.has(id));
+  const selectedRows = messages.filter((msg) => selectedMessages.has(msg.id));
+  const canDeleteForEveryone =
+    selectedRows.length === selectedMessages.size &&
+    selectedRows.length > 0 &&
+    selectedRows.every((msg) => msg.sender_user_id === currentUserId);
+  const showVoiceButton =
+    !newMessage.trim() &&
+    (thread?.purpose === "budget" || thread?.purpose === "reminder");
+
+  const deleteSelectedMessages = async (scope: "me" | "everyone") => {
+    const messageIds = [...selectedMessages];
+    if (!messageIds.length || (scope === "everyone" && !canDeleteForEveryone)) return;
+
+    setDeleteError(false);
+    setIsDeletingMessages(true);
+    try {
+      const response = await safeFetch("/api/hub/messages", {
+        method: scope === "me" ? "PATCH" : "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          scope === "me"
+            ? { messageIds, action: "hide" }
+            : { messageIds },
+        ),
+      });
+      if (!response.ok) throw new Error("Delete failed");
+      if (scope === "everyone") {
+        const result = (await response.json()) as { deletedCount: number };
+        if (result.deletedCount !== messageIds.length) throw new Error("Delete incomplete");
+      }
+
+      await queryClient.invalidateQueries({ queryKey: qk.hubMessages(threadId) });
+      await queryClient.invalidateQueries({ queryKey: qk.hubThreads() });
+      setShowDeleteModal(false);
+      setIsSelectionMode(false);
+      setSelectedMessages(new Set());
+      toast.message(`${messageIds.length} message${messageIds.length === 1 ? "" : "s"} deleted`, {
+        icon: ToastIcons.delete,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              const undo = await safeFetch("/api/hub/messages", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  messageIds,
+                  action: scope === "me" ? "unhide" : "undo",
+                }),
+              });
+              if (!undo.ok) throw new Error("Restore failed");
+              await queryClient.invalidateQueries({ queryKey: qk.hubMessages(threadId) });
+              await queryClient.invalidateQueries({ queryKey: qk.hubThreads() });
+            } catch {
+              toast.error("Restore failed", { icon: ToastIcons.error });
+            }
+          },
+        },
+      });
+    } catch {
+      setDeleteError(true);
+      await queryClient.invalidateQueries({ queryKey: qk.hubMessages(threadId) });
+      await queryClient.invalidateQueries({ queryKey: qk.hubThreads() });
+    } finally {
+      setIsDeletingMessages(false);
+    }
+  };
+
   return (
     <div
       ref={containerRef}
@@ -2650,27 +2704,24 @@ function ThreadConversation({
     >
       {/* Thread Header - Fixed at top of screen (app header is hidden in full-screen thread mode) */}
       <div
-        className="fixed top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 pb-3 border-b transition-all duration-300"
+         className={cn("fixed top-0 left-0 right-0 z-30 flex flex-col gap-2 px-3 pb-3 border-b transition-all duration-300", themeClasses.bgPage)}
         style={{
           paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.75rem)",
           borderBottomColor: thread?.color
             ? `${thread.color}40`
             : "rgba(255,255,255,0.1)",
-          backgroundColor: thread?.color
-            ? `color-mix(in srgb, ${thread.color} 8%, rgb(15, 23, 42))`
-            : "rgb(15, 23, 42)",
           boxShadow: thread?.color ? `0 4px 20px ${thread.color}20` : "none",
         }}
       >
         {isSearchOpen ? (
           /* Search Mode Header - Replace everything with search input */
-          <>
+          <div className="flex w-full min-w-0 items-center gap-2">
             <button
               onClick={() => {
                 setIsSearchOpen(false);
                 setSearchQuery("");
               }}
-              className="p-2 rounded-lg hover:bg-white/5 text-white/70 hover:text-white transition-colors"
+              className="min-h-10 min-w-10 p-2 rounded-lg hover:bg-white/5 text-white/70 hover:text-white transition-colors"
             >
               <ChevronLeftIcon className="w-5 h-5" />
             </button>
@@ -2706,17 +2757,17 @@ function ThreadConversation({
                 {searchFilteredMessages.length} found
               </span>
             )}
-          </>
+          </div>
         ) : (
           /* Normal Header */
-          <>
+          <div className="flex w-full min-w-0 items-center gap-2">
             <button
               onClick={handleBack}
-              className="p-2 rounded-lg hover:bg-white/5 text-white/70 hover:text-white transition-colors"
+              className="min-h-10 min-w-10 p-2 rounded-lg hover:bg-white/5 text-white/70 hover:text-white transition-colors"
             >
               <ChevronLeftIcon className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
               {/* Thread Icon with Color */}
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all duration-300"
@@ -2739,9 +2790,9 @@ function ThreadConversation({
               </div>
               <div className="min-w-0 flex-1">
                 <h2 className="text-sm font-semibold text-white truncate">
-                  {thread?.title || "Chat"}
+                  {isSelectionMode ? `${selectedMessages.size} selected` : thread?.title || "Chat"}
                 </h2>
-                <div className="flex items-center gap-2 mt-0.5">
+                <div className="hidden sm:flex items-center gap-2 mt-0.5">
                   {/* Item Links Toggle for Shopping Threads */}
                   {thread?.purpose === "shopping" && (
                     <button
@@ -2781,94 +2832,7 @@ function ThreadConversation({
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              {isSelectionMode ? (
-                isConvertSelection ? (
-                  (() => {
-                    const eligibleIds = getSelectAllEligibleIds();
-                    const isAllEligibleSelected =
-                      eligibleIds.length > 0 &&
-                      eligibleIds.every((id) => selectedMessages.has(id));
-                    return (
-                      <>
-                        <button
-                          onClick={() =>
-                            setSelectedMessages(
-                              isAllEligibleSelected
-                                ? new Set()
-                                : new Set(eligibleIds),
-                            )
-                          }
-                          disabled={eligibleIds.length === 0}
-                          className={cn(
-                            "px-3 py-1.5 rounded-lg transition-all text-sm",
-                            eligibleIds.length === 0
-                              ? "bg-white/5 text-white/30 cursor-not-allowed"
-                              : "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
-                          )}
-                        >
-                          {isAllEligibleSelected ? "Deselect all" : "Select all"}
-                        </button>
-                        <span className="text-sm text-white/70">
-                          {selectedMessages.size} selected
-                        </span>
-                        <button
-                          onClick={() => {
-                            setIsSelectionMode(false);
-                            setSelectedMessages(new Set());
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all text-sm"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => setShowBulkConvertSheet(true)}
-                          disabled={selectedMessages.size === 0}
-                          className={cn(
-                            "p-2 rounded-lg transition-all",
-                            selectedMessages.size > 0
-                              ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
-                              : "bg-white/5 text-white/30 cursor-not-allowed",
-                          )}
-                          title={
-                            thread?.purpose === "reminder"
-                              ? "Review & add as schedule items"
-                              : "Review & add as transactions"
-                          }
-                        >
-                          <CheckIcon className="w-5 h-5" />
-                        </button>
-                      </>
-                    );
-                  })()
-                ) : (
-                  <>
-                    <span className="text-sm text-white/70">
-                      {selectedMessages.size} selected
-                    </span>
-                    <button
-                      onClick={() => {
-                        setIsSelectionMode(false);
-                        setSelectedMessages(new Set());
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all text-sm"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => setShowDeleteModal(true)}
-                      disabled={selectedMessages.size === 0}
-                      className={cn(
-                        "p-2 rounded-lg transition-all",
-                        selectedMessages.size > 0
-                          ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                          : "bg-white/5 text-white/30 cursor-not-allowed",
-                      )}
-                    >
-                      <Trash2Icon className="w-5 h-5" />
-                    </button>
-                  </>
-                )
-              ) : (
+              {!isSelectionMode && (
                 <>
                   {/* Search Button */}
                   <button
@@ -2879,7 +2843,7 @@ function ThreadConversation({
                       }
                     }}
                     className={cn(
-                      "p-2 rounded-lg transition-all",
+                      "min-h-10 min-w-10 p-2 rounded-lg transition-all",
                       isSearchOpen
                         ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30"
                         : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70",
@@ -2896,6 +2860,25 @@ function ThreadConversation({
                       <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                   </button>
+                  <button
+                    onClick={() => setShowHeaderTools((open) => !open)}
+                     className="sm:hidden min-h-10 min-w-10 p-2 rounded-lg bg-white/5 text-white/70"
+                    aria-label="Chat options"
+                    aria-expanded={showHeaderTools}
+                  >
+                    <MoreHorizontal className="w-5 h-5" />
+                  </button>
+                  <div
+                    className={cn(
+                      "items-center gap-1 shrink-0 sm:flex",
+                      showHeaderTools
+                        ? cn(
+                            "absolute right-3 top-full z-40 flex max-w-[calc(100vw-1.5rem)] flex-wrap rounded-xl border border-white/10 p-2 shadow-xl sm:static sm:border-0 sm:p-0 sm:shadow-none",
+                            themeClasses.bgPage,
+                          )
+                        : "hidden",
+                    )}
+                  >
                   {/* Eye icon only for budget and reminder chats */}
                   {thread?.purpose &&
                     (thread.purpose === "budget" ||
@@ -3061,18 +3044,55 @@ function ThreadConversation({
                       });
                     }}
                   />
+                  </div>
                 </>
               )}
             </div>
-          </>
+          </div>
+        )}
+        {isSelectionMode && (
+          <div className="flex w-full items-center gap-1.5 border-t border-white/10 pt-2">
+            <button
+              onClick={() => setSelectedMessages(allVisibleSelected ? new Set() : new Set(selectableMessageIds))}
+              disabled={selectableMessageIds.length === 0}
+               className="min-h-10 min-w-0 flex-1 rounded-lg bg-white/5 px-2 py-1.5 text-xs text-white/80 disabled:opacity-40"
+            >
+              {allVisibleSelected ? "Clear" : "Select all"}
+            </button>
+            {isConvertSelection && (
+              <button
+                onClick={() => setShowBulkConvertSheet(true)}
+                disabled={!canAddSelected}
+                 className="min-h-10 min-w-0 flex-1 rounded-lg bg-emerald-500/20 px-2 py-1.5 text-xs text-emerald-300 disabled:opacity-40"
+              >
+                Add all
+              </button>
+            )}
+            <button
+              onClick={() => { setDeleteError(false); setShowDeleteModal(true); }}
+              disabled={selectedMessages.size === 0}
+               className="min-h-10 min-w-0 flex-1 rounded-lg bg-rose-500/20 px-2 py-1.5 text-xs text-rose-300 disabled:opacity-40"
+            >
+              Delete all
+            </button>
+            <button
+              onClick={() => { setIsSelectionMode(false); setSelectedMessages(new Set()); }}
+               className="min-h-10 min-w-10 rounded-lg bg-white/5 p-1.5 text-white/70"
+              aria-label="Cancel selection"
+            >
+              <XIcon className="w-4 h-4" />
+            </button>
+          </div>
         )}
       </div>
 
       {/* Spacer for fixed header (header height + safe-area inset) */}
       <div
-        className="h-16"
-        style={{
-          paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.75rem)",
+         className="shrink-0"
+         style={{
+           height: isSelectionMode
+             ? "calc(7.625rem + env(safe-area-inset-top, 0px))"
+             : "calc(4rem + env(safe-area-inset-top, 0px))",
         }}
       />
 
@@ -3139,8 +3159,9 @@ function ThreadConversation({
         <>
           {/* Messages - Scrollable area, messages stick to bottom like WhatsApp */}
           <div
-            className="flex-1 overflow-y-auto px-4 pb-24 flex flex-col transition-all duration-300"
+            className="flex-1 overflow-y-auto px-4 flex flex-col transition-all duration-300"
             style={{
+              paddingBottom: "calc(7rem + env(safe-area-inset-bottom, 0px))",
               background: thread?.color
                 ? `linear-gradient(to bottom, ${thread.color}03, transparent 200px)`
                 : undefined,
@@ -3217,12 +3238,8 @@ function ThreadConversation({
                   const isMe = msg.sender_user_id === currentUserId;
                   const isFirstUnread = msg.id === firstUnreadMessageId;
 
-                  // Check if this message has actions
                   const msgActions = messageActions.filter(
-                    (a: any) => a.message_id === msg.id,
-                  );
-                  const hasTransactionAction = msgActions.some(
-                    (a: any) => a.action_type === "transaction",
+                    (action) => action.message_id === msg.id,
                   );
 
                   // Date separator logic - only for reminder and budget chats
@@ -3269,12 +3286,11 @@ function ThreadConversation({
                       <div className="flex items-start gap-2">
                         {/* Checkbox column - fixed width on LEFT */}
                         {isSelectionMode && (
-                          <div className="w-8 flex-shrink-0 flex justify-center pt-2">
+                          <div className="w-10 flex-shrink-0 flex justify-center pt-1">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                // Cannot select messages with actions or deleted messages
-                                if (msgActions.length > 0 || msg.deleted_at)
+                                if (msg.deleted_at || msg.is_hidden_by_me)
                                   return;
 
                                 setSelectedMessages((prev) => {
@@ -3287,32 +3303,20 @@ function ThreadConversation({
                                   return newSet;
                                 });
                               }}
-                              disabled={
-                                msgActions.length > 0 || !!msg.deleted_at
-                              }
+                              disabled={!!msg.deleted_at || !!msg.is_hidden_by_me}
+                              aria-label={`Select message: ${msg.content || "voice message"}`}
+                              aria-pressed={selectedMessages.has(msg.id)}
                               className={cn(
-                                "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
-                                msgActions.length > 0 || msg.deleted_at
+                                "w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all",
+                                msg.deleted_at || msg.is_hidden_by_me
                                   ? "bg-white/5 border-white/10 cursor-not-allowed opacity-30"
                                   : selectedMessages.has(msg.id)
                                     ? "bg-blue-500 border-blue-500"
                                     : "bg-white/5 border-white/30 hover:border-white/50",
                               )}
-                              title={
-                                msgActions.length > 0
-                                  ? isConvertSelection
-                                    ? "Already converted"
-                                    : "Cannot delete: has actions"
-                                  : msg.deleted_at
-                                    ? isConvertSelection
-                                      ? "Already deleted"
-                                      : "Cannot delete: already deleted"
-                                    : ""
-                              }
+                              title={msg.deleted_at || msg.is_hidden_by_me ? "Already deleted" : "Select message"}
                             >
-                              {selectedMessages.has(msg.id) &&
-                                !msgActions.length &&
-                                !msg.deleted_at && (
+                              {selectedMessages.has(msg.id) && !msg.deleted_at && !msg.is_hidden_by_me && (
                                   <CheckIcon className="w-3 h-3 text-white" />
                                 )}
                             </button>
@@ -3337,8 +3341,8 @@ function ThreadConversation({
                             onClick={() => {
                               if (
                                 isSelectionMode &&
-                                msgActions.length === 0 &&
-                                !msg.deleted_at
+                                !msg.deleted_at &&
+                                !msg.is_hidden_by_me
                               ) {
                                 setSelectedMessages((prev) => {
                                   const newSet = new Set(prev);
@@ -3547,15 +3551,15 @@ function ThreadConversation({
           {/* Input - Fixed at bottom, above navigation bar (only for non-shopping/non-notes threads) */}
           {!isShoppingThread && !isNotesThread && (
             <div
-              className="fixed bottom-0 left-0 right-0 px-4 pt-2 border-t backdrop-blur-sm z-20 transition-all duration-300"
+              className={cn(
+                "fixed bottom-0 left-0 right-0 z-20 border-t px-3 pt-2 shadow-[0_-8px_24px_rgba(0,0,0,0.12)]",
+                themeClasses.bgPage,
+              )}
               style={{
                 paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)",
                 borderTopColor: thread?.color
                   ? `${thread.color}15`
                   : "rgba(255,255,255,0.05)",
-                backgroundColor: thread?.color
-                  ? `${thread.color}05`
-                  : "rgba(var(--bg-card-custom), 0.95)",
               }}
             >
               {/* Voice recording mode - inline WhatsApp style */}
@@ -3587,8 +3591,11 @@ function ThreadConversation({
                       className="mb-1"
                     />
                   )}
+                  {isConvModeEnabled && <EraProposalCard variant="embedded" />}
+                  {isConvModeEnabled && <EraAskChips variant="embedded" />}
                   {/* Partner presence / typing / voice indicators */}
-                  <div className="flex items-center gap-3 mb-1.5">
+                  {(partnerRecordingVoice || partnerTyping || partnerOnline) && (
+                  <div className="mb-2 flex items-center gap-3 px-1">
                     {partnerRecordingVoice ? (
                       <div className={cn("flex items-center gap-1.5 text-[10px]", partnerColor)}>
                         {/* Mic icon with pulsing ring */}
@@ -3631,7 +3638,8 @@ function ThreadConversation({
                       </div>
                     ) : null}
                   </div>
-                <div className="flex gap-2">
+                  )}
+                <div className="flex min-w-0 items-center gap-2">
                   {/* Active compose color (HUB-11) — fast pre-select before
                       typing; stays sticky across sends so a batch of
                       same-color messages doesn't need reselecting each time. */}
@@ -3642,7 +3650,7 @@ function ThreadConversation({
                         setShowColorFilterMenu(false);
                         setShowComposeColorPicker((p) => !p);
                       }}
-                      className="w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all"
+                      className="w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all"
                       style={{
                         borderColor: activeComposeColor
                           ? (getMessageColorHex(activeComposeColor) ?? "rgba(255,255,255,0.2)")
@@ -3735,7 +3743,7 @@ function ThreadConversation({
                       e.key === "Enter" && !e.shiftKey && handleSend()
                     }
                     placeholder="Type a message..."
-                    className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border text-white placeholder:text-white/30 focus:outline-none transition-all duration-300"
+                    className="h-12 min-w-0 flex-1 rounded-2xl border bg-white/5 px-4 text-base text-white placeholder:text-white/40 focus:outline-none transition-colors sm:text-sm"
                     style={{
                       borderColor: thread?.color
                         ? `${thread.color}30`
@@ -3754,95 +3762,30 @@ function ThreadConversation({
                       }
                     }}
                   />
-                  {/* ERA conversation toggle — appears for budget + reminder threads */}
-                  {(thread?.purpose === "budget" || thread?.purpose === "reminder") && convMode.isSupported && (
-                    <ConversationToggle
-                      isEnabled={isConvModeEnabled}
-                      isSupported={convMode.isSupported}
-                      state={convMode.state}
-                      theme={theme}
-                      onToggle={() => setIsConvModeEnabled((p) => !p)}
-                      onWake={convMode.wake}
-                      onBargeIn={convMode.bargeIn}
-                    />
-                  )}
-                  {/* WhatsApp-style: Show mic when empty, send when typed */}
-                  <div className="relative w-12 h-12 flex items-center justify-center">
-                    {/* Mic button - fades out when typing */}
-                    <button
-                      type="button"
-                      onClick={() => setIsVoiceMode(true)}
-                      className={cn(
-                        "absolute inset-0 flex items-center justify-center rounded-xl text-white transition-all duration-200",
-                        newMessage.trim()
-                          ? "opacity-0 scale-75 pointer-events-none"
-                          : "opacity-100 scale-100",
-                        !(
-                          thread?.purpose === "budget" ||
-                          thread?.purpose === "reminder"
-                        ) && "hidden",
-                      )}
-                      style={
-                        thread?.color
-                          ? {
-                              background: `linear-gradient(135deg, ${thread.color}, ${thread.color}dd)`,
-                            }
-                          : undefined
-                      }
-                      title="Record voice message"
-                    >
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                      </svg>
-                    </button>
-                    {/* Send button - fades in when typing */}
-                    <button
-                      onClick={handleSend}
-                      disabled={!newMessage.trim() || sendMessage.isPending}
-                      className={cn(
-                        "absolute inset-0 flex items-center justify-center rounded-xl text-white transition-all duration-200",
-                        newMessage.trim()
-                          ? "opacity-100 scale-100"
-                          : "opacity-0 scale-75 pointer-events-none",
-                        "disabled:opacity-50 disabled:cursor-not-allowed",
-                      )}
-                      style={
-                        thread?.color
-                          ? {
-                              background: `linear-gradient(135deg, ${thread.color}, ${thread.color}dd)`,
-                            }
-                          : undefined
-                      }
-                    >
-                      <SendIcon className="w-5 h-5" />
-                    </button>
-                    {/* Fallback disabled send for non-voice threads */}
-                    {!(
-                      thread?.purpose === "budget" ||
-                      thread?.purpose === "reminder"
-                    ) &&
-                      !newMessage.trim() && (
-                        <button
-                          disabled
-                          className="absolute inset-0 flex items-center justify-center rounded-xl text-white opacity-50 cursor-not-allowed"
-                          style={
-                            thread?.color
-                              ? {
-                                  background: `linear-gradient(135deg, ${thread.color}, ${thread.color}dd)`,
-                                }
-                              : undefined
-                          }
-                        >
-                          <SendIcon className="w-5 h-5" />
-                        </button>
-                      )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={showVoiceButton ? () => setIsVoiceMode(true) : handleSend}
+                    disabled={!showVoiceButton && (!newMessage.trim() || sendMessage.isPending)}
+                    className={cn(
+                      "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white transition-colors disabled:cursor-not-allowed",
+                      showVoiceButton
+                        ? "bg-white/10 hover:bg-white/15"
+                        : newMessage.trim()
+                          ? "bg-cyan-500 hover:brightness-110 disabled:opacity-60"
+                          : "bg-white/10 text-white/30",
+                    )}
+                    style={!showVoiceButton && newMessage.trim() && thread?.color
+                      ? { backgroundColor: thread.color }
+                      : undefined}
+                    aria-label={showVoiceButton ? "Record voice message" : "Send message"}
+                    title={showVoiceButton ? "Record voice message" : "Send message"}
+                  >
+                    {showVoiceButton ? (
+                      <Mic className="h-6 w-6" strokeWidth={2.2} />
+                    ) : (
+                      <Send className="h-6 w-6" strokeWidth={2.2} />
+                    )}
+                  </button>
                 </div>
                 </>
               )}
@@ -3865,7 +3808,7 @@ function ThreadConversation({
 
           {/* Action Menu */}
           <div
-            className="fixed z-50 bg-bg-card-custom/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+             className={cn("fixed z-50 border border-white/20 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200", themeClasses.bgPage)}
             style={{
               left: `${actionMenuPosition.x}px`,
               top: `${actionMenuPosition.y}px`,
@@ -4075,164 +4018,32 @@ function ThreadConversation({
                     </div>
                   </div>
 
-                  {/* Multi-add Action - budget/reminder threads only, enters bulk-convert selection */}
-                  {(threadPurpose === "budget" ||
-                    threadPurpose === "reminder") && (
-                    <button
-                      onClick={() => {
-                        setIsSelectionMode(true);
-                        setSelectedMessages(new Set());
-
-                        // Close action menu
-                        setActionMenuMessage(null);
-                        setActionMenuPosition(null);
-                      }}
-                      className="w-full px-4 py-3 flex items-center gap-3 rounded-xl hover:bg-white/10 active:scale-[0.98] transition-all mt-1"
-                    >
-                      <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br from-cyan-500/20 to-blue-500/20 shrink-0">
-                        <ListChecks className="w-5 h-5 text-cyan-400" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <p className="text-sm font-semibold text-white">
-                          Multi-add…
-                        </p>
-                        <p className="text-xs text-white/60 mt-0.5">
-                          {threadPurpose === "reminder"
-                            ? "Select multiple messages to add as schedule items"
-                            : "Select multiple messages to add as transactions"}
-                        </p>
-                      </div>
-                    </button>
-                  )}
-
-                  {/* Select Message Action - only if message has no actions */}
-                  {!hasTransactionAction &&
-                    !hasReminderAction &&
-                    (threadPurpose === "shopping" ||
-                      threadPurpose === "notes") && (
-                      <button
-                        onClick={() => {
-                          // Enter selection mode and select this message
-                          setIsSelectionMode(true);
-                          setSelectedMessages(new Set([actionMenuMessage.id]));
-
-                          // Close action menu
-                          setActionMenuMessage(null);
-                          setActionMenuPosition(null);
-                        }}
-                        className="w-full px-4 py-3 flex items-center gap-3 rounded-xl hover:bg-white/10 active:scale-[0.98] transition-all mt-1"
-                      >
-                        <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br from-red-500/20 to-orange-500/20 shrink-0">
-                          <Trash2Icon className="w-5 h-5 text-red-400" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <p className="text-sm font-semibold text-white">
-                            Select to Delete
-                          </p>
-                          <p className="text-xs text-white/60 mt-0.5">
-                            Choose messages to remove
-                          </p>
-                        </div>
-                      </button>
-                    )}
-
-                  {/* Delete Message - For all other chats (budget, reminder, general, etc) */}
-                  {!hasTransactionAction &&
-                    !hasReminderAction &&
-                    threadPurpose !== "shopping" &&
-                    threadPurpose !== "notes" && (
-                      <>
-                        {/* Delete for me */}
-                        <button
-                          onClick={async () => {
-                            try {
-                              const res = await safeFetch("/api/hub/messages", {
-                                method: "PATCH",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                  messageIds: [actionMenuMessage.id],
-                                  action: "hide",
-                                }),
-                              });
-
-                              if (!res.ok) {
-                                throw new Error("Failed to hide message");
-                              }
-
-                              queryClient.invalidateQueries({
-                                queryKey: ["hub", "messages", threadId],
-                              });
-
-                              setActionMenuMessage(null);
-                              setActionMenuPosition(null);
-                            } catch (error) {
-                              console.error("Failed to hide message:", error);
-                            }
-                          }}
-                          className="w-full px-4 py-3 flex items-center gap-3 rounded-xl hover:bg-white/10 active:scale-[0.98] transition-all mt-1"
-                        >
-                          <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br from-orange-500/20 to-red-500/20 shrink-0">
-                            <Trash2Icon className="w-5 h-5 text-orange-400" />
-                          </div>
-                          <div className="flex-1 text-left">
-                            <p className="text-sm font-semibold text-white">
-                              Delete for me
-                            </p>
-                            <p className="text-xs text-white/60 mt-0.5">
-                              Hide from your view only
-                            </p>
-                          </div>
-                        </button>
-
-                        {/* Delete for everyone - only if it's my message */}
-                        {actionMenuMessage.sender_user_id === currentUserId && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                const res = await safeFetch("/api/hub/messages", {
-                                  method: "DELETE",
-                                  headers: {
-                                    "Content-Type": "application/json",
-                                  },
-                                  body: JSON.stringify({
-                                    messageIds: [actionMenuMessage.id],
-                                  }),
-                                });
-
-                                if (!res.ok) {
-                                  throw new Error("Failed to delete message");
-                                }
-
-                                queryClient.invalidateQueries({
-                                  queryKey: ["hub", "messages", threadId],
-                                });
-
-                                setActionMenuMessage(null);
-                                setActionMenuPosition(null);
-                              } catch (error) {
-                                console.error(
-                                  "Failed to delete message:",
-                                  error,
-                                );
-                              }
-                            }}
-                            className="w-full px-4 py-3 flex items-center gap-3 rounded-xl hover:bg-white/10 active:scale-[0.98] transition-all"
-                          >
-                            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br from-red-500/20 to-pink-500/20 shrink-0">
-                              <Trash2Icon className="w-5 h-5 text-red-400" />
-                            </div>
-                            <div className="flex-1 text-left">
-                              <p className="text-sm font-semibold text-white">
-                                Delete for everyone
-                              </p>
-                              <p className="text-xs text-white/60 mt-0.5">
-                                Remove permanently
-                              </p>
-                            </div>
-                          </button>
-                        )}
-                      </>
-                    )}
+                  <button
+                    onClick={() => {
+                      setIsSelectionMode(true);
+                      setShowHeaderTools(false);
+                      setSelectedMessages(new Set([actionMenuMessage.id]));
+                      setActionMenuMessage(null);
+                      setActionMenuPosition(null);
+                    }}
+                    className="w-full px-4 py-3 flex items-center gap-3 rounded-xl hover:bg-white/10"
+                  >
+                    <ListChecks className="w-5 h-5 text-cyan-400" />
+                    <span className="text-sm font-semibold text-white">Select messages</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedMessages(new Set([actionMenuMessage.id]));
+                      setDeleteError(false);
+                      setShowDeleteModal(true);
+                      setActionMenuMessage(null);
+                      setActionMenuPosition(null);
+                    }}
+                    className="w-full px-4 py-3 flex items-center gap-3 rounded-xl hover:bg-white/10"
+                  >
+                    <Trash2Icon className="w-5 h-5 text-rose-400" />
+                    <span className="text-sm font-semibold text-white">Delete</span>
+                  </button>
                 </div>
               );
             })()}
@@ -4296,162 +4107,48 @@ function ThreadConversation({
           />
         )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Message deletion scope */}
       {showDeleteModal && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
           onClick={() => setShowDeleteModal(false)}
         >
           <div
-            className="w-full max-w-md mx-4 mb-[88px] sm:mb-8 bg-bg-card-custom rounded-2xl border border-white/10 overflow-hidden animate-in slide-in-from-bottom-4"
-            onClick={(e) => e.stopPropagation()}
+            className={cn("w-full max-w-md mx-3 mb-6 rounded-2xl border border-white/10 p-3 shadow-2xl", themeClasses.bgPage)}
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Delete messages"
           >
-            <div className="p-4 border-b border-white/10">
-              <h3 className="text-lg font-semibold text-white text-center">
-                Delete {selectedMessages.size} message
-                {selectedMessages.size > 1 ? "s" : ""}?
-              </h3>
-            </div>
-
-            <div className="p-2">
-              {/* Delete for me */}
-              <button
-                onClick={() => {
-                  const idsToDelete = Array.from(selectedMessages);
-                  if (idsToDelete.length === 0) return;
-
-                  const queryKey = ["hub", "messages", threadId];
-
-                  // Optimistically hide messages
-                  queryClient.setQueryData<{ messages: HubMessage[] }>(
-                    queryKey,
-                    (old) => {
-                      if (!old) return old;
-                      return {
-                        ...old,
-                        messages: old.messages.map((msg) =>
-                          idsToDelete.includes(msg.id)
-                            ? { ...msg, is_hidden_by_me: true }
-                            : msg,
-                        ),
-                      };
-                    },
-                  );
-
-                  // Fire and forget
-                  safeFetch("/api/hub/messages", {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      messageIds: idsToDelete,
-                      action: "hide",
-                    }),
-                  }).then((res) => {
-                    if (!res.ok) {
-                      console.error("Failed to hide messages");
-                      queryClient.invalidateQueries({ queryKey });
-                    }
-                  });
-
-                  setSelectedMessages(new Set());
-                  setIsSelectionMode(false);
-                  setShowDeleteModal(false);
-                }}
-                className="w-full p-4 text-left hover:bg-white/5 rounded-xl transition-colors"
-              >
-                <p className="text-sm font-medium text-white">Delete for me</p>
-                <p className="text-xs text-white/50 mt-0.5">
-                  Messages will be hidden from your view only
-                </p>
-              </button>
-
-              {/* Delete for everyone - only if ALL selected messages are mine */}
-              {(() => {
-                const selectedMsgs = searchFilteredMessages.filter((m) =>
-                  selectedMessages.has(m.id),
-                );
-                const allMine = selectedMsgs.every(
-                  (m) => m.sender_user_id === currentUserId,
-                );
-
-                return (
-                  <button
-                    onClick={() => {
-                      if (!allMine) return;
-                      const idsToDelete = Array.from(selectedMessages);
-                      if (idsToDelete.length === 0) return;
-
-                      const queryKey = ["hub", "messages", threadId];
-
-                      // Optimistically remove messages
-                      queryClient.setQueryData<{ messages: HubMessage[] }>(
-                        queryKey,
-                        (old) => {
-                          if (!old) return old;
-                          return {
-                            ...old,
-                            messages: old.messages.filter(
-                              (msg) => !idsToDelete.includes(msg.id),
-                            ),
-                          };
-                        },
-                      );
-
-                      // Fire and forget
-                      safeFetch("/api/hub/messages", {
-                        method: "DELETE",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ messageIds: idsToDelete }),
-                      }).then((res) => {
-                        if (!res.ok) {
-                          console.error("Failed to delete messages");
-                          queryClient.invalidateQueries({ queryKey });
-                        }
-                      });
-
-                      setSelectedMessages(new Set());
-                      setIsSelectionMode(false);
-                      setShowDeleteModal(false);
-                    }}
-                    disabled={!allMine}
-                    className={cn(
-                      "w-full p-4 text-left rounded-xl transition-colors",
-                      allMine
-                        ? "hover:bg-red-500/10"
-                        : "opacity-40 cursor-not-allowed",
-                    )}
-                  >
-                    <p
-                      className={cn(
-                        "text-sm font-medium",
-                        allMine ? "text-red-400" : "text-white/50",
-                      )}
-                    >
-                      Delete for everyone
-                    </p>
-                    <p className="text-xs text-white/50 mt-0.5">
-                      {allMine
-                        ? "Messages will be permanently deleted for all participants"
-                        : "You can only delete your own messages for everyone"}
-                    </p>
-                  </button>
-                );
-              })()}
-            </div>
-
-            <div className="p-2 border-t border-white/10">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="w-full p-3 text-center text-white/70 hover:text-white hover:bg-white/5 rounded-xl transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
+            <h3 className="px-3 py-2 text-base font-semibold text-white">
+              Delete {selectedMessages.size} message{selectedMessages.size === 1 ? "" : "s"}
+            </h3>
+            {deleteError && <p className="px-3 py-1 text-sm text-rose-400">Delete failed. Try again.</p>}
+            <button
+              onClick={() => void deleteSelectedMessages("me")}
+              disabled={isDeletingMessages}
+              className="w-full rounded-xl px-3 py-3 text-left text-sm text-white hover:bg-white/10 disabled:opacity-50"
+            >
+              Delete for me
+            </button>
+            <button
+              onClick={() => void deleteSelectedMessages("everyone")}
+              disabled={!canDeleteForEveryone || isDeletingMessages}
+              className="w-full rounded-xl px-3 py-3 text-left text-sm text-rose-300 hover:bg-white/10 disabled:opacity-40"
+            >
+              Delete for everyone
+              {!canDeleteForEveryone && <span className="ml-2 text-xs text-white/40">Own messages only</span>}
+            </button>
+            <button
+              onClick={() => setShowDeleteModal(false)}
+              className="w-full rounded-xl px-3 py-2 text-sm text-white/60 hover:bg-white/10"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
 
-      {/* Thread Settings Modal */}
       {showThreadSettings && thread && (
         <ThreadSettingsModal
           thread={thread}

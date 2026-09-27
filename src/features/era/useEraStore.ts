@@ -6,6 +6,7 @@ import { DEFAULT_FACE_KEY } from "./faceRegistry";
 import type { ERAModuleKey } from "@/components/shared/ERAMark";
 import type { FocusEntity } from "./focusMemory";
 import { pushEntity } from "./focusMemory";
+import type { LexiconRule } from "./lexicon";
 import type { EraTemplate } from "./templates/matcher";
 import type { EraActiveProposal, EraPendingTurn, FaceKey, Intent } from "./types";
 
@@ -52,6 +53,10 @@ interface EraState {
    * synchronously — see that hook's doc comment for why.
    */
   templates: EraTemplate[];
+  /** HUB-80 — the speaker's live lexicon (useEraLexicon mirrors it here). */
+  lexicon: LexiconRule[];
+  /** HUB-80 — the rule the last turn applied, so "forget that" knows what to revoke. */
+  lastAppliedRuleId: string | null;
   /**
    * The raw text of the most recent router miss (`unknown`/`clarify`),
    * kept around so the command bar's "Ask AI" button stays usable after a
@@ -79,6 +84,8 @@ interface EraActions {
   setAskingAI: (v: boolean) => void;
   pushFocusEntity: (entity: FocusEntity) => void;
   setTemplates: (templates: EraTemplate[]) => void;
+  setLexicon: (lexicon: LexiconRule[]) => void;
+  setLastAppliedRuleId: (id: string | null) => void;
   setLastMissText: (text: string | null) => void;
 }
 
@@ -96,6 +103,8 @@ const INITIAL: EraState = {
   askingAI: false,
   focusEntities: [],
   templates: [],
+  lexicon: [],
+  lastAppliedRuleId: null,
   lastMissText: null,
 };
 
@@ -117,5 +126,7 @@ export const useEraStore = create<EraState & EraActions>((set) => ({
   pushFocusEntity: (entity) =>
     set((s) => ({ focusEntities: pushEntity(s.focusEntities, entity) })),
   setTemplates: (templates) => set({ templates }),
+  setLexicon: (lexicon) => set({ lexicon }),
+  setLastAppliedRuleId: (lastAppliedRuleId) => set({ lastAppliedRuleId }),
   setLastMissText: (text) => set({ lastMissText: text }),
 }));

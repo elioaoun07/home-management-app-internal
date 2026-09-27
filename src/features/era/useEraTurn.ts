@@ -30,22 +30,36 @@
 // (see /api/era/ask/route.ts's DAILY_AUTO_ESCALATION_CAP).
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef } from "react";
+import { toast } from "sonner";
+import { qk } from "@/lib/queryKeys";
+import { safeFetch } from "@/lib/safeFetch";
+import { parseSmartText } from "@/lib/smartTextParser";
+import { ToastIcons } from "@/lib/toastIcons";
+import { deriveOutcome, handoffUrl, type EraHandoff } from "./engine";
 import { getFace } from "./faceRegistry";
+import { moneyIn } from "./intents/formatters/budget";
+import { resolvePendingSlot } from "./intents/resolvers/slots";
+import { patchDueAt } from "./nativeActions";
 import { rootIntentRouter } from "./intentRouter";
-import { resolveIntent } from "./intents/resolveIntent";
+import { resolveIntent, type ResolveResult } from "./intents/resolveIntent";
 import { resolvePendingReminderAnswer } from "./intents/resolvers/schedule";
 import { logEraAction, logEraCapabilityAction } from "./logEraAction";
 import { classifyMiss, type MissClassification } from "./missTracking";
 import { useEraTemplates } from "./templates/useEraTemplates";
+import { useEraLexicon } from "./useEraLexicon";
 import { deriveLearnedVocab } from "./templates/vocabGrowth";
-import type { EraPendingTurn, Intent } from "./types";
+import type { FocusEntity } from "./focusMemory";
+import type { EraActiveProposal, EraOutcome, EraPendingSlot, EraPendingTurn, Intent } from "./types";
 import { useEraAskAI } from "./useEraAskAI";
 import { useEraBudgetSubmit } from "./useEraBudgetSubmit";
 import {
   useActiveEraConversation,
   useCreateEraMessage,
+  useEraMessages,
 } from "./useEraConversation";
+import { focusFromMessages } from "./focusRehydrate";
 import { useEraStore } from "./useEraStore";
 
 function intentPayload(intent: Intent): Record<string, unknown> {
@@ -67,7 +81,7 @@ function pushFocusFromResult(
   metadata: Record<string, unknown> | undefined,
 ): void {
   const relevant =
-    pending !== null || // completed a "what time?" question → draftReminder
+    pending !== null || // answered a question (what time? / which one? / scope)
     intent.kind === "draftReminder" ||
     intent.kind === "reminderReschedule" ||
     intent.kind === "reminderComplete" ||
@@ -104,6 +118,14 @@ export interface EraTurnResult {
    * escalation that already happened.
    */
   aiHandled?: boolean;
+  /** HUB-78 — the turn's single outcome (also persisted on the assistant row). */
+  outcome?: EraOutcome;
+  /**
+   * HUB-37 — nothing was sent (offline refusal before the request left):
+   * the command bar puts the text back so the person can resend it.
+   * Never true after a timeout (uncertain) — that might duplicate.
+   */
+  keepInput?: boolean;
 }
 
 export function useEraTurn() {
@@ -114,11 +136,13 @@ export function useEraTurn() {
   const pendingTurn = useEraStore((s) => s.pendingTurn);
   const setPendingTurn = useEraStore((s) => s.setPendingTurn);
   const setLastMissText = useEraStore((s) => s.setLastMissText);
+  const setActiveProposal = useEraStore((s) => s.setActiveProposal);
 
   const budgetSubmit = useEraBudgetSubmit();
   const { data: activeConversation } = useActiveEraConversation();
   const createMessage = useCreateEraMessage();
   const queryClient = useQueryClient();
+  const router = useRouter();
   // Stage C — the auto-escalation path below reuses this hook's askAI
   // verbatim (same request, same proposal rendering, same template
   // learning) rather than a second implementation of any of it.
@@ -126,36 +150,79 @@ export function useEraTurn() {
   // Stage 4 (HUB-30) — keeps useEraStore().templates current for the
   // router's Layer 2 matcher; see that hook's doc comment.
   useEraTemplates();
+  // HUB-80 — the lexicon the resolvers read every turn.
+  useEraLexicon();
+
+  // HUB-84 — rebuild "it" from the conversation's saved results after a
+  // reload (focus memory itself is page state). Once per conversation, and
+  // only when nothing is in focus yet.
+  const { data: messagesPage } = useEraMessages(activeConversation?.id ?? null);
+  const rehydratedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const convId = activeConversation?.id ?? null;
+    if (!convId || rehydratedFor.current === convId || !messagesPage?.messages) return;
+    rehydratedFor.current = convId;
+    const store = useEraStore.getState();
+    if (store.focusEntities.length > 0) return;
+    for (const e of focusFromMessages(messagesPage.messages).reverse()) store.pushFocusEntity(e);
+  }, [activeConversation?.id, messagesPage]);
 
   const runTurn = useCallback(
-    async (text: string): Promise<EraTurnResult> => {
-      // A question is outstanding — this turn answers it, full stop. It is
-      // never reclassified through the normal router (see module doc above).
-      const pending = pendingTurn;
-      const intent: Intent = pending
+    async (text: string, opts: { chip?: string } = {}): Promise<EraTurnResult> => {
+      // HUB-78 — turn state (plan §4 component 1). An outstanding question
+      // gets the first look at this turn, but it never swallows a new request.
+      let pending: EraPendingTurn | null = pendingTurn;
+      let slotResolution: ResolveResult | null = null;
+
+      if (pending?.kind === "slot") {
+        const answered = await resolvePendingSlot(pending, text, opts.chip).catch(() => null);
+        if (answered && !("unmatched" in answered)) {
+          slotResolution = answered as ResolveResult;
+        } else {
+          pending = null;
+          setPendingTurn(null);
+        }
+      } else if (pending?.kind === "draftReminder" && !hasDate(text)) {
+        // "what time?" is open but this is plainly a new request: keep the
+        // title as a reviewable draft (never lost) and handle the new one.
+        const next = rootIntentRouter.parse(text);
+        if (isConfident(next)) {
+          void resolvePendingReminderAnswer(pending, "").catch(() => {});
+          pending = null;
+          setPendingTurn(null);
+        }
+      }
+
+      const intent: Intent = slotResolution
         ? {
-            kind: "draftReminder",
-            face: "schedule",
-            title: pending.title,
+            kind: "slotAnswer",
+            face: (pending as EraPendingSlot).capability.startsWith("transfer") ? "budget" : "schedule",
+            capability: (pending as EraPendingSlot).capability,
             rawText: text,
           }
-        : rootIntentRouter.parse(text);
+        : pending?.kind === "draftReminder"
+          ? { kind: "draftReminder", face: "schedule", title: pending.title, rawText: text }
+          : rootIntentRouter.parse(text);
+      const answeringQuestion = pending !== null;
 
-      if (!pending) setLastIntent(intent);
+      if (!answeringQuestion) setLastIntent(intent);
 
       // A2 — a miss (unknown/clarify) keeps its raw text around so "Ask AI"
       // stays usable after the input box clears; a resolved turn (whether it
       // hit a router or answered a pending question) forgets it.
       const isMiss =
-        !pending && (intent.kind === "clarify" || intent.kind === "unknown");
+        !answeringQuestion && (intent.kind === "clarify" || intent.kind === "unknown");
       setLastMissText(isMiss ? text : null);
 
       const isFaceless =
         intent.kind === "unknown" ||
         intent.kind === "greeting" ||
+        intent.kind === "timeNow" ||
+        intent.kind === "navigate" ||
+        intent.kind === "forgetRule" ||
         intent.kind === "clarify";
 
-      if (!pending && !isFaceless) {
+      if (!answeringQuestion && !isFaceless) {
         setActiveFace(intent.face);
         setHubModuleKey(getFace(intent.face).eraModuleKey);
       }
@@ -167,7 +234,7 @@ export function useEraTurn() {
         content: text,
         intent_kind: intent.kind,
         intent_face: isFaceless ? null : intent.face,
-        intent_payload: intentPayload(intent),
+        intent_payload: { ...intentPayload(intent), ...(opts.chip ? { chip: opts.chip } : {}) },
       };
 
       if (conversationId) {
@@ -196,14 +263,17 @@ export function useEraTurn() {
         : null;
 
       // Stage C — a language-gap miss escalates to the AI automatically; a
-      // capability-gap miss (nothing in the registry covers this) never
-      // does. The user message above is already persisted, so `askAI` must
-      // not persist it a second time — it persists its own assistant reply
-      // and manages the proposal/template-learning flow exactly as a manual
-      // tap would.
-      if (isMiss && missClassification?.missKind === "language-gap") {
-        // Handled (or at least attempted) automatically — the manual "Ask
-        // AI" fallback no longer needs to hold this text around.
+      // capability-gap miss never does (HUB-77 kept "model on miss or
+      // conflict only"). HUB-76 — a NEGATED write never escalates.
+      const negatedWrite =
+        intent.kind === "clarify" &&
+        intent.reason === "speechAct" &&
+        intent.act === "negated";
+      if (
+        isMiss &&
+        !negatedWrite &&
+        missClassification?.missKind === "language-gap"
+      ) {
         setLastMissText(null);
         const reply = await askAI(text, {
           skipUserMessage: true,
@@ -213,55 +283,82 @@ export function useEraTurn() {
         return { intent, reply, metadata: undefined, aiHandled: true };
       }
 
-      const {
-        text: reply,
-        metadata,
-        pending: nextPending,
-      } = await (
-        pending
-          ? resolvePendingReminderAnswer(pending, text)
-          : resolveIntent(intent, { submitBudgetDraft: budgetSubmit.submit })
-      ).catch(() => ({
-        text: "Something went wrong. Try again.",
-        metadata: undefined as Record<string, unknown> | undefined,
-        pending: null,
-      }));
+      const resolution: ResolveResult =
+        slotResolution ??
+        (await (
+          (pending?.kind === "draftReminder"
+            ? resolvePendingReminderAnswer(pending, text)
+            : resolveIntent(intent, {
+                submitBudgetDraft: budgetSubmit.submit,
+              })) as Promise<ResolveResult>
+        ).catch(() => ({
+          text: "Something went wrong. Try again.",
+          ok: false,
+          metadata: undefined as Record<string, unknown> | undefined,
+          pending: null,
+        })));
+      const { text: reply, metadata, pending: nextPending, proposal, handoff, navigate, focus: nextFocus, undo } = resolution;
 
       setPendingTurn(nextPending ?? null);
+      // HUB-76 — a write held behind Confirm: show the card, write nothing.
+      if (proposal) setActiveProposal(proposal);
+      // HUB-81 — a page door: one Open tap, no auto-navigation mid-conversation.
+      if (navigate) setActiveProposal({ kind: "handoff", text: reply, open: () => router.push(navigate) });
+
+      const outcome = deriveOutcome(intent, resolution);
       if (intent.kind === "capabilityAction") {
         logEraCapabilityAction(intent.capabilityId, metadata, queryClient);
+      } else if (intent.kind === "slotAnswer") {
+        if (typeof metadata?.previousDueAt === "string" || metadata?.dueAt) {
+          logEraCapabilityAction("reminder.reschedule", metadata, queryClient);
+        }
       } else {
         logEraAction(intent.kind, metadata, queryClient);
       }
-      pushFocusFromResult(intent, pending, metadata);
+      pushFocusFromResult(intent, answeringQuestion ? pending : null, metadata);
+      // HUB-84 — every editable result becomes "it" for the next follow-up.
+      registerResultFocus({ intent, focus: nextFocus, proposal, handoff, metadata });
 
       const draftTransactionId =
         typeof metadata?.draftId === "string" ? metadata.draftId : null;
 
       setEraReply(reply);
 
-      if (conversationId) {
-        // onMutate makes the reply visible immediately. The write queue keeps
-        // it behind the user's row without holding up text or speech.
-        void createMessage
-          .mutateAsync({
-            conversation_id: conversationId,
-            role: "assistant",
-            content: reply,
-            intent_kind: intent.kind,
-            intent_face: isFaceless ? null : intent.face,
-            intent_payload: missClassification
-              ? {
-                  ...(metadata ?? intentPayload(intent)),
-                  ...missClassification,
-                }
-              : (metadata ?? intentPayload(intent)),
-            draft_transaction_id: draftTransactionId,
-          })
-          .catch(() => {});
+      // The assistant row carries the outcome (HUB-47 reads only this) and,
+      // for a spend, the handoff the precision form can open (component 9).
+      const assistantWrite = conversationId
+        ? createMessage
+            .mutateAsync({
+              conversation_id: conversationId,
+              role: "assistant",
+              content: reply,
+              intent_kind: intent.kind,
+              intent_face: isFaceless ? null : intent.face,
+              intent_payload: {
+                ...(metadata ?? intentPayload(intent)),
+                ...(missClassification ?? {}),
+                outcome,
+                ...(handoff ? { handoff } : {}),
+              },
+              draft_transaction_id: draftTransactionId,
+            })
+            .then((r) => r.message.id as string)
+        : Promise.reject(new Error("no conversation"));
+      assistantWrite.catch(() => {});
+
+      const openHandoff = () =>
+        assistantWrite
+          .then((id) => router.push(handoffUrl(id)))
+          .catch(() => toast.error("Couldn't open the form"));
+
+      // Receipts (plan §5): one line, Undo only where an inverse exists.
+      if (undo) {
+        showUndoReceipt(reply, undo);
+      } else {
+        showReceipt({ intent, outcome, metadata, reply, handoff, openHandoff, queryClient, setActiveProposal });
       }
 
-      return { intent, reply, metadata };
+      return { intent, reply, metadata, outcome, keepInput: metadata?.retryable === true };
     },
     [
       pendingTurn,
@@ -272,12 +369,159 @@ export function useEraTurn() {
       askAI,
       setLastIntent,
       setLastMissText,
+      setActiveProposal,
       setActiveFace,
       setHubModuleKey,
       setEraReply,
       queryClient,
+      router,
     ],
   );
 
   return { runTurn, budgetSubmitReady: budgetSubmit.ready };
+}
+
+/** HUB-84 — register the result a follow-up may edit next. */
+function registerResultFocus(args: {
+  intent: Intent;
+  focus?: FocusEntity;
+  proposal?: EraActiveProposal;
+  handoff?: EraHandoff;
+  metadata?: Record<string, unknown>;
+}): void {
+  const push = useEraStore.getState().pushFocusEntity;
+  if (args.focus) {
+    push(args.focus);
+    return;
+  }
+  const p = args.proposal;
+  if (p?.kind === "native_action" && p.action.type === "transfer") {
+    push({ id: "transfer-card", type: "transfer_card", title: p.text, addedAt: Date.now(), meta: { ...p.action } });
+    return;
+  }
+  const m = args.metadata;
+  if (typeof m?.draftId === "string" && args.handoff?.kind === "spend") {
+    const h = args.handoff;
+    push({
+      id: m.draftId,
+      type: "draft",
+      title: typeof m.categoryName === "string" ? m.categoryName : "Draft",
+      addedAt: Date.now(),
+      meta: {
+        draftId: m.draftId,
+        accountId: h.accountId,
+        amount: h.amount,
+        currency: h.currency,
+        categoryId: h.categoryId,
+        subcategoryId: h.subcategoryId,
+        description: h.description,
+        date: h.date,
+      },
+    });
+  }
+}
+
+function showUndoReceipt(label: string, undo: () => Promise<boolean>): void {
+  const run = once(undo);
+  toast.success(label, {
+    icon: ToastIcons.success,
+    duration: 4000,
+    action: { label: "Undo", onClick: () => run().then((ok) => (ok ? toast.success("Undone") : toast.error("Couldn't undo"))) },
+  });
+}
+
+function isConfident(intent: Intent): boolean {
+  return !["clarify", "unknown", "greeting", "switchFace"].includes(intent.kind);
+}
+
+function hasDate(text: string): boolean {
+  const p = parseSmartText(text);
+  return p.confidence.date > 0 && Boolean(p.dueDate);
+}
+
+function showReceipt(args: {
+  intent: Intent;
+  outcome: EraOutcome;
+  metadata: Record<string, unknown> | undefined;
+  reply: string;
+  handoff: EraHandoff | undefined;
+  openHandoff: () => void;
+  queryClient: ReturnType<typeof useQueryClient>;
+  setActiveProposal: (p: EraActiveProposal | null) => void;
+}): void {
+  const { outcome, metadata: m, handoff, openHandoff, queryClient } = args;
+
+  if (outcome.status === "drafted" && typeof m?.draftId === "string") {
+    const draftId = m.draftId;
+    const amount = typeof m.amount === "number" ? m.amount : null;
+    const title = [
+      "Draft",
+      amount !== null ? moneyIn(amount, typeof m.currency === "string" ? m.currency : undefined) : null,
+      typeof m.categoryName === "string" ? m.categoryName : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const undo = once(async () => {
+      const res = await safeFetch(`/api/drafts/${draftId}`, { method: "DELETE" });
+      queryClient.invalidateQueries({ queryKey: qk.drafts() });
+      queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+      return res.ok;
+    });
+    toast.success(title, {
+      icon: ToastIcons.success,
+      duration: 4000,
+      action: {
+        label: "Undo",
+        onClick: () =>
+          undo().then((ok) => (ok ? toast.success("Undone") : toast.error("Couldn't undo"))),
+      },
+      cancel: { label: "Change", onClick: openHandoff },
+    });
+    return;
+  }
+
+  if (outcome.status === "handed_off" && handoff) {
+    args.setActiveProposal({ kind: "handoff", text: args.reply, open: openHandoff });
+    return;
+  }
+
+  if (outcome.status !== "done" || typeof m?.itemId !== "string") return;
+  const itemId = m.itemId;
+  const title = typeof m.title === "string" ? m.title : "Reminder";
+  const label = typeof m.dueAt === "string" ? `${title} · ${formatDue(m.dueAt)}` : title;
+
+  if (outcome.inverse === "reminder.patchDue" && typeof m.previousDueAt === "string") {
+    const previous = m.previousDueAt;
+    const undo = once(() => patchDueAt(itemId, previous, queryClient));
+    toast.success(label, {
+      icon: ToastIcons.success,
+      duration: 4000,
+      action: { label: "Undo", onClick: () => undo().then((ok) => (ok ? toast.success("Undone") : toast.error("Couldn't undo"))) },
+    });
+  } else if (outcome.inverse === "reminder.delete") {
+    const undo = once(async () => {
+      const res = await safeFetch(`/api/items/${itemId}`, { method: "DELETE", timeoutMs: 8_000 });
+      queryClient.invalidateQueries({ queryKey: qk.scheduleItems() });
+      return res.ok;
+    });
+    toast.success(label, {
+      icon: ToastIcons.success,
+      duration: 4000,
+      action: { label: "Undo", onClick: () => undo().then((ok) => (ok ? toast.success("Undone") : toast.error("Couldn't undo"))) },
+    });
+  }
+}
+
+function formatDue(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
+}
+
+function once(fn: () => Promise<boolean>): () => Promise<boolean> {
+  let ran = false;
+  return async () => {
+    if (ran) return false;
+    ran = true;
+    return fn();
+  };
 }
