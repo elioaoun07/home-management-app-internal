@@ -491,6 +491,7 @@ export function medicationToSaveDTO(m: HealthMedication): SaveHealthMedicationDT
     ends_at: m.ends_at ? new Date(m.ends_at).toISOString() : null,
     min_hours_between: m.min_hours_between,
     max_per_day: m.max_per_day,
+    prn_slots: m.prn_slots ?? [],
     notes: m.notes,
   };
 }
@@ -643,7 +644,9 @@ export function useSetMedicationDose() {
                 id: dto.log_id ?? `optimistic-${dto.medication_id}-${dto.scheduled_at}`,
                 medication_id: dto.medication_id,
                 managing_user_id: "",
-                scheduled_at: dto.scheduled_at ?? null,
+                scheduled_at: dto.prn_slot ? null : (dto.scheduled_at ?? null),
+                prn_slot: dto.prn_slot ?? null,
+                prn_day: null,
                 taken_at: dto.taken_at ?? now,
                 created_at: now,
               },
@@ -652,9 +655,9 @@ export function useSetMedicationDose() {
           : logs.filter(
               (l) =>
                 l.medication_id !== dto.medication_id ||
-                (dto.scheduled_at
-                  ? !sameInstant(l.scheduled_at, dto.scheduled_at)
-                  : l.id !== dto.log_id),
+                (dto.prn_slot || !dto.scheduled_at
+                  ? l.id !== dto.log_id
+                  : !sameInstant(l.scheduled_at, dto.scheduled_at)),
             );
         queryClient.setQueryData<HealthBundle>(healthcareKeys.bundle(), {
           ...prev,
@@ -663,14 +666,14 @@ export function useSetMedicationDose() {
       }
       return { prev };
     },
-    onSuccess: (_res, dto) => {
-      if (!dto.taken || dto.scheduled_at) return;
+    onSuccess: ({ log }, dto) => {
+      if (!dto.taken || (dto.scheduled_at && !dto.prn_slot)) return;
       toast.success(`${dto.label ?? "Dose"} taken`, {
         icon: ToastIcons.success,
         duration: 4000,
         action: {
           label: "Undo",
-          onClick: () => mutation.mutate({ ...dto, taken: false }),
+          onClick: () => mutation.mutate({ ...dto, log_id: log?.id ?? dto.log_id, taken: false }),
         },
       });
     },

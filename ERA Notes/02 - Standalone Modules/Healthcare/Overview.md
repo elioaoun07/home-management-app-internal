@@ -32,13 +32,13 @@ Family health profiles: allergies (junction → Recipes warnings), medical histo
 
 ### Medications (HLTH-24)
 
-- **Model.** `mode` = `course` (fixed wall-clock `dose_times` from the `starts_at` first dose until the exclusive `ends_at`; null = ongoing) or `as_needed` (symptom-driven; optional `min_hours_between` / `max_per_day`; no reminders). `food_timing` = `any | empty_stomach | with_food`. Times are in the medication's own IANA `timezone`.
-- **Dose identity.** A course dose is its slot instant: `health_medication_logs` unique `(medication_id, scheduled_at)`. As-needed doses have `scheduled_at` NULL and a client-generated id. Double-tap, retry and mirror writes all collapse to one row.
+- **Model.** `mode` = `course` (fixed wall-clock `dose_times` from the `starts_at` first dose until the exclusive `ends_at`; null = ongoing) or `as_needed` (symptom-driven; optional `min_hours_between` / `max_per_day` and morning/evening `prn_slots`; no reminders). `food_timing` = `any | empty_stomach | with_food`. Times are in the medication's own IANA `timezone`.
+- **Dose identity.** A course dose is its slot instant: `health_medication_logs` unique `(medication_id, scheduled_at)`. As-needed doses have `scheduled_at` NULL and a client-generated id. Named as-needed opportunities additionally have a unique `(medication_id, prn_day, prn_slot)` key. The 08:00/20:00 values sent to the RPC identify Morning/Evening; they are not actual dose times or reminders. The user chooses the opportunity; the app does not impose a clock boundary. Historical Noon logs remain Noon after the correction. Server-side checks enforce the minimum gap and daily max under a medication row lock; repeat requests return the existing log.
 - **Reminders.** `health_rebuild_medication_reminders()` creates one `urgent` recurring `reminder` item per dose time (`FREQ=DAILY`, anchored on the first slot ≥ `starts_at`, `end_until` = last slot < `ends_at`), with an absolute `item_alerts` row on the next future slot; the existing `item-reminders` cron fires and re-arms it. Items carry `source_medication_id` and `metadata_json.medication_dose_time`. Every save **replaces** them (delete + recreate, one transaction) and re-marks taken doses as completed occurrences.
 - **Two-way sync.** Health → Schedule: `health_set_dose()` writes the log and the item's completed occurrence together. Schedule → Health: triggers `health_mirror_occurrence_done/undone` on `item_occurrence_actions` log/un-log the nearest dose slot. `app.health_mirror_off` (transaction-local) stops the RPCs' own writes and reminder rebuild cascades from echoing.
 - **Writes are RPCs** (`health_save_medication`, `health_set_medication_deleted`, `health_set_dose`) — SECURITY INVOKER, so items/health RLS applies; only the mirror trigger is SECURITY DEFINER. Routes: `src/app/api/healthcare/medications/` + shared server helpers `src/lib/health/medicationServer.ts`. Google Calendar is best-effort around the RPCs (events removed before a rebuild, created after).
 - **Checklist math** is `src/lib/health/medicationSchedule.ts` (pure, tested) — slot generation for one day, course totals/day counter, next dose, as-needed wait. It mirrors the SQL rules; it is not an item-recurrence expansion engine.
-- **UI** `src/app/healthcare/MedicationsSection.tsx`: Doses card (‹ day › switcher, tap to tick, as-needed "Take" with Undo) and Medications card (tap row to edit).
+- **UI** `src/app/healthcare/MedicationsSection.tsx`: Doses card with a day switcher, connected daily timeline, circular Taken/Not taken toggles and progress for scheduled doses. As-needed medicines have circular Take controls; named Morning/Evening opportunities show their own Taken/Not taken state and toggle by log ID. Mutations retain Undo. The Medications card opens a row for editing.
 
 ## Database
 
@@ -71,6 +71,7 @@ Family health profiles: allergies (junction → Recipes warnings), medical histo
 - **Profile soft delete stops its medications' reminders** (`rebuildProfileMedicationReminders` in the profile DELETE route); Undo recreates them.
 - **DST:** dose times are wall-clock and the SQL/checklist honour DST, but the `item-reminders` cron re-arms alerts with a UTC-fixed RRULE (existing engine behaviour) — a course crossing a DST change can push one hour off until the next save.
 - Dose ticks are not queued offline (the health hooks use `safeFetch` without the IndexedDB queue) — offline ticks fail with a toast.
+- Deployment: the owner reported running the earlier Morning/Noon version of `migrations/2026-09-27_medication-prn-slots.sql` on 2026-09-27. Run `migrations/2026-09-27_medication-evening-upgrade.sql` to change current options to Morning/Evening while preserving historical Noon logs. Owner report is not a live DB or phone verification.
 - Health `requestJson` calls for medication writes pass `timeoutMs: 30_000` (Google sync runs inside the request).
 
 ## See Also

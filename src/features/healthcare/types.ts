@@ -7,6 +7,9 @@ export type BloodType = "A+" | "A-" | "B+" | "B-" | "AB+" | "AB-" | "O+" | "O-";
 /** course = fixed dose times until the course is done; as_needed = taken based on how you feel. */
 export type MedicationMode = "course" | "as_needed";
 export type MedicationFoodTiming = "any" | "empty_stomach" | "with_food";
+export type MedicationPrnSlot = "morning" | "evening";
+/** Noon can appear in logs created before the evening correction. */
+export type MedicationLoggedPrnSlot = MedicationPrnSlot | "noon";
 
 export interface HealthProfile {
   id: string;
@@ -85,6 +88,8 @@ export interface HealthMedication {
   ends_at: string | null;
   min_hours_between: number | null;
   max_per_day: number | null;
+  /** Optional named dose opportunities, at most one logged dose per slot each local day. */
+  prn_slots: MedicationPrnSlot[];
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -97,6 +102,8 @@ export interface HealthMedicationLog {
   managing_user_id: string;
   /** Course dose slot; null = as-needed dose. */
   scheduled_at: string | null;
+  prn_slot: MedicationLoggedPrnSlot | null;
+  prn_day: string | null;
   taken_at: string;
   created_at: string;
 }
@@ -172,6 +179,7 @@ export interface SaveHealthMedicationDTO {
   ends_at: string | null;
   min_hours_between: number | null;
   max_per_day: number | null;
+  prn_slots: MedicationPrnSlot[];
   notes: string | null;
 }
 
@@ -182,9 +190,11 @@ export interface CreateHealthMedicationDTO extends SaveHealthMedicationDTO {
 export interface SetMedicationDoseDTO {
   medication_id: string;
   taken: boolean;
-  /** Course dose slot (ISO). */
+  /** Course dose slot, or named as-needed opportunity identity key (ISO). */
   scheduled_at?: string | null;
   /** As-needed dose id — client-generated so a retry can't double-log. */
   log_id?: string | null;
   taken_at?: string | null;
+  /** Client-only label for optimistic state and the Undo toast. */
+  prn_slot?: MedicationPrnSlot | null;
 }

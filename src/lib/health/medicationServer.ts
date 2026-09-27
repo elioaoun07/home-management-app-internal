@@ -39,11 +39,15 @@ export const medicationFieldsSchema = z
     ends_at: z.string().datetime({ offset: true }).nullish(),
     min_hours_between: z.number().positive().max(168).nullish(),
     max_per_day: z.number().int().positive().max(48).nullish(),
+    prn_slots: z.array(z.enum(["morning", "evening"])).max(2).default([]),
     notes: z.string().max(2000).nullish(),
   })
   .superRefine((v, ctx) => {
     if (v.mode === "course" && v.dose_times.length === 0) {
       ctx.addIssue({ code: "custom", path: ["dose_times"], message: "At least one dose time" });
+    }
+    if (v.mode === "course" && v.prn_slots.length > 0) {
+      ctx.addIssue({ code: "custom", path: ["prn_slots"], message: "As-needed only" });
     }
     if (v.ends_at && new Date(v.ends_at) <= new Date(v.starts_at)) {
       ctx.addIssue({ code: "custom", path: ["ends_at"], message: "End must be after the first dose" });
@@ -62,7 +66,8 @@ export function normalizeMedicationFields(v: MedicationFields) {
     ends_at: v.ends_at ?? null,
     dose_times: course ? [...new Set(v.dose_times)].sort() : [],
     min_hours_between: course ? null : (v.min_hours_between ?? null),
-    max_per_day: course ? null : (v.max_per_day ?? null),
+    max_per_day: course ? null : (v.max_per_day ?? (v.prn_slots.length || null)),
+    prn_slots: course ? [] : [...new Set(v.prn_slots)],
   };
 }
 

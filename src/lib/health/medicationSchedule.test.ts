@@ -132,4 +132,19 @@ describe("asNeededState", () => {
     expect(state.nextOkAt).toBeNull();
     expect(state.atDailyMax).toBe(false);
   });
+
+  it("tracks morning and evening independently on the medication's local day", () => {
+    const state = asNeededState(
+      prn,
+      [
+        { scheduled_at: null, taken_at: "2026-09-27T06:00:00Z", prn_slot: "morning" },
+        { scheduled_at: null, taken_at: "2026-09-26T17:00:00Z", prn_slot: "evening" },
+        { scheduled_at: "2026-09-27T09:00:00Z", taken_at: "2026-09-27T09:00:00Z" },
+      ],
+      new Date("2026-09-27T12:00:00Z"),
+    );
+    expect(state.takenToday).toBe(1);
+    expect(state.takenSlotsToday).toEqual(["morning"]);
+    expect(state.nextOkAt).toBeNull();
+  });
 });

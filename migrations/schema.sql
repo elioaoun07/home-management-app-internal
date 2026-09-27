@@ -1743,6 +1743,7 @@ CREATE TABLE public.health_medications (
   ends_at timestamp with time zone,
   min_hours_between numeric CHECK (min_hours_between IS NULL OR min_hours_between > 0::numeric),
   max_per_day integer CHECK (max_per_day IS NULL OR max_per_day > 0),
+  prn_slots text[] NOT NULL DEFAULT '{}'::text[],
   notes text,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -1751,19 +1752,26 @@ CREATE TABLE public.health_medications (
   CONSTRAINT health_medications_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.health_profiles(id),
   CONSTRAINT health_medications_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id),
   CONSTRAINT health_medications_course_times_check CHECK (mode <> 'course'::text OR cardinality(dose_times) > 0),
-  CONSTRAINT health_medications_window_check CHECK (ends_at IS NULL OR ends_at > starts_at)
+  CONSTRAINT health_medications_window_check CHECK (ends_at IS NULL OR ends_at > starts_at),
+  CONSTRAINT health_medications_prn_slots_check CHECK (prn_slots <@ ARRAY['morning'::text, 'evening'::text] AND (mode = 'as_needed'::text OR cardinality(prn_slots) = 0))
 );
 CREATE TABLE public.health_medication_logs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   medication_id uuid NOT NULL,
   managing_user_id uuid NOT NULL,
   scheduled_at timestamp with time zone,
+  prn_slot text,
+  prn_day date,
   taken_at timestamp with time zone NOT NULL DEFAULT now(),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT health_medication_logs_pkey PRIMARY KEY (id),
   CONSTRAINT health_medication_logs_medication_id_fkey FOREIGN KEY (medication_id) REFERENCES public.health_medications(id),
-  CONSTRAINT health_medication_logs_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id)
+  CONSTRAINT health_medication_logs_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id),
+  CONSTRAINT health_medication_logs_prn_slot_check CHECK ((prn_slot IS NULL AND prn_day IS NULL) OR (prn_slot = ANY (ARRAY['morning'::text, 'noon'::text, 'evening'::text]) AND prn_day IS NOT NULL AND scheduled_at IS NULL))
 );
+CREATE UNIQUE INDEX health_medication_logs_prn_slot_unique
+  ON public.health_medication_logs (medication_id, prn_day, prn_slot)
+  WHERE prn_slot IS NOT NULL;
 CREATE TABLE public.wardrobe_profiles (
   user_id uuid NOT NULL,
   height_cm numeric,

@@ -18,7 +18,9 @@ Private health records and dependable reminders with explicit evidence limits. S
 
 Core profiles, allergies, conditions, vaccines and warning integration shipped as code July17. Current application, privacy and mobile acceptance remain HLTH-7.
 
-Medications shipped as code 2026-09-26 (HLTH-24, owner request while sick, ahead of the HLTH-19 skill gate): medicine list with dose, full-course vs as-needed, food timing, dose times and course length; a day-by-day taken checklist; one urgent recurring Schedule reminder per dose time, kept in sync both ways with the checklist. Evidence is local only — PGlite fixture run 31/31 and `medicationSchedule.test.ts` 14/14. The migration is **not applied**; until the owner runs it (HLTH-25) "Add medication" fails. Verified Google status (HLTH-9/10), calendar badge (HLTH-11) and the phone alarm battery (HLTH-12) remain.
+Medications shipped as code 2026-09-26 (HLTH-24, owner request while sick, ahead of the HLTH-19 skill gate): medicine list with dose, full-course vs as-needed, food timing, dose times and course length; a day-by-day taken checklist; one urgent recurring Schedule reminder per dose time, kept in sync both ways with the checklist. Local evidence: PGlite fixture run 31/31 and `medicationSchedule.test.ts` 14/14. On 2026-09-27 the owner reported running the earlier Morning/Noon PRN migration, which implies the base medication migration was also applied; live DB and phone behavior remain unverified under HLTH-25. Verified Google status (HLTH-9/10), calendar badge (HLTH-11) and the phone alarm battery (HLTH-12) remain.
+
+2026-09-27 medication form extension (HLTH-26, source and local SQL checks only): a morning/evening course shortcut, as-needed symptom note, and optional one-dose-per-morning/evening opportunities. Minimum spacing and daily maximum are checked by the write RPC as well as the button. The owner must run the evening upgrade after the earlier Morning/Noon migration; HLTH-25 still owns deployment and phone acceptance.
 
 Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Healthcare/Healthcare — Master Book.md>) preserves detailed older narratives and receipts.
 
@@ -26,16 +28,17 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 - Conditions/vaccines/profiles are private to the managing user with per-profile household opt-in. Allergies are household-visible through the approved feed, not blanket direct-table sharing. Dependent profiles with user_id NULL are supported. *(IMPLEMENTED as code 2026-07-17; deployment witness HLTH-7)*
 - Allergen matching is an editable warning aid, never a cooking gate or proof of safety. Unavailable household evidence must remain unavailable.
-- Medication reminders use existing urgent reminder items, one per dose-time, existing recurrence and Google sync. No new alert engine. Dose log uniqueness includes medication, occurrence date and dose time. *(IMPLEMENTED as code 2026-09-26 — HLTH-24: key is `(medication_id, scheduled_at)`, the slot instant; migration pending HLTH-25)*
+- Medication reminders use existing urgent reminder items, one per dose-time, existing recurrence and Google sync. No new alert engine. Dose log uniqueness includes medication, occurrence date and dose time. *(IMPLEMENTED as code 2026-09-26 — HLTH-24: key is `(medication_id, scheduled_at)`, the slot instant; owner reports migration run, verification pending HLTH-25)*
 - Warn-but-allow when Google is disconnected (owner decision July17). Sync is awaited with bookkeeping; an event identifier still does not prove a physical alarm. Schedule edits archive/recreate reminder items; adherence history remains in medication logs. *(Partly IMPLEMENTED 2026-09-26: edits hard-delete and recreate the reminder items in one RPC, then re-mark already-taken doses as completed occurrences; history stays in logs. Google sync is still best-effort — verified bookkeeping is HLTH-9.)*
 - Medication model (owner, 2026-09-26): two modes — **full course** (fixed wall-clock dose times from a first-dose instant for N days; N blank = ongoing) and **as needed** (taken based on symptoms, optional minimum gap and daily max, no reminders). Food timing is `any | empty_stomach | with_food`. Dose times live in the medication's own IANA zone so checklist, dose keys and reminders agree when the phone travels. The Health checklist and the Schedule reminder are one fact: ticking either side marks the other (RPC one way, `item_occurrence_actions` trigger the other). *(IMPLEMENTED as code 2026-09-26)*
+- An as-needed medicine may have named Morning and Evening opportunities, with at most one logged dose per opportunity each local day. The names are user-selected dose opportunities, not fixed clock windows or automatic reminders. Minimum spacing and daily maximum are enforced by the write RPC. Historical Noon logs remain unchanged. *(IMPLEMENTED as code 2026-09-27 — HLTH-26; evening upgrade pending owner application)*
 - Expiry and vaccine reminders use the existing materialization boundary. Healthcare skill HLTH-19 is required before medication math, not a final polish item. UI extraction is only an on-touch rider.
 
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
 
-🔴 **HLTH-25** Medication tracking is code-complete but its migration is not applied — "Add medication" fails until the owner runs it. See [acceptance](<#hlth-25>).
+🔴 **HLTH-25** Owner reports the base and earlier PRN migrations applied, but live DB and phone behavior are unverified; the Morning/Evening upgrade remains to run. See [acceptance](<#hlth-25>).
 
 🔴 **HLTH-7** Verify core deployment, household privacy and mobile use. See [acceptance](<#hlth-7>) for the root cause, evidence and gate.
 
@@ -51,6 +54,21 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execution-plans>). Read only the selected ID, its declared dependencies and relevant source; planning does not certify deployment or mark work complete.
 
+### HLTH-27
+
+**Outcome:** Show doses as an interactive daily timeline.
+
+- **Acceptance:** Scheduled doses appear as connected circles in time order; tapping a circle toggles its Taken/Not taken state and updates the day progress. As-needed doses use circular Take controls; Morning and Evening opportunities show their individual states and can be untaken from the same control. Existing dose Undo and server limits remain in effect.
+- **Evidence, 2026-09-27:** UI implemented in `MedicationsSection.tsx`; local typecheck, scoped lint and medication schedule tests passed. Phone visual and live medication acceptance remain in HLTH-25.
+
+### HLTH-26
+
+**Outcome:** Represent and enforce the owner's three medication instructions.
+
+- **Acceptance:** A full course can store a two-pill dose at morning/evening times with any food timing; an as-needed stomach-pain medicine can store one pill, with food, and an eight-hour minimum gap; an as-needed medicine can store one pill, empty stomach, and one Morning plus one Evening opportunity per local day.
+- **Evidence, 2026-09-27:** `node scripts/check-medication-prn.mjs` covers replay, gap, named slots, Undo, daily maximum and course regression in isolated PGlite; `medicationSchedule.test.ts` covers local-day slot state. This is not a live DB or phone witness.
+- **Deployment:** Owner reports the earlier Morning/Noon PRN migration applied. Run `migrations/2026-09-27_medication-evening-upgrade.sql` to convert current options and preserve historical Noon logs. HLTH-25 retains phone acceptance.
+
 ### HLTH-25
 
 **Outcome:** Apply the medications migration and accept doses + reminders on phone.
@@ -59,7 +77,7 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 **Touches:** none
 
-- **Acceptance:** Owner runs `migrations/2026-09-26_healthcare-medications.sql` in the Supabase SQL Editor (idempotent). Its section 10 holds read-only checks: both new tables show RLS on with a `*_owner_all` policy, `item_occurrence_actions` has the two `health_mirror_occurrence_*` triggers, and `get_health_bundle()` returns `medications` and `medication_logs`.
+- **Acceptance:** Owner reports the base and earlier Morning/Noon PRN migrations applied. Owner runs `migrations/2026-09-27_medication-evening-upgrade.sql` in the Supabase SQL Editor, then verifies the DB state. The base migration's section 10 holds read-only checks: both new tables show RLS on with a `*_owner_all` policy, `item_occurrence_actions` has the two `health_mirror_occurrence_*` triggers, and `get_health_bundle()` returns `medications` and `medication_logs`.
 - **Acceptance (390×844):** add a 3×/day full course → Schedule shows 3 urgent reminders titled "<name> · <dose>"; tick a dose in Health → that occurrence is completed in Schedule; complete the next one from Schedule → it is ticked in Health; un-tick → both revert; the push arrives at the next dose time; delete → reminders disappear and Undo restores them with ticks intact; an as-needed medicine logs "Take" with Undo and shows the minimum-gap wait.
 - **Failure case:** "Add medication" failing with a missing `health_save_medication` function means the migration is not applied.
 - **Local evidence (not deployment proof), 2026-09-26:** PGlite fixture run against a stub schema, 31/31 — migration re-runs cleanly; 3 reminders per 3-dose course with correct anchors/UNTIL; double tick → 1 log + 1 completed occurrence; Schedule complete/un-complete mirrors; edit replaces reminders with zero duplicates and re-completes taken doses; item cascade delete keeps history; soft delete/restore; as-needed replay idempotent; partner writes denied (P0002/42501) and an unshared profile's medications absent from the partner bundle; malformed time/timezone rejected. `src/lib/health/medicationSchedule.test.ts` 14/14.
@@ -1114,6 +1132,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - ✅ 2026-07-17 — **HLTH-4** allergen matcher: word-boundary + plurals, Lebanese-staples synonyms, editable per-allergy keywords (`allergenMatch.test.ts` 12/12)
 - ✅ 2026-07-17 — **HLTH-5** recipe allergen warnings: detail-view banner + per-ingredient flags, both partners' allergies, offline-persisted feed (`household-allergens` in `STABLE_KEYS`)
 - ✅ 2026-07-17 — **HLTH-6** health page UI: profile chips including dependents, allergies with severity/keywords, medical history, vaccines, Undo on every mutation
+- ✅ 2026-09-27 — **HLTH-26** Cover three medication dosing instructions: course morning/evening, eight-hour as-needed gap, and one Morning plus one Evening as-needed opportunity ([criteria](<Healthcare — Master Book.md#hlth-26>); isolated PGlite and schedule tests; evening upgrade pending owner application).
+- ✅ 2026-09-27 — **HLTH-27** Show doses as an interactive daily timeline — [criteria](<Healthcare — Master Book.md#hlth-27>)
 
 ## Delivery session log
 

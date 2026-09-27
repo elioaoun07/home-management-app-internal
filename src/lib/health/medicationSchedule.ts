@@ -27,6 +27,7 @@ export interface MedicationScheduleInput {
 export interface DoseLogInput {
   scheduled_at: string | null;
   taken_at: string;
+  prn_slot?: "morning" | "noon" | "evening" | null;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -185,6 +186,7 @@ export interface AsNeededState {
   /** Earliest next dose when the minimum gap hasn't elapsed yet. */
   nextOkAt: Date | null;
   atDailyMax: boolean;
+  takenSlotsToday: ("morning" | "noon" | "evening")[];
 }
 
 /** As-needed status from the medication's logs ("today" in its zone). */
@@ -195,11 +197,17 @@ export function asNeededState(
 ): AsNeededState {
   const todayKey = dateKeyInZone(now, med.timezone);
   const taken = logs
+    .filter((l) => l.scheduled_at === null)
     .map((l) => new Date(l.taken_at))
     .sort((a, b) => b.getTime() - a.getTime());
   const takenToday = taken.filter(
     (t) => dateKeyInZone(t, med.timezone) === todayKey,
   ).length;
+  const takenSlotsToday = logs
+    .filter((l) =>
+      l.prn_slot && dateKeyInZone(new Date(l.taken_at), med.timezone) === todayKey,
+    )
+    .map((l) => l.prn_slot!) as ("morning" | "noon" | "evening")[];
   const lastTakenAt = taken[0] ?? null;
   let nextOkAt: Date | null = null;
   if (lastTakenAt && med.min_hours_between) {
@@ -211,5 +219,6 @@ export function asNeededState(
     lastTakenAt,
     nextOkAt,
     atDailyMax: !!med.max_per_day && takenToday >= med.max_per_day,
+    takenSlotsToday,
   };
 }

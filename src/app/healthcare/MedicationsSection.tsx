@@ -16,6 +16,7 @@ import type {
   HealthProfile,
   MedicationFoodTiming,
   MedicationMode,
+  MedicationPrnSlot,
   SaveHealthMedicationDTO,
 } from "@/features/healthcare/types";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
@@ -48,8 +49,17 @@ import { Modal, chipCls, inputCls, labelCls } from "./healthUi";
 
 const FOOD_LABEL: Record<MedicationFoodTiming, string | null> = {
   any: null,
-  empty_stomach: "Empty stomach",
+  empty_stomach: "Without food",
   with_food: "With food",
+};
+// RPC identity keys only. Actual as-needed doses use taken_at, without a reminder.
+const PRN_SLOT_TIME: Record<MedicationPrnSlot, string> = {
+  morning: "08:00",
+  evening: "20:00",
+};
+const PRN_SLOT_LABEL: Record<MedicationPrnSlot, string> = {
+  morning: "Morning",
+  evening: "Evening",
 };
 
 function browserTimeZone(): string {
@@ -128,6 +138,7 @@ function MedicationForm({
   const [maxPerDay, setMaxPerDay] = useState(
     existing?.max_per_day != null ? String(existing.max_per_day) : "",
   );
+  const [prnSlots, setPrnSlots] = useState<MedicationPrnSlot[]>(existing?.prn_slots ?? []);
   const [notes, setNotes] = useState(existing?.notes ?? "");
 
   const pickPerDay = (n: number) => {
@@ -145,12 +156,18 @@ function MedicationForm({
 
   const daysNum = days.trim() ? Number(days) : null;
   const daysValid = daysNum === null || (Number.isInteger(daysNum) && daysNum > 0);
+  const minHoursNum = minHours ? Number(minHours) : null;
+  const maxPerDayNum = maxPerDay ? Number(maxPerDay) : null;
+  const prnLimitsValid =
+    (minHoursNum === null || (Number.isFinite(minHoursNum) && minHoursNum > 0 && minHoursNum <= 168 && Number.isInteger(minHoursNum * 10))) &&
+    (maxPerDayNum === null || (Number.isInteger(maxPerDayNum) && maxPerDayNum > 0 && maxPerDayNum <= 48));
   const validTimes = times.filter(Boolean);
   const canSave =
     !!name.trim() &&
     !!startDate &&
     !!startTime &&
     daysValid &&
+    (mode === "course" || prnLimitsValid) &&
     (mode === "as_needed" || validTimes.length > 0);
 
   const submit = () => {
@@ -170,7 +187,10 @@ function MedicationForm({
           ? zonedDateTime(addDaysToKey(startDate, daysNum), startTime, tz).toISOString()
           : null,
       min_hours_between: mode === "as_needed" && minHours ? Number(minHours) : null,
-      max_per_day: mode === "as_needed" && maxPerDay ? Number(maxPerDay) : null,
+      max_per_day: mode === "as_needed"
+        ? (maxPerDay ? Number(maxPerDay) : prnSlots.length || null)
+        : null,
+      prn_slots: mode === "as_needed" ? prnSlots : [],
       notes: notes.trim() || null,
     };
     if (existing) {
@@ -219,7 +239,7 @@ function MedicationForm({
       <div className="flex flex-wrap gap-2">
         {(["any", "empty_stomach", "with_food"] as const).map((f) => (
           <button key={f} className={chipCls(food === f)} onClick={() => setFood(f)}>
-            {FOOD_LABEL[f] ?? "Anytime"}
+            {FOOD_LABEL[f] ?? "With or without food"}
           </button>
         ))}
       </div>
@@ -248,12 +268,18 @@ function MedicationForm({
           </div>
           <div>
             <label className={labelCls}>Per day</label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {[1, 2, 3, 4].map((n) => (
                 <button key={n} className={chipCls(perDay === n)} onClick={() => pickPerDay(n)}>
                   {n}×
                 </button>
               ))}
+              <button
+                className={chipCls(times.length === 2 && times[0] === "08:00" && times[1] === "20:00")}
+                onClick={() => { setPerDay(null); setTimes(["08:00", "20:00"]); }}
+              >
+                Morning + evening
+              </button>
             </div>
           </div>
           <div>
@@ -306,36 +332,55 @@ function MedicationForm({
           </div>
         </>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <>
           <div>
-            <label className={labelCls}>Min hours apart</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              className={inputCls}
-              value={minHours}
-              onChange={(e) => setMinHours(e.target.value.replace(/[^\d.]/g, ""))}
-            />
+            <label className={labelCls}>Dose opportunities</label>
+            <div className="flex gap-2">
+              {(["morning", "evening"] as const).map((slot) => (
+                <button
+                  key={slot}
+                  className={chipCls(prnSlots.includes(slot))}
+                  onClick={() => setPrnSlots((current) => current.includes(slot)
+                    ? current.filter((value) => value !== slot)
+                    : [...current, slot])}
+                >
+                  {PRN_SLOT_LABEL[slot]}
+                </button>
+              ))}
+            </div>
           </div>
-          <div>
-            <label className={labelCls}>Max per day</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              className={inputCls}
-              value={maxPerDay}
-              onChange={(e) => setMaxPerDay(e.target.value.replace(/[^\d]/g, ""))}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Min hours apart</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                className={inputCls}
+                value={minHours}
+                onChange={(e) => setMinHours(e.target.value.replace(/[^\d.]/g, ""))}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Max per day</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                className={inputCls}
+                value={maxPerDay}
+                onChange={(e) => setMaxPerDay(e.target.value.replace(/[^\d]/g, ""))}
+              />
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       <div>
-        <label className={labelCls}>Notes</label>
+        <label className={labelCls}>{mode === "as_needed" ? "When needed for" : "Notes"}</label>
         <textarea
           className={cn(inputCls, "min-h-[56px]")}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
+          placeholder={mode === "as_needed" ? "e.g. stomach pain" : undefined}
         />
       </div>
       <Button className="w-full" disabled={!canSave || pending} onClick={submit}>
@@ -358,6 +403,142 @@ interface DoseRow {
   med: HealthMedication;
   slot: Date;
   taken: boolean;
+}
+
+function DoseTimelineRow({
+  row,
+  isNext,
+  onToggle,
+}: {
+  row: DoseRow;
+  isNext: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <li className="relative flex items-start gap-3">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-pressed={row.taken}
+        aria-label={`${row.taken ? "Unmark" : "Mark"} ${row.med.name} at ${hhmm(row.slot)} as taken`}
+        className={cn(
+          "relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+          row.taken
+            ? "border-cyan-300 bg-cyan-400/20 text-cyan-200"
+            : isNext
+              ? "border-cyan-400/70 bg-white/5 text-white/70"
+              : "border-white/25 bg-white/5 text-white/50",
+        )}
+      >
+        {row.taken ? <Check className="h-6 w-6" strokeWidth={2.5} /> : <span className="h-2 w-2 rounded-full bg-current" />}
+      </button>
+      <div
+        className={cn(
+          "min-w-0 flex-1 rounded-xl border bg-white/5 px-3 py-2.5",
+          isNext && !row.taken ? "border-cyan-400/30" : "border-white/10",
+        )}
+      >
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-sm font-medium tabular-nums text-white/90">{hhmm(row.slot)}</span>
+          <span className={cn("text-xs", row.taken ? "text-cyan-300" : "text-white/45")}>
+            {row.taken ? "Taken" : "Not taken"}
+          </span>
+        </div>
+        <p className="truncate text-sm text-white/85">
+          {row.med.name}
+          {row.med.dosage && <span className="text-white/50"> · {row.med.dosage}</span>}
+        </p>
+        <FoodBadge timing={row.med.food_timing} />
+      </div>
+    </li>
+  );
+}
+
+function AsNeededDoseCard({
+  med,
+  logs,
+  now,
+  pending,
+  onTake,
+  onUntake,
+}: {
+  med: HealthMedication;
+  logs: HealthMedicationLog[];
+  now: Date;
+  pending: boolean;
+  onTake: (slot?: MedicationPrnSlot) => void;
+  onUntake: (log: HealthMedicationLog) => void;
+}) {
+  const state = asNeededState(med, logs, now);
+  const canTake = !state.atDailyMax && !state.nextOkAt && !pending;
+  const slots = (["morning", "evening"] as const).filter((slot) => med.prn_slots?.includes(slot));
+  const todayKey = dateKeyInZone(now, med.timezone);
+
+  return (
+    <li className="rounded-xl border border-white/10 bg-white/5 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-white/90">
+            {med.name}
+            {med.dosage && <span className="font-normal text-white/50"> · {med.dosage}</span>}
+          </p>
+          {med.notes && <p className="truncate text-xs text-white/50">{med.notes}</p>}
+        </div>
+        <FoodBadge timing={med.food_timing} />
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="text-xs text-white/50">
+          <span className="tabular-nums">{state.takenToday}{med.max_per_day ? `/${med.max_per_day}` : ""}</span> today
+          {state.nextOkAt && <span className="block">Next {hhmm(state.nextOkAt)}</span>}
+        </div>
+        <div className="flex flex-wrap justify-end gap-3">
+          {slots.length ? slots.map((slot) => {
+            const takenLog = logs.find((log) =>
+              log.prn_slot === slot && dateKeyInZone(new Date(log.taken_at), med.timezone) === todayKey,
+            );
+            const taken = !!takenLog;
+            return (
+              <button
+                key={slot}
+                type="button"
+                disabled={pending || (!taken && !canTake)}
+                onClick={() => takenLog ? onUntake(takenLog) : onTake(slot)}
+                aria-pressed={taken}
+                aria-label={taken ? `Unmark ${PRN_SLOT_LABEL[slot].toLowerCase()} dose of ${med.name}` : `Take ${PRN_SLOT_LABEL[slot].toLowerCase()} dose of ${med.name}`}
+                className="flex min-w-12 flex-col items-center gap-1 text-xs text-white/70 disabled:cursor-default"
+              >
+                <span className={cn(
+                  "flex h-12 w-12 items-center justify-center rounded-full border-2",
+                  taken ? "border-cyan-300 bg-cyan-400/20 text-cyan-200" : "border-white/25 bg-white/5",
+                  !canTake && !taken && "opacity-40",
+                )}>
+                  {taken ? <Check className="h-6 w-6" strokeWidth={2.5} /> : <Plus className="h-5 w-5" />}
+                </span>
+                <span>{PRN_SLOT_LABEL[slot]}</span>
+                <span className={taken ? "text-cyan-300" : "text-white/45"}>{taken ? "Taken" : "Not taken"}</span>
+              </button>
+            );
+          }) : (
+            <button
+              type="button"
+              disabled={!canTake}
+              onClick={() => onTake()}
+              aria-label={`Take ${med.name}`}
+              className="flex min-w-12 flex-col items-center gap-1 text-xs text-white/70 disabled:cursor-default"
+            >
+              <span className={cn(
+                "flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/25 bg-white/5",
+                !canTake && "opacity-40",
+              )}>
+                <Plus className="h-5 w-5" />
+              </span>
+              <span>Take</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </li>
+  );
 }
 
 export function MedicationsSection({
@@ -417,6 +598,7 @@ export function MedicationsSection({
   );
   const hasActive = medications.some((m) => !isMedicationFinished(m, now));
   const nextUpcoming = doseRows.find((r) => !r.taken && r.slot.getTime() >= now.getTime());
+  const takenCount = doseRows.filter((row) => row.taken).length;
 
   const toggleDose = (row: DoseRow) =>
     setDose.mutate({
@@ -425,12 +607,16 @@ export function MedicationsSection({
       scheduled_at: row.slot.toISOString(),
     });
 
-  const takeAsNeeded = (med: HealthMedication) =>
+  const takeAsNeeded = (med: HealthMedication, slot?: MedicationPrnSlot) =>
     setDose.mutate({
       medication_id: med.id,
       taken: true,
+      scheduled_at: slot
+        ? zonedDateTime(dateKeyInZone(new Date(), med.timezone), PRN_SLOT_TIME[slot], med.timezone).toISOString()
+        : null,
       log_id: crypto.randomUUID(),
       taken_at: new Date().toISOString(),
+      prn_slot: slot ?? null,
       label: med.name,
     });
 
@@ -470,96 +656,66 @@ export function MedicationsSection({
           {doseRows.length === 0 && (dayKey !== todayKey || asNeeded.length === 0) ? (
             <p className="text-sm text-white/40">No doses</p>
           ) : (
-            <ul className="space-y-2">
-              {doseRows.map((row) => {
-                const past = row.slot.getTime() < now.getTime();
-                const isNext = row === nextUpcoming;
-                return (
-                  <li key={`${row.med.id}-${row.slot.getTime()}`}>
-                    <button
-                      onClick={() => toggleDose(row)}
-                      className={cn(
-                        "w-full flex items-center gap-3 p-3 rounded-xl bg-white/5 text-left",
-                        isNext && "ring-1 ring-cyan-400/40",
-                      )}
-                      aria-pressed={row.taken}
+            <div className="space-y-4">
+              {doseRows.length > 0 && (
+                <>
+                  <div className="flex items-center gap-3 text-xs text-white/60">
+                    <div
+                      role="progressbar"
+                      aria-label="Scheduled doses taken"
+                      aria-valuemin={0}
+                      aria-valuemax={doseRows.length}
+                      aria-valuenow={takenCount}
+                      className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-white/10"
                     >
-                      <span
-                        className={cn(
-                          "shrink-0 w-6 h-6 rounded-full border flex items-center justify-center",
-                          row.taken
-                            ? "bg-cyan-500/20 border-cyan-400 text-cyan-300"
-                            : "border-white/30",
-                        )}
-                      >
-                        {row.taken && <Check className="w-3.5 h-3.5" />}
-                      </span>
-                      <span
-                        className={cn(
-                          "shrink-0 w-12 text-sm tabular-nums",
-                          row.taken
-                            ? "text-white/40"
-                            : past
-                              ? "text-white/40"
-                              : "text-white/90",
-                        )}
-                      >
-                        {hhmm(row.slot)}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span
-                          className={cn(
-                            "block text-sm truncate",
-                            row.taken ? "text-white/50" : "text-white/90",
-                          )}
-                        >
-                          {row.med.name}
-                          {row.med.dosage && (
-                            <span className="text-white/50"> · {row.med.dosage}</span>
-                          )}
-                        </span>
-                      </span>
-                      <FoodBadge timing={row.med.food_timing} />
-                    </button>
-                  </li>
-                );
-              })}
-
-              {dayKey === todayKey &&
-                asNeeded.map((med) => {
-                  const state = asNeededState(med, logsByMed.get(med.id) ?? [], now);
-                  const wait = state.nextOkAt ?? null;
-                  return (
-                    <li
-                      key={med.id}
-                      className="flex items-center gap-3 p-3 rounded-xl bg-white/5"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm text-white/90 truncate">
-                          {med.name}
-                          {med.dosage && (
-                            <span className="text-white/50"> · {med.dosage}</span>
-                          )}
-                        </p>
-                        <p className="text-xs text-white/50">
-                          {state.takenToday}
-                          {med.max_per_day ? `/${med.max_per_day}` : ""} today
-                          {wait && ` · Next ${hhmm(wait)}`}
-                        </p>
-                      </div>
-                      <FoodBadge timing={med.food_timing} />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={state.atDailyMax}
-                        onClick={() => takeAsNeeded(med)}
-                      >
-                        Take
-                      </Button>
-                    </li>
-                  );
-                })}
-            </ul>
+                      <div
+                        className="h-full rounded-full bg-cyan-400 transition-all"
+                        style={{ width: `${(takenCount / doseRows.length) * 100}%` }}
+                      />
+                    </div>
+                    <span className="tabular-nums">{takenCount}/{doseRows.length}</span>
+                  </div>
+                  <div className="relative">
+                    {doseRows.length > 1 && (
+                      <span aria-hidden="true" className="absolute bottom-6 left-6 top-6 w-px bg-white/15" />
+                    )}
+                    <ol className="relative space-y-3">
+                      {doseRows.map((row) => (
+                        <DoseTimelineRow
+                          key={`${row.med.id}-${row.slot.getTime()}`}
+                          row={row}
+                          isNext={row === nextUpcoming}
+                          onToggle={() => toggleDose(row)}
+                        />
+                      ))}
+                    </ol>
+                  </div>
+                </>
+              )}
+              {dayKey === todayKey && asNeeded.length > 0 && (
+                <div className="space-y-2">
+                  {doseRows.length > 0 && <h3 className="text-xs font-medium text-white/50">As needed</h3>}
+                  <ul className="grid gap-2 sm:grid-cols-2">
+                    {asNeeded.map((med) => (
+                      <AsNeededDoseCard
+                        key={med.id}
+                        med={med}
+                        logs={logsByMed.get(med.id) ?? []}
+                        now={now}
+                        pending={setDose.isPending}
+                        onTake={(slot) => takeAsNeeded(med, slot)}
+                        onUntake={(log) => setDose.mutate({
+                          medication_id: med.id,
+                          taken: false,
+                          log_id: log.id,
+                          prn_slot: log.prn_slot === "morning" || log.prn_slot === "evening" ? log.prn_slot : null,
+                        })}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           )}
         </Card>
       )}
@@ -624,6 +780,9 @@ export function MedicationsSection({
                             "As needed",
                             med.min_hours_between ? `≥${med.min_hours_between}h` : null,
                             med.max_per_day ? `max ${med.max_per_day}/day` : null,
+                            ...(["morning", "evening"] as const)
+                              .filter((slot) => med.prn_slots?.includes(slot))
+                              .map((slot) => `1 ${PRN_SLOT_LABEL[slot].toLowerCase()}`),
                           ]
                             .filter(Boolean)
                             .join(" · ")}

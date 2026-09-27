@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 const setDoseSchema = z
   .object({
     taken: z.boolean(),
-    // Course dose: the slot instant. As-needed dose: client-generated log id.
+    // Course slot instant; named as-needed opportunities also send an identity instant.
+    // All as-needed doses use a client-generated log id for replay and Undo.
     scheduled_at: z.string().datetime({ offset: true }).nullish(),
     log_id: z.string().uuid().nullish(),
     taken_at: z.string().datetime({ offset: true }).nullish(),
@@ -19,8 +20,8 @@ const setDoseSchema = z
   });
 
 // POST /api/healthcare/medications/[id]/doses — mark / un-mark one dose.
-// Idempotent: the slot (or the client id) is the unique key, and the linked
-// Schedule reminder occurrence is completed / reopened in the same call.
+// Idempotent: a course slot, named as-needed opportunity, or client log id
+// identifies the dose. Course Schedule occurrences sync in the same call.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
