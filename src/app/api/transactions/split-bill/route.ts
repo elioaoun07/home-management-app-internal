@@ -47,35 +47,60 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Format the response
-    const formatted = await Promise.all(
-      (pendingSplits || []).map(async (tx: any) => {
-        // Try to get suggested_amount from the notification action_data
-        const { data: notification } = await supabase
-          .from("notifications")
-          .select("action_data")
-          .eq("transaction_id", tx.id)
-          .eq("user_id", user.id)
-          .eq("notification_type", "transaction_pending")
-          .maybeSingle();
+    const transactionIds = (pendingSplits || []).map((tx) => tx.id);
+    const { data: splitNotifications, error: notificationError } =
+      transactionIds.length
+        ? await supabase
+            .from("notifications")
+            .select("transaction_id, action_data")
+            .eq("user_id", user.id)
+            .eq("notification_type", "transaction_pending")
+            .in("transaction_id", transactionIds)
+        : { data: [], error: null };
 
-        const actionData = notification?.action_data as Record<
-          string,
-          any
-        > | null;
+    if (notificationError) {
+      return NextResponse.json(
+        { error: notificationError.message },
+        { status: 500 },
+      );
+    }
 
-        return {
-          transaction_id: tx.id,
-          date: tx.date,
-          owner_amount: tx.amount,
-          owner_description: tx.description,
-          category_name: tx.category?.name || "Expense",
-          category_color: tx.category?.color || "#38bdf8",
-          suggested_amount: actionData?.suggested_amount ?? null,
-          total_bill_amount: actionData?.total_bill_amount ?? null,
-        };
-      }),
-    );
+    // Older splits can have two notifications. Prefer the payload that has
+    // the bill total, whichever notification was created first.
+    const actionDataByTransaction = new Map<string, Record<string, unknown>>();
+    for (const notification of splitNotifications || []) {
+      if (!notification.transaction_id) continue;
+      const actionData = notification.action_data as Record<
+        string,
+        unknown
+      > | null;
+      if (!actionData) continue;
+      const current = actionDataByTransaction.get(notification.transaction_id);
+      if (
+        !current ||
+        (current.total_bill_amount == null &&
+          actionData.total_bill_amount != null)
+      ) {
+        actionDataByTransaction.set(notification.transaction_id, actionData);
+      }
+    }
+
+    const formatted = (pendingSplits || []).map((tx) => {
+      const actionData = actionDataByTransaction.get(tx.id);
+      const category = Array.isArray(tx.category)
+        ? tx.category[0]
+        : tx.category;
+      return {
+        transaction_id: tx.id,
+        date: tx.date,
+        owner_amount: tx.amount,
+        owner_description: tx.description,
+        category_name: category?.name || "Expense",
+        category_color: category?.color || "#38bdf8",
+        suggested_amount: actionData?.suggested_amount ?? null,
+        total_bill_amount: actionData?.total_bill_amount ?? null,
+      };
+    });
 
     return NextResponse.json({ pending_splits: formatted });
   } catch (error) {

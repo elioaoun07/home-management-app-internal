@@ -155,7 +155,9 @@ export function useNotificationsRealtime() {
         { event: "*", schema: "public", table: "notifications" },
         () => {
           queryClient.invalidateQueries({ queryKey: notificationKeys.list() });
-          queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
+          queryClient.invalidateQueries({
+            queryKey: notificationKeys.unreadCount(),
+          });
         },
       )
       .subscribe();
@@ -176,7 +178,10 @@ export function useNotificationNavigation() {
   const { setActiveTab } = useTab();
   const { openSplitBillModal } = useSplitBillModal();
 
-  return (notification: Notification, onBeforeNavigate?: () => void): boolean => {
+  return (
+    notification: Notification,
+    onBeforeNavigate?: () => void,
+  ): boolean => {
     if (
       notification.notification_type === "transaction_pending" &&
       notification.action_data
@@ -186,6 +191,8 @@ export function useNotificationNavigation() {
         owner_amount?: number;
         owner_description?: string;
         category_name?: string;
+        suggested_amount?: number;
+        total_bill_amount?: number;
       };
       if (splitData.transaction_id) {
         onBeforeNavigate?.();
@@ -194,6 +201,8 @@ export function useNotificationNavigation() {
           owner_amount: splitData.owner_amount || 0,
           owner_description: splitData.owner_description || "",
           category_name: splitData.category_name || "Expense",
+          suggested_amount: splitData.suggested_amount,
+          total_bill_amount: splitData.total_bill_amount,
         });
         return true;
       }
@@ -658,20 +667,27 @@ export function useNotificationQuickAction() {
         unread_count: number;
       }>({ queryKey: notificationKeys.list() }, (old) => {
         if (!old) return old;
-        const notification = old.notifications.find((n) => n.id === notificationId);
+        const notification = old.notifications.find(
+          (n) => n.id === notificationId,
+        );
         const wasUnread = notification && !notification.is_read;
         return {
           ...old,
-          notifications: old.notifications.filter((n) => n.id !== notificationId),
-          unread_count: wasUnread ? Math.max(0, old.unread_count - 1) : old.unread_count,
+          notifications: old.notifications.filter(
+            (n) => n.id !== notificationId,
+          ),
+          unread_count: wasUnread
+            ? Math.max(0, old.unread_count - 1)
+            : old.unread_count,
         };
       });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: notificationKeys.list() });
-      queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
+      queryClient.invalidateQueries({
+        queryKey: notificationKeys.unreadCount(),
+      });
       queryClient.invalidateQueries({ queryKey: ["hub", "alerts"] });
     },
   });
 }
-

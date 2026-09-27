@@ -104,6 +104,7 @@ type TransactionInput = {
   subcategory_id?: string | null;
   is_private?: boolean;
   split_requested?: boolean;
+  total_bill_amount?: number;
   trip_id?: string | null;
   // Optional display fields for optimistic UI (not sent to server)
   _optimistic?: {
@@ -1020,6 +1021,7 @@ export function useAddTransaction() {
           transactionId: serverTransaction.id,
           collaboratorId: serverTransaction.collaborator_id,
           amount: serverTransaction.amount,
+          totalBillAmount: variables.total_bill_amount,
           categoryName: serverTransaction.category || undefined,
           description: serverTransaction.description || undefined,
         });

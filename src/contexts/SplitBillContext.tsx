@@ -8,6 +8,8 @@ type SplitBillData = {
   owner_description: string;
   category_name: string;
   date?: string;
+  suggested_amount?: number | null;
+  total_bill_amount?: number | null;
 };
 
 type SplitBillContextType = {
@@ -17,7 +19,7 @@ type SplitBillContextType = {
 };
 
 const SplitBillContext = createContext<SplitBillContextType | undefined>(
-  undefined
+  undefined,
 );
 
 export function SplitBillProvider({ children }: { children: ReactNode }) {

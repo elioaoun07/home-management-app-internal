@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-26
+updated: 2026-09-27
 type: master-book
 status: active
 owner: Elio
@@ -27,6 +27,7 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 - Payments and Schedule recurrence remain separate engines. Do not widen matching tolerance to hide bad matches.
 - Expense/recurring mega-forms split only when real work touches them (BUD-9). Full forecasting waits for money contracts and coverage; cheap ERA signals do not close BUD-4.
 - Calculation tests, manual merchant mapping, transfers and account editing are implemented as recorded in the Shipped Log. Proposed E11–E13 matching/briefing experiments remain in Research unless covered by a named task.
+- Split requests carry the full bill total and suggested unpaid share to the partner's notification and editable review form. *(IMPLEMENTED 2026-09-27)*
 
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
@@ -2100,6 +2101,19 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 }
 ```
 
+### BUD-84
+
+**Kind:** bug
+
+**Outcome:** The partner sees the full Split bill and starts with the unpaid portion filled in.
+
+- **Acceptance:** A $70 bill with a $30 creator portion shows `Total $70.00` and prefills `$40` for the partner in the notification review drawer. The amount remains editable before confirmation.
+- **Acceptance:** Opening from the notification bell, alerts navigation, or pending-split toast carries the same total and suggestion. An older notification can be enriched from the pending-split read without overwriting a manually edited amount. A request with no valid total leaves the amount blank.
+- **Acceptance:** Request creation changes only the creator's balance. Reviewing the request changes no balance; confirmation continues to apply the partner's chosen amount once.
+- **Evidence:** 2026-09-27 source trace found the server notification included `total_bill_amount` and `suggested_amount`, while the push companion and notification tap handlers dropped them; pending-split GET used `maybeSingle()` despite duplicate notification rows. Shared split calculation and tests cover the arithmetic; typecheck and lint are recorded in the Shipped Log.
+
+**Touches:** `src/services/transaction.service.ts`, `src/lib/notifications/sendSplitBillNotification.ts`, `src/features/transactions/useDashboardTransactions.ts`, `src/app/api/transactions/split-bill/route.ts`, `src/components/notifications/NotificationModal.tsx`, `src/hooks/useNotifications.ts`, `src/contexts/SplitBillContext.tsx`, `src/components/expense/SplitBillHandler.tsx`, `src/components/expense/SplitBillModal.tsx`, `src/lib/utils/splitBill.ts`, `src/lib/utils/splitBill.test.ts`
+
 ## Backlog reconciliation
 
 - 2026-09-10 — **HUB-10** → BUD-2. Scope is retained in the destination criteria; duplicate removed, not shipped.
@@ -2177,6 +2191,7 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - ✅ 2026-09-19 — **BUD-80** Statement import row sheet: changing a row's account left the category grid on the statement account's categories (picker was hardwired to the statement account unless a row was drilled into, and a single row's cleared category override shadowed the group pick), and picking the statement account (e.g. Salary) snapped back to the auto-suggested one (`account_id: undefined` fell through to `suggestAccountForRow`). Fix in `GroupSheet.tsx`: picker follows the rows' resolved account and writes to the row when it owns an override; the select stores the explicit pick; income/saving accounts are disabled for debit rows (a debit there raises the balance — `getBalanceDelta`). 88 statement-import tests pass, typecheck clean. **Known edge left open:** a multi-row group where every row was individually redirected still has its group-level pick shadowed by the rows' cleared overrides; the per-row "Own" button works around it. **Follow-up same day:** the review card still read "Choose category" after a pick on a row re-targeted at a non-default expense account (Debit Card - NEO) — `page.tsx`'s `categoryById` only loaded the statement + default income/expense accounts' categories. Now also loads every account picked in a row's select via new `useCategoriesForAccounts` (`useQueries`, same `qk.categories` cache).
 - ✅ 2026-09-19 — **BUD-81** Statement Import can target the partner's public accounts (partner couldn't pick a shared "Italy Trip"). Picker adds partner `is_public` visible accounts; parse/reconcile/commit/revert authorize via `listWritableAccounts` (`src/lib/accountAccess.ts`). Imports stay per-importer: `(user_id, statement_hash)` key unchanged, rows written with the importer's `user_id`, matching only against the importer's own transactions (owner decision). Tests: reconcile + commit partner-account cases; 395 pass. Known limit: an import never dedupes against the account owner's own manual entries on the shared account.
 - ✅ 2026-09-19 — **BUD-82** Statement import row sheet: the per-row account dropdown omitted the partner's public accounts (GroupSheet got own-only `accounts`). Now fed the same own + partner-public set as the statement picker (partner name suffixed); transfer destinations pinned to own accounts; `accountRefs` includes a shared statement account so `suggestAccountForRow` knows its type. Category grid already follows the row's account (`/api/categories` resolves the account owner's categories).
+- ✅ 2026-09-27 — **BUD-84** Show split total and prefill partner share — [criteria](<Budget — Master Book.md#bud-84>). Source implementation: notification payload and all tap paths carry total/share; older pending requests prefer the richer server notification; review drawer displays total and prefills an editable amount. Split arithmetic and payload tests pass (9 tests); typecheck clean; ESLint has no errors in touched files. Browser/device verification pending because no browser session was available.
 
 ## Delivery session log
 

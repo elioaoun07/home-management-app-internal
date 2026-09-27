@@ -3,6 +3,7 @@ import { canAccessTrip } from "@/lib/tripAccess";
 import { adjustAccountBalance } from "@/lib/balance";
 import type { AccountType } from "@/lib/balance-utils";
 import { getBalanceDelta } from "@/lib/balance-utils";
+import { getSuggestedSplitAmount } from "@/lib/utils/splitBill";
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export interface TransactionFilters {
@@ -151,7 +152,8 @@ export class SupabaseTransactionService implements TransactionService {
         (rawRows || []).map((r: any) => r.subcategory_id).filter(Boolean),
       ),
     ];
-    const categoryNamesMap: Record<string, { name: string; color?: string }> = {};
+    const categoryNamesMap: Record<string, { name: string; color?: string }> =
+      {};
 
     if (categoryIds.length > 0 || subcategoryIds.length > 0) {
       const allCatIds = [...categoryIds, ...subcategoryIds];
@@ -512,17 +514,18 @@ export class SupabaseTransactionService implements TransactionService {
         .single();
 
       // Compute partner's suggested amount from total bill if provided
-      const suggestedAmount =
-        total_bill_amount && total_bill_amount > amount
-          ? total_bill_amount - amount
-          : null;
+      const suggestedAmount = getSuggestedSplitAmount(
+        total_bill_amount,
+        amount,
+      );
 
       await this.supabase.from("notifications").insert({
         user_id: collaboratorId,
         title: "Split Bill Request",
-        message: suggestedAmount
-          ? `You've been asked to add your portion ($${suggestedAmount.toFixed(2)}) to a $${total_bill_amount!.toFixed(2)} ${categoryData?.name || "expense"}`
-          : `You've been asked to add your portion to a $${amount} ${categoryData?.name || "expense"}`,
+        message:
+          suggestedAmount != null
+            ? `Your share: $${suggestedAmount.toFixed(2)} · Total: $${total_bill_amount!.toFixed(2)}`
+            : `You've been asked to add your portion to a $${amount} ${categoryData?.name || "expense"}`,
         icon: "split",
         notification_type: "transaction_pending",
         severity: "action",

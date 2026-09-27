@@ -2,8 +2,23 @@ import { describe, expect, it } from "vitest";
 import {
   getTransactionDisplayAmount,
   getTransactionDisplayDescription,
+  getSuggestedSplitAmount,
   type TransactionForDisplay,
 } from "./splitBill";
+
+describe("getSuggestedSplitAmount", () => {
+  it("prefills the unpaid portion of a supplied bill total", () => {
+    expect(getSuggestedSplitAmount(70, 30)).toBe(40);
+    expect(getSuggestedSplitAmount(12.75, 5.25)).toBe(7.5);
+    expect(getSuggestedSplitAmount(0.3, 0.1)?.toFixed(2)).toBe("0.20");
+  });
+
+  it("leaves the partner's amount open when the total is absent or invalid", () => {
+    expect(getSuggestedSplitAmount(null, 30)).toBeNull();
+    expect(getSuggestedSplitAmount(30, 30)).toBeNull();
+    expect(getSuggestedSplitAmount(20, 30)).toBeNull();
+  });
+});
 
 const completedSplit: TransactionForDisplay = {
   amount: 60,

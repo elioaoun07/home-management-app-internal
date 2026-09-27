@@ -1,10 +1,13 @@
 // src/lib/notifications/sendSplitBillNotification.ts
 // Helper to send a push notification when a split bill is requested
+import { getSuggestedSplitAmount } from "@/lib/utils/splitBill";
+import { safeFetch } from "@/lib/safeFetch";
 
 interface SplitBillNotificationParams {
   transactionId: string;
   collaboratorId: string;
   amount: number;
+  totalBillAmount?: number;
   categoryName?: string;
   description?: string;
 }
@@ -20,11 +23,14 @@ export async function sendSplitBillNotification({
   transactionId,
   collaboratorId,
   amount,
+  totalBillAmount,
   categoryName,
   description,
 }: SplitBillNotificationParams): Promise<boolean> {
   try {
-    const response = await fetch("/api/notifications/in-app", {
+    const suggestedAmount = getSuggestedSplitAmount(totalBillAmount, amount);
+    const response = await safeFetch("/api/notifications/in-app", {
+      timeoutMs: 60_000,
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -33,7 +39,10 @@ export async function sendSplitBillNotification({
         // Target the collaborator (partner)
         target_user_id: collaboratorId,
         title: "Split Bill Request",
-        message: `You've been asked to add your portion to a $${amount} ${categoryName || "expense"}`,
+        message:
+          suggestedAmount != null
+            ? `Your share: $${suggestedAmount.toFixed(2)} · Total: $${totalBillAmount!.toFixed(2)}`
+            : `You've been asked to add your portion to a $${amount} ${categoryName || "expense"}`,
         icon: "split",
         notification_type: "transaction_pending",
         severity: "action",
@@ -47,26 +56,18 @@ export async function sendSplitBillNotification({
           owner_amount: amount,
           owner_description: description || "",
           category_name: categoryName || "",
+          ...(suggestedAmount != null && { suggested_amount: suggestedAmount }),
+          ...(totalBillAmount != null && {
+            total_bill_amount: totalBillAmount,
+          }),
         },
         group_key: `split_bill_${transactionId}`,
         send_push: true,
       }),
     });
 
-    if (!response.ok) {
-      console.error(
-        "[sendSplitBillNotification] API returned error:",
-        response.status,
-      );
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error(
-      "[sendSplitBillNotification] Failed to send notification:",
-      error,
-    );
+    return response.ok;
+  } catch {
     return false;
   }
 }

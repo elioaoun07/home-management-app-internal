@@ -1,5 +1,21 @@
 export type OwnershipFilter = "all" | "mine" | "partner" | "both";
 
+export function getSuggestedSplitAmount(
+  totalBillAmount: number | null | undefined,
+  ownerAmount: number,
+): number | null {
+  if (
+    totalBillAmount == null ||
+    !Number.isFinite(totalBillAmount) ||
+    !Number.isFinite(ownerAmount) ||
+    totalBillAmount <= ownerAmount
+  ) {
+    return null;
+  }
+
+  return totalBillAmount - ownerAmount;
+}
+
 export interface TransactionForDisplay {
   amount: number;
   description: string | null;
@@ -27,7 +43,7 @@ export interface TransactionForDisplay {
  */
 export function getTransactionDisplayAmount(
   t: TransactionForDisplay,
-  filter: OwnershipFilter
+  filter: OwnershipFilter,
 ): number {
   const isSplitCompleted = !!(
     t.split_requested &&
@@ -65,7 +81,7 @@ export function getTransactionDisplayAmount(
  */
 export function getTransactionDisplayDescription(
   t: TransactionForDisplay,
-  filter: OwnershipFilter
+  filter: OwnershipFilter,
 ): string | null {
   const isSplitCompleted = !!(t.split_requested && t.split_completed_at);
 

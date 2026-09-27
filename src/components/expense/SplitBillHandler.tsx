@@ -41,15 +41,20 @@ export default function SplitBillHandler() {
       !hasShownToast
     ) {
       const firstSplit = data.pending_splits[0];
-      const suggestedText = firstSplit.suggested_amount
-        ? ` · Your share: $${firstSplit.suggested_amount.toFixed(2)}`
-        : "";
-      toast(`Split bill request for $${firstSplit.owner_amount.toFixed(2)}`, {
+      const suggestedText =
+        firstSplit.suggested_amount != null
+          ? ` · Your share: $${firstSplit.suggested_amount.toFixed(2)}`
+          : "";
+      const billText =
+        firstSplit.total_bill_amount != null
+          ? `Total: $${firstSplit.total_bill_amount.toFixed(2)}`
+          : `Partner: $${firstSplit.owner_amount.toFixed(2)}`;
+      toast("Split bill", {
         icon: <ArrowLeftRight className="w-4 h-4 text-blue-400" />,
-        description: `${firstSplit.category_name}${suggestedText} - Tap to add your portion`,
+        description: `${firstSplit.category_name} · ${billText}${suggestedText}`,
         duration: 10000,
         action: {
-          label: "Add Amount",
+          label: "Review",
           onClick: () => openSplitBillModal(firstSplit),
         },
       });
@@ -94,11 +99,24 @@ export default function SplitBillHandler() {
 
   if (!currentSplit) return null;
 
+  const pendingSplit = data?.pending_splits.find(
+    (split) => split.transaction_id === currentSplit.transaction_id,
+  );
+  const splitData = pendingSplit
+    ? {
+        ...pendingSplit,
+        total_bill_amount:
+          pendingSplit.total_bill_amount ?? currentSplit.total_bill_amount,
+        suggested_amount:
+          pendingSplit.suggested_amount ?? currentSplit.suggested_amount,
+      }
+    : currentSplit;
+
   return (
     <SplitBillModal
       open={!!currentSplit}
       onClose={closeSplitBillModal}
-      splitData={currentSplit}
+      splitData={splitData}
       onComplete={handleComplete}
     />
   );

@@ -121,6 +121,8 @@ export default function NotificationModal({
         owner_amount?: number;
         owner_description?: string;
         category_name?: string;
+        suggested_amount?: number;
+        total_bill_amount?: number;
       };
 
       if (splitData.transaction_id) {
@@ -129,6 +131,8 @@ export default function NotificationModal({
           owner_amount: splitData.owner_amount || 0,
           owner_description: splitData.owner_description || "",
           category_name: splitData.category_name || "Expense",
+          suggested_amount: splitData.suggested_amount,
+          total_bill_amount: splitData.total_bill_amount,
         });
         onOpenChange(false);
         return;
@@ -276,6 +280,8 @@ export default function NotificationModal({
         owner_amount?: number;
         owner_description?: string;
         category_name?: string;
+        suggested_amount?: number;
+        total_bill_amount?: number;
       };
 
       if (splitData.transaction_id) {
@@ -284,6 +290,8 @@ export default function NotificationModal({
           owner_amount: splitData.owner_amount || 0,
           owner_description: splitData.owner_description || "",
           category_name: splitData.category_name || "Expense",
+          suggested_amount: splitData.suggested_amount,
+          total_bill_amount: splitData.total_bill_amount,
         });
         onOpenChange(false);
         return;

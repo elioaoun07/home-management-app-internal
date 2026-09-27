@@ -22,7 +22,8 @@ import {
 import { useMyAccounts } from "@/features/accounts/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { getSuggestedSplitAmount } from "@/lib/utils/splitBill";
+import { useEffect, useRef, useState } from "react";
 
 type SplitBillData = {
   transaction_id: string;
@@ -57,23 +58,41 @@ export default function SplitBillModal({
   const [description, setDescription] = useState("");
   const [accountId, setAccountId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const activeTransactionId = useRef<string | null>(null);
+  const amountEdited = useRef(false);
 
-  // Reset form when modal opens — pre-fill with suggested amount if available
+  const suggestedAmount =
+    splitData.suggested_amount ??
+    getSuggestedSplitAmount(
+      splitData.total_bill_amount,
+      splitData.owner_amount,
+    );
+
+  // A pending-split fetch can enrich an older notification after the drawer opens.
+  // Fill only while the partner has not changed the suggested amount.
   useEffect(() => {
-    if (open) {
-      setAmount(
-        splitData.suggested_amount ? splitData.suggested_amount.toString() : "",
-      );
-      setDescription("");
-      // Default to "Wallet" account if available, otherwise first account
-      if (accounts && accounts.length > 0) {
-        const walletAccount = accounts.find(
-          (a) => a.name.toLowerCase() === "wallet",
-        );
-        setAccountId(walletAccount ? walletAccount.id : accounts[0].id);
-      }
+    if (!open) {
+      activeTransactionId.current = null;
+      return;
     }
-  }, [open, accounts, splitData.suggested_amount]);
+    if (activeTransactionId.current !== splitData.transaction_id) {
+      activeTransactionId.current = splitData.transaction_id;
+      amountEdited.current = false;
+      setDescription("");
+      setAccountId("");
+    }
+    if (!amountEdited.current) {
+      setAmount(suggestedAmount != null ? suggestedAmount.toFixed(2) : "");
+    }
+  }, [open, splitData.transaction_id, suggestedAmount]);
+
+  useEffect(() => {
+    if (!open || accountId || !accounts?.length) return;
+    const walletAccount = accounts.find(
+      (a) => a.name.toLowerCase() === "wallet",
+    );
+    setAccountId(walletAccount ? walletAccount.id : accounts[0].id);
+  }, [open, accountId, accounts]);
 
   const ownerAmount = splitData.owner_amount ?? 0;
   const myAmount = parseFloat(amount) || 0;
@@ -86,8 +105,8 @@ export default function SplitBillModal({
     try {
       await onComplete(myAmount, description, accountId);
       onClose();
-    } catch (error) {
-      console.error("Failed to complete split bill:", error);
+    } catch {
+      // The parent handler shows the error toast.
     } finally {
       setIsSubmitting(false);
     }
@@ -96,11 +115,7 @@ export default function SplitBillModal({
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DrawerContent
-        className={cn(
-          "neo-card border-2",
-          themeClasses.border,
-          themeClasses.modalBg,
-        )}
+        className={cn("border-2", themeClasses.border, themeClasses.modalBg)}
       >
         <div className="mx-auto w-full max-w-sm flex flex-col max-h-[75vh] overflow-hidden">
           <DrawerHeader className="flex-none">
@@ -133,10 +148,13 @@ export default function SplitBillModal({
                   "{splitData.owner_description}"
                 </p>
               )}
-              {splitData.total_bill_amount && (
-                <p className="mt-2 text-xs text-slate-500">
-                  Total bill: ${splitData.total_bill_amount.toFixed(2)}
-                </p>
+              {splitData.total_bill_amount != null && (
+                <div className="mt-3 flex items-center justify-between border-t border-slate-700/50 pt-3">
+                  <span className="text-sm text-slate-400">Total</span>
+                  <span className="text-lg font-semibold text-slate-200">
+                    ${splitData.total_bill_amount.toFixed(2)}
+                  </span>
+                </div>
               )}
             </div>
 
@@ -155,7 +173,10 @@ export default function SplitBillModal({
                   step="0.01"
                   min="0"
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onChange={(e) => {
+                    amountEdited.current = true;
+                    setAmount(e.target.value);
+                  }}
                   placeholder="0.00"
                   className={cn(
                     "pl-8 pr-4 h-14 text-2xl font-bold neo-card",
@@ -173,7 +194,12 @@ export default function SplitBillModal({
                   <SelectTrigger className="mt-1 neo-card w-full">
                     <SelectValue placeholder="Select account" />
                   </SelectTrigger>
-                  <SelectContent className={cn(themeClasses.selectContentBg, themeClasses.border)}>
+                  <SelectContent
+                    className={cn(
+                      themeClasses.selectContentBg,
+                      themeClasses.border,
+                    )}
+                  >
                     {accounts?.map((account) => (
                       <SelectItem key={account.id} value={account.id}>
                         {account.name}
