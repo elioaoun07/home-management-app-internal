@@ -25,6 +25,8 @@ interface EraState {
   isAwake: boolean;
   /** When true, assistant replies are spoken aloud via Azure TTS. Default false. */
   voiceReplyEnabled: boolean;
+  /** Voice chat (mic + wake-word listening) is off until the user taps the mic. Default false. */
+  voiceChatEnabled: boolean;
   /** Latest assistant reply text — set the instant ERA begins speaking it, ahead
    *  of the era_messages round trip (see conversationEngine's onWillSpeak). */
   eraReply: string;
@@ -77,6 +79,7 @@ interface EraActions {
   reset: () => void;
   wake: () => void;
   setVoiceReplyEnabled: (v: boolean) => void;
+  setVoiceChatEnabled: (v: boolean) => void;
   setHubModuleKey: (key: ERAModuleKey) => void;
   setEraReply: (text: string) => void;
   setPendingTurn: (turn: EraPendingTurn | null) => void;
@@ -96,6 +99,7 @@ const INITIAL: EraState = {
   pendingTranscript: "",
   isAwake: false,
   voiceReplyEnabled: false,
+  voiceChatEnabled: false,
   hubModuleKey: "chat",
   eraReply: "",
   pendingTurn: null,
@@ -118,6 +122,7 @@ export const useEraStore = create<EraState & EraActions>((set) => ({
   reset: () => set(INITIAL),
   wake: () => set({ isAwake: true }),
   setVoiceReplyEnabled: (v) => set({ voiceReplyEnabled: v }),
+  setVoiceChatEnabled: (v) => set({ voiceChatEnabled: v }),
   setHubModuleKey: (key) => set({ hubModuleKey: key }),
   setEraReply: (text) => set({ eraReply: text }),
   setPendingTurn: (turn) => set({ pendingTurn: turn }),

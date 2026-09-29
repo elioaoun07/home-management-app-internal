@@ -216,17 +216,7 @@ Bridge between Standalone modules. May import from any standalone feature direct
 
 ## React Contexts
 
-Located in `src/contexts/`. Always use the `Safe` variant in components that may render outside the provider.
-
-| Context | Purpose | Safe variant |
-| --- | --- | --- |
-| `SyncContext` | Offline queue, connectivity state, retry logic | `useSyncSafe()` |
-| `AppModeContext` | "budget" vs "items" mode, FAB target | `useAppModeSafe()` |
-| `TabContext` | Active tab + notification deep-link routing (`pendingItemId`, `pendingThreadId`) | `useTabSafe()` |
-| `ThemeContext` | Theme switching (blue/pink/frost/calm), invalidates all queries on change | — |
-| `UserContext` | Current user name, email, avatar | — |
-| `PrivacyBlurContext` | Privacy mode blur toggle | — |
-| `SplitBillContext` | Split bill calculation state | — |
+Located in `src/contexts/`. Always use the `Safe` variant (`useSyncSafe`, `useAppModeSafe`, `useTabSafe`) in components that may render outside the provider.
 
 ---
 

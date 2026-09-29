@@ -15,7 +15,7 @@ import type { FaceKey } from "@/features/era/types";
 import { useEraReplyTTS } from "@/features/voice-conversation";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { ArrowRight, Mic, MicOff, Sparkles, Volume2, VolumeX } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 const PLACEHOLDERS: Record<FaceKey, string> = {
   budget: 'Talk to ERA — "How much did I spend this month?"',
@@ -44,53 +44,13 @@ export function CommandBar({
   const { play: speakReply } = useEraReplyTTS();
   const [busy, setBusy] = useState(false);
 
-  // Mic / speech recognition state
-  const [micActive, setMicActive] = useState(false);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const micSupportedRef = useRef<boolean>(false);
-
-  useEffect(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ??
-      (window as any).webkitSpeechRecognition;
-    micSupportedRef.current = Boolean(SpeechRecognition);
-  }, []);
-
-  const startMic = useCallback(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ??
-      (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-
-    const rec: SpeechRecognition = new SpeechRecognition();
-    rec.lang = "en-US";
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-
-    rec.onresult = (e: SpeechRecognitionEvent) => {
-      const transcript = e.results[0][0].transcript;
-      setPendingTranscript(transcript);
-    };
-    rec.onend = () => {
-      setMicActive(false);
-      // Auto-submit on silence if something was transcribed
-      // (submit reads latest pendingTranscript via store directly)
-      setTimeout(() => {
-        const text = useEraStore.getState().pendingTranscript.trim();
-        if (text) submitText(text);
-      }, 50);
-    };
-    rec.onerror = () => setMicActive(false);
-
-    recognitionRef.current = rec;
-    rec.start();
-    setMicActive(true);
-  }, [setPendingTranscript]);
-
-  const stopMic = useCallback(() => {
-    recognitionRef.current?.stop();
-    setMicActive(false);
-  }, []);
+  // Voice chat stays off until the mic is tapped.
+  const micActive = useEraStore((s) => s.voiceChatEnabled);
+  const setVoiceChatEnabled = useEraStore((s) => s.setVoiceChatEnabled);
+  const toggleMic = useCallback(
+    () => setVoiceChatEnabled(!useEraStore.getState().voiceChatEnabled),
+    [setVoiceChatEnabled],
+  );
 
   const submitText = useCallback(
     async (text: string) => {
@@ -172,11 +132,9 @@ export function CommandBar({
         <button
           type="button"
           aria-label={micActive ? "Stop listening" : "Voice input"}
-          onClick={micActive ? stopMic : startMic}
-          disabled={!micSupportedRef.current && !micActive}
+          onClick={toggleMic}
           className={[
             "flex-shrink-0 transition-opacity",
-            !micSupportedRef.current ? "opacity-20 cursor-not-allowed" : "",
             micActive ? "opacity-100" : "opacity-50 hover:opacity-80",
           ].join(" ")}
           style={

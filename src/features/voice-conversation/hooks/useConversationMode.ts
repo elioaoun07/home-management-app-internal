@@ -46,9 +46,14 @@ export function useConversationMode(opts: UseConversationModeOptions): UseConver
 
   // Pre-warm Azure SDK + token on mount so first activation has no cold-start delay
   useEffect(() => {
+    if (!opts.enabled) return;
     prewarmAzureSpeech();
     prewarmTTSWorklet();
-  }, []);
+  }, [opts.enabled]);
+
+  useEffect(() => {
+    setIsEnabled(opts.enabled);
+  }, [opts.enabled]);
 
   useEffect(() => {
     handlersRef.current = opts.handlers;

@@ -99,6 +99,7 @@ export function EraShell() {
 
   const firstName = user?.name?.split(" ")[0] ?? "";
   const setVoiceReplyEnabled = useEraStore((s) => s.setVoiceReplyEnabled);
+  const voiceChatEnabled = useEraStore((s) => s.voiceChatEnabled);
 
   // Unlock AudioContext on first user gesture — needed for voice-wake TTS to play.
   // Also pre-caches the 3 greeting variants for the current time of day so the
@@ -109,20 +110,13 @@ export function EraShell() {
   }, [firstName]);
 
   useEffect(() => {
-    document.addEventListener("pointerdown", handleFirstInteraction, { once: true });
-    return () => document.removeEventListener("pointerdown", handleFirstInteraction);
-  }, [handleFirstInteraction]);
-
-  // Re-preload when name becomes available (e.g., initial render before user data loads).
-  useEffect(() => {
-    if (firstName) {
-      preloadGreetings(firstName);
-    }
-  }, [firstName]);
+    if (!voiceChatEnabled) return;
+    handleFirstInteraction();
+  }, [voiceChatEnabled, handleFirstInteraction]);
 
   // Conversation engine — handles wake detection, TTS greeting, and voice Q&A.
   const { wake: engineWake, isEnabled: convModeEnabled } = useConversationMode({
-    enabled: true,
+    enabled: voiceChatEnabled,
     userName: firstName || undefined,
     onWake: (source) => {
       wake();
@@ -154,7 +148,7 @@ export function EraShell() {
   });
 
   // Fallback wake listener — only runs when conversation engine is not supported
-  useEraWakeListener({ enabled: !convModeEnabled });
+  useEraWakeListener({ enabled: voiceChatEnabled && !convModeEnabled });
 
   const hubModuleKey = useEraStore((s) => s.hubModuleKey);
   const face      = getFace(activeFaceKey);
@@ -202,7 +196,7 @@ export function EraShell() {
     <div
       className="era-shell fixed inset-0 overflow-hidden"
       data-awake={isAwake}
-      onClick={!isAwake ? () => { unlockAudioContext(); preloadGreetings(firstName || undefined); wake(); engineWake(); } : undefined}
+      onClick={!isAwake ? () => { wake(); engineWake(); } : undefined}
       style={
         {
           "--era-hue":           fc.hue,
