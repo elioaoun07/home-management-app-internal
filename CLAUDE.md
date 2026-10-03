@@ -15,13 +15,13 @@ If you read only four things before acting, read these, in order:
 3. **`ERA Notes/01 - Architecture/Feature Map/_index.md`** — user intent → exact source files.
 4. **`ERA Notes/01 - Architecture/Design Doctrine.md`** — how to *decide* when no playbook covers it: the Ten Questions, silent-failure taxonomy, standing decisions, and tradeoff priority order. Mandatory before designing any new feature or resolving an ambiguous tradeoff; skippable for mechanical edits.
 
-Deep-dive PM state lives in the campaign's **Master Book** (`ERA Notes/10 - Project Management/<Campaign>/<Campaign> — Master Book.md`): purpose, dated evidence, decisions, pain inventory, acceptance criteria, shipped log and Successor Briefing. Read it before working a campaign, then inspect code changes since its **evidence cutoff**, not its document-maintenance `updated:` stamp. The eleven campaign checklists form one backlog; `ERA Notes/10 - Project Management/_index.md` routes ownership and `_Conventions.md` governs new work. Accepted cross-campaign specifications live in `Plans/`; unresolved choices in `_Decisions.md`; unadopted options in `Research/Options.md`. ASTRA/FABLED/FABLE studies and superseded plans are historical evidence under `_Archive/`, which no PM tool scans. Do not recreate competing per-campaign study queues. Vault sections outside PM retain their own architecture/audit references.
+PM state: read the campaign's **Master Book** (`ERA Notes/10 - Project Management/<Campaign>/<Campaign> — Master Book.md`) before working it, then inspect code changes since its **evidence cutoff**, not its `updated:` stamp. `ERA Notes/10 - Project Management/_index.md` routes ownership and specs; `_Conventions.md` governs new work; `_Archive/` is historical and no PM tool scans it. Do not recreate competing per-campaign study queues.
 
 ---
 
 ## Before You Code — Mandatory Checklist
 
-0. **Is the bug shaped like "X can't see Y"?** (partner/household can't see shared data, empty list with no error, works for one user but not another) — then **stop and run Hard Rule #27's two RLS queries before reading any code.** RLS is invisible to this repo; no amount of route-reading can rule it out, and the repo has actively lied about it before. Skip this gate only if the symptom is not visibility/permission-shaped.
+0. **Is the bug shaped like "X can't see Y"?** (partner/household can't see shared data, empty list with no error, works for one user but not another) — **stop and follow Hard Rule #27 before reading any code.**
 1. **For edit / bug-fix tasks, read the Feature Map first** — open `ERA Notes/01 - Architecture/Feature Map/_index.md`, find the matching module, then read that module's MD file to get exact source file paths. Do this **before** Glob / Grep / Read on source files. It is the cheapest and most accurate router from user intent → files to edit.
 2. **Identify the module type** (Standalone or Junction — see Module Model below) before scoping work
 3. **Check the Feature Index** for the deeper vault doc in `ERA Notes/`
@@ -35,46 +35,13 @@ Deep-dive PM state lives in the campaign's **Master Book** (`ERA Notes/10 - Proj
 
 ## Engineer Playbooks (Skills)
 
-Step-by-step playbooks in `.claude/skills/`, written as senior-engineer handoffs so **any agent — including lower-capability models — can execute reliably**. Each contains verified code templates, evidence gates, and STOP conditions. They operationalize the Mandatory Checklist and Hard Rules; when one applies, follow it instead of improvising.
+Playbooks live in `.claude/skills/<name>/SKILL.md` (verified templates, evidence gates, STOP conditions); each file's `description` says when it applies. They operationalize the Mandatory Checklist and Hard Rules — when one applies, follow it instead of improvising.
 
 **Start every task with `start-task`; end every task with `finish-task`.**
 
-| Playbook | Use for |
-| --- | --- |
-| `start-task` | Any new task — restate goal, classify type, read docs in order, verify assumptions before editing |
-| `fix-bug` | Bugs / errors / regressions — evidence-first root-cause with this app's known-cause table |
-| `add-feature` | New behavior in an existing module — vertical slice order (DB → API → types → hooks → UI) |
-| `api-route` | Anything under `src/app/api/` — auth/Zod/household/error-mapping templates + cron variant |
-| `db-migration` | Any DB change — migration runbook first, schema.sql end state, RLS decision tree |
-| `ui-guardrails` | Any component/page/style change — theming, color identity, mobile-first verification |
-| `finish-task` | Definition of done — self-review greps, typecheck/lint/test, docs, Atlas, PM update |
-
-**Domain-invariant skills** — organized by *risk domain*, not per module (module knowledge lives in the vault docs; skills are execution modes). start-task's domain-risk gate routes into these:
-
-| Skill | Use for |
-| --- | --- |
-| `money-rules` | ANY money logic (accounts, transactions, transfers, recurring, debts, envelopes, drafts) — balance invariants, worked before/after example, test required |
-| `recurrence-safety` | Both recurrence systems (recurring payments + item occurrences) — exactly-once guarantees, skip≠postpone, no new expansion engines |
-| `data-repair` | Production data fixes, cleanup/backfill SQL runbooks, console scripts — inspect→backup→fix→verify→rollback |
-| `skill-factory` | Authoring a skill for a future domain (Healthcare, Diet, …) — decision gate, house template, registration, junior-test QA |
-
-Specialized skills (existing): `new-module` (brand-new module scaffold), `cache-invalidation`, `timezone-handling`, `graphify`, `triage-inbox` (file raw entries from the PM Idea Inbox `0 - Inbox.md` into canonical checklist items/docs — never implements), `wizard` (interleaved AI/owner setup or debug sessions — shared MD checklist, steps split `[AI]`/`[OWNER]`, progression gated on the owner's pasted verification output).
-
----
-
-## Graphify (Dynamic Codebase Exploration)
-
-> ERA Notes = **design intent + hard rules** (always read first).
-> Graphify = **implementation reality + relationships** (use for exploration).
-
-Run `/graphify` **before reading individual files** when the task involves:
-
-- Starting on an **unfamiliar module** — visualize structure before diving in
-- **Junction modules** — trace cross-module cascades before changing anything
-- **Large refactors** — map all affected modules and dependencies first
-- **Architecture verification** — confirm code matches ERA Notes intent
-
-Never use graphify as a substitute for ERA Notes — it cannot infer hard rules, gotchas, or design decisions.
+- **Workflow:** `fix-bug`, `add-feature`, `api-route` (anything under `src/app/api/`), `db-migration` (any DB change), `ui-guardrails` (any component/page/style change)
+- **Risk domains** (start-task's domain-risk gate routes here): `money-rules` (ANY money logic), `recurrence-safety` (both recurrence systems), `data-repair` (production data fixes), `skill-factory` (new skills)
+- **Specialized:** `new-module`, `cache-invalidation`, `timezone-handling`, `triage-inbox` (never implements), `wizard`, `graphify`
 
 ---
 
@@ -106,17 +73,17 @@ Never use graphify as a substitute for ERA Notes — it cannot infer hard rules,
 19. **Mobile number inputs** — never use `type="number"`. Use `type="text"` with `inputMode="decimal"`. Prevents iOS scroll-wheel bug and inconsistent decimal handling.
 20. **Never add RLS `EXISTS`-subquery policies to hot child tables** — a policy like `EXISTS (SELECT 1 FROM items i WHERE i.id = child.item_id AND i.user_id = auth.uid())` re-evaluates a join for every row scanned. On `item_alerts`, `item_subtasks`, `reminder_details`, etc. that is catastrophic (~500 ms per table for 50 rows, even at service-role baseline). Enforce access one of these two ways instead — and never enable RLS on a child table without one of them in place:
 
-- **SECURITY DEFINER RPC** (preferred): own the WHERE clause inside the function; bypass per-table RLS. See `get_schedule_bundle` in `migrations/schema.sql` (FUNCTIONS section) + `ERA Notes/05 - Performance/Performance Optimizations.md`. *(Citation corrected 2026-08-01: the previously cited `migrations/2026-05-11_schedule_bundle_rpc.sql` does not exist.)*
+- **SECURITY DEFINER RPC** (preferred): own the WHERE clause inside the function; bypass per-table RLS. See `get_schedule_bundle` in `migrations/db-state.json` (SECURITY DEFINER bodies) + `ERA Notes/05 - Performance/Performance Optimizations.md`.
 - **Denormalized `user_id`** on the child table + a direct `user_id = auth.uid()` policy, with a trigger keeping it in sync with the parent.
 
 21. **Hot read paths that fetch a parent + N child tables must use a single SECURITY DEFINER RPC** — each PostgREST call costs ~170–200 ms of network overhead, so `items` + `reminder_details` + `event_details` + `item_subtasks` + `item_alerts` + `item_recurrence_rules` + `recurrence_pauses` as 7 queries adds ~1.3 s of floor latency before any RLS or query cost. Collapse into one `get_*_bundle()` RPC returning JSON aggregates; `get_schedule_bundle` is the canonical example.
-22. **No `console.log` / `console.warn` / `console.error` in client code** — `src/components/`, `src/features/`, `src/hooks/`, `src/contexts/`, `page.tsx` files. Stray calls there slow the React DevTools overlay and leak internal state into the user's browser; use the Error Logs module (`src/app/error-logs/`) for persistent structured logging. **Server-side `console.error` in `src/app/api/` is permitted** — that's the Vercel log stream, with none of those costs. *(Scope corrected 2026-08-01: the rule previously banned `console.*` in all committed code on a client-only rationale and was ignored at ~535 sites; the `src/lib/logger.ts` reference was dropped — that file does not exist.)*
-23. **Atlas must be kept in sync** — every new page (`src/app/.../page.tsx`), route, feature module (`src/features/[name]/`), or significant navigation/tab change MUST add/update an entry in `ERA Notes/04 - UI & Design/Page & Feature Atlas/` (copy `_Template.md`, fill all sections, add a row to `_Index.md`). Renaming a feature/route is a breaking change — update or delete its MD file in the same commit. Stub generator: `node scripts/seed-atlas.mjs` (idempotent). **`public/atlas/atlas.json` regenerates automatically** via `.claude/hooks/update-atlas.sh` (PostToolUse) — no manual `pnpm atlas` after editing `src/app/`, `src/features/`, `src/components/`.
+22. **No `console.log` / `console.warn` / `console.error` in client code** — `src/components/`, `src/features/`, `src/hooks/`, `src/contexts/`, `page.tsx` files. Stray calls there slow the React DevTools overlay and leak internal state into the user's browser; use the Error Logs module (`src/app/error-logs/`) for persistent structured logging. **Server-side `console.error` in `src/app/api/` is permitted** — that's the Vercel log stream, with none of those costs.
+23. **Atlas must be kept in sync** — every new page (`src/app/.../page.tsx`), route, feature module (`src/features/[name]/`), or significant navigation/tab change MUST add/update an entry in `ERA Notes/04 - UI & Design/Page & Feature Atlas/` (copy `_Template.md`, fill all sections, add a row to `_Index.md`). Renaming a feature/route is a breaking change — update or delete its MD file in the same commit. Stub generator: `node scripts/seed-atlas.mjs` (idempotent). **`public/atlas/atlas.json` regenerates automatically** via `.claude/hooks/update-atlas.sh` (PostToolUse) whenever an Atlas entry is edited — no manual `pnpm atlas`.
 24. **DB changes require a migration file** — for any DB change (CREATE/ALTER TABLE, ADD COLUMN, CREATE INDEX, CREATE POLICY, DROP, …) you MUST (1) **first** write `migrations/YYYY-MM-DD_short-description.sql` with the exact SQL to run manually in the Supabase SQL Editor, (2) **then** update `migrations/schema.sql` to the final schema state. The migration file is the manual runbook; `schema.sql` is the authoritative end-state snapshot. Never update `schema.sql` without a migration file in the same session; multiple unrelated changes in one session share one migration file. Enforced by `.claude/hooks/check-migration.sh`.
 25. **PM files MUST stay current** — `ERA Notes/10 - Project Management/` is the live command center, not a historical snapshot. Update it in the same session as the code change, before the work counts as done: mark an already-documented point completed, or add it and then mark it completed.
-   - **Story/bug-fix completed:** every campaign folder (`Budget/`, `Schedule/`, `Kitchen/`, `Trips/`, `Hub & ERA/`, `Notifications & Alerts/`, `Healthcare/`, `Outfits/`, `PM Tooling/`, `Delivery/`, `Native App/`) holds exactly **two** files: `<Campaign> — Master Book.md` and `4 - Checklist.md`. Check `[x]`, sweep the record into the book's **Shipped Log** as `- ✅ YYYY-MM-DD — **ID** what landed (evidence)`, delete the checklist line, and add `*(IMPLEMENTED YYYY-MM-DD)*` in **Vision & Decisions** where a decision is realized. **The sweep is automated** — `pnpm pm:archive` (or the dashboard's Ship action, or the monthly auto-sweep on `pnpm pm` boot) moves it with a git-derived date; `pnpm pm:archive --undo` reverts. Discarded work goes to `_Archive/Cancelled Log.md` via the dashboard's Discard action. See `_Conventions.md` §2.1.
+   - **Story/bug-fix completed:** each campaign folder holds exactly two files, `<Campaign> — Master Book.md` and `4 - Checklist.md`. Check `[x]`, sweep it into the book's **Shipped Log** with `pnpm pm:archive` (`--undo` reverts), and add `*(IMPLEMENTED YYYY-MM-DD)*` in **Vision & Decisions** where a decision is realized. Cancellations and merges: `_Conventions.md` §2.1.
    - **New bug surfaces:** add it to the Master Book's **Pain Inventory** with an emoji severity lead (🔴/🟠/🟡/⚪ at line start — the dashboard reads those), root cause, and evidence, so it enters the ranked queue instead of a separate list.
-   - **Canonical item grammar:** every `4 - Checklist.md` item and done-stamp follows `ERA Notes/10 - Project Management/_Conventions.md` — `- [ ] **PREFIX-n** outcome _(severity - effort)_` under `## Now / ## Next / ## Later` (prefixes `BUD`/`SCH`/`KIT`/`TRIP`/`HUB`/`NOTIF`/`HLTH`/`OUT`/`R`/`DLV`; severity blocker/friction/annoyance/parked; effort S/M/L). Validate with `pnpm pm:lint`. The `pnpm pm` Task board is the consolidated view; `_Archive/` is never scanned at all, and `status: superseded|baseline-frozen|template` docs are hidden by default.
+   - **Canonical item grammar:** `- [ ] **PREFIX-n** outcome _(severity - effort)_` under `## Now / ## Next / ## Later`; prefixes, severities and efforts are defined in `_Conventions.md`. Validate with `pnpm pm:lint`.
    - **No orphan fixes** — a fix with no PM trace is invisible to future planning. These files are the single source of truth for what hurts, what's been done, and what's next.
    - **Claude Code enforcement:** `.claude/hooks/check-pm-update.sh` (a `Stop` hook) blocks the end of a turn if `src/` or `migrations/` were edited without a matching edit under `ERA Notes/10 - Project Management/`. It fires once per turn (won't loop) — if the change truly has no PM-trackable story (pure tooling/config/hook edit), state that explicitly and finish. Codex and other agents without a hook engine must still treat this rule as mandatory.
 
@@ -203,10 +170,9 @@ Bridge between Standalone modules. May import from any standalone feature direct
 - **Data flow, optimistic mutations, ID-only state, Framer Motion + HTML5 drag conflicts**: `ERA Notes/01 - Architecture/Common Patterns.md`
 - **Offline queue, sync engine, IndexedDB vs legacy localStorage queue**: `ERA Notes/01 - Architecture/Sync and Offline.md`
 - **API route pattern** (auth check → zod parse → DB op → error handling): follow `src/app/api/accounts/route.ts`
-- **Query cache time constants** (`BALANCE=5min`, `TRANSACTIONS=2min`, `ACCOUNTS/CATEGORIES=1h`, `RECURRING=30min`): `src/lib/queryConfig.ts`
+- **Query cache time constants**: `src/lib/queryConfig.ts`
 - **Supabase clients**: `lib/supabase/client.ts` (browser singleton, required for realtime) · `server.ts` (API routes/RSC) · `admin.ts` (cron/batch ops, service role) — never mix
 - **Query keys**: use `qk.*` from `src/lib/queryKeys.ts` OR feature-scoped `queryKeys.ts` — never inline arrays
-- **Path alias**: `@/*` → `src/*`
 - **Offline queue**: new code uses IndexedDB via `src/lib/offlineQueue.ts`. The legacy localStorage queue in `SyncContext` is for hub shopping list only — don't add to it.
 - **Custom month start**: billing cycle uses day 1–31 set by user. Use `startOfCustomMonth(date, monthStartDay)` from `src/lib/utils/date.ts`, not calendar months.
 - **Environment variables**: see `docs/ENV.md`
@@ -223,8 +189,7 @@ Located in `src/contexts/`. Always use the `Safe` variant (`useSyncSafe`, `useAp
 ## Database
 
 > **`migrations/schema.sql` is the single source of truth for tables/columns.** Read it before writing any SQL. Never assume a column exists.
-> **Caveat — `schema.sql` CANNOT answer RLS or function questions. The live DB is the only authority.** The export is tables/columns/constraints only. Verify with `select relname, relrowsecurity from pg_class` and `select * from pg_policies`, never by reading this repo.
-> *(Re-corrected 2026-08-04. The "Corrected 2026-08-01" note that stood here was **false** and caused a production bug: it claimed `schema.sql` "now contains the full policy set (see the `items` and `*_via_parent` policies) and a FUNCTIONS section including `get_schedule_bundle`." None of that was ever in the file — `grep -c "_via_parent"` → 0, `grep -c "get_schedule_bundle"` → 0, no FUNCTIONS section, `CREATE POLICY` count 0 until the trips policies were hand-added on 2026-08-04. Believing it made an agent read "no policy in schema.sql" as "no RLS on the table" and spend five turns re-reading correct application code while RLS was the actual filter. See Hard Rule #27.)*
+> **Caveat — `schema.sql` CANNOT answer RLS or function questions** (tables/columns/constraints only). Use `migrations/db-state.json` or the live DB — see Hard Rule #27.
 
 DB changes = SQL run manually in the Supabase SQL Editor. New tables must include RLS policies. **Always create the migration file first** (`migrations/YYYY-MM-DD_description.sql`), then update `schema.sql` (Hard Rule #24). Unique constraint violations: Supabase returns `error.code === "23505"` → respond `409 Conflict`. Account types (`expense`/`income`/`saving`) affect balance direction — see the `schema.sql` CHECK constraints and `src/lib/balance-utils.ts`.
 
@@ -296,17 +261,4 @@ DB changes = SQL run manually in the Supabase SQL Editor. New tables must includ
 - **Never duplicate** — augment the existing doc, don't create a parallel one
 - Update `ERA Notes/04 - UI & Design/App Routes and Icons.md` when adding routes or icons
 - New feature doc template: `ERA Notes/Templates/Feature Doc.md`
-
-| Content type | Vault location |
-| --- | --- |
-| Feature doc (Standalone) | `ERA Notes/02 - Standalone Modules/[module-name]/` |
-| Feature doc (Junction) | `ERA Notes/03 - Junction Modules/[module-name]/` |
-| Cross-cutting/system | `ERA Notes/01 - Architecture/` |
-| UI/visual | `ERA Notes/04 - UI & Design/` |
-| Performance | `ERA Notes/05 - Performance/` |
-| Setup/env | `ERA Notes/06 - Setup & Onboarding/` |
-| Ideas/pending | `ERA Notes/07 - Backlog & Ideas/` |
-| Session notes (personal) | `ERA Notes/08 - Sessions/{Features\|Bug Fixes\|Refactors\|Wizards}/` |
-| Reusable patterns (personal) | `ERA Notes/09 - Patterns & Lessons/` |
-| Page & Feature Atlas entry | `ERA Notes/04 - UI & Design/Page & Feature Atlas/` |
-| Root-level only | `CLAUDE.md`, `README.md` |
+- Vault folders under `ERA Notes/` are self-describing; only `CLAUDE.md` and `README.md` live at the repo root

@@ -37,3 +37,4 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **R9** Font subsetting — [criteria](<PM Tooling — Master Book.md#r9>) _(parked - S)_
 - [ ] **R53** Make phone Inbox capture visible and identifiable — [criteria](<PM Tooling — Master Book.md#r53>) _(friction - M)_
 - [ ] **R62** Compare Delivery outcomes using observed run data — [criteria](<PM Tooling — Master Book.md#r62>) _(annoyance - M)_
+- [ ] **R71** Point the PM Stop hook at the current campaign files — [criteria](<PM Tooling — Master Book.md#r71>) _(annoyance - S)_

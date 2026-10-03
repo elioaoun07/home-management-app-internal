@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# PostToolUse: regenerate public/atlas/atlas.json after any UI/feature/component file is edited.
+# PostToolUse: regenerate public/atlas/atlas.json after an Atlas entry is edited.
+# scripts/build-atlas.mjs reads only "ERA Notes/04 - UI & Design/Page & Feature Atlas/*.md"
+# (plus public/atlas/screenshots), so edits there are the only ones that change its output.
 INPUT=$(cat)
-FILE_PATH=$(echo "$INPUT" | node -e "let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>console.log(JSON.parse(d).file_path||''))" 2>/dev/null || echo "")
+# Claude Code delivers the path under tool_input; keep the legacy top-level fallback.
+FILE_PATH=$(echo "$INPUT" | node -e "let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{const j=JSON.parse(d); console.log(j.tool_input?.file_path ?? j.file_path ?? '')})" 2>/dev/null || echo "")
+# Windows paths arrive with backslashes.
+FILE_PATH=$(echo "$FILE_PATH" | tr '\\' '/')
 
-# Only act on pages, features, and components (not lib/types/hooks/atlas files themselves)
-[[ "$FILE_PATH" == */src/app/* || "$FILE_PATH" == */src/features/* || "$FILE_PATH" == */src/components/* ]] || exit 0
-
-# Skip edits to the atlas MD files themselves (avoid triggering on atlas maintenance)
-[[ "$FILE_PATH" == *"ERA Notes"* ]] && exit 0
+[[ "$FILE_PATH" == *"Page & Feature Atlas/"*.md ]] || exit 0
 
 pnpm atlas --silent 2>/dev/null || true

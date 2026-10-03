@@ -98,6 +98,8 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟡 **R71 — 2026-10-03: The PM Stop hook sends agents to retired PM files.** `.claude/hooks/check-pm-update.sh` blocks with "mark completed work … in the Feature State / Pain Inventory file, check it off in the Execution Plan, and note *(IMPLEMENTED YYYY-MM-DD)* in the Vision/Decisions file" — the pre-consolidation layout. Campaigns have been Master Book + `4 - Checklist.md` since 2026-07-30 (Hard Rule #25), so a blocked agent gets stale directions. Found by the 2026-10-03 Claude setup audit.
+
 🟠 **R66 — 2026-09-15: Delivery exposes internal policy and hides major review facts.** Launch printed scope/fleet verdicts and recommendation rationales; the session hid Risks, Unknowns, verification history, application history and run facts in low-prominence disclosures. Token receipts repeated unknown/reserved/allowance fields, and global footer copy made the application read like a draft. Owner screenshots supplied desktop and mobile evidence.
 
 🟠 **R64 — 2026-09-14: Delivery compresses decisions into small technical rows.** Source CSS uses 9px plan disclosures, 10px check states and 11px check/resource/list text. Plan, cost, evidence and application counters compete without a clear decision hierarchy; owner reports desktop/mobile usability failure. Responsive screenshot/device acceptance is pending. [Hotfix UX contract](<../Plans/Delivery First-Run Hotfix.md>).
@@ -123,6 +125,25 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### R71
+
+**Outcome:** The PM Stop hook's block message names the current two-file campaign layout.
+**Kind:** bug
+**Touches:** `.claude/hooks/check-pm-update.sh`
+
+- **Acceptance:** when the hook blocks, its reason directs the agent to tick `4 - Checklist.md` and sweep to the Master Book's Shipped Log (`pnpm pm:archive`), or to add a Pain Inventory entry, and never names Feature State, Execution Plan or Vision/Decisions files. Blocking conditions are unchanged.
+
+### R70
+
+**Implementation:** done
+
+**Outcome:** The UI-folder guard and Atlas rebuild hooks run on real Claude Code payloads.
+**Kind:** bug
+**Touches:** `.claude/hooks/block-ui-dir.sh`, `.claude/hooks/update-atlas.sh`, `public/atlas/atlas.json`, `CLAUDE.md`
+
+- **Acceptance:** an Edit/Write to `src/components/ui/` is blocked (exit 2) for Windows, forward-slash and relative paths; other paths pass and malformed input fails open. Editing a Page & Feature Atlas entry rebuilds `public/atlas/atlas.json`; source and other vault edits do not.
+- **Verification (2026-10-03):** both scripts read `file_path` from the payload's top level, but Claude Code sends `tool_input.file_path` (a backslash path on Windows), so both were silent no-ops: an Edit payload for `src\components\ui\button.tsx` exited 0, and `atlas.json` had not changed since 2026-09-12. Both now read `tool_input.file_path` (legacy fallback kept) and normalize separators, as `check-migration.sh` already did. `update-atlas.sh` also fired on `src/` edits while skipping Atlas entries — the reverse of `scripts/build-atlas.mjs`, whose only inputs are the Atlas entries and screenshots — so it now fires on Atlas entries. Payload tests: three `ui/` path styles blocked; non-`ui/` and malformed input allowed; two Atlas paths rebuild; `src/app` and other vault docs do not. One rebuild takes ~0.46 s. `atlas.json` regenerated (83 nodes); Hard Rule #23 wording updated to the Atlas-entry trigger.
 
 ### R69
 
@@ -1326,6 +1347,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - 2026-09-10 — R35 governance complete; R34/R38 retain only freshness-radar implementation.
 
 ## Shipped Log
+
+- ✅ 2026-10-03 — **R70** Guardrail hooks fire on real payloads: `block-ui-dir.sh` blocks `src/components/ui/` edits and `update-atlas.sh` rebuilds `atlas.json` when an Atlas entry changes. Both had read the wrong payload field, so Hard Rules #11 and #23 were unenforced. (Payload tests; [acceptance and verification](<#r70>).)
 
 - ✅ 2026-09-26 — **R69** Shared Command Center Memory mark, Home queue/module cards, Analytics navigation and daily receipts, visible work IDs, persistent search across status/layout changes, and selectable question options from supplied text. Existing Delivery execution and answer commands are preserved; guaranteed AI-generated choices remain a separate suggestion. (Local implementation; [acceptance and verification](<#r69>); physical-phone UAT pending.)
 
