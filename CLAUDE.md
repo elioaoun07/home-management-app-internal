@@ -41,7 +41,7 @@ Playbooks live in `.claude/skills/<name>/SKILL.md` (verified templates, evidence
 
 - **Workflow:** `fix-bug`, `add-feature`, `api-route` (anything under `src/app/api/`), `db-migration` (any DB change), `ui-guardrails` (any component/page/style change)
 - **Risk domains** (start-task's domain-risk gate routes here): `money-rules` (ANY money logic), `recurrence-safety` (both recurrence systems), `data-repair` (production data fixes), `skill-factory` (new skills)
-- **Specialized:** `new-module`, `cache-invalidation`, `timezone-handling`, `triage-inbox` (never implements), `wizard`, `graphify`
+- **Specialized:** `new-module`, `cache-invalidation`, `timezone-handling`, `triage-inbox` (never implements), `wizard`, `graphify`, `pwa-install` (installable apps/manifests, "already installed")
 
 ---
 

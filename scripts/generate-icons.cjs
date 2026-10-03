@@ -100,6 +100,14 @@ const choresOutputs = [
   { size: 512, file: "chores-maskable-512.png" },
 ];
 
+// Meal Plan app icon outputs
+const mealPlanOutputs = [
+  { size: 180, file: "meal-plan-180.png" },
+  { size: 192, file: "meal-plan-192.png" },
+  { size: 512, file: "meal-plan-512.png" },
+  { size: 512, file: "meal-plan-maskable-512.png" },
+];
+
 // ERA app icon outputs
 const eraOutputs = [
   { size: 180, file: "era-180.png" },
@@ -230,6 +238,13 @@ async function main() {
     path.join(publicDir, "chores-icon.svg"),
     choresOutputs,
     "Chores App",
+  );
+
+  // Generate Meal Plan app icons (if SVG exists)
+  await generateIcons(
+    path.join(publicDir, "meal-plan-icon.svg"),
+    mealPlanOutputs,
+    "Meal Plan App",
   );
 
   // Generate ERA app icons (if SVG exists)

@@ -168,6 +168,10 @@ Each standalone app needs 4 icon sizes in `public/`:
 
 ---
 
+## Install Scopes (one origin, many apps)
+
+Every installable app owns a disjoint scope; nothing claims `/`. Chrome reports "This app is already installed" for any URL inside an installed app's scope, so a scope-`/` app blocks every app installed after it. Budget (`public/manifest.json`, id `/budget-app`) was `/` until 2026-10-03 and is now `/expense`. `pnpm pwa:check` (`scripts/check-pwa-manifests.mjs`, in pre-commit) enforces disjoint scopes, ids, icons and route links. Rules, phone reset steps and known overlaps: `.claude/skills/pwa-install/SKILL.md`.
+
 ## How to Install Standalone Apps
 
 1. Navigate to the standalone route (e.g., `/chat`)
@@ -182,13 +186,14 @@ Each standalone app needs 4 icon sizes in `public/`:
 - **Recurring Payments** (`/recurring`) - Payment scheduler
 - **Future Purchases** (`/savings`) - Savings goals tracker
 
-To add a new standalone app:
+To add a new standalone app (full recipe: `.claude/skills/pwa-install/SKILL.md`):
 
 1. Create route with page.tsx and layout.tsx
-2. Add manifest to `public/manifests/`
-3. Add icons to `public/`
+2. Add manifest to `public/manifests/` (`id: "/<name>-app"`, `scope: "/<name>"`)
+3. Add `public/<name>-icon.svg`, register it in `scripts/generate-icons.cjs`, run `pnpm icons`
 4. Add route to `standaloneRoutes` array in `MobileNav.tsx`
 5. Add configuration to `STANDALONE_APPS` in `ConditionalHeader.tsx`
+6. Run `pnpm pwa:check`
 
 ---
 

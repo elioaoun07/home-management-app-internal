@@ -30,6 +30,7 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 - Do not redesign working Month/Week/Today surfaces or split useItems solely for size. Mobile form deletion requires SCH-5.3’s explicit keep/merge/retire decision.
 - Reusable Catalogue definitions never replace execution ownership: Schedule owns activation, occurrence identity and history; edits to a definition do not silently rewrite instances.
 - Chores is its own page and install identity (`/chores`, `/chores-app`): a day-focused mobile agenda and a wider web week/planning workspace. Unassigned rows take a weekday in two taps, placing one occurrence in that week; Catalogue → Chores is the definition library. Shared Items data stays shared. *(IMPLEMENTED 2026-10-03)*
+- No installable app claims `/`: Budget (`/budget-app`) is scoped to `/expense`, so every sub-app (Chores and all future ones) installs regardless of order. Supersedes the 2026-07-19 install-order dance; accepted cost is a URL strip on `/recurring`, `/settings`, `/statement-import` inside the Expense app. `pnpm pwa:check` (pre-commit) guards it. *(IMPLEMENTED 2026-10-03)*
 
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
@@ -2018,6 +2019,19 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - **Acceptance:** `src/features/chores/` imports scheduling data only from shared locations (`src/hooks/`, `src/lib/`, `src/types/`), with Items callers migrated to the same implementation — not a re-exporting wrapper. No copied hooks, no chores table, no second recurrence engine.
 - **Reading guide:** Chores needs `useItems`, `useAllOccurrenceActions`, `useItemActionsWithToast`, `useFlexibleRoutines`/`useFlexibleSchedules`, the schedule mutations and `useUpdateReminderDetails` (~4.8k LOC across `useItems.ts`, `useItemActions.ts`, `useFlexibleRoutines.ts`, ~80 importers). SCH-20 kept this pre-existing debt rather than fold an Items split into a UI change. Natural moment: when SCH-4.5 splits `useItems.ts`. The pure organizer (`organizeFlexibleRoutines`) and `src/features/chores/choreWeek.ts` are the first candidates for `src/lib/schedule/`.
 
+### SCH-22
+
+**Kind:** bug
+**Implementation:** done
+**UAT:** pending
+**Touches:** public/manifest.json, scripts/check-pwa-manifests.mjs, .claude/hooks/pre-commit.sh, .claude/skills/pwa-install/SKILL.md, public/meal-plan-*, scripts/generate-icons.cjs
+
+**Outcome:** Install Chores (and any later app) as its own app even when Budget is installed.
+
+- **Acceptance:** No manifest has `scope: "/"`, and no app's scope contains another app's `start_url` apart from the owner-accepted `KNOWN_OVERLAPS`. `pnpm pwa:check` passes and runs in pre-commit. On a phone with the old Budget icon removed once, `/chores` offers **Install app** and opens standalone.
+- **Root cause:** `public/manifest.json` had `scope: "/"`. Chrome treats any URL inside an installed app's scope as already installed, so apps installed after Budget (Chores) got "This app is already installed"; Trips, Chat and the others only worked because they were installed first. The same check found Meal Plan's manifest icons missing (not installable).
+- **Reading guide:** `.claude/skills/pwa-install/SKILL.md`; `scripts/check-pwa-manifests.mjs`.
+
 ## Shipped Log
 
 - ✅ 2026-05-31 — partner-edit 403 fixed: the PATCH route ran its own creator-only check **stricter than the RLS policy underneath**; now uses `canMutateItem()` (creator OR responsible OR public+partner), matching `items_update`
@@ -2042,6 +2056,7 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - ✅ 2026-06-21 — **Decision 4 shipped**: all four occurrence-action inserts are idempotent `.upsert(..., { onConflict: "item_id,occurrence_date,action_type" })`, ending the 500-then-retry-forever loop on double-tap/offline replay
 - ✅ 2026-07-10 — **Google Calendar sync** (`2783b1d`, 12 files, +727): OAuth connect/callback/connection routes, `sync-item`, `google_calendar_connections` table, `items.google_synced_at`, and a two-pass idempotent `cron/gcal-reconcile` (migration `2026-07-10_google-calendar-sync.sql`)
 - ✅ 2026-10-03 — **SCH-20** Chores got its own page and install icon (`/chores`, `/chores-app`), a Catalogue → Chores section and two-tap weekday assignment; refined the UI into a mobile day agenda and web week/planning workspace with search, theme-aware responsive dialogs and date-link parity. Web Chores renders independently of Budget loading/errors. Fixed the length-keyed `useFlexibleRoutines` cache and missing schedule-items invalidation on `is_chore` edits ([criteria](<Schedule — Master Book.md#sch-20>), `src/features/chores/choreWeek.test.ts`)
+- ✅ 2026-10-03 — **SCH-22** Install Chores as its own app alongside Budget — [criteria](<Schedule — Master Book.md#sch-22>)
 
 ## Delivery session log
 

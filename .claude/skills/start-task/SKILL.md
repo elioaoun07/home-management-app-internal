@@ -37,6 +37,7 @@ TASK TYPE: <bug | feature-in-existing-module | new-module | api | db | ui | docs
 | Fix/clean/backfill production data, console scripts | data-repair | `.claude/skills/data-repair/SKILL.md` |
 | Authoring a new skill for a new domain/module | skill-factory | `.claude/skills/skill-factory/SKILL.md` |
 | Triage raw ideas/bugs from the PM Idea Inbox (`0 - Inbox.md`) | triage-inbox | `.claude/skills/triage-inbox/SKILL.md` |
+| Installable PWA: new app, any manifest, "This app is already installed" | pwa-install | `.claude/skills/pwa-install/SKILL.md` |
 | Setup/install/debug session needing owner-run steps + verification (external accounts, SDK installs, hardware) | wizard | `.claude/skills/wizard/SKILL.md` |
 | Designing a feature, weighing a tradeoff, or NO playbook fits | Design Doctrine (not a skill — the judgment layer) | `ERA Notes/01 - Architecture/Design Doctrine.md` |
 

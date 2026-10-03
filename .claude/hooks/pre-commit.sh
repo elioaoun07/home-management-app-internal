@@ -8,6 +8,12 @@ if ! pnpm docs:check; then
   exit 2
 fi
 
+echo "Checking PWA manifests..."
+if ! pnpm -s pwa:check; then
+  echo "PWA manifest scopes collide - see .claude/skills/pwa-install/SKILL.md" >&2
+  exit 2
+fi
+
 echo "Running TypeScript check..."
 if ! pnpm tsc --noEmit; then
   echo "TypeScript errors — fix before committing." >&2
