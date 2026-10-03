@@ -11,6 +11,8 @@ import { getErrorMessage } from "@/lib/errors";
 import { CategoryManagement } from "@/components/settings/CategoryManagement";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { useInstallButtonStore } from "@/lib/stores/installButtonStore";
 import {
   Dialog,
   DialogContent,
@@ -78,6 +80,7 @@ type SectionType =
   | "categories"
   | "notifications"
   | "steps"
+  | "install"
   | "household"
   | "statement";
 
@@ -86,6 +89,8 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
   const themeClasses = useThemeClasses();
   const { viewMode, updateViewMode } = useViewMode();
   const [activeSection, setActiveSection] = useState<SectionType>("view");
+  const showInstall = useInstallButtonStore((s) => s.showInstall);
+  const setShowInstall = useInstallButtonStore((s) => s.setShowInstall);
 
   // Section order state
   const { data: serverOrderArray } = useSectionOrder();
@@ -166,6 +171,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
     { id: "categories", label: "Categories" },
     { id: "notifications", label: "Notifications" },
     { id: "steps", label: "Steps" },
+    { id: "install", label: "Install" },
     { id: "household", label: "Household" },
     { id: "statement", label: "Statement Import" },
   ];
@@ -505,6 +511,20 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                   </p>
                 </div>
                 <NotificationSettings />
+              </div>
+            )}
+
+            {/* INSTALL SECTION */}
+            {activeSection === "install" && (
+              <div className="flex items-center justify-between animate-in fade-in duration-300">
+                <h3 className={`text-lg font-semibold ${themeClasses.text}`}>
+                  Install button
+                </h3>
+                <Switch
+                  checked={showInstall}
+                  onCheckedChange={setShowInstall}
+                  aria-label="Install button"
+                />
               </div>
             )}
 

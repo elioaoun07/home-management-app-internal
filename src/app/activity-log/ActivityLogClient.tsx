@@ -10,6 +10,7 @@ import {
   type ActivityModule,
 } from "@/features/activity-log/types";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { useInstallButtonStore } from "@/lib/stores/installButtonStore";
 import { cn } from "@/lib/utils";
 import { localToISO } from "@/lib/utils/date";
 import { addDays, format, subDays } from "date-fns";
@@ -64,6 +65,7 @@ function words(value: string) {
 export default function ActivityLogClient({ userId }: { userId: string }) {
   const tc = useThemeClasses();
   const { theme } = useTheme();
+  const showInstall = useInstallButtonStore((s) => s.showInstall);
   const [module, setModule] = useState<ActivityModule | "">("");
   const [feature, setFeature] = useState("");
   const [actor, setActor] = useState<ActivityFilters["actor"]>();
@@ -160,7 +162,7 @@ export default function ActivityLogClient({ userId }: { userId: string }) {
             <Activity className={cn("h-6 w-6 shrink-0", tc.text)} />
             <h1 className="truncate text-xl font-semibold">Activity</h1>
           </div>
-          {installPrompt && (
+          {showInstall && installPrompt && (
             <button
               type="button"
               className={iconButton}

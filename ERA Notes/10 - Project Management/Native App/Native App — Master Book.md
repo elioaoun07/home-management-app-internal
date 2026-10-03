@@ -536,6 +536,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 
 
+- ✅ 2026-10-03 — **NAT-9** Settings toggle (default off) shows/hides the Install button on installable pages
 Earlier shipped work is preserved in the linked pre-refactor record; no dated receipt is invented here.
 
 ## Delivery session log

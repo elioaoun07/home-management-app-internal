@@ -1,6 +1,7 @@
 "use client";
 
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { useInstallButtonStore } from "@/lib/stores/installButtonStore";
 import { cn } from "@/lib/utils";
 import { Download, X } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -36,6 +37,7 @@ export function InstallAppPrompt() {
   } | null>(null);
   const [currentManifest, setCurrentManifest] = useState("");
   const [dismissed, setDismissed] = useState(false);
+  const showInstall = useInstallButtonStore((s) => s.showInstall);
 
   useEffect(() => {
     const capture = (event: Event) => {
@@ -66,6 +68,7 @@ export function InstallAppPrompt() {
   }, [pathname]);
 
   if (
+    !showInstall ||
     !captured ||
     dismissed ||
     captured.manifest !== currentManifest ||
