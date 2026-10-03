@@ -172,10 +172,12 @@ Each standalone app needs 4 icon sizes in `public/`:
 
 Every installable app owns a disjoint scope; nothing claims `/`. Chrome reports "This app is already installed" for any URL inside an installed app's scope, so a scope-`/` app blocks every app installed after it. Budget (`public/manifest.json`, id `/budget-app`) was `/` until 2026-10-03 and is now `/expense`. `pnpm pwa:check` (`scripts/check-pwa-manifests.mjs`, in pre-commit) enforces disjoint scopes, ids, icons and route links. Rules, phone reset steps and known overlaps: `.claude/skills/pwa-install/SKILL.md`.
 
+**Install with the in-app button, not Chrome's ⋮ menu.** On Android the ⋮ menu's Install sheet reports "This app is already installed" if *any* app from this origin is installed (Chromium `WebappRegistry.isAppInstalledForUrl` → `hasAtLeastOneWebApkForOrigin`), then "Could not open app". The page prompt (`beforeinstallprompt`) only checks the app's own scope, so `src/components/pwa/InstallAppPrompt.tsx` (mounted in the root layout) shows an **Install** pill on any app page Chrome considers installable. *(2026-10-03, SCH-23)*
+
 ## How to Install Standalone Apps
 
 1. Navigate to the standalone route (e.g., `/chat`)
-2. Browser will detect the manifest and offer "Add to Home Screen"
+2. Tap the in-app **Install** pill (not the ⋮ menu — see Install Scopes above)
 3. Each app will have its own icon and launch independently
 
 ---

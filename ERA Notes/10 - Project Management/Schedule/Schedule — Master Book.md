@@ -31,6 +31,7 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 - Reusable Catalogue definitions never replace execution ownership: Schedule owns activation, occurrence identity and history; edits to a definition do not silently rewrite instances.
 - Chores is its own page and install identity (`/chores`, `/chores-app`): a day-focused mobile agenda and a wider web week/planning workspace. Unassigned rows take a weekday in two taps, placing one occurrence in that week; Catalogue → Chores is the definition library. Shared Items data stays shared. *(IMPLEMENTED 2026-10-03)*
 - No installable app claims `/`: Budget (`/budget-app`) is scoped to `/expense`, so every sub-app (Chores and all future ones) installs regardless of order. Supersedes the 2026-07-19 install-order dance; accepted cost is a URL strip on `/recurring`, `/settings`, `/statement-import` inside the Expense app. `pnpm pwa:check` (pre-commit) guards it. *(IMPLEMENTED 2026-10-03)*
+- Apps install from the in-app Install pill (`InstallAppPrompt`), not Chrome's ⋮ menu: Chrome Android's menu blocks any second app on the same origin regardless of scope (verified in Chromium source). Disjoint scopes (SCH-22) remain required because the page prompt checks scope. *(IMPLEMENTED 2026-10-03)*
 
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
@@ -2032,6 +2033,20 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - **Root cause:** `public/manifest.json` had `scope: "/"`. Chrome treats any URL inside an installed app's scope as already installed, so apps installed after Budget (Chores) got "This app is already installed"; Trips, Chat and the others only worked because they were installed first. The same check found Meal Plan's manifest icons missing (not installable).
 - **Reading guide:** `.claude/skills/pwa-install/SKILL.md`; `scripts/check-pwa-manifests.mjs`.
 
+### SCH-23
+
+**Kind:** bug
+**Implementation:** done
+**UAT:** pending
+**Touches:** src/components/pwa/InstallAppPrompt.tsx, src/app/layout.tsx, .claude/skills/pwa-install/SKILL.md
+
+**Outcome:** Install a second app (Chat, Chores…) while Expense is installed, from an in-app Install button.
+
+- **Acceptance:** With Expense installed, `/chat` shows an Install pill; tapping it opens Chrome's "Install app — Hub Chat" dialog and installs Chat; the reverse order works too. The pill hides when installed, in standalone mode and on `/activity-log`, and stays dismissed only for the session.
+- **Root cause:** SCH-22 was necessary but not sufficient. Chrome Android's ⋮ menu Install (`AppInstallMenuHandler.doUniversalInstall`) checks `WebappRegistry.isAppInstalledForUrl` → `hasAtLeastOneWebApkForOrigin`, so any installed app on the origin blocks every other one ("This app is already installed", then "Could not open app" from `doOpenWebApp`). The page path (`beforeinstallprompt` → `AppBannerManager`) only checks `IsWebApkInstalled(start_url)`, which is scope-based.
+- **Evidence:** Chromium source (`AppInstallMenuHandler.java`, `WebappRegistry.java`, `webapps_client_android.cc`, `app_banner_manager.cc`); S23 emulator on Chrome 153: prompt fired for `chat.webmanifest`, pill rendered, tap opened the install dialog. A real second WebAPK install is owner UAT (the emulator's Play is signed out).
+- **Reading guide:** `.claude/skills/pwa-install/SKILL.md`.
+
 ## Shipped Log
 
 - ✅ 2026-05-31 — partner-edit 403 fixed: the PATCH route ran its own creator-only check **stricter than the RLS policy underneath**; now uses `canMutateItem()` (creator OR responsible OR public+partner), matching `items_update`
@@ -2057,6 +2072,7 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - ✅ 2026-07-10 — **Google Calendar sync** (`2783b1d`, 12 files, +727): OAuth connect/callback/connection routes, `sync-item`, `google_calendar_connections` table, `items.google_synced_at`, and a two-pass idempotent `cron/gcal-reconcile` (migration `2026-07-10_google-calendar-sync.sql`)
 - ✅ 2026-10-03 — **SCH-20** Chores got its own page and install icon (`/chores`, `/chores-app`), a Catalogue → Chores section and two-tap weekday assignment; refined the UI into a mobile day agenda and web week/planning workspace with search, theme-aware responsive dialogs and date-link parity. Web Chores renders independently of Budget loading/errors. Fixed the length-keyed `useFlexibleRoutines` cache and missing schedule-items invalidation on `is_chore` edits ([criteria](<Schedule — Master Book.md#sch-20>), `src/features/chores/choreWeek.test.ts`)
 - ✅ 2026-10-03 — **SCH-22** Install Chores as its own app alongside Budget — [criteria](<Schedule — Master Book.md#sch-22>)
+- ✅ 2026-10-03 — **SCH-23** Install a second app from the in-app Install button — [criteria](<Schedule — Master Book.md#sch-23>)
 
 ## Delivery session log
 
