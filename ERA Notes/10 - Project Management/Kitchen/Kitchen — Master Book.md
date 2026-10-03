@@ -16,7 +16,7 @@ Turn food and household references into useful, reversible daily actions. Campai
 
 ## Current state & evidence
 
-Recipes, cooking, stock, meal planning and Chef reads exist. Automatic low-stock shopping and ingredient consumption are incomplete. Catalogue is an existing module in this campaign, not a new campaign; its accepted Sep7 reference/execution separation is incorporated below.
+Recipes, cooking, stock, meal planning and Chef reads exist. Automatic low-stock shopping and ingredient consumption are incomplete. Catalogue is an existing module in this campaign, not a new campaign; its accepted Sep7 reference/execution separation is incorporated below. Catalogue → Chores (a read view of `is_chore` definitions, editing through the existing task editor) shipped 2026-10-03 under Schedule/SCH-20.
 
 Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>) preserves detailed older narratives and receipts.
 

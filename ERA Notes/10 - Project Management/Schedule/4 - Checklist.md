@@ -51,3 +51,4 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **SCH-17** Pause, stop and resume one activation coherently — [criteria](<Schedule — Master Book.md#sch-17>) _(friction - M)_
 - [ ] **SCH-18** Apply reusable defaults only to future work — [criteria](<Schedule — Master Book.md#sch-18>) _(friction - M)_
 - [ ] **SCH-19** Offer explicit updates to future activations — [criteria](<Schedule — Master Book.md#sch-19>) _(friction - M)_
+- [ ] **SCH-21** Move Chores off direct Items hook imports — [criteria](<Schedule — Master Book.md#sch-21>) _(parked - L)_

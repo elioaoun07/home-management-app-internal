@@ -1,66 +1,65 @@
 ---
 slug: chores
-title: Chores (merged → /reminders)
+title: Chores
 category: standalone-page
-route: /reminders
+route: /chores
 type: page
 parent: null
 children: []
 status: active
-tags: []
+tags:
+  - installable
 ---
 
 # Chores
 
-> Merged into the `/reminders` Chores tab (2026-06-19, between Focus and Assign). The former `/chores` route is now a redirect. Household chore management — Up Next hero, grouped list, quick completion, Sunday check-in for unresolved chores.
+> Day-focused mobile agenda and a wide web week/planning workspace. Me | Both | partner tabs, collapsible week strip, planning search, swipe-to-assign (left me, right partner) with All day / time, and responsive action dialogs. Own installable app (`/chores-app`); the web shell uses the same components.
 
 ## Files
 
-- **Page** (Chores tab): `src/app/reminders/page.tsx`
-- **Redirect**: `src/app/chores/page.tsx` → `/reminders?tab=chores`
-- **Main component**: `src/components/chores/ChoresTabContent.tsx` (props-driven: `userFilter`, `currentUserId`, `showCompleted` come from the shared Reminders `FilterBar`, not an internal filter bar)
-- **Sub-components**:
-  - `src/components/chores/UpNextHero.tsx`
-  - `src/components/chores/ChoreCard.tsx`
-  - `src/components/chores/ChoreGroupList.tsx`
-  - `src/components/chores/ChoreCheckInPanel.tsx`
-  - `src/components/chores/ChoreActionsSheet.tsx`
-  - `src/components/chores/ChorePostponeSheet.tsx`
-  - `src/components/web/WebChores.tsx` (separate desktop SPA view inside `WebViewContainer` — untouched by this merge)
+- **Page**: `src/app/chores/page.tsx` (web view mode → `WebViewContainer initialMode="chores"`)
+- **Layout / metadata**: `src/app/chores/layout.tsx`
+- **Manifest**: `public/manifests/chores.webmanifest`
+- **Main component**: `src/components/chores/ChoresView.tsx`
+- **Sub-components**: `ChoreRow.tsx`, `ChoreTodoRow.tsx`, `ChoreSheet.tsx`, `ChoreCheckInPanel.tsx`, `ChorePostponeSheet.tsx`, `choreUi.tsx` (all in `src/components/chores/`)
+- **Desktop**: `src/components/web/WebChores.tsx` → `ChoresView variant="web"`
 
 ## Hooks
 
-- `src/features/chores/useChores.ts` — fetches items where `is_chore = true`
-- `src/features/chores/useChoreActions.ts` — complete, skip, postpone, assign
+- `src/features/chores/useChores.ts` — `useChoreWeek`
+- `src/features/chores/useChoreActions.ts` — slot actions, assign/move/unassign, responsibility
+- `src/features/chores/choreWeek.ts` — pure week model
 
 ## API routes
 
 - `POST /api/items/[id]/complete` → `src/app/api/items/[id]/complete/route.ts`
 - `POST /api/items/[id]/actions` → `src/app/api/items/[id]/actions/route.ts`
+- Flexible slots: direct Supabase upsert/delete on `item_flexible_schedules`
 
 ## DB tables
 
-- `items` (`is_chore = true`)
-- `item_occurrence_actions`
-- `reminder_details`
+- `items` (`is_chore = true`), `reminder_details`, `item_occurrence_actions`, `item_flexible_schedules`
 
 ## How to get here
 
-- Default: navigate to `/reminders`, select the Chores tab
-- Direct URL: `/reminders?tab=chores`
-- Legacy: `/chores` → redirects above
+- Installed **Chores** icon, or `/chores`
+- Reminders → Chores section button
+- `/reminders?tab=chores` (redirects, keeps `?date=`)
+- `/chores?date=YYYY-MM-DD` selects that date in the mobile or web agenda
+- ERA: "open chores"
 
 ## What it links to
 
-- All interactions are in-page sheets (no child routes).
+- Week header → **Library** → `/catalogue?section=chores`
+- **Assign** opens the planning dialog on mobile; To plan is a sidebar on web
+- In-page sheets only otherwise
 
 ## Related vault doc
 
-- `ERA Notes/02 - Standalone Modules/Chores/`
+- `ERA Notes/02 - Standalone Modules/Chores/Overview.md`
 
 ## Notes
 
-- Chores are `items` rows — not a separate table. Always scope queries with `is_chore = true`.
-- Trip activation auto-skips chores via `trip_side_effects`.
-- Sunday check-in is collapsed by default; shows prior-week unresolved chores when expanded.
-- The Reminders page's "show completed" eye toggle in the toolbar now also drives the Chores tab's "Done this period" section.
+- Header: standalone `ConditionalHeader` (h-16) on mobile; content has `pt-16`. MobileNav hidden.
+- The web shell renders Chores independently of Budget transaction loading/errors.
+- Offline: warm launch works after one online visit (SW stale-while-revalidate); a never-visited cold offline launch shows the SW loading shell.

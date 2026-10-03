@@ -41,7 +41,7 @@ Generated from `src/features/era/reach.ts` by `src/features/era/reach.test.ts` (
 | Error Logs | ✓ `/error-logs` | – | – | – |  |
 | NFC Tags | ✓ `/nfc` | – | – | – |  |
 | Prerequisites | ✓ `/reminders` | – | – | – | Set on an item inside Reminders. |
-| Chores | ✓ `/reminders?tab=chores` | – | – | – |  |
+| Chores | ✓ `/chores` | – | – | – |  |
 | Focus | ✓ `/reminders?tab=focus` | – | – | – |  |
 | Trips | ✓ `/trips` | – | – | – | Reads wait on TRIP-1–3. |
 | Dashboard | ✓ `/dashboard` | – | – | – |  |

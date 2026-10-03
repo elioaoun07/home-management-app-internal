@@ -124,6 +124,7 @@ export default function AIChatAssistant() {
     "/chat",
     "/dashboard",
     "/reminders",
+    "/chores",
     "/nfc/",
     "/watch",
     "/era",
@@ -276,7 +277,7 @@ export default function AIChatAssistant() {
                   tokens: (msg.input_tokens || 0) + (msg.output_tokens || 0),
                   report:
                     msg.role === "assistant"
-                      ? msg.analysis_report ?? undefined
+                      ? (msg.analysis_report ?? undefined)
                       : undefined,
                 });
               }

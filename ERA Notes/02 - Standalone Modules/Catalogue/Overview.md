@@ -26,6 +26,7 @@ tags:
 > **Final build specification — 2026-09-07:** [ASTRA §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>) implements the accepted §9/§9.10 direction as ownership contracts, additive migration/compatibility rules, UX and prioritized packets C00–C19. Documentation only; no packet is implemented. Earlier Object Memory/Tasks V2 proposals remain historical.
 
 - Task templates as "UI Database"
+- **Chores section** (top-level card, deep link `/catalogue?section=chores`): a saved view of every visible, non-archived item with `is_chore = true`, across modules and categories. Rows keep their IDs, module and category; detail/edit use the row's own module (`itemModule` in `WebCatalogue`). **Add** opens the task-template editor in the Tasks module with the chore flag preselected. The count is flagged definitions, not this week's occurrences. Changing `is_chore` still fans out to linked items server-side; the client now also invalidates `qk.scheduleItems()`. *(IMPLEMENTED 2026-10-03)*
 - Multi-store product links with AI price scraping
 - Convert catalogue items to calendar events
 - Documents are catalogue items with document-only fields stored in `metadata_json`.

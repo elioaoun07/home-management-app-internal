@@ -172,9 +172,12 @@ Each entry carries:
 - `targetOccurrences` — the N from the catalogue
 - `scheduledOccurrences[]` — every schedule row for this period
 - `scheduledCount`, `completedCount`, `skippedCount`
+- `remainingCount` — slots still unaccounted for in the period (target − pending, completed, skipped, postponed, cancelled) *(added 2026-10-03)*
 - `flexibleSchedule` — the **specific slot** for that entry (when injected one-per-slot)
 
 Views can iterate `scheduled[]` and treat each entry as one calendar item.
+
+**Derivation, not a query (2026-10-03).** The pure work lives in `organizeFlexibleRoutines` (`fetchFlexibleRoutines` is its async wrapper). The hook memoizes it on the cached inputs (stable item references, schedules, actions, completions, catalogue targets, reference day). It used to be a `useQuery` keyed on collection *lengths*: equal-sized inputs from two views shared one cached result, and a moved slot (same counts) kept its old day until the 30 s staleTime. The hook still returns `{ data }`.
 
 ---
 

@@ -92,6 +92,14 @@ const healthcareOutputs = [
   { size: 512, file: "healthcare-maskable-512.png" },
 ];
 
+// Chores app icon outputs
+const choresOutputs = [
+  { size: 180, file: "chores-180.png" },
+  { size: 192, file: "chores-192.png" },
+  { size: 512, file: "chores-512.png" },
+  { size: 512, file: "chores-maskable-512.png" },
+];
+
 // ERA app icon outputs
 const eraOutputs = [
   { size: 180, file: "era-180.png" },
@@ -215,6 +223,13 @@ async function main() {
     path.join(publicDir, "healthcare-icon.svg"),
     healthcareOutputs,
     "Healthcare App",
+  );
+
+  // Generate Chores app icons (if SVG exists)
+  await generateIcons(
+    path.join(publicDir, "chores-icon.svg"),
+    choresOutputs,
+    "Chores App",
   );
 
   // Generate ERA app icons (if SVG exists)

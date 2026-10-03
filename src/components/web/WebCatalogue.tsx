@@ -43,6 +43,7 @@ import {
   Plane,
   Plus,
   Search,
+  Sparkles,
   Star,
   Tag,
   Trash2,
@@ -87,7 +88,7 @@ function getModuleIcon(
   return MODULE_ICON_COMPONENTS[iconName] || FolderOpen;
 }
 
-type ViewLevel = "modules" | "categories" | "items";
+type ViewLevel = "modules" | "categories" | "items" | "chores";
 
 interface BreadcrumbItem {
   level: ViewLevel;
@@ -97,13 +98,18 @@ interface BreadcrumbItem {
 
 type DocOwnerFilter = "all" | "mine" | "partner";
 
-export default function WebCatalogue() {
+export default function WebCatalogue({
+  initialSection,
+  stickyTopClass = "top-0",
+}: { initialSection?: "chores"; stickyTopClass?: string } = {}) {
   const themeClasses = useThemeClasses();
   const { theme } = useTheme();
   const { data: householdData } = useHouseholdMembers();
 
   // Navigation state
-  const [currentLevel, setCurrentLevel] = useState<ViewLevel>("modules");
+  const [currentLevel, setCurrentLevel] = useState<ViewLevel>(
+    initialSection === "chores" ? "chores" : "modules",
+  );
   const [selectedModule, setSelectedModule] = useState<CatalogueModule | null>(
     null,
   );
@@ -127,9 +133,13 @@ export default function WebCatalogue() {
   );
   const [showCalendarDialog, setShowCalendarDialog] = useState(false);
   const [calendarItem, setCalendarItem] = useState<CatalogueItem | null>(null);
+  // Chores section spans modules: dialogs use the open row's own module.
+  const [itemModule, setItemModule] = useState<CatalogueModule | null>(null);
+  const isChoresSection = currentLevel === "chores";
+  const dialogModule = isChoresSection ? itemModule : selectedModule;
 
   // Check if current module is tasks type
-  const isTasksModule = selectedModule?.type === "tasks";
+  const isTasksModule = dialogModule?.type === "tasks";
 
   // Data queries
   const { data: modules = [], isLoading: modulesLoading } =
@@ -141,6 +151,27 @@ export default function WebCatalogue() {
     selectedCategory?.id,
   );
 
+  // Without a selected module `items` is every visible item: the Chores
+  // section is a saved view of flagged definitions across categories.
+  const moduleById = useMemo(
+    () => new Map(modules.map((module) => [module.id, module])),
+    [modules],
+  );
+  const tasksModule = useMemo(
+    () => modules.find((module) => module.type === "tasks") ?? null,
+    [modules],
+  );
+  const choreItems = useMemo(
+    () =>
+      selectedModule
+        ? []
+        : items.filter(
+            (item) =>
+              item.is_chore && !item.archived_at && item.status !== "archived",
+          ),
+    [items, selectedModule],
+  );
+
   // Mutations
   const deleteItem = useDeleteItem();
   const deleteCategory = useDeleteCategory();
@@ -149,7 +180,7 @@ export default function WebCatalogue() {
 
   // Filtered data
   const filteredItems = useMemo(() => {
-    let result = items;
+    let result = isChoresSection ? choreItems : items;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
@@ -176,7 +207,15 @@ export default function WebCatalogue() {
       }
     }
     return result;
-  }, [items, searchQuery, docOwnerFilter, selectedModule, householdData]);
+  }, [
+    items,
+    choreItems,
+    isChoresSection,
+    searchQuery,
+    docOwnerFilter,
+    selectedModule,
+    householdData,
+  ]);
 
   // Color for a document's owner (blue = me if theme isn't pink, pink = partner)
   const getDocOwnerColor = (item: CatalogueItem): string | undefined => {
@@ -202,6 +241,10 @@ export default function WebCatalogue() {
   // Breadcrumb navigation
   const breadcrumbs = useMemo<BreadcrumbItem[]>(() => {
     const crumbs: BreadcrumbItem[] = [{ level: "modules", name: "Catalogue" }];
+    if (isChoresSection) {
+      crumbs.push({ level: "chores", name: "Chores" });
+      return crumbs;
+    }
     if (selectedModule) {
       crumbs.push({
         level: "categories",
@@ -217,7 +260,7 @@ export default function WebCatalogue() {
       });
     }
     return crumbs;
-  }, [selectedModule, selectedCategory]);
+  }, [selectedModule, selectedCategory, isChoresSection]);
 
   // Navigation handlers
   const navigateToModules = () => {
@@ -226,6 +269,13 @@ export default function WebCatalogue() {
     setSelectedCategory(null);
     setSearchQuery("");
     setDocOwnerFilter("all");
+  };
+
+  const navigateToChores = () => {
+    setCurrentLevel("chores");
+    setSelectedModule(null);
+    setSelectedCategory(null);
+    setSearchQuery("");
   };
 
   const navigateToCategories = (module: CatalogueModule) => {
@@ -253,6 +303,7 @@ export default function WebCatalogue() {
 
   // Item actions
   const handleViewItem = (item: CatalogueItem) => {
+    if (isChoresSection) setItemModule(moduleById.get(item.module_id) ?? null);
     setViewingItem(item);
     setShowItemDetailDialog(true);
   };
@@ -266,8 +317,12 @@ export default function WebCatalogue() {
   };
 
   const handleEditItem = (item: CatalogueItem) => {
+    const owningModule = isChoresSection
+      ? (moduleById.get(item.module_id) ?? null)
+      : selectedModule;
+    if (isChoresSection) setItemModule(owningModule);
     setEditingItem(item);
-    if (isTasksModule) {
+    if (owningModule?.type === "tasks") {
       setShowTaskItemDialog(true);
     } else {
       setShowItemDialog(true);
@@ -285,6 +340,12 @@ export default function WebCatalogue() {
 
   const handleAddItem = () => {
     setEditingItem(null);
+    if (isChoresSection) {
+      // New chore: task template in the Tasks module, flag preselected
+      setItemModule(tasksModule);
+      setShowTaskItemDialog(true);
+      return;
+    }
     if (isTasksModule) {
       setShowTaskItemDialog(true);
     } else {
@@ -316,6 +377,11 @@ export default function WebCatalogue() {
     deleteModule.mutate(module.id);
   };
 
+  // Editing from the Chores section keeps the row's own category
+  const dialogCategoryId = isChoresSection
+    ? (editingItem?.category_id ?? undefined)
+    : selectedCategory?.id;
+
   // Loading state
   if (modulesLoading) {
     return (
@@ -338,7 +404,7 @@ export default function WebCatalogue() {
     <div className={`min-h-full ${themeClasses.pageBg}`}>
       {/* Header */}
       <div
-        className={`sticky top-0 z-10 ${themeClasses.headerGradient} backdrop-blur-xl border-b ${themeClasses.border}`}
+        className={`sticky ${stickyTopClass} z-10 ${themeClasses.headerGradient} backdrop-blur-xl border-b ${themeClasses.border}`}
       >
         <div className="max-w-7xl mx-auto px-6 py-4">
           {/* Breadcrumb Navigation */}
@@ -410,7 +476,8 @@ export default function WebCatalogue() {
 
             {/* Add Button - hide for inventory modules (they have their own UI) */}
             {currentLevel !== "modules" &&
-              selectedModule?.type !== "inventory" && (
+              selectedModule?.type !== "inventory" &&
+              (!isChoresSection || !!tasksModule) && (
                 <button
                   type="button"
                   onClick={() => {
@@ -480,6 +547,30 @@ export default function WebCatalogue() {
         {/* Modules Grid */}
         {currentLevel === "modules" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {/* Chores: flagged definitions from any module/category */}
+            <Card
+              className={cn(
+                "group relative overflow-hidden cursor-pointer transition-all duration-300",
+                "hover:scale-[1.02] hover:shadow-xl",
+                themeClasses.cardBg,
+                themeClasses.border,
+              )}
+              onClick={navigateToChores}
+            >
+              <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity bg-gradient-to-br from-green-500 to-emerald-600" />
+              <div className="relative p-6">
+                <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-4 shadow-lg bg-gradient-to-br from-green-500 to-emerald-600">
+                  <Sparkles className="w-7 h-7 text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-1">Chores</h3>
+                <div className="flex items-center gap-1 text-sm text-white/50">
+                  <FileText className="w-4 h-4" />
+                  <span>{itemsLoading ? "–" : choreItems.length}</span>
+                </div>
+                <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30 group-hover:text-white/60 transition-colors" />
+              </div>
+            </Card>
+
             {modules.map((module) => {
               const IconComponent = getModuleIcon(module.icon);
               return (
@@ -693,6 +784,25 @@ export default function WebCatalogue() {
             </div>
           )}
 
+        {/* Chores section */}
+        {isChoresSection && (
+          <ItemsGrid
+            items={filteredItems}
+            isLoading={itemsLoading}
+            themeClasses={themeClasses}
+            isTasksModuleFn={(item) =>
+              moduleById.get(item.module_id)?.type === "tasks"
+            }
+            emptyTitle="No chores"
+            onClick={handleViewItem}
+            onDoubleClick={handleTogglePin}
+            onEdit={handleEditItem}
+            onDelete={handleDeleteItem}
+            onAddToCalendar={handleAddToCalendar}
+            onAdd={handleAddItem}
+          />
+        )}
+
         {/* Items Grid */}
         {currentLevel === "items" && (
           <ItemsGrid
@@ -715,18 +825,19 @@ export default function WebCatalogue() {
       <CatalogueItemDialog
         open={showItemDialog}
         onOpenChange={setShowItemDialog}
-        moduleId={selectedModule?.id || ""}
-        moduleType={selectedModule?.type || "custom"}
-        categoryId={selectedCategory?.id}
+        moduleId={dialogModule?.id || ""}
+        moduleType={dialogModule?.type || "custom"}
+        categoryId={dialogCategoryId}
         editingItem={editingItem}
       />
 
       <CatalogueTaskItemDialog
         open={showTaskItemDialog}
         onOpenChange={setShowTaskItemDialog}
-        moduleId={selectedModule?.id || ""}
-        categoryId={selectedCategory?.id}
+        moduleId={dialogModule?.id || ""}
+        categoryId={dialogCategoryId}
         editingItem={editingItem}
+        defaultIsChore={isChoresSection}
       />
 
       <CatalogueCategoryDialog
@@ -740,7 +851,7 @@ export default function WebCatalogue() {
         open={showItemDetailDialog}
         onOpenChange={setShowItemDetailDialog}
         item={viewingItem}
-        moduleType={selectedModule?.type || "custom"}
+        moduleType={dialogModule?.type || "custom"}
         onEdit={handleEditItem}
         onAddToCalendar={isTasksModule ? handleAddToCalendar : undefined}
       />
@@ -879,6 +990,9 @@ interface ItemsGridProps {
   isLoading: boolean;
   themeClasses: ReturnType<typeof useThemeClasses>;
   isTasksModule?: boolean;
+  /** Per-row module check for views spanning modules (Chores) */
+  isTasksModuleFn?: (item: CatalogueItem) => boolean;
+  emptyTitle?: string;
   ownerColorFn?: (item: CatalogueItem) => string | undefined;
   onClick: (item: CatalogueItem) => void;
   onDoubleClick: (item: CatalogueItem) => void;
@@ -893,6 +1007,8 @@ function ItemsGrid({
   isLoading,
   themeClasses,
   isTasksModule,
+  isTasksModuleFn,
+  emptyTitle,
   ownerColorFn,
   onClick,
   onDoubleClick,
@@ -918,8 +1034,8 @@ function ItemsGrid({
     return (
       <EmptyState
         icon={FileText}
-        title="No items yet"
-        description="Add your first item to this category"
+        title={emptyTitle ?? "No items yet"}
+        description={emptyTitle ? undefined : "Add your first item to this category"}
         onAdd={onAdd}
         themeClasses={themeClasses}
       />
@@ -944,7 +1060,7 @@ function ItemsGrid({
                 key={item.id}
                 item={item}
                 themeClasses={themeClasses}
-                isTasksModule={isTasksModule}
+                isTasksModule={isTasksModuleFn ? isTasksModuleFn(item) : isTasksModule}
                 ownerColor={ownerColorFn?.(item)}
                 onClick={onClick}
                 onDoubleClick={onDoubleClick}
@@ -964,7 +1080,7 @@ function ItemsGrid({
             key={item.id}
             item={item}
             themeClasses={themeClasses}
-            isTasksModule={isTasksModule}
+            isTasksModule={isTasksModuleFn ? isTasksModuleFn(item) : isTasksModule}
             ownerColor={ownerColorFn?.(item)}
             onClick={onClick}
             onDoubleClick={onDoubleClick}
@@ -1193,7 +1309,7 @@ function ItemCard({
 interface EmptyStateProps {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
-  description: string;
+  description?: string;
   onAdd: () => void;
   themeClasses: ReturnType<typeof useThemeClasses>;
 }
@@ -1217,7 +1333,9 @@ function EmptyState({
         <Icon className="w-8 h-8 text-white/30" />
       </div>
       <h3 className="text-lg font-medium text-white mb-1">{title}</h3>
-      <p className="text-sm text-white/50 text-center mb-4">{description}</p>
+      {description && (
+        <p className="text-sm text-white/50 text-center mb-4">{description}</p>
+      )}
       <button
         type="button"
         onClick={onAdd}

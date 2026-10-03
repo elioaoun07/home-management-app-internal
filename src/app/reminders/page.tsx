@@ -7,7 +7,6 @@ import FilterBar, {
   type TypeFilter,
   type UserFilter,
 } from "@/components/activity/FilterBar";
-import ChoresTabContent from "@/components/chores/ChoresTabContent";
 import MobileFlexibleAssignmentPage from "@/components/planner/MobileFlexibleAssignmentPage";
 import WebDayPlanner, { type PlannerToolbarState } from "@/components/planner/WebDayPlanner";
 import {
@@ -23,10 +22,10 @@ import { cn } from "@/lib/utils";
 import { yyyyMmDd } from "@/lib/utils/date";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { parseISO } from "date-fns";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type RemindersPage = "focus" | "chores" | "assign";
+type RemindersPage = "focus" | "assign";
 
 // ─── Tab Icons ────────────────────────────────────────────────────────────────
 const FocusIcon = ({ className }: { className?: string }) => (
@@ -90,13 +89,16 @@ const DEFAULT_PLANNER_TOOLBAR_STATE: PlannerToolbarState = {
 };
 
 export default function RemindersStandalonePage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialDate = useMemo(() => searchParams.get("date") ?? undefined, [searchParams]);
   const initialPlanning = useMemo(() => searchParams.get("plan") === "1", [searchParams]);
   const initialTab = useMemo(() => {
     const tab = searchParams.get("tab");
-    return tab === "chores" || tab === "assign" ? tab : undefined;
+    return tab === "assign" ? tab : undefined;
   }, [searchParams]);
+  // Chores moved to its own page; keep old ?tab=chores links working.
+  const redirectToChores = searchParams.get("tab") === "chores";
   const initialOpenItemId = useMemo(() => searchParams.get("openId"), [searchParams]);
   const themeClasses = useThemeClasses();
 
@@ -131,6 +133,15 @@ export default function RemindersStandalonePage() {
     return { start: yyyyMmDd(monthStart), end: yyyyMmDd(monthEnd) };
   }, []);
   const [dateRange, setDateRange] = useState(thisMonthRange);
+
+  useEffect(() => {
+    if (!redirectToChores) return;
+    router.replace(
+      initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate)
+        ? `/chores?date=${initialDate}`
+        : "/chores",
+    );
+  }, [redirectToChores, initialDate, router]);
 
   useEffect(() => {
     setMounted(true);
@@ -172,12 +183,13 @@ export default function RemindersStandalonePage() {
 
   // Clean the URL params after reading them (captured into initialDate/initialPlanning/initialTab above)
   useEffect(() => {
+    if (redirectToChores) return;
     if (mounted && (initialDate || initialPlanning || initialTab)) {
       window.history.replaceState({}, "", "/reminders");
     }
-  }, [mounted, initialDate, initialPlanning, initialTab]);
+  }, [mounted, initialDate, initialPlanning, initialTab, redirectToChores]);
 
-  if (!mounted) {
+  if (!mounted || redirectToChores) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-background to-background/95 pt-16">
         <div className="min-h-full p-4 pb-8 space-y-4">
@@ -209,7 +221,13 @@ export default function RemindersStandalonePage() {
         onUserFilterChange={setUserFilter}
         sections={REMINDERS_SECTIONS}
         activeSection={activePage}
-        onSectionChange={(key) => setActivePage(key as RemindersPage)}
+        onSectionChange={(key) => {
+          if (key === "chores") {
+            router.push("/chores");
+            return;
+          }
+          setActivePage(key as RemindersPage);
+        }}
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
         groupMode={groupMode}
@@ -233,7 +251,7 @@ export default function RemindersStandalonePage() {
           queryClient.invalidateQueries({ queryKey: itemsKeys.all });
         }}
         extraActions={
-          activePage === "focus" || activePage === "chores" ? (
+          activePage === "focus" ? (
             <>
               {activePage === "focus" && (
                 <button
@@ -325,12 +343,6 @@ export default function RemindersStandalonePage() {
           typeFilter={typeFilter}
           recurringFilter={recurringFilter}
           initialOpenItemId={initialOpenItemId}
-        />
-      ) : activePage === "chores" ? (
-        <ChoresTabContent
-          userFilter={userFilter}
-          currentUserId={currentUserId}
-          showCompleted={showCompleted}
         />
       ) : (
         <MobileFlexibleAssignmentPage

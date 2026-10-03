@@ -13,35 +13,37 @@ tags:
 
 # Feature · Chores
 
-> Standalone feature module. Hosts hooks/types/utilities. Not directly routable.
+> Standalone feature module: the pure chore-week model and the hooks behind `/chores`.
 
 ## Files
 
 - **Module dir**: `src/features/chores/`
+- `choreWeek.ts` (+ `choreWeek.test.ts`)
 
 ## Hooks
 
-- See files in `src/features/chores/` (typically `hooks.ts` or sub-files)
+- `useChores.ts` — `useChoreWeek(weekOf, templates)`
+- `useChoreActions.ts` — `useChoreSlotActions`, `useChoreAssign`, `useChoreResponsibility`
 
 ## API routes
 
-- TODO (list `/api/chores/...` routes used by this feature)
+- `POST /api/items/[id]/complete`, `POST /api/items/[id]/actions` (via Items hooks)
 
 ## DB tables
 
-- TODO
+- `items`, `reminder_details`, `item_occurrence_actions`, `item_flexible_schedules`
 
 ## How to get here
 
-- Used by pages — see "What it links to" or grep imports of `@/features/chores`.
+- Imported by `src/components/chores/*` (rendered at `/chores` and the desktop Chores tab).
 
 ## What it links to
 
-- TODO (which pages render this feature's UI)
+- [[chores]]
 
 ## Related vault doc
 
-- `ERA Notes/02 - Standalone Modules/Chores/` _(verify path)_
+- `ERA Notes/02 - Standalone Modules/Chores/Overview.md`
 
 ## Screenshots
 
@@ -49,4 +51,4 @@ tags:
 
 ## Notes
 
-- TODO
+- Still imports Items hooks (`useItems`, `useItemActions`, `useFlexibleRoutines`) — known boundary debt, see SCH-20.

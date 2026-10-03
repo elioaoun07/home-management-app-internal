@@ -34,6 +34,7 @@ A library of reusable templates — items, tasks, recipe ingredients, products. 
 
 - **"Edit catalogue item dialog"** → `src/components/web/CatalogueItemDialog.tsx`.
 - **"Change the picker shown in the item entry form"** → `src/components/items/CatalogueTemplatePicker.tsx`.
+- **"Catalogue → Chores section"** → `src/components/web/WebCatalogue.tsx` (`currentLevel === "chores"`); deep link `/catalogue?section=chores` read in `src/app/catalogue/page.tsx`.
 
 ## Connected modules
 

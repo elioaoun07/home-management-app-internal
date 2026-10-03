@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-03T05:43:19.293Z",
+  "generatedAt": "2026-10-03T08:20:54.829Z",
   "count": 83,
   "nodes": [
     {
@@ -495,15 +495,15 @@
         "feature-module"
       ],
       "sections": {
-        "files": "- **Module dir**: `src/features/chores/`",
-        "hooks": "- See files in `src/features/chores/` (typically `hooks.ts` or sub-files)",
-        "api_routes": "- TODO (list `/api/chores/...` routes used by this feature)",
-        "db_tables": "- TODO",
-        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/chores`.",
-        "what_it_links_to": "- TODO (which pages render this feature's UI)",
-        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Chores/` _(verify path)_",
+        "files": "- **Module dir**: `src/features/chores/`\n- `choreWeek.ts` (+ `choreWeek.test.ts`)",
+        "hooks": "- `useChores.ts` — `useChoreWeek(weekOf, templates)`\n- `useChoreActions.ts` — `useChoreSlotActions`, `useChoreAssign`, `useChoreResponsibility`",
+        "api_routes": "- `POST /api/items/[id]/complete`, `POST /api/items/[id]/actions` (via Items hooks)",
+        "db_tables": "- `items`, `reminder_details`, `item_occurrence_actions`, `item_flexible_schedules`",
+        "how_to_get_here": "- Imported by `src/components/chores/*` (rendered at `/chores` and the desktop Chores tab).",
+        "what_it_links_to": "- [[chores]]",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Chores/Overview.md`",
         "screenshots": "- n/a",
-        "notes": "- TODO"
+        "notes": "- Still imports Items hooks (`useItems`, `useItemActions`, `useFlexibleRoutines`) — known boundary debt, see SCH-20."
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-chores.md"
@@ -1409,23 +1409,25 @@
     },
     {
       "slug": "chores",
-      "title": "Chores (merged → /reminders)",
+      "title": "Chores",
       "category": "standalone-page",
-      "route": "/reminders",
+      "route": "/chores",
       "type": "page",
       "parent": null,
       "children": [],
       "status": "active",
-      "tags": [],
+      "tags": [
+        "installable"
+      ],
       "sections": {
-        "files": "- **Page** (Chores tab): `src/app/reminders/page.tsx`\n- **Redirect**: `src/app/chores/page.tsx` → `/reminders?tab=chores`\n- **Main component**: `src/components/chores/ChoresTabContent.tsx` (props-driven: `userFilter`, `currentUserId`, `showCompleted` come from the shared Reminders `FilterBar`, not an internal filter bar)\n- **Sub-components**:\n  - `src/components/chores/UpNextHero.tsx`\n  - `src/components/chores/ChoreCard.tsx`\n  - `src/components/chores/ChoreGroupList.tsx`\n  - `src/components/chores/ChoreCheckInPanel.tsx`\n  - `src/components/chores/ChoreActionsSheet.tsx`\n  - `src/components/chores/ChorePostponeSheet.tsx`\n  - `src/components/web/WebChores.tsx` (separate desktop SPA view inside `WebViewContainer` — untouched by this merge)",
-        "hooks": "- `src/features/chores/useChores.ts` — fetches items where `is_chore = true`\n- `src/features/chores/useChoreActions.ts` — complete, skip, postpone, assign",
-        "api_routes": "- `POST /api/items/[id]/complete` → `src/app/api/items/[id]/complete/route.ts`\n- `POST /api/items/[id]/actions` → `src/app/api/items/[id]/actions/route.ts`",
-        "db_tables": "- `items` (`is_chore = true`)\n- `item_occurrence_actions`\n- `reminder_details`",
-        "how_to_get_here": "- Default: navigate to `/reminders`, select the Chores tab\n- Direct URL: `/reminders?tab=chores`\n- Legacy: `/chores` → redirects above",
-        "what_it_links_to": "- All interactions are in-page sheets (no child routes).",
-        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Chores/`",
-        "notes": "- Chores are `items` rows — not a separate table. Always scope queries with `is_chore = true`.\n- Trip activation auto-skips chores via `trip_side_effects`.\n- Sunday check-in is collapsed by default; shows prior-week unresolved chores when expanded.\n- The Reminders page's \"show completed\" eye toggle in the toolbar now also drives the Chores tab's \"Done this period\" section."
+        "files": "- **Page**: `src/app/chores/page.tsx` (web view mode → `WebViewContainer initialMode=\"chores\"`)\n- **Layout / metadata**: `src/app/chores/layout.tsx`\n- **Manifest**: `public/manifests/chores.webmanifest`\n- **Main component**: `src/components/chores/ChoresView.tsx`\n- **Sub-components**: `ChoreRow.tsx`, `ChoreTodoRow.tsx`, `ChoreSheet.tsx`, `ChoreCheckInPanel.tsx`, `ChorePostponeSheet.tsx`, `choreUi.tsx` (all in `src/components/chores/`)\n- **Desktop**: `src/components/web/WebChores.tsx` → `ChoresView variant=\"web\"`",
+        "hooks": "- `src/features/chores/useChores.ts` — `useChoreWeek`\n- `src/features/chores/useChoreActions.ts` — slot actions, assign/move/unassign, responsibility\n- `src/features/chores/choreWeek.ts` — pure week model",
+        "api_routes": "- `POST /api/items/[id]/complete` → `src/app/api/items/[id]/complete/route.ts`\n- `POST /api/items/[id]/actions` → `src/app/api/items/[id]/actions/route.ts`\n- Flexible slots: direct Supabase upsert/delete on `item_flexible_schedules`",
+        "db_tables": "- `items` (`is_chore = true`), `reminder_details`, `item_occurrence_actions`, `item_flexible_schedules`",
+        "how_to_get_here": "- Installed **Chores** icon, or `/chores`\n- Reminders → Chores section button\n- `/reminders?tab=chores` (redirects, keeps `?date=`)\n- `/chores?date=YYYY-MM-DD` selects that date in the mobile or web agenda\n- ERA: \"open chores\"",
+        "what_it_links_to": "- Week header → **Library** → `/catalogue?section=chores`\n- **Assign** opens the planning dialog on mobile; To plan is a sidebar on web\n- In-page sheets only otherwise",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Chores/Overview.md`",
+        "notes": "- Header: standalone `ConditionalHeader` (h-16) on mobile; content has `pt-16`. MobileNav hidden.\n- The web shell renders Chores independently of Budget transaction loading/errors.\n- Offline: warm launch works after one online visit (SW stale-while-revalidate); a never-visited cold offline launch shows the SW loading shell."
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/chores.md"

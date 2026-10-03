@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-26
+updated: 2026-10-03
 type: master-book
 status: active
 owner: Elio
@@ -29,6 +29,7 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 - No geofencing. Arrive/leave uses existing NFC prerequisites. Do not activate inert evaluators to expand parser vocabulary. DEC-10 preserves the unresolved optional-versus-required time_window conflict.
 - Do not redesign working Month/Week/Today surfaces or split useItems solely for size. Mobile form deletion requires SCH-5.3’s explicit keep/merge/retire decision.
 - Reusable Catalogue definitions never replace execution ownership: Schedule owns activation, occurrence identity and history; edits to a definition do not silently rewrite instances.
+- Chores is its own page and install identity (`/chores`, `/chores-app`): a day-focused mobile agenda and a wider web week/planning workspace. Unassigned rows take a weekday in two taps, placing one occurrence in that week; Catalogue → Chores is the definition library. Shared Items data stays shared. *(IMPLEMENTED 2026-10-03)*
 
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
@@ -1986,6 +1987,37 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 }
 ```
 
+### SCH-20
+
+**Kind:** feature
+**Implementation:** done
+**UAT:** pending
+**Touches:** src/app/chores/, src/components/chores/, src/features/chores/, src/app/reminders/page.tsx, src/components/web/WebChores.tsx, src/components/web/WebCatalogue.tsx, src/app/catalogue/page.tsx, src/components/web/CatalogueTaskItemDialog.tsx, src/features/catalogue/hooks.ts, src/features/items/useFlexibleRoutines.ts, src/lib/schedule/catalogueInstance.ts, src/components/planner/MobileFlexibleAssignmentPage.tsx, src/features/era/reach.ts, public/manifests/chores.webmanifest, public/chores-*
+
+**Outcome:** Give Chores its own page, install icon, Catalogue section and a two-tap weekday assignment.
+
+- **Acceptance:** `/chores` renders Chores directly with its own manifest/icons; `/reminders?tab=chores` and the Reminders Chores button reach it; desktop uses the same view. Catalogue shows a top-level Chores section of `is_chore` definitions across categories, with edit in each row's own module. From an Unassigned chore, Assign → weekday saves one occurrence in that week with Undo; Change moves the same slot; Unassign removes only that slot. No inherited Reminders filter bar, stats or hero.
+- **UI refinement requested 2026-10-03:** the first implementation was too plain and used a narrow mobile list on web. Keep the same scheduling contracts while adding a selectable week strip, focused-day agenda, wide web planning sidebar, mobile assignment dialog, local search for longer planning lists, wrapped titles, theme-aware inputs and accessible responsive action dialogs. Source: `ChoresView.tsx`, `ChoreRow.tsx`, `ChoreTodoRow.tsx`, `ChoreSheet.tsx`, `ChoreCheckInPanel.tsx`, `ChorePostponeSheet.tsx`, `choreUi.tsx` in `src/components/chores/`.
+- **UI refinement evidence (2026-10-03):** isolated headless Chrome fixtures rendered the real components at 320/390 px mobile and 1024/1440 px web; blue, pink, frost and calm had no horizontal overflow. Exercised day/week navigation, person filtering, planning search, weekday assignment, completion, details, postponing and check-in with sample actions. Typecheck, scoped ESLint and 30 scheduling/date tests passed; full lint had 0 errors (existing repo warnings). The real web-shell integration was source-reviewed: Chores now bypasses unrelated Budget loading/error gates and receives date links. No production writes, signed-in full-app browser session or physical-device/PWA installation verification in this refinement pass; owner UAT remains pending.
+- **Depends on:** Kitchen owns Catalogue; the section is a read view plus the existing editor (no Catalogue contract change).
+- **Evidence (2026-10-03, source + fixtures + local dev read-only):** `src/features/chores/choreWeek.test.ts` (14 cases: target 1/3, monthly straddle, monthly count across weeks, late completion via `planned_for`, non-chore exclusion, fixed weekly + skip, Beirut DST week, undated, template instances, free index, move bounds). Local dev against live data viewed read-only: mobile and desktop layouts, picker day rules, menu/filter, sheet, `/reminders?tab=chores` redirect, Catalogue section + editor context. No write was exercised against production data.
+- **Fixed along the way:** `useFlexibleRoutines` derived result was cached under collection *lengths* (equal-sized inputs shared results; a moved slot kept its old day up to 30 s) → now a memoized pure derivation. Catalogue `is_chore` edits fan out to items server-side but only refreshed Catalogue caches → also invalidates `qk.scheduleItems()`. `/catalogue` breadcrumb sat under the fixed standalone header (Hard Rule 16) → offset in the mobile layout.
+- **UAT (owner):** install the Chores icon alongside main/Trips/Outfits and launch it; assign, move, unassign and Undo a real chore on both phones; check Calendar/Focus shows the placement; check another theme.
+- **Follow-up 2026-10-03 (IMPLEMENTED, owner request "unassign after a mistaken assign"):** one-off placements can be unassigned from the chore sheet (Catalogue instances are cancelled with alerts off; alert-free dated items lose their due date); both have Undo.
+- **Follow-up 2026-10-03 (IMPLEMENTED, owner request "quick assign to today, or another day"):** the day-level Assign (empty-day button and the `+` in a selected day's header) opens To plan with that day preselected; header **Assign N** shows weekday chips. Past days and days a chore can't take fall back to the chips.
+- **Follow-up 2026-10-03 (IMPLEMENTED, owner feedback round 2):** no default time — assigning asks **All day** or a time (blank = all day; flexible `scheduled_for_time` null, one-offs noon + `metadata_json.all_day`, no push alert for all-day instances). Swipe left = me / right = partner on To plan rows (then the time prompt) and on scheduled rows (hand over), Hub-shopping feel with lock + haptic; rows outlined in the owner's person-absolute color. Me | Both | partner tabs replace the Everyone dropdown; week strip collapses (remembered per device); Earlier section removed; AI button hidden on `/chores`. Typecheck, scoped ESLint and 18 chore-week tests (new all-day case) pass; not exercised in a browser or on a phone — owner UAT pending. **Limit:** swiping a flexible routine hands the whole routine over (responsibility is item-level; a per-slot owner would need a column on `item_flexible_schedules`).
+- **Limits:** two slots of one chore on the same day are blocked (engine matches completions by date — SCH-14 territory); flexible slot writes have no offline queue (fail with "Not saved"); a never-visited cold offline launch shows the SW loading shell; old SW-cached `/chores` HTML may run the former redirect once.
+
+### SCH-21
+
+**Kind:** maintenance
+**Depends on:** SCH-4.5
+
+**Outcome:** Move Chores off direct Items hook imports.
+
+- **Acceptance:** `src/features/chores/` imports scheduling data only from shared locations (`src/hooks/`, `src/lib/`, `src/types/`), with Items callers migrated to the same implementation — not a re-exporting wrapper. No copied hooks, no chores table, no second recurrence engine.
+- **Reading guide:** Chores needs `useItems`, `useAllOccurrenceActions`, `useItemActionsWithToast`, `useFlexibleRoutines`/`useFlexibleSchedules`, the schedule mutations and `useUpdateReminderDetails` (~4.8k LOC across `useItems.ts`, `useItemActions.ts`, `useFlexibleRoutines.ts`, ~80 importers). SCH-20 kept this pre-existing debt rather than fold an Items split into a UI change. Natural moment: when SCH-4.5 splits `useItems.ts`. The pure organizer (`organizeFlexibleRoutines`) and `src/features/chores/choreWeek.ts` are the first candidates for `src/lib/schedule/`.
+
 ## Shipped Log
 
 - ✅ 2026-05-31 — partner-edit 403 fixed: the PATCH route ran its own creator-only check **stricter than the RLS policy underneath**; now uses `canMutateItem()` (creator OR responsible OR public+partner), matching `items_update`
@@ -2009,6 +2041,7 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - ✅ 2026-06-21 — a completed occurrence older than 30 days keeps its strikethrough — `useAllOccurrenceActions` filtered `item_occurrence_actions` by *occurrence* date, so old occurrences never reached `isOccurrenceCompleted`; the window was removed entirely
 - ✅ 2026-06-21 — **Decision 4 shipped**: all four occurrence-action inserts are idempotent `.upsert(..., { onConflict: "item_id,occurrence_date,action_type" })`, ending the 500-then-retry-forever loop on double-tap/offline replay
 - ✅ 2026-07-10 — **Google Calendar sync** (`2783b1d`, 12 files, +727): OAuth connect/callback/connection routes, `sync-item`, `google_calendar_connections` table, `items.google_synced_at`, and a two-pass idempotent `cron/gcal-reconcile` (migration `2026-07-10_google-calendar-sync.sql`)
+- ✅ 2026-10-03 — **SCH-20** Chores got its own page and install icon (`/chores`, `/chores-app`), a Catalogue → Chores section and two-tap weekday assignment; refined the UI into a mobile day agenda and web week/planning workspace with search, theme-aware responsive dialogs and date-link parity. Web Chores renders independently of Budget loading/errors. Fixed the length-keyed `useFlexibleRoutines` cache and missing schedule-items invalidation on `is_chore` edits ([criteria](<Schedule — Master Book.md#sch-20>), `src/features/chores/choreWeek.test.ts`)
 
 ## Delivery session log
 

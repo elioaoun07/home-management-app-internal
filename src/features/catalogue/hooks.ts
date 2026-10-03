@@ -1,6 +1,7 @@
 // src/features/catalogue/hooks.ts
 "use client";
 
+import { qk } from "@/lib/queryKeys";
 import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import type {
@@ -605,8 +606,12 @@ export function useUpdateItem() {
       qc.invalidateQueries({ queryKey: catalogueKeys.items() });
       toast.error(err.message || "Failed to update item");
     },
-    onSettled: () => {
+    onSettled: (_data, _error, input) => {
       qc.invalidateQueries({ queryKey: catalogueKeys.items() });
+      // PATCH fans is_chore out to linked schedule items server-side.
+      if (input.is_chore !== undefined) {
+        qc.invalidateQueries({ queryKey: qk.scheduleItems() });
+      }
     },
     onSuccess: (updated) => {
       toast.success(`"${updated.name}" updated`, {

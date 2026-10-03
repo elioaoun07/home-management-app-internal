@@ -61,6 +61,8 @@ interface Props {
   categoryId?: string;
   editingItem: CatalogueItem | null;
   onSuccess?: (item: CatalogueItem) => void;
+  /** Preselect the chore flag for a new item (Catalogue → Chores) */
+  defaultIsChore?: boolean;
 }
 
 const PRIORITY_OPTIONS: CataloguePriority[] = [
@@ -145,6 +147,7 @@ export default function CatalogueTaskItemDialog({
   categoryId,
   editingItem,
   onSuccess,
+  defaultIsChore = false,
 }: Props) {
   const themeClasses = useThemeClasses();
   const createItem = useCreateItem();
@@ -243,11 +246,11 @@ export default function CatalogueTaskItemDialog({
         setIsFlexibleRoutine(false);
         setFlexibleOccurrences("1");
         // Reset chore state
-        setIsChore(false);
+        setIsChore(defaultIsChore);
         setChoreCategory("");
       }
     }
-  }, [open, editingItem]);
+  }, [open, editingItem, defaultIsChore]);
 
   const handleAddTag = () => {
     const trimmed = tagInput.trim();

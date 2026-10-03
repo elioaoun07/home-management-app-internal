@@ -1,17 +1,23 @@
 "use client";
 
 import { type ChorePostponeTarget } from "@/features/chores/useChoreActions";
-import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { useChoreTone } from "@/components/chores/choreUi";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { addDays, addWeeks, endOfWeek, format, parseISO } from "date-fns";
 import {
+  ArrowLeft,
   CalendarArrowDown,
   CalendarClock,
   CalendarPlus,
   CalendarRange,
   X,
 } from "lucide-react";
-import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
 
 interface ChorePostponeSheetProps {
@@ -19,6 +25,7 @@ interface ChorePostponeSheetProps {
   onClose: () => void;
   onPostpone: (to: ChorePostponeTarget, customDate?: string) => void;
   plannedAt?: string;
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 export function ChorePostponeSheet({
@@ -26,18 +33,13 @@ export function ChorePostponeSheet({
   onClose,
   onPostpone,
   plannedAt,
+  onCloseAutoFocus,
 }: ChorePostponeSheetProps) {
-  const tc = useThemeClasses();
-  const [isClosing, setIsClosing] = useState(false);
+  const tone = useChoreTone();
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [customDate, setCustomDate] = useState("");
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
-
   useEffect(() => {
     if (!isOpen) {
-      setIsClosing(false);
       setShowDatePicker(false);
       setCustomDate("");
     }
@@ -52,24 +54,19 @@ export function ChorePostponeSheet({
     }
   }, [plannedAt]);
 
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(onClose, 200);
-  };
-
   const handleSelect = (to: ChorePostponeTarget) => {
     if (to === "custom") {
       setShowDatePicker(true);
       return;
     }
     onPostpone(to);
-    handleClose();
+    onClose();
   };
 
   const handleCustomConfirm = () => {
     if (!customDate) return;
     onPostpone("custom", customDate);
-    handleClose();
+    onClose();
   };
 
   const tomorrow = addDays(baseDate, 1);
@@ -98,65 +95,85 @@ export function ChorePostponeSheet({
     {
       id: "custom" as const,
       label: "Pick a date",
-      sublabel: "Choose a calendar day",
+      sublabel: null,
       Icon: CalendarRange,
     },
   ];
 
-  if (!mounted || !isOpen) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end">
-      <div
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        showCloseButton={false}
+        onCloseAutoFocus={onCloseAutoFocus}
+        aria-describedby={undefined}
         className={cn(
-          "absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity",
-          isClosing ? "opacity-0" : "opacity-100",
-        )}
-        onClick={handleClose}
-      />
-
-      <div
-        className={cn(
-          "relative w-full rounded-t-3xl border-t border-white/10 p-5 pb-8 transition-transform",
-          tc.pageBg,
-          isClosing ? "translate-y-full" : "translate-y-0",
+          "bottom-0 top-auto max-h-[90dvh] max-w-full translate-y-0 overflow-y-auto rounded-b-none rounded-t-3xl border p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:bottom-auto sm:top-1/2 sm:max-w-md sm:-translate-y-1/2 sm:rounded-3xl sm:p-6",
+          "motion-reduce:animate-none",
+          tone.tc.bgPage,
+          tone.border,
         )}
       >
-        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
-
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white/70">
-            {showDatePicker ? "Pick a date" : "Postpone chore"}
-          </h3>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="rounded-xl bg-white/10 p-2 text-white/50 hover:bg-white/15"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+        <div className="flex items-center gap-3">
+          {showDatePicker && (
+            <button
+              type="button"
+              onClick={() => setShowDatePicker(false)}
+              className={cn(
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+                tone.ghost,
+                tone.focus,
+              )}
+              aria-label="Back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          )}
+          <DialogTitle className={cn("min-w-0 flex-1 text-base", tone.main)}>
+            {showDatePicker ? "Pick a date" : "Postpone"}
+          </DialogTitle>
+          <DialogClose asChild>
+            <button
+              type="button"
+              className={cn(
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+                tone.ghost,
+                tone.focus,
+              )}
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </DialogClose>
         </div>
 
         {showDatePicker ? (
           <div className="space-y-3">
             <input
               type="date"
+              aria-label="Date"
               value={customDate}
               min={format(tomorrow, "yyyy-MM-dd")}
               onChange={(event) => setCustomDate(event.target.value)}
               className={cn(
-                "w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white",
-                "focus:border-emerald-500/50 focus:outline-none",
+                "h-12 w-full min-w-0 rounded-xl border px-4 text-sm outline-none",
+                tone.tc.formControlBg,
+                tone.main,
+                tone.focus,
+                tone.isFrost ? "[color-scheme:light]" : "[color-scheme:dark]",
               )}
             />
             <button
               type="button"
               onClick={handleCustomConfirm}
               disabled={!customDate}
-              className="w-full rounded-xl bg-emerald-500/20 py-3 text-sm font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/30 disabled:opacity-40"
+              className={cn(
+                "h-12 w-full rounded-xl text-sm font-semibold transition-colors disabled:opacity-40",
+                tone.tc.buttonPrimary,
+                tone.tc.textButton,
+                tone.focus,
+              )}
             >
-              Confirm
+              Move
             </button>
           </div>
         ) : (
@@ -167,22 +184,35 @@ export function ChorePostponeSheet({
                 type="button"
                 onClick={() => handleSelect(id)}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-xl border border-white/5 px-4 py-3 text-left transition-colors active:scale-[0.98]",
-                  tc.surfaceBg,
-                  "hover:border-white/10",
+                  "flex min-h-16 w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors",
+                  tone.row,
+                  tone.tc.bgHover,
+                  tone.focus,
                 )}
               >
-                <Icon className="h-4 w-4 flex-shrink-0 text-amber-300" />
+                <span
+                  className={cn(
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+                    tone.accentSurface,
+                  )}
+                >
+                  <Icon className={cn("h-4 w-4", tone.accent)} />
+                </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-white/80">{label}</p>
-                  <p className="text-xs text-white/40">{sublabel}</p>
+                  <p className={cn("text-sm font-medium", tone.main)}>
+                    {label}
+                  </p>
+                  {sublabel && (
+                    <p className={cn("mt-0.5 text-xs", tone.soft)}>
+                      {sublabel}
+                    </p>
+                  )}
                 </div>
               </button>
             ))}
           </div>
         )}
-      </div>
-    </div>,
-    document.body,
+      </DialogContent>
+    </Dialog>
   );
 }

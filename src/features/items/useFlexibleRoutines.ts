@@ -9,6 +9,7 @@ import type {
   ItemWithDetails,
 } from "@/types/items";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useRef } from "react";
 import {
   addWeeks,
   endOfDay,
@@ -124,6 +125,8 @@ export interface FlexibleRoutineItem extends ItemWithDetails {
   completedCount?: number;
   /** How many skipped actions exist within the current period */
   skippedCount?: number;
+  /** Slots still unaccounted for in the period (target minus pending, completed, skipped, postponed, cancelled) */
+  remainingCount?: number;
   isScheduledForCurrentPeriod: boolean;
   isCompletedForCurrentPeriod: boolean;
   periodStart: string;
@@ -230,7 +233,8 @@ async function fetchFlexibleSchedules(): Promise<FlexibleSchedule[]> {
 }
 
 /**
- * Fetch flexible items with their schedules and completion status
+ * Fetch flexible items with their schedules and completion status.
+ * Async wrapper kept for existing callers; the work is synchronous.
  */
 export async function fetchFlexibleRoutines(
   items: ItemWithDetails[],
@@ -240,6 +244,28 @@ export async function fetchFlexibleRoutines(
   catalogueOccurrenceMap: Map<string, number>,
   referenceDate: Date = new Date(),
 ): Promise<FlexibleRoutinesResult> {
+  return organizeFlexibleRoutines(
+    items,
+    schedules,
+    actions,
+    subtaskCompletions,
+    catalogueOccurrenceMap,
+    referenceDate,
+  );
+}
+
+/**
+ * Organize flexible items into unscheduled / scheduled / completed for the
+ * period containing `referenceDate`. Pure and synchronous.
+ */
+export function organizeFlexibleRoutines(
+  items: ItemWithDetails[],
+  schedules: FlexibleSchedule[],
+  actions: ItemOccurrenceAction[],
+  subtaskCompletions: SubtaskCompletion[],
+  catalogueOccurrenceMap: Map<string, number>,
+  referenceDate: Date = new Date(),
+): FlexibleRoutinesResult {
   // Filter items that have flexible recurrence rules
   const flexibleItems = items.filter(
     (item) => item.recurrence_rule?.is_flexible === true,
@@ -353,6 +379,19 @@ export async function fetchFlexibleRoutines(
       if (a.action_type !== "postponed") return false;
       return actionIsWithinPeriod(a, start, end);
     }).length;
+    const periodCancelledCount = actions.filter((a) => {
+      if (a.item_id !== item.id) return false;
+      if (a.action_type !== "cancelled") return false;
+      return actionIsWithinPeriod(a, start, end);
+    }).length;
+
+    // Cancelled slots count as "accounted for"
+    const accountedFor =
+      pendingPeriodSchedules.length +
+      periodCompletedCount +
+      periodSkippedCount +
+      periodPostponedCount +
+      periodCancelledCount;
 
     // For N=1 backwards compat, "isCompletedForCurrentPeriod" means at least one
     // completion in this period. For N>1 it means all slots completed.
@@ -428,6 +467,7 @@ export async function fetchFlexibleRoutines(
       scheduledCount: pendingPeriodSchedules.length,
       completedCount: periodCompletedCount,
       skippedCount: periodSkippedCount,
+      remainingCount: Math.max(0, targetOccurrences - accountedFor),
       isScheduledForCurrentPeriod: pendingPeriodSchedules.length > 0,
       isCompletedForCurrentPeriod: isCompleted,
       periodStart: itemPeriodStartStr,
@@ -472,20 +512,7 @@ export async function fetchFlexibleRoutines(
       }
     }
 
-    // Count cancellations within the current period
-    const periodCancelledCount = actions.filter((a) => {
-      if (a.item_id !== item.id) return false;
-      if (a.action_type !== "cancelled") return false;
-      return actionIsWithinPeriod(a, start, end);
-    }).length;
-
-    // Still unscheduled if any remaining slots (cancelled slots count as "accounted for")
-    const accountedFor =
-      pendingPeriodSchedules.length +
-      periodCompletedCount +
-      periodSkippedCount +
-      periodPostponedCount +
-      periodCancelledCount;
+    // Still unscheduled if any remaining slots
     if (accountedFor < targetOccurrences) {
       result.unscheduled.push({
         ...baseFields,
@@ -551,43 +578,74 @@ export function useFlexibleSubtaskCompletions(
   });
 }
 
+const EMPTY_SCHEDULES: FlexibleSchedule[] = [];
+const EMPTY_ACTIONS: ItemOccurrenceAction[] = [];
+const EMPTY_COMPLETIONS: SubtaskCompletion[] = [];
+const EMPTY_OCCURRENCE_MAP = new Map<string, number>();
+
 /**
- * Main hook to get flexible routines organized by status
+ * Callers usually pass a freshly filtered array each render. Keep the previous
+ * reference while the elements are the same objects (TanStack structural
+ * sharing preserves unchanged rows), so the memo below only recomputes when
+ * the content actually changes.
+ */
+function useStableItems(
+  items: ItemWithDetails[] | undefined,
+): ItemWithDetails[] | undefined {
+  const ref = useRef(items);
+  const previous = ref.current;
+  const same =
+    previous === items ||
+    (!!previous &&
+      !!items &&
+      previous.length === items.length &&
+      previous.every((item, index) => item === items[index]));
+  if (!same) ref.current = items;
+  return ref.current;
+}
+
+/**
+ * Main hook to get flexible routines organized by status.
+ *
+ * Derived synchronously from the cached inputs. It used to be a useQuery keyed
+ * on collection *lengths*, so two views with equal-sized but different inputs
+ * shared one cached result, and moving a slot (same counts) kept showing the
+ * old placement until the 30 s staleTime expired.
  */
 export function useFlexibleRoutines(
   items: ItemWithDetails[] | undefined,
   actions: ItemOccurrenceAction[] | undefined,
   referenceDate: Date = new Date(),
 ) {
-  const { data: schedules = [] } = useFlexibleSchedules();
-  const { data: subtaskCompletions = [] } =
-    useFlexibleSubtaskCompletions(items);
-  const { data: catalogueOccurrenceMap } =
-    useCatalogueFlexibleOccurrences(items);
+  const stableItems = useStableItems(items);
+  const { data: schedules = EMPTY_SCHEDULES } = useFlexibleSchedules();
+  const { data: subtaskCompletions = EMPTY_COMPLETIONS } =
+    useFlexibleSubtaskCompletions(stableItems);
+  const { data: catalogueOccurrenceMap = EMPTY_OCCURRENCE_MAP } =
+    useCatalogueFlexibleOccurrences(stableItems);
+  const referenceDay = format(referenceDate, "yyyy-MM-dd");
+  const resolvedActions = actions ?? EMPTY_ACTIONS;
 
-  return useQuery({
-    queryKey: [
-      ...flexibleRoutinesKeys.all,
-      "organized",
-      format(referenceDate, "yyyy-MM-dd"),
-      items?.length,
-      schedules.length,
-      actions?.length,
-      subtaskCompletions.length,
-      catalogueOccurrenceMap?.size ?? 0,
-    ],
-    queryFn: () =>
-      fetchFlexibleRoutines(
-        items || [],
-        schedules,
-        actions || [],
-        subtaskCompletions,
-        catalogueOccurrenceMap ?? new Map(),
-        referenceDate,
-      ),
-    enabled: !!items && items.length > 0,
-    staleTime: 1000 * 30, // 30 seconds
-  });
+  const data = useMemo(() => {
+    if (!stableItems || stableItems.length === 0) return undefined;
+    return organizeFlexibleRoutines(
+      stableItems,
+      schedules,
+      resolvedActions,
+      subtaskCompletions,
+      catalogueOccurrenceMap,
+      parseISO(referenceDay),
+    );
+  }, [
+    stableItems,
+    schedules,
+    resolvedActions,
+    subtaskCompletions,
+    catalogueOccurrenceMap,
+    referenceDay,
+  ]);
+
+  return { data };
 }
 
 /**

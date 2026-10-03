@@ -64,7 +64,7 @@ export type WebTab = "dashboard" | "budget" | "goals";
 // Tabs within Recipes view
 export type RecipesTab = "recipes" | "planner";
 
-export default function WebViewContainer({ initialMode }: { initialMode?: WebViewMode } = {}) {
+export default function WebViewContainer({ initialMode, initialChoreDate }: { initialMode?: WebViewMode; initialChoreDate?: string } = {}) {
   const themeClasses = useThemeClasses();
   const userData = useUser();
   const [showLanding, setShowLanding] = useState(!initialMode);
@@ -208,7 +208,9 @@ export default function WebViewContainer({ initialMode }: { initialMode?: WebVie
 
       {/* Scrollable Content Area */}
       <main className="flex-1 overflow-y-auto">
-        {showSkeleton ? (
+        {viewMode === "chores" ? (
+          <WebChores initialDate={initialChoreDate} />
+        ) : showSkeleton ? (
           <div className={`p-8 ${themeClasses.pageBg} h-full`}>
             <div className="max-w-7xl mx-auto space-y-6">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -244,7 +246,6 @@ export default function WebViewContainer({ initialMode }: { initialMode?: WebVie
           <>
             {viewMode === "events" && <WebEvents />}
             {viewMode === "catalogue" && <WebCatalogue />}
-            {viewMode === "chores" && <WebChores />}
             {viewMode === "meal-plan" && (
               <WebMealPlanCalendar currentUserId={currentUserId} />
             )}

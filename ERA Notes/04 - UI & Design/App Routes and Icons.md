@@ -38,6 +38,7 @@ tags:
 | `/reminders` | Reminders          | `CalendarClockIcon`        | `from-amber-400 to-amber-600`     |
 | `/recurring` | Recurring Payments | `CalendarClockIcon`        | Theme-based                       |
 | `/trips`     | Trips              | `Plane` (lucide)           | `from-cyan-400 to-sky-500`        |
+| `/chores`    | Chores             | Broom install icon (`public/chores-icon.svg`, id `/chores-app`) | `from-green-400 to-emerald-400` |
 | `/activity-log` | Activity Log    | Custom timeline install icon / `Activity` (lucide) | Theme-based UI; cyan install icon |
 | `/today`     | Plan My Day        | `CalendarOff` (lucide)     | `from-pink-400 to-amber-400`      |
 | `/healthcare` | Health            | `HeartPulse` (lucide)      | `from-rose-400 to-pink-500`       |

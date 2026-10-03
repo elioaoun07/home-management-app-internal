@@ -52,7 +52,7 @@ tags:
 | Slug             | Route             | Detail             |
 | ---------------- | ----------------- | ------------------ |
 | `era`            | `/era`            | [[era]]            |
-| `chores`         | `/reminders` (merged; `/chores` → redirect) | [[chores]]         |
+| `chores`         | `/chores`                                   | [[chores]]         |
 | `today`          | `/reminders` (merged; `/today` → redirect) | [[feature-today]]  |
 | `catalogue`      | `/catalogue`      | [[catalogue]]      |
 | `recipe`         | `/recipe`         | [[recipe]]         |

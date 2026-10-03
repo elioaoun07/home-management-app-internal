@@ -511,7 +511,7 @@ function PackedRing({
 
 // ── Assignment chip ──────────────────────────────────────────────────────────
 // Person-absolute color identity per CLAUDE.md Hard Rule #14: derive blue/pink
-// from the viewer's theme, not from role — same pattern as ChoreCard.tsx.
+// from the viewer's theme, not from role — same pattern as the Chores PersonTag (choreUi.tsx).
 
 function AssignChip({
   assignedTo,

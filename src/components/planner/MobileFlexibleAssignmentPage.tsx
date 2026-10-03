@@ -31,17 +31,15 @@ import {
   useDeleteItem,
   useItems,
 } from "@/features/items/useItems";
+import {
+  buildTemplateInstanceInput,
+  templateItemType,
+} from "@/lib/schedule/catalogueInstance";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { localToISO } from "@/lib/utils/date";
 import type { CatalogueItem } from "@/types/catalogue";
-import type {
-  CreateSubtaskInput,
-  FlexiblePeriod,
-  ItemPriority,
-  ItemType,
-  ItemWithDetails,
-} from "@/types/items";
+import type { FlexiblePeriod, ItemType, ItemWithDetails } from "@/types/items";
 import {
   addDays,
   endOfWeek,
@@ -121,19 +119,6 @@ function isFlexiblePeriod(value: unknown): value is FlexiblePeriod {
   );
 }
 
-function parseSubtasks(text: string | null | undefined): CreateSubtaskInput[] {
-  if (!text) return [];
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line, index) => ({
-      title: line.replace(/^[-*\u2022]\s*|\d+\.\s*/g, "").trim(),
-      order_index: index,
-    }))
-    .filter((subtask) => subtask.title.length > 0);
-}
-
 function normalizeTime(time: string | null | undefined): string | null {
   if (!time) return null;
   return time.slice(0, 5);
@@ -141,14 +126,6 @@ function normalizeTime(time: string | null | undefined): string | null {
 
 function scheduledAt(item: ItemWithDetails): string | null {
   return item.reminder_details?.due_at ?? item.event_details?.start_at ?? null;
-}
-
-function toItemType(type: CatalogueItem["item_type"]): "reminder" | "task" {
-  return type === "reminder" ? "reminder" : "task";
-}
-
-function toItemPriority(priority: CatalogueItem["priority"]): ItemPriority {
-  return priority === "critical" ? "urgent" : priority;
 }
 
 function getTimeLabel(time?: string | null): string {
@@ -437,76 +414,16 @@ export default function MobileFlexibleAssignmentPage({
         return;
       }
 
-      const dueAtIso = localToISO(dateForEntry, time);
-      const subtasks = parseSubtasks(tpl.subtasks_text);
-      const duration =
-        typeof tpl.preferred_duration_minutes === "number" &&
-        tpl.preferred_duration_minutes > 0
-          ? tpl.preferred_duration_minutes
-          : undefined;
-      const priority = toItemPriority(tpl.priority);
-      const categoryIds = tpl.item_category_ids?.length
-        ? tpl.item_category_ids
-        : undefined;
-      const locationContext = tpl.location_context ?? undefined;
-      const locationText = tpl.location_url ?? undefined;
-      const prerequisites =
-        (tpl.metadata_json?.trigger_conditions as
-          | import("@/types/prerequisites").CreatePrerequisiteInput[]
-          | undefined) || undefined;
-      const alerts = [
-        {
-          kind: "absolute" as const,
-          trigger_at: dueAtIso,
-          channel: "push" as const,
-        },
-      ];
-
-      let createdId: string | undefined;
-      if (toItemType(tpl.item_type) === "reminder") {
-        const created = await createReminder.mutateAsync({
-          type: "reminder",
-          title: tpl.name,
-          description: tpl.description || undefined,
-          priority,
-          is_public: tpl.is_public,
-          responsible_user_id: defaultResponsibleUserId(tpl),
-          due_at: dueAtIso,
-          estimate_minutes: duration,
-          has_checklist: subtasks.length > 0,
-          subtasks,
-          alerts,
-          category_ids: categoryIds,
-          location_context: locationContext,
-          location_text: locationText,
-          prerequisites,
-          source_catalogue_item_id: tpl.id,
-          is_template_instance: true,
-          is_chore: tpl.is_chore || false,
-        });
-        createdId = created?.id;
-      } else {
-        const created = await createTask.mutateAsync({
-          type: "task",
-          title: tpl.name,
-          description: tpl.description || undefined,
-          priority,
-          is_public: tpl.is_public,
-          responsible_user_id: defaultResponsibleUserId(tpl),
-          due_at: dueAtIso,
-          estimate_minutes: duration,
-          subtasks: subtasks.length > 0 ? subtasks : undefined,
-          alerts,
-          category_ids: categoryIds,
-          location_context: locationContext,
-          location_text: locationText,
-          prerequisites,
-          source_catalogue_item_id: tpl.id,
-          is_template_instance: true,
-          is_chore: tpl.is_chore || false,
-        });
-        createdId = created?.id;
-      }
+      const input = buildTemplateInstanceInput(
+        tpl,
+        localToISO(dateForEntry, time),
+        defaultResponsibleUserId(tpl),
+      );
+      const created =
+        input.type === "reminder"
+          ? await createReminder.mutateAsync(input)
+          : await createTask.mutateAsync(input);
+      const createdId: string | undefined = created?.id;
 
       if (!createdId) throw new Error("Item creation failed");
 
@@ -616,7 +533,7 @@ export default function MobileFlexibleAssignmentPage({
 
   const renderEntryCard = (entry: CatalogueFlexibleEntry, index: number) => {
     const { tpl } = entry;
-    const itemType = toItemType(tpl.item_type);
+    const itemType = templateItemType(tpl.item_type);
     const Icon = typeIcons[itemType];
     const colors = typeColor[itemType];
     const key = `${tpl.id}:${entry.periodStart}`;

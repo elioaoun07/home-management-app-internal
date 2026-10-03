@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Chores App Icon">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#0c2420"/>
+    </linearGradient>
+    <linearGradient id="accent" gradientUnits="userSpaceOnUse" x1="96" y1="96" x2="416" y2="416">
+      <stop offset="0%" stop-color="#4ade80"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="46%" r="58%">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#0a1628" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="g" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="9" result="b"/>
+      <feFlood flood-color="#10b981" flood-opacity="0.4"/>
+      <feComposite in2="b" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+  <rect x="10" y="10" width="492" height="492" rx="104" fill="none" stroke="url(#accent)" stroke-width="1.5" opacity="0.22"/>
+
+  <!-- Broom, leaning: handle, binding, fanned head with bristles -->
+  <g filter="url(#g)" transform="translate(256 262) scale(1.14) translate(-256 -262) rotate(28 256 300)">
+    <line x1="256" y1="104" x2="256" y2="256" stroke="url(#accent)" stroke-width="14" stroke-linecap="round"/>
+    <rect x="228" y="254" width="56" height="30" rx="8" fill="#0d2a24" stroke="url(#accent)" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M224,286 L288,286 L318,392 Q256,406 194,392 Z" fill="#0d2a24" stroke="url(#accent)" stroke-width="12" stroke-linejoin="round"/>
+    <line x1="236" y1="304" x2="226" y2="384" stroke="url(#accent)" stroke-width="6" stroke-linecap="round" opacity="0.55"/>
+    <line x1="256" y1="304" x2="256" y2="388" stroke="url(#accent)" stroke-width="6" stroke-linecap="round" opacity="0.55"/>
+    <line x1="276" y1="304" x2="286" y2="384" stroke="url(#accent)" stroke-width="6" stroke-linecap="round" opacity="0.55"/>
+  </g>
+
+  <!-- Sparkles -->
+  <path d="M372,318 Q372,346 400,346 Q372,346 372,374 Q372,346 344,346 Q372,346 372,318 Z" fill="url(#accent)" opacity="0.9"/>
+  <path d="M146,140 Q146,160 166,160 Q146,160 146,180 Q146,160 126,160 Q146,160 146,140 Z" fill="url(#accent)" opacity="0.7"/>
+  <path d="M410,248 Q410,260 422,260 Q410,260 410,272 Q410,260 398,260 Q410,260 410,248 Z" fill="url(#accent)" opacity="0.55"/>
+</svg>

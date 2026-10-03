@@ -81,7 +81,7 @@ activity log                                                  | [junction/activi
 | NFC Tags           | NFC slug routes, admin page, PWA redirect banner.                                      | [standalone/nfc-tags.md](standalone/nfc-tags.md)                                  |
 | Error Logs         | Persistent structured error log viewer.                                                | [standalone/error-logs.md](standalone/error-logs.md)                              |
 | AI Usage           | Track Claude/OpenAI token usage; upcoming sessions.                                    | [standalone/ai-usage.md](standalone/ai-usage.md)                                  |
-| Chores             | Household chores list, postpone, group, "up next" hero.                                | [standalone/chores.md](standalone/chores.md)                                      |
+| Chores             | `/chores` week list, weekday assignment, check-in; own install identity.               | [standalone/chores.md](standalone/chores.md)                                      |
 | Focus              | Flexible routines / focus page.                                                        | [standalone/focus.md](standalone/focus.md)                                        |
 | Dashboard          | Main landing page after login — KPI cards, recent transactions.                        | [standalone/dashboard.md](standalone/dashboard.md)                                |
 | Recycle Bin        | Soft-deleted items with restore.                                                       | [standalone/recycle-bin.md](standalone/recycle-bin.md)                            |

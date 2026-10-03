@@ -1,5 +1,6 @@
 ---
 created: 2026-05-30
+updated: 2026-10-03
 type: overview
 module: chores
 module-type: standalone
@@ -13,61 +14,72 @@ related:
 
 # Chores
 
-> **Page:** `src/app/reminders/` (Chores tab) | **Feature:** `src/features/chores/` | **Components:** `src/components/chores/`
-> **DB Tables:** `items` (`is_chore = true`), `item_occurrence_actions`, `reminder_details`
+> **Page:** `src/app/chores/` | **Feature:** `src/features/chores/` | **Components:** `src/components/chores/`
+> **DB Tables:** `items` (`is_chore = true`), `item_occurrence_actions`, `reminder_details`, `item_flexible_schedules`
 > **Type:** Standalone
-> **Route:** `/reminders` (Chores tab, between Focus and Assign) — `/chores` redirects to `/reminders?tab=chores`
+> **Route:** `/chores` — own installable app (`/manifests/chores.webmanifest`, id `/chores-app`). `/reminders?tab=chores` redirects here.
 
 ## Overview
 
-Household chore management — a simplified view over Items where `is_chore = true`. Shows an "Up Next" hero card, grouped chore lists, quick completion, and a Sunday check-in for unresolved chores. Deliberately simpler UX than the full Items/Schedule: completion is the primary action, not editing.
+A responsive household agenda with weekly planning built in. Mobile opens the selected day; web opens a wider week overview with a To plan sidebar. Chores are Items with `is_chore = true`; their reusable definitions are Catalogue items with the same flag (Catalogue → Chores).
 
-Merged into `/reminders` as a tab on 2026-06-19 (mirroring the earlier Plan My Day merge — see [[Plan My Day]]). The mobile chores page (`StandaloneChoresPage`) was replaced by `ChoresTabContent`, a content-only component driven by the Reminders page's shared `FilterBar` (userFilter, showCompleted) instead of its own `ChoresFilterBar`.
+History: standalone page (May 2026) → merged into `/reminders` as a tab (2026-06-19) → own page and install identity again (2026-10-03, SCH-20), with the Reminders filter bar, Up Next hero, stats pills and swipe gestures removed.
+
+**Standalone here means** independent navigation, install identity and presentation. Data stays shared: chores read and write the Items tables through the Items hooks.
+
+## Page structure
+
+```
+Week dates · previous/next · Library
+Mon … Sun                         day/date/remaining counts
+Today / Week                      person filter · Assign (mobile)
+Selected-day agenda / week overview
+Completed / Earlier               collapsed
+Sunday check-in                   collapsed
+To plan                           desktop sidebar / mobile dialog
+```
+
+Day buttons focus the agenda without changing any placement. Today returns to the current day; Week shows the selected week. The compact person filter changes only visibility. **Library** links directly to `/catalogue?section=chores`.
+
+Desktop renders the same `ChoresView` inside the web shell (`WebChores`), with enough width for the agenda and planning sidebar. Mobile opens assignment in a dialog. Longer planning lists have local title search. An Unassigned row still uses Assign → weekday; time stays visible and editable before choosing the day. Rows wrap long titles and retain explicit completion and detail buttons.
+
+`/chores?date=YYYY-MM-DD` selects that date on mobile and web. The web shell renders Chores before its Budget loading/error gates, so an unrelated transaction fetch cannot replace the chore agenda.
+
+Detail and postpone dialogs use the shared accessible Dialog primitive, bottom-aligned on mobile and centered on wider screens. Theme tokens cover blue, pink, frost and calm, including check-in inputs. The redesign adds no scheduling engine or write path.
 
 ## Architecture
 
-Chores are not a separate table — they are `items` rows with `is_chore = true`. The feature hooks (`useChores`, `useChoreActions`) filter on this flag. Completing a chore writes to `item_occurrence_actions` with `action_type = "completed"` and the actual completion timestamp. The planned slot is preserved in `metadata_json.planned_for` so the Sunday check-in and analytics can correlate planned vs. actual.
+`useChoreWeek(weekOf, templates)` gathers cached inputs (items, all occurrence actions, flexible schedules) and the shared flexible organizer for the week's Monday and Sunday anchors, then calls the pure `buildChoreWeek`:
 
-**Sunday check-in**: collapsed panel, shows unresolved chores from the previous week. Two resolutions:
-- Done but not marked → user supplies actual completion date/time.
-- Not done → `action_type = "skipped"` with a required reason.
+| Chore shape | Source of slots | Assign path |
+|---|---|---|
+| Flexible routine (`recurrence_rule.is_flexible`) | `organizeFlexibleRoutines` scheduled entries | upsert `item_flexible_schedules` at the first free `occurrence_index` |
+| Flexible chore template, no routine item | — | create one-off reminder/task + push alert (`buildTemplateInstanceInput`) |
+| Fixed recurring | `expandOccurrencesInRange` (shared day expander) | n/a — use Postpone/Skip |
+| Dated one-off | `expandOccurrencesInRange` | n/a — use Postpone/Skip |
+| Undated one-off (reminder/task) | — | set `reminder_details.due_at` |
 
-Chore instances are planned via the Web Calendar Flexible Items view (not from the Chores tab).
-
-## Database
-
-| Table | Role |
-|---|---|
-| `items` | Source rows — `is_chore = true`, `chore_category` enum (cleaning/laundry/cooking/garden/maintenance/general) |
-| `item_occurrence_actions` | Completion and skip records; `metadata_json.planned_for` holds the original scheduled slot |
-| `reminder_details` | Recurrence config for recurring chores |
-
-## Key Files
-
-- `src/app/reminders/page.tsx` — owns the Chores tab + shared `FilterBar` (userFilter, showCompleted)
-- `src/app/chores/page.tsx` — redirect shim to `/reminders?tab=chores`
-- `src/components/chores/ChoresTabContent.tsx` — chores content, props-driven (no own filter bar)
-- `src/components/chores/UpNextHero.tsx` — hero card for next due chore
-- `src/components/chores/ChoreCard.tsx` — individual chore row
-- `src/components/chores/ChoreGroupList.tsx` — grouped list by category/day
-- `src/components/chores/ChoreCheckInPanel.tsx` — Sunday check-in UI
-- `src/components/chores/ChoreActionsSheet.tsx` — postpone/skip/assign sheet
-- `src/components/chores/ChorePostponeSheet.tsx` — postpone date picker
-- `src/components/web/WebChores.tsx` — separate desktop SPA view inside `WebViewContainer` (untouched by this merge)
-- `src/features/chores/useChores.ts` — query hook (filters `items` by `is_chore`)
-- `src/features/chores/useChoreActions.ts` — complete/skip/postpone mutations
-- `src/app/api/items/[id]/complete/route.ts` — completion API
-- `src/app/api/items/[id]/actions/route.ts` — skip/postpone API
+Done = completion actions accounted (via `planned_for`) to a day in the week.
 
 ## Gotchas
 
-- Chores share the `items` table — any query touching `items` without `is_chore` filtering will include chores. Always scope queries appropriately.
-- Trips integration: when a trip is activated, recurring chores are auto-skipped via `trip_side_effects` (`effect_type = 'chore_skip'`). Reverting a trip un-skips them.
-- Do not add a time-spent prompt — chores intentionally skip that field.
+- **Two slots of one chore on the same day are not supported.** The flexible engine matches completions by date, so the picker disables a day the chore already holds.
+- **Never reuse a taken `occurrence_index`.** Upserts key on item/period/index; `nextFreeOccurrenceIndex` checks every row in the period (including completed/skipped).
+- **A week can straddle two months.** Each day's chip uses the chore's period for that day; moving a slot never crosses its period (period is part of its identity).
+- Flexible slot writes (`useScheduleRoutine`/`useUnscheduleRoutine`) are direct Supabase calls with no offline queue — failures show "Not saved", never a success toast. Template-created items use the Items offline queue.
+- Partner taps on the same chore at the same time compute the same free index → last write wins for that slot (no duplicate).
+- Old installs and SW-cached HTML of `/chores` may run the former redirect once after deploy.
+- Chores share the `items` table — scope queries with `is_chore`.
+- Trips: activation auto-skips recurring chores via `trip_side_effects`; revert un-skips.
+- Do not add a time-spent prompt.
+
+## Key Files
+
+See the Feature Map: `ERA Notes/01 - Architecture/Feature Map/standalone/chores.md`.
 
 ## See Also
 
-- [[Items & Reminders]] — shared DB table and API
-- [[Plan My Day]] — precedent for merging a standalone route into `/reminders` as a tab
-- [[Trips]] — chore skip side-effects on trip activation
+- [[Items & Reminders]] — shared tables, occurrence actions, flexible engine
+- [[Catalogue]] — Chores section
+- [[Trips]] — chore skip side-effects
 - [[Common Patterns]]

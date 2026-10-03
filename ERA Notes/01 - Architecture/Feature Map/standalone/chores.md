@@ -1,56 +1,53 @@
 # Chores
 
 **Type:** Standalone
-**Route:** `/reminders` (Chores tab) — `/chores` is a redirect to `/reminders?tab=chores`
+**Route:** `/chores` (own page + install identity, 2026-10-03). `/reminders?tab=chores` redirects here; the Reminders "Chores" section button navigates here.
 
 ## What it does
 
-Household chores list with grouped views, an "up next" hero, simple completion, and a Sunday check-in for unresolved chores. Chores are stored as Items with `is_chore = true`, but the UX intentionally stays simpler than Schedule tasks/reminders.
-
-The mobile chores UI was merged into `/reminders` as a tab (between Focus and Assign) on 2026-06-19 — it is no longer a standalone route. `/chores` survives only as a redirect for old links / the installed PWA shortcut.
+Responsive chore agenda: Me | Both | partner tabs, collapsible week strip, focused day on mobile, week overview and planning sidebar on web. Mobile assignment opens in a dialog; longer To plan lists support title search. Completed and Sunday check-in stay collapsed (no Earlier section). Chores are Items with `is_chore = true`; definitions live in Catalogue → **Chores**.
 
 ## Files at a glance
 
-- **Page entry**: `src/app/reminders/page.tsx` (Chores tab) — renders `ChoresTabContent`
-- **Redirect**: `src/app/chores/page.tsx` → `/reminders?tab=chores`
-- **Components**:
-  - `src/components/chores/ChoresTabContent.tsx` — content (no longer owns its own filter bar; driven by the shared Reminders `FilterBar` userFilter/showCompleted)
-  - `src/components/chores/ChoreCheckInPanel.tsx`
-  - `src/components/chores/UpNextHero.tsx`
-  - `src/components/chores/ChoreGroupList.tsx`
-  - `src/components/chores/ChoreCard.tsx`
-  - `src/components/chores/ChoreActionsSheet.tsx`
-  - `src/components/chores/ChorePostponeSheet.tsx`
-  - `src/components/web/WebChores.tsx` (separate desktop SPA view inside `WebViewContainer`, untouched by this merge)
-- **Hooks**:
-  - `src/features/chores/useChores.ts`
-  - `src/features/chores/useChoreActions.ts`
-- **API routes**:
-  - `src/app/api/items/[id]/complete/route.ts`
-  - `src/app/api/items/[id]/actions/route.ts`
-- **DB tables**: `items`, `reminder_details`, `item_occurrence_actions`
+- **Page**: `src/app/chores/page.tsx` (mobile; `viewMode === "web"` renders `WebViewContainer initialMode="chores"`), `src/app/chores/layout.tsx` (metadata + manifest)
+- **Web shell**: `src/components/web/WebViewContainer.tsx` renders Chores before Budget loading/error gates and forwards `initialChoreDate` to `WebChores`; date links select the same day in both views.
+- **Install identity**: `public/manifests/chores.webmanifest` (`id: /chores-app`), `public/chores-icon.svg` → `chores-{180,192,512,maskable-512}.png` via `scripts/generate-icons.cjs`
+- **Components** (`src/components/chores/`):
+  - `ChoresView.tsx` — responsive agenda, week/day selection, person filter, Library, planning search/sidebar/dialog and action wiring. Also used by desktop `src/components/web/WebChores.tsx`.
+  - `ChoreRow.tsx` — slot row: completion button, wrapped title (opens sheet), time and person tag
+  - `ChoreTodoRow.tsx` — Unassigned row: tap **Assign** or swipe (left = me, right = partner) → day (preselected from `targetDate`; chips when none) + **All day** or a time ✓
+  - `ChoreSwipe.tsx` — Hub-shopping-style swipe: dead zone → follow → lock at 72 px with haptic → commit on release; pointer events + `touch-action: pan-y`. Also wraps scheduled `ChoreRow`s (swipe hands responsibility over)
+  - `ChoreSheet.tsx` — responsive detail dialog: move day (flexible), Done, Skip, Postpone (non-flexible), Unassign (flexible), give/take responsibility
+  - `ChoreCheckInPanel.tsx` — Sunday check-in (actual completion time / skip reason)
+  - `ChorePostponeSheet.tsx`
+  - `choreUi.tsx` — tone classes, `PersonTag`, `ChoreDayChips`
+- **Model / hooks** (`src/features/chores/`):
+  - `choreWeek.ts` — pure week builder (`buildChoreWeek`, `moveDayOptions`, `nextFreeOccurrenceIndex`) + `choreWeek.test.ts`
+  - `useChores.ts` — `useChoreWeek(weekOf, templates)`
+  - `useChoreActions.ts` — `useChoreSlotActions`, `useChoreAssign`, `useChoreResponsibility`
+- **Shared**: `src/lib/schedule/catalogueInstance.ts` (template → one-off item input; also used by `MobileFlexibleAssignmentPage`)
+- **API routes**: `src/app/api/items/[id]/complete/route.ts`, `src/app/api/items/[id]/actions/route.ts`
+- **DB tables**: `items`, `reminder_details`, `item_occurrence_actions`, `item_flexible_schedules`
 
 ## Behavior rules
 
-- Weekly planning happens through Web Calendar Flexible Items.
-- During the week, the primary chore action is completion.
-- Mobile chore rows also expose secondary quick actions for postpone, skip, and assign to partner.
-- Completing a chore writes the actual completion timestamp to `item_occurrence_actions.occurrence_date`.
-- The originally planned slot is preserved in `item_occurrence_actions.metadata_json.planned_for` so check-in logic can resolve the correct weekly chore while analytics can learn when it was actually done.
-- Sunday check-in is collapsed by default and shows unresolved chores from the previous week when expanded.
-- If the chore was done but not marked, the user supplies the actual completion date/time.
-- If the chore was not done, it is stored as `action_type = "skipped"` with a required reason.
-- Chores do not prompt for actual minutes/time spent.
+- Assign places **one occurrence in the selected week**, never a permanent recurrence. Three existing write paths: flexible routine → `item_flexible_schedules` slot; flexible chore template without a routine item → one-off item + push alert at due time; undated one-off → sets `reminder_details.due_at` (no alert added).
+- No default time. **All day** / blank time: flexible slot → `scheduled_for_time = null`; one-offs → `due_at` local noon (Schedule's no-time convention) + `items.metadata_json.all_day = true`, and Catalogue instances get no push alert. `isAllDayItem` makes the row show "All day".
+- Day chips: past days, days outside the item's period, and days already holding a slot of that chore are disabled. A Mon–Sun week can straddle two monthly periods; each day uses its own period.
+- Move = upsert the same slot (item/period/index) to a new day; Undo restores the old day. Unassign deletes only that slot.
+- Person filter only filters. Responsibility changes write `items.responsible_user_id` (item-level): a swipe on a routine hands the **whole routine** over (no per-slot owner column); Catalogue instances take the swiped person at creation. Rows are outlined in the owner's person-absolute color.
+- Completing writes the actual time to `occurrence_date` and the slot to `metadata_json.planned_for`. No time-spent prompt.
 
 ## Common edit scenarios
 
-- **"Edit chore card layout"** -> `ChoreCard.tsx`.
-- **"Change up-next hero"** -> `UpNextHero.tsx`.
-- **"Edit check-in behavior"** -> `ChoreCheckInPanel.tsx` + `useChoreActions.ts`.
-- **"Add a chores nav entry / filter"** -> `src/app/reminders/page.tsx` (it owns the tab + shared `FilterBar`, not `ChoresTabContent.tsx`).
+- **"Change a chore row"** → `ChoreRow.tsx`; **Unassigned/picker** → `ChoreTodoRow.tsx` + `choreUi.tsx`.
+- **"Which chores land in a week / what can be assigned"** → `choreWeek.ts` (add a test in `choreWeek.test.ts`).
+- **"Edit check-in behavior"** → `ChoreCheckInPanel.tsx` + `useChoreSlotActions`.
+- **"Chore definitions"** → Catalogue → Chores (`src/components/web/WebCatalogue.tsx`).
 
 ## Connected modules
 
-- **Web Calendar** - plans chore instances from Flexible Items.
-- **Notifications** - chore alerts.
-- **Household Sharing** - partner sees chores assigned to them.
+- **Items / Schedule** — data, occurrence actions, flexible engine (`useFlexibleRoutines`), shared expander (`dayOccurrences`).
+- **Catalogue** — Chores section (flagged definitions); templates feed Unassigned.
+- **Trips** — trip activation skips recurring chores (`trip_side_effects`).
+- **Household Sharing** — person colors and responsibility.

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -63,7 +63,9 @@ const CORPUS: CorpusCase[] = [
 
 describe("real statement PDF corpus", () => {
   for (const corpus of CORPUS) {
-    it(`preserves every money column in ${corpus.file}`, async () => {
+    // Real statements are private and never committed; skip where absent (CI).
+    const present = existsSync(resolve(process.cwd(), corpus.file));
+    it.skipIf(!present)(`preserves every money column in ${corpus.file}`, async () => {
       const buffer = readFileSync(resolve(process.cwd(), corpus.file));
       const pdf = await parsePDF(buffer);
       const parsed = parsePDFTextWithDiagnostics(pdf.text);

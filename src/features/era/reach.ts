@@ -53,7 +53,7 @@ export const ERA_REACH: ReachRow[] = [
   { module: "Error Logs", route: "/error-logs", label: "Error logs", words: ["error logs", "errors"], prefill: false, inline: [], verified: false },
   { module: "NFC Tags", route: "/nfc", label: "NFC", words: ["nfc", "tags"], prefill: false, inline: [], verified: false },
   { module: "Prerequisites", route: "/reminders", label: "Reminders", words: [], prefill: false, inline: [], verified: false, note: "Set on an item inside Reminders." },
-  { module: "Chores", route: "/reminders?tab=chores", label: "Chores", words: ["chores", "chore"], prefill: false, inline: [], verified: false },
+  { module: "Chores", route: "/chores", label: "Chores", words: ["chores", "chore"], prefill: false, inline: [], verified: false },
   { module: "Focus", route: "/reminders?tab=focus", label: "Focus", words: ["focus"], prefill: false, inline: [], verified: false },
   { module: "Trips", route: "/trips", label: "Trips", words: ["trips", "trip", "travel"], prefill: false, inline: [], verified: false, note: "Reads wait on TRIP-1–3." },
   { module: "Dashboard", route: "/dashboard", label: "Dashboard", words: ["dashboard", "home"], prefill: false, inline: [], verified: false },
