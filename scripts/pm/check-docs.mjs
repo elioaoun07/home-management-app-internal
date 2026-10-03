@@ -53,7 +53,7 @@ for (const campaign of campaigns) {
   const bookFile = path.join(dir, `${campaign} — Master Book.md`);
   const checklistFile = path.join(dir, '4 - Checklist.md');
   if (!fs.existsSync(bookFile) || !fs.existsSync(checklistFile)) continue;
-  const book = fs.readFileSync(bookFile, 'utf8');
+  const book = fs.readFileSync(bookFile, 'utf8').replace(/\r\n/g, '\n');
   const checklist = fs.readFileSync(checklistFile, 'utf8');
   for (const heading of ['Vision & Decisions', 'Pain Inventory', 'Acceptance Criteria Index', 'Shipped Log', 'Delivery session log']) {
     if (!book.includes(`## ${heading}\n`)) fail(bookFile, `missing required heading ${heading}`);

@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-26
+updated: 2026-10-03
 type: master-book
 status: active
 owner: Elio
@@ -17,6 +17,8 @@ Item plans follow [the shared execution-plan convention](<../_Conventions.md#9-i
 Keep work identifiable, reviewable and recoverable across PM surfaces. Tooling campaign for desktop, static and mobile PM reading and task controls.
 
 ## Current state & evidence
+
+**2026-10-03 weekly delivery (R61):** Home / Sprints / Work / Delivery / Analytics now share the desktop and phone shell. Eight editable draft weeks start October 5 with 25 canonical item references and 42 known points at planning revision 4; weekly capacity remains six provisional points and 90 review minutes. Mixed-module and module-focus previews can replan drafts or append weeks. Start freezes commitment and its criteria witnesses; scope edits and explicit carryover are recorded. Each visit derives To do / Active / Review / Done and blocked/input reasons from the current corpus and V1/V2 receipts. Candidate/run status never fabricates a shipped item. Closed weeks freeze their observed outcome; Analytics uses the same work/history definitions. Named deliverable groups, capacity/unknown estimates, milestone badges and reduced-motion behavior are included. Local writes use existing pairing, revision checks, durable command IDs and an OS-released native mutex. Watcher-only observations record observed UTC time and known source receipt dates without inventing historical occurrence dates. Verification uses copied fixtures and Chromium at 1440/820/700/390/320 px in blue/pink; no production DB access, provider run, deploy or physical-phone acceptance. Phone planning edits need the owner migration and `PM_SPRINT_RELAY=1` in [PM Relay Setup](<../../06 - Setup & Onboarding/PM Relay Setup.md>).
 
 **2026-09-26 Command Center navigation and question presentation (R69):** the shared local/phone UI now uses the ERA Memory mark, puts Now / Up next / Waiting / Someday and all module cards on Home, and adds Analytics as a fourth destination. `#/analytics` retains `#/dashboard` as an alias and combines the existing detailed metrics with In focus, fourteen daily shipped-record counts and receipt drilldowns. Work cards show their source ID; search survives To do / Done and Board / List navigation. Delivery question options already present in question text become selectable answers, with an explicitly marked recommendation first and editable free text retained. This is presentation work only: no worker instructions, execution contracts, relay commands, approval or Apply behavior changed. Verification and the remaining question-generation limitation are recorded under [R69](<#r69>); this entry does not claim deployment or physical-phone acceptance.
 
@@ -53,7 +55,13 @@ The local React application, Preact reference/static outputs and separate React 
 
 Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/PM Tooling — Master Book.md>) preserves detailed older narratives and receipts.
 
+**2026-10-03 sprint start correction (R61):** A paired local browser could read the sprint and show Start, then receive `local-session-required`. The browser cookie is scoped to `/api/delivery/v2`, while the new planning POST went to `/api/planning`; that request therefore had no cookie. Sprint writes now use `/api/delivery/v2/planning` under the existing paired-session and CSRF checks. The phone relay still uses its bridge credential. A local browser fixture with a real scoped cookie and the targeted auth/relay suite verify the correction; physical-phone UAT remains pending.
+
+**2026-10-03 disabled Start correction (R61):** The owner's revision-6 replan exposed a second defect: forecasts leave review estimates unknown, but Start disabled itself and the transition refused unknown estimates. Estimates are now optional planning aids, retained as null in the frozen commitment; over-capacity remains visible without preventing Start. Unsplit L work still needs an explicit point estimate. Unknown totals display a dash, partial totals a plus; active weeks no longer offer the draft-only estimate editor. Disabled Start gives a short reason and links to Delivery pairing or the active week where applicable. Regression coverage includes unknown/over-capacity commitment, persistence and close; copied-plan browser verification covers the real paired-cookie path and a second active-week refusal. The owner's plan stays unchanged.
+
 ## Vision & Decisions
+
+- Owner request 2026-10-03: weekly shipping is a primary Sprints tab between Home and Work, usable remotely and on desktop, with visible item status, Delivery entry and restrained game-like progress. Recommend one primary module plus a supporting module; retain module-focused weeks as an explicit option. Initial capacity and review estimates are editable planning aids, not measured velocity; drafts remain uncommitted until Start. *(IMPLEMENTED 2026-10-03: R61.)*
 
 - Owner decision 2026-09-26: Home is the entry point for module cards, four work queues and A place to begin; Analytics is a primary destination for focus and progress. Use the existing animated Memory mark, expose work IDs and retain search context across status/layout changes. Delivery may render supplied answer options but this UI session must not change the confirmed execution system. *(IMPLEMENTED 2026-09-26: R69.)* This updates the earlier three-destination and swipeable-Home-card decisions for the shared React app; classic/static reference views remain separate.
 
@@ -198,11 +206,19 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Outcome:** Plan sprints, deliverables and readiness over the same work.
 
+**Implementation:** done
+
+**UAT:** pending
+
+**Final verification (2026-10-03):** 382 affected tests pass; changed-file lint, typecheck and build pass. Readiness includes dependencies declared in embedded JSON execution plans: 224 open items comprise 52 Ready, 38 Needs input and 134 Blocked. These are planning classifications, not executor qualification. Planning revision 4 has eight draft weeks, 25 references and 42 known points. HUB-43 remains blocked by HUB-38/HUB-42 and is excluded; HUB-59 moves to week 5. HUB-64 in week 8 is conditional on week 5's HUB-47; membership does not make it Ready. Final Chromium fixture verification passes at 1440/820/700/390/320 px in both themes, covering edits/Undo, start, Delivery navigation, live status, scope restoration, close/carryover, replan, overlap refusal, append weeks, Analytics and reduced motion with no overflow or page errors. Physical-phone UAT remains Pending. Repository-wide lint is blocked by one unrelated temporary recipe fixture error; changed-file lint is clean.
+
+**Implemented 2026-10-03:** `Sprints.tsx`, `sprintModel.ts`, the revisioned `_Planning.json` contract and shared metrics provide the accepted weekly flow. Fixtures cover stale plan revisions and acceptance witnesses, idempotent retries, native crash-lock recovery, cancellation versus delivery, removed/re-added scope, missing references, conditional prerequisites, capacity, carryover, CLI observations and frozen close outcomes. Browser fixtures exercised Edit/Undo, Start, Delivery entry, active/review/done states, Close with carryover, alternative forecast selection and Analytics table. Desktop/mobile viewports and both themes pass; actual phone relay/deployment remain owner UAT. Migration `2026-10-03_pm-sprint-planning-relay.sql` is **written, not applied**. Current-source readiness reads the complete ID section; `portfolio.contract` can end at Provenance and must not be treated as the full lifecycle/readiness witness. Observation files live under root `.pm/`, never in GET/buildWorld. Existing September planning instructions below are historical and must not cause this feature to be built again.
+
 - **Acceptance:** Command Center Phase 2. A validated, revisioned `_Planning.json` (references and planning facts, never copied titles, acceptance, checkbox state or lanes) supports draft/start/close sprints, relative and owner-review capacity, deliverables and Ready / Needs input / Blocked readiness. The same item moves on the board, joins a sprint, completes through the CLI and updates every view once; cancellation reduces remaining work without adding delivered work; a criteria edit invalidates its readiness witness; overcapacity and unestimated work are visible; a conditional dependency can be planned but cannot launch early; concurrent stale edits to `_Planning.json` conflict instead of overwriting.
 - **Depends on:** [R60](<#r60>).
 - **Delivery Phase 5 note (2026-09-12):** parallel coordination landed before this item ([Delivery/DLV-106](<../Delivery/Delivery — Master Book.md#dlv-106>)). "Can it run now?" should call `scripts/delivery-v2/coordination.mjs` (`itemReasons`, `coordinate`) rather than restate prerequisite and scope rules. Prerequisites and `**Touches:**` are read through `scripts/pm/shared/declarations.mjs`. No sprint view shows parallel verdicts yet.
 - **Provenance:** [Command Center Phase 2](<../Plans/Command Center.md#phase-2--add-practical-sprints-deliverables-and-readiness>).
-- **Reading guide:** Large, unstarted, and the file it is named after does not exist — verified 2026-09-20, there is no `ERA Notes/10 - Project Management/_Planning.json` and nothing in `scripts/pm/` references one. Read three things before designing it. (1) `scripts/pm/shared/metrics.mjs` already has `sprintProgress(planning)` expecting a planning object, plus `openWork()`, `workOutcomes()`, `PRIORITIES`, `SEVERITIES` — that is the contract to satisfy. (2) Readiness must not restate prerequisite rules: call `scripts/delivery-v2/coordination.mjs` (`itemReasons`, `coordinate`, `dependencyState`), which already answers "can it run now?", and read declarations through `scripts/pm/shared/declarations.mjs` (`Depends on`, `Touches`). (3) The no-copying constraint is the design crux — `_Planning.json` holds references only, so the checklist stays the single source of truth for titles, acceptance and lanes. Concurrent-edit conflict means a revision check on write; the write discipline is in `scripts/pm/write-guards.mjs` and `scripts/pm/mutations.mjs`. Depends on R60.
+- **Reading guide (updated 2026-10-03):** use the PM Feature Map's weekly-sprint entry. `planning.mjs` owns source facts/authenticated writes/observations; `shared/planning.mjs` owns validation and transitions; `sprintModel.ts` owns forecast and item status; `metrics.mjs#sprintProgress` owns reconciled charts. Planning never authorizes a worker; normal Delivery still decides dispatch. Dates are calendar dates plus an IANA timezone; actual command and observation events are UTC instants.
 
 
 **Execution plan — 2026-09-26**
@@ -257,7 +273,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### R62
 
-**Remaining engineering (2026-09-15):** sprint metrics after R61 and comparable-run charts once owner trial data exists. Existing core metrics/history parser are implemented; do not recreate them.
+**Remaining engineering (2026-10-03):** comparable-run charts once owner trial data exists. R61 delivered sprint scope/progress charts and tables; existing core metrics/history parser are implemented. Do not recreate them.
 
 **Outcome:** Add sprint and comparable-run metrics.
 
@@ -1363,6 +1379,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-09-11 — **R59** Repaired canonical work identity, acceptance lookup and source/history links; checkbox writes refuse stale, duplicate and witness-less targets — [evidence](<PM Tooling — Master Book.md#r59>)
 - ✅ 2026-09-11 — **R60** Completed Home, Work Board/List and module views: badges (not lanes) for blocked/active/review, shareable filtered URLs, checklist-row highlighting, distinct Checklist/Brief links and an Open-in-CLI handoff — [evidence](<PM Tooling — Master Book.md#r60>)
 - ✅ 2026-09-26 — **R68** Phone content no longer hides behind the fixed bottom nav: `.app-main` reserves the nav height plus the safe area (`scripts/pm/app/responsive.css`); the clearance had lived on `.app-footer`, which the app no longer renders. Verified at 390 px on Home, Work and Delivery (last content above the nav). Reported by the owner on `/pm/live`.
+- ✅ 2026-10-03 — **R61** Plan sprints, deliverables and readiness over the same work; corrected Start authentication, optional-estimate commitment and visible disabled reasons — [criteria](<PM Tooling — Master Book.md#r61>)
 
 ## Delivery session log
 

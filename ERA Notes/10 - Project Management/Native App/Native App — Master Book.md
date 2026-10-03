@@ -98,7 +98,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** [Native App — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Native App/Native App — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
-- **Reading guide:** Two bounded contracts: (1) `package.json` currently has no `engines` or `packageManager`; select tested compatible values after verifying the owner build environment, not a guessed latest release. (2) [ERA Top Layer D1](<../Plans/ERA Top Layer.md#accepted-constraints>) selects owner-configured pg_cron/pg_net calling the web deployment. There is no `vercel.json`, but repository absence does not prove the live scheduler configuration. Document accepted ownership and obtain a separate owner liveness/configuration witness. Native setup must not relocate cron or alter the existing PWA.
+- **Reading guide:** Two bounded contracts: (1) `package.json` currently has no `engines` or `packageManager`; select tested compatible values after verifying the owner build environment, not a guessed latest release. (2) [ERA Top Layer D1](<../Plans/ERA Top Layer.md#10-carried-forward-constraints-d1d18>) selects owner-configured pg_cron/pg_net calling the web deployment. There is no `vercel.json`, but repository absence does not prove the live scheduler configuration. Document accepted ownership and obtain a separate owner liveness/configuration witness. Native setup must not relocate cron or alter the existing PWA.
 
 
 **Execution plan — 2026-09-26**

@@ -202,7 +202,10 @@ export function createRelayTransport({
   }
 
   return {
-    capabilities: { kind: "relay", planWrites: false, capture: true, v1Launch: false, v1Detail: false, v2: true, pairing: false, apply: true, referenceTools: false },
+    get capabilities() {
+      const published = payloadOf<{ relay?: { sprintWrites?: boolean } }>(ROW_KINDS.CAPABILITIES);
+      return { kind: "relay" as const, planWrites: false, sprintWrites: published?.relay?.sprintWrites === true, capture: true, v1Launch: false, v1Detail: false, v2: true, pairing: false, apply: true, referenceTools: false };
+    },
 
     ready: () => readyPromise,
     ownerId: () => ownerId,
@@ -330,6 +333,15 @@ export function createRelayTransport({
 
     async mutate<T>(op: string, body: unknown): Promise<T> {
       const input = (body || {}) as Payload;
+      if (op === "planning") {
+        await readyPromise;
+        const published = payloadOf<{ relay?: { sprintWrites?: boolean } }>(ROW_KINDS.CAPABILITIES);
+        if (published?.relay?.sprintWrites !== true) throw new PmError("Sprint editing needs laptop setup", 409);
+        if (!installationId) throw new PmError("No laptop has published yet", 503);
+        const id = String(input.command_id || "");
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(id)) throw new PmError("Command id required", 400);
+        return await send("planning", id, { schema: RELAY_SCHEMA, installation_id: installationId, body: input }) as T;
+      }
       // Inbox capture is the one checklist-area write the phone relays.
       if (op === "append" && input.file === "0 - Inbox.md") {
         const text = String(input.line || "").replace(/^\s*-\s*\[ \]\s*/u, "").trim();

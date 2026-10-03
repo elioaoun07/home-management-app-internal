@@ -61,6 +61,7 @@ import {
 import { createDeliveryV2Context, routeDeliveryV2 } from "./delivery-v2/service.mjs";
 import { readDispatchMode } from "./delivery-v2/entry.mjs";
 import { issuePairingCode } from "./delivery-v2/local-auth.mjs";
+import { observePlanningProgress, planningSnapshot, routePlanning } from "./pm/planning.mjs";
 
 loadDotenv({ path: ".env" });
 
@@ -138,7 +139,7 @@ function buildData() {
   const sourceKeys = Object.keys(
     collectSources(files, ROOT, { keysOnly: true }),
   );
-  return {
+  const data = {
     generatedAt: new Date().toISOString(),
     cancelledLog: readCancelledLog(PM_DIR),
     repoRootFileUrl: pathToFileURL(ROOT).href.replace(/\/$/, "") + "/",
@@ -152,6 +153,7 @@ function buildData() {
       repoDir: relative(ROOT, f.absDir).replace(/\\/g, "/"),
     })),
   };
+  return { ...data, ...planningSnapshot(PM_DIR, data) };
 }
 
 // ---- mutation operations (throw {status,msg} on failure) ----
@@ -354,7 +356,14 @@ const MUTATIONS = {
 const sseClients = new Set();
 let suppressUntil = 0;
 let watchTimer = null;
+function observeSprints() {
+  // This is the explicit-write / filesystem-watcher path. GET /api/data remains
+  // read-only; changes made from CLI/chat are observed here, without backdating.
+  try { observePlanningProgress({ root: ROOT, pmDir: PM_DIR, data: buildData() }); }
+  catch (error) { console.error("[pm] sprint observation failed:", error.message); }
+}
 function broadcast() {
+  observeSprints();
   for (const res of sseClients) {
     try {
       res.write("data: reload\n\n");
@@ -382,6 +391,9 @@ try {
 } catch {
   // recursive watch unsupported on this platform — manual refresh still works.
 }
+// Establish observed-now coverage for an already-started sprint after restart.
+// This explicit startup worker is separate from every HTTP read path.
+setImmediate(observeSprints);
 
 let bundleWatcher;
 let appWatcher;
@@ -551,6 +563,11 @@ const server = createServer(async (req, res) => {
       // on a path, and given the raw headers — the Origin/Sec-Fetch-Site checks
       // are the reason loopback binding alone is not the authentication story.
       if (path.startsWith("/api/delivery/v2/")) {
+        if (path === "/api/delivery/v2/planning" && req.method === "POST") {
+          const result = routePlanning({ headers: req.headers, body }, { root: ROOT, pmDir: PM_DIR, data: buildData() });
+          if (result.status === 200) broadcast();
+          return sendJson(res, result.status, result.json);
+        }
         const v2 = await routeDeliveryV2(
           { method: req.method, path, query: u.searchParams, body, headers: req.headers },
           deliveryV2Ctx,
@@ -579,6 +596,7 @@ const server = createServer(async (req, res) => {
       }
       suppressUntil = Date.now() + 700; // mute our own fs.watch echo
       const result = guardUndo(PM_DIR, handler(body));
+      observeSprints();
       return sendJson(res, 200, result);
     }
 

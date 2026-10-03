@@ -33,13 +33,24 @@ export function createLocalTransport(): Transport {
   }
 
   async function post<T>(path: string, body: unknown, timeoutMs = 60000): Promise<T> {
-    const response = await safeFetch(`/api/${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(body),
-      timeoutMs,
-    });
+    if (path === "planning" && !csrf) await v2Session();
+    let response: Response;
+    try {
+      // The paired browser cookie is scoped to /api/delivery/v2. Keep sprint
+      // writes under that prefix so the browser sends it with the CSRF token.
+      response = await safeFetch(path === "planning" ? "/api/delivery/v2/planning" : `/api/${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", ...(path === "planning" && csrf ? { "x-era-csrf": csrf } : {}) },
+        body: JSON.stringify(body),
+        timeoutMs,
+      });
+    } catch (error) {
+      const commandId = body && typeof body === "object" && "command_id" in body ? String(body.command_id) : "";
+      if (path === "planning" && commandId && error instanceof RequestTimeoutError) throw new PendingCommand(commandId, "unknown");
+      throw error;
+    }
     const payload = await response.json();
+    if (path === "planning" && (response.status === 401 || response.status === 403)) csrf = null;
     if (!response.ok) throw new PmError(payload.error || payload.refusals?.[0]?.detail || `Request failed (${response.status})`, response.status);
     return payload;
   }
@@ -62,7 +73,7 @@ export function createLocalTransport(): Transport {
   }
 
   return {
-    capabilities: { kind: "local", planWrites: true, capture: true, v1Launch: true, v1Detail: true, v2: true, pairing: true, apply: true, referenceTools: true },
+    capabilities: { kind: "local", planWrites: true, sprintWrites: true, capture: true, v1Launch: true, v1Detail: true, v2: true, pairing: true, apply: true, referenceTools: true },
 
     start() {
       startProbing();

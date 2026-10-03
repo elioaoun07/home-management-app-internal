@@ -1,6 +1,6 @@
 ---
 created: 2026-09-11
-updated: 2026-09-12
+updated: 2026-10-03
 type: plan
 status: active
 owner: Elio
@@ -20,15 +20,63 @@ evidence_cutoff: "Assessment: 2026-09-11 working tree over 8d952332b0d7917369ce0
 
 The product promise should be: **choose an outcome, organize when it matters, approve its approach, follow its delivery, and return to an accurately recorded result—from the phone or the desk.** CLI and chat remain first-class ways to do the engineering.
 
-Build around three everyday places:
+Build around five everyday places (Analytics adopted under R69; weekly view added 2026-10-03):
 
 | Place | What the owner does there |
 |---|---|
 | **Home** | See all module/campaign cards, current sprint or Now work, decisions needing attention, active deliveries and recent outcomes. |
+| **Sprints** | Choose a week, see its deliverables and current item status, monitor progress and launch eligible work through Delivery. |
 | **Work** | Search/filter the global backlog, open a module, switch Board/List/Sprints, inspect readiness, open source, organize or deliver an item. |
 | **Delivery** | Find sessions, see their actual state, read plans, answer questions, inspect work/checks, review results and apply an approved candidate. |
+| **Analytics** | Inspect current work, evidenced outcomes, sprint scope and delivery metrics. |
 
-Keep the existing three-destination navigation. Rename the visible Today/Explore labels to Home/Work if adopted, preserving existing deep-link aliases. Put **Dashboard** behind a clear Home link and **Source** on work details. There is no need for a fourth permanent mobile tab, a permanent inspector, a document-tree landing page or a new design system.
+The owner request on 2026-10-03 supersedes the original three-destination recommendation: place **Sprints between Home and Work** on desktop and mobile, retaining the Analytics destination adopted under R69. Preserve existing deep-link aliases and **Source** on work details. Keep the current design system, with compact progress rewards and subtle motion that respects reduced-motion preferences.
+
+### Weekly delivery analysis — 2026-10-03, R61
+
+This analysis reads the eleven current checklists and their item criteria/plans, the decision register and the source-path changes from the execution-plan cutoff `45b28899` to current HEAD `ad092149`. It is a planning snapshot before this R61 implementation, not a production, device or current-behavior certification. The September assessment and its original evidence cutoff below remain historical.
+
+| Campaign | Now | Next | Later | Total | S / M / L |
+|---|---:|---:|---:|---:|---|
+| Budget | 4 | 14 | 16 | 34 | 4 / 27 / 3 |
+| Schedule | 3 | 9 | 19 | 31 | 7 / 21 / 3 |
+| Kitchen | 2 | 8 | 10 | 20 | 0 / 20 / 0 |
+| Trips | 3 | 7 | 9 | 19 | 2 / 17 / 0 |
+| Hub & ERA | 4 | 12 | 27 | 43 | 5 / 35 / 3 |
+| Notifications & Alerts | 2 | 4 | 6 | 12 | 3 / 9 / 0 |
+| Healthcare | 3 | 6 | 8 | 17 | 6 / 11 / 0 |
+| Outfits | 1 | 3 | 8 | 12 | 3 / 6 / 3 |
+| PM Tooling | 2 | 8 | 7 | 17 | 7 / 8 / 2 |
+| Delivery | 3 | 0 | 9 | 12 | 0 / 9 / 3 |
+| Native App | 1 | 1 | 6 | 8 | 2 / 6 / 0 |
+| **Total** | **28** | **72** | **125** | **225** | **39 / 169 / 17** |
+
+These are raw open checklist rows, not 225 launchable engineering tasks. The index and September execution coverage still report an older 222-item corpus. Several rows require owner SQL or phone evidence but lack the explicit `Execution: owner` declaration; others have a newer completion note above an older plan. Examples are HLTH-25 and HUB-83 (owner application/device checks), BUD-67/39 (owner deployment/repair evidence), and HUB-37 (2026-09-27 repository-complete note, first CI run pending). Do not turn these mismatches into promised engineering or infer readiness from the Now lane. Lifecycle reconciliation remains governed by the campaign books and conventions.
+
+**Final session snapshot, 2026-10-03:** after R61 was archived to its Shipped Log, **224 open items** remain. Readiness now includes dependencies declared in embedded JSON execution plans and reports **52 Ready, 38 Needs input and 134 Blocked**. These are planning classifications, not runtime executor qualification or permission to dispatch. The table above deliberately retains the pre-implementation 225-item analysis cutoff.
+
+**Recommendation:** default to mixed weekly increments with one main product campaign and one support campaign. Offer a Focus alternative that finishes a coherent slice in one selected campaign before moving on. Mixed keeps useful progress moving while another campaign waits for evidence; Focus reduces context switching for connected work. Neither approach implies simultaneous execution: shared files and prerequisite chains still follow Delivery coordination. Avoid dividing each week across all eleven campaigns, and avoid weeks of discretionary PM work without a product outcome.
+
+Use the existing relative convention **S=1, M=2** with an adjustable initial **six-point weekly capacity**. L items require bounded slices before commitment; never assign them an invented small estimate. Keep owner review capacity distinct, leave room for failed checks and rework, and calibrate after two closed weeks. Existing receipts do not establish comparable weekly throughput, so this is an initial planning budget, not measured velocity or a completion-date prediction. The first full proposed week begins Monday **2026-10-05** in `Asia/Beirut`; later draft weeks are forecasts until started.
+
+**Actual seeded forecast, 2026-10-03:** the real revision-checked planning command saved `_Planning.json` revision **4** with **eight draft weeks, 25 canonical references and 42 known points**, covering **5 October–29 November**. The first four weeks below supersede the earlier opening-candidate recommendation; all remain subject to current criteria and launch checks.
+
+| Draft week | Campaign focus | Seeded canonical references | Initial units | Gate |
+|---|---|---|---:|---|
+| 5–11 Oct | Schedule + PM Tooling | SCH-7, R44, SCH-4.2, R34, SCH-5.5 | 6 | Revalidate SCH-7 against the newer ERA resolver; SCH-4.2 establishes parity evidence before larger recurrence work. |
+| 12–18 Oct | Budget + Kitchen | BUD-32, KIT-10, KIT-4, BUD-85 | 6 | BUD-32 is an isolated witness, not historical repair; preserve exactly-once coverage and verify the current meal adapter seam. |
+| 19–25 Oct | Healthcare + Notifications & Alerts | HLTH-19, NOTIF-2.1, NOTIF-3.1 | 5 | Ground the health contract in shipped medication code; phone observation remains separate from local fixtures. |
+| 26 Oct–1 Nov | Delivery + Budget | DLV-122, BUD-66, BUD-68 | 6 | BUD-68 replaces the owner-DB-gated BUD-63; recheck current Delivery and ERA source before dispatch. |
+
+This table is a dated readout of the seeded drafts, not additional task state or a second sprint store. The complete eight-week membership and later adjustments belong only in `_Planning.json`; the owning checklist/book supplies every title, outcome, acceptance and status. Future forecasts should pull the next bounded, unheld items from Now/Next, respecting the chosen strategy. Conditional successors may be shown with their prerequisites, but never acquire launch eligibility merely because their forecast week arrived. Keep Later and unresolved large work outside automatic commitments.
+
+The final dependency pass removed **HUB-43** from week 5 because it waits for HUB-38/HUB-42; **HUB-59** now occupies that week. **HUB-64** remains conditional in week 8 after week 5's HUB-47. Conditional forecast membership does not make an item Ready.
+
+Several chains constrain the forecast: BUD-32 → BUD-67 → BUD-39 → BUD-36 waits for owner evidence; SCH-4.2 → SCH-4.3b → SCH-14 → SCH-8 requires split recurrence work; KIT-18/20/19/21/24 requires catalogue and current access evidence; OUT-7/8 waits for OUT-19; briefing activation waits for DEC-01 and producer contracts, and cron instrumentation for DEC-06. Current owner evidence gates also cover Trips lifecycle and Native account setup. Show the exact missing input instead of filling those weeks with a promise.
+
+The September plans are unreviewed references. Source paths in the SCH-7, BUD-66, BUD-83, HUB-47 and DLV-122 scopes changed after their plan cutoff; HLTH-19 also predates the current medication implementation. A draft plan's presence, empty check list or historical source receipt is insufficient for Ready. Bind readiness to the current item and criteria revision; explain stale or missing evidence and use the existing `coordination.mjs` verdict for execution dependencies and shared scope.
+
+**R61 scope for this owner request:** references-only weekly planning with editable Focus/Mixed forecasts, current item/attempt status, progress from canonical completed outcomes, a desktop and mobile Sprints destination, and a delivery entry point that retains the existing launch/approval boundary. Count shipped work separately from candidate results, cancelled attempts, cancelled work and removed scope. Gamification may celebrate evidenced delivery and completion; it must not reward dispatch or erase carryover. Remote views must distinguish current, stale and unavailable worker evidence. No forecast, sprint start or week change automatically launches an executor, applies a candidate, deploys code or applies SQL.
 
 ### Why it is worth maintaining
 
@@ -254,11 +302,17 @@ Inside a sprint, offer an outcome overview and a compact execution board: To do 
 
 Freeze commitment at sprint start and append scope-change history. Display original commitment, added/removed scope, completed/cancelled and remaining work separately. Carryover is an explicit selection at close. Make sprint progress observe CLI completions without creating synthetic Delivery sessions. Persist date-only sprint dates with an IANA timezone; actual events use UTC instants.
 
-**Files:** existing shared work/source models, PM scanner/server and query keys; **proposed** `scripts/pm/planning.mjs`, `scripts/pm/app/Sprints.tsx`, `scripts/pm/shared/readiness.mjs`, `ERA Notes/10 - Project Management/_Planning.json`, `tests/pm-ui/planning.test.ts` and `readiness.test.ts`. Extend the existing watcher for the derived observation journal; do not journal in `buildWorld`/GET.
+**Files (implemented 2026-10-03):** `scripts/pm/planning.mjs`, `scripts/pm/shared/planning.mjs`, `scripts/pm/app/Sprints.tsx`, `sprintModel.ts`, `planningTypes.ts`, `scripts/pm/shared/metrics.mjs`, `ERA Notes/10 - Project Management/_Planning.json`, `tests/pm-ui/planning.test.ts`, `sprint-model.test.ts` and `metrics.test.ts`; existing scanner/server, watcher and relay seams. The proposed separate `readiness.mjs` was unnecessary. The watcher records progress observations; `buildWorld` and GET remain read-only.
 
 **Dependencies/decisions:** Phase 1 source/model contract. Sprint readiness is independent of executor qualification. Do not require AI generation, point estimation on the entire backlog, auto-scheduling, velocities or Scrum ceremonies.
 
+**Start semantics (2026-10-03):** missing point/review estimates and over-capacity are advisory, not Start gates. Freeze unknown values as null; show unknown and partial capacity totals explicitly. Unsplit L work still requires an explicit point override. Authentication, nonempty scope, one active week, canonical acceptance and prerequisite checks remain enforced; disabled controls show the immediate next step.
+
 **Complete when:** the same item can move in Kanban, join a sprint, complete through CLI and update all views once; a cancelled item reduces remaining work without adding delivered work; a criteria edit invalidates its readiness witness; overcapacity/unestimated work is visible; a conditional dependency can be planned but cannot launch early; concurrent stale edits to `_Planning.json` receive a conflict rather than overwrite.
+
+**Status: shipped locally 2026-10-03 — R61 implementation complete; physical-phone UAT pending.** [R61's implementation receipt](<../PM Tooling/PM Tooling — Master Book.md#r61>) records the shared desktop/phone Sprints tab, eight editable draft weeks, Focus/Mixed forecasts, deliverable groups, revision-checked planning commands, frozen commitment/close outcomes, explicit carryover, criteria-bound readiness, current delivery status and Analytics scope metrics. Copied fixtures cover concurrency, replay, cancellation, stale criteria, CLI observations and missing/unknown evidence; browser fixtures cover the planning and Delivery entry flow at desktop/mobile sizes in both PM themes. This is local implementation and fixture evidence, not deployment or physical-device acceptance. [Owner checks](<../../../docs/Delivery-UAT.md#weekly-sprint-acceptance--r61>) remain Pending. Phone planning writes require the owner to apply `migrations/2026-10-03_pm-sprint-planning-relay.sql`, set `PM_SPRINT_RELAY=1`, restart the bridge and serve the current bundle; [PM Relay Setup](<../../06 - Setup & Onboarding/PM Relay Setup.md#weekly-sprint-editing-2026-10-03>) owns those steps. No production migration was applied by an agent.
+
+**Final dependency integration verification:** 382 affected tests pass; changed-file lint, typecheck and build pass. The final Chromium fixture flow passes at 1440/820/700/390/320 px in blue/pink: group edit and Undo, start, Delivery navigation, live status projection, completed-scope removal and restoration, close/carryover, replan, overlap refusal, append weeks, Analytics and reduced motion. No horizontal overflow or page errors. Physical-phone acceptance remains Pending. Repository-wide lint has one unrelated error in `.tmp/kit11-checker-candidate/src/app/api/recipes/[id]/cooking-log/route.ts:124`; changed files are clean.
 
 ### Phase 3 — Make one native v2 delivery dependable locally
 
@@ -321,7 +375,7 @@ Expose a small queue with running slots, waiting reason, owner decisions and eac
 
 **Status: implementation landed 2026-09-12; real pair and sprint integration outstanding — Phase 5 is not complete.** Evidence: [Delivery DLV-106](<../Delivery/Delivery — Master Book.md#dlv-106>).
 
-- **Prerequisites as verified:** Phase 2 (PM Tooling R61) has no implementation — no `_Planning.json`, readiness module or Sprints view. Verdicts therefore appear on Delivery, Launch and Run only, and dependency order reads the canonical checklist and Master Book directly. Phases 3–4 exist as code with synthetic evidence only: no executor is qualified and the relay migration is unapplied.
+- **Prerequisites as verified on 2026-09-12:** Phase 2 (PM Tooling R61) had no implementation — no `_Planning.json`, readiness module or Sprints view. Verdicts therefore appeared on Delivery, Launch and Run only, and dependency order read the canonical checklist and Master Book directly. Phases 3–4 then existed as code with synthetic evidence only: no executor was qualified and the relay migration was unapplied. **2026-10-03 update:** R61 supplies sprint planning/readiness and the existing Delivery entry point; this does not certify a real parallel pair or physical-phone operation.
 - **Built:** rule-based coordination (`scripts/delivery-v2/coordination.mjs`), evaluated inside each admission transaction and again under the dispatch claim, over:
   - item identity;
   - HELD markers and `Depends on` prerequisites, where open, cancelled or unresolved ones are unsatisfied;
@@ -368,6 +422,8 @@ After those receipts, remove duplicated presentation/control paths that are no l
 - **Built:** one history parser (`scripts/pm/shared/history.mjs`) used by the React app locally and on `/pm/live`, the classic build and the bridge's legacy row; the metric contract above as `scripts/pm/shared/metrics.mjs`; `#/dashboard` from Home with filters and selection in the URL, a table for every chart and drilldowns into the counted records. Product and portfolio read models moved into `scripts/pm/shared/`.
 - **Verified:** chart totals reconcile to their drilldowns and to the Board in fixtures and on the live corpus; the relay-assembled corpus yields identical metrics; no record is placed outside its stated week; attempts never change work outcomes; units stay separate. Rendered at 1280/390/320 px with no overflow. Live corpus: 240 open, 167 completed exact IDs, 1 cancelled, 93 records without an exact ID, 1 reopened ID, 0 declared kinds.
 - **Pending:** sprint charts (R61); delivery/resource comparisons, the DLV-98–102 trial, phone use and useful outcomes (no V2 run, no qualified executor, no owner-approved task or amounts, relay migration unapplied); any retirement (after the trial and R6's UAT). Recorded V1 evidence — 16 attempts, 1 accepted — is not a trial result.
+
+**2026-10-03 update:** R61 completes the sprint-chart portion of the September pending list: Analytics derives original/add/remove/current/delivered/cancelled/remaining counts, known point coverage and frozen closed-week outcomes, with a table and week links. Later implementation/qualification receipts in the Delivery book supersede September runtime claims above. Comparable operating-trial evidence, physical-phone acceptance and retirement remain separate obligations.
 
 ### Sequence and useful parallel implementation
 

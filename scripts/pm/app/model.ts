@@ -104,6 +104,9 @@ export function buildWorld(snapshot: Snapshot): World {
     generatedAt: snapshot.generatedAt,
     offline: !!snapshot.offline,
     cachedAt: snapshot.cachedAt,
+    planning: snapshot.planning,
+    planningReadiness: snapshot.planningReadiness,
+    planningError: snapshot.planningError,
   };
 }
 const aliases: Record<string, string> = {

@@ -875,7 +875,7 @@
   }
 }
 
-/* Four primary destinations and compact, fully visible space cards. */
+/* Five primary destinations and compact, fully visible space cards. */
 @media (min-width: 701px) and (max-width: 950px) {
   .app-header { padding-inline: 24px; gap: 12px; }
   .desktop-nav a { padding-inline: 12px; }
@@ -885,7 +885,7 @@
 }
 @media (max-width: 700px) {
   .mobile-nav { padding-inline: 10px; }
-  .mobile-nav > a { width: 25%; }
+  .mobile-nav > a { width: 20%; }
   .mobile-nav strong { font-size: 11px; }
   .header-tools .icon-button { min-width: 40px; }
   .home-queues .work-collections { gap: 10px; margin-bottom: 18px; }

@@ -1,3 +1,5 @@
+import type { Planning, PlanningReadiness } from "./planningTypes";
+
 export interface SourceFile {
   relPath: string;
   raw: string;
@@ -9,6 +11,9 @@ export interface Snapshot {
   generatedAt: string;
   offline?: boolean;
   cachedAt?: string | null;
+  planning?: Planning | null;
+  planningReadiness?: Record<string, PlanningReadiness>;
+  planningError?: string | null;
 }
 export interface Choice {
   id: string;
@@ -89,6 +94,9 @@ export interface World {
   generatedAt: string;
   offline: boolean;
   cachedAt?: string | null;
+  planning?: Planning | null;
+  planningReadiness?: Record<string, PlanningReadiness>;
+  planningError?: string | null;
 }
 export type Bucket = "now" | "next" | "waiting" | "later";
 export interface RunItem {

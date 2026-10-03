@@ -212,6 +212,74 @@ describe("open work and bugs", () => {
   });
 });
 
+describe("sprint progress", () => {
+  const world = buildWorld(SNAPSHOT);
+  const at = "2026-09-07T08:00:00Z";
+  const member = (workId: string, points: number | null = 1, campaign = "Budget") => ({ workId, origin: { file: `${campaign}/4 - Checklist.md`, alias: workId }, points, reviewMinutes: 10 });
+  const sprint = (members: ReturnType<typeof member>[]) => ({
+    id: "week-1", name: "Week 1", goal: "Useful outcomes", startDate: "2026-09-07", endExclusive: "2026-09-14", timezone: "Asia/Beirut",
+    state: "draft", strategy: "balanced", capacity: { unit: "points", available: 6, reviewMinutes: 90 }, members,
+    commitment: null, scopeChanges: [], closed: null,
+  });
+  const planning = (weeks: unknown[]) => ({ schema: "pm-planning@1", revision: 1, sprints: weeks, deliverables: [] });
+  const rows = (plan: unknown, options = {}) => {
+    const result = sprintProgress(plan, world, options);
+    expect(result.available).toBe(true);
+    if (!result.rows) throw new Error("Expected valid sprint metrics");
+    return result.rows;
+  };
+
+  it("reconciles scope changes while keeping cancellation, reopened work and delivery distinct", () => {
+    const first = member("BUD-1", 2);
+    const done = member("BUD-10", 2);
+    const cancelled = member("BUD-20");
+    const next = member("BUD-3", 2);
+    const reopened = member("BUD-2");
+    const week = {
+      ...sprint([done, cancelled, next, reopened]), state: "active",
+      commitment: { at, goal: "Useful outcomes", members: [first, done, cancelled].map((entry) => ({ ...entry, criteriaRevision: "criteria-1" })) },
+      scopeChanges: [
+        { at, action: "remove", workId: first.workId, member: first },
+        { at, action: "add", workId: next.workId, member: next },
+        { at, action: "add", workId: reopened.workId, member: reopened },
+        { at, action: "remove", workId: reopened.workId, member: reopened },
+        { at, action: "add", workId: reopened.workId, member: reopened },
+      ],
+    };
+    const [result] = rows(planning([week]));
+    expect(result).toMatchObject({ original: 3, added: 3, removed: 2, total: 4, delivered: 1, cancelled: 1, remaining: 2, percent: 25 });
+    expect(result.original! + result.added - result.removed).toBe(result.total);
+    expect(result.delivered + result.cancelled + result.remaining).toBe(result.total);
+    expect(result.originalPoints!.known + result.addedPoints.known - result.removedPoints.known).toBe(result.points.known);
+    expect(result.items.find((item) => item.workId === "BUD-2")?.status).toBe("remaining");
+    expect(result.items.some((item) => item.workId === "BUD-1")).toBe(false);
+  });
+
+  it("freezes closed outcomes when unfinished work ships later or a delivered item reopens", () => {
+    const members = [member("BUD-1"), member("BUD-10")];
+    const [result] = rows(planning([{
+      ...sprint(members), state: "closed",
+      commitment: { at, goal: "Useful outcomes", members: members.map((entry) => ({ ...entry, criteriaRevision: "criteria-1" })) },
+      closed: { at: "2026-09-08T08:00:00Z", delivered: ["BUD-1"], cancelled: [], carryover: ["BUD-10"] },
+    }]));
+    expect(result).toMatchObject({ delivered: 1, cancelled: 0, remaining: 1 });
+    expect(result.items.map((item) => [item.workId, item.status])).toEqual([["BUD-1", "delivered"], ["BUD-10", "remaining"]]);
+  });
+
+  it("keeps unknown estimates and missing work visible, with no invented commitment", () => {
+    const [result] = rows(planning([sprint([member("BUD-999", null), member("BUD-10", 2)])]));
+    expect(result).toMatchObject({ original: null, originalPoints: null, total: 2, delivered: 1, remaining: 1, missing: 1, points: { known: 2, unestimated: 1 } });
+    expect(result.remainingPoints).toEqual({ known: 0, unestimated: 1 });
+  });
+
+  it("filters by canonical campaign references and refuses inconsistent scope history", () => {
+    const week = sprint([member("BUD-1"), member("KIT-9", 2, "Kitchen")]);
+    expect(rows(planning([week]), { campaign: "Kitchen" })[0]).toMatchObject({ total: 1, delivered: 1, remaining: 0 });
+    expect(rows(planning([week]), { campaign: "Outfits" })).toEqual([]);
+    expect(sprintProgress(planning([{ ...week, state: "active" }]), world)).toEqual({ available: false, reason: "invalid-planning-data" });
+  });
+});
+
 describe("delivery attempts and resources", () => {
   const world = buildWorld(SNAPSHOT);
   const v1 = [

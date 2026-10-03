@@ -1,6 +1,6 @@
 ---
 created: 2026-09-12
-updated: 2026-09-12
+updated: 2026-10-03
 type: runbook
 status: active
 owner: Elio
@@ -52,6 +52,21 @@ Record each under DLV-104 / DLV-105 / R63 with date and what was observed. Synth
 - [ ] Edit an affected file from the CLI during a run, then Apply: conflict, nothing written, edit intact.
 - [ ] Apply a verified candidate: files written, integrated checks in the checker, `Applied`; Roll back restores.
 - [ ] Inspect a phone payload (browser devtools on `/pm/live`): no service-role key, CRON secret, provider key or bridge token.
+
+## Weekly sprint editing (2026-10-03)
+
+Sprints are readable on the shared local and phone view, with the existing Delivery launch path. To enable **saving, starting, adjusting and closing weeks from the phone**:
+
+1. In Supabase SQL Editor, run the inspection query in `migrations/2026-10-03_pm-sprint-planning-relay.sql`. Confirm the constraint is `pm_commands_type_check` and preserves the existing command names. Stop on a mismatch.
+2. Run its transaction and verification query. Confirm `planning` appears in the type constraint. No agent has applied this migration.
+3. Set `PM_SPRINT_RELAY=1` in the laptop environment and restart `pnpm pm --bridge`. Keep the laptop awake and online. The bridge advertises sprint editing only with that explicit switch.
+4. On the phone, open `/pm/live#/sprints`, edit a draft, reload, start a chosen week, then close it with a selected carryover item. Check that the same planning revision appears at the desk. Record physical-device acceptance separately.
+
+Local planning requires the existing Delivery pairing. Planning lives in `ERA Notes/10 - Project Management/_Planning.json`; task titles, acceptance and completion stay in Markdown. The native mutex and observations under root `.pm/` are machine-local and ignored by Git. The OS releases the mutex if the process dies. No worker starts when a sprint is started; Deliver still opens the ordinary witnessed launch flow. The 15-minute per-item review estimates in the initial eight draft weeks are provisional and editable.
+
+The local progress journal is `.pm/planning-observations.ndjson`; `.pm/planning-observations.json` is its rebuildable checkpoint. Watcher/explicit-write observations carry `observedAt` in UTC and retain a known source receipt date separately; external edits do not invent `occurredAt`. `.pm/planning-events.ndjson` records planning-command receipts. Reading a page does not append observations. Keep physical-phone results under [R61 owner UAT](<../../docs/Delivery-UAT.md#weekly-sprint-acceptance--r61>).
+
+To disable phone sprint edits, unset `PM_SPRINT_RELAY` and restart. Existing week reading, history and Delivery links remain available.
 
 ## Not authorized by this setup
 

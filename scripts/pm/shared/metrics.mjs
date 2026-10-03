@@ -6,13 +6,15 @@
 //   - work outcomes    distinct exact IDs, completed and cancelled apart; other receipts
 //                      stay "historical records"
 //   - bugs             explicit `**Kind:** bug` only, grouped by severity
-//   - sprint progress  unavailable until a planning file exists (R61)
+//   - sprint progress  frozen commitments and scope changes; current canonical
+//                      outcomes until close, then the recorded close outcome
 //   - delivery         attempts (sessions/runs) with their outcome, and observed
 //                      dispositions as reached levels — never work outcomes
 //   - resources        known usage per executor and run, estimates, tokens and settled
 //                      amounts in separate units, with coverage
 import { normalizeWorkId } from "./work-id.mjs";
 import { CANCELLED_LOG_FILE, parseHistory } from "./history.mjs";
+import { validatePlanning } from "./planning.mjs";
 
 export const PRIORITIES = ["Now", "Next", "Later"];
 export const SEVERITIES = ["blocker", "friction", "annoyance", "parked", "none"];
@@ -195,10 +197,61 @@ export function bugs(work = [], { campaign = null } = {}) {
   };
 }
 
-/** Sprint scope needs committed planning facts; none exist before R61. */
-/** @param {unknown} [planning] */
-export function sprintProgress(planning = null) {
-  return planning ? { available: false, reason: "unsupported-planning-schema" } : { available: false, reason: "no-planning-file" };
+/**
+ * Scope history counts additions/removals, including removal and re-addition of
+ * the same identity. Current membership is the denominator: removed work earns
+ * no delivery, cancellation is separate, and missing evidence stays unfinished.
+ * Closed weeks retain their observed result after later delivery or reopening.
+ *
+ * @param {unknown} [planning]
+ * @param {{history?: any[], work?: any[]}} [world]
+ * @param {{campaign?: string | null}} [options]
+ */
+export function sprintProgress(planning = null, world = {}, { campaign = null } = {}) {
+  if (!planning) return { available: false, reason: "no-planning-file" };
+  let validated;
+  try { validated = validatePlanning(planning); }
+  catch { return { available: false, reason: "invalid-planning-data" }; }
+  const outcomes = workOutcomes(world);
+  const outcomeById = new Map([...outcomes.completed, ...outcomes.cancelled].map((outcome) => [outcome.workId, outcome]));
+  const work = world.work || [];
+  const belongs = (member) => !campaign || member.origin.file.split("/")[0] === campaign;
+  const points = (members) => ({
+    known: members.reduce((sum, member) => sum + (finite(member.points) ? member.points : 0), 0),
+    unestimated: members.filter((member) => !finite(member.points)).length,
+  });
+  const rows = validated.sprints.map((sprint) => {
+    const members = sprint.members.filter(belongs);
+    const originalMembers = sprint.commitment?.members.filter(belongs) || [];
+    const added = sprint.scopeChanges.filter((change) => change.action !== "remove" && belongs(change.member));
+    const removed = sprint.scopeChanges.filter((change) => change.action === "remove" && belongs(change.member));
+    const items = members.map((member) => {
+      const item = work.find((entry) => normalizeWorkId(entry.idChip || entry.id) === member.workId && entry.file === member.origin.file);
+      const outcome = outcomeById.get(member.workId);
+      const status = sprint.closed
+        ? sprint.closed.delivered.includes(member.workId) ? "delivered" : sprint.closed.cancelled.includes(member.workId) ? "cancelled" : "remaining"
+        : item?.state === "open" ? "remaining" : outcome?.status === "Shipped" ? "delivered" : outcome?.status === "Cancelled" ? "cancelled" : "missing";
+      return { ...member, campaign: member.origin.file.split("/")[0], status, item: item || null, record: outcome?.record || null };
+    });
+    const delivered = items.filter((item) => item.status === "delivered");
+    const cancelled = items.filter((item) => item.status === "cancelled");
+    const remaining = items.filter((item) => item.status !== "delivered" && item.status !== "cancelled");
+    return {
+      id: sprint.id, name: sprint.name, goal: sprint.goal, state: sprint.state,
+      startDate: sprint.startDate, endExclusive: sprint.endExclusive,
+      original: sprint.commitment ? originalMembers.length : null,
+      added: added.length, removed: removed.length, total: items.length,
+      delivered: delivered.length, cancelled: cancelled.length, remaining: remaining.length,
+      missing: items.filter((item) => item.status === "missing").length,
+      percent: items.length ? Math.round(delivered.length / items.length * 100) : 0,
+      points: points(members), deliveredPoints: points(delivered), remainingPoints: points(remaining),
+      originalPoints: sprint.commitment ? points(originalMembers) : null,
+      addedPoints: points(added.map((change) => change.member)), removedPoints: points(removed.map((change) => change.member)),
+      items,
+    };
+  }).filter((row) => !campaign || row.total > 0 || (row.original || 0) > 0 || row.added > 0 || row.removed > 0)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.id.localeCompare(b.id));
+  return { available: true, rows };
 }
 
 // ---------------------------------------------------------------------------

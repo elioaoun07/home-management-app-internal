@@ -50,6 +50,7 @@ DEV_USER_ID=                       # override auth user in local development
 
 ```env
 PM_BRIDGE=                         # set to "1" to start the laptop bridge alongside `pnpm pm` (also: --no-bridge flag)
+PM_SPRINT_RELAY=                   # set to "1" only after owner applies 2026-10-03_pm-sprint-planning-relay.sql; enables phone sprint edits
 PM_OWNER_USER_ID=                  # the Supabase auth user id /pm/live commands and snapshots are scoped to (RLS: user_id = auth.uid())
 PM_NOTIFY_URL=                     # optional override for the push endpoint; defaults to `${NEXT_PUBLIC_SITE_URL}/api/pm/notify`
 ```

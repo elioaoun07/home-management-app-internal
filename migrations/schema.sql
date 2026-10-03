@@ -1865,7 +1865,7 @@ CREATE TABLE public.pm_live (
 CREATE TABLE public.pm_commands (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL DEFAULT auth.uid(),
-  type text NOT NULL CHECK (type = ANY (ARRAY['capture'::text, 'undo'::text, 'preflight'::text, 'launch'::text, 'pause'::text, 'abort-turn'::text, 'resume'::text, 'cancel'::text, 'answer'::text, 'ask'::text, 'approve'::text, 'accept'::text, 'legacy-tick'::text, 'v2-deliver'::text, 'v2-decision'::text, 'v2-answer'::text, 'v2-message'::text, 'v2-control'::text, 'v2-apply'::text])),
+  type text NOT NULL CHECK (type = ANY (ARRAY['capture'::text, 'undo'::text, 'preflight'::text, 'launch'::text, 'pause'::text, 'abort-turn'::text, 'resume'::text, 'cancel'::text, 'answer'::text, 'ask'::text, 'approve'::text, 'accept'::text, 'legacy-tick'::text, 'v2-deliver'::text, 'v2-decision'::text, 'v2-answer'::text, 'v2-message'::text, 'v2-control'::text, 'v2-apply'::text, 'planning'::text])),
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'claimed'::text, 'done'::text, 'failed'::text, 'expired'::text, 'unknown'::text])),
   result jsonb,

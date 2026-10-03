@@ -166,7 +166,8 @@ export function Dashboard() {
   const delivery = useMemo(() => deliveryAttempts({ v1: runs, v2: v2.data?.runs || [] }, { campaign }), [runs, v2.data, campaign]);
   const resources = useMemo(() => resourceRows(delivery.attempts), [delivery]);
   const coverage = useMemo(() => historyCoverage(world, { campaign }), [world, campaign]);
-  const sprint = sprintProgress();
+  const sprint = useMemo(() => sprintProgress(world.planning, world, { campaign }), [world, campaign]);
+  const sprintRows = ("rows" in sprint ? sprint.rows : undefined) || [];
 
   const maxOpen = Math.max(1, ...open.rows.map((row) => row.total));
   const maxWeek = Math.max(1, ...series.buckets.flatMap((bucket) => [bucket.completed.length, bucket.cancelled.length]));
@@ -301,6 +302,34 @@ export function Dashboard() {
             </tfoot>
           </table>
         }
+      />
+
+      <Panel
+        title="Sprint progress"
+        meta={<a href="#/sprints">Weekly plan</a>}
+        chart={sprintRows.length ? (
+          <div className="dash-hbars">
+            <Legend items={[["Delivered", "done"], ["Cancelled", "cancel"], ["Remaining", "next"]]} />
+            {sprintRows.map((row) => {
+              const href = `#/sprints?week=${encodeURIComponent(row.id)}`;
+              return <div className="dash-hbar-row" key={row.id}>
+                <a className="dash-row-label" href={href}>{row.name}<small> · {row.state === "draft" ? "Forecast" : row.state === "active" ? "Active" : "Closed"}</small></a>
+                <div className="dash-hbar-track" role="img" aria-label={`${row.name}: ${row.delivered} delivered, ${row.cancelled} cancelled, ${row.remaining} remaining; ${row.original ?? row.total} ${row.original === null ? "planned" : "original"}, ${row.added} added, ${row.removed} removed`}>
+                  {([ ["Delivered", "done", row.delivered], ["Cancelled", "cancel", row.cancelled], ["Remaining", "next", row.remaining] ] as const).map(([label, series, value]) => value > 0 ? <a key={series} href={href} data-series={series} style={{ width: pct(value, row.total) }} aria-label={`${row.name}: ${value} ${label.toLowerCase()}`} title={`${value} ${label.toLowerCase()}`} /> : null)}
+                </div>
+                <span className="dash-value">{row.delivered}/{row.total}</span>
+              </div>;
+            })}
+          </div>
+        ) : <p className="dash-empty">{world.planningError || ("reason" in sprint && sprint.reason === "invalid-planning-data") ? "Plan unavailable" : "No planned weeks"}</p>}
+        table={<table>
+          <caption>Sprint scope and outcomes{campaign ? ` · ${campaign}` : ""}</caption>
+          <thead><tr><th scope="col">Week</th><th scope="col">Original</th><th scope="col">Added</th><th scope="col">Removed</th><th scope="col">Current</th><th scope="col">Delivered</th><th scope="col">Cancelled</th><th scope="col">Remaining</th><th scope="col">Points</th></tr></thead>
+          <tbody>{sprintRows.map((row) => <tr key={row.id}>
+            <th scope="row"><a href={`#/sprints?week=${encodeURIComponent(row.id)}`}>{row.name}</a><small> · {row.state === "draft" ? "Forecast" : row.state === "active" ? "Active" : "Closed"}</small></th>
+            <td>{row.original ?? "—"}</td><td>{row.added}</td><td>{row.removed}</td><td>{row.total}</td><td>{row.delivered}</td><td>{row.cancelled}</td><td>{row.remaining}</td><td>{row.points.known}{row.points.unestimated > 0 ? ` + ${row.points.unestimated} unestimated` : ""}</td>
+          </tr>)}</tbody>
+        </table>}
       />
 
       <Panel

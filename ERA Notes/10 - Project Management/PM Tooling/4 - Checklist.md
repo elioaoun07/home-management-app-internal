@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-15
+updated: 2026-10-03
 type: checklist
 status: active
 owner: Elio
@@ -22,7 +22,6 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 
 - [ ] **R55** Page and filter Delivery history across Work and Home — [criteria](<PM Tooling — Master Book.md#r55>) _(friction - M)_
 - [ ] **R47** Enforce the client-only console rule — [criteria](<PM Tooling — Master Book.md#r47>) _(annoyance - S)_
-- [ ] **R61** Plan sprints, deliverables and readiness over the same work — [criteria](<PM Tooling — Master Book.md#r61>) _(friction - L)_
 - [ ] **R6** Verify the replacement PM UI before retiring rollback files — [criteria](<PM Tooling — Master Book.md#r6>) _(blocker - M)_
 - [ ] **R45** Resolve the mutation-toast Undo rule — [criteria](<PM Tooling — Master Book.md#r45>) _(friction - S)_
 - [ ] **R34** Surface the oldest small hygiene item in session briefs — [criteria](<PM Tooling — Master Book.md#r34>) _(friction - S)_
@@ -37,4 +36,4 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **R8** Measure index responsiveness on the largest note and on the complete static twin — [criteria](<PM Tooling — Master Book.md#r8>) _(annoyance - S)_
 - [ ] **R9** Font subsetting — [criteria](<PM Tooling — Master Book.md#r9>) _(parked - S)_
 - [ ] **R53** Make phone Inbox capture visible and identifiable — [criteria](<PM Tooling — Master Book.md#r53>) _(friction - M)_
-- [ ] **R62** Add sprint and comparable-run metrics — [criteria](<PM Tooling — Master Book.md#r62>) _(annoyance - M)_
+- [ ] **R62** Compare Delivery outcomes using observed run data — [criteria](<PM Tooling — Master Book.md#r62>) _(annoyance - M)_

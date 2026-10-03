@@ -108,6 +108,7 @@ tags:
 | Hash route | Destination | Icon (lucide-react) |
 | --- | --- | --- |
 | `#/` | Home | `Home` |
+| `#/sprints` | Sprints — weekly scope, status and Delivery | `Flag` |
 | `#/explore` | Work | `Compass` |
 | `#/delivery` | Delivery | `Zap` |
 | `#/analytics` | Analytics | `ChartNoAxesCombined` |

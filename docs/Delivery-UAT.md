@@ -88,6 +88,16 @@ These are engineering recommendations, not measured results for these tasks. Use
 | U21 · DLV-114 | Ask for a hard cap: set `resources.enforcement` to `"hard-cap"` and try to launch. | Launch refuses before anything is dispatched, naming `strict-bound-unavailable`. It does **not** run under a threshold instead. No run, job or token is created. | Ready: implemented 2026-09-20 — covered deterministically in `budget-stop.test.ts` | Pending |
 | U23 · DLV-135 | After restarting `pnpm pm` (once run A is finished), keep the run page open through run B's Build and Check. | No Offline banner while the laptop works; status and activity keep updating; Stop stays reachable. | Done: implemented 2026-09-26, needs the restart | Pending |
 
+## Weekly sprint acceptance — R61
+
+**Implemented locally 2026-10-03; physical-phone results Pending.** Follow [Weekly sprint editing](<../ERA Notes/06 - Setup & Onboarding/PM Relay Setup.md#weekly-sprint-editing-2026-10-03>) first: owner SQL inspection/application, `PM_SPRINT_RELAY=1`, restarted laptop bridge and current served bundle. No agent has applied the migration. Use a temporary draft week for planning checks; R61 is completed implementation and is not a new Delivery task.
+
+| ID | Owner action | Expected | Actual |
+|---|---|---|---|
+| U24 · R61 | On the phone, open Sprints between Home and Work; edit/save a draft, reload, then compare it on desktop. | Same week, membership and revision; controls fit the phone, bottom navigation stays clear, and the selected week survives reload. | Pending |
+| U25 · R61 | Start that week, open an eligible item's Delivery flow, then observe the next actual CLI completion. Close the week with an explicit unfinished carryover. | Start launches no worker; Delivery retains normal approval; the completed item updates once in Sprints and Analytics. Closed results stay fixed and only selected unfinished work carries over. | Pending |
+| U26 · R61 | Disconnect/reconnect the phone around a planning save; inspect its receipt and reopen the week. | One command/revision, visible stale/unavailable state while disconnected, no duplicate membership, and the current item/attempt status after recovery. | Pending |
+
 ## Owner-run checks
 
 These retained IDs describe manual acceptance or operating trials. They are **not Delivery tasks** and have no Deliver action. All are Pending; none was silently accepted or discarded. Open their original criteria in the linked Master Book sections before testing.

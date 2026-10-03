@@ -36,6 +36,8 @@ export interface TransportCapabilities {
   kind: "local" | "relay";
   /** Checklist writes: complete, move, ship, discard, restore. */
   planWrites: boolean;
+  /** Revision-checked sprint planning, independently of checklist writes. */
+  sprintWrites?: boolean;
   /** Inbox capture. */
   capture: boolean;
   v1Launch: boolean;

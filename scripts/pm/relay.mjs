@@ -128,7 +128,7 @@ export function findSecrets(text, env = process.env, extraSecrets = []) {
 /**
  * Document rows and a manifest for the Markdown corpus the local app reads.
  *
- * @param {{data:{generatedAt:string, cancelledLog?:string, files:{relPath:string, raw:string, mtimeMs?:number}[]},
+ * @param {{data:{generatedAt:string, cancelledLog?:string, planning?:any, planningReadiness?:any, planningError?:string|null, files:{relPath:string, raw:string, mtimeMs?:number}[]},
  *   installation_id:string, previous?:Map<string, string>}} input  previous: relPath → sha last published
  */
 export function buildCorpusRows({ data, installation_id, previous = new Map() }) {
@@ -150,6 +150,7 @@ export function buildCorpusRows({ data, installation_id, previous = new Map() })
     generatedAt: data.generatedAt,
     files,
     cancelledLog: data.cancelledLog || "",
+    ...(data.planning !== undefined ? { planning: data.planning, planningReadiness: data.planningReadiness || {}, planningError: data.planningError || null } : {}),
   };
   return {
     manifest: { id: rowId(installation_id, ROW_KINDS.MANIFEST), kind: "cc-" + ROW_KINDS.MANIFEST, payload: manifest },
@@ -258,13 +259,18 @@ export function createCommandJournal({ dir }) {
  * @param {{id:string, type:string}} cmd
  * @param {ReturnType<typeof createCommandJournal>} journal
  * @param {{commandState?:(id:string)=>any}|null} journey
+ * @param {((id:string)=>any)|null} [planningState]
  */
-export function reconcileClaimedCommand(cmd, journal, journey = null) {
+export function reconcileClaimedCommand(cmd, journal, journey = null, planningState = null) {
   const state = journal.stateOf(cmd.id);
   if (!state || !state.phases.includes("claimed")) return { action: "skip", reason: "not claimed by this installation" };
   if (state.phases.includes("reported")) return { action: "skip", reason: "already reported" };
   if (state.phases.includes("effected")) return { action: "report", outcome: state.outcome, recovered: true };
   if (!state.phases.includes("started")) return { action: "execute" };
+  if (cmd.type === "planning" && planningState) {
+    const recorded = planningState(cmd.id);
+    if (recorded?.recorded) return { action: "report", outcome: recorded.outcome, recovered: true };
+  }
   if (V2_COMMAND_TYPES[cmd.type] && journey && typeof journey.commandState === "function") {
     const recorded = journey.commandState(cmd.id);
     if (recorded && recorded.recorded) {
@@ -320,6 +326,21 @@ export async function executeV2Command({ cmd, installation_id, route, credential
     ...json,
     error: String(json.error || (first && first.code) || "refused") + (typeof detail === "string" && detail ? ": " + detail : ""),
   };
+}
+
+/** Planning uses the same installation/actor binding, but never a Delivery route.
+ * @param {{cmd:{id:string,type:string,payload:any,user_id:string},installation_id:string,credential:string,route:(req:{method:string,path:string,body:Record<string,unknown>,headers:Record<string,string>})=>any}} input
+ */
+export async function executePlanningCommand({ cmd, installation_id, route, credential }) {
+  const payload = cmd.payload && typeof cmd.payload === "object" ? cmd.payload : {};
+  if (cmd.type !== "planning" || payload.installation_id !== installation_id) return { ok: false, error: "installation-mismatch" };
+  if (!REMOTE_ACTOR.test(String(cmd.user_id || ""))) return { ok: false, error: "remote-actor-required" };
+  const response = await route({
+    method: "POST", path: "/api/delivery/v2/planning", body: { ...payload.body, command_id: cmd.id },
+    headers: { authorization: "Bearer " + credential, "x-era-remote-actor": "supabase:" + cmd.user_id },
+  });
+  if (!response) return { ok: false, error: "planning-unavailable" };
+  return response.status === 200 ? { ok: true, ...response.json } : { ok: false, ...response.json };
 }
 
 // ---------------------------------------------------------------------------

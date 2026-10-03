@@ -1,0 +1,514 @@
+{
+  "schema": "pm-planning@1",
+  "revision": 7,
+  "sprints": [
+    {
+      "id": "sprint-2026-10-05",
+      "name": "Week of Oct 5",
+      "goal": "Schedule + PM Tooling",
+      "startDate": "2026-10-05",
+      "endExclusive": "2026-10-12",
+      "timezone": "Asia/Beirut",
+      "strategy": "balanced",
+      "capacity": {
+        "unit": "points",
+        "available": 6,
+        "reviewMinutes": 90
+      },
+      "members": [
+        {
+          "workId": "SCH-7",
+          "origin": {
+            "file": "Schedule/4 - Checklist.md",
+            "alias": "SCH-7"
+          },
+          "points": 1,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "R44",
+          "origin": {
+            "file": "PM Tooling/4 - Checklist.md",
+            "alias": "R44"
+          },
+          "points": 1,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "SCH-4.2",
+          "origin": {
+            "file": "Schedule/4 - Checklist.md",
+            "alias": "SCH-4.2"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "R34",
+          "origin": {
+            "file": "PM Tooling/4 - Checklist.md",
+            "alias": "R34"
+          },
+          "points": 1,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "SCH-5.5",
+          "origin": {
+            "file": "Schedule/4 - Checklist.md",
+            "alias": "SCH-5.5"
+          },
+          "points": 1,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        }
+      ],
+      "state": "active",
+      "commitment": {
+        "at": "2026-10-03T05:03:24.263Z",
+        "goal": "Schedule + PM Tooling",
+        "members": [
+          {
+            "workId": "SCH-7",
+            "origin": {
+              "file": "Schedule/4 - Checklist.md",
+              "alias": "SCH-7"
+            },
+            "points": 1,
+            "reviewMinutes": null,
+            "estimateSource": "effort",
+            "criteriaRevision": "297655fe0b2f1edec1d19ccf9b77afb691ff23754a6f6ba814334b135078dac4"
+          },
+          {
+            "workId": "R44",
+            "origin": {
+              "file": "PM Tooling/4 - Checklist.md",
+              "alias": "R44"
+            },
+            "points": 1,
+            "reviewMinutes": null,
+            "estimateSource": "effort",
+            "criteriaRevision": "015ce9028236535db6c6f971e03cb5aac201acb386bf494bf56b76a25990a3fe"
+          },
+          {
+            "workId": "SCH-4.2",
+            "origin": {
+              "file": "Schedule/4 - Checklist.md",
+              "alias": "SCH-4.2"
+            },
+            "points": 2,
+            "reviewMinutes": null,
+            "estimateSource": "effort",
+            "criteriaRevision": "418ab60a4f02e607aa4804fd5cd14e641e7dd033be3160f389b74ba1b42e0435"
+          },
+          {
+            "workId": "R34",
+            "origin": {
+              "file": "PM Tooling/4 - Checklist.md",
+              "alias": "R34"
+            },
+            "points": 1,
+            "reviewMinutes": null,
+            "estimateSource": "effort",
+            "criteriaRevision": "6ed0ba814c3bed14192cbe29baf8848c05d6c9b859b9a9698b2c680d4f1fa6a6"
+          },
+          {
+            "workId": "SCH-5.5",
+            "origin": {
+              "file": "Schedule/4 - Checklist.md",
+              "alias": "SCH-5.5"
+            },
+            "points": 1,
+            "reviewMinutes": null,
+            "estimateSource": "effort",
+            "criteriaRevision": "36042228a6a9aa77b2e0073c8fd00e9f99f792cedc651aaaab29b243e4556a4f"
+          }
+        ]
+      },
+      "scopeChanges": [],
+      "closed": null
+    },
+    {
+      "id": "sprint-2026-10-12",
+      "name": "Week of Oct 12",
+      "goal": "Budget + Kitchen",
+      "startDate": "2026-10-12",
+      "endExclusive": "2026-10-19",
+      "timezone": "Asia/Beirut",
+      "strategy": "balanced",
+      "capacity": {
+        "unit": "points",
+        "available": 6,
+        "reviewMinutes": 90
+      },
+      "members": [
+        {
+          "workId": "BUD-32",
+          "origin": {
+            "file": "Budget/4 - Checklist.md",
+            "alias": "BUD-32"
+          },
+          "points": 1,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "KIT-10",
+          "origin": {
+            "file": "Kitchen/4 - Checklist.md",
+            "alias": "KIT-10"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "KIT-4",
+          "origin": {
+            "file": "Kitchen/4 - Checklist.md",
+            "alias": "KIT-4"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "BUD-85",
+          "origin": {
+            "file": "Budget/4 - Checklist.md",
+            "alias": "BUD-85"
+          },
+          "points": 1,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        }
+      ],
+      "state": "draft",
+      "commitment": null,
+      "scopeChanges": [],
+      "closed": null
+    },
+    {
+      "id": "sprint-2026-10-19",
+      "name": "Week of Oct 19",
+      "goal": "Healthcare + Notifications & Alerts",
+      "startDate": "2026-10-19",
+      "endExclusive": "2026-10-26",
+      "timezone": "Asia/Beirut",
+      "strategy": "balanced",
+      "capacity": {
+        "unit": "points",
+        "available": 6,
+        "reviewMinutes": 90
+      },
+      "members": [
+        {
+          "workId": "HLTH-19",
+          "origin": {
+            "file": "Healthcare/4 - Checklist.md",
+            "alias": "HLTH-19"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "NOTIF-2.1",
+          "origin": {
+            "file": "Notifications & Alerts/4 - Checklist.md",
+            "alias": "NOTIF-2.1"
+          },
+          "points": 1,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "NOTIF-3.1",
+          "origin": {
+            "file": "Notifications & Alerts/4 - Checklist.md",
+            "alias": "NOTIF-3.1"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        }
+      ],
+      "state": "draft",
+      "commitment": null,
+      "scopeChanges": [],
+      "closed": null
+    },
+    {
+      "id": "sprint-2026-10-26",
+      "name": "Week of Oct 26",
+      "goal": "Delivery + Budget",
+      "startDate": "2026-10-26",
+      "endExclusive": "2026-11-02",
+      "timezone": "Asia/Beirut",
+      "strategy": "balanced",
+      "capacity": {
+        "unit": "points",
+        "available": 6,
+        "reviewMinutes": 90
+      },
+      "members": [
+        {
+          "workId": "DLV-122",
+          "origin": {
+            "file": "Delivery/4 - Checklist.md",
+            "alias": "DLV-122"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "BUD-66",
+          "origin": {
+            "file": "Budget/4 - Checklist.md",
+            "alias": "BUD-66"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "BUD-68",
+          "origin": {
+            "file": "Budget/4 - Checklist.md",
+            "alias": "BUD-68"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        }
+      ],
+      "state": "draft",
+      "commitment": null,
+      "scopeChanges": [],
+      "closed": null
+    },
+    {
+      "id": "sprint-2026-11-02",
+      "name": "Week of Nov 2",
+      "goal": "Hub & ERA + Trips",
+      "startDate": "2026-11-02",
+      "endExclusive": "2026-11-09",
+      "timezone": "Asia/Beirut",
+      "strategy": "balanced",
+      "capacity": {
+        "unit": "points",
+        "available": 6,
+        "reviewMinutes": 90
+      },
+      "members": [
+        {
+          "workId": "HUB-47",
+          "origin": {
+            "file": "Hub & ERA/4 - Checklist.md",
+            "alias": "HUB-47"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "TRIP-31",
+          "origin": {
+            "file": "Trips/4 - Checklist.md",
+            "alias": "TRIP-31"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "HUB-59",
+          "origin": {
+            "file": "Hub & ERA/4 - Checklist.md",
+            "alias": "HUB-59"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        }
+      ],
+      "state": "draft",
+      "commitment": null,
+      "scopeChanges": [],
+      "closed": null
+    },
+    {
+      "id": "sprint-2026-11-09",
+      "name": "Week of Nov 9",
+      "goal": "Native App + Trips",
+      "startDate": "2026-11-09",
+      "endExclusive": "2026-11-16",
+      "timezone": "Asia/Beirut",
+      "strategy": "balanced",
+      "capacity": {
+        "unit": "points",
+        "available": 6,
+        "reviewMinutes": 90
+      },
+      "members": [
+        {
+          "workId": "NAT-7",
+          "origin": {
+            "file": "Native App/4 - Checklist.md",
+            "alias": "NAT-7"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "TRIP-35",
+          "origin": {
+            "file": "Trips/4 - Checklist.md",
+            "alias": "TRIP-35"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        }
+      ],
+      "state": "draft",
+      "commitment": null,
+      "scopeChanges": [],
+      "closed": null
+    },
+    {
+      "id": "sprint-2026-11-16",
+      "name": "Week of Nov 16",
+      "goal": "Healthcare + PM Tooling",
+      "startDate": "2026-11-16",
+      "endExclusive": "2026-11-23",
+      "timezone": "Asia/Beirut",
+      "strategy": "balanced",
+      "capacity": {
+        "unit": "points",
+        "available": 6,
+        "reviewMinutes": 90
+      },
+      "members": [
+        {
+          "workId": "HLTH-21",
+          "origin": {
+            "file": "Healthcare/4 - Checklist.md",
+            "alias": "HLTH-21"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "R46",
+          "origin": {
+            "file": "PM Tooling/4 - Checklist.md",
+            "alias": "R46"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "R47",
+          "origin": {
+            "file": "PM Tooling/4 - Checklist.md",
+            "alias": "R47"
+          },
+          "points": 1,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        }
+      ],
+      "state": "draft",
+      "commitment": null,
+      "scopeChanges": [],
+      "closed": null
+    },
+    {
+      "id": "sprint-2026-11-23",
+      "name": "Week of Nov 23",
+      "goal": "Notifications & Alerts + Hub & ERA",
+      "startDate": "2026-11-23",
+      "endExclusive": "2026-11-30",
+      "timezone": "Asia/Beirut",
+      "strategy": "balanced",
+      "capacity": {
+        "unit": "points",
+        "available": 6,
+        "reviewMinutes": 90
+      },
+      "members": [
+        {
+          "workId": "NOTIF-3.2",
+          "origin": {
+            "file": "Notifications & Alerts/4 - Checklist.md",
+            "alias": "NOTIF-3.2"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        },
+        {
+          "workId": "HUB-64",
+          "origin": {
+            "file": "Hub & ERA/4 - Checklist.md",
+            "alias": "HUB-64"
+          },
+          "points": 2,
+          "reviewMinutes": null,
+          "estimateSource": "effort"
+        }
+      ],
+      "state": "draft",
+      "commitment": null,
+      "scopeChanges": [],
+      "closed": null
+    }
+  ],
+  "deliverables": [],
+  "commands": [
+    {
+      "id": "3e134980-fb90-4f59-8a81-87f53cc53adf",
+      "hash": "2f2168982700367e5694f8488c94bb15c0ef3c29fb4b3f1e525545a4b68333bd",
+      "revision": 1
+    },
+    {
+      "id": "b4cdc3a2-6c40-49fc-9c7f-32f17d5d47ca",
+      "hash": "0a5038cd8685a78b720485bb0cb43ed264d7d3c8e41cda025705601c6c7ac126",
+      "revision": 2
+    },
+    {
+      "id": "859d6d2c-87b9-471f-b0f8-9aaf718b5f0c",
+      "hash": "3ab95fd26ce937067e239f5ec6cbdfe54ffef815a70beba8fbd08db094401012",
+      "revision": 3
+    },
+    {
+      "id": "8a86783d-ec0e-467c-a370-9b1533668f08",
+      "hash": "2747f9c9357f17d1e2fd9525557fc8c7c62d6d3388c690eea7ced38cc400a436",
+      "revision": 4
+    },
+    {
+      "id": "9989dc7d-8a5f-41f5-b454-8dbe275b5f93",
+      "hash": "807f2a993d054b0c7d613b37403a79528609d5a24b02bc6777adbd1c93ff595f",
+      "revision": 5
+    },
+    {
+      "id": "2a8f25d4-afc6-4f3c-95e3-afe28d2260be",
+      "hash": "fcc785661be5407289f6603c69e8d92470378fdaf8bbe14749324058536a6377",
+      "revision": 6
+    },
+    {
+      "id": "f39deb59-ab4a-434e-98d7-6c3fdb435030",
+      "hash": "7c4d8cf764134cbe6bbc242f1b6d72f6169e8c10d13cfbb6a803b481de910e0f",
+      "revision": 7
+    }
+  ]
+}

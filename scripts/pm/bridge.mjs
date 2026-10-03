@@ -46,6 +46,7 @@ import { routeDelivery } from "../delivery/server-routes.mjs";
 import { isRunnerAlive } from "../delivery/run-session.mjs";
 import { readDispatchMode, routeDeliveryV2 } from "../delivery-v2/entry.mjs";
 import { pairBridgeSession } from "../delivery-v2/local-auth.mjs";
+import { planningCommandState, routePlanning } from "./planning.mjs";
 import { RELAY_SCHEMA, ROW_KINDS, V2_COMMAND_TYPES, attentionItems, rowId } from "./relay-shared.mjs";
 import {
   RELAY_DIR,
@@ -56,6 +57,7 @@ import {
   createAttentionLedger,
   createCommandJournal,
   executeV2Command,
+  executePlanningCommand,
   findSecrets,
   payloadDigest,
   readInstallation,
@@ -1219,7 +1221,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
       availability,
       // What this relay can carry. PM checklist writes, V1 launch and V1 detail
       // stay at the desk; capture and every V2 command are relayed.
-      relay: { planWrites: false, capture: true, v1Launch: false, v1Detail: false, v2: true, apply: true },
+      relay: { planWrites: false, sprintWrites: process.env.PM_SPRINT_RELAY === "1", capture: true, v1Launch: false, v1Detail: false, v2: true, apply: true },
     });
   }
 
@@ -1330,7 +1332,11 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
     journal.record(cmd.id, "started", { type: cmd.type });
     let outcome;
     try {
-      outcome = V2_COMMAND_TYPES[cmd.type]
+      outcome = cmd.type === "planning"
+        ? process.env.PM_SPRINT_RELAY === "1" && typeof buildData === "function"
+          ? await executePlanningCommand({ cmd, installation_id, route: (req) => routePlanning(req, { root: ROOT, pmDir: PM_DIR, data: buildData() }), credential: bridgeCredential() })
+          : { ok: false, error: "sprint-relay-not-enabled" }
+        : V2_COMMAND_TYPES[cmd.type]
         ? deliveryV2Ctx
           ? await executeV2Command({ cmd, installation_id, route: (req) => routeDeliveryV2(req, deliveryV2Ctx), credential: bridgeCredential() })
           : { ok: false, error: "delivery-v2-unavailable" }
@@ -1357,7 +1363,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
       if (error || !pending || !pending.length) return;
       for (const cmd of pending) {
         // A V2 command names the installation it was sent to; another laptop's stays pending.
-        if (V2_COMMAND_TYPES[cmd.type] && (!cmd.payload || cmd.payload.installation_id !== installation_id)) continue;
+        if ((V2_COMMAND_TYPES[cmd.type] || cmd.type === "planning") && (!cmd.payload || cmd.payload.installation_id !== installation_id)) continue;
         // Claim atomically: only proceed if this bridge won the race against
         // any other process (there should only ever be one, but this makes
         // it safe if pnpm pm is accidentally started twice).
@@ -1387,6 +1393,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
         // lives on the heartbeat, which is otherwise up to 10s stale.
         if (cmd.type === "capture" || cmd.type === "undo") await publishHeartbeat();
         if (V2_COMMAND_TYPES[cmd.type]) await publishV2();
+        if (cmd.type === "planning") await publishCorpus();
       }
     } catch (err) {
       console.error("[pm-bridge] drain error:", err.message);
@@ -1412,7 +1419,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
     const journey = v2Available() ? deliveryV2Ctx.journey : null;
     for (const cmd of claimed) {
       if (cmd.result && cmd.result.outcome_unknown) continue;
-      const decision = reconcileClaimedCommand(cmd, journal, journey);
+      const decision = reconcileClaimedCommand(cmd, journal, journey, (id) => planningCommandState(PM_DIR, id));
       if (decision.action === "execute") await runClaimed(cmd);
       else if (decision.action === "report") await writeReceipt(cmd.id, { ...(decision.outcome || { ok: false }), recovered: true });
       else if (decision.action === "unknown") {

@@ -5,7 +5,7 @@ import {
   MotionConfig,
   useReducedMotion,
 } from "framer-motion";
-import { ChartNoAxesCombined, Compass, Home as HomeIcon, Palette, Search, Settings as SettingsIcon, Zap } from "lucide-react";
+import { ChartNoAxesCombined, Compass, Flag, Home as HomeIcon, Palette, Search, Settings as SettingsIcon, Zap } from "lucide-react";
 import { ERAMark } from "@/components/shared/ERAMark";
 import { SettingsSheet } from "./Settings";
 import { client, pmKeys, useRoute, useWorld } from "./state";
@@ -21,6 +21,7 @@ import { Activity, Attention, Capture, Reader } from "./Auxiliary";
 import { Dashboard } from "./Dashboard";
 import { Delivery, Launch } from "./Delivery";
 import { Run } from "./Run";
+import { Sprints } from "./Sprints";
 
 class Boundary extends Component<{ children: ReactNode }, { error: boolean }> {
   state = { error: false };
@@ -46,6 +47,7 @@ class Boundary extends Component<{ children: ReactNode }, { error: boolean }> {
 }
 const links = [
   { path: "/", label: "Home", icon: HomeIcon },
+  { path: "/sprints", label: "Sprints", icon: Flag },
   { path: "/explore", label: "Work", icon: Compass },
   { path: "/delivery", label: "Delivery", icon: Zap },
   { path: "/analytics", label: "Analytics", icon: ChartNoAxesCombined },
@@ -69,6 +71,8 @@ export function App() {
   const root = route.parts[0] || "";
   const section = ["delivery", "deliver"].includes(root)
     ? "/delivery"
+    : root === "sprints"
+      ? "/sprints"
     : ["explore", "space", "work", "module", "project"].includes(root)
       ? "/explore"
       : ["analytics", "dashboard"].includes(root)
@@ -115,6 +119,9 @@ export function App() {
   switch (root) {
     case "":
       view = <Home capture={() => setCapture(true)} />;
+      break;
+    case "sprints":
+      view = <Sprints />;
       break;
     case "explore":
     case "project":

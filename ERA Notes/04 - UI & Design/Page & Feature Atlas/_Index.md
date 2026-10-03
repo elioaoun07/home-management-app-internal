@@ -83,7 +83,7 @@ tags:
 | `atlas`         | `/atlas`         | [[atlas]]         |
 | `offline`       | `/offline`       | [[offline]]       |
 | `pm`            | `/pm`            | [[pm]] — React local app; hosted Preact reference/export |
-| `pm-live`       | `/pm/live`       | [[pm-live]] — shared Home / Work / Delivery / Analytics |
+| `pm-live`       | `/pm/live`       | [[pm-live]] — shared Home / Sprints / Work / Delivery / Analytics |
 
 ## Feature Modules (Standalone)
 

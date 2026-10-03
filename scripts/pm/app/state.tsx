@@ -17,6 +17,7 @@ import { post } from "./api";
 import { transport, type ConnectionState } from "./transport";
 import { buildWorld } from "./model";
 import type { RunSummary, World } from "./types";
+import type { Planning } from "./planningTypes";
 
 export const pmKeys = {
   all: ["pm-app"] as const,
@@ -114,6 +115,8 @@ export interface CommandReply {
   raw?: string;
   state?: string;
   ok?: boolean;
+  planning?: Planning;
+  appliedRevision?: number;
 }
 export function useCommand() {
   return useMutation({
