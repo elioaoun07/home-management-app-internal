@@ -160,7 +160,16 @@ async function createItem(input: CreateItemInput): Promise<CatalogueItem> {
   return res.json();
 }
 
-async function updateItem(input: UpdateItemInput): Promise<CatalogueItem> {
+/** The row changed on another device since the editor loaded it (409). */
+export class CatalogueConflictError extends Error {
+  constructor(public current: CatalogueItem | null) {
+    super("Changed elsewhere — reopen to see the latest");
+  }
+}
+
+type UpdatedItem = CatalogueItem & { inverse?: Omit<UpdateItemInput, "id"> };
+
+async function updateItem(input: UpdateItemInput): Promise<UpdatedItem> {
   const { id, ...data } = input;
   const res = await safeFetch(`/api/catalogue/items/${id}`, {
     method: "PATCH",
@@ -169,6 +178,7 @@ async function updateItem(input: UpdateItemInput): Promise<CatalogueItem> {
   });
   if (!res.ok) {
     const json = await res.json().catch(() => ({}));
+    if (res.status === 409) throw new CatalogueConflictError(json.current ?? null);
     throw new Error(json.error || "Failed to update item");
   }
   return res.json();
@@ -595,9 +605,18 @@ export function useUpdateItem() {
       qc.setQueriesData<CatalogueItem[]>(
         { queryKey: catalogueKeys.items() },
         (old) =>
-          old?.map((item) =>
-            item.id === input.id ? { ...item, ...input } : item,
-          ),
+          old?.map((item) => {
+            if (item.id !== input.id) return item;
+            const { expected_revision, metadata_set, metadata_unset, ...fields } = input;
+            void expected_revision;
+            const metadata_json = {
+              ...(item.metadata_json ?? {}),
+              ...(fields.metadata_json ?? {}),
+              ...(metadata_set ?? {}),
+            };
+            for (const k of metadata_unset ?? []) delete metadata_json[k];
+            return { ...item, ...fields, metadata_json };
+          }),
       );
 
       return { previous };
@@ -614,13 +633,29 @@ export function useUpdateItem() {
       }
     },
     onSuccess: (updated) => {
+      const inverse = updated.inverse;
       toast.success(`"${updated.name}" updated`, {
         icon: ToastIcons.update,
         duration: 4000,
         action: {
           label: "Undo",
-          onClick: () => {
-            qc.invalidateQueries({ queryKey: catalogueKeys.items() });
+          onClick: async () => {
+            if (!inverse) {
+              qc.invalidateQueries({ queryKey: catalogueKeys.items() });
+              return;
+            }
+            try {
+              await updateItem({ id: updated.id, ...inverse });
+              toast.success("Update undone");
+            } catch (err) {
+              toast.error(
+                err instanceof CatalogueConflictError
+                  ? "Changed since — not undone"
+                  : "Failed to undo",
+              );
+            } finally {
+              qc.invalidateQueries({ queryKey: catalogueKeys.items() });
+            }
           },
         },
       });
@@ -671,24 +706,15 @@ export function useDeleteItem() {
             label: "Undo",
             onClick: async () => {
               try {
-                await createItem({
-                  module_id: item.module_id,
-                  category_id: item.category_id || undefined,
-                  name: item.name,
-                  description: item.description || undefined,
-                  notes: item.notes || undefined,
-                  status: item.status,
-                  priority: item.priority,
-                  icon: item.icon || undefined,
-                  color: item.color || undefined,
-                  tags: item.tags,
-                  metadata_json: item.metadata_json,
-                  progress_current: item.progress_current ?? undefined,
-                  progress_target: item.progress_target ?? undefined,
-                  progress_unit: item.progress_unit || undefined,
-                  next_due_date: item.next_due_date || undefined,
-                  frequency: item.frequency || undefined,
+                // Restore the same row (same ID, links, image, sharing) —
+                // never a re-created copy (KIT-21).
+                const res = await safeFetch("/api/recycle-bin/restore", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ module: "catalogue", id: item.id }),
                 });
+                if (!res.ok) throw new Error("restore failed");
+                qc.invalidateQueries({ queryKey: catalogueKeys.modules() });
                 qc.invalidateQueries({ queryKey: catalogueKeys.items() });
                 toast.success("Deletion undone");
               } catch {

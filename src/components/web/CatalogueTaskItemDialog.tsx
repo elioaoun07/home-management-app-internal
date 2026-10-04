@@ -1,5 +1,6 @@
 "use client";
 
+import { diffMetadata } from "@/lib/catalogue/itemPatch";
 import { PrerequisitePicker } from "@/components/items/PrerequisitePicker";
 import { Button } from "@/components/ui/button";
 import {
@@ -334,9 +335,20 @@ export default function CatalogueTaskItemDialog({
 
       let result: CatalogueItem;
       if (isEditing && editingItem) {
+        // Patch trigger_conditions by key so other metadata survives and an
+        // emptied list actually clears (KIT-20).
+        const { metadata_json: _metadata, module_id: _module, ...fields } = itemData;
+        void _metadata;
+        void _module;
         result = await updateItem.mutateAsync({
           id: editingItem.id,
-          ...itemData,
+          ...fields,
+          expected_revision: editingItem.revision,
+          ...diffMetadata(
+            editingItem.metadata_json,
+            { trigger_conditions: triggerConditions.length > 0 ? triggerConditions : undefined },
+            ["trigger_conditions"],
+          ),
         });
       } else {
         result = await createItem.mutateAsync(itemData);

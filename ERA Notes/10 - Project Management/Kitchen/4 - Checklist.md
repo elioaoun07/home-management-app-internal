@@ -14,6 +14,7 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 
 ## Now
 
+- [ ] **KIT-25** Witness a stale catalogue save on two phones (migration applied 2026-10-04) — [criteria](<Kitchen — Master Book.md#kit-25>) _(blocker - S)_
 - [ ] **KIT-10** Validate ingredient payloads at every writer — [criteria](<Kitchen — Master Book.md#kit-10>) _(friction - M)_
 - [ ] **KIT-4** Expose scoped meal coverage to ERA — [criteria](<Kitchen — Master Book.md#kit-4>) _(annoyance - M)_
 
@@ -23,7 +24,8 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **KIT-2** Deduct mapped ingredients when cooking completes — [criteria](<Kitchen — Master Book.md#kit-2>) _(friction - M)_
 - [ ] **KIT-18** Authorize document signing through its owning record — [criteria](<Kitchen — Master Book.md#kit-18>) _(friction - M)_
 - [ ] **KIT-19** Preserve old document files through replacement and Undo — [criteria](<Kitchen — Master Book.md#kit-19>) _(friction - M)_
-- [ ] **KIT-20** Patch catalogue metadata with revision checks — [criteria](<Kitchen — Master Book.md#kit-20>) _(friction - M)_
+- [ ] **KIT-27** Content edits without a revision are refused once both phones are updated — [criteria](<Kitchen — Master Book.md#kit-27>) _(friction - S)_
+- [ ] **KIT-26** Catalogue sharing follows one verified policy set — [criteria](<Kitchen — Master Book.md#kit-26>) _(friction - S)_
 - [ ] **KIT-21** Preserve catalogue identity through delete and restore — [criteria](<Kitchen — Master Book.md#kit-21>) _(friction - M)_
 - [ ] **KIT-22** Browse and edit reference records — [criteria](<Kitchen — Master Book.md#kit-22>) _(friction - M)_
 - [ ] **KIT-24** Keep catalogue metadata separate from stock ownership — [criteria](<Kitchen — Master Book.md#kit-24>) _(friction - M)_

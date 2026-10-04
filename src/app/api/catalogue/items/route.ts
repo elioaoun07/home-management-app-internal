@@ -1,6 +1,7 @@
 // src/app/api/catalogue/items/route.ts
 import { supabaseServer } from "@/lib/supabase/server";
-import type { CatalogueItem, CreateItemInput } from "@/types/catalogue";
+import { catalogueItemCreateSchema, toIlikeTerm } from "@/lib/catalogue/itemPatch";
+import type { CatalogueItem } from "@/types/catalogue";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -79,7 +80,10 @@ export async function GET(req: NextRequest) {
   }
 
   if (search) {
-    query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`);
+    // Raw text inside .or() is PostgREST filter syntax — a comma or paren in
+    // the query would break (or rewrite) the filter.
+    const term = toIlikeTerm(search);
+    if (term) query = query.or(`name.ilike.%${term}%,description.ilike.%${term}%`);
   }
 
   if (!includeArchived) {
@@ -89,7 +93,8 @@ export async function GET(req: NextRequest) {
   query = query.is("deleted_at", null);
 
   if (limit) {
-    query = query.limit(parseInt(limit, 10));
+    const n = parseInt(limit, 10);
+    if (Number.isFinite(n) && n > 0) query = query.limit(Math.min(n, 1000));
   }
 
   const { data, error } = await query;
@@ -116,7 +121,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = (await req.json()) as CreateItemInput;
+    const parsed = catalogueItemCreateSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid request body", issues: parsed.error.flatten() },
+        { status: 400 },
+      );
+    }
+    const body = parsed.data;
     const {
       module_id,
       category_id,
@@ -153,13 +165,6 @@ export async function POST(req: NextRequest) {
       chore_category,
     } = body;
 
-    if (!module_id || !name?.trim()) {
-      return NextResponse.json(
-        { error: "module_id and name are required" },
-        { status: 400 },
-      );
-    }
-
     // Verify module exists (RLS handles visibility)
     const { data: module } = await supabase
       .from("catalogue_modules")
@@ -177,7 +182,8 @@ export async function POST(req: NextRequest) {
         .from("catalogue_categories")
         .select("id")
         .eq("id", category_id)
-        .single();
+        .eq("module_id", module_id)
+        .maybeSingle();
 
       if (!category) {
         return NextResponse.json(

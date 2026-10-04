@@ -59,6 +59,7 @@ interface Props {
   moduleType: CatalogueModuleType;
   onEdit: (item: CatalogueItem) => void;
   onAddToCalendar?: (item: CatalogueItem) => void;
+  isPlaces?: boolean;
 }
 
 // Module-specific metadata field display config
@@ -197,6 +198,12 @@ const MODULE_DISPLAY_FIELDS: Record<
   ],
 };
 
+const PLACES_DISPLAY_FIELDS: (typeof MODULE_DISPLAY_FIELDS)["custom"] = [
+  { key: "maps_url", label: "Maps", icon: MapPin, format: "url" },
+  { key: "address", label: "Address", icon: MapPin },
+  { key: "phone", label: "Phone", icon: Phone, format: "phone" },
+];
+
 export default function CatalogueItemDetailDialog({
   open,
   onOpenChange,
@@ -204,6 +211,7 @@ export default function CatalogueItemDetailDialog({
   moduleType,
   onEdit,
   onAddToCalendar,
+  isPlaces = false,
 }: Props) {
   const themeClasses = useThemeClasses();
   const updateItem = useUpdateItem();
@@ -285,7 +293,9 @@ export default function CatalogueItemDetailDialog({
   if (!item) return null;
 
   const metadata = item.metadata_json || {};
-  const displayFields = MODULE_DISPLAY_FIELDS[moduleType] || [];
+  const displayFields = isPlaces
+    ? PLACES_DISPLAY_FIELDS
+    : MODULE_DISPLAY_FIELDS[moduleType] || [];
   const isTasksModule = moduleType === "tasks";
   const isOnCalendar = item.is_active_on_calendar;
 

@@ -22,6 +22,7 @@ import { useCreateItem, useUpdateItem } from "@/features/catalogue/hooks";
 import { catalogueKeys } from "@/features/catalogue/queryKeys";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { diffMetadata } from "@/lib/catalogue/itemPatch";
 import { safeFetch } from "@/lib/safeFetch";
 import { compressReceiptImage, formatFileSize } from "@/lib/receiptUtils";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ import type {
   CatalogueModuleType,
   CataloguePriority,
   CreateItemInput,
+  UpdateItemInput,
 } from "@/types/catalogue";
 import {
   MODULE_TYPE_LABELS,
@@ -64,6 +66,7 @@ interface Props {
   moduleType: CatalogueModuleType;
   categoryId?: string;
   editingItem: CatalogueItem | null;
+  isPlaces?: boolean;
 }
 
 const STATUS_OPTIONS: CatalogueItemStatus[] = [
@@ -684,6 +687,45 @@ const MODULE_FIELD_CONFIG: Record<
   },
 };
 
+const PLACES_FIELD_CONFIG: (typeof MODULE_FIELD_CONFIG)["custom"] = {
+  nameLabel: "Name",
+  namePlaceholder: "Kobeize Center",
+  showDescription: false,
+  showPriority: false,
+  showStatus: false,
+  showProgress: false,
+  showFrequency: false,
+  showTags: true,
+  customFields: [
+    {
+      key: "maps_url",
+      label: "Google Maps Link",
+      type: "text",
+      placeholder: "https://maps.app.goo.gl/...",
+      icon: MapPin,
+    },
+    {
+      key: "address",
+      label: "Address",
+      type: "text",
+      placeholder: "Street, area, city",
+    },
+    {
+      key: "phone",
+      label: "Phone",
+      type: "text",
+      placeholder: "+961 ...",
+      icon: Phone,
+    },
+    {
+      key: "notes",
+      label: "Notes",
+      type: "textarea",
+      placeholder: "Parking, hours...",
+    },
+  ],
+};
+
 const FREQUENCY_OPTIONS = [
   { value: "daily", label: "Daily" },
   { value: "weekly", label: "Weekly" },
@@ -826,6 +868,7 @@ export default function CatalogueItemDialog({
   moduleType,
   categoryId,
   editingItem,
+  isPlaces = false,
 }: Props) {
   const themeClasses = useThemeClasses();
   const createItem = useCreateItem();
@@ -835,7 +878,9 @@ export default function CatalogueItemDialog({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  const config = MODULE_FIELD_CONFIG[moduleType] || MODULE_FIELD_CONFIG.custom;
+  const config = isPlaces
+    ? PLACES_FIELD_CONFIG
+    : MODULE_FIELD_CONFIG[moduleType] || MODULE_FIELD_CONFIG.custom;
   const isDocuments = moduleType === "documents";
 
   // Form state
@@ -867,6 +912,7 @@ export default function CatalogueItemDialog({
 
   // Get module-specific title
   const getDialogTitle = () => {
+    if (isPlaces) return isEditing ? "Edit Place" : "Add Place";
     if (isEditing)
       return `Edit ${MODULE_TYPE_LABELS[moduleType]?.replace(/s$/, "") || "Item"}`;
     switch (moduleType) {
@@ -1069,8 +1115,36 @@ export default function CatalogueItemDialog({
     };
 
     if (isEditing) {
+      // Edit = patch only what this form manages (KIT-20): hidden fields keep
+      // their values, unknown metadata keys survive, cleared fields clear.
+      const managedKeys = config.customFields
+        .map((f) => f.key)
+        .filter((k) => k !== "notes")
+        .concat(isDocuments ? ["belongs_to_user_id"] : []);
+      const parseNum = (v: string) => (v.trim() ? parseFloat(v) : null);
+      const patch: Omit<UpdateItemInput, "id"> = {
+        expected_revision: editingItem.revision,
+        name: name.trim(),
+        ...diffMetadata(editingItem.metadata_json, metadataJson, managedKeys),
+        ...(config.customFields.some((f) => f.key === "notes") && {
+          notes:
+            typeof customFields.notes === "string"
+              ? customFields.notes.trim() || null
+              : null,
+        }),
+        ...(config.showDescription && { description: description.trim() || null }),
+        ...(config.showStatus && { status }),
+        ...(config.showPriority && { priority }),
+        ...(config.showFrequency && { frequency: frequency || null }),
+        ...(config.showTags && { tags }),
+        ...(config.showProgress && {
+          progress_current: parseNum(progressCurrent),
+          progress_target: parseNum(progressTarget),
+          progress_unit: progressUnit.trim() || null,
+        }),
+      };
       updateItem.mutate(
-        { id: editingItem.id, ...data },
+        { id: editingItem.id, ...patch },
         {
           onSuccess: async (saved) => {
             await uploadImageForItem(saved.id);

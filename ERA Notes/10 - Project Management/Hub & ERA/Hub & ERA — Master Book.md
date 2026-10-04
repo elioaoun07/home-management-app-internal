@@ -93,6 +93,8 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
+🟡 **HUB-95** ERA's "add a contact" never checks for an existing contact. "Add Laura" twice creates two rows. For the partner, `resolveAddContact` picks the owner's shared `contacts` module and writes a private row there (`src/features/era/intents/resolvers/contacts.ts`). Places already dedupes by name and tag. See [acceptance](#hub-95).
+
 ## Acceptance Criteria Index
 
 ### HUB-94
@@ -2935,6 +2937,21 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 }
 ```
 
+### HUB-95
+
+**Outcome:** ERA reuses an existing contact instead of duplicating it.
+
+- **Acceptance:** "Add Laura as a contact" when Laura exists (by normalized name) answers `Already in Contacts · Laura` with a door to open it, and writes nothing. The partner's adds land in a module the partner can see and keep using. Gym cases cover the duplicate, a near-name and the partner path.
+- **Depends on:** [HUB-93](#hub-93) (the same resolver; do both in one pass).
+- **Reading guide:** Copy the `loadPlaces` / `matchPlace` pattern from `resolvers/places.ts`. Audience rules are decided under Kitchen KIT-26.
+
+### HUB-96
+
+**Outcome:** An event at a saved place carries that place's Maps link.
+
+- **Acceptance:** When ERA attaches a saved place (`metadata_json.place_id`) to an event, it also fills the event's location link from the place's `maps_url` if one is set. Editing the place's link later doesn't rewrite past events (live-reference vs snapshot, ASTRA §10.2).
+- **Reading guide:** Place metadata keys: `PlaceItemMetadata` in `src/types/catalogue.ts`. Entry point: the HUB-94 "Where?" flow.
+
 ## Backlog reconciliation
 
 - 2026-09-10 — **HUB-53** → NOTIF-19. Scope is retained in the destination criteria; duplicate removed, not shipped.
@@ -3015,6 +3032,7 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - ✅ 2026-10-04 — **HUB-89** ERA handles "Add Laura as a contact person" — [criteria](<Hub & ERA — Master Book.md#hub-89>)
 - ✅ 2026-10-04 — **HUB-90** Every ERA write leaves an Artifact that opens the item — [criteria](<Hub & ERA — Master Book.md#hub-90>)
 - ✅ 2026-10-04 — **HUB-88** ERA handles "Add Kobeize as a location" — [criteria](<Hub & ERA — Master Book.md#hub-88>)
+- ✅ 2026-10-04 — Catalogue → Places item form shows place fields (Maps link, address, phone, notes) instead of progress/status/frequency — `CatalogueItemDialog.tsx`, `CatalogueItemDetailDialog.tsx`
 - ✅ 2026-10-04 — **HUB-94** ERA asks where an event happens and learns your places — [criteria](<Hub & ERA — Master Book.md#hub-94>)
 
 ## Delivery session log

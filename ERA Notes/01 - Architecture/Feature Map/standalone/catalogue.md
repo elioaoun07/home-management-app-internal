@@ -27,12 +27,16 @@ A library of reusable templates — items, tasks, recipe ingredients, products. 
 - **Hooks**:
   - `src/features/catalogue/hooks.ts`
   - `src/features/catalogue/queryKeys.ts`
+- **Shared lib**:
+  - `src/lib/catalogue/itemPatch.ts` — Zod schemas for item create/PATCH, key-level metadata patch, inverse, `diffMetadata` (KIT-20)
+  - `src/lib/catalogue/moduleRoles.ts` — `isPlacesModule` / `pickPlacesModule` (ERA module roles)
 - **API routes**: `src/app/api/catalogue/`
-- **DB tables**: `catalogue_items` (confirm in `schema.sql`)
+- **DB tables**: `catalogue_modules`, `catalogue_categories`, `catalogue_items` (`revision` — KIT-20), `catalogue_sub_items`, `catalogue_item_calendar_history` (confirm in `schema.sql`)
+- **Tests**: `tests/catalogue-patch.test.ts`
 
 ## Common edit scenarios
 
-- **"Edit catalogue item dialog"** → `src/components/web/CatalogueItemDialog.tsx`.
+- **"Edit catalogue item dialog"** → `src/components/web/CatalogueItemDialog.tsx` (per-module fields in `MODULE_FIELD_CONFIG`; Places uses `PLACES_FIELD_CONFIG`). Edits must go through `diffMetadata` — never send a whole `metadata_json`.
 - **"Change the picker shown in the item entry form"** → `src/components/items/CatalogueTemplatePicker.tsx`.
 - **"Catalogue → Chores section"** → `src/components/web/WebCatalogue.tsx` (`currentLevel === "chores"`); deep link `/catalogue?section=chores` read in `src/app/catalogue/page.tsx`.
 

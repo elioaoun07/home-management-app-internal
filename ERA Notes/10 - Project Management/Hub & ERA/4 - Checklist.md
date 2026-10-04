@@ -39,11 +39,13 @@ Now-lane exception: reports filed from the ERA chat arrive under **ERA reports**
 - [ ] **HUB-42** Deliver one stored briefing per eligible recipient day — [criteria](<Hub & ERA — Master Book.md#hub-42>) _(blocker - M)_
 - [ ] **HUB-43** Measure briefing feedback and vital signs — [criteria](<Hub & ERA — Master Book.md#hub-43>) _(friction - M)_
 - [ ] **HUB-45** Connect canonical balances and meal coverage to ERA — [criteria](<Hub & ERA — Master Book.md#hub-45>) _(friction - M)_
+- [ ] **HUB-95** ERA reuses an existing contact instead of duplicating it — [criteria](<Hub & ERA — Master Book.md#hub-95>) _(friction - S)_
 - [ ] **HUB-59** Use the source message date for transaction conversion — [criteria](<Hub & ERA — Master Book.md#hub-59>) _(friction - M)_
 - [ ] **HUB-61** Verify guest-drinks household access — [criteria](<Hub & ERA — Master Book.md#hub-61>) _(friction - M)_
 
 ## Later
 
+- [ ] **HUB-96** An event at a saved place carries that place's Maps link — [criteria](<Hub & ERA — Master Book.md#hub-96>) _(annoyance - S)_
 - [ ] **HUB-92** ERA artifacts for every entity open the exact item — [criteria](<Hub & ERA — Master Book.md#hub-92>) _(annoyance - M)_
 - [ ] **HUB-79** Reach every Budget, Schedule and Kitchen family from ERA — [criteria](<Hub & ERA — Master Book.md#hub-79>) _(friction - L)_
 - [ ] **HUB-81** Reach every module from ERA and run two named workflows — [criteria](<Hub & ERA — Master Book.md#hub-81>) _(friction - L)_

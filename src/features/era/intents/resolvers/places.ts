@@ -11,6 +11,7 @@
 // Recycle Bin). Items are private by default, like contacts.
 
 import { type EraArtifact, eraArtifact } from "@/lib/era/artifacts";
+import { pickPlacesModule as pickPlacesModuleShared } from "@/lib/catalogue/moduleRoles";
 import { safeFetch } from "@/lib/safeFetch";
 import { routeWrite, type RouteWriteResult } from "./routeWrite";
 
@@ -27,14 +28,8 @@ interface ModuleRow {
   settings_json?: Record<string, unknown> | null;
 }
 
-const PLACES_NAME_RE = /^(?:my\s+)?(?:places|locations)$/i;
-
 export function pickPlacesModule(modules: ModuleRow[]): ModuleRow | null {
-  return (
-    modules.find((m) => m.settings_json?.era_role === "places") ??
-    modules.find((m) => PLACES_NAME_RE.test((m.name ?? "").trim())) ??
-    null
-  );
+  return pickPlacesModuleShared(modules);
 }
 
 /** Lowercase, possessives folded, punctuation and a leading article dropped. */
@@ -154,10 +149,16 @@ export async function savePlace(name: string, reply: (name: string) => string): 
         }),
         timeoutMs: 8_000,
       });
-      if (!res.ok) return fail;
-      moduleId = ((await res.json().catch(() => null)) as { id?: string } | null)?.id ?? null;
-      if (!moduleId) return fail;
-      created.push(eraArtifact("catalogue_module", "created", moduleId, "Places"));
+      if (res.status === 409) {
+        // Another turn/device created it first (one ERA role per user).
+        moduleId = (await loadPlaces())?.moduleId ?? null;
+        if (!moduleId) return fail;
+      } else {
+        if (!res.ok) return fail;
+        moduleId = ((await res.json().catch(() => null)) as { id?: string } | null)?.id ?? null;
+        if (!moduleId) return fail;
+        created.push(eraArtifact("catalogue_module", "created", moduleId, "Places"));
+      }
     }
 
     const r = await routeWrite({

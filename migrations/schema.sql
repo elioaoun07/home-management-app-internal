@@ -893,6 +893,7 @@ CREATE TABLE public.catalogue_items (
   flexible_occurrences integer NOT NULL DEFAULT 1 CHECK (flexible_occurrences >= 1 AND flexible_occurrences <= 31),
   is_chore boolean NOT NULL DEFAULT false,
   chore_category text CHECK (chore_category = ANY (ARRAY['cleaning'::text, 'laundry'::text, 'cooking'::text, 'garden'::text, 'maintenance'::text, 'general'::text])),
+  revision bigint NOT NULL DEFAULT 1,
   CONSTRAINT catalogue_items_pkey PRIMARY KEY (id),
   CONSTRAINT catalogue_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT catalogue_items_module_id_fkey FOREIGN KEY (module_id) REFERENCES public.catalogue_modules(id),
@@ -2100,3 +2101,16 @@ CREATE POLICY era_lexicon_self ON public.era_lexicon
   FOR ALL
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
+
+-- ===========================================================================
+-- CATALOGUE REVISION + ERA ROLES (2026-10-04_catalogue-revision.sql, KIT-20)
+-- ===========================================================================
+-- bump_catalogue_item_revision(): BEFORE UPDATE trigger; revision += 1 on any
+-- column change except revision, updated_at, position, is_pinned, is_favorite,
+-- linked_item_id, is_active_on_calendar.
+CREATE TRIGGER trigger_catalogue_items_revision
+  BEFORE UPDATE ON public.catalogue_items
+  FOR EACH ROW EXECUTE FUNCTION public.bump_catalogue_item_revision();
+CREATE UNIQUE INDEX IF NOT EXISTS catalogue_modules_era_role_uidx
+  ON public.catalogue_modules (user_id, (settings_json->>'era_role'))
+  WHERE settings_json ? 'era_role';

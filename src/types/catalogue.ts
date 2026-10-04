@@ -1,5 +1,7 @@
 // src/types/catalogue.ts
 
+import type { CatalogueItemPatchInput } from "@/lib/catalogue/itemPatch";
+
 export type UUID = string;
 
 // =============================================================================
@@ -276,6 +278,8 @@ export interface CatalogueItem {
   // Chore fields
   is_chore?: boolean;
   chore_category?: ChoreCategory | null;
+  /** Stale-write token (KIT-20); absent until 2026-10-04_catalogue-revision.sql runs. */
+  revision?: number;
   // Virtual fields
   sub_items?: CatalogueSubItem[];
   category?: CatalogueCategory;
@@ -389,51 +393,8 @@ export interface CreateItemInput {
   chore_category?: ChoreCategory;
 }
 
-export interface UpdateItemInput {
-  id: UUID;
-  category_id?: UUID | null;
-  name?: string;
-  description?: string;
-  notes?: string;
-  status?: CatalogueItemStatus;
-  priority?: CataloguePriority;
-  icon?: string;
-  color?: string;
-  image_url?: string;
-  is_pinned?: boolean;
-  is_favorite?: boolean;
-  tags?: string[];
-  metadata_json?: Record<string, unknown>;
-  progress_current?: number;
-  progress_target?: number;
-  progress_unit?: string;
-  next_due_date?: string;
-  frequency?: string;
-  position?: number;
-  // Task-specific fields
-  item_type?: "reminder" | "event" | "task";
-  location_context?: LocationContext;
-  location_url?: string;
-  preferred_time?: string;
-  preferred_duration_minutes?: number;
-  recurrence_pattern?: RecurrencePattern;
-  recurrence_custom_rrule?: string;
-  recurrence_days_of_week?: number[];
-  subtasks_text?: string;
-  is_active_on_calendar?: boolean;
-  linked_item_id?: UUID | null;
-  // Category multi-select (e.g., "personal", "work", "home")
-  item_category_ids?: string[];
-  // Visibility: true = public to household, false = private
-  is_public?: boolean;
-  // Flexible routine fields
-  is_flexible_routine?: boolean;
-  /** Times per period for flexible routines (1–31) */
-  flexible_occurrences?: number;
-  // Chore fields
-  is_chore?: boolean;
-  chore_category?: ChoreCategory;
-}
+/** PATCH /api/catalogue/items/[id] body — derived from the route's Zod schema (KIT-20). */
+export type UpdateItemInput = { id: UUID } & CatalogueItemPatchInput;
 
 export interface CreateSubItemInput {
   item_id: UUID;
@@ -556,6 +517,13 @@ export interface DocumentItemMetadata {
   belongs_to_user_id?: string;
   file_url?: string;
   reminder_before_days?: number;
+}
+
+/** Catalogue → Places (HUB-94). ERA reads name + tags (aliases). */
+export interface PlaceItemMetadata {
+  maps_url?: string;
+  address?: string;
+  phone?: string;
 }
 
 // =============================================================================

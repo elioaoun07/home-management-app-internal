@@ -25,7 +25,7 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 - Reuse the Hub shopping offline queue; do not introduce another queue or turn unknown quantities into zero. Stock/history and a genuine inverse must be verified before automation.
 - Low-stock criteria and automatic addition remain DEC-03; ingredient identity/units and confirmation remain DEC-17. Older unconditional D1/D2 checkboxes are criteria of KIT-1/2 under these gates.
 - A planned or cooked meal covers only the intended person, status and actual leftover interval. Existing Chef reads are reused; missing data is not proof of an empty plan.
-- Catalogue stores reusable references; Recipes and Inventory own executable recipes and operational stock. Source privacy, lineage, revision checks and explicit promotions apply at every bridge. The accepted Catalogue final build plan (§10, Sep7) supersedes its earlier study alternatives.
+- Catalogue stores reusable references; Recipes and Inventory own executable recipes and operational stock. Source privacy, lineage, revision checks and explicit promotions apply at every bridge. The accepted Catalogue final build plan (§10, Sep7) supersedes its earlier study alternatives. Revision checks and key-level metadata edits: *(IMPLEMENTED 2026-10-04 — KIT-20; migration applied by owner 2026-10-04, device witness KIT-25 pending)*
 - Chores/NFC execution belongs to Schedule. Trip cascade visibility is TRIP-7, including the former KIT-9 scope. Allergy knowledge remains Healthcare-owned; ingredient shape validity is not clinical safety.
 
 Unresolved policy choices live in the [decision register](../_Decisions.md); original exploratory ideas live in [Research options](../Research/Options.md). A Later item is retained work, not automatic permission to start.
@@ -53,6 +53,12 @@ Unresolved policy choices live in the [decision register](../_Decisions.md); ori
 🟠 **KIT-21** Preserve catalogue identity through delete and restore. Dated source diagnosis; cause and witness limits are in [criteria](#kit-21) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
 
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
+
+🟡 **KIT-25** The owner applied the catalogue-revision migration on 2026-10-04. The two-phone stale-save witness has not been done yet. See [acceptance](#kit-25).
+
+🟡 **KIT-27** The route still accepts content edits that send no `expected_revision`. Older app builds can therefore still overwrite a newer edit made on the other phone. See [acceptance](#kit-27).
+
+🟡 **KIT-26** Catalogue RLS is unverified. The 2026-08-04 snapshot shows two overlapping SELECT/INSERT/UPDATE/DELETE policy sets on `catalogue_items` (one via `household_members`, one via `household_links`) and owner-only SELECT on `catalogue_sub_items`. A partner who can see a shared item cannot see its sub-items. Evidence: `migrations/db-state.json` (stale). See [acceptance](#kit-26).
 
 ## Acceptance Criteria Index
 
@@ -615,11 +621,15 @@ The remaining retained defects, decisions and enhancements are indexed below and
 }
 ```
 
+- **Implemented 2026-10-04 (code; migration applied by owner 2026-10-04 — witness [KIT-25](#kit-25)).** `src/lib/catalogue/itemPatch.ts` is the one Zod contract for create and PATCH, and `UpdateItemInput` is derived from it. PATCH writes `metadata_set` / `metadata_unset` by key; legacy `metadata_json` merges and never replaces. `expected_revision` makes the route return 409 with the current row. A metadata merge is compare-and-set on `revision`. A BEFORE UPDATE trigger owns the increment, so every writer participates; pin/favorite/position and calendar hints don't bump it. The response carries `inverse`, so the update toast's Undo is real. `CatalogueItemDialog` / `CatalogueTaskItemDialog` send only managed keys through `diffMetadata`, so cleared fields clear, hidden fields are no longer forced to `active`/`normal`, and emptied trigger conditions clear. Evidence: `tests/catalogue-patch.test.ts` (16 cases), ERA suite 478 passed, typecheck clean. Not witnessed on device.
+
 ### KIT-21
 
 **Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C03. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
 
 **Outcome:** Preserve catalogue identity through delete and restore.
+
+- **Progress 2026-10-04:** delete-Undo (`useDeleteItem`) now restores the same row through `POST /api/recycle-bin/restore`; it used to POST a copy with a new ID that dropped image/sharing/task fields. Still open: `disable` route atomicity, purge/permanent-delete dependency guard, repeated-inverse witnesses. Also, an update-Undo after a status → completed edit restores `status` but not `completed_at`, because `completed_at` isn't a patchable field.
 
 - **Acceptance:** Catalogue C03: tombstone/restore preserve ID and backlinks; purge only after the retained-reference contract permits it. Exercise failed and repeated inverse operations.
 - **Depends on:** [KIT-19](<Kitchen — Master Book.md#kit-19>), [KIT-20](<Kitchen — Master Book.md#kit-20>).
@@ -695,6 +705,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Outcome:** Browse and edit reference records.
 
 - **Acceptance:** Catalogue C09: reference-only types get compact browsing/forms, typed metadata and permissions without execution controls. Keep executable masters in their owning modules.
+- **Found 2026-10-04:** the typed metadata interfaces in `src/types/catalogue.ts` don't match the keys `CatalogueItemDialog` writes. For example, `RecipeItemMetadata.prep_time_mins` vs the form's `prep_time`, and `TripItemMetadata.activities: string[]` vs a textarea string. Reconcile them into per-kind Zod schemas here; until then the dialog config is the real contract. Places already has `PlaceItemMetadata`.
 - **Depends on:** [KIT-20](<Kitchen — Master Book.md#kit-20>).
 
 **Provenance:** [Kitchen — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>). The source is historical; this entry owns the retained outcome.
@@ -1448,6 +1459,32 @@ The remaining retained defects, decisions and enhancements are indexed below and
 }
 ```
 
+### KIT-25
+
+**Outcome:** Run the catalogue-revision migration and witness a stale save.
+
+- **Acceptance:** The owner runs `migrations/2026-10-04_catalogue-revision.sql` (step 0 inspect returns no rows, step 4 verify passes). On device, open the same catalogue item's editor on both phones and save on phone A, then on phone B. Phone B shows "Changed elsewhere" and keeps its input. Editing a Places item keeps keys the form doesn't show, and Undo after an edit restores the previous values.
+- **Depends on:** [KIT-20](#kit-20).
+- **Reading guide:** The SQL is idempotent and the app tolerates either order. Rollback is at the bottom of the file.
+- **Status 2026-10-04:** the owner reports steps 0–4 applied. Remaining: the two-phone witness. Step 5 output is tracked under [KIT-26](#kit-26).
+
+### KIT-26
+
+**Outcome:** Catalogue sharing follows one verified policy set.
+
+- **Acceptance:** Step 5 of `migrations/2026-10-04_catalogue-revision.sql` (`pg_policies`, untruncated) is in hand, and `db-state.json` is regenerated. Duplicate policies are collapsed to one set in a migration. The owner decides whether a partner who can see a shared item also sees its sub-items. Shared containers never expose private descendants (ASTRA §10.2 Sharing).
+- **Also decide:** a partner who adds an item inside the owner's shared module creates a row only the partner can see, because items default to `is_public = false`. Choose whether items inherit the container's audience or stay private.
+- **Blocked 2026-10-04:** the owner ran the migration but could not share step 5 yet. Nothing proceeds without that output.
+- **Reading guide:** Hard Rule #27. Do not edit policies from the 2026-08-04 snapshot alone. `catalogue_sub_items` is not a hot child table, but prefer a denormalized `is_public` + `user_id` check over an `EXISTS` join (Hard Rule #20).
+
+### KIT-27
+
+**Outcome:** Content edits without a revision are refused once both phones are updated.
+
+- **Acceptance:** After both phones run a build that sends `expected_revision`, `PATCH /api/catalogue/items/[id]` returns **428** for content edits that send no revision. Pin, favorite and position toggles stay revision-free. Old-build payloads fail closed and the editor input is kept (ASTRA §10.7 rollout step 6).
+- **Depends on:** [KIT-25](#kit-25).
+- **Reading guide:** The check goes next to the existing 409 branch in `src/app/api/catalogue/items/[id]/route.ts`. ERA's resolvers only POST/DELETE today. Any future ERA edit must read the item and send its revision.
+
 ## Backlog reconciliation
 
 - 2026-09-10 — **KIT-9** → TRIP-7. Scope is retained in the destination criteria; duplicate removed, not shipped.
@@ -1456,6 +1493,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - ✅ 2026-07-18 — inbound Healthcare bridge landed in recipe views (`RecipeAllergenWarning.tsx` consuming `useHouseholdAllergens`) — Kitchen gained a junction without gaining a commit
 - ✅ 2026-09-26 — **KIT-11** Return the correct cooking count — [criteria](<Kitchen — Master Book.md#kit-11>)
+- ✅ 2026-10-04 — **KIT-20** Patch catalogue metadata with revision checks — [criteria](<Kitchen — Master Book.md#kit-20>)
 
 ## Delivery session log
 

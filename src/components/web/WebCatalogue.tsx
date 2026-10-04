@@ -59,6 +59,7 @@ import AddToCalendarDialog from "./AddToCalendarDialog";
 import CatalogueCategoryDialog from "./CatalogueCategoryDialog";
 import CatalogueItemDetailDialog from "./CatalogueItemDetailDialog";
 import CatalogueItemDialog from "./CatalogueItemDialog";
+import { isPlacesModule } from "@/lib/catalogue/moduleRoles";
 import CatalogueModuleDialog from "./CatalogueModuleDialog";
 import CatalogueTaskItemDialog from "./CatalogueTaskItemDialog";
 
@@ -149,6 +150,7 @@ export default function WebCatalogue({
 
   // Check if current module is tasks type
   const isTasksModule = dialogModule?.type === "tasks";
+  const isPlaces = isPlacesModule(dialogModule);
 
   // Data queries
   const { data: modules = [], isLoading: modulesLoading } =
@@ -854,6 +856,7 @@ export default function WebCatalogue({
         moduleType={dialogModule?.type || "custom"}
         categoryId={dialogCategoryId}
         editingItem={editingItem}
+        isPlaces={isPlaces}
       />
 
       <CatalogueTaskItemDialog
@@ -879,6 +882,7 @@ export default function WebCatalogue({
         moduleType={dialogModule?.type || "custom"}
         onEdit={handleEditItem}
         onAddToCalendar={isTasksModule ? handleAddToCalendar : undefined}
+        isPlaces={isPlaces}
       />
 
       <CatalogueModuleDialog

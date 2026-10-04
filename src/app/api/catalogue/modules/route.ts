@@ -56,6 +56,9 @@ export async function GET() {
     `,
     )
     .eq("is_enabled", true)
+    // Counts exclude binned/archived items (they inflated every module card).
+    .is("items.deleted_at", null)
+    .is("items.archived_at", null)
     .order("position", { ascending: true });
 
   if (error) {
@@ -149,6 +152,13 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
+      // (user_id, type, name) and the per-user ERA role are unique.
+      if (error.code === "23505") {
+        return NextResponse.json(
+          { error: "A module with that name already exists" },
+          { status: 409 },
+        );
+      }
       console.error("Error creating module:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
