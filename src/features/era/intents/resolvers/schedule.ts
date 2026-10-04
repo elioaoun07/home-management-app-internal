@@ -2,6 +2,7 @@
 // bundle, and creates real reminders from natural language (draftReminder).
 import { fetchAllOccurrenceActions, normalizeToLocalDateString } from "@/features/items/useItemActions";
 import { fetchItems } from "@/features/items/useItems";
+import { eraArtifact, type EraArtifact } from "@/lib/era/artifacts";
 import { safeFetch } from "@/lib/safeFetch";
 import { parseSmartText } from "@/lib/smartTextParser";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -30,6 +31,8 @@ interface ResolveResult {
   pending?: EraPendingTurn | null;
   /** HUB-34 — false on every graceful-error return below; see resolveIntent.ts's ResolveResult doc for why this exists. */
   ok?: boolean;
+  /** What this write left behind (src/lib/era/artifacts.ts). */
+  artifacts?: EraArtifact[];
 }
 
 /**
@@ -209,6 +212,7 @@ async function writeReminder(
         recurrenceRule: recurrenceRule ?? null,
         priority,
       },
+      artifacts: item?.id ? [eraArtifact("reminder", "created", item.id, title, { date: dueDate })] : undefined,
       pending: null,
     };
   } catch {
@@ -258,6 +262,7 @@ export async function resolvePendingReminderAnswer(
     return {
       text: formatReminderSavedAsDraft({ title: pending.title }),
       metadata: { itemId: item?.id ?? null, title: pending.title, draft: true },
+      artifacts: item?.id ? [eraArtifact("reminder", "created", item.id, pending.title)] : undefined,
       pending: null,
     };
   } catch {
@@ -337,7 +342,12 @@ export async function skipNextOccurrence(
       timeoutMs: 8_000,
     });
     if (!res.ok) return { text: `Couldn't skip ${title}.`, ok: false, outcome: "failed" };
-    return { text: `Skipped · ${title} · ${occurrence}`, metadata: { itemId, title, occurrence }, outcome: "done" };
+    return {
+      text: `Skipped · ${title} · ${occurrence}`,
+      metadata: { itemId, title, occurrence },
+      artifacts: [eraArtifact("reminder", "updated", itemId, `${title} · skipped`, { date: occurrence })],
+      outcome: "done",
+    };
   } catch {
     return { text: `Not sure ${title} was skipped.`, ok: false, outcome: "uncertain" };
   }
@@ -378,6 +388,7 @@ export async function postponeNextOccurrence(
     return {
       text: formatReminderRescheduled({ title, dueAt: postponedTo }),
       metadata: { itemId, title, dueAt: postponedTo, occurrence: normalizeToLocalDateString(next.occurrenceDate) },
+      artifacts: [eraArtifact("reminder", "updated", itemId, title, { date: formatDate(new Date(postponedTo)) })],
       outcome: "done",
     };
   } catch {
@@ -421,6 +432,7 @@ export async function resolveReminderReschedule(
       text: formatReminderRescheduled({ title: title ?? "that reminder", dueAt }),
       // HUB-78 — previousDueAt is the demonstrated inverse (Undo re-PATCHes it).
       metadata: { itemId, title, dueAt, previousDueAt: existingDueAt },
+      artifacts: [eraArtifact("reminder", "updated", itemId, title ?? "Reminder", { date: formatDate(new Date(dueAt)) })],
     };
   } catch {
     return { text: formatReminderActionError(title, "reschedule"), ok: false };
@@ -470,6 +482,7 @@ export async function resolveReminderComplete(
     return {
       text: formatReminderCompleted(title),
       metadata: { itemId, title },
+      artifacts: [eraArtifact("reminder", "updated", itemId, `${title ?? "Reminder"} · done`, { date: occurrenceDate })],
     };
   } catch {
     return { text: formatReminderActionError(title, "complete"), ok: false };
@@ -523,6 +536,7 @@ export async function resolveReminderDelete(
     return {
       text: formatReminderDeleted(title),
       metadata: { deletedItemId: itemId, title },
+      artifacts: [eraArtifact("reminder", "deleted", itemId, title ?? "Reminder")],
     };
   } catch {
     return { text: formatReminderActionError(title, "delete"), ok: false };

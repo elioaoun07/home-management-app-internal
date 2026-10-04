@@ -358,7 +358,7 @@ function normalizeDayName(name: string): string {
 /**
  * Parses relative date expressions
  */
-function parseRelativeDate(
+export function parseRelativeDate(
   text: string,
   referenceDate: Date = new Date(),
 ): { date: Date; matched: string } | null {
@@ -703,7 +703,7 @@ function applyTimePeriod(hours: number, period: string | undefined): number {
 /**
  * Parses time expressions from text
  */
-function parseTime(text: string): { time: string; matched: string } | null {
+export function parseTime(text: string): { time: string; matched: string } | null {
   const lowerText = text.toLowerCase();
 
   // Check named time periods first (longest-match by iterating sorted entries)

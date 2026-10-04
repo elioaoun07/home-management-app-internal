@@ -22,11 +22,8 @@ import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import { toast } from "sonner";
 import { getCapability } from "./capabilities/registry";
-import {
-  logEraAction,
-  logEraCapabilityAction,
-  logEraNfcReminder,
-} from "./logEraAction";
+import { eraArtifact, type EraArtifact } from "@/lib/era/artifacts";
+import { recordEraArtifacts } from "./recordArtifacts";
 import { executeNativeAction } from "./nativeActions";
 import { eraKeys } from "./queryKeys";
 import { learnTemplateFromProposal, shouldLearnFrom } from "./templates/learn";
@@ -207,6 +204,23 @@ export function useEraAskAI() {
 
     const conversationId = activeConversation?.id ?? null;
     let replyText: string;
+    let artifacts: EraArtifact[] | undefined;
+    // Every confirmed write ends the same way: log its artifacts, then the
+    // assistant row carries them so the Activity Log can open the item.
+    const finish = () => {
+      recordEraArtifacts(artifacts, queryClient);
+      setEraReply(replyText);
+      if (conversationId) {
+        void createMessage
+          .mutateAsync({
+            conversation_id: conversationId,
+            role: "assistant",
+            content: replyText,
+            ...(artifacts?.length ? { intent_payload: { artifacts } } : {}),
+          })
+          .catch(() => {});
+      }
+    };
 
     // HUB-76 — a native router write held behind its tier. Executes through
     // the native resolvers (never a template, never Ask AI's catalog); the
@@ -217,15 +231,7 @@ export function useEraAskAI() {
         const result = await executeNativeAction(action, queryClient);
         replyText = result.text;
         if (result.outcome === "done") {
-          if (action.type === "capability") {
-            logEraCapabilityAction(action.capabilityId, result.metadata, queryClient);
-          } else if (action.type === "reminderSeries" || action.type === "reminderOccurrence" || action.type === "reminderSkip") {
-            logEraCapabilityAction("reminder.reschedule", result.metadata, queryClient);
-          } else if (action.type === "recurringCover" || action.type === "shoppingGroupCreate" || action.type === "shoppingRemove") {
-            // Activity log has no recurring entity type yet; the Recurring page shows it.
-          } else {
-            logEraAction(action.type, result.metadata, queryClient);
-          }
+          artifacts = result.artifacts;
           const undo = result.undo;
           if (undo) {
             toast.success(proposal.text, {
@@ -246,16 +252,7 @@ export function useEraAskAI() {
         replyText = "That didn't go through — try it from the app directly.";
       }
 
-      setEraReply(replyText);
-      if (conversationId) {
-        void createMessage
-          .mutateAsync({
-            conversation_id: conversationId,
-            role: "assistant",
-            content: replyText,
-          })
-          .catch(() => {});
-      }
+      finish();
       return;
     }
 
@@ -269,11 +266,7 @@ export function useEraAskAI() {
         if (!capability) throw new Error("unknown capability");
         const result = await capability.execute(proposal.slots);
         replyText = result.text;
-        logEraCapabilityAction(
-          proposal.capabilityId,
-          result.metadata,
-          queryClient,
-        );
+        if (result.ok !== false) artifacts = result.artifacts;
 
         // Stage 4 (HUB-30) — learn a phrasing template from this SUCCESSFUL
         // execution only. A dismissed proposal never reaches here at all; a
@@ -317,16 +310,7 @@ export function useEraAskAI() {
         replyText = "That didn't go through — try it from the app directly.";
       }
 
-      setEraReply(replyText);
-      if (conversationId) {
-        void createMessage
-          .mutateAsync({
-            conversation_id: conversationId,
-            role: "assistant",
-            content: replyText,
-          })
-          .catch(() => {});
-      }
+      finish();
       return;
     }
 
@@ -358,22 +342,13 @@ export function useEraAskAI() {
       if (!prereqRes.ok) throw new Error("prerequisite create failed");
 
       replyText = `Set — "${proposal.reminderTitle}" fires when ${proposal.nfcTagLabel} reaches ${proposal.targetState}.`;
-      logEraNfcReminder(item.id, proposal.reminderTitle, queryClient);
+      artifacts = [eraArtifact("reminder", "created", item.id, proposal.reminderTitle)];
     } catch {
       replyText =
         "That didn't save — try setting the trigger from the item's own page instead.";
     }
 
-    setEraReply(replyText);
-    if (conversationId) {
-      void createMessage
-        .mutateAsync({
-          conversation_id: conversationId,
-          role: "assistant",
-          content: replyText,
-        })
-        .catch(() => {});
-    }
+    finish();
   }, [
     activeProposal,
     activeConversation,

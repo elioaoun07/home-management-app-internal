@@ -5,6 +5,7 @@
 // inverse is demonstrated; money keeps its tier (a transfer edit is a new
 // Confirm card, a draft edit is Act + Undo like the draft itself).
 
+import { eraArtifact, type EraArtifact } from "@/lib/era/artifacts";
 import { safeFetch } from "@/lib/safeFetch";
 import type { FocusEntity } from "../../focusMemory";
 import type { EraActiveProposal, EraPendingTurn, EraTransferAction } from "../../types";
@@ -16,6 +17,7 @@ import { prepareTransfer } from "./budget";
 import {
   createShoppingGroup,
   listOpenShoppingItems,
+  shoppingArtifacts,
   listShoppingGroups,
   matchShoppingItems,
   shoppingFocusFor,
@@ -35,6 +37,8 @@ export interface AmendResult {
   /** The edited result, re-registered so a second follow-up still finds it. */
   focus?: FocusEntity;
   undo?: () => Promise<boolean>;
+  /** What this write left behind (src/lib/era/artifacts.ts). */
+  artifacts?: EraArtifact[];
 }
 
 const cantChange = (what = "that"): AmendResult => ({ text: `Can't change ${what} here.`, ok: false });
@@ -171,6 +175,7 @@ export async function moveToGroup(
   return {
     text: `${meta.items.join(", ")} · ${groupName}`,
     metadata: { messageIds: meta.messageIds, groupId, edited: "group" },
+    artifacts: shoppingArtifacts(meta.messageIds, meta.items, "updated", meta.threadId),
     focus: { ...focus, addedAt: Date.now(), meta: { ...meta, groupId } },
     undo: () => moveShoppingItems(meta.messageIds, previous).catch(() => false),
   };
@@ -207,6 +212,7 @@ async function amendShopping(focus: FocusEntity, edits: EditRequest): Promise<Am
       return {
         text: `${previous} → ${edits.name}`,
         metadata: { messageIds: [id], edited: "name" },
+        artifacts: shoppingArtifacts([id], [edits.name], "updated", meta.threadId),
         focus: { ...focus, title: edits.name, addedAt: Date.now(), meta: { ...meta, items: [edits.name] } },
         undo: () => renameShoppingItem(id, previous).catch(() => false),
       };
@@ -217,6 +223,7 @@ async function amendShopping(focus: FocusEntity, edits: EditRequest): Promise<Am
     return {
       text: `${label} · ${edits.quantity}`,
       metadata: { messageIds: [id], edited: "quantity" },
+      artifacts: shoppingArtifacts([id], [`${label} · ${edits.quantity}`], "updated", meta.threadId),
       focus: { ...focus, addedAt: Date.now(), meta: { ...meta, quantity: edits.quantity } },
       undo: () => setShoppingQuantity(id, previousQty).catch(() => false),
     };
@@ -300,6 +307,7 @@ async function amendDraft(focus: FocusEntity, edits: EditRequest): Promise<Amend
   return {
     text: label,
     metadata: { draftId: newId, amount: edited.amount, edited: edits.amount !== undefined ? "amount" : "category" },
+    artifacts: [eraArtifact("draft", "updated", newId, label)],
     focus: { ...focus, id: newId, addedAt: Date.now(), meta: edited as unknown as Record<string, unknown> },
     undo: async () => Boolean(await replaceDraft(edited, meta).catch(() => null)),
   };

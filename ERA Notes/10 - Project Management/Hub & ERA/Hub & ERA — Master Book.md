@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-03
+updated: 2026-10-04
 type: master-book
 status: active
 owner: Elio
@@ -21,6 +21,10 @@ Intent routing and turn-latency repairs shipped. Proactive delivery, source cove
 Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>) preserves detailed older narratives and receipts.
 
 ## Vision & Decisions
+
+- **HUB-94 — ERA learns the places you go (owner request 2026-10-04).** When ERA creates an event it asks where. A new place gets one offer to save it to Catalogue → **Places**, and next time ERA recognises it by name or alias tag without asking. The event is written first, and the questions are skippable chips that never block it. A place is a Catalogue item in a custom module ERA creates and marks `settings_json.era_role = "places"`, so no DB change is needed. The event keeps `location_text` plus `metadata_json.place_id` as the seam for proactive use. Proactive use stays time-based (owner no-geofencing exclusion). Similar patterns are proposed in [ERA Learns Your World — Proposal](<../../03 - Junction Modules/AI Assistant/ERA Learns Your World — Proposal.md>). *(IMPLEMENTED 2026-10-04 — repository; device acceptance pending.)*
+
+- **HUB-90 — Every ERA write is "ERA using the app's functionality", and it leaves an Artifact (owner rule 2026-10-04).** Every create, update and delete ERA performs appears in /era → Artifacts and opens the item (deletes open the Recycle Bin); the Activity Log's ERA row opens the same target. One template for every feature: the adapter reuses the app's own route and returns `artifacts`; one logger (`recordArtifacts.ts`), one entity/link registry (`src/lib/era/artifacts.ts`), one contract test. Per-feature identity is data (entity, title, link), never a per-feature code path. `/era-wire` mandates it for new wirings. *(IMPLEMENTED 2026-10-04 — repository; owner SQL and device acceptance in HUB-91; item-level links for the remaining entities in HUB-92.)*
 
 - **HUB-85 / HUB-86 / HUB-52 — The ERA chat is a conversation, and its misses become work (owner-commissioned 2026-10-03).** The owner asked for: a way to log a missed or wrongly handled request with its chat history and actions, landing in the weekly sprint as standalone defects/hotfixes to deliver now; a conversation-grade chat on web and mobile instead of small text above the bar; New chat to reset "it", with a subtle, unforced cue when a conversation has ended; and subtle history. Decisions: a Report is a system `era_messages` row carrying a server-built snapshot (no new store — D4); the PM bridge imports it read-only toward the DB into Now › **ERA reports** (PM Tooling R72), where Sprints lists it as a Hotfix (wrong) or Defect (missed) whatever week it was filed. New chat is client state (plus a per-device marker so it survives a reload); the cue appears after 30 minutes of silence — the focus-memory TTL, exactly when "it" stops resolving. History keeps every chat, lists the 50 most recent, and a chat auto-closes after 6 h. **Layout-freeze exception (owner request):** while a conversation is open in hub view the ERA DOT takes its existing module-mode position so the thread can be read; the idle hub is unchanged. *(IMPLEMENTED 2026-10-03 — repository; device acceptance in HUB-83.)*
 
@@ -43,9 +47,15 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🔴 **HUB-93** ERA did the wrong thing with "Add Racha as a Contact" (ERA report, 2026-10-04). See [acceptance](<#hub-93>).
+
+🟠 **HUB-90** ERA's writes did not show in /era → Artifacts, and the Activity Log's ERA "Open" went to `/era` instead of the item. Owner screenshots 2026-10-04: "Add Racha as a Contact" → "Added · Racha", Artifacts shows "0 · Nothing yet today"; Activity Log row "Added · Racha · ERA · Messages" → Open → /era Artifacts. Cause: `src/features/era/logEraAction.ts` mapped six intent kinds onto a fixed six-value `era_actions.entity_type` CHECK, so every newer write (contact, shopping add/edit/remove, shopping group, recurring cover, NFC via capability) logged nothing; `activitySourceHref` sent every ERA row to `/era` and schedule items to `/items?openId=`, a page that does not exist. Resolved in repository 2026-10-04 (artifact contract — every adapter returns `artifacts`, one logger, one link registry, contract test); migration and device witness in HUB-91.
+
+🟡 **HUB-92** ERA artifacts for transfers, debts, drafts, meal plans, memories, recurring payments and shopping open their module page, not the item. Cause: those pages take no per-item URL parameter (only Schedule `?openId=`, Dashboard `?openId=` and, since 2026-10-04, Catalogue `?item=` do). Links are built in one place (`src/lib/era/artifacts.ts`), so each fix is one page param plus one registry row.
+
 🟠 **HUB-89** ERA missed "Add Laura as a contact person" (ERA report, 2026-10-03). See [acceptance](<#hub-89>).
 
-🟠 **HUB-88** ERA missed "Add Kobeize as a location" (ERA report, 2026-10-03). See [acceptance](<#hub-88>).
+🟠 **HUB-88** ERA missed "Add Kobeize as a location" (ERA report, 2026-10-03). Cause: ERA had no place grammar or Places store. Resolved in repository 2026-10-04 by HUB-94 (Catalogue → Places). See [acceptance](<#hub-88>).
 
 🟠 **HUB-87** ERA missed "Add Mop Chores today" (ERA report, 2026-10-03). See [acceptance](<#hub-87>).
 
@@ -85,6 +95,72 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Acceptance Criteria Index
 
+### HUB-94
+
+**Outcome:** ERA asks where an event happens and learns your places.
+
+**Kind:** feature
+**Implementation:** done
+**UAT:** pending
+**Touches:** src/features/era/intents/eventText.ts, src/features/era/intents/freeTextAnswer.ts, src/features/era/intents/resolvers/events.ts, src/features/era/intents/resolvers/places.ts, src/features/era/intents/{schedule,brain,chef,index,resolveIntent}.ts, src/features/era/intents/resolvers/{slots,slotBuilders,routeWrite}.ts, src/features/era/{types,engine,useEraTurn,replyFormatter,reach}.ts, src/lib/era/artifacts.ts, src/lib/smartTextParser.ts (two exports), src/app/api/catalogue/modules/route.ts (`settings_json` on POST), src/components/web/WebCatalogue.tsx (`map-pin` icon)
+
+- **Acceptance:** "Add an event dinner tomorrow at 8pm" creates the event with Undo, then asks **Where?** with chips for up to 3 saved places (pinned first) plus [Skip]. A typed new place is set on the event, then ERA asks `Save "<place>" to Places?` [Save] [No]. With no date, ERA asks **When?** [Today] [Tomorrow] and writes nothing until it has one. A saved place or alias tag named in the sentence ("dinner at parents") fills the location with no question. "Add X as a location" saves a place (HUB-88). Repeating events hand off to the form. Every write leaves an Artifact (`event`, `place`, `catalogue_module`). A free-text answer that is really a new command is routed as a new request.
+- **Evidence (2026-10-04):** `pnpm vitest run tests/era-gym src/features/era src/lib/era` gave 478 passed. The Gym router path went from 169/189 to 179/199: all 10 new `reports.jsonl` cases pass (HUB-88 ×3, HUB-94 ×7, including both negated twins and the "new request while Where? is open" case). The known-miss list is unchanged (20), with wrong effects 1 and wrong money 0, both as before. `eventText.test.ts` (title/place/date split, place matching) and 4 new artifact-contract rows pass. Typecheck is clean.
+- **Owner check (phone):** "Add an event dinner tomorrow at 8pm" → Where? → type a place → Save → Catalogue shows **Places** with it. Then "add an event lunch at <that place> Friday at 1pm" sets the place with no question. Artifacts open the event and the place. The `place`/`event` artifacts need HUB-91's migration first.
+- **Reading guide:** `src/features/era/intents/eventText.ts` (sentence → title/place/when) → `resolvers/events.ts` (write, then ask) → `resolvers/places.ts` (Places module, matching, save) → `resolvers/slots.ts` (answers).
+
+### HUB-93
+
+**Outcome:** ERA gets "Add Racha as a Contact" right.
+
+**Kind:** bug
+**Source:** ERA report 6e4bfd59-7aec-461c-90c2-43fc4dafe210 · wrong · owner · 2026-10-04 15:34 (Asia/Beirut)
+
+- **Acceptance:** This request ends in the right outcome — done with Undo, one confirm card, one question with chips, a prefilled form, or an honest limit with a door — never a wrong action or a dead end. An ERA Gym case replays the transcript below.
+- **Comment:** Adding Racha as a Contact should request me to fill more info. So the form for creating a Contact should fire to prompt me into adding more details
+- **Reading guide:** start at `src/features/era/useEraTurn.ts` (one turn), then the router in `src/features/era/intents/` and the capability's resolver; add the sentence to `tests/era-gym/`.
+
+**Transcript**
+
+- You · 15:31 — Add Racha as a Contact _(addContact)_
+- ERA · 15:31 — Added · Racha _(addContact · answered)_ ← reported
+
+**ERA actions**
+
+- created contact — Racha · 15:31
+
+### HUB-90
+
+**Outcome:** Every ERA write leaves an Artifact that opens the item.
+
+**Kind:** bug
+**Touches:** src/lib/era/artifacts.ts, src/features/era/recordArtifacts.ts, src/features/era/intents/resolvers/, src/features/era/nativeActions.ts, src/features/era/useEraTurn.ts, src/features/era/useEraAskAI.ts, src/app/api/era/actions/route.ts, src/app/api/activity-log/route.ts, src/features/activity-log/types.ts, src/components/web/WebCatalogue.tsx, migrations/2026-10-04_era-artifacts-any-entity.sql
+
+- **Acceptance:** Any create, update or delete ERA performs appears in /era → Artifacts with its entity label and opens the item (or the Recycle Bin when deleted); the Activity Log's ERA message row opens the same target. No per-intent mapping: adapters return `artifacts`, `recordArtifacts` logs them, `ERA_ARTIFACT_ENTITIES` builds every link. `src/features/era/artifacts.contract.test.ts` fails when a write path returns no artifact.
+- **Evidence (2026-10-04):** contract test 18 write paths green (mutation-checked: dropping memory.save's artifact turns it red); `pnpm vitest run tests/era-gym src/features/era src/lib/era src/features/activity-log src/app/api/activity-log src/app/api/era` 490 passed, Gym B ✗ list unchanged (20 known misses); typecheck clean. Read-only browser check: `/catalogue?item=<Racha>` opens Racha's detail inside Contacts; `/api/activity-log?module=era` returns 200 (pre-contract rows carry no artifacts, so they keep `/era`).
+- **Reading guide:** `src/lib/era/artifacts.ts` → `src/features/era/recordArtifacts.ts` → any resolver's `artifacts:` line; `/era-wire` step 5.
+
+### HUB-91
+
+**Outcome:** Run the era-artifacts migration and witness Artifacts + Activity Log links on the phone.
+
+**Kind:** verification
+**Depends on:** HUB-90
+**Touches:** none
+
+- **Acceptance:** Owner runs `migrations/2026-10-04_era-artifacts-any-entity.sql` in the Supabase SQL Editor; its verify query shows exactly `era_actions_action_check` (created/updated/deleted) and `era_actions_entity_type_check` (slug). Then on the phone: "Add <name> as a contact" → the contact appears in /era → Artifacts as "Contact" and opens its detail; the Activity Log's "Added · <name>" row Open lands on the same detail; Undo removes the contact.
+- **Why it blocks:** until the migration runs, the DB rejects artifacts for the new entities (contact, draft, shopping_item, shopping_group, recurring_payment) and every `deleted` row — they are logged server-side and never appear.
+
+### HUB-92
+
+**Outcome:** ERA artifacts for every entity open the exact item.
+
+**Kind:** feature
+**Depends on:** HUB-90
+**Touches:** src/lib/era/artifacts.ts
+
+- **Acceptance:** Transfer, debt, draft, meal plan, memory, recurring payment and shopping artifacts each open their own row (detail, highlight or scroll-to) via a page URL parameter; the registry row switches from the module home to that URL; `src/lib/era/artifacts.test.ts` covers each.
+
 ### HUB-89
 
 **Outcome:** ERA handles "Add Laura as a contact person".
@@ -110,6 +186,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Acceptance:** This request ends in the right outcome — done with Undo, one confirm card, one question with chips, a prefilled form, or an honest limit with a door — never a wrong action or a dead end. An ERA Gym case replays the transcript below.
 - **Expected:** Adding a Location to Catalogue
+- **Resolved 2026-10-04 (HUB-94):** `addPlace` grammar (`intents/brain.ts`) → `resolveAddPlace` saves to Catalogue → Places via the Catalogue routes, with Undo and a `place` Artifact. Gym cases `report-hub-88`, `-b` and `-neg` pass.
 - **Reading guide:** start at `src/features/era/useEraTurn.ts` (one turn), then the router in `src/features/era/intents/` and the capability's resolver; add the sentence to `tests/era-gym/`.
 
 **Transcript**
@@ -2935,6 +3012,10 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - ✅ 2026-10-03 — **HUB-86** The ERA chat is a conversation: bubbles in the person's color, 15–16 px ERA replies, time breaks, a thinking indicator for every turn, the confirm card and chips as the newest turn, a jump-to-latest control; in hub view an open conversation lifts the DOT to its module-mode position (idle hub unchanged). New chat clears "it" and every open question/card, survives a reload, and a 30-minute-quiet chat shows a "New chat" divider and a toolbar dot. First turns of a fresh chat render optimistically (`ensure_conversation`). Also fixed: bookkeeping system rows leaking into the transcript and Ask AI history; cards floating over the thread. (`thread.test.ts`; read-only live dev check; [acceptance](<#hub-86>); device witness in HUB-83.)
 - ✅ 2026-10-03 — **HUB-85** Report from the ERA chat: a quiet Report chip under a missed reply (and on any reply's details), Missed / Wrong + "Expected…", a server-built snapshot of the turns, outcomes and ERA actions stored as a system `era_messages` row, a "Reported" marker and Undo. Imported into Now › ERA reports by PM Tooling R72. (`issueReport.test.ts`, `thread.test.ts`, `tests/pm-era-issues.test.ts`; [acceptance](<#hub-85>); first real report is the owner's, HUB-83.)
 - ✅ 2026-10-03 — **HUB-52** ERA History: titled, grouped past chats with read-only preview, Continue (clean context) and Archive with Undo; no schema change. ([acceptance](<#hub-52>).)
+- ✅ 2026-10-04 — **HUB-89** ERA handles "Add Laura as a contact person" — [criteria](<Hub & ERA — Master Book.md#hub-89>)
+- ✅ 2026-10-04 — **HUB-90** Every ERA write leaves an Artifact that opens the item — [criteria](<Hub & ERA — Master Book.md#hub-90>)
+- ✅ 2026-10-04 — **HUB-88** ERA handles "Add Kobeize as a location" — [criteria](<Hub & ERA — Master Book.md#hub-88>)
+- ✅ 2026-10-04 — **HUB-94** ERA asks where an event happens and learns your places — [criteria](<Hub & ERA — Master Book.md#hub-94>)
 
 ## Delivery session log
 

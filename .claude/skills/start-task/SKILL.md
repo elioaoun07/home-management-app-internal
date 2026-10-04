@@ -24,6 +24,7 @@ TASK TYPE: <bug | feature-in-existing-module | new-module | api | db | ui | docs
 
 | Task type | Playbook to read NOW | Path |
 |---|---|---|
+| ERA report (HUB-n under **ERA reports**): ERA can't do something the manual app already does | era-wire (alone; it replaces this protocol's other routing) | `.claude/skills/era-wire/SKILL.md` |
 | Bug / error / regression / "X doesn't work" | fix-bug | `.claude/skills/fix-bug/SKILL.md` |
 | New behavior in an existing module | add-feature | `.claude/skills/add-feature/SKILL.md` |
 | Brand-new top-level module | new-module | `.claude/skills/new-module/SKILL.md` |

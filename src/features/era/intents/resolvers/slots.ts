@@ -21,6 +21,7 @@ async function recordExample(input: LexiconRuleInput): Promise<void> {
   await saveLexiconRule(input).catch(() => null);
 }
 import { coverCard } from "./budgetFamilies";
+import { answerEventLocation, answerEventWhen, answerPlaceSave } from "./events";
 import { answerAmendTarget, moveToGroup } from "./amend";
 import { findReminderCandidates, normalizeTitle, type ReminderCandidate } from "./reminderLookup";
 import {
@@ -125,6 +126,10 @@ export async function resolvePendingSlot(
     if (!r) return { unmatched: true };
     return { ...r, pending: r.pending ?? null };
   }
+  // HUB-94 — event date, event place and "save this place" take free text too.
+  if (pending.capability === "event.when") return answerEventWhen(pending, text, chip);
+  if (pending.capability === "event.location") return answerEventLocation(pending, text, chip);
+  if (pending.capability === "place.save") return answerPlaceSave(pending, text, chip);
   const choice = chip ?? matchOption(pending.options, text)?.value;
   if (!choice || choice.startsWith("nav:")) return { unmatched: true };
   const a = pending.args;

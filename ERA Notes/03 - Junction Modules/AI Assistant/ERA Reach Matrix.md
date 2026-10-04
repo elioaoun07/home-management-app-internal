@@ -20,7 +20,7 @@ Generated from `src/features/era/reach.ts` by `src/features/era/reach.test.ts` (
 | Meal Planning | ✓ `/meal-plan` | – | meal.assign, meal.gaps | ✓ |  |
 | Inventory | ✓ `/catalogue` | – | – | – |  |
 | Debts | ✓ `/expense` | – | debt.record | ✓ | Settle waits on BUD-68. |
-| Catalogue | ✓ `/catalogue` | – | – | – | Search waits on HUB-69 (KIT-20/22). |
+| Catalogue | ✓ `/catalogue` | – | contact.create, place.create | ✓ | Search waits on HUB-69 (KIT-20/22). |
 | Future Purchases | ✓ `/dashboard` | – | purchases.read | – |  |
 | Budget Allocation | ✓ `/dashboard` | – | spend.month | ✓ |  |
 | Preferences (LBP, theme) | ✓ `/settings` | – | – | – |  |
@@ -29,7 +29,7 @@ Generated from `src/features/era/reach.ts` by `src/features/era/reach.test.ts` (
 | Hub Chat | ✓ `/chat` | – | – | – |  |
 | Shopping List | ✓ `/chat` | – | shopping.add | ✓ |  |
 | Message Actions | ✓ `/chat` | – | – | – | Reached through Hub Chat. |
-| Items / Reminders | ✓ `/reminders` | – | reminder.create, reminder.reschedule, reminder.complete, reminder.delete, reminder.skip, schedule.forDay | ✓ |  |
+| Items / Reminders | ✓ `/reminders` | – | reminder.create, event.create, reminder.reschedule, reminder.complete, reminder.delete, reminder.skip, schedule.forDay | ✓ |  |
 | AI Assistant | ✓ `/era` | – | – | ✓ |  |
 | Notifications | ✓ `/alerts` | – | – | – |  |
 | Household Sharing | ✓ `/settings` | – | – | – |  |

@@ -3,8 +3,11 @@ import { supabaseServer } from "@/lib/supabase/server";
 import type { CatalogueModule, CreateModuleInput } from "@/types/catalogue";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
+
+const settingsSchema = z.record(z.string(), z.unknown()).optional();
 
 // GET all modules for the current user
 export async function GET() {
@@ -105,6 +108,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // HUB-94 — ERA marks the modules it creates (`{ era_role: "places" }`).
+    const settings = settingsSchema.safeParse(body.settings_json);
+    if (!settings.success) {
+      return NextResponse.json(
+        { error: "settings_json must be an object" },
+        { status: 400 },
+      );
+    }
+
     // Get max position
     const { data: maxPos } = await supabase
       .from("catalogue_modules")
@@ -131,6 +143,7 @@ export async function POST(req: NextRequest) {
         is_enabled: true,
         is_public: is_public ?? true,
         position: nextPosition,
+        ...(settings.data ? { settings_json: settings.data } : {}),
       })
       .select()
       .single();

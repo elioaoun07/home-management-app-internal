@@ -50,7 +50,7 @@ const RECIPE_SEARCH_VERB_RE =
  * check to always catch it.
  */
 const SCHEDULE_DOMAIN_RE =
-  /\b(?:reminder|reminders|appointment|appointments|meeting|meetings|dentist|doctor|task|tasks|todo|to-do|alarm|deadline)\b/i;
+  /\b(?:reminder|reminders|appointment|appointments|meeting|meetings|event|events|calendar|dentist|doctor|task|tasks|todo|to-do|alarm|deadline)\b/i;
 
 export const chefRouter: FaceIntentRouter = {
   parse(text, ctx) {

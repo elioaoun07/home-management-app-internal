@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-03
+updated: 2026-10-04
 type: checklist
 status: active
 owner: Elio
@@ -16,6 +16,7 @@ Now-lane exception: reports filed from the ERA chat arrive under **ERA reports**
 
 ## Now
 
+- [ ] **HUB-91** Run the era-artifacts migration and witness Artifacts + Activity Log links on the phone — [criteria](<Hub & ERA — Master Book.md#hub-91>) _(blocker - S)_
 - [ ] **HUB-83** Run the era_lexicon migration and witness ERA's new flows on both phones — [criteria](<Hub & ERA — Master Book.md#hub-83>) _(blocker - S)_
 - [ ] **HUB-62** Record current schema and application evidence — [criteria](<Hub & ERA — Master Book.md#hub-62>) _(friction - M)_
 - [ ] **HUB-37** Verify CI and recoverable capture failures — [criteria](<Hub & ERA — Master Book.md#hub-37>) _(blocker - M)_
@@ -24,8 +25,7 @@ Now-lane exception: reports filed from the ERA chat arrive under **ERA reports**
 **ERA reports**
 
 - [ ] **HUB-87** ERA handles "Add Mop Chores today" — [criteria](<Hub & ERA — Master Book.md#hub-87>) _(friction - S)_
-- [ ] **HUB-88** ERA handles "Add Kobeize as a location" — [criteria](<Hub & ERA — Master Book.md#hub-88>) _(friction - S)_
-- [ ] **HUB-89** ERA handles "Add Laura as a contact person" — [criteria](<Hub & ERA — Master Book.md#hub-89>) _(friction - S)_
+- [ ] **HUB-93** ERA gets "Add Racha as a Contact" right — [criteria](<Hub & ERA — Master Book.md#hub-93>) _(blocker - S)_
 
 ## Next
 
@@ -44,6 +44,7 @@ Now-lane exception: reports filed from the ERA chat arrive under **ERA reports**
 
 ## Later
 
+- [ ] **HUB-92** ERA artifacts for every entity open the exact item — [criteria](<Hub & ERA — Master Book.md#hub-92>) _(annoyance - M)_
 - [ ] **HUB-79** Reach every Budget, Schedule and Kitchen family from ERA — [criteria](<Hub & ERA — Master Book.md#hub-79>) _(friction - L)_
 - [ ] **HUB-81** Reach every module from ERA and run two named workflows — [criteria](<Hub & ERA — Master Book.md#hub-81>) _(friction - L)_
 - [ ] **HUB-82** Route typed, voice and Hub input through one interpretation path — [criteria](<Hub & ERA — Master Book.md#hub-82>) _(friction - M)_

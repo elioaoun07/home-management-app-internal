@@ -188,6 +188,9 @@ export function formatReply(intent: Intent): string {
     case "slotAnswer":
       return "Okay.";
     case "addShopping":
+    case "addContact":
+    case "addPlace":
+    case "draftEvent":
       return "Adding that.";
     case "captureIncome":
     case "splitExpense":

@@ -7,6 +7,7 @@
 //   recurring.cover → link an EXISTING transaction via mark-covered, behind a
 //                     confirm card re-checked on tap; no match → prefilled form
 
+import { eraArtifact, type EraArtifact } from "@/lib/era/artifacts";
 import { safeFetch } from "@/lib/safeFetch";
 import { getCachedPreferences } from "@/lib/queryConfig";
 import { getDefaultDateRange } from "@/lib/utils/date";
@@ -227,7 +228,13 @@ export function coverCard(action: Omit<Extract<EraNativeAction, { type: "recurri
  */
 export async function executeCoverRecurring(
   action: Extract<EraNativeAction, { type: "recurringCover" }>,
-): Promise<{ text: string; ok: boolean; outcome: "done" | "failed" | "uncertain"; metadata?: Record<string, unknown> }> {
+): Promise<{
+  text: string;
+  ok: boolean;
+  outcome: "done" | "failed" | "uncertain";
+  metadata?: Record<string, unknown>;
+  artifacts?: EraArtifact[];
+}> {
   try {
     const listRes = await safeFetch("/api/recurring-payments", { timeoutMs: 8_000 });
     if (!listRes.ok) return { text: "Couldn't check it first.", ok: false, outcome: "failed" };
@@ -253,6 +260,7 @@ export async function executeCoverRecurring(
       ok: true,
       outcome: "done",
       metadata: { paymentId: action.paymentId, transactionId: action.transactionId, nextDue: data.next_due_date },
+      artifacts: [eraArtifact("recurring_payment", "updated", action.paymentId, `${action.name} · paid`)],
     };
   } catch {
     return { text: `Not sure ${action.name} was marked. Check Recurring before retrying.`, ok: false, outcome: "uncertain" };

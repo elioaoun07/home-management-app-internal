@@ -3,6 +3,7 @@
 // Kept import-free of the resolvers so budget.ts and slots.ts can both use
 // them without a cycle.
 
+import type { EraArtifact } from "@/lib/era/artifacts";
 import type { EraActiveProposal, EraChipOption, EraPendingSlot, EraPendingTurn } from "../../types";
 
 export interface SlotResult {
@@ -11,6 +12,11 @@ export interface SlotResult {
   ok?: boolean;
   pending?: EraPendingTurn | null;
   proposal?: EraActiveProposal;
+  artifacts?: EraArtifact[];
+  /** HUB-94 — a write done before (or while) asking keeps its Undo. */
+  undo?: () => Promise<boolean>;
+  /** HUB-94 — a page door (e.g. repeating events → the form). */
+  navigate?: string;
 }
 
 export function slot(

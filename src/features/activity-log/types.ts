@@ -72,6 +72,8 @@ export interface ActivityEvent {
   changed_fields: string[];
   parent_id: string | null;
   available: boolean;
+  /** Server-resolved deep link (ERA rows → the artifact the turn wrote). */
+  href?: string | null;
 }
 export interface ActivityPage {
   events: ActivityEvent[];
@@ -91,10 +93,13 @@ export function activitySourceHref(event: ActivityEvent): string | null {
   if (!event.available) return null;
   // Guest destinations are slug-based. Never expose or fabricate a UUID URL.
   if (event.module === "guests") return null;
+  if (event.href) return event.href;
   const id = encodeURIComponent(event.source_id);
   const parent = event.parent_id ? encodeURIComponent(event.parent_id) : null;
   if (event.source_table === "transactions") return `/dashboard?openId=${id}`;
-  if (event.source_table === "items") return `/items?openId=${id}`;
+  // Schedule items open in the planner (there is no /items page).
+  if (event.source_table === "items") return `/reminders?openId=${id}`;
+  if (event.source_table === "catalogue_items") return `/catalogue?item=${id}`;
   if (event.source_table === "trips") return `/trips/${id}`;
   if (event.source_table.startsWith("trip_") && parent)
     return `/trips/${parent}`;
@@ -113,7 +118,7 @@ export function activitySourceHref(event: ActivityEvent): string | null {
       )) &&
     parent
   )
-    return `/items?openId=${parent}`;
+    return `/reminders?openId=${parent}`;
   const homes: Record<ActivityModule, string> = {
     budget: "/expense",
     schedule: "/reminders",

@@ -7,10 +7,12 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
 function CatalogueContent({ stickyTopClass }: { stickyTopClass: string }) {
-  const section = useSearchParams().get("section");
+  const params = useSearchParams();
+  const section = params.get("section");
   return (
     <WebCatalogue
       initialSection={section === "chores" ? "chores" : undefined}
+      initialItemId={params.get("item") ?? undefined}
       stickyTopClass={stickyTopClass}
     />
   );

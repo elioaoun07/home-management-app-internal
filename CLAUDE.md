@@ -41,7 +41,7 @@ Playbooks live in `.claude/skills/<name>/SKILL.md` (verified templates, evidence
 
 - **Workflow:** `fix-bug`, `add-feature`, `api-route` (anything under `src/app/api/`), `db-migration` (any DB change), `ui-guardrails` (any component/page/style change)
 - **Risk domains** (start-task's domain-risk gate routes here): `money-rules` (ANY money logic), `recurrence-safety` (both recurrence systems), `data-repair` (production data fixes), `skill-factory` (new skills)
-- **Specialized:** `new-module`, `cache-invalidation`, `timezone-handling`, `triage-inbox` (never implements), `wizard`, `graphify`, `pwa-install` (installable apps/manifests, "already installed")
+- **Specialized:** `new-module`, `cache-invalidation`, `timezone-handling`, `triage-inbox` (never implements), `wizard`, `graphify`, `pwa-install` (installable apps/manifests, "already installed"), `era-wire` (ERA reports: wire a shipped manual feature into the command bar)
 
 ---
 
@@ -199,6 +199,7 @@ DB changes = SQL run manually in the Supabase SQL Editor. New tables must includ
 
 - **Two recurrence systems exist** — recurring *payments* (money commitments, `recurring_payments`) and item/schedule *recurrence* (rrule occurrences + exceptions + pauses). They share vocabulary but not engines. Identify which one you're in before editing anything recurring (`recurrence-safety` skill), and never introduce a new expansion path.
 - **The AI layer runs on Gemini** (`src/lib/ai/gemini.ts`) with a fallback model on a separate quota bucket and daily-vs-per-minute 429 discrimination. AI mutations always flow through the drafts/proposal pattern — AI proposes, the human confirms; never let a model write directly to money or schedule state.
+- **Every ERA write leaves an Artifact** (owner rule, 2026-10-04) — create, update and delete. The adapter returns `artifacts` via `eraArtifact()` (`src/lib/era/artifacts.ts`, the one entity + deep-link registry); `recordArtifacts.ts` logs them and the Activity Log opens the item from them. Never add a per-intent logging `switch`; add a row to `src/features/era/artifacts.contract.test.ts`. New wirings: `/era-wire`.
 - **Cron scheduling lives outside the repo** — there is no `vercel.json`; the six `src/app/api/cron/*` routes only run if an external scheduler (or Vercel project config) invokes them with `Bearer CRON_SECRET`. Never assume a cron is live without checking a last-run trace; anything time-triggered needs a "how do I know it ran" answer.
 - **Framer Motion + HTML5 drag**: never mix `<motion.div draggable>` with HTML5 drag events — use one or the other (see `COMMON_PATTERNS.md`)
 - **Enum/type updates**: always update DB migration + TypeScript type + API route + UI components + utilities together

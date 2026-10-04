@@ -1,4 +1,5 @@
 // Brain resolver — saves and recalls household memories
+import { eraArtifact, type EraArtifact } from "@/lib/era/artifacts";
 import { safeFetch } from "@/lib/safeFetch";
 import {
   formatMemoryNotFound,
@@ -13,6 +14,8 @@ interface ResolveResult {
   metadata?: Record<string, unknown>;
   /** HUB-34 — false on a genuine failure (technical, or a save that didn't actually save, e.g. the 409-duplicate branch below); a recall that correctly found nothing is still a success — see resolveIntent.ts's ResolveResult doc. */
   ok?: boolean;
+  /** What this write left behind (src/lib/era/artifacts.ts). */
+  artifacts?: EraArtifact[];
 }
 
 export async function resolveMemorySave(
@@ -45,6 +48,7 @@ export async function resolveMemorySave(
     return {
       text: formatMemorySaved(label, value),
       metadata: { saved: true, label, value, memoryId: saved.id ?? null },
+      artifacts: [eraArtifact("memory", "created", saved.id, label)],
     };
   } catch {
     return { text: formatMemorySaveError(), ok: false };

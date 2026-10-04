@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import {
   useCatalogueCategories,
   useCatalogueItems,
+  useCatalogueItem,
   useCatalogueModules,
   useDeleteCategory,
   useDeleteItem,
@@ -36,6 +37,7 @@ import {
   GraduationCap,
   Heart,
   HeartPulse,
+  MapPin,
   MoreVertical,
   Package,
   Pencil,
@@ -51,7 +53,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { InventoryView } from "../inventory/InventoryView";
 import AddToCalendarDialog from "./AddToCalendarDialog";
 import CatalogueCategoryDialog from "./CatalogueCategoryDialog";
@@ -80,6 +82,7 @@ const MODULE_ICON_COMPONENTS: Record<
   book: BookOpen,
   film: Film,
   package: Package,
+  "map-pin": MapPin,
 };
 
 function getModuleIcon(
@@ -100,8 +103,14 @@ type DocOwnerFilter = "all" | "mine" | "partner";
 
 export default function WebCatalogue({
   initialSection,
+  initialItemId,
   stickyTopClass = "top-0",
-}: { initialSection?: "chores"; stickyTopClass?: string } = {}) {
+}: {
+  initialSection?: "chores";
+  /** Deep link (?item=) — open this item's detail in its own module. */
+  initialItemId?: string;
+  stickyTopClass?: string;
+} = {}) {
   const themeClasses = useThemeClasses();
   const { theme } = useTheme();
   const { data: householdData } = useHouseholdMembers();
@@ -300,6 +309,22 @@ export default function WebCatalogue({
       setSearchQuery("");
     }
   };
+
+  // Deep link (?item=) from ERA Artifacts / Activity Log: open the item's
+  // module, then its detail — once.
+  const { data: linkedItem } = useCatalogueItem(initialItemId ?? "");
+  const linkedConsumed = useRef(false);
+  useEffect(() => {
+    if (linkedConsumed.current || !linkedItem) return;
+    const home = moduleById.get(linkedItem.module_id);
+    if (!home) return;
+    linkedConsumed.current = true;
+    setCurrentLevel("categories");
+    setSelectedModule(home);
+    setSelectedCategory(null);
+    setViewingItem(linkedItem);
+    setShowItemDetailDialog(true);
+  }, [linkedItem, moduleById]);
 
   // Item actions
   const handleViewItem = (item: CatalogueItem) => {

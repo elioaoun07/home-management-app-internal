@@ -217,6 +217,16 @@ export type Intent =
   | { kind: "reminderSkip"; face: "schedule"; itemId: string | null; title: string | null; targetHint?: string; rawText: string }
   // HUB-78 — marginal-cost capability: add items to the household shopping list.
   | { kind: "addShopping"; face: "chef"; items: string[]; groupHint?: string; rawText: string }
+  /** HUB-89 — add a Catalogue contact ("add Laura as a contact"). */
+  | { kind: "addContact"; face: "brain"; name: string; rawText: string }
+  /** HUB-88/94 — save a Catalogue place ("add Kobeize as a location"). */
+  | { kind: "addPlace"; face: "brain"; name: string; rawText: string }
+  /**
+   * HUB-94 — create a calendar event. `title` is already clean (no lead-in,
+   * no date/time, no place); `placeHint` is the "at X" phrase, if any. The
+   * resolver reads date/time from `rawText`.
+   */
+  | { kind: "draftEvent"; face: "schedule"; title: string; placeHint?: string; rawText: string }
   /** HUB-84 — edit the last result (any type) through its edit contract. */
   | { kind: "amendLast"; face: FaceKey; focusId: string | null; focusType: string | null; targetHint?: string; rawText: string }
   | { kind: "unknown"; rawText: string };
@@ -246,7 +256,17 @@ export interface EraPendingReminder {
  */
 export interface EraPendingSlot {
   kind: "slot";
-  capability: "transfer.create" | "reminder.pick" | "reminder.scope" | "recurring.link" | "shopping.group" | "amend.target";
+  capability:
+    | "transfer.create"
+    | "reminder.pick"
+    | "reminder.scope"
+    | "recurring.link"
+    | "shopping.group"
+    | "amend.target"
+    // HUB-94 — event date, event place (free text or a saved place), save a new place.
+    | "event.when"
+    | "event.location"
+    | "place.save";
   /** Arguments already resolved (ids, amounts, whenText, action). */
   args: Record<string, unknown>;
   /** The argument the chips fill. */

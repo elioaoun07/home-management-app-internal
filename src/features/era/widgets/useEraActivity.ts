@@ -1,5 +1,6 @@
 "use client";
 
+import type { EraArtifactAction } from "@/lib/era/artifacts";
 import { safeFetch } from "@/lib/safeFetch";
 import { isToday } from "@/lib/utils/date";
 import { useQuery } from "@tanstack/react-query";
@@ -7,7 +8,9 @@ import { eraKeys } from "../queryKeys";
 
 export interface EraActivityItem {
   id: string;
-  entity_type: "reminder" | "transaction" | "transfer" | "debt" | "meal_plan" | "memory";
+  action: EraArtifactAction;
+  /** An ERA_ARTIFACT_ENTITIES key (src/lib/era/artifacts.ts). */
+  entity_type: string;
   title: string;
   route: string;
   created_at: string;

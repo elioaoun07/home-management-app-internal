@@ -40,12 +40,13 @@ import { ToastIcons } from "@/lib/toastIcons";
 import { deriveOutcome, handoffUrl, type EraHandoff } from "./engine";
 import { getFace } from "./faceRegistry";
 import { moneyIn } from "./intents/formatters/budget";
+import { FREE_TEXT_SLOTS, isNewRequest } from "./intents/freeTextAnswer";
 import { resolvePendingSlot } from "./intents/resolvers/slots";
 import { patchDueAt } from "./nativeActions";
 import { rootIntentRouter } from "./intentRouter";
 import { resolveIntent, type ResolveResult } from "./intents/resolveIntent";
 import { resolvePendingReminderAnswer } from "./intents/resolvers/schedule";
-import { logEraAction, logEraCapabilityAction } from "./logEraAction";
+import { recordEraArtifacts } from "./recordArtifacts";
 import { classifyMiss, type MissClassification } from "./missTracking";
 import { useEraTemplates } from "./templates/useEraTemplates";
 import { useEraLexicon } from "./useEraLexicon";
@@ -177,7 +178,10 @@ export function useEraTurn() {
       let slotResolution: ResolveResult | null = null;
 
       if (pending?.kind === "slot") {
-        const answered = await resolvePendingSlot(pending, text, opts.chip).catch(() => null);
+        // HUB-94 — "When?"/"Where?" take free text, so a real new request
+        // typed instead is handed to the router, never read as a date/place.
+        const newRequest = !opts.chip && FREE_TEXT_SLOTS.has(pending.capability) && isNewRequest(text);
+        const answered = newRequest ? null : await resolvePendingSlot(pending, text, opts.chip).catch(() => null);
         if (answered && !("unmatched" in answered)) {
           slotResolution = answered as ResolveResult;
         } else {
@@ -292,7 +296,7 @@ export function useEraTurn() {
           metadata: undefined as Record<string, unknown> | undefined,
           pending: null,
         })));
-      const { text: reply, metadata, pending: nextPending, proposal, handoff, navigate, focus: nextFocus, undo } = resolution;
+      const { text: reply, metadata, pending: nextPending, proposal, handoff, navigate, focus: nextFocus, undo, artifacts } = resolution;
 
       setPendingTurn(nextPending ?? null);
       // HUB-76 — a write held behind Confirm: show the card, write nothing.
@@ -301,15 +305,8 @@ export function useEraTurn() {
       if (navigate) setActiveProposal({ kind: "handoff", text: reply, open: () => router.push(navigate) });
 
       const outcome = deriveOutcome(intent, resolution);
-      if (intent.kind === "capabilityAction") {
-        logEraCapabilityAction(intent.capabilityId, metadata, queryClient);
-      } else if (intent.kind === "slotAnswer") {
-        if (typeof metadata?.previousDueAt === "string" || metadata?.dueAt) {
-          logEraCapabilityAction("reminder.reschedule", metadata, queryClient);
-        }
-      } else {
-        logEraAction(intent.kind, metadata, queryClient);
-      }
+      // Every write's adapter returned its artifacts — one call, no per-feature mapping.
+      recordEraArtifacts(artifacts, queryClient);
       pushFocusFromResult(intent, answeringQuestion ? pending : null, metadata);
       // HUB-84 — every editable result becomes "it" for the next follow-up.
       registerResultFocus({ intent, focus: nextFocus, proposal, handoff, metadata });
@@ -334,6 +331,8 @@ export function useEraTurn() {
                 ...(missClassification ?? {}),
                 outcome,
                 ...(handoff ? { handoff } : {}),
+                // The Activity Log's ERA row opens the item from these.
+                ...(artifacts?.length ? { artifacts } : {}),
               },
               draft_transaction_id: draftTransactionId,
             })

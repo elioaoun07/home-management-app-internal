@@ -1,4 +1,5 @@
 // Chef resolver — searches recipes by dish name
+import { eraArtifact, type EraArtifact } from "@/lib/era/artifacts";
 import { safeFetch } from "@/lib/safeFetch";
 import { parseSmartText } from "@/lib/smartTextParser";
 import { formatDate } from "@/lib/utils/date";
@@ -17,6 +18,8 @@ interface ResolveResult {
   metadata?: Record<string, unknown>;
   /** HUB-34 — false only on a genuine technical failure (fetch/exception); a correctly-executed search that legitimately found nothing is still a success — see resolveIntent.ts's ResolveResult doc. */
   ok?: boolean;
+  /** What this write left behind (src/lib/era/artifacts.ts). */
+  artifacts?: EraArtifact[];
 }
 
 export async function resolveRecipeSearch(dish: string): Promise<ResolveResult> {
@@ -160,6 +163,7 @@ export async function resolveAssignMeal(
         plannedDate,
         mealType: mealType || "lunch",
       },
+      artifacts: [eraArtifact("meal_plan", "created", mealPlan.id, `${recipe.name} · ${mealType || "lunch"}`)],
     };
   } catch {
     return { text: formatChefError(), ok: false };

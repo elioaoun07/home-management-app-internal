@@ -8,6 +8,8 @@
 
 ERA is the proactive AI co-pilot. It lives across all modules: a command bar parses typed/voice input into intents (budget, schedule, chef, brain), runs the corresponding action, and replies in ERA's voice. Each module is a "face" with its own hue. Voice mode includes wake-word listening, STT, intent classification, TTS.
 
+**Since 2026-10-04 (HUB-94):** ERA also creates events (`draftEvent`) and saves places (`addPlace`) to Catalogue → Places.
+
 **Capability set (as of 2026-08-26):** query (todaySchedule, monthSpend, showAnalytics, listRecipes, mealPlanGaps, memoryRecall) · write (draftTransaction, draftReminder, transfer, recordDebt, confirmDraft, assignMeal, memorySave) · multi-turn slot filling (a `draftReminder` with no date asks a question instead of writing undated — see `EraPendingTurn` / `useEraTurn.ts`) · manual AI handoff ("Ask AI" — see `useEraAskAI.ts` / `EraActiveProposal`, the confirm-card pattern for an AI-proposed action). Full intent list: `src/features/era/types.ts`.
 
 ## Files at a glance
@@ -37,6 +39,7 @@ ERA is the proactive AI co-pilot. It lives across all modules: a command bar par
   - `src/features/era/useEraAskAI.ts` — "Ask AI" (Slice 4): `askAI()` calls `/api/era/ask`; `confirmProposal()`/`dismissProposal()` act on `activeProposal`
   - `src/features/era/engine.ts` — outcome contract, effect tiers, `?era=` handoff shape (HUB-78)
   - `src/features/era/nativeActions.ts` — executes native confirm cards + their Undo (HUB-76/78/79)
+  - **Artifacts ("ERA using the app's functionality")**: `src/lib/era/artifacts.ts` (entity registry, `eraArtifact()`, deep links), `src/features/era/recordArtifacts.ts` (the one logger), `src/features/era/intents/resolvers/routeWrite.ts` (adapter template), `src/app/api/era/actions/route.ts`, `src/components/era/dashboards/ArtifactsView.tsx`; contract test `src/features/era/artifacts.contract.test.ts`. "ERA did X but it's not in Artifacts / Open goes to the wrong page" starts here.
   - `src/features/era/intents/speechAct.ts` — speech-act gate on every write (HUB-76)
   - `src/features/era/intents/resolvers/slots.ts`, `slotBuilders.ts`, `reminderLookup.ts` — chip questions, reminders by name (HUB-78)
   - `src/features/era/intents/resolvers/budgetFamilies.ts`, `shopping.ts`, `estate.ts` — income/split handoff, balance, recurring cover, shopping-add, activity/purchases reads (HUB-79/81)
@@ -45,6 +48,7 @@ ERA is the proactive AI co-pilot. It lives across all modules: a command bar par
   - `src/features/era/useEraHandoff.ts`, `src/app/api/era/messages/[id]/route.ts` — precision-form handoff (HUB-78)
   - `src/lib/nlp/amount.ts` — the one amount extractor (HUB-75)
   - `src/features/era/intents/followUp.ts`, `intents/resolvers/amend.ts` — follow-ups edit the last result by its type (HUB-84)
+  - **Events + Places (HUB-94/88):** `src/features/era/intents/eventText.ts` (sentence → title / "at place" / date-time), `intents/resolvers/events.ts` (write the event, then "When?"/"Where?"/"Save to Places?"), `intents/resolvers/places.ts` (Catalogue → Places module, alias-tag matching, save), `intents/freeTextAnswer.ts` (a free-text answer never swallows a new command); tests `intents/eventText.test.ts` + Gym `reports.jsonl` `hub-94-*`. "ERA didn't recognise my place" starts at `matchPlace` / the place's tags.
   - `src/components/era/EraAskChips.tsx` — chip row for one-question turns (HUB-78)
   - `tests/era-gym/` — ERA Gym corpus, harness, record/replay (HUB-77)
 - **Intent layer**:

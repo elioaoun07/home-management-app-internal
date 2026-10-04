@@ -13,11 +13,11 @@
 // History / New chat controls in its header.
 
 import { motion } from "framer-motion";
-import { History, MessageCircle, SquarePen, X } from "lucide-react";
+import { MessageCircle, X } from "lucide-react";
 import { useStartNewEraChat } from "@/features/era/useEraConversation";
 import { useEraStore } from "@/features/era/useEraStore";
 import { CommandBar } from "./CommandBar";
-import { ChatIconButton, useActiveThreadState } from "./EraChatToolbar";
+import { ChatIconButton, EraHistoryIcon, EraNewChatIcon, useActiveThreadState } from "./EraChatToolbar";
 import { EraConversation } from "./EraConversation";
 
 export function EraChatDrawer({
@@ -86,14 +86,14 @@ export function EraChatDrawer({
       >
         <div className="flex items-center gap-1 px-2 pt-2 pb-1">
           <ChatIconButton label="History" onClick={() => setHistoryOpen(true)}>
-            <History className="size-[18px]" aria-hidden />
+            <EraHistoryIcon className="size-5" />
           </ChatIconButton>
           <span className="flex-1 text-center text-xs font-semibold tracking-wide text-white/60">
             Talk to ERA
           </span>
           {hasTurns && (
             <ChatIconButton label="New chat" onClick={startNewChat} dot={quiet}>
-              <SquarePen className="size-[18px]" aria-hidden />
+              <EraNewChatIcon className="size-5" />
             </ChatIconButton>
           )}
           <ChatIconButton label="Close chat" onClick={() => onOpenChange(false)}>

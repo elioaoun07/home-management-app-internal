@@ -22,6 +22,8 @@ related:
 
 The household's read-only timeline at `/activity-log`, with module, feature, person and local-date filters, newest first and cursor pagination. A separate manifest and icon allow home-screen installation alongside Trips and PM. User menu → Activity and ERA Artifacts → Household activity open it. Its own opaque sticky header replaces global navigation and the floating assistant on this route.
 
+**Open targets (2026-10-04):** schedule items open `/reminders?openId=` (the old `/items?openId=` had no page and 404'd), catalogue items open `/catalogue?item=`, and an ERA message row opens what that turn wrote — the API route (`withEraLinks`) reads the assistant message's `intent_payload.artifacts` and rebuilds the link from `src/lib/era/artifacts.ts`. `era_messages` is owner-only, so a partner's view falls back to `/era`; turns from before 2026-10-04 carry no artifacts and also fall back.
+
 HUB-72 implements the owner's 2026-09-26 request. The existing HUB-25 `era_actions`/Artifacts feed only records assistant-originated actions; it remains available. This ledger records source-table changes regardless of the entry point, after the migration is applied. It does not invent historical create/update events from existing records.
 
 ## Architecture

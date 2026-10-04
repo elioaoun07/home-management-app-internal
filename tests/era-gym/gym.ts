@@ -38,6 +38,10 @@ import {
   resolveAmend,
   resolveAmendByName,
 } from "@/features/era/intents/resolvers/amend";
+import { resolveAddContact } from "@/features/era/intents/resolvers/contacts";
+import { resolveDraftEvent } from "@/features/era/intents/resolvers/events";
+import { resolveAddPlace } from "@/features/era/intents/resolvers/places";
+import { FREE_TEXT_SLOTS, isNewRequest } from "@/features/era/intents/freeTextAnswer";
 import { resolveAddShopping } from "@/features/era/intents/resolvers/shopping";
 import type { FocusEntity } from "@/features/era/focusMemory";
 import type { EraPendingTurn } from "@/features/era/types";
@@ -225,6 +229,12 @@ function accountName(handle: string): string | undefined {
   return HOUSEHOLD.accounts.find((a) => a.handle === handle)?.name;
 }
 
+/** HUB-94 — saved places (Catalogue → Places); `parents` is an alias tag. */
+const HOUSEHOLD_PLACES = [
+  { id: "pl-parents", name: "Parents' house", tags: ["parents"] },
+  { id: "pl-church", name: "Church", tags: [] },
+];
+
 /** Fake `/api/accounts?own=true` for prepareTransfer. Install with vi.stubGlobal("fetch", gymFetch). */
 export async function gymFetch(
   input: RequestInfo | URL,
@@ -265,7 +275,21 @@ export async function gymFetch(
                     },
                   }
                 : { groups: HOUSEHOLD.shoppingGroups }
-              : url === "/api/hub/messages" && init?.method === "POST"
+              : url === "/api/catalogue/modules"
+                ? init?.method === "POST"
+                  ? { id: `mod-${++gymSeq}` }
+                  : [
+                      { id: "mod-contacts", type: "contacts" },
+                      // HUB-94 — the Places module ERA creates (era_role marker).
+                      { id: "mod-places", type: "custom", name: "Places", settings_json: { era_role: "places" } },
+                    ]
+                : url === "/api/catalogue/items?module_id=mod-places"
+                  ? HOUSEHOLD_PLACES
+                : url === "/api/catalogue/items" && init?.method === "POST"
+                  ? { id: `c-${++gymSeq}` }
+                : url === "/api/items" && init?.method === "POST"
+                  ? { item: { id: `ev-${++gymSeq}` } }
+                  : url === "/api/hub/messages" && init?.method === "POST"
                 ? { message: { id: `m-${++gymSeq}` } }
                 : url === "/api/drafts" && init?.method === "POST"
                   ? { draft: { id: `gym-draft-${++gymSeq}` } }
@@ -357,6 +381,37 @@ export function fromResolution(r: SlotResult, cap: string): PathResult {
       tier: "act",
       via,
       effect: { cap, target: m.title, itemId: m.itemId },
+    };
+  }
+  return { outcome: r.ok === false ? "honest_limit" : "answered", via };
+}
+
+/** HUB-94 — events and places: a write may come with one follow-up question. */
+export function fromEvent(r: SlotResult): PathResult {
+  const via = "router" as const;
+  const m = r.metadata ?? {};
+  const pending = r.pending ?? undefined;
+  const place = typeof m.place === "string" ? { place: m.place } : {};
+  if (r.ok !== false && typeof m.eventId === "string") {
+    return {
+      outcome: "done",
+      tier: "act",
+      via,
+      pending,
+      effect: { cap: m.locationSet ? "event.location" : "event.create", title: m.title, ...place },
+    };
+  }
+  if (r.ok !== false && typeof m.placeId === "string") {
+    return { outcome: "done", tier: "act", via, pending, effect: { cap: "place.create", name: m.place } };
+  }
+  if (r.navigate) return { outcome: "handed_off", via, effect: { cap: "navigate", to: r.navigate } };
+  if (r.pending) {
+    const args = r.pending.kind === "slot" ? r.pending.args : {};
+    return {
+      outcome: "needs_input",
+      via,
+      pending: r.pending,
+      effect: { cap: "event.create", ...(typeof args.title === "string" ? { title: args.title } : {}) },
     };
   }
   return { outcome: r.ok === false ? "honest_limit" : "answered", via };
@@ -540,6 +595,19 @@ export async function resolveRouted(
           ...(group ? { group } : {}),
         },
         focus: r.focus,
+      };
+    }
+    case "addPlace":
+      return fromEvent(await resolveAddPlace(intent.name));
+    case "draftEvent":
+      return fromEvent(await resolveDraftEvent(intent));
+    case "addContact": {
+      const r = await resolveAddContact(intent.name);
+      return {
+        outcome: r.ok === false ? "honest_limit" : "done",
+        tier: "act",
+        via,
+        effect: { cap: "contact.create", name: intent.name },
       };
     }
     case "amendLast": {
@@ -1009,7 +1077,15 @@ export async function runCase(
   for (let t = 0; t < c.turns.length; t++) {
     const text = c.turns[t];
     // HUB-78 — an open chip question takes typed text that matches an option.
+    // HUB-94 — a free-text question never swallows a real new request.
+    if (pendingSlot?.kind === "slot" && FREE_TEXT_SLOTS.has(pendingSlot.capability) && isNewRequest(text)) {
+      pendingSlot = null;
+    }
     if (pendingSlot?.kind === "slot") {
+      const isEvent: boolean =
+        pendingSlot.capability === "event.when" ||
+        pendingSlot.capability === "event.location" ||
+        pendingSlot.capability === "place.save";
       const slotCap =
         pendingSlot.capability === "transfer.create"
           ? "transfer.create"
@@ -1027,7 +1103,9 @@ export async function runCase(
               title: "",
               addedAt: 0,
             })
-          : fromResolution(answered, slotCap);
+          : isEvent
+            ? fromEvent(answered as SlotResult)
+            : fromResolution(answered, slotCap);
         if (r.pending) pendingSlot = r.pending;
         if (r.effect || !final.effect) final = r;
         continue;

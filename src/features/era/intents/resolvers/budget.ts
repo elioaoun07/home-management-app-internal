@@ -31,6 +31,7 @@ import { forgetLexiconRule, saveLexiconRule } from "../../useEraLexicon";
 import { useEraStore } from "../../useEraStore";
 import type { EraBudgetSubmitResult } from "../../useEraBudgetSubmit";
 import { extractAmount } from "@/lib/nlp/amount";
+import { eraArtifact, type EraArtifact } from "@/lib/era/artifacts";
 import { HANDOFF_TTL_MS, type EraHandoff } from "../../engine";
 
 interface ResolveResult {
@@ -38,6 +39,8 @@ interface ResolveResult {
   metadata?: Record<string, unknown>;
   /** HUB-34 — false on every graceful-error return; see resolveIntent.ts's ResolveResult doc. Only set on resolvers reachable through the capability registry (spend.month, draft.list, draft.confirm). */
   ok?: boolean;
+  /** What this write left behind (src/lib/era/artifacts.ts). */
+  artifacts?: EraArtifact[];
 }
 
 interface PeriodTransaction {
@@ -361,6 +364,14 @@ export async function resolveDraftTransaction(
       currency: result.currency,
       categoryName: result.parsed.categoryName ?? null,
     },
+    artifacts: [
+      eraArtifact(
+        "draft",
+        "created",
+        result.draftId,
+        `${result.parsed.categoryName ?? "Expense"} · ${moneyIn(amount, result.currency)}`,
+      ),
+    ],
     // "Change" on the receipt opens this; the form deletes the draft on save.
     handoff: {
       kind: "spend",
@@ -636,6 +647,14 @@ export async function executeTransfer(
       fromName: action.fromName,
       toName: action.toName,
     },
+    artifacts: [
+      eraArtifact(
+        "transfer",
+        "created",
+        outcome.data.id,
+        `${moneyIn(action.amount, action.currency)} · ${action.fromName} → ${action.toName}`,
+      ),
+    ],
     outcome: "done",
   };
 }
@@ -741,6 +760,7 @@ export async function executeRecordDebt(
       debtorName: action.debtorName,
       amount: action.amount,
     },
+    artifacts: [eraArtifact("debt", "created", outcome.data.debt.id, `${action.debtorName} · ${moneyIn(action.amount)}`)],
     outcome: "done",
   };
 }
@@ -856,6 +876,9 @@ export async function resolveConfirmDraft(hint: string | undefined): Promise<Res
     return {
       text: formatDraftConfirmed({ amount: full.amount, categoryName: full.category?.name }),
       metadata: { transactionId: transaction.id, amount: full.amount },
+      artifacts: [
+        eraArtifact("transaction", "updated", transaction.id, `${full.category?.name ?? "Expense"} · ${moneyIn(full.amount)}`),
+      ],
     };
   } catch {
     return { text: formatConfirmDraftError("request-failed"), ok: false };

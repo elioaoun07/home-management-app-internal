@@ -27,6 +27,7 @@ tags:
 
 - Task templates as "UI Database"
 - **Chores section** (top-level card, deep link `/catalogue?section=chores`): a saved view of every visible, non-archived item with `is_chore = true`, across modules and categories. Rows keep their IDs, module and category; detail/edit use the row's own module (`itemModule` in `WebCatalogue`). **Add** opens the task-template editor in the Tasks module with the chore flag preselected. The count is flagged definitions, not this week's occurrences. Changing `is_chore` still fans out to linked items server-side; the client now also invalidates `qk.scheduleItems()`. *(IMPLEMENTED 2026-10-03)*
+- **Places** (ERA-owned custom module, HUB-94): created by ERA the first time you save a place ("Add Kobeize as a location", or [Save] after an event's "Where?"). It is a `custom` module marked `settings_json.era_role = "places"` with the `map-pin` icon. Each place is a normal item, and its **tags are aliases** ERA matches ("parents" → Parents' house). **Pinned** places come first in ERA's chips. Renaming the module is safe because ERA finds it by the marker. *(IMPLEMENTED 2026-10-04)*
 - Multi-store product links with AI price scraping
 - Convert catalogue items to calendar events
 - Documents are catalogue items with document-only fields stored in `metadata_json`.

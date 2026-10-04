@@ -1,5 +1,6 @@
 // Central dispatcher — routes an intent to the appropriate resolver.
 // Returns { text, metadata } to be persisted as the assistant message.
+import type { EraArtifact } from "@/lib/era/artifacts";
 import { greeting } from "@/lib/era/phrasing";
 import { getCapability } from "../capabilities/registry";
 import { formatReply } from "../replyFormatter";
@@ -31,6 +32,9 @@ import {
   resolveReminderReschedule,
   resolveScheduleForDay,
 } from "./resolvers/schedule";
+import { resolveAddContact } from "./resolvers/contacts";
+import { resolveDraftEvent } from "./resolvers/events";
+import { resolveAddPlace } from "./resolvers/places";
 import { resolveAddShopping } from "./resolvers/shopping";
 import { resolveAmend, resolveAmendByName } from "./resolvers/amend";
 import { useEraStore } from "../useEraStore";
@@ -81,6 +85,12 @@ export interface ResolveResult {
   focus?: FocusEntity;
   /** HUB-84 — inverse for the receipt's Undo (only where demonstrated). */
   undo?: () => Promise<boolean>;
+  /**
+   * What this write left behind — every create/update/delete returns one per
+   * row (src/lib/era/artifacts.ts). The turn pipeline logs them to Artifacts
+   * and the Activity Log opens the item from them.
+   */
+  artifacts?: EraArtifact[];
 }
 
 /**
@@ -211,6 +221,16 @@ export async function resolveIntent(
     case "addShopping":
       return resolveAddShopping(intent.items, intent.groupHint);
 
+    case "addContact":
+      return resolveAddContact(intent.name);
+
+    // HUB-88 / HUB-94 — places and events.
+    case "addPlace":
+      return resolveAddPlace(intent.name);
+
+    case "draftEvent":
+      return resolveDraftEvent(intent);
+
     // HUB-84 — follow-ups edit the last result through its type's contract.
     case "amendLast": {
       if (intent.targetHint) return resolveAmendByName(intent.targetHint, intent.rawText);
@@ -251,7 +271,7 @@ export async function resolveIntent(
       }
       const result = await capability.execute(parsed.data);
       if (intent.sourceTemplateId) bumpTemplateMatch(intent.sourceTemplateId);
-      return { text: result.text, metadata: result.metadata };
+      return { text: result.text, metadata: result.metadata, artifacts: result.artifacts };
     }
 
     case "recipeSearch":

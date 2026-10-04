@@ -1,10 +1,51 @@
-import { activityFiltersSchema } from "@/features/activity-log/types";
+import {
+  activityFiltersSchema,
+  type ActivityEvent,
+} from "@/features/activity-log/types";
+import { eraArtifactHref, parseEraArtifacts } from "@/lib/era/artifacts";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store", Vary: "Cookie" };
+
+type Supabase = Awaited<ReturnType<typeof supabaseServer>>;
+
+/**
+ * An ERA message row opens what that turn wrote, not /era: the assistant
+ * message carries its artifacts (src/lib/era/artifacts.ts); the link is
+ * rebuilt from entity + id, never taken from stored text. era_messages is
+ * owner-only (RLS), so a partner's view keeps the module fallback.
+ */
+async function withEraLinks(
+  supabase: Supabase,
+  events: ActivityEvent[],
+): Promise<ActivityEvent[]> {
+  const ids = events
+    .filter((e) => e.source_table === "era_messages" && e.available)
+    .map((e) => e.source_id);
+  if (ids.length === 0) return events;
+  try {
+    const { data } = await supabase
+      .from("era_messages")
+      .select("id, intent_payload")
+      .in("id", ids);
+    const hrefs = new Map<string, string>();
+    for (const row of data ?? []) {
+      const payload = row.intent_payload as { artifacts?: unknown } | null;
+      const first = parseEraArtifacts(payload?.artifacts)[0];
+      if (first) hrefs.set(row.id as string, eraArtifactHref(first));
+    }
+    return events.map((e) =>
+      hrefs.has(e.source_id) && e.source_table === "era_messages"
+        ? { ...e, href: hrefs.get(e.source_id) }
+        : e,
+    );
+  } catch {
+    return events;
+  }
+}
 
 export async function GET(request: NextRequest) {
   const supabase = await supabaseServer(await cookies());
@@ -51,7 +92,11 @@ export async function GET(request: NextRequest) {
         { status: setupRequired ? 503 : 500, headers },
       );
     }
-    return NextResponse.json(data, { headers });
+    const page = data as { events?: ActivityEvent[] } | null;
+    if (page?.events?.length) {
+      page.events = await withEraLinks(supabase, page.events);
+    }
+    return NextResponse.json(page, { headers });
   } catch {
     return NextResponse.json(
       { error: "Couldn’t load activity" },

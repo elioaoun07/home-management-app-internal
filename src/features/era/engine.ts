@@ -19,6 +19,11 @@ const MIN_TIER: Record<string, EraTier> = {
   "debt.record": "confirm",
   "draft.confirm": "confirm",
   "reminder.create": "act",
+  "event.create": "act",
+  "event.when": "act",
+  "event.location": "act",
+  "place.create": "act",
+  "place.save": "act",
   "reminder.reschedule": "act",
   "reminder.complete": "act",
   "reminder.delete": "confirm",
@@ -60,6 +65,9 @@ const INTENT_CAPABILITY: Partial<Record<Intent["kind"], string>> = {
   memorySave: "memory.save",
   memoryRecall: "memory.recall",
   addShopping: "shopping.add",
+  addContact: "contact.create",
+  addPlace: "place.create",
+  draftEvent: "event.create",
   captureIncome: "income.record",
   splitExpense: "split.create",
   balanceRead: "balance.read",
@@ -91,6 +99,7 @@ export function deriveOutcome(
     handoff?: EraHandoff;
     navigate?: string;
     undo?: () => Promise<boolean>;
+    artifacts?: Array<{ id: string | null }>;
   },
 ): EraOutcome {
   const capability = capabilityOf(intent);
@@ -98,6 +107,7 @@ export function deriveOutcome(
   const ids = ["draftId", "itemId", "transferId", "debtId", "transactionId", "messageId", "memoryId", "mealPlanId"]
     .map((k) => m[k])
     .filter((v): v is string => typeof v === "string");
+  for (const a of r.artifacts ?? []) if (a.id && !ids.includes(a.id)) ids.push(a.id);
   if (r.proposal?.kind === "native_action") return { status: "awaiting_confirm", capability, entityIds: ids, inverse: null };
   if (r.pending) return { status: "needs_input", capability, entityIds: ids, inverse: null };
   if (r.handoff || r.navigate) return { status: "handed_off", capability, entityIds: ids, inverse: null };

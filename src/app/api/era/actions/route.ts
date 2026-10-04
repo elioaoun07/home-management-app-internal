@@ -1,8 +1,11 @@
-// GET/POST for the ERA Activity log (era_actions) — what ERA itself created
-// or updated via chat/voice, shown on the /era Top View's Activity card.
+// GET/POST for ERA Artifacts (era_actions) — what ERA itself created,
+// updated or deleted via chat/voice, shown on the /era Artifacts tab.
+// POST takes the adapter's `artifacts` (src/lib/era/artifacts.ts); the deep
+// link is built here from entity + id, never accepted from the client.
 // "Today" filtering happens client-side (useEraActivity) against the
 // caller's local day, not here — the server has no reliable local timezone
 // to filter by (see timezone-handling skill).
+import { eraArtifactHref, eraArtifactSchema } from "@/lib/era/artifacts";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -10,19 +13,8 @@ import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
-const CreateActionSchema = z.object({
-  action: z.enum(["created", "updated"]),
-  entity_type: z.enum([
-    "reminder",
-    "transaction",
-    "transfer",
-    "debt",
-    "meal_plan",
-    "memory",
-  ]),
-  entity_id: z.string().uuid().nullable().optional(),
-  title: z.string().trim().min(1).max(200),
-  route: z.string().trim().min(1).max(300),
+const CreateArtifactsSchema = z.object({
+  artifacts: z.array(eraArtifactSchema).min(1).max(20),
 });
 
 async function getHouseholdId(
@@ -66,7 +58,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => null);
-  const parsed = CreateActionSchema.safeParse(body);
+  const parsed = CreateArtifactsSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
@@ -75,19 +67,23 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase
     .from("era_actions")
-    .insert({
-      user_id: user.id,
-      household_id: householdId,
-      action: parsed.data.action,
-      entity_type: parsed.data.entity_type,
-      entity_id: parsed.data.entity_id ?? null,
-      title: parsed.data.title,
-      route: parsed.data.route,
-    })
-    .select()
-    .single();
+    .insert(
+      parsed.data.artifacts.map((a) => ({
+        user_id: user.id,
+        household_id: householdId,
+        action: a.action,
+        entity_type: a.entity,
+        entity_id: a.id,
+        title: a.title,
+        route: eraArtifactHref(a),
+      })),
+    )
+    .select();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("era_actions insert failed:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
-  return NextResponse.json({ action: data }, { status: 201 });
+  return NextResponse.json({ actions: data }, { status: 201 });
 }

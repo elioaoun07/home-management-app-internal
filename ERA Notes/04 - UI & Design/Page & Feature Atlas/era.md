@@ -29,7 +29,7 @@ tags:
   - `src/components/era/EraDots.tsx`
   - `src/components/era/HubScatterWidgets.tsx` — the 4 hub-mode scatter cards (Budget/Schedule/Chef/Brain), corner-positioned around the center orb — unchanged; a same-session redesign of this into a grid was reverted per owner feedback (see Master Book HUB-25 correction note)
   - `src/components/era/dashboards/ArtifactsView.tsx` — the Activity log's own view, opened via the Artifacts chip exactly like a face dashboard (`useEraStore`'s `EraView` gained a third `"activity"` value alongside `"hub"`/`"dashboard"`)
-  - `src/features/era/logEraAction.ts` — the ERA Activity log's single write point (not a component)
+  - `src/features/era/recordArtifacts.ts` — the Artifacts tab's single write point (not a component); entities, labels and deep links live in `src/lib/era/artifacts.ts` (2026-10-04)
   - `src/components/era/EraConversation.tsx` — the conversation (2026-10-03, HUB-86; replaced the inline `EraThreadTranscript`): bubbles in the person's own color, ERA replies beside a small orb in the answering face's hue, time breaks, a thinking indicator, the confirm card and question chips as the newest turn, a quiet "Report" offer under a missed reply, and a "New chat" divider once the chat has been silent 30 min. Layouts: `stage` (hub), `panel` (desktop dashboards), `sheet` (mobile chat sheet), `preview` (History)
   - `src/components/era/EraChatToolbar.tsx` — History (left) and New chat (right) icons under the nav in hub view; New chat shows a dot once the chat has gone quiet
   - `src/components/era/EraHistorySheet.tsx` — past chats (HUB-52): side panel on desktop, bottom sheet on phones; grouped Today / Yesterday / This week / Earlier; tap = read-only preview with Archive / Continue
@@ -63,7 +63,7 @@ tags:
 ## DB tables
 
 - `era_conversations`, `era_messages` (`migrations/schema.sql`) — shipped since Phase 0.5
-- `era_actions` (migration `2026-08-26_era-actions.sql`, **pending manual run**) — one row per ERA-initiated create/update, feeds the Activity card
+- `era_actions` (migration `2026-08-26_era-actions.sql`; entity/verb widened by `2026-10-04_era-artifacts-any-entity.sql`, **pending manual run**) — one row per ERA-initiated create/update/delete, feeds the Artifacts tab
 
 ## How to get here
 
@@ -74,7 +74,7 @@ tags:
 
 - Each face's `route` (`/expense`, `/items`, `/recipe`, `/catalogue`) — Phase 1+ wires the placeholder body to deep-link into these
 - Settings, Atlas, etc. via the global `ConditionalHeader` (visible above the shell)
-- Activity log rows (2026-08-27, HUB-25, in `ArtifactsView.tsx`): `/items?openId=<id>&date=<yyyy-mm-dd>` (reminders — `WebDayPlanner`'s new `initialOpenItemId` prop opens the item's detail modal directly, independent of which day-section it's in), `/dashboard?openId=<id>` (confirmed transactions — `WebDashboard`'s `openId` search param), `/meal-plan` and `/era?face=brain` (no per-record deep link yet), `/expense` (transfers/debts — no detail view exists anywhere for these, tracked in the Master Book Pain Inventory)
+- Artifact rows open `era_actions.route`, built server-side from `ERA_ARTIFACT_ENTITIES` in `src/lib/era/artifacts.ts` (2026-10-04 — that registry is now the source of truth; contacts open `/catalogue?item=<id>`, deletes open `/recycle-bin`). Historical note, 2026-08-27, HUB-25: `/items?openId=<id>&date=<yyyy-mm-dd>` (reminders — `WebDayPlanner`'s new `initialOpenItemId` prop opens the item's detail modal directly, independent of which day-section it's in), `/dashboard?openId=<id>` (confirmed transactions — `WebDashboard`'s `openId` search param), `/meal-plan` and `/era?face=brain` (no per-record deep link yet), `/expense` (transfers/debts — no detail view exists anywhere for these, tracked in the Master Book Pain Inventory)
 
 ## Related vault doc
 

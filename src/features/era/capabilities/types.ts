@@ -11,6 +11,7 @@
 // directly and do not need to go through this registry — it becomes load-
 // bearing once Ask AI starts producing structured proposals against it.
 
+import type { EraArtifact } from "@/lib/era/artifacts";
 import type { z } from "zod";
 
 /** The application domains ERA can act on. Grows as new capabilities are added. */
@@ -42,6 +43,8 @@ export interface EraCapabilityResult {
    * must never get memorized as if it did.
    */
   ok?: boolean;
+  /** Forwarded from the wrapped resolver (src/lib/era/artifacts.ts). */
+  artifacts?: EraArtifact[];
 }
 
 export interface EraCapability<TSlots = unknown> {

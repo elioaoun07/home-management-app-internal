@@ -1,6 +1,7 @@
 // Per-face intent router — Schedule face
 import { parseSmartText } from "@/lib/smartTextParser";
 import { resolveEntityRef, resolveFocusRef } from "../focusMemory";
+import { parseEvent } from "./eventText";
 import type { FaceKey, Intent } from "../types";
 import { useEraStore } from "../useEraStore";
 
@@ -50,9 +51,8 @@ const SCHEDULE_QUESTION_RE =
  * my reminders" is a QUERY (handled by SCHEDULE_NOUN_RE/SCHEDULE_QUESTION_RE
  * above), never a silent create (owner decision 2026-08-31: keep this
  * conservative — no generic intent verbs like "I need to" either).
- * Excludes appointment/meeting/event/"book a …" — those need a dedicated
- * event capability; they fall through to the generic switchFace below
- * rather than being masked as a reminder.
+ * Excludes appointment/meeting/event/"book a …" — those are events
+ * (`draftEvent`, HUB-94, see eventText.ts), never masked as a reminder.
  */
 const REMINDER_CREATE_RE =
   /\bremind\b|\bremember\s+to\b|\b(?:don'?t|do\s+not)\s+forget\b|\b(?:alert|notify|ping|buzz|wake)\s+me\b|\bnote\s+to\s+(?:my\s+)?self\b|\b(?:set|put)\s+(?:a|an)\s+alarm\b|\b(?:add|set|create|make|new)\s+(?:a|an|the)?\s*(?:new\s+)?(?:reminders?|alarms?|tasks?|to-?dos?)\b/i;
@@ -126,13 +126,27 @@ function scheduleDateISO(text: string): string | undefined {
 function namedMatch(text: string, re: RegExp): RegExpMatchArray | null {
   // HUB-78 — creation wording always wins over a named follow-up: "remind me
   // to check if the oven is off" is a new reminder, not "complete 'if the oven…'".
-  if (REMINDER_CREATE_RE.test(text)) return null;
+  if (REMINDER_CREATE_RE.test(text) || parseEvent(text)) return null;
   return OTHER_FACE_RE.test(text) ? null : text.match(re);
 }
 
 export const scheduleRouter: FaceIntentRouter = {
   parse(text) {
     const lo = text.toLowerCase();
+
+    // HUB-94 — "add an event …", "schedule a meeting …", "add X to my
+    // calendar". First: an explicit create verb + event noun outranks the
+    // query gates below ("add an event to get groceries" has "get").
+    const event = parseEvent(text);
+    if (event) {
+      return {
+        kind: "draftEvent",
+        face: "schedule",
+        title: event.title,
+        ...(event.placeHint ? { placeHint: event.placeHint } : {}),
+        rawText: text,
+      };
+    }
 
     // "What do I have to do today", "What's on my schedule", "anything
     // due tomorrow", "check my reminders" — gated against money/food

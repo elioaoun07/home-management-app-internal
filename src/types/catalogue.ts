@@ -308,6 +308,8 @@ export interface CreateModuleInput {
   gradient_from?: string;
   gradient_to?: string;
   is_public?: boolean;
+  /** Marks a module ERA owns, e.g. `{ era_role: "places" }` (HUB-94). */
+  settings_json?: Record<string, unknown>;
 }
 
 export interface UpdateModuleInput {

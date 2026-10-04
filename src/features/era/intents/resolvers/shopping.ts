@@ -5,6 +5,7 @@
 // shape ShoppingListView already renders). Explicit requests only — DEC-03
 // governs automatic additions. Inverse: DELETE /api/hub/messages (soft).
 
+import { eraArtifact, type EraArtifact } from "@/lib/era/artifacts";
 import { safeFetch } from "@/lib/safeFetch";
 import type { FocusEntity } from "../../focusMemory";
 import type { EraActiveProposal, EraPendingTurn } from "../../types";
@@ -16,6 +17,8 @@ interface ResolveResult {
   focus?: FocusEntity;
   pending?: EraPendingTurn | null;
   proposal?: EraActiveProposal;
+  /** What this write left behind (src/lib/era/artifacts.ts). */
+  artifacts?: EraArtifact[];
 }
 
 interface ThreadLite {
@@ -86,6 +89,7 @@ export async function resolveAddShopping(items: string[], groupHint?: string): P
         : `Added · ${added.join(", ")}${groupName ? ` · ${groupName}` : ""}`,
       ok: !partial,
       metadata: { messageIds: ids, threadId: list.id, items: added, partial, groupId },
+      artifacts: shoppingArtifacts(ids, added, "created", list.id),
       focus,
     };
     if (unresolvedGroup) {
@@ -102,6 +106,18 @@ export async function resolveAddShopping(items: string[], groupHint?: string): P
 async function applyShoppingGroupLazy(focus: FocusEntity, hint: string) {
   const { applyShoppingGroup } = await import("./amend");
   return applyShoppingGroup(focus, focus.meta as never, hint);
+}
+
+/** One artifact per list row — the shared shape every shopping write returns. */
+export function shoppingArtifacts(
+  messageIds: string[],
+  names: string[],
+  action: EraArtifact["action"],
+  threadId?: string,
+): EraArtifact[] {
+  return messageIds.map((id, i) =>
+    eraArtifact("shopping_item", action, id, names[i] ?? names[0] ?? "Item", threadId ? { thread: threadId } : undefined),
+  );
 }
 
 export async function removeShoppingMessages(messageIds: string[]): Promise<boolean> {

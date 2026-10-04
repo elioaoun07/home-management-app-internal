@@ -14,11 +14,12 @@ import { transferKeys } from "@/features/transfers/hooks";
 import { qk } from "@/lib/queryKeys";
 import { invalidateAccountData } from "@/lib/queryInvalidation";
 import { safeFetch } from "@/lib/safeFetch";
+import { eraArtifact, type EraArtifact } from "@/lib/era/artifacts";
 import { getCapability } from "./capabilities/registry";
 import { executeRecordDebt, executeTransfer } from "./intents/resolvers/budget";
 import { executeCoverRecurring, undoCoverRecurring } from "./intents/resolvers/budgetFamilies";
 import { createGroupAndMove } from "./intents/resolvers/amend";
-import { moveShoppingItems, removeShoppingMessages } from "./intents/resolvers/shopping";
+import { moveShoppingItems, removeShoppingMessages, shoppingArtifacts } from "./intents/resolvers/shopping";
 import { postponeNextOccurrence, resolveReminderReschedule, skipNextOccurrence } from "./intents/resolvers/schedule";
 import type { EraNativeAction } from "./types";
 
@@ -28,6 +29,8 @@ export interface NativeActionResult {
   outcome: "done" | "failed" | "uncertain";
   /** Present only where an inverse is demonstrated (Plan §5). */
   undo?: () => Promise<boolean>;
+  /** What the write left behind (src/lib/era/artifacts.ts). */
+  artifacts?: EraArtifact[];
 }
 
 function once(fn: () => Promise<boolean>): () => Promise<boolean> {
@@ -73,6 +76,7 @@ export async function executeNativeAction(
     return {
       text: result.text,
       metadata: result.metadata,
+      artifacts: result.artifacts,
       outcome: result.outcome,
       undo:
         typeof transferId === "string"
@@ -93,6 +97,7 @@ export async function executeNativeAction(
     return {
       text: result.text,
       metadata: result.metadata,
+      artifacts: result.artifacts,
       outcome: result.outcome,
       undo:
         typeof debtId === "string"
@@ -112,6 +117,7 @@ export async function executeNativeAction(
     return {
       text: `${action.name} · created`,
       metadata: { groupId: r.groupId, messageIds: action.messageIds },
+      artifacts: [eraArtifact("shopping_group", "created", r.groupId, action.name, { thread: action.threadId })],
       outcome: "done",
       undo: once(async () => {
         const ok = await moveShoppingItems(action.messageIds, action.previousGroupId).catch(() => false);
@@ -124,7 +130,13 @@ export async function executeNativeAction(
   if (action.type === "shoppingRemove") {
     const ok = await removeShoppingMessages(action.messageIds).catch(() => false);
     queryClient.invalidateQueries({ queryKey: ["hub"] });
-    return ok ? { text: `Removed · ${action.label}`, outcome: "done" } : { text: "Couldn't remove it.", outcome: "failed" };
+    return ok
+      ? {
+          text: `Removed · ${action.label}`,
+          outcome: "done",
+          artifacts: shoppingArtifacts(action.messageIds, action.label.split(", "), "deleted"),
+        }
+      : { text: "Couldn't remove it.", outcome: "failed" };
   }
 
   if (action.type === "recurringCover") {
@@ -136,6 +148,7 @@ export async function executeNativeAction(
     return {
       text: result.text,
       metadata: result.metadata,
+      artifacts: result.artifacts,
       outcome: result.outcome,
       undo:
         result.outcome === "done"
@@ -156,6 +169,7 @@ export async function executeNativeAction(
     return {
       text: result.text,
       metadata: result.metadata,
+      artifacts: result.artifacts,
       outcome: "done",
       undo: typeof previous === "string" ? once(() => patchDueAt(action.itemId, previous, queryClient)) : undefined,
     };
@@ -164,14 +178,14 @@ export async function executeNativeAction(
   if (action.type === "reminderSkip") {
     const result = await skipNextOccurrence(action.itemId, action.title);
     if (result.outcome !== "failed") queryClient.invalidateQueries({ queryKey: qk.scheduleItems() });
-    return { text: result.text, metadata: result.metadata, outcome: result.outcome };
+    return { text: result.text, metadata: result.metadata, artifacts: result.artifacts, outcome: result.outcome };
   }
 
   if (action.type === "reminderOccurrence") {
     const result = await postponeNextOccurrence(action.itemId, action.title, action.whenText);
     if (result.outcome !== "failed") queryClient.invalidateQueries({ queryKey: qk.scheduleItems() });
     // No demonstrated inverse for an occurrence exception → no Undo (plan §5).
-    return { text: result.text, metadata: result.metadata, outcome: result.outcome };
+    return { text: result.text, metadata: result.metadata, artifacts: result.artifacts, outcome: result.outcome };
   }
 
   // Destructive registry capability — today only reminder.delete, whose
@@ -188,6 +202,7 @@ export async function executeNativeAction(
   return {
     text: result.text,
     metadata: result.metadata,
+    artifacts: result.artifacts,
     outcome: "done",
     undo:
       action.capabilityId === "reminder.delete" && typeof deletedItemId === "string"

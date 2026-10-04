@@ -1,24 +1,21 @@
 "use client";
 
-// ERA Artifacts — today's log of everything ERA itself created or updated
-// (reminders, transactions, transfers, debts, meal plans, memories), each
-// row deep-linking back to where it lives. Not a face — no dashboard hue,
-// just the neutral chat teal.
+// ERA Artifacts — today's log of everything ERA itself created, updated or
+// deleted, each row deep-linking back to the item. Labels and links come
+// from the one entity registry (src/lib/era/artifacts.ts). Not a face — no
+// dashboard hue, just the neutral chat teal.
 
 import { useEraActivity, type EraActivityItem } from "@/features/era/widgets/useEraActivity";
+import { eraArtifactLabel } from "@/lib/era/artifacts";
 import { useRouter } from "next/navigation";
 import { EraStatCard } from "./EraStatCard";
 
 const HUE = 190;
 
-const ENTITY_LABEL: Record<EraActivityItem["entity_type"], string> = {
-  reminder: "Reminder",
-  transaction: "Transaction",
-  transfer: "Transfer",
-  debt: "Debt",
-  meal_plan: "Meal plan",
-  memory: "Memory",
-};
+function rowLabel(item: EraActivityItem): string {
+  const label = eraArtifactLabel(item.entity_type);
+  return item.action === "created" ? label : `${label} · ${item.action}`;
+}
 
 function formatRelativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -79,7 +76,7 @@ export function ArtifactsView() {
           >
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-white/85">{item.title}</p>
-              <p className="text-xs text-white/40">{ENTITY_LABEL[item.entity_type]}</p>
+              <p className="text-xs text-white/40">{rowLabel(item)}</p>
             </div>
             <span className="shrink-0 text-xs text-white/40">
               {formatRelativeTime(item.created_at)}
