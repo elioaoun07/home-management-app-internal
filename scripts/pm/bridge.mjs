@@ -47,6 +47,7 @@ import { isRunnerAlive } from "../delivery/run-session.mjs";
 import { readDispatchMode, routeDeliveryV2 } from "../delivery-v2/entry.mjs";
 import { pairBridgeSession } from "../delivery-v2/local-auth.mjs";
 import { planningCommandState, routePlanning } from "./planning.mjs";
+import { applyEraIssueImport, fetchEraIssueReports } from "./era-issues.mjs";
 import { RELAY_SCHEMA, ROW_KINDS, V2_COMMAND_TYPES, attentionItems, rowId } from "./relay-shared.mjs";
 import {
   RELAY_DIR,
@@ -68,6 +69,8 @@ import {
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const RUNNER_DEAD_DEBOUNCE_MS = 60_000;
 const POLL_FALLBACK_MS = 5_000;
+// ERA reports are reviewed work, not live state: every five minutes is plenty.
+const ERA_ISSUES_POLL_MS = 5 * 60_000;
 const EVENTS_TAIL_LINES = 40;
 // Session detail budget. Everything below is derived from files that already
 // exist on disk; the caps exist because a realtime row has to stay small enough
@@ -908,7 +911,7 @@ export function createCommandExecutor({ PM_DIR, deliveryCtx }) {
     }
   }
 
-  return { executeCommand, lastUndoable };
+  return { executeCommand, lastUndoable, writeWithUndo };
 }
 
 // ============================================================================
@@ -943,7 +946,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
   const { buildTasksSnapshot } = createTasksSnapshotBuilder({ PM_DIR });
   const { buildRollupsSnapshot } = createRollupsSnapshotBuilder({ PM_DIR });
   const { buildHistorySnapshot } = createHistorySnapshotBuilder({ PM_DIR });
-  const { executeCommand, lastUndoable } = createCommandExecutor({ PM_DIR, deliveryCtx });
+  const { executeCommand, lastUndoable, writeWithUndo } = createCommandExecutor({ PM_DIR, deliveryCtx });
   const { installation_id } = readInstallation({ root: ROOT });
   const journal = createCommandJournal({ dir: relayDir });
   const attention = createAttentionLedger({ file: join(relayDir, "attention.json") });
@@ -955,6 +958,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
   let heartbeatTimer = null;
   let capabilitiesTimer = null;
   let v2Timer = null;
+  let eraIssuesTimer = null;
   let channel = null;
   let drainEnabled = false;
   let credential = null;
@@ -1448,6 +1452,30 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
     ]);
   }
 
+  /**
+   * R72 / HUB-85 — import ERA chat reports into Hub & ERA › Now (read-only
+   * toward the DB; idempotent via the corpus Source marker + .pm journal).
+   * Writes go through the same undo journal as phone captures.
+   */
+  async function importEraIssues() {
+    try {
+      const reports = await fetchEraIssueReports(supabase);
+      const plan = applyEraIssueImport({
+        PM_DIR,
+        reports,
+        ownerUserId: ownerId,
+        isSecret: (text) => findSecrets(text, env, [serviceKey, credential].filter(Boolean)).length > 0,
+        write: writeWithUndo,
+      });
+      if (plan.imported.length) {
+        console.log(`[pm-bridge] imported ERA report(s): ${plan.imported.map((i) => i.workId).join(", ")}`);
+        await publishTasks();
+      }
+    } catch (err) {
+      console.error("[pm-bridge] ERA report import failed:", err.message);
+    }
+  }
+
   function start() {
     const lock = acquireRelayLock({ dir: relayDir, installation_id });
     if (!lock.acquired) {
@@ -1464,6 +1492,8 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
     capabilitiesTimer = setInterval(publishCapabilities, CAPABILITIES_INTERVAL_MS);
     publishV2();
     v2Timer = setInterval(publishV2, V2_POLL_MS);
+    importEraIssues();
+    eraIssuesTimer = setInterval(importEraIssues, ERA_ISSUES_POLL_MS);
 
     channel = supabase
       .channel(`pm-commands-${ownerId}`)
@@ -1489,6 +1519,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
     clearInterval(pollTimer);
     clearInterval(capabilitiesTimer);
     clearInterval(v2Timer);
+    clearInterval(eraIssuesTimer);
     if (channel) supabase.removeChannel(channel);
     if (drainEnabled) releaseRelayLock({ dir: relayDir });
     drainEnabled = false;
@@ -1511,6 +1542,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
     publishHeartbeat,
     drainOnce,
     reconcileClaimed,
+    importEraIssues,
     enableDrainForTest,
     installation_id,
   };

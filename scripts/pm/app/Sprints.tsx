@@ -16,6 +16,7 @@ import {
   Pencil,
   Play,
   Plus,
+  RefreshCw,
   RotateCcw,
   Sparkles,
   Target,
@@ -31,9 +32,11 @@ import { canDeliver, workPath } from "./model";
 import {
   addCalendarDays,
   dateInTimezone,
+  eraHotfixes,
   forecastSprints,
   mondayOf,
   sprintItemStatus,
+  type EraHotfix,
 } from "./sprintModel";
 import type { Planning, Sprint, SprintMember } from "./planningTypes";
 import type { World } from "./types";
@@ -126,6 +129,123 @@ function Ring({
         {!compact && <span>delivered</span>}
       </div>
     </div>
+  );
+}
+
+/**
+ * R72 — ERA chat reports in Now, shown on the current week as standalone
+ * Hotfixes / Defects regardless of the week they were filed in. Not members:
+ * they never count against planned points. Deliver opens the ordinary flow.
+ */
+function HotfixLane({
+  hotfixes,
+  from,
+  canLaunch,
+}: {
+  hotfixes: EraHotfix[];
+  from: string;
+  canLaunch: boolean;
+}) {
+  const canSync = !!transport().capabilities.eraSync;
+  const [syncing, setSyncing] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const sync = async () => {
+    setSyncing(true);
+    setNote(null);
+    try {
+      const r = await transport().post<{
+        imported: unknown[];
+        waiting: number;
+        error?: string;
+      }>("era-issues/sync", {});
+      setNote(
+        r.imported.length
+          ? `${r.imported.length} added`
+          : r.waiting
+            ? "Waiting for Undo"
+            : "Up to date",
+      );
+      await client.invalidateQueries({ queryKey: pmKeys.all });
+    } catch (error) {
+      setNote(error instanceof Error ? error.message : "Couldn't refresh");
+    } finally {
+      setSyncing(false);
+    }
+  };
+  if (!hotfixes.length && !canSync) return null;
+  return (
+    <section className="sprint-hotfixes" aria-labelledby="sprint-hotfixes-title">
+      <div className="section-title">
+        <h2 id="sprint-hotfixes-title">Hotfixes</h2>
+        <span className="quiet">
+          {note ?? (hotfixes.length ? `${hotfixes.length} from ERA` : "None")}
+        </span>
+        {canSync && (
+          <button
+            className="secondary"
+            onClick={() => void sync()}
+            disabled={syncing}
+            aria-label="Refresh ERA reports"
+          >
+            <RefreshCw size={15} className={syncing ? "spin" : undefined} />
+            Refresh
+          </button>
+        )}
+      </div>
+      <div className="sprint-items">
+        {hotfixes.map(({ work, label, reported, comment }) => {
+          const href = workPath(work, from);
+          return (
+            <article
+              key={work.key}
+              className="sprint-item"
+              data-state="todo"
+              data-hotfix={label.toLowerCase()}
+            >
+              <div className="sprint-item-mark">
+                <Flag size={18} />
+              </div>
+              <a className="sprint-item-content" href={`#${href}`}>
+                <span className="sprint-item-meta">
+                  <b>{work.label}</b>
+                  <span>{work.module}</span>
+                  {reported && <span>{shortDay(reported)}</span>}
+                </span>
+                <h3>{work.title}</h3>
+                {comment && <p className="sprint-hotfix-comment">{comment}</p>}
+                <span className="sprint-item-bottom">
+                  <span className={`sprint-hotfix-badge ${label.toLowerCase()}`}>
+                    {label}
+                  </span>
+                </span>
+              </a>
+              {canDeliver(work) ? (
+                <button
+                  className="sprint-item-action"
+                  disabled={!canLaunch}
+                  onClick={() =>
+                    go(
+                      `/deliver/${encodeURIComponent(work.module)}/${encodeURIComponent(work.id)}?from=${encodeURIComponent(from)}`,
+                    )
+                  }
+                >
+                  <Zap size={14} />
+                  Deliver
+                </button>
+              ) : (
+                <a
+                  className="sprint-item-action"
+                  href={`#${href}`}
+                  aria-label={`View ${work.label}`}
+                >
+                  <ChevronRight size={18} />
+                </a>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -325,6 +445,8 @@ export function Sprints() {
       review > selected.capacity.reviewMinutes);
   const deliveryKnown =
     !v2.isError && !!session.data?.paired && !runError && connected;
+  const hotfixes = useMemo(() => eraHotfixes(world), [world]);
+  const showHotfixes = !selected || selected.state !== "closed";
   const launch = (row: (typeof rows)[number]) => {
     if (!selected) return;
     if (row.run && !row.ready) {
@@ -392,12 +514,19 @@ export function Sprints() {
         </nav>
       )}
       {!selected || !stats ? (
-        <Empty title="No sprints yet">
-          <button className="primary" onClick={() => setEditor("forecast")}>
-            <Sparkles size={17} />
-            Plan weeks
-          </button>
-        </Empty>
+        <>
+          <HotfixLane
+            hotfixes={hotfixes}
+            from="/sprints"
+            canLaunch={connected && deliveryKnown}
+          />
+          <Empty title="No sprints yet">
+            <button className="primary" onClick={() => setEditor("forecast")}>
+              <Sparkles size={17} />
+              Plan weeks
+            </button>
+          </Empty>
+        </>
       ) : (
         <>
           <section className="sprint-hero" aria-labelledby="sprint-goal">
@@ -534,6 +663,13 @@ export function Sprints() {
               </span>
             </div>
           </div>
+          {showHotfixes && (
+            <HotfixLane
+              hotfixes={hotfixes}
+              from={fromWeek(selected.id)}
+              canLaunch={connected && deliveryKnown}
+            />
+          )}
           <div className="sprint-layout">
             <section className="sprint-deliverables">
               <div className="section-title">

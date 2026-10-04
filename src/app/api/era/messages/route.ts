@@ -82,6 +82,12 @@ export async function POST(req: NextRequest) {
     draft_transaction_id: z.string().uuid().nullable().optional(),
     /** When true and no conversation_id provided, auto-create one. */
     auto_create_conversation: z.boolean().optional(),
+    /**
+     * HUB-86 — the client started this conversation itself (a fresh chat's
+     * first sentence) and named it with `conversation_id`: create that row
+     * first if it does not exist yet, so the first turn never waits.
+     */
+    ensure_conversation: z.boolean().optional(),
   });
 
   const body = await req.json().catch(() => ({}));
@@ -117,6 +123,28 @@ export async function POST(req: NextRequest) {
       { error: "conversation_id is required" },
       { status: 400 },
     );
+  }
+
+  if (parsed.data.ensure_conversation && parsed.data.conversation_id) {
+    const { error: ensureErr } = await supabase.from("era_conversations").insert({
+      id: conversationId,
+      user_id: user.id,
+      active_face_key: parsed.data.intent_face ?? "budget",
+    });
+    if (ensureErr) {
+      if ((ensureErr as { code?: string }).code !== "23505") {
+        return NextResponse.json({ error: ensureErr.message }, { status: 500 });
+      }
+      // Already created (a retried first write) — it must be the caller's own.
+      const { data: own, error: ownErr } = await supabase
+        .from("era_conversations")
+        .select("id")
+        .eq("id", conversationId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (ownErr) return NextResponse.json({ error: ownErr.message }, { status: 500 });
+      if (!own) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
   }
 
   const { data, error } = await supabase

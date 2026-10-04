@@ -7,12 +7,18 @@
 // top of a dashboard the user is trying to read. Reuses CommandBar and
 // EraThreadTranscript in "embedded" mode so mic/send/AI/transcript logic
 // isn't duplicated (see their variant props).
+//
+// HUB-86 — the sheet holds the same conversation as the hub (EraConversation,
+// "sheet" layout: confirm card and chips are its newest turn) and the same
+// History / New chat controls in its header.
 
 import { motion } from "framer-motion";
-import { MessageCircle, X } from "lucide-react";
+import { History, MessageCircle, SquarePen, X } from "lucide-react";
+import { useStartNewEraChat } from "@/features/era/useEraConversation";
+import { useEraStore } from "@/features/era/useEraStore";
 import { CommandBar } from "./CommandBar";
-import { EraAskChips } from "./EraAskChips";
-import { EraProposalCard, EraThreadTranscript } from "./EraShell";
+import { ChatIconButton, useActiveThreadState } from "./EraChatToolbar";
+import { EraConversation } from "./EraConversation";
 
 export function EraChatDrawer({
   open,
@@ -21,6 +27,10 @@ export function EraChatDrawer({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const setHistoryOpen = useEraStore((s) => s.setHistoryOpen);
+  const startNewChat = useStartNewEraChat();
+  const { hasTurns, quiet } = useActiveThreadState();
+
   return (
     <>
       <button
@@ -64,7 +74,7 @@ export function EraChatDrawer({
 
       <motion.div
         aria-hidden={!open}
-        className="fixed inset-x-0 bottom-0 z-50 flex max-h-[80vh] flex-col rounded-t-3xl md:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 flex h-[80vh] flex-col rounded-t-3xl md:hidden"
         style={{
           background: "rgba(13, 18, 32, 0.97)",
           border: "1px solid var(--era-border-subtle, rgba(255,255,255,0.14))",
@@ -74,26 +84,27 @@ export function EraChatDrawer({
         animate={{ y: open ? 0 : "100%" }}
         transition={{ duration: 0.3, ease: "easeOut" }}
       >
-        <div className="flex items-center justify-between px-4 pt-3 pb-2">
-          <span className="text-xs font-semibold tracking-wide text-white/60">
+        <div className="flex items-center gap-1 px-2 pt-2 pb-1">
+          <ChatIconButton label="History" onClick={() => setHistoryOpen(true)}>
+            <History className="size-[18px]" aria-hidden />
+          </ChatIconButton>
+          <span className="flex-1 text-center text-xs font-semibold tracking-wide text-white/60">
             Talk to ERA
           </span>
-          <button
-            type="button"
-            aria-label="Close chat"
-            onClick={() => onOpenChange(false)}
-          >
-            <X className="size-4 text-white/50" aria-hidden />
-          </button>
+          {hasTurns && (
+            <ChatIconButton label="New chat" onClick={startNewChat} dot={quiet}>
+              <SquarePen className="size-[18px]" aria-hidden />
+            </ChatIconButton>
+          )}
+          <ChatIconButton label="Close chat" onClick={() => onOpenChange(false)}>
+            <X className="size-[18px]" aria-hidden />
+          </ChatIconButton>
         </div>
 
-        <div className="min-h-[120px] flex-1 overflow-y-auto">
-          <EraThreadTranscript variant="embedded" />
+        {/* HUB-76 — the confirm card and chips render as the thread's newest turn. */}
+        <div className="min-h-0 flex-1">
+          <EraConversation layout="sheet" />
         </div>
-
-        {/* HUB-76 — the confirm card must be reachable while this sheet is open. */}
-        {open && <EraProposalCard variant="embedded" />}
-        {open && <EraAskChips variant="embedded" />}
 
         <div className="p-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
           <CommandBar variant="embedded" />

@@ -52,6 +52,7 @@ import { appAsset, buildAppShell } from "./pm/app-shell.mjs";
 import { routeHealth } from "./pm/health.mjs";
 import { assertExpectedCheckbox, assertRestoreCurrent, guardUndo } from "./pm/write-guards.mjs";
 import { createBridge } from "./pm/bridge.mjs";
+import { syncEraIssues } from "./pm/era-issues.mjs";
 import {
   createDeliveryContext,
   performPendingWritebacks,
@@ -362,6 +363,22 @@ function observeSprints() {
   try { observePlanningProgress({ root: ROOT, pmDir: PM_DIR, data: buildData() }); }
   catch (error) { console.error("[pm] sprint observation failed:", error.message); }
 }
+let eraSyncing = null;
+/** One sync at a time; a change to the Hub & ERA files reloads open views. */
+function runEraIssueSync() {
+  if (!eraSyncing) {
+    suppressUntil = Date.now() + 700;
+    eraSyncing = syncEraIssues({ PM_DIR })
+      .then((result) => {
+        if (result.imported.length) broadcast();
+        return result;
+      })
+      .finally(() => {
+        eraSyncing = null;
+      });
+  }
+  return eraSyncing;
+}
 function broadcast() {
   observeSprints();
   for (const res of sseClients) {
@@ -583,6 +600,12 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 404, { error: "unknown delivery route" });
     }
 
+    // R72 — pull ERA chat reports into Hub & ERA (the Sprints "Refresh" button).
+    if (req.method === "POST" && path === "/api/era-issues/sync") {
+      const result = await runEraIssueSync();
+      return sendJson(res, result.ok ? 200 : 502, result);
+    }
+
     if (req.method === "POST" && path.startsWith("/api/")) {
       const op = path.slice(5);
       const handler = MUTATIONS[op];
@@ -662,6 +685,11 @@ function listen(port, attemptsLeft) {
       }
     }
     console.log("Press Ctrl+C to stop.");
+    // R72 — reports filed from the ERA chat while away land in Hub & ERA now.
+    runEraIssueSync().then((r) => {
+      if (!r.ok) console.log("[era-issues] skipped: " + r.error);
+      else if (r.imported.length) console.log("[era-issues] imported " + r.imported.map((i) => i.workId).join(", "));
+    });
     if (bridge) bridge.start();
     else if (process.env.PM_BRIDGE === "1") console.log("[pm-bridge] disabled by --no-bridge");
     if (!noOpen) openBrowser(url);

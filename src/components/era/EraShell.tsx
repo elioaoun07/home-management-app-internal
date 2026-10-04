@@ -8,17 +8,17 @@
 //
 // Every color (glow, CommandBar border, icons, text accent) is driven by
 // --era-hue / --era-accent CSS variables that shapeshift with the active module.
+//
+// HUB-86 — while a conversation is open in hub view ("conversing"), the DOT
+// takes its module-mode position (same spring) and the thread fills the space
+// between it and the command bar. New chat brings the DOT and greeting back
+// to the centre. With no conversation the hub is unchanged.
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getFace } from "@/features/era/faceRegistry";
 import { useEraAskAI } from "@/features/era/useEraAskAI";
-import { saveLexiconRule } from "@/features/era/useEraLexicon";
-import {
-  useActiveEraConversation,
-  useEraMessages,
-  useEraMessagesRealtime,
-} from "@/features/era/useEraConversation";
+import { useRestoreNewChat } from "@/features/era/useEraConversation";
 import { useEraStore } from "@/features/era/useEraStore";
 import { useEraTurn } from "@/features/era/useEraTurn";
 import { useEraWakeListener } from "@/features/era/useEraWakeListener";
@@ -36,23 +36,17 @@ import { ArtifactsView } from "./dashboards/ArtifactsView";
 import { CommandBar } from "./CommandBar";
 import { EraAskChips } from "./EraAskChips";
 import { EraChatDrawer } from "./EraChatDrawer";
+import { EraChatToolbar, useActiveThreadState } from "./EraChatToolbar";
+import { EraConversation } from "./EraConversation";
 import { EraDots } from "./EraDots";
 import { EraFaceNav } from "./EraFaceNav";
+import { EraHistorySheet } from "./EraHistorySheet";
+import { EraProposalCard } from "./EraProposalCard";
 import { HubScatterWidgets } from "./HubScatterWidgets";
+import { MODULE_COLORS } from "./eraHues";
 
-// Module hues — "chat" is the ERA hub default (190°)
-const MODULE_COLORS: Record<string, { hue: number; sat: number; lum: number }> = {
-  chat:      { hue: 190, sat: 85, lum: 62 },
-  financial: { hue: 175, sat: 72, lum: 55 },
-  recipe:    { hue:  28, sat: 85, lum: 58 },
-  schedule:  { hue: 256, sat: 78, lum: 68 },
-  memory:    { hue: 220, sat: 65, lum: 68 },
-  health:    { hue: 352, sat: 82, lum: 62 },
-  home:      { hue: 205, sat: 75, lum: 62 },
-  trip:      { hue: 155, sat: 72, lum: 58 },
-  fitness:   { hue:  40, sat: 92, lum: 62 },
-  outfit:    { hue: 325, sat: 78, lum: 68 },
-};
+// Kept for existing imports; the card now lives in its own file (HUB-86).
+export { EraProposalCard };
 
 // Heights used to centre the ERA DOT block in hub mode.
 // The motion.div contains: greeting (~80px) + ring (500px) + label (~40px).
@@ -96,6 +90,8 @@ export function EraShell() {
   // path a typed "Ask AI" tap does (EraProposalCard renders whatever
   // proposal either one produces, via the shared store).
   const { askAI, confirmProposal, dismissProposal } = useEraAskAI();
+  // HUB-86 — a New chat from before a reload still applies.
+  useRestoreNewChat();
 
   const firstName = user?.name?.split(" ")[0] ?? "";
   const setVoiceReplyEnabled = useEraStore((s) => s.setVoiceReplyEnabled);
@@ -154,6 +150,11 @@ export function EraShell() {
   const face      = getFace(activeFaceKey);
   const isHub      = activeView === "hub";
   const isActivity = activeView === "activity";
+  const turnInFlight = useEraStore((s) => s.turnInFlight);
+  const { hasTurns } = useActiveThreadState();
+  // HUB-86 — the hub shows a conversation (DOT risen, thread below it).
+  const conversing = isAwake && isHub && (hasTurns || turnInFlight);
+  const heroHub    = isHub && !conversing;
   // Hub → tracks last mentioned module (starts as "chat", shifts when user addresses a face);
   // Activity → neutral chat hue, it isn't tied to any one face;
   // Module dashboard → that face's module key.
@@ -196,6 +197,7 @@ export function EraShell() {
     <div
       className="era-shell fixed inset-0 overflow-hidden"
       data-awake={isAwake}
+      data-conversing={conversing}
       onClick={!isAwake ? () => { wake(); engineWake(); } : undefined}
       style={
         {
@@ -237,7 +239,7 @@ export function EraShell() {
           <motion.div
             className="absolute left-1/2 z-10 pointer-events-none"
             style={{ x: "-50%", transformOrigin: "top center" }}
-            animate={isHub
+            animate={heroHub
               ? { top: hubDotTop, scale: 1 }
               : { top: moduleDotTop, scale: MODULE_SCALE }
             }
@@ -245,7 +247,7 @@ export function EraShell() {
           >
             {/* Greeting — fades out when switching to module */}
             <AnimatePresence>
-              {isHub && (
+              {heroHub && (
                 <motion.div
                   key="greeting"
                   initial={{ opacity: 0, y: 10 }}
@@ -323,6 +325,22 @@ export function EraShell() {
           {/* ─── Hub scatter widgets (desktop, hub mode) ─────────────────── */}
           <HubScatterWidgets />
 
+          {/* ─── HUB-86 — the conversation, below the risen ERA DOT ──────────
+              Mounted only while conversing; no exit animation (the DOT's
+              return to centre is the transition), so nothing invisible can
+              linger over the hub. Bottom clears the command bar. */}
+          {conversing && (
+            <motion.div
+              className="absolute inset-x-0 z-20 bottom-[148px] md:bottom-[88px]"
+              style={{ top: dashboardTop }}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.12, ease: "easeOut" }}
+            >
+              <EraConversation layout="stage" />
+            </motion.div>
+          )}
+
           {/* ─── Module dashboard (below shrunk ERA DOT) ─────────────────── */}
           <AnimatePresence mode="wait">
             {!isHub && (
@@ -346,22 +364,28 @@ export function EraShell() {
         </div>
       </div>
 
-      {/* ── ERA conversation thread — appears above command bar ──
-          Desktop: always floating, every view. Mobile: floating only in
-          Hub — module/activity views hide it behind EraChatDrawer instead. */}
-      {(!isMobile || isHub) && (
-        <AnimatePresence>
-          {isAwake && <EraThreadTranscript key="era-thread" />}
-        </AnimatePresence>
+      {/* ── Desktop module/activity views: the conversation as a compact
+          panel above the command bar (pointer events only on the panel). ── */}
+      {!isMobile && !isHub && isAwake && (
+        <div className="pointer-events-none absolute inset-x-0 z-20 flex justify-center px-5 bottom-[84px] [&>*]:pointer-events-auto">
+          <EraConversation layout="panel" />
+        </div>
       )}
 
-      {/* ── AI proposal confirm card (Slice 4) — sits just above the command bar ──
-          Always visible when active, in every view/breakpoint: it's an
-          action awaiting confirmation, not a chat surface. */}
+      {/* ── Mobile module/activity views with the chat sheet closed: an
+          action awaiting confirmation stays reachable (voice can raise one).
+          Everywhere else the card and chips are the thread's newest turn. ── */}
       <AnimatePresence>
-        {isAwake && <EraProposalCard key="era-proposal" />}
-        {isAwake && <EraAskChips key="era-ask-chips" />}
+        {isAwake && isMobile && !isHub && !chatDrawerOpen && (
+          <EraProposalCard key="era-proposal" />
+        )}
+        {isAwake && isMobile && !isHub && !chatDrawerOpen && (
+          <EraAskChips key="era-ask-chips" />
+        )}
       </AnimatePresence>
+
+      {/* ── History / New chat (hub) ── */}
+      <EraChatToolbar />
 
       {/* ── Floating command bar — same gating as the thread above ── */}
       {(!isMobile || isHub) && <CommandBar />}
@@ -370,239 +394,9 @@ export function EraShell() {
       {isMobile && !isHub && isAwake && (
         <EraChatDrawer open={chatDrawerOpen} onOpenChange={setChatDrawerOpen} />
       )}
+
+      {/* ── HUB-52 — past chats ── */}
+      {isAwake && <EraHistorySheet />}
     </div>
-  );
-}
-
-// Shows the last few turns of the active ERA conversation — not just the
-// latest reply. Reads `era_messages` via the same hooks the (now-retired)
-// EraTranscript used, so this is real conversation history, not a
-// re-derived summary: whatever CommandBar or voice just wrote is what
-// appears here, from both surfaces, on both devices (useEraMessagesRealtime).
-// Typewriter effect applies only to the newest assistant row, once.
-const MAX_VISIBLE_TURNS = 6;
-
-export function EraThreadTranscript({
-  variant = "floating",
-}: {
-  variant?: "floating" | "embedded";
-} = {}) {
-  const { data: conversation } = useActiveEraConversation();
-  const conversationId = conversation?.id ?? null;
-  const { data } = useEraMessages(conversationId);
-  useEraMessagesRealtime(conversationId);
-
-  const messages = data?.messages ?? [];
-  const newestAssistant =
-    [...messages].reverse().find((m) => m.role === "assistant") ?? null;
-  // Depend on primitive id/content, not the `.find()` result object — a new
-  // array/object reference arrives on every refetch (React Query, realtime)
-  // even when nothing changed, and putting that object straight in a
-  // useEffect dependency array — worse, mirroring its id into state and
-  // depending on THAT too — retriggers the effect on its own state update,
-  // tearing down the typewriter's setInterval a tick or two after it starts.
-  const newestAssistantId = newestAssistant?.id ?? null;
-  const newestAssistantContent = newestAssistant?.content ?? "";
-
-  const typedIdRef = useRef<string | null>(null);
-  const typedContentRef = useRef("");
-  const [displayed, setDisplayed] = useState("");
-  const listRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!newestAssistantId || newestAssistantId === typedIdRef.current) return;
-
-    // An optimistic message is replaced with its server row after persistence.
-    // The id changes, but the reply did not: keep it visible instead of
-    // restarting the typewriter from the first character.
-    if (newestAssistantContent === typedContentRef.current) {
-      typedIdRef.current = newestAssistantId;
-      setDisplayed(newestAssistantContent);
-      return;
-    }
-
-    typedIdRef.current = newestAssistantId;
-    typedContentRef.current = newestAssistantContent;
-    setDisplayed("");
-    let i = 0;
-    const id = setInterval(() => {
-      i++;
-      setDisplayed(newestAssistantContent.slice(0, i));
-      if (i >= newestAssistantContent.length) clearInterval(id);
-    }, 16);
-    return () => clearInterval(id);
-  }, [newestAssistantId, newestAssistantContent]);
-
-  useEffect(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
-
-  if (messages.length === 0) return null;
-  const recent = messages.slice(-MAX_VISIBLE_TURNS);
-
-  const list = (
-    <div
-      ref={listRef}
-      className={
-        variant === "embedded"
-          ? "flex h-full w-full flex-col gap-2 overflow-y-auto px-2 py-2"
-          : "flex w-full max-w-[560px] flex-col gap-2 overflow-y-auto rounded-2xl px-4 py-3"
-      }
-      style={
-        variant === "embedded"
-          ? undefined
-          : {
-              background: "rgba(13, 18, 32, 0.88)",
-              border: "1px solid var(--era-border-subtle, rgba(255,255,255,0.08))",
-              maxHeight: 240,
-            }
-      }
-    >
-      {recent.map((m) => {
-          const isNewestAssistant =
-            m.role === "assistant" && m.id === newestAssistant?.id;
-          return (
-            <p
-              key={m.id}
-              className="text-[13px] font-mono leading-relaxed tracking-wide"
-              style={{
-                color:
-                  m.role === "user"
-                    ? "rgba(255,255,255,0.55)"
-                    : "var(--era-accent)",
-              }}
-            >
-              {m.role === "user" ? "› " : ""}
-              {isNewestAssistant ? displayed : m.content}
-              {isNewestAssistant && displayed.length < m.content.length && (
-                <span
-                  className="ml-[2px] inline-block h-[14px] w-[2px] animate-pulse align-middle"
-                  style={{ backgroundColor: "var(--era-accent)", opacity: 0.9 }}
-                />
-              )}
-            </p>
-          );
-        })}
-    </div>
-  );
-
-  if (variant === "embedded") return list;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 8 }}
-      transition={{ duration: 0.28, ease: "easeOut" }}
-      className="absolute inset-x-0 z-20 flex justify-center px-5 bottom-[148px] md:bottom-[72px]"
-    >
-      {list}
-    </motion.div>
-  );
-}
-
-// AI-proposed action (Slice 4) — nothing behind this card has been written
-// yet; Confirm performs the real writes (POST /api/items, POST
-// .../prerequisites), Dismiss just clears it. Renders only while
-// `activeProposal` is set — the manual-handoff pattern's one shipped kind.
-//
-// `embedded` renders it inside the mobile EraChatDrawer, which sits above the
-// shell (z-50) and would otherwise hide the floating card entirely.
-export function EraProposalCard({
-  variant = "floating",
-}: {
-  variant?: "floating" | "embedded";
-}) {
-  const { activeProposal, confirmProposal, dismissProposal } = useEraAskAI();
-  // HUB-80 — "Always" (plan §5: ☐ Always beside Confirm). Only offered when
-  // the same choice was made before; saving happens on Confirm, never alone.
-  const [always, setAlways] = useState(false);
-  if (!activeProposal) return null;
-  const offer = activeProposal.kind === "native_action" ? activeProposal.offerAlways : undefined;
-  const confirm = () => {
-    if (offer && always) void saveLexiconRule({ kind: "default", ...offer });
-    setAlways(false);
-    void confirmProposal();
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 8 }}
-      transition={{ duration: 0.24, ease: "easeOut" }}
-      className={
-        variant === "embedded"
-          ? "flex justify-center px-3 pb-2"
-          : "absolute inset-x-0 z-25 flex justify-center px-5 bottom-[148px] md:bottom-[76px]"
-      }
-    >
-      <div
-        className="flex w-full max-w-[560px] flex-col gap-3 rounded-2xl px-4 py-3"
-        style={{
-          background: "rgba(13, 18, 32, 0.94)",
-          border: "1px solid var(--era-border-subtle, rgba(255,255,255,0.14))",
-        }}
-      >
-        <p className="text-[13px] leading-relaxed" style={{ color: "var(--era-accent)" }}>
-          {activeProposal.text}
-        </p>
-        {activeProposal.kind === "handoff" ? (
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={dismissProposal}
-              className="rounded-full px-3 py-1.5 text-xs text-white/60 transition-opacity hover:opacity-80"
-            >
-              Dismiss
-            </button>
-            <button
-              type="button"
-              onClick={confirmProposal}
-              className="rounded-full px-3 py-1.5 text-xs font-medium"
-              style={{ background: "var(--era-accent, white)", color: "#0d1220" }}
-            >
-              Open
-            </button>
-          </div>
-        ) : (
-        <div className="flex items-center justify-end gap-2">
-          {offer && (
-            <button
-              type="button"
-              aria-pressed={always}
-              onClick={() => setAlways((v) => !v)}
-              className="mr-auto rounded-full border px-3 py-1.5 text-xs transition-opacity hover:opacity-80"
-              style={{
-                borderColor: "var(--era-border-subtle, rgba(255,255,255,0.2))",
-                color: always ? "var(--era-accent)" : "rgba(255,255,255,0.6)",
-              }}
-            >
-              {always ? "✓ Always" : "Always"}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={dismissProposal}
-            className="rounded-full px-3 py-1.5 text-xs text-white/60 transition-opacity hover:opacity-80"
-          >
-            Dismiss
-          </button>
-          <button
-            type="button"
-            onClick={confirm}
-            className="rounded-full px-3 py-1.5 text-xs font-medium"
-            style={{
-              background: "var(--era-accent, white)",
-              color: "#0d1220",
-            }}
-          >
-            Confirm
-          </button>
-        </div>
-        )}
-      </div>
-    </motion.div>
   );
 }

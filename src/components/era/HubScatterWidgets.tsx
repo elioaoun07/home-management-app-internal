@@ -49,7 +49,7 @@ function HubCard({ hue, pos, delay, label, children }: CardProps) {
     <AnimatePresence>
       {show && (
         <motion.div
-          className="absolute hidden md:flex w-[340px] flex-col rounded-2xl overflow-hidden"
+          className="era-scatter-card absolute hidden md:flex w-[340px] flex-col rounded-2xl overflow-hidden"
           style={{
             ...POS[pos],
             transformOrigin: "center",

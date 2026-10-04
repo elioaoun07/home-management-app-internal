@@ -67,6 +67,18 @@ interface EraState {
    * owner has to retype the sentence. Cleared on the next non-miss turn.
    */
   lastMissText: string | null;
+  /**
+   * HUB-86 — which conversation this session talks in (see
+   * `pickActiveConversation`): undefined = automatic (most recent inside
+   * 6 h), null = a fresh chat, an id = the chat picked or started here.
+   */
+  explicitConversation: string | null | undefined;
+  /** HUB-86 — a turn is being resolved (typed, voice or chip): the thread shows ERA thinking. */
+  turnInFlight: boolean;
+  /** HUB-85 — the Report card is open for this message (null = the whole chat). */
+  reportTarget: { messageId: string | null; kind: "missed" | "wrong" } | null;
+  /** HUB-52 — the History picker is open. */
+  historyOpen: boolean;
 }
 
 interface EraActions {
@@ -90,6 +102,17 @@ interface EraActions {
   setLexicon: (lexicon: LexiconRule[]) => void;
   setLastAppliedRuleId: (id: string | null) => void;
   setLastMissText: (text: string | null) => void;
+  setExplicitConversation: (id: string | null | undefined) => void;
+  setTurnInFlight: (v: boolean) => void;
+  setReportTarget: (target: EraState["reportTarget"]) => void;
+  setHistoryOpen: (open: boolean) => void;
+  /**
+   * HUB-86 — forget everything the last conversation left behind: "it"
+   * (focus memory), an open question or confirm card, the miss Ask AI would
+   * retry, the rule "forget that" would revoke. Called on New chat and when
+   * switching chats, so nothing from one conversation acts on the next.
+   */
+  resetConversationContext: () => void;
 }
 
 const INITIAL: EraState = {
@@ -110,6 +133,10 @@ const INITIAL: EraState = {
   lexicon: [],
   lastAppliedRuleId: null,
   lastMissText: null,
+  explicitConversation: undefined,
+  turnInFlight: false,
+  reportTarget: null,
+  historyOpen: false,
 };
 
 export const useEraStore = create<EraState & EraActions>((set) => ({
@@ -134,4 +161,20 @@ export const useEraStore = create<EraState & EraActions>((set) => ({
   setLexicon: (lexicon) => set({ lexicon }),
   setLastAppliedRuleId: (lastAppliedRuleId) => set({ lastAppliedRuleId }),
   setLastMissText: (text) => set({ lastMissText: text }),
+  setExplicitConversation: (id) => set({ explicitConversation: id }),
+  setTurnInFlight: (v) => set({ turnInFlight: v }),
+  setReportTarget: (target) => set({ reportTarget: target }),
+  setHistoryOpen: (open) => set({ historyOpen: open }),
+  resetConversationContext: () =>
+    set({
+      focusEntities: [],
+      pendingTurn: null,
+      activeProposal: null,
+      lastMissText: null,
+      lastIntent: null,
+      lastAppliedRuleId: null,
+      eraReply: "",
+      hubModuleKey: "chat",
+      reportTarget: null,
+    }),
 }));

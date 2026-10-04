@@ -55,6 +55,7 @@ import type { EraActiveProposal, EraOutcome, EraPendingSlot, EraPendingTurn, Int
 import { useEraAskAI } from "./useEraAskAI";
 import { useEraBudgetSubmit } from "./useEraBudgetSubmit";
 import {
+  eraConversationTarget,
   useActiveEraConversation,
   useCreateEraMessage,
   useEraMessages,
@@ -137,6 +138,7 @@ export function useEraTurn() {
   const setPendingTurn = useEraStore((s) => s.setPendingTurn);
   const setLastMissText = useEraStore((s) => s.setLastMissText);
   const setActiveProposal = useEraStore((s) => s.setActiveProposal);
+  const setTurnInFlight = useEraStore((s) => s.setTurnInFlight);
 
   const budgetSubmit = useEraBudgetSubmit();
   const { data: activeConversation } = useActiveEraConversation();
@@ -167,7 +169,7 @@ export function useEraTurn() {
     for (const e of focusFromMessages(messagesPage.messages).reverse()) store.pushFocusEntity(e);
   }, [activeConversation?.id, messagesPage]);
 
-  const runTurn = useCallback(
+  const runTurnInner = useCallback(
     async (text: string, opts: { chip?: string } = {}): Promise<EraTurnResult> => {
       // HUB-78 — turn state (plan §4 component 1). An outstanding question
       // gets the first look at this turn, but it never swallows a new request.
@@ -227,30 +229,23 @@ export function useEraTurn() {
         setHubModuleKey(getFace(intent.face).eraModuleKey);
       }
 
-      let conversationId = activeConversation?.id ?? null;
-      const userMessage = {
-        conversation_id: conversationId,
-        role: "user" as const,
-        content: text,
-        intent_kind: intent.kind,
-        intent_face: isFaceless ? null : intent.face,
-        intent_payload: { ...intentPayload(intent), ...(opts.chip ? { chip: opts.chip } : {}) },
-      };
-
-      if (conversationId) {
-        // Existing threads render this optimistically and persist it in the
-        // per-conversation write queue. Intent resolution can start now.
-        void createMessage.mutateAsync(userMessage).catch(() => {});
-      } else {
-        // The first turn must create the parent conversation before its
-        // assistant row has a valid foreign key.
-        try {
-          const userResult = await createMessage.mutateAsync(userMessage);
-          conversationId = userResult.conversation_id;
-        } catch {
-          conversationId = null;
-        }
-      }
+      // HUB-86 — a fresh chat names its conversation here and the first write
+      // creates it (`ensure`), so even the first turn renders optimistically
+      // and persists in the per-conversation write queue: the assistant row
+      // queues behind the row that creates its parent. Resolution starts now.
+      const target = eraConversationTarget(queryClient, isFaceless ? useEraStore.getState().activeFaceKey : intent.face);
+      const conversationId: string | null = target.id;
+      void createMessage
+        .mutateAsync({
+          conversation_id: conversationId,
+          role: "user",
+          content: text,
+          intent_kind: intent.kind,
+          intent_face: isFaceless ? null : intent.face,
+          intent_payload: { ...intentPayload(intent), ...(opts.chip ? { chip: opts.chip } : {}) },
+          ensure_conversation: target.ensure,
+        })
+        .catch(() => {});
 
       // Stage 2 (HUB-28) — a "clarify"/"unknown" turn is a router miss.
       // Classify it (language gap vs capability gap) BEFORE deciding what to
@@ -363,7 +358,6 @@ export function useEraTurn() {
     [
       pendingTurn,
       setPendingTurn,
-      activeConversation,
       createMessage,
       budgetSubmit,
       askAI,
@@ -376,6 +370,20 @@ export function useEraTurn() {
       queryClient,
       router,
     ],
+  );
+
+  // HUB-86 — the thread shows ERA thinking for the whole turn, whichever
+  // surface started it (typed, voice or a chip).
+  const runTurn = useCallback(
+    async (text: string, opts: { chip?: string } = {}): Promise<EraTurnResult> => {
+      setTurnInFlight(true);
+      try {
+        return await runTurnInner(text, opts);
+      } finally {
+        setTurnInFlight(false);
+      }
+    },
+    [runTurnInner, setTurnInFlight],
   );
 
   return { runTurn, budgetSubmitReady: budgetSubmit.ready };

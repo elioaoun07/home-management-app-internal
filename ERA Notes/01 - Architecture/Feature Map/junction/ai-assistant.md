@@ -14,18 +14,22 @@ ERA is the proactive AI co-pilot. It lives across all modules: a command bar par
 
 - **Page entry**: `src/app/era/page.tsx`
 - **Shell components**:
-  - `src/components/era/EraShell.tsx` — also defines `EraThreadTranscript` (HUB-17), the scrollable multi-turn view above the command bar; reads `era_messages` via the same hooks as `useEraConversation.ts`
+  - `src/components/era/EraShell.tsx` — the shell; `conversing` (hub view + an open conversation) moves the DOT to its module-mode position and mounts the thread below it (HUB-86)
+  - `src/components/era/EraConversation.tsx` — the conversation thread (HUB-86, replaced `EraThreadTranscript`): layouts `stage` / `panel` / `sheet` / `preview`; renders what `src/features/era/thread.ts` decides (breaks, groups, Report offer, quiet nudge); confirm card + chips + Report card are its newest turn
+  - `src/components/era/EraChatToolbar.tsx` — History / New chat icons (hub) + `useActiveThreadState`; `EraHistorySheet.tsx` — past chats (HUB-52); `EraReportCard.tsx` — Report (HUB-85); `EraProposalCard.tsx` — confirm card (moved out of EraShell); `eraHues.ts` — module hues
   - `src/components/era/CommandBar.tsx`
   - `src/components/era/EraFaceNav.tsx`
   - `src/components/era/EraDots.tsx`
   - `src/components/era/HubScatterWidgets.tsx`
-  - `src/components/era/EraChatDrawer.tsx` — mobile-only (`md:hidden`) chat bubble + bottom sheet for module/activity dashboard views, so the floating CommandBar/transcript don't permanently eat a phone screen. `CommandBar` and `EraShell`'s exported `EraThreadTranscript` both take a `variant?: "floating" | "embedded"` prop (default `"floating"`, byte-identical to before) so the sheet reuses their logic instead of duplicating it. Backdrop/sheet stay mounted and animate via the `open` prop directly (no `AnimatePresence` mount/unmount) — the embedded transcript's own re-renders (realtime, typewriter) were interfering with `AnimatePresence`'s exit-complete tracking and left it stuck-but-invisible.
+  - `src/components/era/EraChatDrawer.tsx` — mobile-only (`md:hidden`) chat bubble + bottom sheet for module/activity dashboard views, so the floating CommandBar/transcript don't permanently eat a phone screen. It embeds `CommandBar variant="embedded"` and `EraConversation layout="sheet"`, with History / New chat in its header. Backdrop/sheet stay mounted and animate via the `open` prop directly (no `AnimatePresence` mount/unmount) — the embedded transcript's own re-renders (realtime, typewriter) were interfering with `AnimatePresence`'s exit-complete tracking and left it stuck-but-invisible.
   - *(deleted 2026-08-25, HUB-17 — confirmed zero importers: `EraHubView.tsx`, `EraTranscript.tsx`, `EraFaceCard.tsx`, `QuickFaceChips.tsx`, `FaceHeader.tsx`, `FaceCanvas.tsx`, `FacePlaceholder.tsx`)*
 - **Face widgets** (one per face): `src/components/era/face-widgets/`
 - **Dashboards**: `src/components/era/dashboards/`
 - **AI assistant component** (in-app chat surface): `src/components/ai/AIChatAssistant.tsx`
 - **Hooks**:
-  - `src/features/era/useEraConversation.ts` — optimistic transcript rows plus ordered per-conversation background persistence
+  - `src/features/era/useEraConversation.ts` — optimistic transcript rows plus ordered per-conversation background persistence; active-conversation choice (`explicitConversation` + `pickActiveConversation`), `eraConversationTarget` (a fresh chat names its conversation client-side; the first write sends `ensure_conversation`), New chat (`useStartNewEraChat`, survives reload via a localStorage marker), History (`useEraConversationHistory`, `useResumeEraConversation`, `useArchiveEraConversation`)
+  - `src/features/era/thread.ts` — pure thread view-model (HUB-86/85/52): `buildThread`, `reportOfferId`, `isQuiet`, `pickActiveConversation`, `conversationTitle`, `historyGroup`; tests in `thread.test.ts`
+  - `src/features/era/useEraIssues.ts` — file / undo a Report (HUB-85); snapshot shape in `src/lib/era/issueReport.ts`
   - `src/features/era/useEraBudgetSubmit.ts`
   - `src/features/era/useEraStore.ts`
   - `src/features/era/useEraHousehold.ts`
@@ -67,6 +71,8 @@ ERA is the proactive AI co-pilot. It lives across all modules: a command bar par
 - **API routes**:
   - `src/app/api/ai-chat/` ← main inference endpoint
   - `src/app/api/era/ask/` ← ERA "Ask AI" handoff: manual tap or guarded language-gap auto-escalation; domain writes still require explicit confirmation
+  - `src/app/api/era/conversations/` (`?history=1`) + `conversations/[id]/` (PATCH resume / archive) ← History (HUB-52)
+  - `src/app/api/era/issues/` (POST) + `issues/[id]/` (DELETE = Undo) ← Report (HUB-85); imported into Hub & ERA by `scripts/pm/era-issues.mjs` (R72)
   - `src/app/api/azure-speech/` ← STT/TTS bridge
   - `src/app/api/tts/`
   - `src/app/api/suggest-schedule/`
@@ -92,6 +98,9 @@ ERA is the proactive AI co-pilot. It lives across all modules: a command bar par
 - **"Edit the proactive briefing"** → see the briefing/insight calls in widget hooks + Focus briefing cache rule (vault Hard Rule).
 
 ## Gotchas
+
+- **System rows are bookkeeping, not conversation.** `era_messages` holds `handoff_consumed` and `issue_report` system rows. The thread hides the first and shows the second as a "Reported" marker (`thread.ts#isVisible`); Ask AI's history excludes both. Any new reader of `era_messages` must filter `role === "system"` the same way.
+- **New chat is client state.** It clears focus memory ("it"), open questions/cards and the miss Ask AI would retry (`resetConversationContext`), and marks the session `explicitConversation = null`; the next sentence names a new conversation. Nothing server-side changes until that sentence is sent.
 
 - AI endpoints are slow → **always** pass `timeoutMs: 60_000` (or higher) to `safeFetch()` (Hard Rule #6).
 - Focus briefing cache has its own Hard Rule (see AI Assistant vault doc).

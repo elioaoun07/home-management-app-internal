@@ -5,6 +5,8 @@ export const eraKeys = {
   all: ["era"] as const,
   household: () => [...eraKeys.all, "household"] as const,
   conversations: () => [...eraKeys.all, "conversations"] as const,
+  /** HUB-52 — the History picker's titled list (a separate shape from `conversations`). */
+  history: () => [...eraKeys.all, "history"] as const,
   messages: (conversationId: string | null) =>
     [...eraKeys.all, "messages", conversationId ?? "none"] as const,
   templates: () => [...eraKeys.all, "templates"] as const,

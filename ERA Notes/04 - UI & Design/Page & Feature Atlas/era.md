@@ -30,7 +30,11 @@ tags:
   - `src/components/era/HubScatterWidgets.tsx` — the 4 hub-mode scatter cards (Budget/Schedule/Chef/Brain), corner-positioned around the center orb — unchanged; a same-session redesign of this into a grid was reverted per owner feedback (see Master Book HUB-25 correction note)
   - `src/components/era/dashboards/ArtifactsView.tsx` — the Activity log's own view, opened via the Artifacts chip exactly like a face dashboard (`useEraStore`'s `EraView` gained a third `"activity"` value alongside `"hub"`/`"dashboard"`)
   - `src/features/era/logEraAction.ts` — the ERA Activity log's single write point (not a component)
-  - `EraThreadTranscript` — defined inline in `EraShell.tsx`, the scrollable multi-turn conversation view above the command bar
+  - `src/components/era/EraConversation.tsx` — the conversation (2026-10-03, HUB-86; replaced the inline `EraThreadTranscript`): bubbles in the person's own color, ERA replies beside a small orb in the answering face's hue, time breaks, a thinking indicator, the confirm card and question chips as the newest turn, a quiet "Report" offer under a missed reply, and a "New chat" divider once the chat has been silent 30 min. Layouts: `stage` (hub), `panel` (desktop dashboards), `sheet` (mobile chat sheet), `preview` (History)
+  - `src/components/era/EraChatToolbar.tsx` — History (left) and New chat (right) icons under the nav in hub view; New chat shows a dot once the chat has gone quiet
+  - `src/components/era/EraHistorySheet.tsx` — past chats (HUB-52): side panel on desktop, bottom sheet on phones; grouped Today / Yesterday / This week / Earlier; tap = read-only preview with Archive / Continue
+  - `src/components/era/EraReportCard.tsx` — the Report card (HUB-85): Missed / Wrong, an optional "Expected…" note, Send; Undo on the toast
+  - `src/components/era/EraProposalCard.tsx` — the confirm card, moved out of `EraShell.tsx` (still re-exported there)
 
 ## Hooks
 
@@ -38,7 +42,9 @@ tags:
 - `src/features/era/useEraTurn.ts` — **the one entry point from "a sentence" to "a reply"** (HUB-17): classify (`rootIntentRouter`) → resolve (`resolveIntent`) → persist (`era_messages`) → update store. `CommandBar` (typed) and `EraShell`'s voice wiring (spoken) both call this and nothing else.
 - `src/features/era/useEraHousehold.ts` — `useEraHousehold` (current user + partner id)
 - `src/features/era/useEraBudgetSubmit.ts` — money choke point for `draftTransaction`
-- `src/features/era/useEraConversation.ts` — `era_conversations`/`era_messages` persistence + realtime
+- `src/features/era/useEraConversation.ts` — `era_conversations`/`era_messages` persistence + realtime; active-conversation choice, New chat, History (resume / archive)
+- `src/features/era/useEraIssues.ts` — file / undo a Report (HUB-85)
+- `src/features/era/thread.ts` — pure thread view-model: breaks, Report offer, quiet nudge, titles (HUB-86/52)
 
 ## Feature module
 
@@ -51,6 +57,8 @@ tags:
 
 - `src/app/api/era/conversations/route.ts`, `src/app/api/era/messages/route.ts` — shipped since Phase 0.5; append-only `era_messages`
 - `src/app/api/era/actions/route.ts` — GET/POST for the Activity log (2026-08-27, HUB-25); GET returns the last 30 rows, "today" filtering happens client-side in `useEraActivity` against the caller's own timezone
+- `src/app/api/era/conversations/route.ts?history=1` — History rows with deterministic titles; `src/app/api/era/conversations/[id]/route.ts` — PATCH resume / archive (HUB-52)
+- `src/app/api/era/issues/route.ts` (POST) and `src/app/api/era/issues/[id]/route.ts` (DELETE = Undo) — file a Report as a system `era_messages` row (HUB-85); the PM bridge imports it as a Hub & ERA defect (R72)
 
 ## DB tables
 
@@ -83,4 +91,5 @@ tags:
 - All command-bar input must flow through `IntentRouter` — never bypass.
 - `CommandBar` background uses `tc.bgPage` (Hard Rule #15: floating overlays must be opaque, never `neo-card`).
 - ERA is **not** in `STANDALONE_APPS`, so the global `ConditionalHeader` and `MobileNav` remain visible.
+- **Conversation layout (2026-10-03, owner-commissioned chat redesign, HUB-86).** With no open conversation the hub is exactly as before. While a conversation is open in hub view, the ERA DOT takes its existing module-mode position (same spring) and the thread fills the space between it and the command bar; New chat returns the DOT and greeting to the centre. Below 1280 px the corner cards step aside while chatting (`.era-shell[data-conversing]`). Revert path: `heroHub` → `isHub` in `EraShell.tsx`.
 - **The centered animating ERA DOT + corner-scattered widget cards are original, unchanged Phase 0/0.5 design.** A same-session attempt to redesign this into a top-left icon + widget grid (HUB-25) was reverted at the owner's explicit request — the Activity log shipped instead as an additive "Artifacts" nav chip. Don't re-attempt the layout rework without asking first.

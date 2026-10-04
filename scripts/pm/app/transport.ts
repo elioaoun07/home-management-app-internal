@@ -38,6 +38,8 @@ export interface TransportCapabilities {
   planWrites: boolean;
   /** Revision-checked sprint planning, independently of checklist writes. */
   sprintWrites?: boolean;
+  /** Pull ERA chat reports into Hub & ERA (the local server reads the database). */
+  eraSync?: boolean;
   /** Inbox capture. */
   capture: boolean;
   v1Launch: boolean;

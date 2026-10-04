@@ -1030,3 +1030,69 @@
     transition: none !important;
   }
 }
+
+/* R72 — ERA chat reports: standalone hotfixes on the current week. */
+.sprint-hotfixes {
+  display: grid;
+  gap: 12px;
+  margin: 4px 0 22px;
+}
+.sprint-item[data-hotfix="hotfix"] {
+  border-color: color-mix(in srgb, var(--chart-2) 45%, var(--line));
+}
+.sprint-item[data-hotfix] .sprint-item-mark {
+  color: var(--chart-2);
+}
+.sprint-item[data-hotfix="defect"] .sprint-item-mark {
+  color: var(--accent);
+}
+.sprint-hotfix-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.sprint-hotfix-badge.hotfix {
+  color: var(--chart-2);
+  background: color-mix(in srgb, var(--chart-2) 14%, transparent);
+}
+.sprint-hotfix-badge.defect {
+  color: var(--accent);
+  background: var(--accent-wash);
+}
+
+.sprint-hotfixes .section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sprint-hotfixes .section-title .quiet {
+  margin-left: auto;
+}
+.sprint-hotfixes .section-title .secondary {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+.sprint-hotfixes .spin {
+  animation: sprint-hotfix-spin 0.9s linear infinite;
+}
+@keyframes sprint-hotfix-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.sprint-hotfix-comment {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--muted, inherit);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

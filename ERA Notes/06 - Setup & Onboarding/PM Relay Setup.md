@@ -68,6 +68,10 @@ The local progress journal is `.pm/planning-observations.ndjson`; `.pm/planning-
 
 To disable phone sprint edits, unset `PM_SPRINT_RELAY` and restart. Existing week reading, history and Delivery links remain available.
 
+## ERA chat reports (2026-10-03, R72)
+
+While `pnpm pm --bridge` runs, the bridge reads new **Report**s filed from the ERA chat (system `era_messages` rows, `intent_kind = issue_report`) every five minutes and adds each once to `Hub & ERA/4 - Checklist.md` › Now › **ERA reports**, with its transcript in the Master Book. Sprints lists them as **Hotfixes** on the current week. Nothing is written to the database; no setup or migration is needed. Reports younger than two minutes wait out the app's Undo. Without the bridge, `pnpm pm:era-issues` previews and `pnpm pm:era-issues --apply` imports. The import journal is `ERA Notes/10 - Project Management/.pm/era-issues.jsonl` (ignored by Git); a discarded item is never re-imported.
+
 ## Not authorized by this setup
 
 Apply writes files only. It does not reset, merge, commit, push, deploy or touch any database; a candidate's migration SQL is written as a file for the owner to run.

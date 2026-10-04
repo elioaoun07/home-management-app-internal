@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-27
+updated: 2026-10-03
 type: master-book
 status: active
 owner: Elio
@@ -22,6 +22,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 ## Vision & Decisions
 
+- **HUB-85 / HUB-86 / HUB-52 — The ERA chat is a conversation, and its misses become work (owner-commissioned 2026-10-03).** The owner asked for: a way to log a missed or wrongly handled request with its chat history and actions, landing in the weekly sprint as standalone defects/hotfixes to deliver now; a conversation-grade chat on web and mobile instead of small text above the bar; New chat to reset "it", with a subtle, unforced cue when a conversation has ended; and subtle history. Decisions: a Report is a system `era_messages` row carrying a server-built snapshot (no new store — D4); the PM bridge imports it read-only toward the DB into Now › **ERA reports** (PM Tooling R72), where Sprints lists it as a Hotfix (wrong) or Defect (missed) whatever week it was filed. New chat is client state (plus a per-device marker so it survives a reload); the cue appears after 30 minutes of silence — the focus-memory TTL, exactly when "it" stops resolving. History keeps every chat, lists the 50 most recent, and a chat auto-closes after 6 h. **Layout-freeze exception (owner request):** while a conversation is open in hub view the ERA DOT takes its existing module-mode position so the thread can be read; the idle hub is unchanged. *(IMPLEMENTED 2026-10-03 — repository; device acceptance in HUB-83.)*
+
 - **HUB-74 — Phone-width chat composer.** Keep the draft field flexible and use one prominent mic/send action; voice recording controls follow the same edge sizing. *(IMPLEMENTED 2026-09-27 — repository; device acceptance pending.)*
 
 - **HUB-73 — Compact chat selection.** Long press starts message selection; the toolbar exposes bulk add and delete, while mobile secondary controls move to Chat options. Deletion asks for viewer scope and keeps Undo. *(IMPLEMENTED 2026-09-27 — repository; device acceptance pending.)*
@@ -40,6 +42,12 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+🟠 **HUB-89** ERA missed "Add Laura as a contact person" (ERA report, 2026-10-03). See [acceptance](<#hub-89>).
+
+🟠 **HUB-88** ERA missed "Add Kobeize as a location" (ERA report, 2026-10-03). See [acceptance](<#hub-88>).
+
+🟠 **HUB-87** ERA missed "Add Mop Chores today" (ERA report, 2026-10-03). See [acceptance](<#hub-87>).
 
 🟠 **HUB-84** A follow-up about something that isn't a reminder was read as a reschedule. Owner screenshot 2026-09-27: "Add salt to my shopping list" → "Added · Salt"; "make it under Spinneys group" → "I'm not sure what \"that\" refers to — what should I reschedule?". Cause: focus memory only held reminders, the "make it …" grammar was fixed to reminder reschedule, and the shopping adapter had no edit contract. Resolved in repository 2026-09-27 (typed focus + per-type edit contracts); device witness in HUB-83.
 
@@ -77,6 +85,75 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Acceptance Criteria Index
 
+### HUB-89
+
+**Outcome:** ERA handles "Add Laura as a contact person".
+
+**Kind:** bug
+**Source:** ERA report cc4540f4-4dd4-49bf-bad7-d01a44c46909 · missed · owner · 2026-10-03 18:51 (Asia/Beirut)
+
+- **Acceptance:** This request ends in the right outcome — done with Undo, one confirm card, one question with chips, a prefilled form, or an honest limit with a door — never a wrong action or a dead end. An ERA Gym case replays the transcript below.
+- **Expected:** Unable to add a contact
+- **Reading guide:** start at `src/features/era/useEraTurn.ts` (one turn), then the router in `src/features/era/intents/` and the capability's resolver; add the sentence to `tests/era-gym/`.
+
+**Transcript**
+
+- You · 18:51 — Add Laura as a contact person _(unknown)_
+- ERA · 18:51 — I missed that. Ask me about today, about money, about dinner — or just tell me something to keep. _(unknown · answered)_ ← reported
+
+### HUB-88
+
+**Outcome:** ERA handles "Add Kobeize as a location".
+
+**Kind:** bug
+**Source:** ERA report 07b5ac48-9aac-4526-abf1-6bed5f72096b · missed · owner · 2026-10-03 18:35 (Asia/Beirut)
+
+- **Acceptance:** This request ends in the right outcome — done with Undo, one confirm card, one question with chips, a prefilled form, or an honest limit with a door — never a wrong action or a dead end. An ERA Gym case replays the transcript below.
+- **Expected:** Adding a Location to Catalogue
+- **Reading guide:** start at `src/features/era/useEraTurn.ts` (one turn), then the router in `src/features/era/intents/` and the capability's resolver; add the sentence to `tests/era-gym/`.
+
+**Transcript**
+
+- You · 18:35 — Add Kobeize as a location _(unknown)_
+- ERA · 18:35 — Not sure what you're after. Try your schedule, your spending, a recipe, or something to remember. _(unknown · answered)_ ← reported
+
+### HUB-87
+
+**Outcome:** ERA handles "Add Mop Chores today".
+
+**Kind:** bug
+**Source:** ERA report 747f8f21-6e74-4e8f-8ee8-992c928ac19e · missed · owner · 2026-10-03 18:10 (Asia/Beirut)
+
+- **Acceptance:** This request ends in the right outcome — done with Undo, one confirm card, one question with chips, a prefilled form, or an honest limit with a door — never a wrong action or a dead end. An ERA Gym case replays the transcript below.
+- **Expected:** It should have added Mop Chores today and/or ask me for the time i want to add it, and how is responsible of it
+- **Reading guide:** start at `src/features/era/useEraTurn.ts` (one turn), then the router in `src/features/era/intents/` and the capability's resolver; add the sentence to `tests/era-gym/`.
+
+**Transcript**
+
+- You · 18:09 — Add Mop Chores today _(navigate)_
+- ERA · 18:09 — Chores _(navigate · handed\_off)_ ← reported
+
+### HUB-86
+
+**Outcome:** The ERA chat reads like a conversation on web and mobile, and New chat starts clean.
+**Kind:** feature
+**Touches:** `src/components/era/EraConversation.tsx`, `src/components/era/EraShell.tsx`, `src/components/era/EraChatToolbar.tsx`, `src/components/era/EraChatDrawer.tsx`, `src/features/era/thread.ts`, `src/features/era/useEraConversation.ts`, `src/features/era/useEraStore.ts`, `src/features/era/useEraTurn.ts`, `src/app/api/era/messages/route.ts`
+
+- **Acceptance:** the person's messages are bubbles in their own color and ERA's replies are 15–16 px text; time breaks after 30 min or a new day; ERA shows it is thinking for every turn (typed, voice, chip); the confirm card and question chips are the newest turn and never cover the thread; the newest reply types out once and never replays on load. In hub view an open conversation moves the ERA DOT to its module-mode position and the thread fills the space to the command bar; with no conversation the hub is unchanged. New chat clears focus memory, open questions/cards, the pending Ask AI retry and the last applied rule; the next sentence opens a new conversation and survives a reload. After 30 min of silence a "New chat" divider and a toolbar dot appear without forcing anything. A fresh chat's first sentence renders optimistically (client-named conversation, `ensure_conversation` on the first write).
+- **Evidence (2026-10-03):** `src/features/era/thread.test.ts` (breaks, grouping, hidden system rows, quiet window, active-conversation choice, titles, history groups). Live dev check on the owner's data through the running app (read-only: no message sent, nothing written): 680 px column centred between the risen DOT and the bar, user bubbles 15 px blue (blue-theme owner), ERA text 16 px, breaks `Sun · 5:11 PM`, quiet divider and toolbar dot on a silent chat, Report card opening with Wrong preselected for a done turn, New chat unmounting the thread. Motion could not be watched (the automation tab was hidden, so animation frames were paused); device acceptance in HUB-83.
+- **Fixed on the way:** `handoff_consumed` system rows rendered in the transcript as "› handoff consumed" and reached Ask AI's history as user turns; the confirm card and chips floated over the transcript at the same position.
+- **Reading guide:** `thread.ts` decides, `EraConversation.tsx` renders, `useEraConversation.ts` owns which conversation is active (`pickActiveConversation`, `eraConversationTarget`, `useStartNewEraChat`).
+
+### HUB-85
+
+**Outcome:** A missed or wrongly handled ERA request can be reported with its history, and lands as Hub & ERA work.
+**Kind:** feature
+**Touches:** `src/app/api/era/issues/route.ts`, `src/app/api/era/issues/[id]/route.ts`, `src/lib/era/issueReport.ts`, `src/features/era/useEraIssues.ts`, `src/components/era/EraReportCard.tsx`, `src/features/era/useEraAskAI.ts`, `scripts/pm/era-issues.mjs`
+
+- **Acceptance:** under a reply that missed (router miss with no AI follow-up, failed or uncertain outcome, or an Ask AI prose answer to a missed request) the thread offers a quiet Report chip; any ERA reply's details offer Report too; a refused negation never offers it. The card takes Missed / Wrong (preselected from the reply) and an optional "Expected…" note. The server stores a snapshot — the request, ERA's reply, up to 24 turns with intent and outcome, and the ERA actions logged in that window — as a system row in the same conversation; the thread shows "Reported"; Undo removes only that row. The PM bridge imports each report once (after the 2-minute Undo grace) into Now › **ERA reports** as a `**Kind:** bug` item with the transcript; Wrong = hotfix (blocker), Missed = defect (friction).
+- **Evidence (2026-10-03):** `src/lib/era/issueReport.test.ts` (request/reply selection, window cut, action window, bounds); `thread.test.ts` (offer rules, preselected kind); `tests/pm-era-issues.test.ts` (import shape, lint grammar, once-only, grace, ID allocation, Markdown neutralised, secrets withheld). Not exercised against production: filing a report writes to the DB, so the first real report is the owner's (HUB-83).
+- **Reading guide:** `useEraIssues.ts` → `POST /api/era/issues` → `buildIssueSnapshot`; import in `scripts/pm/era-issues.mjs`; Sprints lane in `scripts/pm/app/sprintModel.ts#eraHotfixes`.
+
 ### HUB-84
 
 **Outcome:** A follow-up edits the last result, whatever its type.
@@ -92,6 +169,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance (owner):**
   - Run `migrations/2026-09-27_era-lexicon.sql` in the Supabase SQL Editor and paste its two verify queries' output.
   - On each phone after deploy: `I took 300$ from Drawer` → chips → Wallet → Confirm → Undo restores; `Don't transfer…` does nothing; `move the dentist to Friday` (a real reminder name); `taxi 250k` → Open → form prefilled; `mark internet as paid` (or a real recurring name); `add milk to the shopping list`; the "Always" toggle after choosing the same destination twice; `Add salt to my shopping list` → `make it under Spinneys` (and Undo); `spent 12$ on coffee` → `no, 15`.
+  - ERA chat (HUB-85/86/52), phone and desktop: send a sentence ERA can't handle → Report chip → Missed + a note → Send → "Reported" shows; Undo removes it; send it again and keep it, then within ~5 min with `pnpm pm` + bridge running the item appears in Hub & ERA › Now and on Sprints › Hotfixes. Tap New chat → the DOT returns to centre and `move it to 5 PM` no longer targets the earlier reminder. History → pick an old chat → Continue → it becomes the thread; Archive → Undo restores it. Leave a chat 30 min → the divider and the toolbar dot appear.
 - **Why an ID:** D12 — applied SQL and device acceptance stay distinct from implementation history.
 
 ### HUB-76
@@ -1697,6 +1775,7 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
+- **Implementation (2026-10-03):** `src/components/era/EraHistorySheet.tsx` (side panel on desktop, bottom sheet on phones; Today / Yesterday / This week / Earlier; tap = read-only preview; Continue = `PATCH /api/era/conversations/[id] {action:"resume"}` with a clean context; Archive = `{action:"archive"}` with Undo). Titles: `conversationTitle` in `src/features/era/thread.ts` from each chat's first sentence, served by `GET /api/era/conversations?history=1` (chats with no sentence are left out). No schema change. Live dev check (read-only): 32 chats titled and grouped, preview read-only with Archive / Continue.
 - **Reading guide:** Sessions picker, reopen, and deterministic titles — the acceptance says **no LLM** for the title, so derive it from the first user message plus a date using plain string logic. The storage already exists: `src/app/api/era/conversations/route.ts` and `src/app/api/era/messages/route.ts`; read their shapes and `src/features/era/queryKeys.ts` before adding fields. UI is `src/components/era/EraChatDrawer.tsx` / `EraShell.tsx`. Determinism means the same conversation always yields the same title — no timestamp-of-render, no random tiebreak. Hard Rule #28 for the picker's chrome.
 
 
@@ -2853,6 +2932,9 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - ✅ 2026-09-27 — **HUB-78** Understanding engine pilot: chip turn state, by-name reminders with this one / series, `?era=` handoff to `/expense`, shopping-add, outcome on every turn; Gym pilot 15/15, fast path 82.6% held-out; mobile confirm card fixed (it rendered behind the chat sheet). Device witness pending. [Criteria](<Hub & ERA — Master Book.md#hub-78>).
 - ✅ 2026-09-27 — **HUB-77** ERA Gym: `tests/era-gym/` (159 full-context cases — 87 synthetic, 72 from the owner export — all mandatory slices), real router + pure resolvers against a fake household, path C Understand prototype, record/replay (72 live calls, `gemini-3.8-flash`), `REPORT.md`. Decision: keep model on miss/conflict only (C − A = +10.2 held-out points, 3 wrong money). Found and fixed two money bugs (HUB-75 follow-up). CI wiring rides HUB-37; replay runs in `pnpm test`. [Criteria](<Hub & ERA — Master Book.md#hub-77>).
 - ✅ 2026-09-27 — **HUB-76** Speech-act gate (`intents/speechAct.ts`) on every routed write: negated/hypothetical/question/conditional/reported → `clarify{speechAct}`, negations never escalate. Native transfer, debt record and reminder delete (plus destructive taught templates) now return a `native_action` confirm card; `nativeActions.ts` executes on tap with Undo (transfer DELETE, debt DELETE, Recycle Bin restore; Undo runs once). A timeout after a money POST replies *uncertain*, never retried. Cross-currency transfers and non-USD debts are refused. Evidence: `nativeActions.test.ts` asserts Drawer $1,000/Wallet $100 → card with zero POSTs → $700/$400 after tap → $1,000/$100 after one Undo, second Undo no-op; `speechAct.test.ts`; four acceptance router rows. Typecheck clean; not exercised on a device (local dev points at the production DB). [Criteria](<Hub & ERA — Master Book.md#hub-76>).
+- ✅ 2026-10-03 — **HUB-86** The ERA chat is a conversation: bubbles in the person's color, 15–16 px ERA replies, time breaks, a thinking indicator for every turn, the confirm card and chips as the newest turn, a jump-to-latest control; in hub view an open conversation lifts the DOT to its module-mode position (idle hub unchanged). New chat clears "it" and every open question/card, survives a reload, and a 30-minute-quiet chat shows a "New chat" divider and a toolbar dot. First turns of a fresh chat render optimistically (`ensure_conversation`). Also fixed: bookkeeping system rows leaking into the transcript and Ask AI history; cards floating over the thread. (`thread.test.ts`; read-only live dev check; [acceptance](<#hub-86>); device witness in HUB-83.)
+- ✅ 2026-10-03 — **HUB-85** Report from the ERA chat: a quiet Report chip under a missed reply (and on any reply's details), Missed / Wrong + "Expected…", a server-built snapshot of the turns, outcomes and ERA actions stored as a system `era_messages` row, a "Reported" marker and Undo. Imported into Now › ERA reports by PM Tooling R72. (`issueReport.test.ts`, `thread.test.ts`, `tests/pm-era-issues.test.ts`; [acceptance](<#hub-85>); first real report is the owner's, HUB-83.)
+- ✅ 2026-10-03 — **HUB-52** ERA History: titled, grouped past chats with read-only preview, Continue (clean context) and Archive with Undo; no schema change. ([acceptance](<#hub-52>).)
 
 ## Delivery session log
 

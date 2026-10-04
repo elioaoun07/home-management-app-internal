@@ -30,8 +30,10 @@ import {
 import { executeNativeAction } from "./nativeActions";
 import { eraKeys } from "./queryKeys";
 import { learnTemplateFromProposal, shouldLearnFrom } from "./templates/learn";
+import { AI_ANSWER_KIND } from "./thread";
 import type { EraActiveProposal } from "./types";
 import {
+  eraConversationTarget,
   useActiveEraConversation,
   useCreateEraMessage,
   useEraMessages,
@@ -77,29 +79,31 @@ export function useEraAskAI() {
         // persisted the user's turn as part of its normal flow; persisting
         // it again here would duplicate the era_messages row.
         if (!skipUserMessage) {
-          const userMessage = {
-            conversation_id: conversationId,
-            role: "user" as const,
-            content: question,
-          };
-
-          if (conversationId) {
-            void createMessage.mutateAsync(userMessage).catch(() => {});
-          } else {
-            try {
-              const userResult = await createMessage.mutateAsync(userMessage);
-              conversationId = userResult.conversation_id;
-            } catch {
-              conversationId = null;
-            }
-          }
+          // HUB-86 — a fresh chat names its conversation here (first write creates it).
+          const target = conversationId
+            ? { id: conversationId, ensure: false }
+            : eraConversationTarget(queryClient, activeFaceKey);
+          conversationId = target.id;
+          void createMessage
+            .mutateAsync({
+              conversation_id: target.id,
+              role: "user",
+              content: question,
+              ensure_conversation: target.ensure,
+            })
+            .catch(() => {});
         }
 
-        const history = (messagesData?.messages ?? []).slice(-8).map((m) => ({
-          role:
-            m.role === "assistant" ? ("assistant" as const) : ("user" as const),
-          content: m.content,
-        }));
+        // System rows (a consumed handoff, a filed report) are bookkeeping,
+        // not something either side said.
+        const history = (messagesData?.messages ?? [])
+          .filter((m) => m.role !== "system")
+          .slice(-8)
+          .map((m) => ({
+            role:
+              m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+            content: m.content,
+          }));
 
         // Focus memory lives in browser state — send the single most recent
         // reminder so the server can resolve a "FOCUS" sentinel in a
@@ -162,6 +166,10 @@ export function useEraAskAI() {
               conversation_id: conversationId,
               role: "assistant",
               content: result.text,
+              // HUB-85 — marks the answer as the model's, and whether it was
+              // only prose, so the thread can offer Report on a missed request.
+              intent_kind: AI_ANSWER_KIND,
+              intent_payload: { aiKind: result.kind, auto },
             })
             .catch(() => {});
         }
@@ -182,6 +190,7 @@ export function useEraAskAI() {
       setActiveProposal,
       setEraReply,
       setAskingAI,
+      queryClient,
     ],
   );
 

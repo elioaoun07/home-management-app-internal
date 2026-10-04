@@ -4770,6 +4770,45 @@ body.theme-loaded {
   border-radius: inherit;
 }
 
+/* ── HUB-86 — ERA conversation ── */
+/* The thread fades out under the risen ERA DOT instead of being cut off. */
+.era-thread-fade {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 40px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 40px);
+}
+/* ERA thinking — three dots in the active module's hue. */
+.era-think-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: hsl(var(--era-hue), var(--era-sat), var(--era-lum));
+  animation: era-think 1.2s ease-in-out infinite;
+}
+.era-think-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.era-think-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes era-think {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+/* While a conversation is open, the corner cards make room on narrower desktops. */
+@media (max-width: 1279px) {
+  .era-shell[data-conversing="true"] .era-scatter-card {
+    display: none !important;
+  }
+}
+
 /* ── Mobile face chip (horizontal scroll row above command bar) ── */
 .era-mobile-chip {
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -4828,6 +4867,7 @@ body.theme-loaded {
   .era-hub-ring-inner,
   .era-idle-dot,
   .era-dot-birth,
+  .era-think-dot,
   .era-mark-filter,
   .era-command-bar::after,
   .era-command-pill::after {

@@ -73,7 +73,7 @@ export function createLocalTransport(): Transport {
   }
 
   return {
-    capabilities: { kind: "local", planWrites: true, sprintWrites: true, capture: true, v1Launch: true, v1Detail: true, v2: true, pairing: true, apply: true, referenceTools: true },
+    capabilities: { kind: "local", planWrites: true, sprintWrites: true, eraSync: true, capture: true, v1Launch: true, v1Detail: true, v2: true, pairing: true, apply: true, referenceTools: true },
 
     start() {
       startProbing();

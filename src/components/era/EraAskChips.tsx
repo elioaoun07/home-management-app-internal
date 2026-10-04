@@ -5,15 +5,17 @@
 //   Drawer → ? · $300    [Wallet] [Savings] [Other]
 // A tap answers the open question structurally (never re-parsed). A `nav:`
 // option opens the precision page instead. Additive: rendered next to the
-// confirm card, floating in the shell and inside the mobile chat sheet.
+// confirm card — inline as the thread's newest turn (HUB-86), or floating on
+// mobile module views while the chat sheet is closed.
 
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useEraStore } from "@/features/era/useEraStore";
 import { useEraTurn } from "@/features/era/useEraTurn";
+import type { EraCardVariant } from "./EraProposalCard";
 
-export function EraAskChips({ variant = "floating" }: { variant?: "floating" | "embedded" }) {
+export function EraAskChips({ variant = "floating" }: { variant?: EraCardVariant }) {
   const pending = useEraStore((s) => s.pendingTurn);
   const setPendingTurn = useEraStore((s) => s.setPendingTurn);
   const { runTurn } = useEraTurn();
@@ -42,21 +44,24 @@ export function EraAskChips({ variant = "floating" }: { variant?: "floating" | "
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
       className={
-        variant === "embedded"
-          ? "flex justify-center px-3 pb-2"
-          : "absolute inset-x-0 z-25 flex justify-center px-5 bottom-[148px] md:bottom-[76px]"
+        variant === "inline"
+          ? "mt-4"
+          : variant === "embedded"
+            ? "flex justify-center px-3 pb-2"
+            : "absolute inset-x-0 z-[25] flex justify-center px-5 bottom-[148px] md:bottom-[76px]"
       }
     >
       <div
-        className="flex w-full max-w-[560px] flex-col gap-2 rounded-2xl px-4 py-3"
+        className={[
+          "flex w-full flex-col gap-2.5 rounded-2xl px-4 py-3.5",
+          variant === "inline" ? "" : "max-w-[560px]",
+        ].join(" ")}
         style={{
-          background: "rgba(13, 18, 32, 0.94)",
+          background: "#121a2c",
           border: "1px solid var(--era-border-subtle, rgba(255,255,255,0.14))",
         }}
       >
-        <p className="text-[13px] leading-relaxed" style={{ color: "var(--era-accent)" }}>
-          {pending.question}
-        </p>
+        <p className="text-[15px] leading-relaxed text-white/90">{pending.question}</p>
         <div className="flex flex-wrap gap-2">
           {pending.options.map((o) => (
             <button
@@ -64,7 +69,7 @@ export function EraAskChips({ variant = "floating" }: { variant?: "floating" | "
               type="button"
               disabled={busy}
               onClick={() => void choose(o.label, o.value)}
-              className="rounded-full border px-3 py-1.5 text-xs font-medium text-white/85 transition-opacity hover:opacity-80 disabled:opacity-40"
+              className="rounded-full border px-3.5 py-2 text-[13px] font-medium text-white/85 transition-opacity hover:opacity-80 disabled:opacity-40"
               style={{ borderColor: "var(--era-border-subtle, rgba(255,255,255,0.2))" }}
             >
               {o.label}

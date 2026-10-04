@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addCalendarDays,
   dateInTimezone,
+  eraHotfixes,
   forecastSprints,
   mondayOf,
   sprintDateLabel,
@@ -548,3 +549,44 @@ describe("weekly forecast", () => {
     ).toBe("Over weekly capacity");
   });
 });
+
+describe("eraHotfixes (R72)", () => {
+  const source = (id: string, kind: "missed" | "wrong", date: string) =>
+    `**Kind:** bug
+**Source:** ERA report ${id} · ${kind} · owner · ${date} 18:01 (Asia/Beirut)`;
+  const ERA = (n: number, kind: "missed" | "wrong", date: string, extra: Partial<Work> = {}) =>
+    item(`HUB-${n}`, "Hub & ERA", {
+      kind: "bug",
+      severity: kind === "wrong" ? "blocker" : "friction",
+      contract: source(`aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12, "0")}`, kind, date),
+      ...extra,
+    });
+
+  it("lists open Now reports, hotfixes first, oldest first", () => {
+    const list = eraHotfixes(
+      world([
+        ERA(85, "missed", "2026-09-28"),
+        ERA(86, "wrong", "2026-10-02"),
+        ERA(87, "missed", "2026-09-20"),
+        item("HUB-62", "Hub & ERA", { kind: "bug" }),
+      ]),
+    );
+    expect(list.map((h) => [h.work.id, h.label, h.reported])).toEqual([
+      ["HUB-86", "Hotfix", "2026-10-02"],
+      ["HUB-87", "Defect", "2026-09-20"],
+      ["HUB-85", "Defect", "2026-09-28"],
+    ]);
+  });
+
+  it("drops reports that were completed or triaged out of Now", () => {
+    expect(
+      eraHotfixes(
+        world([
+          ERA(85, "missed", "2026-09-28", { state: "done" }),
+          ERA(86, "wrong", "2026-10-02", { section: "Next" }),
+        ]),
+      ),
+    ).toEqual([]);
+  });
+});
+

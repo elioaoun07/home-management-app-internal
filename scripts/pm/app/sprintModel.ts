@@ -635,3 +635,39 @@ export function forecastSprints(
   }
   return { strategy: options.strategy, weeks, unplanned };
 }
+
+/** R72 — an ERA chat report imported by scripts/pm/era-issues.mjs. */
+export interface EraHotfix {
+  work: Work;
+  /** A "wrong" report is a Hotfix (filed as blocker); a "missed" one a Defect. */
+  label: "Hotfix" | "Defect";
+  /** Filing date from the Source line (YYYY-MM-DD, owner timezone). */
+  reported: string | null;
+  /** The person's comment on the report, if they left one. */
+  comment: string | null;
+}
+
+const ERA_COMMENT_RE = /^\s*-\s*\*\*(?:Comment|Expected):\*\*\s*(.+)$/m;
+
+const ERA_SOURCE_RE =
+  /\*\*Source:\*\* ERA report [0-9a-f-]{36} · (missed|wrong) · [a-z]+ · (\d{4}-\d{2}-\d{2})/;
+
+/**
+ * R72 — open ERA chat reports still in Now. The Sprints view shows them on the
+ * current week as standalone Hotfixes / Defects whatever week they were filed
+ * in; they are not sprint members, so they never change planned capacity or
+ * the week's commitment. Moving one out of Now (triage) takes it off the lane.
+ */
+export function eraHotfixes(world: World): EraHotfix[] {
+  const rank = (h: EraHotfix) => (h.label === "Hotfix" ? 0 : 1);
+  return world.work
+    .filter((w) => w.state === "open" && w.kind === "bug" && /^now$/i.test(w.section.trim()))
+    .flatMap((work): EraHotfix[] => {
+      const m = work.contract.match(ERA_SOURCE_RE);
+      if (!m) return [];
+      const label = m[1] === "wrong" || work.severity === "blocker" ? "Hotfix" : "Defect";
+      const comment = work.contract.match(ERA_COMMENT_RE)?.[1]?.trim() ?? null;
+      return [{ work, label, reported: m[2], comment }];
+    })
+    .sort((a, b) => rank(a) - rank(b) || (a.reported ?? "").localeCompare(b.reported ?? "") || a.work.line - b.work.line);
+}

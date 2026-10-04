@@ -130,6 +130,7 @@ export function CommandBar({
       >
         {/* Mic button */}
         <button
+          suppressHydrationWarning
           type="button"
           aria-label={micActive ? "Stop listening" : "Voice input"}
           onClick={toggleMic}
@@ -164,7 +165,7 @@ export function CommandBar({
           aria-label="Ask ERA"
           disabled={busy}
           suppressHydrationWarning
-          className="flex-1 bg-transparent text-sm text-white/80 outline-none placeholder:text-white/28 disabled:opacity-50"
+          className="min-w-0 flex-1 bg-transparent text-base text-white/85 outline-none placeholder:text-white/28 disabled:opacity-50 md:text-[15px]"
           autoComplete="off"
         />
 

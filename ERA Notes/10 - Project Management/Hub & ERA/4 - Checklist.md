@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-27
+updated: 2026-10-03
 type: checklist
 status: active
 owner: Elio
@@ -12,12 +12,20 @@ owner: Elio
 
 One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds and its **Reading guide** (where to start in the code). Lane order is priority, not authorization; owner evidence and policy gates still apply.
 
+Now-lane exception: reports filed from the ERA chat arrive under **ERA reports** in Now automatically (PM Tooling R72) and show on the current sprint as Hotfixes / Defects. Triage moves one to Next or Later, which takes it off that lane.
+
 ## Now
 
 - [ ] **HUB-83** Run the era_lexicon migration and witness ERA's new flows on both phones — [criteria](<Hub & ERA — Master Book.md#hub-83>) _(blocker - S)_
 - [ ] **HUB-62** Record current schema and application evidence — [criteria](<Hub & ERA — Master Book.md#hub-62>) _(friction - M)_
 - [ ] **HUB-37** Verify CI and recoverable capture failures — [criteria](<Hub & ERA — Master Book.md#hub-37>) _(blocker - M)_
 - [ ] **HUB-38** Record authenticated cadence-aware cron liveness — [criteria](<Hub & ERA — Master Book.md#hub-38>) _(blocker - M)_
+
+**ERA reports**
+
+- [ ] **HUB-87** ERA handles "Add Mop Chores today" — [criteria](<Hub & ERA — Master Book.md#hub-87>) _(friction - S)_
+- [ ] **HUB-88** ERA handles "Add Kobeize as a location" — [criteria](<Hub & ERA — Master Book.md#hub-88>) _(friction - S)_
+- [ ] **HUB-89** ERA handles "Add Laura as a contact person" — [criteria](<Hub & ERA — Master Book.md#hub-89>) _(friction - S)_
 
 ## Next
 
@@ -46,7 +54,6 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **HUB-49** Bundle the Top View data read — [criteria](<Hub & ERA — Master Book.md#hub-49>) _(friction - M)_
 - [ ] **HUB-50** Keep mobile vitals available while conversation sleeps — [criteria](<Hub & ERA — Master Book.md#hub-50>) _(friction - M)_
 - [ ] **HUB-51** Deliver partner preferences and persistent person colors — [criteria](<Hub & ERA — Master Book.md#hub-51>) _(friction - M)_
-- [ ] **HUB-52** Reopen ERA sessions with deterministic titles — [criteria](<Hub & ERA — Master Book.md#hub-52>) _(annoyance - M)_
 - [ ] **HUB-54** Connect signal cards to confirmed actions and real destinations — [criteria](<Hub & ERA — Master Book.md#hub-54>) _(friction - M)_
 - [ ] **HUB-55** Turn a transaction anomaly into one policy-gated proposal — [criteria](<Hub & ERA — Master Book.md#hub-55>) _(friction - M)_
 - [ ] **HUB-56** Add Kitchen, Trips and Healthcare signals — [criteria](<Hub & ERA — Master Book.md#hub-56>) _(friction - M)_

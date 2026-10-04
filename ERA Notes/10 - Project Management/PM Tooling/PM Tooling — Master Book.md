@@ -61,6 +61,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 ## Vision & Decisions
 
+- Owner request 2026-10-03 (with Hub & ERA HUB-85): issues reported from the ERA chat join the weekly sprint as standalone Defects / Hotfixes to deliver now, regardless of the week they were filed in. They import as canonical Hub & ERA Now items (no second inbox, no sprint membership) and Sprints lists them in their own lane. *(IMPLEMENTED 2026-10-03: R72.)*
+
 - Owner request 2026-10-03: weekly shipping is a primary Sprints tab between Home and Work, usable remotely and on desktop, with visible item status, Delivery entry and restrained game-like progress. Recommend one primary module plus a supporting module; retain module-focused weeks as an explicit option. Initial capacity and review estimates are editable planning aids, not measured velocity; drafts remain uncommitted until Start. *(IMPLEMENTED 2026-10-03: R61.)*
 
 - Owner decision 2026-09-26: Home is the entry point for module cards, four work queues and A place to begin; Analytics is a primary destination for focus and progress. Use the existing animated Memory mark, expose work IDs and retain search context across status/layout changes. Delivery may render supplied answer options but this UI session must not change the confirmed execution system. *(IMPLEMENTED 2026-09-26: R69.)* This updates the earlier three-destination and swipeable-Home-card decisions for the shared React app; classic/static reference views remain separate.
@@ -125,6 +127,16 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### R72
+
+**Outcome:** Reports filed from the ERA chat become Hub & ERA work and appear on the current sprint as Hotfixes / Defects.
+**Kind:** feature
+**Touches:** `scripts/pm/era-issues.mjs`, `scripts/pm/bridge.mjs`, `scripts/pm/app/sprintModel.ts`, `scripts/pm/app/Sprints.tsx`, `scripts/pm/app/sprints.css`, `package.json`
+**Depends on:** Hub & ERA/HUB-85
+
+- **Acceptance:** with the bridge running, every `issue_report` row older than the 2-minute Undo grace is imported exactly once into `Hub & ERA/4 - Checklist.md` › Now › **ERA reports** (ID above every `HUB-n` in the corpus; `blocker` for Wrong, `friction` for Missed; effort S to re-estimate) with a Pain Inventory line and a `### HUB-n` section carrying `**Kind:** bug`, `**Source:** ERA report <id>`, acceptance, transcript and ERA actions. The DB is only read; idempotence is the corpus marker plus `.pm/era-issues.jsonl`; untrusted text is neutralised and credential-shaped text withheld; writes use the bridge's undo journal. `pnpm pm:era-issues` previews and `--apply` writes. Sprints shows open Now items with the marker as a Hotfixes lane above the week's work — Hotfix (wrong) first, then Defect, oldest first — on any non-closed week and when no sprint exists; they never become members or change planned points; moving one out of Now removes it.
+- **Verification (2026-10-03):** `tests/pm-era-issues.test.ts` (6: shape, `lintChecklist` clean, once-only + grace + journal, allocation above archived IDs, Markdown/secret handling, wrong → blocker hotfix); `tests/pm-ui/sprint-model.test.ts` `eraHotfixes` (ordering; done or triaged items drop off); `tests/pm-bridge.test.ts` green; `pnpm pm:build-app` builds. Not run against production — the bridge is owner-run.
 
 ### R71
 
@@ -1403,6 +1415,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-09-11 — **R60** Completed Home, Work Board/List and module views: badges (not lanes) for blocked/active/review, shareable filtered URLs, checklist-row highlighting, distinct Checklist/Brief links and an Open-in-CLI handoff — [evidence](<PM Tooling — Master Book.md#r60>)
 - ✅ 2026-09-26 — **R68** Phone content no longer hides behind the fixed bottom nav: `.app-main` reserves the nav height plus the safe area (`scripts/pm/app/responsive.css`); the clearance had lived on `.app-footer`, which the app no longer renders. Verified at 390 px on Home, Work and Delivery (last content above the nav). Reported by the owner on `/pm/live`.
 - ✅ 2026-10-03 — **R61** Plan sprints, deliverables and readiness over the same work; corrected Start authentication, optional-estimate commitment and visible disabled reasons — [criteria](<PM Tooling — Master Book.md#r61>)
+- ✅ 2026-10-03 — **R72** ERA chat reports import into Hub & ERA › Now › ERA reports (bridge every 5 min, read-only toward the DB, once-only via the Source marker + `.pm/era-issues.jsonl`, undo-journaled writes; `pnpm pm:era-issues` preview / `--apply`) and Sprints shows them as a Hotfixes lane on the current week, never as members. (`tests/pm-era-issues.test.ts`, `sprint-model.test.ts`, bridge tests green, `pnpm pm:build-app`; [acceptance and verification](<#r72>).)
 
 ## Delivery session log
 
