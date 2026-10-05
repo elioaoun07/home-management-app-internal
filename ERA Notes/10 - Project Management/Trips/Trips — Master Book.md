@@ -1244,6 +1244,15 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Provenance:** Owner request 2026-09-19 (Italy trip: visa and flights paid from the USD account while daily spend sits in the EUR trip account).
 
+### TRIP-37
+
+**Outcome:** Add place form is a mobile-sized sheet (pinned footer, 44px fields, type chips, "More" for secondary fields) with an optional ticket / QR image or PDF per place.
+
+- **Acceptance:** A place can carry one attachment (image or PDF, max 5 MB) in the private `trip-documents` bucket; `trip_places.attachment_path` holds the path; opening signs a fresh URL at click time. Replace and remove work.
+- **Owner step:** run `migrations/2026-10-05_trip-place-attachment.sql` then `migrations/2026-10-05_trip-place-attachments-multi.sql` in the Supabase SQL Editor (final column: `attachment_paths text[]`, up to 10 files per place). Until then, attachment upload fails; the rest of the form works.
+
+**Provenance:** Owner request 2026-10-05.
+
 ### TRIP-36
 
 **Outcome:** No page, module or sheet in the app has content hidden under the fixed top header.
@@ -1331,6 +1340,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-08-04 — **TRIP-12** Packing-category lookup (`trip_packing_category` + nullable `trip_packing_items.category_id`), collaborative CRUD/query hooks, clone and bundle support, and legacy rendering during owner-run manual backfill. Migration `2026-08-04_trip-packing-category-lookup.sql` is prepared but not applied.
 - ✅ 2026-08-04 — **TRIP-13** Packing category icon/color lookup reworked for the now-real `trip_packing_category` table (`TripPackingList.tsx`): exact-match dictionary extended with `Shoes`/`Bags`/`Swim`, a keyword-alias layer resolves compound names (e.g. "Documents & Wallet", "Bags & Travel Gear", "Underwear & Swimwear") to the right built-in look, and any category matching neither now hashes on its DB `id` (stable across renames) into a 6-entry rotating palette instead of collapsing to flat gray. Shoe glyph replaced with Tabler Icons' MIT `shoe` outline (attributed inline); swimwear glyph hand-drawn as a two-piece (no permissively-licensed swimwear glyph exists in Tabler/Lucide).
 - ✅ 2026-08-04 — **TRIP-14** Packing category tiles lost their colour wash (owner-reported: Shoes and Underwear & Swimwear rendered flat/colourless while sibling tiles were fine). Root cause: the tile gradient was the one visual property still expressed as Tailwind class strings (`from-X/35 via-X/15 to-X/5`) inside a data lookup table, so it depended on the class surviving Tailwind's scanner and the dev-server CSS bundle staying fresh — `iconColor`/`borderColor` were already raw values and kept working, which is why only the wash disappeared. Verified via `npx @tailwindcss/cli` that the classes *do* compile, confirming a stale bundle rather than a source error. Fix: `gradient` (classes) → `gradientColor` (hex) + optional `gradientStops`, applied inline through a `categoryGradient()` helper at both render sites; zero Tailwind gradient classes remain in the file, so all 17 entries — including the six fallback-palette colours that were equally at risk — are now immune.
+- ✅ 2026-10-05 — **TRIP-37** Simplify the Add place form and attach a ticket / QR to a place — [criteria](<Trips — Master Book.md#trip-37>)
 
 ## Delivery session log
 

@@ -1608,6 +1608,7 @@ CREATE TABLE public.trip_places (
   confirmation_code text,
   address text,
   end_time time without time zone,
+  attachment_paths text[] NOT NULL DEFAULT '{}'::text[],
   CONSTRAINT trip_places_pkey PRIMARY KEY (id),
   CONSTRAINT trip_places_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT trip_places_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)

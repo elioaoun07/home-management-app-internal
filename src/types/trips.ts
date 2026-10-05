@@ -52,6 +52,7 @@ export interface TripPlace {
   confirmation_code: string | null;
   address: string | null;
   end_time: string | null;
+  attachment_paths: string[];
 }
 
 export interface TripPackingItem {

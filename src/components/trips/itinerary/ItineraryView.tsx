@@ -7,6 +7,7 @@ import {
   useTripPlaces,
   useUpdateTripPlace,
 } from "@/features/trips/hooks";
+import { openTripFile } from "@/features/trips/storedFile";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn, formatCurrency } from "@/lib/utils";
 import {
@@ -30,6 +31,7 @@ import {
   MapPin,
   MoreVertical,
   Navigation,
+  Paperclip,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -159,7 +161,7 @@ function PlaceRow({
                   {PLACE_PRIORITY_LABELS[place.priority]}
                 </span>
               </div>
-              {(place.address || place.confirmation_code || place.url) && (
+              {(place.address || place.confirmation_code || place.url || place.attachment_paths?.length) && (
                 <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                   {place.address && (
                     <a
@@ -177,6 +179,15 @@ function PlaceRow({
                       <Copy className="w-3 h-3" /> {place.confirmation_code}
                     </button>
                   )}
+                  {(place.attachment_paths ?? []).map((path, i, all) => (
+                    <button
+                      key={path}
+                      onClick={(e) => { e.stopPropagation(); openTripFile(tripId, path); }}
+                      className="flex items-center gap-1 text-xs text-cyan-400/80 hover:text-cyan-300"
+                    >
+                      <Paperclip className="w-3 h-3" /> {all.length > 1 ? `Ticket ${i + 1}` : "Ticket"}
+                    </button>
+                  ))}
                   {place.url && (
                     <a
                       href={place.url}
@@ -224,6 +235,12 @@ export function ItineraryView({ tripId }: { tripId: string }) {
   const { data: places = [], isLoading } = useTripPlaces(tripId);
   const reorderPlaces = useReorderTripPlaces(tripId);
   const [addOpen, setAddOpen] = useState(false);
+  // Bumped on every open so the sheet remounts with fresh defaults (date of the active day, empty fields).
+  const [addSession, setAddSession] = useState(0);
+  const openAdd = () => {
+    setAddSession((n) => n + 1);
+    setAddOpen(true);
+  };
 
   const days = useMemo(() => {
     if (!trip?.start_date || !trip?.end_date) return [];
@@ -263,7 +280,7 @@ export function ItineraryView({ tripId }: { tripId: string }) {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className={cn("text-sm font-medium", tc.textMuted)}>Places & Activities</h3>
-          <button onClick={() => setAddOpen(true)} className={cn("flex items-center gap-1 text-sm", tc.text)}>
+          <button onClick={() => openAdd()} className={cn("flex items-center gap-1 text-sm", tc.text)}>
             <Plus className="w-4 h-4" /> Add
           </button>
         </div>
@@ -271,7 +288,7 @@ export function ItineraryView({ tripId }: { tripId: string }) {
         {isLoading ? (
           <p className={cn("text-sm text-center py-4", tc.textFaint)}>Loading…</p>
         ) : places.length === 0 ? (
-          <EmptyState onAdd={() => setAddOpen(true)} />
+          <EmptyState onAdd={() => openAdd()} />
         ) : (
           Object.entries(byDate)
             .sort(([a], [b]) => (a === "__unscheduled" ? 1 : b === "__unscheduled" ? -1 : a.localeCompare(b)))
@@ -288,7 +305,7 @@ export function ItineraryView({ tripId }: { tripId: string }) {
               </div>
             ))
         )}
-        <PlaceFormSheet tripId={tripId} open={addOpen} onOpenChange={setAddOpen} />
+        <PlaceFormSheet key={addSession} tripId={tripId} open={addOpen} onOpenChange={setAddOpen} />
       </div>
     );
   }
@@ -317,7 +334,7 @@ export function ItineraryView({ tripId }: { tripId: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className={cn("text-sm font-medium", tc.textMuted)}>Itinerary</h3>
-        <button onClick={() => setAddOpen(true)} className={cn("flex items-center gap-1 text-sm", tc.text)}>
+        <button onClick={() => openAdd()} className={cn("flex items-center gap-1 text-sm", tc.text)}>
           <Plus className="w-4 h-4" /> Add
         </button>
       </div>
@@ -363,7 +380,7 @@ export function ItineraryView({ tripId }: { tripId: string }) {
       {isLoading ? (
         <p className={cn("text-sm text-center py-4", tc.textFaint)}>Loading…</p>
       ) : dayItems.length === 0 ? (
-        <EmptyState onAdd={() => setAddOpen(true)} />
+        <EmptyState onAdd={() => openAdd()} />
       ) : (
         <div className="space-y-2">
           {anytimeItems.length > 0 && (
@@ -391,6 +408,7 @@ export function ItineraryView({ tripId }: { tripId: string }) {
       )}
 
       <PlaceFormSheet
+        key={addSession}
         tripId={tripId}
         open={addOpen}
         onOpenChange={setAddOpen}

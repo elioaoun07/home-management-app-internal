@@ -6,7 +6,7 @@ import {
   useTripDocuments,
 } from "@/features/trips/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
-import { safeFetch } from "@/lib/safeFetch";
+import { openTripFile } from "@/features/trips/storedFile";
 import { cn } from "@/lib/utils";
 import { TRIP_DOCUMENT_TYPE_LABELS, type TripDocument } from "@/types/trips";
 import { differenceInCalendarDays, parseISO } from "date-fns";
@@ -44,26 +44,7 @@ function DocumentRow({ tripId, doc, tripEndDate }: { tripId: string; doc: TripDo
   const deleteDoc = useDeleteTripDocument(tripId);
   const [editOpen, setEditOpen] = useState(false);
 
-  // Sign at click time: a cached URL goes stale (1h JWT) in a long-lived PWA.
-  const openFile = async () => {
-    if (!doc.storage_path) return;
-    const win = window.open("", "_blank");
-    try {
-      const res = await safeFetch(`/api/trips/${tripId}/documents/signed-urls`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paths: [doc.storage_path] }),
-        timeoutMs: 15_000,
-      });
-      const data = await res.json();
-      const url = data.urls?.[doc.storage_path];
-      if (!res.ok || !url) throw new Error("sign failed");
-      if (win) win.location.href = url;
-      else window.location.href = url;
-    } catch {
-      win?.close();
-    }
-  };
+  const openFile = () => openTripFile(tripId, doc.storage_path);
 
   return (
     <>
