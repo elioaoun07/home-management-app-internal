@@ -3,10 +3,10 @@
 import {
   useDeleteTripDocument,
   useTrip,
-  useTripDocumentUrls,
   useTripDocuments,
 } from "@/features/trips/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { safeFetch } from "@/lib/safeFetch";
 import { cn } from "@/lib/utils";
 import { TRIP_DOCUMENT_TYPE_LABELS, type TripDocument } from "@/types/trips";
 import { differenceInCalendarDays, parseISO } from "date-fns";
@@ -42,9 +42,28 @@ function ExpiryNote({ expiresOn, tripEndDate }: { expiresOn: string | null; trip
 function DocumentRow({ tripId, doc, tripEndDate }: { tripId: string; doc: TripDocument; tripEndDate: string | null }) {
   const tc = useThemeClasses();
   const deleteDoc = useDeleteTripDocument(tripId);
-  const { getUrl } = useTripDocumentUrls(tripId, [doc.storage_path]);
   const [editOpen, setEditOpen] = useState(false);
-  const url = getUrl(doc.storage_path);
+
+  // Sign at click time: a cached URL goes stale (1h JWT) in a long-lived PWA.
+  const openFile = async () => {
+    if (!doc.storage_path) return;
+    const win = window.open("", "_blank");
+    try {
+      const res = await safeFetch(`/api/trips/${tripId}/documents/signed-urls`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paths: [doc.storage_path] }),
+        timeoutMs: 15_000,
+      });
+      const data = await res.json();
+      const url = data.urls?.[doc.storage_path];
+      if (!res.ok || !url) throw new Error("sign failed");
+      if (win) win.location.href = url;
+      else window.location.href = url;
+    } catch {
+      win?.close();
+    }
+  };
 
   return (
     <>
@@ -60,10 +79,10 @@ function DocumentRow({ tripId, doc, tripEndDate }: { tripId: string; doc: TripDo
           </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          {url && (
-            <a href={url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-white/30 hover:text-white/60">
+          {doc.storage_path && (
+            <button onClick={openFile} aria-label="Open file" className="p-1.5 text-white/30 hover:text-white/60">
               <ExternalLink className="w-4 h-4" />
-            </a>
+            </button>
           )}
           <button onClick={() => setEditOpen(true)} className="p-1.5 text-white/30 hover:text-white/60">
             <Pencil className="w-4 h-4" />

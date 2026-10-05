@@ -60,7 +60,7 @@ export function TripsView() {
   return (
     <div className="min-h-screen pb-24">
       {/* Header */}
-      <div className={cn("px-4 pt-14 pb-3 flex items-center justify-between border-b", tc.border)}>
+      <div className={cn("px-4 pt-24 pb-3 flex items-center justify-between border-b", tc.border)}>
         <div className="flex items-center gap-3">
           <div className={cn("w-9 h-9 rounded-full flex items-center justify-center", tc.bgSurface)}>
             <Plane className={cn("w-4 h-4", tc.text)} />

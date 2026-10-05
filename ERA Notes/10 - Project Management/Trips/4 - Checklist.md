@@ -38,4 +38,5 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **TRIP-10** Select catalogue or stock references for packing — [criteria](<Trips — Master Book.md#trip-10>) _(annoyance - M)_
 - [ ] **TRIP-11** Replace Overview's "Planned spend" placeholder (sums `trip_places.cost` only) with the trip account's real balance/transactions once actuals matter — [criteria](<Trips — Master Book.md#trip-11>) _(annoyance - M)_
 - [ ] **TRIP-30** Repair trip lifecycle atomically under an agreed inverse — [criteria](<Trips — Master Book.md#trip-30>) _(friction - M)_
+- [ ] **TRIP-36** Sweep every page for content hidden under the fixed header (app-wide) — [criteria](<Trips — Master Book.md#trip-36>) _(annoyance - M)_
 - [ ] **TRIP-33** Attach a saved document snapshot to a trip — [criteria](<Trips — Master Book.md#trip-33>) _(friction - M)_

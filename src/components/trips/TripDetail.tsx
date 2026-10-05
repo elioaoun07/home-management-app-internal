@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/shared/DropdownMenu";
-import { Calendar, Copy, MapPin, MoreVertical, Pencil, Plane, Users } from "lucide-react";
+import { Calendar, ChevronLeft, Copy, MapPin, MoreVertical, Pencil, Plane, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -70,9 +70,12 @@ export function TripDetail({ tripId }: { tripId: string }) {
   return (
     <div className="min-h-screen pb-24">
       {/* Header */}
-      <div className={cn("px-4 pt-4 pb-3 border-b", tc.border)}>
+      <div className={cn("px-4 pt-24 pb-3 border-b", tc.border)}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
+            <button onClick={() => router.push("/trips")} aria-label="Back to trips" className={cn("p-2 -ml-2 rounded-lg flex-shrink-0", tc.bgHover, tc.textMuted)}>
+              <ChevronLeft className="w-5 h-5" />
+            </button>
             <div className={cn("w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0", tc.bgSurface)}>
               <Plane className={cn("w-5 h-5", tc.text)} />
             </div>

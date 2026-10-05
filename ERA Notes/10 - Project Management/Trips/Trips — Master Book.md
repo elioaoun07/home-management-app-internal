@@ -41,6 +41,8 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 🟠 **TRIP-29** Acknowledge checkpoint writes truthfully. Dated source diagnosis; cause and witness limits are in [criteria](<#trip-29>) and its provenance. Runtime incidence/application is unverified unless the cited receipt says otherwise.
 
+🟡 **TRIP-36** Fixed header overlaps page content (Trips fixed 2026-10-05; app-wide sweep pending). See [acceptance](<#trip-36>) for the root cause and fix recipe.
+
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
@@ -1241,6 +1243,16 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Depends on:** TRIP-34 (shipped 2026-09-19 — column, validation and API support already exist; this is UI only).
 
 **Provenance:** Owner request 2026-09-19 (Italy trip: visa and flights paid from the USD account while daily spend sits in the EUR trip account).
+
+### TRIP-36
+
+**Outcome:** No page, module or sheet in the app has content hidden under the fixed top header.
+
+- **Root cause (Trips, fixed 2026-10-05):** `ConditionalHeader` renders a `fixed` header at `h-16` (64px) for every standalone app (`STANDALONE_APPS`) and the default header elsewhere; it takes no layout space. `TripsView` used `pt-14` (8px overlap) and `TripDetail` used `pt-4` (full overlap). Both now use `pt-20` (64px + 16px gap).
+- **Fix recipe:** top padding of the first content block ≥ `pt-20` on any page rendered under `ConditionalHeader`. Skip routes where the header returns `null` (`/g/`, `/era`, `/nfc/`, `/watch`, `/pm/live`, `/activity-log`, web/watch view modes, open chat thread).
+- **Acceptance:** Every route under `STANDALONE_APPS` plus the default-header pages (expense, dashboard, …) verified at mobile width with first content clear of the header. Hard Rule #16 applies. Sweep only when owner asks or a page is next touched; fix the same way.
+
+**Provenance:** Owner report 2026-10-05 (Trips header overlapping content); owner asked to track the app-wide class without running a full analysis now.
 
 - **Reading guide (revalidated 2026-09-26):** UI wiring remains the scope: `src/app/api/transactions/route.ts` POST passes the body to `SupabaseTransactionService.createTransaction()`, whose `trip_id` validation and insert already exist in `src/services/transaction.service.ts`; absence of a `trip_id` literal in the route did not mean unsupported creation. The earlier suggestion to widen that route or issue a follow-up PATCH was incorrect. Reuse current create/update support and `canAccessTrip()` validation. Surfaces: `src/components/expense/MobileExpenseForm.tsx`, `src/components/expense/ExpenseFormContext.tsx` and `src/components/dashboard/TransactionDetailModal.tsx`; authorized choices come from the existing Trips reader. Preserve account/amount/date, support explicit clearing, and run `src/services/transaction.service.trip-tag.test.ts`. TRIP-34's manual migration application is a separate owner evidence gate.
 
