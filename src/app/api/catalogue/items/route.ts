@@ -246,7 +246,7 @@ export async function POST(req: NextRequest) {
         recurrence_days_of_week: recurrence_days_of_week || [],
         subtasks_text: subtasks_text || null,
         item_category_ids: item_category_ids || [],
-        is_public: is_public ?? false,
+        is_public: is_public ?? true,
         is_flexible_routine: is_flexible_routine ?? false,
         flexible_occurrences: Math.min(
           31,

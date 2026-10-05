@@ -50,7 +50,7 @@ tags:
 | ID | What's left |
 | --- | --- |
 | KIT-25 | Two-phone stale-save witness (migration applied) |
-| KIT-26 | Step 5 `pg_policies` output → one policy set, sub-item visibility, partner rows in shared modules |
+| KIT-26 | Owner runs `migrations/2026-10-05_catalogue-rls-collapse.sql`, then the partner-phone witness and a fresh `db-state.json` |
 | KIT-27 | Refuse revision-less content edits (428) once both phones are updated |
 | KIT-21 | Disable atomicity, purge guard, `completed_at` on update-Undo |
 | KIT-22 | Typed metadata schemas per kind (interfaces drift from the dialog) |
@@ -60,8 +60,9 @@ tags:
 
 ## Gotchas
 
-- **RLS is not what the repo docs say until re-checked.** The 2026-08-04 snapshot shows two overlapping policy sets on `catalogue_items` (one through `household_members`, one through `household_links`) and owner-only SELECT on `catalogue_sub_items`. A partner sees a shared item but not its sub-items. The read-only `pg_policies` query is in step 5 of `migrations/2026-10-04_catalogue-revision.sql`. Do not change policies before its output is in hand (Hard Rule #27).
-- **Item visibility:** items default to private (`is_public = false`). Modules and categories default to shared. A partner adding an item inside the owner's shared module creates a row only the partner sees.
+- **RLS is not what the repo docs say until re-checked.** Live `pg_policies` on 2026-10-04 (`migrations/output.md`) showed two overlapping policy sets on `catalogue_items` (legacy `household_members` one has no `active` check and breaks for a user in 2+ households), owner-only SELECT on `catalogue_sub_items`, and a module delete policy whose `is_system = false` guard was OR-ed away. `2026-10-05_catalogue-rls-collapse.sql` collapses all of it; until the owner runs it and refreshes `db-state.json`, treat the live DB as the old shape (Hard Rule #27).
+- **Audience rule (owner, 2026-10-05):** everything is shared with the household unless explicitly set private. Items, modules and categories all default to `is_public = true`. Sub-items have no audience of their own — `catalogue_sub_items.is_public` is trigger-owned and mirrors the parent item, so the partner policy is a direct column check. Rows created before the change stay as they were (private ones are indistinguishable from deliberate ones).
+- **Partner reads sub-items through RLS, not an app filter.** `GET /api/catalogue/sub-items` no longer filters `user_id`; sub-item writes stay owner-only.
 - **Module counts** (`item_count`) exclude binned and archived items as of 2026-10-04. They used to count rows in the Recycle Bin.
 - **`GET /api/catalogue/modules` initializes default modules** for a user with none. Never use it as a background read path (ASTRA §10.6).
 - The typed metadata interfaces (`RecipeItemMetadata`, `TaskItemMetadata`, …) drift from the keys the dialog actually writes (`prep_time` vs `prep_time_mins`). The dialog config is the de-facto contract until KIT-22.

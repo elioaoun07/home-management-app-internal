@@ -2943,7 +2943,7 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Acceptance:** "Add Laura as a contact" when Laura exists (by normalized name) answers `Already in Contacts · Laura` with a door to open it, and writes nothing. The partner's adds land in a module the partner can see and keep using. Gym cases cover the duplicate, a near-name and the partner path.
 - **Depends on:** [HUB-93](#hub-93) (the same resolver; do both in one pass).
-- **Reading guide:** Copy the `loadPlaces` / `matchPlace` pattern from `resolvers/places.ts`. Audience rules are decided under Kitchen KIT-26.
+- **Reading guide:** Copy the `loadPlaces` / `matchPlace` pattern from `resolvers/places.ts`. Audience rule (Kitchen KIT-26, owner 2026-10-05): shared unless explicitly private, so ERA-created catalogue rows take `is_public = true`.
 
 ### HUB-96
 

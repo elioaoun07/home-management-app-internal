@@ -26,8 +26,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabase
     .from("catalogue_sub_items")
     .select("*")
-    .eq("item_id", itemId)
-    .eq("user_id", user.id)
+    .eq("item_id", itemId) // RLS: own rows + partner's shared ones
     .order("position", { ascending: true });
 
   if (error) {

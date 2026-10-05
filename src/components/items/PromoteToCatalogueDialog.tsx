@@ -182,7 +182,7 @@ export function PromoteToCatalogueDialog({
 
   // Categories and visibility
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
-  const [isPublic, setIsPublic] = useState(false);
+  const [isPublic, setIsPublic] = useState(true);
 
   // Get categories for selected module
   const { data: moduleCats = [] } = useCatalogueCategories(
@@ -289,7 +289,7 @@ export function PromoteToCatalogueDialog({
       setIsFlexibleRoutine(false);
       setFlexiblePeriod(null);
       setSelectedCategoryIds([]);
-      setIsPublic(false);
+      setIsPublic(true);
       setKeepLinked(true);
     }
   }, [item, open, tasksModule?.id]);

@@ -295,6 +295,8 @@ export interface CatalogueSubItem {
   completed_at: string | null;
   position: number;
   metadata_json: Record<string, unknown>;
+  // Mirrors the parent item (trigger-owned)
+  is_public: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -58,7 +58,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 🟡 **KIT-27** The route still accepts content edits that send no `expected_revision`. Older app builds can therefore still overwrite a newer edit made on the other phone. See [acceptance](#kit-27).
 
-🟡 **KIT-26** Catalogue RLS is unverified. The 2026-08-04 snapshot shows two overlapping SELECT/INSERT/UPDATE/DELETE policy sets on `catalogue_items` (one via `household_members`, one via `household_links`) and owner-only SELECT on `catalogue_sub_items`. A partner who can see a shared item cannot see its sub-items. Evidence: `migrations/db-state.json` (stale). See [acceptance](#kit-26).
+🟡 **KIT-26** Catalogue RLS verified 2026-10-04 (`migrations/output.md`): two overlapping policy sets on `catalogue_items` (one via `household_members` with no `active` check, one via `household_links`), owner-only SELECT on `catalogue_sub_items` (a partner sees a shared item with an empty checklist), and a module delete policy whose `is_system = false` guard is OR-ed away. Fix written 2026-10-05 as `migrations/2026-10-05_catalogue-rls-collapse.sql`; waiting on the owner to run it. See [acceptance](#kit-26).
 
 ## Acceptance Criteria Index
 
@@ -1474,7 +1474,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Acceptance:** Step 5 of `migrations/2026-10-04_catalogue-revision.sql` (`pg_policies`, untruncated) is in hand, and `db-state.json` is regenerated. Duplicate policies are collapsed to one set in a migration. The owner decides whether a partner who can see a shared item also sees its sub-items. Shared containers never expose private descendants (ASTRA §10.2 Sharing).
 - **Also decide:** a partner who adds an item inside the owner's shared module creates a row only the partner can see, because items default to `is_public = false`. Choose whether items inherit the container's audience or stay private.
-- **Blocked 2026-10-04:** the owner ran the migration but could not share step 5 yet. Nothing proceeds without that output.
+- **Decided 2026-10-05 (owner):** everything is shared unless explicitly set private; sub-items follow their parent item. Items now default to `is_public = true` (DB default, `POST /api/catalogue/items`, promote route and dialog), which also resolves the partner-adds-item case. Existing rows are not flipped.
+- **Status 2026-10-05:** step 5 output received. Code and `schema.sql` are done; `migrations/2026-10-05_catalogue-rls-collapse.sql` is written and **not yet run**. Remaining: owner runs it, partner-phone witness (shared item shows its checklist; flip to private and it disappears), re-run `migrations/db-state.sql` and commit `db-state.json`. Then check this off.
 - **Reading guide:** Hard Rule #27. Do not edit policies from the 2026-08-04 snapshot alone. `catalogue_sub_items` is not a hot child table, but prefer a denormalized `is_public` + `user_id` check over an `EXISTS` join (Hard Rule #20).
 
 ### KIT-27

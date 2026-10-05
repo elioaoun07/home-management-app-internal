@@ -59,7 +59,7 @@ export async function POST(
       tags = [],
       is_flexible_routine = false,
       item_category_ids = [],
-      is_public = false,
+      is_public = true,
     } = body;
 
     // Validate required fields

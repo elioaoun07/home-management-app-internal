@@ -887,7 +887,7 @@ CREATE TABLE public.catalogue_items (
   is_active_on_calendar boolean DEFAULT false,
   linked_item_id uuid,
   item_category_ids ARRAY DEFAULT '{}'::text[],
-  is_public boolean DEFAULT false,
+  is_public boolean DEFAULT true,
   is_flexible_routine boolean DEFAULT false,
   deleted_at timestamp with time zone,
   flexible_occurrences integer NOT NULL DEFAULT 1 CHECK (flexible_occurrences >= 1 AND flexible_occurrences <= 31),
@@ -912,6 +912,7 @@ CREATE TABLE public.catalogue_sub_items (
   metadata_json jsonb DEFAULT '{}'::jsonb,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  is_public boolean NOT NULL DEFAULT true,
   CONSTRAINT catalogue_sub_items_pkey PRIMARY KEY (id),
   CONSTRAINT catalogue_sub_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT catalogue_sub_items_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.catalogue_items(id)
