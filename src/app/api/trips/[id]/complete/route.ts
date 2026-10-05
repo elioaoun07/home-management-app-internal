@@ -1,3 +1,4 @@
+import { TRIP_CASCADE_ENABLED } from "@/features/trips/cascade";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
@@ -28,11 +29,17 @@ export async function POST(
 
   const admin = supabaseAdmin();
 
-  const { data: rpcResult, error: rpcErr } = await admin
-    .rpc("complete_trip", { p_trip_id: id });
+  // Cascade reversal — gated off with activation (see cascade.ts). User-scoped
+  // client: complete_trip reads auth.uid(), NULL under the service role.
+  let rpcResult: unknown = { reversed_effects: 0 };
+  if (TRIP_CASCADE_ENABLED) {
+    const { data, error: rpcErr } = await supabase
+      .rpc("complete_trip", { p_trip_id: id });
 
-  if (rpcErr) {
-    return NextResponse.json({ error: rpcErr.message }, { status: 500 });
+    if (rpcErr) {
+      return NextResponse.json({ error: rpcErr.message }, { status: 500 });
+    }
+    rpcResult = data;
   }
 
   const { data: updatedTrip, error: updateErr } = await admin

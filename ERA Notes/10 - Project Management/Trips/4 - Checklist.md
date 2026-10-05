@@ -26,11 +26,11 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **TRIP-29** Acknowledge checkpoint writes truthfully — [criteria](<Trips — Master Book.md#trip-29>) _(friction - M)_
 - [ ] **TRIP-31** Cover trip ownership predicates — [criteria](<Trips — Master Book.md#trip-31>) _(friction - M)_
 - [ ] **TRIP-32** Verify shared trip documents and money setup — [criteria](<Trips — Master Book.md#trip-32>) _(friction - M)_
-- [ ] **TRIP-35** Tag a transaction to a trip from the expense form and transaction editor — [criteria](<Trips — Master Book.md#trip-35>) _(friction - M)_
 
 ## Later
 
 - [ ] **TRIP-5** Trip budget rollup / post-trip summary ("this trip cost X") — [criteria](<Trips — Master Book.md#trip-5>) _(annoyance - M)_
+- [ ] **TRIP-39** Re-enable the trip activation cascade (disabled 2026-10-05) — [criteria](<Trips — Master Book.md#trip-39>) _(parked - S)_
 - [ ] **TRIP-6** Per-cascade opt-out (choose which cascades fire per trip) — [criteria](<Trips — Master Book.md#trip-6>) _(annoyance - M)_
 - [ ] **TRIP-7** Show trip cascades in Schedule and Kitchen — [criteria](<Trips — Master Book.md#trip-7>) _(annoyance - M)_
 - [ ] **TRIP-8** Richer template library (weekend / abroad / business) with cascade prefs — [criteria](<Trips — Master Book.md#trip-8>) _(parked - M)_

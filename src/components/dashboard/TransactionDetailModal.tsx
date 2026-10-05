@@ -13,6 +13,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
+import { useTaggableTrips } from "@/features/trips/hooks";
 import {
   useDeleteTransaction,
   useUpdateTransaction,
@@ -26,7 +27,7 @@ import { createPortal } from "react-dom";
 
 const ReceiptSheet = dynamic(() => import("@/components/expense/ReceiptSheet"), { ssr: false });
 
-type EditField = "date" | "account" | "category" | "subcategory" | null;
+type EditField = "date" | "account" | "category" | "subcategory" | "trip" | null;
 
 type Transaction = {
   id: string;
@@ -44,6 +45,7 @@ type Transaction = {
   is_private?: boolean;
   is_masked?: boolean;
   receipt_url?: string | null;
+  trip_id?: string | null;
 };
 
 type Props = {
@@ -115,7 +117,9 @@ export default function TransactionDetailModal({
     account_id: transaction.account_id,
     category_id: "",
     subcategory_id: "",
+    trip_id: transaction.trip_id ?? "",
   });
+  const { data: taggableTrips = [] } = useTaggableTrips(transaction.trip_id);
   const [selectedAccount, setSelectedAccount] = useState<string | undefined>(
     transaction.account_id,
   );
@@ -135,6 +139,10 @@ export default function TransactionDetailModal({
           account_id: formData.account_id,
           category_id: formData.category_id || null,
           subcategory_id: formData.subcategory_id || null,
+          // Only sent when changed, so an unrelated edit never re-validates the tag.
+          ...(formData.trip_id !== (transaction.trip_id ?? "")
+            ? { trip_id: formData.trip_id || null }
+            : {}),
         },
         {
           onSuccess: () => {
@@ -481,6 +489,65 @@ export default function TransactionDetailModal({
                 </div>
               )}
             </div>
+
+            {/* Trip Row - Tap to expand */}
+            {(taggableTrips.length > 0 || formData.trip_id) && (
+              <div>
+                <button
+                  onClick={() =>
+                    isOwner &&
+                    setEditingField(editingField === "trip" ? null : "trip")
+                  }
+                  disabled={!isOwner}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 transition-colors ${isOwner ? "hover:bg-white/8 active:scale-[0.99]" : ""}`}
+                >
+                  <span className={`text-sm ${themeClasses.textMuted}`}>Trip</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-medium ${themeClasses.text}`}>
+                      {taggableTrips.find((t) => t.id === formData.trip_id)?.name || "—"}
+                    </span>
+                    {isOwner && (
+                      <span
+                        className={`text-white/30 transition-transform ${editingField === "trip" ? "rotate-90" : ""}`}
+                      >
+                        ›
+                      </span>
+                    )}
+                  </div>
+                </button>
+                {editingField === "trip" && (
+                  <div className="mt-2 p-3 rounded-xl bg-white/5 grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-150">
+                    {taggableTrips.map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          setFormData((prev) => ({ ...prev, trip_id: t.id }));
+                          setEditingField(null);
+                        }}
+                        className={`px-3 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95 text-left ${
+                          formData.trip_id === t.id
+                            ? "bg-cyan-500/20 text-cyan-400 ring-1 ring-cyan-500/50"
+                            : `bg-white/5 ${themeClasses.text} hover:bg-white/10`
+                        }`}
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                    {formData.trip_id && (
+                      <button
+                        onClick={() => {
+                          setFormData((prev) => ({ ...prev, trip_id: "" }));
+                          setEditingField(null);
+                        }}
+                        className="px-3 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95 text-left bg-white/5 text-white/50 hover:bg-white/10"
+                      >
+                        None
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Category Row - Tap to expand */}
             <div>

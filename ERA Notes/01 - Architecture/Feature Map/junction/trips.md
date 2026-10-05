@@ -28,7 +28,7 @@
 | Client transaction types | `src/features/transactions/useDashboardTransactions.ts` |
 | Tag behavior tests | `src/services/transaction.service.trip-tag.test.ts` |
 
-> A trip's expenses = the trip account's transactions **∪** transactions tagged with `trip_id` (any account, any date), **deduplicated by id**. No UI writes the tag yet (TRIP-35); no rollup reads it yet (TRIP-5).
+> A trip's expenses = the trip account's transactions **∪** transactions tagged with `trip_id` (any account, any date), **deduplicated by id**. Tag UI: `src/components/expense/TripTagRow.tsx` (mobile expense form) and the Trip row in `src/components/dashboard/TransactionDetailModal.tsx`. Rollup: `GET /api/trips/[id]/spend` → `summarizeTripSpend()` in `src/lib/tripSpend.ts` (per-currency, expense accounts only, no conversion) → `useTripSpend` → Overview `TotalExpensesCard`. Debts and future-dated payments go through other routes and are not taggable yet.
 
 ### Feature layer
 | Intent | File |

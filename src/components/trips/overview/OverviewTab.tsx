@@ -1,11 +1,12 @@
 "use client";
 
-import { useTripDocuments, useTripPacking, useTripPlaces } from "@/features/trips/hooks";
+import { useTripDocuments, useTripPacking, useTripPlaces, useTripSpend } from "@/features/trips/hooks";
 import { tripCountdown } from "@/features/trips/tripPhase";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { Trip } from "@/types/trips";
 import { differenceInCalendarDays, format, parseISO } from "date-fns";
+import { useState } from "react";
 import { AlertTriangle, CheckCircle2, Clock, FileWarning, MapPin, PackageCheck, Wallet } from "lucide-react";
 
 function Card({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -188,6 +189,59 @@ function DocumentsStripCard({ tripId, trip }: { tripId: string; trip: Trip }) {
   );
 }
 
+function TotalExpensesCard({ tripId, trip }: { tripId: string; trip: Trip }) {
+  const { data, isError } = useTripSpend(tripId);
+  const tc = useThemeClasses();
+  const [open, setOpen] = useState(false);
+
+  const totals = data?.totals ?? [];
+  if (isError) {
+    return (
+      <Card>
+        <CardLabel>Total expenses</CardLabel>
+        <p className="text-sm text-white/40">Unavailable</p>
+      </Card>
+    );
+  }
+  if (!data) return null;
+  if (totals.length === 0) {
+    if (!trip.account_id) return null;
+    totals.push({ currency: trip.currency ?? "USD", total: 0, count: 0 });
+  }
+
+  return (
+    <Card>
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left">
+        <CardLabel>Total expenses</CardLabel>
+        <div className="space-y-1.5">
+          {totals.map((t) => (
+            <div key={t.currency} className="flex items-center gap-3">
+              <Wallet className={cn("w-5 h-5 flex-shrink-0", tc.text)} />
+              <p className="text-sm text-white">{formatCurrency(t.total, t.currency)}</p>
+              <p className="text-xs text-white/40">{t.count}</p>
+            </div>
+          ))}
+        </div>
+      </button>
+      {open && (
+        <ul className="mt-3 pt-3 border-t border-white/10 space-y-2">
+          {data!.transactions.map((tx) => (
+            <li key={tx.id} className="flex items-center gap-3 text-sm">
+              <div className="min-w-0 flex-1">
+                <p className="text-white truncate">{tx.description || tx.account_name}</p>
+                <p className="text-xs text-white/40">
+                  {format(parseISO(tx.date), "MMM d")} · {tx.account_name}
+                </p>
+              </div>
+              <p className="text-white flex-shrink-0">{formatCurrency(tx.amount, tx.currency)}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 function PlannedSpendCard({ tripId, trip }: { tripId: string; trip: Trip }) {
   const { data: places = [] } = useTripPlaces(tripId);
   const tc = useThemeClasses();
@@ -202,7 +256,6 @@ function PlannedSpendCard({ tripId, trip }: { tripId: string; trip: Trip }) {
         <Wallet className={cn("w-5 h-5 flex-shrink-0", tc.text)} />
         <p className="text-sm text-white">{formatCurrency(total, trip.currency)}</p>
       </div>
-      <p className="text-xs text-white/30 mt-1">From places — not actuals. Trip spend tracking comes later.</p>
     </Card>
   );
 }
@@ -225,6 +278,7 @@ export function OverviewTab({ tripId, trip }: { tripId: string; trip: Trip }) {
       <ItineraryReadinessCard tripId={tripId} trip={trip} />
       <PackingRingCard tripId={tripId} />
       <DocumentsStripCard tripId={tripId} trip={trip} />
+      <TotalExpensesCard tripId={tripId} trip={trip} />
       <PlannedSpendCard tripId={tripId} trip={trip} />
 
       {trip.account_id && (

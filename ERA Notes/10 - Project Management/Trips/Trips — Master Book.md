@@ -1242,6 +1242,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** A transaction can be assigned to, and cleared from, an accessible trip (own trip, or the partner's household-scope trip) without changing its account, amount or date. The control is available when editing an existing transaction and when logging a new one. Clearing is reachable. No explanatory prose ships with it (Hard Rule #28).
 - **Depends on:** TRIP-34 (shipped 2026-09-19 — column, validation and API support already exist; this is UI only).
 
+- **Delivered 2026-10-05:** `TripTagRow` pill under the mobile expense form's Split/Debt/Public row (hidden for debts and future-dated entries, whose routes drop the tag) and a Trip row in `TransactionDetailModal`; `trip_id` is sent on edit only when changed.
+
 **Provenance:** Owner request 2026-09-19 (Italy trip: visa and flights paid from the USD account while daily spend sits in the EUR trip account).
 
 ### TRIP-37
@@ -1262,6 +1264,34 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Every route under `STANDALONE_APPS` plus the default-header pages (expense, dashboard, …) verified at mobile width with first content clear of the header. Hard Rule #16 applies. Sweep only when owner asks or a page is next touched; fix the same way.
 
 **Provenance:** Owner report 2026-10-05 (Trips header overlapping content); owner asked to track the app-wide class without running a full analysis now.
+
+### TRIP-38
+
+**Outcome:** Activating a trip succeeds and only creates the trip expense account.
+
+- **Root cause:** `POST /api/trips/[id]/activate` (and `/complete`) called the `activate_trip` / `complete_trip` RPCs on the service-role client. Both RPCs read `auth.uid()`, which is NULL under the service role, so `SELECT … WHERE user_id = v_caller_id` never matched and every activation raised "Trip not found or access denied" → 500 (the just-created trip account was rolled back). Evidence: RPC bodies in `migrations/db-state.json`.
+- **Fix:** owner decision 2026-10-05 — cascade disabled behind `TRIP_CASCADE_ENABLED = false` (`src/features/trips/cascade.ts`); activation creates the account + sets status only, completion only sets status. Cascade UI copy hidden behind the same flag. The RPC calls now use the user-scoped client so they work when re-enabled (TRIP-39).
+- **Acceptance:** Activate on a dated trip returns 200, trip is `active`, one trip account exists; no `trip_side_effects`, `recurrence_pauses`, `item_occurrence_actions` or `meal_plans` rows change.
+
+**Provenance:** Owner report 2026-10-05 (error activating "France - Christmas 2026").
+
+### TRIP-40
+
+**Outcome:** Trip Overview shows total expenses per currency and the transactions behind them.
+
+- **Delivered 2026-10-05:** `GET /api/trips/[id]/spend` = trip-account transactions ∪ `trip_id`-tagged transactions (one OR query, dedupe by id), grouped by account currency, expense accounts only, drafts/deleted excluded, no conversion. Overview `TotalExpensesCard` lists each currency; tap to expand the rows. Realizes the union/dedupe part of TRIP-5; the post-trip summary part stays open there.
+- **Open gaps:** debts and future-dated payments (`/api/debts`, `/api/drafts`) cannot carry the tag; the desktop `ExpenseForm` has no tag control; Statement Import / Hub-chat / template creation paths do not set it.
+
+**Provenance:** Owner request 2026-10-05.
+
+### TRIP-39
+
+**Outcome:** Re-enable the trip activation cascade (chores skipped, recurring events paused, one-time events cleared, meal plans skipped, solo reassignment) and its reversal on completion.
+
+- **Acceptance:** Owner says to re-enable. Flip `TRIP_CASCADE_ENABLED` in `src/features/trips/cascade.ts`; the RPCs, sheet copy and toasts return with it. Gated by TRIP-1/TRIP-2 lifecycle verification. Check `EXECUTE` grants on `activate_trip`/`complete_trip` for `authenticated` (calls now run on the user client). Trips activated while disabled have no ledger rows, so completing them reverses nothing — correct by construction.
+- **Depends on:** TRIP-1, TRIP-2, TRIP-3.
+
+**Provenance:** Owner request 2026-10-05 — "Keep it if coded, just disable it until communicated otherwise."
 
 - **Reading guide (revalidated 2026-09-26):** UI wiring remains the scope: `src/app/api/transactions/route.ts` POST passes the body to `SupabaseTransactionService.createTransaction()`, whose `trip_id` validation and insert already exist in `src/services/transaction.service.ts`; absence of a `trip_id` literal in the route did not mean unsupported creation. The earlier suggestion to widen that route or issue a follow-up PATCH was incorrect. Reuse current create/update support and `canAccessTrip()` validation. Surfaces: `src/components/expense/MobileExpenseForm.tsx`, `src/components/expense/ExpenseFormContext.tsx` and `src/components/dashboard/TransactionDetailModal.tsx`; authorized choices come from the existing Trips reader. Preserve account/amount/date, support explicit clearing, and run `src/services/transaction.service.trip-tag.test.ts`. TRIP-34's manual migration application is a separate owner evidence gate.
 
@@ -1341,6 +1371,9 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-08-04 — **TRIP-13** Packing category icon/color lookup reworked for the now-real `trip_packing_category` table (`TripPackingList.tsx`): exact-match dictionary extended with `Shoes`/`Bags`/`Swim`, a keyword-alias layer resolves compound names (e.g. "Documents & Wallet", "Bags & Travel Gear", "Underwear & Swimwear") to the right built-in look, and any category matching neither now hashes on its DB `id` (stable across renames) into a 6-entry rotating palette instead of collapsing to flat gray. Shoe glyph replaced with Tabler Icons' MIT `shoe` outline (attributed inline); swimwear glyph hand-drawn as a two-piece (no permissively-licensed swimwear glyph exists in Tabler/Lucide).
 - ✅ 2026-08-04 — **TRIP-14** Packing category tiles lost their colour wash (owner-reported: Shoes and Underwear & Swimwear rendered flat/colourless while sibling tiles were fine). Root cause: the tile gradient was the one visual property still expressed as Tailwind class strings (`from-X/35 via-X/15 to-X/5`) inside a data lookup table, so it depended on the class surviving Tailwind's scanner and the dev-server CSS bundle staying fresh — `iconColor`/`borderColor` were already raw values and kept working, which is why only the wash disappeared. Verified via `npx @tailwindcss/cli` that the classes *do* compile, confirming a stale bundle rather than a source error. Fix: `gradient` (classes) → `gradientColor` (hex) + optional `gradientStops`, applied inline through a `categoryGradient()` helper at both render sites; zero Tailwind gradient classes remain in the file, so all 17 entries — including the six fallback-palette colours that were equally at risk — are now immune.
 - ✅ 2026-10-05 — **TRIP-37** Simplify the Add place form and attach a ticket / QR to a place — [criteria](<Trips — Master Book.md#trip-37>)
+- ✅ 2026-10-05 — **TRIP-38** Activating a trip succeeds and only creates the trip expense account — [criteria](<Trips — Master Book.md#trip-38>)
+- ✅ 2026-10-05 — **TRIP-40** Trip Overview shows total expenses per currency and the transactions behind them — [criteria](<Trips — Master Book.md#trip-40>)
+- ✅ 2026-10-05 — **TRIP-35** Tag a transaction to a trip from the expense form and transaction editor — [criteria](<Trips — Master Book.md#trip-35>)
 
 ## Delivery session log
 

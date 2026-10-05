@@ -22,6 +22,9 @@ export const qk = {
   // Draft transactions
   drafts: () => ["drafts"] as const,
 
+  // Trip spend totals (== prefix of tripKeys.spend in src/features/trips)
+  tripSpend: () => ["trips", "spend"] as const,
+
   // Hub chat
   hubThreads: () => ["hub", "threads"] as const,
   hubMessages: (threadId: string) => ["hub", "messages", threadId] as const,

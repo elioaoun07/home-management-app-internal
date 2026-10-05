@@ -86,6 +86,9 @@ export function invalidateAccountData(
   // Matches all ["analytics", { months, accountId, ownership }] entries
   queryClient.invalidateQueries({ queryKey: qk.analytics() });
 
+  // Trip Overview "Total expenses" sums transactions
+  queryClient.invalidateQueries({ queryKey: qk.tripSpend() });
+
   if (accountId) {
     // Per-account balance widget (eager refetch)
     queryClient.invalidateQueries({ queryKey: ["account-balance", accountId] });

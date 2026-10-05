@@ -7,6 +7,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { TRIP_CASCADE_ENABLED } from "@/features/trips/cascade";
 import { useActivateTrip } from "@/features/trips/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
@@ -33,8 +34,9 @@ export function TripActivateSheet({ open, onOpenChange, trip }: TripActivateShee
     onOpenChange(false);
   };
 
-  const sideEffects =
-    trip.scope === "household"
+  const sideEffects = !TRIP_CASCADE_ENABLED
+    ? []
+    : trip.scope === "household"
       ? ["Chore occurrences will be skipped", "Recurring events paused", "One-time events cleared", "Meal plans skipped"]
       : ["Your chores and events reassigned to partner", "Meal planning untouched (partner is home)"];
 
@@ -76,10 +78,12 @@ export function TripActivateSheet({ open, onOpenChange, trip }: TripActivateShee
             </div>
           )}
 
-          <div className="flex items-start gap-2 text-amber-400 text-sm bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <p>This cascade has not been verified end-to-end yet. It will make real changes across your schedule, chores and meal plans. Consider using the trip as a planner until that verification is done.</p>
-          </div>
+          {TRIP_CASCADE_ENABLED && (
+            <div className="flex items-start gap-2 text-amber-400 text-sm bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <p>This cascade has not been verified end-to-end yet. It will make real changes across your schedule, chores and meal plans. Consider using the trip as a planner until that verification is done.</p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <p className={cn("text-xs font-medium uppercase tracking-wider", tc.textFaint)}>What will happen</p>
@@ -95,9 +99,11 @@ export function TripActivateSheet({ open, onOpenChange, trip }: TripActivateShee
                 A dedicated expense account is created for this trip
               </li>
             </ul>
-            <p className={cn("text-xs mt-3", tc.textFaint)}>
-              All changes are reversed when you complete the trip. The expense account is kept for records.
-            </p>
+            {TRIP_CASCADE_ENABLED && (
+              <p className={cn("text-xs mt-3", tc.textFaint)}>
+                All changes are reversed when you complete the trip. The expense account is kept for records.
+              </p>
+            )}
           </div>
 
           <div className="flex gap-2 pt-2">

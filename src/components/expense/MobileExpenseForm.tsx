@@ -112,6 +112,7 @@ import {
   ExpenseFormProvider,
   useExpenseForm,
 } from "./ExpenseFormContext";
+import { TripTagRow } from "./TripTagRow";
 import VoiceEntryButton from "./VoiceEntryButton";
 
 // Lazy-load Calendar and drawers — never visible on initial render.
@@ -365,6 +366,7 @@ function MobileExpenseFormContent() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
+  const [tripId, setTripId] = useState<string | null>(null);
   const [isSplitBill, setIsSplitBill] = useState(false);
   const [splitBillTotal, setSplitBillTotal] = useState("");
 
@@ -898,6 +900,9 @@ function MobileExpenseFormContent() {
       total_bill_amount:
         isSplitBill && splitBillTotal ? parseFloat(splitBillTotal) : undefined,
       lbp_change_received: parsedLbpChange,
+      // Debts and scheduled (future-dated) payments go through other routes that
+      // do not carry the tag, so it is only sent on the plain transaction path.
+      trip_id: isDebt || format(date, "yyyy-MM-dd") > format(new Date(), "yyyy-MM-dd") ? null : tripId,
       // Include display names for optimistic UI
       _optimistic: {
         category_name: selectedCategory?.name ?? null,
@@ -928,6 +933,7 @@ function MobileExpenseFormContent() {
     setSelectedSubcategoryId(undefined);
     setDescription("");
     setIsPrivate(false);
+    setTripId(null);
     setIsSplitBill(false);
     setSplitBillTotal("");
     setIsDebt(false);
@@ -1803,6 +1809,10 @@ function MobileExpenseFormContent() {
                     {isPrivate ? "Private" : "Public"}
                   </button>
                 </div>
+
+                {!isDebt && format(date, "yyyy-MM-dd") <= format(new Date(), "yyyy-MM-dd") && (
+                  <TripTagRow value={tripId} onChange={setTripId} />
+                )}
 
                 {/* Split bill total input - expands below when active */}
                 {isSplitBill && (

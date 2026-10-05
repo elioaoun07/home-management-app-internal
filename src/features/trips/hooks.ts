@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { flexibleRoutinesKeys } from "../items/useFlexibleRoutines";
 import { itemsKeys } from "../items/useItems";
 import { mealPlanKeys } from "../meal-planning/queryKeys";
+import { TRIP_CASCADE_ENABLED } from "./cascade";
 import { tripDocumentsQueryOptions } from "./documentQueries";
 import { tripKeys } from "./queryKeys";
 
@@ -85,6 +86,25 @@ export function useTrips() {
   });
 }
 
+/** Trips a transaction can be tagged with: active trips only, plus the currently
+ *  tagged one so an existing tag always resolves to a name. */
+export function useTaggableTrips(currentTripId?: string | null) {
+  return useQuery({
+    queryKey: tripKeys.list(),
+    queryFn: () => fetchTrips(false),
+    staleTime: 1000 * 60 * 5,
+    // The "trips" cache is persisted and the app default is refetchOnMount:false,
+    // so a trip activated since the last session would still read as a draft here.
+    refetchOnMount: "always",
+    select: (trips) =>
+      trips.filter(
+        (t) =>
+          t.id === currentTripId ||
+          (!t.is_template && t.status === "active"),
+      ),
+  });
+}
+
 export function useTripTemplates() {
   return useQuery({
     queryKey: tripKeys.templates(),
@@ -108,6 +128,43 @@ export function useTripPlaces(tripId: string) {
     queryKey: tripKeys.places(tripId),
     queryFn: () => fetchTripPlaces(tripId),
     staleTime: 1000 * 60 * 5,
+    enabled: !!tripId,
+  });
+}
+
+export interface TripSpendTotal {
+  currency: string;
+  total: number;
+  count: number;
+}
+
+export interface TripSpendTransaction {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  currency: string;
+  account_name: string;
+}
+
+export interface TripSpend {
+  totals: TripSpendTotal[];
+  transactions: TripSpendTransaction[];
+}
+
+async function fetchTripSpend(tripId: string): Promise<TripSpend> {
+  const res = await fetch(`/api/trips/${tripId}/spend`);
+  if (!res.ok) throw new Error("Failed to fetch trip spend");
+  return res.json();
+}
+
+export function useTripSpend(tripId: string) {
+  return useQuery({
+    queryKey: tripKeys.spend(tripId),
+    queryFn: () => fetchTripSpend(tripId),
+    staleTime: 1000 * 60,
+    // "trips" is persisted and the app default is refetchOnMount:false.
+    refetchOnMount: "always",
     enabled: !!tripId,
   });
 }
@@ -325,7 +382,7 @@ export function useCompleteTrip() {
       qc.invalidateQueries({ queryKey: itemsKeys.all });
       qc.invalidateQueries({ queryKey: flexibleRoutinesKeys.all });
       qc.invalidateQueries({ queryKey: mealPlanKeys.all });
-      toast.success("Trip completed — schedule restored", { icon: ToastIcons.success, duration: 5000 });
+      toast.success(TRIP_CASCADE_ENABLED ? "Trip completed — schedule restored" : "Trip completed", { icon: ToastIcons.success, duration: 5000 });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to complete trip", { icon: ToastIcons.error }),
   });

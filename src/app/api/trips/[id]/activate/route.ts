@@ -1,4 +1,5 @@
 import { DEFAULT_CATEGORIES } from "@/constants/defaultCategories";
+import { TRIP_CASCADE_ENABLED } from "@/features/trips/cascade";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
@@ -93,15 +94,28 @@ export async function POST(
     });
   }
 
-  // ── 2. Run activation RPC ───────────────────────────────────────────────
-  const { data: rpcResult, error: rpcErr } = await admin
-    .rpc("activate_trip", { p_trip_id: id });
+  // ── 2. Run activation RPC (cascade — gated off, see cascade.ts) ─────────
+  // Must run on the user-scoped client: activate_trip reads auth.uid(), which
+  // is NULL under the service role and makes it raise "access denied".
+  let rpcResult: unknown = {
+    scope: trip.scope,
+    skipped_chores: 0,
+    skipped_events: 0,
+    paused_recurring: 0,
+    skipped_meals: 0,
+    reassigned_items: 0,
+  };
+  if (TRIP_CASCADE_ENABLED) {
+    const { data, error: rpcErr } = await supabase
+      .rpc("activate_trip", { p_trip_id: id });
 
-  if (rpcErr) {
-    if (account?.id) {
-      await admin.from("accounts").delete().eq("id", account.id);
+    if (rpcErr) {
+      if (account?.id) {
+        await admin.from("accounts").delete().eq("id", account.id);
+      }
+      return NextResponse.json({ error: `Activation failed: ${rpcErr.message}` }, { status: 500 });
     }
-    return NextResponse.json({ error: `Activation failed: ${rpcErr.message}` }, { status: 500 });
+    rpcResult = data;
   }
 
   // ── 3. Update trip record ───────────────────────────────────────────────

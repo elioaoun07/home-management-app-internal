@@ -7,6 +7,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { TRIP_CASCADE_ENABLED } from "@/features/trips/cascade";
 import { useCompleteTrip } from "@/features/trips/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
@@ -46,7 +47,7 @@ export function TripCompleteSheet({ open, onOpenChange, trip }: TripCompleteShee
             </p>
           </div>
 
-          <div className="space-y-2">
+          {TRIP_CASCADE_ENABLED && <div className="space-y-2">
             <p className={cn("text-xs font-medium uppercase tracking-wider", tc.textFaint)}>What will be restored</p>
             <ul className="space-y-2">
               {[
@@ -67,7 +68,7 @@ export function TripCompleteSheet({ open, onOpenChange, trip }: TripCompleteShee
             <p className={cn("text-xs mt-3", tc.textFaint)}>
               The trip expense account is kept with all recorded transactions.
             </p>
-          </div>
+          </div>}
 
           <div className="flex gap-2 pt-2">
             <Button
