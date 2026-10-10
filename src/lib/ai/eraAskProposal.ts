@@ -247,7 +247,10 @@ export async function generateAskAIResponse(args: {
         systemInstruction: systemPrompt,
         config: {
           temperature: 0.3,
-          maxOutputTokens: 1024,
+          // HUB-98 — on a thinking model this cap includes the thinking
+          // tokens; at 1024 a deliberating answer can be cut off before
+          // its JSON. The answer itself stays short (schema + prompt).
+          maxOutputTokens: 4096,
           responseMimeType: "application/json",
           responseSchema: ASK_AI_RESPONSE_SCHEMA,
         },
@@ -255,8 +258,15 @@ export async function generateAskAIResponse(args: {
 
       const parsed = parseAskAIResponse(response.text, args.scheduleContext, args.focusEntity);
       if (parsed) return parsed;
-    } catch {
-      // Rate limit, network, bad JSON — fall through to the deterministic reply below.
+      // HUB-98 — an empty, cut-off or off-schema answer used to vanish into
+      // the line below with no trace.
+      console.error("[era-ask] unusable model answer", {
+        finishReason: response.candidates?.[0]?.finishReason,
+        chars: response.text?.length ?? 0,
+      });
+    } catch (err) {
+      // Rate limit, overload, network — fall through to the deterministic reply below.
+      console.error("[era-ask] model call failed:", err instanceof Error ? err.message : err);
     }
   }
 

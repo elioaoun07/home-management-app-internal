@@ -52,6 +52,9 @@ const RECIPE_SEARCH_VERB_RE =
 const SCHEDULE_DOMAIN_RE =
   /\b(?:reminder|reminders|appointment|appointments|meeting|meetings|event|events|calendar|dentist|doctor|task|tasks|todo|to-do|alarm|deadline)\b/i;
 
+/** HUB-97 — "the weekly shopping list" describes the list; it is not a store group. */
+const NOT_A_STORE_RE = /^(?:weekly|usual|regular|main|household|family|home|big|new|current|shared)$/i;
+
 export const chefRouter: FaceIntentRouter = {
   parse(text, ctx) {
     const lo = text.toLowerCase();
@@ -72,9 +75,18 @@ export const chefRouter: FaceIntentRouter = {
     // automatic ones): "add milk and eggs to the shopping list", "put bread
     // on the grocery list", "we're out of olive oil", "add to my grocery
     // list: salt".
+    // HUB-97 — the household also says "shopping chat" (the list is a Hub
+    // thread) and names the store in front of it: "… to spinneys shopping
+    // list". The store word is the group, exactly like "under Spinneys".
+    const toList = text.match(
+      /\b(?:add|put)\s+(.+?)\s+(?:to|on)\s+(?:(?:the|my|our)\s+)?(?:([\w'’ -]{1,30}?)\s+)?(?:shopping|grocery|groceries)\s+(?:list|chat)\b/i,
+    );
+    const listFirst = toList
+      ? null
+      : text.match(/\badd\s+to\s+(?:(?:the|my|our)\s+)?(?:([\w'’ -]{1,30}?)\s+)?(?:shopping|grocery|groceries)\s+(?:list|chat)\b[:\s]*(.+)$/i);
     const shop =
-      text.match(/\b(?:add|put)\s+(.+?)\s+(?:to|on)\s+(?:the|my|our)?\s*(?:shopping|grocery|groceries)\s+list\b/i)?.[1] ??
-      text.match(/\badd\s+to\s+(?:the|my|our)?\s*(?:shopping|grocery|groceries)\s+list\b[:\s]*(.+)$/i)?.[1] ??
+      toList?.[1] ??
+      listFirst?.[2] ??
       text.match(/\bwe(?:'re|\s+are)\s+(?:out\s+of|running\s+low\s+on)\s+(.+?)[.!]*$/i)?.[1];
     if (shop) {
       // HUB-84 — "… under Spinneys", "… in the Spinneys group": the group
@@ -83,7 +95,9 @@ export const chefRouter: FaceIntentRouter = {
         text.match(/\bunder\s+(?:the\s+)?(\S+)\s+group\b/i) ??
         text.match(/\bin\s+(?:the\s+)?([\w' -]{1,30}?)\s+group\b/i) ??
         text.match(/\bunder\s+(?:the\s+)?(.+?)(?:\s+group)?(?:\s+(?:list|section))?[.!]*$/i);
-      const groupHint = groupMatch?.[1]?.trim();
+      const listQualifier = (toList?.[2] ?? listFirst?.[1])?.trim();
+      const groupHint =
+        groupMatch?.[1]?.trim() ?? (listQualifier && !NOT_A_STORE_RE.test(listQualifier) ? listQualifier : undefined);
       // Remove only the exact group phrase — never the item that follows it
       // ("… under spinneys group Salt").
       const items = splitShoppingItems(groupMatch ? shop.replace(groupMatch[0], " ") : shop);

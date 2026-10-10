@@ -95,6 +95,14 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 🟡 **HUB-95** ERA's "add a contact" never checks for an existing contact. "Add Laura" twice creates two rows. For the partner, `resolveAddContact` picks the owner's shared `contacts` module and writes a private row there (`src/features/era/intents/resolvers/contacts.ts`). Places already dedupes by name and tag. See [acceptance](#hub-95).
 
+🟠 **HUB-97** ERA missed "Add BBQ sauce, Small Pepsi Can, bread, cheese, and eggs to spinneys shopping list" and "Add BBQ Sauce to shopping chat" (owner screenshots, 2026-10-05 08:03). Only "Add to shopping list BBQ Sauce" worked. Cause: the shopping grammar in `src/features/era/intents/chef.ts` required `to (the|my|our) shopping list`. A store word between "to" and "shopping list" broke it, and "shopping chat" wasn't a list noun. Evidence: router probe on all 7 sentences, 4 Gym reds. Resolved in repository 2026-10-10. See [acceptance](#hub-97).
+
+🟠 **HUB-98** Ask AI answered "I couldn't reach the AI just now" 3 times out of 5 in the same session, with no trace of why. Causes: `generateAskAIResponse` swallowed every failure silently (`src/lib/ai/eraAskProposal.ts`). `generateContentWithFallback` retried only 429s, so a 503 "model overloaded" rethrew without trying the fallback model (`src/lib/ai/gemini.ts`). `maxOutputTokens: 1024` also counts a thinking model's thinking tokens, which can cut the JSON off. That last one is a hypothesis; the new log line will confirm it. Resolved in repository 2026-10-10. See [acceptance](#hub-98).
+
+🟠 **HUB-99** Typed sentences can skip ERA entirely. The ✨ Ask AI icon sits next to Send as two bare 16 px icons (`CommandBar.tsx`), and with text typed it sends that text straight to `/api/era/ask` without routing it first. Evidence: "Add to shopping list Small Pepsi Can, bread, cheese, and eggs" routes to `addShopping` deterministically, yet got an AI reply twice. `useEraTurn` only calls the AI on a router miss, so those turns came from the ✨ button. Owner decision needed. See [acceptance](#hub-99).
+
+🟡 **HUB-100** Ask AI says "I don't have a shopping list feature". Its catalog (`src/features/era/capabilities/registry.ts`) has no `shopping.add`, so the model can't propose one. See [acceptance](#hub-100).
+
 ## Acceptance Criteria Index
 
 ### HUB-94
@@ -2952,6 +2960,54 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - **Acceptance:** When ERA attaches a saved place (`metadata_json.place_id`) to an event, it also fills the event's location link from the place's `maps_url` if one is set. Editing the place's link later doesn't rewrite past events (live-reference vs snapshot, ASTRA §10.2).
 - **Reading guide:** Place metadata keys: `PlaceItemMetadata` in `src/types/catalogue.ts`. Entry point: the HUB-94 "Where?" flow.
 
+### HUB-97
+
+**Outcome:** ERA adds a list of items to the shopping list however the household phrases it.
+
+**Kind:** bug
+**Implementation:** done
+**UAT:** pending
+
+- **Acceptance:** "Add A, B, C. To spinneys shopping list", "Add A, B and C to spinneys shopping list", "Add A to shopping chat" and "Add to shopping list A, B and C" each add every item with Undo. A store named before "shopping list" files the items under that group; an unknown store adds them to General and offers the group. "Weekly"/"usual" etc. are not groups. "Don't add …" writes nothing.
+- **Evidence (2026-10-10):** Gym `report-hub-97` (+ `-b`, `-c`, `-d`) red → green; `-e` and `-neg` green throughout. Known-miss list unchanged (20), release gates pass. `pnpm vitest run tests/era-gym src/features/era src/lib/era src/lib/ai`: 512 passed. Router rows in `rootIntentRouter.test.ts` (HUB-97). Typecheck clean.
+- **Owner check (phone):** send the four sentences above with **Send** (not ✨).
+- **Reading guide:** `src/features/era/intents/chef.ts` (shopping grammar) → `resolvers/shopping.ts` (`splitShoppingItems`, `resolveAddShopping`).
+
+### HUB-98
+
+**Outcome:** Ask AI fails less often, and when it does fail the reason is in the server log.
+
+**Kind:** bug
+**Implementation:** done
+**UAT:** pending
+
+- **Acceptance:** A 5xx from the primary Gemini model goes straight to the fallback model; a 400 never does. Every Ask AI failure logs `[era-ask] model call failed: <reason>` or `[era-ask] unusable model answer {finishReason, chars}` to the Vercel log. The output cap leaves room for thinking tokens.
+- **Evidence (2026-10-10):** `src/lib/ai/gemini.test.ts` (503 → fallback, 500 on both → rethrown and not a rate-limit error, 400 → no fallback). Typecheck clean. Live Gemini not called.
+- **Owner check:** next time "I couldn't reach the AI" appears, search the Vercel logs for `[era-ask]`. `finishReason: MAX_TOKENS` confirms the thinking-token hypothesis. A 503 means both models were down.
+- **Reading guide:** `src/lib/ai/gemini.ts` (`generateContentWithFallback`) → `src/lib/ai/eraAskProposal.ts` (`generateAskAIResponse`).
+
+### HUB-99
+
+**Outcome:** A typed sentence never skips ERA's own understanding by accident.
+
+**Kind:** decision
+**Implementation:** not started
+
+- **Acceptance:** Tapping beside Send can't send a sentence to the AI that ERA itself handles. Owner picks one: (a) give ✨ its own padded target with clear space from Send (keeps the "always visible" decision); (b) show ✨ only after a miss or an open question, not while typing (changes that decision). Recommendation: (b), because the router-first rule (HUB-77) then holds for every typed sentence.
+- **Evidence:** 2026-10-05 transcript. The two "Add to shopping list Small Pepsi Can, bread, cheese, and eggs" turns got the server's AI fallback line, although the router returns `addShopping` for that sentence and `useEraTurn` only calls the AI on a miss. To confirm, run this read-only query in the SQL Editor: `select created_at, role, intent_kind, left(content,60) from era_messages where created_at::date = '2026-10-05' and created_at::time between '04:55' and '05:30' order by created_at;` In the result, a user row with `intent_kind` null was sent with ✨.
+- **Reading guide:** `src/components/era/CommandBar.tsx` (`askAIClick`, `canAskAI`, the two buttons).
+
+### HUB-100
+
+**Outcome:** Ask AI knows the shopping list exists and can propose adding to it.
+
+**Kind:** enhancement
+**Implementation:** not started
+
+- **Acceptance:** A shopping sentence the grammar misses gets a confirm card from Ask AI, never "I don't have a shopping list feature". `shopping.add` (items, optional group) wraps `resolveAddShopping`, has a `shopping` vocab bucket, and a registry test row.
+- **Cost:** any registry change alters the Ask AI prompt, so every recorded Gym model reply goes stale (`tests/era-gym/gym.ts` `replayModel`). Re-record in the same session; that is a live Gemini run the owner approves.
+- **Reading guide:** `src/features/era/capabilities/{registry,vocab,types}.ts`.
+
 ## Backlog reconciliation
 
 - 2026-09-10 — **HUB-53** → NOTIF-19. Scope is retained in the destination criteria; duplicate removed, not shipped.
@@ -3034,6 +3090,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - ✅ 2026-10-04 — **HUB-88** ERA handles "Add Kobeize as a location" — [criteria](<Hub & ERA — Master Book.md#hub-88>)
 - ✅ 2026-10-04 — Catalogue → Places item form shows place fields (Maps link, address, phone, notes) instead of progress/status/frequency — `CatalogueItemDialog.tsx`, `CatalogueItemDetailDialog.tsx`
 - ✅ 2026-10-04 — **HUB-94** ERA asks where an event happens and learns your places — [criteria](<Hub & ERA — Master Book.md#hub-94>)
+- ✅ 2026-10-10 — **HUB-97** ERA adds a list of items to the shopping list however the household phrases it — [criteria](<Hub & ERA — Master Book.md#hub-97>)
+- ✅ 2026-10-10 — **HUB-98** Ask AI fails less often and logs why when it does — [criteria](<Hub & ERA — Master Book.md#hub-98>)
 
 ## Delivery session log
 

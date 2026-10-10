@@ -25,6 +25,18 @@ function isRateLimitError(err: unknown): boolean {
 }
 
 /**
+ * Detect Gemini 5xx errors ("The model is overloaded", UNAVAILABLE, INTERNAL).
+ * They are Google's side, not the request's, and the fallback model is a
+ * different deployment, so it gets one try instead of the error surfacing.
+ */
+function isTransientServerError(err: unknown): boolean {
+  const status = (err as { status?: unknown } | null)?.status;
+  if (typeof status === "number") return status >= 500;
+  const msg = err instanceof Error ? err.message : String(err);
+  return /"code"\s*:\s*50\d|\bUNAVAILABLE\b|\bINTERNAL\b|overloaded/i.test(msg);
+}
+
+/**
  * Parse `retryDelay` (e.g. "27s", "1.5s") from a Gemini RESOURCE_EXHAUSTED
  * error body. Returns ms, capped to a sane upper bound.
  */
@@ -88,7 +100,9 @@ interface GenerateOptions {
  *      if the original error had no `retryDelay` (per-day RPD) — callers
  *      should surface "daily quota reached, resets at midnight Pacific"
  *      instead of "try again in 60s".
- *   4. Non-rate-limit errors (auth, safety, network) rethrow immediately.
+ *   4. A 5xx (overloaded / unavailable) on the primary skips straight to
+ *      the fallback model; if that fails too, the 5xx is rethrown.
+ *   5. Other errors (auth, safety, network) rethrow immediately.
  *
  * **All Gemini callers in the app should use this** so retries and the
  * fallback bucket apply uniformly. See [src/lib/ai/gemini.ts](src/lib/ai/gemini.ts).
@@ -121,6 +135,7 @@ export async function generateContentWithFallback(
       });
     } catch (err) {
       lastErr = err;
+      if (isTransientServerError(err)) break;
       if (!isRateLimitError(err)) throw err;
 
       if (attempt < maxPrimaryAttempts) {
@@ -138,7 +153,7 @@ export async function generateContentWithFallback(
   if (fallback && fallback !== primary) {
     try {
       console.warn(
-        `[gemini] primary ${primary} rate-limited, falling back to ${fallback}`,
+        `[gemini] primary ${primary} ${isTransientServerError(lastErr) ? "unavailable" : "rate-limited"}, falling back to ${fallback}`,
       );
       return await genAI.models.generateContent({
         model: fallback,
@@ -146,10 +161,12 @@ export async function generateContentWithFallback(
         config,
       });
     } catch (err) {
-      if (!isRateLimitError(err)) throw err;
+      if (!isRateLimitError(err) && !isTransientServerError(err)) throw err;
       lastErr = err;
     }
   }
+
+  if (!isRateLimitError(lastErr)) throw lastErr;
 
   // Both buckets exhausted — surface a typed rate-limit error.
   const daily = isDailyQuotaError(lastErr);

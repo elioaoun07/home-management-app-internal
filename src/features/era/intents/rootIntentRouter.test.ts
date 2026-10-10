@@ -780,6 +780,29 @@ describe("rootIntentRouter", () => {
     expect(rootIntentRouter.parse(text)).toMatchObject(expected);
   });
 
+  // HUB-97 — owner transcript 2026-10-05: the store named before "shopping
+  // list" is the group, "shopping chat" is the list, and a stray "." splits nothing.
+  it.each([
+    ["Add BBQ sauce, Small Pepsi Can, bread, cheese, eggs. To spinneys shopping list", { items: ["BBQ sauce", "Small Pepsi Can", "Bread", "Cheese", "Eggs"], groupHint: "spinneys" }],
+    ["Add BBQ sauce, Small Pepsi Can, bread, cheese, and eggs to spinneys shopping list", { items: ["BBQ sauce", "Small Pepsi Can", "Bread", "Cheese", "Eggs"], groupHint: "spinneys" }],
+    ["Add BBQ Sauce to shopping chat", { items: ["BBQ Sauce"] }],
+    ["add to the spinneys shopping list salt", { items: ["Salt"], groupHint: "spinneys" }],
+    ["add milk to the shopping list under Spinneys", { items: ["Milk"], groupHint: "Spinneys" }],
+  ] as const)("HUB-97: %s", (text, expected) => {
+    useEraStore.setState({ activeFaceKey: "budget" });
+    expect(rootIntentRouter.parse(text)).toMatchObject({ kind: "addShopping", ...expected });
+  });
+
+  it.each([
+    ["add bread to our weekly shopping list"],
+    ["add milk and eggs to the shopping list"],
+  ])("HUB-97: %s names no store group", (text) => {
+    useEraStore.setState({ activeFaceKey: "chef" });
+    const intent = rootIntentRouter.parse(text);
+    expect(intent.kind).toBe("addShopping");
+    expect(intent).not.toHaveProperty("groupHint");
+  });
+
   it.each([
     ["Nudge it to 7pm!", "7pm"],
     ["Postpone the reminder to 6pm.", "6pm"],

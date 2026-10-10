@@ -21,6 +21,7 @@ Now-lane exception: reports filed from the ERA chat arrive under **ERA reports**
 - [ ] **HUB-62** Record current schema and application evidence — [criteria](<Hub & ERA — Master Book.md#hub-62>) _(friction - M)_
 - [ ] **HUB-37** Verify CI and recoverable capture failures — [criteria](<Hub & ERA — Master Book.md#hub-37>) _(blocker - M)_
 - [ ] **HUB-38** Record authenticated cadence-aware cron liveness — [criteria](<Hub & ERA — Master Book.md#hub-38>) _(blocker - M)_
+- [ ] **HUB-99** A typed sentence never skips ERA's own understanding by accident — [criteria](<Hub & ERA — Master Book.md#hub-99>) _(friction - S)_
 
 **ERA reports**
 
@@ -45,6 +46,7 @@ Now-lane exception: reports filed from the ERA chat arrive under **ERA reports**
 
 ## Later
 
+- [ ] **HUB-100** Ask AI knows the shopping list exists and can propose adding to it — [criteria](<Hub & ERA — Master Book.md#hub-100>) _(annoyance - S)_
 - [ ] **HUB-96** An event at a saved place carries that place's Maps link — [criteria](<Hub & ERA — Master Book.md#hub-96>) _(annoyance - S)_
 - [ ] **HUB-92** ERA artifacts for every entity open the exact item — [criteria](<Hub & ERA — Master Book.md#hub-92>) _(annoyance - M)_
 - [ ] **HUB-79** Reach every Budget, Schedule and Kitchen family from ERA — [criteria](<Hub & ERA — Master Book.md#hub-79>) _(friction - L)_

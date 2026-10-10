@@ -33,7 +33,8 @@ export function splitShoppingItems(raw: string): string[] {
     .replace(/\bin\s+(?:the\s+)?hub(?:\s+chat)?\b/gi, " ")
     .replace(/\bunder\s+\S+(?:\s+group)?\b/gi, " ")
     .split(/,|\band\b|&|\+/i)
-    .map((s) => s.replace(/^\s*(?:some|a|an|the|more)\s+/i, "").trim())
+    // HUB-97 — "…, eggs. To spinneys shopping list" leaves "eggs." behind.
+    .map((s) => s.replace(/^\s*(?:some|a|an|the|more)\s+/i, "").replace(/^[\s.;:!?]+|[\s.;:!?]+$/g, ""))
     .filter((s) => s.length > 0 && s.length <= 60)
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1));
 }
