@@ -25,8 +25,32 @@ export interface EraArtifactRef {
   thread?: string;
 }
 
+/**
+ * The app module an artifact belongs to — the Artifacts view groups by it and
+ * tints each group with the module's ERA hue (faces: src/components/era/eraHues.ts;
+ * Catalogue has no face, so it gets its own).
+ */
+export const ERA_ARTIFACT_MODULES = {
+  budget: { label: "Budget", hue: 175 },
+  schedule: { label: "Schedule", hue: 256 },
+  chef: { label: "Chef", hue: 28 },
+  catalogue: { label: "Catalogue", hue: 300 },
+  brain: { label: "Brain", hue: 220 },
+} as const;
+export type EraArtifactModule = keyof typeof ERA_ARTIFACT_MODULES;
+export const ERA_ARTIFACT_MODULE_KEYS = Object.keys(ERA_ARTIFACT_MODULES) as EraArtifactModule[];
+
+/**
+ * Recycle Bin module ids (src/lib/recycleBin/registry.ts) whose soft-delete +
+ * restore pair is the real, balance-correct undo/redo for an artifact's row.
+ */
+export type EraBinModule = "items" | "catalogue" | "transfers" | "drafts";
+
 interface EntitySpec {
   label: string;
+  module: EraArtifactModule;
+  /** Present only where delete/restore is a complete inverse (soft-delete + restore route). */
+  bin?: EraBinModule;
   href: (id: string | null, action: EraArtifactAction, ref: EraArtifactRef) => string;
 }
 
@@ -43,24 +67,28 @@ const thread = (ref: EraArtifactRef) => (ref.thread ? `/chat?thread=${enc(ref.th
 export const ERA_ARTIFACT_ENTITIES = {
   reminder: {
     label: "Reminder",
+    module: "schedule",
+    bin: "items",
     href: itemOr((id, ref) => `/reminders?openId=${enc(id)}${ref.date ? `&date=${ref.date}` : ""}`, "/reminders"),
   },
-  transaction: { label: "Transaction", href: itemOr((id) => `/dashboard?openId=${enc(id)}`, "/dashboard") },
-  draft: { label: "Draft", href: () => "/expense" },
-  transfer: { label: "Transfer", href: () => "/expense" },
-  debt: { label: "Debt", href: () => "/expense" },
-  recurring_payment: { label: "Recurring", href: () => "/recurring" },
-  meal_plan: { label: "Meal plan", href: () => "/meal-plan" },
-  memory: { label: "Memory", href: () => "/era?face=brain" },
+  transaction: { label: "Transaction", module: "budget", href: itemOr((id) => `/dashboard?openId=${enc(id)}`, "/dashboard") },
+  draft: { label: "Draft", module: "budget", bin: "drafts", href: () => "/expense" },
+  transfer: { label: "Transfer", module: "budget", bin: "transfers", href: () => "/expense" },
+  debt: { label: "Debt", module: "budget", href: () => "/expense" },
+  recurring_payment: { label: "Recurring", module: "budget", href: () => "/recurring" },
+  meal_plan: { label: "Meal plan", module: "chef", href: () => "/meal-plan" },
+  memory: { label: "Memory", module: "brain", href: () => "/era?face=brain" },
   event: {
     label: "Event",
+    module: "schedule",
+    bin: "items",
     href: itemOr((id, ref) => `/reminders?openId=${enc(id)}${ref.date ? `&date=${ref.date}` : ""}`, "/reminders"),
   },
-  contact: { label: "Contact", href: itemOr((id) => `/catalogue?item=${enc(id)}`, "/catalogue") },
-  place: { label: "Place", href: itemOr((id) => `/catalogue?item=${enc(id)}`, "/catalogue") },
-  catalogue_module: { label: "Catalogue module", href: () => "/catalogue" },
-  shopping_item: { label: "Shopping", href: (_id, _action, ref) => thread(ref) },
-  shopping_group: { label: "Shopping group", href: (_id, _action, ref) => thread(ref) },
+  contact: { label: "Contact", module: "catalogue", bin: "catalogue", href: itemOr((id) => `/catalogue?item=${enc(id)}`, "/catalogue") },
+  place: { label: "Place", module: "catalogue", bin: "catalogue", href: itemOr((id) => `/catalogue?item=${enc(id)}`, "/catalogue") },
+  catalogue_module: { label: "Catalogue module", module: "catalogue", href: () => "/catalogue" },
+  shopping_item: { label: "Shopping", module: "chef", href: (_id, _action, ref) => thread(ref) },
+  shopping_group: { label: "Shopping group", module: "chef", href: (_id, _action, ref) => thread(ref) },
 } satisfies Record<string, EntitySpec>;
 
 export type EraArtifactEntity = keyof typeof ERA_ARTIFACT_ENTITIES;
@@ -113,6 +141,32 @@ export function eraArtifact(
 
 export function eraArtifactLabel(entity: string): string {
   return (ERA_ARTIFACT_ENTITIES as Record<string, EntitySpec>)[entity]?.label ?? "Item";
+}
+
+export function eraArtifactModule(entity: string): EraArtifactModule {
+  return (ERA_ARTIFACT_ENTITIES as Record<string, EntitySpec>)[entity]?.module ?? "brain";
+}
+
+/**
+ * What a row's persistent Undo/Redo acts on. Only created/deleted verbs of an
+ * entity with a Recycle Bin pair qualify — an "updated" verb has no stored
+ * before-image, so it has no inverse and gets no button (never a fake one).
+ *   born "live"    → the artifact created the row: Undo trashes, Redo restores.
+ *   born "trashed" → the artifact deleted the row: Undo restores, Redo trashes.
+ */
+export interface EraReversal {
+  bin: EraBinModule;
+  id: string;
+  born: "live" | "trashed";
+}
+
+export function eraArtifactReversal(a: { entity: string; action: string; id: string | null }): EraReversal | null {
+  if (!a.id) return null;
+  const bin = (ERA_ARTIFACT_ENTITIES as Record<string, EntitySpec>)[a.entity]?.bin;
+  if (!bin) return null;
+  if (a.action === "created") return { bin, id: a.id, born: "live" };
+  if (a.action === "deleted") return { bin, id: a.id, born: "trashed" };
+  return null;
 }
 
 export function eraArtifactHref(a: Pick<EraArtifact, "entity" | "id" | "action" | "ref">): string {

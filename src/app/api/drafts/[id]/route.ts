@@ -111,14 +111,22 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const { error } = await supabase
+    // Only a live draft can be deleted. Without the row check a confirmed
+    // draft (is_draft false) matched nothing yet answered success, so callers
+    // believed a counted transaction was gone.
+    const { data: deleted, error } = await supabase
       .from("transactions")
       .update({ deleted_at: new Date().toISOString() })
       .eq("id", id)
       .eq("user_id", user.id)
-      .eq("is_draft", true);
+      .eq("is_draft", true)
+      .is("deleted_at", null)
+      .select("id");
 
     if (error) throw error;
+    if (!deleted?.length) {
+      return NextResponse.json({ error: "Draft not found" }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {

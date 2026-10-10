@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { ERA_ARTIFACT_ENTITY_KEYS, eraArtifact, eraArtifactHref, eraArtifactLabel, parseEraArtifacts } from "./artifacts";
+import {
+  ERA_ARTIFACT_ENTITY_KEYS,
+  ERA_ARTIFACT_MODULE_KEYS,
+  eraArtifact,
+  eraArtifactHref,
+  eraArtifactLabel,
+  eraArtifactModule,
+  eraArtifactReversal,
+  parseEraArtifacts,
+} from "./artifacts";
 
 const ID = "00000000-0000-4000-8000-000000000001";
 
@@ -27,6 +36,28 @@ describe("ERA artifact registry", () => {
     expect(eraArtifactHref({ entity: "reminder", action: "created", id: ID, ref: { date: "javascript:1" } })).toBe(
       `/reminders?openId=${ID}`,
     );
+  });
+
+  it("every entity belongs to a known module", () => {
+    for (const entity of ERA_ARTIFACT_ENTITY_KEYS) {
+      expect(ERA_ARTIFACT_MODULE_KEYS).toContain(eraArtifactModule(entity));
+    }
+    expect(eraArtifactModule("transfer")).toBe("budget");
+    expect(eraArtifactModule("reminder")).toBe("schedule");
+    expect(eraArtifactModule("contact")).toBe("catalogue");
+  });
+
+  it("only created/deleted verbs of bin-backed entities are reversible", () => {
+    expect(eraArtifactReversal({ entity: "transfer", action: "created", id: ID })).toEqual({ bin: "transfers", id: ID, born: "live" });
+    expect(eraArtifactReversal({ entity: "reminder", action: "deleted", id: ID })).toEqual({ bin: "items", id: ID, born: "trashed" });
+    expect(eraArtifactReversal({ entity: "draft", action: "created", id: ID })?.bin).toBe("drafts");
+    expect(eraArtifactReversal({ entity: "contact", action: "created", id: ID })?.bin).toBe("catalogue");
+    // no stored before-image / hard delete / no id → no button
+    expect(eraArtifactReversal({ entity: "reminder", action: "updated", id: ID })).toBeNull();
+    expect(eraArtifactReversal({ entity: "transaction", action: "updated", id: ID })).toBeNull();
+    expect(eraArtifactReversal({ entity: "debt", action: "created", id: ID })).toBeNull();
+    expect(eraArtifactReversal({ entity: "memory", action: "created", id: ID })).toBeNull();
+    expect(eraArtifactReversal({ entity: "transfer", action: "created", id: null })).toBeNull();
   });
 
   it("parses stored payloads defensively", () => {

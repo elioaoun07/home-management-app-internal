@@ -46,6 +46,7 @@ Now-lane exception: reports filed from the ERA chat arrive under **ERA reports**
 
 ## Later
 
+- [ ] **HUB-102** Every Artifact row, including debts, memories, meal plans and updates, can be undone and redone — [criteria](<Hub & ERA — Master Book.md#hub-102>) _(annoyance - M)_
 - [ ] **HUB-100** Ask AI knows the shopping list exists and can propose adding to it — [criteria](<Hub & ERA — Master Book.md#hub-100>) _(annoyance - S)_
 - [ ] **HUB-96** An event at a saved place carries that place's Maps link — [criteria](<Hub & ERA — Master Book.md#hub-96>) _(annoyance - S)_
 - [ ] **HUB-92** ERA artifacts for every entity open the exact item — [criteria](<Hub & ERA — Master Book.md#hub-92>) _(annoyance - M)_

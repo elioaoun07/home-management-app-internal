@@ -21,7 +21,7 @@ export function recordEraArtifacts(
     body: JSON.stringify({ artifacts }),
   })
     .then((res) => {
-      if (res.ok) queryClient?.invalidateQueries({ queryKey: eraKeys.widgets.activity() });
+      if (res.ok) queryClient?.invalidateQueries({ queryKey: eraKeys.artifacts.all() });
     })
     .catch(() => {});
 }

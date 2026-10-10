@@ -28,7 +28,7 @@ tags:
   - `src/components/era/EraFaceNav.tsx` — face-switch pills (ERA/Budget/Schedule/Recipes/Brain), plus an **Artifacts** chip added 2026-08-27 (HUB-25) for the Activity log
   - `src/components/era/EraDots.tsx`
   - `src/components/era/HubScatterWidgets.tsx` — the 4 hub-mode scatter cards (Budget/Schedule/Chef/Brain), corner-positioned around the center orb — unchanged; a same-session redesign of this into a grid was reverted per owner feedback (see Master Book HUB-25 correction note)
-  - `src/components/era/dashboards/ArtifactsView.tsx` — the Activity log's own view, opened via the Artifacts chip exactly like a face dashboard (`useEraStore`'s `EraView` gained a third `"activity"` value alongside `"hub"`/`"dashboard"`)
+  - `src/components/era/dashboards/ArtifactsView.tsx` — the Activity log's own view (day navigation, module groups tinted per module, per-row Undo/Redo), opened via the Artifacts chip exactly like a face dashboard (`useEraStore`'s `EraView` gained a third `"activity"` value alongside `"hub"`/`"dashboard"`)
   - `src/features/era/recordArtifacts.ts` — the Artifacts tab's single write point (not a component); entities, labels and deep links live in `src/lib/era/artifacts.ts` (2026-10-04)
   - `src/components/era/EraConversation.tsx` — the conversation (2026-10-03, HUB-86; replaced the inline `EraThreadTranscript`): bubbles in the person's own color, ERA replies beside a small orb in the answering face's hue, time breaks, a thinking indicator, the confirm card and question chips as the newest turn, a quiet "Report" offer under a missed reply, and a "New chat" divider once the chat has been silent 30 min. Layouts: `stage` (hub), `panel` (desktop dashboards), `sheet` (mobile chat sheet), `preview` (History)
   - `src/components/era/EraChatToolbar.tsx` — History (left) and New chat (right) icons under the nav in hub view; New chat shows a dot once the chat has gone quiet
@@ -56,7 +56,7 @@ tags:
 ## API routes
 
 - `src/app/api/era/conversations/route.ts`, `src/app/api/era/messages/route.ts` — shipped since Phase 0.5; append-only `era_messages`
-- `src/app/api/era/actions/route.ts` — GET/POST for the Activity log (2026-08-27, HUB-25); GET returns the last 30 rows, "today" filtering happens client-side in `useEraActivity` against the caller's own timezone
+- `src/app/api/era/actions/route.ts` — GET/POST for the Activity log (2026-08-27, HUB-25); GET returns the last 30 rows by default, one local day with `?from=&to=` and the list of days with `?view=days` (bucketed client-side in `useEraArtifacts` against the caller's timezone); `POST /api/era/actions/status` reports each reversible row's live state for Undo/Redo
 - `src/app/api/era/conversations/route.ts?history=1` — History rows with deterministic titles; `src/app/api/era/conversations/[id]/route.ts` — PATCH resume / archive (HUB-52)
 - `src/app/api/era/issues/route.ts` (POST) and `src/app/api/era/issues/[id]/route.ts` (DELETE = Undo) — file a Report as a system `era_messages` row (HUB-85); the PM bridge imports it as a Hub & ERA defect (R72)
 

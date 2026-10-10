@@ -47,6 +47,8 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟠 **HUB-102** Artifacts for debts, memories, meal plans, shopping, recurring cover and every "updated" verb (complete, skip, postpone, confirm, reschedule) have no Undo/Redo. Cause: their backend inverse is a hard delete (debts, memories, meal plans) or does not exist, so there is no restore to reuse. Each needs a soft-delete + restore pair, or a stored before-image, first. See [acceptance](<#hub-102>).
+
 🔴 **HUB-93** ERA did the wrong thing with "Add Racha as a Contact" (ERA report, 2026-10-04). See [acceptance](<#hub-93>).
 
 🟠 **HUB-90** ERA's writes did not show in /era → Artifacts, and the Activity Log's ERA "Open" went to `/era` instead of the item. Owner screenshots 2026-10-04: "Add Racha as a Contact" → "Added · Racha", Artifacts shows "0 · Nothing yet today"; Activity Log row "Added · Racha · ERA · Messages" → Open → /era Artifacts. Cause: `src/features/era/logEraAction.ts` mapped six intent kinds onto a fixed six-value `era_actions.entity_type` CHECK, so every newer write (contact, shopping add/edit/remove, shopping group, recurring cover, NFC via capability) logged nothing; `activitySourceHref` sent every ERA row to `/era` and schedule items to `/items?openId=`, a page that does not exist. Resolved in repository 2026-10-04 (artifact contract — every adapter returns `artifacts`, one logger, one link registry, contract test); migration and device witness in HUB-91.
@@ -3008,6 +3010,17 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - **Cost:** any registry change alters the Ask AI prompt, so every recorded Gym model reply goes stale (`tests/era-gym/gym.ts` `replayModel`). Re-record in the same session; that is a live Gemini run the owner approves.
 - **Reading guide:** `src/features/era/capabilities/{registry,vocab,types}.ts`.
 
+### HUB-102
+
+**Outcome:** Every Artifact row ERA writes can be undone and redone, not only the soft-deletable ones.
+
+**Kind:** enhancement
+**Implementation:** not started
+
+- **Acceptance:** debts, memories, meal plans, shopping items/groups, recurring cover and the "updated" verbs each get an inverse that moves money and state exactly as the app's own control does, then a row in `eraArtifactReversal` (`src/lib/era/artifacts.ts`). A hard-deleted row gets no Redo.
+- **Constraint:** Undo/Redo is derived from the row's live status (`POST /api/era/actions/status`), never a stored flag. Money inverses need a worked balance example and a test (money-rules).
+- **Reading guide:** `src/lib/era/artifacts.ts`, `src/features/era/widgets/useEraArtifacts.ts`, `src/app/api/recycle-bin/restore/route.ts`.
+
 ## Backlog reconciliation
 
 - 2026-09-10 — **HUB-53** → NOTIF-19. Scope is retained in the destination criteria; duplicate removed, not shipped.
@@ -3032,6 +3045,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Owner UAT:** Apply the migration manually in Supabase SQL Editor, then confirm a public/private transaction, reminder create/complete, household/private/hidden chat and a child record in each enabled source module across both accounts. Confirm a private transition removes old partner history; try date/person/module/feature filters and Load more. Verify 390px layout and install/launch Activity alongside Trips/PM on the target phone. Check current live schema and actual module mutation paths if any capture error occurs. No browser backend was available for local device/visual verification; migration application is unverified. Optional source tables missing at install need migration reapplication after installation. History starts with application; there is no backfill.
 
 ## Shipped Log
+
+- ✅ 2026-10-10 — **HUB-101** ERA Artifacts view: browse by day (‹ › skip days with nothing, calendar greys them out), grouped by module in each module's ERA hue, and a persistent Undo/Redo per row derived from the row's live state (`POST /api/era/actions/status`; no stored flag, no migration). Reversal reuses the app's own soft-delete + Recycle Bin restore for reminders, events, contacts, places, drafts and transfers. Money fix: `/api/recycle-bin/restore` now re-applies transfer balances (it only cleared deleted_at, so every restored transfer left both accounts off), is compare-and-set against a double restore, and re-arms never-fired alerts that DELETE had switched off; `DELETE /api/drafts/[id]` now 404s a confirmed draft instead of reporting success. Files: `ArtifactsView.tsx`, `useEraArtifacts.ts`, `artifacts.ts`, `api/era/actions/{route,status/route}.ts`. Typecheck, lint and 488 targeted tests green (restore route 8 new); not browser-verified.
 
 - ✅ 2026-09-29 — **HUB-84** ERA Top Layer voice chat is off by default: mic icon toggles `voiceChatEnabled` (wake-word engine, fallback listener, Azure prewarm/greeting preload all gated); speaker stays opt-in via its icon. Files: `useEraStore.ts`, `EraShell.tsx`, `CommandBar.tsx`, `useConversationMode.ts`. Typecheck green; not browser-verified.
 

@@ -47,6 +47,8 @@ No owned tables. Reads `deleted_at` from origin tables across modules. Check `sc
 
 ## Gotchas
 
+- **Restore is the exact inverse of the DELETE that trashed the row** (ERA Artifacts Redo/Undo rides on it). Transactions and **transfers** re-apply their balance deltas on restore (transfers: `getTransferDeltas` incl. `to_amount`, mirroring `DELETE /api/transfers/[id]`; before 2026-10-10 a restored transfer left both accounts off). Items re-arm never-fired alerts that DELETE switched off, unless completed/archived. The un-delete is compare-and-set, so a double restore applies its deltas once. Test: `src/app/api/recycle-bin/restore/route.test.ts`.
+
 - Adding a new restorable record type requires: add `deleted_at` column to the origin table → register the source in `hooks.ts` → add a section in `SectionNav.tsx` — all three together.
 - The empty action is **irreversible** — confirm with the user before calling the `/empty` route. Hard Rule #1 (Undo toast) does not apply here because permanent delete cannot be undone; instead, show a destructive confirmation dialog.
 - Counts endpoint is used for badge display in nav — keep it fast (COUNT queries only, no data fetch).

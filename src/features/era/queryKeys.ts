@@ -16,6 +16,12 @@ export const eraKeys = {
     budget: () => [...(["era"] as const), "widget", "budget"] as const,
     chef: () => [...(["era"] as const), "widget", "chef"] as const,
     brain: () => [...(["era"] as const), "widget", "brain"] as const,
-    activity: () => [...(["era"] as const), "widget", "activity"] as const,
+  },
+  /** The Artifacts view: which days have rows, one day's rows, and each row's live status. */
+  artifacts: {
+    all: () => [...eraKeys.all, "artifacts"] as const,
+    days: () => [...eraKeys.all, "artifacts", "days"] as const,
+    day: (dayKey: string) => [...eraKeys.all, "artifacts", "day", dayKey] as const,
+    status: (ids: string[]) => [...eraKeys.all, "artifacts", "status", ids.join(",")] as const,
   },
 };
