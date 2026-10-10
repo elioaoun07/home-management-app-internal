@@ -27,7 +27,7 @@ import type {
   RoomConfig,
 } from "@/types/catalogue";
 import { CHORE_CATEGORIES, FLEXIBLE_PERIOD_LABELS } from "@/types/catalogue";
-import { Loader2, Plus, Sparkles } from "lucide-react";
+import { ChevronDown, Loader2, Plus, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface Props {
@@ -105,6 +105,8 @@ export default function ChoreItemDialog({
   const [perRoom, setPerRoom] = useState(false);
   // Default owner (user id); null = anyone
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
+  // Optional fields stay folded unless the chore already uses them
+  const [more, setMore] = useState(false);
 
   const isEditing = !!editingItem;
   const isLoading =
@@ -141,6 +143,17 @@ export default function ChoreItemDialog({
     setDescription(item?.description ?? "");
     setPerRoom(Object.keys(config).length > 0);
     setAssigneeId(item?.default_assignee_id ?? null);
+    setMore(
+      !!item &&
+        !!(
+          item.chore_category ||
+          item.preferred_duration_minutes ||
+          item.preferred_time ||
+          item.subtasks_text ||
+          item.description ||
+          Object.keys(config).length > 0
+        ),
+    );
   }, [open, editingItem]);
 
   const toggleRoom = (id: string) =>
@@ -274,20 +287,6 @@ export default function ChoreItemDialog({
             className={cn(themeClasses.inputBg, "border-white/10 text-white")}
           />
 
-          {/* Kind */}
-          <div className="flex flex-wrap gap-1.5">
-            {CHORE_CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setChoreCategory(choreCategory === cat ? "" : cat)}
-                className={cn(chip(choreCategory === cat), "capitalize")}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
           {/* Frequency */}
           <div className="flex flex-wrap items-center gap-2">
             <input
@@ -368,6 +367,48 @@ export default function ChoreItemDialog({
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
+          </div>
+
+          {/* Default owner: Chores pre-assigns it, only the day is left to pick */}
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button" onClick={() => setAssigneeId(null)} className={chip(assigneeId === null)}>
+              Anyone
+            </button>
+            {owners.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => setAssigneeId(o.id)}
+                className={personChip(assigneeId === o.id, o.color)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setMore((v) => !v)}
+            aria-expanded={more}
+            className="flex items-center gap-1.5 text-xs text-white/60 hover:text-white/80"
+          >
+            <ChevronDown className={cn("w-4 h-4 transition-transform", more && "rotate-180")} />
+            More
+          </button>
+          {more && (
+            <div className="space-y-5">
+          {/* Kind */}
+          <div className="flex flex-wrap gap-1.5">
+            {CHORE_CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setChoreCategory(choreCategory === cat ? "" : cat)}
+                className={cn(chip(choreCategory === cat), "capitalize")}
+              >
+                {cat}
+              </button>
+            ))}
           </div>
 
           {selectedRooms.length > 0 && (
@@ -469,23 +510,8 @@ export default function ChoreItemDialog({
             aria-label="Notes"
             className="bg-white/5 border-white/10 text-white text-sm"
           />
-
-          {/* Default owner: Chores pre-assigns it, only the day is left to pick */}
-          <div className="flex flex-wrap gap-1.5">
-            <button type="button" onClick={() => setAssigneeId(null)} className={chip(assigneeId === null)}>
-              Anyone
-            </button>
-            {owners.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => setAssigneeId(o.id)}
-                className={personChip(assigneeId === o.id, o.color)}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
             <Button
