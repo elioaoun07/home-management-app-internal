@@ -6,7 +6,7 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
+} from "@/components/shared/Sheet";
 import { TRIP_CASCADE_ENABLED } from "@/features/trips/cascade";
 import { useActivateTrip } from "@/features/trips/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
@@ -42,7 +42,7 @@ export function TripActivateSheet({ open, onOpenChange, trip }: TripActivateShee
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className={cn("rounded-t-2xl border-t", tc.border, tc.bgPage, "max-h-[85vh] overflow-y-auto")}>
+      <SheetContent side="bottom" className={cn("rounded-t-2xl border-t", tc.border, tc.bgPage)}>
         <SheetHeader className="pb-4">
           <SheetTitle className="flex items-center gap-2 text-white">
             <Plane className={cn("w-4 h-4", tc.text)} />

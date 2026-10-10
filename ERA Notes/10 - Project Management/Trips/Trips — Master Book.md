@@ -1280,9 +1280,29 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Outcome:** Trip Overview shows total expenses per currency and the transactions behind them.
 
 - **Delivered 2026-10-05:** `GET /api/trips/[id]/spend` = trip-account transactions ∪ `trip_id`-tagged transactions (one OR query, dedupe by id), grouped by account currency, expense accounts only, drafts/deleted excluded, no conversion. Overview `TotalExpensesCard` lists each currency; tap to expand the rows. Realizes the union/dedupe part of TRIP-5; the post-trip summary part stays open there.
-- **Open gaps:** debts and future-dated payments (`/api/debts`, `/api/drafts`) cannot carry the tag; the desktop `ExpenseForm` has no tag control; Statement Import / Hub-chat / template creation paths do not set it.
+- **Open gaps:** debts and future-dated payments (`/api/debts`, `/api/drafts`) cannot carry the tag; the desktop `ExpenseForm` has no tag control; Hub-chat / template creation paths do not set it (Statement Import now does — TRIP-41).
 
 **Provenance:** Owner request 2026-10-05.
+
+### TRIP-41
+
+**Outcome:** Tag a statement row with an active trip during Statement Import review.
+
+- **Delivered 2026-10-10:** `RowDecision.trip_id` set from `TripTagRow` inside `GroupSheet`'s per-row controls (debit rows on the Transaction path only; credits/refunds and transfers never carry a trip). `buildCommitActions` copies it onto the `create` action; `commit/route.ts` validates each distinct trip with `canAccessTrip()` (an invalid trip fails only its own row) and writes `transactions.trip_id` on insert. Balance-neutral — the tag adds no money movement. Pinned by two `sessionModel.test.ts` cases.
+- **Open gaps:** matched rows (`stamp` / `confirm_draft`) are not taggable here — tag those from the transaction editor.
+
+**Provenance:** Owner request 2026-10-10.
+
+### TRIP-42
+
+**Outcome:** Trip Overview leads with countdown, next two activities and expenses; packing presets include Winter/Christmas and preview before adding.
+
+- **Delivered 2026-10-10:** `OverviewTab.tsx` drops the Trip-account card, the "N days total" line and the "N documents on file" state (Documents card now renders only for expiry warnings); Notes moved out of the widgets to a plain line under the header meta in `TripDetail.tsx`; `NextUpCard` lists the next two scheduled places (from Places). `packingPresets.ts` gains `winter` ("Winter / Christmas"). `PresetPickerSheet` is now two-step: pick a preset → checklist grouped by category where each row can be unchecked → `Add N`. A Presets (sparkles) button in the Packing header makes presets reachable after the list is non-empty.
+- **Follow-up 2026-10-10:** countdown is a live Days/Hrs/Min/Sec ticker to the start date at local midnight (planning/soon phases; travelling/home keep their label). "Up next" is a large hero (name, date, time, Today/Tomorrow/In N days) with a smaller "After" strip. `TripDetail` header is now always compact (title row + tabs, never animated). The first attempt collapsed the header's meta/notes/button on non-Overview tabs, but the tabs moved under the owner's thumb; replaced the same day by moving that meta, notes and the Activate / "I'm back home" button into the top of the Overview content, so the tabs never change position.
+- **Sheet fix 2026-10-10 (app-wide):** bottom sheets rendered content flush against the screen edge (owner screenshot of the preset preview). Root cause: `ui/sheet.tsx` bottom variant has no side padding, height cap or safe-area inset, and each consumer's body div omitted them. Added `src/components/shared/Sheet.tsx` (same pattern as `shared/DropdownMenu.tsx`): bottom `SheetContent` defaults to `px-4`, `max-h-[92dvh]`, inner scroll, `overflow-x-hidden`, bottom safe-area; `SheetHeader` drops its own side padding. All 7 Trips sheets repointed and their ad-hoc `max-h`/`overflow` overrides removed; rule added to `ui-guardrails` §10. Not repointed: `CatalogueTemplatePicker` (bottom sheet, unreviewed body padding), `AIChatAssistant` (side sheet), `ui/sidebar.tsx`.
+- **Open gaps:** "Next up" shows scheduled places dated today or later only; ideas without a date never appear. Activate / "I'm back home" only appears on the Overview tab. Not live-verified in a browser this session.
+
+**Provenance:** Owner request 2026-10-10.
 
 ### TRIP-39
 
@@ -1374,6 +1394,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-10-05 — **TRIP-38** Activating a trip succeeds and only creates the trip expense account — [criteria](<Trips — Master Book.md#trip-38>)
 - ✅ 2026-10-05 — **TRIP-40** Trip Overview shows total expenses per currency and the transactions behind them — [criteria](<Trips — Master Book.md#trip-40>)
 - ✅ 2026-10-05 — **TRIP-35** Tag a transaction to a trip from the expense form and transaction editor — [criteria](<Trips — Master Book.md#trip-35>)
+- ✅ 2026-10-10 — **TRIP-41** Tag a statement row with an active trip during Statement Import review — [criteria](<Trips — Master Book.md#trip-41>)
+- ✅ 2026-10-10 — **TRIP-42** Leaner Trip Overview, Winter/Christmas packing preset with preview — [criteria](<Trips — Master Book.md#trip-42>)
 
 ## Delivery session log
 

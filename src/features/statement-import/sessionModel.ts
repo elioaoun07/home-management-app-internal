@@ -818,6 +818,10 @@ export function buildCommitActions(
       category_id,
       subcategory_id,
       statement_hash: statementHash,
+      // Credits are refunds, not trip spend — same rule as the expense form.
+      ...(decision?.trip_id && row.type === "debit"
+        ? { trip_id: decision.trip_id }
+        : {}),
       // A withdrawal's normalized_key carries the ATM/voucher reference
       // number, not a merchant — learning it would write one throwaway
       // mapping per withdrawal instead of a reusable merchant pattern.

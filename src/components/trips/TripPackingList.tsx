@@ -39,7 +39,7 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
+} from "@/components/shared/Sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -1415,6 +1415,14 @@ export function TripPackingList({ tripId }: { tripId: string }) {
               </button>
             )}
             <button
+              onClick={() => setPresetOpen(true)}
+              className="flex items-center text-white/40 hover:text-white/70 transition-colors"
+              title="Presets"
+              aria-label="Presets"
+            >
+              <Sparkles className="w-4 h-4" />
+            </button>
+            <button
               onClick={() => setAddCatOpen(true)}
               className={cn("flex items-center gap-1 text-sm", tc.text)}
             >
@@ -1528,7 +1536,7 @@ function DeletedItemsSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className={cn("rounded-t-2xl border-t max-h-[80vh] overflow-y-auto", tc.border, tc.bgPage)}>
+      <SheetContent side="bottom" className={cn("rounded-t-2xl border-t", tc.border, tc.bgPage)}>
         <SheetHeader className="pb-4">
           <SheetTitle className="text-white">Deleted items</SheetTitle>
         </SheetHeader>
@@ -1632,26 +1640,114 @@ function PresetPickerSheet({
   onSelect: (preset: PackingPreset) => void;
 }) {
   const tc = useThemeClasses();
+  const [previewing, setPreviewing] = useState<PackingPreset | null>(null);
+  const [excluded, setExcluded] = useState<Set<number>>(new Set());
+
+  const handleOpenChange = (v: boolean) => {
+    if (!v) { setPreviewing(null); setExcluded(new Set()); }
+    onOpenChange(v);
+  };
+
+  const toggle = (index: number) =>
+    setExcluded((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+
+  const handleAdd = () => {
+    if (!previewing) return;
+    const items = previewing.items.filter((_, i) => !excluded.has(i));
+    if (items.length === 0) return;
+    onSelect({ ...previewing, items });
+    setPreviewing(null);
+    setExcluded(new Set());
+  };
+
+  const grouped = previewing
+    ? previewing.items.reduce<Array<{ category: string; entries: Array<{ index: number; name: string; quantity?: number }> }>>((acc, item, index) => {
+        const group = acc.find((g) => g.category === item.category);
+        const entry = { index, name: item.name, quantity: item.quantity };
+        if (group) group.entries.push(entry);
+        else acc.push({ category: item.category, entries: [entry] });
+        return acc;
+      }, [])
+    : [];
+  const selectedCount = previewing ? previewing.items.length - excluded.size : 0;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className={cn("rounded-t-2xl border-t", tc.border, tc.bgPage)}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
+      <SheetContent side="bottom" className={cn("rounded-t-2xl border-t flex flex-col", tc.border, tc.bgPage)}>
         <SheetHeader className="pb-4">
-          <SheetTitle className="text-white">Start from a preset</SheetTitle>
+          <SheetTitle className="text-white">{previewing ? previewing.label : "Start from a preset"}</SheetTitle>
         </SheetHeader>
-        <div className="space-y-2 pb-8">
-          {PACKING_PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              onClick={() => onSelect(preset)}
-              className={cn("w-full text-left rounded-xl border p-3.5 bg-white/5 hover:bg-white/8 transition-colors", tc.border)}
-            >
-              <p className="text-sm font-medium text-white">{preset.label}</p>
-              <p className="text-xs text-white/40 mt-0.5">{preset.description}</p>
-              <p className="text-xs text-white/25 mt-1">{preset.items.length} items</p>
-            </button>
-          ))}
-        </div>
+        {previewing ? (
+          <>
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pb-4">
+              {grouped.map((group) => (
+                <div key={group.category}>
+                  <p className={cn("text-xs font-medium uppercase tracking-wider mb-1", tc.textFaint)}>{group.category}</p>
+                  {group.entries.map((entry) => {
+                    const checked = !excluded.has(entry.index);
+                    return (
+                      <button
+                        key={entry.index}
+                        onClick={() => toggle(entry.index)}
+                        className="w-full flex items-center gap-3 py-2 text-left"
+                      >
+                        <span
+                          className={cn(
+                            "flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors",
+                            checked ? "bg-emerald-400 border-emerald-400" : "border-white/25",
+                          )}
+                        >
+                          {checked && (
+                            <svg className="w-3 h-3 text-black" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                              <path d="M2 5l2.5 2.5 4-4" />
+                            </svg>
+                          )}
+                        </span>
+                        <span className={cn("flex-1 min-w-0 text-sm", checked ? "text-white/85" : "text-white/30 line-through")}>
+                          {entry.name}
+                        </span>
+                        {entry.quantity && entry.quantity > 1 && (
+                          <span className="text-xs text-white/40 tabular-nums">×{entry.quantity}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 pt-3 pb-2 border-t border-white/10">
+              <Button variant="ghost" onClick={() => { setPreviewing(null); setExcluded(new Set()); }} className="text-white/60">
+                Back
+              </Button>
+              <Button
+                onClick={handleAdd}
+                disabled={selectedCount === 0}
+                className={cn("flex-1 border font-medium", tc.bgSurface, tc.text, tc.border)}
+              >
+                Add {selectedCount}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <div className="space-y-2 pb-8 overflow-y-auto">
+            {PACKING_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                onClick={() => setPreviewing(preset)}
+                className={cn("w-full text-left rounded-xl border p-3.5 bg-white/5 hover:bg-white/8 transition-colors", tc.border)}
+              >
+                <p className="text-sm font-medium text-white">{preset.label}</p>
+                <p className="text-xs text-white/40 mt-0.5">{preset.description}</p>
+                <p className="text-xs text-white/25 mt-1">{preset.items.length} items</p>
+              </button>
+            ))}
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );

@@ -24,7 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useCatalogueItems } from "@/features/catalogue";
+import { useCatalogueItems, useHomeRooms } from "@/features/catalogue";
 import {
   moveDayOptions,
   type ChoreDayOption,
@@ -38,7 +38,7 @@ import {
 import { useChoreWeek } from "@/features/chores/useChores";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { cn } from "@/lib/utils";
-import type { CatalogueItem } from "@/types/catalogue";
+import type { CatalogueItem, HomeRoom } from "@/types/catalogue";
 import {
   addDays,
   addWeeks,
@@ -65,6 +65,7 @@ import { useEffect, useRef, useState } from "react";
 
 type PersonFilter = "all" | "mine" | "partner";
 const EMPTY_TEMPLATES: CatalogueItem[] = [];
+const EMPTY_ROOMS: HomeRoom[] = [];
 const WEEK_OPEN_KEY = "chores.weekOpen";
 export const CHORE_LIBRARY_HREF = "/catalogue?section=chores";
 
@@ -120,8 +121,9 @@ export default function ChoresView({
 
   const catalogue = useCatalogueItems();
   const templates = catalogue.data ?? EMPTY_TEMPLATES;
+  const rooms = useHomeRooms().data ?? EMPTY_ROOMS;
   const { data: household } = useHouseholdMembers();
-  const chores = useChoreWeek(weekOf, templates);
+  const chores = useChoreWeek(weekOf, templates, rooms);
   const { week, todayKey, isCurrentWeek } = chores;
   const assign = useChoreAssign(chores.schedules);
   const responsibility = useChoreResponsibility();
@@ -168,6 +170,13 @@ export default function ChoresView({
   const filteredTodos = todos.filter((todo) =>
     todo.title.toLocaleLowerCase().includes(searchTerm),
   );
+  // To plan, grouped by room (todos are already sorted by room, then title)
+  const todoGroups: { room: string | null; todos: ChoreTodo[] }[] = [];
+  for (const todo of filteredTodos) {
+    const last = todoGroups[todoGroups.length - 1];
+    if (last && last.room === todo.room) last.todos.push(todo);
+    else todoGroups.push({ room: todo.room, todos: [todo] });
+  }
   const checkIn = chores.checkIn.filter((slot) =>
     matches(slot.item.responsible_user_id),
   );
@@ -200,7 +209,13 @@ export default function ChoresView({
         userId,
       );
     } else if (todo.kind === "template" && todo.template) {
-      await assign.placeTemplate(todo.template, option.date, time, userId);
+      await assign.placeTemplate(
+        todo.template,
+        option.date,
+        time,
+        userId,
+        todo.roomId && todo.room ? { id: todo.roomId, name: todo.room } : undefined,
+      );
     } else if (todo.kind === "undated" && todo.item) {
       await assign.placeUndated(todo.item, option.date, time, userId);
     }
@@ -256,9 +271,16 @@ export default function ChoresView({
   );
 
   const openPlan = (target: string | null) => {
-    setPlanTarget(target && target >= todayKey ? target : null);
+    setPlanTarget(target && target >= todayKey ? target : todayKey);
     setOpenTodo(null);
     setPlanOpen(true);
+  };
+  const shiftPlanWeek = (delta: number) => {
+    changeWeek(addWeeks(weekOf, delta));
+    if (planTarget) {
+      const next = format(addWeeks(parseISO(planTarget), delta), "yyyy-MM-dd");
+      setPlanTarget(next >= todayKey ? next : null);
+    }
   };
   const renderPlanning = (targetDate: string | null = null) => (
     <div className="space-y-3">
@@ -327,22 +349,35 @@ export default function ChoresView({
           Loading library…
         </div>
       )}
-      {filteredTodos.map((todo) => (
-        <ChoreTodoRow
-          key={`${todo.key}:${week.weekStart}:${targetDate ?? ""}`}
-          todo={todo}
-          person={personFor(todo.responsibleUserId)}
-          me={meP}
-          partner={partnerP}
-          open={openTodo === todo.key}
-          pending={assign.isPending}
-          todayKey={todayKey}
-          targetDate={targetDate}
-          onOpenChange={(open) => setOpenTodo(open ? todo.key : null)}
-          onAssign={(option, time, userId) =>
-            pickDay(todo, option, time, userId)
-          }
-        />
+      {todoGroups.map(({ room, todos: roomTodos }) => (
+        <div key={room ?? "none"} className="space-y-3">
+          {todoGroups.length > 1 && (
+            <h3
+              className={cn(
+                "px-1 pt-1 text-[11px] font-semibold uppercase tracking-wider",
+                tone.subtle,
+              )}
+            >
+              {room ?? "Other"}
+            </h3>
+          )}
+          {roomTodos.map((todo) => (
+            <ChoreTodoRow
+              key={`${todo.key}:${week.weekStart}:${targetDate ?? ""}`}
+              todo={todo}
+              person={personFor(todo.responsibleUserId)}
+              me={meP}
+              partner={partnerP}
+              open={openTodo === todo.key}
+              pending={assign.isPending}
+              targetDate={targetDate}
+              onOpenChange={(open) => setOpenTodo(open ? todo.key : null)}
+              onAssign={(option, time, userId) =>
+                pickDay(todo, option, time, userId)
+              }
+            />
+          ))}
+        </div>
       ))}
       {filteredTodos.length === 0 &&
         !catalogue.isLoading &&
@@ -651,7 +686,7 @@ export default function ChoresView({
         <button
           ref={planButtonRef}
           type="button"
-          onClick={() => openPlan(null)}
+          onClick={() => openPlan(selectedDay)}
           disabled={chores.isLoading || chores.isError}
           className={cn(
             "ml-auto flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold disabled:opacity-50 lg:hidden",
@@ -898,25 +933,18 @@ export default function ChoresView({
             tone.border,
           )}
         >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <DialogTitle className={cn("text-lg", tone.main)}>
-                To plan{" "}
-                <span
-                  className={cn(
-                    "ml-1 text-sm font-normal tabular-nums",
-                    tone.subtle,
-                  )}
-                >
-                  {todos.length}
-                </span>
-              </DialogTitle>
-              <DialogDescription className={cn("mt-1 text-xs", tone.soft)}>
-                {planTarget
-                  ? formatDayHeading(planTarget, todayKey)
-                  : dateRange}
-              </DialogDescription>
-            </div>
+          <div className="flex items-center justify-between gap-3">
+            <DialogTitle className={cn("text-lg", tone.main)}>
+              To plan{" "}
+              <span
+                className={cn(
+                  "ml-1 text-sm font-normal tabular-nums",
+                  tone.subtle,
+                )}
+              >
+                {todos.length}
+              </span>
+            </DialogTitle>
             <button
               type="button"
               onClick={() => setPlanOpen(false)}
@@ -924,6 +952,29 @@ export default function ChoresView({
               className={iconButton}
             >
               <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => shiftPlanWeek(-1)}
+              aria-label="Previous week"
+              className={cn(iconButton, "h-10 w-10")}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <DialogDescription
+              className={cn("text-sm font-medium tabular-nums", tone.main)}
+            >
+              {dateRange}
+            </DialogDescription>
+            <button
+              type="button"
+              onClick={() => shiftPlanWeek(1)}
+              aria-label="Next week"
+              className={cn(iconButton, "h-10 w-10")}
+            >
+              <ChevronRight className="h-4 w-4" />
             </button>
           </div>
           {renderPlanning(planTarget)}

@@ -10,6 +10,7 @@ import {
   useDeleteCategory,
   useDeleteItem,
   useDeleteModule,
+  useHomeRooms,
   useUpdateItem,
 } from "@/features/catalogue/hooks";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
@@ -37,6 +38,7 @@ import {
   GraduationCap,
   Heart,
   HeartPulse,
+  Home,
   MapPin,
   MoreVertical,
   Package,
@@ -57,6 +59,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { InventoryView } from "../inventory/InventoryView";
 import AddToCalendarDialog from "./AddToCalendarDialog";
 import CatalogueCategoryDialog from "./CatalogueCategoryDialog";
+import RoomsDialog from "./RoomsDialog";
 import CatalogueItemDetailDialog from "./CatalogueItemDetailDialog";
 import CatalogueItemDialog from "./CatalogueItemDialog";
 import { isPlacesModule } from "@/lib/catalogue/moduleRoles";
@@ -131,6 +134,7 @@ export default function WebCatalogue({
   // Dialog state
   const [showItemDialog, setShowItemDialog] = useState(false);
   const [showTaskItemDialog, setShowTaskItemDialog] = useState(false);
+  const [showRooms, setShowRooms] = useState(false);
   const [editingItem, setEditingItem] = useState<CatalogueItem | null>(null);
   const [showItemDetailDialog, setShowItemDetailDialog] = useState(false);
   const [viewingItem, setViewingItem] = useState<CatalogueItem | null>(null);
@@ -172,6 +176,12 @@ export default function WebCatalogue({
     () => modules.find((module) => module.type === "tasks") ?? null,
     [modules],
   );
+  // A chore sits under every room it is tagged with
+  const { data: homeRooms = [] } = useHomeRooms();
+  const choreGroups = (item: CatalogueItem): ItemGroup[] =>
+    homeRooms
+      .filter((room) => item.room_ids?.includes(room.id))
+      .map((room) => ({ key: room.id, label: room.name, order: room.position }));
   const choreItems = useMemo(
     () =>
       selectedModule
@@ -501,6 +511,17 @@ export default function WebCatalogue({
               )}
             </div>
 
+            {isChoresSection && (
+              <button
+                type="button"
+                onClick={() => setShowRooms(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-white/10 text-white hover:bg-white/15 transition-colors"
+              >
+                <Home className="w-4 h-4" />
+                <span className="hidden sm:inline">Rooms</span>
+              </button>
+            )}
+
             {/* Add Button - hide for inventory modules (they have their own UI) */}
             {currentLevel !== "modules" &&
               selectedModule?.type !== "inventory" &&
@@ -590,6 +611,9 @@ export default function WebCatalogue({
                   <Sparkles className="w-7 h-7 text-white" />
                 </div>
                 <h3 className="text-lg font-semibold text-white mb-1">Chores</h3>
+                <p className="text-sm text-white/60 line-clamp-2 mb-3">
+                  Recurring household tasks
+                </p>
                 <div className="flex items-center gap-1 text-sm text-white/50">
                   <FileText className="w-4 h-4" />
                   <span>{itemsLoading ? "–" : choreItems.length}</span>
@@ -621,7 +645,7 @@ export default function WebCatalogue({
 
                   <div className="relative p-6">
                     {/* Edit/Delete buttons */}
-                    <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <div className="absolute top-2 right-2 flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity z-10">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -821,6 +845,7 @@ export default function WebCatalogue({
               moduleById.get(item.module_id)?.type === "tasks"
             }
             emptyTitle="No chores"
+            groupBy={choreGroups}
             onClick={handleViewItem}
             onDoubleClick={handleTogglePin}
             onEdit={handleEditItem}
@@ -867,6 +892,8 @@ export default function WebCatalogue({
         editingItem={editingItem}
         defaultIsChore={isChoresSection}
       />
+
+      <RoomsDialog open={showRooms} onOpenChange={setShowRooms} />
 
       <CatalogueCategoryDialog
         open={showCategoryDialog}
@@ -1014,6 +1041,12 @@ function CategoryCard({
   );
 }
 
+interface ItemGroup {
+  key: string;
+  label: string;
+  order: number;
+}
+
 interface ItemsGridProps {
   items: CatalogueItem[];
   isLoading: boolean;
@@ -1022,6 +1055,8 @@ interface ItemsGridProps {
   /** Per-row module check for views spanning modules (Chores) */
   isTasksModuleFn?: (item: CatalogueItem) => boolean;
   emptyTitle?: string;
+  /** Group the unpinned items under headers; an item sits under every group it returns, none = "No room" */
+  groupBy?: (item: CatalogueItem) => ItemGroup[];
   ownerColorFn?: (item: CatalogueItem) => string | undefined;
   onClick: (item: CatalogueItem) => void;
   onDoubleClick: (item: CatalogueItem) => void;
@@ -1038,6 +1073,7 @@ function ItemsGrid({
   isTasksModule,
   isTasksModuleFn,
   emptyTitle,
+  groupBy,
   ownerColorFn,
   onClick,
   onDoubleClick,
@@ -1074,6 +1110,24 @@ function ItemsGrid({
   // Separate pinned items
   const pinnedItems = items.filter((i) => i.is_pinned);
   const regularItems = items.filter((i) => !i.is_pinned);
+  const groups: { key: string; label: string | null; order: number; items: CatalogueItem[] }[] = [];
+  if (groupBy) {
+    const byKey = new Map<string, (typeof groups)[number]>();
+    for (const item of regularItems) {
+      const memberOf = groupBy(item);
+      const targets = memberOf.length
+        ? memberOf
+        : [{ key: "none", label: null as string | null, order: Number.MAX_SAFE_INTEGER }];
+      for (const target of targets) {
+        const group = byKey.get(target.key) ?? { ...target, items: [] };
+        group.items.push(item);
+        byKey.set(target.key, group);
+      }
+    }
+    groups.push(...[...byKey.values()].sort((a, b) => a.order - b.order));
+  } else {
+    groups.push({ key: "all", label: null, order: 0, items: regularItems });
+  }
 
   return (
     <div className="space-y-4">
@@ -1103,22 +1157,31 @@ function ItemsGrid({
       )}
 
       {/* Regular items */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {regularItems.map((item) => (
-          <ItemCard
-            key={item.id}
-            item={item}
-            themeClasses={themeClasses}
-            isTasksModule={isTasksModuleFn ? isTasksModuleFn(item) : isTasksModule}
-            ownerColor={ownerColorFn?.(item)}
-            onClick={onClick}
-            onDoubleClick={onDoubleClick}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onAddToCalendar={onAddToCalendar}
-          />
-        ))}
-      </div>
+      {groups.map(({ key: groupKey, label, items: groupItems }) => (
+        <div key={groupKey}>
+          {groupBy && (
+            <h4 className="text-xs font-medium text-white/40 uppercase tracking-wider mb-2">
+              {label ?? "No room"}
+            </h4>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {groupItems.map((item) => (
+              <ItemCard
+                key={item.id}
+                item={item}
+                themeClasses={themeClasses}
+                isTasksModule={isTasksModuleFn ? isTasksModuleFn(item) : isTasksModule}
+                ownerColor={ownerColorFn?.(item)}
+                onClick={onClick}
+                onDoubleClick={onDoubleClick}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onAddToCalendar={onAddToCalendar}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

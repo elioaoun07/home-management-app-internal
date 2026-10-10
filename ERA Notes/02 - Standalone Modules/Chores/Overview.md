@@ -73,6 +73,14 @@ Done = completion actions accounted (via `planned_for`) to a day in the week.
 - Trips: activation auto-skips recurring chores via `trip_side_effects`; revert un-skips.
 - Do not add a time-spent prompt.
 
+## Rooms (2026-10-10)
+
+- **Model:** `home_rooms` (the rooms: name, position, `is_public`, soft-archived; RLS = owner or active household partner when public) + `catalogue_items.room_ids uuid[]` (the rooms a chore template applies to — same array pattern as `item_category_ids`). Migration `2026-10-10_home-rooms.sql` (also seeds the 9 rooms); `2026-10-10_chore-rooms-cleanup.sql` removes the abandoned categories-as-rooms import.
+- **One template, many rooms.** "Mop the floor" is one Catalogue template tagged with every room it applies to (Task Template form → **Rooms** chips, with an **All** shortcut and inline add). Catalogue → Chores lists it under each of its rooms; **Rooms** button there renames/deletes/adds rooms.
+- **Chores page:** `buildChoreWeek` takes `rooms` and emits one "To plan" to-do per (template, room) — key `tpl:<id>:<roomId>` — grouped under room headers (`ChoreTodo.room/roomId/roomOrder`).
+- **Placing a to-do** creates the one-off instance titled `<chore> · <room>` with `items.metadata_json.room_id`; that is how "remaining this period" is counted per room. No column on `items`.
+- **Gotchas:** instances copy the room *name* into their title, so renaming a room doesn't retitle existing instances. A room-tagged template is never hidden by a routine item made from it elsewhere (that would silently drop its rooms). Deleting a room archives it; stale ids in `room_ids` are ignored.
+
 ## Key Files
 
 See the Feature Map: `ERA Notes/01 - Architecture/Feature Map/standalone/chores.md`.

@@ -58,6 +58,10 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 🟡 **KIT-27** The route still accepts content edits that send no `expected_revision`. Older app builds can therefore still overwrite a newer edit made on the other phone. See [acceptance](#kit-27).
 
+🟡 Catalogue module cards (related to KIT-22): the Chores card had no description (it is a UI-only saved view of `catalogue_items.is_chore`, not a `catalogue_modules` row), ERA-created Places had a null description, and the edit pencil was hover-only (invisible on touch). *(IMPLEMENTED 2026-10-10)* — Chores card shows a one-line description, ERA creates Places with one, pencil always visible. Evidence: `WebCatalogue.tsx`, `resolvers/places.ts`. The existing Places row keeps its null description until edited via the pencil.
+
+🟡 Chores had no grouping by room. *(IMPLEMENTED 2026-10-10, migration pending owner run)* — `home_rooms` table + `catalogue_items.room_ids`; one chore template tagged with its rooms, one Chores to-do per room, instances titled `<chore> · <room>` with `metadata_json.room_id`. Runbooks: `migrations/2026-10-10_home-rooms.sql` (seeds the 9 rooms), `2026-10-10_chore-rooms-cleanup.sql`. Evidence: `choreWeek.test.ts`. Vault: Chores/Overview.md § Rooms.
+
 🟡 **KIT-26** Catalogue RLS verified 2026-10-04 (`migrations/output.md`): two overlapping policy sets on `catalogue_items` (one via `household_members` with no `active` check, one via `household_links`), owner-only SELECT on `catalogue_sub_items` (a partner sees a shared item with an empty checklist), and a module delete policy whose `is_system = false` guard is OR-ed away. Fix written 2026-10-05 as `migrations/2026-10-05_catalogue-rls-collapse.sql`; waiting on the owner to run it. See [acceptance](#kit-26).
 
 ## Acceptance Criteria Index

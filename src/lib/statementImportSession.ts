@@ -59,6 +59,8 @@ export interface RowDecision {
    * filed. Reconcile looks hashes up across every account for that reason.
    */
   account_id?: string;
+  /** Trip to count this row toward once created. Independent of the account. */
+  trip_id?: string | null;
   /**
    * Destination account for a household transfer, picked per row.
    *

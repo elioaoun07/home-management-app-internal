@@ -6,7 +6,7 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
+} from "@/components/shared/Sheet";
 import { TRIP_CASCADE_ENABLED } from "@/features/trips/cascade";
 import { useCompleteTrip } from "@/features/trips/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";

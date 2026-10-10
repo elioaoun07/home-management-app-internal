@@ -6,7 +6,7 @@ import {
   useFlexibleSchedules,
 } from "@/features/items/useFlexibleRoutines";
 import { useItems } from "@/features/items/useItems";
-import type { CatalogueItem } from "@/types/catalogue";
+import type { CatalogueItem, HomeRoom } from "@/types/catalogue";
 import type { ItemWithDetails } from "@/types/items";
 import { addWeeks } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
@@ -37,10 +37,14 @@ function useNow(): Date {
 }
 
 /**
- * Chore week for the Chores page. `templates` comes from the caller (the
- * Catalogue hooks live in another standalone module).
+ * Chore week for the Chores page. `templates` and `rooms` come from the caller
+ * (the Catalogue hooks live in another standalone module).
  */
-export function useChoreWeek(weekOf: Date, templates: CatalogueItem[]) {
+export function useChoreWeek(
+  weekOf: Date,
+  templates: CatalogueItem[],
+  rooms: HomeRoom[],
+) {
   const now = useNow();
   const itemsQuery = useItems();
   const items = itemsQuery.data ?? EMPTY_ITEMS;
@@ -77,8 +81,9 @@ export function useChoreWeek(weekOf: Date, templates: CatalogueItem[]) {
         schedules: schedules ?? [],
         flexible: [weekA, weekB],
         templates,
+        rooms,
       }),
-    [weekKey, now, items, actions, schedules, weekA, weekB, templates],
+    [weekKey, now, items, actions, schedules, weekA, weekB, templates, rooms],
   );
 
   const previous = useMemo(

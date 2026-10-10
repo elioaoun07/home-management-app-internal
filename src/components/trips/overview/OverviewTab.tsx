@@ -6,8 +6,8 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { Trip } from "@/types/trips";
 import { differenceInCalendarDays, format, parseISO } from "date-fns";
-import { useState } from "react";
-import { AlertTriangle, CheckCircle2, Clock, FileWarning, MapPin, PackageCheck, Wallet } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, Clock, FileWarning, MapPin, PackageCheck, Wallet } from "lucide-react";
 
 function Card({ children, className }: { children: React.ReactNode; className?: string }) {
   const tc = useThemeClasses();
@@ -19,9 +19,23 @@ function CardLabel({ children }: { children: React.ReactNode }) {
   return <p className={cn("text-xs font-medium uppercase tracking-wider mb-1.5", tc.textFaint)}>{children}</p>;
 }
 
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [active]);
+  return now;
+}
+
 function CountdownHero({ trip }: { trip: Trip }) {
   const tc = useThemeClasses();
-  const countdown = tripCountdown(trip);
+  const initial = tripCountdown(trip);
+  const ticking = initial.phase === "planning" || initial.phase === "soon";
+  const now = useNow(ticking);
+  const countdown = tripCountdown(trip, new Date(now));
 
   if (countdown.phase === "undated") {
     return (
@@ -31,14 +45,34 @@ function CountdownHero({ trip }: { trip: Trip }) {
     );
   }
 
+  if (countdown.phase !== "planning" && countdown.phase !== "soon") {
+    return (
+      <Card className="text-center py-6">
+        <p className={cn("text-2xl font-semibold", tc.text)}>{countdown.label}</p>
+      </Card>
+    );
+  }
+
+  const ms = Math.max(0, new Date(trip.start_date + "T00:00:00").getTime() - now);
+  const units = [
+    { label: "Days", value: Math.floor(ms / 86_400_000) },
+    { label: "Hrs", value: Math.floor(ms / 3_600_000) % 24 },
+    { label: "Min", value: Math.floor(ms / 60_000) % 60 },
+    { label: "Sec", value: Math.floor(ms / 1000) % 60 },
+  ];
+
   return (
-    <Card className="text-center py-6">
-      <p className={cn("text-2xl font-semibold", tc.text)}>{countdown.label}</p>
-      {countdown.totalDays != null && (
-        <p className="text-xs text-white/40 mt-1">
-          {countdown.totalDays} day{countdown.totalDays === 1 ? "" : "s"} total
-        </p>
-      )}
+    <Card className="py-5">
+      <div className="grid grid-cols-4 gap-2">
+        {units.map((u) => (
+          <div key={u.label} className="rounded-lg bg-white/5 py-3 text-center">
+            <p className={cn("text-3xl font-semibold tabular-nums leading-none", tc.text)}>
+              {String(u.value).padStart(2, "0")}
+            </p>
+            <p className="text-[10px] uppercase tracking-wider text-white/40 mt-1.5">{u.label}</p>
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }
@@ -130,30 +164,52 @@ function NextUpCard({ tripId }: { tripId: string }) {
       return (a.scheduled_time ?? "99:99").localeCompare(b.scheduled_time ?? "99:99");
     });
 
-  const next = upcoming[0];
+  const [next, after] = upcoming;
   if (!next) return null;
 
+  const when = (p: typeof next) => {
+    const days = differenceInCalendarDays(parseISO(p.scheduled_date!), new Date());
+    const rel = days <= 0 ? "Today" : days === 1 ? "Tomorrow" : `In ${days} days`;
+    return { rel, date: format(parseISO(p.scheduled_date!), "EEE, MMM d"), time: p.scheduled_time?.slice(0, 5) ?? null };
+  };
+  const n = when(next);
+  const a = after ? when(after) : null;
+
   return (
-    <Card>
-      <CardLabel>Next up</CardLabel>
-      <div className="flex items-center gap-3">
-        <Clock className={cn("w-5 h-5 flex-shrink-0", tc.text)} />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm text-white truncate">{next.name}</p>
-          <p className="text-xs text-white/40 mt-0.5">
-            {format(parseISO(next.scheduled_date!), "EEE, MMM d")}
-            {next.scheduled_time && ` · ${next.scheduled_time.slice(0, 5)}`}
+    <Card className="relative overflow-hidden p-0">
+      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-cyan-400/10 to-transparent pointer-events-none" />
+      <div className="relative p-5">
+        <div className="flex items-center justify-between">
+          <CardLabel>Up next</CardLabel>
+          <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full bg-white/10 -mt-1.5", tc.text)}>{n.rel}</span>
+        </div>
+        <p className="text-2xl font-semibold text-white leading-tight break-words">{next.name}</p>
+        <div className="flex items-center gap-2 mt-2">
+          <Clock className={cn("w-4 h-4 flex-shrink-0", tc.text)} />
+          <p className="text-sm text-white/60">
+            {n.date}
+            {n.time && <span className={cn("ml-2 font-semibold tabular-nums", tc.text)}>{n.time}</span>}
           </p>
         </div>
       </div>
+      {a && after && (
+        <div className="relative border-t border-white/10 bg-white/[0.03] px-5 py-3 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] uppercase tracking-wider text-white/35">After</p>
+            <p className="text-sm text-white/70 truncate mt-0.5">{after.name}</p>
+          </div>
+          <p className="text-xs text-white/40 text-right flex-shrink-0">
+            {a.rel}
+            <span className="block tabular-nums">{a.time ?? a.date}</span>
+          </p>
+        </div>
+      )}
     </Card>
   );
 }
 
 function DocumentsStripCard({ tripId, trip }: { tripId: string; trip: Trip }) {
   const { data: documents = [] } = useTripDocuments(tripId);
-
-  if (documents.length === 0) return null;
 
   const expiringBeforeReturn = trip.end_date
     ? documents.filter((d) => d.expires_on && parseISO(d.expires_on) < parseISO(trip.end_date!))
@@ -163,6 +219,8 @@ function DocumentsStripCard({ tripId, trip }: { tripId: string; trip: Trip }) {
     if (expiringBeforeReturn.some((e) => e.id === d.id)) return false;
     return differenceInCalendarDays(parseISO(d.expires_on), new Date()) <= 90;
   });
+
+  if (expiringBeforeReturn.length === 0 && expiringSoon.length === 0) return null;
 
   return (
     <Card>
@@ -174,15 +232,10 @@ function DocumentsStripCard({ tripId, trip }: { tripId: string; trip: Trip }) {
             {expiringBeforeReturn.map((d) => d.title).join(", ")} expire{expiringBeforeReturn.length === 1 ? "s" : ""} before you're back home
           </p>
         </div>
-      ) : expiringSoon.length > 0 ? (
+      ) : (
         <div className="flex items-start gap-2 text-amber-400 text-sm">
           <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <p>{expiringSoon.length} document{expiringSoon.length === 1 ? "" : "s"} expiring soon</p>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2 text-sm text-white/60">
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-400" />
-          <p>{documents.length} document{documents.length === 1 ? "" : "s"} on file</p>
         </div>
       )}
     </Card>
@@ -261,33 +314,15 @@ function PlannedSpendCard({ tripId, trip }: { tripId: string; trip: Trip }) {
 }
 
 export function OverviewTab({ tripId, trip }: { tripId: string; trip: Trip }) {
-  const tc = useThemeClasses();
-
   return (
     <div className="space-y-3">
       <CountdownHero trip={trip} />
-
-      {trip.notes && (
-        <Card>
-          <CardLabel>Notes</CardLabel>
-          <p className="text-sm text-white/70 whitespace-pre-wrap">{trip.notes}</p>
-        </Card>
-      )}
-
       <NextUpCard tripId={tripId} />
       <ItineraryReadinessCard tripId={tripId} trip={trip} />
       <PackingRingCard tripId={tripId} />
       <DocumentsStripCard tripId={tripId} trip={trip} />
       <TotalExpensesCard tripId={tripId} trip={trip} />
       <PlannedSpendCard tripId={tripId} trip={trip} />
-
-      {trip.account_id && (
-        <Card>
-          <CardLabel>Trip account</CardLabel>
-          <p className={cn("text-sm", tc.text)}>Linked to expense account</p>
-          <p className="text-xs text-white/40 mt-0.5">View in the Accounts tab to track spend</p>
-        </Card>
-      )}
     </div>
   );
 }

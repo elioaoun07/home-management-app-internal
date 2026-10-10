@@ -278,6 +278,8 @@ export interface CatalogueItem {
   // Chore fields
   is_chore?: boolean;
   chore_category?: ChoreCategory | null;
+  /** Rooms (home_rooms ids) this chore applies to; absent until 2026-10-10_home-rooms.sql runs. */
+  room_ids?: UUID[];
   /** Stale-write token (KIT-20); absent until 2026-10-04_catalogue-revision.sql runs. */
   revision?: number;
   // Virtual fields
@@ -393,6 +395,19 @@ export interface CreateItemInput {
   // Chore fields
   is_chore?: boolean;
   chore_category?: ChoreCategory;
+  room_ids?: UUID[];
+}
+
+/** A room of the home (home_rooms). Chores are tagged with the rooms they apply to. */
+export interface HomeRoom {
+  id: UUID;
+  user_id: UUID;
+  name: string;
+  position: number;
+  is_public: boolean;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 /** PATCH /api/catalogue/items/[id] body — derived from the route's Zod schema (KIT-20). */

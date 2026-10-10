@@ -8,7 +8,7 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
+} from "@/components/shared/Sheet";
 import {
   useCreateTripPlace,
   useDeleteTripPlace,

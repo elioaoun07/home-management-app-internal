@@ -38,6 +38,8 @@ Full doc: `ERA Notes/01 - Architecture/Color Identity.md`. If you're coloring ro
 
 Dropdowns, popovers, command palettes, autocomplete panels — anything overlaying page content — use `tc.bgPage` from `useThemeClasses()` as the background. **Never `neo-card`** (semi-transparent glass) on floating panels: text behind bleeds through. `neo-card` is only for non-overlaid, in-flow cards.
 
+**Never hand-roll the panel** (`absolute`/`fixed` div under a header or card): it lives in the parent's stacking context — a `backdrop-blur` header traps it and page content paints over it even with a solid background (shipped bug 2026-10-10, Web View module switcher). Use `@/components/shared/DropdownMenu` (portaled to `<body>`, solid `tc.selectContentBg`). Anything custom must portal to `document.body`. Verify by opening the panel over busy content on a phone viewport.
+
 ## 5. Fixed/sticky headers must not eat content (Hard Rule 16)
 
 - `fixed`/`sticky` header of height `h-14` ⇒ the content below gets `pt-14`. Always paired.
@@ -80,6 +82,7 @@ Never mix `<motion.div>` (Framer Motion) with HTML5 `draggable`/drag events on t
 ## 10. Boundaries
 
 - **Never edit `src/components/ui/`** — enforced by a PreToolUse hook. Wrap or compose instead.
+- **Sheets / drawers:** import from `@/components/shared/Sheet`, never `@/components/ui/sheet`. The raw primitive gives bottom sheets no side gutter, height cap or safe-area inset (content ran flush to the screen edge). The wrapper supplies all three; pass `p-0` to opt out.
 - Icons: use the futuristic SVG set where one exists (toasts: `ToastIcons`); otherwise `lucide-react` like the rest of the app.
 - Pages stay thin; interactive logic lives in feature components/hooks.
 

@@ -13,6 +13,7 @@ import type {
   CreateItemInput,
   CreateModuleInput,
   CreateSubItemInput,
+  HomeRoom,
   UpdateCategoryInput,
   UpdateItemInput,
   UpdateModuleInput,
@@ -195,6 +196,30 @@ async function deleteItem(id: string): Promise<CatalogueItem> {
   return res.json();
 }
 
+// Rooms
+async function fetchRooms(): Promise<HomeRoom[]> {
+  const res = await fetch("/api/catalogue/rooms");
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function roomRequest(
+  url: string,
+  method: "POST" | "PATCH" | "DELETE",
+  body?: Record<string, unknown>,
+): Promise<HomeRoom | null> {
+  const res = await safeFetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || "Failed to save room");
+  }
+  return method === "DELETE" ? null : res.json();
+}
+
 // Sub-items
 async function fetchSubItems(itemId: string): Promise<CatalogueSubItem[]> {
   const res = await fetch(`/api/catalogue/sub-items?item_id=${itemId}`);
@@ -274,6 +299,15 @@ export function useCatalogueItems(moduleId?: string, categoryId?: string) {
         : catalogueKeys.items(),
     queryFn: () => fetchItems(moduleId, categoryId),
     staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
+/** Rooms of the home, in order. Empty until 2026-10-10_home-rooms.sql runs. */
+export function useHomeRooms() {
+  return useQuery({
+    queryKey: catalogueKeys.rooms(),
+    queryFn: fetchRooms,
+    staleTime: 1000 * 60 * 30,
   });
 }
 
@@ -555,6 +589,87 @@ export function useDeleteCategory() {
         });
       }
     },
+  });
+}
+
+// --- Rooms ---
+
+export function useCreateRoom() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => roomRequest("/api/catalogue/rooms", "POST", { name }),
+    onSuccess: (created) => {
+      qc.invalidateQueries({ queryKey: catalogueKeys.rooms() });
+      if (!created) return;
+      toast.success(`"${created.name}" added`, {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await roomRequest(`/api/catalogue/rooms/${created.id}`, "DELETE");
+              qc.invalidateQueries({ queryKey: catalogueKeys.rooms() });
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
+    },
+    onError: (err) => toast.error(err.message || "Failed to add room"),
+  });
+}
+
+export function useRenameRoom() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ room, name }: { room: HomeRoom; name: string }) =>
+      roomRequest(`/api/catalogue/rooms/${room.id}`, "PATCH", { name }),
+    onSuccess: (_updated, { room, name }) => {
+      qc.invalidateQueries({ queryKey: catalogueKeys.rooms() });
+      // Chore instances copied the old name into their title; templates and
+      // the Chores page read the room by id, so they follow the rename.
+      toast.success(`"${name}" renamed`, {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await roomRequest(`/api/catalogue/rooms/${room.id}`, "PATCH", { name: room.name });
+              qc.invalidateQueries({ queryKey: catalogueKeys.rooms() });
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
+    },
+    onError: (err) => toast.error(err.message || "Failed to rename room"),
+  });
+}
+
+export function useDeleteRoom() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (room: HomeRoom) => roomRequest(`/api/catalogue/rooms/${room.id}`, "DELETE"),
+    onSuccess: (_void, room) => {
+      qc.invalidateQueries({ queryKey: catalogueKeys.rooms() });
+      toast.success(`"${room.name}" deleted`, {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await roomRequest(`/api/catalogue/rooms/${room.id}`, "PATCH", { archived_at: null });
+              qc.invalidateQueries({ queryKey: catalogueKeys.rooms() });
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
+    },
+    onError: (err) => toast.error(err.message || "Failed to delete room"),
   });
 }
 

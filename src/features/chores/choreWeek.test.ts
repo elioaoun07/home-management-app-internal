@@ -5,7 +5,7 @@
 import { organizeFlexibleRoutines } from "@/features/items/useFlexibleRoutines";
 import type { ItemOccurrenceAction } from "@/features/items/useItemActions";
 import { localToISO } from "@/lib/utils/date";
-import type { CatalogueItem } from "@/types/catalogue";
+import type { CatalogueItem, HomeRoom } from "@/types/catalogue";
 import type {
   FlexiblePeriod,
   FlexibleSchedule,
@@ -144,6 +144,7 @@ function week(
   actions: ItemOccurrenceAction[] = [],
   templates: CatalogueItem[] = [],
   targets: Record<string, number> = {},
+  rooms: HomeRoom[] = [],
 ) {
   const flexible = items.filter(
     (i) => i.is_chore && i.recurrence_rule?.is_flexible,
@@ -160,6 +161,7 @@ function week(
     actions,
     schedules,
     templates,
+    rooms,
     flexible: [monday, sunday].map((anchor) =>
       organizeFlexibleRoutines(
         flexible,
@@ -367,6 +369,28 @@ describe("buildChoreWeek — Catalogue templates without a routine", () => {
     const routine = flexibleChore("sheets");
     const result = week(WEEK, WED, [routine], [], [], [tpl]);
     expect(result.todos.map((t) => t.key)).toEqual(["flex:sheets"]);
+  });
+
+  it("offers a room-tagged template once per room (room order, unknown rooms ignored) and counts instances per room", () => {
+    const room = (id: string, position: number) =>
+      ({ id, name: id, position }) as unknown as HomeRoom;
+    const rooms = [room("Corridor", 0), room("Kitchen", 1)];
+    const mop = template("mop", { name: "Mop", room_ids: ["Kitchen", "Corridor", "gone"] });
+    const plain = template("zeta", { name: "Zeta" });
+    const kitchenMop = {
+      ...oneOff("mop-k", localToISO("2026-10-08", "09:00")),
+      source_catalogue_item_id: "mop",
+      metadata_json: { room_id: "Kitchen" },
+    } as ItemWithDetails;
+
+    const noRooms = week(WEEK, WED, [], [], [], [mop, plain]);
+    expect(noRooms.todos.map((t) => t.key)).toEqual(["tpl:mop", "tpl:zeta"]);
+
+    const result = week(WEEK, WED, [kitchenMop], [], [], [mop, plain], {}, rooms);
+    expect(result.todos.map((t) => [t.key, t.room])).toEqual([
+      ["tpl:mop:Corridor", "Corridor"],
+      ["tpl:zeta", null],
+    ]);
   });
 });
 

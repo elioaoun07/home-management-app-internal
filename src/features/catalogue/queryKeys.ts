@@ -20,6 +20,9 @@ export const catalogueKeys = {
     [...catalogueKeys.items(), { categoryId }] as const,
   item: (id: string) => [...catalogueKeys.items(), id] as const,
 
+  // Rooms (home_rooms)
+  rooms: () => [...catalogueKeys.all, "rooms"] as const,
+
   // Sub-items
   subItems: (itemId: string) =>
     [...catalogueKeys.all, "sub-items", { itemId }] as const,

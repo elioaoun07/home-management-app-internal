@@ -12,6 +12,7 @@
 // statement it is the exception, and putting it inline is what made the old
 // screen unreadable on a phone.
 
+import { TripTagRow } from "@/components/expense/TripTagRow";
 import { CategoryPicker } from "@/components/statement-import/CategoryPicker";
 import { TransferToggle } from "@/components/statement-import/TransferToggle";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
@@ -440,6 +441,13 @@ function RowControls({
           <EyeOff className="w-4 h-4" />
         </button>
       </div>
+
+      {actionKind === "transaction" && row.type === "debit" && (
+        <TripTagRow
+          value={decision?.trip_id ?? null}
+          onChange={(trip_id) => onRowChange(row.id, { trip_id })}
+        />
+      )}
 
       {/* Per-row destination. The everyday case is one statement → one
           account; this exists for the rows that genuinely belong elsewhere —

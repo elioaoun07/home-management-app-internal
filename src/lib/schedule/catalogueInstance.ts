@@ -44,7 +44,7 @@ export function buildTemplateInstanceInput(
   tpl: CatalogueItem,
   dueAtIso: string,
   responsibleUserId: string | undefined,
-  options: { allDay?: boolean } = {},
+  options: { allDay?: boolean; room?: { id: string; name: string } } = {},
 ): CreateReminderInput | CreateTaskInput {
   const subtasks = parseTemplateSubtasks(tpl.subtasks_text);
   const duration =
@@ -53,7 +53,9 @@ export function buildTemplateInstanceInput(
       ? tpl.preferred_duration_minutes
       : undefined;
   const base = {
-    title: tpl.name,
+    // A room-specific placement is titled "<chore> · <room>" so identical chores
+    // in different rooms stay distinguishable everywhere the title is shown
+    title: options.room ? `${tpl.name} · ${options.room.name}` : tpl.name,
     description: tpl.description || undefined,
     priority: toItemPriority(tpl.priority),
     is_public: tpl.is_public,
@@ -70,7 +72,13 @@ export function buildTemplateInstanceInput(
             channel: "push" as const,
           },
         ],
-    metadata_json: options.allDay ? { all_day: true } : undefined,
+    metadata_json:
+      options.allDay || options.room
+        ? {
+            ...(options.allDay ? { all_day: true } : {}),
+            ...(options.room ? { room_id: options.room.id } : {}),
+          }
+        : undefined,
     category_ids: tpl.item_category_ids?.length
       ? tpl.item_category_ids
       : undefined,

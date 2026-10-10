@@ -94,6 +94,8 @@ time. See the vault guide for why it is an audit rather than an entry path.
 - **A row's category picker must be opened on the account the row will actually be CREATED in** (`resolveRowAccount()`), never on `session.account_id` by default — otherwise the commit route rejects the pair as a category↔account mismatch.
 - **Turbopack dev can serve a chunk your browser has cached as `immutable`** (BUD-51, BUD-49 hit a different cause of the same symptom) — server-side code is current (verify with `curl` or `fetch(url,{cache:"no-store"})`), but a normal reload/navigate keeps rendering old client JS. Fix: hard reload (Ctrl+Shift+R), not `pnpm dev:clean` (that fixes a stale SERVER cache, a different failure mode).
 
+- **Trip tag is per row, on `create` only.** `RowDecision.trip_id` (set via `TripTagRow` in `GroupSheet`'s `RowControls`, debit + Transaction rows) → `create.trip_id` → `transactions.trip_id`. The commit route validates with `canAccessTrip()` and fails just that row on a bad trip. Credits and transfers never carry one; matched rows (`stamp`/`confirm_draft`) are not taggable here.
+
 ## Connected modules
 
 - **Transactions** — creates/stamps them; also reads the merchant map for manual-entry auto-suggest.

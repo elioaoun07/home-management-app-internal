@@ -166,6 +166,7 @@ export type CommitAction =
       category_id: string | null;
       subcategory_id: string | null;
       statement_hash: string;
+      trip_id?: string | null;
       learn_mapping?: { pattern: string; name: string };
     }
   | {

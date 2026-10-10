@@ -17,7 +17,7 @@ import {
   getItemDate,
 } from "@/lib/utils/dayOccurrences";
 import { localToISO } from "@/lib/utils/date";
-import type { CatalogueItem } from "@/types/catalogue";
+import type { CatalogueItem, HomeRoom } from "@/types/catalogue";
 import type {
   FlexiblePeriod,
   FlexibleSchedule,
@@ -73,6 +73,10 @@ export interface ChoreTodo {
   key: string;
   kind: ChoreTodoKind;
   title: string;
+  /** Room this to-do is for (a template applies to several: one to-do per room) */
+  roomId: string | null;
+  room: string | null;
+  roomOrder: number;
   responsibleUserId: string | null;
   /** Slots left in the first assignable period */
   remaining: number;
@@ -94,6 +98,8 @@ export interface ChoreWeekInput {
   /** Organizer results for the week's Monday and Sunday anchors */
   flexible: (FlexibleRoutinesResult | undefined)[];
   templates: CatalogueItem[];
+  /** Rooms of the home; a template's `room_ids` resolve against these */
+  rooms?: HomeRoom[];
 }
 
 export interface ChoreWeek {
@@ -358,6 +364,20 @@ export function buildChoreWeek(input: ChoreWeekInput): ChoreWeek {
 
   // ── Todos ──────────────────────────────────────────────────────────────────
   const todos: ChoreTodo[] = [];
+  const roomsById = new Map((input.rooms ?? []).map((r) => [r.id, r] as const));
+  const roomFields = (roomId: string | null) => {
+    const room = roomId ? roomsById.get(roomId) : undefined;
+    return {
+      roomId: room?.id ?? null,
+      room: room?.name ?? null,
+      roomOrder: room?.position ?? Number.MAX_SAFE_INTEGER,
+    };
+  };
+  /** Instances created from a template remember their room (metadata_json.room_id) */
+  const instanceRoomId = (item: ItemWithDetails): string | null => {
+    const id = item.metadata_json?.room_id;
+    return typeof id === "string" ? id : null;
+  };
   const dayIsOpen = (date: string) => date >= todayKey;
 
   // Flexible chores with slots left in a period touching this week
@@ -384,6 +404,7 @@ export function buildChoreWeek(input: ChoreWeekInput): ChoreWeek {
       key: `flex:${item.id}`,
       kind: "flexible",
       title: item.title,
+      ...roomFields(instanceRoomId(item)),
       responsibleUserId: item.responsible_user_id ?? null,
       remaining: primary.remainingCount ?? 1,
       target: primary.targetOccurrences ?? 1,
@@ -409,41 +430,48 @@ export function buildChoreWeek(input: ChoreWeekInput): ChoreWeek {
     if (!tpl.is_chore || !tpl.is_flexible_routine) continue;
     if (!isFlexiblePeriod(tpl.recurrence_pattern)) continue;
     if (tpl.archived_at || tpl.status === "archived") continue;
-    if (routineSources.has(tpl.id)) continue;
+    // One to-do per room the template is tagged with; untagged = one to-do.
+    // A room-tagged template is never hidden by a routine item made elsewhere.
+    const tplRoomIds = (tpl.room_ids ?? []).filter((id) => roomsById.has(id));
+    if (routineSources.has(tpl.id) && tplRoomIds.length === 0) continue;
     const period = tpl.recurrence_pattern;
     const target = Math.max(1, tpl.flexible_occurrences ?? 1);
-    const instances = input.items.filter(
-      (i) =>
-        sourceId(i) === tpl.id &&
-        !i.recurrence_rule?.is_flexible &&
-        !CLOSED_STATUSES.has(i.status ?? ""),
-    );
-    let primaryRemaining = 0;
-    const dayOptions = days.map((date): ChoreDayOption => {
-      const bounds = getPeriodBoundaries(parseISO(date), period);
-      const instanceDates = instances
-        .map(getItemDate)
-        .filter((d): d is Date => !!d && isWithinInterval(d, bounds))
-        .map(toDateKey);
-      const remaining = Math.max(0, target - instanceDates.length);
-      const enabled =
-        dayIsOpen(date) && remaining > 0 && !instanceDates.includes(date);
-      if (enabled && primaryRemaining === 0) primaryRemaining = remaining;
-      return { date, enabled, periodStart: toDateKey(bounds.start) };
-    });
-    if (primaryRemaining === 0) continue;
-    todos.push({
-      key: `tpl:${tpl.id}`,
-      kind: "template",
-      title: tpl.name,
-      responsibleUserId: null,
-      remaining: primaryRemaining,
-      target,
-      period,
-      preferredTime: tpl.preferred_time?.slice(0, 5) || null,
-      days: dayOptions,
-      template: tpl,
-    });
+    for (const roomId of tplRoomIds.length ? tplRoomIds : [null]) {
+      const instances = input.items.filter(
+        (i) =>
+          sourceId(i) === tpl.id &&
+          (roomId === null || instanceRoomId(i) === roomId) &&
+          !i.recurrence_rule?.is_flexible &&
+          !CLOSED_STATUSES.has(i.status ?? ""),
+      );
+      let primaryRemaining = 0;
+      const dayOptions = days.map((date): ChoreDayOption => {
+        const bounds = getPeriodBoundaries(parseISO(date), period);
+        const instanceDates = instances
+          .map(getItemDate)
+          .filter((d): d is Date => !!d && isWithinInterval(d, bounds))
+          .map(toDateKey);
+        const remaining = Math.max(0, target - instanceDates.length);
+        const enabled =
+          dayIsOpen(date) && remaining > 0 && !instanceDates.includes(date);
+        if (enabled && primaryRemaining === 0) primaryRemaining = remaining;
+        return { date, enabled, periodStart: toDateKey(bounds.start) };
+      });
+      if (primaryRemaining === 0) continue;
+      todos.push({
+        key: roomId ? `tpl:${tpl.id}:${roomId}` : `tpl:${tpl.id}`,
+        kind: "template",
+        title: tpl.name,
+        ...roomFields(roomId),
+        responsibleUserId: null,
+        remaining: primaryRemaining,
+        target,
+        period,
+        preferredTime: tpl.preferred_time?.slice(0, 5) || null,
+        days: dayOptions,
+        template: tpl,
+      });
+    }
   }
 
   // Undated one-offs: assigning sets their due date
@@ -461,6 +489,7 @@ export function buildChoreWeek(input: ChoreWeekInput): ChoreWeek {
       key: `undated:${item.id}`,
       kind: "undated",
       title: item.title,
+      ...roomFields(instanceRoomId(item)),
       responsibleUserId: item.responsible_user_id ?? null,
       remaining: 1,
       target: 1,
@@ -471,7 +500,9 @@ export function buildChoreWeek(input: ChoreWeekInput): ChoreWeek {
     });
   }
 
-  todos.sort((a, b) => a.title.localeCompare(b.title));
+  todos.sort(
+    (a, b) => a.roomOrder - b.roomOrder || a.title.localeCompare(b.title),
+  );
 
   return {
     weekStart,

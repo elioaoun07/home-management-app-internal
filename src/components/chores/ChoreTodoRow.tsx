@@ -6,7 +6,6 @@ import {
 } from "@/components/chores/ChoreSwipe";
 import {
   ChoreDayChips,
-  formatDayHeading,
   PersonTag,
   personTone,
   useChoreTone,
@@ -15,7 +14,6 @@ import {
 import type { ChoreDayOption, ChoreTodo } from "@/features/chores/choreWeek";
 import { cn } from "@/lib/utils";
 import {
-  CalendarDays,
   Check,
   ChevronUp,
   Clock3,
@@ -36,7 +34,6 @@ interface ChoreTodoRowProps {
   partner: ChoreHousehold | null;
   open: boolean;
   pending: boolean;
-  todayKey: string;
   /** yyyy-MM-dd preselected when the chore can take it; the chips stay one tap away */
   targetDate?: string | null;
   onOpenChange: (open: boolean) => void;
@@ -55,7 +52,6 @@ export function ChoreTodoRow({
   partner,
   open,
   pending,
-  todayKey,
   targetDate,
   onOpenChange,
   onAssign,
@@ -69,7 +65,6 @@ export function ChoreTodoRow({
   const [day, setDay] = useState<string | null>(
     () => (target ?? todo.days.find((d) => d.enabled))?.date ?? null,
   );
-  const [showDays, setShowDays] = useState(false);
   const [time, setTime] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -88,7 +83,6 @@ export function ChoreTodoRow({
   const setOpen = (next: boolean) => {
     if (!next) {
       setChosen(null);
-      setShowDays(false);
     }
     onOpenChange(next);
   };
@@ -179,28 +173,12 @@ export function ChoreTodoRow({
             id={pickerId}
             className={cn("space-y-2.5 border-t px-2.5 pb-3 pt-3", tone.border)}
           >
-            {!target || showDays ? (
-              <ChoreDayChips
-                days={todo.days}
-                selected={day ?? undefined}
-                disabled={busy}
-                onPick={(picked) => setDay(picked.date)}
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowDays(true)}
-                aria-label="Change day"
-                className={cn(
-                  "inline-flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold",
-                  tone.ghost,
-                  tone.focus,
-                )}
-              >
-                <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-                {day ? formatDayHeading(day, todayKey) : null}
-              </button>
-            )}
+            <ChoreDayChips
+              days={todo.days}
+              selected={day ?? undefined}
+              disabled={busy}
+              onPick={(picked) => setDay(picked.date)}
+            />
             <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
               <button
                 type="button"

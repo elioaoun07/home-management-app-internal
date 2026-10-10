@@ -35,6 +35,7 @@ import type { AccountType } from "@/lib/balance-utils";
 import { getBalanceDelta, getTransferDeltas } from "@/lib/balance-utils";
 import { getErrorCode } from "@/lib/errors";
 import { listWritableAccounts } from "@/lib/accountAccess";
+import { canAccessTrip } from "@/lib/tripAccess";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -60,6 +61,7 @@ const createAction = z.object({
   category_id: z.string().uuid().nullable(),
   subcategory_id: z.string().uuid().nullable(),
   statement_hash: z.string().min(1).max(200),
+  trip_id: z.string().uuid().nullable().optional(),
   learn_mapping: z
     .object({
       pattern: z.string().trim().min(2).max(120),
@@ -334,7 +336,20 @@ export async function POST(req: NextRequest) {
     const creates = actions.filter(
       (a): a is Extract<CommitAction, { kind: "create" }> => a.kind === "create",
     );
+    // A trip tag must name a trip this user can see; an invalid one fails its
+    // own row, not the batch.
+    const tripAccess = new Map<string, boolean>();
+    for (const tripId of new Set(
+      creates.flatMap((a) => (a.trip_id ? [a.trip_id] : [])),
+    )) {
+      tripAccess.set(tripId, await canAccessTrip(supabase, user.id, tripId));
+    }
+
     const validCreates = creates.filter((a) => {
+      if (a.trip_id && !tripAccess.get(a.trip_id)) {
+        results.push({ row_id: a.row_id, status: "error", error: "Invalid trip" });
+        return false;
+      }
       const error = categoryError(a.account_id, a.category_id, a.subcategory_id);
       if (error) {
         results.push({ row_id: a.row_id, status: "error", error });
@@ -356,6 +371,7 @@ export async function POST(req: NextRequest) {
       is_imported: true,
       is_debt_return: a.direction === "credit",
       statement_hash: a.statement_hash,
+      trip_id: a.trip_id ?? null,
     });
 
     const recordCreate = (

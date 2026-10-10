@@ -2073,6 +2073,8 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - ✅ 2026-10-03 — **SCH-20** Chores got its own page and install icon (`/chores`, `/chores-app`), a Catalogue → Chores section and two-tap weekday assignment; refined the UI into a mobile day agenda and web week/planning workspace with search, theme-aware responsive dialogs and date-link parity. Web Chores renders independently of Budget loading/errors. Fixed the length-keyed `useFlexibleRoutines` cache and missing schedule-items invalidation on `is_chore` edits ([criteria](<Schedule — Master Book.md#sch-20>), `src/features/chores/choreWeek.test.ts`)
 - ✅ 2026-10-03 — **SCH-22** Install Chores as its own app alongside Budget — [criteria](<Schedule — Master Book.md#sch-22>)
 - ✅ 2026-10-03 — **SCH-23** Install a second app from the in-app Install button — [criteria](<Schedule — Master Book.md#sch-23>)
+- ✅ 2026-10-10 — Chores polish on SCH-20: `/chores` page uses the themed `tc.bgPage` (the `--background` gradient rendered near-black in blue dark), **Assign** opens preselected on the selected day (Today by default), and the assign dialog has previous/next week chevrons
+- ✅ 2026-10-10 — Web View on a phone-width screen (`WebViewContainer`): the header's module tabs and avatar were clipped off-screen, so Mobile View and module switching were unreachable. Below `lg` the tabs are replaced by a module-switcher dropdown and the avatar stays visible; `lg`+ unchanged
 
 ## Delivery session log
 

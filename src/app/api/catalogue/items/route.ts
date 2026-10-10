@@ -163,6 +163,7 @@ export async function POST(req: NextRequest) {
       flexible_occurrences,
       is_chore,
       chore_category,
+      room_ids,
     } = body;
 
     // Verify module exists (RLS handles visibility)
@@ -254,6 +255,8 @@ export async function POST(req: NextRequest) {
         ),
         is_chore: is_chore ?? false,
         chore_category: is_chore ? (chore_category || null) : null,
+        // Only sent when set, so saves keep working until home_rooms is migrated
+        ...(room_ids?.length ? { room_ids } : {}),
       })
       .select(
         `

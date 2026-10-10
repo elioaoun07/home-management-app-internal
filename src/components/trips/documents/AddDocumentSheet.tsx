@@ -8,7 +8,7 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
+} from "@/components/shared/Sheet";
 import { useCreateTripDocument, useUpdateTripDocument } from "@/features/trips/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
@@ -82,7 +82,7 @@ export function AddDocumentSheet({ tripId, open, onOpenChange, document }: AddDo
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className={cn("rounded-t-2xl border-t", tc.border, tc.bgPage, "max-h-[90vh] overflow-y-auto")}>
+      <SheetContent side="bottom" className={cn("rounded-t-2xl border-t", tc.border, tc.bgPage)}>
         <SheetHeader className="pb-4">
           <SheetTitle className="text-white">{document ? "Edit document" : "Add document"}</SheetTitle>
         </SheetHeader>

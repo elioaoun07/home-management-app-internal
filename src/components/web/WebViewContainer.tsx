@@ -11,6 +11,12 @@ import WebLandingPage from "@/components/web/WebLandingPage";
 import WebMealPlanner from "@/components/web/WebMealPlanner";
 import WebMealPlanCalendar from "@/components/web/WebMealPlanCalendar";
 import WebRecipes from "@/components/web/WebRecipes";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/shared/DropdownMenu";
 import { ERAMark, type ERAModuleKey } from "@/components/shared/ERAMark";
 import { useUser } from "@/contexts/UserContext";
 import { useUserPreferences } from "@/features/preferences/useUserPreferences";
@@ -23,6 +29,7 @@ import {
   BarChart3,
   BookOpen,
   CalendarDays,
+  LayoutGrid,
   Rocket,
   Wallet,
 } from "lucide-react";
@@ -140,35 +147,36 @@ export default function WebViewContainer({ initialMode, initialChoreDate }: { in
       <header
         className={`flex-shrink-0 w-full ${themeClasses.headerGradient} backdrop-blur-xl border-b ${themeClasses.border}`}
       >
-        <div className="max-w-7xl mx-auto px-6 py-3 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+        <div className="max-w-7xl mx-auto px-3 lg:px-6 py-3 flex items-center justify-between gap-2 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-4">
           {/* Left: ERA Mark + Title — key re-mounts on viewMode change for entrance animation */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <motion.div
               key={viewMode}
+              className="flex-shrink-0"
               initial={{ scale: 0.6, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }}
             >
               <ERAMark module={VIEW_CONFIG[viewMode].module} size={44} />
             </motion.div>
-            <div className="flex flex-col leading-tight">
+            <div className="flex flex-col leading-tight min-w-0">
               <motion.span
                 key={`title-${viewMode}`}
-                className={`text-[17px] font-bold leading-tight bg-gradient-to-r ${VIEW_CONFIG[viewMode].gradient} bg-clip-text text-transparent`}
+                className={`truncate text-[17px] font-bold leading-tight bg-gradient-to-r ${VIEW_CONFIG[viewMode].gradient} bg-clip-text text-transparent`}
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.35, ease: "easeOut", delay: 0.05 }}
               >
                 {VIEW_CONFIG[viewMode].title}
               </motion.span>
-              <span className="text-[11px] text-white/40 leading-tight">
+              <span className="truncate text-[11px] text-white/40 leading-tight">
                 {VIEW_CONFIG[viewMode].role}
               </span>
             </div>
           </div>
 
-          {/* Center: View Mode Tabs */}
-          <div className="flex items-center p-1 rounded-xl bg-black/20 border border-white/10">
+          {/* Center: View Mode Tabs (laptop) */}
+          <div className="hidden lg:flex items-center p-1 rounded-xl bg-black/20 border border-white/10">
             {NAV_ITEMS.map(({ mode, label, eraModule }) => (
               <button
                 key={mode}
@@ -195,8 +203,37 @@ export default function WebViewContainer({ initialMode, initialChoreDate }: { in
             ))}
           </div>
 
-          {/* Right: Avatar */}
-          <div className="flex items-center justify-end">
+          {/* Right: module switcher (narrow screens) + Avatar */}
+          <div className="flex items-center justify-end gap-2 flex-shrink-0">
+            <div className="lg:hidden">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Switch module"
+                    className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/10 active:scale-95 transition-all"
+                  >
+                    <LayoutGrid className="w-5 h-5 text-white/80" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {NAV_ITEMS.map(({ mode, label, eraModule }) => (
+                    <DropdownMenuItem
+                      key={mode}
+                      onSelect={() => setViewMode(mode)}
+                      className={cn(
+                        "font-medium",
+                        viewMode === mode &&
+                          `${VIEW_CONFIG[mode].activeClass} text-white`,
+                      )}
+                    >
+                      <ERAMark module={eraModule} size={22} />
+                      {label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <UserMenuClient
               name={userData?.name ?? "User"}
               email={userData?.email ?? ""}

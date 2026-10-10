@@ -69,6 +69,7 @@ export const catalogueItemPatchSchema = z
     flexible_occurrences: z.number().int().min(1).max(31).optional(),
     is_chore: z.boolean().optional(),
     chore_category: z.enum(CHORE_CATEGORIES).nullable().optional(),
+    room_ids: z.array(z.string().uuid()).max(50).optional(),
   })
   // Unknown keys are dropped, not rejected: shared create/edit payloads and
   // older app builds still send module_id etc. on edit.

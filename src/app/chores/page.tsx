@@ -2,7 +2,9 @@
 
 import ChoresView from "@/components/chores/ChoresView";
 import WebViewContainer from "@/components/web/WebViewContainer";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
+import { cn } from "@/lib/utils";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
@@ -11,6 +13,7 @@ const DATE_PARAM = /^\d{4}-\d{2}-\d{2}$/;
 function ChoresRoute() {
   const searchParams = useSearchParams();
   const { viewMode } = useViewMode();
+  const tc = useThemeClasses();
   const date = searchParams.get("date");
   const initialDate = date && DATE_PARAM.test(date) ? date : undefined;
 
@@ -21,7 +24,7 @@ function ChoresRoute() {
 
   // Mobile: the standalone ConditionalHeader is fixed h-16.
   return (
-    <main className="min-h-screen bg-gradient-to-b from-background to-background/95 pt-16">
+    <main className={cn("min-h-screen pt-16", tc.bgPage)}>
       <ChoresView initialDate={initialDate} />
     </main>
   );

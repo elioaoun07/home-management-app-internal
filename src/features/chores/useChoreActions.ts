@@ -270,12 +270,13 @@ export function useChoreAssign(schedules: FlexibleSchedule[]) {
     date: string,
     time: string | null,
     responsibleUserId: string | undefined,
+    room?: { id: string; name: string },
   ) => {
     const input = buildTemplateInstanceInput(
       tpl,
       dueAt(date, time),
       responsibleUserId,
-      { allDay: time === null },
+      { allDay: time === null, room },
     );
     let createdId: string | undefined;
     try {
@@ -293,7 +294,7 @@ export function useChoreAssign(schedules: FlexibleSchedule[]) {
       return;
     }
     const id = createdId;
-    toast.success(`${tpl.name} · ${dayLabel(date)}`, {
+    toast.success(`${room ? `${tpl.name} · ${room.name}` : tpl.name} · ${dayLabel(date)}`, {
       icon: ToastIcons.create,
       duration: 4000,
       action: {

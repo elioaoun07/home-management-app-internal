@@ -80,7 +80,7 @@ export function TripDetail({ tripId }: { tripId: string }) {
               <Plane className={cn("w-5 h-5", tc.text)} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg font-semibold text-white truncate">{trip.name}</h1>
+              <h1 className="text-lg font-semibold text-white leading-tight line-clamp-2 break-words">{trip.name}</h1>
               <TripStatusBadge status={trip.status} trip={trip} />
             </div>
           </div>
@@ -109,45 +109,6 @@ export function TripDetail({ tripId }: { tripId: string }) {
             </div>
           )}
         </div>
-
-        {/* Meta row */}
-        <div className={cn("flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs", tc.textFaint)}>
-          {trip.destination_name && (
-            <span className="flex items-center gap-1">
-              <MapPin className="w-3 h-3" />
-              {trip.destination_name}
-              {trip.destination_country_code && ` (${trip.destination_country_code})`}
-            </span>
-          )}
-          {trip.start_date && trip.end_date && (
-            <span className="flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
-              {fmt(trip.start_date)} → {fmt(trip.end_date)}
-            </span>
-          )}
-          <span className="flex items-center gap-1">
-            <Users className="w-3 h-3" />
-            {trip.scope === "household" ? "Household" : "Solo"}
-          </span>
-        </div>
-
-        {/* Action button — activation/completion stays owner-only */}
-        {trip.is_owner !== false && (trip.status === "draft" || trip.status === "upcoming") && (
-          <Button
-            onClick={() => setActivateOpen(true)}
-            className={cn("w-full mt-3 border font-semibold", tc.bgSurface, tc.text, tc.border)}
-          >
-            Activate trip
-          </Button>
-        )}
-        {trip.is_owner !== false && trip.status === "active" && (
-          <Button
-            onClick={() => setCompleteOpen(true)}
-            className="w-full mt-3 border font-semibold text-emerald-400 bg-emerald-500/15 border-emerald-400/40"
-          >
-            I'm back home
-          </Button>
-        )}
       </div>
 
       {/* Tabs */}
@@ -170,7 +131,54 @@ export function TripDetail({ tripId }: { tripId: string }) {
 
       {/* Tab content */}
       <div className="px-4 pt-4">
-        {tab === "overview" && <OverviewTab tripId={tripId} trip={trip} />}
+        {tab === "overview" && (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <div className={cn("flex flex-wrap gap-x-4 gap-y-1 text-xs", tc.textFaint)}>
+                {trip.destination_name && (
+                  <span className="flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    {trip.destination_name}
+                    {trip.destination_country_code && ` (${trip.destination_country_code})`}
+                  </span>
+                )}
+                {trip.start_date && trip.end_date && (
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    {fmt(trip.start_date)} → {fmt(trip.end_date)}
+                  </span>
+                )}
+                <span className="flex items-center gap-1">
+                  <Users className="w-3 h-3" />
+                  {trip.scope === "household" ? "Household" : "Solo"}
+                </span>
+              </div>
+              {trip.notes && (
+                <p className={cn("text-xs whitespace-pre-wrap", tc.textMuted)}>{trip.notes}</p>
+              )}
+            </div>
+
+            {/* Activation/completion stays owner-only */}
+            {trip.is_owner !== false && (trip.status === "draft" || trip.status === "upcoming") && (
+              <Button
+                onClick={() => setActivateOpen(true)}
+                className={cn("w-full border font-semibold", tc.bgSurface, tc.text, tc.border)}
+              >
+                Activate trip
+              </Button>
+            )}
+            {trip.is_owner !== false && trip.status === "active" && (
+              <Button
+                onClick={() => setCompleteOpen(true)}
+                className="w-full border font-semibold text-emerald-400 bg-emerald-500/15 border-emerald-400/40"
+              >
+                I'm back home
+              </Button>
+            )}
+
+            <OverviewTab tripId={tripId} trip={trip} />
+          </div>
+        )}
         {tab === "places" && <ItineraryView tripId={tripId} />}
         {tab === "packing" && <TripPackingList tripId={tripId} />}
         {tab === "documents" && <DocumentsView tripId={tripId} />}

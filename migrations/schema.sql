@@ -894,11 +894,24 @@ CREATE TABLE public.catalogue_items (
   is_chore boolean NOT NULL DEFAULT false,
   chore_category text CHECK (chore_category = ANY (ARRAY['cleaning'::text, 'laundry'::text, 'cooking'::text, 'garden'::text, 'maintenance'::text, 'general'::text])),
   revision bigint NOT NULL DEFAULT 1,
+  room_ids ARRAY NOT NULL DEFAULT '{}'::uuid[],
   CONSTRAINT catalogue_items_pkey PRIMARY KEY (id),
   CONSTRAINT catalogue_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT catalogue_items_module_id_fkey FOREIGN KEY (module_id) REFERENCES public.catalogue_modules(id),
   CONSTRAINT catalogue_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.catalogue_categories(id),
   CONSTRAINT catalogue_items_linked_item_fkey FOREIGN KEY (linked_item_id) REFERENCES public.items(id)
+);
+CREATE TABLE public.home_rooms (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  name text NOT NULL CHECK (length(btrim(name)) > 0),
+  position integer NOT NULL DEFAULT 0,
+  is_public boolean NOT NULL DEFAULT true,
+  archived_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT home_rooms_pkey PRIMARY KEY (id),
+  CONSTRAINT home_rooms_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.catalogue_sub_items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

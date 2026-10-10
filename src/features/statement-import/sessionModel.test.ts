@@ -731,6 +731,34 @@ describe("buildCommitActions", () => {
     });
   });
 
+  it("carries a trip tag onto a created debit, and omits it otherwise", () => {
+    const TRIP = "33333333-3333-4333-8333-333333333333";
+    const tagged = session({
+      rows: [row()],
+      decisions: {
+        "row-1": { resolution: "create", category_id: CAT_FOOD, trip_id: TRIP },
+      },
+    });
+    expect(buildCommitActions(tagged)[0]).toMatchObject({ trip_id: TRIP });
+
+    const untagged = session({
+      rows: [row()],
+      decisions: { "row-1": { resolution: "create", category_id: CAT_FOOD } },
+    });
+    expect(buildCommitActions(untagged)[0]).not.toHaveProperty("trip_id");
+  });
+
+  it("never tags a credit (refund) with a trip", () => {
+    const TRIP = "33333333-3333-4333-8333-333333333333";
+    const s = session({
+      rows: [row({ type: "credit" })],
+      decisions: {
+        "row-1": { resolution: "create", category_id: CAT_FOOD, trip_id: TRIP },
+      },
+    });
+    expect(buildCommitActions(s)[0]).not.toHaveProperty("trip_id");
+  });
+
   it("falls back to the statement account when no override is set", () => {
     const s = session({
       rows: [row()],

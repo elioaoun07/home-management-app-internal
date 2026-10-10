@@ -143,6 +143,7 @@ export async function savePlace(name: string, reply: (name: string) => string): 
         body: JSON.stringify({
           type: "custom",
           name: "Places",
+          description: "Saved locations",
           icon: "map-pin",
           color: "#0ea5e9",
           settings_json: { era_role: "places" },

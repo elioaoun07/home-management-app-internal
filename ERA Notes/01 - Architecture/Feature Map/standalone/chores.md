@@ -5,7 +5,7 @@
 
 ## What it does
 
-Responsive chore agenda: Me | Both | partner tabs, collapsible week strip, focused day on mobile, week overview and planning sidebar on web. Mobile assignment opens in a dialog; longer To plan lists support title search. Completed and Sunday check-in stay collapsed (no Earlier section). Chores are Items with `is_chore = true`; definitions live in Catalogue → **Chores**.
+Responsive chore agenda: Me | Both | partner tabs, collapsible week strip, focused day on mobile, week overview and planning sidebar on web. Mobile assignment opens in a dialog; longer To plan lists support title search; the dialog opens preselected on the selected day (else Today) with week chevrons. Completed and Sunday check-in stay collapsed (no Earlier section). Chores are Items with `is_chore = true`; definitions live in Catalogue → **Chores**.
 
 ## Files at a glance
 
@@ -15,7 +15,7 @@ Responsive chore agenda: Me | Both | partner tabs, collapsible week strip, focus
 - **Components** (`src/components/chores/`):
   - `ChoresView.tsx` — responsive agenda, week/day selection, person filter, Library, planning search/sidebar/dialog and action wiring. Also used by desktop `src/components/web/WebChores.tsx`.
   - `ChoreRow.tsx` — slot row: completion button, wrapped title (opens sheet), time and person tag
-  - `ChoreTodoRow.tsx` — Unassigned row: tap **Assign** or swipe (left = me, right = partner) → day (preselected from `targetDate`; chips when none) + **All day** or a time ✓
+  - `ChoreTodoRow.tsx` — Unassigned row: tap **Assign** or swipe (left = me, right = partner) → always the 7 day chips, with `targetDate` (Today by default) preselected + **All day** or a time ✓
   - `ChoreSwipe.tsx` — Hub-shopping-style swipe: dead zone → follow → lock at 72 px with haptic → commit on release; pointer events + `touch-action: pan-y`. Also wraps scheduled `ChoreRow`s (swipe hands responsibility over)
   - `ChoreSheet.tsx` — responsive detail dialog: move day (flexible), Done, Skip, Postpone (non-flexible), Unassign (flexible), give/take responsibility
   - `ChoreCheckInPanel.tsx` — Sunday check-in (actual completion time / skip reason)
@@ -44,6 +44,7 @@ Responsive chore agenda: Me | Both | partner tabs, collapsible week strip, focus
 - **"Which chores land in a week / what can be assigned"** → `choreWeek.ts` (add a test in `choreWeek.test.ts`).
 - **"Edit check-in behavior"** → `ChoreCheckInPanel.tsx` + `useChoreSlotActions`.
 - **"Chore definitions"** → Catalogue → Chores (`src/components/web/WebCatalogue.tsx`).
+- **"Chores by room / tag a chore with rooms"** → Rooms chips in `CatalogueTaskItemDialog.tsx`, `RoomsDialog.tsx`, `useHomeRooms` (`src/features/catalogue/hooks.ts`); one to-do per (template, room) in `choreWeek.ts` (`rooms` input), grouping in `ChoresView.tsx` (`todoGroups`), instance title/`room_id` in `src/lib/schedule/catalogueInstance.ts`.
 
 ## Connected modules
 
