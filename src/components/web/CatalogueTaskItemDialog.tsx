@@ -22,8 +22,6 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useCreateItem,
-  useCreateRoom,
-  useHomeRooms,
   useUpdateItem,
 } from "@/features/catalogue/hooks";
 import { useItemCategories } from "@/features/items/useItems";
@@ -32,11 +30,10 @@ import { cn } from "@/lib/utils";
 import type {
   CatalogueItem,
   CataloguePriority,
-  ChoreCategory,
   LocationContext,
   RecurrencePattern,
 } from "@/types/catalogue";
-import { CHORE_CATEGORIES, PRIORITY_COLORS, PRIORITY_LABELS } from "@/types/catalogue";
+import { PRIORITY_COLORS, PRIORITY_LABELS } from "@/types/catalogue";
 import type { CreatePrerequisiteInput } from "@/types/prerequisites";
 import {
   AlertCircle,
@@ -53,7 +50,6 @@ import {
   MapPin,
   Plus,
   Repeat,
-  Sparkles,
   Tag,
   Users,
   X,
@@ -67,8 +63,6 @@ interface Props {
   categoryId?: string;
   editingItem: CatalogueItem | null;
   onSuccess?: (item: CatalogueItem) => void;
-  /** Preselect the chore flag for a new item (Catalogue → Chores) */
-  defaultIsChore?: boolean;
 }
 
 const PRIORITY_OPTIONS: CataloguePriority[] = [
@@ -153,14 +147,11 @@ export default function CatalogueTaskItemDialog({
   categoryId,
   editingItem,
   onSuccess,
-  defaultIsChore = false,
 }: Props) {
   const themeClasses = useThemeClasses();
   const createItem = useCreateItem();
   const updateItem = useUpdateItem();
-  const createRoom = useCreateRoom();
   const { data: itemCategories = [] } = useItemCategories();
-  const { data: rooms = [] } = useHomeRooms();
 
   // Form state
   const [name, setName] = useState("");
@@ -184,12 +175,6 @@ export default function CatalogueTaskItemDialog({
   // Flexible routine state
   const [isFlexibleRoutine, setIsFlexibleRoutine] = useState(false);
   const [flexibleOccurrences, setFlexibleOccurrences] = useState("1");
-  // Chore state
-  const [isChore, setIsChore] = useState(false);
-  const [choreCategory, setChoreCategory] = useState<string>("");
-  // Rooms this chore applies to (home_rooms ids)
-  const [roomIds, setRoomIds] = useState<string[]>([]);
-  const [roomInput, setRoomInput] = useState("");
   // New fields: categories and visibility
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(false);
@@ -199,7 +184,7 @@ export default function CatalogueTaskItemDialog({
   >([]);
 
   const isLoading =
-    createItem.isPending || updateItem.isPending || createRoom.isPending;
+    createItem.isPending || updateItem.isPending;
   const isEditing = !!editingItem;
 
   // Reset form when opening/closing or editing different item
@@ -231,11 +216,6 @@ export default function CatalogueTaskItemDialog({
         // Flexible routine state
         setIsFlexibleRoutine(editingItem.is_flexible_routine || false);
         setFlexibleOccurrences(String(editingItem.flexible_occurrences ?? 1));
-        // Chore state
-        setIsChore(editingItem.is_chore || false);
-        setChoreCategory(editingItem.chore_category || "");
-        setRoomIds(editingItem.room_ids ?? []);
-        setRoomInput("");
       } else {
         // Reset to defaults
         setName("");
@@ -259,14 +239,9 @@ export default function CatalogueTaskItemDialog({
         // Reset flexible routine state
         setIsFlexibleRoutine(false);
         setFlexibleOccurrences("1");
-        // Reset chore state
-        setIsChore(defaultIsChore);
-        setChoreCategory("");
-        setRoomIds([]);
-        setRoomInput("");
       }
     }
-  }, [open, editingItem, defaultIsChore]);
+  }, [open, editingItem]);
 
   const handleAddTag = () => {
     const trimmed = tagInput.trim();
@@ -295,28 +270,6 @@ export default function CatalogueTaskItemDialog({
       );
     } else {
       setSelectedCategoryIds([...selectedCategoryIds, categoryId]);
-    }
-  };
-
-  const toggleRoom = (id: string) =>
-    setRoomIds((ids) =>
-      ids.includes(id) ? ids.filter((r) => r !== id) : [...ids, id],
-    );
-
-  const allRoomsOn = rooms.length > 0 && rooms.every((r) => roomIds.includes(r.id));
-  const toggleAllRooms = () =>
-    setRoomIds(allRoomsOn ? [] : rooms.map((r) => r.id));
-
-  const addNewRoom = async () => {
-    const name = roomInput.trim();
-    if (!name) return;
-    const existing = rooms.find((r) => r.name.toLowerCase() === name.toLowerCase());
-    try {
-      const room = existing ?? (await createRoom.mutateAsync(name));
-      setRoomInput("");
-      if (room) setRoomIds((ids) => (ids.includes(room.id) ? ids : [...ids, room.id]));
-    } catch {
-      // the mutation already toasted
     }
   };
 
@@ -362,17 +315,6 @@ export default function CatalogueTaskItemDialog({
         flexible_occurrences: isFlexibleRoutine
           ? Math.min(31, Math.max(1, parseInt(flexibleOccurrences, 10) || 1))
           : 1,
-        // Chore fields
-        is_chore: isChore,
-        chore_category:
-          isChore && choreCategory
-            ? (choreCategory as ChoreCategory)
-            : undefined,
-        // Only sent when it changes, so saves keep working until home_rooms is migrated
-        room_ids:
-          isChore && roomIds.join() !== (editingItem?.room_ids ?? []).join()
-            ? roomIds
-            : undefined,
       };
 
       let result: CatalogueItem;
@@ -807,128 +749,6 @@ export default function CatalogueTaskItemDialog({
                   </p>
                 </div>
               )}
-
-            {/* Household Chore Toggle (only for flexible routines) */}
-            {isFlexibleRoutine && (
-              <div
-                className={cn(
-                  "flex items-center justify-between p-3 rounded-lg",
-                  isChore
-                    ? "bg-emerald-500/20 border border-emerald-500/30"
-                    : "bg-white/5 border border-white/10",
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <Sparkles
-                    className={cn(
-                      "w-4 h-4",
-                      isChore ? "text-emerald-400" : "text-white/60",
-                    )}
-                  />
-                  <div>
-                    <p
-                      className={cn(
-                        "text-sm font-medium",
-                        isChore ? "text-emerald-300" : "text-white/80",
-                      )}
-                    >
-                      Household Chore
-                    </p>
-                    <p className="text-xs text-white/50">
-                      Appears in Chores view — not counted in Schedule overdue
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={isChore}
-                  onCheckedChange={(checked) => {
-                    setIsChore(checked);
-                    if (!checked) setChoreCategory("");
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Chore category (only when chore is enabled) */}
-            {isChore && isFlexibleRoutine && (
-              <Select value={choreCategory} onValueChange={setChoreCategory}>
-                <SelectTrigger className="bg-white/5 border-white/10 text-white text-sm">
-                  <SelectValue placeholder="Category (optional)" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#1c1917] border-white/10">
-                  {CHORE_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat} className="text-white capitalize">
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
-            {/* Rooms (chores): the rooms this chore applies to */}
-            {isChore && (
-              <div className="space-y-2">
-                <Label className="text-white/60 text-xs">Rooms</Label>
-                <div className="flex flex-wrap gap-1.5">
-                  {rooms.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={toggleAllRooms}
-                      className={cn(
-                        "px-3 py-1.5 rounded-full text-sm border transition-all",
-                        allRoomsOn
-                          ? "bg-emerald-500 border-emerald-500 text-white"
-                          : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10",
-                      )}
-                    >
-                      All
-                    </button>
-                  )}
-                  {rooms.map((room) => {
-                    const selected = roomIds.includes(room.id);
-                    return (
-                      <button
-                        key={room.id}
-                        type="button"
-                        onClick={() => toggleRoom(room.id)}
-                        className={cn(
-                          "px-3 py-1.5 rounded-full text-sm border transition-all",
-                          selected
-                            ? "bg-emerald-500/20 border-emerald-500/60 text-emerald-300"
-                            : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10",
-                        )}
-                      >
-                        {room.name}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    value={roomInput}
-                    onChange={(e) => setRoomInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        void addNewRoom();
-                      }
-                    }}
-                    placeholder="New room"
-                    className="bg-white/5 border-white/10 text-white text-sm"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => void addNewRoom()}
-                    aria-label="Add room"
-                    className="border-white/10 bg-white/5"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
 
             {/* Days of Week (for weekly/biweekly recurrence, only when NOT flexible) */}
             {(recurrencePattern === "weekly" ||

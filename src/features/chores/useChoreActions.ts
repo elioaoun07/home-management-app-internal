@@ -28,6 +28,15 @@ import {
 } from "./choreWeek";
 import { itemsKeys } from "@/features/items/useItems";
 
+/** One template placement of the Assign form's batch save. */
+export interface ChorePlacement {
+  tpl: CatalogueItem;
+  date: string;
+  time: string | null;
+  responsibleUserId?: string;
+  room?: { id: string; name: string };
+}
+
 export type ChorePostponeTarget =
   | "tomorrow"
   | "end_of_week"
@@ -488,10 +497,52 @@ export function useChoreAssign(schedules: FlexibleSchedule[]) {
     });
   };
 
+  /**
+   * Places many template chores at once (Assign form → Save): a few requests in
+   * flight at a time, one toast, one Undo that takes them all back.
+   */
+  const placeTemplates = async (placements: ChorePlacement[]) => {
+    const created: string[] = [];
+    let failed = 0;
+    for (let i = 0; i < placements.length; i += 6) {
+      const results = await Promise.allSettled(
+        placements.slice(i, i + 6).map(async (p) => {
+          const input = buildTemplateInstanceInput(
+            p.tpl,
+            dueAt(p.date, p.time),
+            p.responsibleUserId,
+            { allDay: p.time === null, room: p.room },
+          );
+          const made =
+            input.type === "reminder"
+              ? await createReminder.mutateAsync(input)
+              : await createTask.mutateAsync(input);
+          if (!made?.id) throw new Error("no id");
+          return made.id as string;
+        }),
+      );
+      for (const r of results) {
+        if (r.status === "fulfilled") created.push(r.value);
+        else failed += 1;
+      }
+    }
+    if (failed > 0) toast.error(`${failed} not saved`, { icon: ToastIcons.error });
+    if (created.length === 0) return;
+    toast.success(`${created.length} assigned`, {
+      icon: ToastIcons.create,
+      duration: 4000,
+      action: {
+        label: "Undo",
+        onClick: () => created.forEach((id) => deleteItem.mutate(id, { onError: notSaved })),
+      },
+    });
+  };
+
   return {
     unassignOneOff,
     placeFlexible,
     placeTemplate,
+    placeTemplates,
     placeUndated,
     moveFlexible,
     unassignFlexible,

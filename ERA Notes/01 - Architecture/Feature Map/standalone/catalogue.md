@@ -17,6 +17,7 @@ A library of reusable templates — items, tasks, recipe ingredients, products. 
   - `src/components/web/CatalogueItemDialog.tsx`
   - `src/components/web/CatalogueItemDetailDialog.tsx`
   - `src/components/web/CatalogueTaskItemDialog.tsx`
+  - `src/components/web/ChoreItemDialog.tsx` (chore templates)
   - `src/components/web/CatalogueCategoryDialog.tsx`
   - `src/components/web/CatalogueModuleDialog.tsx`
   - `src/components/web/RoomsDialog.tsx` — rename/delete/add rooms (Catalogue → Chores → Rooms)
@@ -32,7 +33,7 @@ A library of reusable templates — items, tasks, recipe ingredients, products. 
   - `src/lib/catalogue/itemPatch.ts` — Zod schemas for item create/PATCH, key-level metadata patch, inverse, `diffMetadata` (KIT-20)
   - `src/lib/catalogue/moduleRoles.ts` — `isPlacesModule` / `pickPlacesModule` (ERA module roles)
 - **API routes**: `src/app/api/catalogue/` (rooms: `rooms/route.ts`, `rooms/[id]/route.ts`)
-- **DB tables**: `catalogue_modules`, `catalogue_categories`, `catalogue_items` (`revision` — KIT-20), `catalogue_sub_items`, `catalogue_item_calendar_history`, `home_rooms` (+ `catalogue_items.room_ids`) (confirm in `schema.sql`)
+- **DB tables**: `catalogue_modules`, `catalogue_categories`, `catalogue_items` (`revision` — KIT-20), `catalogue_sub_items`, `catalogue_item_calendar_history`, `home_rooms` (+ `catalogue_items.room_ids`, `room_config`) (confirm in `schema.sql`)
 - **Tests**: `tests/catalogue-patch.test.ts`
 
 ## Common edit scenarios

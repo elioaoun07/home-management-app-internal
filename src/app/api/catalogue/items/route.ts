@@ -164,6 +164,8 @@ export async function POST(req: NextRequest) {
       is_chore,
       chore_category,
       room_ids,
+      room_config,
+      default_assignee_id,
     } = body;
 
     // Verify module exists (RLS handles visibility)
@@ -257,6 +259,8 @@ export async function POST(req: NextRequest) {
         chore_category: is_chore ? (chore_category || null) : null,
         // Only sent when set, so saves keep working until home_rooms is migrated
         ...(room_ids?.length ? { room_ids } : {}),
+        ...(room_config && Object.keys(room_config).length ? { room_config } : {}),
+        ...(default_assignee_id ? { default_assignee_id } : {}),
       })
       .select(
         `

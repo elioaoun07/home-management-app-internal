@@ -46,12 +46,23 @@ export function buildTemplateInstanceInput(
   responsibleUserId: string | undefined,
   options: { allDay?: boolean; room?: { id: string; name: string } } = {},
 ): CreateReminderInput | CreateTaskInput {
-  const subtasks = parseTemplateSubtasks(tpl.subtasks_text);
+  // A room's own checklist replaces the template's, so "Tidy & Organize · Master
+  // Bedroom" gets that room's steps only
+  const roomChecklist = options.room
+    ? tpl.room_config?.[options.room.id]?.checklist
+    : undefined;
+  const subtasks = parseTemplateSubtasks(
+    roomChecklist?.trim() ? roomChecklist : tpl.subtasks_text,
+  );
+  // A room's own minutes win over the template's default
+  const roomMinutes = options.room ? tpl.room_config?.[options.room.id]?.minutes : undefined;
   const duration =
-    typeof tpl.preferred_duration_minutes === "number" &&
-    tpl.preferred_duration_minutes > 0
-      ? tpl.preferred_duration_minutes
-      : undefined;
+    typeof roomMinutes === "number" && roomMinutes > 0
+      ? roomMinutes
+      : typeof tpl.preferred_duration_minutes === "number" &&
+          tpl.preferred_duration_minutes > 0
+        ? tpl.preferred_duration_minutes
+        : undefined;
   const base = {
     // A room-specific placement is titled "<chore> · <room>" so identical chores
     // in different rooms stay distinguishable everywhere the title is shown

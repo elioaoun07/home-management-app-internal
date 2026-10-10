@@ -463,7 +463,7 @@ export function buildChoreWeek(input: ChoreWeekInput): ChoreWeek {
         kind: "template",
         title: tpl.name,
         ...roomFields(roomId),
-        responsibleUserId: null,
+        responsibleUserId: tpl.default_assignee_id ?? null,
         remaining: primaryRemaining,
         target,
         period,

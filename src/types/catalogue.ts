@@ -280,6 +280,10 @@ export interface CatalogueItem {
   chore_category?: ChoreCategory | null;
   /** Rooms (home_rooms ids) this chore applies to; absent until 2026-10-10_home-rooms.sql runs. */
   room_ids?: UUID[];
+  /** Per-room settings keyed by home_rooms id; absent until 2026-10-10_chore-room-config.sql runs. */
+  room_config?: RoomConfig;
+  /** Chore owner by default (Chores pre-assigns it); null = anyone. Absent until 2026-10-10_chore-default-assignee.sql runs. */
+  default_assignee_id?: UUID | null;
   /** Stale-write token (KIT-20); absent until 2026-10-04_catalogue-revision.sql runs. */
   revision?: number;
   // Virtual fields
@@ -396,7 +400,12 @@ export interface CreateItemInput {
   is_chore?: boolean;
   chore_category?: ChoreCategory;
   room_ids?: UUID[];
+  room_config?: RoomConfig;
+  default_assignee_id?: UUID | null;
 }
+
+/** Per-room settings of a chore template: own checklist (one step per line) and own duration. */
+export type RoomConfig = Record<UUID, { checklist?: string; minutes?: number }>;
 
 /** A room of the home (home_rooms). Chores are tagged with the rooms they apply to. */
 export interface HomeRoom {

@@ -51,7 +51,7 @@ tags:
 ## What it links to
 
 - Week header → **Library** → `/catalogue?section=chores`
-- **Assign** opens the planning dialog on mobile; To plan is a sidebar on web
+- **Assign** opens the Assign form on mobile: room gradient tiles (done · assigned · to plan), Rooms|Chores tabs, assign-all bar, staged changes saved together (Save / Discard on close); To plan stays an immediate sidebar on web
 - In-page sheets only otherwise
 
 ## Related vault doc

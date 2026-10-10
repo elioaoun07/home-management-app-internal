@@ -65,6 +65,7 @@ import CatalogueItemDialog from "./CatalogueItemDialog";
 import { isPlacesModule } from "@/lib/catalogue/moduleRoles";
 import CatalogueModuleDialog from "./CatalogueModuleDialog";
 import CatalogueTaskItemDialog from "./CatalogueTaskItemDialog";
+import ChoreItemDialog from "./ChoreItemDialog";
 
 // Icon mapping for modules
 const MODULE_ICON_COMPONENTS: Record<
@@ -134,6 +135,7 @@ export default function WebCatalogue({
   // Dialog state
   const [showItemDialog, setShowItemDialog] = useState(false);
   const [showTaskItemDialog, setShowTaskItemDialog] = useState(false);
+  const [showChoreDialog, setShowChoreDialog] = useState(false);
   const [showRooms, setShowRooms] = useState(false);
   const [editingItem, setEditingItem] = useState<CatalogueItem | null>(null);
   const [showItemDetailDialog, setShowItemDetailDialog] = useState(false);
@@ -359,7 +361,9 @@ export default function WebCatalogue({
       : selectedModule;
     if (isChoresSection) setItemModule(owningModule);
     setEditingItem(item);
-    if (owningModule?.type === "tasks") {
+    if (item.is_chore) {
+      setShowChoreDialog(true);
+    } else if (owningModule?.type === "tasks") {
       setShowTaskItemDialog(true);
     } else {
       setShowItemDialog(true);
@@ -378,9 +382,9 @@ export default function WebCatalogue({
   const handleAddItem = () => {
     setEditingItem(null);
     if (isChoresSection) {
-      // New chore: task template in the Tasks module, flag preselected
+      // New chore: a Tasks-module template, made in the dedicated chore form
       setItemModule(tasksModule);
-      setShowTaskItemDialog(true);
+      setShowChoreDialog(true);
       return;
     }
     if (isTasksModule) {
@@ -890,7 +894,14 @@ export default function WebCatalogue({
         moduleId={dialogModule?.id || ""}
         categoryId={dialogCategoryId}
         editingItem={editingItem}
-        defaultIsChore={isChoresSection}
+      />
+
+      <ChoreItemDialog
+        open={showChoreDialog}
+        onOpenChange={setShowChoreDialog}
+        moduleId={dialogModule?.id || ""}
+        categoryId={dialogCategoryId}
+        editingItem={editingItem}
       />
 
       <RoomsDialog open={showRooms} onOpenChange={setShowRooms} />

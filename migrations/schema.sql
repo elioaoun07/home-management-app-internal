@@ -895,6 +895,8 @@ CREATE TABLE public.catalogue_items (
   chore_category text CHECK (chore_category = ANY (ARRAY['cleaning'::text, 'laundry'::text, 'cooking'::text, 'garden'::text, 'maintenance'::text, 'general'::text])),
   revision bigint NOT NULL DEFAULT 1,
   room_ids ARRAY NOT NULL DEFAULT '{}'::uuid[],
+  room_config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  default_assignee_id uuid,
   CONSTRAINT catalogue_items_pkey PRIMARY KEY (id),
   CONSTRAINT catalogue_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT catalogue_items_module_id_fkey FOREIGN KEY (module_id) REFERENCES public.catalogue_modules(id),

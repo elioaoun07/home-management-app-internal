@@ -392,6 +392,15 @@ describe("buildChoreWeek — Catalogue templates without a routine", () => {
       ["tpl:zeta", null],
     ]);
   });
+
+  it("pre-assigns a template to its default owner", () => {
+    const bins = template("bins", { name: "Bins", default_assignee_id: "partner" });
+    const result = week(WEEK, WED, [], [], [], [bins, template("zeta", { name: "Zeta" })]);
+    expect(result.todos.map((t) => [t.key, t.responsibleUserId])).toEqual([
+      ["tpl:bins", "partner"],
+      ["tpl:zeta", null],
+    ]);
+  });
 });
 
 describe("unassigning a one-off", () => {

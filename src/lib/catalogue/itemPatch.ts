@@ -70,6 +70,17 @@ export const catalogueItemPatchSchema = z
     is_chore: z.boolean().optional(),
     chore_category: z.enum(CHORE_CATEGORIES).nullable().optional(),
     room_ids: z.array(z.string().uuid()).max(50).optional(),
+    default_assignee_id: z.string().uuid().nullable().optional(),
+    room_config: z
+      .record(
+        z.string().uuid(),
+        z.object({
+          checklist: z.string().max(5_000).optional(),
+          minutes: z.number().int().min(1).max(10_000).optional(),
+        }),
+      )
+      .refine((c) => Object.keys(c).length <= 50, "too many rooms")
+      .optional(),
   })
   // Unknown keys are dropped, not rejected: shared create/edit payloads and
   // older app builds still send module_id etc. on edit.

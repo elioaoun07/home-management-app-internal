@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  ChoreAssignPanel,
+  useChoreDrafts,
+} from "@/components/chores/ChoreAssignPanel";
 import { ChoreCheckInPanel } from "@/components/chores/ChoreCheckInPanel";
 import { ChoreRow } from "@/components/chores/ChoreRow";
 import {
@@ -114,6 +118,9 @@ export default function ChoresView({
     }
   }, []);
   const [planOpen, setPlanOpen] = useState(false);
+  // Assign form: placements are staged locally and saved together
+  const drafts = useChoreDrafts();
+  const [confirmClose, setConfirmClose] = useState(false);
   // Day the plan dialog assigns to in one tap; null = pick a day per chore
   const [planTarget, setPlanTarget] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -213,13 +220,50 @@ export default function ChoresView({
         todo.template,
         option.date,
         time,
-        userId,
+        // The template's default owner applies unless swiped to someone else
+        userId ?? todo.responsibleUserId ?? undefined,
         todo.roomId && todo.room ? { id: todo.roomId, name: todo.room } : undefined,
       );
     } else if (todo.kind === "undated" && todo.item) {
       await assign.placeUndated(todo.item, option.date, time, userId);
     }
     setOpenTodo(null);
+  };
+  const requestClosePlan = () => {
+    if (drafts.count > 0) setConfirmClose(true);
+    else setPlanOpen(false);
+  };
+  const discardDrafts = () => {
+    drafts.clear();
+    setConfirmClose(false);
+    setPlanOpen(false);
+  };
+  // Closes at once (the form is already optimistic) and saves in the background
+  const saveDrafts = async () => {
+    const entries = drafts.list;
+    if (entries.length === 0) return;
+    setConfirmClose(false);
+    setPlanOpen(false);
+    drafts.clear();
+    const owner = (userId: string | null) => userId ?? undefined;
+    await assign.placeTemplates(
+      entries
+        .filter((e) => e.todo.kind === "template" && e.todo.template)
+        .map((e) => ({
+          tpl: e.todo.template!,
+          date: e.date,
+          time: e.time,
+          responsibleUserId: owner(e.userId),
+          room:
+            e.todo.roomId && e.todo.room
+              ? { id: e.todo.roomId, name: e.todo.room }
+              : undefined,
+        })),
+    );
+    for (const e of entries.filter((x) => x.todo.kind !== "template")) {
+      const option = e.todo.days.find((d) => d.date === e.date);
+      if (option) await pickDay(e.todo, option, e.time, owner(e.userId));
+    }
   };
   const reassign = (slot: ChoreSlot, side: ChoreSwipeSide) => {
     const to = side === "me" ? meP : partnerP;
@@ -920,7 +964,10 @@ export default function ChoresView({
         </div>
       )}
 
-      <Dialog open={planOpen} onOpenChange={setPlanOpen}>
+      <Dialog
+        open={planOpen}
+        onOpenChange={(next) => (next ? setPlanOpen(true) : requestClosePlan())}
+      >
         <DialogContent
           showCloseButton={false}
           onCloseAutoFocus={(event) => {
@@ -933,28 +980,15 @@ export default function ChoresView({
             tone.border,
           )}
         >
-          <div className="flex items-center justify-between gap-3">
-            <DialogTitle className={cn("text-lg", tone.main)}>
-              To plan{" "}
-              <span
-                className={cn(
-                  "ml-1 text-sm font-normal tabular-nums",
-                  tone.subtle,
-                )}
-              >
-                {todos.length}
-              </span>
-            </DialogTitle>
-            <button
-              type="button"
-              onClick={() => setPlanOpen(false)}
-              aria-label="Close assignment"
-              className={iconButton}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="flex items-center justify-between gap-2">
+          {/* Pinned: the week arrows stay reachable from anywhere in the list */}
+          <div
+            className={cn(
+              "sticky top-0 z-10 -mx-4 -mt-4 flex items-center gap-1.5 border-b px-3 pb-2 pt-3 sm:-mx-5 sm:-mt-5 sm:px-4",
+              tone.tc.bgPage,
+              tone.border,
+            )}
+          >
+            <DialogTitle className="sr-only">To plan</DialogTitle>
             <button
               type="button"
               onClick={() => shiftPlanWeek(-1)}
@@ -964,9 +998,15 @@ export default function ChoresView({
               <ChevronLeft className="h-4 w-4" />
             </button>
             <DialogDescription
-              className={cn("text-sm font-medium tabular-nums", tone.main)}
+              className={cn(
+                "min-w-0 flex-1 text-center text-sm font-semibold tabular-nums",
+                tone.main,
+              )}
             >
               {dateRange}
+              <span className={cn("ml-2 text-xs font-normal", tone.subtle)}>
+                {todos.length}
+              </span>
             </DialogDescription>
             <button
               type="button"
@@ -976,8 +1016,64 @@ export default function ChoresView({
             >
               <ChevronRight className="h-4 w-4" />
             </button>
+            <button
+              type="button"
+              onClick={requestClosePlan}
+              aria-label="Close assignment"
+              className={cn(iconButton, "h-10 w-10")}
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          {renderPlanning(planTarget)}
+          <ChoreAssignPanel
+            todos={todos}
+            slots={visible}
+            rooms={rooms}
+            weekStart={week.weekStart}
+            weekDays={week.days}
+            me={meP}
+            partner={partnerP}
+            personFor={personFor}
+            targetDate={planTarget}
+            store={drafts}
+            saving={assign.isPending}
+            onSave={saveDrafts}
+            onDiscard={discardDrafts}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmClose} onOpenChange={setConfirmClose}>
+        <DialogContent
+          showCloseButton={false}
+          className={cn("max-w-sm gap-4 rounded-3xl border p-5", tone.tc.bgPage, tone.border)}
+        >
+          <DialogTitle className={cn("text-base tabular-nums", tone.main)}>
+            {drafts.count} unsaved
+          </DialogTitle>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={discardDrafts}
+              className={cn("h-11 flex-1 rounded-xl text-sm font-semibold", tone.ghost, tone.focus)}
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmClose(false)}
+              className={cn("h-11 flex-1 rounded-xl text-sm font-semibold", tone.ghost, tone.focus)}
+            >
+              Keep
+            </button>
+            <button
+              type="button"
+              onClick={saveDrafts}
+              className={cn("h-11 flex-1 rounded-xl border text-sm font-semibold", tone.selected, tone.focus)}
+            >
+              Save
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 
