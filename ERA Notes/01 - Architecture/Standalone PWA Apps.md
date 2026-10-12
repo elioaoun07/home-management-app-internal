@@ -140,6 +140,7 @@ const STANDALONE_APPS = {
 | `src/components/reminder/StandaloneRemindersPage.tsx` | Reminders UI component             |
 | `public/manifests/chat.webmanifest`                   | Chat PWA manifest                  |
 | `public/manifests/reminders.webmanifest`              | Reminders PWA manifest             |
+| `public/manifests/fitness.webmanifest`                | Fitness PWA manifest (scope `/fitness`) |
 
 ---
 
