@@ -12,13 +12,14 @@
 // "sheet" layout: confirm card and chips are its newest turn) and the same
 // History / New chat controls in its header.
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { MessageCircle, X } from "lucide-react";
 import { useStartNewEraChat } from "@/features/era/useEraConversation";
 import { useEraStore } from "@/features/era/useEraStore";
 import { CommandBar } from "./CommandBar";
 import { ChatIconButton, EraHistoryIcon, EraNewChatIcon, useActiveThreadState } from "./EraChatToolbar";
 import { EraConversation } from "./EraConversation";
+import styles from "./EraMotion.module.css";
 
 export function EraChatDrawer({
   open,
@@ -30,6 +31,7 @@ export function EraChatDrawer({
   const setHistoryOpen = useEraStore((s) => s.setHistoryOpen);
   const startNewChat = useStartNewEraChat();
   const { hasTurns, quiet } = useActiveThreadState();
+  const reducedMotion = useReducedMotion();
 
   return (
     <>
@@ -37,7 +39,7 @@ export function EraChatDrawer({
         type="button"
         aria-label="Open chat with ERA"
         onClick={() => onOpenChange(true)}
-        className="fixed right-4 bottom-24 z-30 flex h-12 w-12 items-center justify-center overflow-hidden rounded-full md:hidden"
+        className={`${styles.chatLauncher} fixed right-4 bottom-24 z-30 flex h-12 w-12 items-center justify-center overflow-hidden rounded-full md:hidden`}
         style={{
           background: `linear-gradient(155deg, hsl(var(--era-hue) var(--era-sat) calc(var(--era-lum) + 16%)) 0%, hsl(var(--era-hue) var(--era-sat) var(--era-lum)) 55%, hsl(var(--era-hue) calc(var(--era-sat) + 8%) calc(var(--era-lum) - 14%)) 100%)`,
           color: "#0d1220",
@@ -68,7 +70,7 @@ export function EraChatDrawer({
         className="fixed inset-0 z-40 bg-black/60 md:hidden"
         style={{ pointerEvents: open ? "auto" : "none" }}
         animate={{ opacity: open ? 1 : 0 }}
-        transition={{ duration: 0.2 }}
+        transition={{ duration: reducedMotion ? 0 : 0.2 }}
         onClick={() => onOpenChange(false)}
       />
 
@@ -84,7 +86,7 @@ export function EraChatDrawer({
           pointerEvents: open ? "auto" : "none",
         }}
         animate={{ y: open ? 0 : "100%" }}
-        transition={{ duration: 0.3, ease: "easeOut" }}
+        transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 340, damping: 34 }}
       >
         <div className="flex items-center gap-1 px-2 pt-2 pb-1">
           <ChatIconButton label="History" onClick={() => setHistoryOpen(true)}>

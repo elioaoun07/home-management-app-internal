@@ -10,6 +10,14 @@ tags:
 
 # AI Assistant
 
+## Top-layer motion — 2026-10-12 (HUB-115)
+
+The existing centered mark and corner-card layout remain. `EraMotion.module.css` adds slow module-colored aurora drift, faint desktop gridwork, counter-rotating ring trails and a single wake ripple. Ambient movement pauses outside the idle hub and the atmosphere dims while reading a conversation/dashboard. The mark stays mounted when the detected module changes, allowing its existing hue/cue transitions to morph continuously rather than fading through an empty space. The shell retains its 1.8 s identity transition; the shared mark's actual palette transition is 3.5 s in `globals.css`.
+
+Face navigation uses one namespaced Framer Motion shared-layout highlight. Buttons retain the same view handlers and swipe order, with 40 px targets inside the existing 52 px header offset. Desktop corner cards settle into place with a single light pass; their data and positions are unchanged. The composer gets a brief focus sheen and staggered starter entrances; no input mirror, parser, Send or microphone behavior changes. The mobile chat drawer uses a damped spring and tactile launcher feedback, retaining its mounted open/closed lifecycle.
+
+`MotionConfig reducedMotion="user"`, explicit zero-duration reduced-motion transitions and local CSS media queries disable new movement, including smooth pill scrolling. All decoration ignores pointer events and is hidden from accessibility. Mobile drops the secondary aurora and grid. Verification is local typecheck, lint, existing composer/capture/swipe tests and CSS compilation; browser/390 px/two-theme visual acceptance remains pending because Computer Use exposed no browser.
+
 ## Native typing helpers — 2026-10-12 (HUB-112)
 
 `CommandBar` offers native sentence completion in both floating and embedded layouts. Each input change recomputes the next missing detail. One unified composer contains the sentence, a short assistant question and its contextual choices. Choices wrap in a two-column grid and show full names: up to four suggestions, or two for long names. More opens a searchable, opaque, portaled sheet; Shopping always offers Browse lists so full chat previews remain reachable. The helper stays in the composer's flow rather than a floating panel or horizontal scrolling rail. The sentence uses neutral foreground text without an inner border, ring or glow. Mic, audio, Ask AI and Send remain in a separate toolbar.

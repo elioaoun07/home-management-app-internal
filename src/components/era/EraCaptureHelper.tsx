@@ -8,6 +8,7 @@ import {
   CalendarDays,
   Check,
   ChevronRight,
+  EyeOff,
   Flag,
   ListChecks,
   MapPin,
@@ -88,6 +89,7 @@ export function EraCaptureHelper({
   setText,
   editLocation,
   refocus,
+  clear,
 }: {
   helper: Helper;
   text: string;
@@ -97,6 +99,8 @@ export function EraCaptureHelper({
   setText: (next: string) => void;
   editLocation: (location: string) => void;
   refocus: () => void;
+  /** Empties the sentence; the bar offers Undo. */
+  clear: () => void;
 }) {
   const tc = useThemeClasses();
   const [inspection, setInspection] = useState<{
@@ -192,11 +196,8 @@ export function EraCaptureHelper({
         <button
           type="button"
           className={styles.iconButton}
-          onClick={() => {
-            h.dismiss();
-            refocus();
-          }}
-          aria-label="Dismiss suggestions"
+          onClick={clear}
+          aria-label="Clear text"
           disabled={busy}
         >
           <X className="size-4" aria-hidden />
@@ -350,9 +351,20 @@ export function EraCaptureHelper({
                   {kind === h.kind && <Check className="size-4" aria-hidden />}
                 </button>
               ))}
+              <div className={styles.rowDivider} />
+              <button
+                type="button"
+                className={styles.row}
+                onClick={() => {
+                  h.dismiss();
+                  close();
+                }}
+              >
+                <EyeOff className="size-4 shrink-0" aria-hidden />
+                <span className={styles.rowText}>Hide suggestions</span>
+              </button>
               {schedule && (
                 <>
-                  <div className={styles.rowDivider} />
                   <button
                     type="button"
                     className={styles.row}

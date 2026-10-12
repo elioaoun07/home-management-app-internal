@@ -24,6 +24,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 ## Vision & Decisions
 
+- **HUB-115 — Subtle, expressive motion on ERA's top layer (owner request, 2026-10-12).** Add atmosphere and interaction polish around the existing centered mark, scatter cards, face pills and composer. Preserve all functionality and the current layout. Slow ambient motion belongs at the edges; reading surfaces stay still; reduced-motion preferences disable movement. *(IMPLEMENTED 2026-10-12 — repository and local checks; browser/mobile visual acceptance pending.)*
+
 - **HUB-113 — The composer finishes your sentence the way you usually finish it (owner request, 2026-10-12).** "Feel like talking to a person who can autocomplete my sentences and understand what I am saying, while being native" — for spends, reminders/events and shopping. ERA keeps a read-only memory of the person's own wording (spends, titles) and the household's list items; completes from it and from the next gap; understands each module grammar's phrasing anywhere plus the household's remembered phrasing; infers account/category/list/group from history without ever changing an amount's currency; asks only what the manual flows require (shopping group and alert become corrections in a prose summary, not questions). No model on typing or Send; the 2026-08-31 "no generic reminder verbs" decision stands. *(IMPLEMENTED 2026-10-12 — repository, unit/route/render checks and a static visual review; device acceptance pending.)*
 
 - **HUB-112 — Native chatbot completion (owner request and corrections, 2026-10-12).** Reminder/event, expense and shopping prefixes progressively complete the sentence inside one calm composer. The owner rejected both the creation form and the scrolling token rail. One in-flow assistant question owns the next step; fully named choices wrap, with More in a searchable native sheet and Details for optional values. The detected action keeps its module hue; ellipsis opens vertical intent correction without mixing feature tabs. Natural date/time summary, neutral sentence text, separate toolbar and Close/Escape preserve focus. After accepting that layout, the owner requested ERA atmosphere: reused miniature mark, module-colored halo/chips/Send and subtle autocomplete transitions, with theme contrast and reduced-motion support. Keep source adapters, drafts, Undo and artifacts; no new database store. *(IMPLEMENTED 2026-10-12 — repository, replay and rendered-component checks; mobile/browser acceptance pending.)*
@@ -142,6 +144,19 @@ The remaining retained defects, decisions and enhancements are indexed below and
 🟡 **HUB-100** Ask AI says "I don't have a shopping list feature". Its catalog (`src/features/era/capabilities/registry.ts`) has no `shopping.add`, so the model can't propose one. See [acceptance](#hub-100).
 
 ## Acceptance Criteria Index
+
+### HUB-115
+
+**Outcome:** ERA's top layer gains subtle, expressive animation without changing functionality.
+
+**Kind:** feature
+**Implementation:** done
+**UAT:** pending
+**Touches:** src/components/era/{EraShell,EraFaceNav,HubScatterWidgets,CommandBar,EraChatDrawer}.tsx, src/components/era/{EraMotion,EraComposer}.module.css
+
+- **Acceptance:** The existing idle hub has slow module-colored aurora, fine orbital trails and one wake ripple. The mark morphs continuously between modules. One active-pill highlight travels between the same views; corner cards settle with a brief light pass; composer focus/starters and mobile chat have tactile transitions. Ambient loops pause outside the idle hub. Decorative layers cannot intercept input. Reduced-motion users get immediate movement transitions, static atmosphere and no sheen. Existing navigation/swipe, capture, mic/Send, conversation and source operations are unchanged.
+- **Evidence (2026-10-12):** Typecheck and changed-component ESLint pass; 98 existing composer/capture/assist/progress/swipe tests pass. Both CSS modules compile through the project's PostCSS/Tailwind pipeline. The existing local Next server serves `/era` and its new motion/composer stylesheet with HTTP 200; the unauthenticated page streams its normal login redirect, so this proves compilation, not an exercised UI. PM archive/lint/docs checks and the local dashboard rebuild pass (one existing Delivery empty-lane warning). No production writes or paid APIs.
+- **Owner acceptance:** At 390 × 844 and desktop widths, in Blue and Frost, inspect wake, idle hub, face changes, typing, conversation and opening/closing mobile chat. Confirm readable text, clear controls, no overflow and calm reduced-motion behavior. Computer Use returned no browsers and opening the in-app browser was unavailable; visual/device acceptance is not certified.
 
 ### HUB-113
 
@@ -3236,6 +3251,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 ## Shipped Log
 
+- ✅ 2026-10-12 — **HUB-114** ERA DOT follows the sentence being typed: when the composer detects a capture ("Remind me to…"), the big DOT, background glow and toolbar mark switch to that module — reminders and events the Schedule clock, spends Budget, shopping Recipes; clearing the text restores the hub/face look. Phone swipe left/right on the content area steps ERA → Budget → Schedule → Recipes → Brain → Artifacts (AI Usage excluded; fields and sideways-scrolling strips keep their own swipes; active pill scrolls into view). Files: `CommandBar.tsx`, `EraShell.tsx`, `EraFaceNav.tsx`, `useEraStore.ts` (`captureModuleKey`), `features/era/swipeNav.ts` (+3 tests). Typecheck/lint green; browser-verified via DOM (hue 190→256 + clock cue on typing, swipe sequence + end stops + vertical ignored) on desktop with synthetic touches — not on a real phone.
+
 - ✅ 2026-10-11 — **HUB-110** ERA AI Usage tab (desktop only, next to Artifacts): one month at a time, a table per local day of the chats that reached the model (click → reopens the chat), AI calls (auto-escalations counted separately), input/output tokens and estimated $ cost, with month totals. Counts only the `ai_messages` receipts `/api/era/ask` writes per model call (`era-ask` + `era-ask-auto`), so native-only turns never count and escalated ones do; chats are linked through their `ai_answer` rows. Cost uses list prices per `model_used` (Claude Haiku 5.5 $0.10/$0.50 per 1M; legacy Gemini Flash assumed $0.30/$2.50); recorded input includes cache reads at the full rate, so Claude estimates lean high. Pre-Claude receipts left `model_used` null on the input row and are priced from their output row. No migration. Files: `api/era/ai-usage/route.ts`, `features/era/{aiUsage,useEraAiUsage}.ts`, `dashboards/AiUsageView.tsx`, `EraFaceNav.tsx`, `EraShell.tsx`, `useEraStore.ts`. 12 unit tests, typecheck green, desktop browser-verified against live October data; chat-link click and the phone viewport not exercised. *(Amended 2026-10-12: Haiku 5.5 calls with a prompt over 100K tokens are now priced at the long-prompt rate $0.50/$2.50 per 1M, paired per call from the input receipt; 13 tests.)*
 
 - ✅ 2026-10-10 — **HUB-101** ERA Artifacts view: browse by day (‹ › skip days with nothing, calendar greys them out), grouped by module in each module's ERA hue, and a persistent Undo/Redo per row derived from the row's live state (`POST /api/era/actions/status`; no stored flag, no migration). Reversal reuses the app's own soft-delete + Recycle Bin restore for reminders, events, contacts, places, drafts and transfers. Money fix: `/api/recycle-bin/restore` now re-applies transfer balances (it only cleared deleted_at, so every restored transfer left both accounts off), is compare-and-set against a double restore, and re-arms never-fired alerts that DELETE had switched off; `DELETE /api/drafts/[id]` now 404s a confirmed draft instead of reporting success. Files: `ArtifactsView.tsx`, `useEraArtifacts.ts`, `artifacts.ts`, `api/era/actions/{route,status/route}.ts`. Typecheck, lint and 488 targeted tests green (restore route 8 new); not browser-verified.
@@ -3307,6 +3324,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - ✅ 2026-10-11 — **HUB-109** Show actual effective actions and values before Confirm — [criteria](<Hub & ERA — Master Book.md#hub-109>)
 - ✅ 2026-10-12 — **HUB-112** Add native sentence completion for reminders, expenses and shopping; refactor into a unified chatbot composer with wrapped choices, readable summary, correction/details sheets and keyboard-aware layout — [criteria](<Hub & ERA — Master Book.md#hub-112>); 70 focused tests and machine checks pass, mobile/browser acceptance pending.
 - ✅ 2026-10-12 — **HUB-113** ERA's composer completes and understands everyday captures from the household's own wording — [criteria](<Hub & ERA — Master Book.md#hub-113>)
+- ✅ 2026-10-12 — ERA composer mic/send are one WhatsApp-style button: mic when empty, Send when text; tap toggles voice, hold listens until release — four icon-only starter chips above the bar (expense, reminder, event, shopping) write "I paid " / "Remind me to " / "Add an event for " / "Add to shopping list " — `CommandBar.tsx`; phone acceptance of release-sends-phrase pending.
+- ✅ 2026-10-12 — **HUB-115** Polish ERA's top-layer motion while preserving functionality — [criteria](<Hub & ERA — Master Book.md#hub-115>)
 
 ## Delivery session log
 

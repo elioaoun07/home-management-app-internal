@@ -1,7 +1,7 @@
 "use client";
 
 // HubScatterWidgets — 4 compact floating stat cards positioned around the ERA DOT in hub view.
-// Each card manages its own AnimatePresence and vaults open outward from the ERA DOT direction.
+// Each card manages its own AnimatePresence and settles into place on wake.
 // Desktop only (hidden on mobile via "hidden md:block").
 
 import { useEraStore } from "@/features/era/useEraStore";
@@ -9,21 +9,15 @@ import { useBrainSummary } from "@/features/era/widgets/useBrainSummary";
 import { useBudgetSummary } from "@/features/era/widgets/useBudgetSummary";
 import { useChefSummary } from "@/features/era/widgets/useChefSummary";
 import { useScheduleSummary } from "@/features/era/widgets/useScheduleSummary";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import React, { useMemo } from "react";
+import styles from "./EraMotion.module.css";
 
 const POS: Record<string, React.CSSProperties> = {
   tl: { top: "12%", left: "3%" },
   tr: { top: "10%", right: "3%" },
   bl: { bottom: "20%", left: "3%" },
   br: { bottom: "22%", right: "3%" },
-};
-
-const ORIGIN: Record<string, string> = {
-  tl: "bottom right",
-  tr: "bottom left",
-  bl: "top right",
-  br: "top left",
 };
 
 function fmt(n: number) {
@@ -44,29 +38,30 @@ function HubCard({ hue, pos, delay, label, children }: CardProps) {
   const isHub   = useEraStore((s) => s.activeView === "hub");
   const isAwake = useEraStore((s) => s.isAwake);
   const show    = isHub && isAwake;
+  const reducedMotion = useReducedMotion();
 
   return (
     <AnimatePresence>
       {show && (
         <motion.div
-          className="era-scatter-card absolute hidden md:flex w-[340px] flex-col rounded-2xl overflow-hidden"
+          className={`era-scatter-card absolute hidden md:flex w-[340px] flex-col rounded-2xl overflow-hidden ${styles.card}`}
           style={{
             ...POS[pos],
-            transformOrigin: "center",
+            "--card-hue": hue,
             background: `hsla(${hue}, 20%, 7%, 0.92)`,
             border: `1px solid hsla(${hue}, 55%, 50%, 0.28)`,
             backdropFilter: "blur(18px)",
-          }}
-          initial={{ scaleY: 0.008, opacity: 1 }}
+          } as React.CSSProperties}
+          initial={reducedMotion ? false : { y: pos.startsWith("t") ? -12 : 12, scale: 0.975, opacity: 0 }}
           animate={{
-            scaleY: 1,
+            y: 0,
+            scale: 1,
             opacity: 1,
-            transition: { delay, duration: 0.46, ease: [0.34, 1.3, 0.64, 1] },
+            transition: { delay: reducedMotion ? 0 : delay, duration: reducedMotion ? 0 : 0.5, ease: [0.16, 1, 0.3, 1] },
           }}
           exit={{
-            scaleY: 0.008,
             opacity: 0,
-            transition: { duration: 0.15, ease: "easeIn" },
+            transition: { duration: reducedMotion ? 0 : 0.15, ease: "easeIn" },
           }}
         >
           {/* Top accent edge */}
@@ -80,41 +75,18 @@ function HubCard({ hue, pos, delay, label, children }: CardProps) {
             style={{ background: `hsl(${hue}, 70%, 62%)`, opacity: 0.35 }}
           />
 
-          {/* Scan line — glowing bar that sweeps top → bottom during card expansion */}
-          <motion.div
-            className="absolute inset-x-0 h-[2px] pointer-events-none"
-            style={{
-              background: `linear-gradient(90deg, transparent 0%, hsl(${hue}, 90%, 74%) 50%, transparent 100%)`,
-              zIndex: 6,
-              boxShadow: `0 0 8px 1px hsla(${hue}, 85%, 65%, 0.55)`,
-            }}
-            initial={{ top: "-2px", opacity: 0.95 }}
-            animate={{ top: "102%", opacity: 0 }}
-            transition={{ delay, duration: 0.44, ease: [0.22, 0.8, 0.36, 1] }}
-          />
+          {/* A single quiet light pass, never a repeating sweep over the data. */}
+          {!reducedMotion && (
+            <div className={styles.cardSheen} aria-hidden="true">
+              <motion.span
+                initial={{ x: "-120%" }}
+                animate={{ x: "120%" }}
+                transition={{ delay: delay + 0.2, duration: 0.9, ease: [0.4, 0, 0.2, 1] }}
+              />
+            </div>
+          )}
 
-          {/* Shimmer diagonal sweep — fires once after card has expanded */}
-          <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none" style={{ zIndex: 4 }}>
-            <motion.div
-              className="absolute inset-y-0 left-0 w-full"
-              style={{
-                background: `linear-gradient(105deg, transparent 20%, hsla(${hue}, 85%, 78%, 0.10) 50%, transparent 80%)`,
-                x: "-100%",
-              }}
-              animate={{ x: "100%" }}
-              transition={{ delay: delay + 0.30, duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
-            />
-          </div>
-
-          {/* Card content — fades in after card has expanded */}
-          <motion.div
-            className="flex flex-col gap-3 p-5 w-full"
-            initial={{ opacity: 0 }}
-            animate={{
-              opacity: 1,
-              transition: { delay: delay + 0.28, duration: 0.3, ease: "easeOut" },
-            }}
-          >
+          <div className="flex flex-col gap-3 p-5 w-full">
             <span
               className="text-[11px] font-bold uppercase tracking-[0.18em]"
               style={{ color: `hsla(${hue}, 65%, 68%, 0.55)` }}
@@ -122,7 +94,7 @@ function HubCard({ hue, pos, delay, label, children }: CardProps) {
               {label}
             </span>
             {children}
-          </motion.div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
@@ -306,7 +278,7 @@ function BudgetCard({ delay }: { delay: number }) {
   const txCount = data?.txCount ?? 0;
 
   return (
-    <HubCard hue={hue} pos="tl" delay={0.06} label="Expenses">
+    <HubCard hue={hue} pos="tl" delay={delay} label="Expenses">
       <Headline
         hue={hue}
         value={isLoading ? "…" : fmt(total)}
@@ -376,7 +348,7 @@ function ScheduleCard({ delay }: { delay: number }) {
   };
 
   return (
-    <HubCard hue={hue} pos="tr" delay={0.22} label="Schedule">
+    <HubCard hue={hue} pos="tr" delay={delay} label="Schedule">
       <Headline hue={hue} value={isLoading ? "…" : `${today} today`} />
 
       <Divider hue={hue} />
@@ -435,7 +407,7 @@ function ChefCard({ delay }: { delay: number }) {
   const mostMade = data?.mostMade;
 
   return (
-    <HubCard hue={hue} pos="bl" delay={0.38} label="Kitchen">
+    <HubCard hue={hue} pos="bl" delay={delay} label="Kitchen">
       <Headline hue={hue} value={isLoading ? "…" : `${count} recipes`} />
 
       <Divider hue={hue} />
@@ -490,7 +462,7 @@ function BrainCard({ delay }: { delay: number }) {
   const lastValue = data?.lastValue;
 
   return (
-    <HubCard hue={hue} pos="br" delay={0.54} label="Memory">
+    <HubCard hue={hue} pos="br" delay={delay} label="Memory">
       <p className="text-[30px] font-semibold leading-none text-white/90">
         {isLoading ? "…" : `${count} saved`}
       </p>

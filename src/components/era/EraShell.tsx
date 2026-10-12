@@ -15,13 +15,14 @@
 // to the centre. With no conversation the hub is unchanged.
 
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, MotionConfig, motion, useReducedMotion } from "framer-motion";
 import { getFace } from "@/features/era/faceRegistry";
 import { useEraAskAI } from "@/features/era/useEraAskAI";
 import { useRestoreNewChat } from "@/features/era/useEraConversation";
 import { useEraStore } from "@/features/era/useEraStore";
 import { useEraTurn } from "@/features/era/useEraTurn";
 import { useEraWakeListener } from "@/features/era/useEraWakeListener";
+import { adjacentEraStop } from "@/features/era/swipeNav";
 import { useConversationMode } from "@/features/voice-conversation/hooks/useConversationMode";
 import { unlockAudioContext } from "@/features/voice-conversation/audioContext";
 import { preloadGreetings } from "@/features/voice-conversation/greetingCache";
@@ -46,6 +47,7 @@ import { EraProposalCard } from "./EraProposalCard";
 import { HubScatterWidgets } from "./HubScatterWidgets";
 import { MODULE_COLORS } from "./eraHues";
 import composerStyles from "./EraComposer.module.css";
+import motionStyles from "./EraMotion.module.css";
 
 // Kept for existing imports; the card now lives in its own file (HUB-86).
 export { EraProposalCard };
@@ -74,7 +76,20 @@ function DashboardContent({ faceKey }: { faceKey: string }) {
   }
 }
 
+/** A touch inside a field or a sideways-scrolling strip belongs to that element, not to page swipes. */
+function swipeOwnedBy(target: HTMLElement, boundary: EventTarget): boolean {
+  for (let el: HTMLElement | null = target; el && el !== boundary; el = el.parentElement) {
+    if (el.matches("input, textarea, select, [contenteditable='true'], [data-no-swipe]")) return true;
+    if (el.scrollWidth > el.clientWidth) {
+      const overflow = getComputedStyle(el).overflowX;
+      if (overflow === "auto" || overflow === "scroll") return true;
+    }
+  }
+  return false;
+}
+
 export function EraShell() {
+  const reducedMotion = useReducedMotion();
   const shellRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -187,7 +202,10 @@ export function EraShell() {
   // Hub → tracks last mentioned module (starts as "chat", shifts when user addresses a face);
   // Activity → neutral chat hue, it isn't tied to any one face;
   // Module dashboard → that face's module key.
-  const moduleKey = isHub ? hubModuleKey : isActivity || isUsage ? "chat" : face.eraModuleKey;
+  // A sentence being typed ("Remind me to…") takes over the DOT and glow.
+  const captureModuleKey = useEraStore((s) => s.captureModuleKey);
+  const moduleKey =
+    captureModuleKey ?? (isHub ? hubModuleKey : isActivity || isUsage ? "chat" : face.eraModuleKey);
   const fc        = MODULE_COLORS[moduleKey] ?? MODULE_COLORS.chat;
 
   const greeting  = `${getTimeGreeting()}${firstName ? `, ${firstName}.` : "."}`;
@@ -203,6 +221,30 @@ export function EraShell() {
   useEffect(() => {
     if (isMobile && activeView === "usage") setActiveView("hub");
   }, [isMobile, activeView, setActiveView]);
+
+  // Horizontal swipe on the content area steps hub → faces → Artifacts.
+  const openDashboard = useEraStore((s) => s.openDashboard);
+  const swipeStart = useRef<{ x: number; y: number; t: number } | null>(null);
+  const onSwipeStart = (event: React.TouchEvent) => {
+    const target = event.target as HTMLElement;
+    swipeStart.current =
+      event.touches.length === 1 && isAwake && !swipeOwnedBy(target, event.currentTarget)
+        ? { x: event.touches[0].clientX, y: event.touches[0].clientY, t: Date.now() }
+        : null;
+  };
+  const onSwipeEnd = (event: React.TouchEvent) => {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (!start) return;
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 0.6 || Date.now() - start.t > 700) return;
+    const stop = adjacentEraStop(activeView, activeFaceKey, dx < 0 ? 1 : -1);
+    if (!stop) return;
+    if (stop.view === "dashboard" && stop.face) openDashboard(stop.face);
+    else setActiveView(stop.view);
+  };
 
   // Measure the content area so we can spring the ERA DOT to an exact pixel center.
   const contentRef = useRef<HTMLDivElement>(null);
@@ -229,11 +271,13 @@ export function EraShell() {
   const dashboardTop  = Math.round(moduleDotTop + ringH * MODULE_SCALE + 20);
 
   return (
+    <MotionConfig reducedMotion="user">
     <div
       ref={shellRef}
-      className="era-shell fixed inset-0 overflow-hidden"
+      className={`era-shell fixed inset-0 overflow-hidden ${motionStyles.shell}`}
       data-awake={isAwake}
       data-conversing={conversing}
+      data-hero={heroHub}
       onClick={!isAwake ? () => { wake(); engineWake(); } : undefined}
       style={
         {
@@ -256,6 +300,11 @@ export function EraShell() {
         animate={{ opacity: isAwake ? 1 : 0 }}
         transition={{ duration: 0.7, ease: "easeOut", delay: isAwake ? 0.1 : 0 }}
       />
+      <div className={motionStyles.atmosphere} aria-hidden="true">
+        <div className={motionStyles.aurora} />
+        <div className={`${motionStyles.aurora} ${motionStyles.auroraEcho}`} />
+        <div className={motionStyles.grid} />
+      </div>
       <EraDots />
 
       {/* ── Top pill nav ── */}
@@ -266,6 +315,8 @@ export function EraShell() {
         ref={contentRef}
         className="absolute inset-x-0"
         style={{ top: 52, bottom: 0 }}
+        onTouchStart={onSwipeStart}
+        onTouchEnd={onSwipeEnd}
       >
         <div className="relative h-full">
 
@@ -281,17 +332,17 @@ export function EraShell() {
               ? { top: hubDotTop, scale: 1 }
               : { top: moduleDotTop, scale: MODULE_SCALE }
             }
-            transition={{ type: "spring", stiffness: 145, damping: 24 }}
+            transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 145, damping: 24 }}
           >
             {/* Greeting — fades out when switching to module */}
             <AnimatePresence>
               {heroHub && (
                 <motion.div
                   key="greeting"
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={reducedMotion ? false : { opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.26 }}
+                  transition={{ duration: reducedMotion ? 0 : 0.26 }}
                   className="mb-6 text-center"
                 >
                   <p className="text-[19px] font-medium leading-tight text-white/80 md:text-xl">
@@ -312,25 +363,16 @@ export function EraShell() {
                 animate={{ filter: isAwake ? "grayscale(0) brightness(1)" : "grayscale(1) brightness(0.35)" }}
                 transition={{ duration: 0.8, ease: "easeOut" }}
               >
-                <div className="era-hub-ring-outer absolute inset-0 rounded-full" />
+                <div className={`era-hub-ring-outer absolute inset-0 rounded-full ${motionStyles.orbitOuter}`} />
                 <div className="era-hub-ring-mid   absolute rounded-full" style={{ inset: 26 }} />
-                <div className="era-hub-ring-inner absolute rounded-full" style={{ inset: 54 }} />
+                <div className={`era-hub-ring-inner absolute rounded-full ${motionStyles.orbitInner}`} style={{ inset: 54 }} />
+                {isAwake && <div className={motionStyles.wakeHalo} aria-hidden="true" />}
                 <div
                   className="absolute flex items-center justify-center"
                   style={{ inset: 0 }}
                 >
-                  {/* Crossfade mark when moduleKey changes */}
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={moduleKey}
-                      initial={{ opacity: 0, scale: 0.88 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.88 }}
-                      transition={{ duration: 0.28, ease: "easeOut" }}
-                    >
-                      <ERAMark module={moduleKey} size={240} />
-                    </motion.div>
-                  </AnimatePresence>
+                  {/* Keep the mark mounted: its existing hue/cue morph carries identity. */}
+                  <ERAMark module={moduleKey} size={240} />
                 </div>
               </motion.div>
             </div>
@@ -351,9 +393,10 @@ export function EraShell() {
                     off-center ring. `inset` doesn't touch `transform`, and
                     is exact now that the parent box is a fixed 160×160. */}
                 <div
-                  className="era-hub-ring-inner absolute rounded-full"
+                  className={`era-hub-ring-inner absolute rounded-full ${motionStyles.orbitInner}`}
                   style={{ inset: -(RING_H_MOBILE - 160) / 2 }}
                 />
+                {isAwake && <div className={motionStyles.wakeHalo} style={{ inset: -(RING_H_MOBILE - 160) / 2 }} aria-hidden="true" />}
                 <ERAMark module={moduleKey} size={160} />
               </motion.div>
             </div>
@@ -371,9 +414,9 @@ export function EraShell() {
             <motion.div
               className={`absolute inset-x-0 z-20 ${composerStyles.stage}`}
               style={{ top: dashboardTop }}
-              initial={{ opacity: 0, y: 16 }}
+              initial={reducedMotion ? false : { opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.12, ease: "easeOut" }}
+              transition={{ duration: reducedMotion ? 0 : 0.3, delay: reducedMotion ? 0 : 0.08, ease: [0.16, 1, 0.3, 1] }}
             >
               <EraConversation layout="stage" />
             </motion.div>
@@ -386,10 +429,13 @@ export function EraShell() {
                 key={isActivity || isUsage ? activeView : activeFaceKey}
                 className="absolute inset-x-0 overflow-y-auto"
                 style={{ top: dashboardTop, bottom: 0 }}
-                initial={{ opacity: 0, y: 28 }}
+                initial={reducedMotion ? false : { opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.32, delay: 0.2, ease: "easeOut" }}
+                transition={{
+                  opacity: { duration: reducedMotion ? 0 : 0.18 },
+                  y: { duration: reducedMotion ? 0 : 0.42, ease: [0.16, 1, 0.3, 1] },
+                }}
               >
                 {/* Bottom padding clears the CommandBar (80px mobile offset + ~52px height) */}
                 <div className={composerStyles.dashboard}>
@@ -436,5 +482,6 @@ export function EraShell() {
       {/* ── HUB-52 — past chats ── */}
       {isAwake && <EraHistorySheet />}
     </div>
+    </MotionConfig>
   );
 }

@@ -373,31 +373,31 @@ export function captureQuestion(
 ): string {
   switch (step) {
     case "title":
-      return kind === "event" ? "What's happening?" : "What should I remind you about?";
+      return kind === "event" ? "Event?" : "Remind you of?";
     case "date":
       return "When?";
     case "time":
-      return "What time?";
+      return "Time?";
     case "amount":
-      return "How much did you pay?";
+      return "Amount?";
     case "description":
-      return "What was it for?";
+      return "For?";
     case "accountId":
-      return "Which account?";
+      return "Account?";
     case "categoryId":
-      return "Which category?";
+      return "Category?";
     case "subcategoryId":
-      return "Which subcategory?";
+      return "Subcategory?";
     case "threadId":
-      return "Which shopping list?";
+      return "List?";
     case "groupId":
-      return "Which group?";
+      return "Group?";
     case "items":
-      return more ? "What else?" : "What do you need?";
+      return more ? "More?" : "Items?";
     case "alert":
-      return "When should I alert you?";
+      return "Alert?";
     case "priority":
-      return "Which priority?";
+      return "Priority?";
     default:
       return "";
   }

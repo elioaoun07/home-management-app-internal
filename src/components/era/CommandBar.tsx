@@ -15,15 +15,21 @@ import { useEraReplyTTS } from "@/features/voice-conversation";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import {
   ArrowUp,
+  Bell,
+  CalendarDays,
   LoaderCircle,
   Mic,
   MicOff,
+  RotateCcw,
+  ShoppingCart,
   Sparkles,
   Volume2,
+  Wallet,
   VolumeX,
 } from "lucide-react";
 import {
   useCallback,
+  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -39,6 +45,21 @@ import { EraCaptureHelper } from "./EraCaptureHelper";
 import styles from "./EraComposer.module.css";
 import { ERAMark } from "@/components/shared/ERAMark";
 import { MODULE_COLORS } from "./eraHues";
+
+/** Quick starters: one tap writes the opening words of a capture. */
+const STARTERS = [
+  { key: "budget", label: "Expense", text: "I paid ", mod: "financial", Icon: Wallet },
+  { key: "reminder", label: "Reminder", text: "Remind me to ", mod: "schedule", Icon: Bell },
+  { key: "event", label: "Event", text: "Add an event for ", mod: "schedule", Icon: CalendarDays },
+  { key: "shopping", label: "Shopping list", text: "Add to shopping list ", mod: "recipe", Icon: ShoppingCart },
+] as const;
+
+/** Schedule's reminder + event share one pill; each half stays its own button. */
+const GROUPS = [
+  [STARTERS[0]],
+  [STARTERS[1], STARTERS[2]],
+  [STARTERS[3]],
+] as const;
 
 /** The sentence with ERA's understood phrases marked; drawn behind the real text. */
 function highlighted(text: string, marks: CaptureMark[]): ReactNode[] {
@@ -69,6 +90,7 @@ export function CommandBar({
   const setPendingTranscript = useEraStore((s) => s.setPendingTranscript);
   const voiceReplyEnabled = useEraStore((s) => s.voiceReplyEnabled);
   const setVoiceReplyEnabled = useEraStore((s) => s.setVoiceReplyEnabled);
+  const isAwake = useEraStore((s) => s.isAwake);
   const pendingTurn = useEraStore((s) => s.pendingTurn);
   const lastMissText = useEraStore((s) => s.lastMissText);
   const setLastMissText = useEraStore((s) => s.setLastMissText);
@@ -88,6 +110,12 @@ export function CommandBar({
         : helper.kind
           ? "schedule"
           : "chat";
+  // The DOT and background follow the sentence being typed.
+  const setCaptureModuleKey = useEraStore((s) => s.setCaptureModuleKey);
+  useEffect(() => {
+    setCaptureModuleKey(active && helper.kind ? markModule : null);
+  }, [active, helper.kind, markModule, setCaptureModuleKey]);
+  useEffect(() => () => setCaptureModuleKey(null), [setCaptureModuleKey]);
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -125,6 +153,22 @@ export function CommandBar({
     }
     if (mirrorRef.current) mirrorRef.current.scrollTop = input.scrollTop;
   }, [pendingTranscript]);
+  // Last wiped sentence, so the bar can offer a one-tap Undo.
+  const [cleared, setCleared] = useState<string | null>(null);
+  useEffect(() => {
+    if (pendingTranscript) setCleared(null);
+  }, [pendingTranscript]);
+  const clearText = () => {
+    setCleared(pendingTranscript);
+    helper.reset();
+    setPendingTranscript("");
+    inputRef.current?.focus();
+  };
+  const undoClear = () => {
+    if (cleared === null) return;
+    helper.begin();
+    setText(cleared);
+  };
   const refocus = () => {
     inputRef.current?.focus();
   };
@@ -155,12 +199,30 @@ export function CommandBar({
         })
       : [];
 
-  // Voice chat stays off until the mic is tapped.
+  // WhatsApp-style: tap toggles listening, hold listens until release.
   const micActive = useEraStore((s) => s.voiceChatEnabled);
   const setVoiceChatEnabled = useEraStore((s) => s.setVoiceChatEnabled);
-  const toggleMic = useCallback(
-    () => setVoiceChatEnabled(!useEraStore.getState().voiceChatEnabled),
-    [setVoiceChatEnabled],
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const held = useRef(false);
+  const micDown = useCallback(() => {
+    held.current = false;
+    holdTimer.current = setTimeout(() => {
+      held.current = true;
+      setVoiceChatEnabled(true);
+    }, 300);
+  }, [setVoiceChatEnabled]);
+  const micUp = useCallback(() => {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+    if (held.current) setVoiceChatEnabled(false);
+    else setVoiceChatEnabled(!useEraStore.getState().voiceChatEnabled);
+    held.current = false;
+  }, [setVoiceChatEnabled]);
+  useEffect(
+    () => () => {
+      if (holdTimer.current) clearTimeout(holdTimer.current);
+    },
+    [],
   );
 
   const submitText = useCallback(
@@ -237,6 +299,7 @@ export function CommandBar({
     !busy &&
     !askingAI;
 
+  const showSend = busy || pendingTranscript.trim().length > 0;
   const showHelper = active && !!helper.kind && !busy;
   const composer = (
     <form
@@ -252,9 +315,52 @@ export function CommandBar({
           "--capture-hue": helper.kind
             ? MODULE_COLORS[markModule].hue
             : "var(--era-hue, 190)",
+          // Dormant ERA: the bar and starters sit dimmed until pressed.
+          filter: isAwake ? undefined : "grayscale(0.6) brightness(0.85)",
+          transition: "filter 0.5s ease",
         } as CSSProperties
       }
     >
+      <span className={styles.sheen} aria-hidden="true" />
+      {!pendingTranscript && !busy && active && (
+        <div className="absolute bottom-full left-0 right-0 mb-2 flex justify-center gap-2">
+          {GROUPS.map((group) => {
+            const hue = MODULE_COLORS[group[0].mod].hue;
+            return (
+              <div
+                key={group[0].key}
+                className={`${styles.starter} ${tc.bgPage} flex h-10 items-center overflow-hidden rounded-full border`}
+                style={{
+                  color: `hsl(${hue} 70% 68%)`,
+                  borderColor: `hsl(${hue} 65% 62% / 40%)`,
+                  boxShadow: `0 0 14px hsl(${hue} 70% 60% / 18%)`,
+                }}
+              >
+                {group.map(({ key, label, text, Icon }, i) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-label={label}
+                    title={label}
+                    onClick={() => {
+                      helper.begin();
+                      setText(text);
+                    }}
+                    className={`${styles.starterButton} flex h-full w-10 items-center justify-center`}
+                    style={
+                      i > 0
+                        ? { borderLeft: `1px solid hsl(${hue} 65% 62% / 28%)` }
+                        : undefined
+                    }
+                  >
+                    <Icon className="size-[18px]" aria-hidden />
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
       {showHelper && (
         <EraCaptureHelper
           key={helper.kind}
@@ -265,6 +371,7 @@ export function CommandBar({
           setText={setText}
           editLocation={editLocation}
           refocus={refocus}
+          clear={clearText}
         />
       )}
       <div className={styles.inputWrap}>
@@ -353,6 +460,18 @@ export function CommandBar({
           className={styles.input}
           autoComplete="off"
         />
+        {cleared && !pendingTranscript && !busy && active && (
+          <button
+            type="button"
+            aria-label="Undo clear"
+            title="Undo"
+            onClick={undoClear}
+            className="absolute right-3 top-3 z-10 flex size-8 items-center justify-center rounded-full opacity-70 hover:opacity-100"
+            style={{ color: "var(--capture-accent)" }}
+          >
+            <RotateCcw className="size-4" aria-hidden />
+          </button>
+        )}
         {ghost && (
           <span id={`${formId}-completion`} className="sr-only">
             Press Tab to complete {ghost.suffix.trim()}
@@ -368,24 +487,6 @@ export function CommandBar({
           />
           <span className={styles.brandName}>ERA</span>
         </span>
-        <button
-          type="button"
-          suppressHydrationWarning
-          aria-label={micActive ? "Stop listening" : "Voice input"}
-          aria-pressed={micActive}
-          onClick={toggleMic}
-          disabled={busy || !active}
-          className={styles.iconButton}
-          style={
-            micActive ? { opacity: 1, color: "var(--era-accent)" } : undefined
-          }
-        >
-          {micActive ? (
-            <MicOff className="size-[18px]" aria-hidden />
-          ) : (
-            <Mic className="size-[18px]" aria-hidden />
-          )}
-        </button>
         <button
           type="button"
           suppressHydrationWarning
@@ -414,24 +515,46 @@ export function CommandBar({
         >
           <Sparkles className="size-[18px]" aria-hidden />
         </button>
-        <button
-          type="submit"
-          aria-label="Send"
-          data-ready={helper.capture && !busy ? "true" : undefined}
-          disabled={
-            !pendingTranscript.trim() ||
-            busy ||
-            !active ||
-            (!!helper.kind && !helper.capture)
-          }
-          className={`${styles.iconButton} ${styles.send}`}
-        >
-          {busy ? (
-            <LoaderCircle className="size-[18px] animate-spin" aria-hidden />
-          ) : (
-            <ArrowUp className="size-[18px]" aria-hidden />
-          )}
-        </button>
+        {showSend ? (
+          <button
+            type="submit"
+            aria-label="Send"
+            data-ready={helper.capture && !busy ? "true" : undefined}
+            disabled={
+              !pendingTranscript.trim() ||
+              busy ||
+              !active ||
+              (!!helper.kind && !helper.capture)
+            }
+            className={`${styles.iconButton} ${styles.send}`}
+          >
+            {busy ? (
+              <LoaderCircle className="size-[18px] animate-spin" aria-hidden />
+            ) : (
+              <ArrowUp className="size-[18px]" aria-hidden />
+            )}
+          </button>
+        ) : (
+          <button
+            type="button"
+            suppressHydrationWarning
+            aria-label={micActive ? "Stop listening" : "Voice input"}
+            aria-pressed={micActive}
+            onPointerDown={micDown}
+            onPointerUp={micUp}
+            onPointerCancel={micUp}
+            onContextMenu={(event) => event.preventDefault()}
+            disabled={!active}
+            className={`${styles.iconButton} ${styles.send} touch-none select-none`}
+            style={micActive ? { color: "var(--era-accent)" } : undefined}
+          >
+            {micActive ? (
+              <MicOff className="size-[18px]" aria-hidden />
+            ) : (
+              <Mic className="size-[18px]" aria-hidden />
+            )}
+          </button>
+        )}
       </div>
     </form>
   );

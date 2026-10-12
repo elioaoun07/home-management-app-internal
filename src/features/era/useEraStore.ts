@@ -37,6 +37,8 @@ interface EraState {
    * addresses a module.
    */
   hubModuleKey: ERAModuleKey;
+  /** The module the sentence being typed belongs to ("Remind me to…" → schedule); overrides the DOT while set. */
+  captureModuleKey: ERAModuleKey | null;
   /** A question ERA is waiting on an answer to (Slice 3) — see EraPendingTurn. */
   pendingTurn: EraPendingTurn | null;
   /** An AI-proposed action awaiting Confirm/Dismiss (Slice 4) — see EraActiveProposal. */
@@ -95,6 +97,7 @@ interface EraActions {
   setVoiceReplyEnabled: (v: boolean) => void;
   setVoiceChatEnabled: (v: boolean) => void;
   setHubModuleKey: (key: ERAModuleKey) => void;
+  setCaptureModuleKey: (key: ERAModuleKey | null) => void;
   setEraReply: (text: string) => void;
   setPendingTurn: (turn: EraPendingTurn | null) => void;
   setActiveProposal: (proposal: EraActiveProposal | null) => void;
@@ -126,6 +129,7 @@ const INITIAL: EraState = {
   voiceReplyEnabled: false,
   voiceChatEnabled: false,
   hubModuleKey: "chat",
+  captureModuleKey: null,
   eraReply: "",
   pendingTurn: null,
   activeProposal: null,
@@ -154,6 +158,7 @@ export const useEraStore = create<EraState & EraActions>((set) => ({
   setVoiceReplyEnabled: (v) => set({ voiceReplyEnabled: v }),
   setVoiceChatEnabled: (v) => set({ voiceChatEnabled: v }),
   setHubModuleKey: (key) => set({ hubModuleKey: key }),
+  setCaptureModuleKey: (key) => set({ captureModuleKey: key }),
   setEraReply: (text) => set({ eraReply: text }),
   setPendingTurn: (turn) => set({ pendingTurn: turn }),
   setActiveProposal: (proposal) => set({ activeProposal: proposal }),

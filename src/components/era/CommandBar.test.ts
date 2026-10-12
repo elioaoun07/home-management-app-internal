@@ -137,8 +137,8 @@ describe("native chatbot composer", () => {
   beforeEach(() => use("reminder", "Remind me today at 5pm"));
   it("asks for the missing title in the screenshot, using one original input", () => {
     const markup = render();
-    expect(markup).toContain("What should I remind you about?");
-    expect(markup).not.toContain("When should I alert you?");
+    expect(markup).toContain("Remind you of?");
+    expect(markup).not.toContain("Alert?");
     expect(markup.match(/<textarea/g)).toHaveLength(1);
     expect(markup.match(/<form/g)).toHaveLength(1);
     expect(markup).toContain("Change action");
@@ -153,7 +153,7 @@ describe("native chatbot composer", () => {
     expect(markup).toContain("No alert");
     expect(markup).toContain("Call mom");
     expect(markup).not.toContain("17:00");
-    expect(markup).not.toContain("When should I alert you?");
+    expect(markup).not.toContain("Alert?");
   });
   it("keeps long list names complete and moves large previews out of the composer", () => {
     use("shopping", "Add to shopping list", {

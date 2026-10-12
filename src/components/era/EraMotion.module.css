@@ -1,0 +1,304 @@
+/* ERA's motion stays at the edges. Reading surfaces never drift or shimmer. */
+.shell {
+  isolation: isolate;
+}
+
+.atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.shell[data-awake="true"] .atmosphere {
+  opacity: 1;
+}
+.shell[data-awake="true"][data-hero="false"] .atmosphere {
+  opacity: 0.3;
+}
+.aurora {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(
+      ellipse at 24% 30%,
+      hsl(var(--era-hue) var(--era-sat) var(--era-lum) / 10%),
+      transparent 45%
+    ),
+    radial-gradient(
+      ellipse at 76% 64%,
+      hsl(calc(var(--era-hue) + 28) var(--era-sat) var(--era-lum) / 7%),
+      transparent 40%
+    );
+  animation: auroraDrift 24s ease-in-out infinite alternate;
+}
+.auroraEcho {
+  background: radial-gradient(
+    ellipse at 58% 32%,
+    hsl(var(--era-hue) var(--era-sat) var(--era-lum) / 8%),
+    transparent 42%
+  );
+  animation-duration: 32s;
+  animation-delay: -12s;
+  animation-direction: alternate-reverse;
+}
+.grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(hsl(var(--era-hue) 45% 65% / 4%) 1px, transparent 1px),
+    linear-gradient(
+      90deg,
+      hsl(var(--era-hue) 45% 65% / 4%) 1px,
+      transparent 1px
+    );
+  background-size: 72px 72px;
+  mask-image: radial-gradient(
+    ellipse at 50% 45%,
+    transparent 15%,
+    #000 60%,
+    transparent 95%
+  );
+}
+
+/* Each trail rotates independently of the existing ring's breathing transform. */
+.orbitOuter::after,
+.orbitInner::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg 285deg,
+    hsl(var(--era-hue) var(--era-sat) var(--era-lum) / 6%) 310deg,
+    hsl(var(--era-hue) var(--era-sat) calc(var(--era-lum) + 18%) / 65%) 355deg,
+    transparent 360deg
+  );
+  mask-image: radial-gradient(
+    closest-side,
+    transparent calc(100% - 1.5px),
+    #000 calc(100% - 1px)
+  );
+  animation: orbitTravel 32s linear infinite;
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+.orbitInner::after {
+  animation-duration: 24s;
+  animation-direction: reverse;
+  animation-delay: -8s;
+}
+.shell[data-awake="true"][data-hero="true"] .orbitOuter::after,
+.shell[data-awake="true"][data-hero="true"] .orbitInner::after {
+  opacity: 1;
+}
+.wakeHalo {
+  position: absolute;
+  inset: 0;
+  border: 1px solid hsl(var(--era-hue) var(--era-sat) var(--era-lum) / 40%);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: wakeHalo 1.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.shell[data-awake="false"] .aurora,
+.shell[data-hero="false"] .aurora,
+.shell[data-awake="false"] .orbitOuter::after,
+.shell[data-awake="false"] .orbitInner::after,
+.shell[data-hero="false"] .orbitOuter::after,
+.shell[data-hero="false"] .orbitInner::after {
+  animation-play-state: paused;
+}
+
+.nav {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  animation: navReveal 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.navPill {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgb(255 255 255 / 6%);
+  border-radius: 999px;
+  color: rgb(255 255 255 / 42%);
+  font-size: 12px;
+  font-weight: 500;
+  transition:
+    color 180ms ease,
+    border-color 180ms ease;
+}
+.navPill[data-active="true"] {
+  color: hsl(var(--pill-hue) 72% 80%);
+  border-color: transparent;
+}
+.navPill:focus-visible {
+  outline: 2px solid hsl(var(--pill-hue) 72% 70%);
+  outline-offset: 2px;
+}
+.navActive {
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  pointer-events: none;
+  border: 1px solid hsl(var(--pill-hue) 55% 60% / 35%);
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--pill-hue) 65% 60% / 16%),
+    hsl(var(--pill-hue) 50% 60% / 5%)
+  );
+  box-shadow: inset 0 1px 0 hsl(var(--pill-hue) 70% 85% / 12%);
+}
+.navActive::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 25%;
+  right: 25%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    hsl(var(--pill-hue) 75% 78% / 75%),
+    transparent
+  );
+}
+.navDot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 25%);
+  transition: background-color 250ms ease;
+}
+.navPill[data-active="true"] .navDot {
+  background: hsl(var(--pill-hue) 72% 70%);
+}
+.desktopPill {
+  display: none;
+}
+
+.card {
+  transition:
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+}
+.cardSheen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.cardSheen > span {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    hsl(var(--card-hue) 70% 82% / 9%) 48%,
+    transparent 66%
+  );
+}
+.chatLauncher {
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease;
+}
+.chatLauncher:active {
+  transform: scale(0.94);
+}
+
+@keyframes auroraDrift {
+  from {
+    transform: translate3d(-2%, -1%, 0) rotate(-3deg) scale(1);
+  }
+  to {
+    transform: translate3d(3%, 2%, 0) rotate(3deg) scale(1.06);
+  }
+}
+@keyframes orbitTravel {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes wakeHalo {
+  0% {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+  22% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.22);
+    opacity: 0;
+  }
+}
+@keyframes navReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (min-width: 768px) {
+  .desktopPill {
+    display: inline-flex;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .navPill:hover {
+    color: rgb(255 255 255 / 90%);
+    border-color: rgb(255 255 255 / 16%);
+  }
+  .card:hover {
+    border-color: hsl(var(--card-hue) 55% 60% / 48%) !important;
+    box-shadow: 0 12px 32px rgb(0 0 0 / 14%);
+  }
+  .chatLauncher:hover {
+    transform: translateY(-2px);
+  }
+}
+@media (max-width: 767px) {
+  .auroraEcho,
+  .grid {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .atmosphere,
+  .navPill,
+  .navDot,
+  .card,
+  .chatLauncher,
+  .orbitOuter::after,
+  .orbitInner::after {
+    transition: none;
+  }
+  .aurora,
+  .nav,
+  .orbitOuter::after,
+  .orbitInner::after {
+    animation: none;
+  }
+  .wakeHalo {
+    display: none;
+  }
+  .chatLauncher:hover,
+  .chatLauncher:active {
+    transform: none;
+  }
+}
