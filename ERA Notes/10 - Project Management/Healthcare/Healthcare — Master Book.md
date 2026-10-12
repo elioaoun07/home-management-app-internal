@@ -44,7 +44,7 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 🔴 **HLTH-25** Owner reports the base and earlier PRN migrations applied, but live DB and phone behavior are unverified; the Morning/Evening upgrade remains to run. See [acceptance](<#hlth-25>).
 
-🔴 **HLTH-29** Fitness is code complete but its migration (and SCH-24 before it) is unapplied, so `/fitness` returns "Fitness setup pending" on live data; ERA agent replay evidence must be refreshed because the Fitness reach row changes the agent prompt. See [acceptance](<#hlth-29>).
+🔴 **HLTH-29** Fitness is code complete but its migration (and SCH-24 before it) is unapplied, so `/fitness` returns "Fitness setup pending" on live data; Fitness is hidden from the ERA prompt (`PROMPT_HIDDEN_MODULES` in `discovery.ts`, 2026-10-12) so the replay evidence stays valid; un-hiding it needs the paid 13-call refresh (Rule #29). See [acceptance](<#hlth-29>).
 
 🔴 **HLTH-7** Verify core deployment, household privacy and mobile use. See [acceptance](<#hlth-7>) for the root cause, evidence and gate.
 

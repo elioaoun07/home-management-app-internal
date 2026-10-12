@@ -82,8 +82,12 @@ export function applicationModules(catalog: Catalog) {
   }));
 }
 
+// Modules in the reach matrix but not yet in the model prompt: listing one
+// changes the prompt hash and forces a paid Gym evidence refresh (Rule #29).
+const PROMPT_HIDDEN_MODULES = new Set(["Fitness"]);
+
 export function describeModuleAvailability(catalog: Catalog): string {
-  return applicationModules(catalog).map((row) =>
+  return applicationModules(catalog).filter((row) => !PROMPT_HIDDEN_MODULES.has(row.module)).map((row) =>
     `- ${row.module}: ${row.capabilities.length
       ? row.capabilities.map((capability) => capability.id).join(", ")
       : "no registered agent actions"}; ${row.page ? "precision page available" : "no owner page"}`,
