@@ -7,7 +7,9 @@ import {
 } from "@/features/items/gcalSync";
 import { isReallyOnline } from "@/lib/connectivityManager";
 import { addToQueue } from "@/lib/offlineQueue";
+import { prepareItemCreate, itemCreateReceiptSchema } from "@/lib/items/createContract";
 import { safeFetch } from "@/lib/safeFetch";
+import { qk } from "@/lib/queryKeys";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ToastIcons } from "@/lib/toastIcons";
 import type {
@@ -65,14 +67,14 @@ export async function fetchItems(
 ): Promise<ItemWithDetails[]> {
   const supabase = supabaseBrowser();
 
-  // ────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Single-round-trip bundle via SECURITY DEFINER RPC. See
   //   migrations/2026-05-11_schedule_bundle_rpc.sql
   // The RPC resolves the household partner, joins items + all 6 children,
   // and returns one JSON document. Replaces 7 separate PostgREST round-trips
-  // (each ~170-200ms) with one. Filters/sort applied client-side — cheap for
+  // (each ~170-200ms) with one. Filters/sort applied client-side â€” cheap for
   // realistic item counts and avoids re-implementing query DSL in SQL.
-  // ────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const includeArchived = filters?.archived === true;
   const includeDrafts = filters?.includeDrafts === true;
   const { data, error } = await supabase.rpc("get_schedule_bundle", {
@@ -294,7 +296,7 @@ export function useDraftItems() {
   return useQuery({
     queryKey: itemsKeys.list({ status: "draft", includeDrafts: true }),
     queryFn: () => fetchItems({ status: "draft", includeDrafts: true }),
-    staleTime: 1000 * 60, // 1 minute — may be added frequently via bulk convert
+    staleTime: 1000 * 60, // 1 minute â€” may be added frequently via bulk convert
     refetchOnWindowFocus: true,
   });
 }
@@ -322,13 +324,32 @@ export function useItemCategories() {
 // MUTATION HOOKS
 // ============================================
 
+async function createItemAtSource(body: ReturnType<typeof prepareItemCreate>): Promise<Item> {
+  let res: Response;
+  try {
+    res = await safeFetch("/api/items", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body), timeoutMs: 8_000,
+    });
+  } catch {
+    throw new Error("Save unverified. Check Schedule before retrying.");
+  }
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(["not_started", "rolled_back"].includes(json?.completion?.status)
+    ? "Item was not saved." : "Save unverified. Check Schedule before retrying.");
+  const receipt = itemCreateReceiptSchema.safeParse(json);
+  if (!receipt.success) throw new Error("Save unverified. Check Schedule before retrying.");
+  return receipt.data.item as unknown as Item;
+}
+
 /** Create a new reminder */
 export function useCreateReminder() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (input: CreateReminderInput) => {
-      // Offline: queue via API route
+      const body = prepareItemCreate({ ...input, type: "reminder" });
+      // Offline: queue the same validated request used online
       if (!isReallyOnline()) {
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         await addToQueue({
@@ -336,7 +357,7 @@ export function useCreateReminder() {
           operation: "create",
           endpoint: "/api/items",
           method: "POST",
-          body: { ...input, type: "reminder" },
+          body,
           tempId,
           metadata: { label: `Add reminder: ${input.title}` },
         });
@@ -344,197 +365,17 @@ export function useCreateReminder() {
           id: tempId,
           type: "reminder",
           title: input.title,
-          status: "pending",
+          status: body.status,
           _offline: true,
         } as unknown as Item;
       }
 
-      const supabase = supabaseBrowser();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      // Create the base item
-      const { data: item, error: itemError } = await supabase
-        .from("items")
-        .insert({
-          user_id: user.id,
-          type: "reminder",
-          title: input.title,
-          description: input.description,
-          priority: input.priority || "normal",
-          status: input.status || "pending",
-          metadata_json: input.metadata_json,
-          is_public: input.is_public || false,
-          responsible_user_id: input.responsible_user_id || user.id,
-          notify_all_household: input.notify_all_household || false,
-          categories: input.category_ids || [],
-          location_context: input.location_context ?? null,
-          location_text: input.location_text ?? null,
-          // Catalogue template link
-          source_catalogue_item_id: input.source_catalogue_item_id || null,
-          is_template_instance: input.is_template_instance || false,
-          is_chore: input.is_chore || false,
-        })
-        .select()
-        .single();
-
-      if (itemError) throw itemError;
-
-      // Create reminder details
-      const { error: detailsError } = await supabase
-        .from("reminder_details")
-        .insert({
-          item_id: item.id,
-          due_at: input.due_at,
-          estimate_minutes: input.estimate_minutes,
-          has_checklist: input.has_checklist || false,
-        });
-
-      if (detailsError) throw detailsError;
-
-      // Create subtasks if provided
-      if (input.subtasks?.length) {
-        const subtasks = input.subtasks.map((s, i) => ({
-          parent_item_id: item.id,
-          title: s.title,
-          order_index: s.order_index ?? i,
-        }));
-        const { error: subtasksError } = await supabase
-          .from("item_subtasks")
-          .insert(subtasks);
-        if (subtasksError) throw subtasksError;
-      }
-
-      // Create alerts if provided — skip entirely for drafts, since the item
-      // isn't confirmed yet and shouldn't fire notifications until reviewed.
-      if (input.status !== "draft" && input.alerts?.length) {
-        const alerts = input.alerts.map((a) => {
-          // For relative alerts, compute the actual trigger_at based on due_at
-          let computedTriggerAt = a.trigger_at;
-          if (a.kind === "relative" && input.due_at) {
-            const baseTime = new Date(input.due_at);
-
-            // Check if custom_time is set (e.g., "1 day before at 9am")
-            if (a.custom_time && a.offset_minutes) {
-              // Calculate the day offset (e.g., 1440 minutes = 1 day before)
-              const daysOffset = Math.floor((a.offset_minutes || 0) / 1440);
-              const alertDate = new Date(baseTime);
-              alertDate.setDate(alertDate.getDate() - daysOffset);
-
-              // Set the specific time from custom_time (HH:MM format)
-              const [hours, minutes] = a.custom_time.split(":").map(Number);
-              alertDate.setHours(hours, minutes, 0, 0);
-
-              computedTriggerAt = alertDate.toISOString();
-            } else if (a.offset_minutes) {
-              // Standard offset calculation
-              computedTriggerAt = new Date(
-                baseTime.getTime() - a.offset_minutes * 60 * 1000,
-              ).toISOString();
-            }
-          }
-          const alertData: Record<string, unknown> = {
-            item_id: item.id,
-            kind: a.kind,
-            trigger_at: computedTriggerAt,
-            offset_minutes: a.offset_minutes,
-            relative_to: a.relative_to,
-            repeat_every_minutes: a.repeat_every_minutes,
-            max_repeats: a.max_repeats,
-            channel: a.channel || "push",
-          };
-          // Only include custom_time if set (column may not exist in DB yet)
-          if (a.custom_time) {
-            alertData.custom_time = a.custom_time;
-          }
-          return alertData;
-        });
-        const { error: alertsError } = await supabase
-          .from("item_alerts")
-          .insert(alerts);
-        if (alertsError) throw alertsError;
-      } else if (input.status !== "draft" && input.due_at) {
-        // Auto-create a push alert at the due time if no alerts provided
-        console.log(
-          "[useCreateReminder] Creating auto-alert for due_at:",
-          input.due_at,
-        );
-        const { data: alertData, error: alertsError } = await supabase
-          .from("item_alerts")
-          .insert({
-            item_id: item.id,
-            kind: "absolute",
-            trigger_at: input.due_at,
-            channel: "push",
-            active: true,
-          })
-          .select()
-          .single();
-
-        if (alertsError) {
-          console.error("Failed to create auto-alert:", alertsError);
-          // Still throw so user knows there was an issue
-          throw new Error(
-            `Reminder created but alert failed: ${alertsError.message}`,
-          );
-        } else {
-          console.log("[useCreateReminder] Auto-alert created:", alertData);
-        }
-      }
-
-      // Create recurrence rule if provided
-      if (input.recurrence_rule?.rrule) {
-        const { error: recurrenceError } = await supabase
-          .from("item_recurrence_rules")
-          .insert({
-            item_id: item.id,
-            rrule: input.recurrence_rule.rrule,
-            start_anchor: input.due_at || new Date().toISOString(),
-            end_until: input.recurrence_rule.end_until,
-            count: input.recurrence_rule.count,
-            is_flexible: input.recurrence_rule.is_flexible || false,
-            flexible_period: input.recurrence_rule.flexible_period || null,
-          });
-        if (recurrenceError) {
-          console.error("Failed to create recurrence rule:", recurrenceError);
-        }
-      }
-
-      // Create prerequisites (trigger conditions) if provided
-      if (input.prerequisites?.length) {
-        const prereqs = input.prerequisites.map((p) => ({
-          item_id: item.id,
-          condition_type: p.condition_type,
-          condition_config: p.condition_config,
-          logic_group: p.logic_group ?? 0,
-        }));
-        const { error: prereqError } = await supabase
-          .from("item_prerequisites")
-          .insert(prereqs);
-        if (prereqError) {
-          console.error("Failed to create prerequisites:", prereqError);
-        } else {
-          // Set item to dormant — it activates when prerequisites are met
-          await supabase
-            .from("items")
-            .update({ status: "dormant", updated_at: new Date().toISOString() })
-            .eq("id", item.id);
-          (item as Record<string, unknown>).status = "dormant";
-        }
-      }
-
-      // Online direct-write path never touches /api/items, so the Google
-      // Calendar sync must be triggered from here (fire-and-forget).
-      triggerGcalSync(item.id);
-
-      return item as Item;
+      return createItemAtSource(body);
     },
-    onSuccess: (_data, variables) => {
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
       if (variables.prerequisites?.length) {
-        queryClient.invalidateQueries({ queryKey: ["nfc-tag-items"] });
+        queryClient.invalidateQueries({ queryKey: qk.nfcTagItemsAll() });
       }
     },
   });
@@ -546,7 +387,8 @@ export function useCreateEvent() {
 
   return useMutation({
     mutationFn: async (input: CreateEventInput) => {
-      // Offline: queue via API route
+      const body = prepareItemCreate({ ...input, type: "event" });
+      // Offline: queue the same validated request used online
       if (!isReallyOnline()) {
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         await addToQueue({
@@ -554,7 +396,7 @@ export function useCreateEvent() {
           operation: "create",
           endpoint: "/api/items",
           method: "POST",
-          body: { ...input, type: "event" },
+          body,
           tempId,
           metadata: { label: `Add event: ${input.title}` },
         });
@@ -562,159 +404,17 @@ export function useCreateEvent() {
           id: tempId,
           type: "event",
           title: input.title,
-          status: "pending",
+          status: body.status,
           _offline: true,
         } as unknown as Item;
       }
 
-      const supabase = supabaseBrowser();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      // Create the base item
-      const { data: item, error: itemError } = await supabase
-        .from("items")
-        .insert({
-          user_id: user.id,
-          type: "event",
-          title: input.title,
-          description: input.description,
-          priority: input.priority || "normal",
-          status: input.status,
-          metadata_json: input.metadata_json,
-          is_public: input.is_public || false,
-          responsible_user_id: input.responsible_user_id || user.id,
-          notify_all_household: input.notify_all_household || false,
-          categories: input.category_ids || [],
-          location_context: input.location_context ?? null,
-          location_text: input.location_text ?? null,
-          // Catalogue template link
-          source_catalogue_item_id: input.source_catalogue_item_id || null,
-          is_template_instance: input.is_template_instance || false,
-        })
-        .select()
-        .single();
-
-      if (itemError) throw itemError;
-
-      // Create event details
-      const { error: detailsError } = await supabase
-        .from("event_details")
-        .insert({
-          item_id: item.id,
-          start_at: input.start_at,
-          end_at: input.end_at,
-          all_day: input.all_day || false,
-          location_text: input.location_text,
-        });
-
-      if (detailsError) throw detailsError;
-
-      // Create recurrence rule if provided
-      if (input.recurrence_rule) {
-        const { error: recurrenceError } = await supabase
-          .from("item_recurrence_rules")
-          .insert({
-            item_id: item.id,
-            rrule: input.recurrence_rule.rrule,
-            start_anchor: input.recurrence_rule.start_anchor,
-            end_until: input.recurrence_rule.end_until,
-            count: input.recurrence_rule.count,
-            is_flexible: input.recurrence_rule.is_flexible || false,
-            flexible_period: input.recurrence_rule.flexible_period || null,
-          });
-        if (recurrenceError) throw recurrenceError;
-      }
-
-      // Create alerts if provided — skip entirely for drafts, since the item
-      // isn't confirmed yet and shouldn't fire notifications until reviewed.
-      if (input.status !== "draft" && input.alerts?.length) {
-        const alerts = input.alerts.map((a) => {
-          // For relative alerts, compute the actual trigger_at based on start_at or end_at
-          let computedTriggerAt = a.trigger_at;
-          if (a.kind === "relative") {
-            const baseTimeStr =
-              a.relative_to === "end" ? input.end_at : input.start_at;
-            if (baseTimeStr) {
-              const baseTime = new Date(baseTimeStr);
-
-              // Check if custom_time is set (e.g., "1 day before at 9am")
-              if (a.custom_time && a.offset_minutes) {
-                // Calculate the day offset (e.g., 1440 minutes = 1 day before)
-                const daysOffset = Math.floor((a.offset_minutes || 0) / 1440);
-                const alertDate = new Date(baseTime);
-                alertDate.setDate(alertDate.getDate() - daysOffset);
-
-                // Set the specific time from custom_time (HH:MM format)
-                const [hours, minutes] = a.custom_time.split(":").map(Number);
-                alertDate.setHours(hours, minutes, 0, 0);
-
-                computedTriggerAt = alertDate.toISOString();
-              } else if (a.offset_minutes) {
-                // Standard offset calculation
-                computedTriggerAt = new Date(
-                  baseTime.getTime() - a.offset_minutes * 60 * 1000,
-                ).toISOString();
-              }
-            }
-          }
-          const alertData: Record<string, unknown> = {
-            item_id: item.id,
-            kind: a.kind,
-            trigger_at: computedTriggerAt,
-            offset_minutes: a.offset_minutes,
-            relative_to: a.relative_to,
-            repeat_every_minutes: a.repeat_every_minutes,
-            max_repeats: a.max_repeats,
-            channel: a.channel || "push",
-          };
-          // Only include custom_time if set (column may not exist in DB yet)
-          if (a.custom_time) {
-            alertData.custom_time = a.custom_time;
-          }
-          return alertData;
-        });
-        const { error: alertsError } = await supabase
-          .from("item_alerts")
-          .insert(alerts);
-        if (alertsError) throw alertsError;
-      }
-
-      // Create prerequisites (trigger conditions) if provided
-      if (input.prerequisites?.length) {
-        const prereqs = input.prerequisites.map((p) => ({
-          item_id: item.id,
-          condition_type: p.condition_type,
-          condition_config: p.condition_config,
-          logic_group: p.logic_group ?? 0,
-        }));
-        const { error: prereqError } = await supabase
-          .from("item_prerequisites")
-          .insert(prereqs);
-        if (prereqError) {
-          console.error("Failed to create prerequisites:", prereqError);
-        } else {
-          // Set item to dormant — it activates when prerequisites are met
-          await supabase
-            .from("items")
-            .update({ status: "dormant", updated_at: new Date().toISOString() })
-            .eq("id", item.id);
-          (item as Record<string, unknown>).status = "dormant";
-        }
-      }
-
-      // Online direct-write path never touches /api/items, so the Google
-      // Calendar sync must be triggered from here (fire-and-forget).
-      triggerGcalSync(item.id);
-
-      return item as Item;
+      return createItemAtSource(body);
     },
-    onSuccess: (_data, variables) => {
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
       if (variables.prerequisites?.length) {
-        queryClient.invalidateQueries({ queryKey: ["nfc-tag-items"] });
+        queryClient.invalidateQueries({ queryKey: qk.nfcTagItemsAll() });
       }
     },
   });
@@ -726,7 +426,8 @@ export function useCreateTask() {
 
   return useMutation({
     mutationFn: async (input: CreateTaskInput) => {
-      // Offline: queue via API route
+      const body = prepareItemCreate({ ...input, type: "task" });
+      // Offline: queue the same validated request used online
       if (!isReallyOnline()) {
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         await addToQueue({
@@ -734,7 +435,7 @@ export function useCreateTask() {
           operation: "create",
           endpoint: "/api/items",
           method: "POST",
-          body: { ...input, type: "task" },
+          body,
           tempId,
           metadata: { label: `Add task: ${input.title}` },
         });
@@ -742,181 +443,17 @@ export function useCreateTask() {
           id: tempId,
           type: "task",
           title: input.title,
-          status: "pending",
+          status: body.status,
           _offline: true,
         } as unknown as Item;
       }
 
-      const supabase = supabaseBrowser();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      // Create the base item
-      const { data: item, error: itemError } = await supabase
-        .from("items")
-        .insert({
-          user_id: user.id,
-          type: "task",
-          title: input.title,
-          description: input.description,
-          priority: input.priority || "normal",
-          status: "pending",
-          metadata_json: input.metadata_json,
-          is_public: input.is_public || false,
-          responsible_user_id: input.responsible_user_id || user.id,
-          notify_all_household: input.notify_all_household || false,
-          categories: input.category_ids || [],
-          location_context: input.location_context ?? null,
-          location_text: input.location_text ?? null,
-          // Catalogue template link
-          source_catalogue_item_id: input.source_catalogue_item_id || null,
-          is_template_instance: input.is_template_instance || false,
-          is_chore: input.is_chore || false,
-        })
-        .select()
-        .single();
-
-      if (itemError) throw itemError;
-
-      // Create reminder details (for due date and duration)
-      if (input.due_at || input.estimate_minutes) {
-        const { error: detailsError } = await supabase
-          .from("reminder_details")
-          .insert({
-            item_id: item.id,
-            due_at: input.due_at,
-            estimate_minutes: input.estimate_minutes,
-            has_checklist: false,
-          });
-
-        if (detailsError) throw detailsError;
-      }
-
-      // Create subtasks if provided (tasks can have subtasks too)
-      if (input.subtasks?.length) {
-        const subtasks = input.subtasks.map((s, i) => ({
-          parent_item_id: item.id,
-          title: s.title,
-          order_index: s.order_index ?? i,
-        }));
-        const { error: subtasksError } = await supabase
-          .from("item_subtasks")
-          .insert(subtasks);
-        if (subtasksError) {
-          console.error("Failed to create subtasks for task:", subtasksError);
-        }
-      }
-
-      // Create recurrence rule if provided
-      if (input.recurrence_rule) {
-        const { error: recurrenceError } = await supabase
-          .from("item_recurrence_rules")
-          .insert({
-            item_id: item.id,
-            rrule: input.recurrence_rule.rrule,
-            start_anchor: input.recurrence_rule.start_anchor,
-            end_until: input.recurrence_rule.end_until,
-            count: input.recurrence_rule.count,
-            is_flexible: input.recurrence_rule.is_flexible || false,
-            flexible_period: input.recurrence_rule.flexible_period || null,
-          });
-
-        if (recurrenceError) throw recurrenceError;
-      }
-
-      // Create alerts if provided, otherwise auto-create at due time — skip
-      // entirely for drafts, since the item isn't confirmed yet and
-      // shouldn't fire notifications until reviewed.
-      if (input.status !== "draft" && input.alerts?.length) {
-        const alerts = input.alerts.map((a) => {
-          let computedTriggerAt = a.trigger_at;
-          if (a.kind === "relative" && input.due_at) {
-            const baseTime = new Date(input.due_at);
-            if (a.custom_time && a.offset_minutes) {
-              const daysOffset = Math.floor((a.offset_minutes || 0) / 1440);
-              const alertDate = new Date(baseTime);
-              alertDate.setDate(alertDate.getDate() - daysOffset);
-              const [hours, minutes] = a.custom_time.split(":").map(Number);
-              alertDate.setHours(hours, minutes, 0, 0);
-              computedTriggerAt = alertDate.toISOString();
-            } else if (a.offset_minutes) {
-              computedTriggerAt = new Date(
-                baseTime.getTime() - a.offset_minutes * 60 * 1000,
-              ).toISOString();
-            }
-          }
-          const alertData: Record<string, unknown> = {
-            item_id: item.id,
-            kind: a.kind,
-            trigger_at: computedTriggerAt,
-            offset_minutes: a.offset_minutes,
-            relative_to: a.relative_to,
-            repeat_every_minutes: a.repeat_every_minutes,
-            max_repeats: a.max_repeats,
-            channel: a.channel || "push",
-          };
-          if (a.custom_time) {
-            alertData.custom_time = a.custom_time;
-          }
-          return alertData;
-        });
-        const { error: alertsError } = await supabase
-          .from("item_alerts")
-          .insert(alerts);
-        if (alertsError) {
-          console.error("Failed to create alerts for task:", alertsError);
-        }
-      } else if (input.status !== "draft" && input.due_at) {
-        // Auto-create a push alert at the due time if no alerts provided
-        const { error: alertsError } = await supabase
-          .from("item_alerts")
-          .insert({
-            item_id: item.id,
-            kind: "absolute",
-            trigger_at: input.due_at,
-            channel: "push",
-            active: true,
-          });
-        if (alertsError) {
-          console.error("Failed to create auto-alert for task:", alertsError);
-        }
-      }
-
-      // Create prerequisites (trigger conditions) if provided
-      if (input.prerequisites?.length) {
-        const prereqs = input.prerequisites.map((p) => ({
-          item_id: item.id,
-          condition_type: p.condition_type,
-          condition_config: p.condition_config,
-          logic_group: p.logic_group ?? 0,
-        }));
-        const { error: prereqError } = await supabase
-          .from("item_prerequisites")
-          .insert(prereqs);
-        if (prereqError) {
-          console.error("Failed to create prerequisites:", prereqError);
-        } else {
-          // Set item to dormant — it activates when prerequisites are met
-          await supabase
-            .from("items")
-            .update({ status: "dormant", updated_at: new Date().toISOString() })
-            .eq("id", item.id);
-          (item as Record<string, unknown>).status = "dormant";
-        }
-      }
-
-      // Online direct-write path never touches /api/items, so the Google
-      // Calendar sync must be triggered from here (fire-and-forget).
-      triggerGcalSync(item.id);
-
-      return item as Item;
+      return createItemAtSource(body);
     },
-    onSuccess: (_data, variables) => {
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
       if (variables.prerequisites?.length) {
-        queryClient.invalidateQueries({ queryKey: ["nfc-tag-items"] });
+        queryClient.invalidateQueries({ queryKey: qk.nfcTagItemsAll() });
       }
     },
   });
@@ -1125,7 +662,7 @@ export function useDeleteItem() {
         });
         return id;
       }
-      // Remove the Google Calendar event BEFORE the row disappears — the
+      // Remove the Google Calendar event BEFORE the row disappears â€” the
       // hard delete takes google_event_id with it, orphaning the event.
       await removeFromGcalBeforeDelete(id);
       const supabase = supabaseBrowser();
@@ -1163,14 +700,14 @@ export function useArchiveItem() {
         .update({ archived_at: new Date().toISOString() })
         .eq("id", id);
       if (error) throw error;
-      // Soft delete bypasses FK cascade — deactivate any pending alerts so
+      // Soft delete bypasses FK cascade â€” deactivate any pending alerts so
       // the cron stops firing them.
       await supabase
         .from("item_alerts")
         .update({ active: false })
         .eq("item_id", id)
         .eq("active", true);
-      // Archived items are no longer sync-eligible — this removes the event.
+      // Archived items are no longer sync-eligible â€” this removes the event.
       triggerGcalSync(id);
       return id;
     },
@@ -1203,7 +740,7 @@ export function useCompleteReminder() {
         .eq("item_id", id);
       if (detailsError) throw detailsError;
 
-      // Completed items are no longer sync-eligible — this removes the event.
+      // Completed items are no longer sync-eligible â€” this removes the event.
       triggerGcalSync(id);
       return id;
     },
@@ -2171,7 +1708,7 @@ export function useAllSubtaskCompletions() {
 
       const subtaskIds = subtasks.map((s) => s.id);
 
-      // No date window — same reasoning as useAllOccurrenceActions: a recurring
+      // No date window â€” same reasoning as useAllOccurrenceActions: a recurring
       // occurrence's subtask ticks must still render when you navigate to that
       // occurrence's date, however old. A "last 30 days" filter made older
       // occurrences show their subtasks as un-done. Bounded by the user's
@@ -2328,7 +1865,7 @@ export function useCreateRecurrenceException() {
       // Create or update the exception. We do a manual select+update/insert
       // here instead of `.upsert(..., { onConflict })` because
       // `item_recurrence_exceptions` does not (yet) have a UNIQUE constraint
-      // on (rule_id, exdate) — so PostgREST upsert fails with a cryptic
+      // on (rule_id, exdate) â€” so PostgREST upsert fails with a cryptic
       // "there is no unique or exclusion constraint matching the
       // ON CONFLICT specification" error. The migration to add the unique
       // constraint is in `migrations/2026-05-12_recurrence_exceptions_unique.sql`,
@@ -2375,7 +1912,7 @@ export function useCreateRecurrenceException() {
       }
 
       if (error) {
-        // PostgrestError fields are non-enumerable — destructure for visibility.
+        // PostgrestError fields are non-enumerable â€” destructure for visibility.
         const detail = {
           message: error.message,
           code: error.code,

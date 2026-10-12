@@ -21,7 +21,14 @@ export type EraEntityType =
   | "transaction"
   | "recipe"
   | "meal"
+  | "shopping"
+  | "application"
   | "memory";
+
+/** Evidence for integration/coverage only. Never grants arbitrary HTTP or SQL. */
+export type EraCapabilitySource =
+  | { kind: "api"; path: string; methods: ("GET" | "POST" | "PATCH" | "PUT" | "DELETE")[] }
+  | { kind: "rpc"; name: string };
 
 export type EraCapabilityOperation =
   | "read"
@@ -45,6 +52,16 @@ export interface EraCapabilityResult {
   ok?: boolean;
   /** Forwarded from the wrapped resolver (src/lib/era/artifacts.ts). */
   artifacts?: EraArtifact[];
+  pending?: import("../types").EraPendingTurn | null;
+  proposal?: import("../types").EraActiveProposal;
+  focus?: import("../focusMemory").FocusEntity;
+}
+
+export interface EraExecutionContext {
+  referenceDate?: Date;
+  beforeWrite?: import("./effectiveAction").BeforeWrite;
+  /** Awaited after each internal write, before another may dispatch. */
+  onProgress?: (result: EraCapabilityResult) => Promise<void>;
 }
 
 export interface EraCapability<TSlots = unknown> {
@@ -52,17 +69,23 @@ export interface EraCapability<TSlots = unknown> {
   id: string;
   entity: EraEntityType;
   operation: EraCapabilityOperation;
+  /** Reviewed confirmation vocabulary; never taken from model prose. */
+  confirmation?: {
+    title: string;
+    fields: Record<string, string>;
+    resolveAtWrite?: boolean;
+    initialValues?: (slots: Record<string, unknown>, referenceDate: Date) => Record<string, unknown>;
+  };
+  /** Feature Index owner and purpose; discovery is generated from these. */
+  module: string;
+  description: string;
+  sources: EraCapabilitySource[];
+  /** Semantic limits that cannot be expressed by an input schema. */
+  constraints?: string[];
   /** Validates a proposed action's slots before `execute` ever runs. */
   slots: z.ZodType<TSlots>;
   /** True for an action a bad proposal could meaningfully hurt (deletes). */
   destructive?: boolean;
-  /**
-   * Short, human/model-readable description of this capability's slot
-   * shape — used ONLY to build the Ask AI prompt (Stage 3) so Gemini knows
-   * what fields to fill. Never consumed by the deterministic router or by
-   * validation itself; the Zod schema above is the actual contract.
-   */
-  promptSlots: string;
   /**
    * When set, names the slot key that identifies a SPECIFIC existing entity
    * (e.g. "itemId"). A model or a taught template is never trusted to supply
@@ -72,6 +95,14 @@ export interface EraCapability<TSlots = unknown> {
    * that create or read rather than act on one known entity.
    */
   entityRefSlot?: string;
+  /** Safe dependency outputs. Example checks slot compatibility at admission;
+   * actual data must fit EVERY receiving slot before later steps may run. */
+  outputs?: Record<string, { schema: z.ZodType; example: unknown }>;
+  /** Allow entity references only from matching domain outputs. */
+  referenceSource?: { entity: EraEntityType; field: string };
   /** Wraps the existing application code path — never reimplements it. */
-  execute(slots: TSlots): Promise<EraCapabilityResult>;
+  execute(
+    slots: TSlots,
+    context?: EraExecutionContext,
+  ): Promise<EraCapabilityResult>;
 }

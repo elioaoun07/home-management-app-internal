@@ -1,0 +1,122 @@
+{
+  "recordedAt": "2026-10-11T08:20:12.859Z",
+  "entries": {
+    "shopping-paraphrase": {
+      "raw": "{\"kind\":\"propose_action\",\"text\":\"Add milk and eggs to your shopping list?\",\"capabilityId\":\"shopping.add\",\"slotsJson\":\"{\\\"items\\\":[\\\"milk\\\",\\\"eggs\\\"]}\"}",
+      "hash": "3b297218ee9ea096adbc679c239e246088f2e9be4b1540e47d6f21c5cd081bda",
+      "model": "claude-haiku-5-5",
+      "inputTokens": 5622,
+      "outputTokens": 76,
+      "stopReason": "end_turn",
+      "ms": 2053
+    },
+    "recipe-meal-shopping": {
+      "raw": "{\"kind\":\"propose_plan\",\"text\":\"Plan Orange Chicken for Friday dinner and add its ingredients to your shopping list? Both steps will wait for your confirmation.\",\"planJson\":\"{\\\"steps\\\":[{\\\"id\\\":\\\"lookup\\\",\\\"capabilityId\\\":\\\"recipe.ingredients\\\",\\\"label\\\":\\\"Find Orange Chicken recipe\\\",\\\"slots\\\":{\\\"dish\\\":\\\"Orange Chicken\\\"}},{\\\"id\\\":\\\"assign\\\",\\\"capabilityId\\\":\\\"meal.assign\\\",\\\"label\\\":\\\"Assign to Friday dinner\\\",\\\"slots\\\":{\\\"dish\\\":{\\\"step\\\":\\\"lookup\\\",\\\"field\\\":\\\"recipeName\\\"},\\\"dayHint\\\":\\\"Friday\\\",\\\"mealType\\\":\\\"dinner\\\"}},{\\\"id\\\":\\\"shopping\\\",\\\"capabilityId\\\":\\\"shopping.add\\\",\\\"label\\\":\\\"Add ingredients\\\",\\\"slots\\\":{\\\"items\\\":{\\\"step\\\":\\\"lookup\\\",\\\"field\\\":\\\"ingredients\\\"}}}]}\"}",
+      "hash": "cc68f20853028a4734aba5b247d2081f95bc89336497b6565ddbab35e6abea75",
+      "model": "claude-haiku-5-5",
+      "inputTokens": 5633,
+      "outputTokens": 639,
+      "stopReason": "end_turn",
+      "ms": 3440
+    },
+    "named-reminder": {
+      "raw": "{\"kind\":\"propose_plan\",\"text\":\"Find your dentist reminder and move it to Friday at 5pm?\",\"planJson\":\"{\\\"steps\\\":[{\\\"id\\\":\\\"find\\\",\\\"capabilityId\\\":\\\"reminder.find\\\",\\\"label\\\":\\\"Find dentist reminder\\\",\\\"slots\\\":{\\\"hint\\\":\\\"dentist\\\"}},{\\\"id\\\":\\\"move\\\",\\\"capabilityId\\\":\\\"reminder.reschedule\\\",\\\"label\\\":\\\"Move to Friday at 5pm\\\",\\\"slots\\\":{\\\"itemId\\\":{\\\"step\\\":\\\"find\\\",\\\"field\\\":\\\"itemId\\\"},\\\"whenText\\\":\\\"Friday at 5pm\\\"}}]}\"}",
+      "hash": "110724fe7b2fc2d1335355ff7ea2e5330d08274a880a3d168ddf5431563bb7b6",
+      "model": "claude-haiku-5-5",
+      "inputTokens": 5624,
+      "outputTokens": 727,
+      "stopReason": "end_turn",
+      "ms": 3845
+    },
+    "shopping-reminder": {
+      "raw": "{\"kind\":\"propose_plan\",\"text\":\"Add milk to your shopping list and set a reminder to collect it tomorrow at 5pm?\",\"planJson\":\"{\\\"steps\\\":[{\\\"id\\\":\\\"shopping\\\",\\\"capabilityId\\\":\\\"shopping.add\\\",\\\"label\\\":\\\"Add milk to shopping\\\",\\\"slots\\\":{\\\"items\\\":[\\\"milk\\\"]}},{\\\"id\\\":\\\"reminder\\\",\\\"capabilityId\\\":\\\"reminder.create\\\",\\\"label\\\":\\\"Remind to collect milk\\\",\\\"slots\\\":{\\\"rawText\\\":\\\"tomorrow at 5pm\\\",\\\"title\\\":\\\"Collect milk\\\"}}]}\"}",
+      "hash": "3dd1f83b464fd3a12c61c73b79fb50aeba3b45914b5730187ef76143596ac676",
+      "model": "claude-haiku-5-5",
+      "inputTokens": 5629,
+      "outputTokens": 588,
+      "stopReason": "end_turn",
+      "ms": 3427
+    },
+    "two-reads": {
+      "raw": "{\"kind\":\"propose_plan\",\"text\":\"I'll pull up your saved recipes and your open shopping list.\",\"planJson\":\"{\\\"steps\\\":[{\\\"id\\\":\\\"recipes\\\",\\\"capabilityId\\\":\\\"recipe.list\\\",\\\"label\\\":\\\"Show saved recipes\\\",\\\"slots\\\":{}},{\\\"id\\\":\\\"shopping\\\",\\\"capabilityId\\\":\\\"shopping.list\\\",\\\"label\\\":\\\"List shopping items\\\",\\\"slots\\\":{}}]}\"}",
+      "hash": "4842c9c358c68c26ead1768f8ba2e1c454c192676d078dde65b3ee0b38105862",
+      "model": "claude-haiku-5-5",
+      "inputTokens": 5621,
+      "outputTokens": 226,
+      "stopReason": "end_turn",
+      "ms": 2404
+    },
+    "recipe-shopping-implicit": {
+      "raw": "{\"kind\":\"propose_plan\",\"text\":\"I'll look up the Orange Chicken ingredients from your saved recipes and add them to your shopping list, pending your confirmation.\",\"planJson\":\"{\\\"steps\\\":[{\\\"id\\\":\\\"lookup\\\",\\\"capabilityId\\\":\\\"recipe.ingredients\\\",\\\"label\\\":\\\"Find Orange Chicken recipe\\\",\\\"slots\\\":{\\\"dish\\\":\\\"Orange Chicken\\\"}},{\\\"id\\\":\\\"shopping\\\",\\\"capabilityId\\\":\\\"shopping.add\\\",\\\"label\\\":\\\"Add ingredients to shopping list\\\",\\\"slots\\\":{\\\"items\\\":{\\\"step\\\":\\\"lookup\\\",\\\"field\\\":\\\"ingredients\\\"}}}]}\"}",
+      "hash": "a0b17a3b27d9debd6da0261f2ca4ea43431b3524f75a07e01623dfac079eac7f",
+      "model": "claude-haiku-5-5",
+      "inputTokens": 5624,
+      "outputTokens": 389,
+      "stopReason": "end_turn",
+      "ms": 3187
+    },
+    "negation": {
+      "raw": "{\"kind\":\"prose\",\"text\":\"Okay, I won't add milk to your shopping list and I won't create a reminder.\"}",
+      "hash": "06b02769ff13565eed1f5ddd3d25307ffcfb8da23b042b6685c7fc82b6a911e4",
+      "model": "claude-haiku-5-5",
+      "inputTokens": 5621,
+      "outputTokens": 41,
+      "stopReason": "end_turn",
+      "ms": 1639
+    },
+    "unsupported": {
+      "raw": "{\"kind\":\"prose\",\"text\":\"Flight booking and payments aren't something I can do. The Trips module has no agent actions, so I can't book flights, and I can't make payments either. I can add a reminder or log a shopping item if that helps.\"}",
+      "hash": "a8c37dacfd5052a47805f7ddbef4d61940ad0747722b108509e195fc59d53123",
+      "model": "claude-haiku-5-5",
+      "inputTokens": 5617,
+      "outputTokens": 79,
+      "stopReason": "end_turn",
+      "ms": 2192
+    },
+    "application-awareness": {
+      "raw": "{\"kind\":\"propose_action\",\"text\":\"Trips has no agent actions in ERA, so I can't show what it can do there, though its precision page is available in the app. I can list your saved recipes now.\",\"capabilityId\":\"recipe.list\",\"slotsJson\":\"{}\"}",
+      "hash": "4ddb0598dc7912fd983bf6e48f92da002ac6a73f843c8a14c143e936f16093ef",
+      "model": "claude-haiku-5-5",
+      "inputTokens": 5623,
+      "outputTokens": 281,
+      "stopReason": "end_turn",
+      "ms": 3115
+    },
+    "memory-copy": {
+      "raw": "{\"kind\":\"propose_plan\",\"text\":\"I'll recall your guest WiFi memory and save a copy labeled Visitor WiFi. The save waits for your Confirm.\",\"planJson\":\"{\\\"steps\\\":[{\\\"id\\\":\\\"recall\\\",\\\"capabilityId\\\":\\\"memory.recall\\\",\\\"label\\\":\\\"Recall guest WiFi\\\",\\\"slots\\\":{\\\"query\\\":\\\"guest WiFi\\\"}},{\\\"id\\\":\\\"save\\\",\\\"capabilityId\\\":\\\"memory.save\\\",\\\"label\\\":\\\"Save as Visitor WiFi\\\",\\\"slots\\\":{\\\"label\\\":\\\"Visitor WiFi\\\",\\\"value\\\":{\\\"step\\\":\\\"recall\\\",\\\"field\\\":\\\"value\\\"}}}]}\"}",
+      "hash": "f5f831f368fe8ee4f393c916b4ab73016ee5be714d89aecc6a115fcb2461049d",
+      "model": "claude-haiku-5-5",
+      "inputTokens": 5626,
+      "outputTokens": 593,
+      "stopReason": "end_turn",
+      "ms": 3597
+    },
+    "unsupported-module-write": {
+      "raw": "{\"kind\":\"propose_action\",\"text\":\"Activating a Paris trip isn't something I can do; Trips has no agent actions. I can add milk to your shopping list. Want me to add it?\",\"capabilityId\":\"shopping.add\",\"slotsJson\":\"{\\\"items\\\":[\\\"milk\\\"]}\"}",
+      "hash": "72d11aed6b72e49f12ff7b4a3a7e3f096c68daaddaefcd6b3ce8a7c09d4b88db",
+      "model": "claude-haiku-5-5",
+      "inputTokens": 5620,
+      "outputTokens": 100,
+      "stopReason": "end_turn",
+      "ms": 2017
+    },
+    "unsupported-stock-subtraction": {
+      "raw": "{\"kind\":\"propose_plan\",\"text\":\"I can plan Orange Chicken for Friday dinner, but I can't check your pantry, so I can't add only the missing ingredients to shopping. Set up the dinner plan now, and tell me which ingredients to add or whether to add the full list yourself.\",\"planJson\":\"{\\\"steps\\\":[{\\\"id\\\":\\\"lookup\\\",\\\"capabilityId\\\":\\\"recipe.ingredients\\\",\\\"label\\\":\\\"Find Orange Chicken recipe\\\",\\\"slots\\\":{\\\"dish\\\":\\\"Orange Chicken\\\"}},{\\\"id\\\":\\\"assign\\\",\\\"capabilityId\\\":\\\"meal.assign\\\",\\\"label\\\":\\\"Plan Friday dinner\\\",\\\"slots\\\":{\\\"dish\\\":{\\\"step\\\":\\\"lookup\\\",\\\"field\\\":\\\"recipeName\\\"},\\\"dayHint\\\":\\\"Friday\\\",\\\"mealType\\\":\\\"dinner\\\"}}]}\"}",
+      "hash": "0a6b85fc2b5a39aeb0c104c2f2d3a9676ee12d2cbe5993b7fd90c8a445410f4e",
+      "model": "claude-haiku-5-5",
+      "inputTokens": 5639,
+      "outputTokens": 801,
+      "stopReason": "end_turn",
+      "ms": 4721
+    },
+    "conditional-pantry": {
+      "raw": "{\"kind\":\"prose\",\"text\":\"I can't check whether you have all the ingredients, since inventory isn't something I can access, so I haven't planned Orange Chicken for Friday dinner. I can add it to Friday dinner now if you tell me to, or look up the recipe's ingredients for you to check yourself.\"}",
+      "hash": "d5dda6a49127df92939f1e9e9d595fa5ec928299c433bf36421ae75d5be2a38e",
+      "model": "claude-haiku-5-5",
+      "inputTokens": 5630,
+      "outputTokens": 181,
+      "stopReason": "end_turn",
+      "ms": 2288
+    }
+  }
+}

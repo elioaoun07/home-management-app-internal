@@ -1,298 +1,37 @@
-// src/app/api/items/route.ts
-// API route for creating items (reminders, events, tasks)
-// Used by offline sync engine for replay
-
+// One source transaction serves ERA, precision forms and offline replay.
 import { syncItemToGoogleCalendar } from "@/lib/gcal/sync";
 import { supabaseServer } from "@/lib/supabase/server";
-import { buildFullRRuleString } from "@/lib/utils/date";
+import { createItemSchema, prepareItemCreate, sourceFailure } from "@/lib/items/createContract";
 import { NextRequest, NextResponse } from "next/server";
-import { RRule } from "rrule";
-
 export const dynamic = "force-dynamic";
 
-/**
- * Compute the base event time for an alert. For recurring items we MUST
- * resolve the next future occurrence (relative to now) — using the raw
- * `due_at`/`start_at` would land trigger_at in the past for any backdated
- * series, and the cron's lookback window would never see it. See
- * `src/app/api/cron/item-reminders/route.ts`.
- */
-function resolveAlertBaseTime(
-  body: Record<string, unknown>,
-  type: string,
-  relativeTo: unknown,
-): Date | null {
-  const rule = body.recurrence_rule as
-    | {
-        rrule?: string;
-        start_anchor?: string;
-        end_until?: string | null;
-        count?: number | null;
-      }
-    | undefined;
-  const dueAt = body.due_at as string | undefined;
-  const startAt = body.start_at as string | undefined;
-  const endAt = body.end_at as string | undefined;
-
-  const baseStr =
-    type === "event" ? (relativeTo === "end" ? endAt : startAt) : dueAt;
-  if (!baseStr) return null;
-
-  if (rule?.rrule) {
-    try {
-      const anchor = new Date(rule.start_anchor || baseStr);
-      const rruleStr = buildFullRRuleString(anchor, {
-        rrule: rule.rrule,
-        end_until: rule.end_until ?? null,
-        count: rule.count ?? null,
-      });
-      const next = RRule.fromString(rruleStr).after(new Date(), true);
-      if (next) return next;
-      // No future occurrences — fall through to base.
-    } catch (err) {
-      console.error("[items/route] RRule expansion failed:", err);
-    }
-  }
-
-  return new Date(baseStr);
-}
-
 export async function POST(request: NextRequest) {
+  const supabase = await supabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized", completion: { status: "not_started" } }, { status: 401 });
+  let input: unknown;
+  try { input = await request.json(); }
+  catch { return NextResponse.json({ error: "Invalid request body", completion: { status: "not_started" } }, { status: 400 }); }
+  const parsed = createItemSchema.safeParse(input);
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten(), completion: { status: "not_started" } }, { status: 400 });
+  // Custom wall-clock alerts must be calculated on the capture device, not
+  // in the server's time zone. Ordinary offsets are safe to calculate here.
+  if (parsed.data.alerts.some(a => a.custom_time && !a.trigger_at))
+    return NextResponse.json({ error: "Custom alert requires a resolved trigger time", completion: { status: "not_started" } }, { status: 400 });
   try {
-    const supabase = await supabaseServer();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const body = prepareItemCreate(parsed.data);
+    const { data, error } = await supabase.rpc("create_item_complete", { p: body });
+    if (error) {
+      const status = error.code === "23505" ? 409 : error.code === "42501" ? 403 : error.code === "22023" ? 400 : 500;
+      const completion = sourceFailure(error.code);
+      return NextResponse.json({ error: completion.status === "unknown" ? "Save unverified. Check Schedule before retrying." : "Item was not saved", completion }, { status });
     }
-
-    const body = await request.json();
-    const { type } = body;
-
-    if (!type || !["reminder", "event", "task"].includes(type)) {
-      return NextResponse.json(
-        { error: "Invalid item type. Must be reminder, event, or task." },
-        { status: 400 },
-      );
-    }
-
-    if (!body.title?.trim()) {
-      return NextResponse.json({ error: "Title is required" }, { status: 400 });
-    }
-
-    // Create the base item
-    // If prerequisites are provided, start as dormant (trigger-only)
-    const hasPrerequisites =
-      Array.isArray(body.prerequisites) && body.prerequisites.length > 0;
-
-    const { data: item, error: itemError } = await supabase
-      .from("items")
-      .insert({
-        user_id: user.id,
-        type,
-        title: body.title,
-        description: body.description || null,
-        priority: body.priority || "normal",
-        status: hasPrerequisites ? "dormant" : body.status || "pending",
-        metadata_json: body.metadata_json || null,
-        is_public: body.is_public || false,
-        responsible_user_id: body.responsible_user_id || user.id,
-        notify_all_household: body.notify_all_household || false,
-        categories: body.category_ids || [],
-        location_context: body.location_context || null,
-        location_text: body.location_text || null,
-        source_catalogue_item_id: body.source_catalogue_item_id || null,
-        is_template_instance: body.is_template_instance || false,
-        is_chore: body.is_chore || false,
-      })
-      .select()
-      .single();
-
-    if (itemError) {
-      console.error("[items/route] Failed to create item:", itemError);
-      if (itemError.code === "23505") {
-        return NextResponse.json(
-          { error: "Item already exists" },
-          { status: 409 },
-        );
-      }
-      return NextResponse.json({ error: itemError.message }, { status: 500 });
-    }
-
-    // Type-specific details
-    if (type === "reminder" || type === "task") {
-      if (body.due_at || body.estimate_minutes) {
-        const { error: detailsError } = await supabase
-          .from("reminder_details")
-          .insert({
-            item_id: item.id,
-            due_at: body.due_at || null,
-            estimate_minutes: body.estimate_minutes || null,
-            has_checklist: body.has_checklist || false,
-          });
-        if (detailsError) {
-          console.error(
-            "[items/route] Failed to create reminder details:",
-            detailsError,
-          );
-        }
-      }
-    } else if (type === "event") {
-      const { error: detailsError } = await supabase
-        .from("event_details")
-        .insert({
-          item_id: item.id,
-          start_at: body.start_at,
-          end_at: body.end_at || null,
-          all_day: body.all_day || false,
-          location_text: body.location_text || null,
-        });
-      if (detailsError) {
-        console.error(
-          "[items/route] Failed to create event details:",
-          detailsError,
-        );
-      }
-    }
-
-    // Subtasks
-    if (body.subtasks?.length) {
-      const subtasks = body.subtasks.map(
-        (s: { title: string; order_index?: number }, i: number) => ({
-          parent_item_id: item.id,
-          title: s.title,
-          order_index: s.order_index ?? i,
-        }),
-      );
-      const { error: subtasksError } = await supabase
-        .from("item_subtasks")
-        .insert(subtasks);
-      if (subtasksError) {
-        console.error(
-          "[items/route] Failed to create subtasks:",
-          subtasksError,
-        );
-      }
-    }
-
-    // Alerts
-    if (body.alerts?.length) {
-      const alerts = body.alerts.map((a: Record<string, unknown>) => {
-        let computedTriggerAt = a.trigger_at;
-        const baseTime = resolveAlertBaseTime(body, type, a.relative_to);
-
-        if (a.kind === "relative" && baseTime) {
-          if (a.custom_time && a.offset_minutes) {
-            const daysOffset = Math.floor((a.offset_minutes as number) / 1440);
-            const alertDate = new Date(baseTime);
-            alertDate.setDate(alertDate.getDate() - daysOffset);
-            const [hours, minutes] = (a.custom_time as string)
-              .split(":")
-              .map(Number);
-            alertDate.setHours(hours, minutes, 0, 0);
-            computedTriggerAt = alertDate.toISOString();
-          } else if (a.offset_minutes) {
-            computedTriggerAt = new Date(
-              baseTime.getTime() - (a.offset_minutes as number) * 60 * 1000,
-            ).toISOString();
-          }
-        }
-
-        const alertData: Record<string, unknown> = {
-          item_id: item.id,
-          kind: a.kind,
-          trigger_at: computedTriggerAt,
-          offset_minutes: a.offset_minutes,
-          relative_to: a.relative_to,
-          repeat_every_minutes: a.repeat_every_minutes,
-          max_repeats: a.max_repeats,
-          channel: a.channel || "push",
-        };
-        if (a.custom_time) alertData.custom_time = a.custom_time;
-        return alertData;
-      });
-      const { error: alertsError } = await supabase
-        .from("item_alerts")
-        .insert(alerts);
-      if (alertsError) {
-        console.error("[items/route] Failed to create alerts:", alertsError);
-      }
-    } else if (body.due_at) {
-      // Auto-create a push alert at due time. For recurring items, anchor
-      // on the next future occurrence so the cron can pick it up.
-      const baseTime = resolveAlertBaseTime(body, type, "due");
-      await supabase.from("item_alerts").insert({
-        item_id: item.id,
-        kind: "absolute",
-        trigger_at: (baseTime ?? new Date(body.due_at)).toISOString(),
-        channel: "push",
-        active: true,
-      });
-    }
-
-    // Recurrence rule
-    if (body.recurrence_rule?.rrule) {
-      const { error: recurrenceError } = await supabase
-        .from("item_recurrence_rules")
-        .insert({
-          item_id: item.id,
-          rrule: body.recurrence_rule.rrule,
-          start_anchor:
-            body.recurrence_rule.start_anchor ||
-            body.due_at ||
-            body.start_at ||
-            new Date().toISOString(),
-          end_until: body.recurrence_rule.end_until || null,
-          count: body.recurrence_rule.count || null,
-          is_flexible: body.recurrence_rule.is_flexible || false,
-          flexible_period: body.recurrence_rule.flexible_period || null,
-        });
-      if (recurrenceError) {
-        console.error(
-          "[items/route] Failed to create recurrence:",
-          recurrenceError,
-        );
-      }
-    }
-
-    // Prerequisites (triggers)
-    if (hasPrerequisites) {
-      const prereqs = body.prerequisites.map(
-        (p: {
-          condition_type: string;
-          condition_config: Record<string, unknown>;
-          logic_group?: number;
-        }) => ({
-          item_id: item.id,
-          condition_type: p.condition_type,
-          condition_config: p.condition_config,
-          logic_group: p.logic_group ?? 0,
-        }),
-      );
-      const { error: prereqError } = await supabase
-        .from("item_prerequisites")
-        .insert(prereqs);
-      if (prereqError) {
-        console.error(
-          "[items/route] Failed to create prerequisites:",
-          prereqError,
-        );
-      }
-    }
-
-    // Best-effort Google Calendar backup sync — awaited so it completes
-    // before the serverless function exits, but any failure is swallowed
-    // inside syncItemToGoogleCalendar and never blocks item creation.
-    await syncItemToGoogleCalendar(supabase, item.id);
-
-    return NextResponse.json({ item }, { status: 201 });
-  } catch (error) {
-    console.error("[items/route] Unexpected error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    if (!data?.item?.id || data.completion?.status !== "complete")
+      return NextResponse.json({ error: "Save unverified. Check Schedule before retrying.", completion: { status: "unknown" } }, { status: 502 });
+    // External backup is explicitly best effort, outside the source receipt.
+    await syncItemToGoogleCalendar(supabase, data.item.id).catch(() => {});
+    return NextResponse.json(data, { status: 201, headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return NextResponse.json({ error: "Save unverified. Check Schedule before retrying.", completion: { status: "unknown" } }, { status: 500 });
   }
 }

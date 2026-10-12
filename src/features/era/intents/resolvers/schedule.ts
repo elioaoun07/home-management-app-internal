@@ -1,3 +1,5 @@
+import { waitingForConsent, type BeforeWrite } from "../../capabilities/effectiveAction";
+import { itemCreateReceiptSchema, createdItemIdentitySchema } from "@/lib/items/createContract";
 // Schedule resolver — fetches a day's items + overdue via the shared items
 // bundle, and creates real reminders from natural language (draftReminder).
 import { fetchAllOccurrenceActions, normalizeToLocalDateString } from "@/features/items/useItemActions";
@@ -29,6 +31,8 @@ interface ResolveResult {
   text: string;
   metadata?: Record<string, unknown>;
   pending?: EraPendingTurn | null;
+  /** Unsupported writes can open the precision tool without dispatching. */
+  navigate?: string;
   /** HUB-34 — false on every graceful-error return below; see resolveIntent.ts's ResolveResult doc for why this exists. */
   ok?: boolean;
   /** What this write left behind (src/lib/era/artifacts.ts). */
@@ -145,8 +149,11 @@ export async function resolveScheduleForDay(dateISO?: string): Promise<ResolveRe
 export async function resolveDraftReminder(
   rawText: string,
   title?: string,
+  referenceDate?: Date,
+  beforeWrite?: BeforeWrite,
 ): Promise<ResolveResult> {
-  const parsed = parseSmartText(rawText);
+  const parsed = parseSmartText(rawText, referenceDate);
+  if (parsed.recurrenceRule) return recurringReminderNeedsSchedule();
 
   const finalTitle = (title?.trim() || parsed.title?.trim() || "").trim();
   if (!finalTitle) {
@@ -170,7 +177,17 @@ export async function resolveDraftReminder(
     };
   }
 
-  return writeReminder(finalTitle, parsed.priority, parsed.dueDate, parsed.dueTime, parsed.recurrenceRule);
+  return writeReminder(finalTitle, parsed.priority, parsed.dueDate, parsed.dueTime, parsed.recurrenceRule, beforeWrite);
+}
+
+function recurringReminderNeedsSchedule(): ResolveResult {
+  return {
+    text: "Set recurring reminders in Schedule.",
+    ok: false,
+    metadata: { notDispatched: true },
+    pending: null,
+    navigate: "/reminders",
+  };
 }
 
 async function writeReminder(
@@ -179,8 +196,14 @@ async function writeReminder(
   dueDate: string,
   dueTime: string | undefined,
   recurrenceRule: string | undefined,
+  beforeWrite?: BeforeWrite,
 ): Promise<ResolveResult> {
+  // The current adapter does not persist a recurrence rule. Never create a
+  // one-off while describing a series; the precision form owns that workflow.
+  if (recurrenceRule) return recurringReminderNeedsSchedule();
   const dueAt = localToISO(dueDate, dueTime || "12:00");
+  const effective = { capabilityId: "reminder.create", values: { title, due_at: dueAt, priority, recurrence: "Once", alert: "Push at due time" } };
+  if (beforeWrite && !await beforeWrite(effective)) return waitingForConsent(effective);
 
   try {
     const res = await safeFetch("/api/items", {
@@ -195,9 +218,21 @@ async function writeReminder(
       timeoutMs: 8_000,
     });
 
-    if (!res.ok) return { text: formatReminderError(), ok: false };
-
-    const { item } = (await res.json()) as { item?: { id?: string } };
+    if (!res.ok) {
+      const receipt = await res.json().catch(() => null);
+      const definite = ["not_started", "rolled_back"].includes(receipt?.completion?.status);
+      return { text: definite ? "Reminder was not saved." : "Save unverified. Check Schedule before retrying.", ok: false,
+        metadata: { completion: definite ? "failed" : "unknown" } };
+    }
+    const json = await res.json();
+    const receipt = itemCreateReceiptSchema.safeParse(json);
+    if (!receipt.success) {
+      const identity = createdItemIdentitySchema.safeParse(json);
+      return { text: "Completion unverified. Check Schedule before retrying.", ok: false,
+        artifacts: identity.success ? [eraArtifact("reminder", "created", identity.data.item.id, title)] : undefined,
+        metadata: { completion: "unknown", partial: identity.success } };
+    }
+    const { item } = receipt.data;
 
     return {
       text: formatReminderCreated({
@@ -216,7 +251,7 @@ async function writeReminder(
       pending: null,
     };
   } catch {
-    return { text: formatReminderError(), ok: false };
+    return { text: "Save unverified. Check Schedule before retrying.", ok: false, metadata: { completion: "unknown" } };
   }
 }
 
@@ -237,6 +272,7 @@ export async function resolvePendingReminderAnswer(
   answerText: string,
 ): Promise<ResolveResult> {
   const parsed = parseSmartText(answerText);
+  if (parsed.recurrenceRule) return recurringReminderNeedsSchedule();
 
   if (parsed.confidence.date > 0 && parsed.dueDate) {
     return writeReminder(pending.title, pending.priority, parsed.dueDate, parsed.dueTime, parsed.recurrenceRule);
@@ -255,9 +291,21 @@ export async function resolvePendingReminderAnswer(
       timeoutMs: 8_000,
     });
 
-    if (!res.ok) return { text: formatReminderError(), pending: null };
-
-    const { item } = (await res.json()) as { item?: { id?: string } };
+    if (!res.ok) {
+      const receipt = await res.json().catch(() => null);
+      const definite = ["not_started", "rolled_back"].includes(receipt?.completion?.status);
+      return { text: definite ? "Draft was not saved." : "Save unverified. Check Schedule before retrying.",
+        ok: false, pending: null, metadata: { completion: definite ? "failed" : "unknown" } };
+    }
+    const json = await res.json();
+    const receipt = itemCreateReceiptSchema.safeParse(json);
+    if (!receipt.success) {
+      const identity = createdItemIdentitySchema.safeParse(json);
+      return { text: "Completion unverified. Check Schedule before retrying.", ok: false, pending: null,
+        artifacts: identity.success ? [eraArtifact("reminder", "created", identity.data.item.id, pending.title)] : undefined,
+        metadata: { completion: "unknown", partial: identity.success } };
+    }
+    const { item } = receipt.data;
 
     return {
       text: formatReminderSavedAsDraft({ title: pending.title }),
@@ -266,7 +314,7 @@ export async function resolvePendingReminderAnswer(
       pending: null,
     };
   } catch {
-    return { text: formatReminderError(), pending: null };
+    return { text: "Save unverified. Check Schedule before retrying.", ok: false, pending: null, metadata: { completion: "unknown" } };
   }
 }
 
@@ -299,8 +347,8 @@ function embedOne<T>(value: T | T[] | null | undefined): T | null {
  * parseSmartText's type detector can read whenText as an event noun (e.g.
  * "appointment") and route the parse into start/end fields instead of due.
  */
-export function whenToISO(whenText: string, referenceISO: string | null): string | null {
-  const parsed = parseSmartText(`at ${whenText}`);
+export function whenToISO(whenText: string, referenceISO: string | null, referenceDate?: Date): string | null {
+  const parsed = parseSmartText(`at ${whenText}`, referenceDate);
   const parsedDate = parsed.dueDate ?? parsed.startDate;
   const parsedTime = parsed.dueTime ?? parsed.startTime;
   if (parsed.confidence.date > 0 && parsedDate) return localToISO(parsedDate, parsedTime || "12:00");
@@ -400,6 +448,8 @@ export async function resolveReminderReschedule(
   itemId: string | null,
   title: string | null,
   whenText: string,
+  referenceDate?: Date,
+  beforeWrite?: BeforeWrite,
 ): Promise<ResolveResult> {
   if (!itemId) return { text: formatFocusMissing("reschedule"), ok: false };
 
@@ -416,9 +466,11 @@ export async function resolveReminderReschedule(
     // Non-fatal — a full date in whenText still resolves without this.
   }
 
-  const dueAt = whenToISO(whenText, existingDueAt);
+  const dueAt = whenToISO(whenText, existingDueAt, referenceDate);
   if (!dueAt) return { text: formatReminderActionError(title, "reschedule"), ok: false };
 
+  const effective = { capabilityId: "reminder.reschedule", values: { itemId, title, due_at: dueAt, previousDueAt: existingDueAt } };
+  if (beforeWrite && !await beforeWrite(effective)) return waitingForConsent(effective);
   try {
     const res = await safeFetch(`/api/items/${itemId}`, {
       method: "PATCH",
@@ -449,6 +501,7 @@ export async function resolveReminderReschedule(
 export async function resolveReminderComplete(
   itemId: string | null,
   title: string | null,
+  beforeWrite?: BeforeWrite,
 ): Promise<ResolveResult> {
   if (!itemId) return { text: formatFocusMissing("complete"), ok: false };
 
@@ -471,6 +524,8 @@ export async function resolveReminderComplete(
       ? formatDate(new Date(reminderDetails.due_at))
       : formatDate(new Date());
 
+    const effective = { capabilityId: "reminder.complete", values: { itemId, title, occurrence_date: occurrenceDate } };
+    if (beforeWrite && !await beforeWrite(effective)) return waitingForConsent(effective);
     const res = await safeFetch(`/api/items/${itemId}/complete`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -523,8 +578,12 @@ export function prepareReminderDelete(
 export async function resolveReminderDelete(
   itemId: string | null,
   title: string | null,
+  beforeWrite?: BeforeWrite,
 ): Promise<ResolveResult> {
   if (!itemId) return { text: formatFocusMissing("delete"), ok: false };
+
+  const effective = { capabilityId: "reminder.delete", values: { itemId, ...(title ? { title } : {}), effect: "Recycle Bin" } };
+  if (beforeWrite && !await beforeWrite(effective)) return waitingForConsent(effective);
 
   try {
     const res = await safeFetch(`/api/items/${itemId}`, {

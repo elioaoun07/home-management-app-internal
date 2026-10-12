@@ -33,6 +33,7 @@ import { ScheduleDashboard } from "./dashboards/ScheduleDashboard";
 import { ChefDashboard } from "./dashboards/ChefDashboard";
 import { BrainDashboard } from "./dashboards/BrainDashboard";
 import { ArtifactsView } from "./dashboards/ArtifactsView";
+import { AiUsageView } from "./dashboards/AiUsageView";
 import { CommandBar } from "./CommandBar";
 import { EraAskChips } from "./EraAskChips";
 import { EraChatDrawer } from "./EraChatDrawer";
@@ -150,6 +151,8 @@ export function EraShell() {
   const face      = getFace(activeFaceKey);
   const isHub      = activeView === "hub";
   const isActivity = activeView === "activity";
+  // AI Usage is desktop-only — a phone never shows it.
+  const isUsage    = activeView === "usage" && isMobile === false;
   const turnInFlight = useEraStore((s) => s.turnInFlight);
   const { hasTurns } = useActiveThreadState();
   // HUB-86 — the hub shows a conversation (DOT risen, thread below it).
@@ -158,7 +161,7 @@ export function EraShell() {
   // Hub → tracks last mentioned module (starts as "chat", shifts when user addresses a face);
   // Activity → neutral chat hue, it isn't tied to any one face;
   // Module dashboard → that face's module key.
-  const moduleKey = isHub ? hubModuleKey : isActivity ? "chat" : face.eraModuleKey;
+  const moduleKey = isHub ? hubModuleKey : isActivity || isUsage ? "chat" : face.eraModuleKey;
   const fc        = MODULE_COLORS[moduleKey] ?? MODULE_COLORS.chat;
 
   const greeting  = `${getTimeGreeting()}${firstName ? `, ${firstName}.` : "."}`;
@@ -168,6 +171,12 @@ export function EraShell() {
   useEffect(() => {
     if (isHub) setChatDrawerOpen(false);
   }, [isHub]);
+
+  // AI Usage has no phone layout — narrowing the window leaves it for the hub.
+  const setActiveView = useEraStore((s) => s.setActiveView);
+  useEffect(() => {
+    if (isMobile && activeView === "usage") setActiveView("hub");
+  }, [isMobile, activeView, setActiveView]);
 
   // Measure the content area so we can spring the ERA DOT to an exact pixel center.
   const contentRef = useRef<HTMLDivElement>(null);
@@ -345,7 +354,7 @@ export function EraShell() {
           <AnimatePresence mode="wait">
             {!isHub && (
               <motion.div
-                key={isActivity ? "activity" : activeFaceKey}
+                key={isActivity || isUsage ? activeView : activeFaceKey}
                 className="absolute inset-x-0 overflow-y-auto"
                 style={{ top: dashboardTop, bottom: 0 }}
                 initial={{ opacity: 0, y: 28 }}
@@ -355,7 +364,7 @@ export function EraShell() {
               >
                 {/* Bottom padding clears the CommandBar (80px mobile offset + ~52px height) */}
                 <div className="pb-[148px] md:pb-[80px]">
-                  {isActivity ? <ArtifactsView /> : <DashboardContent faceKey={activeFaceKey} />}
+                  {isActivity ? <ArtifactsView /> : isUsage ? <AiUsageView /> : <DashboardContent faceKey={activeFaceKey} />}
                 </div>
               </motion.div>
             )}

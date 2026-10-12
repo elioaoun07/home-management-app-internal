@@ -68,7 +68,26 @@ Full protocol in Hard Rule #27 and the `fix-bug` skill's Phase 1.5 gate. The sho
 1. Read `migrations/db-state.json` **before** reading route code.
 2. Silent + asymmetric = RLS. RLS never errors; it removes rows. "Correct query, zero rows, no error, works for the owner but not the partner" is the fingerprint.
 3. If a `SECURITY DEFINER` RPC path works where the equivalent PostgREST path fails, that is near-proof RLS is the filter — SECURITY DEFINER bypasses it.
-4. Never conclude "the code is fine, so it must be data" without policy bodies in hand.
+4. Never conclude "the code is fine, so it must be data" without policy bodies in hand. Equally, don't "fix" correct code to chase the symptom — if every layer reads right, say so and go get DB state.
+5. **If the snapshot is missing or stale**, hand the owner these two queries and wait for the output **untruncated** (a cut-off `qual`/`permissive` column is how a permissive policy overridden by a restrictive one ships):
+   ```sql
+   select relname, relrowsecurity from pg_class c
+     join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname='public' and relname in (<every table in the read path>);
+   select tablename, policyname, permissive, cmd, qual from pg_policies
+    where schemaname='public' and tablename in (<same list>);
+   ```
+6. **No repo prose is evidence about RLS** — not `schema.sql` (tables only), not a vault Overview, a migration comment, a Master Book or CLAUDE.md. A doc claim about DB state is a hypothesis to verify.
+7. **New child tables** get a policy in the same migration, or the migration states why none is needed. "The parent has no RLS" is not a reason — verify the parent.
+
+## Agent access to the live DB (Hard Rule #26)
+
+The Supabase MCP exists only for the Delivery Command Center / PM mobile relay bridge (`pm_live`, `pm_commands` — `migrations/2026-07-25_pm-mobile-relay.sql`, `scripts/pm/bridge.mjs`).
+
+- **Allowed (read-only):** `list_projects`, `list_tables`, `list_migrations`, `list_extensions`, `list_branches`, `list_edge_functions`, `get_edge_function`, `get_project`, `get_project_url`, `get_publishable_keys`, `get_advisors`, `get_logs`, `get_cost`, `generate_typescript_types`, `search_docs`.
+- **Forbidden:** `execute_sql` (even a `SELECT`), `apply_migration`, `deploy_edge_function`, any `*_branch`, `create_project`, `pause_project`, `restore_project`, `confirm_cost`. Blocked via `deny` in `.claude/settings.json` + `~/.claude/settings.json`; approving a prompt cannot override a deny.
+- **Back doors are the same violation:** Supabase CLI (`db push/reset/execute`), `psql`, Node/`tsx` scripts or REPLs using `SUPABASE_SERVICE_ROLE_KEY` / `supabaseAdmin()`, `curl` against PostgREST/RPC, dev-only SQL routes, or running a cron/seed/repair script for its side effect.
+- **`data-repair` runbooks are deliverables, not actions** — inspect/backup/fix/verify SQL handed to the owner.
 
 ## Related
 

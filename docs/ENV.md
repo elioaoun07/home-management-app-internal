@@ -14,6 +14,8 @@ SUPABASE_SERVICE_ROLE_KEY=         # admin ops (cron, batch)
 GOOGLE_AI_API_KEY=                 # Gemini AI
 GEMINI_MODEL=                      # optional, default gemini-flash-latest (auto-updates to latest Flash model, lightweight, future-proof)
 GEMINI_FALLBACK_MODEL=             # optional, default gemini-flash-lite-latest (lighter variant, separate quota bucket; auto-updates to latest Flash-Lite)
+ANTHROPIC_API_KEY=                 # Claude — ERA Ask AI (/api/era/ask); other AI routes still use Gemini
+ANTHROPIC_MODEL=                   # optional, default claude-haiku-5-5 (HUB-107)
 CRON_SECRET=                       # cron job auth (Bearer token)
 VOICE_SECRET=                      # voice endpoint JWT
 AZURE_TTS_KEY=                     # Azure Cognitive Services TTS key
@@ -40,7 +42,10 @@ Setup: in Google Cloud Console, create a project (or reuse one), enable the **Go
 
 ## Optional / Dev
 
+ERA agent recovery is opt-in until the owner applies `migrations/2026-10-10_era-execution-journal.sql` and refreshes the committed DB-state snapshot. Set `NEXT_PUBLIC_ERA_DURABLE_EXECUTION=true` and rebuild to enable saved plans and recovery cards. The default is off, preserving the Phase 2 execution path. This client flag is not an authorization boundary; the journal API always authenticates and checks ownership.
+
 ```env
+NEXT_PUBLIC_ERA_DURABLE_EXECUTION=  # "true" only after owner applies the execution-journal migration
 NEXT_PUBLIC_APP_URL=               # app root URL (used in push notification links)
 NEXT_PUBLIC_ENABLE_SW=             # set to "false" to disable service worker during debugging
 DEV_USER_ID=                       # override auth user in local development

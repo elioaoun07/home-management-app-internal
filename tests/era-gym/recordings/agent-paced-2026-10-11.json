@@ -1,0 +1,354 @@
+{
+  "startedAt": "2026-10-11T05:43:06.545Z",
+  "gapMs": 30000,
+  "apiCalls": 12,
+  "retries": 0,
+  "fallbackCalls": 0,
+  "status": "PASSED",
+  "results": [
+    {
+      "id": "application-awareness",
+      "request": "Show what ERA can do in Trips and list my saved recipes",
+      "caps": [
+        "app.capabilities",
+        "recipe.list"
+      ],
+      "status": "PASSED",
+      "ms": 9688,
+      "model": "gemini-3.8-flash",
+      "usage": {
+        "promptTokenCount": 2749,
+        "candidatesTokenCount": 89,
+        "totalTokenCount": 4555,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2749
+          }
+        ],
+        "thoughtsTokenCount": 1717,
+        "serviceTier": "standard"
+      },
+      "finishReason": "STOP",
+      "raw": "{\"kind\":\"propose_plan\",\"text\":\"I will check ERA's capabilities for Trips and list your saved recipes.\",\"planJson\":\"{\\\"steps\\\":[{\\\"id\\\":\\\"trips_capabilities\\\",\\\"capabilityId\\\":\\\"app.capabilities\\\",\\\"label\\\":\\\"Check Trips capabilities\\\",\\\"slots\\\":{\\\"query\\\":\\\"Trips\\\"}},{\\\"id\\\":\\\"list_recipes\\\",\\\"capabilityId\\\":\\\"recipe.list\\\",\\\"label\\\":\\\"List saved recipes\\\",\\\"slots\\\":{}}]}\"}",
+      "actual": [
+        "app.capabilities",
+        "recipe.list"
+      ]
+    },
+    {
+      "id": "memory-copy",
+      "request": "Recall guest WiFi then save a copy as Visitor WiFi",
+      "caps": [
+        "memory.recall",
+        "memory.save"
+      ],
+      "status": "PASSED",
+      "ms": 3907,
+      "model": "gemini-3.8-flash",
+      "usage": {
+        "promptTokenCount": 2747,
+        "candidatesTokenCount": 107,
+        "totalTokenCount": 3300,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2747
+          }
+        ],
+        "thoughtsTokenCount": 446,
+        "serviceTier": "standard"
+      },
+      "finishReason": "STOP",
+      "raw": "{\"kind\":\"propose_plan\",\"text\":\"I can recall your guest WiFi details and save a copy under Visitor WiFi.\",\"planJson\":\"{\\\"steps\\\":[{\\\"id\\\":\\\"recall_wifi\\\",\\\"capabilityId\\\":\\\"memory.recall\\\",\\\"label\\\":\\\"Recall guest WiFi\\\",\\\"slots\\\":{\\\"query\\\":\\\"guest WiFi\\\"}},{\\\"id\\\":\\\"save_wifi\\\",\\\"capabilityId\\\":\\\"memory.save\\\",\\\"label\\\":\\\"Save Visitor WiFi\\\",\\\"slots\\\":{\\\"label\\\":\\\"Visitor WiFi\\\",\\\"value\\\":{\\\"step\\\":\\\"recall_wifi\\\",\\\"field\\\":\\\"value\\\"}}}]}\"}",
+      "actual": [
+        "memory.recall",
+        "memory.save"
+      ]
+    },
+    {
+      "id": "unsupported-module-write",
+      "request": "Activate my Paris trip and add milk to shopping",
+      "caps": [],
+      "status": "PASSED",
+      "ms": 3657,
+      "model": "gemini-3.8-flash",
+      "usage": {
+        "promptTokenCount": 2746,
+        "candidatesTokenCount": 48,
+        "totalTokenCount": 3241,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2746
+          }
+        ],
+        "thoughtsTokenCount": 447,
+        "serviceTier": "standard"
+      },
+      "finishReason": "STOP",
+      "raw": "{\n  \"kind\": \"prose\",\n  \"text\": \"I can't activate trips because there are no actions available for the Trips module. Would you like me to just add milk to your shopping list?\"\n}",
+      "actual": []
+    },
+    {
+      "id": "unsupported-stock-subtraction",
+      "request": "Plan Orange Chicken for Friday dinner and add only the ingredients missing from my pantry to shopping",
+      "caps": [],
+      "status": "PASSED",
+      "ms": 3687,
+      "model": "gemini-3.8-flash",
+      "usage": {
+        "promptTokenCount": 2754,
+        "candidatesTokenCount": 50,
+        "totalTokenCount": 3193,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2754
+          }
+        ],
+        "thoughtsTokenCount": 389,
+        "serviceTier": "standard"
+      },
+      "finishReason": "STOP",
+      "raw": "{\"kind\":\"prose\",\"text\":\"I can schedule Orange Chicken for dinner, but I can't check or filter against your pantry inventory. Would you like me to assign the meal and add all of its ingredients to your shopping list instead?\"}",
+      "actual": []
+    },
+    {
+      "id": "shopping-paraphrase",
+      "request": "Could you pop milk and eggs onto the grocery list?",
+      "caps": [
+        "shopping.add"
+      ],
+      "status": "PASSED",
+      "ms": 2574,
+      "model": "gemini-3.8-flash",
+      "usage": {
+        "promptTokenCount": 2748,
+        "candidatesTokenCount": 59,
+        "totalTokenCount": 2956,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2748
+          }
+        ],
+        "thoughtsTokenCount": 149,
+        "serviceTier": "standard"
+      },
+      "finishReason": "STOP",
+      "raw": "{\n  \"kind\": \"propose_action\",\n  \"text\": \"Should I add milk and eggs to your shopping list?\",\n  \"capabilityId\": \"shopping.add\",\n  \"slotsJson\": \"{\\\"items\\\":[\\\"milk\\\",\\\"eggs\\\"]}\"\n}",
+      "actual": [
+        "shopping.add"
+      ]
+    },
+    {
+      "id": "recipe-meal-shopping",
+      "request": "Plan Orange Chicken for Friday dinner and add its ingredients to the shopping list",
+      "caps": [
+        "recipe.ingredients",
+        "meal.assign",
+        "shopping.add"
+      ],
+      "status": "PASSED",
+      "ms": 5310,
+      "model": "gemini-3.8-flash",
+      "usage": {
+        "promptTokenCount": 2751,
+        "candidatesTokenCount": 157,
+        "totalTokenCount": 3480,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2751
+          }
+        ],
+        "thoughtsTokenCount": 572,
+        "serviceTier": "standard"
+      },
+      "finishReason": "STOP",
+      "raw": "{\"kind\":\"propose_plan\",\"text\":\"I will find the recipe for Orange Chicken, schedule it for Friday dinner, and add its ingredients to your shopping list.\",\"planJson\":\"{\\\"steps\\\":[{\\\"id\\\":\\\"recipe\\\",\\\"capabilityId\\\":\\\"recipe.ingredients\\\",\\\"label\\\":\\\"Find Orange Chicken recipe\\\",\\\"slots\\\":{\\\"dish\\\":\\\"Orange Chicken\\\"}},{\\\"id\\\":\\\"plan-meal\\\",\\\"capabilityId\\\":\\\"meal.assign\\\",\\\"label\\\":\\\"Plan for Friday dinner\\\",\\\"slots\\\":{\\\"dish\\\":{\\\"step\\\":\\\"recipe\\\",\\\"field\\\":\\\"recipeName\\\"},\\\"dayHint\\\":\\\"Friday\\\",\\\"mealType\\\":\\\"dinner\\\"}},{\\\"id\\\":\\\"shopping\\\",\\\"capabilityId\\\":\\\"shopping.add\\\",\\\"label\\\":\\\"Add ingredients to shopping list\\\",\\\"slots\\\":{\\\"items\\\":{\\\"step\\\":\\\"recipe\\\",\\\"field\\\":\\\"ingredients\\\"}}}]}\"}",
+      "actual": [
+        "recipe.ingredients",
+        "meal.assign",
+        "shopping.add"
+      ]
+    },
+    {
+      "id": "named-reminder",
+      "request": "Find my dentist reminder then move it to Friday at 5pm",
+      "caps": [
+        "reminder.find",
+        "reminder.reschedule"
+      ],
+      "status": "PASSED",
+      "ms": 5625,
+      "model": "gemini-3.8-flash",
+      "usage": {
+        "promptTokenCount": 2750,
+        "candidatesTokenCount": 134,
+        "totalTokenCount": 3671,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2750
+          }
+        ],
+        "thoughtsTokenCount": 787,
+        "serviceTier": "standard"
+      },
+      "finishReason": "STOP",
+      "raw": "{\n  \"kind\": \"propose_plan\",\n  \"text\": \"I will find your dentist reminder and reschedule it to Friday at 5pm.\",\n  \"planJson\": \"{\\\"steps\\\":[{\\\"id\\\":\\\"find\\\",\\\"capabilityId\\\":\\\"reminder.find\\\",\\\"label\\\":\\\"Find dentist reminder\\\",\\\"slots\\\":{\\\"hint\\\":\\\"dentist\\\"}},{\\\"id\\\":\\\"reschedule\\\",\\\"capabilityId\\\":\\\"reminder.reschedule\\\",\\\"label\\\":\\\"Reschedule reminder\\\",\\\"slots\\\":{\\\"itemId\\\":{\\\"step\\\":\\\"find\\\",\\\"field\\\":\\\"itemId\\\"},\\\"title\\\":{\\\"step\\\":\\\"find\\\",\\\"field\\\":\\\"title\\\"},\\\"whenText\\\":\\\"Friday at 5pm\\\"}}]}\"\n}",
+      "actual": [
+        "reminder.find",
+        "reminder.reschedule"
+      ]
+    },
+    {
+      "id": "shopping-reminder",
+      "request": "Add milk to shopping and remind me to collect it tomorrow at 5pm",
+      "caps": [
+        "shopping.add",
+        "reminder.create"
+      ],
+      "status": "PASSED",
+      "ms": 4713,
+      "model": "gemini-3.8-flash",
+      "usage": {
+        "promptTokenCount": 2752,
+        "candidatesTokenCount": 115,
+        "totalTokenCount": 3454,
+        "cachedContentTokenCount": 1154,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2752
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1154
+          }
+        ],
+        "thoughtsTokenCount": 587,
+        "serviceTier": "standard"
+      },
+      "finishReason": "STOP",
+      "raw": "{\"kind\":\"propose_plan\",\"text\":\"I will add milk to your shopping list and set a reminder to collect it tomorrow at 5 PM.\",\"planJson\":\"{\\\"steps\\\":[{\\\"id\\\":\\\"add_shopping\\\",\\\"capabilityId\\\":\\\"shopping.add\\\",\\\"label\\\":\\\"Add milk to shopping list\\\",\\\"slots\\\":{\\\"items\\\":[\\\"milk\\\"]}},{\\\"id\\\":\\\"create_reminder\\\",\\\"capabilityId\\\":\\\"reminder.create\\\",\\\"label\\\":\\\"Create reminder to collect milk\\\",\\\"slots\\\":{\\\"rawText\\\":\\\"collect it tomorrow at 5pm\\\",\\\"title\\\":\\\"Collect milk\\\"}}]}\"}",
+      "actual": [
+        "shopping.add",
+        "reminder.create"
+      ]
+    },
+    {
+      "id": "two-reads",
+      "request": "Show my saved recipes and list what's on the shopping list",
+      "caps": [
+        "recipe.list",
+        "shopping.list"
+      ],
+      "status": "PASSED",
+      "ms": 3321,
+      "model": "gemini-3.8-flash",
+      "usage": {
+        "promptTokenCount": 2750,
+        "candidatesTokenCount": 76,
+        "totalTokenCount": 3116,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2750
+          }
+        ],
+        "thoughtsTokenCount": 290,
+        "serviceTier": "standard"
+      },
+      "finishReason": "STOP",
+      "raw": "{\"kind\":\"propose_plan\",\"text\":\"I will pull up your saved recipes and current shopping list.\",\"planJson\":\"{\\\"steps\\\":[{\\\"id\\\":\\\"recipes\\\",\\\"capabilityId\\\":\\\"recipe.list\\\",\\\"label\\\":\\\"List saved recipes\\\",\\\"slots\\\":{}},{\\\"id\\\":\\\"shopping\\\",\\\"capabilityId\\\":\\\"shopping.list\\\",\\\"label\\\":\\\"List shopping items\\\",\\\"slots\\\":{}}]}\"}",
+      "actual": [
+        "recipe.list",
+        "shopping.list"
+      ]
+    },
+    {
+      "id": "recipe-shopping-implicit",
+      "request": "Put the ingredients for Orange Chicken on my shopping list",
+      "caps": [
+        "recipe.ingredients",
+        "shopping.add"
+      ],
+      "status": "PASSED",
+      "ms": 5001,
+      "model": "gemini-3.8-flash",
+      "usage": {
+        "promptTokenCount": 2747,
+        "candidatesTokenCount": 107,
+        "totalTokenCount": 3499,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2747
+          }
+        ],
+        "thoughtsTokenCount": 645,
+        "serviceTier": "standard"
+      },
+      "finishReason": "STOP",
+      "raw": "{\"kind\":\"propose_plan\",\"text\":\"I will find the ingredients for Orange Chicken and add them to your shopping list.\",\"planJson\":\"{\\\"steps\\\":[{\\\"id\\\":\\\"get_ingredients\\\",\\\"capabilityId\\\":\\\"recipe.ingredients\\\",\\\"label\\\":\\\"Look up Orange Chicken ingredients\\\",\\\"slots\\\":{\\\"dish\\\":\\\"Orange Chicken\\\"}},{\\\"id\\\":\\\"add_ingredients\\\",\\\"capabilityId\\\":\\\"shopping.add\\\",\\\"label\\\":\\\"Add ingredients to shopping list\\\",\\\"slots\\\":{\\\"items\\\":{\\\"step\\\":\\\"get_ingredients\\\",\\\"field\\\":\\\"ingredients\\\"}}}]}\"}",
+      "actual": [
+        "recipe.ingredients",
+        "shopping.add"
+      ]
+    },
+    {
+      "id": "negation",
+      "request": "Don't add milk to shopping and don't create a reminder",
+      "caps": [],
+      "status": "PASSED",
+      "ms": 2048,
+      "model": "gemini-3.8-flash",
+      "usage": {
+        "promptTokenCount": 2751,
+        "candidatesTokenCount": 27,
+        "totalTokenCount": 2904,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2751
+          }
+        ],
+        "thoughtsTokenCount": 126,
+        "serviceTier": "standard"
+      },
+      "finishReason": "STOP",
+      "raw": "{\"kind\":\"prose\",\"text\":\"Understood, I won't add milk to your shopping list or create a reminder.\"}",
+      "actual": []
+    },
+    {
+      "id": "unsupported",
+      "request": "Book two flights to Paris and pay for them",
+      "caps": [],
+      "status": "PASSED",
+      "ms": 2688,
+      "model": "gemini-3.8-flash",
+      "usage": {
+        "promptTokenCount": 2746,
+        "candidatesTokenCount": 32,
+        "totalTokenCount": 2994,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2746
+          }
+        ],
+        "thoughtsTokenCount": 216,
+        "serviceTier": "standard"
+      },
+      "finishReason": "STOP",
+      "raw": "{\"kind\":\"prose\",\"text\":\"I cannot book flights or process payments, as I don't have actions available for booking travel or making transactions.\"}",
+      "actual": []
+    }
+  ],
+  "completedAt": "2026-10-11T05:49:28.936Z"
+}

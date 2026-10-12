@@ -2,8 +2,7 @@
 
 // src/components/era/EraProposalCard.tsx
 // AI-proposed action (Slice 4) — nothing behind this card has been written
-// yet; Confirm performs the real writes (POST /api/items, POST
-// .../prerequisites), Dismiss just clears it. Renders only while
+// yet; Confirm performs the source writes, Dismiss just clears it. Renders only while
 // `activeProposal` is set — the manual-handoff pattern's one shipped kind.
 //
 // Variants:
@@ -17,10 +16,26 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { useEraAskAI } from "@/features/era/useEraAskAI";
 import { saveLexiconRule } from "@/features/era/useEraLexicon";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { EraActionPreview } from "./EraActionPreview";
 
 export type EraCardVariant = "floating" | "embedded" | "inline";
+const nativeTitles = {
+  transfer: "Transfer", recordDebt: "Record debt", capability: "Apply action",
+  reminderSeries: "Move series", reminderOccurrence: "Move occurrence",
+  shoppingGroupCreate: "Create group", shoppingRemove: "Remove shopping items",
+  reminderSkip: "Skip occurrence", recurringCover: "Link payment",
+};
+const nativeFields: Record<string, string> = {
+  amount: "Amount", currency: "Currency", fromAccountId: "From ID", toAccountId: "To ID",
+  fromName: "From", toName: "To", debtorName: "Person", notes: "Notes", itemId: "Item",
+  title: "Title", whenText: "When", threadId: "List", name: "Name", messageIds: "Items",
+  previousGroupId: "Was", label: "Items", paymentId: "Payment", transactionId: "Transaction",
+  txDate: "Date", previousLastProcessed: "Last paid", previousNextDue: "Next due",
+};
 
 export function EraProposalCard({ variant = "floating" }: { variant?: EraCardVariant }) {
+  const tc = useThemeClasses();
   const { activeProposal, confirmProposal, dismissProposal } = useEraAskAI();
   // HUB-80 — "Always" (plan §5: ☐ Always beside Confirm). Only offered when
   // the same choice was made before; saving happens on Confirm, never alone.
@@ -49,15 +64,37 @@ export function EraProposalCard({ variant = "floating" }: { variant?: EraCardVar
     >
       <div
         className={[
-          "flex w-full flex-col gap-3 rounded-2xl px-4 py-3.5",
+          "flex w-full flex-col gap-3 rounded-2xl px-4 py-3.5", tc.bgPage,
           variant === "inline" ? "" : "max-w-[560px]",
         ].join(" ")}
         style={{
-          background: "#121a2c",
           border: "1px solid var(--era-border-subtle, rgba(255,255,255,0.14))",
         }}
       >
-        <p className="text-[15px] leading-relaxed text-white/90">{activeProposal.text}</p>
+        {(activeProposal.kind === "propose_plan" || activeProposal.kind === "propose_action") ? <>
+          <details className="min-w-0 break-words text-[13px] text-white/50"><summary className="min-h-10 cursor-pointer">Request</summary>{activeProposal.sourceText}</details>
+          <EraActionPreview
+            plan={activeProposal.kind === "propose_plan" ? activeProposal.plan : { steps: [{ id: "action", label: "Action", capabilityId: activeProposal.capabilityId, slots: activeProposal.slots }] }}
+            consent={activeProposal.kind === "propose_plan" ? activeProposal.consent : undefined}
+            completed={activeProposal.kind === "propose_plan" ? activeProposal.resume?.map(s => s.id) : undefined}
+            referenceDate={activeProposal.requestContext?.referenceDate ?? new Date().toISOString()}
+            timeZone={activeProposal.requestContext?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone}
+          />
+        </> : activeProposal.kind === "propose_nfc_reminder" ? <dl className="space-y-1 break-words text-[13px] text-white/80">
+          <dt className="text-[15px]">Create triggered reminder</dt>
+          <dd>{activeProposal.reminderTitle}</dd><dd>{activeProposal.nfcTagLabel} · {activeProposal.targetState}</dd>
+          <dd className="text-white/50 [overflow-wrap:anywhere]">{activeProposal.nfcTagId} · Dormant</dd>
+          <dd className="text-white/50">Normal · Once · No timed alert</dd>
+        </dl> : activeProposal.kind === "native_action" ? <>
+          {activeProposal.action.type === "capability" ? <EraActionPreview
+            plan={{ steps: [{ id: "action", label: "Action", capabilityId: activeProposal.action.capabilityId, slots: activeProposal.action.slots }] }}
+            referenceDate={activeProposal.requestContext?.referenceDate ?? new Date().toISOString()}
+            timeZone={activeProposal.requestContext?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone}
+          /> : <>
+            <p className="text-[15px] text-white/90">{nativeTitles[activeProposal.action.type]}</p>
+            <dl className="space-y-1 break-words text-[13px] text-white/80">{Object.entries(activeProposal.action).filter(([key]) => key !== "type").map(([key, value]) => <div key={key} className="[overflow-wrap:anywhere]"><dt className="text-white/40">{nativeFields[key]}</dt><dd>{Array.isArray(value) ? value.length : String(value ?? "None")}</dd></div>)}</dl>
+          </>}
+        </> : <p className="text-[15px] leading-relaxed text-white/90">{activeProposal.text}</p>}
         {activeProposal.kind === "handoff" ? (
           <div className="flex justify-end gap-2">
             <button

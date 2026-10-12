@@ -1,3 +1,4 @@
+import { waitingForConsent, type BeforeWrite } from "../../capabilities/effectiveAction";
 // src/features/era/intents/resolvers/shopping.ts
 // HUB-78 marginal-cost capability — "add milk and eggs to the shopping list".
 // Source-owned adapter: posts to the household shopping thread through the
@@ -39,7 +40,7 @@ export function splitShoppingItems(raw: string): string[] {
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1));
 }
 
-export async function resolveAddShopping(items: string[], groupHint?: string): Promise<ResolveResult> {
+export async function resolveAddShopping(items: string[], groupHint?: string, onProgress?: (result: ResolveResult) => Promise<void>, beforeWrite?: BeforeWrite): Promise<ResolveResult> {
   if (items.length === 0) return { text: "Add what?", ok: false };
   try {
     const list = await findShoppingThread();
@@ -62,20 +63,35 @@ export async function resolveAddShopping(items: string[], groupHint?: string): P
       }
     }
 
+    const effective = { capabilityId: "shopping.add", values: { items, threadId: list.id, groupId, groupName: groupName ?? "General", unresolvedGroup: unresolvedGroup ?? null } };
+    if (beforeWrite && !await beforeWrite(effective)) return waitingForConsent(effective);
     const ids: string[] = [];
+    let checkpointFailed = false;
     for (const content of items) {
-      const res = await safeFetch("/api/hub/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, thread_id: list.id, ...(groupId ? { shopping_group_id: groupId } : {}) }),
-        timeoutMs: 8_000,
-      });
-      if (!res.ok) break;
-      const data = (await res.json()) as { message?: { id?: string } };
-      if (data.message?.id) ids.push(data.message.id);
+      try {
+        const res = await safeFetch("/api/hub/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, thread_id: list.id, ...(groupId ? { shopping_group_id: groupId } : {}) }),
+          timeoutMs: 8_000,
+        });
+        if (!res.ok) break;
+        const data = (await res.json()) as { message?: { id?: string } };
+        if (!data.message?.id) break;
+        ids.push(data.message.id);
+        try {
+          await onProgress?.({ text: `Added ${ids.length} of ${items.length}.`,
+            artifacts: shoppingArtifacts(ids, items.slice(0, ids.length), "created", list.id),
+            metadata: { messageIds: [...ids], threadId: list.id, items: items.slice(0, ids.length), partial: ids.length < items.length, groupId } });
+        } catch { checkpointFailed = true; break; }
+      } catch {
+        // Preserve earlier confirmed rows on timeout/network failure; the
+        // current row is unverified and must not be retried automatically.
+        break;
+      }
     }
     if (ids.length === 0) return { text: "Couldn't add that.", ok: false };
-    const partial = ids.length < items.length;
+    const partial = ids.length < items.length || checkpointFailed;
     const added = items.slice(0, ids.length);
     const focus: FocusEntity = {
       id: ids[0],
@@ -93,9 +109,20 @@ export async function resolveAddShopping(items: string[], groupHint?: string): P
       artifacts: shoppingArtifacts(ids, added, "created", list.id),
       focus,
     };
-    if (unresolvedGroup) {
-      const follow = await applyShoppingGroupLazy(focus, unresolvedGroup);
-      return { ...base, ...follow, text: `${base.text}\n${follow.text}`, metadata: base.metadata, focus: follow.focus ?? focus };
+    if (unresolvedGroup && !partial) {
+      try {
+        const follow = await applyShoppingGroupLazy(focus, unresolvedGroup);
+        return {
+          ...base, ...follow,
+          ok: base.ok === false || follow.ok === false ? false : base.ok,
+          text: `${base.text}\n${follow.text}`,
+          metadata: base.metadata,
+          artifacts: [...(base.artifacts ?? []), ...(follow.artifacts ?? [])],
+          focus: follow.focus ?? focus,
+        };
+      } catch {
+        return { ...base, ok: false, text: `${base.text}\nCouldn't verify the group change.` };
+      }
     }
     return base;
   } catch {

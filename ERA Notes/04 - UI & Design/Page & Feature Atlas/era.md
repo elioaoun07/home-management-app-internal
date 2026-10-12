@@ -29,12 +29,14 @@ tags:
   - `src/components/era/EraDots.tsx`
   - `src/components/era/HubScatterWidgets.tsx` — the 4 hub-mode scatter cards (Budget/Schedule/Chef/Brain), corner-positioned around the center orb — unchanged; a same-session redesign of this into a grid was reverted per owner feedback (see Master Book HUB-25 correction note)
   - `src/components/era/dashboards/ArtifactsView.tsx` — the Activity log's own view (day navigation, module groups tinted per module, per-row Undo/Redo), opened via the Artifacts chip exactly like a face dashboard (`useEraStore`'s `EraView` gained a third `"activity"` value alongside `"hub"`/`"dashboard"`)
+  - `src/components/era/dashboards/AiUsageView.tsx` — **AI Usage** chip after Artifacts (2026-10-11, HUB-110), desktop only (`md:flex`; `EraShell` sends a phone back to the hub). `EraView` value `"usage"`. Month ‹ ›, three stat cards (est. cost, tokens, AI calls) and a per-day table: chats that reached the model (click → `useResumeEraConversation` + hub), calls (auto count), input, output, est. cost, Total row. Data: `GET /api/era/ai-usage?from&to` → `src/features/era/aiUsage.ts` (local-day buckets + list-price estimate)
   - `src/features/era/recordArtifacts.ts` — the Artifacts tab's single write point (not a component); entities, labels and deep links live in `src/lib/era/artifacts.ts` (2026-10-04)
   - `src/components/era/EraConversation.tsx` — the conversation (2026-10-03, HUB-86; replaced the inline `EraThreadTranscript`): bubbles in the person's own color, ERA replies beside a small orb in the answering face's hue, time breaks, a thinking indicator, the confirm card and question chips as the newest turn, a quiet "Report" offer under a missed reply, and a "New chat" divider once the chat has been silent 30 min. Layouts: `stage` (hub), `panel` (desktop dashboards), `sheet` (mobile chat sheet), `preview` (History)
   - `src/components/era/EraChatToolbar.tsx` — History (left) and New chat (right) icons under the nav in hub view; New chat shows a dot once the chat has gone quiet
   - `src/components/era/EraHistorySheet.tsx` — past chats (HUB-52): side panel on desktop, bottom sheet on phones; grouped Today / Yesterday / This week / Earlier; tap = read-only preview with Archive / Continue
   - `src/components/era/EraReportCard.tsx` — the Report card (HUB-85): Missed / Wrong, an optional "Expected…" note, Send; Undo on the toast
   - `src/components/era/EraProposalCard.tsx` — the confirm card, moved out of `EraShell.tsx` (still re-exported there)
+  - `src/components/era/EraRunCards.tsx` — saved execution receipts and Confirm / Resume / Recover / Skip / Stop controls in the conversation (HUB-104, opt-in after the owner-run migration). Interrupted writes require inspection; only reads offer retry. Existing History → Continue opens the original conversation and its unfinished plans.
 
 ## Hooks
 
@@ -48,19 +50,27 @@ tags:
 
 ## Feature module
 
+- **Effective confirmation (HUB-109, 2026-10-11)** — `src/components/era/EraActionPreview.tsx` is shared by default/saved cards. Reviewed registry action titles and effective fields replace model prose; original request is expandable, dependencies stay pending, and materially resolved/changed values need fresh Confirm. Completed effects remain visible and do not repeat. Source completion is SCH-24; owner SQL/RLS and 390 px visual acceptance are pending.
+
 - `src/features/era/types.ts` — `FaceKey`, `Face`, `Intent`, `IntentRouter`
 - `src/features/era/faceRegistry.ts` — `FACES`, `getFace`, `DEFAULT_FACE_KEY`
 - `src/features/era/intentRouter.ts` — re-exports `rootIntentRouter` (`src/features/era/intents/index.ts`), a deterministic keyword router — shipped, not a stub; no Gemini-backed router exists
 - `src/features/era/queryKeys.ts` — `eraKeys`
+- `src/features/era/capabilities/plan.ts` — Agent v1 (2026-10-10): validated plans of up to six actions, typed result dependencies and per-step receipts. Read-only plans answer directly; writes use the existing Confirm/Dismiss card with deterministic effective fields (HUB-109). `confirmation.ts` prevents duplicate confirmation; source actions and artifacts remain shared with the app.
 
 ## API routes
 
+- `src/app/api/era/runs/route.ts` — GET/POST owner-only saved plans; `src/app/api/era/runs/[id]/route.ts` — PATCH validated version/attempt transitions and atomic artifact projection (HUB-104). `src/features/era/execution/useEraRuns.ts` loads the original conversation's unfinished work; the migration and build-time flag are required before rollout.
+
+- `src/app/api/era/ask/route.ts` — capability-aware Gemini interpretation into a single action or multi-step plan; no domain writes. Agent requests include the user's local calendar date.
 - `src/app/api/era/conversations/route.ts`, `src/app/api/era/messages/route.ts` — shipped since Phase 0.5; append-only `era_messages`
 - `src/app/api/era/actions/route.ts` — GET/POST for the Activity log (2026-08-27, HUB-25); GET returns the last 30 rows by default, one local day with `?from=&to=` and the list of days with `?view=days` (bucketed client-side in `useEraArtifacts` against the caller's timezone); `POST /api/era/actions/status` reports each reversible row's live state for Undo/Redo
 - `src/app/api/era/conversations/route.ts?history=1` — History rows with deterministic titles; `src/app/api/era/conversations/[id]/route.ts` — PATCH resume / archive (HUB-52)
 - `src/app/api/era/issues/route.ts` (POST) and `src/app/api/era/issues/[id]/route.ts` (DELETE = Undo) — file a Report as a system `era_messages` row (HUB-85); the PM bridge imports it as a Hub & ERA defect (R72)
 
 ## DB tables
+
+- `era_runs` (migration `2026-10-10_era-execution-journal.sql`, **pending manual run**) — private consent/progress journal with a versioned transaction function; deterministic `era_actions` projection uses the same transaction. Feature flag defaults off.
 
 - `era_conversations`, `era_messages` (`migrations/schema.sql`) — shipped since Phase 0.5
 - `era_actions` (migration `2026-08-26_era-actions.sql`; entity/verb widened by `2026-10-04_era-artifacts-any-entity.sql`, **pending manual run**) — one row per ERA-initiated create/update/delete, feeds the Artifacts tab

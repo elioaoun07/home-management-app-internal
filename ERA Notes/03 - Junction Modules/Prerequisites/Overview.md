@@ -20,6 +20,12 @@ tags:
 
 A pluggable trigger engine that evaluates conditions and activates dormant items. Items with prerequisites start in `dormant` status (hidden from normal lists). When a trigger event fires (NFC tap, item completion, etc.), the engine evaluates all prerequisites and transitions matching dormant items to `pending`.
 
+### Atomic source setup — 2026-10-11 (SCH-24)
+
+New items include prerequisites in their original `/api/items` request; `create_item_complete` commits those rows and dormant status together. Existing-item POST/DELETE use `add_item_prerequisite_complete` / `remove_item_prerequisite_complete`: lock the owned live item, validate the trigger, write/remove it and change dormant/pending status in one transaction. The last active prerequisite's removal activates a dormant item in the same commit. Failed state updates roll back the trigger operation; a missing/incomplete acknowledgement remains unknown. Receipts carry resulting item ID/status and must be complete before the route returns success.
+
+Functions use SECURITY INVOKER plus explicit ownership, active household/tag/state and visible prerequisite-item checks; they do not widen RLS. [Owner SQL](<../../../migrations/2026-10-11_atomic-item-create.sql>) and current `db-state.json` evidence are pending. Local injected SQL/API failures prove the transaction boundary, not production visibility or trigger delivery. SCH-10 still owns policy readiness; existing engine/evaluation/condition support is unchanged.
+
 ---
 
 ## Concepts

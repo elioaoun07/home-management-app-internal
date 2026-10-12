@@ -30,6 +30,8 @@ export interface OfflineOperation {
   createdAt: number;
   retryCount: number;
   maxRetries: number;
+  /** A source write may have committed. Retain input; never replay blindly. */
+  reviewRequired?: boolean;
   metadata?: {
     label: string;
     icon?: string;
@@ -350,6 +352,7 @@ export async function updateRetryCount(
 export async function updateQueuedOperation(
   id: string,
   updates: {
+    reviewRequired?: boolean;
     body?: Record<string, unknown>;
     metadata?: { label: string; icon?: string };
   },
@@ -358,9 +361,11 @@ export async function updateQueuedOperation(
     const op = memoryQueue.find((o) => o.id === id);
     if (!op) return false;
     if (updates.body) op.body = { ...op.body, ...updates.body };
+    if (updates.reviewRequired !== undefined) op.reviewRequired = updates.reviewRequired;
     if (updates.metadata) op.metadata = { ...op.metadata, ...updates.metadata };
     notifyQueueChanged();
-    return true;
+    // A replay fence must survive a browser restart, not just a memory write.
+    return updates.reviewRequired !== true;
   }
 
   try {
@@ -382,6 +387,7 @@ export async function updateQueuedOperation(
       }
 
       if (updates.body) op.body = { ...op.body, ...updates.body };
+      if (updates.reviewRequired !== undefined) op.reviewRequired = updates.reviewRequired;
       if (updates.metadata)
         op.metadata = { ...op.metadata, ...updates.metadata };
 
@@ -389,7 +395,9 @@ export async function updateQueuedOperation(
         const tx = db.transaction(STORE_NAME, "readwrite");
         const store = tx.objectStore(STORE_NAME);
         const putReq = store.put(op);
-        putReq.onsuccess = () => resolve();
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(tx.error);
+        tx.onerror = () => reject(tx.error);
         putReq.onerror = () => reject(putReq.error);
       });
     } finally {
@@ -402,8 +410,9 @@ export async function updateQueuedOperation(
     if (!op) return false;
     if (updates.body) op.body = { ...op.body, ...updates.body };
     if (updates.metadata) op.metadata = { ...op.metadata, ...updates.metadata };
+    if (updates.reviewRequired !== undefined) op.reviewRequired = updates.reviewRequired;
     notifyQueueChanged();
-    return true;
+    return updates.reviewRequired !== true;
   }
 }
 
@@ -415,7 +424,7 @@ export async function removeStaleOperations(
 ): Promise<number> {
   const cutoff = Date.now() - maxAgeMs;
   const allOps = await getAllPending();
-  const stale = allOps.filter((op) => op.createdAt < cutoff);
+  const stale = allOps.filter((op) => !op.reviewRequired && op.createdAt < cutoff);
 
   for (const op of stale) {
     await removeFromQueue(op.id);
@@ -455,6 +464,7 @@ export async function cancelCreateDeletePair(
     (op) =>
       op.feature === feature &&
       op.operation === "create" &&
+      !op.reviewRequired &&
       op.tempId === tempId,
   );
   const deleteOp = allOps.find(

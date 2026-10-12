@@ -101,6 +101,19 @@ The app's core promise is near-effortless capture — CLAUDE.md's interaction mo
 - **Count the taps** before/after your change; a capture-flow change that adds taps needs explicit justification in your report.
 - Amount fields: decimal keyboard via §6, auto-focused where the flow expects immediate typing.
 
-## 13. If you added a page or route
+## 13. UI text is a cost (Hard Rule 28)
+
+Added 2026-08-24 after the owner: *"you are adding on production, on the UI, way too many texts to explain things that are pretty clear for me… it is getting too frustrating."* Single-household app, built by its only users — they know what a button does.
+
+- **Default to no explanatory prose.** Label, number, action verb. If a card reads from title + amount + buttons, it needs nothing else.
+- **Buttons are verbs, 1–2 words**: `Skip`, `Import`, `Restore`. Not `Same one — skip it`.
+- **No reassurance text** ("no money moved", "balance is untouched either way").
+- **No banner restating the tab it sits under.**
+- **One short clause is the ceiling** where genuinely ambiguous — e.g. `Also in Debit Card - NEO`. Never a sentence or rhetorical question.
+- **Never justify a design decision in the UI** — rationale goes in a code comment or the vault.
+- **Genuinely needed help → an `i` affordance** (tap/hover popover), not inline copy.
+- Applies to every shipped string: titles, subtitles, captions, placeholders, empty states, toasts, confirm dialogs, receipts, tooltips. The owner asks for more wording when they want it.
+
+## 14. If you added a page or route
 
 Atlas entry + `App Routes and Icons.md` update are mandatory — handled in `finish-task` (Hard Rule 23). Flag it in your slice plan now so it isn't forgotten.

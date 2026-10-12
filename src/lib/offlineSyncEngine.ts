@@ -3,6 +3,9 @@
 
 import { isReallyOnline, markOffline } from "@/lib/connectivityManager";
 import type { OfflineOperation } from "./offlineQueue";
+import { safeFetch } from "./safeFetch";
+import { itemCreateReceiptSchema } from "./items/createContract";
+import { qk } from "./queryKeys";
 import {
   cancelCreateDeletePair,
   getAllPending,
@@ -10,6 +13,7 @@ import {
   removeFromQueue,
   removeStaleOperations,
   updateRetryCount,
+  updateQueuedOperation,
 } from "./offlineQueue";
 
 export interface SyncResult {
@@ -29,7 +33,7 @@ export const FEATURE_QUERY_KEYS: Record<string, string[][]> = {
     ["accounts"],
     ["dashboard-stats"],
   ],
-  item: [["items"]],
+  item: [[...qk.scheduleItems()], [...qk.nfcTagItemsAll()]],
   "hub-message": [
     ["hub", "messages"],
     ["hub", "threads"],
@@ -153,7 +157,7 @@ class OfflineSyncEngine {
       // Cancel create+delete pairs (user created then deleted same entity offline)
       const allOps = await getAllPending();
       const createOps = allOps.filter(
-        (op) => op.operation === "create" && op.tempId,
+        (op) => op.operation === "create" && op.tempId && !op.reviewRequired,
       );
       for (const createOp of createOps) {
         // Look for a delete targeting this tempId's endpoint
@@ -190,7 +194,18 @@ class OfflineSyncEngine {
       }
 
       for (const op of operations) {
+        if (op.reviewRequired) continue;
         result.processed++;
+        const itemCreate = op.feature === "item" && op.operation === "create" && op.endpoint === "/api/items";
+        const pauseItem = async (notSent = false) => {
+          const error = notSent ? "Not sent. Queue storage unavailable." : "Save unverified. Check Schedule before retrying.";
+          await updateQueuedOperation(op.id, { reviewRequired: true, metadata: { label: `${op.metadata?.label ?? "Item"} / ${notSent ? "Not sent" : "Check Schedule"}` } });
+          result.failed++;
+          result.errors.push({ operationId: op.id, error });
+          this.options.invalidateQueries(FEATURE_QUERY_KEYS.item);
+          this.options.onOperationFailure?.(op, error, false);
+          this.notifyListeners();
+        };
 
         // Check max retries
         if (op.retryCount >= op.maxRetries) {
@@ -211,22 +226,35 @@ class OfflineSyncEngine {
         }
 
         try {
-          // Use AbortController with timeout to prevent hanging requests
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 10_000); // 10s timeout
-
+          // Fence before dispatch: closing the browser after a commit cannot
+          // cause an automatic duplicate create on the next sync pass.
+          if (itemCreate && !await updateQueuedOperation(op.id, { reviewRequired: true })) {
+            await pauseItem(true);
+            continue;
+          }
           console.log(
             `[OFFLINE] syncEngine: replaying ${op.feature}/${op.operation} => ${op.method} ${op.endpoint}`,
           );
-          const response = await fetch(op.endpoint, {
+          const response = await safeFetch(op.endpoint, {
             method: op.method,
             headers: { "Content-Type": "application/json" },
-            signal: controller.signal,
+            timeoutMs: 10_000,
             ...(op.method !== "DELETE" || Object.keys(op.body).length > 0
               ? { body: JSON.stringify(op.body) }
               : {}),
           });
-          clearTimeout(timeout);
+
+          if (itemCreate) {
+            const receipt = await response.clone().json().catch(() => null);
+            if (response.ok ? !itemCreateReceiptSchema.safeParse(receipt).success
+              : !["not_started", "rolled_back"].includes(receipt?.completion?.status)) {
+              await pauseItem();
+              continue;
+            }
+            // Keep the fence through local acknowledgement/removal. A crash
+            // after a complete response must not make another create replayable.
+            if (!response.ok) await updateQueuedOperation(op.id, { reviewRequired: false });
+          }
 
           if (response.ok) {
             // Success
@@ -288,6 +316,7 @@ class OfflineSyncEngine {
             this.notifyListeners();
           }
         } catch (err) {
+          if (itemCreate) { await pauseItem(); continue; }
           // Network error — still offline, stop processing
           const errorMessage =
             err instanceof Error ? err.message : "Network error";

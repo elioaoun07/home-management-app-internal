@@ -10,15 +10,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FocusEntity } from "@/features/era/focusMemory";
 import type { ScheduleContext } from "./context";
 
-// Never let this test suite make a real Gemini call, regardless of whether
-// GEMINI_API_KEY happens to be loaded from .env in this environment.
-const mockGenerateContentWithFallback = vi.hoisted(() => vi.fn());
-vi.mock("./gemini", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./gemini")>();
-  return { ...actual, generateContentWithFallback: mockGenerateContentWithFallback };
+// Never let this test suite make a real model call, regardless of whether
+// ANTHROPIC_API_KEY happens to be loaded from .env in this environment.
+const mockGenerateClaudeJson = vi.hoisted(() => vi.fn());
+vi.mock("./anthropic", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./anthropic")>();
+  return { ...actual, generateClaudeJson: mockGenerateClaudeJson };
 });
 
-const { generateAskAIResponse, parseAskAIResponse } = await import("./eraAskProposal");
+const { generateAskAIResponse, parseAskAIResponse, REJECTED_PROPOSAL_TEXT } = await import("./eraAskProposal");
 
 const SCHEDULE_CONTEXT: ScheduleContext = {
   upcoming: [],
@@ -86,7 +86,7 @@ describe("parseAskAIResponse", () => {
       }),
       SCHEDULE_CONTEXT,
     );
-    expect(result).toEqual({ kind: "prose", text: "Sounds good, I'll set that up." });
+    expect(result).toEqual({ kind: "prose", text: REJECTED_PROPOSAL_TEXT });
   });
 
   it("degrades to prose when the target state isn't one of the tag's real states", () => {
@@ -100,7 +100,7 @@ describe("parseAskAIResponse", () => {
       }),
       SCHEDULE_CONTEXT,
     );
-    expect(result).toEqual({ kind: "prose", text: "Sounds good, I'll set that up." });
+    expect(result).toEqual({ kind: "prose", text: REJECTED_PROPOSAL_TEXT });
   });
 
   it("degrades to prose when no scheduleContext was supplied at all (budget/chef/brain faces)", () => {
@@ -114,7 +114,7 @@ describe("parseAskAIResponse", () => {
       }),
       undefined,
     );
-    expect(result).toEqual({ kind: "prose", text: "Sounds good, I'll set that up." });
+    expect(result).toEqual({ kind: "prose", text: REJECTED_PROPOSAL_TEXT });
   });
 
   it("extracts JSON even when the model wraps it in markdown fences is NOT supported — plain JSON only", () => {
@@ -149,7 +149,7 @@ describe("parseAskAIResponse — propose_action", () => {
         slotsJson: json({}),
       }),
     );
-    expect(result).toEqual({ kind: "prose", text: "I'll do that." });
+    expect(result).toEqual({ kind: "prose", text: REJECTED_PROPOSAL_TEXT });
   });
 
   it("degrades to prose when slotsJson isn't valid JSON", () => {
@@ -161,7 +161,7 @@ describe("parseAskAIResponse — propose_action", () => {
         slotsJson: "not json {{{",
       }),
     );
-    expect(result).toEqual({ kind: "prose", text: "I'll do that." });
+    expect(result).toEqual({ kind: "prose", text: REJECTED_PROPOSAL_TEXT });
   });
 
   it("validates a read capability with no entity reference (schedule.forDay)", () => {
@@ -190,7 +190,7 @@ describe("parseAskAIResponse — propose_action", () => {
         slotsJson: json({ dateISO: "not-a-date" }),
       }),
     );
-    expect(result).toEqual({ kind: "prose", text: "On it." });
+    expect(result).toEqual({ kind: "prose", text: REJECTED_PROPOSAL_TEXT });
   });
 
   it("never trusts a raw model-supplied itemId — only the literal FOCUS sentinel is accepted", () => {
@@ -204,7 +204,7 @@ describe("parseAskAIResponse — propose_action", () => {
       undefined,
       FOCUS,
     );
-    expect(result).toEqual({ kind: "prose", text: "Moved it." });
+    expect(result).toEqual({ kind: "prose", text: REJECTED_PROPOSAL_TEXT });
   });
 
   it("degrades to prose when FOCUS is used but no focus entity was supplied", () => {
@@ -218,7 +218,7 @@ describe("parseAskAIResponse — propose_action", () => {
       undefined,
       null,
     );
-    expect(result).toEqual({ kind: "prose", text: "Moved it." });
+    expect(result).toEqual({ kind: "prose", text: REJECTED_PROPOSAL_TEXT });
   });
 
   it("resolves FOCUS to the real focus entity id and enriches title, when a focus entity is supplied", () => {
@@ -251,23 +251,56 @@ describe("parseAskAIResponse — propose_action", () => {
       undefined,
       FOCUS,
     );
-    expect(result).toEqual({ kind: "prose", text: "Deleted." });
+    expect(result).toEqual({ kind: "prose", text: REJECTED_PROPOSAL_TEXT });
   });
 });
 
 describe("generateAskAIResponse", () => {
-  // GEMINI_API_KEY isn't loaded from .env into the Vitest process env — stub
+  it("meters actual prompt, reasoning and fallback model even for a rejected answer", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    mockGenerateClaudeJson.mockResolvedValue({
+      text: json({ kind: "propose_action", text: "Done", capabilityId: "trip.activate", slotsJson: "{}" }),
+      model: "actual-fallback-model",
+      usage: { inputTokens: 2700, outputTokens: 980 },
+    });
+    const onUsage = vi.fn();
+    const result = await generateAskAIResponse({ message: "Activate Paris", face: "brain", onUsage });
+    expect(result).toEqual({ kind: "prose", text: REJECTED_PROPOSAL_TEXT });
+    expect(onUsage).toHaveBeenCalledExactlyOnceWith({ inputTokens: 2700, outputTokens: 980, model: "actual-fallback-model", estimated: false });
+  });
+
+  it("labels missing provider usage as estimated and includes the catalog in the estimate", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    mockGenerateClaudeJson.mockResolvedValue({ text: json({ kind: "prose", text: "Hello" }) });
+    const onUsage = vi.fn();
+    await generateAskAIResponse({ message: "Hello", face: "brain", onUsage });
+    expect(onUsage.mock.calls[0][0]).toMatchObject({ estimated: true, model: "unknown" });
+    expect(onUsage.mock.calls[0][0].inputTokens).toBeGreaterThan(1000);
+  });
+
+  it("accounts for truncated JSON without treating it as an executable response", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    mockGenerateClaudeJson.mockResolvedValue({
+      text: '{"kind":"propose_plan",', model: "primary", stopReason: "max_tokens",
+      usage: { inputTokens: 3000, outputTokens: 4082 },
+    });
+    const onUsage = vi.fn();
+    expect((await generateAskAIResponse({ message: "Plan dinner", face: "chef", onUsage })).kind).toBe("prose");
+    expect(onUsage.mock.calls[0][0].outputTokens).toBe(4082);
+  });
+
+  // ANTHROPIC_API_KEY isn't loaded from .env into the Vitest process env — stub
   // it so the "model unavailable" branch these tests target is the one
   // ACTUALLY under test, not just "no key configured" short-circuiting
-  // early. generateContentWithFallback is mocked above regardless, so no
+  // early. generateClaudeJson is mocked above regardless, so no
   // real network call is possible either way.
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
   it("degrades to a deterministic prose reply when the model call fails — never throws, never proposes", async () => {
-    vi.stubEnv("GEMINI_API_KEY", "test-key");
-    mockGenerateContentWithFallback.mockRejectedValue(new Error("rate limited"));
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    mockGenerateClaudeJson.mockRejectedValue(new Error("rate limited"));
 
     const result = await generateAskAIResponse({
       message: "remind me when I get home",
@@ -281,9 +314,9 @@ describe("generateAskAIResponse", () => {
     }
   });
 
-  it("degrades to prose when the model returns malformed JSON despite responseSchema", async () => {
-    vi.stubEnv("GEMINI_API_KEY", "test-key");
-    mockGenerateContentWithFallback.mockResolvedValue({ text: "not valid json {{{" });
+  it("degrades to prose when the model returns malformed JSON despite the schema", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    mockGenerateClaudeJson.mockResolvedValue({ text: "not valid json {{{" });
 
     const result = await generateAskAIResponse({
       message: "remind me when I get home",
@@ -295,8 +328,8 @@ describe("generateAskAIResponse", () => {
   });
 
   it("returns a validated proposal end-to-end when the model output is well-formed and matches context", async () => {
-    vi.stubEnv("GEMINI_API_KEY", "test-key");
-    mockGenerateContentWithFallback.mockResolvedValue({
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    mockGenerateClaudeJson.mockResolvedValue({
       text: json({
         kind: "propose_nfc_reminder",
         text: "Set that up for when you arrive?",
@@ -326,8 +359,8 @@ describe("generateAskAIResponse", () => {
   // isn't real never reaches the caller as anything but prose — no write is
   // ever reachable from this path.
   it("degrades a well-formed but hallucinated proposal to prose (the NFC safety gate)", async () => {
-    vi.stubEnv("GEMINI_API_KEY", "test-key");
-    mockGenerateContentWithFallback.mockResolvedValue({
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    mockGenerateClaudeJson.mockResolvedValue({
       text: json({
         kind: "propose_nfc_reminder",
         text: "I'll set that up.",
@@ -343,7 +376,7 @@ describe("generateAskAIResponse", () => {
       scheduleContext: SCHEDULE_CONTEXT,
     });
 
-    expect(result).toEqual({ kind: "prose", text: "I'll set that up." });
+    expect(result).toEqual({ kind: "prose", text: REJECTED_PROPOSAL_TEXT });
   });
 
   // A3 — the capability catalog (propose_action) must be offered on EVERY
@@ -355,8 +388,8 @@ describe("generateAskAIResponse", () => {
   it.each(["budget", "chef", "brain"] as const)(
     "includes the propose_action capability catalog in the system prompt for the %s face",
     async (face) => {
-      vi.stubEnv("GEMINI_API_KEY", "test-key");
-      mockGenerateContentWithFallback.mockResolvedValue({
+      vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+      mockGenerateClaudeJson.mockResolvedValue({
         text: json({ kind: "prose", text: "ok" }),
       });
 
@@ -364,13 +397,13 @@ describe("generateAskAIResponse", () => {
 
       // Mock call history isn't reset between tests in this file — read the
       // most recent call rather than assuming an absolute call count.
-      const call = mockGenerateContentWithFallback.mock.calls.at(-1)?.[0] as {
-        systemInstruction: string;
+      const call = mockGenerateClaudeJson.mock.calls.at(-1)?.[0] as {
+        system: string;
       };
-      expect(call.systemInstruction).toContain("propose_action");
-      expect(call.systemInstruction).toContain("reminder.create");
+      expect(call.system).toContain("propose_action");
+      expect(call.system).toContain("reminder.create");
       // NFC proposals stay schedule-only — no tag catalog leaks into other faces.
-      expect(call.systemInstruction).not.toContain("propose_nfc_reminder");
+      expect(call.system).not.toContain("propose_nfc_reminder");
     },
   );
 });

@@ -6,7 +6,8 @@
 // reaches here on the auto path, only on a manual tap. Builds face-scoped
 // context (src/lib/ai/context.ts), asks Gemini for either a plain answer or
 // a validated proposal (src/lib/ai/eraAskProposal.ts), and returns it
-// untouched — this route performs no writes. The client decides what to
+// with an owner-bound context-source receipt — this route performs no domain
+// writes. The client decides what to
 // render and performs any write only on the user's explicit confirm.
 //
 // Auto-escalations (`auto: true`) are capped per day, separately from the
@@ -14,7 +15,15 @@
 // or is blocked by this cap, only the automatic path is.
 
 import { fetchBudgetContext, fetchScheduleContext } from "@/lib/ai/context";
-import { generateAskAIResponse } from "@/lib/ai/eraAskProposal";
+import {
+  generateAskAIResponse,
+  type AskAIUsage,
+} from "@/lib/ai/eraAskProposal";
+import { fetchAdaptiveContext } from "@/lib/ai/eraAdaptiveContextSource";
+import {
+  contextReceipt,
+  historyEntrySchema,
+} from "@/lib/ai/eraAdaptiveContext";
 import type { ChatMessage } from "@/lib/ai/gemini";
 import {
   checkUserRateLimit,
@@ -22,7 +31,6 @@ import {
   MONTHLY_TOKEN_LIMIT,
   recordRequestHash,
 } from "@/lib/ai/rateLimit";
-import { estimateTokens } from "@/lib/ai/tokenUtils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { after, NextRequest, NextResponse } from "next/server";
@@ -42,15 +50,10 @@ const MANUAL_SESSION_ID = "era-ask";
 const bodySchema = z.object({
   message: z.string().min(1).max(2000),
   face: z.enum(FACE_KEYS),
-  history: z
-    .array(
-      z.object({
-        role: z.enum(["user", "assistant"]),
-        content: z.string(),
-      }),
-    )
-    .optional()
-    .default([]),
+  history: z.array(historyEntrySchema).max(24).optional().default([]),
+  conversationId: z.string().uuid().nullable().optional(),
+  /** Binds an optimistic tail to its speaker; never used as a DB identity. */
+  historyOwnerId: z.string().uuid().optional(),
   /** Set when a "what time?" question was outstanding — see useEraTurn. */
   pendingReminderTitle: z.string().optional(),
   /**
@@ -70,6 +73,10 @@ const bodySchema = z.object({
     .optional(),
   /** Stage C — true when useEraTurn escalated this automatically after a language-gap miss; never set by a manual "Ask AI" tap. */
   auto: z.boolean().optional().default(false),
+  localDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -84,13 +91,30 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json(
+      { error: parsed.error.flatten() },
+      { status: 400 },
+    );
   }
-  const { message, face, history, pendingReminderTitle, focusEntity, auto } = parsed.data;
+  const {
+    message,
+    face,
+    history,
+    historyOwnerId,
+    conversationId,
+    pendingReminderTitle,
+    focusEntity,
+    auto,
+    localDate,
+  } = parsed.data;
   const sessionId = auto ? AUTO_SESSION_ID : MANUAL_SESSION_ID;
   const requestHash = generateRequestHash(message, `era-ask-${face}`);
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const startOfMonth = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1,
+  ).toISOString();
   const startOfToday = auto
     ? new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
     : null;
@@ -110,18 +134,33 @@ export async function POST(req: NextRequest) {
     .select("input_tokens, output_tokens")
     .eq("user_id", user.id)
     .gte("created_at", startOfMonth);
-  const [autoCountResult, monthlyUsageResult, rateLimitCheck] = await Promise.all([
-    autoCountQuery ?? Promise.resolve(null),
-    monthlyUsageQuery,
-    checkUserRateLimit(supabase, user.id, requestHash),
-  ]);
+  const [autoCountResult, monthlyUsageResult, rateLimitCheck] =
+    await Promise.all([
+      autoCountQuery ?? Promise.resolve(null),
+      monthlyUsageQuery,
+      checkUserRateLimit(supabase, user.id, requestHash),
+    ]);
+
+  if (
+    monthlyUsageResult.error ||
+    !monthlyUsageResult.data ||
+    (auto && (autoCountResult?.error || autoCountResult?.count == null))
+  ) {
+    return NextResponse.json(
+      { error: "AI usage is unavailable. Try again later." },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   // Stage C — the daily auto-escalation cap. Counted from this route's own
   // `ai_messages` rows (tagged by session_id), not a new table. A manual tap
   // always uses MANUAL_SESSION_ID and is never counted or blocked here.
   if ((autoCountResult?.count ?? 0) >= DAILY_AUTO_ESCALATION_CAP) {
     return NextResponse.json(
-      { kind: "prose", text: "I'm holding off on AI for now — tap Ask AI directly if you'd like." },
+      {
+        kind: "prose",
+        text: "I'm holding off on AI for now — tap Ask AI directly if you'd like.",
+      },
       { headers: { "Cache-Control": "no-store" } },
     );
   }
@@ -145,19 +184,29 @@ export async function POST(req: NextRequest) {
       { status: 429 },
     );
   }
-  const formattedHistory: ChatMessage[] = history.map((m) => ({
-    role: m.role,
-    content: m.content,
-    timestamp: new Date(),
-  }));
-
   const contextPromise = Promise.all([
-    face === "budget" ? fetchBudgetContext(supabase, user.id) : Promise.resolve(undefined),
-    face === "schedule" ? fetchScheduleContext(supabase, user.id) : Promise.resolve(undefined),
+    face === "budget"
+      ? fetchBudgetContext(supabase, user.id)
+      : Promise.resolve(undefined),
+    face === "schedule"
+      ? fetchScheduleContext(supabase, user.id)
+      : Promise.resolve(undefined),
+    fetchAdaptiveContext(supabase, {
+      owner: user.id,
+      message,
+      conversationId,
+      history,
+      historyOwnerId,
+    }),
   ]);
   await recordRequestHash(supabase, user.id, "era-ask", requestHash);
-  const [budgetContext, scheduleContext] = await contextPromise;
+  const [budgetContext, scheduleContext, adaptive] = await contextPromise;
+  const formattedHistory: ChatMessage[] = adaptive.history.map((m) => ({
+    ...m,
+    timestamp: now,
+  }));
 
+  const metering: AskAIUsage[] = [];
   const result = await generateAskAIResponse({
     message,
     history: formattedHistory,
@@ -166,23 +215,26 @@ export async function POST(req: NextRequest) {
     scheduleContext,
     pendingReminderTitle,
     focusEntity,
+    localDate,
+    adaptiveContext: adaptive.context,
+    onUsage: (usage) => metering.push(usage),
   });
 
-  // Lightweight usage tracking — same table the rest of AI Assistant uses,
-  // grouped under a session id that never collides with a real conversation.
-  const outputTokenEstimate = estimateTokens(result.text);
-  const inputTokenEstimate =
-    estimateTokens(message) +
-    formattedHistory.reduce((s, m) => s + estimateTokens(m.content), 0);
+  // Meter the complete provider response, even if admission refused it.
+  // No response means unknown usage, not a fabricated count for fallback prose.
+  const usage = metering[0];
   after(async () => {
-    await supabase.from("ai_messages").insert([
+    const { error } = await supabase.from("ai_messages").insert([
       {
         user_id: user.id,
         session_id: sessionId,
         role: "user",
         content: message,
-        input_tokens: inputTokenEstimate,
+        input_tokens: usage?.inputTokens ?? 0,
         output_tokens: 0,
+        model_used: usage
+          ? `${usage.model}${usage.estimated ? ":estimated" : ""}`
+          : "unknown:no-response",
       },
       {
         user_id: user.id,
@@ -190,11 +242,20 @@ export async function POST(req: NextRequest) {
         role: "assistant",
         content: result.text,
         input_tokens: 0,
-        output_tokens: outputTokenEstimate,
-        model_used: process.env.GEMINI_MODEL || "gemini-flash-latest",
+        output_tokens: usage?.outputTokens ?? 0,
+        model_used: usage
+          ? `${usage.model}${usage.estimated ? ":estimated" : ""}`
+          : "unknown:no-response",
       },
     ]);
+    if (error)
+      console.error("[era-ask] usage receipt could not be saved", {
+        code: error.code,
+      });
   });
 
-  return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json(
+    { ...result, contextReceipt: contextReceipt(adaptive.context) },
+    { headers: { "Cache-Control": "private, no-store", Vary: "Cookie" } },
+  );
 }

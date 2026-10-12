@@ -48,6 +48,7 @@ import {
 import { useEraStore } from "@/features/era/useEraStore";
 import { EraAskChips } from "./EraAskChips";
 import { EraProposalCard } from "./EraProposalCard";
+import { EraRunCards } from "./EraRunCards";
 import { EraReportCard } from "./EraReportCard";
 import { faceHue } from "./eraHues";
 
@@ -352,6 +353,7 @@ export function EraConversation({
         <>
           <EraProposalCard variant="inline" />
           <EraAskChips variant="inline" />
+          <EraRunCards conversationId={conversationId} now={now} />
           <EraReportCard conversationId={active && !active.local ? active.id : null} />
         </>
       )}

@@ -132,6 +132,29 @@ export function EraFaceNav() {
       >
         Artifacts
       </button>
+
+      {/* AI Usage — desktop only (EraShell sends a phone back to the hub) */}
+      <button
+        type="button"
+        onClick={() => setActiveView("usage")}
+        className="hidden shrink-0 items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all md:flex"
+        style={
+          activeView === "usage"
+            ? {
+                background: "hsla(190, 30%, 12%, 0.9)",
+                border: "1px solid hsla(190, 55%, 45%, 0.35)",
+                color: "hsl(190, 72%, 75%)",
+                boxShadow: "0 0 12px hsla(190, 60%, 40%, 0.2)",
+              }
+            : {
+                background: "transparent",
+                border: "1px solid rgba(255,255,255,0.06)",
+                color: "rgba(255,255,255,0.38)",
+              }
+        }
+      >
+        AI Usage
+      </button>
     </div>
   );
 }

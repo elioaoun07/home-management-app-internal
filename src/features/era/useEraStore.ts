@@ -10,12 +10,12 @@ import type { LexiconRule } from "./lexicon";
 import type { EraTemplate } from "./templates/matcher";
 import type { EraActiveProposal, EraPendingTurn, FaceKey, Intent } from "./types";
 
-export type EraView = "hub" | "dashboard" | "activity";
+export type EraView = "hub" | "dashboard" | "activity" | "usage";
 
 interface EraState {
   /** Currently active face. Drives ERA hue + intent routing + chip highlight. */
   activeFaceKey: FaceKey;
-  /** "hub" = chat/ERAMark center; "dashboard" = full face dashboard view; "activity" = the Activity log (not tied to a face). */
+  /** "hub" = chat/ERAMark center; "dashboard" = full face dashboard view; "activity" = the Activity log (not tied to a face); "usage" = AI Usage (desktop only). */
   activeView: EraView;
   /** Last intent produced by the IntentRouter — useful for debug / future toasts. */
   lastIntent: Intent | null;
@@ -41,6 +41,8 @@ interface EraState {
   pendingTurn: EraPendingTurn | null;
   /** An AI-proposed action awaiting Confirm/Dismiss (Slice 4) — see EraActiveProposal. */
   activeProposal: EraActiveProposal | null;
+  /** Journal whose question/card is currently being answered. Never consent for a new turn. */
+  activeRunId: string | null;
   /** True while an "Ask AI" call is in flight. */
   askingAI: boolean;
   /**
@@ -127,6 +129,7 @@ const INITIAL: EraState = {
   eraReply: "",
   pendingTurn: null,
   activeProposal: null,
+  activeRunId: null,
   askingAI: false,
   focusEntities: [],
   templates: [],
@@ -170,6 +173,7 @@ export const useEraStore = create<EraState & EraActions>((set) => ({
       focusEntities: [],
       pendingTurn: null,
       activeProposal: null,
+      activeRunId: null,
       lastMissText: null,
       lastIntent: null,
       lastAppliedRuleId: null,

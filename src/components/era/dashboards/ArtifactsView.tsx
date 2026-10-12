@@ -67,10 +67,11 @@ export function ArtifactsView() {
   const reversal = useArtifactReversal();
 
   // `days` is newest-first: the previous day with artifacts is the first one
-  // older than this day, the next is the last one newer.
+  // older than this day, the next is the last one newer. Today is the one
+  // exception: always reachable, even with nothing in it.
   const prevDay = days.find((d) => d < dayKey) ?? null;
-  const nextDay = [...days].reverse().find((d) => d > dayKey) ?? null;
-  const daySet = useMemo(() => new Set(days), [days]);
+  const nextDay = [...days].reverse().find((d) => d > dayKey && d < todayKey) ?? (dayKey < todayKey ? todayKey : null);
+  const daySet = useMemo(() => new Set([...days, todayKey]), [days, todayKey]);
 
   const groups = useMemo(() => {
     const byModule = new Map<EraArtifactModule, EraArtifactRow[]>();

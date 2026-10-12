@@ -14,6 +14,7 @@ import type { EraEntityType } from "./types";
 
 /** Base, hand-written vocabulary — deliberately small; grows from real usage via `deriveLearnedVocab`, not speculative synonym lists. */
 export const BASE_ENTITY_VOCAB: Record<EraEntityType, readonly string[]> = {
+  application: ["capabilities", "modules", "features", "functionality"],
   reminder: [
     "remind",
     "reminder",
@@ -84,6 +85,7 @@ export const BASE_ENTITY_VOCAB: Record<EraEntityType, readonly string[]> = {
   ],
   meal: ["meal", "meals", "dinner", "lunch", "breakfast", "snack", "plan", "planning", "assign"],
   memory: ["remember", "memory", "memories", "recall", "note", "save", "stored"],
+  shopping: ["shopping", "groceries", "grocery", "list", "milk", "eggs"],
 };
 
 /** Words too generic to ever count as a domain signal on their own. */
@@ -152,12 +154,14 @@ export function classifyMissEntity(
   learnedVocab?: Partial<Record<EraEntityType, ReadonlySet<string>>>,
 ): EraEntityType | null {
   const entities: EraEntityType[] = [
+    "application",
     "reminder",
     "schedule",
     "transaction",
     "recipe",
     "meal",
     "memory",
+    "shopping",
   ];
   for (const entity of entities) {
     if (matchesEntityVocab(text, entity, learnedVocab?.[entity])) return entity;

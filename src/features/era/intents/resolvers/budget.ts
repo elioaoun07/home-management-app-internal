@@ -1,3 +1,4 @@
+import { waitingForConsent, type BeforeWrite } from "../../capabilities/effectiveAction";
 // Budget resolver — fetches MTD transactions and aggregates
 import { OfflineError, RequestTimeoutError, safeFetch } from "@/lib/safeFetch";
 import { getCachedPreferences } from "@/lib/queryConfig";
@@ -812,7 +813,7 @@ export async function resolveListDrafts(): Promise<ResolveResult> {
  * already orders by inserted_at desc). A hint that matches more than one
  * draft asks the user to use Drafts directly rather than guessing which one.
  */
-export async function resolveConfirmDraft(hint: string | undefined): Promise<ResolveResult> {
+export async function resolveConfirmDraft(hint: string | undefined, beforeWrite?: BeforeWrite): Promise<ResolveResult> {
   try {
     const drafts = await fetchDrafts();
     if (!drafts) return { text: formatConfirmDraftError("request-failed"), ok: false };
@@ -846,11 +847,14 @@ export async function resolveConfirmDraft(hint: string | undefined): Promise<Res
           date: string;
           account_id: string;
           category?: { name: string } | null;
+          accounts?: { name: string; currency: string } | null;
         }>)
       : [];
     const full = fullDrafts.find((d) => d.id === target!.id);
     if (!full) return { text: formatConfirmDraftError("request-failed"), ok: false };
 
+    const effective = { capabilityId: "draft.confirm", values: { id: full.id, amount: full.amount, account_id: full.account_id, account: full.accounts?.name ?? full.account_id, currency: full.accounts?.currency ?? "Unknown", category_id: full.category_id, subcategory_id: full.subcategory_id, description: full.description, date: full.date } };
+    if (beforeWrite && !await beforeWrite(effective)) return waitingForConsent(effective);
     const res = await safeFetch(`/api/drafts/${full.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

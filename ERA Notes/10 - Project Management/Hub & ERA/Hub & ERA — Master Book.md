@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-04
+updated: 2026-10-11
 type: master-book
 status: active
 owner: Elio
@@ -16,11 +16,25 @@ A dependable daily assistant that reads broadly, proposes safely and speaks firs
 
 ## Current state & evidence
 
+Final review 2026-10-11 (**HUB-108**, working tree after HUB-103–106; HEAD `82a564f0`): a supervised assistant with composable reviewed actions, not an unrestricted application operator. Default-mode confirmation, partial NFC receipts, recurrence refusal and Ask AI metering were hardened. The [final assessment](<../../03 - Junction Modules/AI Assistant/Overview.md#final-review-and-hardening--2026-10-11-hub-108>) records actual reach, intelligence limits, remaining source/consent defects and deployment/device gates. No new production, paid-model or device witness is implied.
+
 Intent routing and turn-latency repairs shipped. Proactive delivery, source coverage, safe learned referents and durable capture remain incomplete. September research supplies bounded evidence, not production incidents or completed deliveries.
 
 Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>) preserves detailed older narratives and receipts.
 
 ## Vision & Decisions
+
+- **HUB-109 — Consent describes the effective application action.** Reviewed registry fields, validated/defaulted slots and source lookups own the card; model labels cannot authorize a different effect. Unknown dependencies remain pending; materially resolved/changed values need fresh consent, with completed work retained. Reuse the current executor/journal/source seams. *(IMPLEMENTED 2026-10-11 — repository; 390 px/saved-card owner acceptance pending.)*
+
+- **HUB-108 — Harden before widening reach (owner final-review request, 2026-10-11).** Keep the source-adapter/registry/journal architecture. Put single model actions through the same executor as plans, bind default-mode consent and private results to the original account/chat, retain partial facts, refuse unsupported parsed recurrence and record real provider usage. Broader adoption waits on truthful source receipts, effective-value confirmation and current acceptance evidence; another model or framework does not supply those guarantees. *(IMPLEMENTED 2026-10-11 — local code and fixtures; source/deployment/device/model gaps explicitly remain.)*
+
+- **HUB-106 — Adaptive intelligence through attributed evidence (owner request, 2026-10-10).** Reuse the existing private transcript, lexicon, settings, source-aware activity and capability contracts to supply personal context on every face. Separate working dialogue, historical user statements, acknowledged actions, explicit preferences and tentative observations; do not silently promote inferred habits to household notes or phrase rules. Current requests/source permissions and Confirm remain authoritative. Recognize keyword-free follow-ups within a live dialogue and expose bounded gaps honestly. *(IMPLEMENTED 2026-10-10 — repository and isolated fixtures; live-model/device acceptance pending.)*
+
+- **HUB-105 — Contract-derived discovery (owner request, 2026-10-10).** Make purpose, schemas, dependencies, source provenance and retry limits discoverable from one reviewed capability contract. Inventory new backend methods automatically while keeping them unreviewed until adapted; a route is not authority. Preserve Confirm and conservative durable recovery; source idempotency comes before new write families. *(IMPLEMENTED 2026-10-10 — local discovery/audit and dependency preflight; prompt recording validation pending explicit Gemini disclosure approval.)*
+
+- **HUB-104 — Durable execution before wider agent reach (owner request, 2026-10-10).** Keep the Phase 2 planner and source adapters; add one versioned, owner-bound run journal for consent, outputs, pending questions and partial receipts. Persist an attempt before dispatch, fence competing/late completions, restore unfinished work in its original conversation and require explicit recovery. Unknown writes cannot be replayed. Journal receipts and artifact projection are atomic; source writes still require future endpoint idempotency under HUB-46. No parallel offline queue or background execution. *(IMPLEMENTED 2026-10-10 — repository and isolated transaction/adapter evidence; flag off pending owner migration and device acceptance.)*
+
+- **HUB-103 / HUB-100 — ERA Agent v1 (owner implementation request, 2026-10-10).** Extend the accepted Top Layer source-adapter/confirmation architecture with bounded multi-step plans in the existing typed/voice pipeline. The model discovers capabilities from the real catalog; the deterministic executor validates all steps, binds real outputs, confirms writes and records completed/partial artifacts. Native commands stay available. No new DB store or independent assistant. This is an initial workflow slice, not completion of HUB-81, HUB-46 or the entire U0–U5 programme. *(IMPLEMENTED 2026-10-10 — repository and isolated/live-model evidence; device/production acceptance pending.)*
 
 - **HUB-94 — ERA learns the places you go (owner request 2026-10-04).** When ERA creates an event it asks where. A new place gets one offer to save it to Catalogue → **Places**, and next time ERA recognises it by name or alias tag without asking. The event is written first, and the questions are skippable chips that never block it. A place is a Catalogue item in a custom module ERA creates and marks `settings_json.era_role = "places"`, so no DB change is needed. The event keeps `location_text` plus `metadata_json.place_id` as the seam for proactive use. Proactive use stays time-based (owner no-geofencing exclusion). Similar patterns are proposed in [ERA Learns Your World — Proposal](<../../03 - Junction Modules/AI Assistant/ERA Learns Your World — Proposal.md>). *(IMPLEMENTED 2026-10-04 — repository; device acceptance pending.)*
 
@@ -46,6 +60,16 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+🟠 **HUB-108 — Default execution bypassed plan safeguards and some replies overstated success.** Source inspection and failing isolated regressions on 2026-10-11: single model cards dispatched directly without focus/live-target/artifact re-admission, owner/chat changes were unchecked between default-mode steps, invalid proposals could repeat model-authored “done” prose, and failed NFC trigger setup discarded a created reminder's artifact. Ask AI usage estimated only visible text and attributed the configured primary. Fixed in this review; native-path convergence/source idempotency remain HUB-46, source completeness is SCH-24, and semantic consent is HUB-109. This is repository evidence, not a new production incident.
+
+**HUB-109 — Resolved locally, 2026-10-11.** Model-authored consent descriptions were replaced by a shared deterministic effective-action view and fresh consent after source resolution/change. Isolated adversarial values, actual adapters, React hook continuation and journal reload pass. Owner mobile/saved-card acceptance remains under [criteria](<#hub-109>); whole-goal language fidelity remains HUB-105.
+
+🟠 **HUB-106 — ERA's existing memory was disconnected from interpretation.** Source inspection 2026-10-10: Ask AI supplied eight cached turns and selected-face context, while private history, lexicon and activity stayed outside the model. Keyword-free follow-ups could be stopped as capability gaps; optimistic rows had no speaker identity. Addressed by bounded private retrieval, owner-attributed tails and active-dialogue escalation. Shared Brain note storage/audience remains an unverified readiness gap; no production claim or automatic shared-memory ingestion.
+
+🟠 **HUB-105 — Capability knowledge was duplicated, and dependent data could fail after an intervening write.** Root cause: hand-written slot descriptions and per-workflow prompt instructions diverged from executable schemas; dependency values were checked only when their destination ran. Source inspection and isolated tests demonstrate empty/oversized recipe ingredients could be discovered after meal assignment, including Resume from a saved receipt. Local contract discovery and early consumer preflight address this; current-prompt model recording validation remains pending approval.
+
+🟠 **HUB-104 — Phase 2 execution lost progress and consent on reload and had no cross-client arbitration.** Root cause: session-only plan/card state, optional transcript persistence and a local lock without durable attempt claims; a source commit followed by response loss could be repeated. Evidence: code inspection plus injected lost-response, competing-confirmation and fresh-session tests, not a production incident. Addressed by the opt-in journal foundation below; source-endpoint exactly-once reconciliation remains HUB-46 and owner rollout is pending.
 
 🟠 **HUB-102** Artifacts for debts, memories, meal plans, shopping, recurring cover and every "updated" verb (complete, skip, postpone, confirm, reschedule) have no Undo/Redo. Cause: their backend inverse is a hard delete (debts, memories, meal plans) or does not exist, so there is no restore to reuse. Each needs a soft-delete + restore pair, or a stored before-image, first. See [acceptance](<#hub-102>).
 
@@ -944,6 +968,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 **Outcome:** Attribute model usage and enforce degradation controls.
 
+- **Delivered slice — 2026-10-11 (HUB-108):** `/api/era/ask` records actual response model and complete provider token counts, including thought tokens; explicit estimated/unknown attribution replaces fabricated visible-text estimates. Missing monthly/auto quota data returns 503 before inference. This does not close per-attempt retry/fallback accounting, other AI consumers, asynchronous persistence gaps, atomic budget reservation, kill switches or the degradation matrix.
+
 - **Acceptance:** Dispatch the M provider/model/usage-attribution sheet first, then the retained quota gauge, degradation matrix and `AI_MODEL`/`AI_FALLBACK_MODEL` pin/kill-switch obligations. One bounded child per session; E-07a alone does not close the parent. Must ship before new Gemini consumers (HUB-45).
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
@@ -1002,6 +1028,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 ### HUB-45
 
 **Outcome:** Connect canonical balances and meal coverage to ERA.
+
+- **Final-review evidence — 2026-10-11:** `fetchBudgetContext` uses calendar-month start and degrades failed account/dependent reads to empty/zero-shaped context, while the registered `spend.month` uses custom billing months. The Budget prompt also appends a legacy assistant persona/output contract to ERA. Acceptance must include non-first billing day, failed reads as unavailable rather than zero, and one consistent ERA prompt contract before broader financial reasoning. Source inspection only; no production balances were queried.
 
 - **Acceptance:** ERA reads balances and scoped meal coverage and supplies bounded Chef/Brain context. Reuse the existing Chef meal read; complete meal/person/status coverage and canonical money facts precede a trusted answer.
 - **Depends on:** [HUB-44](<Hub & ERA — Master Book.md#hub-44>), [KIT-4](<../Kitchen/Kitchen — Master Book.md#kit-4>), [BUD-66](<../Budget/Budget — Master Book.md#bud-66>).
@@ -1066,7 +1094,11 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 ### HUB-46
 
+- **2026-10-10 child delivery:** HUB-104 supplies durable registered-plan consent, progress, partial receipts and conservative recovery. This parent remains open: native capture/offline acceptance and source-endpoint idempotency are not delivered by the journal. A journal transition cannot prove the outcome of a lost source response.
+
 **Outcome:** Make conversational capture durable and idempotent.
+
+- **Final-review boundary — 2026-10-11:** The opt-in agent journal arbitrates saved runs but not the source-commit/receipt gap. Native single actions, native confirmation cards and NFC compounds still have separate consent/recovery behavior. Reuse the journal/outcome seam when converging these paths; protect account/chat boundaries and acknowledged partial effects without replaying an unknown write. HUB-108 hardens default model cards and NFC partial receipts, not source exactly-once execution.
 
 - **Acceptance:** Durable queue acknowledgment, idempotent draft/nonrecurring-item endpoints and owner-bound reconciliation precede income/event extensions. Dispatch one bounded child sheet per session; reuse existing queue feature keys. Parent remains open until every retained criterion passes.
 
@@ -3004,11 +3036,91 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Outcome:** Ask AI knows the shopping list exists and can propose adding to it.
 
 **Kind:** enhancement
-**Implementation:** not started
+**Implementation:** done
+
+**UAT:** pending
 
 - **Acceptance:** A shopping sentence the grammar misses gets a confirm card from Ask AI, never "I don't have a shopping list feature". `shopping.add` (items, optional group) wraps `resolveAddShopping`, has a `shopping` vocab bucket, and a registry test row.
 - **Cost:** any registry change alters the Ask AI prompt, so every recorded Gym model reply goes stale (`tests/era-gym/gym.ts` `replayModel`). Re-record in the same session; that is a live Gemini run the owner approves.
 - **Reading guide:** `src/features/era/capabilities/{registry,vocab,types}.ts`.
+
+- **Evidence — 2026-10-10:** `shopping.add` wraps the shipped adapter; `shopping` vocabulary participates in miss classification. A real Gemini grocery paraphrase produced the validated confirm proposal. Registry tests and agent route-fixture tests pass. Older Gym recordings refreshed with 16 new model calls; no production DB used.
+
+### HUB-103
+
+**Outcome:** ERA understands compound requests, discovers registered capabilities and executes bounded dependent steps through the existing application.
+
+**Kind:** feature
+**Implementation:** done
+**UAT:** pending
+
+- **Acceptance:** Every step in a supported compound request reaches a registered action; actual earlier results supply dependent slots. All steps validate before execution. Reads answer from the app; writes require Confirm. Ambiguous/missing references, invalid outputs and failures stop subsequent work. Duplicate confirmation cannot repeat a write. Completed and partial artifacts and source caches survive a failed later step. Document supported requests, limitations and next work.
+- **Scope:** Existing `useEraTurn`/`useEraAskAI`/`/api/era/ask` and `capabilities/`; no production writes or new schema. Preserve native single-command and voice wiring, source-module permissions, parser and financial paths.
+- **Evidence — 2026-10-10:** Eight real Gemini synthetic-request probes pass and replay in CI. Actual adapters execute recipe → meal + shopping, named-reminder rescheduling, and shopping + reminder against isolated route fixtures. Admission, partial-failure, invalid reference, stale-focus and one-time confirmation tests pass; existing ERA/Gym regression suite passes. Existing 205-case Gym baseline is legacy-path evidence, not agent general accuracy. See [Agent v1 implementation and limits](<../../03 - Junction Modules/AI Assistant/Overview.md#era-agent-v1--2026-10-10-hub-103--hub-100>).
+- **Owner acceptance:** Try the documented positive requests at phone width on the served revision. Confirm Dismiss produces no domain writes, Confirm records all artifacts and source pages refresh. Live DB/RLS and device effects were not exercised. Browser QA was blocked by the Computer Use Node runtime requirement (≥22.22 versus installed 22.20); no environment changes performed.
+- **Verification receipt:** Typecheck and changed-file ESLint pass; 526 scoped ERA/Gym/Ask AI tests pass, one existing opt-in recording test skipped. Four live-model recordings also execute through real adapters on isolated routes; HTTP/network partial shopping failures retain prior artifacts. Full-suite failures are outside ERA: three sandbox PM build failures passed with directory access; two untouched Delivery journey cases expect raw test output despite the redacted-output receipt contract. Full lint errors are confined to generated `.tmp/chores-ui-qa/dist/app.js` (20). PM/doc checks pass. No production DB access.
+- **Next:** HUB-104 supplies opt-in saved execution and pending-step continuity. Owner migration/device acceptance precede enabling it. HUB-46 retains offline capture acknowledgment and source-endpoint idempotency; HUB-81 broader source-adapter reach, HUB-102 complete inverses and HUB-44 usage attribution remain open.
+
+### HUB-104
+
+**Outcome:** Registered agent plans retain consent and progress across sessions, resume from real outputs and stop ambiguous writes from being replayed.
+
+**Kind:** feature
+**Implementation:** done
+**UAT:** pending
+
+- **Acceptance:** Save a plan before execution; acquire a versioned attempt before each source call. Completed outputs/artifacts survive partial failures, reload and missing transcript delivery. Restore confirmation or the exact pending step through History → Continue. Competing confirmations cannot dispatch twice. Recover interrupted reads safely; interrupted/partial writes remain uncertain and offer inspection/Skip/Stop. New chat suspends later steps and late answers stay in the originating conversation. Retain source permissions, date semantics, cache refresh and existing native paths.
+- **Design:** `era_runs` plus authenticated `save_era_run` transaction, owner-only read RLS, server-validated transitions and attempt fencing. The same executor/resolvers run in the client; no worker, second queue or model-driven replay. Relative dates use the original request date; changed time zones and stale/changed reminder targets refuse resumed writes. Canonical artifact projection shares the journal transaction and deduplicates receipts.
+- **Verification — 2026-10-10:** 555 ERA/Gym/Ask AI tests pass, one existing opt-in recording test skipped. The 29 execution tests include isolated actual-migration PostgreSQL concurrency/RLS/rollback, lost receipt after commit followed by fresh-session resume, competing confirmations, pending reminder completion, partial shopping checkpoint failure, owner/new-chat interruption and changed targets/dates/time zones. Typecheck and changed-source ESLint pass; two pre-existing schedule warnings remain. Full repository run passes 3,536 tests with five failures; three PM build tests pass on rerun with directory access, leaving the two existing Delivery receipt-output assertions. PM lint and doc/criteria/links checks pass. No new model calls or production DB access.
+- **Rollout:** Owner runs `migrations/2026-10-10_era-execution-journal.sql`, refreshes the DB-state snapshot, then enables `NEXT_PUBLIC_ERA_DURABLE_EXECUTION=true` and rebuilds. Flag defaults off. Do not report the migration as applied or production reliability as witnessed.
+- **Owner acceptance:** At phone width, resume a meal + shopping plan after reload without repeating the meal, resume a pending date question, race confirmation on two devices, and recover an interrupted shopping write without a retry button. Computer Use initialized but returned no browser surfaces; Chrome creation was unavailable, so visual/device QA could not run.
+- **Limits:** No source exactly-once guarantee across the source-write/checkpoint gap; no whole-plan rollback, automatic continuation/retries or automatic reconciliation of unacknowledged shopping creates. Native standalone capture/cards and the NFC two-write path remain unchanged. HUB-46 remains open.
+- **Reading guide:** [Execution contract and rollout](<../../03 - Junction Modules/AI Assistant/Overview.md#durable-execution-foundation--2026-10-10-hub-104>); `src/features/era/execution/`, `src/app/api/era/runs/`, `src/components/era/EraRunCards.tsx` and the owner-run migration.
+
+### HUB-105
+
+**Outcome:** ERA discovers reviewed capabilities and module reach from current contracts, while new backend functions become visible integration candidates without acquiring write authority.
+
+**Kind:** feature
+**Touches:** `src/features/era/capabilities/`, `src/lib/ai/eraAskProposal.ts`, `scripts/era/`, `scripts/era-capabilities.mjs`, `tests/era-gym/`, `package.json`
+**UAT:** pending
+
+- **Acceptance:** Purpose, strict input/output schemas, source routes and confirmation/recovery constraints are derived from the registry; no separate prompt slot shape or per-workflow prompt teaching. All Feature Index modules remain discoverable, with executable actions separated from pages/native reach. New API methods enter a static report; disappeared registered routes/methods fail tests. Real dependency outputs must fit every consumer before any later step runs. Current-prompt synthetic model recordings and isolated source-adapter requests pass, including unsupported compound requests that must not be partially proposed.
+- **Source-present — 2026-10-10:** 18 registered capabilities; read-only `app.capabilities`; memory recall output bindings; strict single-action validation; early downstream-data preflight; static API audit across 400 exported operations (18 declared adapter source operations, 382 unreviewed). No write-family expansion or DB changes. Existing journal, confirmation, source resolvers, artifacts and cache handling are retained.
+- **Verification:** 555 local ERA/Ask AI/real-adapter tests pass, including saved-receipt dependency preflight; typecheck and changed-source ESLint pass. The wider ERA suite's eight old pinned recordings fail because the prompt changed; four new model cases also need recordings. No hashes or model responses were fabricated. See [discovery contract](<../../03 - Junction Modules/AI Assistant/Overview.md#capability-discovery--2026-10-10-hub-105>).
+- **Remaining gate (updated 2026-10-11):** The owner explicitly approved Google Gemini but limited testing to one combined call for all twelve scenarios, with a request/response/status Markdown report and confirmation before any further tests. Exactly one HTTPS request ran with no retries or fallback and a 4,096-token generated-output cap. Gemini returned HTTP 200 / `MAX_TOKENS`, with truncated JSON: 3,065 input, 150 visible output, 3,932 thinking, 7,147 total API-reported tokens. No individual scenario was scored; the batch JSON decode failed before per-case admission/assertions. [One-call report](<../../../tests/era-gym/AGENT-BATCH-2026-10-11.md>) preserves requests, returned fragments, missing responses and statuses; the adjacent JSON receipt preserves the outbound body and API envelope. Original individual-call recordings remain stale/missing because batch evidence is a different request shape. No retry, Vitest replay or other tests followed. Further testing requires fresh owner confirmation. No household records or production data were sent or accessed.
+- **Paced pass — 2026-10-11 (owner-approved):** the original per-scenario method, 12 sequential calls 30 s apart, no retries/fallback: **12/12 PASSED**, all `STOP`, 126–1,717 thinking tokens per call. [Paced report](<../../../tests/era-gym/AGENT-PACED-2026-10-11.md>). `recordings/agent-responses.json` deliberately not refreshed, so the replay test still fails on stale hashes until a recorded refresh is approved. Protocol codified as Hard Rule #29 + `01 - Architecture/Live API Testing Protocol.md`.
+- **Next priorities:** HUB-46 source-endpoint idempotency and authenticated reconciliation; HUB-102 inverses; HUB-69 and HUB-81 source-owned read adapters with privacy/readiness contracts. Keep full catalog visibility now; measure bounded schema retrieval only when catalog growth warrants it. No unrestricted HTTP execution, automatic replay or unreviewed tool exposure.
+
+- **Final-review gate — 2026-10-11 (HUB-108):** Twelve replay failures persist (eight stale fingerprints, four missing entries). The paced 12/12 report is historical evidence without the matching prompt/schema fingerprints, not authority to rewrite old hashes. Before another approved paid pass, make the recorder enforce Hard Rule #29: fixed scenarios/call ceiling, exclusive lock, ≥30-second pacing, no retries/fallback, stop on error and incremental receipt with system/schema/request fingerprints. The legacy `ERA_AGENT_RECORD=1` branch does not enforce these guarantees. Extend held-out evaluation to omitted constraints, conditional money, corrections, private-context injection and actual whole-goal completion; capability-ID equality alone is insufficient. No paid rerun was performed by this review.
+
+### HUB-106
+
+**Outcome:** ERA reuses meaningful personal context and prior experience across faces, understands contextual follow-ups and recognizes limitations without adding taught phrases or sharing private learning.
+
+**Kind:** feature
+**Implementation:** done
+**UAT:** pending
+**Touches:** `src/lib/ai/eraAdaptiveContext.ts`, `src/lib/ai/eraAdaptiveContextSource.ts`, `src/lib/ai/eraAdaptiveContext.test.ts`, `src/lib/ai/eraAdaptiveContextSource.test.ts`, `src/lib/ai/eraAdaptiveContext.integration.test.ts`, `src/lib/ai/eraAskProposal.ts`, `src/app/api/era/ask/route.ts`, `src/app/api/era/ask/route.test.ts`, `src/features/era/adaptiveTurn.ts`, `src/features/era/adaptiveTurn.test.ts`, `src/features/era/conversationOwnership.test.ts`, `src/features/era/useEraAskAI.ts`, `src/features/era/useEraTurn.ts`, `src/features/era/useEraConversation.ts`
+
+- **Acceptance:** Authenticated private episodes, valid explicit choices, acknowledged experience, source coverage and own activity counts reach the existing model on every face. Histories merge without duplicating the current question or confusing speakers. A recent dialogue can interpret a keyword-free router miss; New chat/expiry/negation remain guarded. Failed/pending/uncertain/partial/reported actions cannot become successful experience; unconfirmed legacy examples, revoked choices and stale references are inert. Historical evidence cannot grant entity IDs, write authority or a new capability. No automatic preference promotion, shared-memory values, new phrase rules or new DB store.
+- **Design:** Read-only context assembled per request, bounded by 30 days/400 historical rows/six episodes/12,000 characters; current history at most 24 turns/12,000 characters. Six independent optional source reads share one latency layer and each has a two-second abort. User statements remain attributed; successful action descriptions require receipts. Explicit lexicon choices retain conditions; observations remain tentative. Usage is currently visible own-record/own-actor module counts, never personal values or partner facts. A source receipt is persisted without copying private context.
+- **Verification — 2026-10-11:** All 54 new synthetic-context, retrieval-boundary, actual conversation-mutation, real API wiring and SDK/admission cases pass. They cover preferences/conflicts, follow-ups, account switches, unknown offline identities, malformed input, archived-parent predicates, reports, stale dependencies, plan receipts, missing sources, historical target IDs and an initial confirmation card followed by a real acknowledged receipt. Typecheck and changed-source ESLint pass. Final wider ERA/AI/Gym run: 652 pass, one existing opt-in test skipped, twelve pre-existing stale/missing agent-model recordings fail under HUB-105 (`Refresh with ERA_AGENT_RECORD=1` / `Prompt changed: refresh the model evidence`). No recordings/hashes were fabricated or refreshed. PM lint, criteria/links and Feature Map checks pass; only the existing empty Delivery Next-lane warning remains. The local static PM dashboard was rebuilt with the filesystem access esbuild requires, without publishing.
+- **Owner acceptance:** On a served build, state a preference, continue on another face, then ask a related question in a new chat; check attribution/clarification rather than invented current facts. Ask a keyword-free follow-up in the active chat. Switch accounts and confirm no previous speaker's context is submitted. Report a wrong result and verify it is not reused as successful experience. Live model quality, deployed source readiness and mobile/browser behavior remain unverified. No production DB access or migration was performed or required.
+- **Limits / next:** This is bounded lexical episode retrieval and model context, not model retraining or permanent inferred preference storage. Whole-history semantic recall and automatic preference extraction need source scope, correction/revocation and measured recall gates. Shared `household_memories` is referenced by the existing route but absent from schema/DB-state evidence, so automatic ingestion is unavailable; D17/HUB-70 remain authoritative. Source-adapter expansion stays with HUB-69/71/81; outcome/template hardening remains HUB-47/64 and is not declared complete here. See [adaptive architecture and inventory](<../../03 - Junction Modules/AI Assistant/Overview.md#adaptive-context-foundation--2026-10-10-hub-106>).
+
+### HUB-107
+
+**Outcome:** The app's AI layer runs on Claude Haiku 5.5 (Anthropic) instead of Gemini, with equal-or-better ERA accuracy.
+
+**Kind:** feature
+**UAT:** pending
+**Touches:** `src/lib/ai/` (gemini.ts, eraAskProposal.ts), `src/app/api/era/ask`, `ai-chat`, `ai-chat/stream`, `focus-insights`, `suggest-schedule`, `budget-allocations/ai-suggest`, 5 recipe AI routes, `tests/era-gym/`, `docs/ENV.md`
+
+- **Why (owner, 2026-10-11):** Gemini is causing friction and the owner prefers the Anthropic ecosystem. Cost: Gemini paid-as-you-go $0.25 over 90 days; the same token volume on Haiku 5.5 ($0.10/$0.50 per MTok vs Gemini 3.8 Flash $0.75/$3.75 intro, doubling 2027-01-01) ≈ $0.03.
+- **Acceptance:** (1) One paced pass of the 12 ERA agent scenarios on Haiku 5.5 (Hard Rule #29) scores ≥ the Gemini 12/12 before any code swap. (2) One provider-neutral client in `src/lib/ai/` replaces Gemini call sites; schemas converted to Claude structured outputs. (3) ERA first, then ai-chat (streaming), then the remaining routes, each verified. (4) Gemini code, env vars and fallback removed; gym recordings re-recorded; AI Assistant vault doc + ENV.md updated.
+- **Gate:** needs `ANTHROPIC_API_KEY` with prepaid credit from the owner.
+- **Progress — 2026-10-11 (ERA slice, code only, not deployed):** `src/lib/ai/anthropic.ts` (`generateClaudeJson`: SDK `@anthropic-ai/sdk` 0.133.0, default `claude-haiku-5-5`, JSON-schema structured output, effort `low`, 40 s timeout, one SDK retry). `eraAskProposal.ts` calls it; `ASK_AI_RESPONSE_SCHEMA` is now plain JSON Schema; prompt and admission unchanged. `agent-record.test.ts` records against Claude under Hard Rule #29 (stale cases only, 30 s apart, `maxRetries: 0`, `.tmp/era-agent-record.lock`). Typecheck + changed-file ESLint clean; ERA/AI/Gym run 641 pass, 1 skipped, 12 recorder failures pending the approved pass (Gemini evidence is stale for the new provider). Other routes still Gemini. **Acceptance (1) pass, 2026-10-11:** owner-approved 12 calls, all served by `claude-haiku-5-5` → **11/12** (Gemini 12/12). Miss: `unsupported-stock-subtraction` stated the pantry limit but still proposed `meal.assign`. Not met; no expectation changed. Receipt `tests/era-gym/AGENT-HAIKU-2026-10-11.md`. **Still open:** owner decision on that miss (prompt fix + new approved pass, or accept), then deploy; ai-chat and remaining routes; Gemini removal. Setup log: `08 - Sessions/Wizards/anthropic-era-ask-2026-10-11.md`.
 
 ### HUB-102
 
@@ -3020,6 +3132,40 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - **Acceptance:** debts, memories, meal plans, shopping items/groups, recurring cover and the "updated" verbs each get an inverse that moves money and state exactly as the app's own control does, then a row in `eraArtifactReversal` (`src/lib/era/artifacts.ts`). A hard-deleted row gets no Redo.
 - **Constraint:** Undo/Redo is derived from the row's live status (`POST /api/era/actions/status`), never a stored flag. Money inverses need a worked balance example and a test (money-rules).
 - **Reading guide:** `src/lib/era/artifacts.ts`, `src/features/era/widgets/useEraArtifacts.ts`, `src/app/api/recycle-bin/restore/route.ts`.
+
+### HUB-108
+
+**Outcome:** Critically assess ERA Agent's actual reach and harden the default confirmation, truthful-result and cost boundaries using existing infrastructure.
+
+**Kind:** maintenance
+**Implementation:** done
+**UAT:** pending
+**Touches:** `src/features/era/useEraAskAI.ts`, `src/features/era/useEraAskAI.test.ts`, `src/features/era/types.ts`, `src/features/era/capabilities/plan.ts`, `src/features/era/capabilities/plan.test.ts`, `src/features/era/capabilities/registry.ts`, `src/features/era/intents/resolvers/schedule.ts`, `src/features/era/intents/resolvers/schedule.hardening.test.ts`, `src/lib/ai/eraAskProposal.ts`, `src/lib/ai/eraAskProposal.test.ts`, `src/app/api/era/ask/route.ts`, `src/app/api/era/ask/route.test.ts`
+
+- **Acceptance:** Default-mode single and multi-step proposals share deterministic execution checks and original owner/chat/date context. Expired/changed reminder references and account switches cannot dispatch stale model cards or publish private read results. New chat stops subsequent steps. Missing artifacts and partial NFC effects cannot become complete success. Parsed recurrence cannot become a one-time write or misleading date question. Invalid proposals cannot repeat model success text. Conditional money cannot bypass strict admission. Provider usage includes the actual full request/response and thought tokens, with explicit uncertainty; unavailable quota state refuses inference.
+- **Verified — 2026-10-11:** Six initial hook regressions plus three recurrence/conditional-money regressions failed before the fixes. Final affected ERA/AI/API/Gym run: **638 passed, 12 stale/missing recording failures, one opt-in test skipped**. Actual-hook/recurrence follow-up: 14 passed, including positive confirmation and account change during a read. Typecheck passes. Full repository run before the final two extra regressions: 3,617 passed, 18 failed, 11 skipped; three sandbox-limited PM build failures pass with filesystem access and one loaded-run timeout passes alone. Two existing Delivery output-redaction assertions remain red alongside the twelve recording gaps. No tests were skipped or recordings rewritten to manufacture a pass.
+- **Scope of completion:** Review plus implemented local hardening, not certification of the original application-wide vision. No new source business logic, capability family, migration, production write or live API call. Source receipt work is [SCH-24](<../Schedule/Schedule — Master Book.md#sch-24>); confirmation preview is HUB-109; source idempotency/native lifecycle convergence remains HUB-46. Parsed recurrence guard is a delivered portion of SCH-7.
+- **Finish checks:** Changed-source ESLint has zero errors and two pre-existing `schedule.ts` `no-explicit-any` warnings. PM lint, criteria/links and Feature Map checks pass; only the existing empty Delivery Next-lane warning remains. `pm:archive` swept HUB-108 only. The local PM dashboard was regenerated with the filesystem access its bundler requires; nothing was published. No route, page, navigation or schema change was introduced by this review, so no new Atlas entry or migration pair is required.
+- **Owner acceptance:** Follow the [deployment/device matrix and prioritized roadmap](<../../03 - Junction Modules/AI Assistant/Overview.md#owner-deployment-and-daily-use-acceptance>). The DB snapshot is 67 days old and `db:verify-rls` reports disabled RLS on two tables; no current DB state is inferred. Journal SQL/flag rollout, both-phone interruption and privacy tests, current-model quality, voice and source alert delivery remain pending. Empty browser inventory prevented UI/mobile QA; no served build was exercised.
+- **Reading guide:** [Final review](<../../03 - Junction Modules/AI Assistant/Overview.md#final-review-and-hardening--2026-10-11-hub-108>), then the new actual-hook regression tests. Preserve the prior phases' uncommitted work and their separate rollout gates.
+
+### HUB-109
+
+**Outcome:** Confirm shows the operation and effective values ERA will execute, independently of model-authored prose.
+
+**Kind:** bug
+**Implementation:** done
+**UAT:** pending
+**Touches:** `src/components/era/EraProposalCard.tsx`, `src/components/era/EraRunCards.tsx`, `src/features/era/capabilities/`, `src/features/era/execution/`
+
+- **Acceptance:** Generate compact preview fields from reviewed capability contracts and validated slots (target, date/time, amounts/list and replacement/delete effects where applicable); use the same view for default and journal cards. Dependency values that are not yet known must be visibly unresolved, not invented. If a later read materially changes a consequential target/effect, obtain confirmation for the effective action before dispatch. Keep model prose optional and non-authoritative. Preserve original request for comparison and obey minimal-text/mobile rules.
+- **Evidence:** An isolated adversarial fixture must give benign labels with different valid mutation slots and demonstrate that the actual slots are what the user sees; cover named lookup/dependency values and changed targets. Verify mobile 390 px on a served build. This does not pretend deterministic previews prove that every natural-language constraint has been preserved; HUB-105 owns whole-goal evaluation.
+- **Reading guide:** `EraProposalCard.tsx`, `EraRunCards.tsx`, `capabilities/discovery.ts`/`plan.ts`, and `execution/state.ts`. Reuse the current card/journal and schema contracts; do not add another planner or per-utterance templates.
+
+- **Implementation — 2026-10-11:** All registered writes declare reviewed action/field vocabulary; write admission rejects a missing contract. `EraActionPreview` renders validated/defaulted slots and original request context in normal and journal cards. Real reminder title/date/priority/alert, expense amount/currency/account/date, recipe/default meal/replacement, shopping ingredients/list/group and Recycle Bin effects replace model descriptions. References remain pending until source reads return. Adapters compare actual values before dispatch and recheck owner/chat; differences persist a new consent snapshot. Confirm resumes acknowledged steps without rerunning them. Saved consent survives reload and Resume does not grant approval. Recipe assignment reads all matches instead of masking ambiguity with `limit=1`.
+- **Evidence — 2026-10-11:** Adversarial benign-label previews, changed draft amount/account, owned reminder/date identity, pending then actual ingredient lists, ambiguous recipes, source rollback/partial/unknown distinctions, journal consent reload and the actual default React hook's repeat-free continuation pass. Server-rendered preview contains real action fields and omits model labels. Affected ERA/AI/API/Gym run: 699 passed, one existing opt-in skipped, one known `unsupported-stock-subtraction` replay failure (expected `[]`, actual `[meal.assign]`). No model responses/hashes were rewritten or paid calls made. Typecheck/scoped ESLint pass. See [P0 architecture, evidence and limits](<../../03 - Junction Modules/AI Assistant/Overview.md#p0-action-trust--2026-10-11-sch-24--hub-109>).
+- **Owner UAT:** At 390 px and both themes on an isolated served build, inspect normal/saved Confirm/Dismiss cards with long values, request comparison and pending dependencies; confirm recipe→meal/shopping and changed draft/reminder values, then reload saved consent and verify completed effects do not repeat. Browser inventory was empty, so no visual/real-click witness exists here. HUB-104's migration/flag and SCH-24's source SQL/RLS gates remain prerequisites for their deployed paths. No deployment or production data modification occurred.
+- **Limits:** These previews describe the admitted adapter's effective attempt; they do not prove all natural-language constraints survived interpretation. Haiku's unsupported pantry subtraction case still needs owner disposition under HUB-105/107. Source revision preconditions, native money/occurrence/group lifecycle convergence and exactly-once/reconciliation remain HUB-46; no autonomous retry or new agent framework was added.
 
 ## Backlog reconciliation
 
@@ -3045,6 +3191,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Owner UAT:** Apply the migration manually in Supabase SQL Editor, then confirm a public/private transaction, reminder create/complete, household/private/hidden chat and a child record in each enabled source module across both accounts. Confirm a private transition removes old partner history; try date/person/module/feature filters and Load more. Verify 390px layout and install/launch Activity alongside Trips/PM on the target phone. Check current live schema and actual module mutation paths if any capture error occurs. No browser backend was available for local device/visual verification; migration application is unverified. Optional source tables missing at install need migration reapplication after installation. History starts with application; there is no backfill.
 
 ## Shipped Log
+
+- ✅ 2026-10-11 — **HUB-110** ERA AI Usage tab (desktop only, next to Artifacts): one month at a time, a table per local day of the chats that reached the model (click → reopens the chat), AI calls (auto-escalations counted separately), input/output tokens and estimated $ cost, with month totals. Counts only the `ai_messages` receipts `/api/era/ask` writes per model call (`era-ask` + `era-ask-auto`), so native-only turns never count and escalated ones do; chats are linked through their `ai_answer` rows. Cost uses list prices per `model_used` (Claude Haiku 5.5 $0.10/$0.50 per 1M; legacy Gemini Flash assumed $0.30/$2.50); recorded input includes cache reads at the full rate, so Claude estimates lean high. Pre-Claude receipts left `model_used` null on the input row and are priced from their output row. No migration. Files: `api/era/ai-usage/route.ts`, `features/era/{aiUsage,useEraAiUsage}.ts`, `dashboards/AiUsageView.tsx`, `EraFaceNav.tsx`, `EraShell.tsx`, `useEraStore.ts`. 12 unit tests, typecheck green, desktop browser-verified against live October data; chat-link click and the phone viewport not exercised.
 
 - ✅ 2026-10-10 — **HUB-101** ERA Artifacts view: browse by day (‹ › skip days with nothing, calendar greys them out), grouped by module in each module's ERA hue, and a persistent Undo/Redo per row derived from the row's live state (`POST /api/era/actions/status`; no stored flag, no migration). Reversal reuses the app's own soft-delete + Recycle Bin restore for reminders, events, contacts, places, drafts and transfers. Money fix: `/api/recycle-bin/restore` now re-applies transfer balances (it only cleared deleted_at, so every restored transfer left both accounts off), is compare-and-set against a double restore, and re-arms never-fired alerts that DELETE had switched off; `DELETE /api/drafts/[id]` now 404s a confirmed draft instead of reporting success. Files: `ArtifactsView.tsx`, `useEraArtifacts.ts`, `artifacts.ts`, `api/era/actions/{route,status/route}.ts`. Typecheck, lint and 488 targeted tests green (restore route 8 new); not browser-verified.
 
@@ -3107,6 +3255,12 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - ✅ 2026-10-04 — **HUB-94** ERA asks where an event happens and learns your places — [criteria](<Hub & ERA — Master Book.md#hub-94>)
 - ✅ 2026-10-10 — **HUB-97** ERA adds a list of items to the shopping list however the household phrases it — [criteria](<Hub & ERA — Master Book.md#hub-97>)
 - ✅ 2026-10-10 — **HUB-98** Ask AI fails less often and logs why when it does — [criteria](<Hub & ERA — Master Book.md#hub-98>)
+- ✅ 2026-10-10 — **HUB-100** Ask AI knows the shopping list exists and can propose adding to it — [criteria](<Hub & ERA — Master Book.md#hub-100>)
+- ✅ 2026-10-10 — **HUB-103** ERA executes validated multi-step requests through existing application capabilities — [criteria](<Hub & ERA — Master Book.md#hub-103>)
+- ✅ 2026-10-10 — **HUB-104** Preserve agent consent and execution progress with safe session recovery — [criteria](<Hub & ERA — Master Book.md#hub-104>)
+- ✅ 2026-10-10 — **HUB-106** Reuse private context and acknowledged experience for adaptive ERA dialogue — [criteria](<Hub & ERA — Master Book.md#hub-106>)
+- ✅ 2026-10-11 — **HUB-108** Review ERA Agent and harden confirmation, truthful outcomes and usage accounting — [criteria](<Hub & ERA — Master Book.md#hub-108>)
+- ✅ 2026-10-11 — **HUB-109** Show actual effective actions and values before Confirm — [criteria](<Hub & ERA — Master Book.md#hub-109>)
 
 ## Delivery session log
 

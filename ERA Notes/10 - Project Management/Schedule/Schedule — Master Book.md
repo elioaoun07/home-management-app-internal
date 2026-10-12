@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-03
+updated: 2026-10-11
 type: master-book
 status: active
 owner: Elio
@@ -22,6 +22,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 ## Vision & Decisions
 
+- **SCH-24 — Complete source effects precede success.** One source transaction serves precision capture, ERA and offline replay; child/state rejection rolls back, and an unverified acknowledgement requires inspection rather than retry. Existing Schedule rules and RLS remain the authority. *(IMPLEMENTED 2026-10-11 — repository and isolated SQL/API fixtures; owner SQL/RLS/device acceptance pending.)*
+
 - Focus is a per-item mode; household co-ownership permits mutual edit/reassign through the shared predicate. *(IMPLEMENTED 2026-06-06)*
 - Capture first, classify last: title-only can save a dateless reminder; structured fields remain editable truth. Form parsing is rule-based/offline-capable; Hub uses Gemini with an explicit long-call timeout. Never reuse money NLP logic wholesale.
 - The former three-type data decision is transitional: the accepted SCH-6.1 retirement supersedes it as the target; do not pretend the DB/type migration has shipped. The live form already presents Reminder/Event.
@@ -36,6 +38,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+**SCH-24 — Resolved locally, 2026-10-11.** Parent-only success and separate prerequisite/state writes reproduced from source and isolated failures; atomic source RPCs and complete/rollback/unknown receipts now cover API, three create hooks, ERA and replay. Owner SQL/RLS/device gates remain pending under [criteria](<#sch-24>); this is not a production incident or deployment claim.
 
 🟠 **SCH-4.2** Verify cross-view recurrence placement. See [acceptance](<#sch-42>) for the root cause, evidence and gate.
 
@@ -190,6 +194,8 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 ### SCH-7
 
 **Outcome:** Refuse unsupported recurrence before capture.
+
+- **Delivered portion — 2026-10-11, HUB-108:** The shared ERA resolver now refuses parsed recurrence before pending-question creation, before direct writes and in pending answers. Four real-parser/resolver regressions cover recurring initial/answer/cadence-only requests (zero POSTs) and one-time capture. Native replies offer the existing Schedule door. Remaining scope: preserve original input into the precision-form handoff and witness the 390 px flow; arbitrary unrecognized recurrence wording is not certified by these fixtures. Source receipt completeness is separately SCH-24.
 
 - **Acceptance:** Unsupported recurrence is refused before creating a one-time reminder or a misleading pending turn; blocks safe E-09 conversational capture.
 
@@ -2047,6 +2053,24 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - **Evidence:** Chromium source (`AppInstallMenuHandler.java`, `WebappRegistry.java`, `webapps_client_android.cc`, `app_banner_manager.cc`); S23 emulator on Chrome 153: prompt fired for `chat.webmanifest`, pill rendered, tap opened the install dialog. A real second WebAPK install is owner UAT (the emulator's Play is signed out).
 - **Reading guide:** `.claude/skills/pwa-install/SKILL.md`.
 
+### SCH-24
+
+**Outcome:** Source item/prerequisite writes return success only for complete requested effects, with inspectable partial/unknown results when a commit cannot be verified.
+
+**Kind:** bug
+**Implementation:** done
+**UAT:** pending
+**Touches:** `src/app/api/items/route.ts`, `src/app/api/items/[id]/prerequisites/route.ts`, `src/features/items/`, `src/lib/prerequisites/`, `migrations/`
+
+- **Acceptance:** Validate the complete request before a parent write. Move required parent/child operations behind one source-owned atomic boundary where possible; never silently log a required child's error and return complete success. Preserve a committed parent ID and explicit incomplete outcome if atomicity cannot cover a path. Source clients and ERA must display that state without blind create retries. Verify trigger insertion/dormant-state consistency and owner/household/tag authorization; do not widen permissions to repair the symptom.
+- **Evidence gate:** Inject a failure at each requested child write and prerequisite-state update using isolated route/DB fixtures. Assert either transaction rollback or an explicit partial receipt with the actual surviving IDs; assert ordinary complete requests keep their behavior. Include alerts/recurrence and a lost response. Owner-run SQL deliverables and refreshed RLS evidence are required for any migration; agents never apply them.
+- **Reading guide:** `src/app/api/items/route.ts` POST and `src/app/api/items/[id]/prerequisites/route.ts`, `migrations/schema.sql`, the current DB-state runbook and `SCH-10`. ERA consumes the source contract through `capabilities/plan.ts`; a second ERA-only transaction engine would leave other clients broken. Source idempotency remains HUB-46's cross-module contract.
+
+- **Implementation — 2026-10-11:** Complete Zod validation and a shared prepared request precede one `create_item_complete` transaction. Parent, details, subtasks, alerts, recurrence and prerequisites commit together; trigger create/remove plus dormant/activation transitions use owned-row locks in companion RPCs. SECURITY INVOKER and explicit tag/state/active-household/assignee checks preserve existing RLS. The three browser create hooks now call the same API as ERA/offline; NFC sends its trigger in the original POST. Definite source rejection is rollback; transport/missing/incomplete acknowledgements are unknown. Legacy acknowledged parent IDs remain artifacts without a complete claim. Offline creates require a durable pre-dispatch review fence, held through local removal; unknown attempts never automatically replay or expire.
+- **Evidence — 2026-10-11:** Twelve isolated PGlite tests execute the actual migration, including each child failure, dormant/activation update failures, successful complete/draft/partner paths, repeat application and same-day custom alert. Twenty item/prerequisite API cases cover whole-request validation, source status mapping, missing receipts and lost responses. ERA adapter/hook and queue fixtures pass; wider affected ERA/AI/API/Gym: 699 pass, one existing opt-in skipped, one known Haiku unsupported-constraint replay failure (HUB-105/107). Typecheck and scoped ESLint pass. No production access or model call.
+- **Scope boundary:** Same-day custom alerts require the delivered `offset_minutes >= 0` constraint. Recurring custom-time alerts now fail before a parent is saved, because the current cron cannot preserve that clock rule; this is a delivered SCH-7 refusal, not a new recurrence engine or completion of SCH-7/SCH-9. Source exactly-once/reconciliation remains HUB-46; Google Calendar backup is outside the complete local receipt.
+- **Owner UAT / run first:** Apply [2026-10-11_atomic-item-create.sql](<../../../migrations/2026-10-11_atomic-item-create.sql>) manually, then refresh `db-state.json` using [Database RLS Posture](<../../01 - Architecture/Database RLS Posture.md>) and validate current item/child/tag policies under SCH-10. Expected: either the entire requested item exists or no requested rows remain after a source rejection; trigger and dormant status agree. Verify own and partner-authorized cases on isolated data, source views/Undo and unknown-save inspection. Actual production RLS/enums, source deployment, push/Google delivery and phone/browser interaction remain unverified. Browser inventory was empty; the agent neither applied SQL nor deployed.
+
 ## Shipped Log
 
 - ✅ 2026-05-31 — partner-edit 403 fixed: the PATCH route ran its own creator-only check **stricter than the RLS policy underneath**; now uses `canMutateItem()` (creator OR responsible OR public+partner), matching `items_update`
@@ -2075,6 +2099,7 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - ✅ 2026-10-03 — **SCH-23** Install a second app from the in-app Install button — [criteria](<Schedule — Master Book.md#sch-23>)
 - ✅ 2026-10-10 — Chores polish on SCH-20: `/chores` page uses the themed `tc.bgPage` (the `--background` gradient rendered near-black in blue dark), **Assign** opens preselected on the selected day (Today by default), and the assign dialog has previous/next week chevrons
 - ✅ 2026-10-10 — Web View on a phone-width screen (`WebViewContainer`): the header's module tabs and avatar were clipped off-screen, so Mobile View and module switching were unreachable. Below `lg` the tabs are replaced by a module-switcher dropdown and the avatar stays visible; `lg`+ unchanged
+- ✅ 2026-10-11 — **SCH-24** Acknowledge complete item and prerequisite effects truthfully — [criteria](<Schedule — Master Book.md#sch-24>)
 
 ## Delivery session log
 

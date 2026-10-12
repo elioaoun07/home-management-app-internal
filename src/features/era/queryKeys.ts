@@ -10,6 +10,7 @@ export const eraKeys = {
   messages: (conversationId: string | null) =>
     [...eraKeys.all, "messages", conversationId ?? "none"] as const,
   templates: () => [...eraKeys.all, "templates"] as const,
+  runs: (conversationId: string | null, owner?: string | null) => [...eraKeys.all, "runs", owner ?? "none", conversationId ?? "none"] as const,
   lexicon: () => [...eraKeys.all, "lexicon"] as const,
   widgets: {
     schedule: () => [...(["era"] as const), "widget", "schedule"] as const,
@@ -17,6 +18,8 @@ export const eraKeys = {
     chef: () => [...(["era"] as const), "widget", "chef"] as const,
     brain: () => [...(["era"] as const), "widget", "brain"] as const,
   },
+  /** The AI Usage view: one local month (yyyy-MM) of model calls. */
+  aiUsage: (monthKey: string) => [...eraKeys.all, "ai-usage", monthKey] as const,
   /** The Artifacts view: which days have rows, one day's rows, and each row's live status. */
   artifacts: {
     all: () => [...eraKeys.all, "artifacts"] as const,

@@ -22,6 +22,14 @@ tags:
 
 - [[Birthday Feature]]
 
+## Complete source creation — 2026-10-11 (SCH-24)
+
+All three create hooks, ERA and offline replay now call `POST /api/items`. `src/lib/items/createContract.ts` validates the entire request before any write and prepares defaults, draft alert suppression and client-zone custom alert times. The authenticated `create_item_complete` RPC commits parent, typed details, subtasks, alerts, recurrence and prerequisites together; any rejected child rolls back the request. Prerequisite-backed items are created dormant in that transaction. A 201 receipt requires `completion.status = complete`, with child IDs; a legacy parent alone is not a complete save.
+
+PostgreSQL errors mean `rolled_back`; a missing RPC is `not_started`; lost/transport/incomplete responses are `unknown`. Clients refresh Schedule even on failure and direct unknown saves to Check Schedule without automatic create retry. Offline replay retains a durable review fence until the operation is removed. Source idempotency/reconciliation stays HUB-46. Google Calendar backup remains separate best effort.
+
+[Owner-run migration](<../../../migrations/2026-10-11_atomic-item-create.sql>) is unapplied. It includes same-day custom alert offsets (`>= 0`) matching the picker. Recurring custom-time alerts fail validation before saving because the existing cron cannot preserve that clock rule; numeric relative offsets continue through the existing RRule helper. Broader recurrence/alert lifecycle work stays SCH-7/SCH-9. Isolated SQL/API/ERA tests verify rollback, complete children, lost acknowledgement, drafts, trigger transitions and authorization; production enums/RLS and actual push/calendar delivery require owner evidence. See [SCH-24 acceptance](<../../10 - Project Management/Schedule/Schedule — Master Book.md#sch-24>).
+
 ---
 
 ## Quick Reference — "Where do I go to…"

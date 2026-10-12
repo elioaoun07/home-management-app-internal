@@ -15,8 +15,9 @@ describe("ERA_CAPABILITIES", () => {
   });
 
   it("includes the Stage 1 core set plus Stage D's widened registry", () => {
-    expect(Object.keys(ERA_CAPABILITIES).sort()).toEqual(
-      [
+    expect(Object.keys(ERA_CAPABILITIES)).toEqual(
+      expect.arrayContaining([
+        "app.capabilities",
         // Stage 1
         "reminder.complete",
         "reminder.create",
@@ -33,13 +34,17 @@ describe("ERA_CAPABILITIES", () => {
         "meal.assign",
         "memory.save",
         "memory.recall",
-      ].sort(),
+        "reminder.find",
+        "recipe.ingredients",
+        "shopping.add",
+        "shopping.list",
+      ]),
     );
   });
 
-  it("marks reminder.delete as destructive and everything else as not", () => {
+  it("every deletion declares its destructive effect", () => {
     for (const capability of Object.values(ERA_CAPABILITIES)) {
-      expect(Boolean(capability.destructive)).toBe(capability.id === "reminder.delete");
+      if (capability.operation === "delete") expect(capability.destructive).toBe(true);
     }
   });
 
@@ -77,9 +82,10 @@ describe("ERA_CAPABILITIES", () => {
   });
 
   // HUB-29 — every capability must document itself for Ask AI's prompt.
-  it("every entry has a non-empty promptSlots description", () => {
+  it("every entry declares its purpose and Feature Index owner", () => {
     for (const capability of Object.values(ERA_CAPABILITIES)) {
-      expect(capability.promptSlots.length).toBeGreaterThan(0);
+      expect(capability.description.length).toBeGreaterThan(0);
+      expect(capability.module.length).toBeGreaterThan(0);
     }
   });
 

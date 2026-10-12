@@ -21,9 +21,9 @@
 // (missTracking.ts) reads as a LANGUAGE gap — a registered capability
 // plausibly covers this, the phrasing just didn't parse — auto-escalates to
 // Ask AI instead of returning the canned "I didn't catch that" line. A
-// CAPABILITY gap (nothing in the registry covers this at all) never
-// escalates automatically; it stays a deterministic reply and keeps feeding
-// the build-queue signal missClassification already existed for. This is a
+// CAPABILITY gap outside a live dialogue stays a deterministic reply. During
+// recent dialogue, unrecognized follow-ups also reach the model so they need
+// not repeat a domain keyword. Both paths keep the same daily cap. This is a
 // heuristic, not a guarantee (missTracking.ts's own doc comment says so) —
 // worst case a language-gap guess escalates something Ask AI can't help
 // with either, which just costs one AI call, capped per day server-side
@@ -34,6 +34,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { qk } from "@/lib/queryKeys";
+import { eraKeys } from "./queryKeys";
 import { safeFetch } from "@/lib/safeFetch";
 import { parseSmartText } from "@/lib/smartTextParser";
 import { ToastIcons } from "@/lib/toastIcons";
@@ -52,7 +53,13 @@ import { useEraTemplates } from "./templates/useEraTemplates";
 import { useEraLexicon } from "./useEraLexicon";
 import { deriveLearnedVocab } from "./templates/vocabGrowth";
 import type { FocusEntity } from "./focusMemory";
-import type { EraActiveProposal, EraOutcome, EraPendingSlot, EraPendingTurn, Intent } from "./types";
+import type {
+  EraActiveProposal,
+  EraOutcome,
+  EraPendingSlot,
+  EraPendingTurn,
+  Intent,
+} from "./types";
 import { useEraAskAI } from "./useEraAskAI";
 import { useEraBudgetSubmit } from "./useEraBudgetSubmit";
 import {
@@ -63,6 +70,18 @@ import {
 } from "./useEraConversation";
 import { focusFromMessages } from "./focusRehydrate";
 import { useEraStore } from "./useEraStore";
+import { needsAgentPlan } from "./capabilities/plan";
+import { classifySpeechAct } from "./intents/speechAct";
+import { DURABLE_EXECUTION, nextStep } from "./execution/state";
+import {
+  cachedActiveRun,
+  beginAnswer,
+  finishAnswer,
+  conversationStillActive,
+} from "./execution/client";
+import { applyCapabilityResult } from "./capabilities/applyResult";
+import { hasRecentDialogue } from "./adaptiveTurn";
+import type { EraMessagesPage } from "./useEraConversation";
 
 function intentPayload(intent: Intent): Record<string, unknown> {
   const rest: Record<string, unknown> = { ...intent };
@@ -96,14 +115,12 @@ function pushFocusFromResult(
   const title = typeof metadata?.title === "string" ? metadata.title : null;
   if (!itemId || !title) return;
 
-  useEraStore
-    .getState()
-    .pushFocusEntity({
-      id: itemId,
-      type: "reminder",
-      title,
-      addedAt: Date.now(),
-    });
+  useEraStore.getState().pushFocusEntity({
+    id: itemId,
+    type: "reminder",
+    title,
+    addedAt: Date.now(),
+  });
 }
 
 export interface EraTurnResult {
@@ -135,7 +152,6 @@ export function useEraTurn() {
   const setHubModuleKey = useEraStore((s) => s.setHubModuleKey);
   const setLastIntent = useEraStore((s) => s.setLastIntent);
   const setEraReply = useEraStore((s) => s.setEraReply);
-  const pendingTurn = useEraStore((s) => s.pendingTurn);
   const setPendingTurn = useEraStore((s) => s.setPendingTurn);
   const setLastMissText = useEraStore((s) => s.setLastMissText);
   const setActiveProposal = useEraStore((s) => s.setActiveProposal);
@@ -163,28 +179,86 @@ export function useEraTurn() {
   const rehydratedFor = useRef<string | null>(null);
   useEffect(() => {
     const convId = activeConversation?.id ?? null;
-    if (!convId || rehydratedFor.current === convId || !messagesPage?.messages) return;
+    if (!convId || rehydratedFor.current === convId || !messagesPage?.messages)
+      return;
     rehydratedFor.current = convId;
     const store = useEraStore.getState();
     if (store.focusEntities.length > 0) return;
-    for (const e of focusFromMessages(messagesPage.messages).reverse()) store.pushFocusEntity(e);
+    for (const e of focusFromMessages(messagesPage.messages).reverse())
+      store.pushFocusEntity(e);
   }, [activeConversation?.id, messagesPage]);
 
   const runTurnInner = useCallback(
-    async (text: string, opts: { chip?: string } = {}): Promise<EraTurnResult> => {
+    async (
+      text: string,
+      opts: { chip?: string } = {},
+    ): Promise<EraTurnResult> => {
+      // Capture before a pending resolver can await/write. A chat switch must
+      // never send the old answer or its receipts into the new conversation.
+      const turnTarget = eraConversationTarget(
+        queryClient,
+        useEraStore.getState().activeFaceKey,
+      );
       // HUB-78 — turn state (plan §4 component 1). An outstanding question
       // gets the first look at this turn, but it never swallows a new request.
-      let pending: EraPendingTurn | null = pendingTurn;
+      let pending: EraPendingTurn | null = useEraStore.getState().pendingTurn;
       let slotResolution: ResolveResult | null = null;
+      let owningRun = DURABLE_EXECUTION
+        ? cachedActiveRun(queryClient, activeConversation?.id ?? null)
+        : null;
+      let answer: Awaited<ReturnType<typeof beginAnswer>> | null = null;
+      if (DURABLE_EXECUTION && useEraStore.getState().activeRunId && !owningRun)
+        throw new Error("Load unfinished work before answering.");
+      const suspendRun = () => {
+        useEraStore.setState({
+          activeRunId: null,
+          pendingTurn: null,
+          activeProposal: null,
+        });
+        owningRun = null;
+        pending = null;
+      };
+
+      // A fresh compound command must reach the planner as a whole, even
+      // when a previous turn left a date/group question open.
+      if (!opts.chip && needsAgentPlan(text)) {
+        if (owningRun) suspendRun();
+        pending = null;
+        setPendingTurn(null);
+      }
 
       if (pending?.kind === "slot") {
         // HUB-94 — "When?"/"Where?" take free text, so a real new request
         // typed instead is handed to the router, never read as a date/place.
-        const newRequest = !opts.chip && FREE_TEXT_SLOTS.has(pending.capability) && isNewRequest(text);
-        const answered = newRequest ? null : await resolvePendingSlot(pending, text, opts.chip).catch(() => null);
+        const newRequest =
+          !opts.chip &&
+          (owningRun || FREE_TEXT_SLOTS.has(pending.capability)) &&
+          isNewRequest(text);
+        if (newRequest && owningRun) suspendRun();
+        if (!newRequest && owningRun)
+          answer = await beginAnswer(owningRun, queryClient);
+        const answered = newRequest
+          ? null
+          : await resolvePendingSlot(
+              pending as EraPendingSlot,
+              text,
+              opts.chip,
+            ).catch(() => ({
+              text: "Couldn't verify that answer. Check the app.",
+              ok: false,
+            }));
         if (answered && !("unmatched" in answered)) {
           slotResolution = answered as ResolveResult;
         } else {
+          if (answer && owningRun) {
+            await finishAnswer(
+              answer,
+              { text: owningRun.state.text, pending },
+              queryClient,
+            );
+            answer = null;
+            suspendRun();
+          }
           pending = null;
           setPendingTurn(null);
         }
@@ -193,23 +267,52 @@ export function useEraTurn() {
         // title as a reviewable draft (never lost) and handle the new one.
         const next = rootIntentRouter.parse(text);
         if (isConfident(next)) {
-          void resolvePendingReminderAnswer(pending, "").catch(() => {});
+          if (owningRun) suspendRun();
+          else void resolvePendingReminderAnswer(pending, "").catch(() => {});
           pending = null;
           setPendingTurn(null);
+        } else if (owningRun) {
+          return {
+            intent: {
+              kind: "draftReminder",
+              face: "schedule",
+              title: pending.title,
+              rawText: text,
+            },
+            reply: owningRun.state.text,
+            outcome: {
+              status: "needs_input",
+              capability: "agent.plan",
+              entityIds: [],
+              inverse: null,
+            },
+          };
         }
       }
 
       const intent: Intent = slotResolution
         ? {
             kind: "slotAnswer",
-            face: (pending as EraPendingSlot).capability.startsWith("transfer") ? "budget" : "schedule",
+            face: (pending as EraPendingSlot).capability.startsWith("transfer")
+              ? "budget"
+              : "schedule",
             capability: (pending as EraPendingSlot).capability,
             rawText: text,
           }
         : pending?.kind === "draftReminder"
-          ? { kind: "draftReminder", face: "schedule", title: pending.title, rawText: text }
-          : rootIntentRouter.parse(text);
+          ? {
+              kind: "draftReminder",
+              face: "schedule",
+              title: pending.title,
+              rawText: text,
+            }
+          : needsAgentPlan(text)
+            ? { kind: "unknown", rawText: text }
+            : rootIntentRouter.parse(text);
       const answeringQuestion = pending !== null;
+      if (!answeringQuestion && owningRun) suspendRun();
+      if (answeringQuestion && pending?.kind === "draftReminder" && owningRun)
+        answer = await beginAnswer(owningRun, queryClient);
 
       if (!answeringQuestion) setLastIntent(intent);
 
@@ -217,7 +320,8 @@ export function useEraTurn() {
       // stays usable after the input box clears; a resolved turn (whether it
       // hit a router or answered a pending question) forgets it.
       const isMiss =
-        !answeringQuestion && (intent.kind === "clarify" || intent.kind === "unknown");
+        !answeringQuestion &&
+        (intent.kind === "clarify" || intent.kind === "unknown");
       setLastMissText(isMiss ? text : null);
 
       const isFaceless =
@@ -237,7 +341,7 @@ export function useEraTurn() {
       // creates it (`ensure`), so even the first turn renders optimistically
       // and persists in the per-conversation write queue: the assistant row
       // queues behind the row that creates its parent. Resolution starts now.
-      const target = eraConversationTarget(queryClient, isFaceless ? useEraStore.getState().activeFaceKey : intent.face);
+      const target = turnTarget;
       const conversationId: string | null = target.id;
       void createMessage
         .mutateAsync({
@@ -246,7 +350,10 @@ export function useEraTurn() {
           content: text,
           intent_kind: intent.kind,
           intent_face: isFaceless ? null : intent.face,
-          intent_payload: { ...intentPayload(intent), ...(opts.chip ? { chip: opts.chip } : {}) },
+          intent_payload: {
+            ...intentPayload(intent),
+            ...(opts.chip ? { chip: opts.chip } : {}),
+          },
           ensure_conversation: target.ensure,
         })
         .catch(() => {});
@@ -261,17 +368,25 @@ export function useEraTurn() {
           )
         : null;
 
-      // Stage C — a language-gap miss escalates to the AI automatically; a
-      // capability-gap miss never does (HUB-77 kept "model on miss or
-      // conflict only"). HUB-76 — a NEGATED write never escalates.
+      // A live dialogue is additional evidence of a language gap: a follow-up
+      // need not repeat a domain keyword. Outside it, keep the vocabulary gate.
+      // HUB-76 — a NEGATED write never escalates.
       const negatedWrite =
-        intent.kind === "clarify" &&
-        intent.reason === "speechAct" &&
-        intent.act === "negated";
+        classifySpeechAct(text) === "negated" ||
+        (intent.kind === "clarify" &&
+          intent.reason === "speechAct" &&
+          intent.act === "negated");
       if (
         isMiss &&
         !negatedWrite &&
-        missClassification?.missKind === "language-gap"
+        (missClassification?.missKind === "language-gap" ||
+          needsAgentPlan(text) ||
+          hasRecentDialogue(
+            queryClient.getQueryData<EraMessagesPage>(
+              eraKeys.messages(conversationId),
+            )?.messages ?? [],
+            conversationId,
+          ))
       ) {
         setLastMissText(null);
         const reply = await askAI(text, {
@@ -296,25 +411,66 @@ export function useEraTurn() {
           metadata: undefined as Record<string, unknown> | undefined,
           pending: null,
         })));
-      const { text: reply, metadata, pending: nextPending, proposal, handoff, navigate, focus: nextFocus, undo, artifacts } = resolution;
+      const {
+        text: reply,
+        metadata,
+        pending: nextPending,
+        proposal,
+        handoff,
+        navigate,
+        focus: nextFocus,
+        undo,
+        artifacts,
+      } = resolution;
+      if (answer && owningRun) {
+        const saved = await finishAnswer(answer, resolution, queryClient);
+        const stepId = answer.stepId;
+        const capabilityId = saved.state.plan.steps.find(
+          (s) => s.id === stepId,
+        )!.capabilityId;
+        if (conversationStillActive(conversationId))
+          applyCapabilityResult(capabilityId, resolution, queryClient, {
+            recordArtifacts: false,
+          });
+        // A later step is now resumable; the original confirmed plan survives.
+        if (!nextStep(saved.state)) useEraStore.setState({ activeRunId: null });
+      }
 
-      setPendingTurn(nextPending ?? null);
+      const currentChat = conversationStillActive(conversationId);
+      if (currentChat) setPendingTurn(nextPending ?? null);
       // HUB-76 — a write held behind Confirm: show the card, write nothing.
-      if (proposal) setActiveProposal(proposal);
+      if (proposal && currentChat) setActiveProposal(proposal);
       // HUB-81 — a page door: one Open tap, no auto-navigation mid-conversation.
-      if (navigate) setActiveProposal({ kind: "handoff", text: reply, open: () => router.push(navigate) });
+      if (navigate && currentChat)
+        setActiveProposal({
+          kind: "handoff",
+          text: reply,
+          open: () => router.push(navigate),
+        });
 
       const outcome = deriveOutcome(intent, resolution);
       // Every write's adapter returned its artifacts — one call, no per-feature mapping.
-      recordEraArtifacts(artifacts, queryClient);
-      pushFocusFromResult(intent, answeringQuestion ? pending : null, metadata);
+      if (!answer) recordEraArtifacts(artifacts, queryClient);
+      if (currentChat)
+        pushFocusFromResult(
+          intent,
+          answeringQuestion ? pending : null,
+          metadata,
+        );
       // HUB-84 — every editable result becomes "it" for the next follow-up.
-      registerResultFocus({ intent, focus: nextFocus, proposal, handoff, metadata });
+      if (currentChat)
+        registerResultFocus({
+          intent,
+          focus: nextFocus,
+          proposal,
+          handoff,
+          metadata,
+        });
 
       const draftTransactionId =
         typeof metadata?.draftId === "string" ? metadata.draftId : null;
 
-      setEraReply(reply);
+      if (currentChat) setEraReply(reply);
 
       // The assistant row carries the outcome (HUB-47 reads only this) and,
       // for a spend, the handoff the precision form can open (component 9).
@@ -349,13 +505,27 @@ export function useEraTurn() {
       if (undo) {
         showUndoReceipt(reply, undo);
       } else {
-        showReceipt({ intent, outcome, metadata, reply, handoff, openHandoff, queryClient, setActiveProposal });
+        showReceipt({
+          intent,
+          outcome,
+          metadata,
+          reply,
+          handoff,
+          openHandoff,
+          queryClient,
+          setActiveProposal,
+        });
       }
 
-      return { intent, reply, metadata, outcome, keepInput: metadata?.retryable === true };
+      return {
+        intent,
+        reply,
+        metadata,
+        outcome,
+        keepInput: metadata?.retryable === true,
+      };
     },
     [
-      pendingTurn,
       setPendingTurn,
       createMessage,
       budgetSubmit,
@@ -367,6 +537,7 @@ export function useEraTurn() {
       setHubModuleKey,
       setEraReply,
       queryClient,
+      activeConversation?.id,
       router,
     ],
   );
@@ -374,15 +545,49 @@ export function useEraTurn() {
   // HUB-86 — the thread shows ERA thinking for the whole turn, whichever
   // surface started it (typed, voice or a chip).
   const runTurn = useCallback(
-    async (text: string, opts: { chip?: string } = {}): Promise<EraTurnResult> => {
+    async (
+      text: string,
+      opts: { chip?: string } = {},
+    ): Promise<EraTurnResult> => {
+      // Typed and voice share this lock with confirmed agent execution.
+      const state = useEraStore.getState();
+      if (state.turnInFlight || state.askingAI)
+        return {
+          intent: { kind: "unknown", rawText: text },
+          reply: state.eraReply,
+          keepInput: true,
+        };
       setTurnInFlight(true);
+      const originatingConversation =
+        useEraStore.getState().explicitConversation;
       try {
         return await runTurnInner(text, opts);
+      } catch (error) {
+        const reply =
+          error instanceof Error
+            ? error.message
+            : "Couldn't save progress. Refresh and resume.";
+        if (
+          useEraStore.getState().explicitConversation ===
+          originatingConversation
+        )
+          useEraStore.getState().setEraReply(reply);
+        queryClient.invalidateQueries({ queryKey: eraKeys.all });
+        return {
+          intent: { kind: "unknown", rawText: text },
+          reply,
+          outcome: {
+            status: "uncertain",
+            capability: "agent.plan",
+            entityIds: [],
+            inverse: null,
+          },
+        };
       } finally {
         setTurnInFlight(false);
       }
     },
-    [runTurnInner, setTurnInFlight],
+    [runTurnInner, setTurnInFlight, queryClient],
   );
 
   return { runTurn, budgetSubmitReady: budgetSubmit.ready };
@@ -403,7 +608,13 @@ function registerResultFocus(args: {
   }
   const p = args.proposal;
   if (p?.kind === "native_action" && p.action.type === "transfer") {
-    push({ id: "transfer-card", type: "transfer_card", title: p.text, addedAt: Date.now(), meta: { ...p.action } });
+    push({
+      id: "transfer-card",
+      type: "transfer_card",
+      title: p.text,
+      addedAt: Date.now(),
+      meta: { ...p.action },
+    });
     return;
   }
   const m = args.metadata;
@@ -433,12 +644,20 @@ function showUndoReceipt(label: string, undo: () => Promise<boolean>): void {
   toast.success(label, {
     icon: ToastIcons.success,
     duration: 4000,
-    action: { label: "Undo", onClick: () => run().then((ok) => (ok ? toast.success("Undone") : toast.error("Couldn't undo"))) },
+    action: {
+      label: "Undo",
+      onClick: () =>
+        run().then((ok) =>
+          ok ? toast.success("Undone") : toast.error("Couldn't undo"),
+        ),
+    },
   });
 }
 
 function isConfident(intent: Intent): boolean {
-  return !["clarify", "unknown", "greeting", "switchFace"].includes(intent.kind);
+  return !["clarify", "unknown", "greeting", "switchFace"].includes(
+    intent.kind,
+  );
 }
 
 function hasDate(text: string): boolean {
@@ -463,13 +682,20 @@ function showReceipt(args: {
     const amount = typeof m.amount === "number" ? m.amount : null;
     const title = [
       "Draft",
-      amount !== null ? moneyIn(amount, typeof m.currency === "string" ? m.currency : undefined) : null,
+      amount !== null
+        ? moneyIn(
+            amount,
+            typeof m.currency === "string" ? m.currency : undefined,
+          )
+        : null,
       typeof m.categoryName === "string" ? m.categoryName : null,
     ]
       .filter(Boolean)
       .join(" · ");
     const undo = once(async () => {
-      const res = await safeFetch(`/api/drafts/${draftId}`, { method: "DELETE" });
+      const res = await safeFetch(`/api/drafts/${draftId}`, {
+        method: "DELETE",
+      });
       queryClient.invalidateQueries({ queryKey: qk.drafts() });
       queryClient.invalidateQueries({ queryKey: ["account-balance"] });
       return res.ok;
@@ -480,7 +706,9 @@ function showReceipt(args: {
       action: {
         label: "Undo",
         onClick: () =>
-          undo().then((ok) => (ok ? toast.success("Undone") : toast.error("Couldn't undo"))),
+          undo().then((ok) =>
+            ok ? toast.success("Undone") : toast.error("Couldn't undo"),
+          ),
       },
       cancel: { label: "Change", onClick: openHandoff },
     });
@@ -488,40 +716,67 @@ function showReceipt(args: {
   }
 
   if (outcome.status === "handed_off" && handoff) {
-    args.setActiveProposal({ kind: "handoff", text: args.reply, open: openHandoff });
+    args.setActiveProposal({
+      kind: "handoff",
+      text: args.reply,
+      open: openHandoff,
+    });
     return;
   }
 
   if (outcome.status !== "done" || typeof m?.itemId !== "string") return;
   const itemId = m.itemId;
   const title = typeof m.title === "string" ? m.title : "Reminder";
-  const label = typeof m.dueAt === "string" ? `${title} · ${formatDue(m.dueAt)}` : title;
+  const label =
+    typeof m.dueAt === "string" ? `${title} · ${formatDue(m.dueAt)}` : title;
 
-  if (outcome.inverse === "reminder.patchDue" && typeof m.previousDueAt === "string") {
+  if (
+    outcome.inverse === "reminder.patchDue" &&
+    typeof m.previousDueAt === "string"
+  ) {
     const previous = m.previousDueAt;
     const undo = once(() => patchDueAt(itemId, previous, queryClient));
     toast.success(label, {
       icon: ToastIcons.success,
       duration: 4000,
-      action: { label: "Undo", onClick: () => undo().then((ok) => (ok ? toast.success("Undone") : toast.error("Couldn't undo"))) },
+      action: {
+        label: "Undo",
+        onClick: () =>
+          undo().then((ok) =>
+            ok ? toast.success("Undone") : toast.error("Couldn't undo"),
+          ),
+      },
     });
   } else if (outcome.inverse === "reminder.delete") {
     const undo = once(async () => {
-      const res = await safeFetch(`/api/items/${itemId}`, { method: "DELETE", timeoutMs: 8_000 });
+      const res = await safeFetch(`/api/items/${itemId}`, {
+        method: "DELETE",
+        timeoutMs: 8_000,
+      });
       queryClient.invalidateQueries({ queryKey: qk.scheduleItems() });
       return res.ok;
     });
     toast.success(label, {
       icon: ToastIcons.success,
       duration: 4000,
-      action: { label: "Undo", onClick: () => undo().then((ok) => (ok ? toast.success("Undone") : toast.error("Couldn't undo"))) },
+      action: {
+        label: "Undo",
+        onClick: () =>
+          undo().then((ok) =>
+            ok ? toast.success("Undone") : toast.error("Couldn't undo"),
+          ),
+      },
     });
   }
 }
 
 function formatDue(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
+  return d.toLocaleString("en-US", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function once(fn: () => Promise<boolean>): () => Promise<boolean> {

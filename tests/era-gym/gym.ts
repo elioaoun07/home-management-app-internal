@@ -288,7 +288,7 @@ export async function gymFetch(
                 : url === "/api/catalogue/items" && init?.method === "POST"
                   ? { id: `c-${++gymSeq}` }
                 : url === "/api/items" && init?.method === "POST"
-                  ? { item: { id: `ev-${++gymSeq}` } }
+                  ? { item: { id: `ev-${++gymSeq}` }, completion: { status: "complete" } }
                   : url === "/api/hub/messages" && init?.method === "POST"
                 ? { message: { id: `m-${++gymSeq}` } }
                 : url === "/api/drafts" && init?.method === "POST"

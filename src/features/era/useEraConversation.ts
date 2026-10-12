@@ -210,10 +210,13 @@ function startLocalConversation(
     local: true,
   };
   seededConversations.set(conversation.id, conversation);
-  queryClient.setQueryData<EraConversation[]>(eraKeys.conversations(), (old) => [
-    conversation,
-    ...(old ?? []).filter((c) => c.id !== conversation.id),
-  ]);
+  queryClient.setQueryData<EraConversation[]>(
+    eraKeys.conversations(),
+    (old) => [
+      conversation,
+      ...(old ?? []).filter((c) => c.id !== conversation.id),
+    ],
+  );
   queryClient.setQueryData<EraMessagesPage>(eraKeys.messages(conversation.id), {
     messages: [],
     nextCursor: null,
@@ -260,11 +263,14 @@ async function patchConversation(
   id: string,
   body: { action: "resume" } | { action: "archive"; archived: boolean },
 ): Promise<EraConversation> {
-  const res = await safeFetch(`/api/era/conversations/${encodeURIComponent(id)}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const res = await safeFetch(
+    `/api/era/conversations/${encodeURIComponent(id)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
   if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
   return res.json();
 }
@@ -272,37 +278,46 @@ async function patchConversation(
 /** Continue a past chat: it becomes the active one, with a clean context. */
 export function useResumeEraConversation() {
   const queryClient = useQueryClient();
-  return useMutation<EraConversation, Error, EraConversationSummary, { previous: string | null | undefined }>({
-    mutationFn: (summary) => patchConversation(summary.id, { action: "resume" }),
+  return useMutation<
+    EraConversation,
+    Error,
+    EraConversationSummary,
+    { previous: string | null | undefined }
+  >({
+    mutationFn: (summary) =>
+      patchConversation(summary.id, { action: "resume" }),
     onMutate: (summary) => {
       const store = useEraStore.getState();
       const previous = store.explicitConversation;
       const now = new Date().toISOString();
-      queryClient.setQueryData<EraConversation[]>(eraKeys.conversations(), (old) => {
-        const existing = old?.find((c) => c.id === summary.id);
-        const row: EraConversation = existing
-          ? { ...existing, updated_at: now }
-          : {
-              id: summary.id,
-              user_id: "",
-              title: null,
-              active_face_key: summary.active_face_key,
-              is_archived: false,
-              created_at: summary.created_at,
-              updated_at: now,
-            };
-        return [row, ...(old ?? []).filter((c) => c.id !== summary.id)];
-      });
+      queryClient.setQueryData<EraConversation[]>(
+        eraKeys.conversations(),
+        (old) => {
+          const existing = old?.find((c) => c.id === summary.id);
+          const row: EraConversation = existing
+            ? { ...existing, updated_at: now }
+            : {
+                id: summary.id,
+                user_id: "",
+                title: null,
+                active_face_key: summary.active_face_key,
+                is_archived: false,
+                created_at: summary.created_at,
+                updated_at: now,
+              };
+          return [row, ...(old ?? []).filter((c) => c.id !== summary.id)];
+        },
+      );
       store.resetConversationContext();
       store.setExplicitConversation(summary.id);
       writeNewChatMarker(null);
       return { previous };
     },
     onSuccess: (row) => {
-      queryClient.setQueryData<EraConversation[]>(eraKeys.conversations(), (old) => [
-        row,
-        ...(old ?? []).filter((c) => c.id !== row.id),
-      ]);
+      queryClient.setQueryData<EraConversation[]>(
+        eraKeys.conversations(),
+        (old) => [row, ...(old ?? []).filter((c) => c.id !== row.id)],
+      );
       queryClient.invalidateQueries({ queryKey: eraKeys.history() });
     },
     onError: (_error, _summary, context) => {
@@ -340,11 +355,13 @@ export function useArchiveEraConversation() {
         store.resetConversationContext();
         store.setExplicitConversation(null);
       }
-      queryClient.setQueryData<EraConversationSummary[]>(eraKeys.history(), (old) =>
-        (old ?? []).filter((c) => c.id !== summary.id),
+      queryClient.setQueryData<EraConversationSummary[]>(
+        eraKeys.history(),
+        (old) => (old ?? []).filter((c) => c.id !== summary.id),
       );
-      queryClient.setQueryData<EraConversation[]>(eraKeys.conversations(), (old) =>
-        (old ?? []).filter((c) => c.id !== summary.id),
+      queryClient.setQueryData<EraConversation[]>(
+        eraKeys.conversations(),
+        (old) => (old ?? []).filter((c) => c.id !== summary.id),
       );
       toast.success("Archived", {
         icon: ToastIcons.success,
@@ -540,10 +557,34 @@ export function useCreateEraMessage() {
       }
 
       const optimisticId = `optimistic-${crypto.randomUUID()}`;
+      // Capture-session attribution lets Ask AI distinguish this person's
+      // unsaved tail from another account's stale cache, without a DB call.
+      const optimisticOwner = await supabaseBrowser()
+        .auth.getSession()
+        .then(({ data }) => data.session?.user.id ?? "optimistic")
+        .catch(() => "optimistic");
+      const seeded = seededConversations.get(conversationId);
+      if (
+        seeded?.local &&
+        optimisticOwner !== "optimistic" &&
+        (seeded.user_id === "local" || seeded.user_id === optimisticOwner)
+      ) {
+        seededConversations.set(conversationId, {
+          ...seeded,
+          user_id: optimisticOwner,
+        });
+        queryClient.setQueryData<EraConversation[]>(
+          eraKeys.conversations(),
+          (old) =>
+            old?.map((c) =>
+              c.id === conversationId ? { ...c, user_id: optimisticOwner } : c,
+            ),
+        );
+      }
       const optimisticMessage: EraMessage = {
         id: optimisticId,
         conversation_id: conversationId,
-        user_id: "optimistic",
+        user_id: optimisticOwner,
         role: input.role,
         content: input.content,
         intent_kind: input.intent_kind ?? null,
@@ -592,11 +633,19 @@ export function useCreateEraMessage() {
       // A conversation started in this tab now exists server-side.
       const seeded = seededConversations.get(result.conversation_id);
       if (seeded?.local) {
-        seededConversations.set(result.conversation_id, { ...seeded, local: false });
-        queryClient.setQueryData<EraConversation[]>(eraKeys.conversations(), (old) =>
-          (old ?? []).map((c) =>
-            c.id === result.conversation_id ? { ...c, local: false } : c,
-          ),
+        seededConversations.set(result.conversation_id, {
+          ...seeded,
+          user_id: result.message.user_id,
+          local: false,
+        });
+        queryClient.setQueryData<EraConversation[]>(
+          eraKeys.conversations(),
+          (old) =>
+            (old ?? []).map((c) =>
+              c.id === result.conversation_id
+                ? { ...c, user_id: result.message.user_id, local: false }
+                : c,
+            ),
         );
       }
 

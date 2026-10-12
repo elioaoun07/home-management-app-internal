@@ -13,6 +13,7 @@ import {
   eraArtifact,
 } from "@/lib/era/artifacts";
 import { safeFetch } from "@/lib/safeFetch";
+import { itemCreateReceiptSchema, createdItemIdentitySchema } from "@/lib/items/createContract";
 
 export interface RouteWriteResult {
   text: string;
@@ -58,8 +59,20 @@ export async function routeWrite(spec: RouteWriteSpec): Promise<RouteWriteResult
   const fail: RouteWriteResult = { text: spec.failReply ?? "Couldn't do that.", ok: false };
   try {
     const res = await send(spec.call);
-    if (!res.ok) return fail;
-    const id = spec.pickId(await res.json().catch(() => null));
+    if (!res.ok) {
+      if (spec.call.url !== "/api/items") return fail;
+      const receipt = await res.json().catch(() => null);
+      const definite = ["not_started", "rolled_back"].includes(receipt?.completion?.status);
+      return { ...fail, text: definite ? "Item was not saved." : "Save unverified. Check Schedule before retrying.", metadata: { completion: definite ? "failed" : "unknown" } };
+    }
+    const json = await res.json().catch(() => null);
+    if (spec.call.url === "/api/items" && !itemCreateReceiptSchema.safeParse(json).success) {
+      const identity = createdItemIdentitySchema.safeParse(json);
+      return { ...fail, text: "Completion unverified. Check Schedule before retrying.",
+        artifacts: identity.success ? [eraArtifact(spec.artifact.entity, spec.artifact.action, identity.data.item.id, spec.artifact.title, spec.artifact.ref)] : undefined,
+        metadata: { completion: "unknown", partial: identity.success } };
+    }
+    const id = spec.pickId(json);
     if (!id) return fail;
     const inverse = spec.inverse?.(id);
     return {
@@ -70,6 +83,8 @@ export async function routeWrite(spec: RouteWriteSpec): Promise<RouteWriteResult
       undo: inverse ? async () => (await send(inverse).catch(() => null))?.ok ?? false : undefined,
     };
   } catch {
-    return fail;
+    return spec.call.url === "/api/items"
+      ? { ...fail, text: "Save unverified. Check Schedule before retrying.", metadata: { completion: "unknown" } }
+      : fail;
   }
 }

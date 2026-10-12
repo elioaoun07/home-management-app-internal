@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-04
+updated: 2026-10-11
 type: checklist
 status: active
 owner: Elio
@@ -16,6 +16,8 @@ Now-lane exception: reports filed from the ERA chat arrive under **ERA reports**
 
 ## Now
 
+- [ ] **HUB-105** Derive ERA capability discovery from contracts and verify the evolved planning prompt — [criteria](<Hub & ERA — Master Book.md#hub-105>) _(friction - M)_
+
 - [ ] **HUB-91** Run the era-artifacts migration and witness Artifacts + Activity Log links on the phone — [criteria](<Hub & ERA — Master Book.md#hub-91>) _(blocker - S)_
 - [ ] **HUB-83** Run the era_lexicon migration and witness ERA's new flows on both phones — [criteria](<Hub & ERA — Master Book.md#hub-83>) _(blocker - S)_
 - [ ] **HUB-62** Record current schema and application evidence — [criteria](<Hub & ERA — Master Book.md#hub-62>) _(friction - M)_
@@ -30,6 +32,7 @@ Now-lane exception: reports filed from the ERA chat arrive under **ERA reports**
 
 ## Next
 
+- [ ] **HUB-107** Move the AI layer from Gemini to Claude Haiku 5.5 — [criteria](<Hub & ERA — Master Book.md#hub-107>) _(friction - L)_
 - [ ] **HUB-44** Attribute model usage and enforce degradation controls — [criteria](<Hub & ERA — Master Book.md#hub-44>) _(friction - M)_
 - [ ] **HUB-46** Make conversational capture durable and idempotent — [criteria](<Hub & ERA — Master Book.md#hub-46>) _(friction - M)_
 - [ ] **HUB-47** Count only verified actions as successful learning — [criteria](<Hub & ERA — Master Book.md#hub-47>) _(friction - M)_
@@ -47,7 +50,6 @@ Now-lane exception: reports filed from the ERA chat arrive under **ERA reports**
 ## Later
 
 - [ ] **HUB-102** Every Artifact row, including debts, memories, meal plans and updates, can be undone and redone — [criteria](<Hub & ERA — Master Book.md#hub-102>) _(annoyance - M)_
-- [ ] **HUB-100** Ask AI knows the shopping list exists and can propose adding to it — [criteria](<Hub & ERA — Master Book.md#hub-100>) _(annoyance - S)_
 - [ ] **HUB-96** An event at a saved place carries that place's Maps link — [criteria](<Hub & ERA — Master Book.md#hub-96>) _(annoyance - S)_
 - [ ] **HUB-92** ERA artifacts for every entity open the exact item — [criteria](<Hub & ERA — Master Book.md#hub-92>) _(annoyance - M)_
 - [ ] **HUB-79** Reach every Budget, Schedule and Kitchen family from ERA — [criteria](<Hub & ERA — Master Book.md#hub-79>) _(friction - L)_

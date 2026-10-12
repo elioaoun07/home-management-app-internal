@@ -1,105 +1,105 @@
 {
   "meta": {
-    "recordedAt": "2026-09-27T15:35:25.021Z",
+    "recordedAt": "2026-10-10T17:50:10.854Z",
     "model": "gemini-3.8-flash",
-    "calls": 45
+    "calls": 48
   },
   "entries": {
     "A:export-009:0": {
-      "text": "{\"kind\":\"prose\",\"text\":\"Got it. Let me know if you need to confirm a pending transaction or check your spending.\"}",
-      "ms": 3397,
-      "inTok": 583,
-      "outTok": 28,
-      "model": "gemini-3.8-flash",
-      "hash": "70c69ed3687a0cf9"
-    },
-    "A:export-072:0": {
-      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"I cannot record expenses directly, but I can check your monthly spending or help with drafts and reminders if you need.\"\n}",
-      "ms": 3287,
-      "inTok": 582,
-      "outTok": 41,
-      "model": "gemini-3.8-flash",
-      "hash": "138ec772ca3abee6"
-    },
-    "A:budget-011:0": {
-      "text": "{\n  \"kind\": \"propose_action\",\n  \"text\": \"Checking your spending for this month.\",\n  \"capabilityId\": \"spend.month\",\n  \"slotsJson\": \"{\\\"scope\\\":\\\"self\\\"}\"\n}",
-      "ms": 1256,
-      "inTok": 577,
-      "outTok": 51,
-      "model": "gemini-3.8-flash",
-      "hash": "2c33a91009d30105"
-    },
-    "A:budget-039:0": {
-      "text": "{\"kind\":\"prose\",\"text\":\"Nice! Always good when payday rolls around.\"}",
-      "ms": 4137,
-      "inTok": 578,
-      "outTok": 18,
-      "model": "gemini-3.8-flash",
-      "hash": "c80136503acbee9b"
-    },
-    "A:budget-040:0": {
-      "text": "{\"kind\":\"prose\",\"text\":\"Nice! Did you want to track how much you spent on them?\"}",
-      "ms": 2083,
-      "inTok": 579,
-      "outTok": 23,
-      "model": "gemini-3.8-flash",
-      "hash": "6a7dccae51460223"
-    },
-    "A:budget-041:0": {
-      "text": "{\"kind\":\"prose\",\"text\":\"Nice job getting those two hours in. Hope it was productive!\"}",
-      "ms": 2441,
-      "inTok": 579,
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"Got it. If you'",
+      "ms": 9338,
+      "inTok": 974,
       "outTok": 22,
       "model": "gemini-3.8-flash",
-      "hash": "d0fe094b3d5f7dcd"
+      "hash": "d04dbca0de43a694"
+    },
+    "A:export-072:0": {
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"I can't log new expenses directly. If you're trying to confirm a",
+      "ms": 8068,
+      "inTok": 973,
+      "outTok": 33,
+      "model": "gemini-3.8-flash",
+      "hash": "fb412c0928b9a3c4"
+    },
+    "A:budget-011:0": {
+      "text": "{\n  \"kind\": \"propose_action\",\n  \"text\": \"Checking your expenses for this month.\",\n  \"capabilityId\": \"spend.month\",\n  \"slotsJson\": \"{\\\"scope\\\":\\\"self\\\"}\"\n}",
+      "ms": 3095,
+      "inTok": 968,
+      "outTok": 51,
+      "model": "gemini-3.8-flash",
+      "hash": "5c427f6b3ae689b6"
+    },
+    "A:budget-039:0": {
+      "text": "{\"kind\":\"prose\",\"text\":\"That's great news! Always nice to see payday arrive.\"}",
+      "ms": 2840,
+      "inTok": 969,
+      "outTok": 22,
+      "model": "gemini-3.8-flash",
+      "hash": "87eba2130a7f4f63"
+    },
+    "A:budget-040:0": {
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"Got it, though I can't log purchases directly. Let me know if you want to check your spending or review pending transaction drafts.\"\n}",
+      "ms": 3981,
+      "inTok": 970,
+      "outTok": 46,
+      "model": "gemini-3.8-flash",
+      "hash": "4a2232952b7cc06b"
+    },
+    "A:budget-041:0": {
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"Great job getting that study session in.\"\n}",
+      "ms": 3872,
+      "inTok": 970,
+      "outTok": 26,
+      "model": "gemini-3.8-flash",
+      "hash": "9454319000cd09db"
     },
     "A:speech-act-056:0": {
-      "text": "{\"kind\":\"prose\",\"text\":\"Did you want me to note that down, or were you looking to check how that impacts your budget?\"}",
-      "ms": 2721,
-      "inTok": 582,
-      "outTok": 30,
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"What would you like me to do with that? I can check your spending for the month or review pending drafts if you'd like.\"\n}",
+      "ms": 3466,
+      "inTok": 973,
+      "outTok": 46,
       "model": "gemini-3.8-flash",
-      "hash": "ac6aa7bdf11ae56e"
+      "hash": "13c854ebb7c4fe1e"
     },
     "A:speech-act-057:0": {
-      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"Got it. I can't log expenses directly, but let me know if you'd like me to save that to memory or set a reminder.\"\n}",
-      "ms": 4200,
-      "inTok": 582,
-      "outTok": 49,
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"Thanks for letting me know. Let me know if you want me to save that or check for any pending draft transactions.\"\n}",
+      "ms": 3149,
+      "inTok": 973,
+      "outTok": 42,
       "model": "gemini-3.8-flash",
-      "hash": "afdf8627964b768d"
+      "hash": "e3d3acc05513906b"
     },
     "A:speech-act-059:0": {
-      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"If you have enough buffer to cover your upcoming expenses, putting that 200 aside is a great idea.\"\n}",
-      "ms": 1793,
-      "inTok": 584,
-      "outTok": 41,
+      "text": "{\"kind\":\"prose\",\"text\":\"I can't see your account balances or advise on transfers. If your budget allows for it, moving money to savings is usually a solid move.\"}",
+      "ms": 2629,
+      "inTok": 975,
+      "outTok": 39,
       "model": "gemini-3.8-flash",
-      "hash": "eeb7fb3eb61541f7"
+      "hash": "5e38c9b8cfd20df7"
     },
     "A:speech-act-060:0": {
-      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"Got it. Did you want me to record that expense",
-      "ms": 4972,
-      "inTok": 586,
-      "outTok": 27,
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"Got it. Would you like me to check your pending drafts to confirm that payment?\"\n}",
+      "ms": 6922,
+      "inTok": 977,
+      "outTok": 35,
       "model": "gemini-3.8-flash",
-      "hash": "ec798992a1b17cbb"
+      "hash": "b7fccacfc0db6271"
     },
     "A:voice-080:0": {
-      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"I can't log individual expenses right now, but I can help you check your monthly spending if you'd like.\"\n}",
-      "ms": 2800,
-      "inTok": 579,
-      "outTok": 43,
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"I can't log new expenses directly, but I can check your monthly spending or confirm pending drafts.\"\n}",
+      "ms": 4845,
+      "inTok": 970,
+      "outTok": 39,
       "model": "gemini-3.8-flash",
-      "hash": "adb0a1f7cc4af272"
+      "hash": "af5d9872427217fa"
     },
     "A:voice-081:0": {
-      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"I don't have a way to log expenses directly yet, but I can check your spending or drafts if you'd like.\"\n}",
-      "ms": 2613,
-      "inTok": 580,
-      "outTok": 45,
+      "text": "{\n  \"kind\": \"prose\",\n  \"text\": \"I can't log new expenses directly, but I can confirm a",
+      "ms": 7437,
+      "inTok": 971,
+      "outTok": 30,
       "model": "gemini-3.8-flash",
-      "hash": "173d2c0b7246541d"
+      "hash": "2e188dbc121a2f8c"
     },
     "C:export-001:0": {
       "text": "{\n  \"tool\": \"clarify\",\n  \"argsJson\": \"{\\\"missing\\\":\\\"dish\\\",\\\"options\\\":[\\\"Lasagna\\\",\\\"Chicken curry\\\",\\\"Tabbouleh\\\"]}\",\n  \"say\": \"Which recipe would you like to schedule?\"\n}",
@@ -196,6 +196,38 @@
       "outTok": 48,
       "model": "gemini-3.8-flash",
       "hash": "ef93f0cdac7013a5"
+    },
+    "C:report-hub-89-neg:0": {
+      "text": "{\"tool\":\"no_action\",\"argsJson\":\"{}\",\"say\":\"Understood, won't add Laura.\"}",
+      "ms": 2659,
+      "inTok": 735,
+      "outTok": 24,
+      "model": "gemini-3.8-flash",
+      "hash": "f286f92f7974e1b6"
+    },
+    "C:report-hub-88-neg:0": {
+      "text": "{\"tool\":\"no_action\",\"argsJson\":\"{}\",\"say\":\"Understood, won't add it.\"}",
+      "ms": 2062,
+      "inTok": 736,
+      "outTok": 24,
+      "model": "gemini-3.8-flash",
+      "hash": "3421518e2a8f6501"
+    },
+    "C:hub-94-neg:0": {
+      "text": "{\n  \"tool\": \"no_action\",\n  \"argsJson\": \"{}\",\n  \"say\": \"Understood, not adding it.\"\n}",
+      "ms": 1861,
+      "inTok": 755,
+      "outTok": 34,
+      "model": "gemini-3.8-flash",
+      "hash": "455b937e44005928"
+    },
+    "C:report-hub-97-neg:0": {
+      "text": "{\n  \"tool\": \"no_action\",\n  \"argsJson\": \"{}\",\n  \"say\": \"Understood, won't add bread to the list.\"\n}",
+      "ms": 2185,
+      "inTok": 754,
+      "outTok": 39,
+      "model": "gemini-3.8-flash",
+      "hash": "73dfd1c6d06d5dfe"
     },
     "C:budget-011:0": {
       "text": "{\n  \"tool\": \"spend",
@@ -356,14 +388,6 @@
       "outTok": 53,
       "model": "gemini-3.8-flash",
       "hash": "e68317131aa3ef50"
-    },
-    "C:correction-085:1": {
-      "text": "{\n  \"tool\":",
-      "ms": 3349,
-      "inTok": 732,
-      "outTok": 6,
-      "model": "gemini-3.8-flash",
-      "hash": "fb89fa2f7ee43da4"
     }
   }
 }

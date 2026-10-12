@@ -1,34 +1,34 @@
 # ERA Gym report
 
-Model: gemini-3.8-flash · recorded: 2026-09-27T15:35:25.021Z · corpus: synthetic (owner export pending)
+Model: gemini-3.8-flash · recorded: 2026-10-10T17:50:10.854Z · corpus: synthetic (owner export pending)
 
 | Path | Correct (all) | Held-out | Supported caps | Wrong effects | Wrong money | Questions/task | Model calls | p50 / p95 ms | Tokens in / out |
 |---|---|---|---|---|---|---|---|---|---|
-| A | 156/175 (89.1%) | 77/87 (88.5%) | 138/153 (90.2%) | 2 | 1 | 0.09 | 12 | 2800 / 4972 | 6971 / 418 |
-| B | 154/175 (88%) | 77/87 (88.5%) | 137/153 (89.5%) | 2 | 1 | 0.09 | 0 | – / – | 0 / 0 |
-| C | 160/175 (91.4%) | 79/87 (90.8%) | 144/153 (94.1%) | 3 | 2 | 0.09 | 33 | 2284 / 4892 | 24427 / 1125 |
+| A | 187/205 (91.2%) | 82/92 (89.1%) | 155/168 (92.3%) | 1 | 0 | 0.08 | 12 | 3981 / 9338 | 11663 / 431 |
+| B | 185/205 (90.2%) | 82/92 (89.1%) | 154/168 (91.7%) | 1 | 0 | 0.08 | 0 | – / – | 0 / 0 |
+| C | 191/205 (93.2%) | 84/92 (91.3%) | 161/168 (95.8%) | 2 | 1 | 0.08 | 36 | 2276 / 4892 | 26675 / 1240 |
 
 **Decision (plan §7): keep-miss-only**
-- held-out correctness C − A = 2.3 points (need ≥ 20)
-- C wrong money effects = 2 (need 0)
-- C model-path p50 = 2284 ms (need ≤ 2500)
+- held-out correctness C − A = 2.2 points (need ≥ 20)
+- C wrong money effects = 1 (need 0)
+- C model-path p50 = 2276 ms (need ≤ 2500)
 
 ## Model-routed cases
 
 | Path | Case | Last turn | ✓ | Outcome | Effect | ms |
 |---|---|---|---|---|---|---|
-| A | export-009 | Chatbot so I understand. I paid. | ✓ | answered |  | 3397 |
-| A | export-072 | Elio pay 5 groceries dekken | ✓ | answered |  | 3287 |
-| A | budget-011 | show my expenses | ✓ | awaiting_confirm | {"cap":"spend.month","scope":"self"} | 1256 |
-| A | budget-039 | I got paid today | ✓ | answered |  | 4137 |
-| A | budget-040 | I bought 2 shirts | ✗ | answered |  | 2083 |
-| A | budget-041 | spent 2 hours studying | ✓ | answered |  | 2441 |
-| A | speech-act-056 | If I paid 50 for gas | ✓ | answered |  | 2721 |
-| A | speech-act-057 | Rita said she spent 20$ | ✓ | answered |  | 4200 |
-| A | speech-act-059 | should I move 200 to savings? | ✓ | answered |  | 1793 |
-| A | speech-act-060 | she wrote "paid 40$ for the plumber" | ✓ | answered |  | 4972 |
-| A | voice-080 | spent twelve dollars on coffee | ✗ | answered |  | 2800 |
-| A | voice-081 | I paid forty five for gas | ✗ | answered |  | 2613 |
+| A | export-009 | Chatbot so I understand. I paid. | ✓ | answered |  | 9338 |
+| A | export-072 | Elio pay 5 groceries dekken | ✓ | answered |  | 8068 |
+| A | budget-011 | show my expenses | ✓ | awaiting_confirm | {"cap":"spend.month","scope":"self"} | 3095 |
+| A | budget-039 | I got paid today | ✓ | answered |  | 2840 |
+| A | budget-040 | I bought 2 shirts | ✗ | answered |  | 3981 |
+| A | budget-041 | spent 2 hours studying | ✓ | answered |  | 3872 |
+| A | speech-act-056 | If I paid 50 for gas | ✓ | answered |  | 3466 |
+| A | speech-act-057 | Rita said she spent 20$ | ✓ | answered |  | 3149 |
+| A | speech-act-059 | should I move 200 to savings? | ✓ | answered |  | 2629 |
+| A | speech-act-060 | she wrote "paid 40$ for the plumber" | ✓ | answered |  | 6922 |
+| A | voice-080 | spent twelve dollars on coffee | ✗ | answered |  | 4845 |
+| A | voice-081 | I paid forty five for gas | ✗ | answered |  | 7437 |
 | C | export-001 | Honk Kilchi has a budget. Schedule a recipe. | ✓ | needs_input |  | 2536 |
 | C | export-002 | It will be a top view. | ✓ | no_action |  | 1372 |
 | C | export-004 | She a Kufale kills her. | ✓ | no_action |  | 1674 |
@@ -41,6 +41,10 @@ Model: gemini-3.8-flash · recorded: 2026-09-27T15:35:25.021Z · corpus: synthet
 | C | export-044 | payment | ✗ | handed_off | {"cap":"navigate","to":"/expense"} | 2984 |
 | C | export-047 | budget? | ✓ | honest_limit |  | 3208 |
 | C | export-072 | Elio pay 5 groceries dekken | ✗ | drafted | {"cap":"transaction.draft","amount":5,"note":"groceries dekken"} | 3260 |
+| C | report-hub-89-neg | Don't add Laura as a contact | ✓ | no_action |  | 2659 |
+| C | report-hub-88-neg | Don't add Kobeize as a location | ✓ | no_action |  | 2062 |
+| C | hub-94-neg | Don't add an event dinner tomorrow at 8pm | ✓ | no_action |  | 1861 |
+| C | report-hub-97-neg | Don't add bread to the spinneys shopping list | ✓ | no_action |  | 2185 |
 | C | budget-011 | show my expenses | ✗ | honest_limit |  | 2622 |
 | C | schedule-016 | dentist appointment on the 3rd at 4pm | ✓ | awaiting_confirm | {"cap":"reminder.create","title":"Dentist appointment","when":"October 3 at 4:00 PM"} | 2448 |
 | C | household-021 | undo that | ✓ | answered |  | 4892 |

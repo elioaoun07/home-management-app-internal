@@ -310,7 +310,17 @@ export interface EraOutcome {
  * Deliberately one shape — the only proposal kind currently built. Never
  * written until the user taps Confirm; see `useEraAskAI.confirmProposal`.
  */
-export type EraActiveProposal =
+export interface EraRequestContext {
+  ownerId: string;
+  conversationId: string;
+  referenceDate: string;
+  timeZone: string;
+}
+
+export type EraActiveProposal = (
+  | { kind: "propose_plan"; text: string; plan: import("./capabilities/plan").EraPlan; sourceText: string;
+      consent?: Record<string, import("./capabilities/effectiveAction").EffectiveAction>;
+      resume?: import("./capabilities/plan").EraPlanStepResult[] }
   | {
       kind: "propose_nfc_reminder";
       text: string;
@@ -346,7 +356,8 @@ export type EraActiveProposal =
       offerAlways?: EraLexiconOffer;
     }
   // HUB-78 — ERA can't finish this; the precision form opens prefilled.
-  | { kind: "handoff"; text: string; open: () => void };
+  | { kind: "handoff"; text: string; open: () => void }
+) & { requestContext?: EraRequestContext };
 
 export interface EraLexiconOffer {
   capability: string;

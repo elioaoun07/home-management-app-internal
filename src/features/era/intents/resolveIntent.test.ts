@@ -84,7 +84,9 @@ function mockFetch(
             ? (JSON.parse(init.body) as Record<string, unknown>)
             : null,
       });
-      const { status = 200, json } = handler(url);
+      const { status = 200, json: source } = handler(url);
+      const json = url === "/api/items" && init?.method === "POST" && status < 300
+        ? { ...(source as object), completion: { status: "complete" } } : source;
       return {
         ok: status >= 200 && status < 300,
         status,
@@ -500,9 +502,8 @@ describe("resolveIntent — draftReminder", () => {
     const intent = reminderIntent("remind me to call the bank tomorrow at 5pm");
     const variants = await everyVariant(() => resolveIntent(intent));
 
-    // The apology and the retry nudge vary; the diagnosis never does.
-    allContain(variants, "I couldn't save that reminder.");
-    expect((await resolveIntent(intent)).metadata).toBeUndefined();
+    expect(variants.every(v => v.includes("Save unverified. Check Schedule before retrying."))).toBe(true);
+    expect((await resolveIntent(intent)).metadata).toMatchObject({ completion: "unknown" });
   });
 
   // ── the phrasing contract ────────────────────────────────────────────────

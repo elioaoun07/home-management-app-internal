@@ -1,3 +1,4 @@
+import { waitingForConsent, type BeforeWrite } from "../../capabilities/effectiveAction";
 // Chef resolver — searches recipes by dish name
 import { eraArtifact, type EraArtifact } from "@/lib/era/artifacts";
 import { safeFetch } from "@/lib/safeFetch";
@@ -25,7 +26,7 @@ interface ResolveResult {
 export async function resolveRecipeSearch(dish: string): Promise<ResolveResult> {
   try {
     const res = await safeFetch(
-      `/api/recipes?search=${encodeURIComponent(dish)}&limit=1`,
+      `/api/recipes?search=${encodeURIComponent(dish)}`,
       { timeoutMs: 8_000 },
     );
     if (!res.ok) return { text: formatChefError(), ok: false };
@@ -103,12 +104,14 @@ export async function resolveAssignMeal(
   dish: string | undefined,
   dayHint: string | undefined,
   mealType: "breakfast" | "lunch" | "dinner" | "snack" | undefined,
+  referenceDate?: Date,
+  beforeWrite?: BeforeWrite,
 ): Promise<ResolveResult> {
   if (!dish || !dayHint) {
     return { text: formatAssignMealError("missing-fields"), ok: false };
   }
 
-  const parsedDay = parseSmartText(dayHint);
+  const parsedDay = parseSmartText(dayHint, referenceDate);
   if (parsedDay.confidence.date === 0 || !parsedDay.dueDate) {
     return { text: formatAssignMealError("bad-day", dayHint), ok: false };
   }
@@ -116,14 +119,19 @@ export async function resolveAssignMeal(
 
   try {
     const searchRes = await safeFetch(
-      `/api/recipes?search=${encodeURIComponent(dish)}&limit=1`,
+      `/api/recipes?search=${encodeURIComponent(dish)}`,
       { timeoutMs: 8_000 },
     );
     if (!searchRes.ok) return { text: formatChefError(), ok: false };
     const recipes: Array<{ id: string; name: string }> = await searchRes.json();
     if (!recipes.length) return { text: formatAssignMealError("no-recipe", dish), ok: false };
-    const recipe = recipes[0];
+    const exact = recipes.filter((r) => r.name.toLowerCase() === dish.trim().toLowerCase());
+    const matches = exact.length ? exact : recipes;
+    if (matches.length !== 1) return { text: `Which recipe? ${matches.map((r) => r.name).join(" · ")}`, ok: false };
+    const recipe = matches[0];
 
+    const effective = { capabilityId: "meal.assign", values: { dish: recipe.name, recipe_id: recipe.id, planned_date: plannedDate, meal_type: mealType || "lunch", effect: "Replace occupied slot / Both" } };
+    if (beforeWrite && !await beforeWrite(effective)) return waitingForConsent(effective);
     const res = await safeFetch("/api/meal-plans", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
