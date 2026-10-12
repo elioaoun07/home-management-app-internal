@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { extractAmount } from "./amount";
+import { describe, expect, it, vi } from "vitest";
+import { extractAmount, locateAmount } from "./amount";
 import { parseMessageForTransaction } from "./messageTransactionParser";
 import { parseSpeechExpense } from "./speechExpense";
 
@@ -82,5 +82,36 @@ describe("speechExpense reads k shorthand", () => {
   });
   it("a list comma still separates", () => {
     expect(parseSpeechExpense("coffee, 12 dollars", []).amount).toBe(12);
+  });
+});
+
+describe("locateAmount", () => {
+  it.each([
+    ["15$ pharmacy", "15$"],
+    ["I paid $25 on fuel", "$25"],
+    ["spent 12$ 5 times", "12$"],
+    ["500k lbp groceries", "500k lbp"],
+    ["paid 20 for gas", "20"],
+    ["bought 2 shirts", undefined],
+  ] as const)("%s → %s", (text, span) => {
+    const found = locateAmount(text);
+    expect(found && text.slice(found.index, found.index + found.length)).toBe(span);
+  });
+  it("finds a bare number only when asked, and reads the same value as extractAmount", () => {
+    const found = locateAmount("coffee 4.5", { allowBare: true });
+    expect(found && "coffee 4.5".slice(found.index, found.index + found.length)).toBe("4.5");
+    expect(extractAmount("coffee 4.5", { allowBare: true })).toEqual({ value: 4.5, currency: null, marked: false, kShorthand: false });
+  });
+});
+
+describe("parseSpeechExpense dates", () => {
+  it("dates 'yesterday' by the local calendar day, not the UTC one", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 12, 1, 0));
+    try {
+      expect(parseSpeechExpense("paid 5$ for coffee yesterday", []).date).toBe("2026-10-11");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

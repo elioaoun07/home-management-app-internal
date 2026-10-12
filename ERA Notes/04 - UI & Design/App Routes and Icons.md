@@ -105,6 +105,8 @@ tags:
 
 ERA execution journal APIs (HUB-104): `GET/POST /api/era/runs` and `PATCH /api/era/runs/[id]`. These authenticated owner-only endpoints support recovery inside `/era`; no new page, navigation item or icon. Recovery is enabled by `NEXT_PUBLIC_ERA_DURABLE_EXECUTION=true` after the owner applies the journal migration.
 
+ERA typing memory API (HUB-113): `GET /api/era/capture-memory`, authenticated and read-only, feeds the composer's completions; no new page, navigation item or icon.
+
 ## PM Command Center (shared local and phone navigation)
 
 `pnpm pm` and `/pm/live` mount the same React navigation from `scripts/pm/app/App.tsx`. These are hash destinations within the existing shell, not new Next.js pages. The wordmark uses `ERAMark module="memory"` from `src/components/shared/ERAMark.tsx`.

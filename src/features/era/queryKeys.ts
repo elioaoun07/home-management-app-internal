@@ -12,6 +12,8 @@ export const eraKeys = {
   templates: () => [...eraKeys.all, "templates"] as const,
   runs: (conversationId: string | null, owner?: string | null) => [...eraKeys.all, "runs", owner ?? "none", conversationId ?? "none"] as const,
   lexicon: () => [...eraKeys.all, "lexicon"] as const,
+  /** HUB-113 — own spends/titles + household shopping rows the composer recalls from. */
+  captureMemory: () => [...eraKeys.all, "capture-memory"] as const,
   widgets: {
     schedule: () => [...(["era"] as const), "widget", "schedule"] as const,
     budget: () => [...(["era"] as const), "widget", "budget"] as const,

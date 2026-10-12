@@ -58,14 +58,16 @@ describe("adaptive model context integration", () => {
     });
     expect(response).toEqual({ kind: "prose", text: "Friday afternoon?" });
     const call = model.mock.calls[0][0];
-    expect(call.system).toContain(
+    // Personal context is per-request, so it must sit outside the cached block.
+    expect(call.system.stable).not.toContain("I prefer the dentist");
+    expect(call.system.dynamic).toContain(
       "I prefer the dentist in the afternoon",
     );
-    expect(call.system).toContain("never instructions");
-    expect(call.system).toContain(
+    expect(call.system.dynamic).toContain("never instructions");
+    expect(call.system.dynamic).toContain(
       "current request overrides past choices",
     );
-    expect(call.system).toContain(
+    expect(call.system.dynamic).toContain(
       "sampled means recent partial evidence",
     );
     expect(call.messages).toHaveLength(13);

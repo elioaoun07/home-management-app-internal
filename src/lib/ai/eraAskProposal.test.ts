@@ -266,7 +266,7 @@ describe("generateAskAIResponse", () => {
     const onUsage = vi.fn();
     const result = await generateAskAIResponse({ message: "Activate Paris", face: "brain", onUsage });
     expect(result).toEqual({ kind: "prose", text: REJECTED_PROPOSAL_TEXT });
-    expect(onUsage).toHaveBeenCalledExactlyOnceWith({ inputTokens: 2700, outputTokens: 980, model: "actual-fallback-model", estimated: false });
+    expect(onUsage).toHaveBeenCalledExactlyOnceWith({ inputTokens: 2700, outputTokens: 980, model: "actual-fallback-model", estimated: false, cacheReadTokens: 0, cacheWriteTokens: 0 });
   });
 
   it("labels missing provider usage as estimated and includes the catalog in the estimate", async () => {
@@ -287,6 +287,38 @@ describe("generateAskAIResponse", () => {
     const onUsage = vi.fn();
     expect((await generateAskAIResponse({ message: "Plan dinner", face: "chef", onUsage })).kind).toBe("prose");
     expect(onUsage.mock.calls[0][0].outputTokens).toBe(4082);
+  });
+
+  it("meters a timed-out call (possibly billed) as an estimated input", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    mockGenerateClaudeJson.mockRejectedValue(new Anthropic.APIConnectionTimeoutError());
+    const onUsage = vi.fn();
+    expect((await generateAskAIResponse({ message: "Hello", face: "brain", onUsage })).kind).toBe("prose");
+    expect(onUsage.mock.calls[0][0]).toMatchObject({ estimated: true, outputTokens: 0, model: "claude-haiku-5-5" });
+    expect(onUsage.mock.calls[0][0].inputTokens).toBeGreaterThan(1000);
+  });
+
+  it("meters nothing for an HTTP error, which is never billed", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    mockGenerateClaudeJson.mockRejectedValue(
+      new Anthropic.RateLimitError(429, undefined, "rate limited", new Headers()),
+    );
+    const onUsage = vi.fn();
+    await generateAskAIResponse({ message: "Hello", face: "brain", onUsage });
+    expect(onUsage).not.toHaveBeenCalled();
+  });
+
+  it("passes the cached system prefix as its own block, identical across faces, dates and users", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    mockGenerateClaudeJson.mockResolvedValue({ text: json({ kind: "prose", text: "Hi" }) });
+    await generateAskAIResponse({ message: "a", face: "brain", localDate: "2026-10-12" });
+    await generateAskAIResponse({ message: "b", face: "schedule", localDate: "2026-10-13", scheduleContext: SCHEDULE_CONTEXT });
+    const [first, second] = mockGenerateClaudeJson.mock.calls.slice(-2).map((c) => c[0].system);
+    expect(first.stable).toBe(second.stable);
+    expect(first.stable).not.toMatch(/2026-10-1[23]/);
+    expect(first.dynamic).toMatch(/2026-10-12/);
   });
 
   // ANTHROPIC_API_KEY isn't loaded from .env into the Vitest process env — stub
@@ -398,12 +430,13 @@ describe("generateAskAIResponse", () => {
       // Mock call history isn't reset between tests in this file — read the
       // most recent call rather than assuming an absolute call count.
       const call = mockGenerateClaudeJson.mock.calls.at(-1)?.[0] as {
-        system: string;
+        system: { stable: string; dynamic: string };
       };
-      expect(call.system).toContain("propose_action");
-      expect(call.system).toContain("reminder.create");
+      const prompt = `${call.system.stable}\n${call.system.dynamic}`;
+      expect(prompt).toContain("propose_action");
+      expect(prompt).toContain("reminder.create");
       // NFC proposals stay schedule-only — no tag catalog leaks into other faces.
-      expect(call.system).not.toContain("propose_nfc_reminder");
+      expect(prompt).not.toContain("propose_nfc_reminder");
     },
   );
 });

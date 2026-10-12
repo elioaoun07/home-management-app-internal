@@ -700,46 +700,51 @@ function applyTimePeriod(hours: number, period: string | undefined): number {
   return hours;
 }
 
-/**
- * Parses time expressions from text
- */
-export function parseTime(text: string): { time: string; matched: string } | null {
-  const lowerText = text.toLowerCase();
+interface ClockTime {
+  hours: number;
+  minutes: number;
+  /** The hour as written, before any AM/PM heuristic. */
+  raw: number;
+  /** am/pm or an unambiguous 24-hour clock ("18:00", "09:30"). */
+  marked: boolean;
+  matched: string;
+}
 
-  // Check named time periods first (longest-match by iterating sorted entries)
-  const sortedTimeEntries = Object.entries(TIME_DEFAULTS).sort(
-    ([a], [b]) => b.length - a.length,
-  );
-  for (const [name, time] of sortedTimeEntries) {
-    if (lowerText.includes(name)) {
-      return { time, matched: name };
-    }
-  }
+const pad2 = (n: number) => n.toString().padStart(2, "0");
+
+/** Clock times written with digits: "at 6", "6:30pm", "18:00", "half past 6". */
+function parseClockTime(lowerText: string): ClockTime | null {
+  const isMarked = (period: string | undefined) => Boolean(period);
 
   // Conversational times: "half past N"
   const halfPastMatch = lowerText.match(
     /\bhalf\s+past\s+(\d{1,2})\s*(am|pm|a\.?m\.?|p\.?m\.)?\b/i,
   );
   if (halfPastMatch) {
-    const hours = applyTimePeriod(
-      parseInt(halfPastMatch[1]),
-      halfPastMatch[2],
-    );
-    const timeStr = `${hours.toString().padStart(2, "0")}:30`;
-    return { time: timeStr, matched: halfPastMatch[0] };
+    const raw = parseInt(halfPastMatch[1]);
+    return {
+      hours: applyTimePeriod(raw, halfPastMatch[2]),
+      minutes: 30,
+      raw,
+      marked: isMarked(halfPastMatch[2]),
+      matched: halfPastMatch[0],
+    };
   }
 
-  // "quarter to N"
+  // "quarter to N" — "Quarter to 7" means 6:45
   const quarterToMatch = lowerText.match(
     /\bquarter\s+to\s+(\d{1,2})\s*(am|pm|a\.?m\.?|p\.?m\.)?\b/i,
   );
   if (quarterToMatch) {
-    const rawHour = parseInt(quarterToMatch[1]);
-    // "Quarter to 7" means 6:45
-    const targetHour = applyTimePeriod(rawHour, quarterToMatch[2]);
-    const beforeHour = (targetHour - 1 + 24) % 24;
-    const timeStr = `${beforeHour.toString().padStart(2, "0")}:45`;
-    return { time: timeStr, matched: quarterToMatch[0] };
+    const target = parseInt(quarterToMatch[1]);
+    const targetHour = applyTimePeriod(target, quarterToMatch[2]);
+    return {
+      hours: (targetHour - 1 + 24) % 24,
+      minutes: 45,
+      raw: (target - 1 + 24) % 24 || 12,
+      marked: isMarked(quarterToMatch[2]),
+      matched: quarterToMatch[0],
+    };
   }
 
   // "quarter past N"
@@ -747,12 +752,14 @@ export function parseTime(text: string): { time: string; matched: string } | nul
     /\bquarter\s+past\s+(\d{1,2})\s*(am|pm|a\.?m\.?|p\.?m\.)?\b/i,
   );
   if (quarterPastMatch) {
-    const hours = applyTimePeriod(
-      parseInt(quarterPastMatch[1]),
-      quarterPastMatch[2],
-    );
-    const timeStr = `${hours.toString().padStart(2, "0")}:15`;
-    return { time: timeStr, matched: quarterPastMatch[0] };
+    const raw = parseInt(quarterPastMatch[1]);
+    return {
+      hours: applyTimePeriod(raw, quarterPastMatch[2]),
+      minutes: 15,
+      raw,
+      marked: isMarked(quarterPastMatch[2]),
+      matched: quarterPastMatch[0],
+    };
   }
 
   // Explicit time: at 6, at 6pm, at 6:30pm, at 18:00
@@ -760,7 +767,8 @@ export function parseTime(text: string): { time: string; matched: string } | nul
     /\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.?m\.?|p\.?m\.?)?\b/i,
   );
   if (atTimeMatch) {
-    let hours = parseInt(atTimeMatch[1]);
+    const raw = parseInt(atTimeMatch[1]);
+    let hours = raw;
     const minutes = atTimeMatch[2] ? parseInt(atTimeMatch[2]) : 0;
     const period = atTimeMatch[3]?.toLowerCase().replace(/\./g, "");
 
@@ -769,36 +777,81 @@ export function parseTime(text: string): { time: string; matched: string } | nul
     // If no period specified and hour <= 6, assume PM (business hours)
     if (!period && hours <= 6) hours += 12;
 
-    const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
-    return { time: timeStr, matched: atTimeMatch[0] };
+    return {
+      hours,
+      minutes,
+      raw,
+      marked: Boolean(period) || raw > 12 || /^0\d/.test(atTimeMatch[1]),
+      matched: atTimeMatch[0],
+    };
   }
 
-  // Time without "at": 6pm, 6:30pm, 18:00
+  // Time without "at": 6pm, 6:30pm
   const timeMatch = lowerText.match(
     /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.?m\.?|p\.?m\.?)\b/i,
   );
   if (timeMatch) {
-    let hours = parseInt(timeMatch[1]);
+    const raw = parseInt(timeMatch[1]);
+    let hours = raw;
     const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
     const period = timeMatch[3].toLowerCase().replace(/\./g, "");
 
     if (period === "pm" && hours < 12) hours += 12;
     if (period === "am" && hours === 12) hours = 0;
 
-    const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
-    return { time: timeStr, matched: timeMatch[0] };
+    return { hours, minutes, raw, marked: true, matched: timeMatch[0] };
   }
 
   // 24-hour format: 18:00, 09:30
   const militaryMatch = lowerText.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
   if (militaryMatch) {
     const hours = parseInt(militaryMatch[1]);
-    const minutes = parseInt(militaryMatch[2]);
-    const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
-    return { time: timeStr, matched: militaryMatch[0] };
+    return {
+      hours,
+      minutes: parseInt(militaryMatch[2]),
+      raw: hours,
+      marked: hours > 12 || /^0\d/.test(militaryMatch[1]),
+      matched: militaryMatch[0],
+    };
   }
 
   return null;
+}
+
+/** Clock-like named periods are times in their own right ("at 12 noon"). */
+const CLOCK_NAMES = new Set(["noon", "midday", "midnight"]);
+
+/**
+ * Parses time expressions from text.
+ *
+ * A written clock time beats a named period's default: "tonight at 9pm" is
+ * 21:00, not tonight's 20:00. When the clock time has no am/pm, the period
+ * picks the half of the day: "evening class at 7" → 19:00, "morning run at
+ * 6" → 06:00. A named period alone keeps its default ("tomorrow morning").
+ */
+export function parseTime(text: string): { time: string; matched: string } | null {
+  const lowerText = text.toLowerCase();
+
+  // Named time periods (longest-match by iterating sorted entries)
+  const sortedTimeEntries = Object.entries(TIME_DEFAULTS).sort(
+    ([a], [b]) => b.length - a.length,
+  );
+  const namedEntry = sortedTimeEntries.find(([name]) =>
+    lowerText.includes(name),
+  );
+  const named = namedEntry ? { time: namedEntry[1], matched: namedEntry[0] } : null;
+
+  const clock = parseClockTime(lowerText);
+  if (!clock) return named;
+  if (named && CLOCK_NAMES.has(named.matched)) return named;
+
+  let hours = clock.hours;
+  if (named && !clock.marked) {
+    const afternoon = parseInt(named.time.slice(0, 2)) >= 12;
+    const twelveHour = clock.raw % 12;
+    hours = afternoon ? twelveHour + 12 : twelveHour;
+  }
+  return { time: `${pad2(hours)}:${pad2(clock.minutes)}`, matched: clock.matched };
 }
 
 // ============================================

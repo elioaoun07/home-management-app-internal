@@ -7,6 +7,7 @@ import type { ERAModuleKey } from "@/components/shared/ERAMark";
 import type { AmountCurrency } from "@/lib/nlp/amount";
 import type { SpeechAct } from "./intents/speechAct";
 import type { ItemPriority } from "@/types/items";
+import type { ExpenseCapture, ScheduleCapture, NativeCapture } from "./capture";
 
 /**
  * The set of ERA "faces" available in Phase 0. Doctor / Hub / Focus are
@@ -46,6 +47,7 @@ export type Intent =
   | { kind: "switchFace"; face: FaceKey; rawText: string }
   | {
       kind: "draftTransaction";
+      capture?: ExpenseCapture;
       face: "budget";
       amount?: number;
       /** HUB-75 — currency named by an explicit marker; absent = unmarked. */
@@ -55,6 +57,7 @@ export type Intent =
     }
   | {
       kind: "draftReminder";
+      capture?: ScheduleCapture;
       face: "schedule";
       title?: string;
       rawText: string;
@@ -216,7 +219,7 @@ export type Intent =
   /** HUB-79 — skip the next occurrence of a recurring reminder (an exception, never a rule edit). */
   | { kind: "reminderSkip"; face: "schedule"; itemId: string | null; title: string | null; targetHint?: string; rawText: string }
   // HUB-78 — marginal-cost capability: add items to the household shopping list.
-  | { kind: "addShopping"; face: "chef"; items: string[]; groupHint?: string; rawText: string }
+  | { kind: "addShopping"; face: "chef"; items: string[]; groupHint?: string; rawText: string; target?: Extract<NativeCapture, { kind: "shopping" }> }
   /** HUB-89 — add a Catalogue contact ("add Laura as a contact"). */
   | { kind: "addContact"; face: "brain"; name: string; rawText: string }
   /** HUB-88/94 — save a Catalogue place ("add Kobeize as a location"). */
@@ -226,7 +229,7 @@ export type Intent =
    * no date/time, no place); `placeHint` is the "at X" phrase, if any. The
    * resolver reads date/time from `rawText`.
    */
-  | { kind: "draftEvent"; face: "schedule"; title: string; placeHint?: string; rawText: string }
+  | { kind: "draftEvent"; face: "schedule"; title: string; placeHint?: string; rawText: string; capture?: ScheduleCapture }
   /** HUB-84 — edit the last result (any type) through its edit contract. */
   | { kind: "amendLast"; face: FaceKey; focusId: string | null; focusType: string | null; targetHint?: string; rawText: string }
   | { kind: "unknown"; rawText: string };

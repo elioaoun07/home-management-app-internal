@@ -28,6 +28,7 @@ export const qk = {
   // Hub chat
   hubThreads: () => ["hub", "threads"] as const,
   hubMessages: (threadId: string) => ["hub", "messages", threadId] as const,
+  shoppingGroups: (threadId: string) => ["shopping-groups", threadId] as const,
 
   // Schedule items root (== itemsKeys.all in src/features/items) — for
   // cross-module invalidation, e.g. Healthcare medication reminders.

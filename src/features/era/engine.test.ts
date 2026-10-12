@@ -10,6 +10,7 @@ const draft: Intent = { kind: "draftTransaction", face: "budget", amount: 12, de
 describe("deriveOutcome", () => {
   it("maps each resolver shape to exactly one outcome", () => {
     expect(deriveOutcome(draft, { metadata: { draftId: "d1" } })).toMatchObject({ status: "drafted", inverse: "draft.delete", entityIds: ["d1"] });
+    expect(deriveOutcome(draft, { ok: true, metadata: { draftId: "d1" }, handoff: { kind: "spend", expiresAt: "2026-10-13T00:00:00Z" } })).toMatchObject({ status: "drafted", inverse: "draft.delete" });
     expect(deriveOutcome(draft, { ok: false, metadata: { uncertain: true } }).status).toBe("uncertain");
     expect(deriveOutcome(draft, { ok: false }).status).toBe("failed");
     expect(deriveOutcome(draft, { navigate: "/trips" }).status).toBe("handed_off");

@@ -10,12 +10,16 @@ import { qk } from "@/lib/queryKeys";
 import { MerchantMapping } from "@/types/statement";
 import { useQuery } from "@tanstack/react-query";
 
-export function useMerchantMappings(options?: { household?: boolean }) {
+export function useMerchantMappings(options?: {
+  household?: boolean;
+  enabled?: boolean;
+}) {
   // household: include the active partner's mappings too (cross-user matching
   // for the expense-form suggestion glow). Default false — the Merchant
   // Mappings manager and statement import only operate on the user's own rows.
   const household = options?.household ?? false;
   return useQuery({
+    enabled: options?.enabled ?? true,
     queryKey: qk.merchantMappings(household),
     queryFn: async (): Promise<MerchantMapping[]> => {
       const res = await fetch(

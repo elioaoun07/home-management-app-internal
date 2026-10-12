@@ -1,20 +1,18 @@
-// Replay verified model interpretations in CI. Opt-in refresh sends synthetic
-// sentences only to Claude; it never connects to Supabase or executes a write.
-// Refresh is one owner-approved pass (Hard Rule #29): stale cases only, one
-// call each, 30 s apart, no retries, stop on first error, lock file first.
-// PowerShell: $env:ERA_AGENT_RECORD='1'; pnpm vitest run tests/era-gym/agent-record.test.ts
-// Delete .tmp/era-agent-record.lock only when the owner approves another pass.
+// Replay verified Claude Haiku 5.5 interpretations of synthetic sentences.
+// Offline only: this file never calls a model (live calls are blocked in every
+// Vitest process — src/lib/ai/anthropic.ts). A recording whose prompt changed
+// is skipped, not failed, so a stale recording never nudges anyone into a
+// paid refresh. Refreshing is an owner-run, owner-approved pass outside the
+// test suite (Hard Rule #29); the recorder was removed 2026-10-12.
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { beforeAll, describe, expect, it } from "vitest";
-if (process.env.ERA_AGENT_RECORD === "1")
-  (await import("dotenv")).config({ quiet: true });
-// The app reads its model choice at module load; load env first, exactly
-// as Next does, so the recording exercises the production call.
-const { buildSystemPrompt, ASK_AI_RESPONSE_SCHEMA, parseAskAIResponse } =
-  await import("@/lib/ai/eraAskProposal");
-const { generateClaudeJson, claudeModel } = await import("@/lib/ai/anthropic");
+import { describe, expect, it } from "vitest";
+import {
+  ASK_AI_RESPONSE_SCHEMA,
+  buildSystemPrompt,
+  parseAskAIResponse,
+} from "@/lib/ai/eraAskProposal";
 // HUB-107: the evidence must come from Haiku 5.5, nothing else.
 const RECORD_MODEL = "claude-haiku-5-5";
 
@@ -110,7 +108,6 @@ const cases: Case[] = [
   },
 ];
 const file = path.join(__dirname, "recordings", "agent-responses.json");
-const lock = path.join(process.cwd(), ".tmp", "era-agent-record.lock");
 const system = buildSystemPrompt({ face: "chef", localDate: "2026-10-10" });
 type Recording = {
   raw: string;
@@ -121,66 +118,22 @@ type Recording = {
   stopReason?: string | null;
   ms: number;
 };
-let recordings: Record<string, Recording> = {};
+const recordings: Record<string, Recording> = fs.existsSync(file)
+  ? JSON.parse(fs.readFileSync(file, "utf8")).entries
+  : {};
 function hash(request: string) {
   return createHash("sha256")
     .update(JSON.stringify({ system, request, schema: ASK_AI_RESPONSE_SCHEMA }))
     .digest("hex");
 }
 
-beforeAll(async () => {
-  if (fs.existsSync(file))
-    recordings = JSON.parse(fs.readFileSync(file, "utf8")).entries;
-  if (process.env.ERA_AGENT_RECORD !== "1") return;
-  if (!process.env.ANTHROPIC_API_KEY)
-    throw new Error("ANTHROPIC_API_KEY is not configured");
-  if (claudeModel !== RECORD_MODEL)
-    throw new Error(`Refusing to record on ${claudeModel}; expected ${RECORD_MODEL}`);
-  const stale = cases.filter((c) => recordings[c.id]?.hash !== hash(c.request));
-  if (!stale.length) return;
-  fs.mkdirSync(path.dirname(lock), { recursive: true });
-  fs.writeFileSync(
-    lock,
-    `${new Date().toISOString()} ${stale.length} calls\n`,
-    { flag: "wx" },
-  );
-  for (const [i, c] of stale.entries()) {
-    if (i > 0) await new Promise((r) => setTimeout(r, 30_000));
-    const start = performance.now();
-    const response = await generateClaudeJson({
-      system,
-      messages: [{ role: "user", content: c.request }],
-      schema: ASK_AI_RESPONSE_SCHEMA,
-      maxRetries: 0,
-    });
-    if (!response.model.startsWith(RECORD_MODEL))
-      throw new Error(`Served by ${response.model}, not ${RECORD_MODEL}; stopping`);
-    recordings[c.id] = {
-      raw: response.text,
-      hash: hash(c.request),
-      model: response.model,
-      inputTokens: response.usage.inputTokens,
-      outputTokens: response.usage.outputTokens,
-      stopReason: response.stopReason,
-      ms: Math.round(performance.now() - start),
-    };
-    fs.writeFileSync(
-      file,
-      `${JSON.stringify({ recordedAt: new Date().toISOString(), entries: recordings }, null, 2)}\n`,
-    );
-    process.stdout.write(`Recorded ${c.id} (${recordings[c.id].ms} ms)\n`);
-  }
-}, cases.length * 75_000);
-
 describe("ERA Agent live-model interpretation replay", () => {
-  it.each(cases)("$id: $request", (c) => {
+  it.for(cases)("$id: $request", (c, { skip }) => {
     const recording = recordings[c.id];
-    expect(recording, "Refresh with ERA_AGENT_RECORD=1").toBeDefined();
+    if (recording?.hash !== hash(c.request))
+      skip("No current recording (prompt changed); owner-approved refresh only");
     expect(recording.model, "Evidence must come from Haiku 5.5").toMatch(
       new RegExp(`^${RECORD_MODEL}`),
-    );
-    expect(recording.hash, "Prompt changed: refresh the model evidence").toBe(
-      hash(c.request),
     );
     const response = parseAskAIResponse(
       recording.raw,

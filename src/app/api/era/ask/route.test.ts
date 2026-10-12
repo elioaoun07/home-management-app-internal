@@ -41,7 +41,6 @@ vi.mock("@/lib/ai/eraAskProposal", () => ({
   generateAskAIResponse: mock.generate,
 }));
 vi.mock("@/lib/ai/rateLimit", () => ({
-  MONTHLY_TOKEN_LIMIT: 100000,
   generateRequestHash: () => "hash",
   checkUserRateLimit: mock.rate,
   recordRequestHash: mock.record,
@@ -99,6 +98,8 @@ beforeEach(() => {
       select: () => q,
       eq: () => q,
       gte: () => q,
+      order: () => q,
+      range: () => q,
       insert: mock.insert,
       then: (resolve: (v: unknown) => unknown) =>
         Promise.resolve(mock.quotaResult).then(resolve),
@@ -215,6 +216,32 @@ describe("Ask AI adaptive wiring", () => {
       expect(response.headers.get("Vary")).toBe("Cookie");
     },
   );
+  it("blocks inference once the month's estimated spend reaches $1", async () => {
+    // 2M Haiku input ($0.20, long-prompt tier $1.00) + 1M output ($2.50) — well over $1
+    mock.quotaResult = {
+      data: [
+        { created_at: "2026-10-03T09:00:00Z", role: "user", session_id: "era-ask", input_tokens: 2_000_000, output_tokens: 0, model_used: "claude-haiku-5-5:cache=0/0" },
+        { created_at: "2026-10-03T09:00:00Z", role: "assistant", session_id: "era-ask", input_tokens: 0, output_tokens: 1_000_000, model_used: "claude-haiku-5-5:cache=0/0" },
+      ],
+      count: 0,
+      error: null,
+    };
+    const response = await POST(request());
+    expect(response.status).toBe(429);
+    expect(mock.adaptive).not.toHaveBeenCalled();
+    expect(mock.generate).not.toHaveBeenCalled();
+  });
+  it("allows inference under the budget", async () => {
+    mock.quotaResult = {
+      data: [
+        { created_at: "2026-10-03T09:00:00Z", role: "user", session_id: "era-ask", input_tokens: 5500, output_tokens: 0, model_used: "claude-haiku-5-5" },
+        { created_at: "2026-10-03T09:00:00Z", role: "assistant", session_id: "era-ask", input_tokens: 0, output_tokens: 300, model_used: "claude-haiku-5-5" },
+      ],
+      count: 0,
+      error: null,
+    };
+    expect((await POST(request())).status).toBe(200);
+  });
   it("rate-limit rejection cannot start retrieval or inference", async () => {
     mock.rate.mockResolvedValue({ allowed: false, reason: "Wait" });
     expect((await POST(request())).status).toBe(429);

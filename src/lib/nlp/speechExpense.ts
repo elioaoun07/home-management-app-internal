@@ -3,6 +3,7 @@
 // No external deps to keep bundle small.
 
 import type { UICategory } from "@/features/categories/useCategoriesQuery";
+import { formatDate } from "@/lib/utils/date";
 
 export type ParsedExpense = {
   description: string; // Always echo back the literal speech
@@ -392,9 +393,10 @@ export function parseSpeechExpense(
   }
   if (amount != null) notes.push(`amount=${amount}`);
 
-  // Parse relative date
+  // Parse relative date — the local calendar day; toISOString() is the UTC
+  // day and dated an early-morning "yesterday" two days back in Beirut.
   const parsedDate = parseRelativeDate(sentence);
-  const date = parsedDate?.toISOString().split("T")[0];
+  const date = parsedDate ? formatDate(parsedDate) : undefined;
   if (date) notes.push(`date=${date}`);
 
   // Prefer subcategory matches first (with improved threshold)

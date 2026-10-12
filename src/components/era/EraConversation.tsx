@@ -210,6 +210,7 @@ export function EraConversation({
       if (pinnedRef.current) scrollToEnd();
     });
     ro.observe(content);
+    if (scrollRef.current) ro.observe(scrollRef.current);
     return () => ro.disconnect();
   }, [scrollToEnd]);
   const last = messages[messages.length - 1];

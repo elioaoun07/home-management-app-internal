@@ -81,6 +81,9 @@ import {
 } from "./execution/client";
 import { applyCapabilityResult } from "./capabilities/applyResult";
 import { hasRecentDialogue } from "./adaptiveTurn";
+import { captureIntent, type NativeCapture } from "./capture";
+import { capabilityOf } from "./engine";
+import { invalidateAccountData } from "@/lib/queryInvalidation";
 import type { EraMessagesPage } from "./useEraConversation";
 
 function intentPayload(intent: Intent): Record<string, unknown> {
@@ -191,7 +194,7 @@ export function useEraTurn() {
   const runTurnInner = useCallback(
     async (
       text: string,
-      opts: { chip?: string } = {},
+      opts: { chip?: string; capture?: NativeCapture } = {},
     ): Promise<EraTurnResult> => {
       // Capture before a pending resolver can await/write. A chat switch must
       // never send the old answer or its receipts into the new conversation.
@@ -207,6 +210,7 @@ export function useEraTurn() {
         ? cachedActiveRun(queryClient, activeConversation?.id ?? null)
         : null;
       let answer: Awaited<ReturnType<typeof beginAnswer>> | null = null;
+      const nativeIntent = opts.capture ? captureIntent(opts.capture, text) : null;
       if (DURABLE_EXECUTION && useEraStore.getState().activeRunId && !owningRun)
         throw new Error("Load unfinished work before answering.");
       const suspendRun = () => {
@@ -221,7 +225,7 @@ export function useEraTurn() {
 
       // A fresh compound command must reach the planner as a whole, even
       // when a previous turn left a date/group question open.
-      if (!opts.chip && needsAgentPlan(text)) {
+      if (nativeIntent || (!opts.chip && needsAgentPlan(text))) {
         if (owningRun) suspendRun();
         pending = null;
         setPendingTurn(null);
@@ -290,7 +294,7 @@ export function useEraTurn() {
         }
       }
 
-      const intent: Intent = slotResolution
+      const intent: Intent = nativeIntent ?? (slotResolution
         ? {
             kind: "slotAnswer",
             face: (pending as EraPendingSlot).capability.startsWith("transfer")
@@ -308,7 +312,7 @@ export function useEraTurn() {
             }
           : needsAgentPlan(text)
             ? { kind: "unknown", rawText: text }
-            : rootIntentRouter.parse(text);
+            : rootIntentRouter.parse(text));
       const answeringQuestion = pending !== null;
       if (!answeringQuestion && owningRun) suspendRun();
       if (answeringQuestion && pending?.kind === "draftReminder" && owningRun)
@@ -449,6 +453,26 @@ export function useEraTurn() {
         });
 
       const outcome = deriveOutcome(intent, resolution);
+      // Native helper writes share source cache refresh, including unknown saves.
+      if (nativeIntent) {
+        const refresh = () => {
+          applyCapabilityResult(capabilityOf(intent) ?? "", resolution, queryClient, { recordArtifacts: false, updateContext: false });
+          if (intent.kind === "draftTransaction")
+            queryClient.invalidateQueries({ queryKey: eraKeys.widgets.budget() });
+          // event.create is native-only and absent from the model registry.
+          if (intent.kind === "draftEvent") {
+            queryClient.invalidateQueries({ queryKey: qk.scheduleItems() });
+            queryClient.invalidateQueries({ queryKey: eraKeys.widgets.schedule() });
+          }
+          // HUB-113 — the composer learns this wording for next time.
+          queryClient.invalidateQueries({ queryKey: eraKeys.captureMemory() });
+        };
+        refresh();
+        if (resolution.undo) {
+          const inverse = resolution.undo;
+          resolution.undo = async () => { try { return await inverse(); } finally { refresh(); } };
+        }
+      }
       // Every write's adapter returned its artifacts — one call, no per-feature mapping.
       if (!answer) recordEraArtifacts(artifacts, queryClient);
       if (currentChat)
@@ -503,7 +527,7 @@ export function useEraTurn() {
 
       // Receipts (plan §5): one line, Undo only where an inverse exists.
       if (undo) {
-        showUndoReceipt(reply, undo);
+        showUndoReceipt(reply, resolution.undo ?? undo);
       } else {
         showReceipt({
           intent,
@@ -547,7 +571,7 @@ export function useEraTurn() {
   const runTurn = useCallback(
     async (
       text: string,
-      opts: { chip?: string } = {},
+      opts: { chip?: string; capture?: NativeCapture } = {},
     ): Promise<EraTurnResult> => {
       // Typed and voice share this lock with confirmed agent execution.
       const state = useEraStore.getState();
@@ -697,7 +721,8 @@ function showReceipt(args: {
         method: "DELETE",
       });
       queryClient.invalidateQueries({ queryKey: qk.drafts() });
-      queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+      invalidateAccountData(queryClient, typeof m.accountId === "string" ? m.accountId : undefined);
+      queryClient.invalidateQueries({ queryKey: eraKeys.widgets.budget() });
       return res.ok;
     });
     toast.success(title, {

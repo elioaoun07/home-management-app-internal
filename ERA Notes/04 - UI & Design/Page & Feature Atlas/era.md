@@ -22,16 +22,20 @@ tags:
 ## Files
 
 - **Page**: `src/app/era/page.tsx`
-- **Main component**: `src/components/era/EraShell.tsx`
+- **Main component**: `src/components/era/EraShell.tsx` — measured composer-height offsets and `visualViewport` keyboard sizing (HUB-112).
 - **Sub-components** *(corrected 2026-08-25, HUB-17 — the six listed below were confirmed to have zero importers and deleted: `FaceHeader.tsx`, `FaceCanvas.tsx`, `QuickFaceChips.tsx`, `FacePlaceholder.tsx`, `EraFaceCard.tsx`, `EraHubView.tsx`, `EraTranscript.tsx`. This doc had described Phase 0's plan, not shipped reality — see the Master Book Shipped Log for what actually exists)*:
   - `src/components/era/CommandBar.tsx`
+  - `src/components/era/EraComposer.module.css` — responsive unified composer and neutral sentence-input styles (HUB-112). ERA atmosphere adds the reused miniature mark, module-colored halo/chips/Send, tinted completion and brief step transitions; Frost contrast and reduced-motion preferences are handled locally.
+  - `src/components/era/EraCaptureHelper.tsx` — native chatbot completion (HUB-112, reworked by HUB-113): the action pill and its one question share a line; below, what ERA understood reads as prose (“Call mom · Tomorrow at 5 PM · At time”) whose dotted parts open their choices; up to four fully named choices wrap in two columns. More uses an opaque searchable sheet; the ellipsis sheet holds action correction plus Priority and Location. The active action uses Schedule violet, Budget teal or Shopping/Kitchen orange and shows a check once everything required is understood. Shopping list previews stay in the sheet. Shopping Enter adds an item line (“What else?” offers remembered items) and Send submits. The sentence input has neutral text and no inner border/ring/glow; the toolbar holds mic, audio, Ask AI and Send.
+  - Composer mirror (HUB-113, `CommandBar.tsx` + `.mirror`): understood phrases get a soft tint behind the neutral text; one faint completion follows the caret (Tab, → or a right swipe accepts). Send rings once when ready; Enter before then shakes the question.
   - `src/components/era/EraFaceNav.tsx` — face-switch pills (ERA/Budget/Schedule/Recipes/Brain), plus an **Artifacts** chip added 2026-08-27 (HUB-25) for the Activity log
   - `src/components/era/EraDots.tsx`
   - `src/components/era/HubScatterWidgets.tsx` — the 4 hub-mode scatter cards (Budget/Schedule/Chef/Brain), corner-positioned around the center orb — unchanged; a same-session redesign of this into a grid was reverted per owner feedback (see Master Book HUB-25 correction note)
   - `src/components/era/dashboards/ArtifactsView.tsx` — the Activity log's own view (day navigation, module groups tinted per module, per-row Undo/Redo), opened via the Artifacts chip exactly like a face dashboard (`useEraStore`'s `EraView` gained a third `"activity"` value alongside `"hub"`/`"dashboard"`)
   - `src/components/era/dashboards/AiUsageView.tsx` — **AI Usage** chip after Artifacts (2026-10-11, HUB-110), desktop only (`md:flex`; `EraShell` sends a phone back to the hub). `EraView` value `"usage"`. Month ‹ ›, three stat cards (est. cost, tokens, AI calls) and a per-day table: chats that reached the model (click → `useResumeEraConversation` + hub), calls (auto count), input, output, est. cost, Total row. Data: `GET /api/era/ai-usage?from&to` → `src/features/era/aiUsage.ts` (local-day buckets + list-price estimate)
   - `src/features/era/recordArtifacts.ts` — the Artifacts tab's single write point (not a component); entities, labels and deep links live in `src/lib/era/artifacts.ts` (2026-10-04)
-  - `src/components/era/EraConversation.tsx` — the conversation (2026-10-03, HUB-86; replaced the inline `EraThreadTranscript`): bubbles in the person's own color, ERA replies beside a small orb in the answering face's hue, time breaks, a thinking indicator, the confirm card and question chips as the newest turn, a quiet "Report" offer under a missed reply, and a "New chat" divider once the chat has been silent 30 min. Layouts: `stage` (hub), `panel` (desktop dashboards), `sheet` (mobile chat sheet), `preview` (History)
+  - `src/components/era/EraConversation.tsx` — the conversation (2026-10-03, HUB-86; replaced the inline `EraThreadTranscript`): bubbles in the person's own color, ERA replies beside a small orb in the answering face's hue, time breaks, a thinking indicator, the confirm card and question chips as the newest turn, a quiet "Report" offer under a missed reply, and a "New chat" divider once the chat has been silent 30 min. Layouts: `stage` (hub), `panel` (desktop dashboards), `sheet` (mobile chat sheet), `preview` (History). Keeps following the latest turn when the composer/viewport resizes (HUB-112).
+  - `src/components/era/EraChatDrawer.tsx` — mobile chat sheet; viewport-aware height/bottom keep its embedded composer above the keyboard (HUB-112).
   - `src/components/era/EraChatToolbar.tsx` — History (left) and New chat (right) icons under the nav in hub view; New chat shows a dot once the chat has gone quiet
   - `src/components/era/EraHistorySheet.tsx` — past chats (HUB-52): side panel on desktop, bottom sheet on phones; grouped Today / Yesterday / This week / Earlier; tap = read-only preview with Archive / Continue
   - `src/components/era/EraReportCard.tsx` — the Report card (HUB-85): Missed / Wrong, an optional "Expected…" note, Send; Undo on the toast
@@ -39,6 +43,9 @@ tags:
   - `src/components/era/EraRunCards.tsx` — saved execution receipts and Confirm / Resume / Recover / Skip / Stop controls in the conversation (HUB-104, opt-in after the owner-run migration). Interrupted writes require inspection; only reads offer retry. Existing History → Continue opens the original conversation and its unfinished plans.
 
 ## Hooks
+
+- `src/features/era/useEraCapture.ts` — local parser suggestions, accepted choices and existing account/category/list/group queries; `captureProgress.ts` derives the next gap and completes sentence fragments; structured native Send through `useEraTurn`, without model inference.
+- `src/features/era/useEraCaptureMemory.ts` — typing memory from `GET /api/era/capture-memory` (HUB-113): own spends/titles and household shopping rows, fetched on composer focus; `captureAssist.ts` turns state + memory into the question, choices, completion, summary and highlights.
 
 - `src/features/era/useEraStore.ts` — `useEraStore` (Zustand); the old non-React `eraActions` export and `turns`/`pushTurn`/`clearTurns` were dead code (zero importers) and removed 2026-08-25
 - `src/features/era/useEraTurn.ts` — **the one entry point from "a sentence" to "a reply"** (HUB-17): classify (`rootIntentRouter`) → resolve (`resolveIntent`) → persist (`era_messages`) → update store. `CommandBar` (typed) and `EraShell`'s voice wiring (spoken) both call this and nothing else.
@@ -98,7 +105,7 @@ tags:
 
 - The shell uses `fixed inset-x-0 top-16 bottom-0` to claim the viewport under the global `h-16` header. Mobile reserves 72px (`MOBILE_NAV_HEIGHT`) at the bottom for the `MobileNav` via `pb-[72px] md:pb-0`.
 - Brand mark on the global header: `moduleFromPath()` in `src/components/layouts/ConditionalHeader.tsx` maps `/era` → `memory`. The shell itself shows the **active face's** mark inline in `EraShell.tsx` via `ERAMark` — `FaceHeader` (deleted 2026-08-25) never had an importer.
-- All command-bar input must flow through `IntentRouter` — never bypass.
+- Free text uses `IntentRouter`; native completion choices supply validated structured values to the same `useEraTurn` handler. All persistence, execution, receipts and artifacts remain on that shared path.
 - `CommandBar` background uses `tc.bgPage` (Hard Rule #15: floating overlays must be opaque, never `neo-card`).
 - ERA is **not** in `STANDALONE_APPS`, so the global `ConditionalHeader` and `MobileNav` remain visible.
 - **Conversation layout (2026-10-03, owner-commissioned chat redesign, HUB-86).** With no open conversation the hub is exactly as before. While a conversation is open in hub view, the ERA DOT takes its existing module-mode position (same spring) and the thread fills the space between it and the command bar; New chat returns the DOT and greeting to the centre. Below 1280 px the corner cards step aside while chatting (`.era-shell[data-conversing]`). Revert path: `heroHub` → `isHub` in `EraShell.tsx`.

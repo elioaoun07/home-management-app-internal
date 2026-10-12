@@ -38,6 +38,9 @@ export const CACHE_TIMES = {
 
   // NFC tags - 30 minutes (rarely changes)
   NFC: 1000 * 60 * 30,
+
+  // ERA typing memory - 30 minutes (native ERA captures invalidate it)
+  CAPTURE_MEMORY: 1000 * 60 * 30,
 } as const;
 
 // Query key factory with consistent naming

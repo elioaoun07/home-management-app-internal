@@ -1,7 +1,7 @@
 // tests/era-gym/mocks.ts
 // Fake household data sources for the Gym (HUB-78): the reminder bundle the
 // by-name lookup reads, and the minimal Supabase surface the reminder
-// resolvers touch. Wired with vi.mock in gym.test.ts / record.test.ts.
+// resolvers touch. Wired with vi.mock in gym.test.ts.
 
 import { HOUSEHOLD } from "./understand";
 

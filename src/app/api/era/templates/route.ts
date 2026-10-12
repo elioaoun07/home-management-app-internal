@@ -3,8 +3,10 @@
 //
 // GET lists the caller's templates (feeds both the "Taught phrases" UI and
 // the client-side matcher cache — see useEraTemplates.ts).
-// POST is called ONLY after a `propose_action` Ask AI proposal executes
-// successfully (useEraAskAI.confirmProposal → learnTemplateFromProposal).
+// POST learns a template. New template learning is FROZEN (AI Assistant
+// Overview, "Existing memory and learning estate"): `learnTemplateFromProposal`
+// has no production caller, so nothing posts here today; existing rows still
+// match and can be managed from "Taught phrases".
 // Re-teaching the same (capability, pattern) bumps match_count instead of
 // creating a duplicate row — a plain unique-violation insert would 409 on
 // every re-teach, which isn't an error here, so this reads-then-writes

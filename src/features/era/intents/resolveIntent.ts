@@ -2,6 +2,7 @@
 // Returns { text, metadata } to be persisted as the assistant message.
 import type { EraArtifact } from "@/lib/era/artifacts";
 import { greeting } from "@/lib/era/phrasing";
+import { resolveScheduleCapture } from "./resolvers/capture";
 import { getCapability } from "../capabilities/registry";
 import { formatReply } from "../replyFormatter";
 import { bumpTemplateMatch } from "../templates/useEraTemplates";
@@ -106,7 +107,7 @@ export interface ResolveResult {
  * "no account available" reply instead of silently doing nothing.
  */
 export interface ResolveDeps {
-  submitBudgetDraft?: (sentence: string) => Promise<EraBudgetSubmitResult>;
+  submitBudgetDraft?: (sentence: string, capture?: import("../capture").ExpenseCapture) => Promise<EraBudgetSubmitResult>;
 }
 
 export async function resolveIntent(
@@ -168,7 +169,7 @@ export async function resolveIntent(
       return resolveShowAnalytics();
 
     case "draftTransaction":
-      return resolveDraftTransaction(intent.rawText, deps.submitBudgetDraft);
+      return resolveDraftTransaction(intent.rawText, deps.submitBudgetDraft, intent.capture);
 
     // HUB-76 — money movement always confirms: these return a proposal, no write.
     case "transfer":
@@ -196,6 +197,7 @@ export async function resolveIntent(
       return resolveConfirmDraft(intent.hint);
 
     case "draftReminder":
+      if (intent.capture) return resolveScheduleCapture(intent.capture);
       return resolveDraftReminder(intent.rawText, intent.title);
 
     // HUB-78 — a named target not in focus is looked up by name.
@@ -219,7 +221,7 @@ export async function resolveIntent(
       return prepareReminderDelete(intent.itemId, intent.title, intent.rawText);
 
     case "addShopping":
-      return resolveAddShopping(intent.items, intent.groupHint);
+      return resolveAddShopping(intent.items, intent.groupHint, undefined, undefined, intent.target);
 
     case "addContact":
       return resolveAddContact(intent.name);
@@ -229,6 +231,7 @@ export async function resolveIntent(
       return resolveAddPlace(intent.name);
 
     case "draftEvent":
+      if (intent.capture) return resolveScheduleCapture(intent.capture);
       return resolveDraftEvent(intent);
 
     // HUB-84 — follow-ups edit the last result through its type's contract.

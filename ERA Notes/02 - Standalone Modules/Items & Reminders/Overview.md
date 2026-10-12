@@ -212,6 +212,8 @@ Helper functions:
 
 ## Hard Rules for This Module
 
+ERA's native helper (HUB-112, 2026-10-12) explicitly supports No alert through optional `suppress_default_alert` in `createContract.ts`. With it, an empty alert list stays empty through client/server preparation; without it, reminders retain the existing automatic due-time push. The source RPC ignores this preparation option and saves the resulting alerts atomically. No additional migration.
+
 1. **Never use `type="number"` on inputs** — use `type="text"` with `inputMode="decimal"` (prevents iOS scroll-wheel bug)
 2. **Recurrence always via `buildFullRRuleString`** — never inline DTSTART inside the `rrule` field; `start_anchor` is the single source of the anchor date
 3. **Occurrence actions go to `item_occurrence_actions`** — never mutate the base item to record a single-occurrence skip/complete

@@ -51,7 +51,7 @@ tags:
 
 | Slug             | Route             | Detail             |
 | ---------------- | ----------------- | ------------------ |
-| `era`            | `/era`            | [[era]]            |
+| `era`            | `/era`            | [[era]] · native chatbot completion |
 | `chores`         | `/chores`                                   | [[chores]]         |
 | `today`          | `/reminders` (merged; `/today` → redirect) | [[feature-today]]  |
 | `catalogue`      | `/catalogue`      | [[catalogue]]      |

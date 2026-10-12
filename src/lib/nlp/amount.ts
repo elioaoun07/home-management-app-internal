@@ -97,28 +97,41 @@ export function extractAmount(
   text: string,
   opts: ExtractAmountOptions = {},
 ): ExtractedAmount | undefined {
+  const found = locateAmount(text, opts);
+  if (!found) return undefined;
+  const { value, currency, marked, kShorthand } = found;
+  return { value, currency, marked, kShorthand };
+}
+
+/** The same amount `extractAmount` reads, plus where it sits in the text (for highlighting/removal). */
+export interface LocatedAmount extends ExtractedAmount {
+  index: number;
+  length: number;
+}
+
+export function locateAmount(
+  text: string,
+  opts: ExtractAmountOptions = {},
+): LocatedAmount | undefined {
   // Earliest marked amount wins: in "spent 12$ 5 times" the suffix `12$`
   // (index 6) must beat the prefix reading `$ 5` (index 8).
   const prefix = text.match(PREFIX_RE);
   const suffix = text.match(SUFFIX_RE);
-  const marked: ExtractedAmount[] = [];
-  const at: number[] = [];
+  const marked: LocatedAmount[] = [];
   if (prefix) {
     const value = parseAmountToken(prefix[2], prefix[3]);
     if (value !== undefined) {
-      marked.push({ value, currency: wordCurrency(prefix[1]), marked: true, kShorthand: Boolean(prefix[3]) });
-      at.push(prefix.index ?? 0);
+      marked.push({ value, currency: wordCurrency(prefix[1]), marked: true, kShorthand: Boolean(prefix[3]), index: prefix.index ?? 0, length: prefix[0].length });
     }
   }
   if (suffix) {
     const value = parseAmountToken(suffix[1], suffix[2]);
     if (value !== undefined) {
-      marked.push({ value, currency: wordCurrency(suffix[3]), marked: true, kShorthand: Boolean(suffix[2]) });
-      at.push(suffix.index ?? 0);
+      marked.push({ value, currency: wordCurrency(suffix[3]), marked: true, kShorthand: Boolean(suffix[2]), index: suffix.index ?? 0, length: suffix[0].length });
     }
   }
   if (marked.length === 1) return marked[0];
-  if (marked.length === 2) return at[0] <= at[1] ? marked[0] : marked[1];
+  if (marked.length === 2) return marked[0].index <= marked[1].index ? marked[0] : marked[1];
 
   const positional = [STRONG_POSITIONAL_RE, WEAK_POSITIONAL_RE];
   if (opts.allowBare) positional.push(BARE_RE);
@@ -127,7 +140,10 @@ export function extractAmount(
     if (!m) continue;
     const value = parseAmountToken(m[1], m[2]);
     if (value !== undefined) {
-      return { value, currency: null, marked: false, kShorthand: Boolean(m[2]) };
+      // The digits are the last numeric token in the match: only "for/on/at"
+      // or punctuation may follow them.
+      const token = m[1] + (m[2] ?? "");
+      return { value, currency: null, marked: false, kShorthand: Boolean(m[2]), index: (m.index ?? 0) + m[0].lastIndexOf(token), length: token.length };
     }
   }
   return undefined;

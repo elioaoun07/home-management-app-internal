@@ -119,3 +119,8 @@ it("preserves the form's same-day custom alert at zero offset", async () => {
   const r = await create(prepared);
   expect(r.completion.children.alerts).toHaveLength(1);
 });
+it("keeps an explicitly alert-free reminder alert-free in the source transaction", async () => {
+  const r = await create({ type: "reminder", title: "Quiet reminder", due_at: "2026-10-13T14:00:00Z", suppress_default_alert: true });
+  expect(r.completion.children.alerts).toEqual([]);
+  expect((await db.query("SELECT id FROM item_alerts WHERE item_id=$1", [r.item.id])).rows).toHaveLength(0);
+});

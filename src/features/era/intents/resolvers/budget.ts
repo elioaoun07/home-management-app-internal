@@ -316,13 +316,14 @@ export async function resolveShowAnalytics(): Promise<ResolveResult> {
  */
 export async function resolveDraftTransaction(
   rawText: string,
-  submitDraft?: (sentence: string) => Promise<EraBudgetSubmitResult>,
+  submitDraft?: (sentence: string, capture?: import("../../capture").ExpenseCapture) => Promise<EraBudgetSubmitResult>,
+  capture?: import("../../capture").ExpenseCapture,
 ): Promise<ResolveResult & { handoff?: EraHandoff }> {
   if (!submitDraft) {
     return { text: formatDraftTransactionError("no-account") };
   }
 
-  const result = await submitDraft(rawText);
+  const result = await (capture ? submitDraft(rawText, capture) : submitDraft(rawText));
   const expiresAt = new Date(Date.now() + HANDOFF_TTL_MS).toISOString();
 
   if (!result.ok) {
@@ -381,7 +382,7 @@ export async function resolveDraftTransaction(
       accountId: result.accountId,
       categoryId: result.parsed.categoryId,
       subcategoryId: result.parsed.subcategoryId,
-      description: rawText,
+      description: capture?.description ?? rawText,
       date: result.parsed.date,
       draftId: result.draftId,
       expiresAt,

@@ -14,8 +14,10 @@ const FALLBACK_MODELS = new Set([
 
 let client: Anthropic | null = null;
 function getClient(): Anthropic {
-  // Route maxDuration is 60 s and context assembly runs first.
-  client ??= new Anthropic({ timeout: 40_000, maxRetries: 1 });
+  // Tests can never reach the paid API: tests/setup/blockPaidApis.ts.
+  // Route maxDuration is 60 s and context assembly runs first. SDK retries
+  // are off: a timed-out attempt is still billed, so retries are ours (below).
+  client ??= new Anthropic({ timeout: 40_000, maxRetries: 0 });
   return client;
 }
 
@@ -23,9 +25,29 @@ export function isClaudeConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
+/**
+ * A timeout or dropped connection may still have been processed and billed.
+ * HTTP errors (4xx, 429, 5xx, 529) are not billed.
+ */
+export function mayHaveBeenBilled(err: unknown): boolean {
+  return err instanceof Anthropic.APIConnectionError;
+}
+
+/** Rejected before any work was done: free and safe to retry. */
+function isRetryable(err: unknown): boolean {
+  if (!(err instanceof Anthropic.APIError) || mayHaveBeenBilled(err)) return false;
+  return err.status === 429 || (err.status ?? 0) >= 500;
+}
+
 export interface ClaudeTurn {
   role: "user" | "assistant";
   content: string;
+}
+
+/** `stable` is cached across calls and users; it must not vary per request. */
+export interface ClaudeSystem {
+  stable: string;
+  dynamic: string;
 }
 
 export interface ClaudeJsonResult {
@@ -33,7 +55,12 @@ export interface ClaudeJsonResult {
   model: string;
   stopReason: string | null;
   /** Input includes cache reads/writes; output includes thinking tokens. */
-  usage: { inputTokens: number; outputTokens: number };
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+  };
 }
 
 /**
@@ -41,12 +68,12 @@ export interface ClaudeJsonResult {
  * still validate it — the model's output is never trusted as-is.
  */
 export async function generateClaudeJson(opts: {
-  system: string;
+  system: string | ClaudeSystem;
   messages: ClaudeTurn[];
   schema: Record<string, unknown>;
   effort?: "low" | "medium" | "high";
   maxTokens?: number;
-  /** Live test passes send 0 (Hard Rule #29: no retries). */
+  /** Retries of free rejections (429/5xx) only; never of a timeout. */
   maxRetries?: number;
 }): Promise<ClaudeJsonResult> {
   if (!isClaudeConfigured()) {
@@ -57,15 +84,25 @@ export async function generateClaudeJson(opts: {
   const messages = opts.messages.filter((m) => m.content.trim());
   while (messages[0]?.role === "assistant") messages.shift();
 
+  const system =
+    typeof opts.system === "string"
+      ? opts.system
+      : [
+          { type: "text" as const, text: opts.system.stable, cache_control: { type: "ephemeral" as const } },
+          ...(opts.system.dynamic.trim()
+            ? [{ type: "text" as const, text: opts.system.dynamic }]
+            : []),
+        ];
+
   const fallback = FALLBACK_MODELS.has(claudeModel);
-  const response = await getClient().beta.messages.create({
+  const params = {
     model: claudeModel,
     max_tokens: opts.maxTokens ?? 16000,
-    system: opts.system,
+    system,
     messages,
     output_config: {
       effort: opts.effort ?? "low",
-      format: { type: "json_schema", schema: opts.schema },
+      format: { type: "json_schema" as const, schema: opts.schema },
     },
     ...(fallback
       ? {
@@ -73,22 +110,35 @@ export async function generateClaudeJson(opts: {
           fallbacks: "default" as const,
         }
       : {}),
-  }, opts.maxRetries === undefined ? undefined : { maxRetries: opts.maxRetries });
+  };
+
+  const retries = opts.maxRetries ?? 1;
+  let response;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      response = await getClient().beta.messages.create(params);
+      break;
+    } catch (err) {
+      if (attempt >= retries || !isRetryable(err)) throw err;
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
 
   const text = response.content
     .map((block) => (block.type === "text" ? block.text : ""))
     .join("");
   const u = response.usage;
+  const cacheReadTokens = u.cache_read_input_tokens ?? 0;
+  const cacheWriteTokens = u.cache_creation_input_tokens ?? 0;
   return {
     text,
     model: response.model,
     stopReason: response.stop_reason,
     usage: {
-      inputTokens:
-        u.input_tokens +
-        (u.cache_creation_input_tokens ?? 0) +
-        (u.cache_read_input_tokens ?? 0),
+      inputTokens: u.input_tokens + cacheWriteTokens + cacheReadTokens,
       outputTokens: u.output_tokens,
+      cacheReadTokens,
+      cacheWriteTokens,
     },
   };
 }

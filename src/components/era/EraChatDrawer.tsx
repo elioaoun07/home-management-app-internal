@@ -77,6 +77,8 @@ export function EraChatDrawer({
         className="fixed inset-x-0 bottom-0 z-50 flex h-[80vh] flex-col rounded-t-3xl md:hidden"
         style={{
           background: "rgba(13, 18, 32, 0.97)",
+          height: "var(--era-drawer-height, 80dvh)",
+          bottom: "max(0px, calc(100dvh - var(--era-viewport-height, 100dvh) - var(--era-viewport-top, 0px)))",
           border: "1px solid var(--era-border-subtle, rgba(255,255,255,0.14))",
           borderBottom: "none",
           pointerEvents: open ? "auto" : "none",
@@ -107,7 +109,7 @@ export function EraChatDrawer({
         </div>
 
         <div className="p-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
-          <CommandBar variant="embedded" />
+          <CommandBar variant="embedded" active={open} />
         </div>
       </motion.div>
     </>

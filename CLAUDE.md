@@ -85,7 +85,7 @@ Playbooks live in `.claude/skills/<name>/SKILL.md` (verified templates, evidence
    - Don't "fix" correct code to chase the symptom. New child tables get a policy in the same migration.
 28. **UI text is a cost — write the minimum and stop.** *(Added 2026-08-24, owner: "way too many texts to explain things that are pretty clear for me".)* Labels, numbers, 1–2-word verb buttons. No explanatory prose, reassurance text, banners restating the tab, or design justifications; one short clause is the ceiling; real help goes behind an `i` popover. Applies to every shipped string. Details: `ui-guardrails` §13.
 
-29. **Live tests against paid/rate-limited APIs (Gemini, Azure, …): one approved, bounded, paced pass.** Replay offline first; get the owner's OK naming the call count; then one call per scenario, sequential, ≥ 30 s apart, no retries or fallback, stop on first error, lock file against reruns. Never batch scenarios into one request (thinking tokens eat the output cap), never loop or schedule. Synthetic inputs only. Full protocol: `ERA Notes/01 - Architecture/Live API Testing Protocol.md`.
+29. **No agent runs live tests against paid/rate-limited APIs (Claude, Gemini, Azure, …).** *(Tightened 2026-10-12, owner: "those should be under my approval".)* The suite is replay-only and `tests/setup/blockPaidApis.ts` refuses paid hosts in every Vitest process; never remove that block or add a recorder. A stale recording skips, it is not a reason to refresh. Live passes happen only when the owner starts one (new feature, suspected breakage, a reported chat): then one bounded, paced pass per `ERA Notes/01 - Architecture/Live API Testing Protocol.md`.
 
 ---
 

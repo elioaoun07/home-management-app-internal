@@ -62,10 +62,43 @@ describe("aggregateAiUsage", () => {
     expect(oct3.autoCalls).toBe(1);
     expect(oct3.input).toBe(1_002_000);
     expect(oct3.output).toBe(100_500);
-    // 1.002M × $0.10 + 0.1005M × $0.50
-    expect(oct3.cost).toBeCloseTo(0.1002 + 0.05025, 8);
+    // 1M-token prompt is long-tier ($0.50/$2.50): 1M × 0.50 + 0.1M × 2.50;
+    // the 2K call stays base ($0.10/$0.50): 2K × 0.10 + 0.5K × 0.50.
+    expect(oct3.cost).toBeCloseTo(0.5 + 0.25 + 0.00045, 8);
     expect(total.calls).toBe(3);
     expect(total.cost).toBeCloseTo(oct3.cost + (10_000 * 0.3 + 1_000 * 2.5) / 1e6, 8);
+  });
+
+  it("bills Haiku 5.5 at the long-prompt rate only above 100K input", () => {
+    const at100k = aggregateAiUsage({
+      receipts: call(3, 9, 100_000, 1_000, "claude-haiku-5-5"),
+      answers: [],
+      chats: [],
+    }).total;
+    const over = aggregateAiUsage({
+      receipts: call(3, 9, 100_001, 1_000, "claude-haiku-5-5"),
+      answers: [],
+      chats: [],
+    }).total;
+    expect(at100k.cost).toBeCloseTo((100_000 * 0.1 + 1_000 * 0.5) / 1e6, 8);
+    expect(over.cost).toBeCloseTo((100_001 * 0.5 + 1_000 * 2.5) / 1e6, 8);
+  });
+
+  it("reprices prompt-cache reads (0.1×) and writes (1.25×) from the model suffix", () => {
+    const { total } = aggregateAiUsage({
+      receipts: call(3, 9, 6_000, 400, "claude-haiku-5-5:cache=5000/0"),
+      answers: [],
+      chats: [],
+    });
+    // 1K uncached + 5K read × 0.1 = 1.5K input-equivalent; 400 output.
+    expect(total.input).toBe(6_000);
+    expect(total.cost).toBeCloseTo((1_500 * 0.1 + 400 * 0.5) / 1e6, 10);
+    const write = aggregateAiUsage({
+      receipts: call(3, 9, 6_000, 0, "claude-haiku-5-5:cache=0/5000"),
+      answers: [],
+      chats: [],
+    }).total;
+    expect(write.cost).toBeCloseTo(((1_000 + 5_000 * 1.25) * 0.1) / 1e6, 10);
   });
 
   it("keeps unpriced tokens out of cost but reports them", () => {

@@ -1,5 +1,5 @@
 // HUB-77 — ERA Gym, CI mode: no network. Path B runs fully; paths A and C
-// replay recorded model responses (record.test.ts) and count anything
+// replay recorded model responses (recordings/model-responses.json; the live recorder was removed 2026-10-12) and count anything
 // unrecorded as such. Hard gates here are the release gates that must hold
 // regardless of the routing decision.
 import { beforeAll, describe, expect, it, vi } from "vitest";

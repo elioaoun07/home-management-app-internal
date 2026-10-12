@@ -14,7 +14,7 @@
 // between it and the command bar. New chat brings the DOT and greeting back
 // to the centre. With no conversation the hub is unchanged.
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getFace } from "@/features/era/faceRegistry";
 import { useEraAskAI } from "@/features/era/useEraAskAI";
@@ -45,6 +45,7 @@ import { EraHistorySheet } from "./EraHistorySheet";
 import { EraProposalCard } from "./EraProposalCard";
 import { HubScatterWidgets } from "./HubScatterWidgets";
 import { MODULE_COLORS } from "./eraHues";
+import composerStyles from "./EraComposer.module.css";
 
 // Kept for existing imports; the card now lives in its own file (HUB-86).
 export { EraProposalCard };
@@ -74,6 +75,27 @@ function DashboardContent({ faceKey }: { faceKey: string }) {
 }
 
 export function EraShell() {
+  const shellRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const shell = shellRef.current;
+    if (!viewport || !shell) return;
+    const resize = () => {
+      shell.style.setProperty("--era-viewport-height", `${viewport.height}px`);
+      shell.style.setProperty("--era-viewport-top", `${viewport.offsetTop}px`);
+      const keyboardOpen = viewport.scale === 1 && window.innerHeight - viewport.height > 150;
+      shell.style.setProperty("--era-drawer-height", `${keyboardOpen ? viewport.height - 12 : viewport.height * 0.8}px`);
+      if (keyboardOpen) shell.style.setProperty("--era-composer-bottom", "12px");
+      else shell.style.removeProperty("--era-composer-bottom");
+    };
+    resize();
+    viewport.addEventListener("resize", resize);
+    viewport.addEventListener("scroll", resize);
+    return () => {
+      viewport.removeEventListener("resize", resize);
+      viewport.removeEventListener("scroll", resize);
+    };
+  }, []);
   const activeFaceKey = useEraStore((s) => s.activeFaceKey);
   const activeView    = useEraStore((s) => s.activeView);
   const isAwake       = useEraStore((s) => s.isAwake);
@@ -154,9 +176,13 @@ export function EraShell() {
   // AI Usage is desktop-only — a phone never shows it.
   const isUsage    = activeView === "usage" && isMobile === false;
   const turnInFlight = useEraStore((s) => s.turnInFlight);
-  const { hasTurns } = useActiveThreadState();
+  const { hasTurns: cachedTurns } = useActiveThreadState();
+  // Restored query-cache messages exist on the first client render but not in
+  // the server HTML — gate until hydrated so the tree (and useId) matches.
+  const hydrated = useSyncExternalStore(() => () => {}, () => true, () => false);
+  const hasTurns = hydrated && cachedTurns;
   // HUB-86 — the hub shows a conversation (DOT risen, thread below it).
-  const conversing = isAwake && isHub && (hasTurns || turnInFlight);
+  const conversing = hydrated && isAwake && isHub && (hasTurns || turnInFlight);
   const heroHub    = isHub && !conversing;
   // Hub → tracks last mentioned module (starts as "chat", shifts when user addresses a face);
   // Activity → neutral chat hue, it isn't tied to any one face;
@@ -204,6 +230,7 @@ export function EraShell() {
 
   return (
     <div
+      ref={shellRef}
       className="era-shell fixed inset-0 overflow-hidden"
       data-awake={isAwake}
       data-conversing={conversing}
@@ -217,6 +244,8 @@ export function EraShell() {
           "--era-accent-faint":  `hsla(${fc.hue}, 60%, 65%, 0.38)`,
           "--era-border-subtle": `hsla(${fc.hue}, 45%, 48%, 0.28)`,
           background: "#0d1220",
+          height: "var(--era-viewport-height, 100%)",
+          top: "var(--era-viewport-top, 0px)",
           cursor: isAwake ? "default" : "pointer",
         } as React.CSSProperties
       }
@@ -340,7 +369,7 @@ export function EraShell() {
               linger over the hub. Bottom clears the command bar. */}
           {conversing && (
             <motion.div
-              className="absolute inset-x-0 z-20 bottom-[148px] md:bottom-[88px]"
+              className={`absolute inset-x-0 z-20 ${composerStyles.stage}`}
               style={{ top: dashboardTop }}
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
@@ -363,7 +392,7 @@ export function EraShell() {
                 transition={{ duration: 0.32, delay: 0.2, ease: "easeOut" }}
               >
                 {/* Bottom padding clears the CommandBar (80px mobile offset + ~52px height) */}
-                <div className="pb-[148px] md:pb-[80px]">
+                <div className={composerStyles.dashboard}>
                   {isActivity ? <ArtifactsView /> : isUsage ? <AiUsageView /> : <DashboardContent faceKey={activeFaceKey} />}
                 </div>
               </motion.div>
@@ -376,7 +405,7 @@ export function EraShell() {
       {/* ── Desktop module/activity views: the conversation as a compact
           panel above the command bar (pointer events only on the panel). ── */}
       {!isMobile && !isHub && isAwake && (
-        <div className="pointer-events-none absolute inset-x-0 z-20 flex justify-center px-5 bottom-[84px] [&>*]:pointer-events-auto">
+        <div className={`pointer-events-none absolute inset-x-0 z-20 flex justify-center px-5 ${composerStyles.panel} [&>*]:pointer-events-auto`}>
           <EraConversation layout="panel" />
         </div>
       )}

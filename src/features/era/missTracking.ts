@@ -1,7 +1,8 @@
 // src/features/era/missTracking.ts
 // ERA Stage 2 (HUB-28) — classify a router miss (`clarify`/`unknown`) as
 // either a "language gap" (a capability for this exists; the phrasing just
-// didn't parse — feeds Stage 4's template learning once Ask AI resolves it)
+// didn't parse — this is what auto-escalates to Ask AI; template learning from
+// the result is frozen)
 // or a "capability gap" (nothing in the registry covers this at all — a real
 // build-queue candidate, not a phrasing problem).
 //

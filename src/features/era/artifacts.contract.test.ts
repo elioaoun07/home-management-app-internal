@@ -22,6 +22,7 @@ import {
   skipNextOccurrence,
 } from "./intents/resolvers/schedule";
 import { resolveAddShopping } from "./intents/resolvers/shopping";
+import { resolveScheduleCapture } from "./intents/resolvers/capture";
 import { executeNativeAction } from "./nativeActions";
 import { recordEraArtifacts } from "./recordArtifacts";
 import type { EraBudgetSubmitResult } from "./useEraBudgetSubmit";
@@ -121,7 +122,7 @@ function route(url: string, method: string, body: unknown): Response {
       ],
     });
   if (url === `/api/drafts/${ID.draft}` && method === "PATCH") return json({ transaction: { id: ID.draft, amount: 12 } });
-  if (url === "/api/items" && method === "POST") return json({ item: { id: ID.item } });
+  if (url === "/api/items" && method === "POST") return json({ item: { id: ID.item }, completion: { status: "complete" } });
   if (url === "/api/transfers" && method === "POST") return json({ id: ID.transfer });
   if (url === "/api/debts/standalone" && method === "POST") return json({ debt: { id: ID.debt } });
   if (url === "/api/recurring-payments" && method === "GET")
@@ -158,6 +159,8 @@ const submitDraft = async (): Promise<EraBudgetSubmitResult> =>
 type Row = [name: string, run: () => Promise<{ artifacts?: EraArtifact[] }>, entity: string, action: string, id?: string];
 
 const WRITES: Row[] = [
+  ["native reminder helper", () => resolveScheduleCapture({ kind: "reminder", title: "Call", date: "2026-10-13", time: "17:00", priority: "normal", location: "", alert: "none" }), "reminder", "created", ID.item],
+  ["native event helper", () => resolveScheduleCapture({ kind: "event", title: "Dinner", date: "2026-10-13", time: "17:00", endDate: "2026-10-13", endTime: "18:00", priority: "normal", location: "", alert: "15" }), "event", "created", ID.item],
   ["contact.create", () => resolveAddContact("Laura"), "contact", "created", ID.contact],
   ["place.create", () => resolveAddPlace("Kobeize"), "place", "created", ID.contact],
   [

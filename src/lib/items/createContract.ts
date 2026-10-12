@@ -50,6 +50,8 @@ export const createItemSchema = z.object({
     max_repeats: positive,
     channel: z.enum(["push", "email", "sms", "in_app"]).default("push"),
   }).strict()).max(50).default([]),
+  // Explicit native helper choice; absent keeps the existing due-time default.
+  suppress_default_alert: z.boolean().optional(),
   recurrence_rule: z.object({
     rrule: z.string().min(1), start_anchor: timestamp,
     end_until: timestamp.nullable().optional(), count: positive,
@@ -92,7 +94,7 @@ export function prepareItemCreate(input: unknown, now = new Date()): CreateItemB
     return rule ? RRule.fromString(buildFullRRuleString(new Date(rule.start_anchor), rule)).after(now, true) ?? new Date(iso) : new Date(iso);
   };
   if (body.status === "draft") body.alerts = [];
-  else if (!body.alerts.length && body.due_at) body.alerts = [{ kind: "absolute", channel: "push", trigger_at: base()?.toISOString() }];
+  else if (!body.alerts.length && body.due_at && !body.suppress_default_alert) body.alerts = [{ kind: "absolute", channel: "push", trigger_at: base()?.toISOString() }];
   body.alerts = body.alerts.map((a) => {
     if (a.kind !== "relative" || a.trigger_at) return a;
     const d = base(a.relative_to)!;

@@ -20,12 +20,14 @@ interface ResolveResult {
   proposal?: EraActiveProposal;
   /** What this write left behind (src/lib/era/artifacts.ts). */
   artifacts?: EraArtifact[];
+  undo?: () => Promise<boolean>;
 }
 
 interface ThreadLite {
   id: string;
   purpose?: string | null;
   is_private?: boolean | null;
+  is_archived?: boolean;
 }
 
 /** "milk, eggs and bread" → ["Milk", "Eggs", "Bread"]. */
@@ -40,10 +42,16 @@ export function splitShoppingItems(raw: string): string[] {
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1));
 }
 
-export async function resolveAddShopping(items: string[], groupHint?: string, onProgress?: (result: ResolveResult) => Promise<void>, beforeWrite?: BeforeWrite): Promise<ResolveResult> {
+export async function resolveAddShopping(items: string[], groupHint?: string, onProgress?: (result: ResolveResult) => Promise<void>, beforeWrite?: BeforeWrite, target?: { threadId: string; groupId: string | null }): Promise<ResolveResult> {
   if (items.length === 0) return { text: "Add what?", ok: false };
   try {
-    const list = await findShoppingThread();
+    let list: ThreadLite | null;
+    if (target) {
+      const res = await safeFetch("/api/hub/threads", { timeoutMs: 8_000 });
+      if (!res.ok) return { text: "Couldn't verify the list.", ok: false };
+      const { threads } = await res.json() as { threads: ThreadLite[] };
+      list = threads.find(t => t.id === target.threadId && t.purpose === "shopping" && !t.is_archived) ?? null;
+    } else list = await findShoppingThread();
     if (!list) return { text: "No shopping list yet.", ok: false };
 
     // HUB-84 — "add salt under Spinneys": resolve the group first. One match
@@ -52,7 +60,13 @@ export async function resolveAddShopping(items: string[], groupHint?: string, on
     let groupId: string | null = null;
     let groupName: string | null = null;
     let unresolvedGroup: string | undefined;
-    if (groupHint) {
+    if (target?.groupId) {
+      const groups = await listShoppingGroups(list.id);
+      const group = groups?.find(g => g.id === target.groupId);
+      if (!group) return { text: "Couldn't verify the group.", ok: false };
+      groupId = group.id;
+      groupName = group.name;
+    } else if (!target && groupHint) {
       const groups = await listShoppingGroups(list.id);
       const matches = groups ? matchShoppingGroups(groups, groupHint) : [];
       if (matches.length === 1) {
@@ -107,6 +121,7 @@ export async function resolveAddShopping(items: string[], groupHint?: string, on
       ok: !partial,
       metadata: { messageIds: ids, threadId: list.id, items: added, partial, groupId },
       artifacts: shoppingArtifacts(ids, added, "created", list.id),
+      ...(target ? { undo: () => removeShoppingMessages(ids) } : {}),
       focus,
     };
     if (unresolvedGroup && !partial) {

@@ -18,8 +18,9 @@ interface Rate {
 }
 
 // Most specific first — "claude-opus-5-5" must win over "claude-opus-5".
-// Recorded input tokens include cache reads/writes at the full input rate,
-// so Claude estimates lean high.
+// Recorded input tokens include cache reads/writes; a `:cache=R/W` suffix on
+// `model_used` reprices them (reads 0.1×, 5-minute writes 1.25×). Receipts
+// before 2026-10-12 have no suffix and are priced at the full input rate.
 const CLAUDE_RATES: ReadonlyArray<readonly [string, Rate]> = [
   ["claude-fable-5-1", { input: 10, output: 50 }],
   ["claude-fable-5", { input: 10, output: 50 }],
@@ -42,6 +43,29 @@ export function rateOf(modelUsed: string | null | undefined): Rate | null {
   if (model.includes("gemini") && model.includes("flash-lite")) return GEMINI_FLASH_LITE;
   if (model.includes("gemini") && model.includes("flash")) return GEMINI_FLASH;
   return null;
+}
+
+// Haiku 5.5 bills the whole call at a higher rate once the prompt passes 100K.
+const LONG_PROMPT_TOKENS = 100_000;
+const LONG_PROMPT_RATES: ReadonlyArray<readonly [string, Rate]> = [
+  ["claude-haiku-5-5", { input: 0.5, output: 2.5 }],
+];
+
+function rateForCall(modelUsed: string | null, promptTokens: number): Rate | null {
+  const rate = rateOf(modelUsed);
+  if (!rate || promptTokens <= LONG_PROMPT_TOKENS) return rate;
+  const model = (modelUsed ?? "").split(":")[0].trim().toLowerCase();
+  for (const [prefix, long] of LONG_PROMPT_RATES) if (model.startsWith(prefix)) return long;
+  return rate;
+}
+
+const CACHE_READ = 0.1;
+const CACHE_WRITE = 1.25;
+
+/** Prompt-cache tokens recorded in a `model_used` suffix (`:cache=R/W`). */
+export function cacheOf(modelUsed: string | null | undefined): { read: number; write: number } {
+  const m = /:cache=(\d+)\/(\d+)/.exec(modelUsed ?? "");
+  return m ? { read: Number(m[1]), write: Number(m[2]) } : { read: 0, write: 0 };
 }
 
 /** One `ai_messages` receipt row (two per call: user = input, assistant = output). */
@@ -101,7 +125,12 @@ const emptyTotals = (): AiUsageTotals => ({
   unpricedTokens: 0,
 });
 
-function addReceipt(t: AiUsageTotals, r: AiUsageReceipt, model: string | null): void {
+function addReceipt(
+  t: AiUsageTotals,
+  r: AiUsageReceipt,
+  model: string | null,
+  promptTokens: number,
+): void {
   const input = r.input_tokens ?? 0;
   const output = r.output_tokens ?? 0;
   // One call = one assistant receipt (the user receipt carries its input).
@@ -111,8 +140,13 @@ function addReceipt(t: AiUsageTotals, r: AiUsageReceipt, model: string | null): 
   }
   t.input += input;
   t.output += output;
-  const rate = rateOf(model);
-  if (rate) t.cost += (input * rate.input + output * rate.output) / 1_000_000;
+  const rate = rateForCall(model, promptTokens);
+  // Cache tokens are subsets of input; clamp so a bad suffix can't go negative.
+  const cache = cacheOf(model);
+  const read = Math.min(cache.read, input);
+  const write = Math.min(cache.write, input - read);
+  const billedInput = input - read - write + read * CACHE_READ + write * CACHE_WRITE;
+  if (rate) t.cost += (billedInput * rate.input + output * rate.output) / 1_000_000;
   else t.unpricedTokens += input + output;
 }
 
@@ -136,13 +170,18 @@ export function aggregateAiUsage(data: AiUsageResponse): {
   // row (same call = same session + insert timestamp) names the model.
   const callKey = (r: AiUsageReceipt) => `${r.session_id}|${r.created_at}`;
   const modelOfCall = new Map<string, string>();
-  for (const r of data.receipts) if (r.model_used) modelOfCall.set(callKey(r), r.model_used);
+  const promptOfCall = new Map<string, number>();
+  for (const r of data.receipts) {
+    if (r.model_used) modelOfCall.set(callKey(r), r.model_used);
+    promptOfCall.set(callKey(r), Math.max(promptOfCall.get(callKey(r)) ?? 0, r.input_tokens ?? 0));
+  }
 
   const total = emptyTotals();
   for (const r of data.receipts) {
     const model = r.model_used ?? modelOfCall.get(callKey(r)) ?? null;
-    addReceipt(day(r.created_at), r, model);
-    addReceipt(total, r, model);
+    const prompt = promptOfCall.get(callKey(r)) ?? 0;
+    addReceipt(day(r.created_at), r, model, prompt);
+    addReceipt(total, r, model, prompt);
   }
 
   const chatById = new Map(data.chats.map((c) => [c.id, c]));

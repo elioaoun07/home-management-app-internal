@@ -20,6 +20,9 @@ import { qk } from "@/lib/queryKeys";
 import { RequestTimeoutError, safeFetch } from "@/lib/safeFetch";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
+import { captureSchema, type ExpenseCapture } from "./capture";
+import { formatDate } from "@/lib/utils/date";
+import { invalidateAccountData } from "@/lib/queryInvalidation";
 
 export type EraBudgetSubmitResult =
   | {
@@ -107,7 +110,7 @@ export function useEraBudgetSubmit() {
   const { data: categories } = useCategories(accountId ?? undefined);
 
   const submit = useCallback(
-    async (sentence: string): Promise<EraBudgetSubmitResult> => {
+    async (sentence: string, capture?: ExpenseCapture): Promise<EraBudgetSubmitResult> => {
       if (!accountId || !accounts) {
         return {
           ok: false,
@@ -116,7 +119,9 @@ export function useEraBudgetSubmit() {
         };
       }
 
-      const target = pickDraftAccount(accounts, sentence);
+      if (capture && (!captureSchema.safeParse(capture).success || !accounts.some(a => a.id === capture.accountId && a.type === "expense")))
+        return { ok: false, reason: "request-failed", message: "Choose an expense account." };
+      const target = capture ? { ok: true as const, accountId: capture.accountId } : pickDraftAccount(accounts, sentence);
       if (!target.ok) {
         return {
           ok: false,
@@ -134,11 +139,28 @@ export function useEraBudgetSubmit() {
       // Categories are per-account. A currency-routed draft on another
       // account uses that account's cached categories, or none — never the
       // default account's category IDs.
-      const draftCategories =
+      let draftCategories =
         draftAccountId === accountId
           ? (categories ?? [])
           : (queryClient.getQueryData<UICategory[]>(qk.categories(draftAccountId)) ?? []);
-      const parsed = parseSpeechExpense(sentence, draftCategories);
+      if (capture) {
+        try {
+          draftCategories = await queryClient.fetchQuery({ queryKey: qk.categories(draftAccountId), queryFn: async () => {
+            const res = await safeFetch(`/api/categories?accountId=${encodeURIComponent(draftAccountId)}`);
+            if (!res.ok) throw new Error("Categories unavailable");
+            return await res.json() as UICategory[];
+          } });
+        } catch { return { ok: false, reason: "request-failed", message: "Couldn't verify categories." }; }
+        const category = draftCategories.find(c => c.id === capture.categoryId && !c.parent_id);
+        const subcategory = capture.subcategoryId ? draftCategories.find(c => c.id === capture.subcategoryId && c.parent_id === capture.categoryId) : undefined;
+        if (!category || (capture.subcategoryId && !subcategory)) return { ok: false, reason: "request-failed", message: "Choose a category." };
+      }
+      const parsed: ParsedExpense = capture ? {
+        amount: capture.amount, date: capture.date, description: capture.description,
+        categoryId: capture.categoryId, subcategoryId: capture.subcategoryId || undefined,
+        categoryName: draftCategories.find(c => c.id === capture.categoryId)?.name,
+        subcategoryName: draftCategories.find(c => c.id === capture.subcategoryId)?.name,
+      } : parseSpeechExpense(sentence, draftCategories);
 
       if (!parsed.amount || parsed.amount <= 0) {
         return {
@@ -157,10 +179,10 @@ export function useEraBudgetSubmit() {
             amount: parsed.amount,
             category_id: parsed.categoryId || null,
             subcategory_id: parsed.subcategoryId || null,
-            description: sentence,
+            description: capture?.description ?? sentence,
             voice_transcript: sentence,
             confidence_score: parsed.confidenceScore || null,
-            date: parsed.date || new Date().toISOString().split("T")[0],
+            date: parsed.date || formatDate(new Date()),
           }),
         });
 
@@ -179,7 +201,7 @@ export function useEraBudgetSubmit() {
 
         // Cache invalidation — mirror the mic flow (VoiceEntryButton).
         queryClient.invalidateQueries({ queryKey: qk.drafts() });
-        queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+        invalidateAccountData(queryClient, draftAccountId);
 
         // HUB-78 — the receipt (Undo + Change) is shown by useEraTurn, which
         // owns the handoff message id the Change button opens.

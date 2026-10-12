@@ -15,7 +15,7 @@
 //   C — gated fast path, then the Understand prototype on every
 //       non-confident result (miss, weak guess, speech act)
 //
-// Model responses are recorded once by record.test.ts and replayed here, so
+// Model responses were recorded once (recorder removed 2026-10-12) and replayed here, so
 // CI never calls the network.
 
 import fs from "node:fs";

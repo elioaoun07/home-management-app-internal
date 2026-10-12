@@ -28,9 +28,12 @@ import type { ChatMessage } from "@/lib/ai/gemini";
 import {
   checkUserRateLimit,
   generateRequestHash,
-  MONTHLY_TOKEN_LIMIT,
   recordRequestHash,
 } from "@/lib/ai/rateLimit";
+import {
+  aggregateAiUsage,
+  type AiUsageReceipt,
+} from "@/features/era/aiUsage";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { after, NextRequest, NextResponse } from "next/server";
@@ -46,6 +49,41 @@ const DAILY_AUTO_ESCALATION_CAP = 15;
 /** Tags the ai_messages rows this route inserts so the cap above can count only auto-escalations, never manual "Ask AI" taps. */
 const AUTO_SESSION_ID = "era-ask-auto";
 const MANUAL_SESSION_ID = "era-ask";
+
+/**
+ * Monthly AI spend ceiling per user, in USD (owner decision 2026-10-12;
+ * replaces the 1M-token cap, which blocked at ~165 calls ≈ $0.12). Priced
+ * from the user's own `ai_messages` receipts (cache-aware, see aiUsage.ts),
+ * so it is an estimate that counts after inference: concurrent requests can
+ * overshoot by a call or two, which at ~$0.0006 a call is not worth a lock.
+ */
+const MONTHLY_BUDGET_USD = 1;
+const RECEIPT_PAGE = 1000;
+const MAX_RECEIPT_PAGES = 20;
+
+/** Every receipt this month — PostgREST caps one response at 1000 rows. */
+async function monthlyCostUsd(
+  supabase: Awaited<ReturnType<typeof supabaseServer>>,
+  userId: string,
+  since: string,
+): Promise<{ cost: number } | { error: true }> {
+  const receipts: AiUsageReceipt[] = [];
+  for (let page = 0; page < MAX_RECEIPT_PAGES; page++) {
+    const { data, error } = await supabase
+      .from("ai_messages")
+      .select("created_at, role, session_id, input_tokens, output_tokens, model_used")
+      .eq("user_id", userId)
+      .gte("created_at", since)
+      .order("created_at", { ascending: true })
+      .range(page * RECEIPT_PAGE, (page + 1) * RECEIPT_PAGE - 1);
+    if (error || !data) return { error: true };
+    receipts.push(...(data as AiUsageReceipt[]));
+    if (data.length < RECEIPT_PAGE) break;
+  }
+  return {
+    cost: aggregateAiUsage({ receipts, answers: [], chats: [] }).total.cost,
+  };
+}
 
 const bodySchema = z.object({
   message: z.string().min(1).max(2000),
@@ -78,6 +116,18 @@ const bodySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
 });
+
+/**
+ * `model_used` for a receipt. Suffixes (see src/features/era/aiUsage.ts):
+ * `:estimated` = tokens not reported by the API; `:cache=R/W` = R input
+ * tokens read from and W written to the prompt cache (subsets of input).
+ */
+function receiptModel(u: AskAIUsage): string {
+  if (u.estimated) return `${u.model}:estimated`;
+  const r = u.cacheReadTokens ?? 0;
+  const w = u.cacheWriteTokens ?? 0;
+  return r || w ? `${u.model}:cache=${r}/${w}` : u.model;
+}
 
 export async function POST(req: NextRequest) {
   const supabase = await supabaseServer(await cookies());
@@ -129,21 +179,15 @@ export async function POST(req: NextRequest) {
         .eq("role", "user")
         .gte("created_at", startOfToday)
     : null;
-  const monthlyUsageQuery = supabase
-    .from("ai_messages")
-    .select("input_tokens, output_tokens")
-    .eq("user_id", user.id)
-    .gte("created_at", startOfMonth);
   const [autoCountResult, monthlyUsageResult, rateLimitCheck] =
     await Promise.all([
       autoCountQuery ?? Promise.resolve(null),
-      monthlyUsageQuery,
+      monthlyCostUsd(supabase, user.id, startOfMonth),
       checkUserRateLimit(supabase, user.id, requestHash),
     ]);
 
   if (
-    monthlyUsageResult.error ||
-    !monthlyUsageResult.data ||
+    "error" in monthlyUsageResult ||
     (auto && (autoCountResult?.error || autoCountResult?.count == null))
   ) {
     return NextResponse.json(
@@ -165,15 +209,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Monthly token budget (Hard Rule-adjacent: same ceiling as /api/ai-chat).
-  const usageRows = monthlyUsageResult.data;
-  const monthlyUsage = (usageRows ?? []).reduce(
-    (sum, r) => sum + (r.input_tokens ?? 0) + (r.output_tokens ?? 0),
-    0,
-  );
-  if (monthlyUsage >= MONTHLY_TOKEN_LIMIT) {
+  // Monthly spend ceiling (estimated, per user; see MONTHLY_BUDGET_USD).
+  if (monthlyUsageResult.cost >= MONTHLY_BUDGET_USD) {
     return NextResponse.json(
-      { error: "Monthly token limit reached." },
+      { error: "Monthly AI budget reached." },
       { status: 429 },
     );
   }
@@ -223,6 +262,7 @@ export async function POST(req: NextRequest) {
   // Meter the complete provider response, even if admission refused it.
   // No response means unknown usage, not a fabricated count for fallback prose.
   const usage = metering[0];
+  const modelUsed = usage ? receiptModel(usage) : "unknown:no-response";
   after(async () => {
     const { error } = await supabase.from("ai_messages").insert([
       {
@@ -232,9 +272,7 @@ export async function POST(req: NextRequest) {
         content: message,
         input_tokens: usage?.inputTokens ?? 0,
         output_tokens: 0,
-        model_used: usage
-          ? `${usage.model}${usage.estimated ? ":estimated" : ""}`
-          : "unknown:no-response",
+        model_used: modelUsed,
       },
       {
         user_id: user.id,
@@ -243,9 +281,7 @@ export async function POST(req: NextRequest) {
         content: result.text,
         input_tokens: 0,
         output_tokens: usage?.outputTokens ?? 0,
-        model_used: usage
-          ? `${usage.model}${usage.estimated ? ":estimated" : ""}`
-          : "unknown:no-response",
+        model_used: modelUsed,
       },
     ]);
     if (error)

@@ -110,6 +110,9 @@ export function deriveOutcome(
   for (const a of r.artifacts ?? []) if (a.id && !ids.includes(a.id)) ids.push(a.id);
   if (r.proposal?.kind === "native_action") return { status: "awaiting_confirm", capability, entityIds: ids, inverse: null };
   if (r.pending) return { status: "needs_input", capability, entityIds: ids, inverse: null };
+  // A successful draft can also offer Change in the precision form. That door
+  // must not conceal the saved draft or suppress its Undo receipt.
+  if (r.ok !== false && m.uncertain !== true && typeof m.draftId === "string") return { status: "drafted", capability, entityIds: ids, inverse: "draft.delete" };
   if (r.handoff || r.navigate) return { status: "handed_off", capability, entityIds: ids, inverse: null };
   if (m.uncertain === true) return { status: "uncertain", capability, entityIds: ids, inverse: null };
   if (r.ok === false) return { status: "failed", capability, entityIds: ids, inverse: null };
