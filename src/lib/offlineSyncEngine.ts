@@ -41,6 +41,8 @@ export const FEATURE_QUERY_KEYS: Record<string, string[][]> = {
   subtask: [["items"]],
   recurring: [["recurring-payments"], ["transactions"], ["account-balance"]],
   trip: [["trips"]],
+  // Fitness writes also touch Schedule (slot completions).
+  fitness: [["fitness"], [...qk.scheduleItems()], ["flexible-routines"]],
 };
 
 type InvalidateQueriesFn = (queryKeys: string[][]) => void;
@@ -208,6 +210,13 @@ class OfflineSyncEngine {
         };
 
         // Check max retries
+        if (op.retryCount >= op.maxRetries && op.feature === "fitness") {
+          // Keep the workout input; Fitness shows it for Retry / Discard.
+          await updateQueuedOperation(op.id, { reviewRequired: true, metadata: { label: `${op.metadata?.label ?? "Workout"} / Review` } });
+          result.failed++;
+          this.notifyListeners();
+          continue;
+        }
         if (op.retryCount >= op.maxRetries) {
           // Permanent failure — remove from queue
           await removeFromQueue(op.id);
@@ -280,6 +289,24 @@ class OfflineSyncEngine {
               this.options.invalidateQueries(keys);
             }
 
+            this.notifyListeners();
+          } else if (op.feature === "fitness" && response.status >= 400 && response.status < 500) {
+            // Workout logs are never dropped: a conflict (another device changed
+            // the set) or a rejected replay keeps its input for review in
+            // Fitness. 401 = expired session → retry on the next pass.
+            if (response.status === 401) {
+              await updateRetryCount(op.id, op.retryCount + 1);
+            } else {
+              const label = op.metadata?.label ?? "Workout";
+              await updateQueuedOperation(op.id, {
+                reviewRequired: true,
+                metadata: { label: `${label} / ${response.status === 409 ? "Conflict" : "Review"}` },
+              });
+            }
+            result.failed++;
+            result.errors.push({ operationId: op.id, error: `HTTP ${response.status}` });
+            this.options.invalidateQueries(FEATURE_QUERY_KEYS.fitness);
+            this.options.onOperationFailure?.(op, `HTTP ${response.status}`, false);
             this.notifyListeners();
           } else if (response.status >= 400 && response.status < 500) {
             // Client error — won't succeed on retry, remove

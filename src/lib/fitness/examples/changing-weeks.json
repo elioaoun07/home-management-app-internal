@@ -1,0 +1,38 @@
+{
+  "schema_version": "era.fitness.pt-plan.v1",
+  "name": "Block periodization (needs review)",
+  "trainer": "Synthetic PT",
+  "goal": null,
+  "duration_weeks": 8,
+  "workout_order": ["full"],
+  "workouts": [
+    {
+      "id": "full",
+      "name": "Full body",
+      "kind": "strength",
+      "estimated_minutes": null,
+      "notes": null,
+      "exercises": [
+        {
+          "id": "deadlift",
+          "name": "Deadlift",
+          "phase": "main",
+          "equipment": "Barbell",
+          "group_id": null,
+          "group_mode": "straight",
+          "sets": [
+            { "kind": "working", "reps_min": 10, "reps_max": 10, "duration_seconds": null, "distance_m": null, "load_kg": null, "load_kind": "external", "rpe": null, "rir": null, "rest_seconds": null, "tempo": null, "notes": null },
+            { "kind": "working", "reps_min": 10, "reps_max": 10, "duration_seconds": null, "distance_m": null, "load_kg": null, "load_kind": "external", "rpe": null, "rir": null, "rest_seconds": null, "tempo": null, "notes": null },
+            { "kind": "working", "reps_min": 10, "reps_max": 10, "duration_seconds": null, "distance_m": null, "load_kg": null, "load_kind": "external", "rpe": null, "rir": null, "rest_seconds": null, "tempo": null, "notes": null }
+          ],
+          "notes": null
+        }
+      ]
+    }
+  ],
+  "progression_notes": "Weeks 1-4: 3 x 10. Weeks 5-8: 4 x 6 at heavier load.",
+  "source_notes": "Synthetic fixture.",
+  "issues": [
+    { "path": "progression_notes", "message": "Prescription changes by week; v1 supports one repeating split.", "blocking": true }
+  ]
+}

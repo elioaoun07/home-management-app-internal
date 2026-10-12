@@ -1823,6 +1823,24 @@ CREATE TABLE public.health_medication_logs (
 CREATE UNIQUE INDEX health_medication_logs_prn_slot_unique
   ON public.health_medication_logs (medication_id, prn_day, prn_slot)
   WHERE prn_slot IS NOT NULL;
+-- Body measurements (2026-10-12_fitness-module.sql). Owner-only RLS
+-- (managing_user_id = auth.uid()); deliberately absent from get_health_bundle().
+CREATE TABLE public.health_measurements (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  profile_id uuid NOT NULL,
+  managing_user_id uuid NOT NULL,
+  measured_at timestamp with time zone NOT NULL,
+  weight_kg numeric CHECK (weight_kg IS NULL OR weight_kg > 0::numeric AND weight_kg < 700::numeric),
+  height_cm numeric CHECK (height_cm IS NULL OR height_cm > 30::numeric AND height_cm < 300::numeric),
+  source text NOT NULL DEFAULT 'healthcare'::text CHECK (source = ANY (ARRAY['healthcare'::text, 'fitness'::text])),
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT health_measurements_pkey PRIMARY KEY (id),
+  CONSTRAINT health_measurements_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.health_profiles(id),
+  CONSTRAINT health_measurements_managing_user_id_fkey FOREIGN KEY (managing_user_id) REFERENCES auth.users(id),
+  CONSTRAINT health_measurements_value_check CHECK (weight_kg IS NOT NULL OR height_cm IS NOT NULL)
+);
 CREATE TABLE public.wardrobe_profiles (
   user_id uuid NOT NULL,
   height_cm numeric,
@@ -2116,6 +2134,175 @@ ALTER TABLE public.activity_log_sources ENABLE ROW LEVEL SECURITY;
 -- access checks. No per-row parent-join RLS on the ledger or source child tables.
 REVOKE ALL ON public.household_activity, public.activity_log_sources FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON SEQUENCE public.household_activity_sequence_seq FROM PUBLIC, anon, authenticated;
+
+-- ===========================================================================
+-- FITNESS (2026-10-12_fitness-module.sql, HLTH-28)
+-- ===========================================================================
+-- Table snapshot only. RLS: SELECT own rows (user_id = auth.uid()) on every
+-- fitness_* table except fitness_preferences (owner FOR ALL); all other writes
+-- go through SECURITY DEFINER RPCs. Function/trigger bodies, including the
+-- item_occurrence_actions mirror trigger, live in the migration. Written end
+-- state; production application is owner-verified.
+CREATE TABLE public.fitness_preferences (
+  user_id uuid NOT NULL,
+  share_summary boolean NOT NULL DEFAULT false,
+  effects_enabled boolean NOT NULL DEFAULT true,
+  sound_enabled boolean NOT NULL DEFAULT false,
+  cosmetic text CHECK (cosmetic IS NULL OR (cosmetic = ANY (ARRAY['initiate'::text, 'momentum'::text, 'vanguard'::text, 'apex'::text]))),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT fitness_preferences_pkey PRIMARY KEY (user_id),
+  CONSTRAINT fitness_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.fitness_plans (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  name text NOT NULL,
+  status text NOT NULL DEFAULT 'draft'::text CHECK (status = ANY (ARRAY['draft'::text, 'ready'::text, 'active'::text, 'paused'::text, 'archived'::text])),
+  content_fingerprint text NOT NULL,
+  current_version integer NOT NULL DEFAULT 1,
+  timezone text,
+  activated_week date,
+  ends_week date,
+  archived_from text,
+  activated_at timestamp with time zone,
+  paused_at timestamp with time zone,
+  archived_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT fitness_plans_pkey PRIMARY KEY (id),
+  CONSTRAINT fitness_plans_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE UNIQUE INDEX fitness_plans_fingerprint_key ON public.fitness_plans (user_id, content_fingerprint);
+CREATE UNIQUE INDEX fitness_plans_one_live_key ON public.fitness_plans (user_id) WHERE status IN ('active','paused');
+CREATE TABLE public.fitness_plan_versions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  plan_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  version integer NOT NULL,
+  content jsonb NOT NULL,
+  source_text text,
+  fingerprint text NOT NULL,
+  issues jsonb NOT NULL DEFAULT '[]'::jsonb,
+  acknowledged text[] NOT NULL DEFAULT '{}'::text[],
+  slot_count integer NOT NULL,
+  training_target integer NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT fitness_plan_versions_pkey PRIMARY KEY (id),
+  CONSTRAINT fitness_plan_versions_unique UNIQUE (plan_id, version),
+  CONSTRAINT fitness_plan_versions_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.fitness_plans(id),
+  CONSTRAINT fitness_plan_versions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.fitness_plan_slots (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  plan_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  slot_index integer NOT NULL CHECK (slot_index >= 0),
+  item_id uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT fitness_plan_slots_pkey PRIMARY KEY (id),
+  CONSTRAINT fitness_plan_slots_unique UNIQUE (plan_id, slot_index),
+  CONSTRAINT fitness_plan_slots_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.fitness_plans(id),
+  CONSTRAINT fitness_plan_slots_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT fitness_plan_slots_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+);
+CREATE UNIQUE INDEX fitness_plan_slots_item_key ON public.fitness_plan_slots (item_id) WHERE item_id IS NOT NULL;
+CREATE TABLE public.fitness_plan_pauses (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  plan_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  paused_on date NOT NULL,
+  resumed_on date,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT fitness_plan_pauses_pkey PRIMARY KEY (id),
+  CONSTRAINT fitness_plan_pauses_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.fitness_plans(id),
+  CONSTRAINT fitness_plan_pauses_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.fitness_sessions (
+  id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  plan_id uuid NOT NULL,
+  version integer NOT NULL,
+  slot_id uuid,
+  period_start date,
+  workout_id text NOT NULL,
+  workout_name text NOT NULL,
+  kind text NOT NULL CHECK (kind = ANY (ARRAY['strength'::text, 'cardio'::text, 'mobility'::text, 'recovery'::text])),
+  snapshot jsonb NOT NULL,
+  training_target integer NOT NULL DEFAULT 0,
+  status text NOT NULL DEFAULT 'in_progress'::text CHECK (status = ANY (ARRAY['in_progress'::text, 'completed'::text, 'abandoned'::text])),
+  source text NOT NULL DEFAULT 'fitness'::text CHECK (source = ANY (ARRAY['fitness'::text, 'schedule'::text])),
+  started_at timestamp with time zone NOT NULL DEFAULT now(),
+  finished_at timestamp with time zone,
+  local_date date,
+  has_sets boolean NOT NULL DEFAULT false,
+  fully_logged boolean NOT NULL DEFAULT false,
+  notes text,
+  revision integer NOT NULL DEFAULT 1,
+  deleted_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT fitness_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT fitness_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT fitness_sessions_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.fitness_plans(id),
+  CONSTRAINT fitness_sessions_slot_id_fkey FOREIGN KEY (slot_id) REFERENCES public.fitness_plan_slots(id),
+  CONSTRAINT fitness_sessions_finished_check CHECK (status <> 'completed'::text OR finished_at IS NOT NULL AND local_date IS NOT NULL)
+);
+CREATE UNIQUE INDEX fitness_sessions_one_open_key ON public.fitness_sessions (user_id) WHERE status = 'in_progress' AND deleted_at IS NULL;
+CREATE UNIQUE INDEX fitness_sessions_slot_week_key ON public.fitness_sessions (slot_id, period_start)
+  WHERE status = 'completed' AND deleted_at IS NULL AND slot_id IS NOT NULL;
+CREATE TABLE public.fitness_set_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  session_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  exercise_id text NOT NULL,
+  set_index integer NOT NULL CHECK (set_index >= 0 AND set_index <= 49),
+  exercise_name text NOT NULL,
+  equipment text,
+  load_kind text NOT NULL DEFAULT 'unspecified'::text CHECK (load_kind = ANY (ARRAY['external'::text, 'bodyweight'::text, 'assisted'::text, 'unspecified'::text])),
+  substitution text,
+  status text NOT NULL DEFAULT 'done'::text CHECK (status = ANY (ARRAY['done'::text, 'skipped'::text])),
+  reps integer,
+  load_kg numeric,
+  duration_seconds integer,
+  distance_m numeric,
+  rpe numeric,
+  rir integer,
+  notes text,
+  logged_at timestamp with time zone NOT NULL DEFAULT now(),
+  revision integer NOT NULL DEFAULT 1,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT fitness_set_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT fitness_set_logs_unique UNIQUE (session_id, exercise_id, set_index),
+  CONSTRAINT fitness_set_logs_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.fitness_sessions(id),
+  CONSTRAINT fitness_set_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.fitness_reward_events (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  source_key text NOT NULL,
+  kind text NOT NULL CHECK (kind = ANY (ARRAY['xp'::text, 'badge'::text, 'record'::text, 'rank'::text])),
+  xp integer NOT NULL DEFAULT 0 CHECK (xp >= 0),
+  session_id uuid,
+  earned_on date,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  awarded_at timestamp with time zone NOT NULL DEFAULT now(),
+  celebrated_at timestamp with time zone,
+  revoked_at timestamp with time zone,
+  CONSTRAINT fitness_reward_events_pkey PRIMARY KEY (id),
+  CONSTRAINT fitness_reward_events_unique UNIQUE (user_id, source_key),
+  CONSTRAINT fitness_reward_events_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.fitness_operations (
+  op_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  kind text NOT NULL,
+  target_id uuid,
+  result jsonb NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT fitness_operations_pkey PRIMARY KEY (op_id),
+  CONSTRAINT fitness_operations_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 
 -- ===========================================================================
 -- ERA LEXICON (2026-09-27_era-lexicon.sql, HUB-80)

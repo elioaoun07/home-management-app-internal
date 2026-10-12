@@ -68,6 +68,7 @@ tags:
 | `outfits`        | `/outfits`        | [[outfits]]        |
 | `trips`          | `/trips`          | [[trips]]          |
 | `activity-log`   | `/activity-log`   | [[activity-log]]   |
+| `fitness`        | `/fitness`        | [[fitness]]        |
 | `trips-id`       | `/trips/[id]`     | [[trips-id]]       |
 
 ## Utility Routes
@@ -116,6 +117,7 @@ tags:
 | `feature-outfits`          | `src/features/outfits/`          | [[feature-outfits]]          |
 | `feature-trips`            | `src/features/trips/`            | [[feature-trips]]            |
 | `feature-activity-log`     | `src/features/activity-log/` (junction) | [[feature-activity-log]] |
+| `feature-fitness`          | `src/features/fitness/`          | [[feature-fitness]]          |
 
 ---
 

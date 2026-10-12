@@ -34,7 +34,8 @@ const cases: Case[] = [
   {
     id: "application-awareness",
     request: "Show what ERA can do in Trips and list my saved recipes",
-    caps: ["app.capabilities", "recipe.list"],
+    caps: ["recipe.list"],
+    discloses: /trip/i,
   },
   {
     id: "memory-copy",
@@ -53,10 +54,11 @@ const cases: Case[] = [
   {
     id: "unsupported-stock-subtraction",
     request: "Plan Orange Chicken for Friday dinner and add only the ingredients missing from my pantry to shopping",
-    caps: ["meal.assign"],
+    caps: ["meal.assign", "recipe.ingredients"],
     discloses: /pantry|shopping/i,
     slots: {
-      "meal.assign": { dish: /orange chicken/i, dayHint: /friday/i, mealType: /^dinner$/i },
+      // dish is a step reference to the recipe lookup, not a literal.
+      "meal.assign": { dayHint: /friday/i, mealType: /^dinner$/i },
     },
   },
   // Conditional on pantry state, which ERA cannot read: no action at all.

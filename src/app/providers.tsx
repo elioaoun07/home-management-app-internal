@@ -41,6 +41,9 @@ const STABLE_KEYS = new Set([
   // worth of rows), persisted so the itinerary, packing list and document
   // list still render on a cold start with no signal while travelling.
   "trips",
+  // Fitness bundle (active plan + unfinished workout, bounded history) —
+  // persisted so a workout can be resumed and logged with no signal.
+  "fitness",
 ]);
 
 /**

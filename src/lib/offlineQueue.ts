@@ -11,7 +11,7 @@ const MAX_PAYLOAD_SIZE = 64 * 1024; // 64KB
 
 export interface OfflineOperation {
   id: string;
-  feature: "transaction" | "item" | "hub-message" | "subtask" | "recurring" | "trip";
+  feature: "transaction" | "item" | "hub-message" | "subtask" | "recurring" | "trip" | "fitness";
   operation:
     | "create"
     | "update"
@@ -424,7 +424,9 @@ export async function removeStaleOperations(
 ): Promise<number> {
   const cutoff = Date.now() - maxAgeMs;
   const allOps = await getAllPending();
-  const stale = allOps.filter((op) => !op.reviewRequired && op.createdAt < cutoff);
+  // Workout logs are never aged out: a session logged offline for a weekend
+  // must still reach the server (replay is idempotent by op id).
+  const stale = allOps.filter((op) => !op.reviewRequired && op.feature !== "fitness" && op.createdAt < cutoff);
 
   for (const op of stale) {
     await removeFromQueue(op.id);

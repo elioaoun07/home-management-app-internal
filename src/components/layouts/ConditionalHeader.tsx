@@ -88,6 +88,11 @@ const STANDALONE_APPS: Record<
     role: "Health Records",
     color: "from-emerald-400 to-teal-500",
   },
+  "/fitness": {
+    title: "Fitness",
+    role: "Training Core",
+    color: "from-cyan-400 to-violet-400",
+  },
   "/statement-import": {
     title: "Statement Import",
     role: "Reconcile & Audit",

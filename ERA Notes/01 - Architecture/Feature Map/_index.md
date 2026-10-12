@@ -32,6 +32,7 @@ If the user says…                                              | Open
 "focus page" / "flexible routines"                             | [standalone/focus.md](standalone/focus.md)
 "the dashboard" / "today view" / "main landing"                | [standalone/dashboard.md](standalone/dashboard.md)
 "the recycle bin"                                              | [standalone/recycle-bin.md](standalone/recycle-bin.md)
+"log a workout" / "PT plan" / "fitness progress"              | [standalone/fitness.md](standalone/fitness.md)
 allergies / vaccines / medical history / medication           | [standalone/healthcare.md](standalone/healthcare.md)
 "what should I wear" / "add a shirt to my wardrobe"            | [standalone/outfits.md](standalone/outfits.md)
 ---                                                            | ---
@@ -87,6 +88,7 @@ activity log                                                  | [junction/activi
 | Recycle Bin        | Soft-deleted items with restore.                                                       | [standalone/recycle-bin.md](standalone/recycle-bin.md)                            |
 | Healthcare        | Family health profiles: allergies, conditions, vaccines, medications                  | [standalone/healthcare.md](standalone/healthcare.md)                       |
 | Outfits            | Wardrobe catalog, paper-doll outfit builder, weekly outfit planner and wear log.       | [standalone/outfits.md](standalone/outfits.md)                            |
+| Fitness           | Imported PT plans, workout logging, recovery, and gamified progress.                  | [standalone/fitness.md](standalone/fitness.md)                          |
 
 ## Junction modules (bridge two or more standalones)
 

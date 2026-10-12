@@ -211,6 +211,7 @@ DB changes = SQL run manually in the Supabase SQL Editor. New tables must includ
 | Healthcare | `src/features/healthcare/` | `ERA Notes/02 - Standalone Modules/Healthcare/` | Standalone |
 | Outfits | `src/features/outfits/`, `src/app/outfits/`, `src/components/outfits/` | `ERA Notes/02 - Standalone Modules/Outfits/` | Standalone |
 | Activity Log             | `src/features/activity-log/`                                      | `ERA Notes/03 - Junction Modules/Activity Log/`         | Junction   |
+| Fitness                  | `src/features/fitness/`                                           | `ERA Notes/02 - Standalone Modules/Fitness/`            | Standalone |
 
 > **Note:** this table is validated against the **Feature Map** (`ERA Notes/01 - Architecture/Feature Map/_index.md`) by `pnpm docs:check`, which runs during `pnpm sync:ai` and pre-commit. **AI Usage is intentionally excluded** from this Feature Index because it is not part of the application.
 

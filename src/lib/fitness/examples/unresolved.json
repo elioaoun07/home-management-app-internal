@@ -1,0 +1,55 @@
+{
+  "schema_version": "era.fitness.pt-plan.v1",
+  "name": "Unreadable page (draft)",
+  "trainer": null,
+  "goal": null,
+  "duration_weeks": null,
+  "workout_order": ["a", "b"],
+  "workouts": [
+    {
+      "id": "a",
+      "name": "Day A",
+      "kind": "strength",
+      "estimated_minutes": null,
+      "notes": null,
+      "exercises": [
+        {
+          "id": "press",
+          "name": "Overhead press",
+          "phase": "main",
+          "equipment": "Barbell",
+          "group_id": null,
+          "group_mode": "straight",
+          "sets": [],
+          "notes": "Source says 'press — see sheet'; set count not given."
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "name": "Day B",
+      "kind": "recovery",
+      "estimated_minutes": 15,
+      "notes": null,
+      "exercises": [
+        {
+          "id": "breathing",
+          "name": "Box breathing",
+          "phase": "main",
+          "equipment": null,
+          "group_id": null,
+          "group_mode": "straight",
+          "sets": [
+            { "kind": "working", "reps_min": null, "reps_max": null, "duration_seconds": 300, "distance_m": null, "load_kg": null, "load_kind": "bodyweight", "rpe": null, "rir": null, "rest_seconds": null, "tempo": null, "notes": null }
+          ],
+          "notes": null
+        }
+      ]
+    }
+  ],
+  "progression_notes": null,
+  "source_notes": "Synthetic fixture.",
+  "issues": [
+    { "path": "workouts[0].exercises[0].sets", "message": "Set count missing", "blocking": true }
+  ]
+}

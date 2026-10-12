@@ -42,6 +42,7 @@ tags:
 | `/activity-log` | Activity Log    | Custom timeline install icon / `Activity` (lucide) | Theme-based UI; cyan install icon |
 | `/today`     | Plan My Day        | `CalendarOff` (lucide)     | `from-pink-400 to-amber-400`      |
 | `/healthcare` | Health            | `HeartPulse` (lucide)      | `from-rose-400 to-pink-500`       |
+| `/fitness`   | Fitness            | `CoreIcon` (`src/components/fitness/FitnessIcons.tsx`) | `from-cyan-400 to-violet-400` |
 | `/statement-import` | Statement Import | `Upload` / `FileText` (lucide) | `from-sky-400 to-indigo-500` |
 
 ---

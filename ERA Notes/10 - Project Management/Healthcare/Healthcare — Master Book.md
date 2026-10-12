@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-26
+updated: 2026-10-12
 type: master-book
 status: active
 owner: Elio
@@ -12,7 +12,7 @@ owner: Elio
 
 ## Purpose & ownership
 
-Private health records and dependable reminders with explicit evidence limits. Standalone health records with Schedule, Catalogue, Recipes and Notifications junctions.
+Private health records and dependable reminders with explicit evidence limits. Standalone health records with Schedule, Catalogue, Recipes and Notifications junctions. Also owns the **Fitness** module (HLTH-28 onward): it shares Healthcare body measurements and has no separate campaign.
 
 ## Current state & evidence
 
@@ -21,6 +21,8 @@ Core profiles, allergies, conditions, vaccines and warning integration shipped a
 Medications shipped as code 2026-09-26 (HLTH-24, owner request while sick, ahead of the HLTH-19 skill gate): medicine list with dose, full-course vs as-needed, food timing, dose times and course length; a day-by-day taken checklist; one urgent recurring Schedule reminder per dose time, kept in sync both ways with the checklist. Local evidence: PGlite fixture run 31/31 and `medicationSchedule.test.ts` 14/14. On 2026-09-27 the owner reported running the earlier Morning/Noon PRN migration, which implies the base medication migration was also applied; live DB and phone behavior remain unverified under HLTH-25. Verified Google status (HLTH-9/10), calendar badge (HLTH-11) and the phone alarm battery (HLTH-12) remain.
 
 2026-09-27 medication form extension (HLTH-26, source and local SQL checks only): a morning/evening course shortcut, as-needed symptom note, and optional one-dose-per-morning/evening opportunities. Minimum spacing and daily maximum are checked by the write RPC as well as the button. The owner must run the evening upgrade after the earlier Morning/Noon migration; HLTH-25 still owns deployment and phone acceptance.
+
+2026-10-12 Fitness module (HLTH-28, code complete; evidence cutoff = this session's working tree): imported PT plans (PTPlanV1 contract, schema, examples, AI prompt), weekly flexible Schedule slots, focused workout logging with rest timer and offline queue, deterministic server-side rewards, and shared owner-private weight/height/BMI (`health_measurements`). Local evidence only: Fitness PGlite fixtures 16/16 against the real migration, contract/progress/offline/measurement/sync-engine unit tests, typecheck and lint clean, fixture screenshots at 390 px (blue, frost) and desktop (pink). `migrations/2026-10-12_fitness-module.sql` is unapplied and requires SCH-24 first — HLTH-29.
 
 Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Healthcare/Healthcare — Master Book.md>) preserves detailed older narratives and receipts.
 
@@ -32,6 +34,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 - Warn-but-allow when Google is disconnected (owner decision July17). Sync is awaited with bookkeeping; an event identifier still does not prove a physical alarm. Schedule edits archive/recreate reminder items; adherence history remains in medication logs. *(Partly IMPLEMENTED 2026-09-26: edits hard-delete and recreate the reminder items in one RPC, then re-mark already-taken doses as completed occurrences; history stays in logs. Google sync is still best-effort — verified bookkeeping is HLTH-9.)*
 - Medication model (owner, 2026-09-26): two modes — **full course** (fixed wall-clock dose times from a first-dose instant for N days; N blank = ongoing) and **as needed** (taken based on symptoms, optional minimum gap and daily max, no reminders). Food timing is `any | empty_stomach | with_food`. Dose times live in the medication's own IANA zone so checklist, dose keys and reminders agree when the phone travels. The Health checklist and the Schedule reminder are one fact: ticking either side marks the other (RPC one way, `item_occurrence_actions` trigger the other). *(IMPLEMENTED as code 2026-09-26)*
 - An as-needed medicine may have named Morning and Evening opportunities, with at most one logged dose per opportunity each local day. The names are user-selected dose opportunities, not fixed clock windows or automatic reminders. Minimum spacing and daily maximum are enforced by the write RPC. Historical Noon logs remain unchanged. *(IMPLEMENTED as code 2026-09-27 — HLTH-26; evening upgrade pending owner application)*
+- Fitness (owner, 2026-10-12): gym + recovery; futuristic quest hub; flexible scheduling (one weekly flexible Schedule routine per `workout_order` entry, no new recurrence engine, no cron); imported repeating PT splits only; shared Healthcare measurements; private workout data with an opt-in rank/badges/weekly summary for the partner. Rewards are deterministic and server-validated with constants in `fitness_rules()`. *(IMPLEMENTED as code 2026-10-12 — HLTH-28; migration pending HLTH-29)*
+- Body measurements stay owner-private even on shared profiles; Outfits sizing stays separate. *(IMPLEMENTED as code 2026-10-12 — HLTH-28)*
 - Expiry and vaccine reminders use the existing materialization boundary. Healthcare skill HLTH-19 is required before medication math, not a final polish item. UI extraction is only an on-touch rider.
 
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
@@ -39,6 +43,8 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 ## Pain Inventory
 
 🔴 **HLTH-25** Owner reports the base and earlier PRN migrations applied, but live DB and phone behavior are unverified; the Morning/Evening upgrade remains to run. See [acceptance](<#hlth-25>).
+
+🔴 **HLTH-29** Fitness is code complete but its migration (and SCH-24 before it) is unapplied, so `/fitness` returns "Fitness setup pending" on live data; ERA agent replay evidence must be refreshed because the Fitness reach row changes the agent prompt. See [acceptance](<#hlth-29>).
 
 🔴 **HLTH-7** Verify core deployment, household privacy and mobile use. See [acceptance](<#hlth-7>) for the root cause, evidence and gate.
 
@@ -53,6 +59,31 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ## Acceptance Criteria Index
 
 Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execution-plans>). Read only the selected ID, its declared dependencies and relevant source; planning does not certify deployment or mark work complete.
+
+### HLTH-29
+
+**Outcome:** Apply the Fitness migration and accept Fitness on phone.
+
+**Kind:** verification
+
+**Depends on:** Schedule/SCH-24 (`migrations/2026-10-11_atomic-item-create.sql` applied first)
+
+**Touches:** none
+
+- **Acceptance:** Owner runs SCH-24's migration, then `migrations/2026-10-12_fitness-module.sql` (it aborts with a named prerequisite if SCH-24 is missing). Section 12 read-only checks pass: every `fitness_*` table and `health_measurements` has RLS on (fitness tables SELECT-own only), two `fitness_mirror_occurrence_*` triggers exist on `item_occurrence_actions`, write RPCs are SECURITY DEFINER; `db-state.json` regenerated and `pnpm db:verify-rls` green. On a phone: import `src/lib/fitness/examples/upper-lower.json` (and a duplicate → Open existing), activate, see four weekly routines in Schedule's Assign/flexible view, place and move one, start → log → rest timer → finish → Undo (Schedule completion reverts too), complete one slot from Schedule (minimal session appears, no sets), log offline then reconnect, add a weight/height from Fitness and see it in Healthcare, toggle partner sharing and confirm the partner sees only rank/badges/week. Failure case: a stale-revision set edit shows Keep mine / Discard instead of overwriting.
+- **ERA evidence:** the Fitness `ERA_REACH` row changes the ERA agent prompt; `tests/era-gym/agent-record.test.ts` needs an owner-approved, bounded live refresh (`$env:ERA_AGENT_RECORD='1'; pnpm vitest run tests/era-gym/agent-record.test.ts`, Hard Rule 29). Two replay cases already failed before this change.
+- **Evidence so far, 2026-10-12:** local only (see HLTH-28). No production DB or device witness.
+
+### HLTH-28
+
+**Outcome:** Fitness module — imported PT plans, workout logging, recovery and gamified progress.
+
+**Kind:** feature
+
+**Implementation:** done
+
+- **Acceptance:** PTPlanV1 import with field-path validation, review drafts and duplicate detection; versioned plans; activation into weekly flexible Schedule slots bounded by duration; one authoritative completion across Fitness and Schedule with Undo; exactly-once deterministic rewards with replay-safe receipts; offline workout logging with held conflicts; shared owner-private measurements with dated BMI; partner opt-in summary; four tabs + focused workout at 390 px and desktop in all themes with reduced motion.
+- **Evidence, 2026-10-12:** `src/lib/fitness/fitness.database.test.ts` 16/16 (PGlite, real SCH-24 + Fitness migrations: atomic import/replay/duplicate, draft gating, activation shape and duration bound, pause/resume/archive/restore, versioning without history rewrite, finish/Undo across Schedule, daily XP cap, quests, Schedule-created minimal session + enrichment + revert, skip earns nothing, conflict, records by exercise/equipment/load, DST week mapping, partner privacy). Unit: `ptPlan.test.ts` 15, `progress.test.ts`, `offline.test.ts`, `measurements.test.ts`, `OfflineSyncEngine.fitness.test.ts`. Typecheck/lint clean. Fixture screenshots (CDP device emulation, 390×844 blue + frost, 1280 pink). Deployment and phone acceptance: HLTH-29.
 
 ### HLTH-27
 
@@ -1123,6 +1154,7 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 ## Shipped Log
 
+- ✅ 2026-10-12 — **HLTH-28** Fitness module: PT plan import (contract/schema/examples/AI prompt), weekly flexible Schedule slots, workout logging + rest timer + offline queue, deterministic rewards/quests/badges/records/ranks, shared owner-private measurements + BMI, partner opt-in summary ([criteria](<Healthcare — Master Book.md#hlth-28>); PGlite 16/16, unit tests, typecheck + lint; `migrations/2026-10-12_fitness-module.sql` **code-complete, not yet run** — HLTH-29)
 - ✅ 2026-09-26 — **HLTH-24** Medications: list (dose, full course / as needed, food timing, dose times, course length), day-by-day taken checklist, one urgent recurring Schedule reminder per dose time synced both ways with the checklist (`migrations/2026-09-26_healthcare-medications.sql` — **code-complete, migration not yet run**, HLTH-25; PGlite fixtures 31/31, `medicationSchedule.test.ts` 14/14, typecheck + lint clean)
 - ✅ 2026-09-26 — **HLTH-8** Idempotent medication storage and materialization — delivered inside HLTH-24 (same evidence; migration pending HLTH-25)
 

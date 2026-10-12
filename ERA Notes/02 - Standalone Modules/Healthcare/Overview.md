@@ -40,6 +40,12 @@ Family health profiles: allergies (junction → Recipes warnings), medical histo
 - **Checklist math** is `src/lib/health/medicationSchedule.ts` (pure, tested) — slot generation for one day, course totals/day counter, next dose, as-needed wait. It mirrors the SQL rules; it is not an item-recurrence expansion engine.
 - **UI** `src/app/healthcare/MedicationsSection.tsx`: Doses card with a day switcher, connected daily timeline, circular Taken/Not taken toggles and progress for scheduled doses. As-needed medicines have circular Take controls; named Morning/Evening opportunities show their own Taken/Not taken state and toggle by log ID. Mutations retain Undo. The Medications card opens a row for editing.
 
+### Body measurements (HLTH-28, 2026-10-12)
+
+- `health_measurements`: timestamped weight (kg) / height (cm) per profile, `source` = `healthcare` | `fitness`. **Owner-private** — RLS `managing_user_id = auth.uid()` (stamped by `health_child_sync_managing_user()`), and deliberately **not** in `get_health_bundle()`, so a shared profile never exposes measurements.
+- Routes `/api/healthcare/measurements` (GET `?profile_id=`, POST with client id = idempotent) and `[id]` (PATCH/DELETE). Shared hooks `src/hooks/useHealthMeasurements.ts` and card `src/components/health/MeasurementsCard.tsx` are used by **both** Healthcare (own profiles only) and Fitness (self profile). BMI math `src/lib/health/measurements.ts` (latest height at/before each weight; informational, `i` popover). Writes need connectivity.
+- Fitness only *links* to the user's self profile (`user_id = auth.uid()`); it offers explicit creation via `useCreateSelfHealthProfile` and never creates one on open. Outfits' `wardrobe_profiles` height/weight remain separate.
+
 ## Database
 
 - All four tables carry **`managing_user_id`** (denormalized on children by the `health_child_sync_managing_user()` BEFORE-trigger from the parent profile) with **owner-only RLS** (`managing_user_id = auth.uid()` FOR ALL). Household visibility happens ONLY inside the two SECURITY DEFINER RPCs — Hard Rule 20 compliant, no EXISTS-subquery policies.
@@ -73,6 +79,8 @@ Family health profiles: allergies (junction → Recipes warnings), medical histo
 - Dose ticks are not queued offline (the health hooks use `safeFetch` without the IndexedDB queue) — offline ticks fail with a toast.
 - Deployment: the owner reported running the earlier Morning/Noon version of `migrations/2026-09-27_medication-prn-slots.sql` on 2026-09-27. Run `migrations/2026-09-27_medication-evening-upgrade.sql` to change current options to Morning/Evening while preserving historical Noon logs. Owner report is not a live DB or phone verification.
 - Health `requestJson` calls for medication writes pass `timeoutMs: 30_000` (Google sync runs inside the request).
+
+- **Measurements are not shared** even when `shared_with_household = true`, and they render only on profiles the viewer manages. Migration `2026-10-12_fitness-module.sql` (owner-run, needs SCH-24 first).
 
 ## See Also
 

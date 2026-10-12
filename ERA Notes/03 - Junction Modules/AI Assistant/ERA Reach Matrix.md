@@ -49,5 +49,6 @@ Generated from `src/features/era/reach.ts` by `src/features/era/reach.test.ts` (
 | Plan My Day | ✓ `/today` | – | – | – |  |
 | Healthcare | ✓ `/healthcare` | – | – | – | Dose log waits on HLTH-19/25. |
 | Outfits | ✓ `/outfits` | – | – | – |  |
+| Fitness | ✓ `/fitness` | – | – | – | Read seam: summarizeFitness(); commands out of v1. |
 | Activity Log | ✓ `/activity-log` | – | activity.read | – | Needs HUB-72's owner SQL. |
 <!-- reach-matrix:end -->

@@ -61,6 +61,7 @@ export const ERA_REACH: ReachRow[] = [
   { module: "Plan My Day", route: "/today", label: "Plan my day", words: ["plan my day", "day plan", "today plan"], prefill: false, inline: [], verified: false },
   { module: "Healthcare", route: "/healthcare", label: "Healthcare", words: ["healthcare", "health", "medications", "meds"], prefill: false, inline: [], verified: false, note: "Dose log waits on HLTH-19/25." },
   { module: "Outfits", route: "/outfits", label: "Outfits", words: ["outfits", "wardrobe", "closet"], prefill: false, inline: [], verified: false },
+  { module: "Fitness", route: "/fitness", label: "Fitness", words: ["fitness", "workout", "workouts", "gym", "training"], prefill: false, inline: [], verified: false, note: "Read seam: summarizeFitness(); commands out of v1." },
   { module: "Activity Log", route: "/activity-log", label: "Activity", words: ["activity", "activity log", "history"], prefill: false, inline: ["activity.read"], verified: false, note: "Needs HUB-72's owner SQL." },
 ];
 

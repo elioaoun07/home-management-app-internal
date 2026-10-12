@@ -22,7 +22,7 @@ Start with a campaign checklist. The eleven checklists form **one backlog**, gro
 | Trips | Planner, packing/documents, trip lifecycle and trip-side integrations | 19 | [Backlog](<Trips/4 - Checklist.md>) · [Master Book](<Trips/Trips — Master Book.md>) |
 | Hub & ERA | Hub/ERA/Brain, household sharing, shared sync/offline, message actions, guest access, theme/person identity, AI usage/errors | 41 | [Backlog](<Hub & ERA/4 - Checklist.md>) · [Master Book](<Hub & ERA/Hub & ERA — Master Book.md>) |
 | Notifications & Alerts | Notification policy, drawer/Alerts, push and Google alarm transport evidence | 12 | [Backlog](<Notifications & Alerts/4 - Checklist.md>) · [Master Book](<Notifications & Alerts/Notifications & Alerts — Master Book.md>) |
-| Healthcare | Health profiles, allergies, medications and care-reference consumers | 17 | [Backlog](<Healthcare/4 - Checklist.md>) · [Master Book](<Healthcare/Healthcare — Master Book.md>) |
+| Healthcare | Health profiles, allergies, medications, body measurements, Fitness and care-reference consumers | 18 | [Backlog](<Healthcare/4 - Checklist.md>) · [Master Book](<Healthcare/Healthcare — Master Book.md>) |
 | Outfits | Personal wardrobe, outfit builder/plans and wear history | 12 | [Backlog](<Outfits/4 - Checklist.md>) · [Master Book](<Outfits/Outfits — Master Book.md>) |
 | PM Tooling | PM desktop/static/mobile reading, task identity and governance; Atlas tooling | 17 | [Backlog](<PM Tooling/4 - Checklist.md>) · [Master Book](<PM Tooling/PM Tooling — Master Book.md>) |
 | Delivery | V1 operation and V2 execution boundary/value trial | 12 | [Backlog](<Delivery/4 - Checklist.md>) · [Master Book](<Delivery/Delivery — Master Book.md>) |

@@ -1,0 +1,157 @@
+{
+  "schema_version": "era.fitness.pt-plan.v1",
+  "name": "Upper / Lower + Mobility",
+  "trainer": "Synthetic PT",
+  "goal": "General strength",
+  "duration_weeks": 8,
+  "workout_order": ["upper", "lower", "upper", "mobility"],
+  "workouts": [
+    {
+      "id": "upper",
+      "name": "Upper",
+      "kind": "strength",
+      "estimated_minutes": 55,
+      "notes": null,
+      "exercises": [
+        {
+          "id": "band-pull-apart",
+          "name": "Band pull-apart",
+          "phase": "warmup",
+          "equipment": "Band",
+          "group_id": null,
+          "group_mode": "straight",
+          "sets": [
+            { "kind": "warmup", "reps_min": 15, "reps_max": 15, "duration_seconds": null, "distance_m": null, "load_kg": null, "load_kind": "unspecified", "rpe": null, "rir": null, "rest_seconds": null, "tempo": null, "notes": null }
+          ],
+          "notes": null
+        },
+        {
+          "id": "bench-press",
+          "name": "Bench press",
+          "phase": "main",
+          "equipment": "Barbell",
+          "group_id": null,
+          "group_mode": "straight",
+          "sets": [
+            { "kind": "warmup", "reps_min": 10, "reps_max": 10, "duration_seconds": null, "distance_m": null, "load_kg": 20, "load_kind": "external", "rpe": null, "rir": null, "rest_seconds": 60, "tempo": null, "notes": "Empty bar" },
+            { "kind": "working", "reps_min": 8, "reps_max": 12, "duration_seconds": null, "distance_m": null, "load_kg": null, "load_kind": "external", "rpe": 8, "rir": null, "rest_seconds": 120, "tempo": "3-1-1-0", "notes": null },
+            { "kind": "working", "reps_min": 8, "reps_max": 12, "duration_seconds": null, "distance_m": null, "load_kg": null, "load_kind": "external", "rpe": 8, "rir": null, "rest_seconds": 120, "tempo": "3-1-1-0", "notes": null },
+            { "kind": "working", "reps_min": 8, "reps_max": 12, "duration_seconds": null, "distance_m": null, "load_kg": null, "load_kind": "external", "rpe": 8, "rir": null, "rest_seconds": 120, "tempo": "3-1-1-0", "notes": null }
+          ],
+          "notes": "Add 2.5 kg when all sets reach 12 reps."
+        },
+        {
+          "id": "db-row",
+          "name": "Dumbbell row",
+          "phase": "main",
+          "equipment": "Dumbbell",
+          "group_id": "a",
+          "group_mode": "superset",
+          "sets": [
+            { "kind": "working", "reps_min": 10, "reps_max": 10, "duration_seconds": null, "distance_m": null, "load_kg": 22.5, "load_kind": "external", "rpe": null, "rir": 2, "rest_seconds": 0, "tempo": null, "notes": "Source: 50 lb per hand" },
+            { "kind": "working", "reps_min": 10, "reps_max": 10, "duration_seconds": null, "distance_m": null, "load_kg": 22.5, "load_kind": "external", "rpe": null, "rir": 2, "rest_seconds": 0, "tempo": null, "notes": null },
+            { "kind": "working", "reps_min": 10, "reps_max": 10, "duration_seconds": null, "distance_m": null, "load_kg": 22.5, "load_kind": "external", "rpe": null, "rir": 2, "rest_seconds": 0, "tempo": null, "notes": null }
+          ],
+          "notes": "Per hand."
+        },
+        {
+          "id": "push-up",
+          "name": "Push-up",
+          "phase": "main",
+          "equipment": null,
+          "group_id": "a",
+          "group_mode": "superset",
+          "sets": [
+            { "kind": "working", "reps_min": null, "reps_max": null, "duration_seconds": null, "distance_m": null, "load_kg": null, "load_kind": "bodyweight", "rpe": null, "rir": 1, "rest_seconds": 90, "tempo": null, "notes": "AMRAP" },
+            { "kind": "working", "reps_min": null, "reps_max": null, "duration_seconds": null, "distance_m": null, "load_kg": null, "load_kind": "bodyweight", "rpe": null, "rir": 1, "rest_seconds": 90, "tempo": null, "notes": "AMRAP" },
+            { "kind": "working", "reps_min": null, "reps_max": null, "duration_seconds": null, "distance_m": null, "load_kg": null, "load_kind": "bodyweight", "rpe": null, "rir": 1, "rest_seconds": 90, "tempo": null, "notes": "AMRAP" }
+          ],
+          "notes": "Rest 90 s after each round."
+        },
+        {
+          "id": "doorway-stretch",
+          "name": "Doorway pec stretch",
+          "phase": "cooldown",
+          "equipment": null,
+          "group_id": null,
+          "group_mode": "straight",
+          "sets": [
+            { "kind": "working", "reps_min": null, "reps_max": null, "duration_seconds": 45, "distance_m": null, "load_kg": null, "load_kind": "bodyweight", "rpe": null, "rir": null, "rest_seconds": null, "tempo": null, "notes": null }
+          ],
+          "notes": null
+        }
+      ]
+    },
+    {
+      "id": "lower",
+      "name": "Lower",
+      "kind": "strength",
+      "estimated_minutes": 60,
+      "notes": null,
+      "exercises": [
+        {
+          "id": "bike",
+          "name": "Bike",
+          "phase": "warmup",
+          "equipment": "Stationary bike",
+          "group_id": null,
+          "group_mode": "straight",
+          "sets": [
+            { "kind": "warmup", "reps_min": null, "reps_max": null, "duration_seconds": 300, "distance_m": null, "load_kg": null, "load_kind": "unspecified", "rpe": null, "rir": null, "rest_seconds": null, "tempo": null, "notes": null }
+          ],
+          "notes": null
+        },
+        {
+          "id": "squat",
+          "name": "Back squat",
+          "phase": "main",
+          "equipment": "Barbell",
+          "group_id": null,
+          "group_mode": "straight",
+          "sets": [
+            { "kind": "working", "reps_min": 5, "reps_max": 5, "duration_seconds": null, "distance_m": null, "load_kg": null, "load_kind": "external", "rpe": null, "rir": 2, "rest_seconds": 180, "tempo": null, "notes": null },
+            { "kind": "working", "reps_min": 5, "reps_max": 5, "duration_seconds": null, "distance_m": null, "load_kg": null, "load_kind": "external", "rpe": null, "rir": 2, "rest_seconds": 180, "tempo": null, "notes": null },
+            { "kind": "working", "reps_min": 5, "reps_max": 5, "duration_seconds": null, "distance_m": null, "load_kg": null, "load_kind": "external", "rpe": null, "rir": 2, "rest_seconds": 180, "tempo": null, "notes": null }
+          ],
+          "notes": null
+        },
+        {
+          "id": "walk",
+          "name": "Incline walk",
+          "phase": "cooldown",
+          "equipment": "Treadmill",
+          "group_id": null,
+          "group_mode": "straight",
+          "sets": [
+            { "kind": "working", "reps_min": null, "reps_max": null, "duration_seconds": 600, "distance_m": 1000, "load_kg": null, "load_kind": "unspecified", "rpe": null, "rir": null, "rest_seconds": null, "tempo": null, "notes": "Source: 0.6 mi" }
+          ],
+          "notes": null
+        }
+      ]
+    },
+    {
+      "id": "mobility",
+      "name": "Mobility",
+      "kind": "mobility",
+      "estimated_minutes": 20,
+      "notes": null,
+      "exercises": [
+        {
+          "id": "flow",
+          "name": "Hip flow",
+          "phase": "main",
+          "equipment": "Mat",
+          "group_id": null,
+          "group_mode": "straight",
+          "sets": [
+            { "kind": "working", "reps_min": null, "reps_max": null, "duration_seconds": 600, "distance_m": null, "load_kg": null, "load_kind": "bodyweight", "rpe": null, "rir": null, "rest_seconds": null, "tempo": null, "notes": null }
+          ],
+          "notes": null
+        }
+      ]
+    }
+  ],
+  "progression_notes": "Add load when the top of the rep range is reached on every set.",
+  "source_notes": "Synthetic fixture; not a real person's plan.",
+  "issues": []
+}

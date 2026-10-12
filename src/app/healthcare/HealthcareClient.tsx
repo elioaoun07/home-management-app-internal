@@ -27,12 +27,15 @@ import type {
   HealthProfile,
   HealthVaccine,
 } from "@/features/healthcare/types";
+import { MeasurementsCard } from "@/components/health/MeasurementsCard";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { supabaseBrowser } from "@/lib/supabase/client";
 import { deriveDefaultKeywords } from "@/lib/health/allergenMatch";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
   HeartPulse,
+  Scale,
   Loader2,
   Pencil,
   Plus,
@@ -41,7 +44,7 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal, inputCls, labelCls } from "./healthUi";
 import { MedicationsSection } from "./MedicationsSection";
 
@@ -589,6 +592,11 @@ type ModalState =
 export default function HealthcareClient() {
   const tc = useThemeClasses();
   const { data: bundle, isLoading } = useHealthBundle();
+  // Measurements are owner-private: shown only on profiles this user manages.
+  const [uid, setUid] = useState<string | null>(null);
+  useEffect(() => {
+    supabaseBrowser().auth.getSession().then(({ data }) => setUid(data.session?.user.id ?? null));
+  }, []);
   const deleteProfile = useDeleteHealthProfile();
   const deleteAllergy = useDeleteHealthAllergy();
   const deleteCondition = useDeleteHealthCondition();
@@ -719,6 +727,16 @@ export default function HealthcareClient() {
                   </div>
                 </div>
               </Card>
+
+              {activeProfile.managing_user_id === uid && (
+                <Card className={cn("p-4", tc.surfaceBg, "border-white/10")}>
+                  <h2 className="text-base font-medium text-white flex items-center gap-2 mb-3">
+                    <Scale className="w-4 h-4 text-cyan-400" />
+                    Measurements
+                  </h2>
+                  <MeasurementsCard profileId={activeProfile.id} source="healthcare" />
+                </Card>
+              )}
 
               <MedicationsSection
                 profile={activeProfile}

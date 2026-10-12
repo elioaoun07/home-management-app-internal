@@ -132,6 +132,7 @@ export default function MobileNav() {
     "/today",
     "/outfits",
     "/healthcare",
+    "/fitness",
     "/pm/live",
     "/activity-log",
     // Focused workbench with its own sticky commit bar at the bottom.

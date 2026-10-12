@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-26
+updated: 2026-10-12
 type: checklist
 status: active
 owner: Elio
@@ -14,6 +14,7 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 
 ## Now
 
+- [ ] **HLTH-29** Apply the Fitness migration and accept Fitness on phone — [criteria](<Healthcare — Master Book.md#hlth-29>) _(blocker - S)_
 - [ ] **HLTH-25** Apply the medications migration and accept doses + reminders on phone — [criteria](<Healthcare — Master Book.md#hlth-25>) _(blocker - S)_
 - [ ] **HLTH-7** Verify core deployment, household privacy and mobile use — [criteria](<Healthcare — Master Book.md#hlth-7>) _(blocker - S)_
 - [ ] **HLTH-19** Establish medication safety and privacy contracts — [criteria](<Healthcare — Master Book.md#hlth-19>) _(friction - M)_

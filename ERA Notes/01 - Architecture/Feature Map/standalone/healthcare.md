@@ -16,9 +16,10 @@ Family health profiles: medications (dose checklist + Schedule reminders), aller
 - **Types**: `src/features/healthcare/types.ts`
 - **API routes**: `src/app/api/healthcare/route.ts` (GET bundle) + `allergens/`, `profiles/`, `allergies/`, `conditions/`, `vaccines/` (each with `[id]/`) + `medications/` (`[id]/`, `[id]/doses/`)
 - **Medication helpers**: `src/lib/health/medicationSchedule.ts` (dose-slot math, tested) · `src/lib/health/medicationServer.ts` (server-only Zod, RPC errors, Google sync)
+- **Measurements (shared with Fitness)**: `src/app/api/healthcare/measurements/` (+ `[id]/`) · `src/lib/health/measurements.ts` · `src/hooks/useHealthMeasurements.ts` · `src/components/health/MeasurementsCard.tsx` (rendered in `HealthcareClient.tsx` for own profiles)
 - **Allergen matcher**: `src/lib/health/allergenMatch.ts` · shared feed hook `src/hooks/useHouseholdAllergens.ts`
 - **Recipe warning components**: `src/components/web/RecipeAllergenWarning.tsx`
-- **DB tables**: `health_profiles`, `health_allergies`, `health_conditions`, `health_vaccines`, `health_medications`, `health_medication_logs` (+ `items.source_medication_id`)
+- **DB tables**: `health_measurements` (owner-private), `health_profiles`, `health_allergies`, `health_conditions`, `health_vaccines`, `health_medications`, `health_medication_logs` (+ `items.source_medication_id`)
 
 ## Common edit scenarios
 
@@ -34,4 +35,5 @@ Family health profiles: medications (dose checklist + Schedule reminders), aller
 - **Household Sharing** — asymmetric: profiles private by default (`shared_with_household` opt-in), allergies always household-visible via `get_household_allergens()`.
 - **Sync & Offline** — allergen feed persisted (`household-allergens` STABLE_KEYS entry in `src/app/providers.tsx`).
 - **Items/Reminders** — each course dose time is an urgent recurring reminder item (`items.source_medication_id`); completing it in Schedule ticks the dose (DB trigger). Google Calendar sync best-effort (verified status = HLTH-9).
+- **Fitness** — reads/writes the same `health_measurements`; links to the self profile only.
 - **Planned:** Catalogue (Phase 3 doctors/insurance), Hub Chat + AI briefing (Phase 4).

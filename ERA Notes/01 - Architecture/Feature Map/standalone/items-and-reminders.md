@@ -78,6 +78,7 @@ The Schedule module covers everything time-bound: reminders, tasks, events, recu
 
 - **Complete creation (SCH-24, 2026-10-11):** `src/lib/items/createContract.ts` → `/api/items` → `create_item_complete` RPC. `useItems.ts` create hooks and offline replay share this source boundary; no browser multi-write create path. `migrations/2026-10-11_atomic-item-create.sql` is owner-run, unapplied. Actual migration/rollback fixtures: `src/lib/items/create.database.test.ts`; route tests beside both item/prerequisite routes. Unknown acknowledgements hold queued creates via `src/lib/offlineQueue.ts` / `offlineSyncEngine.ts`, never auto-retry them.
 
+- **Fitness slot items (HLTH-28, 2026-10-12):** private weekly flexible reminders created by `fitness_activate_plan` through `create_item_complete` (`metadata_json.fitness.{plan_id,slot_index}`, linked from `fitness_plan_slots.item_id`). Completing one in Schedule fires `fitness_mirror_occurrence_action` (creates/completes the Fitness session); pause/archive set `items.archived_at`. Change them from Fitness.
 - **Read `migrations/schema.sql`** for items first; it has 7+ child tables and column meanings are not obvious.
 - **Never** add `EXISTS`-subquery RLS to child tables (`item_alerts`, `item_subtasks`, etc.). Use `get_schedule_bundle` or a denormalized `user_id` column with a direct RLS policy. See Hard Rule #20.
 - The hot read path is **one RPC call**, not 7 queries. Do not fan out reads; extend the RPC.

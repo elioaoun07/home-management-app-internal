@@ -32,6 +32,8 @@ export const qk = {
   // Schedule items root (== itemsKeys.all in src/features/items) — for
   // cross-module invalidation, e.g. Healthcare medication reminders.
   scheduleItems: () => ["items"] as const,
+  // Flexible routine slots root (== flexibleRoutinesKeys.all) — Fitness slots.
+  flexibleRoutines: () => ["flexible-routines"] as const,
 
   // NFC tags
   nfcTags: () => ["nfc-tags"] as const,
