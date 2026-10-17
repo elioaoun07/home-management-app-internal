@@ -465,7 +465,7 @@ function Wizard({ value, setValue, onClose }) {
                       {providerCaps.defaultModel ? ` (${providerCaps.defaultModel})` : ""}
                     </option>
                     {models.map((m) => (
-                      <option key={m.id} value={m.id}>{m.label || m.id}</option>
+                      <option key={m.id} value={m.id} disabled={m.disabled}>{m.label || m.id}</option>
                     ))}
                   </select>
                 </div>

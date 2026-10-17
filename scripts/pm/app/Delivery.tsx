@@ -423,7 +423,7 @@ function LaunchWork({ work }: { work: Work }) {
                   Suggested{rec ? " · " + rec.model : ""}
                 </option>
                 {caps.data?.providers[provider]?.models?.map((value) => (
-                  <option value={value.id} key={value.id}>
+                  <option value={value.id} key={value.id} disabled={value.disabled}>
                     {value.label || value.id}
                   </option>
                 ))}

@@ -527,7 +527,7 @@ export function LaunchV2({ work }: { work: Work }) {
               >
                 <option value="">Default</option>
                 {chosen.models.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
+                  <option key={entry.id} value={entry.id} disabled={entry.disabled}>
                     {entry.label || entry.id}
                   </option>
                 ))}

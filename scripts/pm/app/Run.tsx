@@ -927,7 +927,7 @@ function Manage({
               >
                 <option value="">Default</option>
                 {caps.data?.providers[provider]?.models.map((value) => (
-                  <option value={value.id} key={value.id}>
+                  <option value={value.id} key={value.id} disabled={value.disabled}>
                     {value.label || value.id}
                   </option>
                 ))}

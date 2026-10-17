@@ -956,6 +956,9 @@ function validateAgentConfig(ctx, agent, { model, effort }) {
   if (model != null && providerCfg && providerCfg.models && providerCfg.models.length && !isKnownModel(config, agent, model)) {
     throw fail(400, `unknown model "${model}" for provider "${agent}"`);
   }
+  if (model != null && getModelInfo(config, agent, model)?.disabled) {
+    throw fail(400, `model "${model}" is disabled for provider "${agent}"`);
+  }
   if (effort && typeof effort === "object") {
     for (const [phase, value] of Object.entries(effort)) {
       if (value != null && !isKnownEffort(config, agent, value)) {

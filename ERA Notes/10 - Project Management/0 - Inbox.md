@@ -13,6 +13,8 @@ owner: Elio
 ## New
 
 Add raw ideas here. Triage assigns an owner and either a canonical task, a decision or a research option; capture is not implementation approval.
+- [ ] Personal feeling status: Meter for relaxed, andry, happy,... Available for work, need rest...
+- [ ] New hook: Personal feeling status: Meter for relaxed, andry, happy,... Available for work, need rest...
 
 ## Processed
 

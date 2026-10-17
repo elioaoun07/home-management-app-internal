@@ -581,6 +581,22 @@ describe("POST /api/delivery/start", () => {
     );
   });
 
+  it("rejects a disabled catalog model with 400", async () => {
+    const { ctx } = setup({
+      deliveryConfig: {
+        providers: { claude: { defaultModel: "claude-sonnet-5", efforts: ["low", "medium", "high", "xhigh", "max"], models: [{ id: "claude-sonnet-5" }, { id: "claude-off", disabled: true }] } },
+      },
+    });
+    await expectRouteError(
+      routeDelivery(
+        { method: "POST", path: "/api/delivery/start", query: q(), body: startBody({ model: "claude-off" }) },
+        ctx,
+      ),
+      400,
+      /disabled/,
+    );
+  });
+
   it("(DW-2) accepts any model string when the provider's catalog is empty (no config.json yet)", async () => {
     const { ctx } = setup();
     const result = await routeDelivery(

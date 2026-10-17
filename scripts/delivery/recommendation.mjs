@@ -549,7 +549,7 @@ function pickModelForTier(config, provider, tier) {
   } catch {
     return null;
   }
-  const match = (providerCfg.models || []).find((m) => m.tier === tier);
+  const match = (providerCfg.models || []).find((m) => m.tier === tier && !m.disabled);
   return match ? match.id : null;
 }
 

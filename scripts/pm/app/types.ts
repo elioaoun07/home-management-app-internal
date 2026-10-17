@@ -218,7 +218,7 @@ export interface CheckReport {
   >;
 }
 export interface Provider {
-  models: { id: string; label?: string; tier?: string }[];
+  models: { id: string; label?: string; tier?: string; disabled?: boolean }[];
   defaultModel?: string;
   efforts?: string[];
   manifest?: { supportsAbort?: boolean };
@@ -652,7 +652,7 @@ export interface V2Executor {
   qualified: boolean;
   refusals: { code: string; detail: unknown; action?: string }[];
   qualification: { ref: string | null; refusals: { code: string; detail: unknown }[] };
-  models: { id: string; label: string | null; efforts: string[] | null }[];
+  models: { id: string; label: string | null; efforts: string[] | null; disabled?: boolean }[];
   suggestions: Record<string, { model: string | null; effort: string | null; reason: string | null } | null>;
 }
 export interface V2Catalogue {

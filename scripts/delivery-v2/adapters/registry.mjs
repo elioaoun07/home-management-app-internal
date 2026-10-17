@@ -85,6 +85,7 @@ export const EXECUTORS = deepFreeze([
 export const SETTINGS_REFUSALS = Object.freeze({
   EFFORT: "unsupported-effort",
   MODEL: "model-not-in-catalog",
+  MODEL_DISABLED: "model-disabled",
   MODEL_EFFORT: "effort-not-offered-for-model",
 });
 
@@ -97,7 +98,7 @@ export const SETTINGS_REFUSALS = Object.freeze({
  * which is recorded afterwards from what the executor reports.
  *
  * @param {{executor:unknown, model?:(string|null), effort?:(string|null),
- *   catalog?:({revision?:(number|null), models?:Record<string, {id:string, efforts?:string[], observedAs?:string[]}[]>}|null)}} input
+ *   catalog?:({revision?:(number|null), models?:Record<string, {id:string, efforts?:string[], disabled?:boolean, observedAs?:string[]}[]>}|null)}} input
  */
 export function validateRunSettings({ executor, model = null, effort = null, catalog = null }) {
   const entry = resolveExecutorChoice(executor);
@@ -121,6 +122,9 @@ export function validateRunSettings({ executor, model = null, effort = null, cat
   const modelEntry = cleanModel ? listed.find((candidate) => candidate.id === cleanModel) || null : null;
   if (cleanModel && !modelEntry) {
     refusals.push({ code: SETTINGS_REFUSALS.MODEL, detail: cleanModel + " is not in this installation's " + entry.label + " catalog" });
+  }
+  if (modelEntry && modelEntry.disabled === true) {
+    refusals.push({ code: SETTINGS_REFUSALS.MODEL_DISABLED, detail: cleanModel + " is disabled in this installation's " + entry.label + " catalog" });
   }
   if (modelEntry && cleanEffort && Array.isArray(modelEntry.efforts) && !modelEntry.efforts.includes(cleanEffort)) {
     refusals.push({ code: SETTINGS_REFUSALS.MODEL_EFFORT, detail: cleanModel + " does not offer " + cleanEffort });

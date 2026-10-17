@@ -380,6 +380,9 @@ export function validateExecutionPolicy(raw) {
         continue;
       }
       const efforts = Array.isArray(entry.efforts) ? entry.efforts : null;
+      if (entry.disabled !== undefined && typeof entry.disabled !== "boolean") {
+        bad(POLICY_REFUSALS.INVALID, "catalog model " + entry.id + " disabled must be true or false");
+      }
       for (const effort of efforts || []) {
         if (!executor.supportedEfforts.includes(effort)) {
           bad(POLICY_REFUSALS.INVALID, "catalog model " + entry.id + " lists effort " + String(effort) + ", which " + executor.label + " does not accept");
@@ -389,6 +392,7 @@ export function validateExecutionPolicy(raw) {
         id: entry.id,
         label: isNonEmptyString(entry.label) ? entry.label : null,
         efforts: efforts ? [...efforts] : null,
+        disabled: entry.disabled === true,
         observedAs: Array.isArray(entry.observedAs) ? entry.observedAs.filter(isNonEmptyString) : [],
       });
     }

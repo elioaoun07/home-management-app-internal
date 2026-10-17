@@ -17,7 +17,7 @@ export class ConfigError extends Error {}
 export const SCHEMA_VERSION = 1;
 
 /** @typedef {{inPerMTok:number, cachedReadPerMTok:number, cacheWritePerMTok:number, outPerMTok:number}} ModelPricing */
-/** @typedef {{id:string, label?:string, contextWindow?:number, pricing?:ModelPricing}} ModelEntry */
+/** @typedef {{id:string, label?:string, contextWindow?:number, pricing?:ModelPricing, disabled?:boolean}} ModelEntry */
 /** @typedef {{defaultModel:(string|null), efforts:string[], models:ModelEntry[]}} ProviderConfig */
 /**
  * The resolved delivery config — owner `.delivery/config.json` deep-merged over
@@ -302,7 +302,7 @@ const VALIDATION_RUNG_KEYS = new Set(["typecheck", "lint", "test"]);
 const VALIDATION_LANES = new Set(["instant", "fast", "standard", "deep"]);
 const VALIDATION_LANE_KEYS = new Set(["rungs", "targetedTest"]);
 const PROVIDER_KEYS = new Set(["defaultModel", "efforts", "models"]);
-const MODEL_KEYS = new Set(["id", "label", "tier", "contextWindow", "pricing"]);
+const MODEL_KEYS = new Set(["id", "label", "tier", "contextWindow", "pricing", "disabled"]);
 const PRICING_KEYS = new Set(["inPerMTok", "cachedReadPerMTok", "cacheWritePerMTok", "outPerMTok"]);
 const BUDGET_KEYS = new Set([
   "laneDefaults",
@@ -372,6 +372,7 @@ export function validateConfig(raw) {
           if (typeof model.id !== "string" || !model.id) throw validationError(`${path}.id`, "is required and must be a non-empty string");
           assertOptionalString(model.label, `${path}.label`); assertOptionalString(model.tier, `${path}.tier`);
           assertOptionalNumber(model.contextWindow, `${path}.contextWindow`, { integer: true });
+          if (model.disabled !== undefined && typeof model.disabled !== "boolean") throw validationError(`${path}.disabled`, "must be a boolean");
           if (model.pricing !== undefined) {
             assertPlainObject(model.pricing, `${path}.pricing`); assertKnownKeys(model.pricing, PRICING_KEYS, `${path}.pricing`);
             for (const key of PRICING_KEYS) assertOptionalNumber(model.pricing[key], `${path}.pricing.${key}`);
