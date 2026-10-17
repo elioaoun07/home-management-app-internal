@@ -18,6 +18,8 @@ export const prerequisiteSchema = z.object({
 });
 
 export const createItemSchema = z.object({
+  // Client-chosen identity: a repeat of the same id returns the item instead of a second one
+  id: z.uuid().optional(),
   type: z.enum(["reminder", "task", "event"]),
   title: z.string().trim().min(1).max(1000),
   description: z.string().nullable().optional(),
@@ -108,6 +110,34 @@ export function prepareItemCreate(input: unknown, now = new Date()): CreateItemB
   body.subtasks = body.subtasks.map((s, i) => ({ ...s, order_index: s.order_index ?? i }));
   return body;
 }
+
+/** Items per bulk request; the RPC enforces the same ceiling. */
+export const BULK_ITEMS_MAX = 50;
+
+/** Bulk create needs every item to carry its own id, which is what makes a retry safe. */
+export const bulkCreateItemsSchema = z.object({
+  items: z.array(createItemSchema).min(1).max(BULK_ITEMS_MAX),
+}).strict().superRefine((body, ctx) => {
+  const seen = new Set<string>();
+  body.items.forEach((item, index) => {
+    const path = ["items", index, "id"];
+    if (!item.id) ctx.addIssue({ code: "custom", path, message: "Bulk items need an id" });
+    else if (seen.has(item.id)) ctx.addIssue({ code: "custom", path, message: "Duplicate id" });
+    else seen.add(item.id);
+  });
+});
+export type BulkCreateItemsBody = z.infer<typeof bulkCreateItemsSchema>;
+
+export const bulkCreateReceiptSchema = z.object({
+  items: z.array(z.object({ id: z.string().min(1) }).passthrough()),
+  failed: z.array(z.object({ index: z.number().int().min(0), code: z.string() })),
+  completion: z.object({ status: z.enum(["complete", "partial"]) }).passthrough(),
+});
+export type BulkCreateReceipt = z.infer<typeof bulkCreateReceiptSchema>;
+
+export const bulkDeleteItemsSchema = z.object({
+  ids: z.array(z.uuid()).min(1).max(100),
+}).strict();
 
 export const itemCreateReceiptSchema = z.object({
   item: z.object({ id: z.string().min(1) }).passthrough(),

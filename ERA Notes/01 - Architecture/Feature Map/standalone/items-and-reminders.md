@@ -46,6 +46,7 @@ The Schedule module covers everything time-bound: reminders, tasks, events, recu
   - `src/components/web/ItemSubtasks.tsx`
 - **Hooks (data + mutations)**:
   - `src/features/items/useItems.ts` - primary list + bundle reader
+  - `src/features/items/bulkItems.ts` - bulk create/delete: optimistic rows, client ids, retry, offline queue (`useBulkItems`; SCH-25)
   - `src/features/items/useItemActions.ts` - create / update / delete / complete
   - `src/features/items/useFlexibleRoutines.ts`
   - `src/features/items/useReminderTemplates.ts`
@@ -53,6 +54,7 @@ The Schedule module covers everything time-bound: reminders, tasks, events, recu
   - `src/features/catalogue/hooks.ts` - catalogue templates used by mobile Assign
 - **API routes (under `src/app/api/items/`)**:
   - `route.ts` - list + create
+  - `bulk/route.ts` - bulk create (≤50, client ids, per-item outcome) + bulk delete
   - `[id]/route.ts` - update + delete + complete
   - `[id]/prerequisites/route.ts` - see [../junction/prerequisites.md](../junction/prerequisites.md)
   - `[id]/subtasks/route.ts` (under `src/app/api/subtasks/`)

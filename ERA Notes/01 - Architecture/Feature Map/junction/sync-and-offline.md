@@ -24,6 +24,7 @@ When the network drops, mutations are queued locally and replayed when connectiv
 ## Common edit scenarios
 
 - **"Add a new queueable mutation"** → use `safeFetch()`. Confirmed network failures call `markOffline()`; endpoint timeouts do not enter the queue.
+- **"Write many rows at once"** → never loop a mutation. Follow the item bulk path: `src/features/items/bulkItems.ts` (optimistic rows, client ids, same-id retry, one queued operation), `src/app/api/items/bulk/route.ts`, `removeQueuedItemCreates` in `offlineQueue.ts`, bulk branch in `offlineSyncEngine.ts` (SCH-25; other flows: HUB-116).
 - **"Edit the offline indicator UI"** → wherever it's rendered — usually `MobileNav` or header. Check `src/components/layouts/MobileNav.tsx`.
 
 ## Gotchas

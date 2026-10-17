@@ -44,7 +44,7 @@ Responsive chore agenda: Me | Both | partner tabs, collapsible week strip, focus
 - **"Which chores land in a week / what can be assigned"** → `choreWeek.ts` (add a test in `choreWeek.test.ts`).
 - **"Edit check-in behavior"** → `ChoreCheckInPanel.tsx` + `useChoreSlotActions`.
 - **"Chore definitions"** → Catalogue → Chores (`src/components/web/WebCatalogue.tsx`).
-- **"Assign form / room tiles / assign all / save or discard staged chores"** → `src/components/chores/ChoreAssignPanel.tsx` (+ `useChoreDrafts`), `ChoreRoomTile.tsx`, `roomStyle.tsx` (gradient + SVG per room), `src/features/chores/roomStats.ts`, batch save `placeTemplates` in `useChoreActions.ts`, close guard in `ChoresView.tsx`.
+- **"Assign form / room tiles / assign all / save or discard staged chores"** → `src/components/chores/ChoreAssignPanel.tsx` (+ `useChoreDrafts`), `ChoreRoomTile.tsx`, `roomStyle.tsx` (gradient + SVG per room), `src/features/chores/roomStats.ts`, batch save `placeTemplates` in `useChoreActions.ts` (calls the shared bulk path `src/features/items/bulkItems.ts` → `src/app/api/items/bulk/route.ts`; optimistic rows, idempotent client ids, offline queue — SCH-25), close guard in `ChoresView.tsx`.
 - **"Chores by room / tag a chore with rooms"** → `ChoreItemDialog.tsx` (dedicated chore form: rooms, per-room steps/minutes, N× per period), `RoomsDialog.tsx`, `useHomeRooms` (`src/features/catalogue/hooks.ts`); one to-do per (template, room) in `choreWeek.ts` (`rooms` input), grouping in `ChoresView.tsx` (`todoGroups`), instance title/`room_id` in `src/lib/schedule/catalogueInstance.ts`.
 
 ## Connected modules

@@ -246,20 +246,27 @@ export default function ChoresView({
     setPlanOpen(false);
     drafts.clear();
     const owner = (userId: string | null) => userId ?? undefined;
-    await assign.placeTemplates(
-      entries
-        .filter((e) => e.todo.kind === "template" && e.todo.template)
-        .map((e) => ({
-          tpl: e.todo.template!,
-          date: e.date,
-          time: e.time,
-          responsibleUserId: owner(e.userId),
-          room:
-            e.todo.roomId && e.todo.room
-              ? { id: e.todo.roomId, name: e.todo.room }
-              : undefined,
-        })),
+    const templateEntries = entries.filter(
+      (e) => e.todo.kind === "template" && e.todo.template,
     );
+    const refused = await assign.placeTemplates(
+      templateEntries.map((e) => ({
+        tpl: e.todo.template!,
+        date: e.date,
+        time: e.time,
+        responsibleUserId: owner(e.userId),
+        room:
+          e.todo.roomId && e.todo.room
+            ? { id: e.todo.roomId, name: e.todo.room }
+            : undefined,
+      })),
+      currentUserId,
+    );
+    // What the server refused goes back into the form; nothing is lost
+    for (const position of refused) {
+      const e = templateEntries[position];
+      drafts.stage(e.todo, e.weekStart, e.date, e.time, e.userId);
+    }
     for (const e of entries.filter((x) => x.todo.kind !== "template")) {
       const option = e.todo.days.find((d) => d.date === e.date);
       if (option) await pickDay(e.todo, option, e.time, owner(e.userId));

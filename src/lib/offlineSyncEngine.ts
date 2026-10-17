@@ -199,6 +199,8 @@ class OfflineSyncEngine {
         if (op.reviewRequired) continue;
         result.processed++;
         const itemCreate = op.feature === "item" && op.operation === "create" && op.endpoint === "/api/items";
+        // Bulk requests carry client ids, so replaying one can never duplicate: no review fence
+        const bulkItems = op.feature === "item" && op.endpoint === "/api/items/bulk";
         const pauseItem = async (notSent = false) => {
           const error = notSent ? "Not sent. Queue storage unavailable." : "Save unverified. Check Schedule before retrying.";
           await updateQueuedOperation(op.id, { reviewRequired: true, metadata: { label: `${op.metadata?.label ?? "Item"} / ${notSent ? "Not sent" : "Check Schedule"}` } });
@@ -230,6 +232,8 @@ class OfflineSyncEngine {
             `Max retries exceeded for: ${op.metadata?.label || op.operation}`,
             true,
           );
+          const droppedKeys = FEATURE_QUERY_KEYS[op.feature];
+          if (droppedKeys) this.options.invalidateQueries(droppedKeys);
           this.notifyListeners();
           continue;
         }
@@ -247,7 +251,8 @@ class OfflineSyncEngine {
           const response = await safeFetch(op.endpoint, {
             method: op.method,
             headers: { "Content-Type": "application/json" },
-            timeoutMs: 10_000,
+            // A bulk request carries a whole chunk, so it gets a chunk's budget
+            timeoutMs: bulkItems ? 30_000 : 10_000,
             ...(op.method !== "DELETE" || Object.keys(op.body).length > 0
               ? { body: JSON.stringify(op.body) }
               : {}),
@@ -279,6 +284,17 @@ class OfflineSyncEngine {
             console.log(
               `[OFFLINE] syncEngine: SUCCESS ${op.feature}/${op.operation} (${op.id})`,
             );
+
+            // The server may have refused some items of a bulk create; say so, once
+            const refused =
+              bulkItems && op.method === "POST"
+                ? ((serverResponse as { failed?: unknown[] } | null)?.failed?.length ?? 0)
+                : 0;
+            if (refused > 0) {
+              result.failed++;
+              result.errors.push({ operationId: op.id, error: `${refused} not saved` });
+              this.options.onOperationFailure?.(op, `${refused} not saved`, true);
+            }
 
             // Notify for post-sync reconciliation
             this.options.onOperationSuccess?.(op, serverResponse);
@@ -326,6 +342,9 @@ class OfflineSyncEngine {
               error: errorMessage,
             });
             this.options.onOperationFailure?.(op, errorMessage, true);
+            // Rows shown optimistically for this operation must not outlive it
+            const refusedKeys = FEATURE_QUERY_KEYS[op.feature];
+            if (refusedKeys) this.options.invalidateQueries(refusedKeys);
             this.notifyListeners();
           } else {
             // Server error (5xx) — increment retry, keep in queue

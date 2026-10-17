@@ -30,6 +30,10 @@ PostgreSQL errors mean `rolled_back`; a missing RPC is `not_started`; lost/trans
 
 [Owner-run migration](<../../../migrations/2026-10-11_atomic-item-create.sql>) is unapplied. It includes same-day custom alert offsets (`>= 0`) matching the picker. Recurring custom-time alerts fail validation before saving because the existing cron cannot preserve that clock rule; numeric relative offsets continue through the existing RRule helper. Broader recurrence/alert lifecycle work stays SCH-7/SCH-9. Isolated SQL/API/ERA tests verify rollback, complete children, lost acknowledgement, drafts, trigger transitions and authorization; production enums/RLS and actual push/calendar delivery require owner evidence. See [SCH-24 acceptance](<../../10 - Project Management/Schedule/Schedule — Master Book.md#sch-24>).
 
+## Bulk create — 2026-10-17 (SCH-25)
+
+Creating several items goes through `createItemsBulk` / `deleteItemsBulk` (`src/features/items/bulkItems.ts`, hook `useBulkItems`), not a loop of `useCreate*`. Each item carries a client-generated `id`; `create_item_complete` treats a repeat of an id the caller owns as a **replay** (returns the existing item, `completion.replayed`) and `create_items_bulk` runs up to 50 items, each in its own sub-transaction, returning `{ items, failed: [{ index, code }], completion }` — a bad item fails alone. `POST /api/items/bulk` validates the whole batch (ids required and unique), maps a missing RPC to 501, and backs up to Google Calendar in `after()`; `DELETE /api/items/bulk` removes Google events first, then the rows (Undo of a bulk create). The client inserts optimistic rows into every cached items list, sends 25-item chunks (30 s timeout, two same-id retries), queues a chunk it cannot confirm as one `/api/items/bulk` operation and removes only refused rows. Single `POST /api/items` now also accepts an optional `id`. [Owner-run migration](<../../../migrations/2026-10-17_items-bulk-create.sql>) requires SCH-24's first. Other callers: HUB-116. See [SCH-25](<../../10 - Project Management/Schedule/Schedule — Master Book.md#sch-25>).
+
 ---
 
 ## Quick Reference — "Where do I go to…"
@@ -202,6 +206,7 @@ Helper functions:
 | Route | Methods | Purpose |
 |-------|---------|---------|
 | `route.ts` | POST | Create item (used by offline sync replay) |
+| `bulk/route.ts` | POST, DELETE | Create up to 50 items with client ids / delete many (SCH-25) |
 | `[id]/route.ts` | PATCH, DELETE | Update or delete an item |
 | `[id]/complete/route.ts` | POST | Mark item/occurrence as completed |
 | `[id]/actions/route.ts` | POST | Record occurrence action (complete/postpone/cancel) |

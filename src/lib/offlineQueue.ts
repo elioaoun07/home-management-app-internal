@@ -455,6 +455,44 @@ export async function findPendingOperation(
 }
 
 /**
+ * Take items back out of queued bulk creates (Undo before they reached the
+ * server). Returns the ids that were still waiting in the queue.
+ */
+export async function removeQueuedItemCreates(ids: string[]): Promise<string[]> {
+  const wanted = new Set(ids);
+  const taken: string[] = [];
+  for (const op of await getAllPending()) {
+    if (
+      op.feature !== "item" ||
+      op.method !== "POST" ||
+      op.endpoint !== "/api/items/bulk" ||
+      op.reviewRequired
+    ) {
+      continue;
+    }
+    const items = Array.isArray(op.body.items)
+      ? (op.body.items as { id?: string }[])
+      : [];
+    const keep = items.filter((item) => !(item.id && wanted.has(item.id)));
+    if (keep.length === items.length) continue;
+    for (const item of items) {
+      if (item.id && wanted.has(item.id)) taken.push(item.id);
+    }
+    if (keep.length === 0) {
+      await removeFromQueue(op.id);
+    } else {
+      await updateQueuedOperation(op.id, {
+        body: { items: keep },
+        metadata: {
+          label: `Add ${keep.length} item${keep.length === 1 ? "" : "s"}`,
+        },
+      });
+    }
+  }
+  return taken;
+}
+
+/**
  * Cancel a create+delete pair for the same temp entity (net zero)
  */
 export async function cancelCreateDeletePair(

@@ -1,5 +1,6 @@
 "use client";
 
+import { useBulkItems } from "@/features/items/bulkItems";
 import { useItemActionsWithToast } from "@/features/items/useItemActions";
 import {
   useScheduleRoutine,
@@ -194,6 +195,7 @@ export function useChoreAssign(schedules: FlexibleSchedule[]) {
   const updateReminder = useUpdateReminderDetails();
   const updateItem = useUpdateItem();
   const queryClient = useQueryClient();
+  const bulk = useBulkItems();
 
   const isPending =
     scheduleRoutine.isPending ||
@@ -498,44 +500,48 @@ export function useChoreAssign(schedules: FlexibleSchedule[]) {
   };
 
   /**
-   * Places many template chores at once (Assign form → Save): a few requests in
-   * flight at a time, one toast, one Undo that takes them all back.
+   * Places many template chores at once (Assign form → Save). They are on the
+   * agenda before the first request leaves; the batch then goes out as a few
+   * idempotent requests, or waits in the offline queue. One toast, one Undo.
+   * Returns the input positions the server refused, so the form can stage them
+   * again.
    */
-  const placeTemplates = async (placements: ChorePlacement[]) => {
-    const created: string[] = [];
-    let failed = 0;
-    for (let i = 0; i < placements.length; i += 6) {
-      const results = await Promise.allSettled(
-        placements.slice(i, i + 6).map(async (p) => {
-          const input = buildTemplateInstanceInput(
-            p.tpl,
-            dueAt(p.date, p.time),
-            p.responsibleUserId,
-            { allDay: p.time === null, room: p.room },
-          );
-          const made =
-            input.type === "reminder"
-              ? await createReminder.mutateAsync(input)
-              : await createTask.mutateAsync(input);
-          if (!made?.id) throw new Error("no id");
-          return made.id as string;
-        }),
-      );
-      for (const r of results) {
-        if (r.status === "fulfilled") created.push(r.value);
-        else failed += 1;
-      }
+  const placeTemplates = async (
+    placements: ChorePlacement[],
+    userId: string | null,
+  ): Promise<number[]> => {
+    const result = await bulk.createMany(
+      placements.map((p) =>
+        buildTemplateInstanceInput(
+          p.tpl,
+          dueAt(p.date, p.time),
+          p.responsibleUserId,
+          { allDay: p.time === null, room: p.room },
+        ),
+      ),
+      { userId },
+    );
+    const refused = result.rejected.map((entry) => entry.index);
+    if (refused.length > 0) {
+      toast.error(`${refused.length} not saved`, { icon: ToastIcons.error });
     }
-    if (failed > 0) toast.error(`${failed} not saved`, { icon: ToastIcons.error });
-    if (created.length === 0) return;
-    toast.success(`${created.length} assigned`, {
-      icon: ToastIcons.create,
-      duration: 4000,
-      action: {
-        label: "Undo",
-        onClick: () => created.forEach((id) => deleteItem.mutate(id, { onError: notSaved })),
-      },
-    });
+    // Queued rows are on this device and will sync, so they count as assigned
+    const created = [...result.saved, ...result.queued];
+    if (created.length > 0) {
+      toast.success(`${created.length} assigned`, {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            void bulk.deleteMany(created).then(({ ok }) => {
+              if (!ok) notSaved();
+            });
+          },
+        },
+      });
+    }
+    return refused;
   };
 
   return {

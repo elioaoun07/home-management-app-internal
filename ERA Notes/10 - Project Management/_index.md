@@ -20,7 +20,7 @@ Start with a campaign checklist. The eleven checklists form **one backlog**, gro
 | Schedule | Items/reminders, calendar, recurrence, chores, Focus mode, Plan My Day, prerequisites and NFC behavior | 31 | [Backlog](<Schedule/4 - Checklist.md>) · [Master Book](<Schedule/Schedule — Master Book.md>) |
 | Kitchen | Recipes, Inventory, Catalogue, Meal Planning and Shopping List | 20 | [Backlog](<Kitchen/4 - Checklist.md>) · [Master Book](<Kitchen/Kitchen — Master Book.md>) |
 | Trips | Planner, packing/documents, trip lifecycle and trip-side integrations | 19 | [Backlog](<Trips/4 - Checklist.md>) · [Master Book](<Trips/Trips — Master Book.md>) |
-| Hub & ERA | Hub/ERA/Brain, household sharing, shared sync/offline, message actions, guest access, theme/person identity, AI usage/errors | 41 | [Backlog](<Hub & ERA/4 - Checklist.md>) · [Master Book](<Hub & ERA/Hub & ERA — Master Book.md>) |
+| Hub & ERA | Hub/ERA/Brain, household sharing, shared sync/offline, message actions, guest access, theme/person identity, AI usage/errors | 42 | [Backlog](<Hub & ERA/4 - Checklist.md>) · [Master Book](<Hub & ERA/Hub & ERA — Master Book.md>) |
 | Notifications & Alerts | Notification policy, drawer/Alerts, push and Google alarm transport evidence | 12 | [Backlog](<Notifications & Alerts/4 - Checklist.md>) · [Master Book](<Notifications & Alerts/Notifications & Alerts — Master Book.md>) |
 | Healthcare | Health profiles, allergies, medications, body measurements, Fitness and care-reference consumers | 18 | [Backlog](<Healthcare/4 - Checklist.md>) · [Master Book](<Healthcare/Healthcare — Master Book.md>) |
 | Outfits | Personal wardrobe, outfit builder/plans and wear history | 12 | [Backlog](<Outfits/4 - Checklist.md>) · [Master Book](<Outfits/Outfits — Master Book.md>) |

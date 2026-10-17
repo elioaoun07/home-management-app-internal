@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-11
+updated: 2026-10-17
 type: master-book
 status: active
 owner: Elio
@@ -23,6 +23,8 @@ Intent routing and turn-latency repairs shipped. Proactive delivery, source cove
 Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Hub & ERA/Hub & ERA — Master Book.md>) preserves detailed older narratives and receipts.
 
 ## Vision & Decisions
+
+- **HUB-116 — Multi-write actions are always optimistic, bulk and connectivity-proof (owner requirement, 2026-10-17).** Any action that writes several rows shows them at once, sends them as one idempotent request (every row carries its own id, so a retry cannot duplicate), queues the whole batch when the network will not take it, and never lets a slow write mark the app offline. SCH-25 delivered the pattern for item creation (`src/features/items/bulkItems.ts`, `/api/items/bulk`); this item carries it to every other multi-write flow and to the connectivity manager. One engine per concept: callers reuse the shared path rather than adding another queue or request shape.
 
 - **HUB-115 — Subtle, expressive motion on ERA's top layer (owner request, 2026-10-12).** Add atmosphere and interaction polish around the existing centered mark, scatter cards, face pills and composer. Preserve all functionality and the current layout. Slow ambient motion belongs at the edges; reading surfaces stay still; reduced-motion preferences disable movement. *(IMPLEMENTED 2026-10-12 — repository and local checks; browser/mobile visual acceptance pending.)*
 
@@ -66,6 +68,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+- 🟠 **HUB-116 — A burst of slow writes can flip the whole app offline, and other multi-write flows still fan out one request per row.** From source reading during SCH-25, not reproduced (production writes are barred): `safeFetch` answers a timeout with an `/api/health` probe on the same origin; if that probe fails under load, `connectivityManager` sets the global state offline and every later write takes the offline path. Hub bulk convert, flexible-routine assignment and the day planner create or write rows one request at a time. Sheets and acceptance under [criteria](<#hub-116>).
 
 - 🟡 **ERA hydration mismatch on `CommandBar` form id — Resolved locally, 2026-10-12.** `/era` logged a `useId` hydration warning. Likely cause (not reproduced): `EraShell` `conversing` read persisted query-cache messages on the first client render, so the thread block above `CommandBar` rendered client-only. Fix: `conversing`/`hasTurns` gated behind a `useSyncExternalStore` hydrated flag in `EraShell.tsx`. Unverified in browser.
 
@@ -144,6 +148,25 @@ The remaining retained defects, decisions and enhancements are indexed below and
 🟡 **HUB-100** Ask AI says "I don't have a shopping list feature". Its catalog (`src/features/era/capabilities/registry.ts`) has no `shopping.add`, so the model can't propose one. See [acceptance](#hub-100).
 
 ## Acceptance Criteria Index
+
+### HUB-116
+
+**Outcome:** Every flow that writes several rows shows them at once, saves them as one idempotent request, survives a slow server or lost network, and a slow write never marks the app offline.
+
+**Kind:** feature
+**Depends on:** SCH-25 (the shared item bulk path and its migration run by the owner)
+**Related:** HUB-46 (durable idempotent capture), HUB-58, HUB-67 (bulk conversion Undo and atomicity), SCH-4.5, SCH-21
+**Touches:** src/lib/connectivityManager.ts, src/lib/safeFetch.ts, src/features/items/bulkItems.ts, src/components/hub/BulkConvertReviewSheet.tsx, src/components/planner/MobileFlexibleAssignmentPage.tsx, src/components/web/{AddFlexibleFromCatalogueDialog,DropSlotConfigSheet,WebDayPlanner}.tsx, src/features/chores/useChoreActions.ts, src/features/items/useFlexibleRoutines.ts
+
+- **Acceptance:** Each migrated flow, with 30 rows: rows are visible before the first request returns; at most ⌈30 ÷ chunk⌉ requests leave; a timeout or 5xx is retried with the same ids and never duplicates; offline, the batch waits as one queued operation and its rows stay visible; a refusal removes only the refused rows and tells the person how many; one toast whose Undo is one request. Separately, a burst of slow writes while `/api/health` answers leaves `isReallyOnline()` true, and a real network failure still goes offline.
+- **Why:** SCH-25 (2026-10-17) showed the shape: N requests, N refetches and a probe that shares the saturated origin. The pattern now exists for item creation and Undo; the same failure waits in every other loop of writes.
+- **Split before dispatch — ordered sheets, each its own change, completing one never completes the parent:**
+  - **A. Connectivity.** A write-path timeout must not flip global offline while other requests are in flight (defer or repeat the probe, or require consecutive failures — pick with a test, do not guess). Extend `safeFetch.test.ts` / `connectivityManager.test.ts`. Touches every module: land alone.
+  - **B. Item multi-create callers.** Hub bulk convert (`BulkConvertReviewSheet`, with HUB-58/67), flexible assignment dialogs, the day planner and ERA multi-step plans use `createItemsBulk`/`deleteItemsBulk`. Chores' desktop per-row assign joins the same path.
+  - **C. Flexible-slot and undated placements.** `item_flexible_schedules` upserts and undated `due_at` updates in Chores (`placeFlexible`, `placeUndated`) are direct and sequential; they need a bulk RPC with the same client-id contract.
+  - **D. Inventory.** Search for loops of writes in other modules (shopping list, trips packing, meal plan, recipes→list, catalogue, inventory) and record per site: migrate, already fine, or not applicable — evidence, not assumption.
+  - **E. Make it the default.** Add the rule to the `add-feature` and `ui-guardrails` playbooks and a `finish-task` grep for `mutateAsync`/`safeFetch` inside loops or `Promise.all`; consider a Hard Rule once two callers have migrated (owner decision).
+- **Reading guide:** `src/features/items/bulkItems.ts` (chunking, optimistic rows, retry, queue), `src/app/api/items/bulk/route.ts`, `migrations/2026-10-17_items-bulk-create.sql`, SCH-25 in the Schedule book. Known limits there: queued rows live only in the creating session's cache; an Undo racing an in-flight queue replay can leave a zombie item.
 
 ### HUB-115
 

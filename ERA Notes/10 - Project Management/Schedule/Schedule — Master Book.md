@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-11
+updated: 2026-10-17
 type: master-book
 status: active
 owner: Elio
@@ -22,6 +22,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 ## Vision & Decisions
 
+- **SCH-25 — Bulk creates are optimistic, idempotent and queueable (owner request, 2026-10-17).** Assigning ~30 chores sent 30 POSTs and 30 refetches; a slow one timed out, a failed `/api/health` probe flipped the app offline, and later creates took the offline path while a retry could duplicate what had committed. Every item now carries a client id: `POST /api/items/bulk` (up to 50, per-item outcome) and `DELETE /api/items/bulk` serve a batch in one request, a retry returns the rows it already made, and a batch the network will not take waits in the offline queue as one operation. The Chores form's Save puts the rows on the agenda before the first request. The owner's standing requirement — optimistic UI, bulk inserts and tolerance of connectivity problems for every action of this shape — is carried by HUB-116. *(IMPLEMENTED 2026-10-17 — repository and isolated SQL/API/queue fixtures; owner SQL and device acceptance pending.)*
+
 - **SCH-24 — Complete source effects precede success.** One source transaction serves precision capture, ERA and offline replay; child/state rejection rolls back, and an unverified acknowledgement requires inspection rather than retry. Existing Schedule rules and RLS remain the authority. *(IMPLEMENTED 2026-10-11 — repository and isolated SQL/API fixtures; owner SQL/RLS/device acceptance pending.)*
 
 - Focus is a per-item mode; household co-ownership permits mutual edit/reassign through the shared predicate. *(IMPLEMENTED 2026-06-06)*
@@ -38,6 +40,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+**SCH-25 — Resolved locally, 2026-10-17.** Saving ~30 staged chores showed an offline banner and a failure toast (owner report). From source, not reproduced (production writes are barred): 30 separate `POST /api/items` each awaited a Google Calendar sync inside an 8 s budget, every create refetched the whole schedule bundle, and one timeout probed `/api/health` on the same saturated origin, flipping global connectivity; later creates then queued with fake temp ids that the batch counted as saved. Replaced by one idempotent bulk path; see [criteria](<#sch-25>). Which request timed out first — Google sync, origin or database — was not witnessed.
 
 **SCH-24 — Resolved locally, 2026-10-11.** Parent-only success and separate prerequisite/state writes reproduced from source and isolated failures; atomic source RPCs and complete/rollback/unknown receipts now cover API, three create hooks, ERA and replay. Owner SQL/RLS/device gates remain pending under [criteria](<#sch-24>); this is not a production incident or deployment claim.
 
@@ -2071,6 +2075,22 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - **Scope boundary:** Same-day custom alerts require the delivered `offset_minutes >= 0` constraint. Recurring custom-time alerts now fail before a parent is saved, because the current cron cannot preserve that clock rule; this is a delivered SCH-7 refusal, not a new recurrence engine or completion of SCH-7/SCH-9. Source exactly-once/reconciliation remains HUB-46; Google Calendar backup is outside the complete local receipt.
 - **Owner UAT / run first:** Apply [2026-10-11_atomic-item-create.sql](<../../../migrations/2026-10-11_atomic-item-create.sql>) manually, then refresh `db-state.json` using [Database RLS Posture](<../../01 - Architecture/Database RLS Posture.md>) and validate current item/child/tag policies under SCH-10. Expected: either the entire requested item exists or no requested rows remain after a source rejection; trigger and dormant status agree. Verify own and partner-authorized cases on isolated data, source views/Undo and unknown-save inspection. Actual production RLS/enums, source deployment, push/Google delivery and phone/browser interaction remain unverified. Browser inventory was empty; the agent neither applied SQL nor deployed.
 
+### SCH-25
+
+**Outcome:** Assigning many chores at once appears on the agenda immediately, saves in one idempotent request, survives a slow server or lost network, and never duplicates or fakes a save.
+
+**Kind:** bug
+**Implementation:** done
+**UAT:** pending
+**Touches:** `migrations/2026-10-17_items-bulk-create.sql`, `migrations/schema.sql`, `src/app/api/items/bulk/`, `src/lib/items/createContract.ts`, `src/features/items/bulkItems.ts`, `src/lib/offlineQueue.ts`, `src/lib/offlineSyncEngine.ts`, `src/features/chores/useChoreActions.ts`, `src/components/chores/ChoresView.tsx`
+
+- **Acceptance:** Chores → Assign → Save with 30 staged chores: every row is on its day before any request returns; at most two requests leave (25 items each); one "30 assigned" toast whose Undo removes all 30 rows at once and deletes them in one request. With a slow server the same ids are retried and nothing doubles; offline, the batch waits in the queue as one operation, rows stay visible and sync later; Undo before sync drops them from the queue. A server refusal removes only the refused rows, restages them in the form and toasts the count. A missing migration fails fast ("not saved"), never silently queues.
+- **Root cause:** `placeTemplates` ran 6 parallel `mutateAsync` creates per wave; each `POST /api/items` awaited a Google Calendar sync inside `safeFetch`'s 8 s budget and every `onSettled` refetched `get_schedule_bundle`. A timeout launched an `/api/health` probe with a 3 s limit on the same origin; a failed probe set the global state offline, so later creates went to the offline queue and returned `temp-…` ids that the batch counted as created. A timed-out create that had committed was reported "not saved", and a retry had no identity to deduplicate on.
+- **Implementation — 2026-10-17:** `create_item_complete` accepts an optional client id (a repeat returns the caller's existing row, `completion.replayed`); `create_items_bulk` runs each item in its own sub-transaction (a bad item fails alone, others commit) for up to 50 items. `POST/DELETE /api/items/bulk` map a missing RPC to 501 (final), 4xx to refusals, anything else to "unverified, retry the same ids"; the Google backup runs in `after()` three at a time. `bulkItems.ts` inserts optimistic rows into every cached items list, sends 25-item chunks with 30 s timeouts and two same-id retries, queues a chunk that cannot be confirmed (one operation, no review fence because it is replay-safe) and rolls back only refused rows. The sync engine replays bulk operations with the same timeout, reports refused items once and refreshes the lists when it drops an operation. Undo is one bulk delete.
+- **Evidence — 2026-10-17:** 15 isolated PGlite cases run the actual migration (replay, foreign id, partial batch, child-write rollback, batch limits, anonymous denial, repeat install); 22 route cases; 23 client cases (optimistic rows before the first request, timeout/5xx/unreadable retry with identical ids, queueing, offline, refusal rollback, partial failure position, delete and queue-strip); 7 sync-engine and 3 queue cases; 4 Chores cases prove the optimistic row leaves To plan and lands on its day. Removing the rollback line fails five client cases. Typecheck and changed-file ESLint clean; `src/lib src/features/{items,chores,era} src/app/api/items` — 1,296 tests pass. No production access, no live model or browser run.
+- **Owner UAT / run first:** Run [2026-10-17_items-bulk-create.sql](<../../../migrations/2026-10-17_items-bulk-create.sql>) in the Supabase SQL Editor — it requires SCH-24's [2026-10-11_atomic-item-create.sql](<../../../migrations/2026-10-11_atomic-item-create.sql>) first and stops with a clear message if that is missing. Until then Save reports "not saved" and restages the chores. Then on a phone: stage ~30 chores, Save, watch the agenda fill at once; repeat once with airplane mode on and confirm they sync on reconnect with no duplicates; Undo a batch. Refresh `db-state.json` afterwards.
+- **Scope boundary:** Chores' flexible-routine and undated placements still write directly and one by one; the desktop per-row assign still uses single creates. Other callers of multi-create, the connectivity manager's probe-under-load behaviour and the remaining fan-outs are HUB-116. An Undo racing a queue replay that is already in flight, or a Google event created after an Undo, are the only known windows; the daily gcal reconcile cron heals the latter. Queued rows are shown only in the session that created them and vanish from a refetch until the queue syncs.
+
 ## Shipped Log
 
 - ✅ 2026-05-31 — partner-edit 403 fixed: the PATCH route ran its own creator-only check **stricter than the RLS policy underneath**; now uses `canMutateItem()` (creator OR responsible OR public+partner), matching `items_update`
@@ -2100,6 +2120,7 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - ✅ 2026-10-10 — Chores polish on SCH-20: `/chores` page uses the themed `tc.bgPage` (the `--background` gradient rendered near-black in blue dark), **Assign** opens preselected on the selected day (Today by default), and the assign dialog has previous/next week chevrons
 - ✅ 2026-10-10 — Web View on a phone-width screen (`WebViewContainer`): the header's module tabs and avatar were clipped off-screen, so Mobile View and module switching were unreachable. Below `lg` the tabs are replaced by a module-switcher dropdown and the avatar stays visible; `lg`+ unchanged
 - ✅ 2026-10-11 — **SCH-24** Acknowledge complete item and prerequisite effects truthfully — [criteria](<Schedule — Master Book.md#sch-24>)
+- ✅ 2026-10-17 — **SCH-25** Assign many chores at once: optimistic rows, one idempotent bulk request, queue-safe offline and truthful refusals — [criteria](<Schedule — Master Book.md#sch-25>)
 
 ## Delivery session log
 

@@ -46,6 +46,7 @@ Now-lane exception: reports filed from the ERA chat arrive under **ERA reports**
 - [ ] **HUB-95** ERA reuses an existing contact instead of duplicating it — [criteria](<Hub & ERA — Master Book.md#hub-95>) _(friction - S)_
 - [ ] **HUB-59** Use the source message date for transaction conversion — [criteria](<Hub & ERA — Master Book.md#hub-59>) _(friction - M)_
 - [ ] **HUB-61** Verify guest-drinks household access — [criteria](<Hub & ERA — Master Book.md#hub-61>) _(friction - M)_
+- [ ] **HUB-116** Move every multi-write flow onto the optimistic bulk path and stop slow writes flipping the app offline — [criteria](<Hub & ERA — Master Book.md#hub-116>) _(friction - L)_
 
 ## Later
 
