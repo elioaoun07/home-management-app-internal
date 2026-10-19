@@ -319,6 +319,7 @@ function journeyWith(h: ReturnType<typeof makeHarness>, overrides: Loose = {}) {
     runtime: h.runtime,
     describe: describeAdmitted,
     generationsRoot: GENERATIONS,
+    artifactsRoot: join(ROOT, ".delivery", "v2", "artifacts"),
     ...overrides,
   }) as unknown as Loose;
 }
@@ -360,6 +361,51 @@ afterEach(() => {
   }
   rmSync(ROOT, { recursive: true, force: true });
   rmSync(GENERATIONS, { recursive: true, force: true });
+});
+
+describe("native model evidence immediately before dispatch", () => {
+  it("refuses missing native evidence even though the configured catalog allows the selection", async () => {
+    const h = makeHarness();h.runtime.kind = "container";
+    const journey = journeyWith(h), delivered = await deliverPlan(journey, "codex");
+    expect(h.calls).toHaveLength(0);
+    expect(store.listJobs(delivered.run_id)[0].dispatch_started_at).toBeNull();
+    expect(JSON.stringify(detailOf(journey, delivered.run_id))).toContain("native-model-runtime-unavailable");
+  });
+  it("refuses a stale native observation returned by the last-moment probe", async () => {
+    const h = makeHarness();h.runtime.kind = "container";
+    h.runtime.readinessObservations = async (backend: string, selected: { model: string; effort: string }) => ({
+      environment: { ok: true, receipt: { probes: { nativePackages: { "@openai/codex-sdk": { cliVersion: "0.144.1" } } } } },
+      runtime: { binding: { backend_id: backend } }, authentication: { ok: true },
+      modelAvailability: { schema: "delivery-v2/codex-model-probe@1", backend_id: backend, ...selected, nativeVersion: "0.144.1", observedAt: new Date(Date.now() - 120_000).toISOString(),
+        ok: true, modelAdvertised: true, effortAdvertised: true, cleanupConfirmed: true, containerCleanupConfirmed: true, providerTurns: 0, entitlement: "unverified",
+        subscription: { method: "chatgpt", additionalSpendAllowed: false, includedUsageAvailable: true } },
+    });
+    const journey = journeyWith(h), delivered = await deliverPlan(journey, "codex");
+    expect(h.calls).toHaveLength(0);
+    expect(store.listJobs(delivered.run_id)[0].dispatch_started_at).toBeNull();
+    expect(JSON.stringify(detailOf(journey, delivered.run_id))).toContain("native-model-stale");
+  });
+  it("reobserves the exact selection before implementation and refuses when native advertising changes", async () => {
+    const h = makeHarness();h.runtime.kind = "container";
+    let advertised = true;
+    const selections: object[] = [];
+    h.runtime.readinessObservations = async (backend: string, selected: { model: string; effort: string }) => {
+      selections.push({ backend, ...selected });
+      return { environment: { ok: true, receipt: { probes: { nativePackages: { "@openai/codex-sdk": { cliVersion: "0.144.1" } } } } },
+        runtime: { binding: { backend_id: backend } }, authentication: { ok: true },
+        modelAvailability: { schema: "delivery-v2/codex-model-probe@1", backend_id: backend, ...selected, nativeVersion: "0.144.1", observedAt: new Date().toISOString(),
+          ok: advertised, modelAdvertised: advertised, effortAdvertised: advertised, cleanupConfirmed: true, containerCleanupConfirmed: true, providerTurns: 0, entitlement: "unverified",
+          subscription: { method: "chatgpt", additionalSpendAllowed: false, includedUsageAvailable: true } } };
+    };
+    const journey = journeyWith(h), delivered = await deliverPlan(journey, "codex"), run_id = String(delivered.run_id);
+    expect(h.calls).toHaveLength(1);advertised = false;
+    const plan = latestPlanOf(journey, run_id);
+    await journey.decide({ run_id, plan_id: plan.plan_id, plan_revision: plan.revision, decision: "approve", command_id: cmd(), actor: "owner" });
+    await journey.idle();
+    expect(h.calls).toHaveLength(1);
+    expect(selections).toEqual(Array(2).fill({ backend: BACKEND.codex, model: "codex-test", effort: "low" }));
+    expect(JSON.stringify(detailOf(journey, run_id))).toContain("native-model-not-advertised");
+  });
 });
 
 describe.each(["claude", "codex"] as const)("one dependable journey on %s", (executor) => {

@@ -27,6 +27,7 @@ import process from "node:process";
 import { contentId, deepFreeze } from "../contracts.mjs";
 import { BACKEND_IDS } from "../adapters/registry.mjs";
 import { makeQualificationReceipt, writeQualificationReceipt } from "../qualification.mjs";
+import { verifyManagedEnvironmentSync } from "../dependency-environment.mjs";
 import {
   CANARY_PATH,
   RUNNER_PATH,
@@ -34,6 +35,7 @@ import {
   boundaryBindingDigest,
   readEgressBinding,
   hardenedFlags as workerFlags,
+  protectedCheckerFlags,
   makeBoundaryConfig,
 } from "../worker-boundary.mjs";
 import { roleVerdict, runRole } from "./container-feasibility.mjs";
@@ -67,9 +69,11 @@ function spawnDocker(args, { timeout = 600_000 } = {}) {
  * @param {{boundary:ReturnType<typeof makeBoundaryConfig>, backend_id:string, docker?:Function}} input
  */
 export function readImageBinding({ boundary, backend_id, docker = spawnDocker }) {
+  const environment = verifyManagedEnvironmentSync({ image: boundary.image, dependencies: boundary.dependencies, limits: boundary.limits, run: docker });
+  if (!environment.ok) return { binding: null, reason: environment.reason };
   const image = docker(["image", "inspect", "--format", "{{.Id}}", boundary.image]);
   if (image.status !== 0) return { binding: null, reason: "worker image " + boundary.image + " is not built" };
-  const probe = docker(["run", "--rm", "--network", "none", "--user", WORKER_USER, "--read-only", boundary.image, "node", RUNNER_PATH, "--probe"]);
+  const probe = docker(["run", "--rm", ...workerFlags(boundary, { network: false }), boundary.image, "node", RUNNER_PATH, "--probe"]);
   const facts = String(probe.stdout)
     .split("\n")
     .map((line) => {
@@ -97,8 +101,21 @@ export function readImageBinding({ boundary, backend_id, docker = spawnDocker })
   };
 }
 
-/** Assemble the receipt from the two role verdicts. The worker's controls are the executor's. */
+/** Assemble only after both roles pass. The worker's controls are the executor's. */
 export function assembleReceipt({ backend_id, binding, worker, checker, run, observed_at }) {
+  const verdicts = { worker, checker };
+  const failed = Object.entries(verdicts)
+    .filter(([, verdict]) => verdict?.met !== true || verdict?.negativeControl?.valid !== true)
+    .map(([role]) => role);
+  if (failed.length) {
+    // A checker failure cannot be reduced to a receipt note: the receipt loader
+    // admits from worker controls. Preserve the complete diagnostic verdicts
+    // for the caller without publishing a potentially admissible receipt.
+    throw Object.assign(new Error("required qualification controls not met: " + failed.join(", ")), {
+      code: "qualification-controls-unproven",
+      qualification: deepFreeze({ binding, run, verdicts }),
+    });
+  }
   return makeQualificationReceipt({
     backend_id,
     binding,
@@ -107,7 +124,7 @@ export function assembleReceipt({ backend_id, binding, worker, checker, run, obs
     harness: { name: "worker-qualification", run },
     observed_at,
     notes: [
-      "checker required controls " + (checker.met ? "met" : "not met: " + checker.failing.join(", ")),
+      "checker required controls met",
       worker.unverified.length ? "unverified: " + worker.unverified.join(", ") : "every battery control observed",
     ],
   });
@@ -141,7 +158,7 @@ export async function runWorkerQualification({ repoRoot = process.cwd(), boundar
         confined: true,
         image: batteryImage,
         canaryPath: CANARY_PATH,
-        hardened: role === "worker" ? workerFlags(boundary) : workerFlags(boundary, { network: false }),
+        hardened: role === "worker" ? workerFlags(boundary) : protectedCheckerFlags(boundary),
       });
       verdicts[role] = {
         ...roleVerdict({
@@ -182,6 +199,7 @@ if (process.argv[1] && process.argv[1].replace(/\\/gu, "/").endsWith("probes/wor
     })
     .catch((error) => {
       process.stderr.write("worker qualification failed: " + String((error && error.message) || error) + "\n");
+      if (error?.qualification) process.stderr.write("qualification diagnostics: " + JSON.stringify(error.qualification) + "\n");
       process.exitCode = 1;
     });
 }

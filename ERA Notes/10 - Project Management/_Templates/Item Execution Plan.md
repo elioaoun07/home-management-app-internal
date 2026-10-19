@@ -16,6 +16,8 @@ Append inside the existing Master Book `### <ID>` section. Follow [Conventions Â
 
 **Verify:** Existing command or explicitly proposed test; normal case, distinguishing failure/retry case, expected result. Name owner-only evidence separately. Commands here are future checks, not claims they ran.
 
+**Candidate handover:** For a fix or feature, deliver [owner manual scenarios](<../../../docs/Delivery-UAT.md#candidate-handover-template>) before owner UAT: prerequisites/test data, navigation, numbered reproduction/test steps and expected results, linked acceptance criteria, regression/edge cases, and separate untested limits. Bind the handover to the actual candidate/revision; keep automated receipts separate. This prose requirement adds no fields to `delivery-plan-v1` and does not claim runtime enforcement.
+
 ```delivery-plan-v1
 {
   "outcome": "One observable result.",

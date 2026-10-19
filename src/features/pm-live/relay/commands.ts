@@ -96,7 +96,8 @@ export function createCommandTracker({
   }
 
   async function refresh(id: string) {
-    const { row } = await client.status(id);
+    const { row, error } = await client.status(id);
+    if (error) throw new Error(error.message);
     if (row) notify(row);
     return row;
   }
@@ -119,6 +120,7 @@ export function createCommandTracker({
    */
   async function send(id: string, type: string, payload: Record<string, unknown>, waitMs = 15000): Promise<SendResult> {
     let intent = intents.get(id);
+    if (intent && (intent.type !== type || JSON.stringify(intent.payload) !== JSON.stringify(payload))) throw new Error("Command payload changed; reconcile the original intent");
     if (intent && intent.phase === "settled" && intent.row) {
       const receipt = receiptState(intent.row);
       return { settled: true, state: receipt.state as "done", row: intent.row };
@@ -138,7 +140,7 @@ export function createCommandTracker({
     set.add(resolveSettled);
     waiters.set(id, set);
     try {
-      if (intent.phase === "unsent") {
+      if (intent.phase === "unsent" && !(await refresh(intent.id))) {
         const inserted = await insert(intent);
         if (!inserted.ok) {
           const offline = !inserted.error.code || /fetch|network|failed to|timeout/iu.test(inserted.error.message);
@@ -167,7 +169,7 @@ export function createCommandTracker({
   async function resume() {
     for (const intent of [...intents.values()]) {
       if (intent.phase === "settled") continue;
-      if (intent.phase === "unsent") {
+      if (intent.phase === "unsent" && !(await refresh(intent.id))) {
         const inserted = await insert(intent);
         if (!inserted.ok) continue;
       }

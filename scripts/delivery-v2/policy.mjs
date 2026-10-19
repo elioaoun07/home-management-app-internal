@@ -446,6 +446,7 @@ export function validateExecutionPolicy(raw) {
       continue;
     }
     specs[id] = { kind: "command", argv: [...spec.argv], expected: isPlainObject(spec.expected) ? { ...spec.expected } : {} };
+    if (spec.expected?.assertions !== undefined && (!Number.isInteger(spec.expected.assertions) || spec.expected.assertions <= 0)) bad(POLICY_REFUSALS.INVALID, "checks.specs." + id + ".expected.assertions must be a positive integer");
   }
   for (const criterion of criteria) {
     const specId = criterion.observer.expected && criterion.observer.expected.spec_id;
@@ -480,6 +481,8 @@ export function validateExecutionPolicy(raw) {
       const isolation = ["checker", "prefer-checker", "host"].includes(isolationInput) ? isolationInput : "prefer-checker";
       const programInput = isPlainObject(entry.program) ? entry.program : {};
       const programRoots = Array.isArray(programInput.roots) ? programInput.roots.filter(isNonEmptyString).map(normalizePath) : [];
+      const generatedTypes = isPlainObject(programInput.generatedTypes) ? programInput.generatedTypes : {};
+      if (Object.entries(generatedTypes).some(([path, hash]) => !/^\.next\/(?:dev\/)?types\/[A-Za-z0-9_./-]+\.ts$/u.test(path) || path.split("/").some(p => !p || p === "." || p === "..") || !/^sha256:[a-f0-9]{64}$/u.test(String(hash)))) bad(POLICY_REFUSALS.INVALID, "invalid generated compiler pins");
       const programExtensions = Array.isArray(programInput.extensions) ? programInput.extensions.filter(isNonEmptyString) : [];
       typecheck = {
         enabled: entry.enabled !== false,
@@ -492,7 +495,7 @@ export function validateExecutionPolicy(raw) {
         isolation,
         // Empty means "use typecheck.mjs's DEFAULT_PROGRAM"; the policy does not
         // duplicate that list so the two cannot drift apart.
-        program: Object.freeze({ roots: Object.freeze(programRoots), extensions: Object.freeze(programExtensions) }),
+        program: Object.freeze({ roots: Object.freeze(programRoots), extensions: Object.freeze(programExtensions), generatedTypes: Object.freeze({ ...generatedTypes }) }),
       };
     }
   }

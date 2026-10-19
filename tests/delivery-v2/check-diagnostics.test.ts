@@ -199,6 +199,15 @@ describe("classifyCheckOutcome", () => {
 // ---------------------------------------------------------------------------
 
 describe("runCheck retains its output", () => {
+  it.each([1, 35, 36, 37])("requires exactly the pinned 36 assertions, observed %i", async count => {
+    const plan = pinCheckPlan({ criteria: [AC_SUITE], specs: { unit: { kind: "command", argv: ["node", "oracle.mjs"], expected: { assertions: 36 } } } });
+    const result = await runCheck({ plan, candidate: candidateFor(), criterion: AC_SUITE, execute: scripted({ exitCode: 0, stdout: `Tests ${count} passed (${count})` }) });
+    if (!result.observation || !result.receipt) throw new Error("expected executed check evidence");
+    expect(result.observation.outcome).toBe(count === 36 ? "observed" : "malformed");
+    expect(result.receipt.exitCode).toBe(0);
+    expect(result.receipt.counts.executed).toBe(count);
+    expect(result.receipt.outcome).toBe(count === 36 ? CHECK_OUTCOMES.PASSED : CHECK_OUTCOMES.OUTPUT_UNREADABLE);
+  });
   it("hands the retainer bounded redacted text tagged with the criterion at its revision", async () => {
     const candidate = candidateFor();
     const kept: Record<string, unknown>[] = [];

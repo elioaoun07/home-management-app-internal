@@ -42,10 +42,12 @@ import { TERMINAL_STATES } from "../delivery/state-machine.mjs";
 import { openStore } from "./store.mjs";
 import { readExecutorSelection, routeDeliveryV2 as routeEntry } from "./entry.mjs";
 import { buildDeliver, loadExecutionPolicy } from "./policy.mjs";
-import { EXECUTORS, admitExecutorProfile, createExecutor, describeExecutor, listExecutors } from "./adapters/registry.mjs";
+import { EXECUTORS, resolveExecutorChoice, admitExecutorProfile, createExecutor, describeExecutor, listExecutors } from "./adapters/registry.mjs";
 import { createJourney } from "./journey.mjs";
 import { loadQualification } from "./qualification.mjs";
 import { createContainerRuntime } from "./worker-boundary.mjs";
+import { inspectReadiness } from "./inspect-readiness.mjs";
+import { evaluateReadiness, readinessFact } from "./readiness.mjs";
 
 export { routeDeliveryV2 } from "./entry.mjs";
 
@@ -138,6 +140,10 @@ export function createDeliveryV2Context({
   let journeyHandle = null;
   let journeyDigest = undefined;
   let reconciled = false;
+  const readinessCache = new Map();
+  const readinessPending = new Map();
+  const selectionOf = value => ({ file: String(value.file || ""), id: String(value.id || ""), executor: String(value.executor || ""), model: value.model || null, effort: value.effort || null, workProfile: value.workProfile || "focused" });
+  const selectionKey = value => JSON.stringify(selectionOf(value));
 
   const runtimeFor = (loaded) => {
     if (!loaded || !loaded.ok || !loaded.policy.runtime) return null;
@@ -193,6 +199,10 @@ export function createDeliveryV2Context({
       return journeyHandle;
     },
 
+    // Explicit command reconciliation may open the service's existing store.
+    // A process restart must not turn a durable command into an absent one.
+    commandStatus: id => context.hasStore() ? context.store.getCommand(String(id)) : null,
+
     /** Whether a supervisor store exists yet; reads never create one. */
     hasStore: () => Boolean(handle) || existsSync(storePath),
 
@@ -200,8 +210,28 @@ export function createDeliveryV2Context({
      * Each executor with its policy permission, bound qualification, supported
      * efforts and the installation's model catalogue.
      */
-    async describeExecutors() {
+    async describeExecutors({ inspectOnly = true } = {}) {
       const loaded = loadExecutionPolicy({ root: ROOT });
+      if (inspectOnly) {
+        // A catalogue read must not provision, copy credentials, probe providers
+        // or reconcile the store. Availability is local SDK presence only.
+        return {
+          executors: context.listExecutors().map(entry => ({ ...entry,
+            permitted: loaded.ok && loaded.policy.executors.permitted.includes(entry.backend_id),
+            qualified: false, authentication: null,
+            refusals: [{ code: "executor-evidence-unprobed", detail: "Current runtime/authentication evidence is unavailable" }],
+            qualification: { ref: null, refusals: [{ code: "runtime-binding-unavailable", detail: null }] },
+            readiness: evaluateReadiness({ phase: "executor", selection: { executor: entry.id }, required: ["runtime", "authentication", "qualification"], facts: {
+              runtime: readinessFact("unknown", "runtime-unprobed"), authentication: readinessFact("unavailable", "authentication-runtime-unavailable"), qualification: readinessFact("unavailable", "qualification-binding-unavailable"),
+            } }),
+            models: loaded.ok ? loaded.policy.executors.catalog?.models[entry.id] || [] : [],
+            suggestions: loaded.ok ? Object.fromEntries(Object.entries(loaded.policy.executors.catalog?.profiles || {}).map(([name, byExecutor]) => [name, byExecutor[entry.id] || null])) : {},
+          })),
+          policy: loaded.ok ? { policy_revision: loaded.policy.policy_revision, runtime: loaded.policy.runtime ? { kind: "container", image: loaded.policy.runtime.image, network: loaded.policy.runtime.network.mode } : null, thresholdUsd: loaded.policy.dispatch.thresholdUsd } : null,
+          refusals: loaded.ok ? [] : loaded.refusals,
+          inspectOnly: true,
+        };
+      }
       const runtime = runtimeFor(loaded);
       const executors = [];
       for (const entry of context.listExecutors()) {
@@ -251,6 +281,61 @@ export function createDeliveryV2Context({
           : null,
         refusals: loaded.ok ? (runtime ? [] : [{ code: "no-worker-runtime-configured", detail: null }]) : loaded.refusals,
       };
+    },
+
+    /** Independent inspection entry: never touches lazy runtime/journey getters. */
+    async readiness(options) {
+      const selection = selectionOf(options);
+      const { collection, ...observations } = readinessCache.get(selectionKey(selection)) || {};
+      const result = await inspectReadiness({ ...selection, root: ROOT, pmRel, observations, readOnlyStore: handle ? handle.readOnlyView() : null });
+      return collection ? { ...result, collection } : result;
+    },
+    async readinessSnapshots() {
+      return Promise.all([...readinessCache.keys()].map(key => context.readiness(JSON.parse(key))));
+    },
+    // Authenticated, explicit refresh. GET/CLI/relay publication never call this.
+    async refreshReadiness(options) {
+      const selection = selectionOf(options), key = selectionKey(selection);
+      if (readinessPending.has(key)) return readinessPending.get(key);
+      if (!readinessCache.has(key)) {
+        if (readinessCache.size >= 32) readinessCache.delete(readinessCache.keys().next().value);
+        readinessCache.set(key, {});
+      }
+      const work = (async () => {
+        // The service owns coordination, including outstanding/unknown jobs.
+        const view = context.store.readOnlyView();
+        const before = await inspectReadiness({ ...selection, root: ROOT, pmRel, readOnlyStore: view });
+        const loaded = loadExecutionPolicy({ root: ROOT }), chosen = resolveExecutorChoice(selection.executor);
+        if (!loaded.ok || !chosen || ["selection", "policy", "source", "checks", "coordination"].some(gate => before.facts[gate]?.state !== "satisfied") || !loaded.policy.runtime?.dependencies?.environment) {
+          // A refused refresh replaces the prior evidence too, so the next GET
+          // cannot silently revert to a different, older collection.
+          readinessCache.set(key, {});
+          return before;
+        }
+        const runtime = runtimeFor(loaded);
+        const observedAt = new Date().toISOString();
+        let observed;
+        try { observed = await runtime.readinessObservations(chosen.backend_id, { model: selection.model, effort: selection.effort }); }
+        catch { observed = { error: "readiness-collection-failed", collection: {
+          schema: "delivery-v2/readiness-collection@1", startedAt: observedAt, completedAt: new Date().toISOString(),
+          stages: [{ name: "collector", startedAt: observedAt, completedAt: new Date().toISOString(), durationMs: Date.now() - Date.parse(observedAt), outcome: "failed", code: "readiness-collection-failed" }],
+        } }; }
+        // Each fact ages from its own observation, not the start or end of the
+        // whole multi-step probe. Older runtimes without timestamps retain the
+        // conservative start time; a slow probe cannot renew earlier evidence.
+        const stamp = (name, fact) => ({ contextFingerprint: before.contextFingerprint, observedAt: observed.observedAt?.[name] || observedAt, fact });
+        readinessCache.set(key, {
+          ...(observed.collection ? { collection: observed.collection } : {}),
+          runtime: stamp("runtime", readinessFact(observed.runtime ? "satisfied" : "blocked", "runtime-observed", observed.error || null, observed.runtime || null)),
+          authentication: stamp("authentication", readinessFact(observed.authentication?.ok ? "satisfied" : "blocked", "subscription-observed", observed.authentication?.reason || null, observed.authentication ? { ...observed.authentication, backend_id: chosen.backend_id } : null)),
+          environment: stamp("environment", readinessFact(observed.environment?.ok && observed.environment.receipt ? "satisfied" : "blocked", "environment-observed", observed.environment?.reason || null, { receipt: observed.environment?.receipt || null })),
+          modelAvailability: stamp("modelAvailability", readinessFact(observed.modelAvailability ? "satisfied" : "unknown", "native-model-observed", null, observed.modelAvailability || null)),
+        });
+        // Re-read all passive inputs after the probe; any concurrent change invalidates it.
+        return context.readiness(selection);
+      })();
+      readinessPending.set(key, work);
+      try { return await work; } finally { readinessPending.delete(key); }
     },
 
     /** The owner-facing executor catalogue, with per-entry availability. */

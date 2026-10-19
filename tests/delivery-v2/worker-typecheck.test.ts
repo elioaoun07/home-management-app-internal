@@ -60,7 +60,7 @@ describe("typecheckArgv", () => {
  * A docker double that records argv and answers `inspect` from a set of things
  * that exist. Nothing is spawned; `cp` and `run` succeed unless scripted to fail.
  */
-function fakeDocker({ existing = new Set<string>(), probe = { status: 0, stdout: JSON.stringify({ typescript: "5.9.2", node: "v22.0.0" }), stderr: "" } } = {}) {
+function fakeDocker({ existing = new Set<string>(), programValid = (): boolean => true, probe = { status: 0, stdout: JSON.stringify({ typescript: "5.9.2", node: "v22.0.0" }), stderr: "" } } = {}) {
   const calls: string[][] = [];
   return {
     calls,
@@ -74,6 +74,7 @@ function fakeDocker({ existing = new Set<string>(), probe = { status: 0, stdout:
       }
       // The dependency probe is the only `run` whose output is read.
       if (args.includes("-e") && args.join(" ").includes("require('typescript')")) return { ...probe, error: null };
+      if (args.includes("-e") && args.join(" ").includes("era-compiler-input-verified")) return programValid() ? { status: 0, stdout: "era-compiler-input-verified", stderr: "", error: null } : { status: 1, stdout: "", stderr: "compiler inputs missing", error: null };
       return { status: 0, stdout: "", stderr: "", error: null };
     },
     lines() {
@@ -125,7 +126,7 @@ describe("typecheckExecutor", () => {
     const args = run as string[];
     expect(mounts(args).find((mount) => mount.includes("target=" + PROGRAM_PATH))).toMatch(/,readonly$/u);
     expect(mounts(args).find((mount) => mount.includes("target=" + CANDIDATE_PATH))).toMatch(/,readonly$/u);
-    expect(mounts(args).find((mount) => mount.includes("target=/deps"))).toMatch(/,readonly$/u);
+    expect(mounts(args).find((mount) => mount.includes("target=/deps"))).toMatch(/,readonly,volume-nocopy$/u);
     expect(flagValue(args, "--network")).toBe("none");
     expect(flagValue(args, "--workdir")).toBe(PROGRAM_PATH);
     expect(args).toContain("--read-only");
@@ -174,5 +175,15 @@ describe("typecheckExecutor", () => {
       dependencies: { volume: "era-dlv107-dependencies", typescript: "5.9.2" },
     });
     expect(offered.producer!.program).toMatchObject({ root: PROGRAM_PATH, config: "tsconfig.json", files: 2 });
+  });
+  it("refuses a missing or altered compiler volume before offering or running a phase", async () => {
+    let valid = false;
+    const docker = fakeDocker({ programValid: () => valid }), runtime = runtimeWith(docker);
+    expect((await runtime.typecheckExecutor({ run_id: "r-1", candidate: withCandidate(), include: ["tsconfig.json"] })).ok).toBe(false);
+    valid = true;
+    const offered = await runtime.typecheckExecutor({ run_id: "r-1", candidate: withCandidate(), include: ["tsconfig.json"] });
+    expect(offered.ok).toBe(true); valid = false;
+    await expect(offered.execute!({ phase: "candidate" })).rejects.toThrow("compiler volume");
+    expect(docker.calls.some(args => args.includes(TYPECHECK_RUNNER_PATH))).toBe(false);
   });
 });

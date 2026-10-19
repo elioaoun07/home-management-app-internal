@@ -1222,6 +1222,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
       installation_id,
       mode,
       catalogue,
+      readiness: deliveryV2Ctx?.readinessSnapshots ? await deliveryV2Ctx.readinessSnapshots() : [],
       availability,
       // What this relay can carry. PM checklist writes, V1 launch and V1 detail
       // stay at the desk; capture and every V2 command are relayed.
@@ -1396,7 +1397,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
         // publishSession(). Only the undo offer needs an explicit nudge — it
         // lives on the heartbeat, which is otherwise up to 10s stale.
         if (cmd.type === "capture" || cmd.type === "undo") await publishHeartbeat();
-        if (V2_COMMAND_TYPES[cmd.type]) await publishV2();
+        if (V2_COMMAND_TYPES[cmd.type]) { await publishV2(); if (cmd.payload?.body?.action === "refresh-readiness") await publishCapabilities(); }
         if (cmd.type === "planning") await publishCorpus();
       }
     } catch (err) {

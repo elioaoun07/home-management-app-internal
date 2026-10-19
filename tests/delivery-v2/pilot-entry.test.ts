@@ -505,6 +505,26 @@ describe("the HTTP surface", () => {
   };
   const ctx = () => ({ root: ROOT, store, allowedOrigins: ["http://127.0.0.1:4317"] });
 
+  it("requires readiness for a new launch but reconciles an existing identity", async () => {
+    setDispatchMode({ root: ROOT, mode: "v2", actor: "owner" });
+    let calls = 0;
+    const context = { ...ctx(), readiness: async () => ({ ready: false }), commandStatus: (id: string) => id === "known" ? { command_id: id } : null,
+      journey: { deliver: async () => { calls++; return { ok: true, run_id: "original" }; } } };
+    const headers = pairedHeaders();
+    const blocked = await routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers, body: { executor: "codex", command_id: "new" } }, context);
+    expect(blocked!.json.error).toBe("delivery-not-ready"); expect(calls).toBe(0);
+    const recovered = await routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers, body: { executor: "codex", command_id: "known" } }, context);
+    expect(recovered!.json.run_id).toBe("original"); expect(calls).toBe(1);
+  });
+
+  it("requires authentication for explicit readiness observations", async () => {
+    let calls = 0;
+    const context = { ...ctx(), refreshReadiness: async () => { calls++; return { ready: false }; } };
+    const request = { method: "POST", path: "/api/delivery/v2/control", body: { action: "refresh-readiness" } };
+    expect((await routeDeliveryV2(request, context))!.status).toBe(401); expect(calls).toBe(0);
+    expect((await routeDeliveryV2({ ...request, headers: pairedHeaders() }, context))!.status).toBe(200); expect(calls).toBe(1);
+  });
+
   it("serves the mode unauthenticated, because reading it changes nothing", async () => {
     const res = await routeDeliveryV2({ method: "GET", path: "/api/delivery/v2/mode", headers: {} }, ctx());
     expect(res!.status).toBe(200);

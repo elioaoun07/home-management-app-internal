@@ -561,6 +561,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ### R44
 
 **Outcome:** Guard new client mutations against raw fetch.
+**Touches:** `eslint.config.mjs`, `tests/pm-ui/raw-fetch-guard.test.ts`
 
 - **Acceptance:** *(hygiene packet **H-02** of the [ERA Top Layer — Master Plan](<../_Archive/Plans/ERA Top Layer — Master Plan (2026-09-02).md>))* Add an eslint guard for Hard Rule 6 so no *new* raw mutating `fetch()` can enter client code — a `no-restricted-syntax` rule scoped to the client directories (components, features, hooks, contexts), warn-level until the existing 98 sites are burned down → `eslint.config.mjs`
 
@@ -584,7 +585,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
   ],
   "scope": [
     "eslint.config.mjs",
-    "tests/pm-ui/"
+    "tests/pm-ui/raw-fetch-guard.test.ts"
   ],
   "steps": [
     "Reuse the existing flat-config override pattern for components, features, hooks and contexts.",
@@ -610,6 +611,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
   "provenance": "2026-09-26 at 45b28899. eslint.config.mjs and the actual checklist-lint test inspected; no raw-fetch guard is present."
 }
 ```
+
+**2026-10-17 recovery preparation:** Exact publication paths are declared for the proposed single pilot; implementation remains open. Protected oracle `tests/delivery-oracles/r44-fetch-guard.mjs` is prepared under DLV-133 and checks warnings across four client directories, read calls/safeFetch and server exclusions. No application guard, live job or owner-reviewed plan is claimed. The later pilot preserves Codex / gpt-6-luna / low and exact phone plan approval; R48 still owns burn-down.
 
 ### R47
 
@@ -1421,6 +1424,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 *(Delivery runner appends dated progress bullets here automatically.)*
 
+- 2026-10-19 — **R44** V2 run `r-262a6aee5ed3` · cancelled · codex gpt-6-luna <!-- v2:res-d15d62b4752b@1 -->
 ## Successor Briefing
 
 **2026-09-15 R65:** keep implemented scope in Done and owner tests in UAT. `work-lifecycle.mjs` governs explicit owner/completed refusal; the source scanner and both launch backends use it. Do not restore acceptance-only checkboxes. Work > Done opens immutable completion evidence plus available attempts.

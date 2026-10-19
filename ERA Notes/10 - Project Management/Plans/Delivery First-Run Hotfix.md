@@ -98,7 +98,7 @@ The evidence supports these causes:
 
 ### Launch
 
-Show the selected item and a compact recommendation first: **Focused · Codex · GPT-5.6 Luna · Low**, only when that exact combination remains in the installed qualified subscription catalog. This is the appropriate existing entry for the tested narrow navigation fix; it is not a recommendation to buy or install another model. One short reason, such as `One-file navigation fix`. `Change` exposes provider/model/effort/profile choices. If only one entry is supported, say so inside the picker.
+Show the selected item and a compact recommendation first: **Focused · Codex · `CODEX_LOW` · Low** (alias resolved per the [Model Registry](<../../Model-Registry.md>); effort `low` is explicit), only when that exact combination remains in the installed qualified subscription catalog. This is the appropriate existing entry for the tested narrow navigation fix; it is not a recommendation to buy or install another model. One short reason, such as `One-file navigation fix`. `Change` exposes provider/model/effort/profile choices. If only one entry is supported, say so inside the picker.
 
 Use **Focused / Deep** as the two visible labels; retain `focused` / `investigate` as compatible stored values. A short optional `i` explains their difference. They describe engineering depth, not permission to skip approval. Show the estimated token range, editable authorized limit, enforcement mode, maximum native jobs/repairs and elapsed-time stop. Values are proposed until the owner starts; no default silently increases an installed limit. Missing/unqualified recommendations remain actionable refusal states, never silent provider substitution.
 

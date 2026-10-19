@@ -14,8 +14,10 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
+import { durableV2Command, storedIntent } from "./commandIntents";
 import { v2Pair, v2Post } from "./api";
 import { client, go, pmKeys, useRoute, useWorld } from "./state";
+import { readinessCanStart, readinessLabels } from "./readinessModel";
 import { PendingCommand, transport } from "./transport";
 import { Back, Empty, ErrorNotice, RunOrb, Sheet } from "./components";
 import { returnFromLaunch } from "./Work";
@@ -28,7 +30,6 @@ import {
   evidenceLabel,
   executorBlockMessage,
   executorLabel,
-  launchState,
   queueSlots,
   reasonLabel,
   receiptLabel,
@@ -53,7 +54,7 @@ import "./delivery-review.css";
 import { LivePulse } from "./LivePulse";
 import { OutcomeReview } from "./OutcomeReview";
 import { DeliveryQuestion } from "./DeliveryQuestion";
-import { TestGateCard, useTestGate } from "./TestGate";
+import { TestGateCard } from "./TestGate";
 import type { V2Executor, V2Reason, V2RunDetail, Work } from "./types";
 
 type Body = Record<string, unknown>;
@@ -255,17 +256,16 @@ export function QueueV2() {
  * a receipt, never as a failure.
  */
 function useV2Command() {
-  const intents = useRef(new Map<string, string>());
   const mutation = useMutation({
     mutationFn: ({
       path,
       body,
+      intent,
     }: {
       path: string;
       body: Body;
       intent: string;
-    }) => v2Post<Body>(path, body),
-    onSuccess: (_data, variables) => intents.current.delete(variables.intent),
+    }) => durableV2Command<Body>(path, intent, body),
     onSettled: () => client.invalidateQueries({ queryKey: pmKeys.all }),
   });
   const send = (
@@ -274,13 +274,8 @@ function useV2Command() {
     body: Body,
     onSuccess?: (data: Body) => void,
   ) => {
-    let command_id = intents.current.get(intent);
-    if (!command_id) {
-      command_id = crypto.randomUUID();
-      intents.current.set(intent, command_id);
-    }
     mutation.mutate(
-      { path, body: { ...body, command_id }, intent },
+      { path, body, intent },
       { onSuccess },
     );
   };
@@ -415,14 +410,29 @@ export function LaunchV2({ work }: { work: Work }) {
   const [effort, setEffort] = useState("");
   const [blockedExecutor, setBlockedExecutor] = useState<V2Executor | null>(null);
   const start = useV2Command();
-  const testGate = useTestGate();
-  const testsLocked = !!testGate.data?.locked;
-  const itemId = String(work.idChip || work.id || "");
-  const assessment = useQuery({
-    queryKey: pmKeys.v2assess(work.file, itemId),
-    queryFn: ({ signal }) => transport().v2Assess(work.file, itemId, signal),
-    enabled: connected && !!session.data?.paired && !!itemId,
+  const refresh = useMutation({
+    mutationFn: () => transport().v2Command<{ readiness: import("./types").V2Readiness }>("control", { action: "refresh-readiness", selection: readinessSelection, command_id: crypto.randomUUID() }, 180000),
+    onSuccess: data => client.setQueryData(pmKeys.v2readiness(readinessSelection), data.readiness),
+    onSettled: () => client.invalidateQueries({ queryKey: pmKeys.all }),
   });
+  const itemId = String(work.idChip || work.id || "");
+  const launchIntent = ["deliver", work.file, itemId.toUpperCase()].join(":");
+  const intentScope = (session.data?.scope || "") + ":" + (session.data?.actor || "");
+  const previousLaunch = useQuery({
+    queryKey: pmKeys.v2intent(intentScope, launchIntent),
+    queryFn: () => storedIntent(intentScope, launchIntent, localStorage),
+    enabled: connected && !!session.data?.paired && !!session.data?.scope,
+  });
+  const readinessSelection = { file: work.file, id: itemId, executor, model: model || null, effort: effort || null, workProfile: profile };
+  const readiness = useQuery({
+    queryKey: pmKeys.v2readiness(readinessSelection),
+    queryFn: ({ signal }) => transport().v2Readiness?.(readinessSelection, signal) || Promise.resolve(null),
+    enabled: connected && !!itemId,
+    refetchInterval: 30_000,
+  });
+  const assessment = readiness.data?.assessment;
+  const testGate = readiness.data?.testGate;
+  const testsLocked = !!testGate?.locked;
   if (session.data && !session.data.paired && transport().capabilities.pairing)
     return <PairV2 />;
 
@@ -443,7 +453,7 @@ export function LaunchV2({ work }: { work: Work }) {
   const deliver = () =>
     start.send(
       "deliver",
-      ["deliver", work.key, executor, model, effort, profile].join(":"),
+      launchIntent,
       {
         file: work.file,
         cbidx: work.cbidx,
@@ -466,14 +476,15 @@ export function LaunchV2({ work }: { work: Work }) {
         <h2>Executor</h2>
         <div className="provider-choices">
           {(catalogue.data?.executors || []).map((entry) => {
-            const state = launchState(entry);
+            const verified = executor === entry.id && readinessCanStart(readiness.data, readinessSelection);
+            const selectable = entry.available !== false && entry.permitted;
             return (
               <button
                 key={entry.id}
                 aria-pressed={executor === entry.id}
-                aria-disabled={!state.enabled}
+                aria-disabled={!selectable}
                 onClick={() => {
-                  if (!state.enabled) {
+                  if (!selectable) {
                     setBlockedExecutor(entry);
                     return;
                   }
@@ -483,10 +494,10 @@ export function LaunchV2({ work }: { work: Work }) {
               >
                 <Sparkles size={21} />
                 <strong>{entry.label}</strong>
-                {!state.enabled ? (
-                  <small>Unavailable</small>
+                {!verified ? (
+                  <small>{selectable ? "Unverified" : "Unavailable"}</small>
                 ) : (
-                  executor === entry.id && <Check size={17} />
+                  <Check size={17} />
                 )}
               </button>
             );
@@ -553,32 +564,48 @@ export function LaunchV2({ work }: { work: Work }) {
         retry={() => void catalogue.refetch()}
       />
       <ErrorNotice error={start.failure} retry={start.retry} />
+      <ErrorNotice error={readiness.error} retry={() => void readiness.refetch()} />
+      <ErrorNotice error={previousLaunch.error} retry={() => void previousLaunch.refetch()} />
+      <section className="launch-section" aria-label="Readiness">
+        <h2>Readiness</h2>
+        <ul>
+          {readinessLabels(readiness.data).map((entry, index) => <li key={`${entry.gate}:${entry.code}:${index}`}>{entry.label}</li>)}
+        </ul>
+      </section>
       <CommandReceipt
         pending={start.pending}
         onCheck={start.retry}
         busy={start.isPending}
       />
-      {testGate.data?.locked && <TestGateCard gate={testGate.data} />}
+      {testGate?.locked && <TestGateCard gate={testGate} />}
+      {refresh.error && <p role="alert">{refresh.error.message}</p>}
       <div className="launch-footer">
+        {previousLaunch.data && <button disabled={!connected || start.isPending} onClick={() => {
+          const saved = previousLaunch.data!;
+          start.send(saved.path, launchIntent, saved.body, data => go(`/delivery/run/${String(data.run_id)}`));
+        }}>{previousLaunch.data.completed ? "Open delivery" : "Resume request"}</button>}
+        <button disabled={!connected || !executor || !model || refresh.isPending} onClick={() => refresh.mutate()}>{refresh.isPending ? "Checking" : "Check readiness"}</button>
         <span>
           {testsLocked
             ? "Tests not confirmed"
             : noRuntime
             ? "Worker unavailable"
-            : assessment.data?.startable === false
-              ? startBlocker(assessment.data.reasons)
+            : assessment?.startable === false
+              ? startBlocker(assessment.reasons)
               : ""}
         </span>
         <button
           className="primary"
           disabled={
             !connected ||
+            !!previousLaunch.data || !!previousLaunch.error ||
             !chosen ||
-            !launchState(chosen).enabled ||
+            !chosen.permitted ||
+            !readinessCanStart(readiness.data, readinessSelection) ||
             noRuntime ||
             start.isPending ||
             work.state !== "open" ||
-            assessment.data?.startable === false ||
+            assessment?.startable === false ||
             testsLocked
           }
           onClick={deliver}

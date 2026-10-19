@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openStore } from "../../scripts/delivery-v2/store.mjs";
 import { TYPECHECK_CRITERION_ID } from "../../scripts/delivery-v2/typecheck.mjs";
-import { SELECT, journeyFor, makeHarness, seedRoot, verifiedRun, writePolicy, type Loose } from "./fixtures/v2-harness";
+import { SELECT, plannedRun, journeyFor, makeHarness, seedRoot, verifiedRun, writePolicy, type Loose } from "./fixtures/v2-harness";
 
 let ROOT: string;
 let DATA: string;
@@ -241,10 +241,11 @@ describe("the journey prefers the protected checker and records which one ran", 
 
   it("refuses to verify at all when the policy requires isolation and the checker is unavailable", async () => {
     const required = withTypecheck();
+    writeFileSync(join(ROOT, "src/old.ts"), "export {};\n");
     writePolicy(ROOT, {
       checks: {
         ...required.checks,
-        requiredVerifications: { typecheck: { ...required.checks.requiredVerifications.typecheck, isolation: "checker" } },
+        requiredVerifications: { typecheck: { ...required.checks.requiredVerifications.typecheck, isolation: "checker", program: { roots: ["tsconfig.json", "src"], extensions: [".ts", ".json"] } } },
       },
     });
     const h = makeHarness(ROOT);
@@ -257,4 +258,43 @@ describe("the journey prefers the protected checker and records which one ran", 
     // nothing to act on.
     expect(view.result.candidateVerified).toBe(false);
   });
+});
+
+
+it("ordinary delivery carries frozen compiler inputs through approval, restart and checking", async () => {
+  const required = withTypecheck();
+  writeFileSync(join(ROOT, "src/old.ts"), "export {};\n");
+  writePolicy(ROOT, { checks: { ...required.checks, requiredVerifications: { typecheck: { ...required.checks.requiredVerifications.typecheck,
+    isolation: "checker", program: { roots: ["tsconfig.json", "src"], extensions: [".ts", ".json"] } } } } });
+  const h = makeHarness(ROOT);
+  const seen: string[] = [];
+  h.runtime.typecheckExecutor = ({ programRoot, include }: Loose) => {
+    seen.push(readFileSync(join(programRoot, "src/config.ts"), "utf8"));
+    return { ok: true, program: { fingerprint: "sha256:fixture", files: include.length }, producer: { producer: "protected-checker", isolated: true },
+      execute: () => ({ exitCode: 0, stdout: "", stderr: "", spawnError: null }) };
+  };
+  const initial = journeyWith(h), { run_id, plan } = await plannedRun(initial, cmd());
+  const frozen = JSON.parse(String(store.getRun(run_id)!.settings_json)).compiler_input;
+  expect(frozen.manifest.some((entry: Loose) => entry.path === "src/config.ts")).toBe(true);
+  writeFileSync(join(ROOT, "src/config.ts"), "BROKEN unrelated checkout edit");
+  const restarted = journeyWith(h);
+  await restarted.decide({ run_id, plan_id: plan.plan_id, plan_revision: plan.revision, decision: "approve", command_id: cmd(), actor: "owner" });
+  await restarted.idle();
+  expect(seen).toEqual(["export const config = { mode: 'normal' };\n"]);
+  expect(restarted.detail(run_id).result.candidateVerified).toBe(true);
+  expect(JSON.parse(String(store.getRun(run_id)!.settings_json)).compiler_input.fingerprint).toBe(frozen.fingerprint);
+});
+
+it("missing frozen compiler input stops implementation before another provider job", async () => {
+  const required = withTypecheck();
+  writeFileSync(join(ROOT, "src/old.ts"), "export {};\n");
+  writePolicy(ROOT, { checks: { ...required.checks, requiredVerifications: { typecheck: { ...required.checks.requiredVerifications.typecheck,
+    isolation: "checker", program: { roots: ["tsconfig.json", "src"], extensions: [".ts", ".json"] } } } } });
+  const h = makeHarness(ROOT), journey = journeyWith(h), { run_id, plan } = await plannedRun(journey, cmd());
+  const frozen = JSON.parse(String(store.getRun(run_id)!.settings_json)).compiler_input;
+  rmSync(join(frozen.root, "tsconfig.json"));
+  await journey.decide({ run_id, plan_id: plan.plan_id, plan_revision: plan.revision, decision: "approve", command_id: cmd(), actor: "owner" });
+  await journey.idle();
+  expect(h.calls).toHaveLength(1);
+  expect(journey.detail(run_id).result?.candidateVerified).not.toBe(true);
 });

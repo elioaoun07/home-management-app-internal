@@ -2,8 +2,8 @@
 // this machine. Same requests the app always made, now behind the transport seam.
 import { RequestTimeoutError, safeFetch } from "@/lib/safeFetch";
 import { isReallyOnline, startProbing } from "@/lib/connectivityManager";
-import { PendingCommand, PmError, type ConnectionState, type Transport, type TransportEvent } from "./transport";
-import type { Snapshot, V2Assessment, V2Queue, V2Allowances, V2TestGate, V2Session } from "./types";
+import { PendingCommand, PmError, RefusedCommand, type ConnectionState, type Transport, type TransportEvent } from "./transport";
+import type { Snapshot, V2Assessment, V2Queue, V2Allowances, V2TestGate, V2Session, V2Readiness } from "./types";
 
 function refusalText(payload: Record<string, unknown>, status: number) {
   const first = Array.isArray(payload.refusals) ? (payload.refusals[0] as Record<string, unknown> | undefined) : undefined;
@@ -133,12 +133,26 @@ export function createLocalTransport(): Transport {
     v2Queue: async (signal) => (await v2Read<{ queue: V2Queue | null }>("/api/delivery/v2/queue", signal)).queue,
     v2TestGate: async (signal) => (await v2Read<{ gate: V2TestGate | null }>("/api/delivery/v2/test-gate", signal)).gate,
     v2Allowances: async (signal) => (await v2Read<{ allowances: V2Allowances | null }>("/api/delivery/v2/allowances", signal)).allowances,
+    v2Readiness: (selection, signal) => {
+      const query = new URLSearchParams(Object.entries(selection).filter((entry): entry is [string, string] => entry[1] !== null));
+      return read<V2Readiness>("/api/delivery/v2/readiness?" + query, signal);
+    },
     v2Assess: (file, id, signal) =>
       v2Read<V2Assessment>("/api/delivery/v2/assess?file=" + encodeURIComponent(file) + "&id=" + encodeURIComponent(id), signal),
 
     async v2Command<T>(path: string, body: Record<string, unknown>, timeoutMs = 60000): Promise<T> {
       if (!csrf) await v2Session();
       const command_id = String(body.command_id || "");
+      if (command_id && !(path === "control" && body.action === "refresh-readiness")) {
+        try {
+          const receipt = await v2Read<{ recorded: boolean; outcome: T & { ok?: boolean } }>("/api/delivery/v2/command?id=" + encodeURIComponent(command_id));
+          if (!receipt.recorded || !receipt.outcome) throw new PendingCommand(command_id, "unknown");
+          if (receipt.outcome?.ok === false) throw new RefusedCommand(refusalText(receipt.outcome as Record<string, unknown>, 409), 409);
+          return receipt.outcome;
+        } catch (error) {
+          if (!(error instanceof PmError && error.status === 404)) throw error;
+        }
+      }
       let response: Response;
       try {
         response = await safeFetch(`/api/delivery/v2/${path}`, {
@@ -150,16 +164,19 @@ export function createLocalTransport(): Transport {
         });
       } catch (error) {
         // A timeout is latency: the server may still be running this command.
-        if (error instanceof RequestTimeoutError && command_id) throw new PendingCommand(command_id, "acknowledged");
+        if (command_id) throw new PendingCommand(command_id, "unknown");
         throw error;
       }
-      const payload = await response.json();
+      let payload;
+      try { payload = await response.json(); }
+      catch (error) { if (command_id) throw new PendingCommand(command_id, "unknown"); throw error; }
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) csrf = null;
         // The same id is still running on the server: not a failure.
         if (firstRefusal(payload) === "command-without-recorded-outcome" && command_id) throw new PendingCommand(command_id, "acknowledged");
         lastAck = { at: new Date().toISOString(), state: "refused" };
-        throw new PmError(refusalText(payload, response.status), response.status);
+        if (response.status >= 500 && command_id) throw new PendingCommand(command_id, "unknown");
+        throw new RefusedCommand(refusalText(payload, response.status), response.status);
       }
       lastAck = { at: new Date().toISOString(), state: "done" };
       return payload;

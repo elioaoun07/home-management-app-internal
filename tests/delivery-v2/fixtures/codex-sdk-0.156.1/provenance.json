@@ -1,0 +1,9 @@
+{
+  "package": "@openai/codex-sdk",
+  "version": "0.156.1",
+  "source": "https://registry.npmjs.org/@openai/codex-sdk/-/codex-sdk-0.156.1.tgz",
+  "integrity": "sha512-t1GNPYrSIjHGfBKZ+9pbjOS/by0tMwVe+27fHsMO3RHl9QLIc7dB8XYR954iZ6HpF4EAjZs0melT0mPXF03jVg==",
+  "typesDigest": "sha256:954d28bec3db17316c2f6acbbd157210ded9f75143c50827215739110327c7ac",
+  "license": "Apache-2.0",
+  "purpose": "Complete unmodified public type surface from SRI-verified worker payload. Operational verification separately proves installed worker identity."
+}

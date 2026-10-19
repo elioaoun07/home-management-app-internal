@@ -198,6 +198,7 @@ export function pinCheckPlan({ criteria, specs, checkerInputs = [], toolchain = 
       procedure: spec.procedure || null,
       expected: { ...(spec.expected || {}) },
     });
+    if (spec.expected?.assertions !== undefined && (!Number.isInteger(spec.expected.assertions) || spec.expected.assertions <= 0)) throw new ContractError("observer assertion count must be a positive integer");
   }
 
   const assignments = {};
@@ -591,6 +592,11 @@ export async function runCheck({
         failure: classified.outcome === CHECK_OUTCOMES.PASSED ? null : classified.outcome,
         failureDetail: classified.outcome === CHECK_OUTCOMES.PASSED ? null : classified.detail,
       });
+      if (spec.expected.assertions !== undefined && (selected !== spec.expected.assertions || executed !== spec.expected.assertions || skipped !== 0 || (raw.failed ?? counts.failed) !== 0)) {
+        const detail = "expected " + spec.expected.assertions + " assertions, selected=" + selected + ", executed=" + executed + ", skipped=" + skipped + ", failed=" + (raw.failed ?? counts.failed);
+        classified = { outcome: CHECK_OUTCOMES.OUTPUT_UNREADABLE, detail };
+        observation = makeObservation({ kind: "command", outcome: "malformed", inputs, attribution: CHECKER_ID, raw_refs: rawRef ? [rawRef] : [], detail: { ...observation.detail, failure: classified.outcome, failureDetail: detail } });
+      }
     }
   }
 

@@ -17,7 +17,7 @@ If you read only four things before acting, read these, in order:
 3. **`ERA Notes/01 - Architecture/Feature Map/_index.md`** — user intent → exact source files.
 4. **`ERA Notes/01 - Architecture/Design Doctrine.md`** — how to *decide* when no playbook covers it: the Ten Questions, silent-failure taxonomy, standing decisions, and tradeoff priority order. Mandatory before designing any new feature or resolving an ambiguous tradeoff; skippable for mechanical edits.
 
-PM state: read the campaign's **Master Book** (`ERA Notes/10 - Project Management/<Campaign>/<Campaign> — Master Book.md`) before working it, then inspect code changes since its **evidence cutoff**, not its `updated:` stamp. `ERA Notes/10 - Project Management/_index.md` routes ownership and specs; `_Conventions.md` governs new work; `_Archive/` is historical and no PM tool scans it. Do not recreate competing per-campaign study queues.
+PM state: read the campaign's **Master Book** (`ERA Notes/10 - Project Management/<Campaign>/<Campaign> — Master Book.md`) before working it, then inspect code changes since its **evidence cutoff**, not its `updated:` stamp. `ERA Notes/10 - Project Management/_index.md` routes ownership and specs; `_Conventions.md` governs new work; `_Archive/` is historical and no PM tool scans it. Do not recreate competing per-campaign study queues. Before choosing a model or effort for any delivery plan, read `ERA Notes/Model-Registry.md` and use its tier aliases (e.g. `CLAUDE_MID`), not model names.
 
 ---
 

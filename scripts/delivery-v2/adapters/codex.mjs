@@ -44,7 +44,7 @@ const SDK_MODULE_SPECIFIER = "@openai/codex-sdk";
 
 /**
  * What the pinned SDK's public surface actually offers, as reviewed in
- * node_modules/@openai/codex-sdk/dist/index.d.ts at version 0.144.1.
+ * @openai/codex-sdk/dist/index.d.ts at version 0.156.1 (SRI-verified fixture).
  *
  * This is a *static* record of an interface, not a claim about the installed
  * machine, and tests/delivery-v2/backend-profile.test.ts re-reads the .d.ts to
@@ -53,7 +53,7 @@ const SDK_MODULE_SPECIFIER = "@openai/codex-sdk";
  */
 export const CODEX_SDK_SURFACE = deepFreeze({
   package: SDK_MODULE_SPECIFIER,
-  reviewed_version: "0.144.1",
+  reviewed_version: "0.156.1",
   threadOptions: [
     "model",
     "sandboxMode",
@@ -65,9 +65,10 @@ export const CODEX_SDK_SURFACE = deepFreeze({
     "webSearchEnabled",
     "approvalPolicy",
     "additionalDirectories",
+    "threadSource",
   ],
   turnOptions: ["outputSchema", "signal"],
-  usageFields: ["input_tokens", "cached_input_tokens", "output_tokens", "reasoning_output_tokens"],
+  usageFields: ["input_tokens", "cached_input_tokens", "cache_write_input_tokens", "output_tokens", "reasoning_output_tokens"],
   // The three findings. Each is the absence of something, which is why each is
   // recorded explicitly: an absent field is invisible until someone writes it
   // down, and the failure mode is promising the capability anyway.
@@ -138,7 +139,7 @@ export function buildThreadOptions({
 /**
  * Normalize a `turn.completed` usage payload without inventing a currency.
  *
- * The pinned SDK's `Usage` carries four token counters and no cost field. Reading
+ * The pinned SDK's `Usage` carries five token counters and no cost field. Reading
  * one anyway — by pricing tokens from a table, say — would manufacture the
  * "reconciled billed cost" that Context §7 insists is a separate provenance from
  * an estimate. So `costUsd` is null here, always, and `basis` says why.
@@ -149,7 +150,7 @@ export function normalizeCodexUsage(raw) {
     unit: "tokens",
     input: Number(usage.input_tokens || 0),
     cachedInput: Number(usage.cached_input_tokens || 0),
-    cacheCreation: 0,
+    cacheCreation: Number(usage.cache_write_input_tokens || 0),
     output: Number(usage.output_tokens || 0),
     reasoningOutput: Number(usage.reasoning_output_tokens || 0),
     costUsd: null,

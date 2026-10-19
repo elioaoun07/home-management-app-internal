@@ -12,7 +12,7 @@
 // saved rows and says they are saved.
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { PendingCommand, PmError, deskOnly, type ConnectionState, type Transport, type TransportEvent } from "../../../../scripts/pm/app/transport";
+import { PendingCommand, PmError, RefusedCommand, deskOnly, type ConnectionState, type Transport, type TransportEvent } from "../../../../scripts/pm/app/transport";
 import type { RunSummary, Snapshot, V2Catalogue, V2Queue, V2RunDetail, V2RunSummary } from "../../../../scripts/pm/app/types";
 import {
   RELAY_SCHEMA,
@@ -174,7 +174,7 @@ export function createRelayTransport({
       delete result.receipt;
       return result;
     }
-    if (receipt.state === "refused") throw new PmError(outcome.row.error || "Refused", 409);
+    if (receipt.state === "refused") throw new RefusedCommand(outcome.row.error || "Refused", 409);
     throw new PendingCommand(id, receipt.state === "expired" ? "expired" : "unknown");
   }
 
@@ -361,7 +361,7 @@ export function createRelayTransport({
 
     async v2Session() {
       await readyPromise;
-      return { paired: Boolean(ownerId), actor: ownerId ? "remote" : null, csrf: null };
+      return { paired: Boolean(ownerId), actor: ownerId, scope: installationId || undefined, csrf: null };
     },
     v2Pair: async () => {
       throw deskOnly();
@@ -392,6 +392,11 @@ export function createRelayTransport({
       return payloadOf<{ queue?: V2Queue | null }>(ROW_KINDS.V2RUNS)?.queue || null;
     },
     v2Assess: async () => null,
+    async v2Readiness(selection) {
+      await readyPromise;
+      const values = payloadOf<{ readiness?: import("../../../../scripts/pm/app/types").V2Readiness[] }>(ROW_KINDS.CAPABILITIES)?.readiness || [];
+      return values.find(value => Object.entries(selection).every(([key, field]) => value.selection[key as keyof typeof selection] === field)) || null;
+    },
     // Allowance settings are read and changed on the laptop server only.
     v2Allowances: async () => null,
     v2TestGate: async () => null,

@@ -39,7 +39,8 @@
 
 import { createHash } from "node:crypto";
 import { DatabaseSync, backup } from "node:sqlite";
-import { closeSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync, fsyncSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync, fsyncSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 import { ContractError, canonicalJson, deepFreeze, normalizePath } from "./contracts.mjs";
@@ -462,11 +463,26 @@ export function payloadDigest(payload) {
  * power loss would quietly reintroduce the hole the `dispatch_started_at` marker
  * exists to close.
  *
- * @param {{path:string, now?:Function}} input
+ * @param {{path:string, now?:Function,readOnly?:boolean}} input
  */
-export function openStore({ path, now = () => new Date().toISOString() }) {
-  mkdirSync(dirname(path), { recursive: true });
-  const db = new DatabaseSync(path, { enableForeignKeyConstraints: true });
+export function openStore({ path, now = () => new Date().toISOString(), readOnly = false }) {
+  if (!readOnly) mkdirSync(dirname(path), { recursive: true });
+  // SQLite's ordinary read-only WAL connection can still create -wal/-shm.
+  // Immutable reads avoid those writes, but must NEVER ignore pending WAL data.
+  // Refuse a live WAL store; report unavailable instead of checkpointing/copying.
+  const hasWal = () => existsSync(path + "-wal") || existsSync(path + "-shm");
+  if (readOnly && hasWal()) throw new ContractError("read-only inspection unavailable while WAL/shared-memory files exist; no checkpoint or cleanup performed");
+  const digest = () => createHash("sha256").update(readFileSync(path)).digest("hex");
+  const readDigest = readOnly ? digest() : null;
+  const db = new DatabaseSync(readOnly ? pathToFileURL(path).href + "?immutable=1&mode=ro" : path, { enableForeignKeyConstraints: true, readOnly });
+  if (readOnly) {
+    // Inspection never creates, migrates, checkpoints or repairs a store.
+    try {
+      db.exec("PRAGMA query_only = ON;");
+      const version = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get();
+      if (Number(version?.value) !== STORE_SCHEMA_VERSION) throw new ContractError("read-only store schema is not current");
+    } catch (error) { db.close(); throw error; }
+  } else {
   // A second process (the bridge, a restarted server) waits for the write lock
   // instead of failing an admission outright.
   db.exec("PRAGMA busy_timeout = 5000;");
@@ -483,6 +499,7 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
   db.prepare(
     "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
   ).run("schema_version", String(STORE_SCHEMA_VERSION));
+  }
 
   const statements = new Map();
   /** Prepared-statement cache; SQLite is happier and the call sites stay short. */
@@ -522,6 +539,19 @@ export function openStore({ path, now = () => new Date().toISOString() }) {
   }
 
   const api = {
+    /** Queries over an already-open connection; never opens or maintains one. */
+    readOnlyView() {
+      const version = () => String(db.prepare("PRAGMA data_version").get().data_version) + ":" + String(db.prepare("SELECT total_changes() AS changes").get().changes);
+      const observed = version();
+      const names = ["getRun", "listRuns", "getWorkRef", "listWorkRefs", "getContract", "getGrant", "getJob", "listJobs", "listAllJobs", "listOutstandingJobs", "countUsageReadings", "listUsageReadings", "listSubagentActivity", "listDecisions", "getDecision", "getPlan", "listPlans", "listCandidates", "listEvidence", "latestResult", "listResults", "getApplication", "listApplications", "listAllApplications", "listActiveApplications"];
+      return Object.freeze({ ...Object.fromEntries(names.map(name => [name, api[name].bind(api)])), close() {},
+        readOnlySnapshotCurrent: () => { try { return version() === observed; } catch { return false; } },
+      });
+    },
+    readOnlySnapshotCurrent() {
+      if (!readOnly) return false;
+      try { return !hasWal() && digest() === readDigest; } catch { return false; }
+    },
     path: normalizePath(path),
     db,
     now,

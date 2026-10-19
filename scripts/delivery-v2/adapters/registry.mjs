@@ -60,7 +60,7 @@ export const EXECUTORS = deepFreeze([
     qualificationProbe: "scripts/delivery-v2/probes/codex-qualification.mjs",
     summary:
       "OpenAI Codex exec/SDK under its own Windows sandbox. Confines writes and network; its read boundary is observed to fail. No monetary reading at this SDK version.",
-    // ModelReasoningEffort in @openai/codex-sdk 0.144.1 (re-read by a fixture).
+    // Reviewed subset of ModelReasoningEffort in @openai/codex-sdk 0.156.1.
     supportedEfforts: ["minimal", "low", "medium", "high", "xhigh"],
     effectiveReported: { model: null, effort: null },
   },

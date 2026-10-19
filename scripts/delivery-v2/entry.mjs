@@ -36,7 +36,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { ContractError, contentId, deepFreeze, normalizePath, evaluateGrant } from "./contracts.mjs";
+import { ContractError, fingerprint, contentId, deepFreeze, normalizePath, evaluateGrant } from "./contracts.mjs";
 import { recordPlan } from "./interaction.mjs";
 import { freezeSelectedItem, recheckContractSource } from "./work-ref.mjs";
 import { ADMISSION_REFUSALS, admitJob, resourceSummary } from "./jobs.mjs";
@@ -783,7 +783,7 @@ const json = (status, body) => ({ status, json: body });
  * @param {{method:string, path:string, query?:URLSearchParams, body?:any,
  *   headers?:Record<string, any>}} req
  * @param {{root:string, store?:any, allowedOrigins?:string[], deliver?:any, journey?:any,
- *   describeExecutors?:any, hasStore?:any, listExecutors?:any,
+ *   describeExecutors?:any, readiness?:any, hasStore?:any, listExecutors?:any,
  *   activeV1Writers?:any, unreconciledV2Jobs?:any, now?:any}} ctx
  * @returns {Promise<({status:number, json:any, headers?:Record<string, string>}|null)>}
  */
@@ -796,7 +796,7 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
 
   // Whether this browser is paired, and its CSRF token. Readable only same-origin.
   if (method === "GET" && path === "/api/delivery/v2/session") {
-    return json(200, sessionView({ root: ctx.root, headers }));
+    return json(200, { ...sessionView({ root: ctx.root, headers }), scope: fingerprint(ctx.root) });
   }
 
   // The executor catalogue with each backend's qualification, supported efforts
@@ -821,9 +821,25 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
     return { status: 200, json: view, headers: { "Set-Cookie": sessionCookie(paired.token) } };
   }
 
+  // Passive inspection reads no local-auth credential and never evaluates the
+  // service's lazy journey/runtime getters. Commands below remain authenticated.
+  if (method === "GET" && path === "/api/delivery/v2/readiness") {
+    if (!ctx.readiness) return json(503, { error: "readiness-unavailable" });
+    const outcome = await ctx.readiness({ file: query?.get("file") || "", id: query?.get("id") || "",
+      executor: query?.get("executor") || "", model: query?.get("model") || null, effort: query?.get("effort") || null,
+      workProfile: query?.get("workProfile") || "focused" });
+    return json(200, outcome);
+  }
+
   const auth = authenticateLocal({ root: ctx.root, headers, allowedOrigins: ctx.allowedOrigins || [] });
   if (!auth.ok || !auth.actor) {
     return json(auth.status, { error: auth.refusal ? auth.refusal.code : ENTRY_REFUSALS.UNAUTHENTICATED, detail: auth.refusal ? auth.refusal.detail : null });
+  }
+
+  if (method === "POST" && path === "/api/delivery/v2/control" && body.action === "refresh-readiness") {
+    if (!ctx.refreshReadiness) return json(503, { error: "readiness-unavailable" });
+    const readiness = await ctx.refreshReadiness(body.selection || {});
+    return json(200, { ok: true, readiness });
   }
 
   if (method === "POST" && path === "/api/delivery/v2/session/revoke") {
@@ -858,6 +874,10 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
   }
 
   if (method === "GET" && path === "/api/delivery/v2/assess") {
+    if (ctx.readiness) {
+      const inspected = await ctx.readiness({ file: query?.get("file") || "", id: query?.get("id") || "" });
+      return json(inspected.assessment?.ok ? 200 : 409, inspected.assessment || { ok: false, refusals: inspected.blockers });
+    }
     if (!ctx.journey) return json(404, { error: ENTRY_REFUSALS.UNKNOWN_RUN, detail: null });
     const outcome = ctx.journey.assess({
       file: (query && query.get("file")) || "",
@@ -925,6 +945,10 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
     const requested = resolveExecutorChoice(body.executor);
     if (!requested) {
       return json(409, { error: ENTRY_REFUSALS.BAD_EXECUTOR, detail: String(body.executor) });
+    }
+    if (ctx.readiness && !ctx.commandStatus?.(body.command_id)) {
+      const readiness = await ctx.readiness({ file: body.file, id: body.expectId || body.witness?.alias, executor: body.executor, model: body.model, effort: body.effort, workProfile: body.workProfile });
+      if (!readiness.ready) return json(409, { ok: false, error: "delivery-not-ready", readiness });
     }
     if (ctx.journey) {
       const outcome = await ctx.journey.deliver({

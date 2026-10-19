@@ -306,3 +306,23 @@ describe("relay transport", () => {
     stop();
   });
 });
+
+
+it("mobile reads the same selection-bound readiness and relays explicit refresh through existing controls", async () => {
+  const rows = publishedRows(OWNER_A);
+  const selection = { file: "PM Tooling/4 - Checklist.md", id: "R44", executor: "codex", model: "gpt-6-luna", effort: "low", workProfile: "focused" };
+  const readiness = { selection, ready: false, blockers: [{ code: "runtime-unprobed" }] };
+  const capability = rows.find(row => row.id === rowId(INST, ROW_KINDS.CAPABILITIES))!;
+  Object.assign(capability.payload, { readiness: [readiness] });
+  const fake = fakeSupabase({ ownerId: OWNER_A, liveRows: rows });
+  const transport = createRelayTransport({ supabase: fake.client as never, cacheStore: createMemoryStore(), storage: memoryStorage(), commandWaitMs: 1 });
+  const stop = transport.start();
+  try {
+    await transport.ready();
+    expect(await transport.v2Readiness!(selection)).toEqual(readiness);
+    expect(await transport.v2Readiness!({ ...selection, effort: "high" })).toBeNull();
+    expect(await transport.v2Session()).toMatchObject({ actor: OWNER_A, scope: INST });
+    await transport.v2Command("control", { action: "refresh-readiness", selection, command_id: "55555555-5555-4555-8555-555555555555" }).catch(() => undefined);
+    expect([...fake.commands.values()][0]).toMatchObject({ type: "v2-control", payload: { installation_id: INST, body: { action: "refresh-readiness", selection } } });
+  } finally { stop(); }
+});

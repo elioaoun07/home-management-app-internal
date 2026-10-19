@@ -21,6 +21,9 @@
 //   4. On resume the session seeds that counter from the last `TokenCount` event
 //      in the rollout, so it carries across `resumeThread`
 //      (codex-rs/core/src/session/mod.rs:1368-1372, 1496-1501).
+// The 0.156.1 upgrade retains usage_from_last_total (exec processor:108-118,
+// 492-515), now including cache_write_input_tokens. Its five counters all read
+// usage.total. Source: https://github.com/openai/codex/blob/rust-v0.156.1/codex-rs/exec/src/event_processor_with_jsonl_output.rs
 //
 // The Claude agent SDK reports per-turn usage on each result message, which is
 // already incremental. Nothing here applies a Codex rule to Claude: the semantics

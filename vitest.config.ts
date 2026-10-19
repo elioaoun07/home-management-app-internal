@@ -9,6 +9,10 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Disk-backed delivery/Apply fixtures and native builds share this laptop
+    // with the bridge. The 19-worker default causes measured full-suite
+    // deadline failures; bound scheduling without changing tests or deadlines.
+    maxWorkers: 2,
     include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
     setupFiles: ["tests/setup/blockPaidApis.ts"],
     passWithNoTests: false,

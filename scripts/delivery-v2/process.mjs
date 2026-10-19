@@ -10,7 +10,7 @@ import { spawn } from "node:child_process";
  *
  * @param {string} command
  * @param {string[]} args
- * @param {{cwd?:string, env?:NodeJS.ProcessEnv, input?:string, timeout?:number, maxBuffer?:number, spawnFn?:typeof spawn}} [options]
+ * @param {{cwd?:string, env?:NodeJS.ProcessEnv, input?:string|Buffer, timeout?:number, maxBuffer?:number, spawnFn?:typeof spawn}} [options]
  * @returns {Promise<{status:(number|null), signal:(string|null), stdout:string, stderr:string, error:((Error & {code?:string})|null)}>}
  */
 export function runProcess(command, args, { cwd, env, input, timeout = 0, maxBuffer = 64 * 1024 * 1024, spawnFn = spawn } = {}) {

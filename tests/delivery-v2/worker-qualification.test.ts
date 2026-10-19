@@ -1,17 +1,18 @@
 // Command Center Phase 3 — the worker qualification harness, without Docker.
 // The receipt it assembles must be loadable only against its own binding and must
 // carry the battery's verdicts unchanged, including an unobserved egress control.
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import { assembleReceipt, batteryDockerfile, readImageBinding } from "../../scripts/delivery-v2/probes/worker-qualification.mjs";
-import { classifyControls, validateNegativeControl } from "../../scripts/delivery-v2/probes/codex-qualification.mjs";
+import { roleVerdict } from "../../scripts/delivery-v2/probes/container-feasibility.mjs";
 import { loadQualification, writeQualificationReceipt } from "../../scripts/delivery-v2/qualification.mjs";
 import { boundaryBindingDigest, makeBoundaryConfig } from "../../scripts/delivery-v2/worker-boundary.mjs";
 import { describeProfile } from "../../scripts/delivery-v2/adapters/claude.mjs";
+import { describeProfile as describeCodexProfile } from "../../scripts/delivery-v2/adapters/codex.mjs";
 import { admitProfile } from "../../scripts/delivery-v2/adapters/adapter.mjs";
 
 const records = (overrides: Record<string, string> = {}) =>
@@ -34,11 +35,8 @@ const unconfined = ["scratch-write", "outside-write", "git-mutation", "host-secr
 
 const boundary = makeBoundaryConfig({ image: "era-delivery-v2-worker:local" });
 
-function verdict(hardened: { canary: string; outcome: string }[]) {
-  const negativeControl = validateNegativeControl(unconfined);
-  const controls = classifyControls(hardened, { evidenceRef: "worker-qualification:run:worker", descendantSurvived: false });
-  const unverified = Object.entries(controls).filter(([, control]) => !control.verified).map(([id]) => id);
-  return { negativeControl, controls, unverified, failing: [], met: true };
+function verdict(hardened: { canary: string; outcome: string }[], negativeRecords = unconfined, descendantSurvived: boolean | null = false) {
+  return roleVerdict({ negativeRecords, hardenedRecords: hardened, evidenceRef: "worker-qualification:run:fixture", descendantSurvived });
 }
 
 describe("worker qualification receipts", () => {
@@ -86,16 +84,49 @@ describe("worker qualification receipts", () => {
     }
   });
 
-  it("records an escape as a finding that refuses the profile", () => {
-    const worker = verdict(records({ "host-secret-read": "escaped" }));
+  it.each(["worker", "checker"] as const)("refuses receipt publication when %s fails a real canary verdict", (role) => {
+    const root = mkdtempSync(join(tmpdir(), "era-v2-wq-refused-"));
+    const binding = { backend_id: "codex-exec-sdk", sdk_version: "0.144.1", boundary_digest: "sha256:bd", battery_digest: "sha256:bt" };
+    const passing = verdict(records({ "network-egress": "denied" }));
+    const failures = [
+      verdict(records({ "host-secret-read": "escaped" })),
+      verdict(records({ "link-escape": "inconclusive" })),
+      verdict(records(), unconfined.map(record => record.canary === "store-access" ? { ...record, outcome: "denied" } : record)),
+      verdict(records(), unconfined, null),
+    ];
+    try {
+      for (const failed of failures) {
+        expect(failed.met).toBe(false);
+        const input = { backend_id: "codex-exec-sdk", binding, worker: passing, checker: passing, [role]: failed, run: "run", observed_at: "2026-09-12T00:00:00.000Z" };
+        let refusal: unknown;
+        try {
+          const receipt = assembleReceipt(input);
+          writeQualificationReceipt({ root, receipt });
+        } catch (error) { refusal = error; }
+        expect(refusal).toMatchObject({
+          code: "qualification-controls-unproven",
+          qualification: { binding, run: "run", verdicts: { [role]: failed } },
+        });
+        expect(existsSync(join(root, ".delivery/v2/artifacts/qualification"))).toBe(false);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("publishes an admissible receipt only after both real role verdicts pass", () => {
+    const worker = verdict(records({ "network-egress": "denied" }));
+    const checker = verdict(records({ "network-egress": "denied" }));
+    expect(worker.met && checker.met).toBe(true);
     const receipt = assembleReceipt({
       backend_id: "codex-exec-sdk",
       binding: { backend_id: "codex-exec-sdk", sdk_version: "0.144.1", boundary_digest: "sha256:bd", battery_digest: "sha256:bt" },
       worker,
-      checker: worker,
+      checker,
       run: "run",
       observed_at: "2026-09-12T00:00:00.000Z",
     });
-    expect((receipt.controls as Record<string, { state: string; verified: boolean }>)["filesystem.hostSecretRead"]).toMatchObject({ state: "unsupported", verified: true });
+    const profile = describeCodexProfile({ observations: { controls: receipt.controls }, qualification_ref: receipt.receipt_id });
+    expect(admitProfile(profile).admitted).toBe(true);
   });
 });

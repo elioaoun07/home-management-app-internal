@@ -270,6 +270,7 @@ export interface Recommendation {
 // --- Delivery V2 projections (scripts/delivery-v2/journey.mjs) ---------------
 
 export interface V2Session {
+  scope?: string;
   paired: boolean;
   actor: string | null;
   csrf: string | null;
@@ -624,6 +625,29 @@ export interface V2Queue {
   pairs: V2Pair[];
   unknown: { jobs: { run_id: string; job_id: string }[]; reservationsWithoutAmount: number };
   nativeAgents: number;
+}
+export interface V2ReadinessSelection {
+  file: string;
+  id: string;
+  executor: string;
+  model: string | null;
+  effort: string | null;
+  workProfile: string;
+}
+export interface V2Readiness {
+  schema: string;
+  phase: string;
+  ready: boolean;
+  status: "ready" | "blocked";
+  fingerprint: string;
+  authority: "inspection-only";
+  selection: V2ReadinessSelection;
+  blockers: { gate: string; state: string; code: string; detail?: unknown; nextAction?: string | null }[];
+  facts: Record<string, { state: string; code: string; detail?: unknown; evidence?: unknown }>;
+  nextActions: string[];
+  expiresAt: string | null;
+  assessment?: V2Assessment | null;
+  testGate?: V2TestGate | null;
 }
 export interface V2Assessment {
   ok: boolean;

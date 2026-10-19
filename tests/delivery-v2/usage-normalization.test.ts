@@ -57,6 +57,16 @@ function usageReading(turn: number, raw: Record<string, number>, semantics: stri
 }
 
 describe("counter semantics", () => {
+  it("preserves cumulative Codex cache writes and derives only the resumed increment", () => {
+    const prior = normalizeCodexUsage({ input_tokens: 100, cache_write_input_tokens: 30, output_tokens: 10 });
+    const next = normalizeCodexUsage({ input_tokens: 160, cache_write_input_tokens: 45, output_tokens: 15 });
+    const merged = mergeUsageReadings([{ turn: 0, usage: prior }, { turn: 1, usage: next }, { turn: 1, usage: next }]);
+    expect(merged.cacheCreation).toBe(45);
+    const delta = normalizeUsageReading({ semantics: CODEX_COUNTER_SEMANTICS, raw: merged, baseline: prior, baselineRequired: true });
+    expect(delta.values.cacheCreation).toBe(15);
+    expect(normalizeCodexUsage({ input_tokens: 100 }).cacheCreation).toBe(0);
+  });
+
   it("reads a Codex turn.completed reading as cumulative for the thread", () => {
     // Not the SDK's doc comment ("usage during a turn") but the exec
     // implementation: turn.completed carries ThreadTokenUsage.total.

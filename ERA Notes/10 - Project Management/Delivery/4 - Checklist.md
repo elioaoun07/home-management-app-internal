@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-26
+updated: 2026-10-17
 type: checklist
 status: active
 owner: Elio
@@ -30,6 +30,10 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 
 ## Next
 
+- [ ] **DLV-137** HELD — DLV-133 — Prepare Delivery runs with one readiness result — [criteria](<Delivery — Master Book.md#dlv-137>) _(friction - L)_
+
+**DLV-137 — 2026-10-17 recovery source/fixtures:** Explicit service observations now feed desktop/mobile readiness and server admission. Passive reads stay effect-free. DLV-133 operational evidence, coordinated restart and phone acceptance remain pending. Durable command recovery is DLV-138.
+
 ## Later
 
 - [ ] **DLV-133** Run the deterministic typecheck inside the protected checker — [criteria](<Delivery — Master Book.md#dlv-133>) _(friction - L)_
@@ -42,6 +46,6 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **DLV-84** Burn down `react-hooks/exhaustive-deps` (50 across 25 files) — [criteria](<Delivery — Master Book.md#dlv-84>) _(friction - L)_
 - [ ] **DLV-103** Retire V1 only after a supported replacement — [criteria](<Delivery — Master Book.md#dlv-103>) _(friction - M)_
 
-**DLV-133 — 2026-09-20 partial.** The checker path, the pinned program and the environment record are implemented and demonstrated with a real compiler; two steps are left and both are the owner's: run `node scripts/delivery-v2/setup-checker-deps.mjs` to stage `typescript` and the type declarations into `era-dlv107-dependencies`, then set `checks.requiredVerifications.typecheck.isolation` to `"checker"` in the execution policy. Until then the policy default (`prefer-checker`) falls back to the labelled host path and records why. The in-container witness is written and **unrun**: `ERA_V2_DOCKER=1 pnpm exec vitest run tests/delivery-v2/typecheck.docker.test.ts`. Blocker: `setup-checker-deps.mjs` would recreate the dependency volume without `esbuild` and stop both oracles running. See the Master Book's dated note.
+**DLV-133 — 2026-10-17 Stage 1 source update; operational witness pending.** Separate target-platform staging, full inventory, cold/warm receipts and managed identity binding are implemented locally. The legacy bare setup now refuses. Use the Master Book’s recipe/runbook; no Docker preparation, installed policy/volume switch or provider execution occurred. Real same-environment/full-program container evidence and owner activation remain open. DLV-137 depends on this item; DLV-118 remains independent.
 
 **DLV-114 — 2026-09-20 partial; parked 2026-09-26 (supervised use runs `advisory`).** In-job stopping is implemented and covered by 25 isolated cases (`npx vitest run tests/delivery-v2/budget-stop.test.ts`). Still owed: the bounded **real stop witness** (UAT U20), a wall-time limit and the `Increase limit` / `Change model` / `Reduce scope` escalation actions. Reopen before any unattended use.

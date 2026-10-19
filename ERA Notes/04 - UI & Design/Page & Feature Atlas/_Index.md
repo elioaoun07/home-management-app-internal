@@ -83,8 +83,8 @@ tags:
 | `statement-import` | `/statement-import` | [[statement-import]] |
 | `atlas`         | `/atlas`         | [[atlas]]         |
 | `offline`       | `/offline`       | [[offline]]       |
-| `pm`            | `/pm`            | [[pm]] — React local app; hosted Preact reference/export |
-| `pm-live`       | `/pm/live`       | [[pm-live]] — shared Home / Sprints / Work / Delivery / Analytics |
+| `pm`            | `/pm`            | [[pm]] — React local app, shared delivery readiness/recovery; hosted reference/export |
+| `pm-live`       | `/pm/live`       | [[pm-live]] — shared navigation, delivery readiness and command recovery |
 
 ## Feature Modules (Standalone)
 

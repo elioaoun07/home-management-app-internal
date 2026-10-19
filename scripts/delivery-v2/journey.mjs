@@ -1,3 +1,4 @@
+import { freezeCompilerInput, verifyCompilerInput } from "./compiler-input.mjs";
 // scripts/delivery-v2/journey.mjs
 // Command Center Phase 3 — one selected item from plan to a truthful Result.
 //
@@ -131,6 +132,7 @@ import {
 } from "./coordination.mjs";
 import { ACTIVE_APPLICATION_STATES, AFTER_JOB_STATES, publishArtifact, readArtifact } from "./store.mjs";
 import { fileTasks } from "../pm/shared/tasks.mjs";
+import { readinessForRefusals, nativeModelAvailabilityFact } from "./readiness.mjs";
 import { normalizeWorkId } from "../pm/shared/work-id.mjs";
 
 export const JOURNEY_REFUSALS = Object.freeze({
@@ -327,7 +329,7 @@ export function writeSessionLog({
  * @param {{root:string, pmRel:string, store:any, runtime?:any, loadPolicy?:Function,
  *   createAdapter?:Function, describe?:Function, loadQualificationReceipts?:Function,
  *   writeProjection?:Function, readFile?:(path:string)=>string, claimant?:string,
- *   generationsRoot?:string, applicationsRoot?:string, stagingRoot?:string,
+ *   generationsRoot?:string, applicationsRoot?:string, stagingRoot?:string, artifactsRoot?:string,
  *   applyFaults?:{beforeWrite?:(op:any)=>void, beforeRename?:(op:any)=>void},
  *   now?:()=>string}} input
  */
@@ -1146,7 +1148,7 @@ export function createJourney({
     scheduleDrain();
   }
 
-  async function preDispatch(current) {
+  async function preDispatch(current, nativeObservation = undefined) {
     const refusals = [];
     const ctx = context(String(current.run_id));
     if (!ctx || !ctx.contract || !ctx.grant) {
@@ -1213,8 +1215,27 @@ export function createJourney({
       // taken at admission, and this job holds its own.
       refusals.push(...evaluateCoordination(String(current.run_id), { access: String(current.access), policy: loaded.policy, capacity: false }).refusals);
     }
+    // Policy permission alone cannot prove the selected native model exists.
+    // Reobserve under this dispatch claim; never reuse the launch UI snapshot.
+    if (!refusals.length && current.backend_id === "codex-exec-sdk" && runtime.kind === "container") {
+      const selection = { model: ctx.settings.model, effort: ctx.settings.effort };
+      if (nativeObservation === undefined) {
+        let observed = null;
+        try { observed = await runtime.readinessObservations?.(String(current.backend_id), selection); } catch { /* unknown remains a refusal */ }
+        // The bounded probe can take time. Re-run every source/policy/approval/
+        // coordination/resource check afterward, without another observation.
+        return preDispatch(current, observed || null);
+      }
+      const observed = nativeObservation;
+      const model = nativeModelAvailabilityFact({ selection, evidence: observed?.modelAvailability,
+        expectedNativeVersion: observed?.environment?.receipt?.probes?.nativePackages?.["@openai/codex-sdk"]?.cliVersion, now: Date.parse(now()) });
+      if (!observed?.environment?.ok || !observed?.runtime?.binding || !observed?.authentication?.ok) refusals.push({ code: "native-model-runtime-unavailable", detail: "Current native model runtime/subscription evidence is unavailable" });
+      else if (model.state !== "satisfied") refusals.push({ code: model.code, detail: model.detail });
+    }
+    const readiness = readinessForRefusals({ refusals, selection: { run_id: String(current.run_id), backend_id: String(current.backend_id) } });
     return {
-      ok: refusals.length === 0,
+      ok: readiness.ready,
+      readiness,
       refusals,
       intent: {
         source_fingerprint: ctx.contract.source_fingerprint,
@@ -1263,9 +1284,19 @@ export function createJourney({
 
     let provisioned;
     try {
+      const configured = policyNow().policy?.checks.requiredVerifications.typecheck;
+      let compilerInput = ctx.settings.compiler_input;
+      if (configured?.enabled && configured.isolation === "checker") {
+        if (!compilerInput) {
+          compilerInput = freezeCompilerInput({ root, directory: join(stagingRoot, run_id), configured: configured.program, extra: ctx.contract.scratchScope.include });
+          s.updateRun(run_id, { settings_json: { ...ctx.settings, compiler_input: compilerInput } });
+        }
+        verifyCompilerInput(compilerInput);
+      }
       provisioned = await runtime.provision({
         run_id,
         job: s.getJob(job_id),
+        sourceRoot: compilerInput?.root,
         include: (ctx.contract.scratchScope && ctx.contract.scratchScope.include) || [],
       });
     } catch (error) {
@@ -1759,7 +1790,7 @@ export function createJourney({
       });
     }
 
-    const typechecked = await typecheckEvidence({ run_id, candidate, policy });
+    const typechecked = await typecheckEvidence({ run_id, candidate, policy, integration: candidate !== scopeCandidate });
     if (typechecked) {
       criteria.push(typechecked.criterion);
       records.push(typechecked.record);
@@ -1797,7 +1828,7 @@ export function createJourney({
    * choice: a fixture scripts two outputs through it and, having no runtime
    * checker, gets exactly that.
    */
-  async function typecheckEnvironment({ run_id, candidate, configured }) {
+  async function typecheckEnvironment({ run_id, candidate, configured, integration = false }) {
     const isolation = String(configured.isolation || "prefer-checker");
     const hostChoice = { execute: typecheckExecutor, producer: HOST_PRODUCER, requireIsolation: isolation === "checker" };
     if (isolation === "host") return hostChoice;
@@ -1805,13 +1836,18 @@ export function createJourney({
       event(run_id, "typecheck.checker-unavailable", { reason: "this runtime has no protected checker" });
       return hostChoice;
     }
-    const program = programFileList({
+    const frozen = integration && isolation === "checker"
+      ? freezeCompilerInput({ root, directory: join(stagingRoot, run_id), configured: configured.program })
+      : context(run_id)?.settings.compiler_input;
+    if (isolation === "checker" && !frozen) return { ...hostChoice, execute: null };
+    if (frozen) verifyCompilerInput(frozen);
+    const program = frozen ? { files: frozen.manifest.map(entry => entry.path) } : programFileList({
       hostRoot: root,
       program: configured.program && configured.program.roots.length ? configured.program : undefined,
     });
     let offered;
     try {
-      offered = await runtime.typecheckExecutor({ run_id, candidate, include: [...program.files] });
+      offered = await runtime.typecheckExecutor({ run_id, candidate, include: [...program.files], programRoot: frozen?.root, generatedTypes: frozen?.generatedTypes || configured.program?.generatedTypes || {} });
     } catch (error) {
       offered = { ok: false, reason: errorText(error) };
     }
@@ -1824,7 +1860,7 @@ export function createJourney({
       files: offered.program ? offered.program.files : null,
       typescript: offered.producer.dependencies ? offered.producer.dependencies.typescript : null,
     });
-    return { execute: offered.execute, producer: offered.producer, requireIsolation: isolation === "checker" };
+    return { execute: offered.execute, producer: offered.producer, requireIsolation: isolation === "checker", hostRoot: frozen?.root || root };
   }
 
   /**
@@ -1850,16 +1886,16 @@ export function createJourney({
     return record && record.verification ? String(record.verification.redaction || "No check receipt") : "No check receipt";
   }
 
-  async function typecheckEvidence({ run_id, candidate, policy }) {
+  async function typecheckEvidence({ run_id, candidate, policy, integration = false }) {
     const configured = policy.checks && policy.checks.requiredVerifications ? policy.checks.requiredVerifications.typecheck : null;
     if (!configured || !configured.enabled) return null;
     const s = getStore();
 
     let verification;
     try {
-      const chosen = await typecheckEnvironment({ run_id, candidate, configured });
+      const chosen = await typecheckEnvironment({ run_id, candidate, configured, integration });
       verification = await runTypecheckVerification({
-        hostRoot: root,
+        hostRoot: chosen.hostRoot || root,
         candidate,
         argv: [...configured.argv],
         execute: chosen.execute,
@@ -3664,13 +3700,15 @@ export function createJourney({
       dependencyIds: facts.dependencyIds,
       catalog: policy.executors.catalog,
     });
+    const readiness = readinessForRefusals({ refusals: reasons.filter(reason => START_BLOCKERS.includes(reason.code)), selection: { file, id: key }, phase: "coordination" });
     return deepFreeze({
       ok: true,
       alias: facts.alias || key,
       verdict: final,
       label: VERDICT_LABELS[final],
       reasons,
-      startable: !reasons.some((reason) => START_BLOCKERS.includes(reason.code)),
+      startable: readiness.ready,
+      readiness,
       declared: facts.declared,
       recommendation,
       pairs: verdict.pairs,

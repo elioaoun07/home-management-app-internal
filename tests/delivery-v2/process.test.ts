@@ -45,6 +45,13 @@ describe("runProcess", () => {
 });
 
 describe("docker CLI", () => {
+  it("preserves binary archive bytes over the existing nonblocking stdin seam", async () => {
+    const docker = createDockerCli({ bin: node });
+    const bytes = Buffer.from([0, 255, 128, 13, 10, 1]);
+    const result = await docker.run(["-e", "const chunks=[];process.stdin.on('data',c=>chunks.push(c));process.stdin.on('end',()=>process.stdout.write(Buffer.concat(chunks).toString('hex')));"], { input: bytes });
+    expect(result).toMatchObject({ status: 0, stdout: bytes.toString("hex"), error: null });
+  });
+
   it("runs without blocking and keeps a blocking variant for the setup scripts", async () => {
     const docker = createDockerCli({ bin: node });
     const pending = docker.run(["-e", "process.stdout.write('ok')"]);

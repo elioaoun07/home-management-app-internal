@@ -21,7 +21,51 @@ plan_revision: "2.2"
 
 **Phase 5 (2026-09-12, code and synthetic evidence):** up to two independent candidates can write at once (DLV-106). Rule-based admission yields Can run together, Must follow or Needs scope check, with reasons. Waiting runs are queued, a writer that grows into another reservation pauses, and applications are serialized and rechecked on the changed source. One writer per candidate, a derived lease and V1's lock are unchanged. No real pair has run. Status: [Command Center Phase 5](<Command Center.md#phase-5--enable-dependable-parallel-items>).
 
+## Recovery contract — 2026-10-17
+
+DLV-133 owns reusable managed dependencies and per-run compiler identity, including generated-type pins. DLV-137 owns explicit service observations and shared desktop/mobile readiness. DLV-138 owns durable launch/transport reconciliation. Dot initiates/oversees the existing Command Center. The owner keeps `pnpm pm --bridge`, exact phone plan approval and final Apply. Source changes do not activate policy or replace the running bridge. Passive inspection never prepares; uncertain outcomes reconcile before redispatch. Live environment/qualification and one R44 pilot require the separately reviewed operational envelope.
+
 ## Operating boundary
+
+### Pre-launch readiness report — 2026-10-19
+
+**Owner requirement from the October 18 voice call; process contract under DLV-137.** Before a delivery session starts, the supervising agent records one dated readiness report in the existing session evidence/Command Center conversation or handoff chat, with a durable reference in the owning Master Book. Use the existing shared projection for the exact item and selection. If collection is not authorized or available, report that limitation; this requirement grants no refresh, preparation or launch authority. A historical Ready receipt is not current readiness.
+
+The persistent checklist follows `readiness-contract.mjs#LAUNCH_GATES`; report every gate, not just the first blocker:
+
+| Check | Required condition |
+|---|---|
+| Policy | Current valid policy/grant covers this item, scope, effects and disposition; record revision, digest and expiry. |
+| Selection | Exact executor, model, effort and profile are permitted; catalogue revision and selection agree. |
+| Source | Current item/acceptance, declared paths and frozen source/check inputs match their bindings. |
+| Coordination | Holds/dependencies, owner test gate, existing/uncertain commands, reservations and writer slots permit this selection. |
+| Runtime | Current observation proves the configured image, executor and confinement binding. |
+| Authentication | Current bound observation proves the required subscription method, included usage and no additional spend. Never include credentials. |
+| Native model | The pinned native runtime advertises the exact model/effort where applicable. Advertising does not prove inference entitlement; retain that limit. |
+| Environment | DLV-133 managed receipt/content, manifest/lock, compiler program and protected oracle inputs match the current selection. |
+| Qualification | Admitted worker/checker receipt and required controls bind the current runtime/environment; an old receipt ID alone is insufficient. |
+| Checks | Required protected criteria and executable inputs are pinned and runnable. Prepared checks have not necessarily run or passed. |
+| Budget | Current allowances, reservations and enforcement admit the work; unknown usage remains unknown and advisory is not a hard cap. |
+
+**Report contract:** identify item, exact selection, policy/catalogue/source/context bindings, collector/version, report time with timezone, evidence references, overall verdict and effect outcome (launch sent or not; command/run/job IDs or explicitly absent/unknown). For each failed, stale, unknown or unavailable check, record:
+
+- Expected condition and actual observation, including the original state/code.
+- Evidence source and observation/collection timestamps; if absent, explicitly say which evidence is missing.
+- Applicable binding comparison and freshness limit/expiry, including evaluated time and age. If collection failed, record the stage, sanitized failure/timeout and start/end times; do not replace missing measurements with a guess.
+- **Diagnosed cause** with supporting evidence, or **cause unknown** with the precise missing evidence. A dependent unavailable check names its upstream blocker; it is not proof of an independent auth, model or qualification failure.
+- Operational impact and concrete next action, responsible actor and any required authority. “Stale”, “not ready”, “retry” or “reinstall” alone is insufficient; a new observation and an environment repair are different actions.
+
+Keep prior reports immutable and label historical evidence as historical. A new report supersedes a verdict, not its evidence. Missing binding/expiry data is itself a reporting gap. No report grants plan approval, Apply or launch permission.
+
+**Current versus required behavior (source inspected 2026-10-19):** the service already collects explicit observations, caches them per selection and projects the same facts to CLI/desktop/phone/admission. Facts carry state/code/detail/evidence/nextAction; observations expire after 60 seconds and Ready projections within 30 seconds. Passive reads do not collect. The complete causal report above is a process obligation, **not an implemented automatic report or chat log**: stale projection can discard the observation detail, and existing generic next actions do not satisfy this contract. Until implemented, the supervising agent authors the report from retained evidence and marks unknowns.
+
+**Separate runtime slice, not authorized by this documentation change:** under DLV-137, retain sanitized per-stage collection outcomes, original fact timestamps and binding/expiry diagnostics through `worker-boundary.mjs`, `service.mjs`, `inspect-readiness.mjs` and `readiness.mjs`; expose/retain the resulting report through existing command receipts, artifact reader and desktop/relay projections. Reuse the current command path for any requested chat delivery. Test old/missing/invalid timestamps, binding changes, slow/partial/throwing collectors, dependent blockers, redaction, persisted report recovery, CLI/UI/relay parity and zero effects on passive reads. Keep DLV-133 environment ownership and DLV-118 independence intact; no new orchestrator or automatic recovery.
+
+### Candidate handover — 2026-10-19
+
+**Later recovery implementation, 2026-10-19:** the authorized recovery now retains sanitized observation timestamps/ages/context comparisons and collector stage timings/outcomes in refresh/passive responses, preserves earlier evidence after a later collector exception, and clears older cache evidence when preflight refuses a refresh. Native catalog diagnostics retain RPC timings, fixed stderr signals, cleanup flags and invalid field names without exposing payloads or changing deadlines. These historical diagnostics survive expiry and dependent blockers but never authorize launch. The [Delivery Master Book](<../Delivery/Delivery — Master Book.md#current-state--evidence>) binds 352 passing regression tests, the loaded source, a passing policy 9 service/desktop observation and a subsequent expired CLI refusal retaining the same diagnostics. The subsequent outer-process correction retains redacted Docker outcome/exit/error/timing/record counts and bounded native stage/RPC progress even when no final record is emitted; partial output remains diagnostic-only. The latest Master Book receipt binds 356 passing tests and the 23:27 reload, with one passing metadata diagnostic and the earlier intermittent failure still unexplained. This is the narrow diagnostic portion of DLV-137; automatic durable report/chat delivery and handover enforcement remain unimplemented. The supervisor retains this session's reports in the existing recovery evidence ledger; the original failure cause and actual pilot remain unverified.
+
+Every delivered defect fix or new feature includes owner-facing manual scenarios **at candidate handover, before owner UAT/acceptance**. Use the [handover template](<../../../docs/Delivery-UAT.md#candidate-handover-template>) against the exact candidate/acceptance revision. Automated receipts, implementation completion, handover completeness and owner acceptance remain separate. A candidate without scenarios has an incomplete handover even if its automated checks pass. This is a process requirement; the current runtime does not enforce that gate or automatically generate the scenarios. The template records the narrow remaining runtime work for separate approval.
 
 ### Bounded Focused extension — 2026-09-20
 

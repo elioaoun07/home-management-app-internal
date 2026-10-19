@@ -27,18 +27,23 @@
 // allowlist is configurable here and unverified by the battery.
 
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, cpSync, existsSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { COMPILER_RESOURCE_PROFILE, compilerResourceFlags } from "./compiler-resources.mjs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, cpSync, existsSync, lstatSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ContractError, canonicalJson, deepFreeze, fingerprint, normalizePath } from "./contracts.mjs";
-import { assertScratchOutsideHost, provisionScratch } from "./scratch.mjs";
+import { assertScratchOutsideHost, provisionScratch, classifyRelativePath } from "./scratch.mjs";
 import { importTrustedCandidate } from "./checks.mjs";
 import { normalizeHosts, PROXY_PORT } from "./worker/egress.mjs";
 import { nestedSandboxDigest, nestedSandboxJSON } from "./worker/seccomp.mjs";
 import { createCredentialSync, revokedRefusal } from "./credential-sync.mjs";
+import { verifyManagedEnvironment } from "./dependency-environment.mjs";
+import { COMPILER_MANIFEST, compilerInventorySource } from "./worker/compiler-inventory.mjs";
 import { runProcess } from "./process.mjs";
+import { nativeProbeTransportDiagnostics } from "./readiness.mjs";
 
 export const BOUNDARY_SCHEMA = "delivery-v2/worker-boundary@1";
 export const WORKER_USER = "10001:10001";
@@ -85,7 +90,7 @@ const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
  *
  * @param {{image:string, network?:{mode:string, name?:string, proxyUrl?:string, allowHosts?:string[]},
  *   limits?:{pids?:number, memory?:string, cpus?:string},
- *   credentials?:Record<string, {volume:string}>, dependencies?:({volume:string}|null),
+ *   credentials?:Record<string, {volume:string}>, dependencies?:({volume:string, environment?:{key:string, contentDigest:string, receiptDigest:string}}|null),
  *   synthetic?:boolean}} input
  */
 export function makeBoundaryConfig({ image, network = { mode: "none" }, limits = {}, credentials = {}, dependencies = null, synthetic = false }) {
@@ -115,6 +120,12 @@ export function makeBoundaryConfig({ image, network = { mode: "none" }, limits =
   if (dependencies && !VOLUME_NAME.test(String(dependencies.volume || ""))) {
     throw new ContractError(BOUNDARY_REFUSALS.VOLUME + ": dependencies");
   }
+  if (dependencies?.environment &&
+      (!/^sha256:[a-f0-9]{64}$/u.test(image) ||
+       canonicalJson(Object.keys(dependencies.environment).sort()) !== canonicalJson(["contentDigest", "key", "receiptDigest"]) ||
+       Object.values(dependencies.environment).some(value => !/^sha256:[a-f0-9]{64}$/u.test(String(value))))) {
+    throw new ContractError("invalid managed dependency environment binding");
+  }
   const body = {
     schema: BOUNDARY_SCHEMA,
     image,
@@ -125,8 +136,9 @@ export function makeBoundaryConfig({ image, network = { mode: "none" }, limits =
       memory: isNonEmptyString(limits.memory) ? limits.memory : "4g",
       cpus: isNonEmptyString(limits.cpus) ? limits.cpus : "2",
     },
+    compilerProfile: COMPILER_RESOURCE_PROFILE,
     credentials: volumes,
-    dependencies: dependencies ? { volume: dependencies.volume } : null,
+    dependencies: dependencies ? { volume: dependencies.volume, ...(dependencies.environment ? { environment: { ...dependencies.environment } } : {}) } : null,
     synthetic: Boolean(synthetic),
   };
   return deepFreeze({ ...body, digest: fingerprint(canonicalJson(body)) });
@@ -195,6 +207,14 @@ export function hardenedFlags(boundary, { network = true } = {}) {
   ];
 }
 
+/** Trusted checker limits are independent of provider-worker limits. */
+export function protectedCheckerFlags(boundary) {
+  if (canonicalJson(boundary.compilerProfile ?? null) !== canonicalJson(COMPILER_RESOURCE_PROFILE)) throw new ContractError("checker resource profile changed; requalify the boundary");
+  const flags = hardenedFlags(boundary, { network: false });
+  flags[flags.indexOf("--memory") + 1] = COMPILER_RESOURCE_PROFILE.containerMemory;
+  return flags;
+}
+
 /** Refuse any argv that could hand host authority to a container. */
 export function assertNoHostAuthority(args) {
   for (let index = 0; index < args.length; index += 1) {
@@ -238,7 +258,7 @@ export function workerRunArgs({ boundary, run_id, job_id, access, backend_id }) 
     "--mount", "type=volume,source=" + volumes.work + ",target=" + WORKDIR + (access === "read-only" ? ",readonly" : ""),
     "--mount", "type=volume,source=" + volumes.session + ",target=" + WORKER_HOME,
     ...(credential ? ["--mount", "type=volume,source=" + credential.volume + ",target=" + CREDENTIAL_ROOT + ",readonly"] : []),
-    ...(boundary.dependencies ? ["--mount", "type=volume,source=" + boundary.dependencies.volume + ",target=/deps,readonly"] : []),
+    ...(boundary.dependencies ? ["--mount", "type=volume,source=" + boundary.dependencies.volume + ",target=/deps,readonly,volume-nocopy"] : []),
     "--env", "HOME=" + WORKER_HOME,
     ...(boundary.synthetic ? ["--env", "ERA_V2_SYNTHETIC=1"] : []),
     "--workdir", WORKDIR,
@@ -253,6 +273,22 @@ export function authProbeArgs(boundary, backend) {
   const credential = boundary.credentials[backend];
   if (!credential) throw new ContractError("subscription login has not been connected to this worker");
   return ["run", "--rm", ...hardenedFlags(boundary), "--tmpfs", WORKER_HOME + ":rw,uid=10001,gid=10001,size=32m", "--mount", "type=volume,source=" + credential.volume + ",target=/run/era-credentials,readonly", "--env", "HOME=" + WORKER_HOME, boundary.image, "node", RUNNER_PATH, "--auth-probe", backend];
+}
+
+/** The explicit Codex observation uses the existing auth container/credential seam. */
+export function modelReadinessProbe(boundary, { model, effort, expectedNativeVersion }) {
+  const args = authProbeArgs(boundary, "codex-exec-sdk");
+  const nonce = randomUUID(), name = "era-v2-model-" + nonce;
+  args.splice(1, 0, "-i", "--name", name, "--label", "era.model-readiness=" + nonce);
+  args.splice(args.lastIndexOf("node"), 4, "node", "--input-type=module", "-");
+  const source = readFileSync(new URL("./probes/codex-models.mjs", import.meta.url), "utf8");
+  const input = `import {prepareSubscription as prepare} from '/opt/era/scripts/delivery-v2/worker/subscription.mjs';
+import {subscriptionObservation} from '/opt/era/scripts/delivery-v2/subscription-window.mjs';
+${source}
+const observeSubscription=async backend=>{const prepared=await prepare(backend);const {usageSnapshot,...provenance}=prepared;console.log(JSON.stringify({era:'subscription-ready',backend_id:backend,...provenance,observation:subscriptionObservation(backend,usageSnapshot,{at:new Date().toISOString()})}));return prepared;};
+const facts=await probeCodexModels({...${JSON.stringify({ model, effort, expectedNativeVersion })},prepareSubscription:observeSubscription,limits:{timeoutMs:10000},onProgress:event=>console.log(JSON.stringify({era:'native-model-progress',...event}))});
+console.log(JSON.stringify({era:'native-model-readiness',...facts,observedAt:new Date().toISOString()}));`;
+  return { args: assertNoHostAuthority(args), input, name, nonce };
 }
 
 /**
@@ -274,15 +310,16 @@ export function checkerRunArgs({ boundary, name, candidateVolume, outVolume, arg
     "run",
     "--rm",
     "--name", name,
-    ...hardenedFlags(boundary, { network: false }),
+    ...protectedCheckerFlags(boundary),
     "--mount", "type=volume,source=" + candidateVolume + ",target=" + CANDIDATE_PATH + ",readonly",
     "--mount", "type=volume,source=" + outVolume + ",target=/out",
     ...(programVolume ? ["--mount", "type=volume,source=" + programVolume + ",target=" + PROGRAM_PATH + ",readonly"] : []),
-    ...(boundary.dependencies ? ["--mount", "type=volume,source=" + boundary.dependencies.volume + ",target=/deps,readonly"] : []),
+    ...(boundary.dependencies ? ["--mount", "type=volume,source=" + boundary.dependencies.volume + ",target=/deps,readonly,volume-nocopy"] : []),
     "--env", "HOME=/tmp",
     ...Object.entries(env)
       .filter(([key]) => allowed.includes(key))
       .flatMap(([key, value]) => ["--env", key + "=" + value]),
+    ...compilerResourceFlags(argv, boundary.compilerProfile.containerMemory),
     "--workdir", workdir,
     boundary.image,
     ...argv,
@@ -330,10 +367,12 @@ export function createDockerCli({ bin = "docker", spawnFn = spawn, spawnSyncFn =
   });
   return {
     /** Non-blocking: the runtime lives in the PM server, whose one thread also answers the browser. */
+    /** @param {string[]} args @param {{input?:string|Buffer,timeout?:number}} [options] */
     async run(args, { input = undefined, timeout = 300_000 } = {}) {
       return shape(await runProcess(bin, args, { input, timeout, spawnFn }));
     },
     /** Blocking; only for the standalone setup scripts. */
+    /** @param {string[]} args @param {{input?:string|Buffer,timeout?:number}} [options] */
     runSync(args, { input = undefined, timeout = 300_000 } = {}) {
       return shape(spawnSyncFn(bin, args, { encoding: "utf8", input, timeout, windowsHide: true, maxBuffer: 64 * 1024 * 1024 }));
     },
@@ -587,9 +626,133 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
     });
   }
 
+  const verifyDependencies = () => verifyManagedEnvironment({ image: boundary.image, dependencies: boundary.dependencies, limits: boundary.limits, run: args => docker.run(args) });
+  async function requireDependencies() {
+    const environment = await verifyDependencies();
+    if (!environment.ok) throw new ContractError("managed dependency environment refused: " + environment.reason);
+  }
+
+  async function observeCodexSelection(selection, expectedNativeVersion, collect) {
+    const failure = code => ({ ok: false, code, schema: "delivery-v2/codex-model-probe@1", backend_id: "codex-exec-sdk", model: selection?.model ?? null, effort: selection?.effort ?? null, providerTurns: 0, entitlement: "unverified", observedAt: new Date().toISOString() });
+    const valid = value => typeof value === "string" && /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,100}$/u.test(value);
+    if (boundary.synthetic || !valid(selection?.model) || !valid(selection?.effort) || !valid(expectedNativeVersion)) return { authentication: null, modelAvailability: failure("native-selection-unavailable") };
+    const renewed = await collect("credential-sync", () => credentials ? credentials.sync("codex-exec-sdk") : { ok: false }, value => value.ok);
+    if (!renewed.ok) return { authentication: { ok: false, reason: renewed.reason, code: renewed.code, reconnect: renewed.reconnect }, modelAvailability: failure("subscription-unavailable") };
+    return collect("native-model", async () => {
+    let probe;
+    try {
+      probe = modelReadinessProbe(boundary, { ...selection, expectedNativeVersion });
+      // Docker stores canonical names with a leading slash. Accept either
+      // representation while retaining exact-name boundaries on both sides.
+      const listArgs = ["container", "ls", "--all", "--no-trunc", "--filter", "name=^/?" + probe.name + "$", "--format", "{{.ID}}"];
+      const cleanupOptions = { timeout: 5000 };
+      const before = await docker.run(listArgs, cleanupOptions);
+      if (before.status !== 0 || before.error || before.stdout.trim()) return { authentication: null, modelAvailability: { ...failure("native-model-container-unavailable"), containerName: probe.name, containerCleanupConfirmed: false } };
+      let result = null, containerCleanupConfirmed = false, processError = null, processCompletedAt = null;
+      const processStartedAt = Date.now();
+      try { result = await docker.run(probe.args, { input: probe.input, timeout: 45000 }); }
+      catch (error) { processError = ["ETIMEDOUT", "ENOBUFS", "ENOENT", "EACCES", "EPERM"].includes(error?.code) ? error.code : "unclassified"; }
+      finally {
+        processCompletedAt = Date.now();
+        // Killing a Docker client is not evidence its container stopped. Only
+        // this nonce-labelled container may be removed, including on timeout.
+        try {
+          const found = await docker.run(listArgs, cleanupOptions), id = found.stdout.trim();
+          if (found.status === 0 && !found.error) {
+            if (!id) containerCleanupConfirmed = true;
+            else if (/^[a-f0-9]{64}$/u.test(id)) {
+              const label = await docker.run(["inspect", "--format", '{{index .Config.Labels "era.model-readiness"}}', id], cleanupOptions);
+              if (label.status === 0 && !label.error && label.stdout.trim() === probe.nonce) {
+                const removed = await docker.run(["rm", "-f", id], cleanupOptions);
+                const remaining = await docker.run(listArgs, cleanupOptions);
+                containerCleanupConfirmed = removed.status === 0 && !removed.error && remaining.status === 0 && !remaining.error && !remaining.stdout.trim();
+              }
+            }
+          }
+        } catch { /* inability to observe absence remains a blocker */ }
+      }
+      const records = String(result?.stdout || "").split("\n").map(parseLine).filter(Boolean);
+      const auth = records.filter(row => row.era === "subscription-ready" && row.backend_id === "codex-exec-sdk");
+      const native = records.filter(row => row.era === "native-model-readiness");
+      const errorCode = processError || result?.error;
+      const transport = nativeProbeTransportDiagnostics({ process: {
+        outcome: errorCode === "ETIMEDOUT" ? "timed-out" : errorCode === "ENOBUFS" ? "output-limit" : processError ? "threw" : !result ? "unobserved" : result.status === 0 && !errorCode ? "completed" : "failed",
+        errorCode, exitCode: result?.status, elapsedMs: processCompletedAt - processStartedAt,
+        stdoutBytes: Buffer.byteLength(String(result?.stdout || "")), stderrBytes: Buffer.byteLength(String(result?.stderr || "")),
+        nativeRecords: native.length, authenticationRecords: auth.length,
+      }, progress: records.filter(row => row.era === "native-model-progress") });
+      const unavailable = code => ({ ...failure(code), containerName: probe.name, containerCleanupConfirmed, diagnostics: { transport } });
+      if (!containerCleanupConfirmed) return { authentication: null, modelAvailability: unavailable("native-container-cleanup-unconfirmed") };
+      if (!result) return { authentication: null, modelAvailability: unavailable("native-model-probe-unavailable") };
+      const authentication = result.status === 0 && !result.error && auth.length === 1 ? { ok: true, ...auth[0] } : { ok: false, reason: "Worker subscription check failed" };
+      const facts = native.length === 1 ? native[0] : null;
+      if (result.status !== 0 || result.error || !facts || facts.schema !== "delivery-v2/codex-model-probe@1" || facts.backend_id !== "codex-exec-sdk" || facts.model !== selection.model || facts.effort !== selection.effort || facts.providerTurns !== 0) return { authentication, modelAvailability: unavailable("native-model-probe-unavailable") };
+      const modelAvailability = facts.ok === true && (facts.cleanupConfirmed !== true || facts.modelAdvertised !== true || facts.effortAdvertised !== true || facts.nativeVersion !== expectedNativeVersion)
+        ? failure("native-model-probe-unverified") : facts;
+      // A following dispatch auth gate may reuse this exact current observation.
+      authMemo.set("codex-exec-sdk", { at: Date.now(), value: Promise.resolve(authentication), pending: false });
+      return { authentication, modelAvailability: { ...modelAvailability, containerName: probe.name, containerCleanupConfirmed, diagnostics: { ...modelAvailability.diagnostics, transport } } };
+    } catch { return { authentication: { ok: false, reason: "Worker subscription check failed" }, modelAvailability: { ...failure("native-model-probe-unavailable"), ...(probe ? { containerName: probe.name, containerCleanupConfirmed: false } : {}) } }; }
+    }, value => value.modelAvailability?.ok === true);
+  }
+
   return {
     kind: "container",
     boundary,
+
+    // Explicit observation only: never install, qualify, repair, or dispatch.
+    async readinessObservations(backend, selection = /** @type {{model:string,effort:string}|undefined} */ (undefined)) {
+      /** @type {{schema:string,startedAt:string,completedAt:string|null,stages:{name:string,startedAt:string,completedAt:string,durationMs:number,outcome:string,code:string|null}[]}} */
+      const collection = { schema: "delivery-v2/readiness-collection@1", startedAt: new Date().toISOString(), completedAt: null, stages: [] };
+      // Only these caller-owned stage names/codes are retained. Never include
+      // Docker output, credential paths or raw exception text in diagnostics.
+      async function collect(name, read, accepted) {
+        const start = Date.now(), startedAt = new Date(start).toISOString();
+        let outcome = "failed", code = name + "-collection-failed";
+        try {
+          const value = await read();
+          outcome = accepted(value) ? "satisfied" : "blocked";
+          code = outcome === "satisfied" ? null : name + "-unavailable";
+          return value;
+        } finally {
+          const end = Date.now();
+          collection.stages.push({ name, startedAt, completedAt: new Date(end).toISOString(), durationMs: Math.max(0, end - start), outcome, code });
+        }
+      }
+      /** @type {Record<string, string>} */
+      const observedAt = {};
+      const observed = { environment: null, runtime: null, authentication: null, modelAvailability: null, observedAt, collection, error: null };
+      try {
+        const environment = await collect("environment", verifyDependencies, value => value.ok && !value.legacy);
+        observed.environment = environment;
+        observedAt.environment = new Date().toISOString();
+        if (!environment.ok || environment.legacy) return observed;
+        const binding = await collect("runtime-binding", () => readBinding(backend), value => Boolean(value));
+        const egressId = await collect("egress", () => readEgressBindingAsync(boundary, args => docker.run(args)), () => true);
+        observed.runtime = binding ? { image: boundary.image, binding, egressId } : null;
+        observedAt.runtime = new Date().toISOString();
+        // Bypass earlier cached authentication: this observation has its own age.
+        authMemo.delete(backend);
+        if (backend === "codex-exec-sdk") {
+          const nativeVersion = environment.receipt?.probes?.nativePackages?.["@openai/codex-sdk"]?.cliVersion;
+          const native = binding ? await observeCodexSelection(selection, nativeVersion, collect) : { authentication: null, modelAvailability: null };
+          observed.authentication = native.authentication;
+          observed.modelAvailability = native.modelAvailability;
+          observedAt.authentication = native.modelAvailability?.observedAt || new Date().toISOString();
+          observedAt.modelAvailability = native.modelAvailability?.observedAt || new Date().toISOString();
+          return observed;
+        }
+        observed.authentication = binding ? await collect("authentication", () => this.authReadiness(backend), value => value?.ok === true) : null;
+        observedAt.authentication = new Date().toISOString();
+        return observed;
+      } catch {
+        // An unsuccessful later stage must not erase evidence already collected.
+        observed.error = "readiness-collection-failed";
+        return observed;
+      } finally {
+        collection.completedAt = new Date().toISOString();
+      }
+    },
 
     async authReadiness(backend) {
       if (boundary.synthetic) return { ok: true, synthetic: true };
@@ -619,6 +782,8 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
 
     /** The binding a qualification receipt must match, or null when it cannot be established. Memoized briefly. */
     async binding(backend_id) {
+      const environment = await verifyDependencies();
+      if (!environment.ok) return null;
       return memoized(bindingMemo, backend_id, () => readBinding(backend_id));
     },
 
@@ -627,7 +792,8 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
      *
      * @param {{run_id:string, job:any, include:string[]}} input
      */
-    async provision({ run_id, job, include }) {
+    async provision({ run_id, job, include, sourceRoot = hostRoot }) {
+      await requireDependencies();
       await readEgressBindingAsync(boundary, (args) => docker.run(args));
       const volumes = volumesFor(run_id);
       let base_manifest = null;
@@ -639,7 +805,7 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
         if (homeOwner.status !== 0) throw new ContractError("could not initialize worker session volume");
         const staging = mkdtempSync(join(workRoot, "snapshot-"));
         try {
-          const supplied = provisionScratch({ scratchRoot: staging, hostRoot, include });
+          const supplied = provisionScratch({ scratchRoot: staging, hostRoot: sourceRoot, include });
           base_manifest = supplied.supplied;
           refusals = [...supplied.refusals];
           await importDirToVolume({ dir: staging, volume: volumes.work });
@@ -715,9 +881,11 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
      * @param {{run_id:string, candidate:{root:string, candidate_id:string, generation:string}}} input
      */
     async checkExecutor({ run_id, candidate }) {
+      await requireDependencies();
       const { candidateVolume, outVolume } = await checkVolumes({ run_id, candidate });
       let sequence = 0;
-      return ({ argv, env }) => {
+      return async ({ argv, env }) => {
+        await requireDependencies();
         sequence += 1;
         const name = "era-v2-check-" + run_id + "-" + candidate.generation + "-" + sequence;
         return checkerResult(checkerRunArgs({ boundary, name, candidateVolume, outVolume, argv, env }));
@@ -737,17 +905,19 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
      * environment record exists to prevent.
      *
      * @param {{run_id:string, candidate:{root:string, candidate_id:string, generation:string},
-     *   include:string[]}} input
+     *   include:string[], generatedTypes?:Record<string,string>}} input
      * @returns {Promise<{ok:boolean, reason?:(string|undefined), execute?:(Function|undefined),
      *   program?:(Record<string, any>|undefined), producer?:(Record<string, any>|undefined)}>}
      */
-    async typecheckExecutor({ run_id, candidate, include }) {
+    async typecheckExecutor({ run_id, candidate, include, generatedTypes = {}, programRoot = hostRoot }) {
+      const environment = await verifyDependencies();
+      if (!environment.ok) return deepFreeze({ ok: false, reason: "managed dependency environment refused: " + environment.reason });
       if (!Array.isArray(include) || include.length === 0) {
         return deepFreeze({ ok: false, reason: "no program file list was pinned for the checker to compile" });
       }
       let program;
       try {
-        program = await stageProgram({ include });
+        program = await stageProgram({ include, generatedTypes, programRoot });
       } catch (error) {
         return deepFreeze({ ok: false, reason: "the pinned program could not be staged: " + String((error && error.message) || error) });
       }
@@ -756,11 +926,20 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
       }
 
       const { candidateVolume, outVolume } = await checkVolumes({ run_id, candidate });
+      const verifyProgram = async () => {
+        const result = await docker.run(checkerRunArgs({ boundary, name: "era-v2-program-probe-" + run_id, candidateVolume, outVolume,
+          programVolume: program.volume, workdir: PROGRAM_PATH, argv: ["node", "-e", compilerInventorySource(program.fingerprint, PROGRAM_PATH)] }));
+        if (result.status !== 0 || result.error || result.stdout.trim() !== "era-compiler-input-verified") throw new Error("pinned compiler volume failed verification: " + result.stderr);
+      };
+      try { await verifyProgram(); }
+      catch (error) { return deepFreeze({ ok: false, reason: error.message, program }); }
       const dependencies = await probeCheckerDependencies({ programVolume: program.volume, candidateVolume, outVolume });
       if (!dependencies.ok) return deepFreeze({ ok: false, reason: dependencies.reason, program });
 
       let sequence = 0;
-      const execute = ({ phase, changed = [], deleted = [], env = {} }) => {
+      const execute = async ({ phase, changed = [], deleted = [], env = {} }) => {
+        await requireDependencies();
+        await verifyProgram();
         sequence += 1;
         const name = "era-v2-tsc-" + run_id + "-" + candidate.generation + "-" + sequence;
         return checkerResult(
@@ -793,8 +972,10 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
             " from volume " +
             String(boundary.dependencies && boundary.dependencies.volume),
           program: { volume: program.volume, fingerprint: program.fingerprint, files: program.files, root: PROGRAM_PATH, config: "tsconfig.json" },
-          dependencies: { volume: String(boundary.dependencies && boundary.dependencies.volume), typescript: dependencies.typescript, node: dependencies.node },
+          dependencies: { volume: String(boundary.dependencies && boundary.dependencies.volume), typescript: dependencies.typescript, node: dependencies.node,
+            ...(boundary.dependencies?.environment ? { environment: boundary.dependencies.environment } : {}) },
           image: String(boundary.image),
+          compilerProfile: COMPILER_RESOURCE_PROFILE,
         },
       });
     },
@@ -844,10 +1025,11 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
    * quietly compiling yesterday's program. A failed import removes the volume, so
    * a retry restages instead of compiling half a tree.
    */
-  async function stageProgram({ include }) {
+  async function stageProgram({ include, generatedTypes, programRoot }) {
     const staging = mkdtempSync(join(workRoot, "program-"));
     try {
-      const supplied = provisionScratch({ scratchRoot: staging, hostRoot, include });
+      const supplied = provisionCheckerProgram({ scratchRoot: staging, hostRoot: programRoot, include, generatedTypes });
+      writeFileSync(join(staging, COMPILER_MANIFEST), JSON.stringify(supplied.supplied));
       const volume = programVolumeName(supplied.manifest_fingerprint);
       if (!(await exists("volume", volume))) {
         await docker.run(["volume", "create", volume]);
@@ -975,4 +1157,38 @@ export function buildWorkerImage({ tag, repoRoot = REPO_ROOT, docker = createDoc
   } finally {
     rmSync(context, { recursive: true, force: true });
   }
+}
+
+/**
+ * DLV-133 trusted compiler inputs only. Candidate/scratch exclusions stay unchanged.
+ * @param {{scratchRoot:string, hostRoot:string, include:string[], generatedTypes?:Record<string,string>}} input
+ */
+export function provisionCheckerProgram({ scratchRoot, hostRoot, include, generatedTypes = {} }) {
+  const hashBytes = bytes => "sha256:" + createHash("sha256").update(bytes).digest("hex");
+  const generated = Object.keys(generatedTypes);
+  const allowed = /^\.next\/(?:dev\/)?types\/(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.ts$/u;
+  if (generated.some(name => !allowed.test(name) || name.split("/").some(segment => segment === "." || segment === "..") || !classifyRelativePath(name.slice(".next/".length)).ok || !include.includes(name) || !/^sha256:[a-f0-9]{64}$/u.test(generatedTypes[name]))) {
+    throw new ContractError("invalid pinned generated compiler input");
+  }
+  if (lstatSync(hostRoot).isSymbolicLink()) throw new ContractError("linked compiler root");
+  const ordinary = provisionScratch({ scratchRoot, hostRoot, include: include.filter(name => !generated.includes(name)) });
+  if (ordinary.refusals.length) throw new ContractError("compiler program inputs refused: " + JSON.stringify(ordinary.refusals));
+  const supplied = [...ordinary.supplied];
+  const base = realpathSync(hostRoot);
+  for (const name of generated) {
+    let cursor = base;
+    for (const segment of name.split("/")) {
+      cursor = join(cursor, segment);
+      if (lstatSync(cursor).isSymbolicLink()) throw new ContractError("linked generated compiler input: " + name);
+    }
+    if (!lstatSync(cursor).isFile()) throw new ContractError("generated compiler input is not a file: " + name);
+    const bytes = readFileSync(cursor);
+    if (hashBytes(bytes) !== generatedTypes[name]) throw new ContractError("generated compiler input changed: " + name);
+    const target = join(scratchRoot, ...name.split("/"));
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, bytes, { flag: "wx" });
+    supplied.push({ path: name, sha256: hashBytes(bytes), size: bytes.length });
+  }
+  supplied.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  return deepFreeze({ root: normalizePath(resolve(scratchRoot)), supplied, refusals: [], manifest_fingerprint: hashBytes(Buffer.from(JSON.stringify(supplied), "utf8")) });
 }

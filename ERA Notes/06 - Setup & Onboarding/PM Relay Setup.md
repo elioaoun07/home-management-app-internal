@@ -75,3 +75,15 @@ While `pnpm pm --bridge` runs, the bridge reads new **Report**s filed from the E
 ## Not authorized by this setup
 
 Apply writes files only. It does not reset, merge, commit, push, deploy or touch any database; a candidate's migration SQL is written as a file for the owner to run.
+
+## Recovery workflow (local implementation 2026-10-17; live acceptance pending)
+
+Keep one `pnpm pm --bridge`. Coordinate restart with the owner after inspecting active/unknown work through the service; absence of a Docker worker is not quiescence. Never delete supervisor WAL/SHM files.
+
+After operational approval and qualification, Dot opens the existing item, selects authorized executor/model/effort, and uses **Check readiness**. This explicit action observes the configured environment; it does not install, qualify, repair or dispatch. Passive reads do no preparation. The same selection-bound result reaches the phone through capabilities; no relay migration is added.
+
+Dot starts once and retains the run/command receipt. On timeout, reconnect or task restart, reopen the same item/run and reconcile that receipt; do not clear storage or invent a command ID. Durable browser intents require Web Locks and working storage; failure keeps launch closed. Confirmed refusal permits correction. Acknowledged duplicate opens the original run.
+
+The owner approves the exact plan revision on the phone. The existing runner executes that same session. Dot oversees observed state and reports results; final **Apply** stays with the owner. Proposed R44 pilot: **Codex / `CODEX_LOW` / low / Fast lane** (tier and selector: [Model Registry](<../Model-Registry.md>); effort `low` is explicit), one staged plan and implementation, no automatic repair/Apply. Do not resume the old attempt.
+
+Suggested Dot instruction after approval: “Use the existing Command Center for the authorized R44 pilot. Check readiness explicitly; start once; preserve command/run identity through reconnects. Wait for my exact plan approval on my phone. Oversee the same session and report verification. Leave Apply to me. If readiness or outcome is unknown, reconcile and stop dispatching.”

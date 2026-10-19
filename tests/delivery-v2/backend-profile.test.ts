@@ -5,12 +5,14 @@
 // interesting assertion is almost always that something is NOT permitted, NOT
 // qualified, or NOT knowable.
 //
-// Three of these read the installed @openai/codex-sdk type surface directly.
+// These read the reviewed SDK type surface, plus installed types when the host
+// has the target version. The worker upgrade need not upgrade the host CLI.
 // That is deliberate — the plan requires unsupported controls to be reported
 // explicitly rather than inferred, and the only way an assertion about "this
 // interface offers no monetary reading" stays true is if a fixture re-reads the
 // interface and fails when the vendor adds one.
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
@@ -40,7 +42,8 @@ import {
   normalizeCodexUsage,
 } from "../../scripts/delivery-v2/adapters/codex.mjs";
 
-const SDK_TYPES = fileURLToPath(new URL("../../node_modules/@openai/codex-sdk/dist/index.d.ts", import.meta.url));
+const SDK_TYPES = fileURLToPath(new URL("./fixtures/codex-sdk-0.156.1/index.d.ts", import.meta.url));
+const SDK_FIXTURE = JSON.parse(readFileSync(new URL("./fixtures/codex-sdk-0.156.1/provenance.json", import.meta.url), "utf8"));
 
 /**
  * Adapter observations are deliberately typed as an opaque bag: they are
@@ -279,6 +282,17 @@ describe("F-ISOLATION — a profile is qualified by observations, never by assig
 });
 
 describe("F-COST — the strict monetary bound is refused, with the reason on the record", () => {
+  it("binds the reviewed types to the declared pin and checks an installed target SDK for drift", () => {
+    const manifest = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+    expect(manifest.devDependencies[CODEX_SDK_SURFACE.package]).toBe(CODEX_SDK_SURFACE.reviewed_version);
+    expect(SDK_FIXTURE.version).toBe(CODEX_SDK_SURFACE.reviewed_version);
+    expect("sha256:" + createHash("sha256").update(readFileSync(SDK_TYPES)).digest("hex")).toBe(SDK_FIXTURE.typesDigest);
+    const installed = JSON.parse(readFileSync(new URL("../../node_modules/@openai/codex-sdk/package.json", import.meta.url), "utf8"));
+    if (installed.version === SDK_FIXTURE.version) {
+      expect(readFileSync(new URL("../../node_modules/@openai/codex-sdk/dist/index.d.ts", import.meta.url), "utf8")).toBe(readFileSync(SDK_TYPES, "utf8"));
+    }
+  });
+
   it("reports no monetary reading, because the installed interface has none", () => {
     const types = readFileSync(SDK_TYPES, "utf8");
     const usageBlock = types.slice(types.indexOf("type Usage = {"), types.indexOf("type Usage = {") + 700);

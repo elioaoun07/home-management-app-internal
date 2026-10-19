@@ -4,7 +4,7 @@
 // against the Node server and on the phone against the authenticated relay. The
 // views never build a URL or assume a permission; they ask the transport, and they
 // read `capabilities` to decide what to offer.
-import type { RunSummary, Snapshot, V2Assessment, V2Catalogue, V2Queue, V2Allowances, V2TestGate, V2RunDetail, V2RunSummary, V2Session } from "./types";
+import type { RunSummary, Snapshot, V2Assessment, V2Catalogue, V2Queue, V2Allowances, V2TestGate, V2RunDetail, V2RunSummary, V2Session, V2Readiness, V2ReadinessSelection } from "./types";
 
 export class PmError extends Error {
   constructor(
@@ -14,6 +14,9 @@ export class PmError extends Error {
     super(message);
   }
 }
+
+/** A recorded/server-confirmed refusal, rather than an uncertain transport error. */
+export class RefusedCommand extends PmError {}
 
 /** What a command's receipt says so far. None of these is a failure. */
 export type ReceiptState = "unsent" | "sent" | "acknowledged" | "unknown" | "expired";
@@ -96,6 +99,7 @@ export interface Transport {
   v2TestGate(signal?: AbortSignal): Promise<V2TestGate | null>;
   /** An item's verdict before launch; null where this transport cannot evaluate one. */
   v2Assess(file: string, id: string, signal?: AbortSignal): Promise<V2Assessment | null>;
+  v2Readiness?(selection: V2ReadinessSelection, signal?: AbortSignal): Promise<V2Readiness | null>;
   /** One V2 command. `body.command_id` is minted before the first send and reused on retry. */
   v2Command<T>(path: string, body: Record<string, unknown>, timeoutMs?: number): Promise<T>;
   /** Where a V1 session is read when this transport cannot show it. */

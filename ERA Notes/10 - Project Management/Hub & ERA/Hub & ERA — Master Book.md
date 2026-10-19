@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-17
+updated: 2026-10-18
 type: master-book
 status: active
 owner: Elio
@@ -68,6 +68,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+🟠 **HUB-117** ERA missed "Location for Women's night is Kobeize" (ERA report, 2026-10-18). See [acceptance](<#hub-117>).
 
 - 🟠 **HUB-116 — A burst of slow writes can flip the whole app offline, and other multi-write flows still fan out one request per row.** From source reading during SCH-25, not reproduced (production writes are barred): `safeFetch` answers a timeout with an `/api/health` probe on the same origin; if that probe fails under load, `connectivityManager` sets the global state offline and every later write takes the offline path. Hub bulk convert, flexible-routine assignment and the day planner create or write rows one request at a time. Sheets and acceptance under [criteria](<#hub-116>).
 
@@ -148,6 +150,31 @@ The remaining retained defects, decisions and enhancements are indexed below and
 🟡 **HUB-100** Ask AI says "I don't have a shopping list feature". Its catalog (`src/features/era/capabilities/registry.ts`) has no `shopping.add`, so the model can't propose one. See [acceptance](#hub-100).
 
 ## Acceptance Criteria Index
+
+### HUB-117
+
+**Outcome:** ERA handles "Location for Women's night is Kobeize".
+
+**Kind:** bug
+**Source:** ERA report e1069cd0-c5fa-44ca-a502-b2c3c5e138d9 · missed · owner · 2026-10-18 17:11 (Asia/Beirut)
+
+- **Acceptance:** This request ends in the right outcome — done with Undo, one confirm card, one question with chips, a prefilled form, or an honest limit with a door — never a wrong action or a dead end. An ERA Gym case replays the transcript below.
+- **Comment:** Locations should have been added
+- **Reading guide:** start at `src/features/era/useEraTurn.ts` (one turn), then the router in `src/features/era/intents/` and the capability's resolver; add the sentence to `tests/era-gym/`.
+
+**Transcript**
+
+- You · 17:08 — Add an event for Group next Tuesday at 8:30 PM _(draftEvent)_
+- ERA · 17:08 — Added · Group · Tuesday at 8:30 PM _(draftEvent · done)_
+- You · 17:09 — Add an event for women's night November 18 at 8:30 PM _(draftEvent)_
+- ERA · 17:09 — Added · Women's night · Wed, Nov 18 at 8:30 PM _(draftEvent · done)_
+- You · 17:10 — Location for Women's night is Kobeize _(unknown)_
+- ERA · 17:10 — I can't set a location for Women's night, since ERA has no action for editing an event's location. You can add it in the Schedule page. _(ai\_answer)_ ← reported
+
+**ERA actions**
+
+- created event — Group · 17:08
+- created event — Women's night · 17:09
 
 ### HUB-116
 
