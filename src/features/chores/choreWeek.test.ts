@@ -387,10 +387,67 @@ describe("buildChoreWeek — Catalogue templates without a routine", () => {
     expect(noRooms.todos.map((t) => t.key)).toEqual(["tpl:mop", "tpl:zeta"]);
 
     const result = week(WEEK, WED, [kitchenMop], [], [], [mop, plain], {}, rooms);
-    expect(result.todos.map((t) => [t.key, t.room])).toEqual([
-      ["tpl:mop:Corridor", "Corridor"],
-      ["tpl:zeta", null],
+    // Kitchen's target is met: it stays offered, flagged as an extra
+    expect(result.todos.map((t) => [t.key, t.room, !!t.extra])).toEqual([
+      ["tpl:mop:Corridor", "Corridor", false],
+      ["tpl:mop:Kitchen", "Kitchen", true],
+      ["tpl:zeta", null, false],
     ]);
+  });
+
+  it("never blocks a day for a met target; only a day the chore already holds", () => {
+    const laundry = template("laundry", { name: "Laundry", flexible_occurrences: 2 });
+    const done = (id: string, date: string) =>
+      ({
+        ...oneOff(id, localToISO(date, "09:00")),
+        source_catalogue_item_id: "laundry",
+        status: "completed",
+      }) as unknown as ItemWithDetails;
+    const items = [done("l1", "2026-10-05"), done("l2", "2026-10-09")];
+    const result = week(WEEK, WED, items, [], [], [laundry]);
+    const todo = result.todos.find((t) => t.key === "tpl:laundry")!;
+    expect(todo.extra).toBe(true);
+    expect(todo.remaining).toBe(0);
+    const day = (date: string) => todo.days.find((d) => d.date === date)!;
+    expect(day("2026-10-10")).toMatchObject({ enabled: true, over: true });
+    expect(day("2026-10-09")).toMatchObject({ enabled: false, taken: true });
+  });
+
+  it("marks a placement beyond the period target, informatively", () => {
+    const laundry = template("laundry", { name: "Laundry", flexible_occurrences: 2 });
+    const inst = (id: string, date: string) =>
+      ({
+        ...oneOff(id, localToISO(date, "09:00")),
+        source_catalogue_item_id: "laundry",
+      }) as unknown as ItemWithDetails;
+    const items = [inst("l1", "2026-10-05"), inst("l2", "2026-10-09"), inst("l3", "2026-10-10")];
+    const result = week(WEEK, WED, items, [], [], [laundry]);
+    expect(result.slots.map((s) => [s.date, s.over?.rank ?? null])).toEqual([
+      ["2026-10-05", null],
+      ["2026-10-09", null],
+      ["2026-10-10", 3],
+    ]);
+    expect(result.slots[2].over?.target).toBe(2);
+  });
+
+  it("offers a no-recurrence chore every week, with no counter, until the day is taken", () => {
+    const tidy = template("tidy", {
+      name: "Tidy",
+      is_flexible_routine: false,
+      recurrence_pattern: null,
+    } as Partial<CatalogueItem>);
+    const open = week(WEEK, WED, [], [], [], [tidy]).todos[0];
+    expect(open).toMatchObject({ key: "tpl:tidy", anytime: true, extra: false, remaining: 0, period: null });
+    expect(open.days.filter((d) => d.enabled).map((d) => d.date)).toEqual([
+      "2026-10-07", "2026-10-08", "2026-10-09", "2026-10-10", "2026-10-11",
+    ]);
+    const placed = {
+      ...oneOff("tidy-1", localToISO("2026-10-08", "09:00")),
+      source_catalogue_item_id: "tidy",
+    } as unknown as ItemWithDetails;
+    const after = week(WEEK, WED, [placed], [], [], [tidy]).todos[0];
+    expect(after.days.find((d) => d.date === "2026-10-08")).toMatchObject({ enabled: false, taken: true });
+    expect(after.days.find((d) => d.date === "2026-10-09")?.enabled).toBe(true);
   });
 
   it("pre-assigns a template to its default owner", () => {

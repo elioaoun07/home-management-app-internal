@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-17
+updated: 2026-10-24
 type: master-book
 status: active
 owner: Elio
@@ -21,6 +21,8 @@ Stage1 recurrence correctness and shared day delegation exist. Stages2–3 and a
 Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>) preserves detailed older narratives and receipts.
 
 ## Vision & Decisions
+
+- **SCH-29 — A met target informs, never blocks; chores can have no counter (owner request, 2026-10-24).** Laundry could not be placed on a third day because the picker treated "done twice this week" as "nothing left". The target is now a hint: a day stays open unless the chore already sits on it, an over-target placement carries an amber `n/target` tag, and a chore whose target is met is offered in the Assign form as an extra. A Catalogue chore can be **Any time** (no recurrence): it is offered every week with no counter. The Chores page opens on Me, grouped; the Assign form hides what is already on the day it was opened for and places a whole chore for a person in one tap. *(IMPLEMENTED 2026-10-24 — repository, pure-model fixtures and a dev-browser read of the Assign form; device acceptance pending.)*
 
 - **SCH-26 — One chore, many rooms, one Done (owner request, 2026-10-20).** Sweeping 9 rooms back to back then meant 9 taps. A per-device toggle groups the agenda by chore (same Catalogue template + day); the group's check completes every room through one bulk, idempotent, queueable request with one Undo — the SCH-25/HUB-116 shape applied to completion. *(IMPLEMENTED 2026-10-20 — repository and client/grouping fixtures; device acceptance pending.)*
 
@@ -2136,6 +2138,21 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - **Acceptance:** With isolated fixtures of 5 and 50 assignments and delayed/failing responses, separate request delay from rendering and repeated taps. If normal use is responsive, record that and keep the two-step flow. If delay is confirmed, add pending/optimistic feedback with rollback and working Undo, preserving flexible-slot, template-instance and one-off semantics including alert state. No bulk unassign.
 - **Scope boundary:** Mocked data only; localhost is connected to production.
 
+### SCH-29
+
+**Outcome:** A chore whose weekly target is already met can still be assigned (flagged, never blocked), a Catalogue chore can have no recurrence, the page opens on Me and grouped, and a Saturday full-scope assignment takes one tap per chore.
+
+**Kind:** feature
+**Implementation:** done
+**UAT:** pending
+**Touches:** `src/features/chores/choreWeek.ts`, `src/features/chores/roomStats.ts`, `src/components/chores/ChoreAssignPanel.tsx`, `src/components/chores/ChoresView.tsx`, `src/components/chores/ChoreRow.tsx`, `src/components/chores/ChoreGroupRow.tsx`, `src/components/chores/choreUi.tsx`, `src/components/web/ChoreItemDialog.tsx`
+
+- **Acceptance:** Chores opens on **Me** (the viewer's own items, either phone) and **Group** on. A chore done to its Catalogue target (Laundry 2× done Mon and Fri) is listed in Assign with an amber `2/2` tag, its Saturday chip open (amber dot); placing it shows an amber `3/2` tag on the agenda row and group. Only a day the chore already holds is closed. With the form opened for today, a chore already on today is not listed. In the Chores tab each chore header has Me / partner buttons: one tap stages every room on the form's day for that person (tap again to take back); the bulk bars' person buttons do the same. Extras and Any-time chores are never swept by bulk assign and never count as "to plan". Catalogue → Chores form: **Any time** beside Weekly / 2 weeks / Monthly saves a chore with no recurrence; it is offered every week with no counter.
+- **Implementation — 2026-10-24:** `buildChoreWeek` no longer drops a template to-do when its period target is met: day options carry `taken` / `over`, the to-do carries `extra` / `anytime`, and `ChoreSlot.over` marks the placement beyond target (rank by date within template + room + period). No DB object: Any time is `is_flexible_routine = false` with no `recurrence_pattern`. The person filter now defaults to Me; the Assign form takes the unfiltered week (the person is chosen there). Group preference moved to `chores.groupByChore.v2` so the new default applies once.
+- **Evidence — 2026-10-24:** 4 new model cases (met target, no block, over-target rank, Any time) and 2 updated; chores/catalogue/schedule suites pass (38); typecheck and changed-file ESLint clean. Dev browser (production data, nothing saved): defaults Me + Group; Assign form hides Laundry · Toilet (already today); one tap on Dust Surface → Me staged 3/3, then Discard. Not checked at 390 px (window would not resize) or in a second theme.
+- **Owner UAT:** On a phone: open Assign on a Saturday, tap Me on three chores, Save, confirm they land today for you; assign a chore already done twice and confirm the amber tag; in Catalogue set Tidy to Any time and confirm it shows every week without a counter.
+- **Scope boundary:** Flexible routine items (not Catalogue instances) still stop at their target — the flexible engine matches by period slot. The desktop "To plan" aside lists no extras. Chore templates saved before this change with no recurrence now appear as Any time.
+
 ## Shipped Log
 
 - ✅ 2026-10-24 — **SCH-27** Mobile chore assignment: search, "Assign all N", per-row person selector, tabs inside a room, fixed-height sheet — [criteria](<Schedule — Master Book.md#sch-27>)
@@ -2168,6 +2185,7 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - ✅ 2026-10-11 — **SCH-24** Acknowledge complete item and prerequisite effects truthfully — [criteria](<Schedule — Master Book.md#sch-24>)
 - ✅ 2026-10-17 — **SCH-25** Assign many chores at once: optimistic rows, one idempotent bulk request, queue-safe offline and truthful refusals — [criteria](<Schedule — Master Book.md#sch-25>)
 - ✅ 2026-10-20 — **SCH-26** Group a chore across rooms and mark every room done in one tap — [criteria](<Schedule — Master Book.md#sch-26>)
+- ✅ 2026-10-24 — **SCH-29** Assign past a met target, Any-time chores, Me + Grouped defaults, one-tap person assign — [criteria](<Schedule — Master Book.md#sch-29>)
 
 ## Delivery session log
 

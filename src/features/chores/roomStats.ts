@@ -37,8 +37,14 @@ export function roomStats(
   };
   for (const todo of todos) {
     const entry = stat(todo.roomId, todo.room);
-    const stagedCount = Math.min(staged.get(todo.key) ?? 0, todo.remaining);
-    entry.unassigned += todo.remaining - stagedCount;
+    // Extras and no-recurrence chores are optional: never "to plan", but a
+    // staged one still counts as assigned.
+    const optional = todo.extra || todo.anytime;
+    const stagedCount = Math.min(
+      staged.get(todo.key) ?? 0,
+      optional ? 1 : todo.remaining,
+    );
+    entry.unassigned += optional ? 0 : todo.remaining - stagedCount;
     entry.assigned += stagedCount;
   }
   for (const slot of slots) {

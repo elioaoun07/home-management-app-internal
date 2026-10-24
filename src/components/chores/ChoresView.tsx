@@ -75,7 +75,8 @@ type PersonFilter = "all" | "mine" | "partner";
 const EMPTY_TEMPLATES: CatalogueItem[] = [];
 const EMPTY_ROOMS: HomeRoom[] = [];
 const WEEK_OPEN_KEY = "chores.weekOpen";
-const GROUP_KEY = "chores.groupByChore";
+// v2: the default flipped to grouped; older "0" values were not a choice
+const GROUP_KEY = "chores.groupByChore.v2";
 export const CHORE_LIBRARY_HREF = "/catalogue?section=chores";
 
 function firstName(name: string | undefined): string {
@@ -110,17 +111,17 @@ export default function ChoresView({
       initialDate ??
       (variant === "mobile" ? format(new Date(), "yyyy-MM-dd") : null),
   );
-  const [filter, setFilter] = useState<PersonFilter>("all");
+  const [filter, setFilter] = useState<PersonFilter>("mine");
   const [openTodo, setOpenTodo] = useState<string | null>(null);
   const [sheetKey, setSheetKey] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
   const [weekOpen, setWeekOpen] = useState(true);
   // Same chore in several rooms on one day → one row with one Done
-  const [groupByChore, setGroupByChore] = useState(false);
+  const [groupByChore, setGroupByChore] = useState(true);
   useEffect(() => {
     try {
       if (localStorage.getItem(WEEK_OPEN_KEY) === "0") setWeekOpen(false);
-      if (localStorage.getItem(GROUP_KEY) === "1") setGroupByChore(true);
+      if (localStorage.getItem(GROUP_KEY) === "0") setGroupByChore(false);
     } catch {
       // per-viewer convenience only
     }
@@ -184,7 +185,18 @@ export default function ChoresView({
   const completed = selectedDay
     ? doneSlots.filter((slot) => slot.date === selectedDay)
     : doneSlots;
-  const todos = week.todos.filter((todo) => matches(todo.responsibleUserId));
+  // The sidebar lists what still needs a day; extras (target already met) are
+  // offered only in the Assign form, which also ignores the person filter
+  // because the person is picked there.
+  const todos = week.todos.filter(
+    (todo) =>
+      !todo.extra &&
+      (!todo.responsibleUserId || matches(todo.responsibleUserId)),
+  );
+  const todoCount = todos.filter((todo) => !todo.anytime).length;
+  const planCount = week.todos.filter(
+    (todo) => !todo.extra && !todo.anytime,
+  ).length;
   const searchTerm = search.trim().toLocaleLowerCase();
   const filteredTodos = todos.filter((todo) =>
     todo.title.toLocaleLowerCase().includes(searchTerm),
@@ -528,7 +540,7 @@ export default function ChoresView({
         >
           Show all
         </button>
-      ) : todos.length > 0 ? (
+      ) : week.todos.length > 0 ? (
         <button
           type="button"
           onClick={() => openPlan(selectedDay)}
@@ -807,7 +819,7 @@ export default function ChoresView({
           )}
         >
           <Plus className="h-4 w-4" />
-          Assign<span className="tabular-nums">{todos.length}</span>
+          Assign<span className="tabular-nums">{planCount}</span>
         </button>
       </div>
 
@@ -881,7 +893,7 @@ export default function ChoresView({
                       >
                         {dayViewSlots.length}
                       </span>
-                      {todos.length > 0 && selectedDay >= todayKey && (
+                      {week.todos.length > 0 && selectedDay >= todayKey && (
                         <button
                           type="button"
                           onClick={() => openPlan(selectedDay)}
@@ -1023,7 +1035,7 @@ export default function ChoresView({
                   tone.ghost,
                 )}
               >
-                {todos.length}
+                {todoCount}
               </span>
             </div>
             {renderPlanning(selectedDay)}
@@ -1072,7 +1084,7 @@ export default function ChoresView({
             >
               {dateRange}
               <span className={cn("ml-2 text-xs font-normal", tone.subtle)}>
-                {todos.length}
+                {planCount}
               </span>
             </DialogDescription>
             <button
@@ -1093,8 +1105,8 @@ export default function ChoresView({
             </button>
           </div>
           <ChoreAssignPanel
-            todos={todos}
-            slots={visible}
+            todos={week.todos}
+            slots={week.slots}
             rooms={rooms}
             weekStart={week.weekStart}
             weekDays={week.days}

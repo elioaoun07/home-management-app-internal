@@ -41,7 +41,7 @@ describe("optimistic chore placement", () => {
 
   it("an all-day placement leaves To plan and lands on its day at once", () => {
     const week = plan([placed(id, "Kitchen", "2026-10-08", null)]);
-    expect(week.todos.map((t) => t.key)).toEqual([`tpl:${mop.id}:Corridor`]);
+    expect(week.todos.filter((t) => !t.extra).map((t) => t.key)).toEqual([`tpl:${mop.id}:Corridor`]);
     expect(week.slots).toHaveLength(1);
     expect(week.slots[0]).toMatchObject({ kind: "dated", date: "2026-10-08", time: null, done: false });
     expect(week.slots[0].item).toMatchObject({ title: "Mop · Kitchen", responsible_user_id: ME, is_chore: true });
@@ -57,7 +57,8 @@ describe("optimistic chore placement", () => {
       placed(id, "Kitchen", "2026-10-08", null),
       placed("aaaaaaaa-aaaa-4aaa-8aaa-000000000002", "Corridor", "2026-10-08", null),
     ]);
-    expect(week.todos).toEqual([]);
+    // A met target leaves To plan; it stays offered only as an extra
+    expect(week.todos.filter((t) => !t.extra)).toEqual([]);
     expect(week.slots).toHaveLength(2);
   });
 });

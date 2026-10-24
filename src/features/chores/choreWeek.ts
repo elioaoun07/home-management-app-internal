@@ -58,6 +58,8 @@ export interface ChoreSlot {
   completedAction?: ItemOccurrenceAction;
   /** Present for open flexible slots (move/unassign need the slot identity) */
   flexible?: ChoreSlotFlexible;
+  /** Placed beyond the Catalogue target for its period: `rank` of `target` */
+  over?: { rank: number; target: number };
 }
 
 export type ChoreTodoKind = "flexible" | "template" | "undated";
@@ -67,6 +69,10 @@ export interface ChoreDayOption {
   enabled: boolean;
   /** Flexible/template period this day falls in */
   periodStart: string | null;
+  /** The chore already sits on this day */
+  taken?: boolean;
+  /** The period's target is already met: placing here is an extra */
+  over?: boolean;
 }
 
 export interface ChoreTodo {
@@ -86,6 +92,10 @@ export interface ChoreTodo {
   days: ChoreDayOption[];
   item?: FlexibleRoutineItem | ItemWithDetails;
   template?: CatalogueItem;
+  /** Template whose period target is met everywhere: offered only as an extra */
+  extra?: boolean;
+  /** Template with no recurrence: do it whenever, no counter */
+  anytime?: boolean;
 }
 
 export interface ChoreWeekInput {
@@ -397,7 +407,7 @@ export function buildChoreWeek(input: ChoreWeekInput): ChoreWeek {
       );
       const enabled = dayIsOpen(date) && remaining > 0 && !taken;
       if (enabled && !primary && entry) primary = entry;
-      return { date, enabled, periodStart };
+      return { date, enabled, periodStart, taken };
     });
     if (!primary) continue;
     todos.push({
@@ -427,15 +437,22 @@ export function buildChoreWeek(input: ChoreWeekInput): ChoreWeek {
       .filter((id): id is string => !!id),
   );
   for (const tpl of input.templates) {
-    if (!tpl.is_chore || !tpl.is_flexible_routine) continue;
-    if (!isFlexiblePeriod(tpl.recurrence_pattern)) continue;
+    if (!tpl.is_chore) continue;
+    // No recurrence at all = "whenever I feel like it": no target, no counter
+    const anytime = !tpl.is_flexible_routine && !tpl.recurrence_pattern;
+    if (!anytime) {
+      if (!tpl.is_flexible_routine) continue;
+      if (!isFlexiblePeriod(tpl.recurrence_pattern)) continue;
+    }
     if (tpl.archived_at || tpl.status === "archived") continue;
     // One to-do per room the template is tagged with; untagged = one to-do.
     // A room-tagged template is never hidden by a routine item made elsewhere.
     const tplRoomIds = (tpl.room_ids ?? []).filter((id) => roomsById.has(id));
     if (routineSources.has(tpl.id) && tplRoomIds.length === 0) continue;
-    const period = tpl.recurrence_pattern;
-    const target = Math.max(1, tpl.flexible_occurrences ?? 1);
+    const period = isFlexiblePeriod(tpl.recurrence_pattern)
+      ? tpl.recurrence_pattern
+      : "weekly";
+    const target = anytime ? 0 : Math.max(1, tpl.flexible_occurrences ?? 1);
     for (const roomId of tplRoomIds.length ? tplRoomIds : [null]) {
       const instances = input.items.filter(
         (i) =>
@@ -445,19 +462,31 @@ export function buildChoreWeek(input: ChoreWeekInput): ChoreWeek {
           !CLOSED_STATUSES.has(i.status ?? ""),
       );
       let primaryRemaining = 0;
+      const instanceDay = instances
+        .map(getItemDate)
+        .filter((d): d is Date => !!d);
       const dayOptions = days.map((date): ChoreDayOption => {
         const bounds = getPeriodBoundaries(parseISO(date), period);
-        const instanceDates = instances
-          .map(getItemDate)
-          .filter((d): d is Date => !!d && isWithinInterval(d, bounds))
+        const periodDates = instanceDay
+          .filter((d) => isWithinInterval(d, bounds))
           .map(toDateKey);
-        const remaining = Math.max(0, target - instanceDates.length);
-        const enabled =
-          dayIsOpen(date) && remaining > 0 && !instanceDates.includes(date);
-        if (enabled && primaryRemaining === 0) primaryRemaining = remaining;
-        return { date, enabled, periodStart: toDateKey(bounds.start) };
+        const taken = instanceDay.map(toDateKey).includes(date);
+        const remaining = Math.max(0, target - periodDates.length);
+        // A met target never blocks a day (an extra is fine); only a day the
+        // chore already holds, or a past day, is closed.
+        const enabled = dayIsOpen(date) && !taken;
+        if (enabled && remaining > 0 && primaryRemaining === 0) {
+          primaryRemaining = remaining;
+        }
+        return {
+          date,
+          enabled,
+          periodStart: toDateKey(bounds.start),
+          taken,
+          over: !anytime && remaining === 0,
+        };
       });
-      if (primaryRemaining === 0) continue;
+      if (!dayOptions.some((d) => d.enabled)) continue;
       todos.push({
         key: roomId ? `tpl:${tpl.id}:${roomId}` : `tpl:${tpl.id}`,
         kind: "template",
@@ -466,10 +495,12 @@ export function buildChoreWeek(input: ChoreWeekInput): ChoreWeek {
         responsibleUserId: tpl.default_assignee_id ?? null,
         remaining: primaryRemaining,
         target,
-        period,
+        period: anytime ? null : period,
         preferredTime: tpl.preferred_time?.slice(0, 5) || null,
         days: dayOptions,
         template: tpl,
+        extra: !anytime && primaryRemaining === 0,
+        anytime,
       });
     }
   }
@@ -503,6 +534,41 @@ export function buildChoreWeek(input: ChoreWeekInput): ChoreWeek {
   todos.sort(
     (a, b) => a.roomOrder - b.roomOrder || a.title.localeCompare(b.title),
   );
+
+  // ── Over-target: placements beyond what the Catalogue asks for the period ───
+  // Informative only: it never blocks an assignment.
+  const templatesById = new Map(input.templates.map((t) => [t.id, t] as const));
+  for (const slot of [...slots, ...overdue]) {
+    if (slot.kind !== "dated") continue;
+    const source = sourceId(slot.item);
+    const tpl = source ? templatesById.get(source) : undefined;
+    if (!tpl?.is_flexible_routine || !isFlexiblePeriod(tpl.recurrence_pattern)) {
+      continue;
+    }
+    const target = Math.max(1, tpl.flexible_occurrences ?? 1);
+    const room = instanceRoomId(slot.item);
+    const bounds = getPeriodBoundaries(parseISO(slot.date), tpl.recurrence_pattern);
+    const siblings = input.items
+      .filter(
+        (i) =>
+          sourceId(i) === source &&
+          instanceRoomId(i) === room &&
+          !i.recurrence_rule?.is_flexible &&
+          !CLOSED_STATUSES.has(i.status ?? ""),
+      )
+      .map((i) => ({ id: i.id, date: getItemDate(i) }))
+      .filter(
+        (s): s is { id: string; date: Date } =>
+          !!s.date && isWithinInterval(s.date, bounds),
+      )
+      .sort(
+        (a, b) =>
+          toDateKey(a.date).localeCompare(toDateKey(b.date)) ||
+          a.id.localeCompare(b.id),
+      );
+    const rank = siblings.findIndex((s) => s.id === slot.item.id) + 1;
+    if (rank > target) slot.over = { rank, target };
+  }
 
   return {
     weekStart,

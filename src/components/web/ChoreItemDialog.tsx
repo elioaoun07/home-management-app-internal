@@ -92,6 +92,8 @@ export default function ChoreItemDialog({
   const [choreCategory, setChoreCategory] = useState<ChoreCategory | "">("");
   const [period, setPeriod] = useState<FlexiblePeriod>("weekly");
   const [times, setTimes] = useState("1");
+  // No recurrence: shows up every week, no counter ("Tidy")
+  const [anytime, setAnytime] = useState(false);
   const [roomIds, setRoomIds] = useState<string[]>([]);
   const [roomInput, setRoomInput] = useState("");
   // Per-room text state: checklist and minutes, keyed by room id
@@ -124,6 +126,7 @@ export default function ChoreItemDialog({
         : "weekly",
     );
     setTimes(String(item?.flexible_occurrences ?? 1));
+    setAnytime(!!item && !item.is_flexible_routine && !item.recurrence_pattern);
     setRoomIds(item?.room_ids ?? []);
     const config = item?.room_config ?? {};
     setRoomChecklists(
@@ -210,9 +213,11 @@ export default function ChoreItemDialog({
     const common = {
       name: name.trim(),
       is_chore: true,
-      is_flexible_routine: true,
-      recurrence_pattern: period,
-      flexible_occurrences: Math.min(31, Math.max(1, parseInt(times, 10) || 1)),
+      is_flexible_routine: !anytime,
+      recurrence_pattern: anytime ? null : period,
+      flexible_occurrences: anytime
+        ? undefined
+        : Math.min(31, Math.max(1, parseInt(times, 10) || 1)),
       default_assignee_id: assigneeChanged ? assigneeId : undefined,
       room_ids: roomsChanged ? roomIds : undefined,
       room_config: configChanged ? nextConfig : undefined,
@@ -233,6 +238,7 @@ export default function ChoreItemDialog({
           })
         : await createItem.mutateAsync({
             ...common,
+            recurrence_pattern: common.recurrence_pattern ?? undefined,
             is_public: true,
             description: note || undefined,
             chore_category: choreCategory || undefined,
@@ -289,29 +295,43 @@ export default function ChoreItemDialog({
 
           {/* Frequency */}
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="text"
-              inputMode="numeric"
-              aria-label="Times per period"
-              value={times}
-              onChange={(e) => setTimes(e.target.value.replace(/[^0-9]/g, ""))}
-              onBlur={() => {
-                const n = parseInt(times, 10);
-                setTimes(String(Number.isFinite(n) && n >= 1 ? Math.min(n, 31) : 1));
-              }}
-              className="w-16 px-3 py-1.5 rounded-md bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-emerald-400/50"
-            />
-            <span className="text-white/50 text-sm">×</span>
+            {!anytime && (
+              <>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  aria-label="Times per period"
+                  value={times}
+                  onChange={(e) => setTimes(e.target.value.replace(/[^0-9]/g, ""))}
+                  onBlur={() => {
+                    const n = parseInt(times, 10);
+                    setTimes(String(Number.isFinite(n) && n >= 1 ? Math.min(n, 31) : 1));
+                  }}
+                  className="w-16 px-3 py-1.5 rounded-md bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-emerald-400/50"
+                />
+                <span className="text-white/50 text-sm">×</span>
+              </>
+            )}
             {PERIODS.map((p) => (
               <button
                 key={p}
                 type="button"
-                onClick={() => setPeriod(p)}
-                className={chip(period === p)}
+                onClick={() => {
+                  setAnytime(false);
+                  setPeriod(p);
+                }}
+                className={chip(!anytime && period === p)}
               >
                 {FLEXIBLE_PERIOD_LABELS[p]}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setAnytime(true)}
+              className={chip(anytime)}
+            >
+              Any time
+            </button>
           </div>
 
           {/* Rooms */}

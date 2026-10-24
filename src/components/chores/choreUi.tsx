@@ -4,6 +4,7 @@ import type { ChoreDayOption } from "@/features/chores/choreWeek";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { addDays, format, isToday, parseISO } from "date-fns";
+import { Check } from "lucide-react";
 
 export interface ChorePerson {
   label: string;
@@ -104,6 +105,25 @@ export function PersonTag({ person }: { person: ChorePerson | null }) {
   );
 }
 
+/**
+ * Informative only: the period's target is already met ("2/2") or passed
+ * ("3/2"). Amber, so it never competes with the blue/pink person outlines.
+ */
+export function TargetTag({ label }: { label: string }) {
+  const { isFrost } = useChoreTone();
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium leading-4 tabular-nums",
+        isFrost ? "bg-amber-50 text-amber-700" : "bg-amber-500/10 text-amber-400",
+      )}
+    >
+      <Check className="h-3 w-3" aria-hidden />
+      {label}
+    </span>
+  );
+}
+
 export function formatChoreTime(time: string | null): string | null {
   if (!time) return null;
   return format(parseISO(`2000-01-01T${time.slice(0, 5)}`), "h:mm a");
@@ -166,6 +186,12 @@ export function ChoreDayChips({
             {today && (
               <span
                 className="absolute bottom-1 h-1 w-1 rounded-full bg-current"
+                aria-hidden
+              />
+            )}
+            {option.over && !isDisabled && (
+              <span
+                className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-400"
                 aria-hidden
               />
             )}

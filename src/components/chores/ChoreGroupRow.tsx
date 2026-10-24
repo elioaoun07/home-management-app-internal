@@ -4,6 +4,7 @@ import {
   formatChoreTime,
   PersonTag,
   personTone,
+  TargetTag,
   useChoreTone,
   type ChorePerson,
 } from "@/components/chores/choreUi";
@@ -35,6 +36,11 @@ export function ChoreGroupRow({
   const { slots, title } = group;
   const sameTime = slots.every((slot) => slot.time === slots[0].time);
   const time = sameTime ? (formatChoreTime(slots[0].time) ?? "All day") : null;
+  const over = slots.reduce<ChoreSlot["over"]>(
+    (best, slot) =>
+      slot.over && (!best || slot.over.rank > best.rank) ? slot.over : best,
+    undefined,
+  );
   const rooms = slots.every(
     (slot) => typeof slot.item.metadata_json?.room_id === "string",
   );
@@ -116,6 +122,7 @@ export function ChoreGroupRow({
                 </span>
               )}
               <PersonTag person={person} />
+              {over && <TargetTag label={`${over.rank}/${over.target}`} />}
             </span>
           </span>
           <ChevronDown

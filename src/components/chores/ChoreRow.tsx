@@ -8,6 +8,7 @@ import {
   formatChoreTime,
   PersonTag,
   personTone,
+  TargetTag,
   useChoreTone,
   type ChorePerson,
 } from "@/components/chores/choreUi";
@@ -111,7 +112,7 @@ export function ChoreRow({
             >
               {slot.item.title}
             </span>
-            {(sub || person) && (
+            {(sub || person || slot.over) && (
               <span className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
                 {sub && (
                   <span
@@ -125,6 +126,9 @@ export function ChoreRow({
                   </span>
                 )}
                 <PersonTag person={person} />
+                {slot.over && (
+                  <TargetTag label={`${slot.over.rank}/${slot.over.target}`} />
+                )}
               </span>
             )}
           </span>

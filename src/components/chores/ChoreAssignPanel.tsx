@@ -7,6 +7,7 @@ import {
   ChoreDayChips,
   PersonTag,
   personTone,
+  TargetTag,
   useChoreTone,
   type ChorePerson,
 } from "@/components/chores/choreUi";
@@ -196,12 +197,15 @@ function DraftRow({
             >
               {label}
             </span>
-            {(meta || person) && (
+            {(meta || person || todo.extra) && (
               <span className="mt-1 flex flex-wrap items-center gap-2">
                 {meta && (
                   <span className={cn("text-[11px]", tone.subtle)}>{meta}</span>
                 )}
                 <PersonTag person={person} />
+                {todo.extra && (
+                  <TargetTag label={`${todo.target}/${todo.target}`} />
+                )}
               </span>
             )}
           </button>
@@ -377,6 +381,21 @@ export function ChoreAssignPanel({
   const draftFor = (todo: ChoreTodo) =>
     store.drafts[draftKey(weekStart, todo.key)];
 
+  // Already on the day the form was opened for: nothing left to offer there
+  // (unless it is staged elsewhere, so the draft stays reachable).
+  const visibleTodos = useMemo(
+    () =>
+      todos.filter(
+        (todo) =>
+          !(
+            targetDate &&
+            todo.days.find((d) => d.date === targetDate)?.taken &&
+            !store.drafts[draftKey(weekStart, todo.key)]
+          ),
+      ),
+    [todos, targetDate, store.drafts, weekStart],
+  );
+
   const staged = useMemo(() => {
     const map = new Map<string, number>();
     for (const draft of store.list) {
@@ -385,8 +404,8 @@ export function ChoreAssignPanel({
     return map;
   }, [store.list, weekStart]);
   const stats = useMemo(
-    () => roomStats(todos, slots, staged),
-    [todos, slots, staged],
+    () => roomStats(visibleTodos, slots, staged),
+    [visibleTodos, slots, staged],
   );
 
   const ownerOf = (todo: ChoreTodo): string | null =>
@@ -406,15 +425,53 @@ export function ChoreAssignPanel({
   const matches = useMemo(
     () =>
       searching
-        ? todos.filter((todo) =>
+        ? visibleTodos.filter((todo) =>
             `${todo.title} ${todo.room ?? ""}`.toLowerCase().includes(needle),
           )
         : [],
-    [todos, needle, searching],
+    [visibleTodos, needle, searching],
   );
 
   // ── Bulk ──
-  const renderBulk = (scope: ChoreTodo[]) => {
+  // Extras and no-recurrence chores are picked one by one, never in bulk
+  const bulkable = (scope: ChoreTodo[]) =>
+    scope.filter((todo) => !todo.extra && !todo.anytime);
+
+  const canTake = (todo: ChoreTodo, date: string) =>
+    todo.days.some((d) => d.date === date && d.enabled);
+
+  /** Every bulkable chore that can take `date` is staged there for `userId` */
+  const quickOn = (scope: ChoreTodo[], date: string, userId: string) => {
+    const eligible = bulkable(scope).filter((todo) => canTake(todo, date));
+    return (
+      eligible.length > 0 &&
+      eligible.every((todo) => {
+        const draft = draftFor(todo);
+        return draft?.date === date && draft.userId === userId;
+      })
+    );
+  };
+
+  /**
+   * One tap = day + person: stages every chore in scope that can take `date`
+   * for `userId`, or takes them all back when they are already there.
+   */
+  const quickPlace = (scope: ChoreTodo[], date: string, userId: string) => {
+    const eligible = bulkable(scope).filter((todo) => canTake(todo, date));
+    if (eligible.length === 0) return;
+    const there = quickOn(scope, date, userId);
+    for (const todo of eligible) {
+      if (there) store.unstage(weekStart, todo.key);
+      else {
+        store.setOwner(todo.key, userId);
+        store.stage(todo, weekStart, date, undefined, userId);
+      }
+    }
+  };
+
+  const renderBulk = (all: ChoreTodo[]) => {
+    const scope = bulkable(all);
+    if (scope.length === 0) return null;
     const days: ChoreDayOption[] = weekDays.map((date) => ({
       date,
       enabled: scope.some((todo) =>
@@ -436,7 +493,9 @@ export function ChoreAssignPanel({
       }
     };
     const applyOwner = (userId: string) => {
-      for (const todo of scope) store.setOwner(todo.key, userId);
+      const date = selected ?? targetDate;
+      if (date) quickPlace(scope, date, userId);
+      else for (const todo of scope) store.setOwner(todo.key, userId);
     };
     const eligible = scope.filter((todo) =>
       todo.days.some((d) => d.enabled),
@@ -520,7 +579,7 @@ export function ChoreAssignPanel({
   const renderFocus = (target: NonNullable<Focus>) => {
     const room = rooms.find((r) => r.id === target.roomId);
     const style = room ? getRoomStyle(room.name, room.id) : NO_ROOM_STYLE;
-    const scope = todos.filter((t) => t.roomId === target.roomId);
+    const scope = visibleTodos.filter((t) => t.roomId === target.roomId);
     const stat = stats.get(target.roomId);
     return (
       <div className="space-y-3">
@@ -575,42 +634,71 @@ export function ChoreAssignPanel({
   // ── Chores tab ──
   const groups = useMemo(() => {
     const map = new Map<string, ChoreTodo[]>();
-    for (const todo of todos) {
+    for (const todo of visibleTodos) {
       const list = map.get(todo.title);
       if (list) list.push(todo);
       else map.set(todo.title, [todo]);
     }
     return [...map.entries()];
-  }, [todos]);
+  }, [visibleTodos]);
 
   const renderGroups = () => (
     <div className="space-y-2.5">
       {groups.map(([title, scope]) => {
         const open = group === title;
         const stagedCount = scope.filter((t) => draftFor(t)).length;
+        const quickDate =
+          targetDate &&
+          bulkable(scope).some((todo) => canTake(todo, targetDate))
+            ? targetDate
+            : null;
         return (
           <div key={title} className={cn("overflow-hidden rounded-2xl border", tone.row)}>
-            <button
-              type="button"
-              onClick={() => setGroup(open ? null : title)}
-              aria-expanded={open}
-              className={cn(
-                "flex min-h-14 w-full items-center gap-2 px-3.5 text-left",
-                tone.focus,
-              )}
-            >
-              <span className={cn("min-w-0 flex-1 truncate text-sm font-semibold", tone.main)}>
-                {title}
-              </span>
-              <span className={cn("text-xs tabular-nums", stagedCount ? tone.accent : tone.subtle)}>
-                {stagedCount}/{scope.length}
-              </span>
-              {open ? (
-                <ChevronUp className="h-4 w-4" aria-hidden />
-              ) : (
-                <ChevronDown className="h-4 w-4" aria-hidden />
-              )}
-            </button>
+            <div className="flex items-center gap-1.5 pr-2">
+              <button
+                type="button"
+                onClick={() => setGroup(open ? null : title)}
+                aria-expanded={open}
+                className={cn(
+                  "flex min-h-14 min-w-0 flex-1 items-center gap-2 pl-3.5 text-left",
+                  tone.focus,
+                )}
+              >
+                <span className={cn("min-w-0 flex-1 truncate text-sm font-semibold", tone.main)}>
+                  {title}
+                </span>
+                <span className={cn("text-xs tabular-nums", stagedCount ? tone.accent : tone.subtle)}>
+                  {stagedCount}/{scope.length}
+                </span>
+                {open ? (
+                  <ChevronUp className="h-4 w-4" aria-hidden />
+                ) : (
+                  <ChevronDown className="h-4 w-4" aria-hidden />
+                )}
+              </button>
+              {quickDate &&
+                [me, partner].map(
+                  (person) =>
+                    person && (
+                      <button
+                        key={person.id}
+                        type="button"
+                        onClick={() => quickPlace(scope, quickDate, person.id)}
+                        aria-pressed={quickOn(scope, quickDate, person.id)}
+                        aria-label={`${title}: ${person.label}, ${dayShort(quickDate)}`}
+                        className={cn(
+                          "h-10 max-w-[5.5rem] shrink-0 truncate rounded-xl border px-2.5 text-xs font-semibold",
+                          tone.focus,
+                          quickOn(scope, quickDate, person.id)
+                            ? cn(personTone(person.color, tone.isFrost).outline, tone.selected)
+                            : cn(tone.ghost, "border-transparent"),
+                        )}
+                      >
+                        {person.label}
+                      </button>
+                    ),
+                )}
+            </div>
             {open && (
               <div className={cn("space-y-2 border-t p-2.5", tone.border)}>
                 {scope.length > 1 && renderBulk(scope)}
