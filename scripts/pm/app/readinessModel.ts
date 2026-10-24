@@ -72,7 +72,8 @@ export function readinessIssues(result: V2Readiness | null | undefined, rows = r
     }
     for (const blocker of result.blockers.filter(entry => entry.gate === row.gate)) {
       const detail = typeof blocker.detail === "string" && blocker.detail.length <= 80 ? blocker.detail : null;
-      issues.add(CODE_FIXES[blocker.code] || detail || reasonLabel(blocker as unknown as V2Reason));
+      const fix = detail === "generated compiler input changed" ? "Refresh build setup" : detail;
+      issues.add(CODE_FIXES[blocker.code] || fix || reasonLabel(blocker as unknown as V2Reason));
     }
   }
   return [...issues];

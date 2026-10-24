@@ -69,7 +69,8 @@ it("lets the real Steward entry record missing setup while ordinary Start stays 
   const cancelled = render();
   expect(cancelled).toContain(">New delivery</button>");
   expect(cancelled).toContain(">Open delivery</button>");
-  expect(cancelled).toMatch(/<button class="primary" disabled="">/u);
+  expect(cancelled).toMatch(/<button class="primary">New delivery<\/button>/u);
+  expect(cancelled).not.toMatch(/>Start<\/button>/u);
   client.setQueryData(pmKeys.v2runs, { runs: [{ run_id: "cancelled-run", lifecycle: "WAITING", closed_outcome: "cancelled" }], requests: [] });
   expect(render()).not.toContain(">New delivery</button>");
 });

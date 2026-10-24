@@ -311,9 +311,9 @@ function LaunchWork({ work }: { work: Work }) {
       options: { capabilitiesDrop: dropped },
     });
   return (
-    <div className="focus-page launch-page">
+    <div className={`focus-page launch-page${mode.data?.mode === "v2" ? " launch-page-v2" : ""}`}>
       <Back fallback="/delivery" />
-      <div className="launch-progress">
+      {mode.data?.mode !== "v2" && <div className="launch-progress">
         <span className={!review ? "current" : "complete"}>
           1 <b>Shape it</b>
         </span>
@@ -321,9 +321,9 @@ function LaunchWork({ work }: { work: Work }) {
         <span className={review ? "current" : ""}>
           2 <b>Ready to go</b>
         </span>
-      </div>
+      </div>}
       <header className="launch-heading">
-        <SpaceIcon name={work.module} size={25} />
+        {mode.data?.mode !== "v2" && <SpaceIcon name={work.module} size={25} />}
         <span className="eyebrow">
           {work.module} · {work.id}
         </span>

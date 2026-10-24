@@ -5,7 +5,6 @@ import {
   ArrowRight,
   Check,
   ClipboardCheck,
-  Clock,
   FileText,
   GitBranch,
   ListChecks,
@@ -13,13 +12,13 @@ import {
   Play,
   Send,
   Sparkles,
-  X,
   Zap,
 } from "lucide-react";
 import { durableV2Command, newDeliveryIntent, storedIntent } from "./commandIntents";
 import { v2Pair, v2Post } from "./api";
 import { client, go, pmKeys, useRoute, useWorld } from "./state";
-import { readinessCanLaunch, readinessCanStart, readinessIssues, readinessRows } from "./readinessModel";
+import { readinessCanLaunch, readinessCanStart } from "./readinessModel";
+import { LaunchReadiness } from "./LaunchReadiness";
 import { PendingCommand, transport } from "./transport";
 import { Back, Empty, ErrorNotice, RunOrb, Sheet } from "./components";
 import { returnFromLaunch } from "./Work";
@@ -58,7 +57,7 @@ import { OutcomeReview } from "./OutcomeReview";
 import { DeliveryQuestion } from "./DeliveryQuestion";
 import { TestGateCard } from "./TestGate";
 import { StewardRequests } from "./StewardRequests";
-import type { V2Executor, V2Reason, V2RunDetail, Work } from "./types";
+import type { V2Executor, V2Readiness, V2ReadinessSelection, V2Reason, V2RunDetail, Work } from "./types";
 
 type Body = Record<string, unknown>;
 // Start may first collect live readiness (Docker, sign-in, model) on the laptop.
@@ -388,18 +387,6 @@ const PROFILES = [
   ["investigate", "Deep dive"],
 ] as const;
 
-function startBlocker(reasons: V2Reason[]) {
-  const reason = reasons[0];
-  if (!reason) return "Unavailable";
-  if (reason.code === "scope-unknown") return "Scope required";
-  if (reason.code === "fleet-resources") return "Allowance used";
-  if (["writer-slots-full", "job-slots-full"].includes(reason.code))
-    return "Capacity full";
-  if (reason.code.startsWith("dependency-"))
-    return `Waiting for ${reason.with || reason.first || "prerequisite"}`;
-  return "Unavailable";
-}
-
 export function LaunchV2({ work }: { work: Work }) {
   const { connected } = useWorld();
   const route = useRoute();
@@ -418,8 +405,12 @@ export function LaunchV2({ work }: { work: Work }) {
   const deliveries = useV2Runs();
   const steward = route.query.get("initiator") === "era-steward";
   const refresh = useMutation({
-    mutationFn: () => transport().v2Command<{ readiness: import("./types").V2Readiness }>("control", { action: "refresh-readiness", selection: readinessSelection, command_id: crypto.randomUUID() }, 180000),
-    onSuccess: data => client.setQueryData(pmKeys.v2readiness(readinessSelection), data.readiness),
+    mutationFn: async (selection: V2ReadinessSelection) => {
+      const data = await transport().v2Command<{ readiness: V2Readiness }>("control", { action: "refresh-readiness", selection, command_id: crypto.randomUUID() }, LAUNCH_TIMEOUT_MS);
+      return { ...data, checkedAt: Date.now() };
+    },
+    onMutate: selection => client.cancelQueries({ queryKey: pmKeys.v2readiness(selection) }),
+    onSuccess: (data, selection) => client.setQueryData(pmKeys.v2readiness(selection), data.readiness),
     onSettled: () => client.invalidateQueries({ queryKey: pmKeys.all }),
   });
   const itemId = String(work.idChip || work.id || "");
@@ -458,8 +449,7 @@ export function LaunchV2({ work }: { work: Work }) {
   }, [catalogue.data, executor, profile]);
   if (session.data && !session.data.paired && transport().capabilities.pairing)
     return <PairV2 />;
-  const gates = readinessRows(readiness.data);
-  const issues = readinessIssues(readiness.data, gates);
+  const refreshCurrent = !!refresh.variables && Object.entries(readinessSelection).every(([key, value]) => refresh.variables?.[key as keyof V2ReadinessSelection] === value);
 
   const chosen = catalogue.data?.executors.find(
     (entry) => entry.id === executor,
@@ -497,10 +487,12 @@ export function LaunchV2({ work }: { work: Work }) {
     );
 
   return (
-    <>
+    <div className="launch-v2">
       {steward && <span className="eyebrow">ERA Steward</span>}
-      {!steward && <a className="secondary" href={`#${route.path}?${new URLSearchParams([...route.query.entries(), ["initiator", "era-steward"]])}`}>Steward</a>}
-      <StewardRequests requests={(deliveries.data?.requests || []).filter(request => request.file === work.file && request.workId.toUpperCase() === itemId.toUpperCase())} />
+      <details className="launch-settings" open={!executor && !catalogue.isPending ? true : undefined}>
+        <summary><span>{chosen ? `${chosen.label} · ${PROFILES.find(([value]) => value === profile)?.[1] || profile}` : "Choose executor"}</span><span>Settings</span></summary>
+        {chosen && <p className="launch-settings-selection">{chosen.models.find(entry => entry.id === model)?.label || model || "Default model"} · {effort || "Default effort"}</p>}
+        <fieldset disabled={refresh.isPending || start.isPending || newDelivery.isPending}>
       <section className="launch-section">
         <h2>Executor</h2>
         <div className="provider-choices">
@@ -588,57 +580,37 @@ export function LaunchV2({ work }: { work: Work }) {
           </div>
         </section>
       )}
+        {!steward && <a className="secondary" href={`#${route.path}?${new URLSearchParams([...route.query.entries(), ["initiator", "era-steward"]])}`}>Use Steward</a>}
+        </fieldset>
+      </details>
       <ErrorNotice
         error={catalogue.error || session.error}
         retry={() => void catalogue.refetch()}
       />
       <ErrorNotice error={start.failure} retry={start.retry} />
-      <ErrorNotice error={readiness.error} retry={() => void readiness.refetch()} />
       <ErrorNotice error={previousLaunch.error} retry={() => void previousLaunch.refetch()} />
       <ErrorNotice error={newDelivery.error} retry={() => newDelivery.mutate()} />
-      <section className="launch-section" aria-label="Readiness">
-        <h2>Readiness</h2>
-        {gates.length ? (
-          <ul className="readiness-gates">
-            {gates.map((row) => (
-              <li key={row.gate} data-state={row.state} title={row.state === "start" ? "Checked at Start" : undefined}>
-                {row.state === "ok" ? <Check size={13} /> : row.state === "fix" ? <X size={13} /> : <Clock size={13} />}
-                {row.label}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="readiness-issues">Readiness unavailable</p>
-        )}
-        {issues.length > 0 && (
-          <ul className="readiness-issues">
-            {issues.map((text) => <li key={text}>{text}</li>)}
-          </ul>
-        )}
-      </section>
+      <LaunchReadiness result={readiness.data} connected={connected} loading={readiness.isPending} checking={refreshCurrent && refresh.isPending}
+        checkedAt={refreshCurrent ? refresh.data?.checkedAt : undefined} error={(refreshCurrent && refresh.error) || readiness.error}
+        disabled={!connected || !executor || !model || start.isPending || newDelivery.isPending}
+        onCheck={() => refresh.mutate(readinessSelection)} />
       <CommandReceipt
         pending={start.pending}
         onCheck={start.retry}
         busy={start.isPending}
       />
       {testGate?.locked && <TestGateCard gate={testGate} />}
-      {refresh.error && <p role="alert">{refresh.error.message}</p>}
-      <div className="launch-footer">
-        {cancelledLaunch && <button disabled={!connected || start.isPending || newDelivery.isPending} onClick={() => newDelivery.mutate()}>New delivery</button>}
-        {previousLaunch.data && <button disabled={!connected || start.isPending} onClick={() => {
+      {previousLaunch.data && <section className="launch-previous" aria-label="Previous delivery">
+        <span>{cancelledLaunch ? "Previous delivery cancelled" : previousLaunch.data.completed ? "Existing delivery" : "Unresolved request"}</span>
+        <div className="launch-previous-actions">
+        {cancelledLaunch && <button className="primary" disabled={!connected || start.isPending || newDelivery.isPending || refresh.isPending} onClick={() => newDelivery.mutate()}>{newDelivery.isPending ? "Preparing…" : "New delivery"}</button>}
+        <button className={cancelledLaunch ? "secondary" : "primary"} disabled={!connected || start.isPending || refresh.isPending} onClick={() => {
           const saved = previousLaunch.data!;
           start.send(saved.path, launchIntent, saved.body, data => go(`/delivery/run/${String(data.run_id)}`));
-        }}>{previousLaunch.data.completed ? "Open delivery" : "Resume request"}</button>}
-        <button disabled={!connected || !executor || !model || refresh.isPending} onClick={() => refresh.mutate()}>{refresh.isPending ? "Checking" : "Check readiness"}</button>
-        <span>
-          {testsLocked
-            ? "Tests not confirmed"
-            : noRuntime
-            ? "Worker unavailable"
-            : assessment?.startable === false
-              ? startBlocker(assessment.reasons)
-              : ""}
-        </span>
+        }}>{previousLaunch.data.completed ? "Open delivery" : "Resume request"}</button>
+        </div>
+      </section>}
+      {!previousLaunch.data && <div className="launch-footer launch-v2-actions">
         <button
           className="primary"
           disabled={
@@ -646,8 +618,9 @@ export function LaunchV2({ work }: { work: Work }) {
             !!previousLaunch.data || !!previousLaunch.error || previousLaunch.isPending || newDelivery.isPending ||
             (!steward && (!chosen || !chosen.permitted)) ||
             (!steward && !readinessCanLaunch(readiness.data, readinessSelection)) ||
+            (!steward && (!!readiness.error || (refreshCurrent && refresh.isError))) ||
             (!steward && noRuntime) ||
-            start.isPending ||
+            start.isPending || refresh.isPending ||
             work.state !== "open" ||
             (!steward && assessment?.startable === false) ||
             (!steward && testsLocked)
@@ -657,7 +630,8 @@ export function LaunchV2({ work }: { work: Work }) {
           <Zap size={17} />
           {start.isPending ? "Starting…" : "Start"}
         </button>
-      </div>
+      </div>}
+      <StewardRequests requests={(deliveries.data?.requests || []).filter(request => request.file === work.file && request.workId.toUpperCase() === itemId.toUpperCase())} />
       <Sheet
         title={`${blockedExecutor?.label || "Executor"} unavailable`}
         open={!!blockedExecutor}
@@ -682,7 +656,7 @@ export function LaunchV2({ work }: { work: Work }) {
           </>
         )}
       </Sheet>
-    </>
+    </div>
   );
 }
 

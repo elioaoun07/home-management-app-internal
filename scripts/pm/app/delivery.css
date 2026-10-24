@@ -435,6 +435,210 @@
   font-size: 11px;
   color: var(--ink-muted);
 }
+.launch-page-v2 {
+  max-width: 680px;
+}
+.launch-page-v2 .launch-heading h1 {
+  font-size: clamp(23px, 3.5vw, 30px);
+  line-height: 1.3;
+  letter-spacing: -0.7px;
+  margin: 10px 0 24px;
+}
+.launch-v2 {
+  display: grid;
+  gap: 18px;
+}
+.launch-settings {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  padding: 0 18px;
+}
+.launch-settings > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 54px;
+  align-items: center;
+  font-size: 13px;
+  cursor: pointer;
+}
+.launch-settings > summary > span:last-child {
+  color: var(--accent);
+  font-size: 12px;
+}
+.launch-settings-selection {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin: 0 0 12px;
+}
+.launch-settings fieldset {
+  border: 0;
+  padding: 0 0 18px;
+  margin: 0;
+  min-width: 0;
+}
+.launch-settings .launch-section {
+  margin: 20px 0;
+}
+.launch-settings .launch-section h2 {
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.launch-readiness {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 22px;
+  background: var(--surface);
+  min-width: 0;
+}
+.launch-readiness-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.launch-status-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  background: var(--accent-wash);
+  color: var(--accent);
+  border-radius: 13px;
+}
+.launch-readiness h2 {
+  font-size: 17px;
+  margin: 0;
+}
+.launch-readiness-heading p {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin: 4px 0 0;
+}
+.launch-blockers {
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 0;
+}
+.launch-blockers li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.launch-blockers svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--accent);
+}
+.launch-v2 .launch-check-button {
+  margin-top: 20px;
+  min-height: 46px;
+  border-radius: 12px;
+  border-color: var(--accent);
+}
+.launch-check-details {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.launch-check-details > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.launch-check-details > summary > span {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.launch-check-list {
+  display: grid;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.launch-check-list li {
+  display: grid;
+  grid-template-columns: 15px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  font-size: 12px;
+}
+.launch-check-list small {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+.launch-check-list li[data-state="fix"] svg {
+  color: var(--accent);
+}
+.launch-check-explanation {
+  grid-column: 2 / -1;
+  color: var(--ink-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  padding-bottom: 10px;
+}
+.launch-check-error {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  color: var(--warning-ink);
+  margin-top: 16px;
+}
+.launch-previous {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px 18px;
+  font-size: 13px;
+}
+.launch-previous-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.launch-v2 .launch-previous button {
+  border-radius: 12px;
+  min-height: 46px;
+}
+.launch-v2 .launch-v2-actions {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+.launch-v2-actions .primary {
+  width: 100%;
+  min-height: 50px;
+  border-radius: 14px;
+  font-size: 14px;
+}
+.launch-v2 button:focus-visible,
+.launch-v2 summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.readiness-spinner {
+  animation: orbit 1s linear infinite;
+}
+@media (max-width: 700px) {
+  .launch-v2 .launch-readiness { padding: 18px; }
+  .launch-v2 .launch-check-button { width: 100%; }
+  .launch-previous-actions > button { flex: 1; }
+  .launch-settings .provider-choices { flex-direction: column; }
+  .launch-v2 .launch-settings .launch-section { margin: 20px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .readiness-spinner { animation: none; }
+}
 .launch-summary {
   display: flex;
   gap: 18px;

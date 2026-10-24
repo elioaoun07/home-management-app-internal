@@ -72,6 +72,8 @@ Reads the eleven campaign checklists and Master Books under `ERA Notes/10 - Proj
 - **"Apply says Fails on current source"** → journey `reassess` over `apply.mjs#previewIntegration`; the base drifted since the candidate was checked and the checker failed the preview. Nothing was written.
 - **"A dashboard number looks wrong / a record is missing"** → parsing in `shared/history.mjs` (`parseHistory`, `receiptIdentity`), counting in `shared/metrics.mjs`; the Dashboard only renders. Add the case to `tests/pm-ui/metrics.test.ts` and keep the reconciliation assertions green.
 
+**Launch clarity (DLV-141, 2026-10-24):** `LaunchReadiness.tsx` presents pending/completed/error feedback, short owner fixes and disclosed per-gate diagnostics. `LaunchV2` binds refresh cache writes to its submitted selection, disables competing controls during collection and keeps executor/model/lane under Settings. A cancelled prior launch offers New/Open instead of a disabled Start; its original receipt is retained. `Delivery.tsx` omits V1 progress steps in V2. Styles: `delivery.css`; fixtures: `tests/pm-ui/launch-readiness.test.ts`, `readiness.test.ts`, `steward-entry.test.ts`.
+
 ## Gotchas
 
 - Compare IDs normalized (`SCH-4.3b` ≡ `SCH-4.3B`); display the source spelling (`Work.label`). References never truncate to a different ID.

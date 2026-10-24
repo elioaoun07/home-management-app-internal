@@ -18,6 +18,8 @@ Produce useful product outcomes with bounded authority and truthful evidence. To
 
 ## Current state & evidence
 
+**2026-10-24 — DLV-141 launch clarity, local source/fixtures:** V2 hides settings and detailed gates until opened, displays readiness request progress/completion/failure and uses explicit buttons. A cancelled launch offers New/Open; Start appears after its active intent is retired. Refresh results bind to the submitted selection, and competing controls are disabled while checking. The actual expired policy/generated-input blockers are preserved, not bypassed. Verification and owner scenarios: [Steward runbook](<../../../docs/ERA-Steward-Runbook.md#launch-ui-acceptance--dlv-141>); `.tmp/dlv141-ui/verification.json`. Physical-phone/deployed acceptance and live readiness remain pending.
+
 **2026-10-24 — R44 pilot prepared, not activated (DLV-138/139/140):** New delivery now releases only a service-confirmed CLOSED/cancelled browser launch, preserving its exact archived receipt and all supervisor/relay history; Start remains explicit. Offline preparation pins all 704 plan inputs, including the four complete client source trees for R48's recount, fixture conventions, helper/config inputs and current generated types. The expired revision-10 draft retains policy 9's runtime/environment/checks/resources, one Focused plan/implementation, zero repairs and verified-candidate ceiling. R44 implementation remains open. [Owner activation and manual checks](<../../../docs/ERA-Steward-Runbook.md#prepared-r44-pilot--2026-10-24-not-activated>); machine evidence is in `.tmp/r44-steward-pilot-20261024/verification.json`. No launch, readiness collection, policy install, service restart, environment repair, provider job, Apply or DB write was performed.
 
 **2026-10-20 — DLV-140, supervised local source/fixtures:** the explicit Steward launch entry commits an authenticated coordination receipt before readiness/admission. Desktop and phone share request identity, timestamps, stage, evidence and run links; each device derives coordinator **Status unconfirmed** separately from job state. Duplicate/uncertain requests retain the original identity without re-launching; terminal job outcomes stay authoritative. **103 scoped tests passed**, typecheck/scoped lint and PM app build passed. The 98-file aggregate had 1,383 passed / 8 sandbox-bound failures / 8 existing opt-in skips; full lint and historical PM link debt are recorded in the [implementation report](<../../../docs/ERA-Steward-Observability-Implementation.md>). Browser/phone walkthrough, live relay and service activation remain untested/pending. No service restart, policy/environment change, R44/provider run, Apply, commit or deployment.
@@ -96,6 +98,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 ## Vision & Decisions
 
+- **DLV-141 — One clear next action on desktop and phone.** Keep advanced launch settings and gate diagnostics disclosed; show request progress and an explicit outcome even if blockers do not change. A confirmed cancelled request offers New/Open before Start. Server authority and original receipts remain authoritative. *(IMPLEMENTED 2026-10-24 — offline checks/browser fixtures; physical-phone UAT pending.)*
+
 - Steward coordination requests are observable before a run exists, under DLV-138's original command UUID. Coordinator silence is derived independently and never changes job state, triggers a retry or replaces a terminal result. DLV-137 retains readiness and DLV-133 environment ownership. *(IMPLEMENTED 2026-10-20 — DLV-140; local fixtures, owner UAT pending.)*
 
 - Owner direction 2026-10-20: readiness and setup (Docker, sign-ins, policy, item scope, environment) are checked and fixed on the Command Center side. ERA Steward's whole job is "Run delivery for item <ID>": open the item, press Start once, and report the run link or Start's listed blockers word for word. Steward never diagnoses, prepares, restarts or writes readiness reports; the launch screen and Start's refusal carry the per-gate report. Plan approval and Apply stay with the owner. *(IMPLEMENTED 2026-10-20 — DLV-139; owner UAT pending.)*
@@ -125,6 +129,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+🟠 **DLV-141 — Readiness check appeared inert; launch was crowded on phone (owner screenshots, 2026-10-24).** `LaunchV2` only changed its refresh button label while pending, with no explicit completion feedback if the same blockers remained. Secondary launch actions were bare buttons inheriting the global transparent reset. V2 also rendered V1's two-step heading, expanded executor/lane/model controls and eleven readiness chips. Root cause is presentation/feedback; the shown expired policy and changed compiler inputs remain real server blockers.
 
 🟡 **KIT-11 oracle count is hardcoded — 2026-09-26 review.** `tests/delivery-oracles/kit11-cooking-count.mjs` invokes `check()` 13 times but line 229 prints `12 of 12 checks passed`; the protected checker therefore records 12 rather than the actual assertion count. Failed assertions still throw before that summary: a fresh local replay against the unchanged checkout failed the four count cases, while both hash-verified frozen candidates (`r-54d5cf10d995`, `r-fa5c81702ec7`) passed. This is an evidence-count defect, not evidence of a false passing candidate. Derive the summary from executed assertions and retain this behavioral regression in routine checks after KIT-11 lands (the oracle is deliberately outside normal Vitest discovery). Do not silently edit a pinned oracle beneath the pending candidates; changed oracle bytes need fresh verification. No candidate, policy or application was changed in this review.
 
@@ -182,6 +188,16 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### DLV-141
+
+**Outcome:** A clear mobile/desktop launch page with visible readiness request outcomes.
+**Touches:** `scripts/pm/app/Delivery.tsx`, `scripts/pm/app/DeliveryV2.tsx`, `scripts/pm/app/LaunchReadiness.tsx`, `scripts/pm/app/readinessModel.ts`, `scripts/pm/app/delivery.css`, `tests/pm-ui/launch-readiness.test.ts`, `tests/pm-ui/readiness.test.ts`, `tests/pm-ui/steward-entry.test.ts`
+
+- **Acceptance:** Show pending, completed-with-blockers, failure and unavailable states at the check control. Keep settings and full gate details behind disclosures; give New/Open/Check distinct button affordances and a full-width Start. Remove V1's progress steps only from V2. Bind refresh cache writes to the submitted selection; block competing settings/launch changes while checking. Preserve server admission, request identity, cancellation receipts and owner authority.
+- **Verification:** 95 scoped tests passed (8 files, zero skipped), typecheck and changed-file ESLint passed. Real React browser fixtures covered pending, unchanged blockers, success, failure, cancelled-intent retirement and Settings at desktop/390/320 px in Blue/Pink. Live desktop asset GET contains the new card. Real readiness collection, bridge restart, production relay, policy activation, provider work and physical-phone acceptance remain separate. [Manual checks](<../../../docs/ERA-Steward-Runbook.md#launch-ui-acceptance--dlv-141>).
+- **Implementation:** done
+- **UAT:** pending
 
 ### DLV-140
 
@@ -1678,6 +1694,7 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - ✅ 2026-10-17 — **DLV-138** Reconnect to the original delivery command — [criteria](<Delivery — Master Book.md#dlv-138>)
 - ✅ 2026-10-20 — **DLV-139** Launch with one Start from ERA Steward; check readiness on the PM side — [criteria](<Delivery — Master Book.md#dlv-139>)
 - ✅ 2026-10-20 — **DLV-140** Observe Steward requests before a Delivery run exists - [criteria](<Delivery — Master Book.md#dlv-140>)
+- ✅ 2026-10-24 — **DLV-141** Simplify launch and show readiness check outcomes — [criteria](<Delivery — Master Book.md#dlv-141>)
 
 DW-3 conversation search/highlighting shipped 2026-07-16; removed the stale DLV-71 duplicate on 2026-09-10. This is a reconciliation, not a second implementation.
 

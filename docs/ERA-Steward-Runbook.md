@@ -6,14 +6,15 @@
 
 1. `pnpm pm --bridge` is running in one terminal.
 2. Open `http://127.0.0.1:4317/#/deliver/<ID>` (for example `#/deliver/R44`).
-3. Press **Check readiness**. Each Readiness chip is ✓, or 🕒 (rechecked automatically at Start).
-4. Fix anything listed under the chips, then check again. Common fixes:
+3. Press **Check readiness**. The card shows **Checking readiness…**, then a checked time with **Checks passed**, **Checks at Start** or **Setup required**. A request error shows **Check failed**. Open **Check details** for individual gates; executor/lane/model/effort are under **Settings**.
+4. Fix anything listed in the card, then check again. Common fixes:
    - **Start Docker Desktop**
    - **Sign in again** — the line shows the exact action (for example, run `codex` once)
    - **Policy expired — renew it**
    - **Record your test result** (after an Apply)
    - **Add Touches to the item**
    - **package.json or lockfile changed** — undo the change, or re-stage the environment (DLV-133)
+   - **Refresh build setup** — generated compiler inputs differ from the reviewed policy; refresh/review those pins before activation.
 
    Uncommitted files do not block a launch by themselves. Avoid saving code changes while Start runs; if files change mid-check, Start says so and can be pressed again.
 5. Tell Steward: **"Run delivery for item <ID>"**.
@@ -25,7 +26,7 @@
 3. Press **Start** once. Wait on the page. Start runs the Docker, sign-in and model checks itself (about 1–2 minutes), so its evidence cannot expire before it is used.
 4. When the run page opens, reply with its link. You are done.
 
-**If Start does not open a run:** reply with the lines shown under Readiness, word for word, then stop. The owner fixes them on the PM side. If the owner asks you to try again after fixing, press Start again.
+**If Start does not open a run:** reply with the lines shown in the readiness card, word for word, then stop. The owner fixes them on the PM side. If the owner asks you to try again after fixing, press Start again.
 
 **If the page shows a receipt (Acknowledged or Outcome unknown):** press its **Check** button, which re-sends the same request. Never start a second launch for the item.
 
@@ -99,3 +100,14 @@ Copy-Item -LiteralPath "$pilotDir/policy.activation.json" -Destination '.deliver
 8. Owner reviews and approves the **new run's exact plan/contract revision on the phone**. Confirm the R48 recount and focused fixture fit the two publication paths. No second planning job, revision job, implementation retry or repair is authorized. Stop at the verified candidate or first failure/unknown/blocker. Retain the new run/command/plan/result references. **Do not Apply** as part of this pilot; any later Apply is a separate owner action.
 
 Offline checks do not certify Docker, subscription/model availability, live qualification, relay, actual phone approval or a provider candidate. Fixture/manual acceptance: after source activation, use the cancelled old run only to confirm New delivery releases its browser slot without launching; Open delivery/history must still open the old run. A waiting/unknown run must expose only recovery, and an offline confirmation must preserve the intent. Verify these actions at about 390 px on the phone before owner acceptance. No owner PASS is recorded here.
+
+## Launch UI acceptance — DLV-141
+
+Source checkout plus `.tmp/dlv141-ui/verification.json` identifies this UI follow-up; it is not an R44 candidate or an activated pilot. Local desktop assets serve the new card; the hosted `/pm/live` shell needs the corresponding deployed source. Offline evidence does not install policy or refresh qualification.
+
+1. Reload R44 on desktop and phone. Expect a compact title, **Settings**, a readiness card and a clear action. Open Settings to inspect the executor/lane/model/effort. At 390 px and 320 px, check wrapping, touch targets and that scrolling keeps the action clear of bottom navigation; repeat in Blue/Pink.
+2. Press **Check readiness** once when you intend to collect readiness. Expect **Checking readiness…** immediately, disabled Check/Start/settings controls, then a checked time and **Checks passed**, **Checks at Start** or **Setup required**. The same blockers remaining still produce completion feedback. **Check details** retains gate codes and diagnostic detail.
+3. An actual request failure must show **Check failed** and its error; normal Start remains disabled until a successful recheck. Cached checks appear only under **Previous checks**. An isolated fixture exercised this case; do not interrupt an operational service just to manufacture it.
+4. A confirmed cancelled request shows **New delivery** and **Open delivery**, with no duplicate Start. New delivery must preserve the old receipt and release only the active intent; it must not launch. Afterward Start appears. Open/history must retain the old run. An uncertain request still offers recovery of its original identity.
+
+Owner observations: pending. The isolated browser fixture exercised all four paths without operational API calls. For step 2's real expired-policy/compiler-input blockers, follow the reviewed activation procedure above before attempting the pilot.
