@@ -72,6 +72,13 @@ export function createLocalTransport(): Transport {
     return payload;
   }
 
+  async function commandStatus<T>(commandId: string): Promise<T> {
+    const receipt = await v2Read<{ recorded: boolean; outcome: T & { ok?: boolean } }>("/api/delivery/v2/command?id=" + encodeURIComponent(commandId));
+    if (!receipt.recorded || !receipt.outcome) throw new PendingCommand(commandId, "unknown");
+    if (receipt.outcome.ok === false) throw new RefusedCommand(refusalText(receipt.outcome as Record<string, unknown>, 409), 409, receipt.outcome as Record<string, unknown>);
+    return receipt.outcome;
+  }
+
   return {
     capabilities: { kind: "local", planWrites: true, sprintWrites: true, eraSync: true, capture: true, v1Launch: true, v1Detail: true, v2: true, pairing: true, apply: true, referenceTools: true },
 
@@ -140,15 +147,20 @@ export function createLocalTransport(): Transport {
     v2Assess: (file, id, signal) =>
       v2Read<V2Assessment>("/api/delivery/v2/assess?file=" + encodeURIComponent(file) + "&id=" + encodeURIComponent(id), signal),
 
+    async v2CommandStatus<T>(commandId: string): Promise<T> {
+      try { return await commandStatus<T>(commandId); }
+      catch (error) {
+        if (error instanceof PmError && error.status === 404) throw new PendingCommand(commandId, "unknown");
+        throw error;
+      }
+    },
+
     async v2Command<T>(path: string, body: Record<string, unknown>, timeoutMs = 60000): Promise<T> {
       if (!csrf) await v2Session();
       const command_id = String(body.command_id || "");
       if (command_id && !(path === "control" && body.action === "refresh-readiness")) {
         try {
-          const receipt = await v2Read<{ recorded: boolean; outcome: T & { ok?: boolean } }>("/api/delivery/v2/command?id=" + encodeURIComponent(command_id));
-          if (!receipt.recorded || !receipt.outcome) throw new PendingCommand(command_id, "unknown");
-          if (receipt.outcome?.ok === false) throw new RefusedCommand(refusalText(receipt.outcome as Record<string, unknown>, 409), 409);
-          return receipt.outcome;
+          return await commandStatus<T>(command_id);
         } catch (error) {
           if (!(error instanceof PmError && error.status === 404)) throw error;
         }
@@ -176,7 +188,7 @@ export function createLocalTransport(): Transport {
         if (firstRefusal(payload) === "command-without-recorded-outcome" && command_id) throw new PendingCommand(command_id, "acknowledged");
         lastAck = { at: new Date().toISOString(), state: "refused" };
         if (response.status >= 500 && command_id) throw new PendingCommand(command_id, "unknown");
-        throw new RefusedCommand(refusalText(payload, response.status), response.status);
+        throw new RefusedCommand(refusalText(payload, response.status), response.status, payload);
       }
       lastAck = { at: new Date().toISOString(), state: "done" };
       return payload;

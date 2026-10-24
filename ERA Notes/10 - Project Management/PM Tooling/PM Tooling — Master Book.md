@@ -18,6 +18,8 @@ Keep work identifiable, reviewable and recoverable across PM surfaces. Tooling c
 
 ## Current state & evidence
 
+**2026-10-24 — R73 navigation, local source/fixtures:** shared desktop/phone order is Home / Sprints / Delivery / Work / Analytics. Delivery is raised above the bar; observed execution softly alternates gold/purple, waiting stays steady, and unconfirmed/closed states do not animate. Existing V1/V2 read queries supply the signal. 305 PM UI tests passed; typecheck/scoped lint clean. Isolated Chrome fixtures exercised 1280/701/390/320 px, Blue/Pink, navigation, idle/running/waiting/stale/offline and matched reduced-motion CSS. No provider job, launch, policy change, service restart or deploy; hosted phone acceptance remains pending.
+
 **2026-10-03 weekly delivery (R61):** Home / Sprints / Work / Delivery / Analytics now share the desktop and phone shell. Eight editable draft weeks start October 5 with 25 canonical item references and 42 known points at planning revision 4; weekly capacity remains six provisional points and 90 review minutes. Mixed-module and module-focus previews can replan drafts or append weeks. Start freezes commitment and its criteria witnesses; scope edits and explicit carryover are recorded. Each visit derives To do / Active / Review / Done and blocked/input reasons from the current corpus and V1/V2 receipts. Candidate/run status never fabricates a shipped item. Closed weeks freeze their observed outcome; Analytics uses the same work/history definitions. Named deliverable groups, capacity/unknown estimates, milestone badges and reduced-motion behavior are included. Local writes use existing pairing, revision checks, durable command IDs and an OS-released native mutex. Watcher-only observations record observed UTC time and known source receipt dates without inventing historical occurrence dates. Verification uses copied fixtures and Chromium at 1440/820/700/390/320 px in blue/pink; no production DB access, provider run, deploy or physical-phone acceptance. Phone planning edits need the owner migration and `PM_SPRINT_RELAY=1` in [PM Relay Setup](<../../06 - Setup & Onboarding/PM Relay Setup.md>).
 
 **2026-09-26 Command Center navigation and question presentation (R69):** the shared local/phone UI now uses the ERA Memory mark, puts Now / Up next / Waiting / Someday and all module cards on Home, and adds Analytics as a fourth destination. `#/analytics` retains `#/dashboard` as an alias and combines the existing detailed metrics with In focus, fourteen daily shipped-record counts and receipt drilldowns. Work cards show their source ID; search survives To do / Done and Board / List navigation. Delivery question options already present in question text become selectable answers, with an explicitly marked recommendation first and editable free text retained. This is presentation work only: no worker instructions, execution contracts, relay commands, approval or Apply behavior changed. Verification and the remaining question-generation limitation are recorded under [R69](<#r69>); this entry does not claim deployment or physical-phone acceptance.
@@ -60,6 +62,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 **2026-10-03 disabled Start correction (R61):** The owner's revision-6 replan exposed a second defect: forecasts leave review estimates unknown, but Start disabled itself and the transition refused unknown estimates. Estimates are now optional planning aids, retained as null in the frozen commitment; over-capacity remains visible without preventing Start. Unsplit L work still needs an explicit point estimate. Unknown totals display a dash, partial totals a plus; active weeks no longer offer the draft-only estimate editor. Disabled Start gives a short reason and links to Delivery pairing or the active week where applicable. Regression coverage includes unknown/over-capacity commitment, persistence and close; copied-plan browser verification covers the real paired-cookie path and a second active-week refusal. The owner's plan stays unchanged.
 
 ## Vision & Decisions
+
+- Owner request 2026-10-24: center Delivery and raise its lightning affordance slightly; use a slow gold/purple glow for observed execution, a steady waiting signal, and static reduced-motion styling. Shared local/phone navigation preserves all destinations and approval boundaries. *(IMPLEMENTED 2026-10-24: R73; isolated browser fixtures, hosted deployment/device acceptance pending.)*
 
 - Owner request 2026-10-03 (with Hub & ERA HUB-85): issues reported from the ERA chat join the weekly sprint as standalone Defects / Hotfixes to deliver now, regardless of the week they were filed in. They import as canonical Hub & ERA Now items (no second inbox, no sprint membership) and Sprints lists them in their own lane. *(IMPLEMENTED 2026-10-03: R72.)*
 
@@ -127,6 +131,16 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### R73
+
+**Outcome:** Delivery is the raised central navigation destination, with a quiet lightning signal for observed running work.
+
+**Kind:** feature
+**Touches:** scripts/pm/app/App.tsx, scripts/pm/app/PrimaryNavigation.tsx, scripts/pm/app/navigation.css, scripts/pm/app/responsive.css, tests/pm-ui/primary-navigation.test.ts
+
+- **Acceptance:** desktop and phone order is Home / Sprints / Delivery / Work / Analytics. Delivery projects slightly above the bar, retains its label and direct route, and softly alternates gold/purple while V1/V2 work is running. Waiting sessions remain steady; closed receipts do not animate; offline/stale/error observations do not claim current execution. Reduced motion keeps a static signal. Verify desktop, 390/320 px, two themes and unchanged navigation.
+- **Verification (2026-10-24):** all 305 PM UI tests in 39 files passed, including five navigation cases and React/classic/static builds; typecheck/scoped ESLint clean. Final navigation/bundle rerun: 6 passed. Initial sandbox-only build failures were resolved by running the same offline suite with parent-directory access. Chrome fixture at 1280/701/390/320 px confirmed destination order, raised placement, >=44 px targets and no horizontal overflow in Blue/Pink. V2 running glows on Work as well as Delivery; waiting/closed/stale/offline do not animate. The actual reduced-motion CSS rules were matched in an isolated stylesheet and yielded a static gold glow; OS preferences were not changed. Fixture blocks every operational API call and dispatch. The running local desktop picked up the finished navigation, correctly idle; R44's contract section and installed policy are unchanged. PM lint and Feature Index pass; document-link check retains the same 15 missing historical Delivery recovery artifacts. Evidence: `.tmp/r73-nav/verification.json`. Hosted deployment, physical phone and a real running job remain unverified; no delivery was started for this test.
 
 ### R72
 
@@ -563,6 +577,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Outcome:** Guard new client mutations against raw fetch.
 **Touches:** `eslint.config.mjs`, `tests/pm-ui/raw-fetch-guard.test.ts`
 
+**2026-10-24 integrated evidence:** owner applied run `r-46688acd1b86`, C1 / Result `res-a20e5a5a072c@1`; application `app-497cee609b88` is terminal Applied at 14:23:46.583Z with both protected checks satisfied. Direct C1 fixture execution then exposed five repeated ESLint-startup timeouts. The separately authorized local post-Apply repair amortizes the same real CLI over the five fixtures without weakening assertions/deadlines; frozen C1 and receipts remain unchanged. Final relevant aggregate: 1,395 passed, eight existing opt-in skips; final fixture 5/5, typecheck/scoped lint/PM build pass. The local test deliberately differs from C1; owner review and physical-phone UAT/sign-off remain pending. [Hashes, original failures, exact identities and acceptance limits](<../../../docs/R44-Delivery-Acceptance-2026-10-24.md#owner-apply-and-final-integrated-validation---2026-10-24>). R44 is not marked accepted by this evidence.
+
 - **Acceptance:** *(hygiene packet **H-02** of the [ERA Top Layer — Master Plan](<../_Archive/Plans/ERA Top Layer — Master Plan (2026-09-02).md>))* Add an eslint guard for Hard Rule 6 so no *new* raw mutating `fetch()` can enter client code — a `no-restricted-syntax` rule scoped to the client directories (components, features, hooks, contexts), warn-level until the existing 98 sites are burned down → `eslint.config.mjs`
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
@@ -935,6 +951,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ### R48
 
 **Outcome:** Replace raw client mutation fetch calls.
+
+**Baseline 2026-10-24:** actual ESLint guard evaluation of 692 client files found **96 warn-level findings across 34 files** (components 61, features 27, hooks 8, contexts 0), zero fatal/other errors. The 421 textual matches in the delivery comment are not a validated violation count. Direct literal POST/PATCH/PUT/DELETE calls are covered; dynamic/aliased/computed/window calls remain outside this syntax guard. [Baseline and limitation evidence](<../../../docs/R44-Delivery-Acceptance-2026-10-24.md#actual-r48-baseline-and-limitations>). No R48 writer replacement or error-level promotion was performed.
 
 - **Acceptance:** Recount current raw mutating fetch calls; replace with safeFetch starting with Hub shopping and notification writers. Pass explicit timeoutMs for AI/uploads/external latency; timeout is not offline and must not enqueue duplicates. Flip R44 guard to error only after the current scope reaches zero. Historical counts 98/13/8 are not targets.
 
@@ -1419,11 +1437,15 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-09-26 — **R68** Phone content no longer hides behind the fixed bottom nav: `.app-main` reserves the nav height plus the safe area (`scripts/pm/app/responsive.css`); the clearance had lived on `.app-footer`, which the app no longer renders. Verified at 390 px on Home, Work and Delivery (last content above the nav). Reported by the owner on `/pm/live`.
 - ✅ 2026-10-03 — **R61** Plan sprints, deliverables and readiness over the same work; corrected Start authentication, optional-estimate commitment and visible disabled reasons — [criteria](<PM Tooling — Master Book.md#r61>)
 - ✅ 2026-10-03 — **R72** ERA chat reports import into Hub & ERA › Now › ERA reports (bridge every 5 min, read-only toward the DB, once-only via the Source marker + `.pm/era-issues.jsonl`, undo-journaled writes; `pnpm pm:era-issues` preview / `--apply`) and Sprints shows them as a Hotfixes lane on the current week, never as members. (`tests/pm-era-issues.test.ts`, `sprint-model.test.ts`, bridge tests green, `pnpm pm:build-app`; [acceptance and verification](<#r72>).)
+- ✅ 2026-10-24 — **R73** Center Delivery navigation and signal running sessions — [criteria](<PM Tooling — Master Book.md#r73>)
 
 ## Delivery session log
 
 *(Delivery runner appends dated progress bullets here automatically.)*
 
+- 2026-10-24 — **R44** V2 run `r-46688acd1b86` · applied; integrated checks passed · codex gpt-6-luna <!-- v2-apply:app-497cee609b88@applied -->
+- 2026-10-24 — **R44** V2 run `r-46688acd1b86` · candidate verified; not applied · codex gpt-6-luna <!-- v2:res-a20e5a5a072c@1 -->
+- 2026-10-24 — **R44** V2 run `r-69bc10ef3c60` · cancelled · codex gpt-6-luna <!-- v2:res-802d062b976a@1 -->
 - 2026-10-19 — **R44** V2 run `r-262a6aee5ed3` · cancelled · codex gpt-6-luna <!-- v2:res-d15d62b4752b@1 -->
 ## Successor Briefing
 

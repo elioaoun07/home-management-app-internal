@@ -83,7 +83,7 @@ export function writePolicy(root: string, overrides: Loose = {}) {
 const writeAmount20 = (dir: string) => writeFileSync(join(dir, "src", "amount.ts"), "export const amount = 20;\n", "utf8");
 
 /** Scripted Claude executor and a worker runtime whose checker records every candidate it sees. */
-export function makeHarness(root: string, build: (dir: string) => void = writeAmount20) {
+export function makeHarness(root: string, build: (dir: string) => void = writeAmount20, planScope: string[] = ["src/amount.ts"]) {
   const h = { workspaces: new Map<string, string>(), checked: [] as Loose[], calls: [] as Loose[], runtime: {} as Loose };
   const claudeSdk = (job: Loose, dir: string) => ({
     query: ({ prompt, options }: { prompt: string; options: Loose }) =>
@@ -93,7 +93,7 @@ export function makeHarness(root: string, build: (dir: string) => void = writeAm
         if (options.hooks) await options.hooks.PreToolUse[0].hooks[0]({ tool_name: "Read", effort: { level: options.effort ?? "high" } });
         let text = "done";
         if (prompt.startsWith("Investigate")) {
-          text = "```json\n" + JSON.stringify({ outcome: "emit 20", scope: ["src/amount.ts"], steps: ["change the constant"], risks: [], unknowns: [], checks: [], questions: [] }) + "\n```";
+          text = "```json\n" + JSON.stringify({ outcome: "emit 20", scope: planScope, steps: ["change the constant"], risks: [], unknowns: [], checks: [], questions: [] }) + "\n```";
         } else if (prompt.startsWith("Implement") && String(job.access) === "write") {
           build(dir);
         }

@@ -38,6 +38,9 @@ const body = () => ({
   expectId: "DLV-140",
   executor: "codex",
 });
+const ordinaryBody = () => ({
+  command_id: randomUUID(), file: "Delivery/4 - Checklist.md", expectId: "DLV-140", executor: "codex",
+});
 const requests = (): StewardRequest[] => listStewardRequests(store, 180000);
 const context = () => ({
   root,
@@ -68,6 +71,72 @@ afterEach(() => {
 });
 
 describe("durable Steward initiation through the real Start entry", () => {
+  it("retains an ordinary Start refusal and its exact readiness across reload without Steward attribution", async () => {
+    const request = ordinaryBody();
+    let inspections = 0;
+    const readiness = {
+      ready: false, evaluatedAt: at,
+      blockers: [{ gate: "modelAvailability", state: "blocked", code: "native-model-evidence-invalid", detail: "model/list timed out" }],
+      collection: { startedAt: at, completedAt: at, stages: [{ name: "native-model", outcome: "failed", code: "native-model-timeout" }] },
+    };
+    const response = await routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers, body: request }, {
+      ...context(), readiness: async () => {
+        inspections++;
+        expect(requests()[0]).toMatchObject({ command_id: request.command_id, initiatedBy: "Owner", stage: "readiness" });
+        return readiness;
+      },
+    });
+    expect(response?.status).toBe(409);
+    const path = store.path;
+    store.close();
+    store = openStore({ path, now: () => at });
+    const before = store.db.prepare("SELECT total_changes() AS n").get();
+    const status = await routeDeliveryV2({ method: "GET", path: "/api/delivery/v2/command", headers,
+      query: new URLSearchParams({ id: request.command_id }) }, context());
+    expect(status?.json).toMatchObject({ recorded: true, outcome: { ok: false, readiness }, request: { initiatedBy: "Owner", status: "blocked" } });
+    expect(store.db.prepare("SELECT total_changes() AS n").get()).toEqual(before);
+    const repeated = await routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers, body: request }, context());
+    expect(repeated?.json).toEqual(response?.json);
+    expect(inspections).toBe(1);
+    expect(store.listRuns()).toHaveLength(0);
+    expect(store.listAllJobs()).toHaveLength(0);
+  });
+
+  it("exposes a pending ordinary Start by GET and refuses both another Start and a Steward duplicate", async () => {
+    const request = ordinaryBody();
+    let release!: () => void, calls = 0;
+    const wait = new Promise<void>((resolve) => { release = resolve; });
+    const ctx = { ...context(), readiness: async () => { calls++; await wait; return { ready: false }; } };
+    const send = (payload: Record<string, unknown>) => routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers, body: payload }, ctx);
+    const first = send(request);
+    const before = store.db.prepare("SELECT total_changes() AS n").get();
+    const status = await routeDeliveryV2({ method: "GET", path: "/api/delivery/v2/command", headers,
+      query: new URLSearchParams({ id: request.command_id }) }, context());
+    expect(status?.json).toMatchObject({ recorded: false, request: { initiatedBy: "Owner", stage: "readiness", status: "pending" } });
+    expect(store.db.prepare("SELECT total_changes() AS n").get()).toEqual(before);
+    expect((await send(request))?.json.refusals[0].code).toBe("command-without-recorded-outcome");
+    expect((await send(ordinaryBody()))?.json).toMatchObject({ error: "launch-request-conflict", command_id: request.command_id });
+    expect((await send(body()))?.json).toMatchObject({ error: "steward-request-conflict", command_id: request.command_id });
+    release();
+    expect((await first)?.status).toBe(409);
+    expect(calls).toBe(1);
+    expect(requests()).toHaveLength(1);
+  });
+
+  it("keeps an interrupted ordinary Start uncertain after restart and rejects a changed payload or actor", async () => {
+    const request = ordinaryBody();
+    const ctx = { ...context(), readiness: async () => { throw new Error("interrupted"); } };
+    const response = await routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers, body: request }, ctx);
+    expect(response?.json.error).toBe("launch-outcome-unconfirmed");
+    const path = store.path;
+    store.close();
+    store = openStore({ path, now: () => at });
+    expect(stewardCommandState(store, request.command_id, 180000)).toMatchObject({ recorded: false, request: { stage: "reconciliation-required" } });
+    expect((await routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers, body: { ...request, executor: "claude" } }, context()))?.json.error).toBe("launch-request-conflict");
+    expect(acceptStewardRequest(store, request, "another-actor", at)).toEqual({ conflict: true });
+    expect(store.listRuns()).toHaveLength(0);
+  });
+
   it("allows a fresh request after confirmed cancellation while preserving the old receipt and outcome", () => {
     const original = body();
     acceptStewardRequest(store, original, "owner", at);
@@ -265,8 +334,8 @@ describe("durable Steward initiation through the real Start entry", () => {
     });
   });
 
-  it("recovers a committed launch after a lost response without evaluating runtime or readiness", async () => {
-    const request = body();
+  it.each(["Steward", "Owner"])("recovers a committed %s launch after a lost response without evaluating runtime or readiness", async (initiator) => {
+    const request = initiator === "Steward" ? body() : ordinaryBody();
     await routeDeliveryV2(
       {
         method: "POST",

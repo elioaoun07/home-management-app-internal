@@ -6,11 +6,11 @@
 
 1. `pnpm pm --bridge` is running in one terminal.
 2. Open `http://127.0.0.1:4317/#/deliver/<ID>` (for example `#/deliver/R44`).
-3. Press **Check readiness**. The card shows **Checking readiness…**, then a checked time with **Checks passed**, **Checks at Start** or **Setup required**. A request error shows **Check failed**. Open **Check details** for individual gates; executor/lane/model/effort are under **Settings**.
+3. Press **Check readiness**. This explicit owner action renews the exact saved authorization for at least another 24 hours, then collects readiness. The card shows **Authorized until**, a checked time and **Checks passed**, **Checks at Start** or **Setup required**. A request error shows **Check failed**. Open **Check details** for individual gates; executor/lane/model/effort are under **Settings**.
 4. Fix anything listed in the card, then check again. Common fixes:
    - **Start Docker Desktop**
    - **Sign in again** — the line shows the exact action (for example, run `codex` once)
-   - **Policy expired — renew it**
+   - **Authorization expired — check readiness**
    - **Record your test result** (after an Apply)
    - **Add Touches to the item**
    - **package.json or lockfile changed** — undo the change, or re-stage the environment (DLV-133)
@@ -19,6 +19,18 @@
    Uncommitted files do not block a launch by themselves. Avoid saving code changes while Start runs; if files change mid-check, Start says so and can be pressed again.
 5. Tell Steward: **"Run delivery for item <ID>"**.
 
+### Check readiness renews saved authority (DLV-142)
+
+The authenticated owner Check command (desktop or updated phone shell) records a time-only renewal in `.delivery/v2/authorization.json`; it does not rewrite the installed policy. Each receipt retains its command UUID, authenticated actor, exact settings fingerprint and expiry. A replay returns the original receipt without adding time. Each new click grants at least 24 hours from that click; a longer existing window is not shortened, and a policy without expiry stays without expiry. Readiness can still report genuine setup blockers after authorization is renewed.
+
+The policy must already be installed and valid. Check cannot install a draft, change source pins/scope, reset usage or reservations, raise concurrency/repair limits, approve a plan, dispatch work or Apply. A changed policy cannot inherit a prior renewal. Passive GET/CLI/relay publication and Start's internal observation collection never renew authority. The journal and original run receipts are retained across restarts; an unreadable journal refuses instead of discarding it.
+
+New grants bind to this exact settings fingerprint. Continuing runs with that binding use renewed time at admission/dispatch without rewriting their stored grants or changing plan approvals/revocation versions. Historical grants without the binding retain their original expiry. This feature does not widen the R44-only/one-Start pilot procedure or enable parallel work under its one-writer/one-job settings.
+
+After a server-source update, restart the existing bridge once and reload the local page. The hosted phone shell needs the corresponding deployed UI before its Check sends the renewal request. No service restart, live renewal, provider turn, deployment or owner acceptance is implied by source verification.
+
+Owner acceptance: on the updated local launch page, press Check once. Expect pending feedback, **Authorized until** at least 24 hours ahead, and the actual readiness result. Reload and confirm the same authorization expiry; passive reads must not move it. On the updated phone shell repeat once and confirm the new expiry on both devices. Genuine source/environment/usage blockers must remain. Keep Start untouched for this check. Record the date, displayed expiry, readiness result and device in the existing wizard; real-phone/deployed acceptance is pending.
+
 ## Steward — "Run delivery for item <ID>"
 
 1. Open `http://127.0.0.1:4317/#/deliver/<ID>?initiator=era-steward` in the paired Command Center browser (or select **Steward** on the launch screen).
@@ -26,15 +38,79 @@
 3. Press **Start** once. Wait on the page. Start runs the Docker, sign-in and model checks itself (about 1–2 minutes), so its evidence cannot expire before it is used.
 4. When the run page opens, reply with its link. You are done.
 
-**If Start does not open a run:** reply with the lines shown in the readiness card, word for word, then stop. The owner fixes them on the PM side. If the owner asks you to try again after fixing, press Start again.
+**If Start does not open a run:** reply with the blocker shown under **Start blocked**, word for word, and its request ID under **Start details**, then stop. Use the readiness card only for a blocker that prevented pressing Start. The owner fixes it on the PM side. If the owner asks you to try again after fixing, press Start again.
 
-**If the page shows a receipt (Acknowledged or Outcome unknown):** press its **Check** button, which re-sends the same request. Never start a second launch for the item.
+**If the page shows a receipt (Acknowledged or Outcome unknown):** press **Check status**. It only reads the original request; it never sends Start again. Missing or uncertain status retains that request. Never start a second launch for the item.
 
 **If the page asks to pair this browser:** tell the owner and stop.
 
+## Typed tools, support accounting and candidate tests — DLV-144
+
+Implements the three phases of the [sign-off plan](ERA-Steward-Signoff-Plan-2026-10-24.md). R44 had the Steward start local Codex turns for status and commands outside every Delivery allowance; this removes the reason to, and makes the remaining AI spend visible.
+
+### Steward tools (owner setup, once)
+
+One stdio tool server, four tools: `start-delivery`, `read-request`, `read-run`, `wait-for-changes`. Each is a deterministic request to Command Center. None runs a model, a shell or Docker.
+
+1. Keep `pnpm pm --bridge` running.
+2. `pnpm pm:pair`, then `pnpm pm:steward pair <CODE>`. This stores a **restricted** credential in `.delivery/v2/steward/session.json` (gitignored). It can call four routes. The server answers 403 to approval, Apply, readiness renewal, cancel/reconcile, allowances, mode, planning and support, even if a client is bypassed.
+3. In the Steward's tool configuration, register `node scripts/delivery-v2/steward-mcp.mjs` (working directory = repo root; set `PM_STEWARD_URL` if the port is not 4317) as its only Command Center tool, and **remove every Codex/Claude task and shell/terminal tool from that Steward**. A repo change cannot do this for an external chat. This step is what ends routine AI delegation; UAT M1 checks it.
+4. Tell the Steward: **"Run delivery for item `<ID>`"**. It calls `start-delivery`, replies with the run link, and uses `read-run` / `wait-for-changes` afterwards.
+
+What you can rely on:
+
+- Start persists its intent in `.delivery/v2/steward/intents/` before the request leaves and keeps one UUID. A repeated call, a lost reply or a restarted tool re-reads that receipt. The restricted server credential cannot create a second request for work with an existing launch, even after refusal or completion, or after clearing the tool's local files. Any new attempt uses the owner's normal Command Center controls; Steward then monitors the supplied run link. There is no model-supplied retry permission.
+- The sole permitted executor and the lane's suggested model/effort are used, as on the launch screen. With more than one permitted executor the tool stops and asks.
+- A dropped connection returns the last confirmed state labelled *stale* (`.delivery/v2/steward/last-known/`). No Start, repair or model follows.
+- Status lines are templates: item, request/run id, state, owner next action, checks, evidence time, then usage.
+- Plan approval and Apply stay with you, on the phone or laptop.
+
+If your Steward has no way to register a restricted tool server, keep using the browser procedure above. Nothing else changes.
+
+### Support jobs and the usage report
+
+A Claude/Codex repair you ask for is real work and belongs on the record. **There are no automatic support jobs.** Use the owner CLI (`pnpm pm:pair`, then `pnpm pm:support pair <CODE>`):
+
+| Step | Command |
+| --- | --- |
+| Authorize one job | `pnpm pm:support authorize --run <run> --purpose "…" --scope a,b --executor codex --tier CODEX_LOW --effort low --tokens 50000` |
+| Let it start | `pnpm pm:support admit <authorization> <job>` |
+| Record what it reported | `pnpm pm:support settle <authorization> <job> --file settlement.json` |
+| Withdraw | `pnpm pm:support close <authorization>` |
+| Enter a chat figure you read yourself | `pnpm pm:support chat --run <run> --tokens N` |
+| Show it | `pnpm pm:support report --run <run>` |
+
+One authorization admits one job. A job whose usage is missing or cannot be normalized stays **unknown** and blocks the next one, as do the job limit and a spent allowance. Usage is normalized like Delivery's: cached input stays inside input, a cumulative counter is differenced, a missing baseline is a flagged hole. A cost the provider did not report is *unknown*, never $0. The settlement keeps requested and observed model/effort, thread and turn ids, tokens and stop reason (`support-cli.mjs` header lists the file shape).
+
+This is a manually maintained authorization/accounting ledger. It does not launch a repair, select its model, enforce its file scope or stop its runtime. Matching effort is labelled `effort_match`; an observed model is reported without claiming that it matches a documentation tier. Input and output counters are required for measured usage. Partial dollar amounts are labelled known subtotals with the remainder unknown; estimates stay labelled estimates.
+
+The run page shows **Support** apart from the delivery's own usage; `read-run` and `report` show **Delivery / Support / Chat overhead** separately, each with how many jobs its figure covers. Chat overhead is never measured here, only figures you enter.
+
+### Candidate tests
+
+R44's authored test file was never run before Apply. With `candidateTests` configured, the test files a candidate adds or changes, plus test files its approved plan names, run in the protected checker with a command the policy pins; the candidate supplies paths only. Anything but a clean pass leaves the run unverified and Apply refused: a missing file, a failing, skipped or timed-out test, unreadable output, extra files collected, a runner that never started, or a changed checker input. Apply checks the evidence belongs to this exact candidate under today's command, checker inputs and test bytes, and the integrated tree re-runs the tests before Applied. The protected oracle and the typecheck are unchanged. A candidate with no test file reports "no candidate tests".
+
+Owner activation: a new policy revision, then **Check readiness**. Adding the block changes the settings fingerprint, so an earlier renewal does not carry over.
+
+```json
+"checks": {
+  "inputs": ["tests/delivery-oracles/r44-fetch-guard.mjs", "vitest.config.ts", "tests/setup/blockPaidApis.ts"],
+  "requiredVerifications": {
+    "typecheck": { "…": "unchanged" },
+    "candidateTests": {
+      "enabled": true,
+      "enforcement": "required",
+      "argv": ["node", "/node_modules/vitest/vitest.mjs", "run"]
+    }
+  }
+}
+```
+
+Omitting `include` uses the built-in test patterns for both `tests/` and source-adjacent tests under `src/`. Keep these defaults for normal delivery. The scratch scope must contain what a test imports, or the test fails honestly. The worker image links `/node_modules` to the pinned dependency volume; confirm once that `vitest` resolves there (UAT M3). If it does not, every candidate with tests is *inconclusive*, never passed. Passing evidence requires complete file and test summaries, with every selected file passed.
+
 ## Request status (DLV-140)
 
-The Steward entry sends `initiatedBy: era-steward` through the existing Start transport. The local supervisor commits a receipt with the authenticated actor and the original command UUID before checking mode, executor or readiness. Delivery, the launch screen and the run page share these request cards on desktop and `/pm/live`. Ordinary Start is not attributed to Steward.
+The Steward entry sends `initiatedBy: era-steward` through the existing Start transport. The local supervisor commits a receipt with the authenticated actor and the original command UUID before checking mode, executor or readiness. Delivery, the launch screen and the run page share these request cards on desktop and `/pm/live`. Ordinary Start has the same durable receipt, labelled Owner rather than Steward (DLV-143).
 
 In Steward mode, Start can record a request even when readiness, executor setup or the test gate is blocked. The same server admission checks still refuse the run; the difference is a durable, visible blocker before a run exists.
 
@@ -44,11 +120,30 @@ The card shows **Initiated by ERA Steward**, request/launch UUID, accepted and c
 
 A repeated UUID returns its recorded outcome or remains unconfirmed. A second UUID for the same pending/open Steward work is refused with the original UUID. An interrupted prelaunch request with no proven outcome keeps its claim: use the same saved request and status check; do not mint another launch. Owner investigation is required if no command outcome can be recovered. After a confirmed refusal the existing DLV-138 correction flow may create a new explicit request. The newest 100 requests are published; older receipts remain in the supervisor store. No automatic cleanup, retry or expiry action runs.
 
-After a confirmed **CLOSED / cancelled** run, the launch page offers **New delivery** beside **Open delivery**. New delivery re-reads that exact run under the existing browser intent lock, archives the original browser receipt under `pm-command-receipt:<scope>:<command UUID>`, then releases only its active intent slot. It does not launch. Pressing Start afterward creates a fresh UUID; the original command still resolves to the old run. Failed, completed, active, missing and unknown outcomes do not qualify. A lost launch reply must first be reconciled with Resume request / Check. Storage or confirmation failure retains the active intent. Server receipts, relay history, run artifacts and results are never deleted.
+After a confirmed **CLOSED / cancelled** run, the launch page offers **New delivery** beside **Open delivery**. New delivery re-reads that exact run under the existing browser intent lock, archives the original browser receipt under `pm-command-receipt:<scope>:<command UUID>`, then releases only its active intent slot. It does not launch. Pressing Start afterward creates a fresh UUID; the original command still resolves to the old run. Failed, completed, active, missing and unknown outcomes do not qualify. A lost launch reply must first be reconciled with **Check status**. Storage or confirmation failure retains the active intent. Server receipts, relay history, run artifacts and results are never deleted.
 
-**Never:** run terminal or Docker commands; restart or start `pnpm pm`; press Check readiness repeatedly; diagnose failures; write readiness reports; approve plans; press Apply. Plan approval and Apply stay with the owner, on the phone or laptop.
+**Never:** run terminal or Docker commands; restart or start `pnpm pm`; press Check readiness repeatedly; diagnose failures; write readiness reports; approve plans; press Apply; hand a status check or a command to Codex or Claude. Plan approval and Apply stay with the owner, on the phone or laptop. With the [tool server](#typed-tools-support-accounting-and-candidate-tests--dlv-144) these steps are its four tools, and the server refuses the rest.
+
+## One Start result — DLV-143
+
+**October 24 cancellation/status follow-up:** [R44 acceptance report](R44-Delivery-Acceptance-2026-10-24.md) records the actual cancelled run/request, idle queue/container evidence, terminal Activity/default-tab correction, reconciled offline tests and browser recovery checks. The subsequent fresh validation was denied at New delivery before execution; no replacement run exists. Follow the report's exact authorization/checkpoints instead of assuming the cancelled proposal is an approvable fresh run.
+
+The October 24 R44 failure had two separate causes. Retained native metadata ended at `model/list` with `native-probe-timeout`; a 10-second caller override left about five seconds after initialize/account lookup. The browser then dropped the detailed refusal and showed only `delivery not ready`. The ordinary entry had no prelaunch receipt. Read-only supervisor evidence confirms no new run/job was created. The original request UUID was not retained; the latest collection is evidence of the runtime failure, not a reconstructed command receipt.
+
+The source correction uses the probe's existing 30-second budget inside the unchanged 45-second container deadline. It retains cleanup, zero inference for readiness, exact model/effort checks, freshness, qualification, authority and owner approval. It does not guarantee an upstream model-service response. Every new Start now retains a receipt before checks, and **Start result** retains its exact refusal independently of later passive readiness. **Check status** reads the original outcome only. A new explicit Start after a confirmed refusal archives the old browser receipt; it is never an automatic retry.
+
+Owner activation and acceptance for this source checkout:
+
+1. After the source checks pass, stop the existing `pnpm pm --bridge` process in its own terminal and start **one** `pnpm pm --bridge` there. Reload the paired R44 page. Preserve policy, pairing, supervisor history and volumes. No image rebuild or environment staging is required for the host-streamed metadata probe correction. The agent cannot restart the production-publishing bridge under project Hard Rule 26; the owner performs this step.
+2. Keep the already chosen R44/Codex/Fast lane selection. The prior failed attempt is historical and must not be called a new receipt. On a separately owner-authorized Start, expect either a run link or **Start result** with the actual blocker (for example **Model check timed out**), command ID and technical details. A timeout must not create a run or dispatch work.
+3. While a request is unresolved, use **Check status** only. Reload and check again: identity must remain the same, and read-only checks must never trigger another Start. Once the exact refusal is recorded, passive readiness refresh and reload must preserve it. Starting again is a new explicit owner decision.
+4. Repeat the presentation checks at 390 px in Blue/Pink. Hosted `/pm/live` requires deployment of the matching frontend for the new result/status controls; local build verification is not deployment or real-phone acceptance. Exact plan approval and Apply remain separate owner actions.
+
+Isolated fixture verification and source fingerprints are retained in `.tmp/r44-start-diagnosis-20261024/`; operational readiness/provider success and owner/phone PASS are not claimed by those fixtures.
 
 ## Prepared R44 pilot — 2026-10-24 (not activated)
+
+> **Status, 2026-10-24 (later):** superseded by what happened. The owner activated a fresh Start; run `r-46688acd1b86` reached Applied. See the [R44 acceptance report](R44-Delivery-Acceptance-2026-10-24.md). The preparation record below is kept as history and must not be re-run as written.
 
 Local review package: `.tmp/r44-steward-pilot-20261024/`. `policy.draft.json` is revision 10 with a deliberately expired grant and PENDING authorization. `inputs.json` pins all 704 exact input files, including every JS/TS source in the four client directories for the plan's R48 recount, the ESLint/package/lock config, safeFetch/connectivity helper, Vitest config and paid-API block, fixture conventions and selected PM source. The new `tests/pm-ui/raw-fetch-guard.test.ts` is intentionally absent: the pilot creates it. No placeholder or application guard has been implemented here.
 

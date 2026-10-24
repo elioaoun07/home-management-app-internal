@@ -5,14 +5,14 @@ import {
   MotionConfig,
   useReducedMotion,
 } from "framer-motion";
-import { ChartNoAxesCombined, Compass, Flag, Home as HomeIcon, Palette, Search, Settings as SettingsIcon, Zap } from "lucide-react";
+import { Palette, Search, Settings as SettingsIcon } from "lucide-react";
 import { ERAMark } from "@/components/shared/ERAMark";
 import { SettingsSheet } from "./Settings";
 import { client, pmKeys, useRoute, useWorld } from "./state";
 import { transport } from "./transport";
-import { RunV2 } from "./DeliveryV2";
+import { RunV2, useV2Runs } from "./DeliveryV2";
 import { connectionChips } from "./v2model";
-import { liveRuns } from "./model";
+import { deliveryNavState, PrimaryNavigation } from "./PrimaryNavigation";
 import { CaptureButton, Empty } from "./components";
 import { Home } from "./Home";
 import { Explore, SpaceView } from "./Explore";
@@ -45,16 +45,10 @@ class Boundary extends Component<{ children: ReactNode }, { error: boolean }> {
     );
   }
 }
-const links = [
-  { path: "/", label: "Home", icon: HomeIcon },
-  { path: "/sprints", label: "Sprints", icon: Flag },
-  { path: "/explore", label: "Work", icon: Compass },
-  { path: "/delivery", label: "Delivery", icon: Zap },
-  { path: "/analytics", label: "Analytics", icon: ChartNoAxesCombined },
-];
 export function App() {
   const route = useRoute();
-  const { world, runs, connected, readError, connection } = useWorld();
+  const { world, runs, connected, readError, runError, connection } = useWorld();
+  const v2 = useV2Runs();
   const capabilities = transport().capabilities;
   const [capture, setCapture] = useState(false);
   const [settings, setSettings] = useState(false);
@@ -184,7 +178,8 @@ export function App() {
         </Empty>
       );
   }
-  const running = liveRuns(runs).length;
+  const delivery = deliveryNavState(runs, v2.data?.runs || [],
+    connected && !connection.stale && !readError && !runError && !v2.isError);
   return (
     <MotionConfig reducedMotion="user">
       <a
@@ -202,20 +197,7 @@ export function App() {
           <ERAMark module="memory" size={38} />
           <b>era</b>
         </a>
-        <nav className="desktop-nav" aria-label="Main navigation">
-          {links.map((link) => (
-            <a
-              key={link.path}
-              href={"#" + link.path}
-              aria-current={section === link.path ? "page" : undefined}
-            >
-              {link.label}
-              {link.path === "/delivery" && running > 0 && (
-                <span>{running}</span>
-              )}
-            </a>
-          ))}
-        </nav>
+        <PrimaryNavigation section={section} delivery={delivery} />
         <div className="header-tools">
           <a
             className="icon-button search-shortcut"
@@ -270,21 +252,7 @@ export function App() {
           </AnimatePresence>
         </Boundary>
       </main>
-      <nav className="mobile-nav" aria-label="Mobile navigation">
-        {links.map((link) => (
-          <a
-            key={link.path}
-            href={"#" + link.path}
-            aria-current={section === link.path ? "page" : undefined}
-          >
-            <span>
-              <link.icon size={22} strokeWidth={1.6} />
-              {link.path === "/delivery" && running > 0 && <i />}
-            </span>
-            <strong>{link.label}</strong>
-          </a>
-        ))}
-      </nav>
+      <PrimaryNavigation section={section} delivery={delivery} mobile />
       <Capture open={capture} onClose={() => setCapture(false)} />
       <SettingsSheet open={settings} onClose={() => setSettings(false)} />
     </MotionConfig>

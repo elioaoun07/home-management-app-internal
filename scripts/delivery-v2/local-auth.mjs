@@ -35,7 +35,13 @@ export const LOCAL_AUTH_SCHEMA = "delivery-v2/local-auth@1";
 export const SESSION_COOKIE = "era_v2_session";
 export const CSRF_HEADER = "x-era-csrf";
 export const REMOTE_ACTOR_HEADER = "x-era-remote-actor";
-export const SESSION_KINDS = Object.freeze(["browser", "bridge"]);
+// `steward` is the restricted credential for ERA Steward's typed tool surface. It
+// authenticates like a browser (cookie + CSRF) but entry.mjs lets it call four
+// operations only: start, read request, read run, wait for changes.
+export const SESSION_KINDS = Object.freeze(["browser", "bridge", "steward"]);
+export const STEWARD_ACTOR = "era-steward";
+const COOKIE_KINDS = Object.freeze(["browser", "steward"]);
+const ACTOR_BY_KIND = Object.freeze({ bridge: "bridge", steward: STEWARD_ACTOR });
 
 const PAIRING_TTL_MS = 10 * 60 * 1000;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -120,7 +126,7 @@ export function pairSession({ root, code, kind = "browser", now = Date.now(), ra
   writeState(root, {
     ...state,
     pairing: null,
-    sessions: [...(state.sessions || []), { session_hash, kind, actor: kind === "bridge" ? "bridge" : "owner", created_at: new Date(now).toISOString() }],
+    sessions: [...(state.sessions || []), { session_hash, kind, actor: ACTOR_BY_KIND[kind] || "owner", created_at: new Date(now).toISOString() }],
   });
   return deepFreeze({ ok: true, token, session_id: session_hash.slice(0, 12), kind, refusal: null });
 }
@@ -246,13 +252,13 @@ export function authenticateLocal({ root, headers = {}, allowedOrigins = [] }) {
   const token = parseCookies(lower.cookie)[SESSION_COOKIE];
   if (!isNonEmptyString(token)) return deny(401, AUTH_REFUSALS.UNPAIRED, "pair this browser first");
   const hash = sha256(token);
-  const session = sessions.find((entry) => entry.kind === "browser" && sameHash(entry.session_hash, hash));
+  const session = sessions.find((entry) => COOKIE_KINDS.includes(entry.kind) && sameHash(entry.session_hash, hash));
   if (!session) return deny(401, AUTH_REFUSALS.UNPAIRED, "this browser's session is not recognised");
   const presented = String(lower[CSRF_HEADER] || "");
   if (!presented || !sameHash(presented, csrfToken({ secret: state.secret, session_hash: hash }))) {
     return deny(403, AUTH_REFUSALS.CSRF, "missing or invalid " + CSRF_HEADER);
   }
-  return deepFreeze({ ok: true, status: 200, refusal: null, actor: String(session.actor), kind: "browser", session_id: hash.slice(0, 12) });
+  return deepFreeze({ ok: true, status: 200, refusal: null, actor: String(session.actor), kind: String(session.kind), session_id: hash.slice(0, 12) });
 }
 
 /**
@@ -265,7 +271,7 @@ export function sessionView({ root, headers = {} }) {
   const token = parseCookies(lower.cookie)[SESSION_COOKIE];
   if (!state || !isNonEmptyString(token)) return deepFreeze({ paired: false, actor: null, csrf: null });
   const hash = sha256(token);
-  const session = (state.sessions || []).find((entry) => entry.kind === "browser" && sameHash(entry.session_hash, hash));
+  const session = (state.sessions || []).find((entry) => COOKIE_KINDS.includes(entry.kind) && sameHash(entry.session_hash, hash));
   if (!session) return deepFreeze({ paired: false, actor: null, csrf: null });
   return deepFreeze({ paired: true, actor: String(session.actor), csrf: csrfToken({ secret: state.secret, session_hash: hash }) });
 }

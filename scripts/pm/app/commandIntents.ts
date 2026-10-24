@@ -1,6 +1,7 @@
 import { transport, PmError, RefusedCommand } from "./transport";
 
 type Body = Record<string, unknown>;
+type Refusal = { message: string; status: number; payload: Body; receivedAt?: string };
 type Storage = Pick<globalThis.Storage, "getItem" | "setItem" | "removeItem">;
 const canonical = (value: unknown): string => value === null || typeof value !== "object" ? JSON.stringify(value)
   : Array.isArray(value) ? `[${value.map(canonical).join(",")}]`
@@ -9,11 +10,11 @@ const canonical = (value: unknown): string => value === null || typeof value !==
 export function storedIntent(scope: string, intent: string, storage: Storage) {
   const raw = storage.getItem("pm-command-intent:" + scope + ":" + intent);
   if (!raw) return null;
-  const saved = JSON.parse(raw) as { path: string; body: Body; result?: { run_id?: string } };
+  const saved = JSON.parse(raw) as { path: string; body: Body; result?: { run_id?: string }; refusal?: Refusal };
   if (!saved.path || !saved.body?.command_id) throw new PmError("Command storage is incomplete", 409);
   const body = { ...saved.body };
   delete body.command_id;
-  return { path: saved.path, body, completed: saved.result !== undefined, ...(saved.result?.run_id ? { runId: saved.result.run_id } : {}) };
+  return { path: saved.path, body, completed: saved.result !== undefined, ...(saved.result?.run_id ? { runId: saved.result.run_id } : {}), ...(saved.refusal ? { refusal: saved.refusal, commandId: String(saved.body.command_id) } : {}) };
 }
 
 /** Explicitly release one cancelled launch; keep its exact receipt before removal. */
@@ -51,20 +52,32 @@ export async function newDeliveryIntent(intent: string) {
 }
 
 /** Persist before transmission. The original payload remains the retry payload. */
-export async function sendDurableIntent<T>({ scope, intent, path, body, storage, send, uuid = () => crypto.randomUUID() }: {
+export async function sendDurableIntent<T>({ scope, intent, path, body, storage, send, checkOnly = false, uuid = () => crypto.randomUUID() }: {
   scope: string; intent: string; path: string; body: Body; storage: Storage;
-  send: (path: string, body: Body) => Promise<T>; uuid?: () => string;
+  send: (path: string, body: Body) => Promise<T>; checkOnly?: boolean; uuid?: () => string;
 }) {
   const key = "pm-command-intent:" + scope + ":" + intent;
-  let saved: { path: string; body: Body; result?: T };
+  let saved: { path: string; body: Body; result?: T; refusal?: Refusal };
   const prior = storage.getItem(key);
-  if (prior) {
+  if (prior && JSON.parse(prior).refusal && path === "deliver" && !checkOnly) {
+    const refused = JSON.parse(prior) as typeof saved;
+    const archiveKey = "pm-command-receipt:" + scope + ":" + String(refused.body.command_id);
+    const archived = storage.getItem(archiveKey);
+    if (archived !== null && archived !== prior) throw new PmError("Receipt conflict", 409);
+    storage.setItem(archiveKey, prior);
+    if (storage.getItem(archiveKey) !== prior) throw new PmError("Command storage unavailable", 503);
+    saved = { path, body: { ...body, command_id: uuid() } };
+    storage.setItem(key, JSON.stringify(saved));
+    if (storage.getItem(key) !== JSON.stringify(saved)) throw new PmError("Command storage unavailable", 503);
+  } else if (prior) {
     saved = JSON.parse(prior);
+    if (saved.refusal) throw Object.assign(new RefusedCommand(saved.refusal.message, saved.refusal.status, saved.refusal.payload), { commandId: String(saved.body.command_id), receivedAt: saved.refusal.receivedAt });
     const original = { ...saved.body };
     delete original.command_id;
     if (saved.path !== path || canonical(original) !== canonical(body)) throw new PmError("Reconcile the previous command first", 409);
     if (saved.result !== undefined) return saved.result;
   } else {
+    if (checkOnly) throw new PmError("No request to check", 404);
     saved = { path, body: { ...body, command_id: uuid() } };
     storage.setItem(key, JSON.stringify(saved));
     if (storage.getItem(key) !== JSON.stringify(saved)) throw new PmError("Command storage unavailable", 503);
@@ -74,7 +87,21 @@ export async function sendDurableIntent<T>({ scope, intent, path, body, storage,
   catch (error) {
     // Only a definitive refusal permits a new intent after correction. A lost
     // response, failed status read or expired relay receipt keeps the old id.
-    if (error instanceof RefusedCommand) storage.removeItem(key);
+    if (error instanceof RefusedCommand) {
+      error.commandId = String(saved.body.command_id);
+      error.receivedAt ||= new Date().toISOString();
+      try {
+        if (path === "deliver") {
+          const refused = JSON.stringify({ ...saved, refusal: { message: error.message, status: error.status, payload: error.payload, receivedAt: error.receivedAt } });
+          storage.setItem(key, refused);
+          if (storage.getItem(key) !== refused) throw new Error("Result not saved");
+        } else storage.removeItem(key);
+      } catch {
+        // A storage failure cannot erase the authoritative server refusal or
+        // release the unresolved local identity for another Start.
+        error.persistenceError = "Result not saved";
+      }
+    }
     throw error;
   }
   // A repeated launch opens its original run, including after a task restart.
@@ -84,12 +111,17 @@ export async function sendDurableIntent<T>({ scope, intent, path, body, storage,
   return result;
 }
 
-export async function durableV2Command<T>(path: string, intent: string, body: Body, timeoutMs?: number): Promise<T> {
+export async function durableV2Command<T>(path: string, intent: string, body: Body, timeoutMs?: number, checkOnly = false): Promise<T> {
   const session = await transport().v2Session();
   if (!session.paired || !session.actor || !session.scope) throw new PmError("Reconnect Command Center", 401);
   if (!navigator.locks) throw new PmError("Command locking unavailable", 503);
   const scope = session.scope + ":" + session.actor;
   return navigator.locks.request("pm-intent:" + scope + ":" + intent, () => sendDurableIntent<T>({
-    scope, intent, path, body, storage: localStorage, send: (target, payload) => transport().v2Command<T>(target, payload, timeoutMs),
+    scope, intent, path, body, storage: localStorage, checkOnly, send: (target, payload) => {
+      if (!checkOnly) return transport().v2Command<T>(target, payload, timeoutMs);
+      const read = transport().v2CommandStatus;
+      if (!read) throw new PmError("Status unavailable", 503);
+      return read<T>(String(payload.command_id));
+    },
   }));
 }

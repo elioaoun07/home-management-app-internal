@@ -286,7 +286,7 @@ export function modelReadinessProbe(boundary, { model, effort, expectedNativeVer
 import {subscriptionObservation} from '/opt/era/scripts/delivery-v2/subscription-window.mjs';
 ${source}
 const observeSubscription=async backend=>{const prepared=await prepare(backend);const {usageSnapshot,...provenance}=prepared;console.log(JSON.stringify({era:'subscription-ready',backend_id:backend,...provenance,observation:subscriptionObservation(backend,usageSnapshot,{at:new Date().toISOString()})}));return prepared;};
-const facts=await probeCodexModels({...${JSON.stringify({ model, effort, expectedNativeVersion })},prepareSubscription:observeSubscription,limits:{timeoutMs:10000},onProgress:event=>console.log(JSON.stringify({era:'native-model-progress',...event}))});
+const facts=await probeCodexModels({...${JSON.stringify({ model, effort, expectedNativeVersion })},prepareSubscription:observeSubscription,onProgress:event=>console.log(JSON.stringify({era:'native-model-progress',...event}))});
 console.log(JSON.stringify({era:'native-model-readiness',...facts,observedAt:new Date().toISOString()}));`;
   return { args: assertNoHostAuthority(args), input, name, nonce };
 }
@@ -650,6 +650,9 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
       if (before.status !== 0 || before.error || before.stdout.trim()) return { authentication: null, modelAvailability: { ...failure("native-model-container-unavailable"), containerName: probe.name, containerCleanupConfirmed: false } };
       let result = null, containerCleanupConfirmed = false, processError = null, processCompletedAt = null;
       const processStartedAt = Date.now();
+      // The native probe keeps its 30-second session budget: initialize and
+      // account/read share it with model/list. This outer deadline still bounds
+      // startup, version, subscription, native sessions and exit together.
       try { result = await docker.run(probe.args, { input: probe.input, timeout: 45000 }); }
       catch (error) { processError = ["ETIMEDOUT", "ENOBUFS", "ENOENT", "EACCES", "EPERM"].includes(error?.code) ? error.code : "unclassified"; }
       finally {

@@ -12,6 +12,7 @@
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -504,6 +505,7 @@ describe("the HTTP surface", () => {
     return { origin: "http://127.0.0.1:4317", "sec-fetch-site": "same-origin", cookie, [CSRF_HEADER]: csrf, "x-era-actor": "mallory" };
   };
   const ctx = () => ({ root: ROOT, store, allowedOrigins: ["http://127.0.0.1:4317"] });
+  const launchBody = (extra: Record<string, unknown> = {}) => ({ command_id: randomUUID(), file: "Budget/4 - Checklist.md", expectId: "BUD-14", ...extra });
 
   it("requires readiness for a new launch but reconciles an existing identity", async () => {
     setDispatchMode({ root: ROOT, mode: "v2", actor: "owner" });
@@ -511,7 +513,7 @@ describe("the HTTP surface", () => {
     const context = { ...ctx(), readiness: async () => ({ ready: false }), commandStatus: (id: string) => id === "known" ? { command_id: id } : null,
       journey: { deliver: async () => { calls++; return { ok: true, run_id: "original" }; } } };
     const headers = pairedHeaders();
-    const blocked = await routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers, body: { executor: "codex", command_id: "new" } }, context);
+    const blocked = await routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers, body: launchBody({ executor: "codex" }) }, context);
     expect(blocked!.json.error).toBe("delivery-not-ready"); expect(calls).toBe(0);
     const recovered = await routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers, body: { executor: "codex", command_id: "known" } }, context);
     expect(recovered!.json.run_id).toBe("original"); expect(calls).toBe(1);
@@ -523,7 +525,7 @@ describe("the HTTP surface", () => {
     const passive = { ready: false, blockers: [{ gate: "runtime", code: "runtime-stale" }] };
     const context = { ...ctx(), readiness: async () => passive, refreshReadiness: async () => { refreshed++; return next; },
       journey: { deliver: async () => { launched++; return { ok: true, run_id: "r-one-step" }; } } };
-    const send = (command_id: string) => routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers: pairedHeaders(), body: { executor: "codex", command_id } }, context);
+    const send = (id: string) => routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers: pairedHeaders(), body: launchBody({ executor: "codex", expectId: id }) }, context);
     const started = await send("a");
     expect(started!.json.run_id).toBe("r-one-step"); expect(refreshed).toBe(1); expect(launched).toBe(1);
     next = { ready: false, blockers: [{ gate: "environment", code: "environment-observed" }] } as typeof next;
@@ -534,9 +536,11 @@ describe("the HTTP surface", () => {
     expect((await send("b2"))!.json.detail).toBe("files changed during the check; press Start again");
     context.refreshReadiness = async () => { refreshed++; throw new Error("collector crashed"); };
     const crashed = await send("c");
-    expect(crashed!.json.readiness).toBe(passive); expect(launched).toBe(1); expect(refreshed).toBe(4);
+    expect(crashed!.json.error).toBe("readiness-collection-failed");
+    expect(crashed!.json.readiness).toBeUndefined(); expect(crashed!.json.previousReadiness).toBe(passive);
+    expect(launched).toBe(1); expect(refreshed).toBe(4);
     const current = { ...context, readiness: async () => ({ ready: true }), refreshReadiness: async () => { refreshed++; return next; } };
-    await routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers: pairedHeaders(), body: { executor: "codex", command_id: "d" } }, current);
+    await routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers: pairedHeaders(), body: launchBody({ executor: "codex", expectId: "d" }) }, current);
     expect(refreshed).toBe(4); expect(launched).toBe(2);
   });
 
@@ -575,7 +579,7 @@ describe("the HTTP surface", () => {
 
   it("refuses a deliver in v1 mode", async () => {
     const res = await routeDeliveryV2(
-      { method: "POST", path: "/api/delivery/v2/deliver", body: {}, headers: pairedHeaders() },
+      { method: "POST", path: "/api/delivery/v2/deliver", body: launchBody(), headers: pairedHeaders() },
       ctx(),
     );
     expect(res!.status).toBe(409);
@@ -586,7 +590,7 @@ describe("the HTTP surface", () => {
     setDispatchMode({ root: ROOT, mode: "v2", actor: "owner" });
     setExecutorSelection({ root: ROOT, choice: "codex", actor: "owner" });
     const res = await routeDeliveryV2(
-      { method: "POST", path: "/api/delivery/v2/deliver", body: {}, headers: pairedHeaders() },
+      { method: "POST", path: "/api/delivery/v2/deliver", body: launchBody(), headers: pairedHeaders() },
       ctx(),
     );
     expect(res!.status).toBe(409);
@@ -596,7 +600,7 @@ describe("the HTTP surface", () => {
   it("refuses a deliver in v2 mode when no pilot policy is installed", async () => {
     setDispatchMode({ root: ROOT, mode: "v2", actor: "owner" });
     const res = await routeDeliveryV2(
-      { method: "POST", path: "/api/delivery/v2/deliver", body: { executor: "codex" }, headers: pairedHeaders() },
+      { method: "POST", path: "/api/delivery/v2/deliver", body: launchBody({ executor: "codex" }), headers: pairedHeaders() },
       ctx(),
     );
     // The honest default: wiring the route did not authorize a gate policy.
@@ -608,7 +612,7 @@ describe("the HTTP surface", () => {
     setDispatchMode({ root: ROOT, mode: "v2", actor: "owner" });
     const seen: Record<string, unknown>[] = [];
     const res = await routeDeliveryV2(
-      { method: "POST", path: "/api/delivery/v2/deliver", body: { file: "x", cbidx: 0, executor: "codex", actor: "mallory" }, headers: pairedHeaders() },
+      { method: "POST", path: "/api/delivery/v2/deliver", body: launchBody({ file: "x", cbidx: 0, executor: "codex", actor: "mallory" }), headers: pairedHeaders() },
       {
         ...ctx(),
         deliver: async (input: Record<string, unknown>) => {

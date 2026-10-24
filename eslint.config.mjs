@@ -40,6 +40,30 @@ const config = [
     files: ["scripts/pm/app/**/*.tsx"],
     rules: { "@next/next/no-html-link-for-pages": "off" },
   },
+  // R44 / Hard Rule 6: client mutations should use safeFetch for its
+  // connectivity and timeout handling. This syntax guard catches direct calls
+  // with literal methods; computed methods and aliased fetch calls are outside
+  // its reach. Keep this warning-only while the existing sites are burned down
+  // under R48. A focused textual scan found 421 candidate references as the
+  // R48 baseline; that count is not a verified violation count.
+  {
+    files: [
+      "src/components/**/*.{js,jsx,ts,tsx}",
+      "src/features/**/*.{js,jsx,ts,tsx}",
+      "src/hooks/**/*.{js,jsx,ts,tsx}",
+      "src/contexts/**/*.{js,jsx,ts,tsx}",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "warn",
+        {
+          selector:
+            "CallExpression[callee.name='fetch'] > ObjectExpression.arguments > Property[key.name='method'][value.value=/^(POST|PATCH|PUT|DELETE)$/]",
+          message: "Use safeFetch for client mutations.",
+        },
+      ],
+    },
+  },
   {
     rules: {
       "@typescript-eslint/no-explicit-any": "error",

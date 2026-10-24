@@ -30,7 +30,7 @@ it("confirms a completed check even when the same blockers remain", () => {
   const html = render({ result: result(true), checkedAt: Date.now() });
   expect(html).toContain("Setup required");
   expect(html).toContain("Checked ");
-  expect(html).toContain("Policy expired — renew it");
+  expect(html).toContain("Authorization expired — check readiness");
   expect(html).not.toContain("Checks passed");
   expect(html).toContain('<details class="launch-check-details">');
   expect(html).toContain("10/11");
@@ -51,4 +51,13 @@ it("distinguishes fresh readiness, expiry, unavailable data and offline state", 
   expect(render({ result: null })).toContain("Readiness unavailable");
   expect(render({ result: null, loading: true })).toContain("Loading readiness…");
   expect(render({ connected: false, disabled: true })).toContain("Laptop offline");
+});
+
+it("makes the authorization effect and its separate expiry visible", () => {
+  const authorization = { key: "fixture", expiresAt: "2026-10-25T12:00:00.000Z", renewedAt: "2026-10-24T12:00:00.000Z" };
+  const html = render({ result: { ...result(), authorization } });
+  expect(html).toContain("Renews authorization · 24h");
+  expect(html).toContain("Authorized until");
+  expect(html).toContain('dateTime="2026-10-25T12:00:00.000Z"');
+  expect(render({ result: { ...result(), authorization: { ...authorization, expiresAt: null } } })).toContain("Confirms saved authorization");
 });

@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { RELAY_SCHEMA, ROW_KINDS, rowId } from "../scripts/pm/relay-shared.mjs";
-import { PendingCommand } from "../scripts/pm/app/transport";
+import { PendingCommand, RefusedCommand } from "../scripts/pm/app/transport";
 import { LEGACY_CACHE_KEYS, cacheKey, createMemoryStore, keysToPurge, loadOwnerCache, purgeForeignOwners } from "../src/features/pm-live/relay/cache";
 import { createCommandTracker, type CommandRow } from "../src/features/pm-live/relay/commands";
 import { chooseInstallation, createRelayTransport, replaceRows } from "../src/features/pm-live/relay/transport";
@@ -201,6 +201,25 @@ function publishedRows(ownerId: string, { seenAt = new Date().toISOString(), run
 }
 
 describe("relay transport", () => {
+  it("checks a missing or refused receipt without inserting another command", async () => {
+    const fake = fakeSupabase({ ownerId: OWNER_A, liveRows: publishedRows(OWNER_A) });
+    const transport = createRelayTransport({ supabase: fake.client as never, cacheStore: createMemoryStore(), storage: memoryStorage(), commandWaitMs: 1 });
+    const stop = transport.start();
+    try {
+      await transport.ready();
+      const id = "44444444-4444-4444-8444-444444444444";
+      await expect(transport.v2CommandStatus!(id)).rejects.toBeInstanceOf(PendingCommand);
+      expect(fake.commands.size).toBe(0);
+      await transport.v2Command("deliver", { command_id: id }).catch(() => undefined);
+      const outcome = { ok: false, error: "delivery-not-ready", readiness: { blockers: [{ code: "native-probe-timeout" }] }, receipt: { state: "refused", installation_id: INST } };
+      Object.assign(fake.commands.get(id)!, { status: "failed", result: outcome, error: "delivery-not-ready" });
+      const failure = await transport.v2CommandStatus!(id).catch(error => error);
+      expect(failure).toBeInstanceOf(RefusedCommand);
+      if (!(failure instanceof RefusedCommand)) throw failure;
+      expect(failure.payload).toEqual(outcome);
+      expect(fake.commands.size).toBe(1);
+    } finally { stop(); }
+  });
   it("shows no previous owner's copy after an account switch", async () => {
     const cacheStore = createMemoryStore();
     await cacheStore.set(cacheKey(OWNER_A, INST), { savedAt: "2026-09-11T10:00:00Z", installation_id: INST, rows: Object.fromEntries(publishedRows(OWNER_A, { runs: ["r-owner-a"] }).map((row) => [row.id, row.payload])) });

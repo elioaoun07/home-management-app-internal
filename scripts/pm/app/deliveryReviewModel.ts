@@ -5,12 +5,14 @@ export const reviewTabs = ["outcome", "plan", "checks", "activity", "changes"] a
 export type ReviewTab = (typeof reviewTabs)[number];
 
 export function defaultReviewTab(detail: V2RunDetail): ReviewTab {
+  if (detail.ownerAction.kind === "application-checks") return "checks";
+  // A retained proposal is history once the run closes, not an approval gate.
+  if (detail.run.lifecycle === "CLOSED") return "outcome";
   if (
     detail.questions.some((q) => q.status === "open" && q.blocking) ||
     detail.plans.at(-1)?.status === "proposed"
   )
     return "plan";
-  if (detail.ownerAction.kind === "application-checks") return "checks";
   if (detail.result) return "outcome";
   if (detail.candidate) return "changes";
   return detail.jobs.some((job) => ["active", "reserved"].includes(job.status))

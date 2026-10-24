@@ -38,8 +38,30 @@ it("permits a corrected intent only after a confirmed refusal", async () => {
   const storage = { getItem: (key: string) => data.get(key) || null, setItem: (key: string, value: string) => { data.set(key, value); }, removeItem: (key: string) => { data.delete(key); } };
   const request = { scope: "owner", intent: "launch", path: "deliver", body: {}, storage };
   await expect(sendDurableIntent({ ...request, uuid: () => "refused", send: async (_path, body) => { ids.push(String(body.command_id)); throw new RefusedCommand("stale approval", 409); } })).rejects.toThrow("stale");
+  expect(storedIntent(request.scope, request.intent, storage)).toMatchObject({ commandId: "refused", refusal: { message: "stale approval" } });
+  await expect(sendDurableIntent({ ...request, checkOnly: true, send: async () => { throw new Error("must not send"); } })).rejects.toThrow("stale approval");
   await sendDurableIntent({ ...request, body: { revision: 2 }, uuid: () => "corrected", send: async (_path, body) => { ids.push(String(body.command_id)); return { run_id: "one" }; } });
   expect(ids).toEqual(["refused", "corrected"]);
+  expect(JSON.parse(data.get("pm-command-receipt:owner:refused")!)).toMatchObject({ body: { command_id: "refused" }, refusal: { message: "stale approval" } });
+});
+
+it("does not mint a new command when checking a missing local intent", async () => {
+  const { request } = cancelledFixture();
+  await expect(sendDurableIntent({ ...request, checkOnly: true, send: async () => { throw new Error("must not send"); } })).rejects.toThrow("No request to check");
+});
+
+it.each(["throws", "drops"])("retains the refusal and unresolved identity when storing the result %s", async mode => {
+  const { storage, request } = cancelledFixture();
+  let writes = 0;
+  const unreliable = { ...storage, setItem: (key: string, value: string) => {
+    if (++writes === 1) return storage.setItem(key, value);
+    if (mode === "throws") throw new Error("quota");
+  } };
+  const refusal = new RefusedCommand("delivery not ready", 409, { error: "delivery-not-ready", readiness: { blockers: ["native-probe-timeout"] } });
+  await expect(sendDurableIntent({ ...request, storage: unreliable, uuid: () => "original", send: async () => { throw refusal; } })).rejects.toBe(refusal);
+  expect(refusal.persistenceError).toBe("Result not saved");
+  expect(storedIntent(request.scope, request.intent, storage)).toEqual({ path: "deliver", body: request.body, completed: false });
+  expect(JSON.parse(storage.getItem("pm-command-intent:" + request.scope + ":" + request.intent)!).body.command_id).toBe("original");
 });
 
 function cancelledFixture() {

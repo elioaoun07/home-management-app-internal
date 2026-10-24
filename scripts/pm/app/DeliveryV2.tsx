@@ -19,7 +19,8 @@ import { v2Pair, v2Post } from "./api";
 import { client, go, pmKeys, useRoute, useWorld } from "./state";
 import { readinessCanLaunch, readinessCanStart } from "./readinessModel";
 import { LaunchReadiness } from "./LaunchReadiness";
-import { PendingCommand, transport } from "./transport";
+import { LaunchResult } from "./LaunchResult";
+import { PendingCommand, RefusedCommand, transport } from "./transport";
 import { Back, Empty, ErrorNotice, RunOrb, Sheet } from "./components";
 import { returnFromLaunch } from "./Work";
 import {
@@ -42,6 +43,7 @@ import {
   ChangesReview,
   ChecksReview,
   PlanReview,
+  SupportUsage,
   UsageSummary,
 } from "./DeliveryReview";
 import {
@@ -260,16 +262,20 @@ export function QueueV2() {
  * a receipt, never as a failure.
  */
 function useV2Command() {
+  const success = useRef<((data: Body) => void) | undefined>(undefined);
   const mutation = useMutation({
     mutationFn: ({
       path,
       body,
       intent,
+      checkOnly,
     }: {
       path: string;
       body: Body;
       intent: string;
-    }) => durableV2Command<Body>(path, intent, body, path === "deliver" ? LAUNCH_TIMEOUT_MS : undefined),
+      checkOnly?: boolean;
+    }) => durableV2Command<Body>(path, intent, body, path === "deliver" ? LAUNCH_TIMEOUT_MS : undefined, checkOnly),
+    onSuccess: data => success.current?.(data),
     onSettled: () => client.invalidateQueries({ queryKey: pmKeys.all }),
   });
   const send = (
@@ -277,14 +283,16 @@ function useV2Command() {
     intent: string,
     body: Body,
     onSuccess?: (data: Body) => void,
+    checkOnly = false,
   ) => {
-    mutation.mutate(
-      { path, body, intent },
-      { onSuccess },
-    );
+    success.current = onSuccess;
+    mutation.mutate({ path, body, intent, checkOnly });
   };
   const retry = () => {
     if (mutation.variables) mutation.mutate(mutation.variables);
+  };
+  const check = () => {
+    if (mutation.variables) mutation.mutate({ ...mutation.variables, checkOnly: true });
   };
   const pending =
     mutation.error instanceof PendingCommand ? mutation.error : null;
@@ -292,6 +300,7 @@ function useV2Command() {
     ...mutation,
     send,
     retry,
+    check,
     pending,
     failure: pending ? null : mutation.error,
   };
@@ -406,7 +415,8 @@ export function LaunchV2({ work }: { work: Work }) {
   const steward = route.query.get("initiator") === "era-steward";
   const refresh = useMutation({
     mutationFn: async (selection: V2ReadinessSelection) => {
-      const data = await transport().v2Command<{ readiness: V2Readiness }>("control", { action: "refresh-readiness", selection, command_id: crypto.randomUUID() }, LAUNCH_TIMEOUT_MS);
+      const data = await transport().v2Command<{ readiness: V2Readiness }>("control", { action: "refresh-readiness", renewAuthorization: true, selection, command_id: crypto.randomUUID() }, LAUNCH_TIMEOUT_MS);
+      if (!data.readiness || !("authorization" in data.readiness)) throw new Error("Restart Command Center to enable renewal");
       return { ...data, checkedAt: Date.now() };
     },
     onMutate: selection => client.cancelQueries({ queryKey: pmKeys.v2readiness(selection) }),
@@ -427,6 +437,8 @@ export function LaunchV2({ work }: { work: Work }) {
   });
   const cancelledLaunch = deliveries.data?.runs.some(run =>
     run.run_id === previousLaunch.data?.runId && run.lifecycle === "CLOSED" && run.closed_outcome === "cancelled");
+  const launchFailure = start.failure instanceof RefusedCommand ? start.failure : previousLaunch.data?.refusal;
+  const existingLaunch = previousLaunch.data && !previousLaunch.data.refusal ? previousLaunch.data : null;
   const readinessSelection = { file: work.file, id: itemId, executor, model: model || null, effort: effort || null, workProfile: profile };
   const readiness = useQuery({
     queryKey: pmKeys.v2readiness(readinessSelection),
@@ -587,7 +599,8 @@ export function LaunchV2({ work }: { work: Work }) {
         error={catalogue.error || session.error}
         retry={() => void catalogue.refetch()}
       />
-      <ErrorNotice error={start.failure} retry={start.retry} />
+      {launchFailure && !start.isPending && <LaunchResult failure={launchFailure} commandId={start.failure instanceof RefusedCommand ? start.failure.commandId : previousLaunch.data?.commandId} />}
+      <ErrorNotice error={start.failure instanceof RefusedCommand ? null : start.failure} />
       <ErrorNotice error={previousLaunch.error} retry={() => void previousLaunch.refetch()} />
       <ErrorNotice error={newDelivery.error} retry={() => newDelivery.mutate()} />
       <LaunchReadiness result={readiness.data} connected={connected} loading={readiness.isPending} checking={refreshCurrent && refresh.isPending}
@@ -596,26 +609,27 @@ export function LaunchV2({ work }: { work: Work }) {
         onCheck={() => refresh.mutate(readinessSelection)} />
       <CommandReceipt
         pending={start.pending}
-        onCheck={start.retry}
+        onCheck={start.check}
         busy={start.isPending}
       />
       {testGate?.locked && <TestGateCard gate={testGate} />}
-      {previousLaunch.data && <section className="launch-previous" aria-label="Previous delivery">
-        <span>{cancelledLaunch ? "Previous delivery cancelled" : previousLaunch.data.completed ? "Existing delivery" : "Unresolved request"}</span>
+      {existingLaunch && <section className="launch-previous" aria-label="Previous delivery">
+        <span>{cancelledLaunch ? "Previous delivery cancelled" : existingLaunch.completed ? "Existing delivery" : "Unresolved request"}</span>
         <div className="launch-previous-actions">
         {cancelledLaunch && <button className="primary" disabled={!connected || start.isPending || newDelivery.isPending || refresh.isPending} onClick={() => newDelivery.mutate()}>{newDelivery.isPending ? "Preparing…" : "New delivery"}</button>}
         <button className={cancelledLaunch ? "secondary" : "primary"} disabled={!connected || start.isPending || refresh.isPending} onClick={() => {
-          const saved = previousLaunch.data!;
-          start.send(saved.path, launchIntent, saved.body, data => go(`/delivery/run/${String(data.run_id)}`));
-        }}>{previousLaunch.data.completed ? "Open delivery" : "Resume request"}</button>
+          const saved = existingLaunch;
+          start.send(saved.path, launchIntent, saved.body, data => go(`/delivery/run/${String(data.run_id)}`), true);
+        }}>{existingLaunch.completed ? "Open delivery" : "Check status"}</button>
         </div>
       </section>}
-      {!previousLaunch.data && <div className="launch-footer launch-v2-actions">
+      {!existingLaunch && <div className="launch-footer launch-v2-actions">
         <button
           className="primary"
           disabled={
             !connected ||
-            !!previousLaunch.data || !!previousLaunch.error || previousLaunch.isPending || newDelivery.isPending ||
+            (start.failure instanceof RefusedCommand && !!start.failure.persistenceError) ||
+            !!existingLaunch || !!previousLaunch.error || previousLaunch.isPending || newDelivery.isPending ||
             (!steward && (!chosen || !chosen.permitted)) ||
             (!steward && !readinessCanLaunch(readiness.data, readinessSelection)) ||
             (!steward && (!!readiness.error || (refreshCurrent && refresh.isError))) ||
@@ -820,6 +834,7 @@ export function RunV2Story({
           <p>{settingsLine(detail.settings)}</p>
         </div>
         <UsageSummary resources={detail.resources} jobs={detail.jobs} />
+        <SupportUsage accounting={detail.accounting} />
         {!closed && busy && (
           <button
             className="round-button"

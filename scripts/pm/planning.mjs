@@ -245,6 +245,8 @@ export function observePlanningProgress({ root, pmDir, data, now = new Date().to
 export function routePlanning(req, { root, pmDir, data, allowedOrigins = [] }) {
   const auth = authenticateLocal({ root, headers: req.headers || {}, allowedOrigins });
   if (!auth.ok || !auth.actor) return { status: auth.status, json: { error: auth.refusal?.code || "unauthenticated", detail: auth.refusal?.detail } };
+  // The Steward credential reads and starts deliveries; it never edits planning.
+  if (auth.kind === "steward") return { status: 403, json: { error: "steward-operation-not-permitted", detail: "planning" } };
   try { return { status: 200, json: writePlanningCommand({ root, pmDir, data, command: req.body }) }; }
   catch (error) { return { status: error.status || 500, json: { error: error.message } }; }
 }

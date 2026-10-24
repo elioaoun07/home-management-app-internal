@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { PassThrough, Writable } from "node:stream";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { probeCodexModels } from "../../scripts/delivery-v2/probes/codex-models.mjs";
 
 type Message = { method: string; id?: string; params: Record<string, unknown> };
@@ -17,7 +17,7 @@ const selection = { model: "gpt-6-luna", effort: "low", expectedNativeVersion: "
 const ready = { method: "chatgpt", additionalSpendAllowed: false, includedUsageAvailable: true };
 const modelRow = { id: "gpt-6-luna", model: "gpt-6-luna", supportedReasoningEfforts: [{ reasoningEffort: "low", description: "private-description" }] };
 
-function fixture(reply?: Reply, { version = "codex-cli 0.144.1", closeOnKill = true, account = { type: "chatgpt", planType: "pro", email: "private@example.invalid" } } = {}) {
+function fixture(reply?: Reply, { version = "codex-cli 0.144.1", closeOnKill = true, account = { type: "chatgpt", planType: "pro", email: "private@example.invalid" }, accountDelayMs = 0 } = {}) {
   const requests: Message[] = [], children: ReturnType<typeof fakeChild>[] = [];
   const prepare = vi.fn(async () => ({ ...ready, usageSnapshot: { secret: "private-usage" } }));
   const spawnFn = vi.fn((_command: string, args: string[]) => {
@@ -26,7 +26,10 @@ function fixture(reply?: Reply, { version = "codex-cli 0.144.1", closeOnKill = t
       requests.push(message);
       const respond = (result: unknown) => child.stdout.write(JSON.stringify({ id: message.id, result }) + "\n");
       if (message.method === "initialize") respond({ platformOs: "linux" });
-      else if (message.method === "account/read") respond({ account, requiresOpenaiAuth: true });
+      else if (message.method === "account/read") {
+        const answer = () => respond({ account, requiresOpenaiAuth: true });
+        if (accountDelayMs) setTimeout(answer, accountDelayMs); else answer();
+      }
       else if (message.method === "model/list") {
         if (reply) reply(message, respond, child);
         else respond({ data: [modelRow], nextCursor: null });
@@ -39,6 +42,8 @@ function fixture(reply?: Reply, { version = "codex-cli 0.144.1", closeOnKill = t
   const run = (limits: Record<string, number> = {}, onProgress?: (event: object) => void) => probeCodexModels({ ...selection, prepareSubscription: prepare, spawnFn, limits, onProgress });
   return { requests, prepare, spawnFn, children, run };
 }
+
+afterEach(() => vi.useRealTimers());
 
 describe("bounded native Codex model catalog diagnostic", () => {
   it("uses only initialization/account/model RPCs and emits exact advertised selection without claiming entitlement", async () => {
@@ -116,6 +121,33 @@ describe("bounded native Codex model catalog diagnostic", () => {
     expect(await f.run({ maxBytes: 2048 })).toMatchObject({ ok: false, code: "native-output-limit", cleanupConfirmed: true });
     const g = fixture(() => {});
     expect(await g.run({ timeoutMs: 10 })).toMatchObject({ ok: false, code: "native-probe-timeout", cleanupConfirmed: true });
+  });
+
+  it("allows account and catalog latency beyond the old ten-second override without retrying", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    const f = fixture((_message, respond) => setTimeout(() => respond({ data: [modelRow], nextCursor: null }), 6_000), { accountDelayMs: 4_876 });
+    const pending = f.run();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(f.requests.map(row => row.method)).toEqual(["initialize", "initialized", "account/read", "model/list"]);
+    expect(f.children[1].kill).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(876);
+    expect(await pending).toMatchObject({ ok: true, code: "native-selection-advertised", cleanupConfirmed: true, providerTurns: 0, diagnostics: { elapsedMs: 10_876 } });
+    expect(f.spawnFn).toHaveBeenCalledTimes(2);
+    expect(f.prepare).toHaveBeenCalledTimes(1);
+    expect(f.requests.filter(row => row.method === "model/list")).toHaveLength(1);
+  });
+
+  it("still stops an unresponsive catalog at the thirty-second session bound", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    const f = fixture(() => {}, { accountDelayMs: 4_876 });
+    const pending = f.run();
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(f.children[1].kill).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await pending).toMatchObject({ ok: false, code: "native-probe-timeout", cleanupConfirmed: true, providerTurns: 0, diagnostics: { elapsedMs: 30_000 } });
+    expect(f.children[1].kill).toHaveBeenCalledExactlyOnceWith("SIGTERM");
+    expect(f.spawnFn).toHaveBeenCalledTimes(2);
+    expect(f.requests.filter(row => row.method === "model/list")).toHaveLength(1);
   });
 
   it("retains only bounded RPC timings and fixed stderr signals when model listing stalls", async () => {

@@ -61,7 +61,7 @@ export async function inspectReadiness({ root, pmRel = "ERA Notes/10 - Project M
   catch (error) { loaded = { ok: false, policy: null, refusals: [{ code: "execution-policy-unreadable", detail: error.message }] }; }
   const allowances = readAllowances({ root });
   const policy = loaded.ok ? effectivePolicy(loaded.policy, { settings: allowances.settings, now }) : null;
-  facts.policy = loaded.ok ? fact("satisfied", "policy-current", null, { revision: policy.policy_revision, digest: loaded.digest || fingerprint(canonicalJson(loaded.policy)) })
+  facts.policy = loaded.ok ? fact("satisfied", "policy-current", null, { revision: policy.policy_revision, digest: loaded.digest || policy.authorization?.key || fingerprint(canonicalJson(loaded.policy)) })
     : { ...blocked("policy-unavailable", null), reasons: loaded.refusals };
   if (policy?.grant.expires_at && Date.parse(policy.grant.expires_at) <= Date.parse(now)) facts.policy = blocked("grant-expired", policy.grant.expires_at, "Review current owner authority");
   const chosen = resolveExecutorChoice(executor), settings = policy && chosen ? validateRunSettings({ executor, model, effort, catalog: policy.executors.catalog }) : null;
@@ -149,7 +149,9 @@ export async function inspectReadiness({ root, pmRel = "ERA Notes/10 - Project M
   try { manifests = ["package.json", "pnpm-lock.yaml"].map(name => input(root, name)); } catch { /* reported by environment gate below */ }
 
   // Bind all live observations to this exact selection and passive snapshot.
-  const contextFingerprint = fingerprint(canonicalJson({ selection, facts, manifests, policy: policy ? fingerprint(canonicalJson(policy)) : null, allowances: allowances.settings }));
+  // Time-only owner renewals do not change runtime/source observations. Keeping
+  // their receipt timestamps out also lets two explicit item checks coexist.
+  const contextFingerprint = fingerprint(canonicalJson({ selection, facts, manifests, policy: policy ? policy.authorization?.key || fingerprint(canonicalJson(policy)) : null, allowances: allowances.settings }));
   // Diagnose freshness independently of dependent gates. Only timestamps and
   // digests cross this seam; observation payloads and collector errors do not.
   // These diagnostics are outside the facts/fingerprint and confer no authority.
@@ -238,5 +240,5 @@ export async function inspectReadiness({ root, pmRel = "ERA Notes/10 - Project M
     nativeModelDiagnostics: chosen?.id === "codex" ? nativeModelDiagnostics({ selection,
       evidence: observations.modelAvailability?.fact?.evidence,
       expectedNativeVersion: observations.environment?.fact?.evidence?.receipt?.probes?.nativePackages?.["@openai/codex-sdk"]?.cliVersion }) : null,
-    assessment, testGate, expiresAt: result.ready ? new Date(Math.min(Date.parse(now) + 30_000, ...Object.values(observations).map(value => Date.parse(value.observedAt) + OBSERVATION_MAX_AGE_MS))).toISOString() : null };
+    assessment, testGate, authorization: policy?.authorization || null, expiresAt: result.ready ? new Date(Math.min(Date.parse(now) + 30_000, ...Object.values(observations).map(value => Date.parse(value.observedAt) + OBSERVATION_MAX_AGE_MS))).toISOString() : null };
 }

@@ -147,7 +147,10 @@ describe("explicit native model readiness", () => {
     const probe = modelReadinessProbe(configured, { ...selected, expectedNativeVersion: "0.144.1" });
     expect(probe.args.slice(-3)).toEqual(["node", "--input-type=module", "-"]);
     expect(mounts(probe.args).every(value => value.startsWith("type=volume,"))).toBe(true);
-    expect(probe.input).toContain("limits:{timeoutMs:10000}");
+    // Use the probe's reviewed session budget. A ten-second override left
+    // model/list under five seconds after a slow account/read in the R44 trace.
+    expect(probe.input).toContain("prepareSubscription:observeSubscription,onProgress:");
+    expect(probe.input).not.toContain("limits:{timeoutMs:10000}");
   });
   it.each(["timeout", "throw"])("cleans only the owned container after a Docker client %s", async lifecycle => {
     const f = fixture({}, true, lifecycle);

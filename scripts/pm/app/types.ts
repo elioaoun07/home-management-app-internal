@@ -585,9 +585,16 @@ export interface V2RunDetail {
   evidence: V2Evidence[];
   result: V2Result | null;
   resources: V2Resources | null;
+  /** Delivery / Support / Chat overhead, kept apart (support-ledger.mjs). Desktop only; the relay does not carry it. */
+  accounting?: V2Accounting | null;
   ownerAction: { kind: string; label: string };
   coordination?: V2Coordination & { holding?: string[] };
   events: { seq: number; kind: string; at: string; data: unknown }[];
+}
+export interface V2Accounting {
+  delivery: { jobs: number; tokens: { total: number }; costUsd: number | null; coverage: { known: number; total: number } };
+  support: { jobs: number; tokens: { total: number }; costUsd: number | null; costComplete: boolean; costBasis?: string; unknown: { job_id: string; reason: string }[]; coverage: { known: number; total: number } };
+  chat: { status: "not-measured" | "owner-entered"; tokens: number | null };
 }
 export interface V2ChangedFile {
   path: string;
@@ -661,6 +668,7 @@ export interface V2Readiness {
   status: "ready" | "blocked";
   fingerprint: string;
   authority: "inspection-only";
+  authorization?: { key: string; expiresAt: string | null; renewedAt: string | null } | null;
   selection: V2ReadinessSelection;
   blockers: { gate: string; state: string; code: string; detail?: unknown; nextAction?: string | null }[];
   facts: Record<string, { state: string; code: string; detail?: unknown; evidence?: unknown }>;
@@ -669,6 +677,7 @@ export interface V2Readiness {
   assessment?: V2Assessment | null;
   testGate?: V2TestGate | null;
   collection?: { stages: { name: string; outcome: string; code: string | null; durationMs: number }[] } | null;
+  nativeModelDiagnostics?: { code?: string; stopCode?: string | null; transport?: { process?: { outcome?: string } | null } | null } | null;
 }
 export interface V2Assessment {
   ok: boolean;

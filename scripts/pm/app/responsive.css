@@ -93,7 +93,7 @@
   }
   /* Content ends above the fixed .mobile-nav below, never behind it. */
   .app-main {
-    padding: 24px 23px calc(74px + env(safe-area-inset-bottom) + 22px);
+    padding: 24px 23px calc(74px + env(safe-area-inset-bottom) + 34px);
     min-height: calc(100dvh - 205px);
   }
   .mobile-nav {

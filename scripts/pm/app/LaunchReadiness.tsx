@@ -35,6 +35,8 @@ export function LaunchReadiness({ result, connected, loading, checking, checkedA
       {checking ? <LoaderCircle size={16} className="readiness-spinner" /> : <ClipboardCheck size={16} />}
       {checking ? "Checking…" : "Check readiness"}
     </button>
+    <p className="launch-authorization">{result?.authorization?.expiresAt === null ? "Confirms saved authorization" : "Renews authorization · 24h"}</p>
+    {result?.authorization?.expiresAt && <p className="launch-authorization">Authorized until <time dateTime={result.authorization.expiresAt}>{new Date(result.authorization.expiresAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time></p>}
     {rows.length > 0 && <details className="launch-check-details">
       <summary>{error ? "Previous checks" : "Check details"}{!error && !checking && <span>{rows.filter(row => row.state === "ok").length}/{rows.length}</span>}</summary>
       <ul className="launch-check-list">{rows.map(row => <li key={row.gate} data-state={row.state}>

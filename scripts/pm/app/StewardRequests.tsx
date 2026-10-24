@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { readinessIssues } from "./readinessModel";
+import { startReadinessIssues } from "./readinessModel";
 import type { StewardRequest } from "./types";
 
 /** Independently derived on each device, including while relay data is cached. */
@@ -34,17 +34,17 @@ export function StewardRequests({
   if (!requests.length) return null;
   const now = suppliedNow ?? clock;
   return (
-    <section className="steward-requests" aria-label="Steward requests">
+    <section className="steward-requests" aria-label="Delivery requests">
       {requests.map((request) => {
         const liveness = coordinatorStatus(request, now);
         const issues = request.blocker?.readiness
-          ? readinessIssues(request.blocker.readiness)
+          ? startReadinessIssues(request.blocker.readiness)
           : [];
         return (
           <article className="steward-request" key={request.command_id}>
             <header>
               <strong>{request.workId}</strong>
-              <span>Initiated by ERA Steward</span>
+              <span>Initiated by {request.initiatedBy}</span>
             </header>
             <dl>
               <div>

@@ -30,6 +30,7 @@ import {
   planMarkdown,
   normalizationNote,
   planWindowMovement,
+  reviewStatus,
   tokenSplit,
 } from "./deliveryReviewModel";
 import type {
@@ -37,6 +38,7 @@ import type {
   V2Evidence,
   V2Job,
   V2Plan,
+  V2Accounting,
   V2Resources,
   V2RunDetail,
 } from "./types";
@@ -629,9 +631,7 @@ export function ActivityReview({
           <div>
             <dt>Status</dt>
             <dd>
-              {detail.applications?.at(-1)
-                ? applicationLabel(detail.applications.at(-1)!.state)
-                : detail.stage.stages[detail.stage.current]}
+              {reviewStatus(detail)}
             </dd>
           </div>
           <div>
@@ -656,6 +656,27 @@ export function ActivityReview({
         )}
       </section>
     </section>
+  );
+}
+
+/** Owner-authorized support jobs, apart from the delivery's own usage. Hidden when there were none. */
+export function SupportUsage({ accounting }: { accounting?: V2Accounting | null }) {
+  const support = accounting?.support;
+  if (!support || support.coverage.total === 0) return null;
+  const unknown = support.unknown.length;
+  return (
+    <div className="usage-summary" data-support="true">
+      <span>Support</span>
+      <strong className="usage-number">{support.tokens.total > 0 ? support.tokens.total.toLocaleString() : "—"}</strong>
+      <small className="usage-split">
+        {support.coverage.total} {support.coverage.total === 1 ? "job" : "jobs"} · {support.costUsd == null ? "cost unknown" : "$" + support.costUsd.toFixed(2) + (support.costComplete ? "" : " known · rest unknown") + (support.costBasis === "estimate" ? " est." : "")}
+      </small>
+      {unknown > 0 && (
+        <small className="usage-split" data-flagged="true" title={support.unknown.map(entry => entry.reason).join("; ")}>
+          {unknown} unknown
+        </small>
+      )}
+    </div>
   );
 }
 

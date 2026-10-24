@@ -36,6 +36,7 @@ Responsive chore agenda: Me | Both | partner tabs, collapsible week strip, focus
 - Day chips: past days and days already holding a slot of that chore are disabled. A met period target never disables a day (SCH-29): Catalogue to-dos stay listed as `extra` (amber `n/n` tag, optional) and a placement past target shows an amber `rank/target` tag (`ChoreSlot.over`). Flexible routine items still stop at their target. A Mon–Sun week can straddle two monthly periods; each day uses its own period.
 - Move = upsert the same slot (item/period/index) to a new day; Undo restores the old day. Unassign deletes only that slot.
 - Person filter only filters. Responsibility changes write `items.responsible_user_id` (item-level): a swipe on a routine hands the **whole routine** over (no per-slot owner column); Catalogue instances take the swiped person at creation. Rows are outlined in the owner's person-absolute color.
+- Done / Reopen of one slot go through `completeItemsBulk` / `uncompleteItemsBulk` (`src/features/items/bulkComplete.ts`, one entry) — optimistic, idempotent, queueable; routine slot writes patch the schedules cache first (`useFlexibleRoutines.ts`). SCH-30.
 - Completing writes the actual time to `occurrence_date` and the slot to `metadata_json.planned_for`. No time-spent prompt.
 
 ## Common edit scenarios

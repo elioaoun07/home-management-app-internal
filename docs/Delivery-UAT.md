@@ -34,6 +34,51 @@ Repeat this block per scenario, replacing all placeholders:
 
 Before any new session, use the [DLV-137 readiness checklist/report](<../ERA Notes/10 - Project Management/Plans/Delivery V2.md#pre-launch-readiness-report--2026-10-19>). Recording a blocked report requires no launch.
 
+## ERA Steward sign-off — 2026-10-24
+
+**Item:** [DLV-144](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-144>), closing the three phases of the [sign-off plan](ERA-Steward-Signoff-Plan-2026-10-24.md). **Build:** direct source delivery on this checkout (HEAD `e0ea5edb` plus uncommitted work; no commit made), not a Delivery run. Files are listed in the Master Book's **Touches**. Local desktop assets serve the Support card after `pnpm pm:build-app` and a bridge restart; nothing is deployed to hosted `/pm/live`.
+
+**Closure statement to record when M1–M5 pass:** *ERA Steward is accepted for routine delivery initiation and deterministic monitoring, with owner plan approval and Apply, explicit support escalation, and disclosed budget limits.*
+
+**Automated closure — PASS (agent-run, offline, replay-only, 2026-10-24).** `tests/delivery-v2/steward-closure.test.ts`, 9 cases over the real Start route, the real journey, the Steward tools, the support ledger and the candidate-test gate with fake provider events:
+
+| Plan check | Result |
+| --- | --- |
+| 1. Success, repeated reads, lost Start reply and reconnect keep one request/run and cause zero supervision-model calls | PASS: one POST, one run, provider calls = the two delivery jobs |
+| 2. Stale connection, duplicate and unexpected failure cause no new Start, repair or fallback | PASS |
+| 3. Generic agent/shell request denied; authorized support linked and counted; unknown usage visible; limits block more | PASS |
+| 4. Failing mandatory candidate test blocks verification and Apply; passing evidence bound to the exact candidate; owner gates intact | PASS |
+
+Wider run: Delivery V2 + PM UI + relay/bridge, one invocation, **155 files passed, 2,819 tests passed, 0 failed, 8 existing opt-in skips**; `pnpm typecheck`, scoped ESLint and `pnpm pm:build-app` pass. No paid or live call, no Docker, no Start, no policy change, no DB write. Not run: `pnpm lint` (repo-wide debt), the opt-in Docker witnesses.
+
+**Review corrections — PASS, 2026-10-24:** final single invocation **241 tests passed across 13 files**, including the existing R44 fixture and adjacent auth/launch/relay paths; typecheck, scoped ESLint, PM build, PM lint and Feature Index pass. The restricted server credential now refuses a second UUID for any work with a launch receipt, including a refused or closed run; retry permission cannot be supplied by Steward. Default candidate-test patterns cover `tests/` and `src/`, and incomplete file summaries cannot pass. Missing input/output counters remain unknown; partial costs and estimates stay labelled; effort matching does not claim model matching. Applied uses the real owner-action label. The preceding 2,819-test aggregate is earlier evidence, not a rerun of this revision.
+
+**R44 fixture follow-up:** the first rerun failed during shared ESLint plugin loading (`spawnSync ... ETIMEDOUT`, 30 seconds; its five cases consequently did not execute). The fixture now loads the same real ESLint configuration in one repository-root API instance and validates the same virtual client/server paths. Cases, assertions, warning levels, exclusions, 30-second child timeout and per-test deadlines are unchanged. It passed 5/5 alone in 2.26 seconds, then in the final 241-test aggregate. Current SHA-256: `e8315a401bef18d5f400a30ec3e69cfa69404ad6dfd7578e235671581298fdfa`; retained diff `.tmp/steward-fix-review/raw-fetch-fixture.diff`. This is a further local test-only correction; original C1 and Apply evidence remain unchanged.
+
+### Activation and owner scenarios
+
+> **M1 · Steward tools only · [DLV-144](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-144>) Phase 1**
+> **Type:** feature. **Prerequisites:** `pnpm pm --bridge` running; `pnpm pm:pair` then `pnpm pm:steward pair <CODE>`; the Steward's tool list contains only `node scripts/delivery-v2/steward-mcp.mjs` for Command Center and no Codex/Claude task or shell tool.
+> **Steps:** (1) Ask the Steward to list its tools. Expect `start-delivery`, `read-request`, `read-run`, `wait-for-changes` and nothing that runs Codex, Claude, a shell or Docker. (2) Ask it to run `git status` or start a Codex task. Expect a refusal or no such tool. (3) Ask it for R44's status. Expect a one-line template with the run id, state, owner next action and a usage line.
+> **Edge:** if the Steward still has a shell or Codex tool, this scenario FAILS regardless of the server; remove the tool.
+> **Actual:** Pending.
+
+> **M2 · Read-only check against the existing R44 run · plan Phase 3**
+> **Steps:** (1) `read-run` for `r-46688acd1b86`; `wait-for-changes` with that run id and `timeout_seconds` 5. Expect CLOSED/verified candidate, `owner next: Applied`, the same run id, and usage lines with Delivery near the recorded 322,267 tokens, no recorded Support jobs and `Chat not measured`. These figures do not reconstruct historical unmeasured support. (2) Restart only the tool server and repeat. Expect identical ids. (3) Check the Codex usage page and Agent SDK consumption before and after. Expect no new coding-agent turn. Do not call `start-delivery` during this scenario. The historical request belongs to its original authenticated actor, so `read-request` with the new Steward credential may correctly return unknown; use `read-run` for this acceptance check.
+> **Actual:** Pending.
+
+> **M3 · Candidate tests in the real checker · Phase 2**
+> **Remaining prerequisite:** install the corrected `candidateTests` block from the [runbook](ERA-Steward-Runbook.md#candidate-tests) as a new policy revision, then **Check readiness**. Keep the default patterns by omitting `include`.
+> **Actual checker witness: PASS (agent, 2026-10-24).** The installed image `sha256:6926e678e4aea4991cd6efcccb92036be01caf7e424c2467936fe319e4b279b6` and its existing pinned dependency volume ran Vitest 4.1.7 with the canonical unprivileged checker flags, no network, read-only candidate/dependencies, the repo's Vitest config and paid-API block. One synthetic test passed and graded satisfied; the deliberately failing control exited 1 (`expected 4 to be 5`) and graded `candidate-tests-failed`. All disposable containers/volumes were removed. The first fixture-staging attempt failed with EACCES; only the disposable staging helper's ownership was corrected before the checks ran. No provider, policy, environment installation or production data changed. Operational evidence: `.tmp/steward-fix-review/checker-probe.json`; installed-policy activation remains Pending. No further Docker existence check is needed for this exact environment.
+
+> **M4 · Physical phone · R44 Applied run**
+> **Steps:** on the phone through `/pm/live`, open run `r-46688acd1b86`. Expect Applied, C1 with two paths, both checks passed. Reload and reconnect. Expect the same run, result and application ids and no new Start. **Actual:** Pending.
+
+> **M5 · Post-Apply fixture repair review**
+> **Agent review: PASS (2026-10-24).** Reviewed `tests/pm-ui/raw-fetch-guard.test.ts`, the original post-Apply diff and the further local correction above: the same five client/server fixtures and assertions are preserved, now using one shared real ESLint API instance, result-to-path checks and virtual filenames. No temporary fixture files are needed. Frozen C1 is unchanged. The owner may use this review when recording final acceptance; no further code change is requested here.
+
+**Untested limitations:** the external Steward tool configuration (cannot be inspected from this repo); installed-policy activation; a hosted `/pm/live` deployment (the Support card is desktop only and the relay does not carry it); a real support job (the CLI and ledger are fixture-tested); Chat overhead (only owner-entered); a hard spend cap or unattended operation (DLV-114); a stale `.delivery/v2/steward/last-known` file after the owner clears pairing. The corrected Support card is render-tested; a fresh browser preview failed during the browser tool's Windows sandbox initialization, so no new visual/physical-phone PASS is claimed.
+
 ### R44 blocked receipt — historical diagnosis
 
 **Read-only review, 2026-10-19; not current readiness.** `.tmp/delivery-recovery-20261018/continuation/r44-pilot-coordination-status.json` records the blocked checkpoint at **2026-10-18T11:15:50.6538865Z**: policy 8/catalogue 4, exact Codex `gpt-6-luna` / low / focused, owner KIT-11 Passed gate, and satisfied policy/selection/source/coordination/checks/budget. One refresh is recorded completed; the final passive read has `ready: false`, `expiresAt: null`, disabled Start, no launch command/run/planning/implementation IDs and zero dispatched provider jobs. This is blocked before launch, not a failed delivery run.

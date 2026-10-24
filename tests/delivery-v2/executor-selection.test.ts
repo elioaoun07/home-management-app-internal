@@ -21,6 +21,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
@@ -384,6 +385,7 @@ describe("execution policy — a document, with structural refusals", () => {
 
 describe("the deliver route — one path, explicit provider per run", () => {
   const PM_REL = join("ERA Notes", "10 - Project Management");
+  const launchBody = (extra: Record<string, unknown> = {}) => ({ command_id: randomUUID(), file: "Delivery/4 - Checklist.md", expectId: "DLV-99", ...extra });
   let headers: Record<string, string> = {};
   const pair = (root: string) => {
     const { code } = issuePairingCode({ root });
@@ -411,43 +413,48 @@ describe("the deliver route — one path, explicit provider per run", () => {
 
   it("refuses to dispatch a run that names no executor, even with an old installation selection", async () => {
     const root = installation();
+    const store = openStore({ path: join(root, ".delivery", "v2", "supervisor.sqlite") });
     try {
       setExecutorSelection({ root, choice: "claude", actor: "elio" });
       const response = await routeDeliveryV2(
-        { method: "POST", path: "/api/delivery/v2/deliver", headers, body: {} },
-        { root, store: {}, deliver: async () => ({ ok: true }) },
+        { method: "POST", path: "/api/delivery/v2/deliver", headers, body: launchBody() },
+        { root, store, deliver: async () => ({ ok: true }) },
       );
       expect(response?.status).toBe(409);
       expect(response?.json.error).toBe(EXECUTOR_REFUSALS.NONE_SELECTED);
     } finally {
+      store.close();
       rmSync(root, { recursive: true, force: true });
     }
   });
 
   it("refuses an unknown executor instead of resolving it to the other one", async () => {
     const root = installation();
+    const store = openStore({ path: join(root, ".delivery", "v2", "supervisor.sqlite") });
     try {
       const response = await routeDeliveryV2(
-        { method: "POST", path: "/api/delivery/v2/deliver", headers, body: { executor: "gpt" } },
-        { root, store: {}, deliver: async () => ({ ok: true }) },
+        { method: "POST", path: "/api/delivery/v2/deliver", headers, body: launchBody({ executor: "gpt" }) },
+        { root, store, deliver: async () => ({ ok: true }) },
       );
       expect(response?.status).toBe(409);
       expect(response?.json.error).toBe(EXECUTOR_REFUSALS.UNKNOWN);
     } finally {
+      store.close();
       rmSync(root, { recursive: true, force: true });
     }
   });
 
   it("hands the run's own executor to the policy layer; the retired selection file is ignored", async () => {
     const root = installation();
+    const store = openStore({ path: join(root, ".delivery", "v2", "supervisor.sqlite") });
     try {
       setExecutorSelection({ root, choice: "claude", actor: "elio" });
       let seen: string | null = null;
       await routeDeliveryV2(
-        { method: "POST", path: "/api/delivery/v2/deliver", headers, body: { executor: "codex" } },
+        { method: "POST", path: "/api/delivery/v2/deliver", headers, body: launchBody({ executor: "codex" }) },
         {
           root,
-          store: {},
+          store,
           deliver: async (request: { executor: string }) => {
             seen = request.executor;
             return { ok: true };
@@ -456,6 +463,7 @@ describe("the deliver route — one path, explicit provider per run", () => {
       );
       expect(seen).toBe("codex-exec-sdk");
     } finally {
+      store.close();
       rmSync(root, { recursive: true, force: true });
     }
   });

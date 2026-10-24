@@ -14,7 +14,6 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 
 ## Now
 
-
 - [ ] **R43** Verify hot-child RLS and read contracts — [criteria](<PM Tooling — Master Book.md#r43>) _(blocker - M)_
 - [ ] **R44** Guard new client mutations against raw fetch — [criteria](<PM Tooling — Master Book.md#r44>) _(blocker - S)_
 

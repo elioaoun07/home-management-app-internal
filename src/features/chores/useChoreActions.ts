@@ -1,6 +1,6 @@
 "use client";
 
-import { useBulkComplete } from "@/features/items/bulkComplete";
+import { isRecurringItem, useBulkComplete } from "@/features/items/bulkComplete";
 import { useBulkItems } from "@/features/items/bulkItems";
 import { useItemActionsWithToast } from "@/features/items/useItemActions";
 import {
@@ -8,12 +8,13 @@ import {
   useUnscheduleRoutine,
 } from "@/features/items/useFlexibleRoutines";
 import {
-  useCreateReminder,
-  useCreateTask,
-  useDeleteItem,
   useUpdateItem,
   useUpdateReminderDetails,
 } from "@/features/items/useItems";
+import {
+  getMemberDisplayName,
+  useHouseholdMembers,
+} from "@/hooks/useHouseholdMembers";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { buildTemplateInstanceInput } from "@/lib/schedule/catalogueInstance";
 import { ToastIcons } from "@/lib/toastIcons";
@@ -54,37 +55,118 @@ function notSaved() {
   toast.error("Not saved", { icon: ToastIcons.error });
 }
 
-/** Complete / reopen / skip / postpone one chore slot (existing occurrence primitives). */
+/** Items whose complete / reopen request is still going out (taps meanwhile are ignored). */
+const inFlight = new Set<string>();
+
+/**
+ * Complete / reopen / skip / postpone one chore slot. Done and Reopen go through
+ * the same optimistic, idempotent, queueable path as a grouped completion: the
+ * row flips before the request leaves. Skip and postpone keep the existing
+ * occurrence primitives.
+ */
 export function useChoreSlotActions(slot: ChoreSlot) {
   const actions = useItemActionsWithToast();
+  const { completeMany, reopenMany } = useBulkComplete();
+  const { data: household } = useHouseholdMembers();
   const plannedAt = slot.plannedAt;
   const item = slot.item;
 
-  const complete = () =>
-    actions.handleComplete(
-      item,
-      new Date().toISOString(),
-      undefined,
-      undefined,
-      false,
-      plannedAt,
+  // Someone else owns it: ask once, like every other completion does
+  const guard = (onConfirm: () => void): boolean => {
+    const me = household?.currentUserId ?? null;
+    const owner = item.responsible_user_id;
+    if (!me || !owner || owner === me) return false;
+    toast.warning(
+      `${getMemberDisplayName(household?.members ?? [], owner) || "Your partner"} is responsible for this`,
+      {
+        icon: ToastIcons.partner,
+        duration: 6000,
+        action: { label: "Override", onClick: onConfirm },
+      },
     );
+    return true;
+  };
 
-  const completeAt = (completedAt: string) =>
-    actions.handleComplete(
-      item,
-      completedAt,
-      undefined,
-      undefined,
-      false,
-      plannedAt,
-    );
+  const send = async (completedAt: string, plannedFor: string) => {
+    if (inFlight.has(item.id)) return;
+    inFlight.add(item.id);
+    try {
+      const result = await completeMany([
+        { item, occurrenceDate: completedAt, plannedFor },
+      ]);
+      const completed = [...result.done, ...result.queued];
+      if (completed.length === 0) {
+        notSaved();
+        return;
+      }
+      toast.success(`"${item.title}" completed!`, {
+        icon: ToastIcons.success,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            void reopenMany(completed).then(({ ok }) => {
+              if (!ok) notSaved();
+            });
+          },
+        },
+      });
+    } finally {
+      inFlight.delete(item.id);
+    }
+  };
 
-  const reopen = () =>
-    actions.handleUncomplete(
-      item,
-      slot.completedAction?.occurrence_date ?? plannedAt,
-    );
+  const completeAt = (completedAt: string, override = false): Promise<void> => {
+    if (!override && guard(() => void completeAt(completedAt, true))) {
+      return Promise.resolve();
+    }
+    void send(completedAt, plannedAt);
+    return Promise.resolve();
+  };
+
+  const complete = () => completeAt(new Date().toISOString());
+
+  const reopen = (override = false): Promise<void> => {
+    if (!override && guard(() => void reopen(true))) return Promise.resolve();
+    if (inFlight.has(item.id)) return Promise.resolve();
+    const entry = {
+      item_id: item.id,
+      occurrence_date: slot.completedAction?.occurrence_date ?? plannedAt,
+      is_recurring: isRecurringItem(item),
+    };
+    const plannedFor =
+      typeof slot.completedAction?.metadata_json?.planned_for === "string"
+        ? slot.completedAction.metadata_json.planned_for
+        : plannedAt;
+    inFlight.add(item.id);
+    void reopenMany([entry])
+      .then(({ ok }) => {
+        if (!ok) {
+          notSaved();
+          return;
+        }
+        toast.success(`"${item.title}" marked as pending`, {
+          icon: ToastIcons.update,
+          duration: 4000,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              void completeMany([
+                {
+                  item,
+                  occurrenceDate: entry.occurrence_date,
+                  plannedFor,
+                },
+              ]).then((result) => {
+                if (result.refused.length > 0) notSaved();
+              });
+            },
+          },
+        });
+      })
+      .finally(() => inFlight.delete(item.id));
+    return Promise.resolve();
+  };
 
   const skip = (reason?: string) =>
     actions.handleSkip(item, plannedAt, reason, false, plannedAt);
@@ -262,9 +344,6 @@ function dueAt(date: string, time: string | null): string {
 export function useChoreAssign(schedules: FlexibleSchedule[]) {
   const scheduleRoutine = useScheduleRoutine();
   const unscheduleRoutine = useUnscheduleRoutine();
-  const createReminder = useCreateReminder();
-  const createTask = useCreateTask();
-  const deleteItem = useDeleteItem();
   const updateReminder = useUpdateReminderDetails();
   const updateItem = useUpdateItem();
   const queryClient = useQueryClient();
@@ -273,9 +352,6 @@ export function useChoreAssign(schedules: FlexibleSchedule[]) {
   const isPending =
     scheduleRoutine.isPending ||
     unscheduleRoutine.isPending ||
-    createReminder.isPending ||
-    createTask.isPending ||
-    deleteItem.isPending ||
     updateReminder.isPending ||
     updateItem.isPending;
 
@@ -316,20 +392,30 @@ export function useChoreAssign(schedules: FlexibleSchedule[]) {
       item.id,
       periodStart,
     );
-    const undoHandOver = await handOver(item, responsibleUserId);
-    if (!undoHandOver) {
-      notSaved();
-      return;
-    }
-    try {
-      await scheduleRoutine.mutateAsync({
+    // The slot shows at once; the hand-over (a person was picked) runs beside it
+    const placed = scheduleRoutine
+      .mutateAsync({
         itemId: item.id,
         periodStartDate: periodStart,
         scheduledForDate: date,
         scheduledForTime: time,
         occurrenceIndex,
-      });
-    } catch {
+      })
+      .then(
+        () => true,
+        () => false,
+      );
+    const undoHandOver = await handOver(item, responsibleUserId);
+    const ok = await placed;
+    if (!undoHandOver || !ok) {
+      // All or nothing: take back whichever half did go through
+      if (ok) {
+        unscheduleRoutine.mutate(
+          { itemId: item.id, periodStartDate: periodStart, occurrenceIndex },
+          { onError: notSaved },
+        );
+      }
+      if (undoHandOver && !ok) undoHandOver();
       notSaved();
       return;
     }
@@ -355,37 +441,38 @@ export function useChoreAssign(schedules: FlexibleSchedule[]) {
     time: string | null,
     responsibleUserId: string | undefined,
     room?: { id: string; name: string },
+    userId: string | null = null,
   ) => {
-    const input = buildTemplateInstanceInput(
-      tpl,
-      dueAt(date, time),
-      responsibleUserId,
-      { allDay: time === null, room },
-    );
-    let createdId: string | undefined;
-    try {
-      const created =
-        input.type === "reminder"
-          ? await createReminder.mutateAsync(input)
-          : await createTask.mutateAsync(input);
-      createdId = created?.id;
-    } catch {
-      notSaved();
-      return;
-    }
-    if (!createdId) {
-      notSaved();
-      return;
-    }
-    const id = createdId;
-    toast.success(`${room ? `${tpl.name} · ${room.name}` : tpl.name} · ${dayLabel(date)}`, {
-      icon: ToastIcons.create,
-      duration: 4000,
-      action: {
-        label: "Undo",
-        onClick: () => deleteItem.mutate(id, { onError: notSaved }),
-      },
-    });
+    // Same optimistic, idempotent, queueable path as the Assign form's Save:
+    // the row is on the agenda before the request leaves, so don't wait for it
+    void (async () => {
+      const result = await bulk.createMany(
+        [
+          buildTemplateInstanceInput(tpl, dueAt(date, time), responsibleUserId, {
+            allDay: time === null,
+            room,
+          }),
+        ],
+        { userId },
+      );
+      const created = [...result.saved, ...result.queued];
+      if (created.length === 0) {
+        notSaved();
+        return;
+      }
+      toast.success(`${room ? `${tpl.name} · ${room.name}` : tpl.name} · ${dayLabel(date)}`, {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            void bulk.deleteMany(created).then(({ ok }) => {
+              if (!ok) notSaved();
+            });
+          },
+        },
+      });
+    })();
   };
 
   const placeUndated = async (

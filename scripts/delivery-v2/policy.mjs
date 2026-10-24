@@ -56,6 +56,7 @@ import {
   PERMITTED_EFFECTS,
   REQUESTED_DISPOSITIONS,
   authorizeGrant,
+  contentId,
   deepFreeze,
   makeCriterion,
   normalizePath,
@@ -63,6 +64,7 @@ import {
 import { ENTRY_REFUSALS, deliverSelection } from "./entry.mjs";
 import { ADMISSION_REFUSALS, RESOURCE_UNITS } from "./jobs.mjs";
 import { DEFAULT_WARN_PERCENT, ENFORCEMENT_MODES } from "./budget.mjs";
+import { DEFAULT_TEST_PATTERNS } from "./candidate-tests.mjs";
 import { DEFAULT_CONCURRENCY, WRITER_CEILING } from "./coordination.mjs";
 import { acceptanceText, freezeSelectedItem } from "./work-ref.mjs";
 import { splitTaskInput, preparedPlanFor } from "./task-input.mjs";
@@ -75,6 +77,7 @@ import {
   validateRunSettings,
 } from "./adapters/registry.mjs";
 import { makeBoundaryConfig } from "./worker-boundary.mjs";
+import { authorizedPolicy } from "./authorization.mjs";
 
 /** The two visible work profiles. FAST/DEEP remain the legacy lane names. */
 export const WORK_PROFILES = Object.freeze(["focused", "investigate"]);
@@ -500,6 +503,31 @@ export function validateExecutionPolicy(raw) {
     }
   }
 
+  // Mandatory candidate tests (sign-off plan, 2026-10-24): the test files a
+  // candidate adds, changes or has its plan name are executed against the frozen
+  // candidate in the protected checker. `argv` is pinned here; the candidate only
+  // contributes paths, and only paths matching `include`.
+  let candidateTests = null;
+  if (isPlainObject(verificationsInput.candidateTests)) {
+    const entry = verificationsInput.candidateTests;
+    const argv = Array.isArray(entry.argv) ? entry.argv.filter((arg) => typeof arg === "string" && arg !== "") : [];
+    const include = Array.isArray(entry.include) ? entry.include.filter(isNonEmptyString) : [...DEFAULT_TEST_PATTERNS];
+    if (entry.enabled !== false && (!argv.length || argv.length !== (entry.argv || []).length)) {
+      bad(POLICY_REFUSALS.INVALID, "checks.requiredVerifications.candidateTests.argv must be a non-empty list of strings");
+    } else if (include.length === 0 || include.some((glob) => glob.startsWith("/") || glob.includes("..") || glob.includes("\\"))) {
+      bad(POLICY_REFUSALS.INVALID, "checks.requiredVerifications.candidateTests.include must be repo-relative glob patterns");
+    } else if (entry.enforcement != null && !["required", "advisory"].includes(entry.enforcement)) {
+      bad(POLICY_REFUSALS.INVALID, "checks.requiredVerifications.candidateTests.enforcement must be required or advisory");
+    } else {
+      candidateTests = {
+        enabled: entry.enabled !== false,
+        argv: Object.freeze([...argv]),
+        include: Object.freeze([...include]),
+        enforcement: entry.enforcement === "advisory" ? "advisory" : "required",
+      };
+    }
+  }
+
   // --- apply (Command Center Phase 4) ------------------------------------------
   // Only additions to the integrator's built-in protected paths. Nothing here can
   // remove one, and there is no switch that lets an application run without the
@@ -611,7 +639,9 @@ export function validateExecutionPolicy(raw) {
         catalog,
       },
       runtime,
-      checks: { specs, inputs: Object.freeze(checkInputs), requiredVerifications: Object.freeze({ typecheck }) },
+      // `candidateTests` is present only when configured, so adding the capability
+      // does not change the settings fingerprint an existing renewal is bound to.
+      checks: { specs, inputs: Object.freeze(checkInputs), requiredVerifications: Object.freeze({ typecheck, ...(candidateTests ? { candidateTests } : {}) }) },
       apply: { protectedPaths: Object.freeze(applyProtected) },
       dispatch,
       concurrency,
@@ -703,7 +733,13 @@ export function loadExecutionPolicy({ root, readFile = null }) {
     });
   }
   const validated = validateExecutionPolicy(parsed);
-  return deepFreeze({ ...validated, path: normalizePath(path) });
+  if (!validated.ok) return deepFreeze({ ...validated, path: normalizePath(path) });
+  try {
+    return deepFreeze({ ...validated, policy: authorizedPolicy({ root, policy: validated.policy }), path: normalizePath(path) });
+  } catch {
+    return deepFreeze({ ok: false, policy: null, path: normalizePath(path),
+      refusals: [{ code: "authorization-unreadable", detail: "Authorization record unreadable; restore the retained record" }] });
+  }
 }
 
 /**
@@ -763,7 +799,7 @@ export function dispositionWithinCeiling(policy, requested) {
  * @param {{policy:object, contract:object, profile:object}} input
  */
 export function buildGrant({ policy, contract, profile }) {
-  return authorizeGrant({
+  const grant = authorizeGrant({
     contract_id: contract.contract_id,
     contract_revision: contract.revision,
     policy_revision: policy.policy_revision,
@@ -777,6 +813,10 @@ export function buildGrant({ policy, contract, profile }) {
     expires_at: policy.grant.expires_at,
     actor: policy.authorized_by,
   });
+  return deepFreeze({ ...grant, ...(policy.authorization ? {
+    grant_id: contentId("g", { grant: grant.grant_id, authorization: policy.authorization.key }),
+    authorization_key: policy.authorization.key,
+  } : {}) });
 }
 
 /**

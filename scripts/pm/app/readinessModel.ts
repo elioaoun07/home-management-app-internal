@@ -36,7 +36,7 @@ export function readinessRows(result: V2Readiness | null | undefined): Readiness
 }
 
 const CODE_FIXES: Record<string, string> = {
-  "grant-expired": "Policy expired — renew it",
+  "grant-expired": "Authorization expired — check readiness",
   "owner-tests-pending": "Record your test result",
   "source-scope-unknown": "Add Touches to the item",
   "scope-not-authorized": "Item scope is outside the policy",
@@ -54,7 +54,8 @@ function stageFix(name: string, result: V2Readiness) {
     case "environment": return detail("environment") || "Environment check failed";
     case "runtime-binding": return "Worker image unavailable";
     case "egress": return "Worker network unavailable";
-    case "native-model": return "Model check failed — retry";
+    case "native-model": return result.nativeModelDiagnostics?.code === "native-probe-timeout" || result.nativeModelDiagnostics?.transport?.process?.outcome === "timed-out"
+      ? "Model check timed out" : "Model check failed";
     default: return "Check failed — retry";
   }
 }
@@ -77,4 +78,9 @@ export function readinessIssues(result: V2Readiness | null | undefined, rows = r
     }
   }
   return [...issues];
+}
+
+/** Start already attempted the live checks; missing evidence is now a blocker. */
+export function startReadinessIssues(result: V2Readiness | null | undefined) {
+  return readinessIssues(result, readinessRows(result).map(row => ({ ...row, state: row.state === "start" ? "fix" : row.state })));
 }

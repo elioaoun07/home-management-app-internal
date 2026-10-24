@@ -13,6 +13,7 @@ import {
   reviewTabs,
 } from "../../scripts/pm/app/deliveryReviewModel";
 import {
+  ActivityReview,
   ChecksReview,
   PlanReview,
   UsageSummary,
@@ -31,8 +32,34 @@ describe("Delivery decision workspace", () => {
     expect(reviewStatus(d)).toBe("Rolled back");
     d.ownerAction = { kind: "application-checks", label: "Checks" };
     expect(defaultReviewTab(d)).toBe("checks");
+    d.run.lifecycle = "WAITING";
+    d.ownerAction = { kind: "review-plan", label: "Review plan" };
     d.plans[0].status = "proposed";
     expect(defaultReviewTab(d)).toBe("plan");
+  });
+  it.each([
+    ["cancelled", "Cancelled"],
+    ["failed", "Failed"],
+    ["verified_candidate", "Candidate verified"],
+  ])("keeps closed %s consistent in Activity and the default tab despite a retained proposal", (outcome, label) => {
+    const d = deliveryReviewFixture();
+    d.applications = [];
+    d.run.closed_outcome = outcome;
+    d.ownerAction = { kind: "none", label };
+    d.plans[0].status = "proposed";
+    d.stage = { stages: ["Plan", "Build", "Check", "Review"], current: 0, branch: outcome === "verified_candidate" ? null : outcome };
+    const html = renderToStaticMarkup(createElement(ActivityReview, { detail: d }));
+    expect(html).toContain(`<dt>Status</dt><dd>${label}</dd>`);
+    expect(html).not.toContain("<dt>Status</dt><dd>Plan</dd>");
+    expect(defaultReviewTab(d)).toBe("outcome");
+  });
+  it("shows Stop requested rather than Plan while cancellation is not yet confirmed", () => {
+    const d = deliveryReviewFixture();
+    d.applications = [];
+    d.run.lifecycle = "WAITING";
+    d.run.closed_outcome = null;
+    d.stage = { stages: ["Plan", "Build", "Check", "Review"], current: 0, branch: "stop-requested" };
+    expect(renderToStaticMarkup(createElement(ActivityReview, { detail: d }))).toContain("<dt>Status</dt><dd>Stop requested</dd>");
   });
   it("summarizes the outcome from recorded facts only", () => {
     const d = deliveryReviewFixture();

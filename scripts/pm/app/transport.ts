@@ -16,7 +16,14 @@ export class PmError extends Error {
 }
 
 /** A recorded/server-confirmed refusal, rather than an uncertain transport error. */
-export class RefusedCommand extends PmError {}
+export class RefusedCommand extends PmError {
+  persistenceError: string | null = null;
+  commandId?: string;
+  receivedAt?: string;
+  constructor(message: string, status: number, public payload: Record<string, unknown> = {}) {
+    super(message, status);
+  }
+}
 
 /** What a command's receipt says so far. None of these is a failure. */
 export type ReceiptState = "unsent" | "sent" | "acknowledged" | "unknown" | "expired";
@@ -102,6 +109,8 @@ export interface Transport {
   v2Readiness?(selection: V2ReadinessSelection, signal?: AbortSignal): Promise<V2Readiness | null>;
   /** One V2 command. `body.command_id` is minted before the first send and reused on retry. */
   v2Command<T>(path: string, body: Record<string, unknown>, timeoutMs?: number): Promise<T>;
+  /** Observe an existing command only. A missing receipt must never send it. */
+  v2CommandStatus?<T>(commandId: string): Promise<T>;
   /** Where a V1 session is read when this transport cannot show it. */
   v1SessionHref(sessionId: string): string | null;
 }

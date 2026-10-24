@@ -174,7 +174,7 @@ export function createRelayTransport({
       delete result.receipt;
       return result;
     }
-    if (receipt.state === "refused") throw new RefusedCommand(outcome.row.error || "Refused", 409);
+    if (receipt.state === "refused") throw new RefusedCommand(outcome.row.error || "Refused", 409, outcome.row.result || {});
     throw new PendingCommand(id, receipt.state === "expired" ? "expired" : "unknown");
   }
 
@@ -406,6 +406,20 @@ export function createRelayTransport({
       await readyPromise;
       const capabilities = payloadOf<{ catalogue?: V2Catalogue | null }>(ROW_KINDS.CAPABILITIES);
       return capabilities?.catalogue || { executors: [], policy: null, refusals: [{ code: "no-capabilities", detail: null }] };
+    },
+
+    async v2CommandStatus<T>(id: string): Promise<T> {
+      await readyPromise;
+      if (!tracker || !ownerId) throw new PmError("Sign in", 401);
+      const row = await tracker.refresh(id);
+      const receipt = receiptState(row);
+      if (row && receipt.state === "done") {
+        const result = { ...(row.result || {}) };
+        delete result.receipt;
+        return result as T;
+      }
+      if (row && receipt.state === "refused") throw new RefusedCommand(row.error || "Refused", 409, row.result || {});
+      throw new PendingCommand(id, receipt.state === "expired" ? "expired" : receipt.state === "acknowledged" ? "acknowledged" : "unknown");
     },
 
     async v2Command<T>(path: string, body: Record<string, unknown>): Promise<T> {

@@ -247,6 +247,7 @@ export default function ChoresView({
         // The template's default owner applies unless swiped to someone else
         userId ?? todo.responsibleUserId ?? undefined,
         todo.roomId && todo.room ? { id: todo.roomId, name: todo.room } : undefined,
+        currentUserId,
       );
     } else if (todo.kind === "undated" && todo.item) {
       await assign.placeUndated(todo.item, option.date, time, userId);
@@ -273,7 +274,8 @@ export default function ChoresView({
     const templateEntries = entries.filter(
       (e) => e.todo.kind === "template" && e.todo.template,
     );
-    const refused = await assign.placeTemplates(
+    // The batch goes out while the routine / undated placements are written
+    const batch = assign.placeTemplates(
       templateEntries.map((e) => ({
         tpl: e.todo.template!,
         date: e.date,
@@ -286,14 +288,14 @@ export default function ChoresView({
       })),
       currentUserId,
     );
-    // What the server refused goes back into the form; nothing is lost
-    for (const position of refused) {
-      const e = templateEntries[position];
-      drafts.stage(e.todo, e.weekStart, e.date, e.time, e.userId);
-    }
     for (const e of entries.filter((x) => x.todo.kind !== "template")) {
       const option = e.todo.days.find((d) => d.date === e.date);
       if (option) await pickDay(e.todo, option, e.time, owner(e.userId));
+    }
+    // What the server refused goes back into the form; nothing is lost
+    for (const position of await batch) {
+      const e = templateEntries[position];
+      drafts.stage(e.todo, e.weekStart, e.date, e.time, e.userId);
     }
   };
   const reassign = (slot: ChoreSlot, side: ChoreSwipeSide) => {

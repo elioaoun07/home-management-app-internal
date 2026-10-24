@@ -6,6 +6,8 @@ import {
   StewardRequests,
 } from "../../scripts/pm/app/StewardRequests";
 import type { StewardRequest } from "../../scripts/pm/app/types";
+import { evaluateReadiness, LAUNCH_GATES, readinessFact } from "../../scripts/delivery-v2/readiness.mjs";
+import type { V2Readiness } from "../../scripts/pm/app/types";
 
 const at = "2026-10-20T10:00:00.000Z",
   now = Date.parse(at);
@@ -35,6 +37,20 @@ const render = (row = request, time = now) =>
   );
 
 describe("shared desktop/phone Steward status", () => {
+  it("keeps the recorded Start timeout visible after live observations expire", () => {
+    const facts = Object.fromEntries(LAUNCH_GATES.map(gate => [gate, readinessFact("satisfied", gate)]));
+    facts.modelAvailability = readinessFact("unknown", "native-model-unprobed");
+    const readiness: V2Readiness = { ...evaluateReadiness({ facts }), status: "blocked", authority: "inspection-only",
+      selection: { file: request.file, id: request.workId, executor: "codex", model: null, effort: null, workProfile: "focused" },
+      blockers: [{ gate: "modelAvailability", state: "unknown", code: "native-model-unprobed" }],
+      nextActions: [], expiresAt: null, nativeModelDiagnostics: { code: "native-probe-timeout" },
+      collection: { stages: [{ name: "native-model", outcome: "blocked", code: "native-model-unavailable", durationMs: 10000 }] } };
+    expect(render({ ...request, status: "blocked", blocker: { code: "delivery-not-ready", readiness } })).toContain("Model check timed out");
+  });
+  it("preserves ordinary owner attribution for the same request receipt", () => {
+    expect(render({ ...request, initiatedBy: "Owner" })).toContain("Initiated by Owner");
+    expect(render({ ...request, initiatedBy: "Owner" })).not.toContain("Initiated by ERA Steward");
+  });
   it("attributes the actual entry with identity, timestamps, stage and evidence before a run", () => {
     const html = render();
     for (const text of [

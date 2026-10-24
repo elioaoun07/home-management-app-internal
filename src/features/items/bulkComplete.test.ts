@@ -120,6 +120,47 @@ describe("completeItemsBulk", () => {
   });
 });
 
+describe("a single chore slot (Done / Reopen)", () => {
+  it("shows done before the request has answered", async () => {
+    let answer: (r: Response) => void = () => {};
+    mock.safeFetch.mockImplementation(() => new Promise<Response>((resolve) => (answer = resolve)));
+    const pending = completeItemsBulk(qc, targets([room(1)]), { sleep: noSleep });
+    await vi.waitFor(() => expect(agenda(qc).find((i) => i.id === "item-1")?.status).toBe("completed"));
+    expect(mock.safeFetch).toHaveBeenCalledTimes(1);
+
+    answer(json({ results: [{ item_id: "item-1", ok: true }] }));
+    expect((await pending).done).toHaveLength(1);
+  });
+
+  it("reopens a routine slot whose stored action carries a different timestamp format", async () => {
+    mock.safeFetch.mockImplementation(answers());
+    qc.setQueryData(itemsKeys.allActions(), [
+      {
+        id: "a1", item_id: "routine", action_type: "completed",
+        occurrence_date: "2026-10-20T09:00:00+00:00", created_at: NOW,
+      },
+    ]);
+    const { ok } = await uncompleteItemsBulk(
+      qc,
+      [{ item_id: "routine", occurrence_date: "2026-10-20T09:00:00+00:00", is_recurring: true }],
+      { sleep: noSleep },
+    );
+    expect(ok).toBe(true);
+    expect(actions(qc)).toHaveLength(0);
+    expect(JSON.parse(String(mock.safeFetch.mock.calls[0][1].body)).entries[0]).toEqual({
+      item_id: "routine", occurrence_date: "2026-10-20T09:00:00+00:00", is_recurring: true,
+    });
+  });
+
+  it("an offline Done stays done and waits in the queue", async () => {
+    mock.safeFetch.mockRejectedValue(new OfflineError());
+    const { queued } = await completeItemsBulk(qc, targets([routine]), { sleep: noSleep });
+    expect(queued).toHaveLength(1);
+    expect(mock.addToQueue).toHaveBeenCalledTimes(1);
+    expect(actions(qc)).toHaveLength(1);
+  });
+});
+
 describe("uncompleteItemsBulk", () => {
   it("reopens them at once with one DELETE", async () => {
     mock.safeFetch.mockImplementation(answers());

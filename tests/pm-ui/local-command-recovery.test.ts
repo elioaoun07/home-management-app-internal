@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { safeFetch } from "../../src/lib/safeFetch";
 import { createLocalTransport } from "../../scripts/pm/app/localTransport";
-import { PendingCommand } from "../../scripts/pm/app/transport";
+import { PendingCommand, RefusedCommand } from "../../scripts/pm/app/transport";
 
 vi.mock("../../src/lib/safeFetch", () => ({ safeFetch: vi.fn(), RequestTimeoutError: class extends Error {} }));
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
@@ -34,4 +34,23 @@ it("keeps a lost POST response uncertain and reconciles before retry", async () 
   await expect(transport.v2Command("deliver", { command_id: "id" })).rejects.toBeInstanceOf(PendingCommand);
   expect(await transport.v2Command("deliver", { command_id: "id" })).toEqual({ ok: true, run_id: "one" });
   expect(safeFetch).toHaveBeenCalledTimes(1);
+});
+
+it("keeps exact refusal payloads from both Start and a later read-only receipt", async () => {
+  const outcome = { ok: false, error: "delivery-not-ready", readiness: { blockers: [{ code: "native-probe-timeout" }] } };
+  const transport = client(async () => response({ error: "unknown-command" }, 404));
+  vi.mocked(safeFetch).mockResolvedValueOnce(response(outcome, 409));
+  const failure = await transport.v2Command("deliver", { command_id: "id" }).catch(error => error);
+  expect(failure).toBeInstanceOf(RefusedCommand);
+  if (!(failure instanceof RefusedCommand)) throw failure;
+  expect(failure.payload).toEqual(outcome);
+  const reloaded = client(async () => response({ recorded: true, outcome }));
+  await expect(reloaded.v2CommandStatus!("id")).rejects.toMatchObject({ payload: outcome });
+  expect(safeFetch).toHaveBeenCalledTimes(1);
+});
+
+it("a read-only status check never POSTs even when the receipt is missing", async () => {
+  const transport = client(async () => response({ error: "unknown-command" }, 404));
+  await expect(transport.v2CommandStatus!("id")).rejects.toBeInstanceOf(PendingCommand);
+  expect(safeFetch).not.toHaveBeenCalled();
 });

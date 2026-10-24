@@ -1,9 +1,13 @@
 // DLV-140: observation of an existing launch, never a dispatcher or retry loop.
 // Uses the supervisor's receipts table; command_id remains DLV-138's launch id.
+// Ordinary Start uses the same receipt lifecycle without Steward attribution.
 import { canonicalJson, fingerprint } from "./contracts.mjs";
 
 const KIND = "steward-initiation";
+const LAUNCH_KIND = "delivery-initiation";
 const receiptId = (id) => "steward:" + id;
+export const getLaunchRequestReceipt = (store, id) =>
+  store.getReceipt(receiptId(id)) || store.getReceipt("launch:" + id);
 const parse = (value) => (value ? JSON.parse(String(value)) : null);
 
 export const DEFAULT_STEWARD_STALE_MS = 180_000;
@@ -16,9 +20,14 @@ export function stewardStaleMs(value) {
 
 /** One durable claim before the first await. Cross-process serialization is SQLite's. */
 export function acceptStewardRequest(store, body, actor, at) {
+  return acceptLaunchRequest(store, body, actor, at);
+}
+
+export function acceptLaunchRequest(store, body, actor, at, { restricted = false } = {}) {
   return store.transaction(() => {
-    const id = receiptId(body.command_id),
-      existing = store.getReceipt(id);
+    const steward = body.initiatedBy === "era-steward";
+    const id = steward ? receiptId(body.command_id) : "launch:" + body.command_id,
+      existing = getLaunchRequestReceipt(store, body.command_id);
     const digest = fingerprint(canonicalJson(body));
     if (existing) {
       if (existing.actor !== actor || existing.payload_digest !== digest)
@@ -27,12 +36,18 @@ export function acceptStewardRequest(store, body, actor, at) {
     }
     // Do not adopt a command initiated through another entry point.
     if (store.getCommand(body.command_id)) return { conflict: true };
-    const workKey =
-      "steward-work:" + body.file + ":" + String(body.expectId).toUpperCase();
-    const pending = store
-      .listReceipts(workKey)
+    const work = body.file + ":" + String(body.expectId).toUpperCase();
+    const workKey = "delivery-work:" + work;
+    const pending = [
+      ...store.listReceipts(workKey),
+      ...store.listReceipts("steward-work:" + work),
+    ]
       .map((row) => parse(row.observed_json))
       .find((record) => {
+        // Restricted credentials may recover their original UUID, never launch
+        // another attempt for the same work. Only the owner's normal controls
+        // can retry a refusal or a closed run, including historical launches.
+        if (restricted) return true;
         const command = store.getCommand(record.command_id);
         const outcome = record.outcome || parse(command?.outcome_json);
         if (!outcome) return true;
@@ -43,7 +58,7 @@ export function acceptStewardRequest(store, body, actor, at) {
     if (pending) return { conflict: true, command_id: pending.command_id };
     const record = {
       command_id: body.command_id,
-      initiatedBy: "ERA Steward",
+      initiatedBy: steward ? "ERA Steward" : "Owner",
       actor,
       file: body.file,
       workId: body.expectId || body.witness?.alias || "",
@@ -53,11 +68,11 @@ export function acceptStewardRequest(store, body, actor, at) {
       stage: "accepted",
       run_id: null,
       outcome: null,
-      evidence: [{ stage: "accepted", at, code: "steward-request-accepted" }],
+      evidence: [{ stage: "accepted", at, code: steward ? "steward-request-accepted" : "launch-request-accepted" }],
     };
     store.putReceipt({
       receipt_id: id,
-      kind: KIND,
+      kind: steward ? KIND : LAUNCH_KIND,
       subject_id: workKey,
       actor,
       payload_digest: digest,
@@ -77,7 +92,7 @@ export function updateStewardRequest(
   outcome = null,
 ) {
   return store.transaction(() => {
-    const row = store.getReceipt(receiptId(command_id));
+    const row = getLaunchRequestReceipt(store, command_id);
     if (!row) return null;
     const previous = parse(row.observed_json);
     if (previous.outcome) return previous; // Late coordination cannot rewrite a conclusion.
@@ -175,13 +190,17 @@ export function projectStewardRequest(store, row, staleAfterMs) {
 }
 
 export function listStewardRequests(store, staleAfterMs) {
-  return store
-    .listReceiptsByKind(KIND)
+  return [
+    ...store.listReceiptsByKind(KIND),
+    ...store.listReceiptsByKind(LAUNCH_KIND),
+  ]
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || String(a.receipt_id).localeCompare(String(b.receipt_id)))
+    .slice(0, 100)
     .map((row) => projectStewardRequest(store, row, staleAfterMs));
 }
 
 export function stewardCommandState(store, command_id, staleAfterMs) {
-  const row = store.getReceipt(receiptId(command_id));
+  const row = getLaunchRequestReceipt(store, command_id);
   if (!row) return null;
   const request = projectStewardRequest(store, row, staleAfterMs);
   return {

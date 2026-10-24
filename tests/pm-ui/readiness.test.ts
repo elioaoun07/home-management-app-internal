@@ -46,7 +46,7 @@ describe("readiness projection", () => {
       { stages: [{ name: "environment", outcome: "satisfied", code: null, durationMs: 1 }, { name: "credential-sync", outcome: "blocked", code: "credential-sync-unavailable", durationMs: 1 }] });
     expect(readinessIssues(signIn)).toEqual(["sign-in expired (run codex once)"]);
     const passive = staleLive({ policy: readinessFact("blocked", "grant-expired", "2026-10-20T19:15:55.000Z"), environment: readinessFact("blocked", "environment-manifest-mismatch") });
-    expect(readinessIssues(passive)).toEqual(["Policy expired — renew it", "package.json or lockfile changed"]);
+    expect(readinessIssues(passive)).toEqual(["Authorization expired — check readiness", "package.json or lockfile changed"]);
     const compiler = staleLive({ checks: readinessFact("blocked", "checks-not-prepared", "generated compiler input changed") });
     expect(readinessIssues(compiler)).toEqual(["Refresh build setup"]);
     expect(compiler.facts.checks.detail).toBe("generated compiler input changed");

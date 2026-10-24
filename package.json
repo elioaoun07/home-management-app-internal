@@ -27,6 +27,8 @@
     "pm:ready": "node scripts/delivery-v2/ready-cli.mjs",
     "pm:bridge": "node scripts/pm-server.mjs --bridge",
     "pm:pair": "node scripts/delivery-v2/local-auth.mjs pair",
+    "pm:steward": "node scripts/delivery-v2/steward-mcp.mjs",
+    "pm:support": "node scripts/delivery-v2/support-cli.mjs",
     "pm:lint": "node scripts/pm/lint.mjs",
     "pm:check-docs": "node scripts/pm/check-docs.mjs",
     "pm:archive": "node scripts/pm/archive.mjs",

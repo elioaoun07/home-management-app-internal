@@ -369,6 +369,7 @@ describe("the bridge relays V2 commands exactly once", () => {
     });
     const deliveryV2Ctx = {
       root: ROOT,
+      store,
       allowedOrigins: [],
       journey,
       hasStore: () => true,

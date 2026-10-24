@@ -49,6 +49,7 @@ import { createContainerRuntime } from "./worker-boundary.mjs";
 import { inspectReadiness } from "./inspect-readiness.mjs";
 import { evaluateReadiness, readinessFact, PASSIVE_GATES } from "./readiness.mjs";
 import { listStewardRequests, stewardStaleMs, stewardCommandState } from "./steward-requests.mjs";
+import { renewAuthorization } from "./authorization.mjs";
 
 export { routeDeliveryV2 } from "./entry.mjs";
 
@@ -298,7 +299,17 @@ export function createDeliveryV2Context({
     async readinessSnapshots() {
       return Promise.all([...readinessCache.keys()].map(key => context.readiness(JSON.parse(key))));
     },
-    // Authenticated, explicit refresh. GET/CLI/relay publication never call this.
+    // Called only by the explicit owner Check command, never by Start/polling.
+    renewAuthorization({ actor, command_id }) {
+      const loaded = loadExecutionPolicy({ root: ROOT });
+      if (!loaded.ok) return { ok: false, refusals: loaded.refusals };
+      try {
+        return { ok: true, authorization: renewAuthorization({ root: ROOT, policy: loaded.policy, actor, command_id }) };
+      } catch {
+        return { ok: false, refusals: [{ code: "authorization-renewal-failed", detail: "Could not retain authorization; check local storage" }] };
+      }
+    },
+    // Observations may also be requested internally by Start; never renew here.
     async refreshReadiness(options) {
       const selection = selectionOf(options), key = selectionKey(selection);
       if (readinessPending.has(key)) return readinessPending.get(key);

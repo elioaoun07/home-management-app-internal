@@ -36,7 +36,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { acceptStewardRequest, updateStewardRequest, projectStewardRequest, stewardStaleMs } from "./steward-requests.mjs";
+import { acceptLaunchRequest, getLaunchRequestReceipt, updateStewardRequest, projectStewardRequest, stewardStaleMs } from "./steward-requests.mjs";
+import { STEWARD_REFUSALS, stewardRoutePermitted } from "./steward-surface.mjs";
+import { accountingReport, admitSupportJob, authorizeSupport, closeSupport, recordChatOverhead, settleSupportJob } from "./support-ledger.mjs";
 
 import { ContractError, fingerprint, contentId, deepFreeze, normalizePath, evaluateGrant } from "./contracts.mjs";
 import { recordPlan } from "./interaction.mjs";
@@ -815,7 +817,8 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
     if (!origin.ok) {
       return json(403, { error: origin.refusal ? origin.refusal.code : ENTRY_REFUSALS.CROSS_ORIGIN, detail: origin.refusal ? origin.refusal.detail : null });
     }
-    const paired = pairSession({ root: ctx.root, code: String((body && body.code) || ""), kind: "browser" });
+    // `steward` is the restricted credential; a code can only ever buy less authority.
+    const paired = pairSession({ root: ctx.root, code: String((body && body.code) || ""), kind: body && body.kind === "steward" ? "steward" : "browser" });
     if (!paired.ok || !paired.token) {
       return json(403, { error: paired.refusal ? paired.refusal.code : "pairing-code-invalid", detail: paired.refusal ? paired.refusal.detail : null });
     }
@@ -838,8 +841,66 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
     return json(auth.status, { error: auth.refusal ? auth.refusal.code : ENTRY_REFUSALS.UNAUTHENTICATED, detail: auth.refusal ? auth.refusal.detail : null });
   }
 
+  // The Steward credential is enforced here, server-side, not by prompt: four
+  // operations (start, read request, read run, accounting) and nothing that
+  // approves, applies, renews, recovers, edits or authorizes anything.
+  if (auth.kind === "steward") {
+    if (!stewardRoutePermitted(method, path)) {
+      return json(403, { error: STEWARD_REFUSALS.NOT_PERMITTED, detail: method + " " + path });
+    }
+    // Attribution cannot be dropped or borrowed: a Steward Start is a Steward Start.
+    if (path === "/api/delivery/v2/deliver") body = { ...body, initiatedBy: "era-steward" };
+  }
+
+  // Accounting: Delivery / Support / Chat overhead, kept apart (read-only).
+  if (method === "GET" && path === "/api/delivery/v2/accounting") {
+    if (ctx.hasStore && !ctx.hasStore()) return json(200, { report: null });
+    if (!ctx.store) return json(503, { error: "store-unavailable" });
+    const run = (query && query.get("run")) || null;
+    const request = (query && query.get("request")) || null;
+    if (!run && !request) return json(400, { error: "run-or-request-required" });
+    return json(200, { report: accountingReport(ctx.store, { run_id: run, request_id: request }, ctx.now ? ctx.now() : new Date().toISOString()) });
+  }
+
+  // Owner-authorized support jobs. Zero are automatic: every one begins with an
+  // owner decision naming scope, model tier, effort and an allowance.
+  if (method === "POST" && path === "/api/delivery/v2/support") {
+    if (!ctx.store || (ctx.hasStore && !ctx.hasStore())) return json(503, { error: "store-unavailable" });
+    const at = ctx.now ? ctx.now() : new Date().toISOString();
+    const subject = z.object({ run_id: z.string().max(128).nullish(), request_id: z.string().max(128).nullish() });
+    const parsed = z.discriminatedUnion("action", [
+      z.object({ action: z.literal("authorize"), command_id: z.string().uuid(), subject, purpose: z.string().min(1).max(200),
+        scope: z.array(z.string().min(1).max(200)).min(1).max(10), executor: z.enum(["claude", "codex"]), model_tier: z.string().min(1).max(64),
+        effort: z.string().min(1).max(16), allowance_tokens: z.number().int().positive(), max_jobs: z.number().int().min(1).max(3).optional() }),
+      z.object({ action: z.literal("admit"), authorization_id: z.string().min(1).max(128), job_id: z.string().min(1).max(128) }),
+      z.object({ action: z.literal("settle"), authorization_id: z.string().min(1).max(128), job_id: z.string().min(1).max(128),
+        thread_id: z.string().max(128).nullish(), turn_ids: z.array(z.string().max(128)).max(50).optional(),
+        observed: z.object({ model: z.string().max(128).nullish(), effort: z.string().max(16).nullish() }).nullish(),
+        usage: z.object({ semantics: z.string().max(32), readings: z.array(z.object({ turn: z.number().int().min(0).optional(), usage: z.record(z.string(), z.number().min(0)) })).max(200),
+          baseline: z.record(z.string(), z.number().min(0)).nullish(), baselineRequired: z.boolean().optional() }).nullish(),
+        stop_reason: z.string().max(64).nullish(), cost: z.object({ usd: z.number().min(0).nullable(), provenance: z.enum(["provider-reported", "estimate"]).optional() }).nullish() }),
+      z.object({ action: z.literal("close"), authorization_id: z.string().min(1).max(128) }),
+      z.object({ action: z.literal("chat"), command_id: z.string().uuid(), subject, tokens: z.number().min(0).nullish(), usd: z.number().min(0).nullish(), note: z.string().max(200).nullish() }),
+    ]).safeParse(body);
+    if (!parsed.success) return json(400, { ok: false, error: "invalid-support-request" });
+    const data = parsed.data;
+    const outcome = data.action === "authorize" ? authorizeSupport(ctx.store, data, auth.actor, at)
+      : data.action === "admit" ? admitSupportJob(ctx.store, data, at)
+        : data.action === "settle" ? settleSupportJob(ctx.store, data, at)
+          : data.action === "close" ? closeSupport(ctx.store, data, at)
+            : recordChatOverhead(ctx.store, data, auth.actor, at);
+    return json(outcome.ok ? 200 : 409, outcome);
+  }
+
   if (method === "POST" && path === "/api/delivery/v2/control" && body.action === "refresh-readiness") {
     if (!ctx.refreshReadiness) return json(503, { error: "readiness-unavailable" });
+    const change = z.object({ renewAuthorization: z.boolean().optional(), command_id: z.string().uuid().optional() }).safeParse(body);
+    if (!change.success || (change.data.renewAuthorization && !change.data.command_id)) return json(400, { error: "invalid-readiness-command" });
+    if (change.data.renewAuthorization) {
+      if (!ctx.renewAuthorization) return json(503, { error: "authorization-renewal-unavailable" });
+      const renewed = ctx.renewAuthorization({ actor: auth.actor, command_id: change.data.command_id });
+      if (!renewed.ok) return json(409, { ok: false, error: "authorization-renewal-failed", refusals: renewed.refusals });
+    }
     const readiness = await ctx.refreshReadiness(body.selection || {});
     return json(200, { ok: true, readiness });
   }
@@ -894,7 +955,7 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
   if (method === "GET" && path === "/api/delivery/v2/command") {
     const command_id = (query && query.get("id")) || "";
     if ((!ctx.hasStore || ctx.hasStore()) && ctx.store?.getReceipt) {
-      const row = ctx.store.getReceipt("steward:" + command_id);
+      const row = getLaunchRequestReceipt(ctx.store, command_id);
       if (row) {
         if (row.actor !== auth.actor) return json(404, { error: "unknown-command" });
         const request = projectStewardRequest(ctx.store, row, stewardStaleMs(process.env.PM_STEWARD_STALE_MS));
@@ -937,12 +998,22 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
   if (method === "GET" && path === "/api/delivery/v2/run") {
     const run_id = (query && query.get("id")) || "";
     const projection = ctx.journey ? ctx.journey.detail(run_id) : projectRun({ store: ctx.store, run_id });
-    return json(projection.ok ? 200 : 404, projection);
+    if (!projection.ok) return json(404, projection);
+    // Delivery / Support / Chat overhead beside the run, so support usage is never invisible.
+    let accounting = null;
+    if (ctx.store && (!ctx.hasStore || ctx.hasStore())) {
+      try {
+        accounting = accountingReport(ctx.store, { run_id }, ctx.now ? ctx.now() : new Date().toISOString());
+      } catch {
+        accounting = null;
+      }
+    }
+    return json(200, { ...projection, accounting });
   }
 
   if (method === "POST" && path === "/api/delivery/v2/deliver") {
-    // Keep the existing admission path intact; Steward wraps it with one durable
-    // observation claim before readiness, mode, executor or policy can refuse.
+    // Every Start commits one durable observation claim before readiness, mode,
+    // executor or policy can refuse. Attribution is separate from durability.
     const launch = async () => {
       const mode = readDispatchMode({ root: ctx.root });
       if (mode.mode !== "v2") {
@@ -969,7 +1040,11 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
         const selection = { file: body.file, id: body.expectId || body.witness?.alias, executor: body.executor, model: body.model, effort: body.effort, workProfile: body.workProfile };
         let readiness = await ctx.readiness(selection);
         if (!readiness.ready && ctx.refreshReadiness) {
-          try { readiness = await ctx.refreshReadiness(selection); } catch { /* the passive refusal stands */ }
+          try { readiness = await ctx.refreshReadiness(selection); }
+          catch {
+            return json(409, { ok: false, error: "readiness-collection-failed",
+              detail: "Readiness check failed; no run was started.", previousReadiness: readiness });
+          }
         }
         if (!readiness.ready) {
           // Evidence bound to inputs that changed mid-check would otherwise refuse with nothing to fix.
@@ -978,7 +1053,7 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
         }
       }
       if (ctx.journey) {
-        if (body.initiatedBy === "era-steward") updateStewardRequest(ctx.store, body.command_id, "admission", ctx.now ? ctx.now() : new Date().toISOString());
+        updateStewardRequest(ctx.store, body.command_id, "admission", ctx.now ? ctx.now() : new Date().toISOString());
         const outcome = await ctx.journey.deliver({
           file: body.file,
           cbidx: body.cbidx,
@@ -1013,16 +1088,18 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
       });
       return json(outcome.ok ? 200 : 409, outcome);
     };
-    const previous = body.command_id && (!ctx.hasStore || ctx.hasStore()) && ctx.store?.getReceipt?.("steward:" + body.command_id);
-    if (body.initiatedBy == null && !previous) return launch();
-    const parsed = z.object({ initiatedBy: z.literal("era-steward"), command_id: z.string().uuid(),
+    const previous = body.command_id && (!ctx.hasStore || ctx.hasStore()) && ctx.store?.getReceipt && getLaunchRequestReceipt(ctx.store, body.command_id);
+    // Existing commands from before launch receipts retain their original journey.
+    if (body.initiatedBy == null && !previous && ctx.commandStatus?.(body.command_id)) return launch();
+    const steward = body.initiatedBy === "era-steward";
+    const parsed = z.object({ initiatedBy: z.literal("era-steward").optional(), command_id: z.string().uuid(),
       file: z.string().min(1).max(1024), expectId: z.string().min(1).max(128) }).safeParse(body);
-    if (!parsed.success) return json(400, { ok: false, error: "invalid-steward-request" });
+    if (!parsed.success) return json(400, { ok: false, error: steward ? "invalid-steward-request" : "invalid-launch-request" });
     const at = () => ctx.now ? ctx.now() : new Date().toISOString();
-    const accepted = acceptStewardRequest(ctx.store, body, auth.actor, at());
-    if (accepted.conflict) return json(409, { ok: false, error: "steward-request-conflict", command_id: accepted.command_id || body.command_id });
+    const accepted = acceptLaunchRequest(ctx.store, body, auth.actor, at(), { restricted: auth.kind === "steward" });
+    if (accepted.conflict) return json(409, { ok: false, error: steward ? "steward-request-conflict" : "launch-request-conflict", command_id: accepted.command_id || body.command_id });
     if (!accepted.created) {
-      const request = projectStewardRequest(ctx.store, ctx.store.getReceipt("steward:" + body.command_id), stewardStaleMs(process.env.PM_STEWARD_STALE_MS));
+      const request = projectStewardRequest(ctx.store, getLaunchRequestReceipt(ctx.store, body.command_id), stewardStaleMs(process.env.PM_STEWARD_STALE_MS));
       if (request.outcome) return json(request.outcome.ok ? 200 : 409, request.outcome);
       return json(409, { ok: false, refusals: [{ code: "command-without-recorded-outcome" }], request });
     }
@@ -1035,7 +1112,7 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
       // An exception is not evidence that admission failed. Keep the claim; an
       // explicit status read can recover a committed command after a lost reply.
       updateStewardRequest(ctx.store, body.command_id, "reconciliation-required", at());
-      return json(503, { ok: false, error: "steward-outcome-unconfirmed" });
+      return json(503, { ok: false, error: steward ? "steward-outcome-unconfirmed" : "launch-outcome-unconfirmed" });
     }
   }
 

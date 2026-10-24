@@ -22,6 +22,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 ## Vision & Decisions
 
+- **SCH-30 — Done, Reopen and every assignment show at once (owner request, 2026-10-24).** Completing one chore waited for the API and a full refetch, so the row lagged. A single Done / Reopen now uses the SCH-26 bulk-complete path with one entry (row flips first, idempotent retry, one queued operation offline, Undo that reverses it); a routine's slot write and unassign patch the schedules cache before the request and refetch on failure; the desktop per-row assign uses the SCH-25 bulk create. No route, schema or request shape changed. *(IMPLEMENTED 2026-10-24 — repository, cache/queue fixtures and full suite; device acceptance pending.)*
+
 - **SCH-29 — A met target informs, never blocks; chores can have no counter (owner request, 2026-10-24).** Laundry could not be placed on a third day because the picker treated "done twice this week" as "nothing left". The target is now a hint: a day stays open unless the chore already sits on it, an over-target placement carries an amber `n/target` tag, and a chore whose target is met is offered in the Assign form as an extra. A Catalogue chore can be **Any time** (no recurrence): it is offered every week with no counter. The Chores page opens on Me, grouped; the Assign form hides what is already on the day it was opened for and places a whole chore for a person in one tap. *(IMPLEMENTED 2026-10-24 — repository, pure-model fixtures and a dev-browser read of the Assign form; device acceptance pending.)*
 
 - **SCH-26 — One chore, many rooms, one Done (owner request, 2026-10-20).** Sweeping 9 rooms back to back then meant 9 taps. A per-device toggle groups the agenda by chore (same Catalogue template + day); the group's check completes every room through one bulk, idempotent, queueable request with one Undo — the SCH-25/HUB-116 shape applied to completion. *(IMPLEMENTED 2026-10-20 — repository and client/grouping fixtures; device acceptance pending.)*
@@ -2153,6 +2155,21 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - **Owner UAT:** On a phone: open Assign on a Saturday, tap Me on three chores, Save, confirm they land today for you; assign a chore already done twice and confirm the amber tag; in Catalogue set Tidy to Any time and confirm it shows every week without a counter.
 - **Scope boundary:** Flexible routine items (not Catalogue instances) still stop at their target — the flexible engine matches by period slot. The desktop "To plan" aside lists no extras. Chore templates saved before this change with no recurrence now appear as Any time.
 
+### SCH-30
+
+**Outcome:** Marking a chore done or open, and placing or removing a routine slot, update the screen before the server answers, without changing any API call.
+
+**Kind:** feature
+**Implementation:** done
+**UAT:** pending
+**Touches:** `src/features/chores/useChoreActions.ts`, `src/features/items/useFlexibleRoutines.ts`, `src/components/chores/ChoresView.tsx`, `src/features/items/bulkComplete.test.ts`, `src/features/items/flexibleScheduleCache.test.ts`
+
+- **Acceptance:** Tapping a chore's check (row or sheet, or the Sunday check-in) shows it done at once, with the "completed" toast and an Undo that reopens it; tapping a done check reopens at once, its Undo completes it again. Someone else's chore still asks Override first. A second tap while the first is still going out is ignored. Offline, the row stays done and syncs later; a refused write shows "Not saved" and the row returns. Assigning a routine (Iron) puts its slot on the day at once; Unassign and Move do too; the Assign form's Save writes routine / undated entries while the template batch is going out; the desktop per-row Assign adds the chore at once.
+- **Implementation — 2026-10-24:** `useChoreSlotActions.complete / completeAt / reopen` call `completeItemsBulk` / `uncompleteItemsBulk` with one entry (`/api/items/bulk/complete`, same server function as the single route). `useScheduleRoutine` / `useUnscheduleRoutine` gain `onMutate` cache patches (`upsertScheduleRow`, `removeScheduleRows`) and refetch on error; their requests are unchanged. `placeFlexible` runs the slot write and the hand-over together and takes back whichever half did not land. `placeTemplate` goes through `createMany` with one entry. Skip, Postpone, Unassign (one-off) and undated placement keep their existing mutations.
+- **Evidence — 2026-10-24:** 3 new bulk-complete cases (done shown before the answer, reopen across timestamp formats, offline Done) and 3 schedule-cache cases; full suite 4287 passed, typecheck clean, changed-file ESLint clean. `/chores` reloads with no console errors. Not clicked against live data (completing writes the production DB).
+- **Owner UAT:** On a phone: tap a chore's check, confirm it flips instantly; Undo; reopen a done chore; repeat in airplane mode and confirm it syncs on reconnect; assign Iron to a day and confirm it appears at once.
+- **Scope boundary:** Skip, Postpone, one-off Unassign and undated placement are still not optimistic (HUB-116). The old single-complete route and `handleComplete` remain for every other screen.
+
 ## Shipped Log
 
 - ✅ 2026-10-24 — **SCH-27** Mobile chore assignment: search, "Assign all N", per-row person selector, tabs inside a room, fixed-height sheet — [criteria](<Schedule — Master Book.md#sch-27>)
@@ -2186,6 +2203,7 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - ✅ 2026-10-17 — **SCH-25** Assign many chores at once: optimistic rows, one idempotent bulk request, queue-safe offline and truthful refusals — [criteria](<Schedule — Master Book.md#sch-25>)
 - ✅ 2026-10-20 — **SCH-26** Group a chore across rooms and mark every room done in one tap — [criteria](<Schedule — Master Book.md#sch-26>)
 - ✅ 2026-10-24 — **SCH-29** Assign past a met target, Any-time chores, Me + Grouped defaults, one-tap person assign — [criteria](<Schedule — Master Book.md#sch-29>)
+- ✅ 2026-10-24 — **SCH-30** Done, Reopen and assignments show at once — [criteria](<Schedule — Master Book.md#sch-30>)
 
 ## Delivery session log
 

@@ -694,13 +694,83 @@ function useCatalogueFlexibleOccurrences(items: ItemWithDetails[] | undefined) {
 // MUTATION HOOKS
 // ============================================
 
+/** Cache row for a slot placed before the server has answered. */
+export function upsertScheduleRow(
+  rows: FlexibleSchedule[],
+  input: ScheduleRoutineInput,
+  now: Date = new Date(),
+): FlexibleSchedule[] {
+  const index = input.occurrenceIndex ?? 0;
+  const next = {
+    scheduled_for_date: input.scheduledForDate,
+    scheduled_for_time: input.scheduledForTime || null,
+  };
+  const exists = rows.some(
+    (r) =>
+      r.item_id === input.itemId &&
+      r.period_start_date === input.periodStartDate &&
+      (r.occurrence_index ?? 0) === index,
+  );
+  if (exists) {
+    return rows.map((r) =>
+      r.item_id === input.itemId &&
+      r.period_start_date === input.periodStartDate &&
+      (r.occurrence_index ?? 0) === index
+        ? { ...r, ...next }
+        : r,
+    );
+  }
+  return [
+    ...rows,
+    {
+      id: `optimistic:${input.itemId}:${input.periodStartDate}:${index}`,
+      item_id: input.itemId,
+      period_start_date: input.periodStartDate,
+      occurrence_index: index,
+      created_at: now.toISOString(),
+      ...next,
+    } as FlexibleSchedule,
+  ];
+}
+
+/** Mirror of the delete in useUnscheduleRoutine: one slot, or the whole period. */
+export function removeScheduleRows(
+  rows: FlexibleSchedule[],
+  input: { itemId: string; periodStartDate: string; occurrenceIndex?: number },
+): FlexibleSchedule[] {
+  return rows.filter(
+    (r) =>
+      !(
+        r.item_id === input.itemId &&
+        r.period_start_date === input.periodStartDate &&
+        (typeof input.occurrenceIndex !== "number" ||
+          (r.occurrence_index ?? 0) === input.occurrenceIndex)
+      ),
+  );
+}
+
 /**
- * Schedule a flexible routine for a specific date
+ * Schedule a flexible routine for a specific date. The slot shows at once; a
+ * failed write refetches the real rows, which drops it again.
  */
 export function useScheduleRoutine() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    onMutate: async (input: ScheduleRoutineInput) => {
+      await queryClient.cancelQueries({
+        queryKey: flexibleRoutinesKeys.schedules(),
+      });
+      queryClient.setQueryData<FlexibleSchedule[]>(
+        flexibleRoutinesKeys.schedules(),
+        (old) => (old ? upsertScheduleRow(old, input) : old),
+      );
+    },
+    onError: () => {
+      queryClient.invalidateQueries({
+        queryKey: flexibleRoutinesKeys.schedules(),
+      });
+    },
     mutationFn: async (input: ScheduleRoutineInput) => {
       const supabase = supabaseBrowser();
       const {
@@ -741,12 +811,31 @@ export function useScheduleRoutine() {
 }
 
 /**
- * Remove a schedule for a flexible routine
+ * Remove a schedule for a flexible routine. The slot leaves at once; a failed
+ * write refetches the real rows, which brings it back.
  */
 export function useUnscheduleRoutine() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    onMutate: async (input: {
+      itemId: string;
+      periodStartDate: string;
+      occurrenceIndex?: number;
+    }) => {
+      await queryClient.cancelQueries({
+        queryKey: flexibleRoutinesKeys.schedules(),
+      });
+      queryClient.setQueryData<FlexibleSchedule[]>(
+        flexibleRoutinesKeys.schedules(),
+        (old) => (old ? removeScheduleRows(old, input) : old),
+      );
+    },
+    onError: () => {
+      queryClient.invalidateQueries({
+        queryKey: flexibleRoutinesKeys.schedules(),
+      });
+    },
     mutationFn: async ({
       itemId,
       periodStartDate,

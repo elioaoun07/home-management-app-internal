@@ -71,6 +71,7 @@ import { COUNTABLE_UNIT, createBudgetMonitor, normalizedReading, resolveEnforcem
 import { gateState, readTestGate, recordTestResult, TEST_GATE_REFUSALS } from "./test-gate.mjs";
 import { BINDING_VERSION, splitTaskInput, makeTaskBrief, briefInstruction } from "./task-input.mjs";
 import { applyAllowanceChange, effectiveGrant, effectivePolicy, fleetWindow, readAllowances, runAllowance, writeAllowances } from "./allowances.mjs";
+import { renewedGrant } from "./authorization.mjs";
 import {
   STAGES,
   answerQuestion,
@@ -92,7 +93,18 @@ import {
   repairInstruction,
   stageProjection,
 } from "./interaction.mjs";
-import { CHECK_REFUSALS, pinCheckPlan, restrictedEnv, runCheck, verifyReceipt } from "./checks.mjs";
+import { CHECK_REFUSALS, detectOracleDrift, pinCheckPlan, restrictedEnv, runCheck, verifyReceipt } from "./checks.mjs";
+import {
+  CANDIDATE_TESTS_CRITERION_ID,
+  CANDIDATE_TESTS_REASONS,
+  CANDIDATE_TESTS_STATE,
+  buildCandidateTestsVerification,
+  candidateTestsAreFresh,
+  candidateTestsDefinition,
+  gradeCandidateTests,
+  selectCandidateTests,
+} from "./candidate-tests.mjs";
+import { retainOutput } from "./diagnostics.mjs";
 import {
   HOST_PRODUCER,
   TYPECHECK_CRITERION_ID,
@@ -941,7 +953,7 @@ export function createJourney({
       : null;
     const rawGrant = run.grant_id ? s.getGrant(String(run.grant_id)) : null;
     // Checks see the owner-adjusted allowance; persistence (revocation) uses rawGrant.
-    const grant = rawGrant ? effectiveGrant(rawGrant, { settings: allowancesNow(), run_id: String(run.run_id) }) : null;
+    const grant = rawGrant ? effectiveGrant(renewedGrant(rawGrant, policyNow().policy), { settings: allowancesNow(), run_id: String(run.run_id) }) : null;
     return { store: s, run, contract, workRef, grant, rawGrant, settings: parseJson(run.settings_json, {}) || {} };
   }
 
@@ -1795,7 +1807,118 @@ export function createJourney({
       criteria.push(typechecked.criterion);
       records.push(typechecked.record);
     }
+    const tested = await candidateTestsEvidence({ run_id, candidate, scopeCandidate, policy, base });
+    if (tested) {
+      criteria.push(tested.criterion);
+      records.push(tested.record);
+      integrity.push(...tested.integrity);
+    }
     return { criteria, records, integrity };
+  }
+
+  /** The mandatory candidate tests the policy would run for this candidate right now. */
+  function candidateTestsPlan({ run_id, candidate, scopeCandidate = candidate, policy, base }) {
+    const configured = policy.checks && policy.checks.requiredVerifications ? policy.checks.requiredVerifications.candidateTests : null;
+    if (!configured || !configured.enabled) return null;
+    const planScope = planView(latestPlan(getStore(), run_id))?.body?.scope || [];
+    const selection = selectCandidateTests({ candidate, scopeCandidate, planScope, patterns: configured.include });
+    const checkerInputs = base.filter((entry) => policy.checks.inputs.includes(entry.path)).map((entry) => ({ path: entry.path, sha256: entry.sha256 }));
+    const definition = candidateTestsDefinition({ configured, selection, checkerInputs, image: runtime && runtime.boundary ? runtime.boundary.image ?? null : null });
+    return { configured, selection, checkerInputs, definition };
+  }
+
+  /**
+   * Run the candidate's own new and changed tests against the frozen candidate in
+   * the protected checker, with the policy's pinned command. Appended to the run's
+   * criteria like the typecheck: a contract cannot select it away, and under
+   * `enforcement: "required"` anything but a pass leaves the run unverified.
+   */
+  async function candidateTestsEvidence({ run_id, candidate, scopeCandidate = candidate, policy, base }) {
+    const planned = candidateTestsPlan({ run_id, candidate, scopeCandidate, policy, base });
+    if (!planned) return null;
+    const { configured, selection, checkerInputs, definition } = planned;
+    const s = getStore();
+    const started_at = now();
+    const integrity = [];
+    let raw = null;
+    let grade;
+    // The checker's own configuration is pinned from the base: a candidate that
+    // rewrote it (vitest config, the paid-API block) cannot grade itself.
+    const drift = detectOracleDrift({ plan: { checkerInputs }, candidate });
+    const needsRun = selection.files.length > 0 && !selection.unsafe.length && !selection.missing.length;
+    if (drift.drifted.length && needsRun) {
+      const detail = drift.drifted.map((entry) => entry.kind + " " + entry.path).join(", ");
+      integrity.push("a checker input changed in the candidate: " + detail);
+      grade = { state: CANDIDATE_TESTS_STATE.INCONCLUSIVE, reason: CANDIDATE_TESTS_REASONS.CHECKER_INPUT, detail, counts: {} };
+    } else if (needsRun && (!runtime || typeof runtime.checkExecutor !== "function")) {
+      grade = { state: CANDIDATE_TESTS_STATE.INCONCLUSIVE, reason: CANDIDATE_TESTS_REASONS.NO_CHECKER, detail: "this runtime has no protected checker", counts: {} };
+    } else {
+      if (needsRun) {
+        try {
+          const execute = await runtime.checkExecutor({ run_id, candidate });
+          raw = await execute({ argv: [...configured.argv, ...selection.files.map((file) => file.path)], cwd: candidate.root, env: restrictedEnv() });
+        } catch (error) {
+          raw = { exitCode: null, stdout: "", stderr: "", spawnError: errorText(error) };
+        }
+      }
+      grade = gradeCandidateTests({ selection, raw });
+    }
+
+    const retained = raw
+      ? retainOutput({ stdout: raw.stdout, stderr: raw.stderr, roots: [{ token: "<candidate>", path: String(candidate.root || "") }, { token: "<checkout>", path: String(root) }] })
+      : null;
+    const verification = buildCandidateTestsVerification({
+      candidate,
+      definition,
+      selection,
+      grade,
+      producer: {
+        producer: "protected-checker",
+        isolated: Boolean(raw) || !needsRun,
+        detail: needsRun ? "run in the protected checker with the policy-pinned command; the candidate chose only the test paths" : "no candidate test files to run",
+      },
+      output: retained && !retained.empty ? { text: retained.text, bytes: retained.bytes, droppedLines: retained.droppedLines, truncatedChars: retained.truncatedChars, redactedSecrets: retained.redactedSecrets } : null,
+      exitCode: raw ? raw.exitCode ?? null : null,
+      started_at,
+      finished_at: now(),
+    });
+    event(run_id, "candidate-tests." + grade.state, {
+      candidate_id: String(candidate.candidate_id),
+      reason: grade.reason,
+      files: selection.files.length,
+      missing: selection.missing.length,
+      definition_digest: definition.definition_digest,
+    });
+
+    const criterion = {
+      criterion_id: CANDIDATE_TESTS_CRITERION_ID,
+      revision: 1,
+      proposition: "The tests this candidate adds or changes, and those its plan names, run in the protected checker and pass.",
+      required_for: configured.enforcement === "advisory" ? "informational" : "candidate",
+      observer: { kind: "command", expected: { spec_id: CANDIDATE_TESTS_CRITERION_ID } },
+      oracle_ref: "policy-pinned test command over the frozen candidate: " + configured.argv.join(" "),
+      freshness_inputs: ["candidate"],
+    };
+    const record = {
+      criterion_id: CANDIDATE_TESTS_CRITERION_ID,
+      criterion_revision: 1,
+      state: grade.state,
+      reason: grade.reason ? grade.reason + ": " + grade.detail : null,
+      evidence_id: String(verification.verification_id),
+      verification,
+    };
+    s.putEvidence({
+      evidence_id: record.evidence_id,
+      run_id,
+      candidate_id: candidate.candidate_id,
+      criterion_id: record.criterion_id,
+      criterion_revision: record.criterion_revision,
+      state: record.state,
+      reason: record.reason,
+      receipt: null,
+      record,
+    });
+    return { criterion, record, integrity };
   }
 
   /**
@@ -2917,6 +3040,38 @@ export function createJourney({
    * spoke and the answer was not yes).
    */
   function requiredVerificationGate({ run_id, policy, record, candidate }) {
+    const typechecked = typecheckGate({ run_id, policy, record, candidate });
+    if (!typechecked.ok) return typechecked;
+    return candidateTestsGate({ run_id, policy, record, candidate });
+  }
+
+  /**
+   * The candidate's own tests: present in the result, satisfied, and bound to THIS
+   * candidate under the CURRENT pinned definition (command, checker inputs, test
+   * bytes). A result recorded before the policy required them proves nothing here.
+   */
+  function candidateTestsGate({ run_id, policy, record, candidate }) {
+    const configured = policy.checks && policy.checks.requiredVerifications ? policy.checks.requiredVerifications.candidateTests : null;
+    if (!configured || !configured.enabled || configured.enforcement === "advisory") return { ok: true, detail: null };
+
+    const state = (record.criterion_states || []).find((entry) => entry.criterion_id === CANDIDATE_TESTS_CRITERION_ID);
+    if (!state) return { ok: false, detail: "this result carries no " + CANDIDATE_TESTS_CRITERION_ID + " verification, so the candidate's own tests have never been run" };
+    if (state.state !== CANDIDATE_TESTS_STATE.SATISFIED) {
+      return { ok: false, detail: CANDIDATE_TESTS_CRITERION_ID + " is " + state.state + (state.reason ? " (" + state.reason + ")" : "") };
+    }
+    const evidence = getStore()
+      .listEvidence(run_id, String(candidate.candidate_id))
+      .map((row) => parseJson(row.record_json, null))
+      .filter((entry) => entry && entry.criterion_id === CANDIDATE_TESTS_CRITERION_ID && entry.verification);
+    const latest = evidence.length ? evidence[evidence.length - 1].verification : null;
+    const base = parseJson(getStore().getRun(run_id)?.base_manifest_json, []) || [];
+    const current = candidateTestsPlan({ run_id, candidate, policy, base });
+    const fresh = candidateTestsAreFresh({ verification: latest, candidate_id: String(candidate.candidate_id), current: current.definition });
+    if (!fresh.fresh) return { ok: false, detail: fresh.reason };
+    return { ok: true, detail: null };
+  }
+
+  function typecheckGate({ run_id, policy, record, candidate }) {
     const configured = policy.checks && policy.checks.requiredVerifications ? policy.checks.requiredVerifications.typecheck : null;
     if (!configured || !configured.enabled || configured.enforcement === "advisory") return { ok: true, detail: null };
 
