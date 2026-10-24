@@ -16,7 +16,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { durableV2Command, storedIntent } from "./commandIntents";
+import { durableV2Command, newDeliveryIntent, storedIntent } from "./commandIntents";
 import { v2Pair, v2Post } from "./api";
 import { client, go, pmKeys, useRoute, useWorld } from "./state";
 import { readinessCanLaunch, readinessCanStart, readinessIssues, readinessRows } from "./readinessModel";
@@ -430,6 +430,12 @@ export function LaunchV2({ work }: { work: Work }) {
     queryFn: () => storedIntent(intentScope, launchIntent, localStorage),
     enabled: connected && !!session.data?.paired && !!session.data?.scope,
   });
+  const newDelivery = useMutation({
+    mutationFn: () => newDeliveryIntent(launchIntent),
+    onSettled: () => client.invalidateQueries({ queryKey: pmKeys.all }),
+  });
+  const cancelledLaunch = deliveries.data?.runs.some(run =>
+    run.run_id === previousLaunch.data?.runId && run.lifecycle === "CLOSED" && run.closed_outcome === "cancelled");
   const readinessSelection = { file: work.file, id: itemId, executor, model: model || null, effort: effort || null, workProfile: profile };
   const readiness = useQuery({
     queryKey: pmKeys.v2readiness(readinessSelection),
@@ -589,6 +595,7 @@ export function LaunchV2({ work }: { work: Work }) {
       <ErrorNotice error={start.failure} retry={start.retry} />
       <ErrorNotice error={readiness.error} retry={() => void readiness.refetch()} />
       <ErrorNotice error={previousLaunch.error} retry={() => void previousLaunch.refetch()} />
+      <ErrorNotice error={newDelivery.error} retry={() => newDelivery.mutate()} />
       <section className="launch-section" aria-label="Readiness">
         <h2>Readiness</h2>
         {gates.length ? (
@@ -617,6 +624,7 @@ export function LaunchV2({ work }: { work: Work }) {
       {testGate?.locked && <TestGateCard gate={testGate} />}
       {refresh.error && <p role="alert">{refresh.error.message}</p>}
       <div className="launch-footer">
+        {cancelledLaunch && <button disabled={!connected || start.isPending || newDelivery.isPending} onClick={() => newDelivery.mutate()}>New delivery</button>}
         {previousLaunch.data && <button disabled={!connected || start.isPending} onClick={() => {
           const saved = previousLaunch.data!;
           start.send(saved.path, launchIntent, saved.body, data => go(`/delivery/run/${String(data.run_id)}`));
@@ -635,7 +643,7 @@ export function LaunchV2({ work }: { work: Work }) {
           className="primary"
           disabled={
             !connected ||
-            !!previousLaunch.data || !!previousLaunch.error ||
+            !!previousLaunch.data || !!previousLaunch.error || previousLaunch.isPending || newDelivery.isPending ||
             (!steward && (!chosen || !chosen.permitted)) ||
             (!steward && !readinessCanLaunch(readiness.data, readinessSelection)) ||
             (!steward && noRuntime) ||

@@ -492,8 +492,13 @@ describe("the deliver route — one path, explicit provider per run", () => {
     expect(claudeDts).toMatch(/export declare type EffortLevel = 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max';/u);
     expect(EXECUTORS.find((entry) => entry.id === "claude")!.supportedEfforts).toEqual(["low", "medium", "high", "xhigh", "max"]);
     const codexDts = readFileSync(join(repoRoot, "node_modules", "@openai", "codex-sdk", "dist", "index.d.ts"), "utf8");
-    expect(codexDts).toMatch(/type ModelReasoningEffort = "minimal" \| "low" \| "medium" \| "high" \| "xhigh";/u);
-    expect(EXECUTORS.find((entry) => entry.id === "codex")!.supportedEfforts).toEqual(["minimal", "low", "medium", "high", "xhigh"]);
+    const union = /type ModelReasoningEffort = ([^;]+);/u.exec(codexDts);
+    expect(union).not.toBeNull();
+    const sdkEfforts = [...union![1].matchAll(/"([a-z]+)"/gu)].map((match) => match[1]);
+    const codexOffered = EXECUTORS.find((entry) => entry.id === "codex")!.supportedEfforts;
+    expect(codexOffered).toEqual(["minimal", "low", "medium", "high", "xhigh"]);
+    // The SDK may add levels; the offered list must stay a subset of what it accepts.
+    for (const effort of codexOffered) expect(sdkEfforts).toContain(effort);
   });
 
   it("still refuses when a policy is installed but the profile is unqualified", async () => {

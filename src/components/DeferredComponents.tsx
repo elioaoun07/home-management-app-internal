@@ -13,6 +13,10 @@ const SplitBillHandler = dynamic(
   () => import("@/components/expense/SplitBillHandler"),
   { ssr: false },
 );
+const IncomingTransferSheet = dynamic(
+  () => import("@/components/expense/IncomingTransferSheet"),
+  { ssr: false },
+);
 
 /** Renders heavy non-critical components lazily. Must be a Client Component for ssr:false. */
 export function DeferredComponents() {
@@ -20,6 +24,7 @@ export function DeferredComponents() {
     <>
       <AIChatAssistant />
       <SplitBillHandler />
+      <IncomingTransferSheet />
     </>
   );
 }

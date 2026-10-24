@@ -43,4 +43,59 @@ The card shows **Initiated by ERA Steward**, request/launch UUID, accepted and c
 
 A repeated UUID returns its recorded outcome or remains unconfirmed. A second UUID for the same pending/open Steward work is refused with the original UUID. An interrupted prelaunch request with no proven outcome keeps its claim: use the same saved request and status check; do not mint another launch. Owner investigation is required if no command outcome can be recovered. After a confirmed refusal the existing DLV-138 correction flow may create a new explicit request. The newest 100 requests are published; older receipts remain in the supervisor store. No automatic cleanup, retry or expiry action runs.
 
+After a confirmed **CLOSED / cancelled** run, the launch page offers **New delivery** beside **Open delivery**. New delivery re-reads that exact run under the existing browser intent lock, archives the original browser receipt under `pm-command-receipt:<scope>:<command UUID>`, then releases only its active intent slot. It does not launch. Pressing Start afterward creates a fresh UUID; the original command still resolves to the old run. Failed, completed, active, missing and unknown outcomes do not qualify. A lost launch reply must first be reconciled with Resume request / Check. Storage or confirmation failure retains the active intent. Server receipts, relay history, run artifacts and results are never deleted.
+
 **Never:** run terminal or Docker commands; restart or start `pnpm pm`; press Check readiness repeatedly; diagnose failures; write readiness reports; approve plans; press Apply. Plan approval and Apply stay with the owner, on the phone or laptop.
+
+## Prepared R44 pilot — 2026-10-24 (not activated)
+
+Local review package: `.tmp/r44-steward-pilot-20261024/`. `policy.draft.json` is revision 10 with a deliberately expired grant and PENDING authorization. `inputs.json` pins all 704 exact input files, including every JS/TS source in the four client directories for the plan's R48 recount, the ESLint/package/lock config, safeFetch/connectivity helper, Vitest config and paid-API block, fixture conventions and selected PM source. The new `tests/pm-ui/raw-fetch-guard.test.ts` is intentionally absent: the pilot creates it. No placeholder or application guard has been implemented here.
+
+The draft retains the installed runtime, dependency volume, qualification requirements, protected oracle, required checker/typecheck, resources, catalog and concurrency. Its generated-type pins are refreshed to the current source bytes; two old development pins differed. No environment is built or repaired. Publication is exactly `eslint.config.mjs` and `tests/pm-ui/raw-fetch-guard.test.ts`.
+
+Pilot selection: **R44 / CODEX_LOW / low / focused**. The literal selector is recorded in `pilot.json`. Focused enforces at most **one planning job, one implementation job, zero repairs** per run. Exact plan approval remains required; `ownerReviewed` in R44's prepared material remains false. Maximum disposition is **verified_candidate**, automatic retry is false and no host Apply/publish effect is granted. The schema has no item allowlist, work-profile restriction or global one-run counter: **R44 only, Focused only, one Start** are owner operational limits, not additional machine-enforcement claims.
+
+### Owner activation (future explicit action)
+
+1. Review the source diff and `pilot.json`, `inputs.json`, `policy.draft.json` and `verification.json` in the package. Any changed input invalidates this preparation; regenerate/review it before activation. The initial working tree contained unrelated incoming-transfer work and an executor-selection test edit; those were preserved. The source manifest records the current input bytes, including existing checkout edits.
+2. In the existing Command Center, confirm **zero active/reserved/unknown jobs and writers**, no pending launch for R44, and the old `r-262a6aee5ed3` is **CLOSED / cancelled**. If any outcome is unknown, reconcile the original receipt and stop. This preparation does not certify the operational store's present state.
+3. Stop the existing bridge with Ctrl+C in its own terminal. Keep the supervisor database, pairing, relay journal, receipts, old policy and all volumes. Do not start a second bridge.
+4. In PowerShell at the repo root, review and run this activation block yourself. It refuses changed policy/input/generated-type bytes, preserves policy 9, creates a fresh 24-hour authorization and installs only the reviewed revision 10:
+
+```powershell
+$pilotDir = '.tmp/r44-steward-pilot-20261024'
+$pilotReview = Get-Content -Raw -Encoding UTF8 "$pilotDir/pilot.json" | ConvertFrom-Json
+$pilotInputs = Get-Content -Raw -Encoding UTF8 "$pilotDir/inputs.json" | ConvertFrom-Json
+$pilotDraft = Get-Content -Raw -Encoding UTF8 "$pilotDir/policy.draft.json" | ConvertFrom-Json
+function Assert-PilotHash($pilotPath, $pilotExpected) {
+  $pilotActual = 'sha256:' + (Get-FileHash -LiteralPath $pilotPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($pilotActual -ne $pilotExpected) { throw "Changed input: $pilotPath" }
+}
+Assert-PilotHash '.delivery/v2/execution-policy.json' $pilotReview.installedPolicySha256
+Assert-PilotHash "$pilotDir/policy.draft.json" $pilotReview.draftPolicySha256
+Assert-PilotHash "$pilotDir/inputs.json" $pilotReview.inputsSha256
+foreach ($pilotInput in $pilotInputs.files) { Assert-PilotHash $pilotInput.path $pilotInput.sha256 }
+foreach ($pilotPin in $pilotDraft.checks.requiredVerifications.typecheck.program.generatedTypes.PSObject.Properties) {
+  Assert-PilotHash $pilotPin.Name $pilotPin.Value
+}
+if (Test-Path -LiteralPath 'tests/pm-ui/raw-fetch-guard.test.ts') { throw 'New test path already exists; re-review preparation' }
+if (Test-Path -LiteralPath "$pilotDir/policy.rev9.preserved.json") { throw 'Activation already staged; reconcile it first' }
+Copy-Item -LiteralPath '.delivery/v2/execution-policy.json' -Destination "$pilotDir/policy.rev9.preserved.json" -ErrorAction Stop
+$pilotNow = [DateTime]::UtcNow
+$pilotDraft.authorized_by = 'Elio: one R44 Steward pilot; CODEX_LOW / low / focused; one plan, one implementation, zero repairs; stop at verified_candidate'
+$pilotDraft.authorized_at = $pilotNow.ToString('o')
+$pilotDraft.grant.expires_at = $pilotNow.AddHours(24).ToString('o')
+$pilotDraft.'$comment' = 'Owner activated one R44 pilot. Exact phone plan approval; no automatic retry, repair, Apply or publish.'
+$pilotJson = $pilotDraft | ConvertTo-Json -Depth 100
+[IO.File]::WriteAllText((Join-Path (Get-Location) "$pilotDir/policy.activation.json"), $pilotJson, [Text.UTF8Encoding]::new($false))
+node --input-type=module -e "import {readFileSync} from 'node:fs'; import {validateExecutionPolicy} from './scripts/delivery-v2/policy.mjs'; const r=validateExecutionPolicy(JSON.parse(readFileSync('.tmp/r44-steward-pilot-20261024/policy.activation.json','utf8'))); if(!r.ok) throw new Error(JSON.stringify(r.refusals));"
+if ($LASTEXITCODE -ne 0) { throw 'Policy validation failed; installed policy unchanged' }
+Copy-Item -LiteralPath "$pilotDir/policy.activation.json" -Destination '.delivery/v2/execution-policy.json' -ErrorAction Stop
+```
+
+5. Start **one** `pnpm pm --bridge` in that terminal. Pair only if requested. Open `http://127.0.0.1:4317/#/deliver/R44?initiator=era-steward`; verify Codex / literal selector from `pilot.json` / low / Fast lane. If this browser offers Open delivery for the cancelled old run, press **New delivery** once; the old receipt remains accessible in Delivery history. If a request is unresolved, use Check/Resume request and stop.
+6. Owner may check readiness once. Setup, qualification, sign-in, included usage, environment or source blockers stop the pilot; no repair, dependency preparation, qualification rerun or provider fallback is authorized by this package. Historical evidence is not current readiness.
+7. Give Steward **“Run delivery for item R44. One Start only; report the run link or listed blockers, then stop.”** Start performs its own fresh admission checks. On an uncertain response, check the same receipt; never mint another UUID.
+8. Owner reviews and approves the **new run's exact plan/contract revision on the phone**. Confirm the R48 recount and focused fixture fit the two publication paths. No second planning job, revision job, implementation retry or repair is authorized. Stop at the verified candidate or first failure/unknown/blocker. Retain the new run/command/plan/result references. **Do not Apply** as part of this pilot; any later Apply is a separate owner action.
+
+Offline checks do not certify Docker, subscription/model availability, live qualification, relay, actual phone approval or a provider candidate. Fixture/manual acceptance: after source activation, use the cancelled old run only to confirm New delivery releases its browser slot without launching; Open delivery/history must still open the old run. A waiting/unknown run must expose only recovery, and an offline confirmation must preserve the intent. Verify these actions at about 390 px on the phone before owner acceptance. No owner PASS is recorded here.

@@ -10,6 +10,7 @@ Move money between two of your own accounts. One transfer writes one row in `tra
 ## Files at a glance
 
 - **Component**: `src/components/expense/TransferDialog.tsx`
+- **Incoming-transfer sheet**: `src/components/expense/IncomingTransferSheet.tsx` (mounted in `DeferredComponents.tsx`; polls 60s, partner household transfers <48h; Acknowledge persists in localStorage `ack-incoming-transfers`, Cancel hides until next load; device-local, no DB)
 - **Hooks**: `src/features/transfers/hooks.ts`
 - **API routes**: `src/app/api/transfers/`
 - **DB tables**: `transfers`, mutates `account_balances` for both legs

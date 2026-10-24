@@ -68,6 +68,22 @@ afterEach(() => {
 });
 
 describe("durable Steward initiation through the real Start entry", () => {
+  it("allows a fresh request after confirmed cancellation while preserving the old receipt and outcome", () => {
+    const original = body();
+    acceptStewardRequest(store, original, "owner", at);
+    store.insertRun({ run_id: "r-cancelled", work_id: "w-fixture", contract_id: "c-fixture", contract_revision: 1 });
+    updateStewardRequest(store, original.command_id, "run-created", at, { ok: true, run_id: "r-cancelled" });
+    const before = store.getReceipt("steward:" + original.command_id);
+    const next = body();
+    expect(acceptStewardRequest(store, next, "owner", at)).toMatchObject({ conflict: true, command_id: original.command_id });
+    store.updateRun("r-cancelled", { lifecycle: "CLOSED", closed_outcome: "cancelled" });
+    expect(acceptStewardRequest(store, next, "owner", at)).toMatchObject({ created: true });
+    expect(store.getReceipt("steward:" + original.command_id)).toEqual(before);
+    expect(stewardCommandState(store, original.command_id, 180000)).toMatchObject({ recorded: true, outcome: { ok: true, run_id: "r-cancelled" }, request: { terminal: true, status: "cancelled" } });
+    expect(requests()).toHaveLength(2);
+    expect(store.listAllJobs()).toHaveLength(0);
+  });
+
   it("commits acceptance before readiness and retains a prelaunch blocker without a run", async () => {
     const request = body();
     const response = await routeDeliveryV2(

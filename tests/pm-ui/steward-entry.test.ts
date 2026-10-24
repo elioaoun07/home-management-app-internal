@@ -41,6 +41,8 @@ it("lets the real Steward entry record missing setup while ordinary Start stays 
   });
   client.setQueryData(pmKeys.v2executors, { executors: [], refusals: [] });
   client.setQueryData(pmKeys.v2runs, { runs: [], requests: [] });
+  const intent = ["deliver", work.file, String(work.idChip || work.id).toUpperCase()].join(":");
+  client.setQueryData(pmKeys.v2intent("fixture:owner", intent), null);
   const render = () =>
     renderToStaticMarkup(
       createElement(
@@ -61,4 +63,13 @@ it("lets the real Steward entry record missing setup while ordinary Start stays 
   expect(ordinary).toMatch(
     /<button class="primary" disabled="">[\s\S]*?Start<\/button>/u,
   );
+  steward = true;
+  client.setQueryData(pmKeys.v2intent("fixture:owner", intent), { path: "deliver", body: {}, completed: true, runId: "cancelled-run" });
+  client.setQueryData(pmKeys.v2runs, { runs: [{ run_id: "cancelled-run", lifecycle: "CLOSED", closed_outcome: "cancelled" }], requests: [] });
+  const cancelled = render();
+  expect(cancelled).toContain(">New delivery</button>");
+  expect(cancelled).toContain(">Open delivery</button>");
+  expect(cancelled).toMatch(/<button class="primary" disabled="">/u);
+  client.setQueryData(pmKeys.v2runs, { runs: [{ run_id: "cancelled-run", lifecycle: "WAITING", closed_outcome: "cancelled" }], requests: [] });
+  expect(render()).not.toContain(">New delivery</button>");
 });
