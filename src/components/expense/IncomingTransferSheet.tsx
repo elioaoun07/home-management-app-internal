@@ -8,9 +8,10 @@ import {
 } from "@/components/ui/dialog";
 import { transferKeys, type Transfer } from "@/features/transfers/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { safeFetch } from "@/lib/safeFetch";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDownLeft, Check, X } from "lucide-react";
+import { ArrowDownLeft, Check } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const ACK_KEY = "ack-incoming-transfers";
@@ -43,17 +44,36 @@ async function fetchRecentTransfers(): Promise<Transfer[]> {
   return (await res.json()) as Transfer[];
 }
 
+async function fetchServerAcks(): Promise<string[]> {
+  const res = await fetch("/api/transfers/acknowledgements");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return (await res.json()) as string[];
+}
+
 /**
  * Global bottom sheet shown when the household partner sends a transfer.
- * Acknowledge is remembered per device; Cancel hides it until next load.
+ * Acknowledge (or any dismissal) is stored server-side so it syncs across
+ * devices; localStorage is the instant/offline fallback.
  * Purely informational — balances were already updated server-side.
  */
 export default function IncomingTransferSheet() {
   const tc = useThemeClasses();
   const [acked, setAcked] = useState<string[]>([]);
-  const [dismissed, setDismissed] = useState<string[]>([]);
+  const [ready, setReady] = useState(false);
 
-  useEffect(() => setAcked(readAcked()), []);
+  useEffect(() => {
+    setAcked(readAcked());
+    setReady(true);
+  }, []);
+
+  const acks = useQuery({
+    queryKey: [...transferKeys.all, "acknowledged"] as const,
+    queryFn: fetchServerAcks,
+    staleTime: POLL_MS,
+    refetchInterval: POLL_MS,
+    refetchOnWindowFocus: true,
+  });
+  const serverAcked = acks.data ?? [];
 
   const { data } = useQuery({
     queryKey: [...transferKeys.all, "incoming"] as const,
@@ -72,7 +92,7 @@ export default function IncomingTransferSheet() {
         t.transfer_type === "household" &&
         new Date(t.created_at).getTime() >= cutoff &&
         !acked.includes(t.id) &&
-        !dismissed.includes(t.id),
+        !serverAcked.includes(t.id),
     )
     .sort(
       (a, b) =>
@@ -85,12 +105,18 @@ export default function IncomingTransferSheet() {
     const next = [...acked, current.id];
     setAcked(next);
     writeAcked(next);
-  };
-  const cancel = () => {
-    if (current) setDismissed((d) => [...d, current.id]);
+    safeFetch("/api/transfers/acknowledgements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transfer_id: current.id }),
+    })
+      .then(() => acks.refetch())
+      .catch(() => {
+        /* kept in localStorage; this device still won't re-show it */
+      });
   };
 
-  if (!current) return null;
+  if (!ready || acks.isPending || !current) return null;
 
   const net = current.amount - (current.returned_amount || 0);
   const currency = current.to_account_currency || "USD";
@@ -109,17 +135,12 @@ export default function IncomingTransferSheet() {
     : tc.isCalm
       ? "text-stone-400"
       : "text-white/60";
-  const ghost = tc.isFrost
-    ? "bg-slate-100/80 text-slate-600 hover:bg-slate-200/80"
-    : tc.isCalm
-      ? "bg-stone-700/40 text-stone-300 hover:bg-stone-700"
-      : "bg-white/5 text-white/70 hover:bg-white/10";
 
   return (
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) cancel();
+        if (!open) acknowledge();
       }}
     >
       <DialogContent
@@ -161,31 +182,18 @@ export default function IncomingTransferSheet() {
             {current.description ? ` · ${current.description}` : ""}
           </DialogDescription>
         </div>
-        <div className="grid grid-cols-[1fr_2fr] gap-2.5">
-          <button
-            type="button"
-            onClick={cancel}
-            className={cn(
-              "flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-medium transition-colors active:scale-[0.98] motion-reduce:transform-none",
-              ghost,
-            )}
-          >
-            <X className="h-4 w-4" />
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={acknowledge}
-            className={cn(
-              "flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-colors active:scale-[0.98] motion-reduce:transform-none",
-              tc.buttonPrimary,
-              tc.textButton,
-            )}
-          >
-            <Check className="h-4 w-4" />
-            Acknowledge
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={acknowledge}
+          className={cn(
+            "flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-colors active:scale-[0.98] motion-reduce:transform-none",
+            tc.buttonPrimary,
+            tc.textButton,
+          )}
+        >
+          <Check className="h-4 w-4" />
+          Acknowledge
+        </button>
       </DialogContent>
     </Dialog>
   );

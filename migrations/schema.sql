@@ -985,6 +985,16 @@ CREATE UNIQUE INDEX transfers_statement_hash_uniq
 CREATE INDEX idx_transfers_statement_hash
   ON public.transfers (user_id, statement_hash)
   WHERE statement_hash IS NOT NULL;
+CREATE TABLE public.transfer_acknowledgements (
+  user_id uuid NOT NULL,
+  transfer_id uuid NOT NULL,
+  acknowledged_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT transfer_acknowledgements_pkey PRIMARY KEY (user_id, transfer_id),
+  CONSTRAINT transfer_acknowledgements_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE,
+  CONSTRAINT transfer_acknowledgements_transfer_id_fkey FOREIGN KEY (transfer_id) REFERENCES public.transfers(id) ON DELETE CASCADE
+);
+CREATE INDEX transfer_acknowledgements_user_ack_idx
+  ON public.transfer_acknowledgements (user_id, acknowledged_at DESC);
 CREATE TABLE public.account_balance_history (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   account_id uuid NOT NULL,
