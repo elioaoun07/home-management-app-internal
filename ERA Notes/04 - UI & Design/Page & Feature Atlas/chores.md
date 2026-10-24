@@ -21,7 +21,7 @@ tags:
 - **Layout / metadata**: `src/app/chores/layout.tsx`
 - **Manifest**: `public/manifests/chores.webmanifest`
 - **Main component**: `src/components/chores/ChoresView.tsx`
-- **Sub-components**: `ChoreRow.tsx`, `ChoreTodoRow.tsx`, `ChoreSheet.tsx`, `ChoreCheckInPanel.tsx`, `ChorePostponeSheet.tsx`, `choreUi.tsx` (all in `src/components/chores/`)
+- **Sub-components**: `ChoreRow.tsx`, `ChoreGroupRow.tsx` (Layers toggle: one chore across rooms, one Done), `ChoreTodoRow.tsx`, `ChoreSheet.tsx`, `ChoreCheckInPanel.tsx`, `ChorePostponeSheet.tsx`, `choreUi.tsx` (all in `src/components/chores/`)
 - **Desktop**: `src/components/web/WebChores.tsx` → `ChoresView variant="web"`
 
 ## Hooks
@@ -33,6 +33,7 @@ tags:
 ## API routes
 
 - `POST /api/items/[id]/complete` → `src/app/api/items/[id]/complete/route.ts`
+- `POST|DELETE /api/items/bulk/complete` → `src/app/api/items/bulk/complete/route.ts` (grouped Done + Undo)
 - `POST /api/items/[id]/actions` → `src/app/api/items/[id]/actions/route.ts`
 - Flexible slots: direct Supabase upsert/delete on `item_flexible_schedules`
 

@@ -35,6 +35,8 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { z } from "zod";
+import { acceptStewardRequest, updateStewardRequest, projectStewardRequest, stewardStaleMs } from "./steward-requests.mjs";
 
 import { ContractError, fingerprint, contentId, deepFreeze, normalizePath, evaluateGrant } from "./contracts.mjs";
 import { recordPlan } from "./interaction.mjs";
@@ -851,7 +853,7 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
 
   if (method === "GET" && path === "/api/delivery/v2/runs") {
     const available = ctx.journey && (!ctx.hasStore || ctx.hasStore());
-    return json(200, { runs: available ? ctx.journey.list() : [] });
+    return json(200, { runs: available ? ctx.journey.list() : [], requests: ctx.stewardRequests?.() || [] });
   }
 
   // Command Center Phase 5: slots, waiting items with their verdicts, owner
@@ -891,6 +893,15 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
   // instead of resending. Only the actor who sent it may read it.
   if (method === "GET" && path === "/api/delivery/v2/command") {
     const command_id = (query && query.get("id")) || "";
+    if ((!ctx.hasStore || ctx.hasStore()) && ctx.store?.getReceipt) {
+      const row = ctx.store.getReceipt("steward:" + command_id);
+      if (row) {
+        if (row.actor !== auth.actor) return json(404, { error: "unknown-command" });
+        const request = projectStewardRequest(ctx.store, row, stewardStaleMs(process.env.PM_STEWARD_STALE_MS));
+        return json(200, { command_id, actor: auth.actor, recorded: !!request.outcome,
+          outcome: request.outcome, request });
+      }
+    }
     const state = ctx.journey && (!ctx.hasStore || ctx.hasStore()) ? ctx.journey.commandState(command_id) : null;
     if (!state || state.actor !== auth.actor) return json(404, { error: "unknown-command", detail: command_id });
     return json(200, state);
@@ -930,60 +941,102 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
   }
 
   if (method === "POST" && path === "/api/delivery/v2/deliver") {
-    const mode = readDispatchMode({ root: ctx.root });
-    if (mode.mode !== "v2") {
-      return json(409, {
-        error: ENTRY_REFUSALS.V2_ROUTE_DISABLED,
-        detail: "this installation is in v1 dispatch mode",
-      });
-    }
-    // The run names its executor. There is no installation default to fall back
-    // on, and an unknown name is refused rather than resolved to something.
-    if (body.executor == null || String(body.executor).trim() === "") {
-      return json(409, { error: ENTRY_REFUSALS.NO_EXECUTOR, detail: "choose Claude or Codex for this run" });
-    }
-    const requested = resolveExecutorChoice(body.executor);
-    if (!requested) {
-      return json(409, { error: ENTRY_REFUSALS.BAD_EXECUTOR, detail: String(body.executor) });
-    }
-    if (ctx.readiness && !ctx.commandStatus?.(body.command_id)) {
-      const readiness = await ctx.readiness({ file: body.file, id: body.expectId || body.witness?.alias, executor: body.executor, model: body.model, effort: body.effort, workProfile: body.workProfile });
-      if (!readiness.ready) return json(409, { ok: false, error: "delivery-not-ready", readiness });
-    }
-    if (ctx.journey) {
-      const outcome = await ctx.journey.deliver({
-        file: body.file,
-        cbidx: body.cbidx,
-        witness: body.witness,
-        expectLine: body.expectLine,
-        expectId: body.expectId,
-        executor: requested.backend_id,
-        model: body.model ?? null,
-        effort: body.effort ?? null,
-        workProfile: body.workProfile ?? null,
-        requestedDisposition: body.requestedDisposition,
-        command_id: body.command_id,
+    // Keep the existing admission path intact; Steward wraps it with one durable
+    // observation claim before readiness, mode, executor or policy can refuse.
+    const launch = async () => {
+      const mode = readDispatchMode({ root: ctx.root });
+      if (mode.mode !== "v2") {
+        return json(409, {
+          error: ENTRY_REFUSALS.V2_ROUTE_DISABLED,
+          detail: "this installation is in v1 dispatch mode",
+        });
+      }
+      // The run names its executor. There is no installation default to fall back
+      // on, and an unknown name is refused rather than resolved to something.
+      if (body.executor == null || String(body.executor).trim() === "") {
+        return json(409, { error: ENTRY_REFUSALS.NO_EXECUTOR, detail: "choose Claude or Codex for this run" });
+      }
+      const requested = resolveExecutorChoice(body.executor);
+      if (!requested) {
+        return json(409, { error: ENTRY_REFUSALS.BAD_EXECUTOR, detail: String(body.executor) });
+      }
+      // Start owns its live evidence. Observations last 60 seconds and one refresh
+      // can take most of that, so Check-then-Start left the caller a window of
+      // seconds that a UI-driven agent missed in practice (2026-10-19). When the
+      // cached evidence is not current, collect it inside this request. Dispatch
+      // still re-observes under its own claim.
+      if (ctx.readiness && !ctx.commandStatus?.(body.command_id)) {
+        const selection = { file: body.file, id: body.expectId || body.witness?.alias, executor: body.executor, model: body.model, effort: body.effort, workProfile: body.workProfile };
+        let readiness = await ctx.readiness(selection);
+        if (!readiness.ready && ctx.refreshReadiness) {
+          try { readiness = await ctx.refreshReadiness(selection); } catch { /* the passive refusal stands */ }
+        }
+        if (!readiness.ready) {
+          // Evidence bound to inputs that changed mid-check would otherwise refuse with nothing to fix.
+          const moved = Object.values(readiness.observationDiagnostics || {}).some((row) => row?.reason === "context-mismatch");
+          return json(409, { ok: false, error: "delivery-not-ready", ...(moved ? { detail: "files changed during the check; press Start again" } : {}), readiness });
+        }
+      }
+      if (ctx.journey) {
+        if (body.initiatedBy === "era-steward") updateStewardRequest(ctx.store, body.command_id, "admission", ctx.now ? ctx.now() : new Date().toISOString());
+        const outcome = await ctx.journey.deliver({
+          file: body.file,
+          cbidx: body.cbidx,
+          witness: body.witness,
+          expectLine: body.expectLine,
+          expectId: body.expectId,
+          executor: requested.backend_id,
+          model: body.model ?? null,
+          effort: body.effort ?? null,
+          workProfile: body.workProfile ?? null,
+          requestedDisposition: body.requestedDisposition,
+          command_id: body.command_id,
+          actor: auth.actor,
+        });
+        return json(outcome.ok ? 200 : 409, outcome);
+      }
+      if (typeof ctx.deliver !== "function") {
+        // Not an error — the normal state of an installation whose pilot gate
+        // policy has not been authorized yet. S1.4: "Future implementation
+        // authorization identifies the pilot's gate policy explicitly." The entry
+        // point refuses rather than inventing criteria, a scratch scope or a grant.
+        return json(409, {
+          error: ENTRY_REFUSALS.NO_POLICY,
+          detail: "no deliver policy is configured for this installation; a pilot gate policy must be authorized and installed first",
+        });
+      }
+      const outcome = await ctx.deliver({
+        ...body,
         actor: auth.actor,
+        session: auth.session_id,
+        executor: requested.backend_id,
       });
       return json(outcome.ok ? 200 : 409, outcome);
+    };
+    const previous = body.command_id && (!ctx.hasStore || ctx.hasStore()) && ctx.store?.getReceipt?.("steward:" + body.command_id);
+    if (body.initiatedBy == null && !previous) return launch();
+    const parsed = z.object({ initiatedBy: z.literal("era-steward"), command_id: z.string().uuid(),
+      file: z.string().min(1).max(1024), expectId: z.string().min(1).max(128) }).safeParse(body);
+    if (!parsed.success) return json(400, { ok: false, error: "invalid-steward-request" });
+    const at = () => ctx.now ? ctx.now() : new Date().toISOString();
+    const accepted = acceptStewardRequest(ctx.store, body, auth.actor, at());
+    if (accepted.conflict) return json(409, { ok: false, error: "steward-request-conflict", command_id: accepted.command_id || body.command_id });
+    if (!accepted.created) {
+      const request = projectStewardRequest(ctx.store, ctx.store.getReceipt("steward:" + body.command_id), stewardStaleMs(process.env.PM_STEWARD_STALE_MS));
+      if (request.outcome) return json(request.outcome.ok ? 200 : 409, request.outcome);
+      return json(409, { ok: false, refusals: [{ code: "command-without-recorded-outcome" }], request });
     }
-    if (typeof ctx.deliver !== "function") {
-      // Not an error — the normal state of an installation whose pilot gate
-      // policy has not been authorized yet. S1.4: "Future implementation
-      // authorization identifies the pilot's gate policy explicitly." The entry
-      // point refuses rather than inventing criteria, a scratch scope or a grant.
-      return json(409, {
-        error: ENTRY_REFUSALS.NO_POLICY,
-        detail: "no deliver policy is configured for this installation; a pilot gate policy must be authorized and installed first",
-      });
+    try {
+      updateStewardRequest(ctx.store, body.command_id, "readiness", at());
+      const result = await launch();
+      updateStewardRequest(ctx.store, body.command_id, result.json.ok === true ? "run-created" : "blocked", at(), { ...result.json, ok: result.status === 200 && result.json.ok !== false });
+      return result;
+    } catch {
+      // An exception is not evidence that admission failed. Keep the claim; an
+      // explicit status read can recover a committed command after a lost reply.
+      updateStewardRequest(ctx.store, body.command_id, "reconciliation-required", at());
+      return json(503, { ok: false, error: "steward-outcome-unconfirmed" });
     }
-    const outcome = await ctx.deliver({
-      ...body,
-      actor: auth.actor,
-      session: auth.session_id,
-      executor: requested.backend_id,
-    });
-    return json(outcome.ok ? 200 : 409, outcome);
   }
 
   if (method === "POST" && ctx.journey) {

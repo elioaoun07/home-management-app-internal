@@ -47,7 +47,8 @@ import { createJourney } from "./journey.mjs";
 import { loadQualification } from "./qualification.mjs";
 import { createContainerRuntime } from "./worker-boundary.mjs";
 import { inspectReadiness } from "./inspect-readiness.mjs";
-import { evaluateReadiness, readinessFact } from "./readiness.mjs";
+import { evaluateReadiness, readinessFact, PASSIVE_GATES } from "./readiness.mjs";
+import { listStewardRequests, stewardStaleMs, stewardCommandState } from "./steward-requests.mjs";
 
 export { routeDeliveryV2 } from "./entry.mjs";
 
@@ -203,6 +204,10 @@ export function createDeliveryV2Context({
     // A process restart must not turn a durable command into an absent one.
     commandStatus: id => context.hasStore() ? context.store.getCommand(String(id)) : null,
 
+    // Passive publication over the already-open connection; never initializes a runtime.
+    stewardRequests: () => handle ? listStewardRequests(handle, stewardStaleMs(process.env.PM_STEWARD_STALE_MS)) : [],
+    stewardCommandState: id => context.hasStore() ? stewardCommandState(context.store, id, stewardStaleMs(process.env.PM_STEWARD_STALE_MS)) : null,
+
     /** Whether a supervisor store exists yet; reads never create one. */
     hasStore: () => Boolean(handle) || existsSync(storePath),
 
@@ -306,7 +311,7 @@ export function createDeliveryV2Context({
         const view = context.store.readOnlyView();
         const before = await inspectReadiness({ ...selection, root: ROOT, pmRel, readOnlyStore: view });
         const loaded = loadExecutionPolicy({ root: ROOT }), chosen = resolveExecutorChoice(selection.executor);
-        if (!loaded.ok || !chosen || ["selection", "policy", "source", "checks", "coordination"].some(gate => before.facts[gate]?.state !== "satisfied") || !loaded.policy.runtime?.dependencies?.environment) {
+        if (!loaded.ok || !chosen || PASSIVE_GATES.some(gate => before.facts[gate]?.state !== "satisfied") || !loaded.policy.runtime?.dependencies?.environment) {
           // A refused refresh replaces the prior evidence too, so the next GET
           // cannot silently revert to a different, older collection.
           readinessCache.set(key, {});

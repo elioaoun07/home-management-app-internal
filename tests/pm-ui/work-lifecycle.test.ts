@@ -55,6 +55,13 @@ describe("actionable work and completed implementation", () => {
       ),
     ).toBeUndefined();
   });
+  it("resolves the hand-off link `#/deliver/<ID>` by the ID alone, never a guess", () => {
+    const world = buildWorld(snapshot);
+    const select = (id: string) => selectionFromRoute(world, ["deliver", id], new URLSearchParams());
+    expect(select("dlv-90")?.id).toBe("DLV-90");
+    expect(select("DLV-98")).toBeUndefined();
+    expect(select("DLV-999")).toBeUndefined();
+  });
   it("deduplicates done receipts, retains owner-pending status, and excludes reopened work", () => {
     const world = buildWorld(snapshot);
     expect(doneReceipts(world).map((entry) => entry.workId)).toEqual([

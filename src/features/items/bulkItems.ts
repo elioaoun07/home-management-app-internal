@@ -215,7 +215,7 @@ export function listAccepts(filters: ItemsFilter, item: ItemWithDetails): boolea
 }
 
 /** Every cached item array with the filter it was fetched under. */
-function itemLists(queryClient: QueryClient) {
+export function itemLists(queryClient: QueryClient) {
   const lists: { key: readonly unknown[]; filters: ItemsFilter }[] = queryClient
     .getQueriesData<ItemWithDetails[]>({ queryKey: itemsKeys.lists() })
     .map(([key]) => ({ key, filters: (key[2] ?? {}) as ItemsFilter }));
@@ -265,7 +265,7 @@ function cachedItems(queryClient: QueryClient, ids: string[]): ItemWithDetails[]
 
 // ── Sending ──────────────────────────────────────────────────────────────────
 
-type Attempt<T> =
+export type Attempt<T> =
   | { kind: "ok"; value: T }
   | { kind: "refused" }
   | { kind: "unreachable" };
@@ -275,16 +275,17 @@ type Attempt<T> =
  * and a lost response are all "unverified": the same ids go out again, which the
  * server answers with the rows it already has.
  */
-async function sendWithRetry<T>(
+export async function sendWithRetry<T>(
   method: "POST" | "DELETE",
   payload: unknown,
   read: (json: unknown) => T | null,
   sleep: (ms: number) => Promise<void>,
+  url: string = BULK_URL,
 ): Promise<Attempt<T>> {
   for (let attempt = 0; ; attempt++) {
     if (!isReallyOnline()) return { kind: "unreachable" };
     try {
-      const res = await safeFetch(BULK_URL, {
+      const res = await safeFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -308,7 +309,7 @@ async function sendWithRetry<T>(
 }
 
 /** The queue replays when connectivity returns; if the network never dropped, nudge it. */
-function nudgeQueue() {
+export function nudgeQueue() {
   if (typeof window === "undefined") return;
   for (const delay of [10_000, 45_000]) {
     setTimeout(() => {

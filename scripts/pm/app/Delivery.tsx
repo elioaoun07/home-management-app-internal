@@ -33,6 +33,7 @@ import {
 import { returnFromLaunch, selectionFromRoute } from "./Work";
 import { LaunchV2, QueueV2, V2RunLink, useV2Runs } from "./DeliveryV2";
 import type { Capabilities, Preflight, Recommendation, Work } from "./types";
+import { StewardRequests } from "./StewardRequests";
 
 export function Delivery() {
   const { runs, runError, world } = useWorld();
@@ -63,6 +64,7 @@ export function Delivery() {
       />
       <ErrorNotice error={runError} />
       <ErrorNotice error={v2.error} />
+      <StewardRequests requests={v2.data?.requests || []} />
       <QueueV2 />
       {active.length || v2Active.length ? (
         <section className="delivery-list">

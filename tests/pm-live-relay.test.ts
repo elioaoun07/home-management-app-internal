@@ -195,7 +195,7 @@ function publishedRows(ownerId: string, { seenAt = new Date().toISOString(), run
     row(ROW_KINDS.DOC, { relPath: "Budget/4 - Checklist.md", raw, sha, mtimeMs: 1 }, "Budget/4 - Checklist.md"),
     row(ROW_KINDS.HEARTBEAT, { installation_id: INST, seenAt, availability: { state: "ready", executors: [] } }),
     row(ROW_KINDS.CAPABILITIES, { mode: "v2", catalogue: { executors: [], policy: null, refusals: [] } }),
-    row(ROW_KINDS.V2RUNS, { runs: runs.map((run_id) => ({ run_id })) }),
+    row(ROW_KINDS.V2RUNS, { runs: runs.map((run_id) => ({ run_id })), requests: [{ command_id: "steward-fixture", initiatedBy: "ERA Steward", workId: "DLV-140", status: "blocked", lastConfirmedAt: "2026-10-20T10:00:00Z", staleAfterMs: 180000 }] }),
     ...runs.map((run_id) => row(ROW_KINDS.V2RUN, { ok: true, run: { run_id } }, run_id)),
   ];
 }
@@ -251,6 +251,7 @@ describe("relay transport", () => {
     const stopFresh = fresh.start();
     await fresh.ready();
     expect((await fresh.v2Runs()).runs.map((run) => run.run_id)).toEqual(["r-live"]);
+    expect((await fresh.v2Runs()).requests).toMatchObject([{ command_id: "steward-fixture", initiatedBy: "ERA Steward", status: "blocked", staleAfterMs: 180000 }]);
     await expect(fresh.v2Run("r-gone")).rejects.toMatchObject({ status: 404 });
     expect((await fresh.snapshot()).offline).toBe(false);
     expect(fresh.connection()).toMatchObject({ online: true, stale: false });
@@ -264,6 +265,7 @@ describe("relay transport", () => {
     expect(snapshot).toMatchObject({ offline: true, cachedAt: "2026-09-11T10:00:00Z" });
     expect(snapshot.files.map((file) => file.relPath)).toEqual(["Budget/4 - Checklist.md"]);
     expect(offline.connection()).toMatchObject({ online: false, stale: true, savedAt: "2026-09-11T10:00:00Z" });
+    expect((await offline.v2Runs()).requests).toMatchObject([{ command_id: "steward-fixture", lastConfirmedAt: "2026-10-20T10:00:00Z", staleAfterMs: 180000 }]);
     stopOffline();
   });
 

@@ -33,7 +33,9 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+const TAB_KEY = "chores.assignTab";
 
 // ── Staged placements ────────────────────────────────────────────────────────
 
@@ -139,6 +141,8 @@ interface DraftRowProps {
   onStage: (date: string, time: string | null | undefined) => void;
   onUnstage: () => void;
   onSwipe: (side: ChoreSwipeSide) => void;
+  onOwner: (userId: string) => void;
+  ownerId: string | null;
 }
 
 function DraftRow({
@@ -154,6 +158,8 @@ function DraftRow({
   onStage,
   onUnstage,
   onSwipe,
+  onOwner,
+  ownerId,
 }: DraftRowProps) {
   const tone = useChoreTone();
   const meta = [
@@ -253,6 +259,30 @@ function DraftRow({
               selected={draft?.date}
               onPick={(option) => onStage(option.date, undefined)}
             />
+            {(me || partner) && (
+              <div className="flex gap-2" role="group" aria-label="Person">
+                {[me, partner].map(
+                  (who) =>
+                    who && (
+                      <button
+                        key={who.id}
+                        type="button"
+                        onClick={() => onOwner(who.id)}
+                        aria-pressed={ownerId === who.id}
+                        className={cn(
+                          "h-11 flex-1 truncate rounded-xl border px-3 text-xs font-semibold",
+                          tone.focus,
+                          ownerId === who.id
+                            ? cn(personTone(who.color, tone.isFrost).outline, tone.selected)
+                            : cn(tone.ghost, "border-transparent"),
+                        )}
+                      >
+                        {who.label}
+                      </button>
+                    ),
+                )}
+              </div>
+            )}
             {draft && (
               <label
                 className={cn(
@@ -323,7 +353,23 @@ export function ChoreAssignPanel({
   onDiscard,
 }: ChoreAssignPanelProps) {
   const tone = useChoreTone();
-  const [tab, setTab] = useState<Tab>("rooms");
+  const [tab, setTabState] = useState<Tab>("rooms");
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(TAB_KEY) === "chores") setTabState("chores");
+    } catch {
+      // per-viewer convenience only
+    }
+  }, []);
+  const setTab = (next: Tab) => {
+    setTabState(next);
+    try {
+      localStorage.setItem(TAB_KEY, next);
+    } catch {
+      // per-viewer convenience only
+    }
+  };
+  const [query, setQuery] = useState("");
   const [focus, setFocus] = useState<Focus>(null);
   const [group, setGroup] = useState<string | null>(null);
   const [openRow, setOpenRow] = useState<string | null>(null);
@@ -355,6 +401,18 @@ export function ChoreAssignPanel({
     time: string | null | undefined,
   ) => store.stage(todo, weekStart, date, time, ownerOf(todo));
 
+  const needle = query.trim().toLowerCase();
+  const searching = needle.length > 0;
+  const matches = useMemo(
+    () =>
+      searching
+        ? todos.filter((todo) =>
+            `${todo.title} ${todo.room ?? ""}`.toLowerCase().includes(needle),
+          )
+        : [],
+    [todos, needle, searching],
+  );
+
   // ── Bulk ──
   const renderBulk = (scope: ChoreTodo[]) => {
     const days: ChoreDayOption[] = weekDays.map((date) => ({
@@ -380,11 +438,19 @@ export function ChoreAssignPanel({
     const applyOwner = (userId: string) => {
       for (const todo of scope) store.setOwner(todo.key, userId);
     };
+    const eligible = scope.filter((todo) =>
+      todo.days.some((d) => d.enabled),
+    ).length;
     return (
       <div
         className={cn("space-y-2.5 rounded-2xl border p-2.5", tone.border)}
+        role="group"
         aria-label="Assign all"
       >
+        <p className={cn("text-xs font-semibold tabular-nums", tone.subtle)}>
+          Assign all {eligible}
+          {searching ? " shown" : ""}
+        </p>
         <ChoreDayChips days={days} selected={selected} onPick={(o) => applyDay(o.date)} />
         {(me || partner) && (
           <div className="flex gap-2">
@@ -437,6 +503,8 @@ export function ChoreAssignPanel({
           const to = side === "me" ? me : partner;
           if (to) store.setOwner(todo.key, to.id);
         }}
+        onOwner={(userId) => store.setOwner(todo.key, userId)}
+        ownerId={ownerOf(todo)}
       />
     );
   };
@@ -555,9 +623,36 @@ export function ChoreAssignPanel({
     </div>
   );
 
+  const renderResults = () =>
+    matches.length > 0 ? (
+      <div className="space-y-2">
+        {matches.length > 1 && renderBulk(matches)}
+        {matches.map((todo) =>
+          renderRow(todo, todo.room ? `${todo.title} · ${todo.room}` : todo.title),
+        )}
+      </div>
+    ) : (
+      <p className={cn("py-6 text-center text-sm", tone.subtle)}>—</p>
+    );
+
   return (
     <div className="space-y-4">
-      {!focus && (
+      <input
+        type="text"
+        inputMode="search"
+        enterKeyHint="search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Search"
+        aria-label="Search chores"
+        className={cn(
+          "h-11 w-full rounded-xl border bg-transparent px-3 text-sm",
+          tone.border,
+          tone.main,
+          tone.focus,
+        )}
+      />
+      {!searching && (
         <div
           className={cn(
             "flex gap-1 rounded-2xl border p-1",
@@ -576,10 +671,13 @@ export function ChoreAssignPanel({
             <button
               key={key}
               type="button"
-              onClick={() => setTab(key)}
+              onClick={() => {
+                setTab(key);
+                setFocus(null);
+              }}
               aria-pressed={tab === key}
               className={cn(
-                "h-10 flex-1 rounded-xl px-3 text-xs font-semibold transition-colors",
+                "h-11 flex-1 rounded-xl px-3 text-xs font-semibold transition-colors",
                 tone.focus,
                 tab === key ? tone.selected : tone.soft,
               )}
@@ -590,7 +688,9 @@ export function ChoreAssignPanel({
         </div>
       )}
 
-      {focus ? (
+      {searching ? (
+        renderResults()
+      ) : focus ? (
         renderFocus(focus)
       ) : tab === "rooms" ? (
         <div className="grid grid-cols-2 gap-3">

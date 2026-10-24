@@ -367,9 +367,10 @@ export function createRelayTransport({
       throw deskOnly();
     },
 
-    async v2Runs(): Promise<{ runs: V2RunSummary[] }> {
+    async v2Runs(): Promise<{ runs: V2RunSummary[]; requests: import("../../../../scripts/pm/app/types").StewardRequest[] }> {
       await readyPromise;
-      return { runs: payloadOf<{ runs?: V2RunSummary[] }>(ROW_KINDS.V2RUNS)?.runs || [] };
+      const payload = payloadOf<{ runs?: V2RunSummary[]; requests?: import("../../../../scripts/pm/app/types").StewardRequest[] }>(ROW_KINDS.V2RUNS);
+      return { runs: payload?.runs || [], requests: payload?.requests || [] };
     },
 
     async v2Run(id: string): Promise<V2RunDetail> {

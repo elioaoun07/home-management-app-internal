@@ -1,7 +1,7 @@
 // DLV-137: one deterministic projection, with no I/O or execution authority.
 import { canonicalJson, deepFreeze, fingerprint } from "./contracts.mjs";
 import { LAUNCH_GATES, READINESS_SCHEMA } from "./readiness-contract.mjs";
-export { LAUNCH_GATES, READINESS_SCHEMA } from "./readiness-contract.mjs";
+export { LAUNCH_GATES, PASSIVE_GATES, READINESS_SCHEMA } from "./readiness-contract.mjs";
 /** @typedef {{state:string,code:string,detail:unknown,evidence:unknown,nextAction:string|null,reasons?:Array<{code:string,detail?:unknown,state?:string,nextAction?:string|null}>}} ReadinessFact */
 /** @param {string} state @param {string} code @param {unknown} detail @param {unknown} evidence @param {string|null} nextAction
  * @returns {ReadinessFact} */

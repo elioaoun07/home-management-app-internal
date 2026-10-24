@@ -1,5 +1,6 @@
 "use client";
 
+import { useBulkComplete } from "@/features/items/bulkComplete";
 import { useBulkItems } from "@/features/items/bulkItems";
 import { useItemActionsWithToast } from "@/features/items/useItemActions";
 import {
@@ -21,6 +22,7 @@ import type { CatalogueItem } from "@/types/catalogue";
 import type { FlexibleSchedule, ItemWithDetails } from "@/types/items";
 import { addDays, addWeeks, endOfWeek, format, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { toast } from "sonner";
 import {
   ALL_DAY_TIME,
@@ -139,6 +141,77 @@ export function useChoreSlotActions(slot: ChoreSlot) {
     postpone,
     isPending: actions.isLoading,
   };
+}
+
+/**
+ * Complete every open slot of a grouped chore ("Sweep floor" in 9 rooms) in one
+ * bulk request: done at once, one toast, one Undo. Slots someone else owns ask
+ * for an Override first, like a single completion does.
+ */
+export function useChoreGroupComplete(
+  currentUserId: string | null,
+  ownerLabel: (userId: string) => string,
+) {
+  const { completeMany, reopenMany } = useBulkComplete();
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+
+  const run = async (key: string, title: string, open: ChoreSlot[]) => {
+    setPendingKey(key);
+    const now = new Date().toISOString();
+    const result = await completeMany(
+      open.map((slot) => ({
+        item: slot.item,
+        occurrenceDate: now,
+        plannedFor: slot.plannedAt,
+      })),
+    );
+    setPendingKey(null);
+    if (result.refused.length > 0) {
+      toast.error(`${result.refused.length} not saved`, {
+        icon: ToastIcons.error,
+      });
+    }
+    const completed = [...result.done, ...result.queued];
+    if (completed.length === 0) return;
+    toast.success(`${title} · ${completed.length}`, {
+      icon: ToastIcons.success,
+      duration: 4000,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          void reopenMany(completed).then(({ ok }) => {
+            if (!ok) notSaved();
+          });
+        },
+      },
+    });
+  };
+
+  const completeGroup = (key: string, title: string, slots: ChoreSlot[]) => {
+    const open = slots.filter((slot) => !slot.done);
+    if (open.length === 0 || pendingKey) return;
+    const other = currentUserId
+      ? open.find(
+          (slot) =>
+            slot.item.responsible_user_id &&
+            slot.item.responsible_user_id !== currentUserId,
+        )
+      : undefined;
+    if (other?.item.responsible_user_id) {
+      toast.warning(
+        `${ownerLabel(other.item.responsible_user_id)} is responsible for this`,
+        {
+          icon: ToastIcons.partner,
+          duration: 6000,
+          action: { label: "Override", onClick: () => void run(key, title, open) },
+        },
+      );
+      return;
+    }
+    void run(key, title, open);
+  };
+
+  return { completeGroup, pendingKey };
 }
 
 /** Change who is responsible for a chore item (item-level, not per slot). */

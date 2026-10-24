@@ -1134,6 +1134,14 @@ export function openStore({ path, now = () => new Date().toISOString(), readOnly
       return sql("SELECT * FROM receipts WHERE subject_id = ? ORDER BY created_at, receipt_id").all(subject_id);
     },
 
+    getReceipt(receipt_id) {
+      return sql("SELECT * FROM receipts WHERE receipt_id = ?").get(receipt_id) || null;
+    },
+
+    listReceiptsByKind(kind, limit = 100) {
+      return sql("SELECT * FROM receipts WHERE kind = ? ORDER BY created_at DESC, receipt_id LIMIT ?").all(kind, limit);
+    },
+
     // -- decisions ----------------------------------------------------------
 
     putDecision(decision) {
@@ -1396,6 +1404,10 @@ export function openStore({ path, now = () => new Date().toISOString(), readOnly
 
     listRunEvents(run_id, after = 0) {
       return sql("SELECT * FROM run_events WHERE run_id = ? AND seq > ? ORDER BY seq").all(run_id, Number(after) || 0);
+    },
+
+    latestRunEvent(run_id) {
+      return sql("SELECT seq, kind, at FROM run_events WHERE run_id = ? ORDER BY seq DESC LIMIT 1").get(run_id) || null;
     },
 
     // -- applications (schema 4) ----------------------------------------------

@@ -517,6 +517,29 @@ describe("the HTTP surface", () => {
     expect(recovered!.json.run_id).toBe("original"); expect(calls).toBe(1);
   });
 
+  it("collects its own readiness inside Start when the cached evidence is not current", async () => {
+    setDispatchMode({ root: ROOT, mode: "v2", actor: "owner" });
+    let launched = 0, refreshed = 0, next = { ready: true };
+    const passive = { ready: false, blockers: [{ gate: "runtime", code: "runtime-stale" }] };
+    const context = { ...ctx(), readiness: async () => passive, refreshReadiness: async () => { refreshed++; return next; },
+      journey: { deliver: async () => { launched++; return { ok: true, run_id: "r-one-step" }; } } };
+    const send = (command_id: string) => routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers: pairedHeaders(), body: { executor: "codex", command_id } }, context);
+    const started = await send("a");
+    expect(started!.json.run_id).toBe("r-one-step"); expect(refreshed).toBe(1); expect(launched).toBe(1);
+    next = { ready: false, blockers: [{ gate: "environment", code: "environment-observed" }] } as typeof next;
+    const refused = await send("b");
+    expect(refused!.status).toBe(409); expect(refused!.json.error).toBe("delivery-not-ready");
+    expect(refused!.json.readiness).toBe(next); expect(refused!.json.detail).toBeUndefined(); expect(launched).toBe(1);
+    next = { ready: false, observationDiagnostics: { runtime: { reason: "context-mismatch" } } } as typeof next;
+    expect((await send("b2"))!.json.detail).toBe("files changed during the check; press Start again");
+    context.refreshReadiness = async () => { refreshed++; throw new Error("collector crashed"); };
+    const crashed = await send("c");
+    expect(crashed!.json.readiness).toBe(passive); expect(launched).toBe(1); expect(refreshed).toBe(4);
+    const current = { ...context, readiness: async () => ({ ready: true }), refreshReadiness: async () => { refreshed++; return next; } };
+    await routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers: pairedHeaders(), body: { executor: "codex", command_id: "d" } }, current);
+    expect(refreshed).toBe(4); expect(launched).toBe(2);
+  });
+
   it("requires authentication for explicit readiness observations", async () => {
     let calls = 0;
     const context = { ...ctx(), refreshReadiness: async () => { calls++; return { ready: false }; } };

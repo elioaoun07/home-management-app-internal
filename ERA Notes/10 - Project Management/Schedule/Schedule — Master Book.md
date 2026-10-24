@@ -22,6 +22,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 ## Vision & Decisions
 
+- **SCH-26 — One chore, many rooms, one Done (owner request, 2026-10-20).** Sweeping 9 rooms back to back then meant 9 taps. A per-device toggle groups the agenda by chore (same Catalogue template + day); the group's check completes every room through one bulk, idempotent, queueable request with one Undo — the SCH-25/HUB-116 shape applied to completion. *(IMPLEMENTED 2026-10-20 — repository and client/grouping fixtures; device acceptance pending.)*
+
 - **SCH-25 — Bulk creates are optimistic, idempotent and queueable (owner request, 2026-10-17).** Assigning ~30 chores sent 30 POSTs and 30 refetches; a slow one timed out, a failed `/api/health` probe flipped the app offline, and later creates took the offline path while a retry could duplicate what had committed. Every item now carries a client id: `POST /api/items/bulk` (up to 50, per-item outcome) and `DELETE /api/items/bulk` serve a batch in one request, a retry returns the rows it already made, and a batch the network will not take waits in the offline queue as one operation. The Chores form's Save puts the rows on the agenda before the first request. The owner's standing requirement — optimistic UI, bulk inserts and tolerance of connectivity problems for every action of this shape — is carried by HUB-116. *(IMPLEMENTED 2026-10-17 — repository and isolated SQL/API/queue fixtures; owner SQL and device acceptance pending.)*
 
 - **SCH-24 — Complete source effects precede success.** One source transaction serves precision capture, ERA and offline replay; child/state rejection rolls back, and an unverified acknowledgement requires inspection rather than retry. Existing Schedule rules and RLS remain the authority. *(IMPLEMENTED 2026-10-11 — repository and isolated SQL/API fixtures; owner SQL/RLS/device acceptance pending.)*
@@ -40,6 +42,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+- 🟡 **SCH-28 — Chore Unassign may feel slow.** Source review 2026-10-24: the template-instance path writes item then alerts sequentially with no optimistic update (`useChoreActions.ts` `unassignOneOff`). Not measured; no duplicate checkbox beyond SCH-28.
 
 **SCH-25 — Resolved locally, 2026-10-17.** Saving ~30 staged chores showed an offline banner and a failure toast (owner report). From source, not reproduced (production writes are barred): 30 separate `POST /api/items` each awaited a Google Calendar sync inside an 8 s budget, every create refetched the whole schedule bundle, and one timeout probed `/api/health` on the same saturated origin, flipping global connectivity; later creates then queued with fake temp ids that the batch counted as saved. Replaced by one idempotent bulk path; see [criteria](<#sch-25>). Which request timed out first — Google sync, origin or database — was not witnessed.
 
@@ -2091,8 +2095,50 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - **Owner UAT / run first:** Run [2026-10-17_items-bulk-create.sql](<../../../migrations/2026-10-17_items-bulk-create.sql>) in the Supabase SQL Editor — it requires SCH-24's [2026-10-11_atomic-item-create.sql](<../../../migrations/2026-10-11_atomic-item-create.sql>) first and stops with a clear message if that is missing. Until then Save reports "not saved" and restages the chores. Then on a phone: stage ~30 chores, Save, watch the agenda fill at once; repeat once with airplane mode on and confirm they sync on reconnect with no duplicates; Undo a batch. Refresh `db-state.json` afterwards.
 - **Scope boundary:** Chores' flexible-routine and undated placements still write directly and one by one; the desktop per-row assign still uses single creates. Other callers of multi-create, the connectivity manager's probe-under-load behaviour and the remaining fan-outs are HUB-116. An Undo racing a queue replay that is already in flight, or a Google event created after an Undo, are the only known windows; the daily gcal reconcile cron heals the latter. Queued rows are shown only in the session that created them and vanish from a refetch until the queue syncs.
 
+### SCH-26
+
+**Outcome:** A chore placed in several rooms on one day can be shown as one grouped row and marked done for every room in one tap.
+
+**Kind:** feature
+**Implementation:** done
+**UAT:** pending
+**Touches:** `src/lib/items/completeItems.ts`, `src/app/api/items/[id]/complete/route.ts`, `src/app/api/items/bulk/complete/route.ts`, `src/features/items/bulkComplete.ts`, `src/features/items/bulkItems.ts`, `src/features/chores/choreGroups.ts`, `src/features/chores/useChoreActions.ts`, `src/components/chores/ChoreGroupRow.tsx`, `src/components/chores/ChoresView.tsx`
+
+- **Acceptance:** Chores → the Layers toggle (next to Today/Week, remembered per device) groups the agenda: "Sweep floor" placed in 9 rooms on a day becomes one row with "9 rooms"; its check marks all 9 done at once (one request), one toast with Undo reopens all 9 in one request; expanding the row shows each room with its own check. Rooms someone else owns ask for Override first. Offline, the completion waits in the queue as one operation and the rows stay done; a refused room reopens alone with "N not saved".
+- **Implementation — 2026-10-20:** Completion logic moved out of `/api/items/[id]/complete` into `completeItemForUser` (same auth, upsert, archive, alerts, prerequisite reset; single-route response unchanged). `POST /api/items/bulk/complete` (≤50 entries, per-entry `ok`) and `DELETE` (undo) reuse it; Google backup runs in `after()`. `bulkComplete.ts` marks rows done in the items lists + all-actions cache before sending, retries the same idempotent body via `sendWithRetry`, queues one operation when unreachable and reopens only refused entries. Grouping is pure (`groupSlotsByChore`: same Catalogue template + same day, ≥2).
+- **Evidence — 2026-10-20:** 5 client cases (one request, optimistic done, partial refusal, offline queue, same-body retry, one-DELETE undo) and 3 grouping cases; existing chores + bulk create suites pass (57). Typecheck and changed-file ESLint clean. No production access, no browser run — completing chores in dev writes the production DB (Hard Rule 26).
+- **Owner UAT:** On a phone: assign one chore to several rooms for today, tap Layers, tap the group check, confirm all rooms show done and the week count moves; Undo; repeat once in airplane mode and confirm it syncs on reconnect.
+- **Scope boundary:** Completed rooms stay listed individually under Completed. No new DB object; idempotency rests on the existing item_id+occurrence_date+action_type upsert.
+
+### SCH-27
+
+**Outcome:** Assigning chores on a phone is faster to find and steadier to use: search, labelled bulk assign, a person selector per row, tabs inside a room and a fixed-height sheet.
+
+**Kind:** feature
+**Implementation:** done
+**UAT:** pending
+**Touches:** `src/components/chores/ChoreAssignPanel.tsx`, `src/components/chores/ChoresView.tsx`
+
+- **Acceptance:** Assign → search matches chore and room names with its own "Assign all N shown"; hidden staged chores stay staged. Bulk bars read "Assign all N". An open row has Me/partner buttons (swipe kept). Rooms / Chores stay reachable inside a room; the last tab is remembered per device. The sheet keeps a fixed mobile height; the agenda toggle reads "Group". The quick path Assign → room → `+ day` → Save stays four taps.
+- **Implementation — 2026-10-24:** UI-only; no new write path, mutation or DB object.
+- **Evidence — 2026-10-24:** typecheck and changed-file ESLint clean. No browser, touch or width check at 360/390 px, no theme check, no new tests.
+- **Scope boundary:** Unassign latency (template path does two sequential writes, no optimistic update) was source-reviewed only and is not measured; no change made. Bulk unassign not built.
+
+### SCH-28
+
+**Outcome:** Know whether chore Unassign is actually slow, and fix it only if it is.
+
+**Kind:** investigation
+**Implementation:** pending
+**UAT:** none
+**Touches:** `src/features/chores/useChoreActions.ts`
+
+- **Acceptance:** With isolated fixtures of 5 and 50 assignments and delayed/failing responses, separate request delay from rendering and repeated taps. If normal use is responsive, record that and keep the two-step flow. If delay is confirmed, add pending/optimistic feedback with rollback and working Undo, preserving flexible-slot, template-instance and one-off semantics including alert state. No bulk unassign.
+- **Scope boundary:** Mocked data only; localhost is connected to production.
+
 ## Shipped Log
 
+- ✅ 2026-10-24 — **SCH-27** Mobile chore assignment: search, "Assign all N", per-row person selector, tabs inside a room, fixed-height sheet — [criteria](<Schedule — Master Book.md#sch-27>)
 - ✅ 2026-05-31 — partner-edit 403 fixed: the PATCH route ran its own creator-only check **stricter than the RLS policy underneath**; now uses `canMutateItem()` (creator OR responsible OR public+partner), matching `items_update`
 - ✅ 2026-05-31 — DELETE shares the same `canMutateItem()` guard, matching `items_delete`
 - ✅ 2026-05-31 — edit and "act" made consistent — the same household-aware predicate everywhere
@@ -2121,6 +2167,7 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - ✅ 2026-10-10 — Web View on a phone-width screen (`WebViewContainer`): the header's module tabs and avatar were clipped off-screen, so Mobile View and module switching were unreachable. Below `lg` the tabs are replaced by a module-switcher dropdown and the avatar stays visible; `lg`+ unchanged
 - ✅ 2026-10-11 — **SCH-24** Acknowledge complete item and prerequisite effects truthfully — [criteria](<Schedule — Master Book.md#sch-24>)
 - ✅ 2026-10-17 — **SCH-25** Assign many chores at once: optimistic rows, one idempotent bulk request, queue-safe offline and truthful refusals — [criteria](<Schedule — Master Book.md#sch-25>)
+- ✅ 2026-10-20 — **SCH-26** Group a chore across rooms and mark every room done in one tap — [criteria](<Schedule — Master Book.md#sch-26>)
 
 ## Delivery session log
 

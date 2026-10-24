@@ -50,12 +50,12 @@ export async function sendDurableIntent<T>({ scope, intent, path, body, storage,
   return result;
 }
 
-export async function durableV2Command<T>(path: string, intent: string, body: Body): Promise<T> {
+export async function durableV2Command<T>(path: string, intent: string, body: Body, timeoutMs?: number): Promise<T> {
   const session = await transport().v2Session();
   if (!session.paired || !session.actor || !session.scope) throw new PmError("Reconnect Command Center", 401);
   if (!navigator.locks) throw new PmError("Command locking unavailable", 503);
   const scope = session.scope + ":" + session.actor;
   return navigator.locks.request("pm-intent:" + scope + ":" + intent, () => sendDurableIntent<T>({
-    scope, intent, path, body, storage: localStorage, send: (target, payload) => transport().v2Command<T>(target, payload),
+    scope, intent, path, body, storage: localStorage, send: (target, payload) => transport().v2Command<T>(target, payload, timeoutMs),
   }));
 }

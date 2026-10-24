@@ -32,6 +32,7 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 
 ## Later
 
+- [ ] **SCH-28** Measure chore Unassign latency with 5 and 50 mocked assignments — [criteria](<Schedule — Master Book.md#sch-28>) _(annoyance - M)_
 - [ ] **SCH-2.1** Parse "at home" / "when I get home" — [criteria](<Schedule — Master Book.md#sch-21>) _(annoyance - S)_
 - [ ] **SCH-2.2** Map the phrase "home" — [criteria](<Schedule — Master Book.md#sch-22>) _(annoyance - M)_
 - [ ] **SCH-2.3** Pre-fill the existing `PrerequisitePicker` from parsed text (plumbing already wired in the form) — [criteria](<Schedule — Master Book.md#sch-23>) _(annoyance - S)_

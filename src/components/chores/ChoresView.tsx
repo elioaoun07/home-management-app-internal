@@ -5,6 +5,7 @@ import {
   useChoreDrafts,
 } from "@/components/chores/ChoreAssignPanel";
 import { ChoreCheckInPanel } from "@/components/chores/ChoreCheckInPanel";
+import { ChoreGroupRow } from "@/components/chores/ChoreGroupRow";
 import { ChoreRow } from "@/components/chores/ChoreRow";
 import {
   ChoreSheet,
@@ -35,8 +36,10 @@ import {
   type ChoreSlot,
   type ChoreTodo,
 } from "@/features/chores/choreWeek";
+import { groupSlotsByChore } from "@/features/chores/choreGroups";
 import {
   useChoreAssign,
+  useChoreGroupComplete,
   useChoreResponsibility,
 } from "@/features/chores/useChoreActions";
 import { useChoreWeek } from "@/features/chores/useChores";
@@ -60,6 +63,7 @@ import {
   ChevronRight,
   ChevronUp,
   ClipboardList,
+  Layers,
   Plus,
   Search,
   X,
@@ -71,6 +75,7 @@ type PersonFilter = "all" | "mine" | "partner";
 const EMPTY_TEMPLATES: CatalogueItem[] = [];
 const EMPTY_ROOMS: HomeRoom[] = [];
 const WEEK_OPEN_KEY = "chores.weekOpen";
+const GROUP_KEY = "chores.groupByChore";
 export const CHORE_LIBRARY_HREF = "/catalogue?section=chores";
 
 function firstName(name: string | undefined): string {
@@ -110,9 +115,12 @@ export default function ChoresView({
   const [sheetKey, setSheetKey] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
   const [weekOpen, setWeekOpen] = useState(true);
+  // Same chore in several rooms on one day → one row with one Done
+  const [groupByChore, setGroupByChore] = useState(false);
   useEffect(() => {
     try {
       if (localStorage.getItem(WEEK_OPEN_KEY) === "0") setWeekOpen(false);
+      if (localStorage.getItem(GROUP_KEY) === "1") setGroupByChore(true);
     } catch {
       // per-viewer convenience only
     }
@@ -158,6 +166,10 @@ export default function ChoresView({
       return { label: firstName(partner.displayName), color: partnerColor };
     return null;
   };
+  const groupComplete = useChoreGroupComplete(
+    currentUserId,
+    (userId) => personFor(userId)?.label ?? "Your partner",
+  );
   const matches = (userId: string | null | undefined) => {
     if (filter === "all" || !currentUserId) return true;
     if (filter === "mine") return userId === currentUserId;
@@ -320,6 +332,31 @@ export default function ChoresView({
       onOpen={() => setSheetKey(slot.key)}
     />
   );
+  const templateName = (id: string) =>
+    templates.find((tpl) => tpl.id === id)?.name;
+  const renderAgenda = (slots: ChoreSlot[]) =>
+    groupByChore
+      ? groupSlotsByChore(slots, templateName).map((entry) => {
+          if (entry.kind === "slot") return renderSlot(entry.slot);
+          const { group } = entry;
+          const owner = group.slots[0].item.responsible_user_id;
+          const shared = group.slots.every(
+            (slot) => slot.item.responsible_user_id === owner,
+          );
+          return (
+            <ChoreGroupRow
+              key={group.key}
+              group={group}
+              person={shared ? personFor(owner) : null}
+              pending={groupComplete.pendingKey === group.key}
+              onComplete={() =>
+                groupComplete.completeGroup(group.key, group.title, group.slots)
+              }
+              renderSlot={(slot) => renderSlot(slot)}
+            />
+          );
+        })
+      : slots.map((slot) => renderSlot(slot));
 
   const openPlan = (target: string | null) => {
     setPlanTarget(target && target >= todayKey ? target : todayKey);
@@ -735,6 +772,29 @@ export default function ChoresView({
           </button>
         </div>
         <button
+          type="button"
+          onClick={() => {
+            const next = !groupByChore;
+            setGroupByChore(next);
+            try {
+              localStorage.setItem(GROUP_KEY, next ? "1" : "0");
+            } catch {
+              // per-viewer convenience only
+            }
+          }}
+          aria-pressed={groupByChore}
+          aria-label="Group by chore"
+          title="Group by chore"
+          className={cn(
+            "flex h-11 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-colors",
+            tone.focus,
+            groupByChore ? tone.selected : cn(tone.ghost, "border-transparent"),
+          )}
+        >
+          <Layers className="h-4 w-4" />
+          Group
+        </button>
+        <button
           ref={planButtonRef}
           type="button"
           onClick={() => openPlan(selectedDay)}
@@ -841,7 +901,7 @@ export default function ChoresView({
                 </div>
                 {dayViewSlots.length > 0 ? (
                   <div className="space-y-2">
-                    {dayViewSlots.map((slot) => renderSlot(slot))}
+                    {renderAgenda(dayViewSlots)}
                   </div>
                 ) : (
                   emptyAgenda(
@@ -902,7 +962,7 @@ export default function ChoresView({
                       </div>
                       {slots.length > 0 && (
                         <div className="space-y-2">
-                          {slots.map((slot) => renderSlot(slot))}
+                          {renderAgenda(slots)}
                         </div>
                       )}
                     </section>
@@ -982,7 +1042,7 @@ export default function ChoresView({
             planButtonRef.current?.focus();
           }}
           className={cn(
-            "left-0 top-auto bottom-0 max-h-[90dvh] w-full max-w-none translate-x-0 translate-y-0 gap-4 overflow-y-auto rounded-b-none rounded-t-3xl border p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:p-5",
+            "left-0 top-auto bottom-0 h-[85dvh] max-h-[90dvh] w-full max-w-none translate-x-0 translate-y-0 gap-4 overflow-y-auto rounded-b-none rounded-t-3xl border p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:h-auto sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:p-5",
             tone.tc.bgPage,
             tone.border,
           )}

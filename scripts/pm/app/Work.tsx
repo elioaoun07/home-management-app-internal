@@ -424,6 +424,13 @@ export function selectionFromRoute(
   parts: string[],
   query: URLSearchParams,
 ): Work | undefined {
+  // `#/deliver/<ID>` is the hand-off link: the ID alone, when exactly one item has it.
+  if (parts[0] === "deliver" && parts.length === 2) {
+    const matches = world.work.filter(
+      (item) => item.idChip?.toUpperCase() === parts[1].toUpperCase(),
+    );
+    return matches.length === 1 ? matches[0] : undefined;
+  }
   if (parts[0] === "deliver")
     return world.work.find(
       (item) => item.module === parts[1] && item.id === parts[2],

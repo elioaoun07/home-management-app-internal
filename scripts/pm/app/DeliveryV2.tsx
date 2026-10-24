@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Activity,
   ArrowRight,
   Check,
   ClipboardCheck,
+  Clock,
   FileText,
   GitBranch,
   ListChecks,
@@ -12,12 +13,13 @@ import {
   Play,
   Send,
   Sparkles,
+  X,
   Zap,
 } from "lucide-react";
 import { durableV2Command, storedIntent } from "./commandIntents";
 import { v2Pair, v2Post } from "./api";
 import { client, go, pmKeys, useRoute, useWorld } from "./state";
-import { readinessCanStart, readinessLabels } from "./readinessModel";
+import { readinessCanLaunch, readinessCanStart, readinessIssues, readinessRows } from "./readinessModel";
 import { PendingCommand, transport } from "./transport";
 import { Back, Empty, ErrorNotice, RunOrb, Sheet } from "./components";
 import { returnFromLaunch } from "./Work";
@@ -55,9 +57,12 @@ import { LivePulse } from "./LivePulse";
 import { OutcomeReview } from "./OutcomeReview";
 import { DeliveryQuestion } from "./DeliveryQuestion";
 import { TestGateCard } from "./TestGate";
+import { StewardRequests } from "./StewardRequests";
 import type { V2Executor, V2Reason, V2RunDetail, Work } from "./types";
 
 type Body = Record<string, unknown>;
+// Start may first collect live readiness (Docker, sign-in, model) on the laptop.
+const LAUNCH_TIMEOUT_MS = 180_000;
 type RollbackPreview = {
   ok: boolean;
   application_id: string;
@@ -265,7 +270,7 @@ function useV2Command() {
       path: string;
       body: Body;
       intent: string;
-    }) => durableV2Command<Body>(path, intent, body),
+    }) => durableV2Command<Body>(path, intent, body, path === "deliver" ? LAUNCH_TIMEOUT_MS : undefined),
     onSettled: () => client.invalidateQueries({ queryKey: pmKeys.all }),
   });
   const send = (
@@ -410,6 +415,8 @@ export function LaunchV2({ work }: { work: Work }) {
   const [effort, setEffort] = useState("");
   const [blockedExecutor, setBlockedExecutor] = useState<V2Executor | null>(null);
   const start = useV2Command();
+  const deliveries = useV2Runs();
+  const steward = route.query.get("initiator") === "era-steward";
   const refresh = useMutation({
     mutationFn: () => transport().v2Command<{ readiness: import("./types").V2Readiness }>("control", { action: "refresh-readiness", selection: readinessSelection, command_id: crypto.randomUUID() }, 180000),
     onSuccess: data => client.setQueryData(pmKeys.v2readiness(readinessSelection), data.readiness),
@@ -433,8 +440,20 @@ export function LaunchV2({ work }: { work: Work }) {
   const assessment = readiness.data?.assessment;
   const testGate = readiness.data?.testGate;
   const testsLocked = !!testGate?.locked;
+  // A policy that permits one executor has made the choice: preselect it with
+  // the lane's suggested model/effort, so a hand-off link needs only Start.
+  useEffect(() => {
+    const allowed = (catalogue.data?.executors || []).filter((entry) => entry.available !== false && entry.permitted);
+    if (executor || allowed.length !== 1) return;
+    const next = allowed[0].suggestions?.[profile];
+    setExecutor(allowed[0].id);
+    setModel(next?.model || "");
+    setEffort(next?.effort || "");
+  }, [catalogue.data, executor, profile]);
   if (session.data && !session.data.paired && transport().capabilities.pairing)
     return <PairV2 />;
+  const gates = readinessRows(readiness.data);
+  const issues = readinessIssues(readiness.data, gates);
 
   const chosen = catalogue.data?.executors.find(
     (entry) => entry.id === executor,
@@ -463,6 +482,7 @@ export function LaunchV2({ work }: { work: Work }) {
         model: model || null,
         effort: effort || null,
         workProfile: profile,
+        ...(steward ? { initiatedBy: "era-steward" } : {}),
       },
       (data) =>
         go(
@@ -472,6 +492,9 @@ export function LaunchV2({ work }: { work: Work }) {
 
   return (
     <>
+      {steward && <span className="eyebrow">ERA Steward</span>}
+      {!steward && <a className="secondary" href={`#${route.path}?${new URLSearchParams([...route.query.entries(), ["initiator", "era-steward"]])}`}>Steward</a>}
+      <StewardRequests requests={(deliveries.data?.requests || []).filter(request => request.file === work.file && request.workId.toUpperCase() === itemId.toUpperCase())} />
       <section className="launch-section">
         <h2>Executor</h2>
         <div className="provider-choices">
@@ -568,9 +591,23 @@ export function LaunchV2({ work }: { work: Work }) {
       <ErrorNotice error={previousLaunch.error} retry={() => void previousLaunch.refetch()} />
       <section className="launch-section" aria-label="Readiness">
         <h2>Readiness</h2>
-        <ul>
-          {readinessLabels(readiness.data).map((entry, index) => <li key={`${entry.gate}:${entry.code}:${index}`}>{entry.label}</li>)}
-        </ul>
+        {gates.length ? (
+          <ul className="readiness-gates">
+            {gates.map((row) => (
+              <li key={row.gate} data-state={row.state} title={row.state === "start" ? "Checked at Start" : undefined}>
+                {row.state === "ok" ? <Check size={13} /> : row.state === "fix" ? <X size={13} /> : <Clock size={13} />}
+                {row.label}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="readiness-issues">Readiness unavailable</p>
+        )}
+        {issues.length > 0 && (
+          <ul className="readiness-issues">
+            {issues.map((text) => <li key={text}>{text}</li>)}
+          </ul>
+        )}
       </section>
       <CommandReceipt
         pending={start.pending}
@@ -599,14 +636,13 @@ export function LaunchV2({ work }: { work: Work }) {
           disabled={
             !connected ||
             !!previousLaunch.data || !!previousLaunch.error ||
-            !chosen ||
-            !chosen.permitted ||
-            !readinessCanStart(readiness.data, readinessSelection) ||
-            noRuntime ||
+            (!steward && (!chosen || !chosen.permitted)) ||
+            (!steward && !readinessCanLaunch(readiness.data, readinessSelection)) ||
+            (!steward && noRuntime) ||
             start.isPending ||
             work.state !== "open" ||
-            assessment?.startable === false ||
-            testsLocked
+            (!steward && assessment?.startable === false) ||
+            (!steward && testsLocked)
           }
           onClick={deliver}
         >
@@ -645,6 +681,7 @@ export function LaunchV2({ work }: { work: Work }) {
 export function RunV2({ id }: { id: string }) {
   const { connected } = useWorld();
   const session = useV2Session();
+  const deliveries = useV2Runs();
   const detail = useQuery({
     queryKey: pmKeys.v2run(id),
     queryFn: ({ signal }) => transport().v2Run(id, signal),
@@ -677,7 +714,8 @@ export function RunV2({ id }: { id: string }) {
       </div>
     );
   return (
-    <RunV2Story key={id} detail={detail.data} refreshError={detail.error} />
+    <><StewardRequests requests={(deliveries.data?.requests || []).filter(request => request.run_id === id)} />
+    <RunV2Story key={id} detail={detail.data} refreshError={detail.error} /></>
   );
 }
 

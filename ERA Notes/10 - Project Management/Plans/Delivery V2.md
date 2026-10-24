@@ -31,6 +31,8 @@ DLV-133 owns reusable managed dependencies and per-run compiler identity, includ
 
 **Owner requirement from the October 18 voice call; process contract under DLV-137.** Before a delivery session starts, the supervising agent records one dated readiness report in the existing session evidence/Command Center conversation or handoff chat, with a durable reference in the owning Master Book. Use the existing shared projection for the exact item and selection. If collection is not authorized or available, report that limitation; this requirement grants no refresh, preparation or launch authority. A historical Ready receipt is not current readiness.
 
+**Owner direction 2026-10-20 (DLV-139):** the launch screen's Readiness chips and Start's own refusal now carry this per-gate report, and Start collects the live gates itself. An agent launching for the owner (ERA Steward) presses Start once and relays the run link or the listed blockers word for word. It does not author a separate report, refresh, prepare or diagnose. Procedure: [ERA Steward runbook](<../../../docs/ERA-Steward-Runbook.md>).
+
 The persistent checklist follows `readiness-contract.mjs#LAUNCH_GATES`; report every gate, not just the first blocker:
 
 | Check | Required condition |

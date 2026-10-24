@@ -1177,7 +1177,8 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
       const runs = journey.list();
       // The queue rides the runs row (Command Center Phase 5): no new row kind, no relay migration.
       const queue = typeof journey.queue === "function" ? journey.queue() : null;
-      await publishIfChanged(rowId(installation_id, ROW_KINDS.V2RUNS), "cc-" + ROW_KINDS.V2RUNS, { schema: RELAY_SCHEMA, runs, queue });
+      await publishIfChanged(rowId(installation_id, ROW_KINDS.V2RUNS), "cc-" + ROW_KINDS.V2RUNS, { schema: RELAY_SCHEMA, runs, queue,
+        requests: deliveryV2Ctx.stewardRequests?.() || [] });
       const entries = [];
       for (const summary of runs.slice(0, V2_RUNS_PUBLISHED)) {
         const detail = journey.detail(summary.run_id);
@@ -1424,7 +1425,8 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
     const journey = v2Available() ? deliveryV2Ctx.journey : null;
     for (const cmd of claimed) {
       if (cmd.result && cmd.result.outcome_unknown) continue;
-      const decision = reconcileClaimedCommand(cmd, journal, journey, (id) => planningCommandState(PM_DIR, id));
+      const commandReader = { commandState: id => deliveryV2Ctx?.stewardCommandState?.(id) || journey?.commandState(id) };
+      const decision = reconcileClaimedCommand(cmd, journal, commandReader, (id) => planningCommandState(PM_DIR, id));
       if (decision.action === "execute") await runClaimed(cmd);
       else if (decision.action === "report") await writeReceipt(cmd.id, { ...(decision.outcome || { ok: false }), recovered: true });
       else if (decision.action === "unknown") {

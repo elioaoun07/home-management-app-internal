@@ -293,6 +293,26 @@ export interface V2Settings {
     overridden: boolean;
   };
 }
+export interface StewardRequest {
+  command_id: string;
+  initiatedBy: string;
+  actor: string;
+  file: string;
+  workId: string;
+  acceptedAt: string;
+  startedAt: string | null;
+  lastConfirmedAt: string;
+  staleAfterMs: number;
+  stage: string;
+  status: string;
+  terminal: boolean;
+  run_id: string | null;
+  jobUpdatedAt: string | null;
+  blocker: { code: string; readiness?: V2Readiness | null; refusals?: unknown[] } | null;
+  evidence: { stage: string; at: string; code: string }[];
+  result: { result_id: string; version: number; at: string; record: unknown } | null;
+  runEvidence: { seq: number; kind: string; at: string } | null;
+}
 export interface V2RunSummary {
   run_id: string;
   engine: "v2";
@@ -648,6 +668,7 @@ export interface V2Readiness {
   expiresAt: string | null;
   assessment?: V2Assessment | null;
   testGate?: V2TestGate | null;
+  collection?: { stages: { name: string; outcome: string; code: string | null; durationMs: number }[] } | null;
 }
 export interface V2Assessment {
   ok: boolean;

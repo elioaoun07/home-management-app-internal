@@ -723,6 +723,14 @@ export function createContainerRuntime({ boundary, hostRoot, workRoot = join(tmp
       const observedAt = {};
       const observed = { environment: null, runtime: null, authentication: null, modelAvailability: null, observedAt, collection, error: null };
       try {
+        // A stopped Docker Desktop otherwise surfaces as a missing dependency
+        // volume. Name the owner's fix before probing anything else.
+        const engine = await collect("docker", () => docker.run(["version", "--format", "{{.Server.Version}}"], { timeout: 10_000 }), value => value.status === 0 && !value.error);
+        if (engine.status !== 0 || engine.error) {
+          observed.environment = { ok: false, reason: "Docker is not running" };
+          observedAt.environment = new Date().toISOString();
+          return observed;
+        }
         const environment = await collect("environment", verifyDependencies, value => value.ok && !value.legacy);
         observed.environment = environment;
         observedAt.environment = new Date().toISOString();

@@ -36,7 +36,8 @@ describe("explicit native model readiness", () => {
   const image = "sha256:" + "1".repeat(64), key = "sha256:" + "2".repeat(64);
   const configured = makeBoundaryConfig({ image, credentials: { "codex-exec-sdk": { volume: "fixture-subscription" } }, dependencies: { volume: "fixture-deps", environment: { key, contentDigest: key, receiptDigest: key } } });
   const selected = { model: "gpt-6-luna", effort: "low" };
-  function fixture(native: Record<string, unknown> = {}, usableSignIn = true, lifecycle = "clean", hooks: { sync?: () => void; image?: () => void; probe?: () => { status: number | null; stdout: string; stderr: string; error: string | null } } = {}) {
+  type Result = { status: number | null; stdout: string; stderr: string; error: string | null };
+  function fixture(native: Record<string, unknown> = {}, usableSignIn = true, lifecycle = "clean", hooks: { sync?: () => void; image?: () => void; probe?: () => Result; engine?: () => Result } = {}) {
     const root = mkdtempSync(join(tmpdir(), "era-native-readiness-"));temporary.push(root);mkdirSync(join(root, "host"));
     const calls: { args: string[]; input?: string; timeout?: number }[] = [];
     let syncs = 0, probeStarted = false, removed = false, ownershipLabel = "";
@@ -44,6 +45,7 @@ describe("explicit native model readiness", () => {
     const docker = {
       async run(args: string[], options: { input?: string; timeout?: number } = {}) {
         calls.push({ args, ...options });let stdout = "", status = 0;
+        if (args[0] === "version" && hooks.engine) return hooks.engine();
         if (args[0] === "volume") stdout = "fixture-deps";
         else if (args[0] === "container") {
           const pattern = args[args.indexOf("--filter") + 1].replace(/^name=/u, "");
@@ -96,11 +98,19 @@ describe("explicit native model readiness", () => {
     const result = await f.runtime.readinessObservations("codex-exec-sdk", selected);
     expect(result.observedAt).toEqual({ environment: new Date(start).toISOString(), runtime: new Date(start).toISOString(), authentication: new Date(later).toISOString(), modelAvailability: new Date(later).toISOString() });
     expect(result.collection).toMatchObject({ schema: "delivery-v2/readiness-collection@1", startedAt: new Date(start).toISOString(), completedAt: new Date(later).toISOString() });
-    expect(result.collection.stages.map(stage => stage.name)).toEqual(["environment", "runtime-binding", "egress", "credential-sync", "native-model"]);
+    expect(result.collection.stages.map(stage => stage.name)).toEqual(["docker", "environment", "runtime-binding", "egress", "credential-sync", "native-model"]);
     expect(result.collection.stages.find(stage => stage.name === "credential-sync")).toEqual({ name: "credential-sync", startedAt: new Date(start).toISOString(), completedAt: new Date(later).toISOString(), durationMs: 61_000, outcome: "satisfied", code: null });
     expect(result.collection.stages.find(stage => stage.name === "native-model")).toMatchObject({ durationMs: 0, startedAt: new Date(later).toISOString(), outcome: "satisfied" });
     expect(result.modelAvailability).toMatchObject({ providerTurns: 0, ok: true });
     expect(f.syncs()).toBe(1);
+  });
+  it("names a stopped Docker engine and probes nothing else", async () => {
+    const f = fixture({}, true, "clean", { engine: () => ({ status: 1, stdout: "", stderr: "error during connect: open //./pipe/dockerDesktopLinuxEngine", error: null }) });
+    const result = await f.runtime.readinessObservations("codex-exec-sdk", selected);
+    expect(result).toMatchObject({ environment: { ok: false, reason: "Docker is not running" }, runtime: null, authentication: null, modelAvailability: null, error: null });
+    expect(result.collection.stages).toEqual([expect.objectContaining({ name: "docker", outcome: "blocked", code: "docker-unavailable" })]);
+    expect(f.calls.map(row => row.args[0])).toEqual(["version"]);expect(f.calls[0].timeout).toBe(10_000);expect(f.syncs()).toBe(0);
+    expect(JSON.stringify(result)).not.toContain("pipe");
   });
   it.each(["image", "sync"] as const)("retains earlier facts and only a fixed diagnostic when %s throws", async failureStage => {
     vi.useFakeTimers({ toFake: ["Date"] });

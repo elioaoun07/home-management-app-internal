@@ -88,7 +88,7 @@ export interface Transport {
   post<T>(path: string, body: unknown, timeoutMs?: number): Promise<T>;
   v2Session(signal?: AbortSignal): Promise<V2Session>;
   v2Pair(code: string): Promise<V2Session>;
-  v2Runs(signal?: AbortSignal): Promise<{ runs: V2RunSummary[] }>;
+  v2Runs(signal?: AbortSignal): Promise<{ runs: V2RunSummary[]; requests?: import("./types").StewardRequest[] }>;
   v2Run(id: string, signal?: AbortSignal): Promise<V2RunDetail>;
   v2Executors(signal?: AbortSignal): Promise<V2Catalogue>;
   /** Slots, waiting items with their verdicts, decisions and pairwise verdicts. Null before any V2 record exists. */
