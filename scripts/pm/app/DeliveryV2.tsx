@@ -1049,9 +1049,9 @@ function ApplyPanel({
             Roll back
           </button>
         )}
+        {/* An unapplied verified candidate reserves its paths whether or not a run is already waiting on it. */}
         {controls.canApply &&
-          !!detail.coordination?.holding?.length &&
-          !detail.coordination.released && (
+          !detail.coordination?.released && (
             <button
               className="text-button"
               disabled={disabled}

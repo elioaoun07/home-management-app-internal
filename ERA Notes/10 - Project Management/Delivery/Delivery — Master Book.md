@@ -221,6 +221,15 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Acceptance Criteria Index
 
+### DLV-147
+
+**Outcome:** An unapplied verified candidate always offers Release, so the owner can free its reserved paths before another item queues behind it.
+**Kind:** bug
+**Execution:** cli
+**Touches:** `scripts/pm/app/DeliveryV2.tsx`
+
+- **Acceptance:** 🟠 Owner report 2026-10-27: BUD-83 (`r-83dddb67fea9`) and DLV-107 (`r-c1d69bb666cf`) hold reservations (`reservingRuns`), and KIT-4's readiness reports `scope-unknown` against both. The run page showed no Release. Cause: the button also required `coordination.holding.length`, which `holdingFor` fills only with *waiting* runs. An item that has not started yet never appears there. The button now shows whenever Apply is offered and the candidate is not released. The server `release` action already refuses anything other than a closed, unapplied `verified_candidate`. Server unchanged.
+
 ### DLV-146
 
 **Outcome:** The delivering worker's existing implementation, repair and revision output carries the structured UAT handover, and the supervisor captures, validates and freezes it against the candidate without another model call.
@@ -1843,6 +1852,7 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - ✅ 2026-10-24 — **DLV-142** Renew saved authorization through Check readiness — [criteria](<Delivery — Master Book.md#dlv-142>)
 - ✅ 2026-10-24 — **DLV-143** Retain one Start outcome and allow the bounded native model check to finish — [criteria](<Delivery — Master Book.md#dlv-143>)
 - ✅ 2026-10-25 — **DLV-145** Freeze a candidate-bound UAT handover, record owner results and gate Shipped on sign-off — [criteria](<Delivery — Master Book.md#dlv-145>)
+- ✅ 2026-10-27 — **DLV-147** Show Release on every unapplied verified candidate — [criteria](<Delivery — Master Book.md#dlv-147>)
 
 DW-3 conversation search/highlighting shipped 2026-07-16; removed the stale DLV-71 duplicate on 2026-09-10. This is a reconciliation, not a second implementation.
 
