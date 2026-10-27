@@ -18,6 +18,14 @@ Produce useful product outcomes with bounded authority and truthful evidence. To
 
 ## Current state & evidence
 
+**2026-10-25 — owner UAT wizard backfill and separate feature specification (documentation only):** [Start with the scenario index](<../../../docs/Delivery-UAT-Scenarios-2026-10-25.md>) for every retained V1/V2 attempt and completed work awaiting acceptance. [PM/Delivery walkthroughs](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md>) expand the older UAT rows into numbered actions and visible expectations; original results remain historical and new results are Pending. The owner-requested [wizard, sign-off and feedback specification](<../Plans/Delivery UAT Sign-off and Feedback.md>) defines explicit owner acceptance and next-startup feedback import, ready for a separate implementation job. No launch, runtime write, Apply, deployment or owner sign-off occurred in this drafting session; no engineering item is completed by it.
+
+**2026-10-25 — manual UAT follow-up plan (documentation only):** [Delivery manual UAT and Steward handover](<../Plans/Delivery Manual UAT.md>) recommends targeted coverage now, candidate-bound instructions from each completed session, a compact Outcome view and reuse of R74's Drive mirror. It extends the existing handover requirement without claiming runtime enforcement, owner acceptance or a new execution queue. Follow-up implementation IDs remain to be allocated before execution.
+
+**2026-10-25 — DLV-144 connection setup tracked separately:** the owner-requested [phased Dot connection checklist](<../../../docs/ERA-Steward-Dot-Connection-Setup-2026-10-25.md>) records each AI/owner step and observed evidence. Phases 1–2 passed: local prerequisites, restricted-session presence, candidate-test policy revision 11 validation, fresh four-tool stdio discovery, and official Windows tunnel-client v0.0.18 downloaded inside ignored repo storage with matching published SHA-256 and successful offline help. No Delivery/model call, global installation, account resource or service startup. Owner account Phase 3 is next; real Dot plugin calls and final acceptance remain pending. Update that checklist as each step completes.
+
+**2026-10-25 — DLV-144 integration assumption corrected:** backend/local-adapter checks do not establish Dot compatibility or removal of its other tools. [The corrected runbook](<../../../docs/ERA-Steward-Runbook.md#steward-tools-connection-status-corrected-2026-10-25>) identifies the officially documented private-plugin/Secure MCP Tunnel route for the existing stdio server. Actual Dot connection and restricted-local-access acceptance remain pending; custom rules cannot certify a hard ban on cloud delegation. This supersedes the earlier full engineering-sign-off wording. UAT now records restricted pairing, partial real read/reconnect evidence and installed candidate-test policy revision 11; repeat neither installation. Bridge restart/readiness and phone acceptance remain owner checks. Fresh local MCP initialization/catalogue passed; no live delivery/model call. No tunnel/plugin was installed; browser inspection failed during sandbox initialization.
+
 **2026-10-24 — DLV-144 review corrections verified:** restricted Steward credentials now cannot mint a second launch for work with any existing launch receipt; any new attempt uses owner controls, and the model-supplied retry flag is removed. The unsafe Start instruction was removed from read-only UAT. Candidate-test defaults cover source-adjacent tests and require complete file/test summaries. Missing counters stay unknown; partial costs/estimates are labelled; effort matching no longer claims model matching; Applied renders its real owner-action label. **241 tests passed across 13 files in the final single invocation**, typecheck/scoped lint/PM build/PM lint/Feature Index pass. The installed protected checker ran positive and deliberately failing synthetic tests offline with correct verdicts and confirmed disposable-resource cleanup. The existing R44 fixture repair was reviewed. Engineering acceptance is recommended; actual tool pairing/configuration, installed-policy activation and read-only/phone acceptance remain pending in [UAT](<../../../docs/Delivery-UAT.md#era-steward-sign-off--2026-10-24>). No provider job, Start, installed-policy change, bridge restart or production write.
 
 **2026-10-24 — DLV-144 ERA Steward sign-off closure, implemented in source with an offline closure suite:** Phase 1 gives the Steward four typed operations (start, read request, read run, wait for changes) over the existing authenticated transport, a restricted `steward` credential the server enforces route by route, a separate owner-authorized support ledger and a Delivery / Support / Chat overhead report. Phase 2 makes the test files a candidate adds, changes or has its plan name run in the protected checker with a policy-pinned command; anything but a clean pass blocks Candidate verified and Apply, and the integrated tree re-runs them before Applied. Phase 3 is `tests/delivery-v2/steward-closure.test.ts`. **Delivery/PM/relay aggregate in one invocation: 155 files, 2,819 tests passed, 0 failed, 8 existing opt-in skips; typecheck, scoped lint and the PM app build pass.** Not done by an agent and still owed to the owner: restrict the actual Steward tool configuration to the one tool server, add `candidateTests` to the installed policy, one read-only check against the existing R44 run, the physical phone pass and the fixture-diff review. [Owner steps and untested limits](<../../../docs/Delivery-UAT.md#era-steward-sign-off--2026-10-24>); [what changed and how to use it](<../../../docs/ERA-Steward-Runbook.md#typed-tools-support-accounting-and-candidate-tests--dlv-144>). No Start, provider call, policy change, bridge restart, Apply or DB write.
@@ -44,21 +52,21 @@ Produce useful product outcomes with bounded authority and truthful evidence. To
 
 **2026-10-20 — one-step Start for ERA Steward ([DLV-139](<#dlv-139>), local source + fixtures):** the 23:05 refusal was structural. Start accepted only live evidence under 60 seconds old, one refresh took 44.3 s (environment 28.8 s, native model 11.7 s), and the Ready window left Steward 18.6 s to click. Start now collects that evidence itself, inside the same request, when the cache is not current; dispatch still re-observes under its claim, and the 60/30-second limits are unchanged. A Docker engine check runs first, so a stopped Docker Desktop reads "Start Docker Desktop" instead of a missing dependency volume. The launch screen shows one chip per gate (✓, 🕒 checked at Start, ✗) and one short fix per problem. A policy with one permitted executor preselects it with the lane's suggested model/effort, and `#/deliver/<ID>` opens an item by ID alone. Owner/Steward procedure: [ERA Steward runbook](<../../../docs/ERA-Steward-Runbook.md>). The running bridge keeps the earlier source until the owner restarts `pnpm pm --bridge`. No restart, refresh, launch, policy change or Apply was made, and R44 run `r-262a6aee5ed3` is untouched.
 
-**2026-10-19, 23:27 Beirut — outer native-probe diagnosis preserved; actual cause unresolved:** Steward's new refresh failed after 45.772 seconds, with container cleanup confirmed but no native version or process-cleanup record; no Start or run. The wrapper discarded failed Docker process metadata and partial records, a proven second reporting gap. The [loaded correction](<../../../../.tmp/delivery-recovery-20261018/continuation/native-transport-final-report.json>) preserves bounded, redacted process outcomes, exit/error codes, timing and record counts, plus stage/RPC progress emitted before awaits. Limits, policy, image, environment, qualification and admission are unchanged. **356 tests passed, zero skips; typecheck/scoped lint clean; 251 stable source hashes.** One metadata-only diagnostic passed in 4.250 seconds with exact Luna/low, all stages and cleanup confirmed, and zero provider turns. It does not reproduce or explain the previous failure and confers no service readiness. Shared primary usage was 40%, included usage available, extra spend disabled. One guarded idle reload, PID 39452 → 5056 at 20:27:04Z, preserves pairing, journal and policy 9; the authenticated queue shows zero jobs/writers and 21 earlier deliveries. Actual phone confirmation after 23:27 is pending in the [manual handover](<../../../../.tmp/delivery-recovery-20261018/continuation/native-transport-handover.json>). No R44 run, plan, candidate or Apply; no extra installation, image assembly or qualification.
+**2026-10-19, 23:27 Beirut — outer native-probe diagnosis preserved; actual cause unresolved:** Steward's new refresh failed after 45.772 seconds, with container cleanup confirmed but no native version or process-cleanup record; no Start or run. The wrapper discarded failed Docker process metadata and partial records, a proven second reporting gap. The [loaded correction](<../../../.tmp/delivery-recovery-20261018/continuation/native-transport-final-report.json>) preserves bounded, redacted process outcomes, exit/error codes, timing and record counts, plus stage/RPC progress emitted before awaits. Limits, policy, image, environment, qualification and admission are unchanged. **356 tests passed, zero skips; typecheck/scoped lint clean; 251 stable source hashes.** One metadata-only diagnostic passed in 4.250 seconds with exact Luna/low, all stages and cleanup confirmed, and zero provider turns. It does not reproduce or explain the previous failure and confers no service readiness. Shared primary usage was 40%, included usage available, extra spend disabled. One guarded idle reload, PID 39452 → 5056 at 20:27:04Z, preserves pairing, journal and policy 9; the authenticated queue shows zero jobs/writers and 21 earlier deliveries. Actual phone confirmation after 23:27 is pending in the [manual handover](<../../../.tmp/delivery-recovery-20261018/continuation/native-transport-handover.json>). No R44 run, plan, candidate or Apply; no extra installation, image assembly or qualification.
 
-**2026-10-19, 23:17 Beirut — live idle status and diagnosis correction:** [Authenticated queue plus process/container inspection](<../../../../.tmp/delivery-recovery-20261018/continuation/live-idle-status-20261019T2017.json>) confirm zero jobs/writers, 21 earlier deliveries, no new R44 and no active delivery worker/checker/readiness probe. The single bridge PID 39452 remains online. The latest saved Steward outcome is the 23:09 refusal; no later run is evidenced. The actual Start response and UUID were not captured: later expiry makes expiry a likely cause, not a proven admission reason, correcting stronger earlier wording. The owner has relayed authorization for one fresh readiness-to-Start attempt under the unchanged policy 9 pilot limits; no additional approval or environment setup is needed. ERA Steward must execute that existing authorized task and report a direct run link or blocker. Root cannot contact Dot directly; no substitute launch or background monitor was started.
+**2026-10-19, 23:17 Beirut — live idle status and diagnosis correction:** [Authenticated queue plus process/container inspection](<../../../.tmp/delivery-recovery-20261018/continuation/live-idle-status-20261019T2017.json>) confirm zero jobs/writers, 21 earlier deliveries, no new R44 and no active delivery worker/checker/readiness probe. The single bridge PID 39452 remains online. The latest saved Steward outcome is the 23:09 refusal; no later run is evidenced. The actual Start response and UUID were not captured: later expiry makes expiry a likely cause, not a proven admission reason, correcting stronger earlier wording. The owner has relayed authorization for one fresh readiness-to-Start attempt under the unchanged policy 9 pilot limits; no additional approval or environment setup is needed. ERA Steward must execute that existing authorized task and report a direct run link or blocker. Root cannot contact Dot directly; no substitute launch or background monitor was started.
 
-**2026-10-19, 23:05–23:07 Beirut — Ready then admission expiry:** the [latest readiness review](<../../../../.tmp/delivery-recovery-20261018/continuation/readiness-admission-review-20261019.json>) retains all 11 gates satisfied for the same policy 9 R44/Codex/Luna/low/focused context; native 0.156.1 advertised the exact selection, cleanup was confirmed, invalid fields were empty and the metadata check used zero provider turns. The Ready read completed at 20:05:00.965Z with expiry 20:05:19.525Z (18.560 seconds remaining). Steward reported one Start click; the owner then relayed that admission refused expired evidence and further attempts stopped. The saved 20:06:44 passive inspection confirms expiry with unchanged context but is not the actual Start response. Original command UUID and click/request/admission timestamps remain unproven; no new run/job/plan/candidate is evidenced. No extra refresh, launch, restart, repair or Apply by the supervisor. Checklist inspection needs no additional setup; exact delay attribution needs the initiating session's original request/response evidence. The final real-phone reconnection remains PASS.
+**2026-10-19, 23:05–23:07 Beirut — Ready then admission expiry:** the [latest readiness review](<../../../.tmp/delivery-recovery-20261018/continuation/readiness-admission-review-20261019.json>) retains all 11 gates satisfied for the same policy 9 R44/Codex/Luna/low/focused context; native 0.156.1 advertised the exact selection, cleanup was confirmed, invalid fields were empty and the metadata check used zero provider turns. The Ready read completed at 20:05:00.965Z with expiry 20:05:19.525Z (18.560 seconds remaining). Steward reported one Start click; the owner then relayed that admission refused expired evidence and further attempts stopped. The saved 20:06:44 passive inspection confirms expiry with unchanged context but is not the actual Start response. Original command UUID and click/request/admission timestamps remain unproven; no new run/job/plan/candidate is evidenced. No extra refresh, launch, restart, repair or Apply by the supervisor. Checklist inspection needs no additional setup; exact delay attribution needs the initiating session's original request/response evidence. The final real-phone reconnection remains PASS.
 
-**2026-10-19 — policy 9 active; Dot stopped before launch:** the owner approved the [24-hour, time-only renewal](<../../../../.tmp/delivery-recovery-20261018/continuation/time-renewal-approval.json>). Policy 9 expires October 20 at 19:15:55Z (22:15 Beirut); its one R44 / Codex / gpt-6-luna / low / focused pilot, one planning and one implementation job, zero repairs, resources, owner phone approval and owner Apply are unchanged. No further environment preparation, image assembly or qualification is authorized. The owner [confirmed the actual phone online with the same Applied KIT-11 after the October 19 22:13 reload, and sent the renewed instruction to ERA Steward](<../../../../.tmp/delivery-recovery-20261018/continuation/owner-policy9-handoff-confirmed.json>). Steward's fresh native check then failed before launch; no command/run/jobs were created, and no retry or repair was attempted. The supervisor continues the separately authorized recovery diagnosis without substituting its own pilot launch.
+**2026-10-19 — policy 9 active; Dot stopped before launch:** the owner approved the [24-hour, time-only renewal](<../../../.tmp/delivery-recovery-20261018/continuation/time-renewal-approval.json>). Policy 9 expires October 20 at 19:15:55Z (22:15 Beirut); its one R44 / Codex / gpt-6-luna / low / focused pilot, one planning and one implementation job, zero repairs, resources, owner phone approval and owner Apply are unchanged. No further environment preparation, image assembly or qualification is authorized. The owner [confirmed the actual phone online with the same Applied KIT-11 after the October 19 22:13 reload, and sent the renewed instruction to ERA Steward](<../../../.tmp/delivery-recovery-20261018/continuation/owner-policy9-handoff-confirmed.json>). Steward's fresh native check then failed before launch; no command/run/jobs were created, and no retry or repair was attempted. The supervisor continues the separately authorized recovery diagnosis without substituting its own pilot launch.
 
 **Narrow DLV-137 diagnostic correction, locally validated and loaded:** observation age, original/evaluated timestamps and expected/actual context digests now survive dependent blockers outside the readiness fingerprint. Collection records sanitized stage timings/outcomes and preserves earlier evidence after a later exception. A refused refresh clears prior cached observations, so the following passive read cannot revert to an older collection. Freshness/authority, protected checks, isolation, image and qualification identities are unchanged. This supports the authorized recovery investigation; it does not implement automatic durable reports, chat logging or handover enforcement. Historical failure cause and actual Dot/phone pilot remain unverified.
 
-**22:31 Beirut native-model blocker:** [Steward's retained report](<../../../../.tmp/delivery-recovery-20261018/continuation/r44-policy9-coordination-status-20261019.json>) and the supervisor's contemporaneous observation agree: environment, runtime binding, egress and credential sync succeeded; the native stage took 21.146 seconds and the current gate refused `native-model-evidence-invalid`. The underlying invalid field is unknown because the later report lost the native payload after dependency expiry. One [targeted metadata diagnostic](<../../../../.tmp/delivery-recovery-20261018/continuation/policy9-native-targeted-diagnostic.json>) on the same pinned boundary passed in 6.233 seconds with exact Luna/low, confirmed native/container cleanup, no invalid fields and zero provider turns. It does not explain or replace the failure. Actual included usage was available, extra spend disabled, shared primary window 19% used. Both authenticated queues showed no jobs/writers/open tasks; the extra bridge started at 22:24 was [safely stopped](<../../../../.tmp/delivery-recovery-20261018/continuation/secondary-bridge-reconciliation.json>), preserving original PID 41224 and policy/pairing/journal. No installation, qualification or resource change.
+**22:31 Beirut native-model blocker:** [Steward's retained report](<../../../.tmp/delivery-recovery-20261018/continuation/r44-policy9-coordination-status-20261019.json>) and the supervisor's contemporaneous observation agree: environment, runtime binding, egress and credential sync succeeded; the native stage took 21.146 seconds and the current gate refused `native-model-evidence-invalid`. The underlying invalid field is unknown because the later report lost the native payload after dependency expiry. One [targeted metadata diagnostic](<../../../.tmp/delivery-recovery-20261018/continuation/policy9-native-targeted-diagnostic.json>) on the same pinned boundary passed in 6.233 seconds with exact Luna/low, confirmed native/container cleanup, no invalid fields and zero provider turns. It does not explain or replace the failure. Actual included usage was available, extra spend disabled, shared primary window 19% used. Both authenticated queues showed no jobs/writers/open tasks; the extra bridge started at 22:24 was [safely stopped](<../../../.tmp/delivery-recovery-20261018/continuation/secondary-bridge-reconciliation.json>), preserving original PID 41224 and policy/pairing/journal. No installation, qualification or resource change.
 
-**Code evidence cutoff 2026-10-19T19:44:44Z:** the proven report-loss gap is corrected: bounded, allowlisted native codes, invalid field names, versions, RPC timings and cleanup signals survive expiry outside admission facts. The rejection now names the invalid field; freshness, limits and refusal semantics are unchanged. [Final report](<../../../../.tmp/delivery-recovery-20261018/continuation/native-retention-final-report.json>): **352 passing tests, zero skips, 19 files; typecheck and scoped lint clean; 251 stable source hashes**. One safe idle reload at 19:40:34Z (22:40 Beirut), PID 41224 → 39452, preserved policy 9, pairing and journal. One subsequent explicit service collection passed all gates, exact Luna/low, app-server 7.689 seconds under the unchanged 10-second deadline, both cleanup confirmations and no invalid fields. Authenticated desktop Start enabled; no Start click. The corrected CLI request crossed expiry and correctly refused; the following passive CLI exited 1 with stale gates and retained identical native diagnostics. No further collection was used to manufacture a green CLI result. This historical pass requires a fresh observation before launch. Shared primary usage was 23%, with included usage available and extra spend disabled; zero pilot jobs/turns. Original native failure cause remains unknown. [Manual handover](<../../../../.tmp/delivery-recovery-20261018/continuation/native-retention-handover.json>) and the single progress ledger now include the owner's [actual-phone confirmation](<../../../../.tmp/delivery-recovery-20261018/continuation/owner-final-phone-confirmed-20261019.json>) after the final 22:40 reload: ElioLaptop online and the same KIT-11 Applied, closing AC3. Recorded 2026-10-19T19:53:49.046Z; the authenticated queue still shows zero jobs/writers and 21 earlier deliveries. Actual Steward continuation remains pending. Direct Dot tools remain unavailable; no new run/launch/plan/candidate or Apply exists.
+**Code evidence cutoff 2026-10-19T19:44:44Z:** the proven report-loss gap is corrected: bounded, allowlisted native codes, invalid field names, versions, RPC timings and cleanup signals survive expiry outside admission facts. The rejection now names the invalid field; freshness, limits and refusal semantics are unchanged. [Final report](<../../../.tmp/delivery-recovery-20261018/continuation/native-retention-final-report.json>): **352 passing tests, zero skips, 19 files; typecheck and scoped lint clean; 251 stable source hashes**. One safe idle reload at 19:40:34Z (22:40 Beirut), PID 41224 → 39452, preserved policy 9, pairing and journal. One subsequent explicit service collection passed all gates, exact Luna/low, app-server 7.689 seconds under the unchanged 10-second deadline, both cleanup confirmations and no invalid fields. Authenticated desktop Start enabled; no Start click. The corrected CLI request crossed expiry and correctly refused; the following passive CLI exited 1 with stale gates and retained identical native diagnostics. No further collection was used to manufacture a green CLI result. This historical pass requires a fresh observation before launch. Shared primary usage was 23%, with included usage available and extra spend disabled; zero pilot jobs/turns. Original native failure cause remains unknown. [Manual handover](<../../../.tmp/delivery-recovery-20261018/continuation/native-retention-handover.json>) and the single progress ledger now include the owner's [actual-phone confirmation](<../../../.tmp/delivery-recovery-20261018/continuation/owner-final-phone-confirmed-20261019.json>) after the final 22:40 reload: ElioLaptop online and the same KIT-11 Applied, closing AC3. Recorded 2026-10-19T19:53:49.046Z; the authenticated queue still shows zero jobs/writers and 21 earlier deliveries. Actual Steward continuation remains pending. Direct Dot tools remain unavailable; no new run/launch/plan/candidate or Apply exists.
 
-**Evidence cutoff 2026-10-19T19:27:42Z:** [341 passing tests, zero skips in 19 files](<../../../../.tmp/delivery-recovery-20261018/continuation/native-timeout-final-tests.json>), clean typecheck/scoped lint, and 251 retained source hashes. One safe idle bridge reload at 19:13:14Z (22:13 Beirut), PID 16144 → 41224, preserved pairing/journal; the owner has confirmed the real phone for this reload. After policy renewal, the first explicit collection exposed a native `model/list` timeout while all other observations were fresh. Sanitized RPC timing diagnostics were added without changing the 10-second deadline. The [second collection passed all readiness gates](<../../../../.tmp/delivery-recovery-20261018/continuation/policy9-ready-handoff.json>): exact Luna/low advertised, app-server completion 8.139 seconds, service CLI exit 0, authenticated desktop Start enabled. These are historical observations: Dot must refresh and launch inside a new Ready window. Included ChatGPT usage was available with extra spend disabled (6% shared primary window used); inference entitlement remains unverified, and both metadata probes used zero provider turns. Intermittent native catalog latency remains a risk; the October 18 failure's underlying cause remains unknown. No additional preparation/image/qualification/provider job or Apply occurred. [Direct-change handover and manual scenarios](<../../../../.tmp/delivery-recovery-20261018/continuation/policy9-diagnostics-handover.json>) retain the phone result and pending actual-pilot checks. The single `continuation/progress.json` ledger is `MONITORING_DOT_PILOT_LAUNCH`.
+**Evidence cutoff 2026-10-19T19:27:42Z:** [341 passing tests, zero skips in 19 files](<../../../.tmp/delivery-recovery-20261018/continuation/native-timeout-final-tests.json>), clean typecheck/scoped lint, and 251 retained source hashes. One safe idle bridge reload at 19:13:14Z (22:13 Beirut), PID 16144 → 41224, preserved pairing/journal; the owner has confirmed the real phone for this reload. After policy renewal, the first explicit collection exposed a native `model/list` timeout while all other observations were fresh. Sanitized RPC timing diagnostics were added without changing the 10-second deadline. The [second collection passed all readiness gates](<../../../.tmp/delivery-recovery-20261018/continuation/policy9-ready-handoff.json>): exact Luna/low advertised, app-server completion 8.139 seconds, service CLI exit 0, authenticated desktop Start enabled. These are historical observations: Dot must refresh and launch inside a new Ready window. Included ChatGPT usage was available with extra spend disabled (6% shared primary window used); inference entitlement remains unverified, and both metadata probes used zero provider turns. Intermittent native catalog latency remains a risk; the October 18 failure's underlying cause remains unknown. No additional preparation/image/qualification/provider job or Apply occurred. [Direct-change handover and manual scenarios](<../../../.tmp/delivery-recovery-20261018/continuation/policy9-diagnostics-handover.json>) retain the phone result and pending actual-pilot checks. The single `continuation/progress.json` ledger is `MONITORING_DOT_PILOT_LAUNCH`.
 
 **2026-10-19 — October 18 voice requirements recorded (documentation/process only):** [DLV-137's persistent pre-launch checklist/report contract](<../Plans/Delivery V2.md#pre-launch-readiness-report--2026-10-19>) requires expected/actual conditions, evidence timestamps, binding/expiry or collection failure, diagnosed versus unknown cause, impact and next action for every failed/stale/unknown check. Every delivered fix/feature now requires [candidate-bound owner manual scenarios](<../../../docs/Delivery-UAT.md#candidate-handover-template>) before UAT/acceptance, linked from the existing item handover and separate from automated receipts and untested limitations. Shared conventions and the execution-plan template carry this obligation. Existing readiness, Result/artifact and UAT architecture is reused; automatic report persistence/chat logging and scenario generation/enforcement remain explicit runtime gaps for separate approval. No new queue/owner, runtime implementation or acceptance claim; DLV-133 owns environments, DLV-137 readiness, and DLV-118 remains independent.
 
@@ -213,7 +221,36 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Acceptance Criteria Index
 
+### DLV-146
+
+**Outcome:** The delivering worker's existing implementation, repair and revision output carries the structured UAT handover, and the supervisor captures, validates and freezes it against the candidate without another model call.
+**Kind:** feature
+**Execution:** delivery
+**Depends on:** Delivery/DLV-145
+**Touches:** `scripts/delivery-v2/interaction.mjs`, `scripts/delivery-v2/journey.mjs`, `scripts/delivery-v2/store.mjs`, `scripts/delivery-v2/uat.mjs`, `tests/delivery-v2/`
+
+- **Acceptance:** [DLV-145](#dlv-145) supplies the schema, validation, freezing and sign-off gate; this item wires them into the run. Worker instructions ask for `scenarios` in the existing output; a missing, malformed or oversized block becomes **Handover incomplete** and a verified candidate keeps its truthful green result but is not offered for owner testing. Retained output is recovered after interruption without a dispatch. A replacement candidate creates a new revision. Plan, Apply and Result authority are unchanged. Spec §4 and §9 rows *Complete delivery*, *Missing/invalid content* and *Identity and recovery* are its tests.
+- **Not started:** until this ships, handovers enter through `pnpm pm:uat` (drafted documents) or the authenticated import route, never from a running worker.
+
+### DLV-145
+
+**Outcome:** Each delivery has one canonical, candidate-bound UAT handover; the owner's Pass / Fail / Blocked results, feedback and sign-off are append-only receipts; **Shipped** exists only after an explicit valid sign-off.
+**Kind:** feature
+**Execution:** delivery
+**Touches:** `scripts/delivery-v2/uat.mjs`, `scripts/delivery-v2/uat-docs.mjs`, `scripts/delivery-v2/uat-cli.mjs`, `scripts/delivery-v2/entry.mjs`, `package.json`, `tests/delivery-v2/uat.test.ts`, `tests/delivery-v2/uat-docs.test.ts`
+**Spec:** [Delivery UAT wizard, sign-off and feedback](<../Plans/Delivery UAT Sign-off and Feedback.md>) §2–§4, §9
+
+- **Acceptance:** `.delivery/v2/uat/` holds append-only handover revisions, owner receipts and feedback revisions; a revision's content digest, identity envelope (run or direct reference, candidate ID/generation, Result and plan revisions, acceptance revision) and status (**draft**, **ready**, **incomplete**) come from the supervisor, never from the caller. Validation rejects empty, oversized, duplicate-ID, missing-expectation and omitted-criterion content as **Handover incomplete**. A receipt names the authenticated actor, a stable command ID (a repeat is a no-op), the handover revision, the server receipt time and an observation time that cannot be in the future; a later result supersedes without deleting. Sign-off requires a **ready**, current handover, a current PASS for every required scenario, an available build, no unresolved Needs-changes feedback (even before import) and the owner's explicit command; Apply, green checks, test-gate Proceed, Pending/FAIL/BLOCKED, a Steward credential or a stale revision never satisfy it. Retraction appends a receipt and reopens acceptance. A replacement candidate or revised content starts Pending again; earlier receipts stay readable. Draft scenarios cannot reach Shipped.
+- **Reuse of drafted scenarios:** `pnpm pm:uat import-docs` extracts the numbered Action / Expected steps from the six `docs/Delivery-UAT-*-2026-10-25.md` wizards as **draft** handovers (preview by default, `--apply` writes), reporting any step lacking an expectation instead of inventing one.
+- **Not claimed:** worker-emitted handovers ([DLV-146](#dlv-146)), the phone relay and Work/Sprints/Analytics labels ([R79](<../PM Tooling/PM Tooling — Master Book.md#r79>)), and any owner PASS.
+- **Implementation:** done
+- **UAT:** pending
+- **Verification (2026-10-25):** `tests/delivery-v2/uat.test.ts` (26: validation, freeze/revision, receipts, the sign-off gate matrix, feedback, drafts), `uat-routes.test.ts` (7: anonymous, forged actor and Steward refused; actor from the session; run identity from the supervisor; direct delivery bound to an exact revision), `uat-docs.test.ts` (7, including the six real wizards: 62 handovers from 80 scenarios, 13 flagged Incomplete for steps with no expected result). All offline temp roots; no provider, Apply, Git write or production write. Isolated Chrome (own temp root and port): Test row, step navigation with resume after reload, Fail with note, Pass, Sign off to Shipped, Retract, a lost reply shown as Pending sync then retried under the same command ID with exactly one receipt. **Not exercised:** the Outcome-tab row against a real run (the isolated store had none), the phone, hosted deployment. A pre-existing clock-sensitive failure in `tests/delivery-v2/authorization.test.ts` (hard-coded 2026-10-24/25 times) is unrelated and untouched.
+- **Owner steps:** restart `pnpm pm`; `pnpm pm:uat import-docs --apply` was already run on this checkout (62 drafts under `.delivery/v2/uat/`, local and gitignored; delete the folder to undo).
+
 ### DLV-144
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#direct-144--steward-tools-usage-and-candidate-tests>) (drafted 2026-10-25; original results retained).
 
 **Review follow-up (2026-10-24):** the four independently reported defect areas are corrected. The final single-invocation regression passed **241 tests across 13 files**, including a further R44 fixture loader correction after a reproduced 30-second plugin-loading timeout. The same real ESLint config, cases, assertions and deadlines now pass through one shared API instance; C1 remains unchanged. Actual positive/negative checker execution is witnessed. The manual support ledger is explicitly documented as accounting rather than runtime/model/scope enforcement. [Final sign-off boundary](<../../../docs/ERA-Steward-Signoff-Plan-2026-10-24.md#review-corrections-and-sign-off--2026-10-24>).
 
@@ -233,6 +270,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### DLV-143
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#direct-143--keep-a-failed-starts-exact-result>) (drafted 2026-10-25; original results retained).
+
 **Outcome:** One Start has a durable, reportable result, with bounded metadata collection and read-only recovery.
 **Kind:** bug
 **Touches:** `scripts/delivery-v2/entry.mjs`, `scripts/delivery-v2/steward-requests.mjs`, `scripts/delivery-v2/worker-boundary.mjs`, `scripts/pm/app/DeliveryV2.tsx`, `scripts/pm/app/commandIntents.ts`, `scripts/pm/app/localTransport.ts`, `scripts/pm/app/transport.ts`, `scripts/pm/app/StewardRequests.tsx`, `src/features/pm-live/relay/transport.ts`, `tests/delivery-v2/`, `tests/pm-ui/`, `tests/pm-live-relay.test.ts`
@@ -248,12 +287,16 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### DLV-142
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#direct-142--renew-only-when-you-choose>) (drafted 2026-10-25; original results retained).
+
 - **Outcome:** Owner Check readiness renews saved execution authority in the natural launch flow. *(IMPLEMENTED 2026-10-24; source/fixtures, owner UAT pending.)*
 - **Acceptance:** authenticated explicit desktop/phone Check renews finite time for at least 24 hours; replay of one UUID never adds time; no-expiry/longer policies are not shortened. Installed policy, usage/reservations, scope, source pins, concurrency, repairs and approval requirements are unchanged. Passive reads and Start do not renew. Each receipt preserves actor, UUID, exact settings identity and expiry across restart; changed settings cannot inherit renewal and corrupt records fail closed. Matching ongoing runs can continue after renewal without overwriting original grants or bypassing approval/revocation. Legacy grants retain their original expiry.
 - **Touches:** `scripts/delivery-v2/authorization.mjs`, `scripts/delivery-v2/policy.mjs`, `scripts/delivery-v2/service.mjs`, `scripts/delivery-v2/entry.mjs`, `scripts/delivery-v2/journey.mjs`, `scripts/delivery-v2/inspect-readiness.mjs`, `scripts/pm/app/DeliveryV2.tsx`, `scripts/pm/app/LaunchReadiness.tsx`, `scripts/pm/app/types.ts`, `scripts/pm/app/readinessModel.ts`, `scripts/pm/app/delivery.css`, `tests/delivery-v2/authorization.test.ts`, `tests/pm-ui/launch-readiness.test.ts`, `tests/pm-ui/readiness.test.ts`.
 - **Verification:** 254 offline tests in 11 suites passed, including authentication/replay, a fake-SDK plan → expired original grant → owner renewal → exact plan approval → verified candidate flow, and admission/coordination regressions. Typecheck, scoped lint, Feature Index and PM lint passed. PM documentation check still reports 15 pre-existing missing October 18–19 recovery-report targets; no evidence was fabricated. Isolated shared UI clicked through pending/completion at 390/320/1440 px in Blue/Pink with no horizontal overflow. Real bridge/phone/deployment and provider execution were not exercised. Record: `.tmp/dlv142-ui/verification.json`. [Owner scenarios](<../../../docs/ERA-Steward-Runbook.md#check-readiness-renews-saved-authority-dlv-142>).
 
 ### DLV-141
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#direct-141--read-the-launch-screen>) (drafted 2026-10-25; original results retained).
 
 **Outcome:** A clear mobile/desktop launch page with visible readiness request outcomes.
 **Touches:** `scripts/pm/app/Delivery.tsx`, `scripts/pm/app/DeliveryV2.tsx`, `scripts/pm/app/LaunchReadiness.tsx`, `scripts/pm/app/readinessModel.ts`, `scripts/pm/app/delivery.css`, `tests/pm-ui/launch-readiness.test.ts`, `tests/pm-ui/readiness.test.ts`, `tests/pm-ui/steward-entry.test.ts`
@@ -264,6 +307,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **UAT:** pending
 
 ### DLV-140
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#direct-140--follow-the-same-steward-request>) (drafted 2026-10-25; original results retained).
 
 **Outcome:** Track an ERA Steward request durably before readiness or run creation, and distinguish coordinator silence from job state. *(IMPLEMENTED 2026-10-20; local source/fixtures)*
 **Kind:** feature
@@ -278,6 +323,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Verification and owner steps:** [implementation report](<../../../docs/ERA-Steward-Observability-Implementation.md>): 103 scoped tests passed; typecheck/scoped lint and PM app build passed. Aggregate sandbox failures and unrelated lint/documentation debt remain explicit. Actual launch, restart, physical-phone acceptance and provider work were not performed. Follow the report's five fixture/manual scenarios before owner acceptance; no automatic retry, repair or authority expansion is introduced.
 
 ### DLV-139
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#direct-139--one-start-checks-readiness>) (drafted 2026-10-25; original results retained).
 
 **Outcome:** ERA Steward launches an item with one Start; readiness is checked and fixed on the PM side. *(IMPLEMENTED 2026-10-20; local fixtures only)*
 **Kind:** bug
@@ -347,6 +394,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Reading guide:** `journey.mjs evidenceFor()` ran `preparedScopeViolations()` on the preview / integrated snapshot, which includes checkout drift; it now takes `scopeCandidate` (the frozen candidate) from `reassess()` and `integrateAndCheck()`. Test: `focused-delivery.test.ts` "applies after an unrelated source edit".
 
 ### DLV-135
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m12--recover-an-interrupted-job-and-observe-live-activity>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
 
 **Outcome:** Keep the PM server answering while Delivery runs Docker, checks and the typecheck. *(IMPLEMENTED 2026-09-26)*
 **Kind:** bug
@@ -575,6 +624,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 
 ### DLV-120
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m3--understand-a-passing-failed-or-inconclusive-check>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
+
 **Outcome:** Retain protected-check logs with precise failure details. *(IMPLEMENTED 2026-09-20 — see the Shipped Log; owner acceptance U11 still Pending.)*
 **Kind:** feature
 **Execution:** delivery
@@ -585,6 +636,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - **Reading guide:** the retention decision is one place — `checks.mjs runCheck()` computes `outputHash = sha256(stdout+stderr)` and records `redaction: "stdout and stderr are hashed, not stored…"`, with `raw_refs: []` on every observation. `raw_refs` (see `criteria.mjs makeObservation()`/`commandObservation()`) is the existing hook for an artifact reference, and `store.mjs publishArtifact()`/`readArtifact()` the existing bounded store. The missing-runner distinction already exists as `raw.spawnError` → `outcome: "interrupted"`; extend that vocabulary rather than adding a parallel one. Do **not** touch `parseTestCounts()` — DLV-112 shipped its ANSI/observer/oracle patterns. Display: `deliveryReviewModel.ts checkGroups()`/`checkTitle()`/`checkReason()` and `DeliveryReview.tsx ChecksReview()`; relay parity via `transport.ts`/`localTransport.ts`. Tests: `tests/delivery-v2/evidence.test.ts`, `criteria.test.ts`, `tests/pm-ui/delivery-review.test.ts`.
 
 ### DLV-119
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m4--count-tokens-once>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
 
 **Implementation:** done
 **UAT:** pending
@@ -601,6 +654,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 
 ### DLV-115
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m6--review-apply-and-safely-test-rollback>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
+
 **Implementation:** done
 **UAT:** pending
 
@@ -615,6 +670,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - **Acceptance:** read-only preview and explicit Cancel/Roll back dialog; server binds confirmation to application/revision/digest and rechecks confined paths. True additions are removed, deletions recreated, existing untracked files restored, later owner edits preserved. Partial/failed inverse is visible. Cancel has no effect; stale/double/reconnected commands cannot repeat or expand the inverse.
 
 ### DLV-116
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m2--read-the-complete-plan-and-its-frozen-changes>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
 
 **Implementation:** done
 **UAT:** pending
@@ -756,6 +813,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 ```
 
 ### DLV-112
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m3--understand-a-passing-failed-or-inconclusive-check>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
 
 **Implementation:** done
 **UAT:** pending
@@ -980,6 +1039,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 
 ### DLV-107
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#v2-107--open-the-right-campaign-history>) (drafted 2026-10-25; original results retained).
+
 **Outcome:** Open campaign history from a completed item's old link.
 
 **Kind:** bug
@@ -1015,6 +1076,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 
 ### DLV-108
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m12--recover-an-interrupted-job-and-observe-live-activity>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
+
 **Outcome:** Recover completed jobs into plans and results after restart.
 
 **Kind:** bug
@@ -1028,6 +1091,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - **Reading guide:** the ordering is visible at the tail of `journey.mjs dispatch()` — `runtime.release(after)` and the `job.recorded` event run *before* `afterJob(job_id)` creates the next durable run state. Recovery scans `jobs.mjs reconcileOutstanding()` over `coordination.mjs OUTSTANDING_JOB_STATUSES` (`reserved`/`active`/`paused`/`unknown`), which is exactly why a `finished/succeeded` job is invisible to it. Read `afterJob()`, `freezeAndCheck()`, `evaluate()` and `project()` as the transitions that must be replayable, and `store.mjs openStore()`'s migration list plus `verifyRestore()` for where a durable completion marker belongs. Entry points: `journey.mjs reconcile()` and `control({action:"reconcile"})`. Idempotence guards that already exist: `once()` and `store.mjs payloadDigest()`. Tests: `tests/delivery-v2/journey.test.ts`, `jobs.test.ts`, `store.test.ts`.
 
 ### DLV-109
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m12--recover-an-interrupted-job-and-observe-live-activity>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
 
 **Outcome:** Show observed activity while an executor is running.
 
@@ -1101,6 +1166,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 ### DLV-97
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m5--keep-plan-approval-separate-from-implementation-and-apply>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
 
 **Implementation:** done
 **UAT:** pending
@@ -1240,6 +1307,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 ### DLV-77
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m13--keep-owner-prerequisites-and-deferred-witnesses-explicit>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
 
 **Execution:** owner
 **UAT:** pending — folded into the 2026-09-26 phone pass
@@ -1438,6 +1507,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 
 ### DLV-100
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m13--keep-owner-prerequisites-and-deferred-witnesses-explicit>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
+
 **Execution:** owner
 **UAT:** pending — parked to Later as an enhancement (owner 2026-09-26)
 
@@ -1451,6 +1522,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 **Provenance:** [Delivery — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/Delivery — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
 ### DLV-101
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m13--keep-owner-prerequisites-and-deferred-witnesses-explicit>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
 
 **Execution:** owner
 **UAT:** pending — parked to Later as an enhancement (owner 2026-09-26)
@@ -1554,6 +1627,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 
 ### DLV-104
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m7--open-the-same-delivery-on-a-phone-and-recover-connection-state>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
+
 **Implementation:** done
 **UAT:** pending
 
@@ -1571,6 +1646,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 
 ### DLV-105
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m6--review-apply-and-safely-test-rollback>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
+
 **Implementation:** done
 **UAT:** pending
 
@@ -1584,6 +1661,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - **Provenance:** [Command Center §4](<../Plans/Command Center.md#completing-work-remotely-includes-disposition>); DEC-16 resolved 2026-09-11.
 
 ### DLV-106
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m8--keep-conflicting-deliveries-apart>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
 
 **Implementation:** done
 **UAT:** pending
@@ -1763,6 +1842,7 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - ✅ 2026-10-24 — **DLV-141** Simplify launch and show readiness check outcomes — [criteria](<Delivery — Master Book.md#dlv-141>)
 - ✅ 2026-10-24 — **DLV-142** Renew saved authorization through Check readiness — [criteria](<Delivery — Master Book.md#dlv-142>)
 - ✅ 2026-10-24 — **DLV-143** Retain one Start outcome and allow the bounded native model check to finish — [criteria](<Delivery — Master Book.md#dlv-143>)
+- ✅ 2026-10-25 — **DLV-145** Freeze a candidate-bound UAT handover, record owner results and gate Shipped on sign-off — [criteria](<Delivery — Master Book.md#dlv-145>)
 
 DW-3 conversation search/highlighting shipped 2026-07-16; removed the stale DLV-71 duplicate on 2026-09-10. This is a reconciliation, not a second implementation.
 

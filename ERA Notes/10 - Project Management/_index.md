@@ -40,6 +40,7 @@ Campaigns group related modules; they do not change the source code’s Standalo
 | Unresolved cross-module policy choices | [_Decisions.md](<_Decisions.md>); related work stays in its campaign |
 | Accepted proactive/native programme | [ERA Top Layer](<Plans/ERA Top Layer.md>); packet IDs map to campaign tasks |
 | Accepted executor design and S0–S3 trial | [Delivery V2](<Plans/Delivery V2.md>); V1 operational constraints remain distinct |
+| Delivery UAT wizard, sign-off and feedback-to-work specification | [Build specification](<Plans/Delivery UAT Sign-off and Feedback.md>); [existing-delivery scenario index](<../../docs/Delivery-UAT-Scenarios-2026-10-25.md>). Documentation only; runtime implementation remains a separate job. |
 | Accepted Command Center product direction and phases | [Command Center](<Plans/Command Center.md>); phases map to PM Tooling and Delivery IDs |
 | Catalogue’s accepted reference/definition design | [Final build plan §10](<../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>); [packet ownership](<Research/Options.md#catalogue-packet-ownership>) |
 | Unadopted ideas, experiments and alternatives | [Research options](<Research/Options.md>), linked to archived originals |

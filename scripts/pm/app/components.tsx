@@ -34,6 +34,7 @@ import {
   backPath,
   bucketOf,
   canDeliver,
+  deliveryAttemptDate,
   historyPath,
   runFor,
   spacePath,
@@ -512,6 +513,7 @@ export function RunLink({
     !!run.runnerAlive &&
     !run.awaiting &&
     !run.execution?.paused;
+  const at = run.createdAt || run.updatedAt;
   return (
     <a
       className="run-link"
@@ -519,8 +521,9 @@ export function RunLink({
     >
       <RunOrb running={running} space={run.item.campaign} size={48} />
       <span>
-        <small>{sessionStatus(run)}</small>
+        <small><b className="run-work-id">{run.item.id || "Unidentified item"}</b>{run.item.campaign ? ` · ${run.item.campaign}` : ""} · {sessionStatus(run)}</small>
         <strong>{workTitle(run.item)}</strong>
+        {at && <time dateTime={at}>{!run.createdAt && "Updated "}{deliveryAttemptDate(at)}</time>}
       </span>
       <span className="run-provider">V1 · {run.agent}</span>
       <ArrowRight size={18} />

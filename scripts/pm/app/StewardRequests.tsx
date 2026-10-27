@@ -17,7 +17,27 @@ export function coordinatorStatus(
     : "Confirmed";
 }
 
-const label = (value: string) => value.replace(/[-_]/gu, " ");
+export const label = (value: string) => value.replace(/[-_]/gu, " ");
+
+/** The known blocker in words: readiness issues when recorded, else its code. */
+export function blockerLine(request: Pick<StewardRequest, "blocker">) {
+  if (!request.blocker) return null;
+  const issues = request.blocker.readiness
+    ? startReadinessIssues(request.blocker.readiness)
+    : [];
+  return issues.length ? issues.join(" · ") : label(request.blocker.code);
+}
+
+/** `Date.now()` re-read every `intervalMs`; 0 stops the timer. */
+export function useClock(intervalMs = 1000) {
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (intervalMs <= 0) return;
+    const timer = window.setInterval(() => setClock(Date.now()), intervalMs);
+    return () => window.clearInterval(timer);
+  }, [intervalMs]);
+  return clock;
+}
 
 export function StewardRequests({
   requests,
@@ -26,20 +46,13 @@ export function StewardRequests({
   requests: StewardRequest[];
   now?: number;
 }) {
-  const [clock, setClock] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = window.setInterval(() => setClock(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const clock = useClock(suppliedNow === undefined ? 1000 : 0);
   if (!requests.length) return null;
   const now = suppliedNow ?? clock;
   return (
     <section className="steward-requests" aria-label="Delivery requests">
       {requests.map((request) => {
         const liveness = coordinatorStatus(request, now);
-        const issues = request.blocker?.readiness
-          ? startReadinessIssues(request.blocker.readiness)
-          : [];
         return (
           <article className="steward-request" key={request.command_id}>
             <header>
@@ -86,14 +99,7 @@ export function StewardRequests({
                 </div>
               )}
             </dl>
-            {request.blocker && (
-              <p>
-                Blocker:{" "}
-                {issues.length
-                  ? issues.join(" · ")
-                  : label(request.blocker.code)}
-              </p>
-            )}
+            {request.blocker && <p>Blocker: {blockerLine(request)}</p>}
             {request.run_id && (
               <a href={`#/delivery/run/${encodeURIComponent(request.run_id)}`}>
                 Open delivery

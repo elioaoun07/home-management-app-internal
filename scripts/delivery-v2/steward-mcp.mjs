@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // scripts/delivery-v2/steward-mcp.mjs
 // ERA Steward's tool server: a stdio MCP server that exposes exactly the four
-// typed operations from steward-tools.mjs and nothing else. Point the Steward's
-// tool configuration at this one server and remove every generic Codex/Claude
-// delegation and shell tool from it; the server-side route allowlist (entry.mjs)
-// is the second lock if that removal is ever missed.
+// typed operations from steward-tools.mjs and nothing else. A compatible host
+// or private MCP tunnel must connect this stdio process to the caller.
+// The route allowlist (entry.mjs) restricts this credential's PM access only;
+// it cannot disable the caller's other coding, delegation or shell tools.
 //
 //   node scripts/delivery-v2/steward-mcp.mjs pair <CODE>   one-time, owner-issued code (pnpm pm:pair)
 //   node scripts/delivery-v2/steward-mcp.mjs               serve MCP on stdin/stdout

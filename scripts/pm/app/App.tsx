@@ -12,7 +12,7 @@ import { client, pmKeys, useRoute, useWorld } from "./state";
 import { transport } from "./transport";
 import { RunV2, useV2Runs } from "./DeliveryV2";
 import { connectionChips } from "./v2model";
-import { deliveryNavState, PrimaryNavigation } from "./PrimaryNavigation";
+import { deliveryNavState, MoreNavigation, PrimaryNavigation } from "./PrimaryNavigation";
 import { CaptureButton, Empty } from "./components";
 import { Home } from "./Home";
 import { Explore, SpaceView } from "./Explore";
@@ -21,6 +21,7 @@ import { Activity, Attention, Capture, Reader } from "./Auxiliary";
 import { Dashboard } from "./Dashboard";
 import { Delivery, Launch } from "./Delivery";
 import { Run } from "./Run";
+import { UatPage } from "./UatWizard";
 import { Sprints } from "./Sprints";
 
 class Boundary extends Component<{ children: ReactNode }, { error: boolean }> {
@@ -71,7 +72,7 @@ export function App() {
       ? "/explore"
       : ["analytics", "dashboard"].includes(root)
         ? "/analytics"
-        : "/";
+        : root === "" ? "/" : "";
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document
@@ -147,6 +148,8 @@ export function App() {
           <Run key={route.parts[2]} id={route.parts[2]} />
         ) : route.parts[1] === "run" ? (
           <RunV2 key={route.parts[2]} id={route.parts[2]} />
+        ) : route.parts[1] === "test" ? (
+          <UatPage key={route.parts[2]} id={route.parts[2]} />
         ) : route.parts[1] === "new" ? (
           <Launch />
         ) : (
@@ -218,6 +221,7 @@ export function App() {
           <button className="icon-button" aria-label="Settings" title="Settings" onClick={() => setSettings(true)}>
             <SettingsIcon size={18} />
           </button>
+          <MoreNavigation referenceTools={capabilities.referenceTools} />
         </div>
       </header>
       {!connected && (

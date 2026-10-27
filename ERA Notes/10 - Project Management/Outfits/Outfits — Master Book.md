@@ -16,6 +16,8 @@ Digitize garments, compose outfits, plan and record wear. Standalone; personal p
 
 ## Current state & evidence
 
+**2026-10-25 ? delivered-slice UAT drafts (documentation only):** [Product walkthroughs](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md>) provide numbered owner actions, expected results, setup and cleanup for this campaign’s identified completed slices. Existing owner results and broader open integration/deployment gates remain unchanged; the new draft scenarios record no test execution. [All UAT scenarios](<../../../docs/Delivery-UAT-Scenarios-2026-10-25.md>).
+
 Catalogue/builder and on-device cutouts shipped together. Owner deployment/device proof, complete image signing and transactional composition remain open. Planning/wear, AI tags and optional dreams are distinct phases; authored SQL is not applied SQL.
 
 Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Outfits/Outfits — Master Book.md>) preserves detailed older narratives and receipts.
@@ -50,6 +52,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Plan navigation:** Open items below carry embedded drafts under [item execution plans](../_Conventions.md#9-item-execution-plans). Read only the selected ID and its dependencies. Prepared 2026-09-26 against source HEAD `45b28899`; implementation review, owner SQL application and device acceptance remain separate. No plan is owner-reviewed or dispatched by this document update.
 
 ### OUT-19
+
+**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#outfits--photograph-a-garment-and-save-an-outfit>) (drafted 2026-10-25; original results and remaining gates retained).
 
 **Outcome:** Verify Outfits deployment, privacy and both-phone behavior.
 
@@ -815,15 +819,15 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Shipped Log
 
-- ✅ 2026-07-18 — **OUT-1** `outfits` standalone module scaffolded across all six index surfaces via `scripts/new-module.mjs`
-- ✅ 2026-07-18 — **OUT-2** Migration A: `wardrobe_items` + `wardrobe_profiles` with flat `user_id = auth.uid()` RLS, paired `schema.sql`
-- ✅ 2026-07-18 — **OUT-3** `wardrobeImage.ts` — a WebP/alpha-preserving compressor (the JPEG receipt compressor flattens alpha and must never be reused here)
-- ✅ 2026-07-18 — **OUT-4** `backgroundRemoval.ts` — lazily-imported `@imgly/background-removal`, webp-alpha output re-compressed to 800 px
-- ✅ 2026-07-18 — **OUT-5** garment + profile CRUD routes, image upload (2 MB cap, private `wardrobe` bucket, paths-in-DB, rollback) and a batch signed-URLs endpoint (≤100 paths, owner-only)
-- ✅ 2026-07-18 — **OUT-6** wardrobe UI: feature dir (queryKeys/hooks/`useSignedUrls` with 50-min cache), `WardrobeGrid` + filters, 3-step `AddGarmentSheet`, `GarmentDetailSheet`, `SizingProfileSheet`
-- ✅ 2026-07-18 — **OUT-9** Migration B: `outfits` + `outfit_items` junction (denormalized `user_id`, `UNIQUE(outfit_id, slot)`), paired `schema.sql`
-- ✅ 2026-07-18 — **OUT-10** outfits CRUD with `outfit_items(*)` embed + `OutfitBuilder` (stacked `SlotSwiper` rows, overlays) + `SaveOutfitSheet` + `OutfitsGallery`
-- ✅ 2026-07-18 — **OUT-11** garment archive/delete shows a "used in N outfits" warning via the junction reverse lookup
+- ✅ 2026-07-18 — **OUT-1** `outfits` standalone module scaffolded across all six index surfaces via `scripts/new-module.mjs` [Owner UAT draft, 2026-10-25](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#outfits--photograph-a-garment-and-save-an-outfit>); historical result unchanged.
+- ✅ 2026-07-18 — **OUT-2** Migration A: `wardrobe_items` + `wardrobe_profiles` with flat `user_id = auth.uid()` RLS, paired `schema.sql` [Owner UAT draft, 2026-10-25](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#outfits--photograph-a-garment-and-save-an-outfit>); historical result unchanged.
+- ✅ 2026-07-18 — **OUT-3** `wardrobeImage.ts` — a WebP/alpha-preserving compressor (the JPEG receipt compressor flattens alpha and must never be reused here) [Owner UAT draft, 2026-10-25](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#outfits--photograph-a-garment-and-save-an-outfit>); historical result unchanged.
+- ✅ 2026-07-18 — **OUT-4** `backgroundRemoval.ts` — lazily-imported `@imgly/background-removal`, webp-alpha output re-compressed to 800 px [Owner UAT draft, 2026-10-25](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#outfits--photograph-a-garment-and-save-an-outfit>); historical result unchanged.
+- ✅ 2026-07-18 — **OUT-5** garment + profile CRUD routes, image upload (2 MB cap, private `wardrobe` bucket, paths-in-DB, rollback) and a batch signed-URLs endpoint (≤100 paths, owner-only) [Owner UAT draft, 2026-10-25](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#outfits--photograph-a-garment-and-save-an-outfit>); historical result unchanged.
+- ✅ 2026-07-18 — **OUT-6** wardrobe UI: feature dir (queryKeys/hooks/`useSignedUrls` with 50-min cache), `WardrobeGrid` + filters, 3-step `AddGarmentSheet`, `GarmentDetailSheet`, `SizingProfileSheet` [Owner UAT draft, 2026-10-25](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#outfits--photograph-a-garment-and-save-an-outfit>); historical result unchanged.
+- ✅ 2026-07-18 — **OUT-9** Migration B: `outfits` + `outfit_items` junction (denormalized `user_id`, `UNIQUE(outfit_id, slot)`), paired `schema.sql` [Owner UAT draft, 2026-10-25](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#outfits--photograph-a-garment-and-save-an-outfit>); historical result unchanged.
+- ✅ 2026-07-18 — **OUT-10** outfits CRUD with `outfit_items(*)` embed + `OutfitBuilder` (stacked `SlotSwiper` rows, overlays) + `SaveOutfitSheet` + `OutfitsGallery` [Owner UAT draft, 2026-10-25](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#outfits--photograph-a-garment-and-save-an-outfit>); historical result unchanged.
+- ✅ 2026-07-18 — **OUT-11** garment archive/delete shows a "used in N outfits" warning via the junction reverse lookup [Owner UAT draft, 2026-10-25](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#outfits--photograph-a-garment-and-save-an-outfit>); historical result unchanged.
 - ✅ 2026-07-19 — **OUT-18** standalone installable PWA: own manifest (`/manifests/outfits.webmanifest`, id `/outfits-app`, scope `/outfits`), generated icons, layout metadata, wired into `scripts/generate-icons.cjs`. The same pass added Healthcare + ERA manifests/icons/layouts. *(These three plus PM cannot install on-device until the root `manifest.json` `scope: "/"` collision is resolved.)*
 - ✅ 2026-07-19 — on-device background removal fixed after the real-phone test — see the CSP case study below
 

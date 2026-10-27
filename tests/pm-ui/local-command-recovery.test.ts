@@ -54,3 +54,47 @@ it("a read-only status check never POSTs even when the receipt is missing", asyn
   await expect(transport.v2CommandStatus!("id")).rejects.toBeInstanceOf(PendingCommand);
   expect(safeFetch).not.toHaveBeenCalled();
 });
+
+it("surfaces a revoked browser session without marking the laptop offline or retrying writes", async () => {
+  const transport = client(async () => response({ error: "local-session-required", detail: "this browser's session is not recognised" }, 401));
+  const listener = vi.fn(); transport.subscribe(listener);
+  await expect(transport.v2Runs()).rejects.toMatchObject({ status: 401, code: "local-session-required", message: "Pair this browser to view Delivery." });
+  expect(listener).toHaveBeenCalledWith({ type: "session", session: { paired: false, actor: null, csrf: null } });
+  expect(safeFetch).not.toHaveBeenCalled();
+});
+
+it("does not confuse a forbidden operation with lost browser pairing", async () => {
+  const transport = client(async () => response({ error: "steward-operation-not-permitted", detail: "Not permitted" }, 403));
+  const listener = vi.fn(); transport.subscribe(listener);
+  await expect(transport.v2Runs()).rejects.toMatchObject({ status: 403, message: "Not permitted" });
+  expect(listener).not.toHaveBeenCalled();
+});
+
+it("keeps an authentication refusal bound to the original command, without replay", async () => {
+  const transport = client(async () => response({ error: "unknown-command" }, 404));
+  const listener = vi.fn(); transport.subscribe(listener);
+  vi.mocked(safeFetch).mockResolvedValueOnce(response({ error: "local-session-required", detail: "this browser's session is not recognised" }, 401));
+  await expect(transport.v2Command("deliver", { command_id: "original-command" })).rejects.toMatchObject({ status: 401, payload: { error: "local-session-required" } });
+  expect(safeFetch).toHaveBeenCalledTimes(1);
+  expect(listener).toHaveBeenCalledWith({ type: "session", session: { paired: false, actor: null, csrf: null } });
+});
+
+it("a late failure from the old session cannot revoke a newly paired browser", async () => {
+  let release!: (value: Response) => void;
+  const pending = new Promise<Response>(resolve => { release = resolve; });
+  const transport = client(() => pending);
+  const listener = vi.fn(); transport.subscribe(listener);
+  await transport.v2Session();
+  const oldRead = transport.v2Runs();
+  const paired = { paired: true, actor: "owner", csrf: "new-csrf" };
+  vi.mocked(safeFetch).mockResolvedValueOnce(response(paired));
+  await expect(transport.v2Pair("ONE-TIME-CODE")).resolves.toEqual(paired);
+  release(response({ error: "local-session-required" }, 401));
+  await expect(oldRead).rejects.toMatchObject({ status: 401 });
+  expect(listener.mock.calls).toEqual([[{ type: "session", session: paired }]]);
+  const fetch = vi.mocked(globalThis.fetch);
+  fetch.mockResolvedValueOnce(response({ runs: [] }));
+  await transport.v2Runs();
+  expect(fetch).toHaveBeenLastCalledWith("/api/delivery/v2/runs", expect.objectContaining({ headers: expect.objectContaining({ "x-era-csrf": "new-csrf" }) }));
+  expect(safeFetch).toHaveBeenCalledTimes(1); // Pair only; no Delivery command.
+});

@@ -109,6 +109,10 @@ ERA typing memory API (HUB-113): `GET /api/era/capture-memory`, authenticated an
 
 ## PM Command Center (shared local and phone navigation)
 
+Local Delivery opens with **Review & sign off** (R81): search a work ID or title, choose To test / Not ready / Feedback / History / All, then Start test / Continue / View steps. The existing `#/delivery/test/<handover id>` route retains review search and filters on Back. Apply/conflict decisions live under **Delivery actions**. Phone UAT relay remains R79.
+
+**More navigation (R80, 2026-10-25):** the header's Lucide `Menu` icon opens the shared portaled sheet on desktop and phone. It links Activity (`#/activity`), Decisions (`#/attention`), Idea inbox (`#/read?file=0%20-%20Inbox.md`) and Documents (`#/read?file=_index.md`); Reference tools is shown only for the local transport. These restore existing hash destinations alongside the five primary tabs.
+
 `pnpm pm` and `/pm/live` mount the same React navigation from `scripts/pm/app/App.tsx`. These are hash destinations within the existing shell, not new Next.js pages. The wordmark uses `ERAMark module="memory"` from `src/components/shared/ERAMark.tsx`.
 
 | Hash route | Destination | Icon (lucide-react) |

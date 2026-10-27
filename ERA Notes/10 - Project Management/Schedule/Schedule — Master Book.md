@@ -16,6 +16,8 @@ One coherent time model from capture through occurrence completion. Standalone I
 
 ## Current state & evidence
 
+**2026-10-25 — owner UAT wording backfilled (documentation only):** [Schedule walkthroughs](<../../../docs/Delivery-UAT-Schedule-2026-10-25.md>) cover completed SCH-20/22/23/24/25/26/27/29/30 with numbered actions and expected results. SCH-28 remains pending engineering. Source/deployment prerequisites and actual current control labels are explicit; every new manual result remains Pending and historical evidence is preserved. [Delivery-wide index](<../../../docs/Delivery-UAT-Scenarios-2026-10-25.md>). No schedule data, migration or runtime state was changed.
+
 Stage1 recurrence correctness and shared day delegation exist. Stages2–3 and all-consumer parity remain open; the old known-red WebTodayView claim is stale. The live capture form is MobileReminderForm; source-present parser behavior is not net-new NLP.
 
 Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>) preserves detailed older narratives and receipts.
@@ -2009,6 +2011,8 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 
 ### SCH-20
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Schedule-2026-10-25.md#s20--open-chores-and-place-one-routine>) (drafted 2026-10-25; original results retained).
+
 **Kind:** feature
 **Implementation:** done
 **UAT:** pending
@@ -2040,6 +2044,8 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 
 ### SCH-22
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Schedule-2026-10-25.md#s22--install-chores-beside-expense>) (drafted 2026-10-25; original results retained).
+
 **Kind:** bug
 **Implementation:** done
 **UAT:** pending
@@ -2052,6 +2058,8 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - **Reading guide:** `.claude/skills/pwa-install/SKILL.md`; `scripts/check-pwa-manifests.mjs`.
 
 ### SCH-23
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Schedule-2026-10-25.md#s23--install-a-second-app-from-its-page>) (drafted 2026-10-25; original results retained).
 
 **Kind:** bug
 **Implementation:** done
@@ -2066,6 +2074,8 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - **Reading guide:** `.claude/skills/pwa-install/SKILL.md`.
 
 ### SCH-24
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Schedule-2026-10-25.md#s24--a-saved-reminder-keeps-all-its-details>) (drafted 2026-10-25; original results retained).
 
 **Outcome:** Source item/prerequisite writes return success only for complete requested effects, with inspectable partial/unknown results when a commit cannot be verified.
 
@@ -2085,6 +2095,8 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 
 ### SCH-25
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Schedule-2026-10-25.md#s25--save-many-chores-and-undo-the-batch>) (drafted 2026-10-25; original results retained).
+
 **Outcome:** Assigning many chores at once appears on the agenda immediately, saves in one idempotent request, survives a slow server or lost network, and never duplicates or fakes a save.
 
 **Kind:** bug
@@ -2101,6 +2113,8 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 
 ### SCH-26
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Schedule-2026-10-25.md#s26--complete-all-rooms-of-one-chore>) (drafted 2026-10-25; original results retained).
+
 **Outcome:** A chore placed in several rooms on one day can be shown as one grouped row and marked done for every room in one tap.
 
 **Kind:** feature
@@ -2115,6 +2129,8 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - **Scope boundary:** Completed rooms stay listed individually under Completed. No new DB object; idempotency rests on the existing item_id+occurrence_date+action_type upsert.
 
 ### SCH-27
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Schedule-2026-10-25.md#s27--find-and-stage-chores-on-a-phone>) (drafted 2026-10-25; original results retained).
 
 **Outcome:** Assigning chores on a phone is faster to find and steadier to use: search, labelled bulk assign, a person selector per row, tabs inside a room and a fixed-height sheet.
 
@@ -2142,6 +2158,8 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 
 ### SCH-29
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Schedule-2026-10-25.md#s29--assign-an-extra-chore-and-use-any-time>) (drafted 2026-10-25; original results retained).
+
 **Outcome:** A chore whose weekly target is already met can still be assigned (flagged, never blocked), a Catalogue chore can have no recurrence, the page opens on Me and grouped, and a Saturday full-scope assignment takes one tap per chore.
 
 **Kind:** feature
@@ -2156,6 +2174,8 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - **Scope boundary:** Flexible routine items (not Catalogue instances) still stop at their target — the flexible engine matches by period slot. The desktop "To plan" aside lists no extras. Chore templates saved before this change with no recurrence now appear as Any time.
 
 ### SCH-30
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Schedule-2026-10-25.md#s30--done-reopen-and-routine-placement-update-immediately>) (drafted 2026-10-25; original results retained).
 
 **Outcome:** Marking a chore done or open, and placing or removing a routine slot, update the screen before the server answers, without changing any API call.
 

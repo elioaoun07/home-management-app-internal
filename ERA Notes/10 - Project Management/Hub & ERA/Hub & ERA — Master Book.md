@@ -16,6 +16,8 @@ A dependable daily assistant that reads broadly, proposes safely and speaks firs
 
 ## Current state & evidence
 
+**2026-10-25 — owner UAT wording backfilled (documentation only):** [Hub and ERA walkthroughs](<../../../docs/Delivery-UAT-Hub-2026-10-25.md>) give completed slices awaiting acceptance numbered navigation/actions, expected results, setup and cleanup. Partial broader items retain their open engineering gates; old receipts and owner observations are unchanged. New manual results are Pending. [Delivery-wide index and feedback format](<../../../docs/Delivery-UAT-Scenarios-2026-10-25.md>). No app/provider/production acceptance was exercised during drafting.
+
 Final review 2026-10-11 (**HUB-108**, working tree after HUB-103–106; HEAD `82a564f0`): a supervised assistant with composable reviewed actions, not an unrestricted application operator. Default-mode confirmation, partial NFC receipts, recurrence refusal and Ask AI metering were hardened. The [final assessment](<../../03 - Junction Modules/AI Assistant/Overview.md#final-review-and-hardening--2026-10-11-hub-108>) records actual reach, intelligence limits, remaining source/consent defects and deployment/device gates. No new production, paid-model or device witness is implied.
 
 Intent routing and turn-latency repairs shipped. Proactive delivery, source coverage, safe learned referents and durable capture remain incomplete. September research supplies bounded evidence, not production incidents or completed deliveries.
@@ -68,6 +70,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+- 🟠 **HUB-94 acceptance gap — source review, 2026-10-25.** The current typed event composer passes structured capture through `useEraTurn` → `resolveIntent` → `resolveScheduleCapture`; that path returns the event receipt without the older event resolver's Where?/Save-to-Places follow-up. [H06](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h06--create-a-placecontact-use-the-place-and-open-its-artifact>) retains the accepted expectation and labels the divergence. No runtime reproduction or owner FAIL is claimed; a bounded follow-up needs its own engineering scope before implementation.
 
 🟠 **HUB-117** ERA missed "Location for Women's night is Kobeize" (ERA report, 2026-10-18). See [acceptance](<#hub-117>).
 
@@ -197,6 +201,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### HUB-115
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h01--era-motion-and-readable-navigation>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** ERA's top layer gains subtle, expressive animation without changing functionality.
 
 **Kind:** feature
@@ -210,6 +216,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### HUB-113
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h03--personal-completion-known-phrases-and-explicit-time>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** ERA's composer completes and understands everyday captures from the household's own wording.
 
 **Kind:** feature
@@ -222,6 +230,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Owner acceptance:** On a phone in two themes, type each example above in both composers; confirm suggestions come from your own history, completions accept by swipe and chip, the summary corrections open the right choices, and Send creates the same reminder, draft or list rows (with Undo) as before. Device keyboard/touch behaviour and live memory content are not machine-verified.
 
 ### HUB-112
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h02--one-clear-next-question-while-typing-a-reminder>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 **Outcome:** ERA completes native commands through a calm chatbot composer while the person types.
 
@@ -241,6 +251,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Owner acceptance:** At 390 px in two themes, type naturally in both composers; confirm one calm surface, only the next question, fully visible wrapped choice names, natural date/time wording and action-specific identity. Open More/Details and ellipsis correction sheets; verify they close with the drawer and preserve the sentence. Touch/Tab completion keeps typing focus, editing/backspacing recomputes the step, and dismissal preserves text. Exercise shopping multiline Send and source Undo. No visual, live notification or production acceptance is claimed. Earlier SCH-24 owner SQL remains a source dependency.
 
 ### HUB-94
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h06--create-a-placecontact-use-the-place-and-open-its-artifact>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 **Outcome:** ERA asks where an event happens and learns your places.
 
@@ -276,6 +288,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### HUB-90
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h06--create-a-placecontact-use-the-place-and-open-its-artifact>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** Every ERA write leaves an Artifact that opens the item.
 
 **Kind:** bug
@@ -308,6 +322,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### HUB-89
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h06--create-a-placecontact-use-the-place-and-open-its-artifact>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** ERA handles "Add Laura as a contact person".
 
 **Kind:** bug
@@ -323,6 +339,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ERA · 18:51 — I missed that. Ask me about today, about money, about dinner — or just tell me something to keep. _(unknown · answered)_ ← reported
 
 ### HUB-88
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h06--create-a-placecontact-use-the-place-and-open-its-artifact>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 **Outcome:** ERA handles "Add Kobeize as a location".
 
@@ -357,6 +375,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### HUB-86
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h08--conversation-new-chat-history-and-report>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** The ERA chat reads like a conversation on web and mobile, and New chat starts clean.
 **Kind:** feature
 **Touches:** `src/components/era/EraConversation.tsx`, `src/components/era/EraShell.tsx`, `src/components/era/EraChatToolbar.tsx`, `src/components/era/EraChatDrawer.tsx`, `src/features/era/thread.ts`, `src/features/era/useEraConversation.ts`, `src/features/era/useEraStore.ts`, `src/features/era/useEraTurn.ts`, `src/app/api/era/messages/route.ts`
@@ -368,6 +388,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### HUB-85
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h08--conversation-new-chat-history-and-report>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** A missed or wrongly handled ERA request can be reported with its history, and lands as Hub & ERA work.
 **Kind:** feature
 **Touches:** `src/app/api/era/issues/route.ts`, `src/app/api/era/issues/[id]/route.ts`, `src/lib/era/issueReport.ts`, `src/features/era/useEraIssues.ts`, `src/components/era/EraReportCard.tsx`, `src/features/era/useEraAskAI.ts`, `scripts/pm/era-issues.mjs`
@@ -378,6 +400,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### HUB-84
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h07--explicit-consent-follow-ups-learned-choices-and-split-handoff>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** A follow-up edits the last result, whatever its type.
 
 - **Acceptance:** "make it / put it / change it / under X / no, 15 / to savings instead / call it … / remove it" resolve against the most recent result of any type and apply through that type's edit contract; values resolve against real data (one → apply, several → chips, none → offer to create behind a card); Undo only where demonstrated; money keeps its tier; unsupported types get an honest limit, never a wrong-domain question; the same fields work in the first sentence.
@@ -385,6 +409,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Reading guide:** `focusMemory.ts`, `intents/followUp.ts`, `intents/index.ts` (`amendLast`), `intents/resolvers/amend.ts`, `resolvers/shopping.ts` (groups), `useEraTurn.ts` (`registerResultFocus`, Undo receipt).
 
 ### HUB-83
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h08--conversation-new-chat-history-and-report>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 **Outcome:** The lexicon table exists in production and today's ERA flows are witnessed on both phones.
 
@@ -395,6 +421,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Why an ID:** D12 — applied SQL and device acceptance stay distinct from implementation history.
 
 ### HUB-76
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h07--explicit-consent-follow-ups-learned-choices-and-split-handoff>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 **Outcome:** No ERA interpreter moves money or deletes records without the tier its effect requires. Negated and hypothetical sentences never execute.
 
@@ -468,6 +496,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### HUB-78
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h07--explicit-consent-follow-ups-learned-choices-and-split-handoff>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** The shared Understanding engine is proven through three unlike flows. The marginal cost of the next capability is measured.
 
 - **Acceptance:** Plan §4 components 1–9 extend `src/features/era/` and its registry; there is no parallel registry. These flows pass as Gym sequences:
@@ -511,6 +541,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
   - Blocked: debt settle waits on BUD-68 (debt reads mutate); pantry/stock reads wait on KIT-1/KIT-2; recurring **add** from chat not built. Found BUD-85 (mark-covered advances on every call).
 
 ### HUB-80
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h07--explicit-consent-follow-ups-learned-choices-and-split-handoff>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 **Outcome:** ERA learns household aliases and defaults through a semantic lexicon that re-binds every turn, replacing phrase templates.
 
@@ -562,6 +594,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### HUB-75
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h04--dollar-suffixes-and-lbp-thousands-produce-the-right-draft>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** ERA reads suffix-currency and `k`-thousands amounts through one shared amount extractor.
 
 - **Acceptance:** `spent 12$ on coffee`, `paid 300$` and `coffee 4$` parse to 12/300/4 on every face that reaches the budget router. `500k lbp groceries` gives 500,000 LBP, stored under the LBP-in-thousands preference rule *(corrected 2026-09-27: accounts store native amounts, so it is 500000 on an LBP account; the thousands rule covers only the exchange rate and LBP-change field)*. `spent 2 hours studying` and `I bought 2 shirts` still create no draft. ERA and Hub chat share one extractor instead of two regex copies.
@@ -571,11 +605,15 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### HUB-74
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h09--household-chat-selection-phone-composer-and-voice-time>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 - At 320–390 px, the color control, message field and 48px action remain on screen. Empty Budget/Reminder input shows Mic; entered text shows Send; sending disables the action while pending.
 - Voice recording keeps Cancel, waveform/timer/pause and Send within the same width. Upload uses `safeFetch` with a long-call timeout, and Undo removes the returned message ID. The fixed composer leaves room for the device safe area and for the last message to scroll above it.
 - Repository evidence: typecheck and changed-file lint pass on 2026-09-27; authenticated device visual verification is pending.
 
 ### HUB-73
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h09--household-chat-selection-phone-composer-and-voice-time>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 - Long press a Budget or Reminder message, select several visible rows, and review them through Add all. Selection also offers Delete all; delete scope distinguishes personal hiding from deleting own messages for everyone. Undo restores either action.
 - At 390 px, the thread title, search and Chat options remain on screen; selection controls occupy their own row without horizontal clipping. The new chat button remains visible in the thread list.
@@ -1756,6 +1794,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 ### HUB-16
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h09--household-chat-selection-phone-composer-and-voice-time>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** Preserve voice reminder time through the shared turn engine.
 
 - **Acceptance:** `/chat` voice reminders lose the time and don't save *(now packet **E-13**, the one sanctioned `HubPage.tsx` rider)* — gives HubPage's voice engine `runTurn`, deletes `intentClassifier.ts` and the five legacy callbacks.
@@ -1998,6 +2038,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 ```
 
 ### HUB-52
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h08--conversation-new-chat-history-and-report>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 **Outcome:** Reopen ERA sessions with deterministic titles.
 
@@ -2364,6 +2406,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 ```
 
 ### HUB-6
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h07--explicit-consent-follow-ups-learned-choices-and-split-handoff>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 **Outcome:** Expense-split from chat (gap 8a).
 
@@ -3105,6 +3149,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 ### HUB-97
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h05--shopping-lists-groups-and-multiline-capture>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** ERA adds a list of items to the shopping list however the household phrases it.
 
 **Kind:** bug
@@ -3117,6 +3163,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - **Reading guide:** `src/features/era/intents/chef.ts` (shopping grammar) → `resolvers/shopping.ts` (`splitShoppingItems`, `resolveAddShopping`).
 
 ### HUB-98
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h13--provider-failures-stay-honest-and-diagnosable>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 **Outcome:** Ask AI fails less often, and when it does fail the reason is in the server log.
 
@@ -3142,6 +3190,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 ### HUB-100
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h10--ai-shopping-and-a-reviewed-recipe-to-meal-plan>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** Ask AI knows the shopping list exists and can propose adding to it.
 
 **Kind:** enhancement
@@ -3156,6 +3206,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - **Evidence — 2026-10-10:** `shopping.add` wraps the shipped adapter; `shopping` vocabulary participates in miss classification. A real Gemini grocery paraphrase produced the validated confirm proposal. Registry tests and agent route-fixture tests pass. Older Gym recordings refreshed with 16 new model calls; no production DB used.
 
 ### HUB-103
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h10--ai-shopping-and-a-reviewed-recipe-to-meal-plan>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 **Outcome:** ERA understands compound requests, discovers registered capabilities and executes bounded dependent steps through the existing application.
 
@@ -3172,6 +3224,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 ### HUB-104
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h11--resume-saved-progress-without-repeating-an-uncertain-write>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** Registered agent plans retain consent and progress across sessions, resume from real outputs and stop ambiguous writes from being replayed.
 
 **Kind:** feature
@@ -3187,6 +3241,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - **Reading guide:** [Execution contract and rollout](<../../03 - Junction Modules/AI Assistant/Overview.md#durable-execution-foundation--2026-10-10-hub-104>); `src/features/era/execution/`, `src/app/api/era/runs/`, `src/components/era/EraRunCards.tsx` and the owner-run migration.
 
 ### HUB-105
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#hub-105-and-hub-107--partial-implementation-not-full-delivery-acceptance>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 **Outcome:** ERA discovers reviewed capabilities and module reach from current contracts, while new backend functions become visible integration candidates without acquiring write authority.
 
@@ -3205,6 +3261,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 ### HUB-106
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h12--context-belongs-to-its-speaker-chat-and-actual-outcomes>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** ERA reuses meaningful personal context and prior experience across faces, understands contextual follow-ups and recognizes limitations without adding taught phrases or sharing private learning.
 
 **Kind:** feature
@@ -3219,6 +3277,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - **Limits / next:** This is bounded lexical episode retrieval and model context, not model retraining or permanent inferred preference storage. Whole-history semantic recall and automatic preference extraction need source scope, correction/revocation and measured recall gates. Shared `household_memories` is referenced by the existing route but absent from schema/DB-state evidence, so automatic ingestion is unavailable; D17/HUB-70 remain authoritative. Source-adapter expansion stays with HUB-69/71/81; outcome/template hardening remains HUB-47/64 and is not declared complete here. See [adaptive architecture and inventory](<../../03 - Junction Modules/AI Assistant/Overview.md#adaptive-context-foundation--2026-10-10-hub-106>).
 
 ### HUB-107
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#hub-105-and-hub-107--partial-implementation-not-full-delivery-acceptance>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 **Outcome:** The app's AI layer runs on Claude Haiku 5.5 (Anthropic) instead of Gemini, with equal-or-better ERA accuracy.
 
@@ -3244,6 +3304,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 ### HUB-108
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h12--context-belongs-to-its-speaker-chat-and-actual-outcomes>) (drafted 2026-10-25; original results and remaining engineering gates retained).
+
 **Outcome:** Critically assess ERA Agent's actual reach and harden the default confirmation, truthful-result and cost boundaries using existing infrastructure.
 
 **Kind:** maintenance
@@ -3259,6 +3321,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - **Reading guide:** [Final review](<../../03 - Junction Modules/AI Assistant/Overview.md#final-review-and-hardening--2026-10-11-hub-108>), then the new actual-hook regression tests. Preserve the prior phases' uncommitted work and their separate rollout gates.
 
 ### HUB-109
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h10--ai-shopping-and-a-reviewed-recipe-to-meal-plan>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 **Outcome:** Confirm shows the operation and effective values ERA will execute, independently of model-authored prose.
 
@@ -3282,6 +3346,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - 2026-09-10 — **HUB-10** → BUD-2. Scope is retained in the destination criteria; duplicate removed, not shipped.
 
 ### HUB-72
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h14--activity-filters-source-links-and-household-privacy>) (drafted 2026-10-25; original results and remaining engineering gates retained).
 
 **Outcome:** Open an installable household Activity Log and filter authorized changes by module, feature, person and local date.
 
@@ -3319,7 +3385,7 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - ✅ 2026-07-10 — per-user receipts extended to shopping child messages: `unread_reply_count` drives the item dot, opening the item thread marks replies read, realtime restores the dot only for a _newer_ partner reply
 - ✅ 2026-07-10 — net complexity went **down** with a feature for the first time in this cluster (`useHubPersistence.ts` −27, `chat-notifications` cron −17), and the vault docs were updated in the same commit
 - ✅ 2026-07-17 — ERA Top View design study recorded as the standing spec for proactive
-- ✅ 2026-08-22 — **HUB-1** intent-routing tests + graceful fallback (`src/features/era/intents/rootIntentRouter.test.ts`, 38 green) — new `clarify` Intent member (`ambiguous`/`weak`) threaded through `types.ts`, `intents/{index,budget}.ts`, `replyFormatter.ts`, `resolveIntent.ts` and `CommandBar.tsx`; a misrecognized intent now asks the user to clarify instead of firing a wrong action. `spent 2 hours studying` no longer drafts a transaction; a weak money word no longer confidently switches faces; a multi-face utterance routes to `clarify` instead of letting fixed FACE_KEYS order decide. `pnpm test` green (1697), no new deps
+- ✅ 2026-08-22 — **HUB-1** intent-routing tests + graceful fallback (`src/features/era/intents/rootIntentRouter.test.ts`, 38 green) — new `clarify` Intent member (`ambiguous`/`weak`) threaded through `types.ts`, `intents/{index,budget}.ts`, `replyFormatter.ts`, `resolveIntent.ts` and `CommandBar.tsx`; a misrecognized intent now asks the user to clarify instead of firing a wrong action. `spent 2 hours studying` no longer drafts a transaction; a weak money word no longer confidently switches faces; a multi-face utterance routes to `clarify` instead of letting fixed FACE_KEYS order decide. `pnpm test` green (1697), no new deps [Owner UAT draft, 2026-10-25](<../../../docs/Delivery-UAT-Legacy-Attempts-2026-10-25.md#l4--hub-1-ambiguous-words-do-not-save-the-wrong-action>); historical result unchanged.
 - ✅ 2026-08-22 — **HUB-1 follow-up** post-delivery review caught two false negatives in the same-day landing: the flat cross-face fallback let a bare `switchFace` keyword echo tie with a fully slot-filled intent ("remind me to buy dinner ingredients" wrongly went to `clarify/ambiguous` instead of `draftReminder`), and the active face's own weak `clarify` short-circuited before other faces' routers ran at all ("remind me to buy groceries" with Budget active never reached schedule). Fixed in `intents/index.ts` by tiering cross-face hits (slot-filled kinds beat bare `switchFace`) and letting a weak local `clarify` step aside for a stronger cross-face hit. One row corrected, one row added to the fixture (39 green). `pnpm test` green (1699), no new deps
 - ✅ 2026-08-22 — **HUB-12** ERA Phase 2 intents: `draftReminder`, `showAnalytics`, and `draftTransaction` all resolve for real. Three intents had been reaching `resolveIntent`, falling through to `replyFormatter`'s "Coming soon" string and writing nothing — the worst failure shape in the taxonomy, since the reply reads like success. Now: `draftReminder` → `POST /api/items` via `resolvers/schedule.ts` (`parseSmartText` for title/date/recurrence, `localToISO` for the UTC instant, **`due_at` omitted entirely when `confidence.date === 0`** so we never invent a due time that fires an alert immediately); `showAnalytics` → `GET /api/analytics?months=2` summarizing the current month with a top-3 category list and a month-over-month delta; `draftTransaction` moved **off** its parallel CommandBar path onto the resolver, with `useEraBudgetSubmit.submit` injected as a `ResolveDeps` capability so the Undo toast (Hard Rule #1) and cache invalidation stay exactly where they were while the dispatcher becomes the single owner of "intent → reply". Reply and side effect can no longer disagree: a failed draft now says so instead of returning "Drafting $25.00…". New fixture `src/features/era/intents/resolveIntent.test.ts` (14 green). `pnpm test` green (1715), typecheck clean, no new deps
 - ✅ 2026-08-22 — **HUB-15** ERA stopped reading from a script. Every reply was a single hardcoded string, so the fifth reminder of the day came back word-for-word identical to the first — the tell that collapses the illusion of an assistant that's listening. New `src/lib/era/phrasing.ts` holds the mechanics (`pick`/`fill`/`say`, `describeWhen`, `money`, `plural`, `listOut`, `errorReply`, time-aware `greeting`) and every situation across all four faces now owns a **pool** of slot-templated phrasings drawn at random — ~40 pools, 4–10 variants each, covering reminders, schedule, spend, analytics, drafts, recipes, memory, greetings, clarify/unknown and the in-flight interstitials. Lives in `src/lib/` because ERA and voice-conversation are both standalone feature dirs and may not import each other. Four rules are written into the module header and enforced by test: **every variant carries the same facts** (variation is connective tissue only), slots rather than concatenation, no personality-of-the-day, and an error's *diagnosis* is never randomized — only its apology and retry nudge. New fixtures `src/lib/era/phrasing.test.ts` (23) and a variant harness in `resolveIntent.test.ts` that drives `Math.random` across its range, collects every sentence a pool can emit, and asserts the payload survives in **all** of them (a future "breezier" variant that drops the due time or the amount fails). `pnpm test` green (1741), typecheck clean, no new deps

@@ -48,6 +48,8 @@ export const pmKeys = {
   v2queue: ["pm-app", "v2", "queue"] as const,
   v2allowances: ["pm-app", "v2", "allowances"] as const,
   v2testgate: ["pm-app", "v2", "test-gate"] as const,
+  v2uat: ["pm-app", "v2", "uat"] as const,
+  v2uatOne: (id: string) => ["pm-app", "v2", "uat", id] as const,
   v2assess: (file: string, id: string) => ["pm-app", "v2", "assess", file, id] as const,
   v2readiness: (selection: object) => ["pm-app", "v2", "readiness", selection] as const,
   v2intent: (scope: string, intent: string) => ["pm-app", "v2", "intent", scope, intent] as const,
@@ -65,6 +67,7 @@ const WorldContext = createContext<{
   connection: ConnectionState;
   readError: Error | null;
   runError: Error | null;
+  runsReady: boolean;
 } | null>(null);
 export const useWorld = () => {
   const context = useContext(WorldContext);
@@ -162,6 +165,12 @@ function ProjectData({ children }: { children: ReactNode }) {
     };
     const unsubscribe = source.subscribe((event) => {
       if (event.type === "ui") location.reload();
+      else if (event.type === "session") {
+        // Authentication loss is distinct from connectivity. Stop protected
+        // polling and expose Pair without deleting cached work or commands.
+        if (event.session) client.setQueryData(pmKeys.v2session, event.session);
+        else void client.invalidateQueries({ queryKey: pmKeys.v2session });
+      }
       else if (event.type === "connection") {
         setConnection(source.connection());
         refresh();
@@ -197,6 +206,7 @@ function ProjectData({ children }: { children: ReactNode }) {
         connection,
         readError: data.error,
         runError: runs.error,
+        runsReady: runs.isSuccess && !runs.isError,
       }}
     >
       {children}

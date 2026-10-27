@@ -16,6 +16,8 @@ Private health records and dependable reminders with explicit evidence limits. S
 
 ## Current state & evidence
 
+**2026-10-25 ? delivered-slice UAT drafts (documentation only):** [Product walkthroughs](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md>) provide numbered owner actions, expected results, setup and cleanup for this campaign’s identified completed slices. Existing owner results and broader open integration/deployment gates remain unchanged; the new draft scenarios record no test execution. [All UAT scenarios](<../../../docs/Delivery-UAT-Scenarios-2026-10-25.md>).
+
 Core profiles, allergies, conditions, vaccines and warning integration shipped as code July17. Current application, privacy and mobile acceptance remain HLTH-7.
 
 Medications shipped as code 2026-09-26 (HLTH-24, owner request while sick, ahead of the HLTH-19 skill gate): medicine list with dose, full-course vs as-needed, food timing, dose times and course length; a day-by-day taken checklist; one urgent recurring Schedule reminder per dose time, kept in sync both ways with the checklist. Local evidence: PGlite fixture run 31/31 and `medicationSchedule.test.ts` 14/14. On 2026-09-27 the owner reported running the earlier Morning/Noon PRN migration, which implies the base medication migration was also applied; live DB and phone behavior remain unverified under HLTH-25. Verified Google status (HLTH-9/10), calendar badge (HLTH-11) and the phone alarm battery (HLTH-12) remain.
@@ -95,6 +97,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 ### HLTH-26
 
+**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#health--medication-checklist-and-schedule>) (drafted 2026-10-25; original results and remaining gates retained).
+
 **Outcome:** Represent and enforce the owner's three medication instructions.
 
 - **Acceptance:** A full course can store a two-pill dose at morning/evening times with any food timing; an as-needed stomach-pain medicine can store one pill, with food, and an eight-hour minimum gap; an as-needed medicine can store one pill, empty stomach, and one Morning plus one Evening opportunity per local day.
@@ -102,6 +106,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - **Deployment:** Owner reports the earlier Morning/Noon PRN migration applied. Run `migrations/2026-09-27_medication-evening-upgrade.sql` to convert current options and preserve historical Noon logs. HLTH-25 retains phone acceptance.
 
 ### HLTH-25
+
+**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#health--medication-checklist-and-schedule>) (drafted 2026-10-25; original results and remaining gates retained).
 
 **Outcome:** Apply the medications migration and accept doses + reminders on phone.
 
@@ -1156,7 +1162,7 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 ## Shipped Log
 
 - ✅ 2026-10-12 — **HLTH-28** Fitness module: PT plan import (contract/schema/examples/AI prompt), weekly flexible Schedule slots, workout logging + rest timer + offline queue, deterministic rewards/quests/badges/records/ranks, shared owner-private measurements + BMI, partner opt-in summary ([criteria](<Healthcare — Master Book.md#hlth-28>); PGlite 16/16, unit tests, typecheck + lint; `migrations/2026-10-12_fitness-module.sql` **code-complete, not yet run** — HLTH-29)
-- ✅ 2026-09-26 — **HLTH-24** Medications: list (dose, full course / as needed, food timing, dose times, course length), day-by-day taken checklist, one urgent recurring Schedule reminder per dose time synced both ways with the checklist (`migrations/2026-09-26_healthcare-medications.sql` — **code-complete, migration not yet run**, HLTH-25; PGlite fixtures 31/31, `medicationSchedule.test.ts` 14/14, typecheck + lint clean)
+- ✅ 2026-09-26 — **HLTH-24** Medications: list (dose, full course / as needed, food timing, dose times, course length), day-by-day taken checklist, one urgent recurring Schedule reminder per dose time synced both ways with the checklist (`migrations/2026-09-26_healthcare-medications.sql` — **code-complete, migration not yet run**, HLTH-25; PGlite fixtures 31/31, `medicationSchedule.test.ts` 14/14, typecheck + lint clean) [Owner UAT draft, 2026-10-25](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#health--medication-checklist-and-schedule>); historical result unchanged.
 - ✅ 2026-09-26 — **HLTH-8** Idempotent medication storage and materialization — delivered inside HLTH-24 (same evidence; migration pending HLTH-25)
 
 - ✅ 2026-07-17 — **HLTH-1** module scaffold: six index surfaces, slug `healthcare` (`node scripts/check-feature-index.mjs` green)

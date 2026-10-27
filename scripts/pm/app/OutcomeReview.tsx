@@ -1,9 +1,12 @@
 // Outcome tab (2026-09-19): one page that answers "how did this delivery go?" from
 // recorded facts only — verdict, what went well, what needs attention, links into
 // every other view, artifacts and token split. No AI-written claims are shown.
-import { CheckCircle2, CircleAlert, CircleDashed, ExternalLink, FileText, GitBranch, ListChecks, MessageSquare, XCircle } from "lucide-react";
+import { CheckCircle2, CircleAlert, CircleDashed, ClipboardList, ExternalLink, FileText, GitBranch, ListChecks, MessageSquare, XCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { compact, outcomeSummary, type OutcomeVerdict, type ReviewTab } from "./deliveryReviewModel";
+import { useRoute } from "./state";
+import { useUat } from "./UatWizard";
+import { forRun, progress, uatLabel } from "./uatModel";
 import type { V2RunDetail } from "./types";
 
 const VERDICTS: Record<OutcomeVerdict, { label: string; Icon: typeof CheckCircle2 }> = {
@@ -33,6 +36,10 @@ export function OutcomeReview({ detail, openTab }: { detail: V2RunDetail; openTa
   const planned = detail.plans.at(-1);
   const candidate = detail.candidate;
   const receipts = detail.evidence.length;
+  const route = useRoute();
+  const uat = useUat();
+  const handover = forRun(uat.data, detail.run.run_id);
+  const testable = detail.run.lifecycle === "CLOSED" && !!candidate;
   return (
     <section className="outcome-review">
       <div className="outcome-verdict" data-verdict={summary.verdict}>
@@ -40,6 +47,7 @@ export function OutcomeReview({ detail, openTab }: { detail: V2RunDetail; openTa
         <div>
           <h2>{label}</h2>
           {detail.result && <small>Result v{detail.result.result_version}</small>}
+          {handover && <small className="uat-row-note">{uatLabel(handover)}</small>}
         </div>
       </div>
 
@@ -81,6 +89,23 @@ export function OutcomeReview({ detail, openTab }: { detail: V2RunDetail; openTa
             <Row icon={<ListChecks size={16} />} label="Verification" meta={summary.groups.length ? `${summary.groups.filter((g) => g.current.state === "satisfied").length}/${summary.groups.length}` : null} onClick={() => openTab("checks")} />
             <Row icon={<MessageSquare size={16} />} label="Conversation" meta={detail.activity.length ? String(detail.activity.length) : null} onClick={() => openTab("activity")} />
             {candidate && <Row icon={<GitBranch size={16} />} label="Changes" meta={String(candidate.changed.length)} onClick={() => openTab("changes")} />}
+            {handover ? (
+              <Row
+                icon={<ClipboardList size={16} />}
+                label="Test steps"
+                meta={`${uatLabel(handover)} · ${progress(handover).done}/${progress(handover).total}`}
+                href={`#/delivery/test/${encodeURIComponent(handover.handover_id)}?from=${encodeURIComponent(route.full)}`}
+              />
+            ) : (
+              testable && (
+                <li>
+                  <span className="uat-row-note">
+                    <ClipboardList size={16} />
+                    Test steps · Missing
+                  </span>
+                </li>
+              )
+            )}
           </ul>
         </div>
         <div className="outcome-links">

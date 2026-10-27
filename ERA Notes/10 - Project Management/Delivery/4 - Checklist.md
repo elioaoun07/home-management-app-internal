@@ -45,6 +45,7 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **DLV-52** Reduce measured type debt at the validation boundary — [criteria](<Delivery — Master Book.md#dlv-52>) _(friction - L)_
 - [ ] **DLV-84** Burn down `react-hooks/exhaustive-deps` (50 across 25 files) — [criteria](<Delivery — Master Book.md#dlv-84>) _(friction - L)_
 - [ ] **DLV-103** Retire V1 only after a supported replacement — [criteria](<Delivery — Master Book.md#dlv-103>) _(friction - M)_
+- [ ] **DLV-146** Have the delivering worker emit the structured UAT handover and the supervisor capture it — [criteria](<Delivery — Master Book.md#dlv-146>) _(friction - L)_
 
 **DLV-133 — 2026-10-17 Stage 1 source update; operational witness pending.** Separate target-platform staging, full inventory, cold/warm receipts and managed identity binding are implemented locally. The legacy bare setup now refuses. Use the Master Book’s recipe/runbook; no Docker preparation, installed policy/volume switch or provider execution occurred. Real same-environment/full-program container evidence and owner activation remain open. DLV-137 depends on this item; DLV-118 remains independent.
 

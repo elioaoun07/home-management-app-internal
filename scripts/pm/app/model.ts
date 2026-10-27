@@ -132,17 +132,25 @@ export function discover(work: Work[], query: string): Work[] {
 }
 export const liveRuns = (runs: RunSummary[]) =>
   runs.filter((run) => !isTerminal(run.state));
+/** Recorded attempt time, so repeated deliveries on the same day stay distinct. */
+export function deliveryAttemptDate(iso: string) {
+  const date = new Date(iso);
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Beirut", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(date)
+    : "";
+}
 /** Where a finished delivery ended, for the Earlier deliveries filter. A V2 run
  *  closed on a verified candidate stays "apply" until its application lands. */
-export type PastOutcome = "apply" | "applied" | "cancelled" | "other";
+export type PastOutcome = "apply" | "applied" | "accepted" | "cancelled" | "other";
 export const pastOutcomes: { id: PastOutcome; label: string }[] = [
   { id: "apply", label: "To apply" },
   { id: "applied", label: "Applied" },
+  { id: "accepted", label: "Accepted" },
   { id: "cancelled", label: "Cancelled" },
   { id: "other", label: "Other" },
 ];
 export function pastOutcomeV1(run: Pick<RunSummary, "state">): PastOutcome {
-  return run.state === "SHIPPED" ? "applied" : run.state === "CANCELLED" ? "cancelled" : "other";
+  return run.state === "SHIPPED" || run.state === "ACCEPTED" ? "accepted" : run.state === "CANCELLED" ? "cancelled" : "other";
 }
 export function pastOutcomeV2(run: Pick<V2RunSummary, "closed_outcome" | "application">): PastOutcome {
   if (run.application?.state === "applied") return "applied";

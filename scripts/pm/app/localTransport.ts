@@ -3,7 +3,7 @@
 import { RequestTimeoutError, safeFetch } from "@/lib/safeFetch";
 import { isReallyOnline, startProbing } from "@/lib/connectivityManager";
 import { PendingCommand, PmError, RefusedCommand, type ConnectionState, type Transport, type TransportEvent } from "./transport";
-import type { Snapshot, V2Assessment, V2Queue, V2Allowances, V2TestGate, V2Session, V2Readiness } from "./types";
+import type { Snapshot, UatHandover, UatSummary, V2Assessment, V2Queue, V2Allowances, V2TestGate, V2Session, V2Readiness } from "./types";
 
 function refusalText(payload: Record<string, unknown>, status: number) {
   const first = Array.isArray(payload.refusals) ? (payload.refusals[0] as Record<string, unknown> | undefined) : undefined;
@@ -21,9 +21,22 @@ export function createLocalTransport(): Transport {
   // Every V2 read and command carries the session cookie (HttpOnly, set by the
   // server) and the CSRF token the server derives from it.
   let csrf: string | null = null;
+  let sessionLost = false;
   const listeners = new Set<(event: TransportEvent) => void>();
   const emit = (event: TransportEvent) => listeners.forEach((listener) => listener(event));
   let lastAck: ConnectionState["lastAck"] = { at: null, state: null };
+
+  function authFailure(payload: Record<string, unknown>, status: number, sentCsrf: string | null) {
+    const code = firstRefusal(payload);
+    if ((status === 401 || status === 403) && csrf === sentCsrf) {
+      csrf = null;
+      if (code === "local-session-required" && !sessionLost) {
+        sessionLost = true;
+        emit({ type: "session", session: { paired: false, actor: null, csrf: null } });
+      }
+    }
+    return new PmError(code === "local-session-required" ? "Pair this browser to view Delivery." : refusalText(payload, status), status, code);
+  }
 
   async function read<T>(path: string, signal?: AbortSignal): Promise<T> {
     const response = await fetch(path, { headers: { Accept: "application/json" }, signal });
@@ -34,6 +47,7 @@ export function createLocalTransport(): Transport {
 
   async function post<T>(path: string, body: unknown, timeoutMs = 60000): Promise<T> {
     if (path === "planning" && !csrf) await v2Session();
+    const sentCsrf = csrf;
     let response: Response;
     try {
       // The paired browser cookie is scoped to /api/delivery/v2. Keep sprint
@@ -50,7 +64,7 @@ export function createLocalTransport(): Transport {
       throw error;
     }
     const payload = await response.json();
-    if (path === "planning" && (response.status === 401 || response.status === 403)) csrf = null;
+    if (path === "planning" && !response.ok) throw authFailure(payload, response.status, sentCsrf);
     if (!response.ok) throw new PmError(payload.error || payload.refusals?.[0]?.detail || `Request failed (${response.status})`, response.status);
     return payload;
   }
@@ -58,16 +72,17 @@ export function createLocalTransport(): Transport {
   async function v2Session(signal?: AbortSignal): Promise<V2Session> {
     const session = await read<V2Session>("/api/delivery/v2/session", signal);
     csrf = session.csrf;
+    if (session.paired) sessionLost = false;
     return session;
   }
 
   async function v2Read<T>(path: string, signal?: AbortSignal): Promise<T> {
     if (!csrf) await v2Session(signal);
+    const sentCsrf = csrf;
     const response = await fetch(path, { headers: { Accept: "application/json", ...(csrf ? { "x-era-csrf": csrf } : {}) }, credentials: "same-origin", signal });
     const payload = await response.json();
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) csrf = null;
-      throw new PmError(refusalText(payload, response.status), response.status);
+      throw authFailure(payload, response.status, sentCsrf);
     }
     return payload;
   }
@@ -131,6 +146,8 @@ export function createLocalTransport(): Transport {
       const payload = await response.json();
       if (!response.ok) throw new PmError(refusalText(payload, response.status), response.status);
       csrf = payload.csrf;
+      sessionLost = false;
+      emit({ type: "session", session: payload });
       return payload;
     },
 
@@ -140,6 +157,8 @@ export function createLocalTransport(): Transport {
     v2Queue: async (signal) => (await v2Read<{ queue: V2Queue | null }>("/api/delivery/v2/queue", signal)).queue,
     v2TestGate: async (signal) => (await v2Read<{ gate: V2TestGate | null }>("/api/delivery/v2/test-gate", signal)).gate,
     v2Allowances: async (signal) => (await v2Read<{ allowances: V2Allowances | null }>("/api/delivery/v2/allowances", signal)).allowances,
+    v2Uat: (signal) => v2Read<{ handovers: UatSummary[] }>("/api/delivery/v2/uat", signal),
+    v2UatOne: (id, signal) => v2Read<{ handover: UatHandover }>("/api/delivery/v2/uat?id=" + encodeURIComponent(id), signal),
     v2Readiness: (selection, signal) => {
       const query = new URLSearchParams(Object.entries(selection).filter((entry): entry is [string, string] => entry[1] !== null));
       return read<V2Readiness>("/api/delivery/v2/readiness?" + query, signal);
@@ -166,6 +185,7 @@ export function createLocalTransport(): Transport {
         }
       }
       let response: Response;
+      const sentCsrf = csrf;
       try {
         response = await safeFetch(`/api/delivery/v2/${path}`, {
           method: "POST",
@@ -183,12 +203,12 @@ export function createLocalTransport(): Transport {
       try { payload = await response.json(); }
       catch (error) { if (command_id) throw new PendingCommand(command_id, "unknown"); throw error; }
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) csrf = null;
+        const failure = authFailure(payload, response.status, sentCsrf);
         // The same id is still running on the server: not a failure.
         if (firstRefusal(payload) === "command-without-recorded-outcome" && command_id) throw new PendingCommand(command_id, "acknowledged");
         lastAck = { at: new Date().toISOString(), state: "refused" };
         if (response.status >= 500 && command_id) throw new PendingCommand(command_id, "unknown");
-        throw new RefusedCommand(refusalText(payload, response.status), response.status, payload);
+        throw new RefusedCommand(failure.message, response.status, payload);
       }
       lastAck = { at: new Date().toISOString(), state: "done" };
       return payload;

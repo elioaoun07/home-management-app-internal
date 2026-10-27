@@ -4,12 +4,13 @@
 // against the Node server and on the phone against the authenticated relay. The
 // views never build a URL or assume a permission; they ask the transport, and they
 // read `capabilities` to decide what to offer.
-import type { RunSummary, Snapshot, V2Assessment, V2Catalogue, V2Queue, V2Allowances, V2TestGate, V2RunDetail, V2RunSummary, V2Session, V2Readiness, V2ReadinessSelection } from "./types";
+import type { RunSummary, Snapshot, UatHandover, UatSummary, V2Assessment, V2Catalogue, V2Queue, V2Allowances, V2TestGate, V2RunDetail, V2RunSummary, V2Session, V2Readiness, V2ReadinessSelection } from "./types";
 
 export class PmError extends Error {
   constructor(
     message: string,
     public status: number,
+    public code: string | null = null,
   ) {
     super(message);
   }
@@ -76,7 +77,9 @@ export interface ConnectionState {
   savedAt: string | null;
 }
 
-export type TransportEvent = { type: "data" } | { type: "delivery" } | { type: "ui" } | { type: "connection" };
+export type TransportEvent = { type: "data" } | { type: "delivery" } | { type: "ui" } | { type: "connection" }
+  /** An observed session, or a request to revalidate it when omitted. */
+  | { type: "session"; session?: V2Session };
 
 export interface Transport {
   capabilities: TransportCapabilities;
@@ -107,6 +110,9 @@ export interface Transport {
   /** An item's verdict before launch; null where this transport cannot evaluate one. */
   v2Assess(file: string, id: string, signal?: AbortSignal): Promise<V2Assessment | null>;
   v2Readiness?(selection: V2ReadinessSelection, signal?: AbortSignal): Promise<V2Readiness | null>;
+  /** Delivery UAT list (R76). Absent where the transport cannot carry it; the phone relay joins in R79. */
+  v2Uat?(signal?: AbortSignal): Promise<{ handovers: UatSummary[] }>;
+  v2UatOne?(id: string, signal?: AbortSignal): Promise<{ handover: UatHandover }>;
   /** One V2 command. `body.command_id` is minted before the first send and reused on retry. */
   v2Command<T>(path: string, body: Record<string, unknown>, timeoutMs?: number): Promise<T>;
   /** Observe an existing command only. A missing receipt must never send it. */

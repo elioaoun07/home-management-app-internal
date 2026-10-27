@@ -88,7 +88,8 @@ describe("React PM application model", () => {
     expect(runFor(work, [{ ...run, state: "SHIPPED" }])).toBeUndefined();
   });
   it("sorts finished deliveries into apply / applied / cancelled / other", () => {
-    expect(pastOutcomeV1({ state: "SHIPPED" })).toBe("applied");
+    expect(pastOutcomeV1({ state: "SHIPPED" })).toBe("accepted");
+    expect(pastOutcomeV1({ state: "ACCEPTED" })).toBe("accepted");
     expect(pastOutcomeV1({ state: "CANCELLED" })).toBe("cancelled");
     expect(pastOutcomeV1({ state: "FAILED" })).toBe("other");
     const v2 = (closed_outcome: string | null, state?: string) =>

@@ -51,8 +51,11 @@ import { createAppWatcher } from "./pm/app-build.mjs";
 import { appAsset, buildAppShell } from "./pm/app-shell.mjs";
 import { routeHealth } from "./pm/health.mjs";
 import { assertExpectedCheckbox, assertRestoreCurrent, guardUndo } from "./pm/write-guards.mjs";
-import { createBridge } from "./pm/bridge.mjs";
+import { createBridge, createRollupsSnapshotBuilder } from "./pm/bridge.mjs";
+import { createDrivePublisher, readDeliveryFromStore, resolveDriveRoot } from "./pm/drive-publish.mjs";
 import { syncEraIssues } from "./pm/era-issues.mjs";
+import { syncUatFeedback } from "./pm/uat-feedback.mjs";
+import { listUat, readImportStatus } from "./delivery-v2/uat.mjs";
 import {
   createDeliveryContext,
   performPendingWritebacks,
@@ -107,6 +110,28 @@ const BRIDGE_ENABLED = (process.env.PM_BRIDGE === "1" || argv.includes("--bridge
 // Phase 4: the bridge relays the same corpus the local app reads (`buildData`,
 // a hoisted function below) and Delivery V2 commands through the same context.
 const bridge = BRIDGE_ENABLED ? createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx, buildData: () => buildData() }) : null;
+
+// One-way Google Drive mirror of PM docs + delivery status (scripts/pm/drive-publish.mjs).
+// Reads only; failures are logged and retried, never thrown into a request or the delivery path.
+const DRIVE_ROOT = resolveDriveRoot();
+const drive = DRIVE_ROOT
+  ? createDrivePublisher({
+      root: ROOT,
+      pmDir: PM_DIR,
+      docsDir: join(ROOT, "docs"),
+      driveRoot: DRIVE_ROOT,
+      readDelivery: () =>
+        deliveryV2Ctx.hasStore()
+          ? readDeliveryFromStore(deliveryV2Ctx.store, { requests: deliveryV2Ctx.stewardRequests() })
+          : { available: false, reason: "no-store", runs: [], requests: [] },
+      readRollups: () => createRollupsSnapshotBuilder({ PM_DIR }).buildRollupsSnapshot(),
+      // Local UAT records, read without the supervisor; the mirror never writes them.
+      readUat: () => listUat({ root: ROOT, importStatus: readImportStatus({ root: ROOT }) }).handovers,
+      statePath: join(ROOT, ".pm", "drive-publish.json"),
+      log: console.log,
+    })
+  : null;
+const driveSchedule = (reason) => drive?.schedule(reason);
 
 // ---- helpers ----
 function pmRel(abs) {
@@ -379,6 +404,25 @@ function runEraIssueSync() {
   }
   return eraSyncing;
 }
+let uatSyncing = null;
+/**
+ * R77 — submitted UAT "Needs changes" feedback becomes linked campaign work. Runs
+ * once at startup, after the corpus is readable; it only writes work items.
+ */
+function runUatFeedbackSync() {
+  if (!uatSyncing) {
+    suppressUntil = Date.now() + 700;
+    uatSyncing = syncUatFeedback({ root: ROOT, pmDir: PM_DIR })
+      .then((result) => {
+        if (result.imported?.length || result.amended?.length) broadcast();
+        return result;
+      })
+      .finally(() => {
+        uatSyncing = null;
+      });
+  }
+  return uatSyncing;
+}
 function broadcast() {
   observeSprints();
   for (const res of sseClients) {
@@ -389,6 +433,7 @@ function broadcast() {
     }
   }
   if (bridge) bridge.publishTasks();
+  driveSchedule("pm");
 }
 function broadcastUi() {
   for (const res of sseClients) {
@@ -448,6 +493,7 @@ function broadcastDelivery() {
     if (bridge) bridge.publishSession(sessionId);
   }
   if (bridge && sessionIds.length) bridge.publishFleet();
+  driveSchedule("delivery");
 }
 try {
   mkdirSync(deliveryCtx.SESSIONS_DIR, { recursive: true });
@@ -589,6 +635,8 @@ const server = createServer(async (req, res) => {
           { method: req.method, path, query: u.searchParams, body, headers: req.headers },
           deliveryV2Ctx,
         );
+        // A recorded UAT result, sign-off or report changes the mirrored status.
+        if (v2 && req.method === "POST" && path === "/api/delivery/v2/uat" && v2.status === 200) driveSchedule("delivery");
         if (v2) return sendJson(res, v2.status, v2.json, v2.headers || {});
         return sendJson(res, 404, { error: "unknown delivery route" });
       }
@@ -620,6 +668,7 @@ const server = createServer(async (req, res) => {
       suppressUntil = Date.now() + 700; // mute our own fs.watch echo
       const result = guardUndo(PM_DIR, handler(body));
       observeSprints();
+      driveSchedule("pm"); // the watcher is muted for our own writes
       return sendJson(res, 200, result);
     }
 
@@ -686,10 +735,32 @@ function listen(port, attemptsLeft) {
     }
     console.log("Press Ctrl+C to stop.");
     // R72 — reports filed from the ERA chat while away land in Hub & ERA now.
-    runEraIssueSync().then((r) => {
-      if (!r.ok) console.log("[era-issues] skipped: " + r.error);
-      else if (r.imported.length) console.log("[era-issues] imported " + r.imported.map((i) => i.workId).join(", "));
-    });
+    // R77 — owner UAT feedback follows, never beside it: both write campaign files.
+    runEraIssueSync()
+      .then((r) => {
+        if (!r.ok) console.log("[era-issues] skipped: " + r.error);
+        else if (r.imported.length) console.log("[era-issues] imported " + r.imported.map((i) => i.workId).join(", "));
+      })
+      .catch(() => {})
+      .then(() => runUatFeedbackSync())
+      .then((r) => {
+        if (!r.ok) console.log("[uat-feedback] skipped: " + r.error);
+        for (const item of r.imported) console.log("[uat-feedback] imported " + item.workId + " (" + item.campaign + ")");
+        for (const item of r.amended) console.log("[uat-feedback] updated " + item.workId);
+        for (const item of r.blocked) console.log("[uat-feedback] blocked " + item.thread_id + ": " + item.cause);
+      })
+      .catch((error) => console.log("[uat-feedback] skipped: " + (error?.message || error)));
+    if (drive) {
+      console.log("[pm-drive] mirroring to " + DRIVE_ROOT);
+      drive.schedule("startup");
+      // Run state also changes in the supervisor store (no file event): a cheap status-only poll.
+      setInterval(() => drive.schedule("poll"), 15_000).unref();
+      try {
+        watch(join(ROOT, "docs"), () => drive.schedule("pm"));
+      } catch {
+        // docs/ changes are picked up by the next PM change or restart
+      }
+    }
     if (bridge) bridge.start();
     else if (process.env.PM_BRIDGE === "1") console.log("[pm-bridge] disabled by --no-bridge");
     if (!noOpen) openBrowser(url);

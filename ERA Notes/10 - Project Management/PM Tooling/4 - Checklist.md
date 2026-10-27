@@ -37,3 +37,4 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **R53** Make phone Inbox capture visible and identifiable — [criteria](<PM Tooling — Master Book.md#r53>) _(friction - M)_
 - [ ] **R62** Compare Delivery outcomes using observed run data — [criteria](<PM Tooling — Master Book.md#r62>) _(annoyance - M)_
 - [ ] **R71** Point the PM Stop hook at the current campaign files — [criteria](<PM Tooling — Master Book.md#r71>) _(annoyance - S)_
+- [ ] **R79** Carry UAT to the phone relay and show Done apart from Shipped in Work, Sprints and Analytics — [criteria](<PM Tooling — Master Book.md#r79>) _(friction - L)_

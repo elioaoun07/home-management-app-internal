@@ -18,6 +18,12 @@ Keep work identifiable, reviewable and recoverable across PM surfaces. Tooling c
 
 ## Current state & evidence
 
+**2026-10-25 — R81 UAT discovery repair:** Delivery opens with **Review & sign off**, visible work IDs, date, readiness and **Start test / Continue / View steps** links. Search spans IDs, titles and campaigns; To test / Not ready / Feedback / History / All retain search, filter and pagination when returning from the wizard. Apply/conflict actions have their own **Delivery actions** section. The initial local store had 62 records (49 draft, 13 incomplete), not 62 owner-ready tests. Nineteen steps lacked explicit expected-result markers, one more used a comma before lowercase expect, and two used lowercase expect after a sentence/semicolon; wording and the parser are repaired without inferring PASS or readiness. Verification and owner steps are recorded under R81.
+
+**2026-10-25 — R80 Delivery identity/navigation/session repair (local source and offline fixtures):** shared legacy rows now show the work ID/campaign and recorded date/time, with older update-only responses labelled Updated. History is newest-first, paginates beyond 50 and retains its outcome filter on return. More restores Activity, Decisions, Idea inbox and Documents. Shared pairing recovery covers Delivery and direct Test links; UAT reads wait for pairing. Unavailable/stale reads cannot claim Nothing running, and a known Apply decision survives a missing queue. V1 Accepted remains distinct from Applied. Typecheck, changed-file lint and 383 PM/relay tests pass; 32 isolated browser scenarios cover 320/390/701/1440 px and Blue/Pink with synthetic pairing only. Existing local health/assets return 200 and serve the recovery code; its V1 response contains all 16 IDs but only update times. No operational pairing, provider, launch, Apply or DB write was performed. [Owner scenarios](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m14--restore-delivery-identity-navigation-and-browser-access>).
+
+**2026-10-25 — novice UAT instructions and sign-off workflow specified (documentation only):** [PM/Delivery walkthroughs](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md>) cover the completed review, lifecycle, phone, search, Analytics and sprint scopes awaiting owner acceptance; [current attempts](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md>) include R73/R74/R75. The separate [UAT wizard/sign-off/feedback specification](<../Plans/Delivery UAT Sign-off and Feedback.md>) defines future UI and deterministic import into the canonical backlog, preserving engineering Done and historical receipts. [Coverage index](<../../../docs/Delivery-UAT-Scenarios-2026-10-25.md>). No new UI/importer is implemented and no manual result is inferred from drafting.
+
 **2026-10-24 — R73 navigation, local source/fixtures:** shared desktop/phone order is Home / Sprints / Delivery / Work / Analytics. Delivery is raised above the bar; observed execution softly alternates gold/purple, waiting stays steady, and unconfirmed/closed states do not animate. Existing V1/V2 read queries supply the signal. 305 PM UI tests passed; typecheck/scoped lint clean. Isolated Chrome fixtures exercised 1280/701/390/320 px, Blue/Pink, navigation, idle/running/waiting/stale/offline and matched reduced-motion CSS. No provider job, launch, policy change, service restart or deploy; hosted phone acceptance remains pending.
 
 **2026-10-03 weekly delivery (R61):** Home / Sprints / Work / Delivery / Analytics now share the desktop and phone shell. Eight editable draft weeks start October 5 with 25 canonical item references and 42 known points at planning revision 4; weekly capacity remains six provisional points and 90 review minutes. Mixed-module and module-focus previews can replan drafts or append weeks. Start freezes commitment and its criteria witnesses; scope edits and explicit carryover are recorded. Each visit derives To do / Active / Review / Done and blocked/input reasons from the current corpus and V1/V2 receipts. Candidate/run status never fabricates a shipped item. Closed weeks freeze their observed outcome; Analytics uses the same work/history definitions. Named deliverable groups, capacity/unknown estimates, milestone badges and reduced-motion behavior are included. Local writes use existing pairing, revision checks, durable command IDs and an OS-released native mutex. Watcher-only observations record observed UTC time and known source receipt dates without inventing historical occurrence dates. Verification uses copied fixtures and Chromium at 1440/820/700/390/320 px in blue/pink; no production DB access, provider run, deploy or physical-phone acceptance. Phone planning edits need the owner migration and `PM_SPRINT_RELAY=1` in [PM Relay Setup](<../../06 - Setup & Onboarding/PM Relay Setup.md>).
@@ -63,6 +69,10 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 ## Vision & Decisions
 
+- Owner report 2026-10-25: asking for sign-off is unusable without an obvious entry point. Put **Review & sign off** first in Delivery, keep preparation separate from testing, and retain work-ID search on return. *(IMPLEMENTED locally 2026-10-25: R81; owner UAT pending.)*
+
+- Owner report 2026-10-25: work IDs are essential hints on every delivery row; retain access to secondary navigation and make browser pairing recoverable without claiming missing data means idle. *(IMPLEMENTED locally 2026-10-25: R80; actual owner browser/deployed phone acceptance pending.)*
+
 - Owner request 2026-10-24: center Delivery and raise its lightning affordance slightly; use a slow gold/purple glow for observed execution, a steady waiting signal, and static reduced-motion styling. Shared local/phone navigation preserves all destinations and approval boundaries. *(IMPLEMENTED 2026-10-24: R73; isolated browser fixtures, hosted deployment/device acceptance pending.)*
 
 - Owner request 2026-10-03 (with Hub & ERA HUB-85): issues reported from the ERA chat join the weekly sprint as standalone Defects / Hotfixes to deliver now, regardless of the week they were filed in. They import as canonical Hub & ERA Now items (no second inbox, no sprint membership) and Sprints lists them in their own lane. *(IMPLEMENTED 2026-10-03: R72.)*
@@ -104,6 +114,12 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+- 🟠 **R81 — UAT steps were buried and their readiness was overstated.** Only ready handovers reached Needs you; draft/incomplete instructions were hidden with finished records under collapsed Test records. The local store had no ready handovers. Resolved locally with the visible review area and explicit expected-result repair; build validation and owner acceptance remain separate.
+
+- 🟠 **R80 — Delivery lost item context and gave no usable recovery for browser pairing.** Source-confirmed: `RunLink` rendered status/title without the stored ID; the new UAT query ran before pairing, while protected transport refusals cleared CSRF without refreshing the query's paired state. Delivery home omitted queue errors and inferred idle from missing V2 rows; direct Test links could misreport an access failure as Not found. Secondary routes existed without a consistent menu, and history stopped at 50. Resolved locally 2026-10-25 with the same shared views/authentication; owner UAT remains pending below.
+
+🟡 **2026-10-25 — Delivery owner actions can disappear when queue data is unavailable.** Source review of R75 found that `DeliveryHome.tsx` omits `queue.error`, while `deliveryHomeModel.ts` sends closed runs into history without the queue decision. The existing fallback fixture confirms that classification; no live failure was observed. Preserve known owner actions and expose uncertainty in the [manual UAT follow-up plan](<../Plans/Delivery Manual UAT.md#phase-3--complete-the-delivery-experience>); allocate its bounded follow-up before implementation.
+
 🟡 **R71 — 2026-10-03: The PM Stop hook sends agents to retired PM files.** `.claude/hooks/check-pm-update.sh` blocks with "mark completed work … in the Feature State / Pain Inventory file, check it off in the Execution Plan, and note *(IMPLEMENTED YYYY-MM-DD)* in the Vision/Decisions file" — the pre-consolidation layout. Campaigns have been Master Book + `4 - Checklist.md` since 2026-07-30 (Hard Rule #25), so a blocked agent gets stale directions. Found by the 2026-10-03 Claude setup audit.
 
 🟠 **R66 — 2026-09-15: Delivery exposes internal policy and hides major review facts.** Launch printed scope/fleet verdicts and recommendation rationales; the session hid Risks, Unknowns, verification history, application history and run facts in low-prominence disclosures. Token receipts repeated unknown/reserved/allowance fields, and global footer copy made the application read like a draft. Owner screenshots supplied desktop and mobile evidence.
@@ -132,7 +148,112 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Acceptance Criteria Index
 
+### R81
+
+**Outcome:** The owner finds delivery test steps by work ID directly from Delivery and sees whether they are ready for testing.
+**Kind:** bug
+**Implementation:** done
+**UAT:** pending
+**UAT instructions:** [PM-M15 walkthrough](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m15--find-test-steps-and-return-to-the-review-list>).
+**Touches:** scripts/pm/app/{DeliveryHome.tsx,uatModel.ts,uat.css}, scripts/delivery-v2/uat-docs.mjs, tests/pm-ui/{delivery-recovery,uat-model}.test.ts, tests/delivery-v2/uat-docs.test.ts, docs/Delivery-UAT-{Legacy-Attempts,PM-Review,Schedule}-2026-10-25.md
+
+- **Acceptance:** Review & sign off appears before delivery actions with To test / Not ready / Feedback / History / All, counts and ID/title/campaign search. Rows retain ID, title, recorded date, state and an action that opens the wizard. Draft/incomplete/stale records cannot masquerade as ready; completed/superseded/no-candidate records remain historical. Search, filter and loaded rows survive Back/reload; every retained record stays reachable beyond 50. Existing scenario imports contain an expected result for every step; refresh remains draft and does not create owner results, bind an unverified build, launch or Apply.
+- **Verification (2026-10-25):** 379 tests pass across 46 PM UI/importer files; the six importer tests pass again after adding PM-M15. Typecheck, changed-source/test ESLint, PM lint/check-docs and Feature Index checks pass. Sixteen isolated Edge cases cover 320/390/701/1440 px, Blue/Pink, draft-only and ready records: visible entry, ID search, all 62 fixture records reachable beyond 50, draft result controls disabled, wizard/All steps, return and reload preserving search, zero overflow and zero POST/provider/operational requests. Evidence: `.tmp/pm-uat-discovery-20261025/verification.json` and viewport PNGs. Initial fixture failures were its wrong detail URL and selecting its intentionally incomplete sample; corrected to the real `uat?id=` route and a usable draft/ready sample. CUA could not start (trusted Node process exited), so the original browser and physical phone were not operated. Local JS/CSS assets return 200 and match the current source build. A guarded local draft refresh changed 13 incomplete handovers and added R80/R81, retaining 49 unchanged: all 64 are Draft/Pending, zero sign-offs or results recorded. Owner UAT remains pending.
+- **Boundary:** this repairs discovery and draft wording; R79 still owns phone relay and lifecycle projections, DLV-146 owns worker handover generation, and readiness still requires a verified delivered build.
+
+### R80
+
+**Outcome:** Delivery retains work identity, reachable navigation and truthful, recoverable browser-session state.
+**Kind:** bug
+**Implementation:** done
+**UAT:** pending
+**UAT instructions:** [PM-M14 owner walkthrough](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m14--restore-delivery-identity-navigation-and-browser-access>).
+**Touches:** scripts/pm/app/{App,PrimaryNavigation,BrowserSession,UatWizard,DeliveryHome,DeliveryV2,components,state}.tsx, scripts/pm/app/{transport,localTransport,model,deliveryHomeModel}.ts, scripts/pm/app/{navigation,delivery}.css, tests/pm-ui/{delivery-recovery,delivery-home,local-command-recovery,app-model}.test.ts
+
+- **Acceptance:** Every V1/V2/UAT delivery row retains its canonical work ID when recorded; attempts carry their actual date. Secondary Activity/Decisions/Idea inbox/Documents remain accessible on desktop and phone. An unknown browser session offers Pair with the owner-run code command, without weakening authentication, marking the laptop offline or replaying writes. A late old-session refusal cannot revoke a newly paired session. Unavailable queue/session data never claims Nothing running; confirmed Apply actions stay visible. History is newest-first, reaches records beyond 50 and preserves filter/page/return context. Legacy acceptance does not invent application evidence.
+- **Verification (2026-10-25):** 383 tests passed across 46 PM UI/relay files; typecheck and changed-file lint pass. Isolated real-component browser fixture: 32 passes at 320/390/701/1440 px × Blue/Pink × ready/initially-unpaired/revoked-session/queue-error, including one synthetic pairing request where required, zero protected reads before initial pairing, zero command replays, no overflow, 76-record pagination and navigation/filter return. Evidence: `.tmp/pm-delivery-recovery-20261025/verification.json`, source hashes/check summary in `validation.json` and viewport PNGs. Browser test helpers required two corrections (scoped evaluation variables and Boolean wait results) before the successful pass; application assertions were retained. Repo-wide `pnpm lint` failed while scanning generated `.tmp`/`.delivery` trees and existing debt; the task's generated JS/CSS assets were removed after QA and all changed application/test files pass scoped lint. No repository-wide clean claim.
+- **Availability/limits:** primary source is updated; no supervisor restart, production mutation, launch, policy change, candidate Apply or deployment was performed. CUA could not start because of Windows sandbox initialization, so the original owner browser and physical phone were not operated. Pair that browser using the visible form and a fresh owner-issued code. R79 continues to own UAT phone transport and broader Done/Shipped projections.
+
+
+### R79
+
+**Outcome:** The phone relay carries UAT handovers, results and feedback, and Work, Sprints, Analytics and the archive Ship action distinguish engineering Done from owner-accepted Shipped.
+**Kind:** feature
+**Execution:** delivery
+**Depends on:** PM Tooling/R76, PM Tooling/R78
+**Touches:** `scripts/pm/bridge.mjs`, `scripts/pm/relay.mjs`, `scripts/pm/relay-shared.mjs`, `src/features/pm-live/relay/transport.ts`, `scripts/pm/shared/metrics.mjs`, `scripts/pm/archive.mjs`, `scripts/pm/app/Work.tsx`, `scripts/pm/app/AnalyticsOverview.tsx`, `scripts/pm/app/Sprints.tsx`
+
+- **Acceptance:** `/pm/live` shows the same UAT read model and records the same commands (command ID = relay row ID) as desktop; any relay schema is an owner-run migration paired with `schema.sql`. Work > Done, Sprints and Analytics label a completed item **UAT unrecorded**, **Testing**, **Needs changes** or **Shipped** from the UAT projection; historical Shipped Logs stay dated engineering receipts and the `## Shipped Log` heading is unchanged. The Ship action and monthly sweep cannot present an item as Shipped without a valid sign-off; retained V1 UAT records are adapted without invented identities.
+- **Not started:** spec §3 last paragraph, §6 phone paragraph and §9 *Projection and retention*.
+
+### R78
+
+**Outcome:** UAT status and handover documents reach the one-way Drive mirror, and the Delivery tab shows each finished delivery's acceptance state apart from engineering Done.
+**Kind:** feature
+**Execution:** delivery
+**Depends on:** Delivery/DLV-145
+**Touches:** `scripts/pm/drive-publish.mjs`, `scripts/pm-server.mjs`, `scripts/pm/app/DeliveryHome.tsx`, `scripts/pm/app/deliveryHomeModel.ts`, `ERA Notes/10 - Project Management/_Conventions.md`, `tests/pm-drive-publish.test.ts`
+
+- **Acceptance:** `02 - Delivery Status/status.json` and `status.md` gain a UAT section (handover state, scenario counts, acceptance, unresolved feedback with its linked work ID, evidence time); each handover is also published as its own document and survives the rolling recent-run summary. Publication stays read-only and fails closed; a Drive edit never signs off or becomes feedback. The Delivery tab's Earlier deliveries rows show **Shipped**, **Testing**, **Needs changes**, **UAT unrecorded** or **No candidate**; a known pending test is never hidden when the queue fails to load. `_Conventions.md` states that Work **Done** is engineering and **Shipped** is owner sign-off.
+- **Not claimed:** the phone, Work, Sprints and Analytics labels and Ship gating ([R79](#r79)).
+- **Implementation:** done
+- **UAT:** pending
+- **Verification (2026-10-25):** `tests/pm-drive-publish.test.ts` (+5: UAT section and one retained document per handover without a local path, no rewrite until a record changes, a Drive edit never reaching the records and the edited document overwritten, last good section kept stale when the records cannot be read, drafts after real records and the 120 cap) with the existing 17 still passing, including the import and server-wiring isolation checks; `uat-model.test.ts` for the row labels. The mirror does not check whether a run's candidate has since changed (`candidate: "unchecked"`). Not run: a real publish to the Drive folder.
+
+### R77
+
+**Outcome:** A submitted **Needs changes** report becomes one linked, unchecked work item in its owning campaign on the next `pnpm pm`, with no agent started.
+**Kind:** feature
+**Execution:** delivery
+**Depends on:** Delivery/DLV-145
+**Touches:** `scripts/pm/uat-feedback.mjs`, `scripts/pm-server.mjs`, `package.json`, `tests/pm-uat-feedback.test.ts`
+**Spec:** [Plans/Delivery UAT Sign-off and Feedback.md](<../Plans/Delivery UAT Sign-off and Feedback.md>) §5, §9
+
+- **Acceptance:** at startup, after the corpus is readable, every submitted, unwithdrawn thread whose 2-minute Undo window has ended and which has no committed import is reconciled in thread order. The owning campaign comes from the delivery's work ID prefix; an unresolvable one stays **Import blocked** with its reason. One new ID is allocated above every active, archived and cancelled ID; a bug adds a checklist line (Next by default, Now only when the owner chose it), a `### ID` section carrying `**Source:** UAT feedback <thread>`, the verbatim sanitized observation, scenario/step, expected versus actual, build/device/date and a retest outcome, and a Pain Inventory line. An intent journal and file witnesses make a crash after either write, a second process, a double submit and a repeat startup converge on one item; an amended revision updates the same item; a withdrawn or cancelled mapping is never resurrected. Informational comments and unstarted tests create nothing. The receipt shows **Feedback saved** until the commit, then the work ID with **Open work**.
+- **Not claimed:** merging into an existing item by owner direction and Undo of an edited or dispatched generated item (retained, owner resolves).
+- **Implementation:** done
+- **UAT:** pending
+- **Verification (2026-10-25):** `tests/pm-uat-feedback.test.ts` (21: one item with feedback verbatim, Now vs Next, allocation above archived IDs per campaign including hyphenless R numbers and past heading slugs such as `SCH-3.1` vs `SCH-31`, Markdown and secret neutralizing, nothing for comments, withdrawn, resolved or in-window reports, blocked campaign, repeat startup, double submit, amendment, withdrawal after import, lost journal, a crash after the intent, after each file and before `committed`, an edit between planning and writing, a held lock); `lintChecklist` clean on the result. Isolated server: a Change submitted in the wizard became `SCH-31` on the next start (checklist row, book section with marker, journal intent then committed); that run showed the slug collision, now fixed. Not run: against the live corpus, two real PM processes, the monthly archive racing an import.
+
+### R76
+
+**Outcome:** The owner opens a delivery's **Test steps**, follows one numbered action at a time with its expected result, records Pass / Fail / Blocked, and signs off or submits **Needs changes** from the same screen.
+**Kind:** feature
+**Execution:** delivery
+**Depends on:** Delivery/DLV-145
+**Touches:** `scripts/pm/app/UatWizard.tsx`, `scripts/pm/app/uatModel.ts`, `scripts/pm/app/uat.css`, `scripts/pm/app/OutcomeReview.tsx`, `scripts/pm/app/DeliveryReview.tsx`, `scripts/pm/app/DeliveryHome.tsx`, `scripts/pm/app/deliveryHomeModel.ts`, `scripts/pm/app/App.tsx`, `scripts/pm/app/types.ts`, `scripts/pm/app/transport.ts`, `scripts/pm/app/localTransport.ts`, `scripts/pm/app/state.tsx`, `scripts/pm/app/responsive.css`, `src/features/pm-live/relay/transport.ts`, `tests/pm-ui/uat-model.test.ts`
+
+- **Acceptance:** a finished delivery with a handover appears once under **Needs you** as **Test** with the attempt date; Outcome gains **Test steps** and an acceptance summary. The wizard shows a setup card, then one step at a time (action, expected, Back / Next, **All steps** list), a Pass / Fail / Blocked choice per scenario with one short feedback field for Fail / Blocked, and **Save** for partial progress; the draft survives reload and reads stale after a handover revision change. **Draft** and **Incomplete** handovers are labelled and cannot be signed. **Sign off** enables only when the server's gate has no blockers and lists them otherwise; **Needs changes** captures Bug / Change, pre-fills scenario, step and expected result, keeps screenshots and context under **Details**, and shows **Saving / Saved / Pending sync** with a retryable error and the same command ID on retry. Opening the wizard never launches, applies, calls a provider or changes application data. 390 px has no horizontal scroll; controls are keyboard-operable and labelled.
+- **Not claimed:** the phone relay ([R79](#r79)).
+- **Implementation:** done
+- **UAT:** pending
+- **Verification (2026-10-25):** `tests/pm-ui/uat-model.test.ts` (23: labels and grouping, a delivery listed once, step navigation, receipt wording, local drafts and pending commands without storage, the server-rendered wizard in each state, device label) and `delivery-home.test.ts`; typecheck, scoped ESLint and `pm:build-app` clean. Isolated Chrome at desktop and a 390 px iframe: no horizontal overflow in the wizard, All steps, the Fail note, the Needs-changes sheet and the Delivery list; every control at least 43 px. Fixed from that pass: the green chip's text was invisible; Draft handovers offered result buttons. Not exercised: keyboard-only and screen-reader operation (labels and focus order are in the markup only), reduced motion (CSS rule only), two themes, the Outcome-tab row, the phone.
+
+### R75
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#direct-75--find-each-delivery-once>) (drafted 2026-10-25; original results retained).
+
+**Outcome:** The Delivery tab shows each delivery once, grouped by what it asks of the owner, instead of stacked launch receipts, a queue panel and a history list that repeated the same runs.
+**Kind:** feature
+**Touches:** `scripts/pm/app/DeliveryHome.tsx`, `scripts/pm/app/deliveryHomeModel.ts`, `scripts/pm/app/Delivery.tsx`, `scripts/pm/app/DeliveryV2.tsx`, `scripts/pm/app/StewardRequests.tsx`, `scripts/pm/app/delivery.css`, `scripts/pm/app/responsive.css`, `tests/pm-ui/delivery-home.test.ts`
+
+- **Acceptance:** groups, in order, each hidden when empty: **Needs you** (queue decisions such as Apply / Conflict / Review plan, and launch requests that are blocked before a run exists), **In progress**, **Waiting** (queue verdict beside the row), **In focus** (Now-lane outcomes not already being delivered, always shown, with an All link) and **Earlier deliveries** (collapsed; outcome filter; excludes anything still under Needs you). A run is never listed twice. A launch receipt with a run is a tag on that run's row (`Owner` / `ERA Steward` under the status) and keeps its full card on the run and launch pages; a receipt without a run is a row whose Request disclosure holds the same card (UUID, timestamps, stage, evidence, `Status unconfirmed`). Writers/Jobs show once, as plain text with an `i` hint, in the first of In progress / Waiting that has rows, and not at all when idle. Pairs is renamed Overlaps. The Room-for-your-next-idea hero is removed. Every non-link figure is plain text, not a pill. No horizontal overflow at 390 px; the status column stays visible.
+- **Verification (2026-10-25):** `tests/pm-ui/delivery-home.test.ts` (8: Apply decision once and not in history, queue-less fallback, progress/waiting split, receipt folded into run row, blocked vs pending vs terminal receipt without a run, V1 split, outcome counts/delivered ids, id-prefix stripping); `steward-requests`, `coordination-model`, `work-lifecycle`, `steward-entry` suites still pass; typecheck, scoped ESLint and `pnpm pm:build-app` clean. Live desktop (4317) showed Needs you 2, In focus 3 (BUD-83 no longer repeated), Earlier deliveries 22 with the three R44 runs as one row each and `ERA Steward` / `Owner` attribution; a 390 px iframe had no overflow. In progress, Waiting and the Capacity line were not exercised: nothing was running or queued, so they are fixture-tested only. The running server served the rebuilt bundle (`pnpm pm:build-app`) with no restart.
+
+### R74
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#direct-74--read-the-drive-mirror>) (drafted 2026-10-25; original results retained).
+
+**Outcome:** The PM Command Center mirrors selected PM documents and delivery status one-way to Google Drive for ERA Steward.
+**Kind:** feature
+**Touches:** `scripts/pm/drive-publish.mjs`, `scripts/pm/drive-publish-cli.mjs`, `scripts/pm-server.mjs`, `tests/pm-drive-publish.test.ts`, `package.json`
+
+- **Acceptance:** `G:\My Drive\ERA PM Command Center` (`PM_DRIVE_DIR` overrides, `PM_DRIVE_PUBLISH=0` disables) gets `01 - PM Documentation` (allowlist: `_index`, `_Conventions`, `_Decisions`, `0 - Inbox`, each campaign's Master Book and checklist, `Plans/`, `Research/`, and `docs/Delivery-*`, `ERA-Steward-*`, `R44-*`; credential-shaped files withheld and removed from Drive), `02 - Delivery Status` (`status.json` + `status.md`: run ID, phase, progress, blockers, pending owner actions, request state, evidence IDs and links, campaign roll-ups, timestamps; rewritten only on change plus a 5-minute heartbeat) and `03 - Steward Proposals` (created, never written or read back, except kept copies of Drive edits). The PM server publishes after PM changes, delivery session changes, a 15 s status poll and at start; `pnpm pm:drive` is the manual full pass (`--dry-run` writes nothing). Local is authoritative: nothing is read from Drive into the repository, a Drive edit is kept under `03 - Steward Proposals/Drive edits` and overwritten. A missing folder, I/O error or hang fails closed (no folder is invented), is bounded to 30 s, never overlaps another pass, and retries at 30 s to 5 min. Status uses read-only store methods only (no journey, Start, plan approval, Apply or reconcile); an unreadable store keeps the last data marked stale.
+- **Verification (2026-10-25):** `tests/pm-drive-publish.test.ts` (17: allowlist, secret withholding, read-only store Proxy, first/idempotent/incremental/prune passes, one-way and Drive-edit preservation, recreate, change-only status, stale fallback, missing folder then recovery, hung call, write failure, no delivery-mutating imports, server wiring and CLI read-only store). Live dry-run then initial publish of 47 documents plus status to the real Drive folder; second run wrote nothing.
+
 ### R73
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#direct-73--find-delivery-in-the-navigation>) (drafted 2026-10-25; original results retained).
 
 **Outcome:** Delivery is the raised central navigation destination, with a quiet lightning signal for observed running work.
 
@@ -173,6 +294,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### R69
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m10--navigate-home-search-and-analytics>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
+
 **Implementation:** done
 **UAT:** pending
 
@@ -187,6 +310,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### R66
 
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m1--find-a-delivery-and-read-it-on-both-screens>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
+
 **Implementation:** done
 **UAT:** pending
 
@@ -198,6 +323,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Verification (2026-09-15):** targeted PM/coordination tests cover tab order, readable verification history, quiet token comparison and executor cause mapping; React bundle, typecheck and changed-file lint passed. Browser connection was unavailable, so visual desktop/phone UAT remains pending in `docs/Delivery-UAT.md`.
 
 ### R65
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m9--find-completed-work-without-delivering-it-again>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
 
 **Implementation:** done
 **UAT:** pending
@@ -212,6 +339,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** owner-only checks stay in UAT; Work has searchable Done outcomes with scope/receipt/session history; completed/owner/noncanonical sources cannot launch through UI or either backend. Pending engineering remains explicit and reopening does not fabricate acceptance.
 
 ### R64
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m1--find-a-delivery-and-read-it-on-both-screens>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
 
 **Implementation:** done
 **UAT:** pending
@@ -250,6 +379,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Provenance:** [Command Center Phase 1](<../Plans/Command Center.md#phase-1--complete-the-home-work-and-module-experience>).
 
 ### R61
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m11--edit-a-sprint-and-keep-its-identity-across-devices>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
 
 **Outcome:** Plan sprints, deliverables and readiness over the same work.
 
@@ -390,6 +521,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ```
 
 ### R63
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m7--open-the-same-delivery-on-a-phone-and-recover-connection-state>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
 
 **Implementation:** done
 **UAT:** pending
@@ -573,6 +706,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ```
 
 ### R44
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#v2-44--review-the-raw-fetch-guard>) (drafted 2026-10-25; original results retained).
 
 **Outcome:** Guard new client mutations against raw fetch.
 **Touches:** `eslint.config.mjs`, `tests/pm-ui/raw-fetch-guard.test.ts`
@@ -876,6 +1011,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ```
 
 ### R51
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m9--find-completed-work-without-delivering-it-again>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
 
 **Implementation:** done
 **UAT:** pending
@@ -1438,6 +1575,13 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-10-03 — **R61** Plan sprints, deliverables and readiness over the same work; corrected Start authentication, optional-estimate commitment and visible disabled reasons — [criteria](<PM Tooling — Master Book.md#r61>)
 - ✅ 2026-10-03 — **R72** ERA chat reports import into Hub & ERA › Now › ERA reports (bridge every 5 min, read-only toward the DB, once-only via the Source marker + `.pm/era-issues.jsonl`, undo-journaled writes; `pnpm pm:era-issues` preview / `--apply`) and Sprints shows them as a Hotfixes lane on the current week, never as members. (`tests/pm-era-issues.test.ts`, `sprint-model.test.ts`, bridge tests green, `pnpm pm:build-app`; [acceptance and verification](<#r72>).)
 - ✅ 2026-10-24 — **R73** Center Delivery navigation and signal running sessions — [criteria](<PM Tooling — Master Book.md#r73>)
+- ✅ 2026-10-25 — **R74** Mirror PM documents and delivery status one-way to Google Drive for ERA Steward — [criteria](<PM Tooling — Master Book.md#r74>)
+- ✅ 2026-10-25 — **R75** Delivery home groups every delivery once by what it asks of the owner — [criteria](<PM Tooling — Master Book.md#r75>)
+- ✅ 2026-10-25 — **R76** Walk the owner through a delivery's test steps and record Pass, Fail or Blocked — [criteria](<PM Tooling — Master Book.md#r76>)
+- ✅ 2026-10-25 — **R77** Turn submitted UAT feedback into linked campaign work on the next pnpm pm — [criteria](<PM Tooling — Master Book.md#r77>)
+- ✅ 2026-10-25 — **R78** Publish UAT status to Drive and show engineering Done apart from owner-accepted Shipped — [criteria](<PM Tooling — Master Book.md#r78>)
+- ✅ 2026-10-25 — **R80** Restore delivery item IDs, navigation access and browser-pairing recovery — [criteria](<PM Tooling — Master Book.md#r80>)
+- ✅ 2026-10-25 — **R81** Find UAT steps and sign-off directly from Delivery — [criteria](<PM Tooling — Master Book.md#r81>)
 
 ## Delivery session log
 

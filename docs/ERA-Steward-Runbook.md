@@ -46,16 +46,33 @@ Owner acceptance: on the updated local launch page, press Check once. Expect pen
 
 ## Typed tools, support accounting and candidate tests — DLV-144
 
-Implements the three phases of the [sign-off plan](ERA-Steward-Signoff-Plan-2026-10-24.md). R44 had the Steward start local Codex turns for status and commands outside every Delivery allowance; this removes the reason to, and makes the remaining AI spend visible.
+Implements the repo portions of the [sign-off plan](ERA-Steward-Signoff-Plan-2026-10-24.md). The four operations remove the need for coding-agent status tasks once connected. Delivery usage and recorded Support/Chat coverage are visible; unreported external usage remains unknown.
 
-### Steward tools (owner setup, once)
+### Steward tools (connection status corrected 2026-10-25)
+
+Setup execution and per-step evidence: [Dot connection setup checklist](ERA-Steward-Dot-Connection-Setup-2026-10-25.md). Use that file to track progress; this section describes the connection.
 
 One stdio tool server, four tools: `start-delivery`, `read-request`, `read-run`, `wait-for-changes`. Each is a deterministic request to Command Center. None runs a model, a shell or Docker.
 
-1. Keep `pnpm pm --bridge` running.
-2. `pnpm pm:pair`, then `pnpm pm:steward pair <CODE>`. This stores a **restricted** credential in `.delivery/v2/steward/session.json` (gitignored). It can call four routes. The server answers 403 to approval, Apply, readiness renewal, cancel/reconcile, allowances, mode, planning and support, even if a client is bypassed.
-3. In the Steward's tool configuration, register `node scripts/delivery-v2/steward-mcp.mjs` (working directory = repo root; set `PM_STEWARD_URL` if the port is not 4317) as its only Command Center tool, and **remove every Codex/Claude task and shell/terminal tool from that Steward**. A repo change cannot do this for an external chat. This step is what ends routine AI delegation; UAT M1 checks it.
-4. Tell the Steward: **"Run delivery for item `<ID>`"**. It calls `start-delivery`, replies with the run link, and uses `read-run` / `wait-for-changes` afterwards.
+**Correction:** local Codex MCP registration does not prove that Dot itself receives those tools. No per-Dot switch removing every coding/shell/delegation tool has been verified. Full Dot sign-off remains pending; this is an integration dependency, not merely an owner checkbox.
+
+The supported connection route to evaluate is **Dot → installed private ChatGPT plugin → Secure MCP Tunnel → this stdio server → Command Center**. MCP is an optional transport for ERA; this route provides direct typed tools. OpenAI documents private stdio forwarding in [Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels), plugin creation in [Connect and test your plugin](https://developers.openai.com/plugins/deploy/connect-chatgpt), and Dot's use of connected plugins in [Computers and apps](https://learn.chatgpt.com/docs/dots/computers-and-apps). Product support is documented; account permissions and this end-to-end connection are not yet tested.
+
+1. Keep the existing bridge running. UAT records restricted pairing already completed; do not pair again unless that credential is missing/revoked. The credential limits PM routes only; it does not control other Dot capabilities.
+2. Create a private tunnel in [Platform tunnel settings](https://platform.openai.com/settings/organization/tunnels), associated with the intended ChatGPT workspace. The documented prerequisites are tunnel Read/Manage access and a runtime key with Read/Use. Store the key locally, never in chat. Install the official `tunnel-client` using the download link there and check `tunnel-client help quickstart`.
+3. Configure the existing server as the tunnel's stdio command. From this repo, the documented command shape is:
+
+```powershell
+tunnel-client init --sample sample_mcp_stdio_local --profile era-steward --tunnel-id <TUNNEL_ID> --mcp-command "node C:/Users/aoune/WebApp/budget-app/scripts/delivery-v2/steward-mcp.mjs"
+tunnel-client doctor --profile era-steward --explain
+tunnel-client run --profile era-steward
+```
+
+4. In ChatGPT **Plugins → + → Add custom MCP server**, choose **Connection: Tunnel**, select that tunnel, configure authentication, then **Create as a plugin**. Verify the discovered four tools. Test Dot's direct `read-run` for `r-46688acd1b86`; no Start. Keep the tunnel client running.
+5. After that succeeds, remove Dot's general local-computer access using **Dot profile → Computers → connected computer → Revoke access**. The independently running tunnel/bridge supplies the restricted connection. Re-test the read from Dot with general local access revoked. This closes the local-computer delegation route; it does not disable Dot's cloud tasks.
+6. Set **Settings → Personalization → Custom rules → Add** for starting/continuing/delegating Work, Codex, Claude or shell tasks for ERA, with **Ask before taking action**. [Official Dot controls](https://learn.chatgpt.com/docs/dots/controls) describe rules as fallible instructions. They cannot prove a hard ban on all external model usage. That stronger promise remains unproven and must not be included in sign-off.
+
+Once the connection is accepted, the normal instruction remains **"Run delivery for item `<ID>`"**. Plan approval and Apply stay with the owner.
 
 What you can rely on:
 
@@ -65,7 +82,7 @@ What you can rely on:
 - Status lines are templates: item, request/run id, state, owner next action, checks, evidence time, then usage.
 - Plan approval and Apply stay with you, on the phone or laptop.
 
-If your Steward has no way to register a restricted tool server, keep using the browser procedure above. Nothing else changes.
+The existing browser procedure remains usable for supervised delivery. It does not establish that external coding-agent delegation is technically disabled. Do not treat browser use or a model's verbal refusal as the M1 permission proof.
 
 ### Support jobs and the usage report
 

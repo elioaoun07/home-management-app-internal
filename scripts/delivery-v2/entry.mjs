@@ -38,6 +38,7 @@ import { dirname, join } from "node:path";
 import { z } from "zod";
 import { acceptLaunchRequest, getLaunchRequestReceipt, updateStewardRequest, projectStewardRequest, stewardStaleMs } from "./steward-requests.mjs";
 import { STEWARD_REFUSALS, stewardRoutePermitted } from "./steward-surface.mjs";
+import { routeUat } from "./uat-routes.mjs";
 import { accountingReport, admitSupportJob, authorizeSupport, closeSupport, recordChatOverhead, settleSupportJob } from "./support-ledger.mjs";
 
 import { ContractError, fingerprint, contentId, deepFreeze, normalizePath, evaluateGrant } from "./contracts.mjs";
@@ -928,6 +929,13 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
   if (method === "GET" && path === "/api/delivery/v2/test-gate") {
     const available = ctx.journey && (!ctx.hasStore || ctx.hasStore());
     return json(200, { gate: available ? ctx.journey.testGate() : { locked: false, application: null, record: null } });
+  }
+
+  // DLV-145: the owner's UAT record (handover, results, sign-off, feedback). Past
+  // the Steward allowlist above, so only the paired owner session reaches it.
+  if (path === "/api/delivery/v2/uat") {
+    const uat = routeUat({ method, path, query, body }, auth, ctx);
+    if (uat) return uat;
   }
 
   // Owner allowance settings (Settings panel): shared window, task default, per-run top-ups.

@@ -16,6 +16,8 @@ Plan travel and make real-trip side-effects understandable and reversible. Junct
 
 ## Current state & evidence
 
+**2026-10-25 ? delivered-slice UAT drafts (documentation only):** [Product walkthroughs](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md>) provide numbered owner actions, expected results, setup and cleanup for this campaign’s identified completed slices. Existing owner results and broader open integration/deployment gates remain unchanged; the new draft scenarios record no test execution. [All UAT scenarios](<../../../docs/Delivery-UAT-Scenarios-2026-10-25.md>).
+
 Planner, packing, documents and account/FX work have shipped. Lifecycle SQL/application, household and solo round-trips still need current owner evidence. Packing acknowledgment is a separate known contract gap; prior shared-document repairs do not establish both-phone acceptance.
 
 Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Trips/Trips — Master Book.md>) preserves detailed older narratives and receipts.
@@ -50,6 +52,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Plan navigation:** Open items below carry embedded drafts under [item execution plans](../_Conventions.md#9-item-execution-plans). Read only the selected ID and its dependencies. Prepared 2026-09-26 against source HEAD `45b28899`; implementation review, owner SQL application and device acceptance remain separate. No plan is owner-reviewed or dispatched by this document update.
 
 ### TRIP-18
+
+**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#trips--plan-pack-and-read-trip-spending>) (drafted 2026-10-25; original results and remaining gates retained).
 
 **Outcome:** Verify packing schema application and checkpoint contract.
 
@@ -578,6 +582,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ```
 
 ### TRIP-32
+
+**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#trips--plan-pack-and-read-trip-spending>) (drafted 2026-10-25; original results and remaining gates retained).
 
 **Outcome:** Verify shared trip documents and money setup.
 
@@ -1237,6 +1243,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### TRIP-35
 
+**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#trips-m5--transaction-tag-currency-totals-and-deduplication>) (drafted 2026-10-25; original results and remaining gates retained).
+
 **Outcome:** Tag a transaction to a trip from the expense form and the transaction editor.
 
 - **Acceptance:** A transaction can be assigned to, and cleared from, an accessible trip (own trip, or the partner's household-scope trip) without changing its account, amount or date. The control is available when editing an existing transaction and when logging a new one. Clearing is reachable. No explanatory prose ships with it (Hard Rule #28).
@@ -1247,6 +1255,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Provenance:** Owner request 2026-09-19 (Italy trip: visa and flights paid from the USD account while daily spend sits in the EUR trip account).
 
 ### TRIP-37
+
+**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#trips--plan-pack-and-read-trip-spending>) (drafted 2026-10-25; original results and remaining gates retained).
 
 **Outcome:** Add place form is a mobile-sized sheet (pinned footer, 44px fields, type chips, "More" for secondary fields) with an optional ticket / QR image or PDF per place.
 
@@ -1267,6 +1277,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### TRIP-38
 
+**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#trips-m4--account-only-activation-and-completion>) (drafted 2026-10-25; original results and remaining gates retained).
+
 **Outcome:** Activating a trip succeeds and only creates the trip expense account.
 
 - **Root cause:** `POST /api/trips/[id]/activate` (and `/complete`) called the `activate_trip` / `complete_trip` RPCs on the service-role client. Both RPCs read `auth.uid()`, which is NULL under the service role, so `SELECT … WHERE user_id = v_caller_id` never matched and every activation raised "Trip not found or access denied" → 500 (the just-created trip account was rolled back). Evidence: RPC bodies in `migrations/db-state.json`.
@@ -1277,6 +1289,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### TRIP-40
 
+**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#trips-m5--transaction-tag-currency-totals-and-deduplication>) (drafted 2026-10-25; original results and remaining gates retained).
+
 **Outcome:** Trip Overview shows total expenses per currency and the transactions behind them.
 
 - **Delivered 2026-10-05:** `GET /api/trips/[id]/spend` = trip-account transactions ∪ `trip_id`-tagged transactions (one OR query, dedupe by id), grouped by account currency, expense accounts only, drafts/deleted excluded, no conversion. Overview `TotalExpensesCard` lists each currency; tap to expand the rows. Realizes the union/dedupe part of TRIP-5; the post-trip summary part stays open there.
@@ -1286,6 +1300,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### TRIP-41
 
+**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#trips-m5--transaction-tag-currency-totals-and-deduplication>) (drafted 2026-10-25; original results and remaining gates retained).
+
 **Outcome:** Tag a statement row with an active trip during Statement Import review.
 
 - **Delivered 2026-10-10:** `RowDecision.trip_id` set from `TripTagRow` inside `GroupSheet`'s per-row controls (debit rows on the Transaction path only; credits/refunds and transfers never carry a trip). `buildCommitActions` copies it onto the `create` action; `commit/route.ts` validates each distinct trip with `canAccessTrip()` (an invalid trip fails only its own row) and writes `transactions.trip_id` on insert. Balance-neutral — the tag adds no money movement. Pinned by two `sessionModel.test.ts` cases.
@@ -1294,6 +1310,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Provenance:** Owner request 2026-10-10.
 
 ### TRIP-42
+
+**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#trips--plan-pack-and-read-trip-spending>) (drafted 2026-10-25; original results and remaining gates retained).
 
 **Outcome:** Trip Overview leads with countdown, next two activities and expenses; packing presets include Winter/Christmas and preview before adding.
 
@@ -1374,7 +1392,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Shipped Log
 
-- ✅ 2026-09-19 — **TRIP-34** Trip membership decoupled from the trip's account at the data layer. Owner request: the Italy trip's daily spend sits in a dedicated EUR account, but the visa fee and flights were paid from the USD account and must still count toward the trip. Added `transactions.trip_id` — nullable `uuid`, FK to `trips(id)` **`ON DELETE SET NULL`** (deliberate: `DELETE /api/trips/[id]` hard-deletes the trip row, so `CASCADE` would destroy money rows and `NO ACTION` would block the delete; untagging is the only safe behavior), plus a partial index `idx_transactions_trip_id ... WHERE trip_id IS NOT NULL` for the future "all spend on trip X" lookup. Existing rows are untouched at `NULL`; no backfill. Backend support wired end-to-end for store + update: `CreateTransactionDTO`/`UpdateTransactionDTO`, the insert payload and the update field builder in `src/services/transaction.service.ts`; `PATCH /api/transactions/[id]`; `trip_id` added to the list-read select and mapping, and to the single-transaction GET response; client `Transaction`/input types in `useDashboardTransactions.ts` (the create/update mutations spread their payloads, so the field reaches the server and the offline queue with no further change). Access is validated on every write via new `canAccessTrip()` in `src/lib/tripAccess.ts`, reusing `getAccessibleTrip()`'s rule — own trip always, partner's trip only at `scope='household'` — so a transaction can never be tagged to a trip its author cannot see; an inaccessible id is rejected before any DB write (`Invalid trip_id` → 400). Tagging is explicitly **not** a balance event: `adjustAccountBalance()` is never called on a trip_id change, and `src/services/transaction.service.trip-tag.test.ts` (8 tests) pins that, plus store/untag/reject/absent-field behavior. **No RLS change** — `transactions` policies are row-level on `user_id`/`household_links` (verified in `migrations/db-state.json`, generated 2026-08-04), so a new column inherits them unchanged. Verification: `pnpm typecheck` clean; `pnpm lint` 0 errors (928 pre-existing warnings); 2,757 tests pass (the one full-suite failure, `tests/pm-ui/react-app-build.test.ts`, is an unrelated pre-existing 5s-timeout flake in uncommitted PM tooling — passes in isolation in 3.4s). **Migration `migrations/2026-09-19_transactions-trip-id.sql` is prepared but owner-run pending (Hard Rule #26); the API will 500 on `trip_id` writes until it is applied.** Out of scope by explicit request and not done: tagging UI (TRIP-35), the trip-expense rollup (TRIP-5), and currency conversion.
+- ✅ 2026-09-19 — **TRIP-34** Trip membership decoupled from the trip's account at the data layer. Owner request: the Italy trip's daily spend sits in a dedicated EUR account, but the visa fee and flights were paid from the USD account and must still count toward the trip. Added `transactions.trip_id` — nullable `uuid`, FK to `trips(id)` **`ON DELETE SET NULL`** (deliberate: `DELETE /api/trips/[id]` hard-deletes the trip row, so `CASCADE` would destroy money rows and `NO ACTION` would block the delete; untagging is the only safe behavior), plus a partial index `idx_transactions_trip_id ... WHERE trip_id IS NOT NULL` for the future "all spend on trip X" lookup. Existing rows are untouched at `NULL`; no backfill. Backend support wired end-to-end for store + update: `CreateTransactionDTO`/`UpdateTransactionDTO`, the insert payload and the update field builder in `src/services/transaction.service.ts`; `PATCH /api/transactions/[id]`; `trip_id` added to the list-read select and mapping, and to the single-transaction GET response; client `Transaction`/input types in `useDashboardTransactions.ts` (the create/update mutations spread their payloads, so the field reaches the server and the offline queue with no further change). Access is validated on every write via new `canAccessTrip()` in `src/lib/tripAccess.ts`, reusing `getAccessibleTrip()`'s rule — own trip always, partner's trip only at `scope='household'` — so a transaction can never be tagged to a trip its author cannot see; an inaccessible id is rejected before any DB write (`Invalid trip_id` → 400). Tagging is explicitly **not** a balance event: `adjustAccountBalance()` is never called on a trip_id change, and `src/services/transaction.service.trip-tag.test.ts` (8 tests) pins that, plus store/untag/reject/absent-field behavior. **No RLS change** — `transactions` policies are row-level on `user_id`/`household_links` (verified in `migrations/db-state.json`, generated 2026-08-04), so a new column inherits them unchanged. Verification: `pnpm typecheck` clean; `pnpm lint` 0 errors (928 pre-existing warnings); 2,757 tests pass (the one full-suite failure, `tests/pm-ui/react-app-build.test.ts`, is an unrelated pre-existing 5s-timeout flake in uncommitted PM tooling — passes in isolation in 3.4s). **Migration `migrations/2026-09-19_transactions-trip-id.sql` is prepared but owner-run pending (Hard Rule #26); the API will 500 on `trip_id` writes until it is applied.** Out of scope by explicit request and not done: tagging UI (TRIP-35), the trip-expense rollup (TRIP-5), and currency conversion. [Owner UAT draft, 2026-10-25](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#trips-m5--transaction-tag-currency-totals-and-deduplication>); historical result unchanged.
 - ✅ 2026-08-06 — **TRIP-27** Partner trip documents no longer stay hidden behind a fresh bundle-primed empty cache: the Docs query revalidates whenever the tab mounts or the app regains focus, fetch failures render a retry action instead of a false empty vault, and `documentQueries.test.ts` proves a cached empty array is replaced from `/api/trips/[id]/documents`. DB-state review confirmed the existing household RLS and bundle RPC are already correct, so no migration was added. Verification: targeted regression + all 1,585 tests, typecheck, full lint (zero errors; existing warnings), and docs check clean; Trips PM grammar is clean, while global `pm:lint` remains blocked by the pre-existing Delivery reference to missing `migrations/2026-08-01_pm-commands-instant-gates.sql`. Live partner-device verification remains manual because the in-app browser backend was unavailable.
 - ✅ 2026-08-04 — **TRIP-26** Follow-up packing-row compaction after TRIP-25 removed the sidebar and restored the full item canvas: moved `QtyControl`, the person-absolute `AssignChip`, and Delete into one fixed-width right-side control group on the same flex row as the item name. The name remains `flex-1 min-w-0`, so it owns the remaining width while controls stay aligned; the existing `break-words` behavior is preserved for unusually long labels. Removed the indented secondary row entirely and added a descriptive per-item delete `aria-label`. No mutation, assignment-cycle, drag, or packing-state behavior changed. Verification: typecheck, targeted ESLint, `docs:check`, and `git diff --check` clean; all 1,564 tests pass. Live viewport verification remains manual because the in-app browser backend was unavailable.
 - ✅ 2026-08-04 — **TRIP-25** Full-screen packing category navigation redesigned after the owner flagged the sidebar and two competing top chevrons as confusing. Removed the persistent/collapsible `CategorySidebar` and its width tax entirely; category switching now lives in a full-width, horizontally scrollable `CategorySwitcher` with icon, name, and `packed/total` context per package. The active chip scrolls into view on open/switch. The header now has one semantic `ArrowLeft` action labelled “All packages”, replacing the rail-collapse chevron + content chevron + redundant close action. The oversized decorative category-icon row was folded into a compact title lockup, returning more vertical space to the actual packing items. The focus overlay now uses `useThemeClasses().bgPage` instead of a hardcoded surface. Existing TRIP-24 item-row wrapping/two-line controls are preserved. Verification: typecheck clean; targeted + full lint have zero errors (existing repo warnings remain); all 1,564 tests pass; `docs:check` and `git diff --check` clean; Trips PM checklist grammar clean (`pm:lint` still fails globally on a pre-existing missing Delivery migration path). In-app visual automation was unavailable in this session (no `iab` browser backend exposed), so the owner-provided 490×980 screenshot was the visual baseline and final live viewport confirmation remains manual.

@@ -16,6 +16,8 @@ Deliver the right event to the right person and resolving screen. Junction acros
 
 ## Current state & evidence
 
+**2026-10-25 ? delivered-slice UAT drafts (documentation only):** [Product walkthroughs](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md>) provide numbered owner actions, expected results, setup and cleanup for this campaign’s identified completed slices. Existing owner results and broader open integration/deployment gates remain unchanged; the new draft scenarios record no test execution. [All UAT scenarios](<../../../docs/Delivery-UAT-Scenarios-2026-10-25.md>).
+
 Routing fixes NOTIF-1.1–1.6 are recorded complete in the Sep2 baseline; the original ship date is unspecified. Finite bell motion and urgency styling are source-present but device acceptance remains. Recipient policy, durable delivery and Google physical-alarm proof remain open.
 
 Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/Notifications & Alerts — Master Book.md>) preserves detailed older narratives and receipts.
@@ -109,6 +111,8 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 ```
 
 ### NOTIF-2.1
+
+**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#notifications--one-arrival-signal-and-the-right-destination>) (drafted 2026-10-25; original results and remaining gates retained).
 
 - **Retained campaign gate (D2):** *(Phase 2)* The bell no longer animates perpetually (finite-on-arrival only), respects `prefers-reduced-motion`, and the unread signal is calm but unambiguous.
 

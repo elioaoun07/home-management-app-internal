@@ -746,3 +746,86 @@ export interface V2TestGate {
   application: { application_id: string; run_id: string; state: string; at: string } | null;
   record: { result: "passed" | "failed"; proceed: boolean; at: string; note: string | null } | null;
 }
+
+// --- Delivery UAT (DLV-145 record, R76 wizard). Read model of scripts/delivery-v2/uat.mjs. ---
+export type UatResult = "pending" | "pass" | "fail" | "blocked";
+export type UatStatus = "draft" | "ready" | "incomplete";
+export type UatAcceptance = "pending" | "in-progress" | "needs-changes" | "blocked" | "accepted" | "superseded" | "no-candidate";
+export interface UatStep {
+  action: string;
+  expected: string;
+}
+export interface UatScenarioHead {
+  id: string;
+  title: string;
+  required: boolean;
+  result: UatResult;
+  draft: boolean;
+  /** The list carries the step count; a single handover carries the steps. */
+  steps: number;
+}
+export interface UatScenario extends Omit<UatScenarioHead, "steps"> {
+  purpose: string;
+  criteria: string[];
+  setup: string;
+  starting: string;
+  steps: UatStep[];
+  defect: string | null;
+  cleanup: string;
+  limits: string | null;
+  receipt: { receipt_id: string; note: string | null; step: number | null; device: string | null; build: string | null; observed_at: string; received_at: string; actor: string } | null;
+  attempts: number;
+}
+export interface UatFeedbackThread {
+  thread_id: string;
+  state: "submitted" | "withdrawn" | "dispositioned";
+  classification: "bug" | "change" | "comment";
+  urgency: "next" | "now";
+  revision: number;
+  handover_revision: number;
+  scenario_id: string | null;
+  step: number | null;
+  observation: string;
+  expected: string;
+  actual: string;
+  received_at: string;
+  undoable_until: string;
+  disposition: { kind: "resolved" | "follow-up"; reason: string; work_id: string | null } | null;
+  import: { status: "saved" | "importing" | "imported" | "blocked"; workId?: string; campaign?: string; cause?: string; withdrawn?: boolean } | null;
+}
+export interface UatBlocker {
+  code: string;
+  detail: unknown;
+}
+export interface UatBase {
+  handover_id: string;
+  revision: number;
+  revisions: number;
+  status: UatStatus;
+  subject: { type: "run" | "direct"; run_id: string | null; delivery_ref: string; work_id: string | null; campaign: string | null; title: string | null };
+  binding: { kind: "candidate" | "source"; candidate_id?: string; source_revision?: string } | null;
+  environment: { target: "local" | "hosted" | "phone" | "none"; build: string | null; url: string | null; device: string | null };
+  created_at: string;
+  summary: string;
+  setup: string;
+  limits: string;
+  problems: { code: string; detail: unknown; scenario?: string; step?: number }[];
+  counts: { pass: number; fail: number; blocked: number; pending: number };
+  availability: { state: "available" | "awaiting" | "unknown"; evidence: string | null };
+  stale: boolean;
+  acceptance: { state: UatAcceptance; shipped: boolean };
+  signoff: { receipt_id: string; actor: string; received_at: string; build: string | null; environment: string } | null;
+  signable: boolean;
+  blockers: UatBlocker[];
+  feedback: UatFeedbackThread[];
+  draft: { position: { scenario_id: string; step: number } | null; notes: Record<string, string>; rev: number; saved_at: string } | null;
+  staleDraft: boolean;
+  draftRev: number;
+  supersededBy: string | null;
+}
+export interface UatSummary extends UatBase {
+  scenarios: UatScenarioHead[];
+}
+export interface UatHandover extends UatBase {
+  scenarios: UatScenario[];
+}

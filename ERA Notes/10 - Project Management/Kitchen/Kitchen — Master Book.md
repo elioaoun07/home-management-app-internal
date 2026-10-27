@@ -16,6 +16,8 @@ Turn food and household references into useful, reversible daily actions. Campai
 
 ## Current state & evidence
 
+**2026-10-25 ? delivered-slice UAT drafts (documentation only):** [Product walkthroughs](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md>) provide numbered owner actions, expected results, setup and cleanup for this campaign’s identified completed slices. Existing owner results and broader open integration/deployment gates remain unchanged; the new draft scenarios record no test execution. [All UAT scenarios](<../../../docs/Delivery-UAT-Scenarios-2026-10-25.md>).
+
 Recipes, cooking, stock, meal planning and Chef reads exist. Automatic low-stock shopping and ingredient consumption are incomplete. Catalogue is an existing module in this campaign, not a new campaign; its accepted Sep7 reference/execution separation is incorporated below. Catalogue → Chores (a read view of `is_chore` definitions, editing through the existing task editor) shipped 2026-10-03 under Schedule/SCH-20.
 
 Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Kitchen/Kitchen — Master Book.md>) preserves detailed older narratives and receipts.
@@ -207,6 +209,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ```
 
 ### KIT-11
+
+**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#v2-11-b--save-two-cooking-logs-and-check-the-count>) (drafted 2026-10-25; original results retained).
 
 **Outcome:** Return the correct cooking count.
 
@@ -555,6 +559,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ```
 
 ### KIT-20
+
+**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#catalogue--keep-edits-and-detect-a-stale-save>) (drafted 2026-10-25; original results and remaining gates retained).
 
 **Accepted specification:** [Catalogue final build plan §10](<../../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>), packet C02. Its detailed data/rollout contract applies; earlier Object Memory/Tasks V2 alternatives were withdrawn.
 
@@ -1464,6 +1470,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ```
 
 ### KIT-25
+
+**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#catalogue--keep-edits-and-detect-a-stale-save>) (drafted 2026-10-25; original results and remaining gates retained).
 
 **Outcome:** Run the catalogue-revision migration and witness a stale save.
 

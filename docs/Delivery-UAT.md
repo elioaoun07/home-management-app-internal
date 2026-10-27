@@ -1,5 +1,9 @@
 # Delivery — owner UAT
 
+**Current wizard entry point (2026-10-25):** [Step-by-step scenarios and complete retained-attempt inventory](Delivery-UAT-Scenarios-2026-10-25.md). Use these beginner-facing walkthroughs for existing deliveries and completed work awaiting acceptance. The dated trials below preserve their original evidence; old setup/launch commands are historical, not current instructions to execute.
+
+**Separate implementation specification:** [UAT wizard, owner sign-off and feedback-to-work import](<../ERA Notes/10 - Project Management/Plans/Delivery UAT Sign-off and Feedback.md>). The wizard/sign-off/import capability is specified, not implemented by this documentation session.
+
 ## Candidate handover template
 
 **Standing process requirement, recorded 2026-10-19 from the October 18 owner request.** For every delivered defect fix or new feature, the delivering agent supplies this completed handover before asking the owner to test or accept it. Keep it with the existing candidate/result artifacts or the item's existing UAT record, and link it from the owning Master Book handover. The dated Delivery trials below retain their historical results; they are not a substitute for scenarios for a newly delivered item.
@@ -7,6 +11,8 @@
 **Identity:** item and acceptance-criteria links; run, candidate ID/generation/digest, Result/plan revision; tested build/environment and observation date. For direct delivery, name the exact source revision and changed-file hashes. State whether the candidate is available in that environment or still needs separately authorized application/deployment. Do not invite testing against an unchanged build.
 
 **Prerequisites and data:** required role/account, device/browser, sign-in, setup and starting state; exact isolated records/values and reset/cleanup steps. Name any owner-only setup or permission and mark the scenario BLOCKED until it exists. A scenario is not authorization for production writes, paid calls, installation or Apply.
+
+**Wizard wording (owner request, 2026-10-25):** write for someone who has never used the application. Begin at an address or named app entry, include each screen/control needed to find the record, and number the actions with their expected visible result. Use labels verified in that candidate, explain icon-only controls and missing test data, and finish with persistence/cleanup where relevant. “Test the feature” or “verify acceptance” is not a usable step. Existing-result backfills stay Pending unless an original owner observation supports the exact version.
 
 Repeat this block per scenario, replacing all placeholders:
 
@@ -36,6 +42,8 @@ Before any new session, use the [DLV-137 readiness checklist/report](<../ERA Not
 
 ## ERA Steward sign-off — 2026-10-24
 
+**25 October correction:** backend/local-adapter evidence below remains valid. Full Dot integration is unverified; M1 was incorrectly described as a known owner setting. Follow the [documented private-plugin connection](ERA-Steward-Runbook.md#steward-tools-connection-status-corrected-2026-10-25). A direct Dot call and verified removal of general local-computer access are still required. No hard restriction on all Dot cloud delegation has been established.
+
 **Item:** [DLV-144](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-144>), closing the three phases of the [sign-off plan](ERA-Steward-Signoff-Plan-2026-10-24.md). **Build:** direct source delivery on this checkout (HEAD `e0ea5edb` plus uncommitted work; no commit made), not a Delivery run. Files are listed in the Master Book's **Touches**. Local desktop assets serve the Support card after `pnpm pm:build-app` and a bridge restart; nothing is deployed to hosted `/pm/live`.
 
 **Closure statement to record when M1–M5 pass:** *ERA Steward is accepted for routine delivery initiation and deterministic monitoring, with owner plan approval and Apply, explicit support escalation, and disclosed budget limits.*
@@ -46,7 +54,7 @@ Before any new session, use the [DLV-137 readiness checklist/report](<../ERA Not
 | --- | --- |
 | 1. Success, repeated reads, lost Start reply and reconnect keep one request/run and cause zero supervision-model calls | PASS: one POST, one run, provider calls = the two delivery jobs |
 | 2. Stale connection, duplicate and unexpected failure cause no new Start, repair or fallback | PASS |
-| 3. Generic agent/shell request denied; authorized support linked and counted; unknown usage visible; limits block more | PASS |
+| 3. This server rejects generic agent/shell requests; authorized support linked and counted; unknown usage visible; limits block more | PASS within this server; does not restrict other Dot tools |
 | 4. Failing mandatory candidate test blocks verification and Apply; passing evidence bound to the exact candidate; owner gates intact | PASS |
 
 Wider run: Delivery V2 + PM UI + relay/bridge, one invocation, **155 files passed, 2,819 tests passed, 0 failed, 8 existing opt-in skips**; `pnpm typecheck`, scoped ESLint and `pnpm pm:build-app` pass. No paid or live call, no Docker, no Start, no policy change, no DB write. Not run: `pnpm lint` (repo-wide debt), the opt-in Docker witnesses.
@@ -58,18 +66,18 @@ Wider run: Delivery V2 + PM UI + relay/bridge, one invocation, **155 files passe
 ### Activation and owner scenarios
 
 > **M1 · Steward tools only · [DLV-144](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-144>) Phase 1**
-> **Type:** feature. **Prerequisites:** `pnpm pm --bridge` running; `pnpm pm:pair` then `pnpm pm:steward pair <CODE>`; the Steward's tool list contains only `node scripts/delivery-v2/steward-mcp.mjs` for Command Center and no Codex/Claude task or shell tool.
-> **Steps:** (1) Ask the Steward to list its tools. Expect `start-delivery`, `read-request`, `read-run`, `wait-for-changes` and nothing that runs Codex, Claude, a shell or Docker. (2) Ask it to run `git status` or start a Codex task. Expect a refusal or no such tool. (3) Ask it for R44's status. Expect a one-line template with the run id, state, owner next action and a usage line.
-> **Edge:** if the Steward still has a shell or Codex tool, this scenario FAILS regardless of the server; remove the tool.
-> **Actual:** Pending.
+> **Type:** integration. **Prerequisites:** running bridge, existing restricted pairing, and the private MCP plugin/tunnel in the corrected runbook. Platform/workspace permissions must be verified during connection; local Codex MCP registration is insufficient evidence.
+> **Steps:** (1) Inspect the connected plugin's actual discovered catalogue: `start-delivery`, `read-request`, `read-run`, `wait-for-changes`. (2) Have Dot call `read-run` for R44 directly; inspect the resulting tool invocation and Activity for delegation. (3) Revoke Dot's general local-computer access in its profile and repeat the direct read/reconnect. No new Work/Codex task should be created for these reads. A model's tool list or refusal alone does not prove permission enforcement.
+> **Limit:** custom approval rules can govern cloud delegation but are fallible instructions. These checks do not certify a hard ban on every external model call. That stronger requirement remains unresolved; do not silently relax it when recording acceptance.
+> **Actual:** Pending for Dot. 2026-10-24 (agent): restricted credential paired (`.delivery/v2/steward/session.json`); four-tool stdio discovery passed. 2026-10-25: fresh process initialization and exact four-tool catalogue passed again without Delivery/model calls. Official documentation confirms the private-plugin/tunnel route; no tunnel or plugin was installed in this review. Browser inspection failed at Windows sandbox initialization, so account-specific access and direct Dot calls remain unverified.
 
 > **M2 · Read-only check against the existing R44 run · plan Phase 3**
 > **Steps:** (1) `read-run` for `r-46688acd1b86`; `wait-for-changes` with that run id and `timeout_seconds` 5. Expect CLOSED/verified candidate, `owner next: Applied`, the same run id, and usage lines with Delivery near the recorded 322,267 tokens, no recorded Support jobs and `Chat not measured`. These figures do not reconstruct historical unmeasured support. (2) Restart only the tool server and repeat. Expect identical ids. (3) Check the Codex usage page and Agent SDK consumption before and after. Expect no new coding-agent turn. Do not call `start-delivery` during this scenario. The historical request belongs to its original authenticated actor, so `read-request` with the new Steward credential may correctly return unknown; use `read-run` for this acceptance check.
-> **Actual:** Pending.
+> **Actual (agent, 2026-10-24, partial):** `read-run` and `wait-for-changes` (5 s), run through two separate tool-server processes, both returned `r-46688acd1b86 · CLOSED/verified_candidate · owner next: Applied · jobs 2 · candidate verified · checks r44-fetch-guard:satisfied, delivery-typecheck:satisfied`. Ids identical, `start-delivery` never called, read-only calls only. **Usage lines absent** (`accounting: null`): the running bridge (pid 29944, started 16:17) predates the DLV-144 source (`entry.mjs` saved 20:21), so the accounting route is not served. Owner restart of the bridge, then repeat. Codex usage page before/after not checked (owner).
 
 > **M3 · Candidate tests in the real checker · Phase 2**
-> **Remaining prerequisite:** install the corrected `candidateTests` block from the [runbook](ERA-Steward-Runbook.md#candidate-tests) as a new policy revision, then **Check readiness**. Keep the default patterns by omitting `include`.
-> **Actual checker witness: PASS (agent, 2026-10-24).** The installed image `sha256:6926e678e4aea4991cd6efcccb92036be01caf7e424c2467936fe319e4b279b6` and its existing pinned dependency volume ran Vitest 4.1.7 with the canonical unprivileged checker flags, no network, read-only candidate/dependencies, the repo's Vitest config and paid-API block. One synthetic test passed and graded satisfied; the deliberately failing control exited 1 (`expected 4 to be 5`) and graded `candidate-tests-failed`. All disposable containers/volumes were removed. The first fixture-staging attempt failed with EACCES; only the disposable staging helper's ownership was corrected before the checks ran. No provider, policy, environment installation or production data changed. Operational evidence: `.tmp/steward-fix-review/checker-probe.json`; installed-policy activation remains Pending. No further Docker existence check is needed for this exact environment.
+> **Policy installed (agent, 2026-10-24):** revision 11 adds the `candidateTests` block (default patterns, `include` omitted) plus `vitest.config.ts` and `tests/setup/blockPaidApis.ts` in `checks.inputs`; validates, and the running bridge reports `policy-current` revision 11. Rev 10 preserved at `.tmp/steward-signoff/policy.rev10.preserved.json`. **Remaining:** owner presses **Check readiness** once (the new fingerprint does not inherit the earlier renewal).
+> **Actual checker witness: PASS (agent, 2026-10-24).** The installed image `sha256:6926e678e4aea4991cd6efcccb92036be01caf7e424c2467936fe319e4b279b6` and its existing pinned dependency volume ran Vitest 4.1.7 with the canonical unprivileged checker flags, no network, read-only candidate/dependencies, the repo's Vitest config and paid-API block. One synthetic test passed and graded satisfied; the deliberately failing control exited 1 (`expected 4 to be 5`) and graded `candidate-tests-failed`. All disposable containers/volumes were removed. The first fixture-staging attempt failed with EACCES; only the disposable staging helper's ownership was corrected before the checks ran. No provider, policy, environment installation or production data changed. Operational evidence: `.tmp/steward-fix-review/checker-probe.json`; the later revision-11 installation above supersedes the original pending installation status. Owner readiness renewal remains pending. No further Docker existence check is needed for this exact environment.
 
 > **M4 · Physical phone · R44 Applied run**
 > **Steps:** on the phone through `/pm/live`, open run `r-46688acd1b86`. Expect Applied, C1 with two paths, both checks passed. Reload and reconnect. Expect the same run, result and application ids and no new Start. **Actual:** Pending.

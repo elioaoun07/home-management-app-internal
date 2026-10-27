@@ -2,6 +2,8 @@
 
 **24 October 2026 · Analysis and proposed work; no controls implemented by this review.**
 
+> **Current decision — 25 October 2026:** backend controls and the local adapter are verified. Full Dot orchestration sign-off is **pending**: the earlier plan assumed local MCP registration and per-Dot tool removal without proving either. The [corrected connection procedure](ERA-Steward-Runbook.md#steward-tools-connection-status-corrected-2026-10-25) uses the documented private-plugin/Secure MCP Tunnel route. It must pass an actual Dot read before acceptance. General local-computer access can be revoked; no hard ban on every cloud delegation is established. Custom rules are not equivalent to such a ban.
+
 ## Decision
 
 **R44 is a good start and credible evidence for adopting Steward with your existing plan-approval and Apply gates. I would not sign off the current unrestricted supervision path.** Close the three phases below, then adopt it without another broad pilot campaign.
@@ -85,13 +87,13 @@ Implemented as [DLV-144](<../ERA Notes/10 - Project Management/Delivery/Delivery
 | Plan point | Status |
 | --- | --- |
 | Phase 1 · four typed operations over the existing transport, Start persisted first, same receipt on an uncertain reply | **Done** — `steward-tools.mjs`, `steward-mcp.mjs` |
-| Phase 1 · restrict the actual tool configuration; enforce server-side | **Server side done** (restricted `steward` credential, route allowlist, planning refused). **Owner step:** register only the tool server in the Steward and remove its Codex/Claude/shell tools (M1). The repo cannot change an external chat |
+| Phase 1 · restrict the actual tool configuration; enforce server-side | **PM credential restrictions done. Dot integration pending.** Connect and test the private plugin, verify local access revocation, and disclose the remaining cloud-delegation limitation (M1). Server controls do not remove unrelated Dot tools |
 | Phase 1 · status and fixed checks in trusted code, templates, stale = last known | **Done** |
 | Phase 1 · reporting independent of the chat turn | PM request cards remain the destination; `wait-for-changes` is bounded polling with no model. Push into the chat is **not** established and no AI polling loop was added |
 | Phase 1 · one blocker then stop; support is a separate, owner-authorized receipt; zero automatic jobs | **Done** — `support-ledger.mjs`, `pnpm pm:support`; one job per authorization |
 | Phase 1 · Delivery / Support / Chat overhead apart, coverage, unknown stays unknown | **Done** — report, `read-run`, run-page Support card. Chat is owner-entered only |
 | Phase 1 · budget boundary | Unchanged: advisory allowance, Focused 1 plan / 1 implementation / 0 repairs. Hard cap stays DLV-114 |
-| Phase 2 · relevant new/changed tests in the verification contract, run in the isolated checker with pinned commands; missing/failing/timed-out/skipped block Verified and Apply; bound to candidate and definition; re-run on the integrated tree | **Done** — `candidate-tests.mjs`, `journey.mjs`. **Owner step:** install the `candidateTests` policy block and confirm vitest resolves in the checker volume (M3) |
+| Phase 2 · relevant new/changed tests in the verification contract, run in the isolated checker with pinned commands; missing/failing/timed-out/skipped block Verified and Apply; bound to candidate and definition; re-run on the integrated tree | **Done** — `candidate-tests.mjs`, `journey.mjs`. UAT now records policy revision 11 installed and the checker witness passed; owner Check readiness remains (M3) |
 | Phase 2 · keep C1 and its receipts; owner reviews the fixture repair | C1 untouched. **Owner step:** M5 |
 | Phase 3 · one offline suite proving the four statements | **Done** — `tests/delivery-v2/steward-closure.test.ts` |
 | Phase 3 · real Steward integration read-only check, physical phone, UAT record | Record **done**; the check and the phone pass are **owner steps** (M2, M4) |
@@ -103,10 +105,10 @@ The four review areas are fixed: server-enforced prevention of additional Stewar
 
 Verified: **241 tests passed in one invocation across 13 files**; typecheck, scoped lint, PM build, PM lint and Feature Index passed. The installed protected checker also executed one passing synthetic test and rejected one deliberately failing control with no network or provider usage. A rerun exposed a further startup timeout in the R44 fixture; its loader now shares one real ESLint API instance at the repository root. The same cases/assertions and deadlines passed alone and in the final aggregate. Frozen C1 is unchanged; the local diff and current hash are recorded in UAT.
 
-**Engineering sign-off: recommended. Operational sign-off: after activation.** The remaining actions are:
+**Backend engineering acceptance: supported by the evidence above. Full Dot integration/sign-off: pending.** The remaining actions are:
 
-1. Owner restarts the existing bridge once, pairs/registers only the four-tool Steward server and removes its generic coding/shell tools.
-2. Owner installs the corrected `candidateTests` policy block from the runbook as a new revision and checks readiness. The installed dependency environment has now passed its offline execution witness; no installation or paid pilot is required.
-3. Complete the read-only existing-run/reconnect and physical-phone checks in UAT M1/M2/M4, then record acceptance. M2 must never call Start. M5 has an agent code-review PASS available for that decision.
+1. Complete the documented private-plugin connection in the runbook and prove the real Dot read with general local-computer access revoked. Do not replace that proof with local Codex registration or a prompt refusal. All-cloud-delegation prevention is not established.
+2. Owner restarts the existing bridge once and checks readiness. UAT records restricted pairing and policy revision 11 already completed; neither needs repeating. The installed checker witness passed.
+3. Complete the real Dot read/reconnect and physical-phone checks in UAT M1/M2/M4, then record the precise accepted scope. M2 must never call Start. M5 has an agent code-review PASS available for that decision.
 
 No live Start, provider job, bridge restart, installed-policy change, production write, commit or deployment was performed by this correction. Browser automation failed during Windows sandbox initialization; the Support card remains render-tested. Historical missing evidence links remain separate documentation debt.

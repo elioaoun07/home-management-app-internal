@@ -15,7 +15,9 @@ import {
   Zap,
 } from "lucide-react";
 import { durableV2Command, newDeliveryIntent, storedIntent } from "./commandIntents";
-import { v2Pair, v2Post } from "./api";
+import { v2Post } from "./api";
+import { PairV2, useV2Session } from "./BrowserSession";
+export { PairV2, useV2Session } from "./BrowserSession";
 import { client, go, pmKeys, useRoute, useWorld } from "./state";
 import { readinessCanLaunch, readinessCanStart } from "./readinessModel";
 import { LaunchReadiness } from "./LaunchReadiness";
@@ -32,10 +34,8 @@ import {
   evidenceLabel,
   executorBlockMessage,
   executorLabel,
-  queueSlots,
   reasonLabel,
   receiptLabel,
-  runningLabel,
   settingsLine,
 } from "./v2model";
 import {
@@ -73,15 +73,6 @@ type RollbackPreview = {
   conflicts: { path: string; code: string }[];
 };
 
-export function useV2Session() {
-  const { connected } = useWorld();
-  return useQuery({
-    queryKey: pmKeys.v2session,
-    queryFn: ({ signal }) => transport().v2Session(signal),
-    enabled: connected,
-  });
-}
-
 export function useV2Runs() {
   const { connected } = useWorld();
   const session = useV2Session();
@@ -105,7 +96,7 @@ export function useV2Queue() {
 }
 
 /** A verdict with its reasons, as the server decided them. */
-function Verdict({
+export function Verdict({
   verdict,
   reasons,
   limit = 3,
@@ -134,124 +125,6 @@ function Verdict({
           <span key={reason.code + index}>{reasonLabel(reason)}</span>
         ))}
     </div>
-  );
-}
-
-function QueueRow({
-  run_id,
-  alias,
-  title,
-  side,
-  line,
-  children,
-}: {
-  run_id: string;
-  alias: string | null;
-  title: string;
-  side: string;
-  line?: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <a
-      className="queue-row"
-      href={`#/delivery/run/${run_id}?from=${encodeURIComponent("/delivery")}`}
-    >
-      <span className="queue-alias">{alias || "V2"}</span>
-      <span className="queue-title">{title}</span>
-      <span className="queue-side">{side}</span>
-      {line && <small>{line}</small>}
-      {children}
-    </a>
-  );
-}
-
-/**
- * The V2 queue (Command Center Phase 5): writer and job slots, what fills them with
- * each item's executor, waiting items with their verdicts, and owner decisions.
- */
-export function QueueV2() {
-  const queue = useV2Queue();
-  const data = queue.data;
-  if (
-    !data ||
-    !(data.running.length + data.waiting.length + data.decisions.length)
-  )
-    return null;
-  const changed = new Set(
-    data.candidates.filter((row) => row.sourceChanged).map((row) => row.run_id),
-  );
-  return (
-    <section className="queue-panel" aria-label="Queue">
-      <div className="queue-slots">
-        {queueSlots(data).map((slot) => (
-          <span key={slot.key} data-full={slot.full}>
-            {slot.label} <strong>{slot.value}</strong>
-          </span>
-        ))}
-      </div>
-      {!!data.running.length && (
-        <div className="queue-group">
-          <h3>Running</h3>
-          {data.running.map((row) => (
-            <QueueRow
-              key={row.job_id || row.run_id}
-              {...row}
-              side={runningLabel(row)}
-              line={settingsLine(row)}
-            />
-          ))}
-        </div>
-      )}
-      {!!data.waiting.length && (
-        <div className="queue-group">
-          <h3>Waiting</h3>
-          {data.waiting.map((row) => (
-            <QueueRow
-              key={row.run_id}
-              {...row}
-              side={executorLabel(row.executor)}
-            >
-              <Verdict verdict={row.verdict} reasons={row.reasons} limit={2} />
-            </QueueRow>
-          ))}
-        </div>
-      )}
-      {!!data.decisions.length && (
-        <div className="queue-group">
-          <h3>Decisions</h3>
-          {data.decisions.map((row) => (
-            <QueueRow
-              key={row.run_id}
-              {...row}
-              side={
-                row.label + (changed.has(row.run_id) ? " · Source changed" : "")
-              }
-              line={settingsLine(row)}
-            />
-          ))}
-        </div>
-      )}
-      {!!data.pairs.length && (
-        <details className="focus-disclosure">
-          <summary>Pairs</summary>
-          <ul className="v2-list">
-            {data.pairs.map((pair) => (
-              <li key={pair.a + ":" + pair.b}>
-                <span>
-                  {pair.a} · {pair.b}
-                </span>
-                <Verdict
-                  verdict={pair.verdict}
-                  reasons={pair.reasons}
-                  limit={2}
-                />
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-    </section>
   );
 }
 
@@ -323,43 +196,6 @@ function CommandReceipt({
         Check status
       </button>
     </div>
-  );
-}
-
-export function PairV2() {
-  const [code, setCode] = useState("");
-  const pair = useMutation({
-    mutationFn: () => v2Pair(code.trim()),
-    onSuccess: () => {
-      setCode("");
-      void client.invalidateQueries({ queryKey: pmKeys.all });
-    },
-  });
-  return (
-    <form
-      className="gate-panel"
-      onSubmit={(event) => {
-        event.preventDefault();
-        pair.mutate();
-      }}
-    >
-      <span className="eyebrow">Delivery</span>
-      <h2>Pair this browser</h2>
-      <label>
-        Code
-        <input
-          value={code}
-          onChange={(event) => setCode(event.target.value)}
-          autoComplete="one-time-code"
-        />
-      </label>
-      <ErrorNotice error={pair.error} />
-      <div className="gate-actions">
-        <button className="primary" disabled={!code.trim() || pair.isPending}>
-          Pair
-        </button>
-      </div>
-    </form>
   );
 }
 
