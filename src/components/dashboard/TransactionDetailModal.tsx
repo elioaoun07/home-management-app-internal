@@ -17,10 +17,12 @@ import { useTaggableTrips } from "@/features/trips/hooks";
 import {
   useDeleteTransaction,
   useUpdateTransaction,
+  useSetTransactionSplit,
 } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { isToday, isYesterday, yyyyMmDd } from "@/lib/utils/date";
+import { canRemoveSplit } from "@/lib/utils/splitBill";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -46,6 +48,9 @@ type Transaction = {
   is_masked?: boolean;
   receipt_url?: string | null;
   trip_id?: string | null;
+  split_requested?: boolean;
+  split_completed_at?: string | null;
+  collaborator_id?: string | null;
 };
 
 type Props = {
@@ -109,6 +114,7 @@ export default function TransactionDetailModal({
 
   const deleteMutation = useDeleteTransaction();
   const updateMutation = useUpdateTransaction();
+  const splitMutation = useSetTransactionSplit();
 
   const [formData, setFormData] = useState({
     date: transaction.date,
@@ -695,6 +701,29 @@ export default function TransactionDetailModal({
                 </span>
               </div>
             ) : null}
+
+            {/* Owners can also request a split on an existing transaction. */}
+            {!isMasked && (isOwner || transaction.split_requested) && (
+              <label className="flex min-h-11 items-center justify-between px-4 py-3 rounded-xl bg-white/5">
+                <span className={`text-sm ${themeClasses.textMuted}`}>Split</span>
+                <input
+                  type="checkbox"
+                  checked={transaction.split_requested === true}
+                  disabled={!isOwner || !!transaction.split_completed_at || splitMutation.isPending ||
+                    (transaction.split_requested === true && !canRemoveSplit({ ...transaction, is_owner: isOwner }))}
+                  onChange={(event) => {
+                    splitMutation.mutate({
+                      id: transaction.id,
+                      split_requested: event.target.checked,
+                      ...(transaction.collaborator_id ? { collaborator_id: transaction.collaborator_id } : {}),
+                    }, {
+                      onSuccess: () => { onSave(); handleClose(); },
+                    });
+                  }}
+                  className="h-5 w-5 accent-cyan-400 disabled:opacity-50"
+                />
+              </label>
+            )}
 
             {/* Receipt row */}
             <div>

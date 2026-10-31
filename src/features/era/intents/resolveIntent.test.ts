@@ -987,14 +987,27 @@ describe("resolveIntent — assignMeal", () => {
 });
 
 describe("resolveIntent — mealPlanGaps", () => {
-  it("names the days in the next 7 with no meal plan row", async () => {
+  const plan = (planned_date: string, extra: Record<string, unknown> = {}) => ({
+    planned_date,
+    eats_through_date: null,
+    status: "planned",
+    for_user_id: null,
+    meal_type: "lunch",
+    ...extra,
+  });
+
+  beforeEach(() => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u-me" } } });
+  });
+
+  it("names the days in the next 7 on which no meal feeds the viewer", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 7, 22, 10, 0, 0)); // Saturday 2026-08-22
 
     mockFetch(() => ({
       json: [
-        { planned_date: "2026-08-22" }, // Saturday — covered
-        { planned_date: "2026-08-24" }, // Monday — covered
+        plan("2026-08-22"), // Saturday — covered
+        plan("2026-08-24"), // Monday — covered
       ],
     }));
 
@@ -1024,9 +1037,7 @@ describe("resolveIntent — mealPlanGaps", () => {
     const localDate = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     mockFetch(() => ({
-      json: Array.from({ length: 7 }, (_, i) => ({
-        planned_date: localDate(new Date(2026, 7, 22 + i)),
-      })),
+      json: Array.from({ length: 7 }, (_, i) => plan(localDate(new Date(2026, 7, 22 + i)))),
     }));
 
     const result = await resolveIntent({
@@ -1036,6 +1047,32 @@ describe("resolveIntent — mealPlanGaps", () => {
     });
 
     expect(result.text.toLowerCase()).toMatch(/no gaps|fully planned/);
+  });
+
+  it("counts leftovers and ignores skipped or partner-only meals", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 22, 10, 0, 0)); // Saturday 2026-08-22
+
+    mockFetch(() => ({
+      json: [
+        plan("2026-08-01", { eats_through_date: "2026-08-23" }), // old leftovers cover Sat + Sun
+        plan("2026-08-24", { status: "skipped" }), // Monday — skipped feeds nobody
+        plan("2026-08-25", { for_user_id: "u-partner" }), // Tuesday — partner only
+      ],
+    }));
+
+    const result = await resolveIntent({ kind: "mealPlanGaps", face: "chef", rawText: "what's unassigned this week" });
+
+    expect(result.metadata?.emptyDays).toEqual(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]);
+  });
+
+  it("reports a failed read as unavailable, not as a week of gaps", async () => {
+    mockFetch(() => ({ status: 500, json: { error: "boom" } }));
+
+    const result = await resolveIntent({ kind: "mealPlanGaps", face: "chef", rawText: "any gaps this week" });
+
+    expect(result.ok).toBe(false);
+    expect(result.metadata?.emptyDays).toBeUndefined();
   });
 });
 

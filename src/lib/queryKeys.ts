@@ -1,5 +1,9 @@
 // src/lib/queryKeys.ts
 export const qk = {
+  transactionHistory: () => ["transactions"] as const,
+  todayTransactions: () => ["transactions-today"] as const,
+  pendingSplits: () => ["pending-splits"] as const,
+  notifications: () => ["notifications"] as const,
   // Per-user: keep userId in the key
   accounts: (userId?: string) => ["accounts", { userId }] as const,
 

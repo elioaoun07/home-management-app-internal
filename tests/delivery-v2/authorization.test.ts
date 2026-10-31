@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AUTHORIZATION_REL, renewAuthorization, renewedGrant } from "../../scripts/delivery-v2/authorization.mjs";
 import { buildGrant, loadExecutionPolicy } from "../../scripts/delivery-v2/policy.mjs";
 import { createDeliveryV2Context } from "../../scripts/delivery-v2/service.mjs";
@@ -16,6 +16,7 @@ const roots: string[] = [];
 const contexts: ReturnType<typeof createDeliveryV2Context>[] = [];
 const stores: ReturnType<typeof openStore>[] = [];
 afterEach(() => {
+  vi.useRealTimers();
   contexts.splice(0).forEach(ctx => ctx.close());
   stores.splice(0).forEach(store => store.close());
   roots.splice(0).forEach(root => rmSync(root, { recursive: true, force: true }));
@@ -102,6 +103,9 @@ describe("owner authorization through Check readiness", () => {
   });
 
   it("keeps a plan approval usable after renewal and preserves its original grant receipt", async () => {
+    // Admission reads the wall clock; pin it to the fixture day so the renewal is not already expired.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(now));
     const f = fixture();
     renew(f.root);
     const store = openStore({ path: join(f.root, ".delivery/v2/test.sqlite") }); stores.push(store);

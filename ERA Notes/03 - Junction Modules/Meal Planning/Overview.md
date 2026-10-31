@@ -45,6 +45,8 @@ tags:
 
 ## Gotchas
 
+- **Coverage contract (KIT-4, 2026-10-27):** the calendar and ERA Chef share `src/lib/mealPlanCoverage.ts`. Calendar days come from `getMealActiveDates`, inclusive of leftovers, with skipped rows still shown. Whether someone is fed comes from `mealCoversDate`: planned, shopping_added or cooked; shared or for that person; an optional slot. `GET /api/meal-plans` date reads return interval overlap of any age. A household lookup error is 503, and Chef reports a failed read as unavailable (`ok:false`), never a week of gaps.
+
 - `mealPlanKeys` is duplicated in `src/features/recipes/hooks.ts` (backwards compat for `WebMealPlanner.tsx`). Both use the same `["meal-plans"]` root key, so React Query deduplicates correctly.
 - The old `WebMealPlanner.tsx` still exists as the Recipes tab > "Meal Planner" sub-tab. It will be removed in a follow-up cleanup PR once the new top-level tab is validated.
 - The `eats_through_date` leftover logic uses `date + "T12:00:00"` to avoid UTC timezone midnight drift (hard rule equivalent: always anchor dates at noon).

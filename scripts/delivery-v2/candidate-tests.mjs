@@ -152,10 +152,13 @@ export function parseVitestSummary(output) {
  * mandatory files collected (no more, no fewer), every test executed, none
  * skipped, none failing.
  *
- * @param {{selection:ReturnType<typeof selectCandidateTests>, raw:(Record<string, any>|null)}} input
+ * `requireTests` (standing policy): a candidate that adds, changes and plans no
+ * test has nothing grading its behavior, so it fails rather than passes.
+ *
+ * @param {{selection:ReturnType<typeof selectCandidateTests>, raw:(Record<string, any>|null), requireTests?:boolean}} input
  * @returns {{state:string, reason:(string|null), detail:string, counts:object}}
  */
-export function gradeCandidateTests({ selection, raw }) {
+export function gradeCandidateTests({ selection, raw, requireTests = false }) {
   const result = (state, reason, detail, counts = {}) => ({ state, reason, detail, counts });
   if (selection.unsafe.length) {
     return result(CANDIDATE_TESTS_STATE.INCONCLUSIVE, CANDIDATE_TESTS_REASONS.UNSAFE_PATH, "test path refused: " + selection.unsafe.join(", "));
@@ -164,7 +167,9 @@ export function gradeCandidateTests({ selection, raw }) {
     return result(CANDIDATE_TESTS_STATE.FAILED, CANDIDATE_TESTS_REASONS.MISSING, "planned test files are not in the candidate: " + selection.missing.join(", "));
   }
   if (!selection.files.length) {
-    return result(CANDIDATE_TESTS_STATE.SATISFIED, CANDIDATE_TESTS_REASONS.NONE_SELECTED, "the candidate adds, changes and plans no test files");
+    return requireTests
+      ? result(CANDIDATE_TESTS_STATE.FAILED, CANDIDATE_TESTS_REASONS.NONE_SELECTED, "the candidate adds, changes and plans no test files; this policy requires them")
+      : result(CANDIDATE_TESTS_STATE.SATISFIED, CANDIDATE_TESTS_REASONS.NONE_SELECTED, "the candidate adds, changes and plans no test files");
   }
   if (!raw || raw.spawnError || raw.exitCode === null || raw.exitCode === undefined) {
     return result(CANDIDATE_TESTS_STATE.INCONCLUSIVE, CANDIDATE_TESTS_REASONS.RUNNER, "the checker produced no result" + (raw && raw.spawnError ? " (" + String(raw.spawnError) + ")" : ""));

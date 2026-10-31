@@ -5,6 +5,7 @@ import { addToQueue } from "@/lib/offlineQueue";
 import { invalidateAccountData } from "@/lib/queryInvalidation";
 import { isOfflineError, safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
+import { qk } from "@/lib/queryKeys";
 import {
   keepPreviousData,
   useMutation,
@@ -1059,10 +1060,68 @@ export function useAddTransaction() {
   });
 }
 
-/**
- * Update a transaction with optimistic updates
- * Changes appear instantly, roll back on error
- */
+/** Split changes stay online: replaying a queued toggle could cancel a newer request. */
+export function useSetTransactionSplit() {
+  const queryClient = useQueryClient();
+  type SplitChange = { id: string; split_requested: boolean; collaborator_id?: string };
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: qk.transactionHistory() }),
+      queryClient.invalidateQueries({ queryKey: qk.todayTransactions() }),
+      queryClient.invalidateQueries({ queryKey: qk.pendingSplits() }),
+      queryClient.invalidateQueries({ queryKey: qk.notifications() }),
+    ]);
+    syncTxCacheToLocalStorage(queryClient);
+  };
+  const save = async ({ id, ...input }: SplitChange): Promise<Transaction> => {
+    const response = await safeFetch(`/api/transactions/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(typeof data.error === "string" ? data.error : "Failed to update split");
+    for (const queryKey of [qk.transactionHistory(), qk.todayTransactions()]) {
+      queryClient.setQueriesData<Transaction[]>({ queryKey }, (old) =>
+        old?.map((tx) => tx.id === id ? { ...tx, ...data } : tx));
+    }
+    return data;
+  };
+  const notify = (change: SplitChange, saved: Transaction) => {
+    toast.success(change.split_requested ? "Split requested" : "Split removed", {
+      icon: ToastIcons.update,
+      duration: 4000,
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          const inverse: SplitChange = {
+            id: change.id,
+            split_requested: !change.split_requested,
+            ...(!change.split_requested && change.collaborator_id
+              ? { collaborator_id: change.collaborator_id } : {}),
+          };
+          try {
+            const restored = await save(inverse);
+            // The inverse's Undo keeps the same collaborator on subsequent toggles.
+            notify({ ...inverse, collaborator_id: saved.collaborator_id ?? change.collaborator_id }, restored);
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to undo split", { icon: ToastIcons.error });
+          } finally {
+            await refresh();
+          }
+        },
+      },
+    });
+  };
+  return useMutation({
+    mutationFn: save,
+    onSuccess: (saved, change) => notify(change, saved),
+    onError: (error) => toast.error(error.message, { icon: ToastIcons.error }),
+    onSettled: refresh,
+  });
+}
+
+/** Update a transaction optimistically, rolling back on error. */
 export function useUpdateTransaction() {
   const queryClient = useQueryClient();
 

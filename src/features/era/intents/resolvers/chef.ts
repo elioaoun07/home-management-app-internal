@@ -1,9 +1,12 @@
 import { waitingForConsent, type BeforeWrite } from "../../capabilities/effectiveAction";
 // Chef resolver — searches recipes by dish name
 import { eraArtifact, type EraArtifact } from "@/lib/era/artifacts";
+import { mealCoversDate } from "@/lib/mealPlanCoverage";
 import { safeFetch } from "@/lib/safeFetch";
 import { parseSmartText } from "@/lib/smartTextParser";
+import { supabaseBrowser } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils/date";
+import type { MealPlan } from "@/types/recipe";
 import {
   formatAssignMealError,
   formatChefError,
@@ -185,12 +188,19 @@ export async function resolveAssignMeal(
 const WEEKDAY_LABEL = new Intl.DateTimeFormat("en-US", { weekday: "long" });
 
 /**
- * "What's unassigned this week" -> the next 7 days (today included) with no
- * meal_plans row at all. Pure client compute over one already-scoped fetch --
- * no new aggregation engine, matching the module's existing week-view pattern.
+ * "What's unassigned this week" -> the next 7 days (today included) on which
+ * no meal feeds the viewer, using the calendar's shared coverage contract:
+ * leftovers count, skipped meals and meals for the partner only do not. A day
+ * is a whole-day gap, not a claim that every slot is filled. A failed read is
+ * unavailable (`ok: false`), never "every day is a gap".
  */
 export async function resolveMealPlanGaps(): Promise<ResolveResult> {
   try {
+    const {
+      data: { user },
+    } = await supabaseBrowser().auth.getUser();
+    if (!user) return { text: formatChefError(), ok: false };
+
     const today = new Date();
     const weekEnd = new Date(today);
     weekEnd.setDate(weekEnd.getDate() + 6);
@@ -199,17 +209,16 @@ export async function resolveMealPlanGaps(): Promise<ResolveResult> {
       `/api/meal-plans?start=${formatDate(today)}&end=${formatDate(weekEnd)}`,
       { timeoutMs: 8_000 },
     );
-    if (!res.ok) return { text: formatChefError() };
+    if (!res.ok) return { text: formatChefError(), ok: false };
 
-    const mealPlans: Array<{ planned_date: string }> = await res.json();
-    const plannedDates = new Set(mealPlans.map((mp) => mp.planned_date));
+    const mealPlans: MealPlan[] = await res.json();
 
     const emptyDayLabels: string[] = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() + i);
       const key = formatDate(d);
-      if (!plannedDates.has(key)) emptyDayLabels.push(WEEKDAY_LABEL.format(d));
+      if (!mealPlans.some((mp) => mealCoversDate(mp, key, user.id))) emptyDayLabels.push(WEEKDAY_LABEL.format(d));
     }
 
     return {
@@ -217,6 +226,6 @@ export async function resolveMealPlanGaps(): Promise<ResolveResult> {
       metadata: { emptyDays: emptyDayLabels },
     };
   } catch {
-    return { text: formatChefError() };
+    return { text: formatChefError(), ok: false };
   }
 }

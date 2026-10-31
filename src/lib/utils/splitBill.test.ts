@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
+  canRemoveSplit,
   getTransactionDisplayAmount,
   getTransactionDisplayDescription,
   getSuggestedSplitAmount,
   type TransactionForDisplay,
 } from "./splitBill";
+
+describe("canRemoveSplit", () => {
+  it("allows only an owner's pending split", () => {
+    expect(canRemoveSplit({ split_requested: true })).toBe(true);
+    expect(canRemoveSplit({ split_requested: true, is_owner: true, split_completed_at: null })).toBe(true);
+    expect(canRemoveSplit({ split_requested: true, is_owner: false })).toBe(false);
+    expect(canRemoveSplit({ split_requested: true, split_completed_at: "2026-10-31T10:00:00Z" })).toBe(false);
+    expect(canRemoveSplit({ split_requested: false })).toBe(false);
+    expect(canRemoveSplit({})).toBe(false);
+  });
+});
 
 describe("getSuggestedSplitAmount", () => {
   it("prefills the unpaid portion of a supplied bill total", () => {

@@ -24,6 +24,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 ## Vision & Decisions
 
+- Transaction details let the owner add/cancel pending Split requests with Undo; completed splits remain locked. *(IMPLEMENTED 2026-10-31)*
+
 - Inside Lebanon, statement upload remains an entry source; abroad, record each tap and audit the statement after returning (owner decision 2026-08-19). One importer with two modes; stale “all statements are audit-only” wording is superseded.
 - AI proposes money through drafts; users confirm. Balance/history and inverse guarantees are domain contracts, never generic row restore.
 - Payments and Schedule recurrence remain separate engines. Do not widen matching tolerance to hide bad matches.
@@ -34,8 +36,6 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
-
-- 🟡 **BUD-83 candidate acceptance gap — source review, 2026-10-25.** Retained unapplied C1 `cand-f6ae4776ef53` renders the Split row even when `split_requested` is false, while the accepted plain-transaction case requires no Split tag. [V2-83 M2/M3](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#v2-83--remove-an-accidental-pending-split>) preserves that expectation and the candidate/build prerequisite. This is a frozen-candidate finding, not a production incident or recorded owner FAIL; no candidate was applied or revised in this documentation session.
 
 🟠 **BUD-85** `POST /api/recurring-payments/[id]/mark-covered` advances `next_due_date` on every call with no duplicate guard, so a repeated or replayed cover skips a real period (recurrence-safety: exactly-once coverage). Found 2026-09-27 while building ERA's "mark rent as paid" (HUB-79). Evidence: the route recomputes `advanceRecurringPastDate` from the current `next_due_date` each time and never checks whether this transaction already covered it. ERA works around it by re-checking the snapshot on tap; the Recurring page has no guard. Fix: key coverage on (payment, period) or reject a transaction already linked.
 
@@ -2047,75 +2047,35 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 
 ### BUD-83
 
-**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#v2-83--remove-an-accidental-pending-split>) (drafted 2026-10-25; original results retained).
-
 **Kind:** feature
 
-**Outcome:** Show the Split tag in transaction details and remove a pending split.
+**Outcome:** Add or cancel pending Split in transaction details, including Activity → Spending.
 
-- **Acceptance:** `TransactionDetailModal` shows a checked **Split** tag when `split_requested` is true and no Split tag when it is false. Hard Rule #28: the label is only "Split", with no helper text.
-- **Acceptance:** the owner can uncheck the tag only while the split is pending (`split_completed_at` is null). Unchecking clears `split_requested`, `collaborator_id`, `collaborator_amount`, `collaborator_description` and `collaborator_account_id`. No account balance or balance history changes.
-- **Acceptance:** a completed split still shows the tag, but it is locked. The server also refuses: the PATCH update is conditional on `split_completed_at IS NULL` and the owner's `user_id`, and a completed or missing row returns 409/404 instead of 500. A partner or collaborator viewing the transaction sees the tag read-only.
-- **Acceptance:** after removal, the partner's pending split list (`GET /api/transactions/split-bill`) no longer shows it, and their pending split notification is dismissed. That notification row belongs to the partner: RLS `notifications` UPDATE is `auth.uid() = user_id` (db-state snapshot 2026-08-04). Dismiss it server-side, scoped to `transaction_id` + the former `collaborator_id`.
-- **Acceptance:** the removal uses `safeFetch` through the existing transaction mutation hook, with the cache invalidated. The toast has **Undo** (Hard Rule #1), and Undo re-requests the split for the same collaborator so it shows as pending again.
-- **Acceptance (money-rules):** `src/lib/utils/splitBill.ts` exports `canRemoveSplit(transaction)`: true only when `split_requested` is true, `split_completed_at` is empty and `is_owner` is not false. The UI and the PATCH route both use it. The protected Delivery check `tests/delivery-oracles/bud83-split-removal.mjs` verifies it (the writer cannot edit that file); existing `src/lib/utils/splitBill.test.ts` still passes. The PATCH update itself stays conditional on `split_completed_at IS NULL`.
-- **Race note:** the collaborator's completion is already guarded at DB level. RLS "Collaborators can update split amounts" requires `split_requested = true AND split_completed_at IS NULL`, so a completion after removal matches zero rows and moves no balance. Do not change `split-bill/route.ts` for this item.
+**Implementation:** done
 
-**Touches:** `src/components/dashboard/TransactionDetailModal.tsx`, `src/app/api/transactions/[id]/route.ts`, `src/features/transactions/useDashboardTransactions.ts`, `src/lib/utils/splitBill.ts`, `src/lib/utils/splitBill.test.ts`
+**UAT:** pending — mobile/browser and current two-user DB behavior remain unverified.
 
-**Provenance:** owner request 2026-09-19 — "if i set it to split by mistake i can remove the tag"; owner scoped removal to pending splits only. Selected as a Delivery V2 Fast lane product trial.
+**Owner amendment — 2026-10-31:** implement directly in the checkout, superseding the unapplied Delivery candidate; extend removal-only scope to add/re-add Split. Owners see an unchecked Split control on plain transactions. This replaces the older no-tag expectation for owner views; partners still see no Split control on plain transactions.
 
-- **Reading guide:** Well specified already; here is where each clause lands. Display and the checkbox: `src/components/dashboard/TransactionDetailModal.tsx`, reading `split_requested` / `split_completed_at` — the display helpers that already branch on that pair are `getTransactionDisplayAmount()` and `getTransactionDisplayDescription()` in `src/lib/utils/splitBill.ts` (with `splitBill.test.ts`). Server: `src/app/api/transactions/[id]/route.ts` — its PATCH is where the conditional update on `split_completed_at IS NULL` + owner `user_id` goes, and its DELETE branch already shows the completed-split balance reversal you must **not** trigger here (removal of a *pending* split changes no balance). Partner's pending list: `src/app/api/transactions/split-bill/route.ts`. The notification dismissal is cross-user, and the acceptance is right that `notifications` UPDATE is `auth.uid() = user_id` — so it must be done server-side scoped to `transaction_id` + the former `collaborator_id`; re-check `migrations/db-state.json` rather than trusting the quoted snapshot (Hard Rule #27). Client mutation: `src/features/transactions/useDashboardTransactions.ts`, through `safeFetch` (Hard Rule #6) with Undo re-requesting the split (Hard Rule #1). Hard Rule #28: the label is "Split", nothing more.
+- **Acceptance:** owner pending splits show an enabled checked **Split** checkbox. Off clears only `split_requested`, `collaborator_id`, `collaborator_amount`, `collaborator_description`, and `collaborator_account_id`. On requests the active household partner on the same transaction. Label only: "Split".
+- **Acceptance:** completed splits stay checked and disabled; nonowners see a requested split read-only. Server reads/writes are owner-scoped, exclude deleted/draft transactions, and condition the update on `split_completed_at IS NULL` and the observed split flag. Missing/nonowned rows return 404; completed or concurrently changed rows return 409.
+- **Acceptance:** request/cancel/Undo move no money, create no transaction and add no balance-history row. UI/server share `canRemoveSplit()`; the protected acceptance oracle is unchanged.
+- **Acceptance:** cancel dismisses only the former collaborator's `transaction_pending` notifications for this transaction. Re-request reactivates the retained request (preserving its full-bill hint), or creates a review notification if absent. Undo refuses a changed household partner.
+- **Acceptance:** online-only `safeFetch`, Undo in both directions, transaction/today/pending-split/notification cache refresh and persisted transaction cache sync. Failed toggles are never queued for later replay against a newer request.
 
-**Execution plan — 2026-09-26**
+**Manual takeover / cleanup — 2026-10-31:** local supervisor inspection found run `r-83dddb67fea9` CLOSED with `verified_candidate`, reservation already released by owner on 2026-10-27, and no open runs. Candidate `cand-f6ae4776ef53` is historical, unapplied and superseded by this manual implementation. No attempt receipt was deleted or re-labelled applied. The 2026-10-25 C1 UI discrepancy is historical, no longer an active pain or a second queue. The stale removal-only execution-plan JSON was removed from this section.
 
-**Readiness:** Implementation draft; refresh owner RLS evidence before certifying the completion/removal race. Keep the existing protected acceptance unchanged.
+**Evidence — 2026-10-31:** 22 tests pass across `src/app/api/transactions/[id]/split.test.ts`, `src/features/transactions/splitMutation.test.ts`, `src/components/dashboard/TransactionDetailModal.test.ts` and `src/lib/utils/splitBill.test.ts`. They cover ownership, completion conflict, notification recipient filters, add/cancel/re-add, legacy null flag, exact five-field cleanup, zero balance calls, both Undo directions, cache refresh and pending/plain/completed/partner modal rendering. The unchanged protected split-removal oracle passes 6/6. `pnpm typecheck`, PM lint/check-docs, Feature Index check and `git diff --check` pass. No live DB or paid API test was run.
 
-**Verify:** `pnpm exec vitest run src/lib/utils/splitBill.test.ts`; existing protected `tests/delivery-oracles/bud83-split-removal.mjs` remains untouched. Add a proposed route/UI regression witness for pending owner removal, collaborator refusal, completed 409, notification dismissal and Undo; mobile four-theme check.
+**Lint receipt:** changed files have no errors. Repository source/test lint passes with 0 errors / 989 existing warnings using `pnpm lint --ignore-pattern '.delivery/**' --ignore-pattern '.tmp/**' --ignore-pattern '.pm/**'`. The unfiltered run was stopped after scanning local runtime artifacts; those three generated folders contain 9,714 code files. No source rule was disabled and no lint configuration changed.
 
-```delivery-plan-v1
-{
-  "outcome": "An owner can remove an accidental pending Split tag without changing money.",
-  "acceptance": [
-    "Pending owner removal clears exactly the five named split fields and dismisses the former collaborator's pending notification.",
-    "Completed and nonowner splits remain visible and locked; Undo re-requests the same collaborator."
-  ],
-  "scope": [
-    "src/components/dashboard/TransactionDetailModal.tsx",
-    "src/app/api/transactions/[id]/route.ts",
-    "src/features/transactions/useDashboardTransactions.ts",
-    "src/lib/utils/splitBill.ts",
-    "src/lib/utils/splitBill.test.ts"
-  ],
-  "steps": [
-    "Extend the detail payload/type with existing split fields and add the shared canRemoveSplit predicate; keep the label exactly Split.",
-    "Add a validated removal branch to PATCH, scoped to owner and split_completed_at IS NULL; distinguish missing, completed/conflict and write failure without entering balance adjustment.",
-    "Dismiss only the former collaborator's notification for this transaction through the existing server authority; report failure truthfully and avoid broad notification updates.",
-    "Wire the tag through the existing safeFetch mutation, invalidate transaction/split/notification consumers and add Undo restoring the previous collaborator request.",
-    "Verify completion versus removal using fresh owner evidence and isolated fixtures; do not edit the collaborator completion route or protected oracle."
-  ],
-  "invariants": [
-    "Pending removal and Undo move zero balance/history.",
-    "A stale client cannot remove a completed split."
-  ],
-  "exclusions": [
-    "Completed split reversal.",
-    "Currency policy changes.",
-    "Editing split-bill/route.ts."
-  ],
-  "checks": [],
-  "risks": [
-    "A guarded row update and a cross-user notification write can partially succeed."
-  ],
-  "unknowns": [
-    "Current live collaborator policy/race behavior; the committed snapshot is dated 2026-08-04."
-  ],
-  "dependencies": [],
-  "risk": "high",
-  "ownerReviewed": false,
-  "provenance": "2026-09-26: detail modal, PATCH, hook fields, split helpers and dated notification/transaction policies inspected; feature not present at HEAD 45b2889."
-}
-```
+**Limits:** transaction metadata and notification updates are separate writes. Notification failure returns 502 with the saved transaction (no false success); clients refresh after errors. A retry with the original collaborator can finish dismissal after a partial save. The 2026-08-04 RLS snapshot is historical; live collaborator-completion race behavior is not certified by mock tests. Browser helper failed to initialize (`helper_unknown_error: setup refresh had errors`), so mobile/two-theme visual and physical two-user checks remain pending.
+
+**UAT instructions:** [current manual checkout scenarios](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#v2-83--remove-an-accidental-pending-split>). These replace C1-only build prerequisites; no owner PASS recorded.
+
+**Touches:** `src/components/dashboard/TransactionDetailModal.tsx`, `src/components/dashboard/TransactionDetailModal.test.ts`, `src/app/api/transactions/[id]/route.ts`, `src/app/api/transactions/[id]/split.test.ts`, `src/features/transactions/useDashboardTransactions.ts`, `src/features/transactions/splitMutation.test.ts`, `src/lib/queryKeys.ts`, `src/lib/utils/splitBill.ts`, `src/lib/utils/splitBill.test.ts`
+
+**Provenance:** owner request 2026-09-19 to remove accidental pending split; manual takeover and add/re-add scope requested 2026-10-31. No DB migration.
 
 ### BUD-84
 
@@ -2135,6 +2095,8 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - 2026-09-10 — **HUB-10** → BUD-2. Scope is retained in the destination criteria; duplicate removed, not shipped.
 
 ## Shipped Log
+
+- ✅ 2026-10-31 — **BUD-83** Manually implemented Split toggle in transaction details; add, cancel and Undo preserve amounts/balances. Guarded owner-only metadata update, scoped partner notifications and cache refresh. Old Delivery C1 is superseded, not applied. Automated route/hook/render/helper and protected-oracle evidence is in [criteria](<#bud-83>); owner UAT and mobile visual verification pending. No migration or production write.
 
 - ✅ 2026-06-10 — `balance-utils` unit-tested (balance direction)
 - ✅ 2026-06-10 — recurring next-due math unit-tested

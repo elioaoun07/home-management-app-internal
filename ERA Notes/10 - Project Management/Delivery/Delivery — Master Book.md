@@ -158,6 +158,10 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+⚪ **DLV-149 — 2026-10-31, resolved same day: false "Offline · viewing last known work" while the server ran.** DLV-148's directory scopes expanded in every `loadExecutionPolicy`, so the bridge's 5-second run poll walked 3,492 files per run on the server's only thread. Measured live: `/api/health` p50 4.6 s, max 8.1 s against the browser's 3 s probe; 28 of 106 browser probes aborted. Fixed in code; needs a `pnpm pm` restart. [Criteria](<#dlv-149>).
+
+🟠 **A script-only `package.json` edit invalidates the checker environment — 2026-10-27, KIT-4 Start.** The managed dependency environment pins the exact `package.json` bytes (`receipt.spec.packageDigest`, `inspect-readiness.mjs:198`). Adding three `pm:` scripts (commits since 2026-10-20; lockfile unchanged) made every Start fail with `environment-manifest-mismatch` and then `native-model-runtime-unavailable`, until a full DLV-133 re-stage and policy revision. Passive readiness does not show it, because inspection never probes the environment, so it surfaces only at Start. Separately, item-specific command oracles (here `meal-coverage`) must also be in the receipt, so each new item policy needs a re-stage anyway. Options, undecided: digest only dependency-relevant manifest fields, or surface the mismatch in passive readiness. **Resolved by [DLV-148](#dlv-148) (standing policy).** **Re-stage findings (same evening):** (1) The fixed 20-minute install bound cannot be met on a ~290 KB/s link (~500 MB). The first attempt timed out at 713/717 packages, mid-way through the 148 MB `@openai/codex` linux binary. `stage-checker-environment.mjs` now accepts an opt-in `ERA_V2_INSTALL_DEADLINE_MS` from 20 to 90 minutes, and the default is unchanged (`dependency-environment.test.ts` 58/58). (2) A failed install cannot resume. Continuation only covers post-install validation, so a retry re-downloads everything. (3) `validOracles` requires every `candidateFixture` to pin an `eslint.config.mjs`, an R44-specific assumption. The KIT-4 fixture (`tests/delivery-oracles/fixtures/kit4-positive/`, generated corrected control, 54/54) carries a marker file. (4) The staging container mounts no `/out`, so the KIT-4 oracle writes to `/tmp/kit4-out` (policy rev 13).
+
 🟠 **Steward supervision escapes Delivery accounting — owner report, 2026-10-24.** The session summary records external Codex turns for local access/status and repairs outside measured Delivery jobs; external model/usage/cost are unavailable. Existing receipt attribution does not restrict the external agent's tools. The same R44 outcome exposed relevant authored tests first running after Apply. [Proposed bounded closure](<../../../docs/ERA-Steward-Signoff-Plan-2026-10-24.md>); no control or verification change is claimed by this analysis.
 
 🟠 **DLV-142 — Routine readiness required a separate manual authorization renewal (owner, 2026-10-24).** An expired grant required a policy-file activation script even when the saved operating conditions were unchanged. Owner direction: Check readiness is the explicit time-only authorization action; routine delivery must reuse saved conditions instead of requiring a new policy preparation per item. Real source, isolation, usage and coordination blockers still apply.
@@ -220,6 +224,33 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### DLV-149
+
+**Outcome:** The Command Center stops reporting Offline because Delivery's run polling blocks the server. *(IMPLEMENTED 2026-10-31)*
+**Kind:** bug
+**Execution:** cli
+**Touches:** `scripts/delivery-v2/policy.mjs`, `scripts/delivery-v2/journey.mjs`, `scripts/delivery-v2/inspect-readiness.mjs`, `tests/delivery-v2/policy-read-cost.test.ts`
+
+- **Acceptance:** Reading runs never walks the source tree; Start and readiness still see the expanded scope and resolved generated pins. After a `pnpm pm` restart, `/api/health` answers inside the 3 s probe while the bridge publishes.
+- **Provenance:** 2026-10-31 owner screenshot on KIT-10. A 40-second CPU profile of the running server was 87.7% busy, about 31 s of it under `loadExecutionPolicy → materializePolicy → expandScratchInclude`, reached from `publishV2` via `journey.list`/`detail` (`policyNow` per run).
+- **Reading guide:** `loadExecutionPolicy` returns the policy as written unless passed `materialize: true`. Materializing callers: `buildDeliver`, journey `deliver`, first provision, `inspectReadiness`. Integration checks use `resolveGeneratedPins`. A missed caller refuses: an unexpanded directory is "not an explicit file" and `"current"` is not a hash. Load cost on this checkout: 140 ms → 2 ms.
+- **Residual:** one readiness inspection still blocks about 1 s (walk 0.2 s, hashing 3,493 files 0.8 s) per GET, every 30 s on an open launch page. Below the probe limit, not free.
+
+### DLV-148
+
+**Outcome:** One standing execution policy runs every item from the Command Center: Check readiness fills in a missing Touches line, the environment survives non-dependency package.json edits, and the typecheck plus the item's own tests verify a candidate without an item-specific oracle.
+**Kind:** feature
+**Execution:** cli
+**Touches:** `scripts/delivery-v2/touches.mjs`, `scripts/delivery-v2/service.mjs`, `scripts/delivery-v2/policy.mjs`, `scripts/delivery-v2/scratch.mjs`, `scripts/delivery-v2/inspect-readiness.mjs`, `scripts/delivery-v2/dependency-environment.mjs`, `scripts/delivery-v2/journey.mjs`, `scripts/delivery-v2/candidate-tests.mjs`, `scripts/delivery-v2/stage-checker-environment.mjs`, `scripts/pm/app/readinessModel.ts`, `tests/delivery-v2/`
+
+- **Acceptance:** Owner decision 2026-10-27 ("too much of a constraint that it is not practical"). The KIT-4 attempt needed per-item scope, an environment rebuild per item and a byte-pinned package.json; see the Pain Inventory entry. Shipped as code, with tests 1551/1551 passing in `tests/delivery-v2` + `tests/pm-ui`:
+  - **Standing policy rev 13:** directory scopes (`src`, `tests`, `scripts/pm` publish; config, Feature Map, vault and PM docs readable), no item criteria or specs, required candidate tests (`requireTests`), and generated route types pinned `current`. Directories expand after authorization (only under `materialize: true` since [DLV-149](#dlv-149)), so the authorization key is unchanged and only adding a dependency rebuilds the environment. Rev 12 is preserved at `.delivery/v2/preparations/execution-policy.rev12.backup.json`.
+  - **Touches:** Check readiness (and Start's internal refresh) writes a missing `**Touches:**` line. It uses the prepared plan scope, else explicit item paths, else the top Feature Map module plus `tests`. Paths are clipped to the publication scope, and a declared line or `none` is never rewritten. See `touches.mjs`.
+  - **Environment:** with the same lockfile digest, a package.json whose dependency specifiers equal the lock importer's is equivalent, so scripts and metadata edits keep the environment. Item command checks bind into the receipt only when the policy has them. The install deadline is opt-in via `ERA_V2_INSTALL_DEADLINE_MS`.
+  - **Verification:** `evidenceFor` no longer returns before the typecheck and candidate tests when a policy has no item criteria. A candidate with no tests fails under `requireTests`.
+  - **Tradeoff (owner-accepted):** without a protected item oracle, the candidate's own tests grade behavior. Plan approval, Touches and Apply remain the owner's per-item controls.
+  - **Not observed:** a live Check readiness → Start on rev 13. The running PM server still has the old code and reports the policy unavailable until `pnpm pm` restarts.
 
 ### DLV-147
 
@@ -1721,6 +1752,7 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - 2026-09-11 — Command Center §7 mapped once: identity/source/witness repairs → PM Tooling R59 (shipped) and R51; V2 selection witness, per-run executor, approvals, resources, dispatch claim and local authentication → DLV-97; isolation → DLV-96; unknown cost → DLV-87/88; phone recovery → DLV-104; phone presentation → R63; Apply → DLV-105; parallel candidates → DLV-106; Home/Work → R60; sprints → R61; metrics → R62; native baseline, trial and retirement stay DLV-98/102/103.
 
 ## Shipped Log
+- ✅ 2026-10-31 — **DLV-149** False Offline banner: policy loads no longer walk the source tree on read paths, cutting a load from 140 ms to 2 ms; Start and readiness still expand scope. `tests/delivery-v2` + `tests/pm-ui`: 1553 passed, 8 skipped; typecheck and scoped lint clean. Live re-measure after the owner's `pnpm pm` restart is pending. [Criteria](<#dlv-149>).
 - ✅ 2026-10-24 — **DLV-144** ERA Steward sign-off closure: four typed Steward operations with a server-enforced restricted credential, an owner-authorized support ledger with a Delivery / Support / Chat overhead report, mandatory candidate tests executed in the protected checker before Candidate verified, Apply and Applied, and one offline closure suite. Review corrections enforce one restricted launch per work, require complete test evidence, preserve unknown accounting and render Applied correctly; 241 tests across 13 files, typecheck, scoped lint and PM build pass. Installed-checker positive/negative execution is witnessed with no network/provider. The external Steward tool configuration, installed-policy change, read-only R44 check and physical phone pass remain in [UAT](<../../../docs/Delivery-UAT.md#era-steward-sign-off--2026-10-24>). No hard spend cap (DLV-114).
 - ✅ 2026-10-24 - **DLV-143** cancellation status presentation: Activity uses terminal/stop status rather than the phase; closed runs open Outcome despite retained proposals. Served desktop/mobile verification and five new offline cases pass. Real R44 cancellation verified; fresh live validation denied before New delivery, Start count zero. [Evidence and owner gates](<../../../docs/R44-Delivery-Acceptance-2026-10-24.md>).
 - ✅ 2026-10-24 — **DLV-138** cancellation follow-up: preserve the original launch receipt and allow an explicit fresh intent only after confirmed cancellation; R44 source/policy preparation is offline and unactivated. See the [Steward runbook](<../../../docs/ERA-Steward-Runbook.md#prepared-r44-pilot--2026-10-24-not-activated>) and `.tmp/r44-steward-pilot-20261024/verification.json` for evidence and pending owner checks. R44's guard is not shipped by this preparation.
@@ -1853,6 +1885,7 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - ✅ 2026-10-24 — **DLV-143** Retain one Start outcome and allow the bounded native model check to finish — [criteria](<Delivery — Master Book.md#dlv-143>)
 - ✅ 2026-10-25 — **DLV-145** Freeze a candidate-bound UAT handover, record owner results and gate Shipped on sign-off — [criteria](<Delivery — Master Book.md#dlv-145>)
 - ✅ 2026-10-27 — **DLV-147** Show Release on every unapplied verified candidate — [criteria](<Delivery — Master Book.md#dlv-147>)
+- ✅ 2026-10-27 — **DLV-148** Run every item from one standing policy — [criteria](<Delivery — Master Book.md#dlv-148>)
 
 DW-3 conversation search/highlighting shipped 2026-07-16; removed the stale DLV-71 duplicate on 2026-09-10. This is a reconciliation, not a second implementation.
 

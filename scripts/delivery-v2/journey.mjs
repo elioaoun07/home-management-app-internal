@@ -55,7 +55,7 @@ import {
   requestStop,
   resourceSummary,
 } from "./jobs.mjs";
-import { buildDeliver, buildGrant, loadExecutionPolicy, masterBookFor, recommendWorkProfile, resolveWorkFile, WORK_PROFILE_CONTRACTS } from "./policy.mjs";
+import { buildDeliver, buildGrant, loadExecutionPolicy, masterBookFor, recommendWorkProfile, resolveGeneratedPins, resolveWorkFile, WORK_PROFILE_CONTRACTS } from "./policy.mjs";
 import { acceptanceText, recheckContractSource } from "./work-ref.mjs";
 import { bindAdapterResult, makeExecutionRef } from "./adapters/adapter.mjs";
 import {
@@ -399,8 +399,9 @@ export function createJourney({
   // Owner allowance settings overlay the policy amounts at every check (allowances.mjs).
   const allowancesNow = () => loadAllowances({ root }).settings;
   const fleetSince = () => fleetWindow({ settings: allowancesNow(), now: now() }).since;
-  const policyNow = () => {
-    const loaded = loadPolicy({ root });
+  // `materialize` walks the source tree: only where a run's inputs are frozen.
+  const policyNow = ({ materialize = false } = {}) => {
+    const loaded = loadPolicy({ root, materialize });
     if (!loaded.ok) return loaded;
     return { ...loaded, policy: effectivePolicy(loaded.policy, { settings: allowancesNow(), now: now() }) };
   };
@@ -1031,7 +1032,7 @@ export function createJourney({
   // -------------------------------------------------------------------------
 
   async function deliver(request) {
-    const loaded = policyNow();
+    const loaded = policyNow({ materialize: true });
     if (!loaded.ok) return refuse(JOURNEY_REFUSALS.NO_POLICY, loaded.refusals);
     if (!runtime) return refuse(JOURNEY_REFUSALS.NO_RUNTIME, "configure a container runtime in the execution policy");
     if (!isNonEmptyString(request.command_id)) return refuse(JOURNEY_REFUSALS.COMMAND_REQUIRED, "deliver");
@@ -1296,7 +1297,7 @@ export function createJourney({
 
     let provisioned;
     try {
-      const configured = policyNow().policy?.checks.requiredVerifications.typecheck;
+      const configured = policyNow({ materialize: !ctx.settings.compiler_input }).policy?.checks.requiredVerifications.typecheck;
       let compilerInput = ctx.settings.compiler_input;
       if (configured?.enabled && configured.isolation === "checker") {
         if (!compilerInput) {
@@ -1746,15 +1747,16 @@ export function createJourney({
     );
     const records = [];
     const integrity = preparedScopeViolations(run_id, scopeCandidate).map(path => "candidate exceeds the approved prepared plan: " + path);
-    if (!criteria.length) return { criteria, records, integrity };
-    const plan = pinCheckPlan({
+    // A standing policy declares no item criteria: the typecheck and the item's own
+    // tests below are then the whole verdict, never an empty pass.
+    const plan = criteria.length ? pinCheckPlan({
       criteria,
       specs: policy.checks.specs,
       checkerInputs: base.filter((entry) => policy.checks.inputs.includes(entry.path)).map((entry) => ({ path: entry.path, sha256: entry.sha256 })),
       toolchain: { runtime: String(runtime.kind || "unknown"), image: runtime.boundary ? runtime.boundary.image : null },
       environmentDescription: String(runtime.kind || "unknown") + " checker; read-only candidate; no network; restricted environment",
-    });
-    const execute = await runtime.checkExecutor({ run_id, candidate });
+    }) : null;
+    const execute = criteria.length ? await runtime.checkExecutor({ run_id, candidate }) : null;
     // DLV-120: the checker's own text, bounded and redacted, published into the
     // existing artifact store and referenced from the receipt. The blob is
     // written and read back before the row is recorded, so a dependent receipt
@@ -1861,7 +1863,7 @@ export function createJourney({
           raw = { exitCode: null, stdout: "", stderr: "", spawnError: errorText(error) };
         }
       }
-      grade = gradeCandidateTests({ selection, raw });
+      grade = gradeCandidateTests({ selection, raw, requireTests: configured.requireTests === true });
     }
 
     const retained = raw
@@ -1959,8 +1961,9 @@ export function createJourney({
       event(run_id, "typecheck.checker-unavailable", { reason: "this runtime has no protected checker" });
       return hostChoice;
     }
+    const generatedTypes = resolveGeneratedPins(root, configured.program?.generatedTypes);
     const frozen = integration && isolation === "checker"
-      ? freezeCompilerInput({ root, directory: join(stagingRoot, run_id), configured: configured.program })
+      ? freezeCompilerInput({ root, directory: join(stagingRoot, run_id), configured: { ...configured.program, generatedTypes } })
       : context(run_id)?.settings.compiler_input;
     if (isolation === "checker" && !frozen) return { ...hostChoice, execute: null };
     if (frozen) verifyCompilerInput(frozen);
@@ -1970,7 +1973,7 @@ export function createJourney({
     });
     let offered;
     try {
-      offered = await runtime.typecheckExecutor({ run_id, candidate, include: [...program.files], programRoot: frozen?.root, generatedTypes: frozen?.generatedTypes || configured.program?.generatedTypes || {} });
+      offered = await runtime.typecheckExecutor({ run_id, candidate, include: [...program.files], programRoot: frozen?.root, generatedTypes: frozen?.generatedTypes || generatedTypes });
     } catch (error) {
       offered = { ok: false, reason: errorText(error) };
     }

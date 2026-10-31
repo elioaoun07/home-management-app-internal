@@ -1,14 +1,128 @@
-import { getAccessibleAccount } from "@/lib/accountAccess";
+import { getAccessibleAccount, getActiveHouseholdPartnerId } from "@/lib/accountAccess";
 import { adjustAccountBalance } from "@/lib/balance";
 import type { AccountType } from "@/lib/balance-utils";
 import { getBalanceDelta } from "@/lib/balance-utils";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { canAccessTrip } from "@/lib/tripAccess";
+import { canRemoveSplit } from "@/lib/utils/splitBill";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
+
+const splitUpdateSchema = z.object({
+  split_requested: z.boolean(),
+  // Undo may restore only the same, still-active household partner.
+  collaborator_id: z.string().uuid().optional(),
+}).strict();
+
+type SplitUpdate = z.infer<typeof splitUpdateSchema>;
+
+async function updateSplit(
+  supabase: Awaited<ReturnType<typeof supabaseServer>>,
+  userId: string,
+  id: string,
+  input: SplitUpdate,
+) {
+  const { data: transaction, error: readError } = await supabase
+    .from("transactions").select("*")
+    .eq("id", id).eq("user_id", userId).is("deleted_at", null).maybeSingle();
+  if (readError) return NextResponse.json({ error: "Failed to read transaction" }, { status: 500 });
+  if (!transaction) return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+  if (transaction.split_completed_at || transaction.is_draft) {
+    return NextResponse.json({ error: "Split cannot be changed" }, { status: 409 });
+  }
+  if (!input.split_requested && transaction.split_requested && !canRemoveSplit(transaction)) {
+    return NextResponse.json({ error: "Split cannot be removed" }, { status: 409 });
+  }
+
+  let collaboratorId = transaction.collaborator_id as string | null;
+  if (!input.split_requested && !collaboratorId && input.collaborator_id) {
+    // A retry after the row saved but notification dismissal failed still has
+    // the original recipient. Authorize it again rather than accepting a UUID.
+    const partnerId = await getActiveHouseholdPartnerId(supabase, userId);
+    if (input.collaborator_id !== partnerId) {
+      return NextResponse.json({ error: "Split partner changed" }, { status: 409 });
+    }
+    collaboratorId = partnerId;
+  }
+  if (input.split_requested) {
+    const partnerId = await getActiveHouseholdPartnerId(supabase, userId);
+    if (!partnerId || (input.collaborator_id && input.collaborator_id !== partnerId) ||
+      (transaction.split_requested && collaboratorId !== partnerId)) {
+      return NextResponse.json({ error: "Split requires the active household partner" }, { status: 409 });
+    }
+    collaboratorId = partnerId;
+  }
+
+  // Split metadata only: never enter the amount/account balance update path.
+  // The predicate is checked again by the DB after a concurrent completion.
+  const update = supabase.from("transactions")
+    .update({
+      split_requested: input.split_requested,
+      collaborator_id: input.split_requested ? collaboratorId : null,
+      collaborator_amount: null,
+      collaborator_description: null,
+      collaborator_account_id: null,
+    })
+    .eq("id", id).eq("user_id", userId).is("deleted_at", null)
+    .is("split_completed_at", null);
+  const { data: updated, error } = await (transaction.split_requested == null
+    ? update.is("split_requested", null)
+    : update.eq("split_requested", transaction.split_requested))
+    .select().maybeSingle();
+  if (error) return NextResponse.json({ error: "Failed to update split" }, { status: error.code === "23505" ? 409 : 500 });
+  if (!updated) return NextResponse.json({ error: "Split changed; reopen the transaction" }, { status: 409 });
+
+  // The recipient owns these notifications. Narrow admin authority to the
+  // authenticated owner's transaction and its verified collaborator only.
+  if (collaboratorId) {
+    const admin = supabaseAdmin();
+    let notificationError;
+    if (!input.split_requested) {
+      ({ error: notificationError } = await admin.from("notifications")
+        .update({ is_dismissed: true, action_taken: true })
+        .eq("transaction_id", id).eq("user_id", collaboratorId)
+        .eq("notification_type", "transaction_pending"));
+    } else {
+      // Reuse an old request (including its full-bill hint) for retries/Undo.
+      const { data: existing, error: lookupError } = await admin.from("notifications")
+        .select("id").eq("transaction_id", id).eq("user_id", collaboratorId)
+        .eq("notification_type", "transaction_pending")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      notificationError = lookupError;
+      if (!lookupError && existing) {
+        ({ error: notificationError } = await admin.from("notifications")
+          .update({ is_dismissed: false, action_taken: false, is_read: false })
+          .eq("id", existing.id).eq("user_id", collaboratorId).eq("transaction_id", id));
+      } else if (!lookupError) {
+        ({ error: notificationError } = await admin.from("notifications").insert({
+          user_id: collaboratorId,
+          title: "Split Bill Request",
+          message: "Add your portion",
+          icon: "split",
+          notification_type: "transaction_pending",
+          severity: "action",
+          source: "transaction",
+          priority: "high",
+          action_type: "log_transaction",
+          transaction_id: id,
+          action_data: {
+            transaction_id: id,
+            owner_amount: updated.amount,
+            owner_description: updated.description,
+          },
+        }));
+      }
+    }
+    if (notificationError) {
+      return NextResponse.json({ error: "Split saved; notification update failed", transaction: updated }, { status: 502 });
+    }
+  }
+  return NextResponse.json({ ...updated, is_owner: true });
+}
 
 type TransactionUpdateData = {
   date?: string;
@@ -95,6 +209,7 @@ export async function GET(
         is_owner: isOwner,
         split_requested: transaction.split_requested,
         split_completed_at: transaction.split_completed_at,
+        collaborator_id: transaction.collaborator_id,
         trip_id: transaction.trip_id ?? null,
       },
     });
@@ -122,6 +237,12 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await req.json();
+
+    if (Object.prototype.hasOwnProperty.call(body, "split_requested")) {
+      const parsed = splitUpdateSchema.safeParse(body);
+      if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+      return await updateSplit(supabase, user.id, id, parsed.data);
+    }
 
     // Extract updateable fields
     const {

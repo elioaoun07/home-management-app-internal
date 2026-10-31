@@ -67,7 +67,7 @@ Inventory source: a read-only SQLite transaction against `.delivery/v2/superviso
 
 ## V2-83 — remove an accidental pending split
 
-**Acceptance:** [BUD-83](<../ERA Notes/10 - Project Management/Budget/Budget — Master Book.md#bud-83>). **Type:** feature, permissions, money regression and Undo. **Readiness:** Draft / blocked until the implementer supplies C1 or a replacement candidate in an isolated two-user test household. The retained candidate is unapplied. The ordinary checkout's transaction detail does not currently contain this candidate's Split control.
+**Acceptance:** [BUD-83](<../ERA Notes/10 - Project Management/Budget/Budget — Master Book.md#bud-83>). **Type:** feature, permissions, money regression and Undo. **Readiness (2026-10-31):** manually implemented in the current checkout; old C1 is unapplied and superseded. Use a build from this checkout in an isolated two-user test household. No deployed build, owner PASS or current live RLS behavior is claimed. Owner scope now includes adding/re-adding Split; the plain-owner expectations below reflect that amendment.
 
 **Prepared data the implementer must provide:** owner A and linked partner B, each with a separate browser session; dates set to the test day; `UAT83-Pending` owned by A with a pending split to B, creator amount USD 10 and no completed split; `UAT83-Plain` with no split; `UAT83-Completed` already completed by B; a second pending split `UAT83-Other` whose notification must remain. Record both account balances and balance-history counts after setup. Supply the environment URL and accounts; do not ask the tester to discover IDs or seed a live database.
 
@@ -84,18 +84,18 @@ Inventory source: a read-only SQLite transaction against `.delivery/v2/superviso
 1. With the fixture reset to a pending split, open B's prepared browser session and its pending split notification/list. The implementer must supply the exact entry point for the candidate build. **Expected:** both `UAT83-Pending` and `UAT83-Other` are present.
 2. On A, return to **Expense → Activity → Spending**, open `UAT83-Pending` and uncheck **Split**. This time let the Undo toast expire. **Expected:** that request is removed.
 3. On B, refresh the pending split list and notifications. **Expected:** only `UAT83-Pending` disappears; `UAT83-Other` remains. B's balance is unchanged.
-4. On A, reload and reopen the transaction. **Expected:** it has no Split tag. The implementer verifies that only the five specified split fields were cleared and that balance history did not change; the owner records the visible behavior separately.
+4. On A, reload and reopen the transaction. **Expected:** Split is unchecked and enabled. Check it again. **Expected:** the same transaction becomes a pending request to B, with Undo; its amount and balance history do not change. On B, refresh the pending list/notifications; the request returns. The implementer verifies that cancellation cleared only the five specified split fields.
 
 **V2-83-M3 — plain, completed and nonowner transactions**
 
-1. On A, open **Activity → Spending → UAT83-Plain**. **Expected:** no Split tag.
+1. On A, open **Activity → Spending → UAT83-Plain**. **Expected:** Split is unchecked and enabled. Check it, then press Undo. **Expected:** it requests B, then returns to a plain transaction, with no amount/balance/history change. On B, a plain transaction has no Split control.
 2. Close it and open `UAT83-Completed`. **Expected:** Split is visible and checked, but cannot be unchecked. Trying it does not alter money or history.
 3. On B, open `UAT83-Pending` after the fixture has restored the request. **Expected:** Split is visible but read-only for B; B cannot remove A's request.
 4. Have the implementer replay the stale-client completion/removal race in the isolated route fixture. **Expected:** a completed split cannot be removed by a stale request, and a completion after removal cannot move money. Record the replay receipt separately from the owner's UI result.
 
 **Actual:** Pending for M1–M3. **Reset:** use M1's Undo immediately; after M2/M3 the implementer restores the isolated fixture, including its notification state and recorded balances. Do not delete real transactions to clean up.
 
-**Known source-review discrepancy, not an owner Fail:** frozen C1 unconditionally renders the Split row, including when `split_requested` is false. M2 step 4 and M3 step 1 deliberately retain the accepted requirement of no tag; do not weaken their expected result to match C1. This candidate also needs current household/RLS evidence before its cross-user/race behavior can be certified. No production visibility investigation or data change was performed here.
+**Historical C1 discrepancy:** the 2026-10-25 review found C1 rendered Split for plain transactions contrary to the then removal-only scope. C1 was not applied. The owner independently amended the scope on 2026-10-31 to allow add/re-add in a new manual implementation; this is the reason M2/M3 now expect an unchecked owner control. The old run's reservation was already released on 2026-10-27; its receipts remain historical. Current two-user/RLS evidence is still required before certifying live race behavior. The browser helper failed to initialize during implementation, so mobile/two-theme visual checks remain pending. No production data was changed.
 
 ## V2-11-A — review the unapplied cooking-count attempt
 

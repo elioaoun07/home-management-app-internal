@@ -15,7 +15,7 @@ import { pinCheckPlan } from "./checks.mjs";
 import { loadQualification } from "./qualification.mjs";
 import { readAllowances, effectivePolicy, runAllowance } from "./allowances.mjs";
 import { resolveEnforcement } from "./budget.mjs";
-import { bindEnvironmentChecks, verifyEnvironmentReceipt, environmentReference } from "./dependency-environment.mjs";
+import { bindEnvironmentChecks, verifyEnvironmentReceipt, environmentReference, manifestMatchesLock } from "./dependency-environment.mjs";
 import { boundaryBindingDigest } from "./worker-boundary.mjs";
 import { compilerFiles } from "./compiler-input.mjs";
 import { compilerObservation } from "./compiler-observation.mjs";
@@ -40,6 +40,13 @@ function input(root, name) {
   return { path: name, sha256: "sha256:" + createHash("sha256").update(readFileSync(path)).digest("hex") };
 }
 
+// Same lock digest + specifiers that equal the lock: a frozen install yields the
+// same tree, so script or metadata edits to package.json keep the environment.
+function lockEquivalentManifest(root) {
+  try { return manifestMatchesLock(readFileSync(join(root, "package.json"), "utf8"), readFileSync(join(root, "pnpm-lock.yaml"), "utf8")); }
+  catch { return false; }
+}
+
 /** Runs in the bounded passive observation thread. No store, runtime or probe. */
 export function readCompilerInputs(root, configured) {
   const program = compilerFiles(root, configured);
@@ -57,7 +64,7 @@ export async function inspectReadiness({ root, pmRel = "ERA Notes/10 - Project M
   const selection = { file, id: normalizeWorkId(id) || id, executor, model, effort, workProfile };
   const facts = {};
   let loaded;
-  try { loaded = loadExecutionPolicy({ root }); }
+  try { loaded = loadExecutionPolicy({ root, materialize: true }); }
   catch (error) { loaded = { ok: false, policy: null, refusals: [{ code: "execution-policy-unreadable", detail: error.message }] }; }
   const allowances = readAllowances({ root });
   const policy = loaded.ok ? effectivePolicy(loaded.policy, { settings: allowances.settings, now }) : null;
@@ -135,14 +142,25 @@ export async function inspectReadiness({ root, pmRel = "ERA Notes/10 - Project M
   try {
     if (!policy) throw new Error("policy unavailable");
     for (const name of policy.checks.inputs) checkInputs.push(input(root, name));
-    const plan = pinCheckPlan({ criteria: policy.criteria, specs: policy.checks.specs, checkerInputs: checkInputs });
-    const commands = Object.values(plan.specs).filter(spec => spec.kind === "command");
-    if (!commands.length || commands.some(spec => !spec.argv.length) || !checkInputs.length) throw new Error("pinned command checks/inputs are missing");
+    // A standing policy has no item-specific criteria: the typecheck and the
+    // item's own tests (required, pinned checker config) are its checks.
+    const standing = !policy.criteria.length && !Object.keys(policy.checks.specs).length;
+    let planDigest;
+    if (standing) {
+      const tests = policy.checks.requiredVerifications.candidateTests;
+      if (!tests?.enabled || tests.enforcement !== "required" || !checkInputs.length) throw new Error("a standing policy needs required candidate tests and pinned checker inputs");
+      planDigest = fingerprint(canonicalJson({ standing: true, inputs: checkInputs, candidateTests: tests }));
+    } else {
+      const plan = pinCheckPlan({ criteria: policy.criteria, specs: policy.checks.specs, checkerInputs: checkInputs });
+      const commands = Object.values(plan.specs).filter(spec => spec.kind === "command");
+      if (!commands.length || commands.some(spec => !spec.argv.length) || !checkInputs.length) throw new Error("pinned command checks/inputs are missing");
+      planDigest = plan.plan_digest;
+    }
     const typecheck = policy.checks.requiredVerifications.typecheck;
     if (!typecheck?.enabled || typecheck.enforcement !== "required" || typecheck.isolation !== "checker") throw new Error("protected checker isolation is not required; no host fallback can certify readiness");
     const configured = typecheck.program;
     const inputs = await compilerObservation(root, configured);
-    facts.checks = fact("satisfied", "checks-pinned", "Inputs pinned; checks not executed", { digest: plan.plan_digest, inputs: checkInputs, program: { files: inputs.length, fingerprint: fingerprint(canonicalJson(inputs)) } });
+    facts.checks = fact("satisfied", "checks-pinned", "Inputs pinned; checks not executed", { digest: planDigest, inputs: checkInputs, program: { files: inputs.length, fingerprint: fingerprint(canonicalJson(inputs)) } });
   } catch (error) { facts.checks = { ...blocked("checks-not-prepared", error.message, "Prepare pinned protected checks under DLV-133/selected item"), evidence: { inputs: checkInputs } }; }
 
   let manifests = null;
@@ -195,19 +213,21 @@ export async function inspectReadiness({ root, pmRel = "ERA Notes/10 - Project M
   if (facts.environment.state === "satisfied") {
     const receipt = facts.environment.evidence?.receipt;
     if (!verifyEnvironmentReceipt(receipt) || canonicalJson(environmentReference(receipt).environment) !== canonicalJson(managed)) facts.environment = blocked("environment-receipt-invalid", "Managed environment identity/evidence is incomplete", "Review DLV-133 environment receipt");
-    else if (!manifests || manifests[0].sha256 !== receipt.spec.packageDigest || manifests[1].sha256 !== receipt.spec.lockDigest) facts.environment = blocked("environment-manifest-mismatch", "Current manifest/lock differs from verified environment", "Review a separately staged environment for the current inputs");
+    else if (!manifests || manifests[1].sha256 !== receipt.spec.lockDigest || (manifests[0].sha256 !== receipt.spec.packageDigest && !lockEquivalentManifest(root))) facts.environment = blocked("environment-manifest-mismatch", "Current manifest/lock differs from verified environment", "Review a separately staged environment for the current inputs");
     else {
       const commands = Object.entries(policy.checks.specs).filter(([, spec]) => spec.kind === "command");
       const matching = commands.map(([id, spec]) => receipt.spec.oracles.find(oracle => oracle.id === id && canonicalJson(oracle.argv) === canonicalJson(spec.argv)));
       const hashes = Object.assign({}, ...matching.filter(Boolean).map(oracle => oracle.inputs));
       let bindingMismatch = false;
-      if (receipt.spec.checks || commands.some(([, spec]) => spec.expected?.assertions !== undefined)) {
+      if (commands.length && (receipt.spec.checks || commands.some(([, spec]) => spec.expected?.assertions !== undefined))) {
         try {
           const bindings = bindEnvironmentChecks({ oracles: receipt.spec.oracles, checks: policy.checks, inputs: Object.fromEntries(checkInputs.map(row => [row.path, row.sha256])) });
           bindingMismatch = canonicalJson(bindings) !== canonicalJson(receipt.spec.checks);
         } catch { bindingMismatch = true; }
       }
-      if (bindingMismatch || matching.some(oracle => !oracle) || checkInputs.some(entry => hashes[entry.path] !== entry.sha256)) facts.environment = blocked("environment-check-input-mismatch", "Verified command executables, assertions or protected inputs differ from current checks", "Review current protected oracle inputs under DLV-133");
+      // With no item command checks the environment proves no oracle; the check
+      // inputs are still pinned at Start by the checks gate.
+      if (commands.length && (bindingMismatch || matching.some(oracle => !oracle) || checkInputs.some(entry => hashes[entry.path] !== entry.sha256))) facts.environment = blocked("environment-check-input-mismatch", "Verified command executables, assertions or protected inputs differ from current checks", "Review current protected oracle inputs under DLV-133");
     }
   }
   facts.modelAvailability = chosen?.id === "codex" ? currentObservation("modelAvailability") : fact("satisfied", "native-model-check-not-applicable", "This native catalog check applies to Codex only");

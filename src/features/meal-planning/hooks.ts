@@ -1,6 +1,7 @@
 "use client";
 
 import { safeFetch } from "@/lib/safeFetch";
+import { formatDate } from "@/lib/utils/date";
 import type {
   MealPlan,
   MealPlanInsert,
@@ -18,20 +19,10 @@ async function fetchMealPlansByDateRange(
   startDate: string,
   endDate: string,
 ): Promise<MealPlanWithRecipe[]> {
-  // Extend start by 14 days to capture meals with leftover dates that overlap this range
-  const extStart = new Date(startDate);
-  extStart.setDate(extStart.getDate() - 14);
-  const extStartStr = extStart.toISOString().split("T")[0];
-
-  const res = await fetch(`/api/meal-plans?start=${extStartStr}&end=${endDate}`);
+  // The route returns every meal whose leftovers overlap the range, however old.
+  const res = await fetch(`/api/meal-plans?start=${startDate}&end=${endDate}`);
   if (!res.ok) throw new Error(await res.text());
-  const all: MealPlanWithRecipe[] = await res.json();
-
-  // Keep only plans that are "active" during [startDate, endDate]
-  return all.filter((mp) => {
-    const lastDay = mp.eats_through_date ?? mp.planned_date;
-    return lastDay >= startDate;
-  });
+  return res.json();
 }
 
 async function fetchMealPlansByDate(date: string): Promise<MealPlanWithRecipe[]> {
@@ -105,9 +96,10 @@ export function useHousehold(currentUserId?: string) {
 }
 
 export function useMealPlansForWeek(startDate: string) {
-  const endDate = new Date(startDate);
+  // Local date arithmetic from a noon anchor; toISOString would shift to UTC.
+  const endDate = new Date(`${startDate}T12:00:00`);
   endDate.setDate(endDate.getDate() + 6);
-  const end = endDate.toISOString().split("T")[0];
+  const end = formatDate(endDate);
 
   return useQuery({
     queryKey: mealPlanKeys.byWeek(startDate),

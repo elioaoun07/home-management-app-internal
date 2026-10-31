@@ -78,6 +78,7 @@ import {
 } from "./adapters/registry.mjs";
 import { makeBoundaryConfig } from "./worker-boundary.mjs";
 import { authorizedPolicy } from "./authorization.mjs";
+import { expandScratchInclude } from "./scratch.mjs";
 
 /** The two visible work profiles. FAST/DEEP remain the legacy lane names. */
 export const WORK_PROFILES = Object.freeze(["focused", "investigate"]);
@@ -485,7 +486,9 @@ export function validateExecutionPolicy(raw) {
       const programInput = isPlainObject(entry.program) ? entry.program : {};
       const programRoots = Array.isArray(programInput.roots) ? programInput.roots.filter(isNonEmptyString).map(normalizePath) : [];
       const generatedTypes = isPlainObject(programInput.generatedTypes) ? programInput.generatedTypes : {};
-      if (Object.entries(generatedTypes).some(([path, hash]) => !/^\.next\/(?:dev\/)?types\/[A-Za-z0-9_./-]+\.ts$/u.test(path) || path.split("/").some(p => !p || p === "." || p === "..") || !/^sha256:[a-f0-9]{64}$/u.test(String(hash)))) bad(POLICY_REFUSALS.INVALID, "invalid generated compiler pins");
+      // "current" pins a generated file at load (frozen into each run's program),
+      // so regenerated Next route types do not block every Start.
+      if (Object.entries(generatedTypes).some(([path, hash]) => !/^\.next\/(?:dev\/)?types\/[A-Za-z0-9_./-]+\.ts$/u.test(path) || path.split("/").some(p => !p || p === "." || p === "..") || !(hash === "current" || /^sha256:[a-f0-9]{64}$/u.test(String(hash))))) bad(POLICY_REFUSALS.INVALID, "invalid generated compiler pins");
       const programExtensions = Array.isArray(programInput.extensions) ? programInput.extensions.filter(isNonEmptyString) : [];
       typecheck = {
         enabled: entry.enabled !== false,
@@ -524,6 +527,8 @@ export function validateExecutionPolicy(raw) {
         argv: Object.freeze([...argv]),
         include: Object.freeze([...include]),
         enforcement: entry.enforcement === "advisory" ? "advisory" : "required",
+        // Present only when set, so existing renewals keep their fingerprint.
+        ...(entry.requireTests === true ? { requireTests: true } : {}),
       };
     }
   }
@@ -701,7 +706,46 @@ export function validateExecutionPolicy(raw) {
  *
  * @param {{root:string, readFile?:Function}} input
  */
-export function loadExecutionPolicy({ root, readFile = null }) {
+/** `"current"` generated-type pins become the files' present hashes; absent files are dropped. */
+export function resolveGeneratedPins(root, pins) {
+  const generatedTypes = {};
+  for (const [path, pin] of Object.entries(pins || {})) {
+    if (pin !== "current") generatedTypes[path] = pin;
+    else if (existsSync(join(root, path))) generatedTypes[path] = hashFile(join(root, path));
+  }
+  return generatedTypes;
+}
+
+/**
+ * Resolve a standing policy against the checkout: directory entries in
+ * `scratchScope.include` become their files, and `"current"` generated-type pins
+ * become the files' present hashes (absent files are dropped). A policy that
+ * lists only files and hashes is returned unchanged.
+ *
+ * This walks the source tree on the server's only thread, so it belongs where a
+ * run's inputs are frozen or inspected, never on a read path: a walk per run per
+ * bridge poll held `/api/health` past the browser's 3 s probe (false "Offline").
+ */
+export function materializePolicy(root, policy) {
+  const include = policy.scratchScope?.include || [];
+  const expanded = expandScratchInclude(root, include);
+  const listed = new Set(include.map(normalizePath));
+  const scratchScope = expanded.length === listed.size && expanded.every((path) => listed.has(path))
+    ? policy.scratchScope
+    : { ...policy.scratchScope, include: expanded };
+  const typecheck = policy.checks?.requiredVerifications?.typecheck;
+  const pins = typecheck?.program?.generatedTypes || {};
+  if (scratchScope === policy.scratchScope && !Object.values(pins).includes("current")) return policy;
+  const generatedTypes = resolveGeneratedPins(root, pins);
+  return {
+    ...policy,
+    scratchScope,
+    ...(typecheck ? { checks: { ...policy.checks, requiredVerifications: { ...policy.checks.requiredVerifications,
+      typecheck: { ...typecheck, program: { ...typecheck.program, generatedTypes } } } } } : {}),
+  };
+}
+
+export function loadExecutionPolicy({ root, readFile = null, materialize = false }) {
   const path = executionPolicyPath(root);
   const read = readFile || ((p) => (existsSync(p) ? readFileSync(p, "utf8") : null));
   const text = read(path);
@@ -735,7 +779,11 @@ export function loadExecutionPolicy({ root, readFile = null }) {
   const validated = validateExecutionPolicy(parsed);
   if (!validated.ok) return deepFreeze({ ...validated, path: normalizePath(path) });
   try {
-    return deepFreeze({ ...validated, policy: authorizedPolicy({ root, policy: validated.policy }), path: normalizePath(path) });
+    // Authorization binds the policy as written; directory scopes and "current"
+    // generated pins are resolved after, against this checkout, and only for a
+    // caller that freezes or inspects inputs. An unresolved scope refuses there.
+    const authorized = authorizedPolicy({ root, policy: validated.policy });
+    return deepFreeze({ ...validated, policy: materialize ? materializePolicy(root, authorized) : authorized, path: normalizePath(path) });
   } catch {
     return deepFreeze({ ok: false, policy: null, path: normalizePath(path),
       refusals: [{ code: "authorization-unreadable", detail: "Authorization record unreadable; restore the retained record" }] });
@@ -883,7 +931,7 @@ export function masterBookFor(file) {
  *   describeExecutor?:Function, readFile?:Function, qualify?:((backend_id:string)=>any)|null}} input
  */
 export function buildDeliver({ root, pmRel, store, policyLoader = null, describeExecutor: describe = null, readFile = null, qualify = null }) {
-  const loaded = (policyLoader || loadExecutionPolicy)({ root });
+  const loaded = (policyLoader || loadExecutionPolicy)({ root, materialize: true });
   if (!loaded.ok) return null;
   const getStore = typeof store === "function" ? store : () => store;
   const policy = loaded.policy;

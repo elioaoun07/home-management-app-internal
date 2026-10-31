@@ -93,6 +93,39 @@ export const EXCLUDED_NAME_PATTERNS = Object.freeze([
 /** Windows device names that are not files however they are spelled. */
 const RESERVED_NAMES = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/iu;
 
+/**
+ * A standing policy names directories (`src`, `tests`) instead of a per-item file
+ * list. Expand them into the regular files below, in sorted order, so every
+ * consumer still sees an explicit file list. Links, excluded segments and
+ * credential-shaped names are skipped; files and missing entries are kept as
+ * listed so provisioning still refuses them by name.
+ * @param {string} hostRoot
+ * @param {readonly string[]} include
+ */
+export function expandScratchInclude(hostRoot, include) {
+  const files = new Set();
+  const skip = (name) => EXCLUDED_SEGMENTS.includes(name) || EXCLUDED_NAME_PATTERNS.some((pattern) => pattern.test(name)) || RESERVED_NAMES.test(name);
+  const walk = (rel) => {
+    for (const name of readdirSync(join(hostRoot, rel))) {
+      if (skip(name)) continue;
+      const child = rel + "/" + name;
+      const stat = lstatSync(join(hostRoot, child));
+      if (stat.isSymbolicLink()) continue;
+      // Hidden directories (.pm, .obsidian, …) hold tool state, not source.
+      if (stat.isDirectory()) { if (!name.startsWith(".")) walk(child); }
+      else if (stat.isFile()) files.add(child);
+    }
+  };
+  for (const entry of include || []) {
+    const rel = normalizePath(entry);
+    let stat = null;
+    try { stat = lstatSync(join(hostRoot, rel)); } catch { /* reported by provisioning */ }
+    if (stat && stat.isDirectory() && !stat.isSymbolicLink()) walk(rel);
+    else files.add(rel);
+  }
+  return [...files].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
 const isNonEmptyString = (value) => typeof value === "string" && value.trim() !== "";
 
 /** sha256 of a buffer, prefixed so the algorithm stays visible in the manifest. */

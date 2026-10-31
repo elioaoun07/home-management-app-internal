@@ -47,6 +47,7 @@ import { createJourney } from "./journey.mjs";
 import { loadQualification } from "./qualification.mjs";
 import { createContainerRuntime } from "./worker-boundary.mjs";
 import { inspectReadiness } from "./inspect-readiness.mjs";
+import { ensureDeclaredTouches } from "./touches.mjs";
 import { evaluateReadiness, readinessFact, PASSIVE_GATES } from "./readiness.mjs";
 import { listStewardRequests, stewardStaleMs, stewardCommandState } from "./steward-requests.mjs";
 import { renewAuthorization } from "./authorization.mjs";
@@ -146,6 +147,13 @@ export function createDeliveryV2Context({
   const readinessPending = new Map();
   const selectionOf = value => ({ file: String(value.file || ""), id: String(value.id || ""), executor: String(value.executor || ""), model: value.model || null, effort: value.effort || null, workProfile: value.workProfile || "focused" });
   const selectionKey = value => JSON.stringify(selectionOf(value));
+  const declareTouches = (selection, allowedPaths) => {
+    try {
+      const checklist = readFileSync(join(ROOT, pmRel, selection.file), "utf8");
+      const lineText = checklist.split(/\r?\n/u).find(line => line.includes("**" + selection.id + "**")) || "";
+      return ensureDeclaredTouches({ root: ROOT, pmRel, file: selection.file, id: selection.id, lineText, allowedPaths });
+    } catch { return { state: "unknown", paths: [], source: null }; }
+  };
 
   const runtimeFor = (loaded) => {
     if (!loaded || !loaded.ok || !loaded.policy.runtime) return null;
@@ -318,6 +326,10 @@ export function createDeliveryV2Context({
         readinessCache.set(key, {});
       }
       const work = (async () => {
+        // A missing Touches line is filled in from the plan, item text or Feature
+        // Map before anything is inspected, so it is never the reason Start waits.
+        const policyBefore = loadExecutionPolicy({ root: ROOT });
+        if (policyBefore.ok) declareTouches(selection, policyBefore.policy.publicationScope.allowedPaths);
         // The service owns coordination, including outstanding/unknown jobs.
         const view = context.store.readOnlyView();
         const before = await inspectReadiness({ ...selection, root: ROOT, pmRel, readOnlyStore: view });

@@ -93,11 +93,20 @@ export function planCheckerEnvironment(recipe) {
 // pnpm's default reporter hides transitive optional fetch failures even when
 // their native binary is required here. Retain debug events in numbered evidence;
 // inventory verification still refuses every missing target after a zero exit.
+// The install is bounded at 20 minutes. A slow link (~500 MB at ~290 KB/s on
+// 2026-10-27) needs longer: ERA_V2_INSTALL_DEADLINE_MS opts in, 20–90 minutes.
+const INSTALL_DEADLINE_MS = (() => {
+  const raw = process.env.ERA_V2_INSTALL_DEADLINE_MS;
+  if (raw === undefined || raw === "") return 1200000;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1200000 || value > 5400000) throw new Error("ERA_V2_INSTALL_DEADLINE_MS must be an integer from 1200000 to 5400000");
+  return value;
+})();
 const installSource = `const fs=require('node:fs'),{spawn}=require('node:child_process');
 for(const name of ['package.json','pnpm-lock.yaml'])fs.copyFileSync('/inputs/'+name,'/deps/'+name);
 function storage(phase){console.log(JSON.stringify({name:'era:installer-filesystem',phase,filesystems:['/tmp','/deps','/pnpm-store'].map(path=>{const s=fs.statfsSync(path);return{path,type:s.type,blockSize:s.bsize,totalBytes:s.blocks*s.bsize,freeBytes:s.bfree*s.bsize,availableBytes:s.bavail*s.bsize}})}))}storage('before');
 let expired=false,killTimer;const child=spawn(process.execPath,['/inputs/pnpm/bin/pnpm.cjs','install','--reporter=ndjson','--frozen-lockfile','--ignore-scripts','--ignore-pnpmfile','--prod=false','--package-import-method=copy','--store-dir=/pnpm-store','--registry=https://registry.npmjs.org/','--config.https-proxy=http://127.0.0.1:3128','--config.verify-store-integrity=true','--config.fetch-retries=0','--network-concurrency=4'],{cwd:'/deps',stdio:'inherit',env:{...process.env,NPM_CONFIG_USERCONFIG:'/dev/null',NPM_CONFIG_GLOBALCONFIG:'/dev/null'}});
-const deadline=setTimeout(()=>{expired=true;child.kill('SIGTERM');killTimer=setTimeout(()=>{child.kill('SIGKILL');process.exit(124)},10000)},1200000);
+const deadline=setTimeout(()=>{expired=true;child.kill('SIGTERM');killTimer=setTimeout(()=>{child.kill('SIGKILL');process.exit(124)},10000)},${INSTALL_DEADLINE_MS});
 const finish=code=>{clearTimeout(deadline);clearTimeout(killTimer);storage('after');process.exit(expired?124:(code??1))};child.once('error',()=>finish(1));child.once('exit',finish);`;
 
 /**
@@ -250,7 +259,7 @@ async function stageCheckerInputs({ recipe, docker, now = () => new Date().toISO
       const installFlags = [...offline];
       installFlags.splice(installFlags.indexOf("--network"), 2, "--network", "container:" + proxy);
       const installer = await create([...installFlags, ...mount(inputs, "/inputs"), ...mount(volume, "/deps", true), ...mount(store, "/pnpm-store", true), "--workdir", "/deps", plan.spec.image, "node", "-e", installSource]);
-      await start(installer, 1220000); await remove(installer); await remove(proxy);
+      await start(installer, INSTALL_DEADLINE_MS + 20000); await remove(installer); await remove(proxy);
       }
       if (owned.size || secondary.length) throw new Error("writers/egress not quiescent before validation");
       const before = JSON.parse((await once([...offline, ...mount(volume, "/deps")], ["node", "-e", dependencyInventorySource()])).stdout);

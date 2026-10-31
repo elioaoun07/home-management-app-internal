@@ -28,10 +28,14 @@ const validOracles = oracles => Array.isArray(oracles) && oracles.length > 0 &&
     Object.keys(row.inputs).length > 0 && Object.values(row.inputs).every(value => digestPattern.test(String(value))) &&
     (row.candidateFixture === undefined || (safeRelative(row.candidateFixture) && digestPattern.test(String(row.inputs[row.candidateFixture + "/eslint.config.mjs"])))));
 
-/** Same executable, protected bytes and assertion obligation at preparation and launch. */
+/** Same executable, protected bytes and assertion obligation at preparation and launch.
+ * A standing policy with no item-specific command checks binds nothing: item
+ * checks are optional, and an environment is then shared by every item. */
 export function bindEnvironmentChecks({ oracles, checks, inputs }) {
-  if (!checks?.specs || !Array.isArray(checks.inputs) || !checks.inputs.length || !Object.keys(checks.specs).length) throw new Error("proposed policy checks and protected inputs required before preparation");
+  if (!checks?.specs || !Array.isArray(checks.inputs)) throw new Error("proposed policy checks and protected inputs required before preparation");
   const bindings = /** @type {CheckBindings} */ ({});
+  if (!Object.keys(checks.specs).length) return bindings;
+  if (!checks.inputs.length) throw new Error("proposed policy checks and protected inputs required before preparation");
   for (const [id, check] of Object.entries(checks.specs)) {
     const oracle = oracles.find(row => row.id === id);
     const assertions = check.expected?.assertions;
@@ -42,6 +46,55 @@ export function bindEnvironmentChecks({ oracles, checks, inputs }) {
     bindings[id] = { argv: [...check.argv], assertions, inputs: pins };
   }
   return bindings;
+}
+
+const DEPENDENCY_SECTIONS = ["dependencies", "devDependencies", "optionalDependencies"];
+// Fields that change what a frozen install produces without appearing as importer
+// specifiers. When any is present, only byte-identical manifests are equivalent.
+const INSTALL_FIELDS = ["pnpm", "overrides", "resolutions", "dependenciesMeta", "peerDependencies", "peerDependenciesMeta", "bundledDependencies", "bundleDependencies", "workspaces"];
+
+/** The root importer's specifiers from a pnpm v9 lockfile, or null when unreadable. */
+export function lockImporterSpecifiers(lockText) {
+  const lines = String(lockText).split(/\r?\n/u);
+  if (!/^lockfileVersion: '?9\./u.test(lines[0] || "")) return null;
+  const start = lines.indexOf("importers:");
+  if (start < 0) return null;
+  /** @type {Record<string, Record<string, string>>} */
+  const sections = {};
+  let inRoot = false, section = null, name = null;
+  const unquote = (value) => value.trim().replace(/^'(.*)'$/u, "$1").replace(/^"(.*)"$/u, "$1");
+  for (const line of lines.slice(start + 1)) {
+    if (/^\S/u.test(line)) break; // next top-level key
+    if (!line.trim()) continue;
+    const indent = line.length - line.trimStart().length;
+    if (indent === 2) { inRoot = line.trim() === ".:"; section = name = null; continue; }
+    if (!inRoot) continue;
+    if (indent === 4) { section = DEPENDENCY_SECTIONS.includes(line.trim().slice(0, -1)) ? line.trim().slice(0, -1) : null; if (section) sections[section] = {}; name = null; continue; }
+    if (!section) continue;
+    if (indent === 6 && line.trim().endsWith(":")) { name = unquote(line.trim().slice(0, -1)); continue; }
+    const specifier = /^specifier:\s*(.+)$/u.exec(line.trim());
+    if (indent === 8 && name && specifier) sections[section][name] = unquote(specifier[1]);
+  }
+  return sections;
+}
+
+/**
+ * Whether `package.json` asks a frozen install for exactly what this lockfile
+ * resolves. A frozen install is a function of the lockfile, so with the same lock
+ * digest a manifest whose dependency specifiers equal the lock's importer
+ * specifiers installs the same tree; scripts and metadata edits do not matter.
+ */
+export function manifestMatchesLock(packageJsonText, lockText) {
+  let manifest;
+  try { manifest = JSON.parse(String(packageJsonText)); } catch { return false; }
+  if (!manifest || typeof manifest !== "object" || INSTALL_FIELDS.some((field) => manifest[field] !== undefined)) return false;
+  const locked = lockImporterSpecifiers(lockText);
+  if (!locked) return false;
+  return DEPENDENCY_SECTIONS.every((section) => {
+    const wanted = manifest[section] || {}, have = locked[section] || {};
+    const names = Object.keys(wanted);
+    return names.length === Object.keys(have).length && names.every((name) => have[name] === String(wanted[name]));
+  });
 }
 
 function validCheckBindings(bindings, oracles, canonical = canonicalJson) {

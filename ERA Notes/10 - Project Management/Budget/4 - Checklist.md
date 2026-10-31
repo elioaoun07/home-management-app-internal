@@ -17,7 +17,6 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **BUD-32** Verify deleted-row recognition and restore choice — [criteria](<Budget — Master Book.md#bud-32>) _(friction - S)_
 - [ ] **BUD-67** Verify statement and default-income deployment — [criteria](<Budget — Master Book.md#bud-67>) _(friction - M)_
 - [ ] **BUD-39** Verify and repair historical duplicate imports — [criteria](<Budget — Master Book.md#bud-39>) _(blocker - S)_
-- [ ] **BUD-83** Show the Split tag in transaction details and remove a pending split — [criteria](<Budget — Master Book.md#bud-83>) _(friction - S)_
 
 ## Next
 

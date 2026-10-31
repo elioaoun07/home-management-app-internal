@@ -1,5 +1,14 @@
 export type OwnershipFilter = "all" | "mine" | "partner" | "both";
 
+export function canRemoveSplit(transaction: {
+  split_requested?: boolean;
+  split_completed_at?: string | null;
+  is_owner?: boolean;
+}): boolean {
+  return transaction.split_requested === true &&
+    !transaction.split_completed_at && transaction.is_owner !== false;
+}
+
 export function getSuggestedSplitAmount(
   totalBillAmount: number | null | undefined,
   ownerAmount: number,

@@ -19,6 +19,7 @@ Weekly meal planner. Drag recipes onto days, see what's coming up, optionally ro
   - `src/features/meal-planning/hooks.ts`
   - `src/features/meal-planning/queryKeys.ts`
 - **API routes**: `src/app/api/meal-plans/`
+- **Coverage contract**: `src/lib/mealPlanCoverage.ts`. `getMealActiveDates` gives calendar days; `mealCoversDate` says who is fed. Shared by the calendar and ERA Chef (`src/features/era/intents/resolvers/chef.ts`).
 - **DB tables**: `meal_plans` (confirm in `schema.sql`)
 
 ## Common edit scenarios
@@ -29,6 +30,9 @@ Weekly meal planner. Drag recipes onto days, see what's coming up, optionally ro
 ## Gotchas
 
 - Framer Motion + HTML5 drag must not be combined on the same element.
+- `GET /api/meal-plans?date=` / `?start=&end=` return every meal whose planned → `eats_through_date` interval **overlaps**, not only meals planned in the range. Never re-add a lookback window client-side.
+- Display ≠ coverage: a skipped meal still shows on the calendar but feeds nobody; a `for_user_id` meal covers only that person. Use `mealCoversDate`, never `planned_date` sets.
+- Dates are local `YYYY-MM-DD`. Never `toISOString().split("T")[0]` — it shifts local midnight to the previous UTC day.
 - Recipe → shopping list flow goes through `src/components/web/AddToShoppingDialog.tsx`.
 
 ## Connected modules

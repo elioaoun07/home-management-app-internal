@@ -6,7 +6,15 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// GET meal plans (by date range, specific date, or specific IDs)
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+// A meal overlaps [day, …] when its leftovers last until at least `day`
+// (eats_through_date), or it has none and is planned on/after `day`.
+const overlapsFrom = (day: string) =>
+  `eats_through_date.gte.${day},and(eats_through_date.is.null,planned_date.gte.${day})`;
+
+// GET meal plans (by date range, specific date, or specific IDs).
+// Date reads return every meal whose planned → eats-through interval overlaps.
 export async function GET(req: NextRequest) {
   const supabase = await supabaseServer(await cookies());
   const {
@@ -23,14 +31,25 @@ export async function GET(req: NextRequest) {
   const singleDate = searchParams.get("date");
   const ids = searchParams.getAll("ids"); // Support ?ids=123&ids=456
 
+  // Dates are interpolated into a PostgREST filter: accept YYYY-MM-DD only.
+  if ([startDate, endDate, singleDate].some((d) => d !== null && !DAY.test(d))) {
+    return NextResponse.json({ error: "Dates must be YYYY-MM-DD" }, { status: 400 });
+  }
+
   // Get user's household
-  const { data: household } = await supabase
+  const { data: household, error: householdError } = await supabase
     .from("household_links")
     .select("id")
     .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
     .eq("active", true)
     .limit(1)
-    .single();
+    .maybeSingle();
+
+  if (householdError) {
+    // Unknown is not "no meals": callers must not read this as an empty plan.
+    console.error("Error resolving household for meal plans:", householdError);
+    return NextResponse.json({ error: "Household unavailable" }, { status: 503 });
+  }
 
   if (!household) {
     // No household = no meal plans (meal plans require household)
@@ -55,9 +74,9 @@ export async function GET(req: NextRequest) {
     // Fetch specific meal plans by IDs
     query = query.in("id", ids);
   } else if (singleDate) {
-    query = query.eq("planned_date", singleDate);
+    query = query.lte("planned_date", singleDate).or(overlapsFrom(singleDate));
   } else if (startDate && endDate) {
-    query = query.gte("planned_date", startDate).lte("planned_date", endDate);
+    query = query.lte("planned_date", endDate).or(overlapsFrom(startDate));
   }
 
   query = query.order("planned_date", { ascending: true });

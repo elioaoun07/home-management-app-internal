@@ -12,6 +12,7 @@ import {
   useUpdateMealPlan,
 } from "@/features/meal-planning/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getMealActiveDates } from "@/lib/mealPlanCoverage";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import type { MealPlanWithRecipe, MealType, RecipeListItem } from "@/types/recipe";
@@ -57,22 +58,9 @@ function getWeekStart(date: Date): Date {
   return d;
 }
 
+// Local calendar date — toISOString would shift local midnight to the previous UTC day.
 function fmtDate(date: Date): string {
-  return date.toISOString().split("T")[0];
-}
-
-function getMealActiveDates(mp: MealPlanWithRecipe): string[] {
-  const dates: string[] = [mp.planned_date];
-  if (mp.eats_through_date && mp.eats_through_date > mp.planned_date) {
-    const cur = new Date(mp.planned_date + "T12:00:00");
-    const end = new Date(mp.eats_through_date + "T12:00:00");
-    cur.setDate(cur.getDate() + 1);
-    while (cur <= end) {
-      dates.push(fmtDate(cur));
-      cur.setDate(cur.getDate() + 1);
-    }
-  }
-  return dates;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 // ─── Meal plan card ───────────────────────────────────────────────────────────

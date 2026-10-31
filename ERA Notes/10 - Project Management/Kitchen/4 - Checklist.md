@@ -16,7 +16,6 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 
 - [ ] **KIT-25** Witness a stale catalogue save on two phones (migration applied 2026-10-04) — [criteria](<Kitchen — Master Book.md#kit-25>) _(blocker - S)_
 - [ ] **KIT-10** Validate ingredient payloads at every writer — [criteria](<Kitchen — Master Book.md#kit-10>) _(friction - M)_
-- [ ] **KIT-4** Expose scoped meal coverage to ERA — [criteria](<Kitchen — Master Book.md#kit-4>) _(annoyance - M)_
 
 ## Next
 
