@@ -114,6 +114,8 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+- 🟠 **R82 — Readiness's pass ratio conflated blockers with unrun checks (2026-10-31).** Owner KIT-10 report: Check appeared to leave `4/11`. Initial inspection found expired authorization, missing scope and five unobserved live gates. An authorized local Check through the existing saved owner session renewed authorization, derived KIT-10's prepared scope and isolated `docker-unavailable`. Docker's frontend was alive but its backend and Linux engine pipe were absent. Supported Start said already running; supported Restart failed to stop lingering processes. Stopping only verified Docker frontend processes and launching the installed main executable restored engine 28.5.1. The second Check passed all eleven gates at 16:17:01 UTC (18:17 Beirut), with zero provider turns and confirmed probe cleanup. No delivery Start, bridge restart, policy replacement or Apply. The original browser click's response remains unknown; this direct reproduction establishes the current blocker and recovery, not that historical response. Docker's original backend-exit cause and permanent prevention remain unproven.
+
 - 🟠 **R81 — UAT steps were buried and their readiness was overstated.** Only ready handovers reached Needs you; draft/incomplete instructions were hidden with finished records under collapsed Test records. The local store had no ready handovers. Resolved locally with the visible review area and explicit expected-result repair; build validation and owner acceptance remain separate.
 
 - 🟠 **R80 — Delivery lost item context and gave no usable recovery for browser pairing.** Source-confirmed: `RunLink` rendered status/title without the stored ID; the new UAT query ran before pairing, while protected transport refusals cleared CSRF without refreshing the query's paired state. Delivery home omitted queue errors and inferred idle from missing V2 rows; direct Test links could misreport an access failure as Not found. Secondary routes existed without a consistent menu, and history stopped at 50. Resolved locally 2026-10-25 with the same shared views/authentication; owner UAT remains pending below.
@@ -147,6 +149,17 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### R82
+
+**Outcome:** Readiness distinguishes setup blockers from checks not yet run.
+**Kind:** bug
+**Execution:** cli
+**Implementation:** complete
+**Touches:** `scripts/pm/app/LaunchReadiness.tsx`, `scripts/pm/app/readinessModel.ts`, `tests/pm-ui/launch-readiness.test.ts`, `tests/pm-ui/readiness.test.ts`
+
+- **Acceptance:** Replace the pass ratio with blocker/pending counts. Pending live checks say Waiting for setup while setup blockers exist; request errors remain visible and do not display old checks as success. Docker failure says Start/restart Docker Desktop, because an open frontend does not prove engine health. Preserve server admission and explicit owner renewal.
+- **Verification (2026-10-31):** 32 offline tests pass across launch-readiness, readiness, authorization and standing-policy suites; typecheck, scoped ESLint and PM build pass. Regression reproduces two blockers plus five pending checks. Browser inspection failed at Windows sandbox initialization; existing paired local access subsequently reproduced Check successfully. Operational sequence and limits are in the Pain Inventory above. Authorization renewed until 2026-11-01T16:13:15.570Z; scope derived in Kitchen's KIT-10 section. No new delivery or provider turn. Physical-phone/render verification remains untested.
 
 ### R81
 
@@ -1582,6 +1595,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-10-25 — **R78** Publish UAT status to Drive and show engineering Done apart from owner-accepted Shipped — [criteria](<PM Tooling — Master Book.md#r78>)
 - ✅ 2026-10-25 — **R80** Restore delivery item IDs, navigation access and browser-pairing recovery — [criteria](<PM Tooling — Master Book.md#r80>)
 - ✅ 2026-10-25 — **R81** Find UAT steps and sign-off directly from Delivery — [criteria](<PM Tooling — Master Book.md#r81>)
+- ✅ 2026-10-31 — **R82** Separate readiness blockers from pending live checks — [criteria](<PM Tooling — Master Book.md#r82>)
 
 ## Delivery session log
 

@@ -381,6 +381,8 @@ export type EraNativeAction =
       toAccountId: string;
       fromName: string;
       toName: string;
+      /** Idempotency key minted with the card: a re-tap after "uncertain" replays, never duplicates. */
+      clientId?: string;
     }
   | { type: "recordDebt"; debtorName: string; amount: number; notes: string | null }
   /** A destructive registry capability (reminder.delete) reached natively or via a taught template. */

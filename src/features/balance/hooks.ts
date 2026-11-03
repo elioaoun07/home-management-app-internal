@@ -15,6 +15,11 @@ export type BalanceChangeType =
   | "transaction_expense"
   | "transaction_income"
   | "transaction_deleted"
+  | "transaction_updated"
+  | "transaction_moved"
+  | "transaction_restored"
+  | "split_deleted"
+  | "statement_import_revert"
   | "split_bill_paid"
   | "split_bill_received"
   | "draft_confirmed"
@@ -286,6 +291,36 @@ export function getChangeTypeInfo(changeType: BalanceChangeType): {
     case "transaction_deleted":
       return {
         label: "Transaction Deleted",
+        icon: "x",
+        colorClass: "text-gray-400",
+      };
+    case "transaction_updated":
+      return {
+        label: "Transaction Updated",
+        icon: "refresh-cw",
+        colorClass: "text-cyan-400",
+      };
+    case "transaction_moved":
+      return {
+        label: "Transaction Moved",
+        icon: "repeat",
+        colorClass: "text-cyan-400",
+      };
+    case "transaction_restored":
+      return {
+        label: "Transaction Restored",
+        icon: "check",
+        colorClass: "text-blue-400",
+      };
+    case "split_deleted":
+      return {
+        label: "Split Removed",
+        icon: "x",
+        colorClass: "text-gray-400",
+      };
+    case "statement_import_revert":
+      return {
+        label: "Import Reverted",
         icon: "x",
         colorClass: "text-gray-400",
       };

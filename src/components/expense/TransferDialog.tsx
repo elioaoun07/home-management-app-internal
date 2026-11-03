@@ -169,7 +169,7 @@ export default function TransferDialog({
     setToAmountOverride("");
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!fromAccountId || !toAccountId) {
@@ -194,27 +194,25 @@ export default function TransferDialog({
       return;
     }
 
-    try {
-      await createTransfer.mutateAsync({
-        from_account_id: fromAccountId,
-        to_account_id: toAccountId,
-        amount: parsedAmount,
-        description: description || undefined,
-        date,
-        transfer_type: transferType,
-        recipient_user_id:
-          transferType === "household" ? partner?.id : undefined,
-        fee_amount: transferType === "household" ? parsedFee : undefined,
-        returned_amount:
-          transferType === "household" ? parsedReturned : undefined,
-        to_amount: needsConversion ? parsedToAmount : undefined,
-      });
+    // Optimistic: balances and the list move now; the hook confirms, retries
+    // the same request when the network is slow, and toasts the outcome.
+    createTransfer.mutate({
+      from_account_id: fromAccountId,
+      to_account_id: toAccountId,
+      amount: parsedAmount,
+      description: description || undefined,
+      date,
+      transfer_type: transferType,
+      recipient_user_id:
+        transferType === "household" ? partner?.id : undefined,
+      fee_amount: transferType === "household" ? parsedFee : undefined,
+      returned_amount:
+        transferType === "household" ? parsedReturned : undefined,
+      to_amount: needsConversion ? parsedToAmount : undefined,
+    });
 
-      resetForm();
-      setOpen(false);
-    } catch {
-      // Error is handled by the hook
-    }
+    resetForm();
+    setOpen(false);
   };
 
   return (

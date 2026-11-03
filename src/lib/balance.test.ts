@@ -17,6 +17,8 @@ const mockDb = vi.hoisted(() => ({
     filters: unknown[];
   }>,
   failBalanceUpdate: false,
+  /** Simulates another request writing between our read and our write */
+  beforeBalanceUpdate: null as null | (() => void),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -96,6 +98,12 @@ function resolveMaybeSingle(state: {
   operation: string;
 }) {
   if (state.table === "account_balances" && state.operation === "select") {
+    if (state.selected === "balance::text" && mockDb.balanceRow) {
+      return Promise.resolve({
+        data: { balance: String(mockDb.balanceRow.balance) },
+        error: null,
+      });
+    }
     return Promise.resolve({ data: mockDb.balanceRow, error: null });
   }
   if (
@@ -112,15 +120,29 @@ function resolveList(state: {
   table: string;
   filters: unknown[];
   operation: string;
+  payload?: unknown;
 }) {
   if (state.operation === "update") {
-    return {
-      data: null,
-      error:
-        state.table === "account_balances" && mockDb.failBalanceUpdate
-          ? { message: "update failed" }
-          : null,
-    };
+    if (state.table !== "account_balances") return { data: null, error: null };
+    if (mockDb.failBalanceUpdate) {
+      return { data: null, error: { message: "update failed" } };
+    }
+    const hook = mockDb.beforeBalanceUpdate;
+    mockDb.beforeBalanceUpdate = null;
+    hook?.();
+    // Compare-and-swap: only matches while the stored value is still the one read
+    const expected = state.filters.find(
+      (filter) =>
+        Array.isArray(filter) && filter[0] === "eq" && filter[1] === "balance",
+    ) as unknown[] | undefined;
+    if (
+      !mockDb.balanceRow ||
+      (expected && String(expected[2]) !== String(mockDb.balanceRow.balance))
+    ) {
+      return { data: [], error: null };
+    }
+    mockDb.balanceRow.balance = (state.payload as TableData).balance;
+    return { data: [{ account_id: "account-1" }], error: null };
   }
 
   if (state.table === "transactions") {
@@ -161,6 +183,7 @@ beforeEach(() => {
   mockDb.insertedRows = [];
   mockDb.updatedRows = [];
   mockDb.failBalanceUpdate = false;
+  mockDb.beforeBalanceUpdate = null;
 });
 
 describe("computeAccountBalance", () => {
@@ -286,5 +309,61 @@ describe("adjustAccountBalance", () => {
         userId: "user-1",
       }),
     ).resolves.toEqual({ previousBalance: 125, newBalance: 125 });
+  });
+
+  it("keeps both of two overlapping transfer legs (no lost update)", async () => {
+    // Wallet 100. Another request debits 20 between our read and our write.
+    mockDb.balanceRow = { balance: 100 };
+    mockDb.beforeBalanceUpdate = () => {
+      mockDb.balanceRow!.balance = 80;
+    };
+
+    await expect(
+      adjustAccountBalance("account-1", -20, "transfer_out", {
+        userId: "user-1",
+        transferId: "transfer-2",
+      }),
+    ).resolves.toEqual({ previousBalance: 80, newBalance: 60 });
+
+    expect(mockDb.balanceRow!.balance).toBe(60);
+    const history = mockDb.insertedRows.filter(
+      (row) => row.table === "account_balance_history",
+    );
+    expect(history).toEqual([
+      {
+        table: "account_balance_history",
+        payload: expect.objectContaining({
+          previous_balance: 80,
+          new_balance: 60,
+          change_amount: -20,
+          change_type: "transfer_out",
+          transfer_id: "transfer-2",
+        }),
+      },
+    ]);
+  });
+
+  it("swaps against the exact stored value, read as text", async () => {
+    mockDb.balanceRow = { balance: "100.10" };
+
+    await adjustAccountBalance("account-1", 20, "transfer_in", {
+      userId: "user-1",
+    });
+
+    expect(mockDb.updatedRows.at(-1)?.filters).toContainEqual([
+      "eq",
+      "balance",
+      "100.10",
+    ]);
+    expect(mockDb.balanceRow!.balance).toBeCloseTo(120.1, 10);
+  });
+
+  it("is a no-op for a zero delta", async () => {
+    mockDb.balanceRow = { balance: 100 };
+
+    await expect(
+      adjustAccountBalance("account-1", 0, "transfer_in"),
+    ).resolves.toEqual({ previousBalance: 0, newBalance: 0 });
+    expect(mockDb.updatedRows).toEqual([]);
   });
 });

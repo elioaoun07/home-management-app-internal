@@ -1,5 +1,5 @@
 import { getAccessibleAccount } from "@/lib/accountAccess";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorCode, getErrorMessage } from "@/lib/errors";
 import { adjustAccountBalance } from "@/lib/balance";
 import { getTransferDeltas } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -31,6 +31,9 @@ const TRANSFER_SELECT = `
 `;
 
 const createTransferSchema = z.object({
+  // Client-generated id = idempotency key. A retry after a lost response sends
+  // the same id and gets the row that already committed, never a second one.
+  id: z.string().uuid().optional(),
   from_account_id: z.string().uuid(),
   to_account_id: z.string().uuid(),
   amount: z.coerce.number().positive(),
@@ -99,6 +102,45 @@ function formatTransfer(transfer: any, currentUserId: string) {
     is_owner: transfer.user_id === currentUserId,
     is_recipient: transfer.recipient_user_id === currentUserId,
   };
+}
+
+/**
+ * Answer a same-id retry with the row that already exists. A different payload
+ * under the same id, someone else's row, or a row the user already undid is a
+ * conflict — never a second balance movement.
+ */
+async function replayTransfer(
+  supabase: any,
+  userId: string,
+  id: string,
+  sent: { from_account_id: string; to_account_id: string; amount: number },
+) {
+  const { data: existing } = await supabase
+    .from("transfers")
+    .select(`${TRANSFER_SELECT}, deleted_at`)
+    .eq("id", id)
+    .maybeSingle();
+
+  const samePayload =
+    existing &&
+    existing.user_id === userId &&
+    existing.from_account_id === sent.from_account_id &&
+    existing.to_account_id === sent.to_account_id &&
+    Math.abs(Number(existing.amount) - sent.amount) < 0.000001;
+
+  if (!samePayload) {
+    return NextResponse.json(
+      { error: "Transfer id already used" },
+      { status: 409 },
+    );
+  }
+  if (existing.deleted_at) {
+    return NextResponse.json(
+      { error: "Transfer was already undone" },
+      { status: 409 },
+    );
+  }
+  return NextResponse.json(formatTransfer(existing, userId));
 }
 
 export async function GET(req: NextRequest) {
@@ -212,6 +254,7 @@ export async function POST(req: NextRequest) {
     }
 
     const {
+      id: clientId,
       from_account_id,
       to_account_id,
       amount,
@@ -253,17 +296,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const fromAccount = await getAccessibleAccount(
-      supabase,
-      user.id,
-      from_account_id,
-    );
-    const toAccount = await getAccessibleAccount(
-      supabase,
-      user.id,
-      to_account_id,
-      { allowPrivatePartner: transfer_type === "household" },
-    );
+    // Independent reads in parallel: every PostgREST round-trip is ~200 ms, and
+    // a slow create is what made the client time out and resubmit (BUD-87).
+    const [fromAccount, toAccount, { partnerId, householdLinkId }] =
+      await Promise.all([
+        getAccessibleAccount(supabase, user.id, from_account_id),
+        getAccessibleAccount(supabase, user.id, to_account_id, {
+          allowPrivatePartner: transfer_type === "household",
+        }),
+        transfer_type === "household"
+          ? getHouseholdInfo(supabase, user.id)
+          : Promise.resolve({ partnerId: null, householdLinkId: null }),
+      ]);
 
     if (!fromAccount?.canWrite || !toAccount?.canWrite) {
       return NextResponse.json(
@@ -272,10 +316,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { partnerId, householdLinkId } = await getHouseholdInfo(
-      supabase,
-      user.id,
-    );
     let actualRecipientId: string | null = null;
     let actualHouseholdLinkId: string | null = null;
 
@@ -302,6 +342,7 @@ export async function POST(req: NextRequest) {
     const { data: transfer, error: insertError } = await supabase
       .from("transfers")
       .insert({
+        ...(clientId ? { id: clientId } : {}),
         user_id: user.id,
         from_account_id,
         to_account_id,
@@ -320,6 +361,16 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (insertError) {
+      // Same id already committed: this is a retry of a request whose response
+      // was lost. Answer with that row and leave balances alone — the first
+      // request already moved them.
+      if (getErrorCode(insertError) === "23505" && clientId) {
+        return replayTransfer(supabase, user.id, clientId, {
+          from_account_id,
+          to_account_id,
+          amount,
+        });
+      }
       return NextResponse.json(
         { error: "Failed to create transfer" },
         { status: 500 },
@@ -334,16 +385,20 @@ export async function POST(req: NextRequest) {
     );
     const labelPrefix = transfer_type === "household" ? "Household" : "Self";
 
-    await adjustAccountBalance(from_account_id, fromDelta, "transfer_out", {
-      userId: user.id,
-      transferId: transfer.id,
-      reason: `${labelPrefix} transfer to ${toAccount.name || "account"}`,
-    });
-    await adjustAccountBalance(to_account_id, toDelta, "transfer_in", {
-      userId: user.id,
-      transferId: transfer.id,
-      reason: `${labelPrefix} transfer from ${fromAccount.name || "account"}`,
-    });
+    // Different accounts (checked above), so the legs can run together; each
+    // is race-safe on its own account inside adjustAccountBalance.
+    await Promise.all([
+      adjustAccountBalance(from_account_id, fromDelta, "transfer_out", {
+        userId: user.id,
+        transferId: transfer.id,
+        reason: `${labelPrefix} transfer to ${toAccount.name || "account"}`,
+      }),
+      adjustAccountBalance(to_account_id, toDelta, "transfer_in", {
+        userId: user.id,
+        transferId: transfer.id,
+        reason: `${labelPrefix} transfer from ${fromAccount.name || "account"}`,
+      }),
+    ]);
 
     return NextResponse.json({
       ...transfer,

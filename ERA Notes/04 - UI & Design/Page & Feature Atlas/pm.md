@@ -18,6 +18,8 @@ tags:
 
 ## Files
 
+- **Readiness clarity (2026-10-31, R82):** launch details show blocker/pending counts instead of a pass ratio. Unrun checks say Waiting for setup when a setup gate is blocked; request failures remain separate from prior check results.
+
 **Primary React Work lifecycle (2026-09-15, R65):** `#/explore` shows To do, `#/explore?view=done` searches completed outcomes. Completed item links open a read-only scope/receipt page with retained V1/V2 attempts and explicit UAT-pending metadata. Manual owner checks live in `docs/Delivery-UAT.md`; completed/owner/noncanonical items cannot launch. Classic/hosted export shares the reconciled Markdown and owner-exclusion model; the new Done navigation belongs to the primary React app.
 
 - **Served page**: `public/pm.html` — generated (gitignored); rebuilt from PM markdown by `pnpm pm:public` (`scripts/build-pm-dashboard.mjs --public`), which runs in `prebuild` on every deploy.

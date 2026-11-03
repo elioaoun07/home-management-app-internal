@@ -169,9 +169,13 @@ POST /api/transfers
   "to_account_id": "uuid",
   "amount": 400,
   "description": "Fund wallet for January",
-  "date": "2025-01-15"
+  "date": "2025-01-15",
+  "id": "client-generated uuid (optional idempotency key)"
 }
 ```
+
+**Exactly-once (BUD-87, 2026-11-03).** `id` is the idempotency key. `useCreateTransfer` mints it, ERA mints it with the confirm card (`clientId`). A repeat POST with the same id hits the primary key (`23505`) and gets the committed row back with no further balance movement. The same id with a different payload, or a transfer already undone, returns `409`. Callers that send no id (statement reconcile) behave as before.
+Why: on 2026-10-28 a create took longer than the 8 s `safeFetch` budget, the still-filled dialog was re-submitted, and two rows were inserted 8.46 s apart.
 
 ### Update Transfer
 
@@ -182,6 +186,8 @@ PATCH /api/transfers/{id}
   "description": "Updated amount"
 }
 ```
+
+Zod-validated. The row update runs first, guarded on `updated_at` (an overlapping edit gets `409`, and no money moves). The balance diff runs after it. The body holds absolute values, so a replayed PATCH computes a zero diff.
 
 ### Cross-Currency Conversion Transfers (2026-08-04)
 
@@ -214,8 +220,10 @@ DELETE /api/transfers/{id}
 This will reverse the balance changes automatically.
 The reversal is logged to `account_balance_history` as `transfer_deleted` for
 both affected accounts and links back to the soft-deleted transfer row.
-The API only reverses rows whose `deleted_at` is still null, so retries or
-double-submits cannot reverse the same transfer twice.
+Only the request whose soft-delete actually flips `deleted_at` (the update
+returns the row) reverses the balances. A retry or second tap gets
+`{ success: true, alreadyDeleted: true }` and moves nothing. *(Before BUD-87
+the guard ignored affected rows, so two overlapping DELETEs both reversed.)*
 
 Implemented 2026-07-04: account balance history surfaces also exclude
 soft-deleted transfers. Daily and archive balance summaries filter
@@ -250,18 +258,19 @@ CREATE TABLE public.transfers (
 Transfers directly update the `account_balances` table:
 
 - Creates balance record if it doesn't exist
-- Adjusts both source (-) and destination (+) balances atomically
+- Adjusts source (-) and destination (+) through `adjustAccountBalance`, in parallel. Each leg is a compare-and-swap on the stored value, so overlapping writers on one account both count (BUD-87).
+- **Not atomic with the row:** the insert and the two legs are separate PostgREST calls. A server death between them leaves a row with no balance effect. The single-transaction fix is **BUD-63** (SQL increment + history RPC, owner-run migration).
 - Balance history rows use `transfer_in` / `transfer_out` on create and
-  `transfer_updated` / `transfer_deleted` for lifecycle reversals.
+  `transfer_updated` / `transfer_deleted` for lifecycle reversals. Until `migrations/2026-11-03_balance-history-change-types.sql` runs, the live `abh_change_type_check` rejects the last two. The balance still moves, but the history row is dropped and logged to `error_logs` (**BUD-88**, confirmed 2026-10-28).
 
 ### React Query Integration
 
 The feature uses React Query hooks for:
 
 - `useTransfers()` - Fetch transfer list
-- `useCreateTransfer()` - Create with optimistic updates
-- `useUpdateTransfer()` - Update with cache invalidation
-- `useDeleteTransfer()` - Delete with balance reversal
+- `useCreateTransfer()` - Optimistic: the list row and both `["account-balance", id]` caches move before the request leaves. It retries a slow request (15 s budget, then 0.8 s / 2.5 s) with the same id. If the outcome stays unconfirmed, it rolls back, refetches, and shows a **Retry** toast with the same id. Re-submitting the same payload also reuses that id. `TransferDialog` closes on submit.
+- `useUpdateTransfer()` - Optimistic list row + balance diff (mirrors the route's `to_amount` recompute)
+- `useDeleteTransfer()` - Optimistic removal + balance reversal; Undo re-creates with a new id
 
 ## Files Created/Modified
 

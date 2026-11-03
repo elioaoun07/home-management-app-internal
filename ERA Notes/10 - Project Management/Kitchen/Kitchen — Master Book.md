@@ -73,6 +73,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 ### KIT-10
 
 **Outcome:** Validate ingredient payloads at every writer.
+**Touches:** `src/app/api/recipes/[id]/generate/route.ts`, `src/app/api/recipes/[id]/route.ts`, `src/app/api/recipes/[id]/versions/route.ts`, `src/app/api/recipes/route.ts`, `src/lib/recipes/ingredientSchema.ts`, `src/types/recipe.ts`, `tests/recipe-ingredient-contract.test.ts`
 
 - **Acceptance:** ASTRA-KIT-3: enforce one ingredient schema across all four documented writers, validate external/AI values before storage and preserve unknown ingredient/allergy state. Reverify the current producer inventory.
 

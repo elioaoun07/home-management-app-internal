@@ -33,7 +33,24 @@ it("confirms a completed check even when the same blockers remain", () => {
   expect(html).toContain("Authorization expired — check readiness");
   expect(html).not.toContain("Checks passed");
   expect(html).toContain('<details class="launch-check-details">');
-  expect(html).toContain("10/11");
+  expect(html).toContain("1 blocker");
+});
+
+it("separates setup blockers from checks that have not run, instead of a pass ratio", () => {
+  const facts = Object.fromEntries(LAUNCH_GATES.map(gate => [gate, readinessFact("satisfied", gate)]));
+  facts.policy = readinessFact("blocked", "grant-expired");
+  facts.source = readinessFact("unavailable", "source-scope-unknown");
+  for (const gate of ["runtime", "authentication", "modelAvailability", "environment", "qualification"]) {
+    facts[gate] = readinessFact("unknown", `${gate}-unprobed`);
+  }
+  const inspected = { ...evaluateReadiness({ selection, facts }), expiresAt: null } as V2Readiness;
+  const html = render({ result: inspected });
+  expect(html).toContain("2 blockers · 5 pending");
+  expect(html).toContain("Waiting for setup");
+  expect(html).not.toContain("4/11");
+  expect(html).not.toContain("Checked at Start");
+  expect(html).toContain("Authorization expired — check readiness");
+  expect(html).toContain("Check readiness sets Touches");
 });
 
 it("makes request failures visible without treating cached ready facts as success", () => {

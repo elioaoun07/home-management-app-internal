@@ -19,10 +19,18 @@ async function logBalanceIssue(
   }
 }
 
+/** Concurrent writers on one account are rare; a few re-reads always settle them. */
+const MAX_BALANCE_CAS_ATTEMPTS = 5;
+
 /**
  * Atomically adjust an account's stored balance by a delta amount.
  * This is the PRIMARY way balances change — every transaction/transfer/split/debt
  * operation calls this to keep account_balances.balance accurate in real-time.
+ *
+ * The write is a compare-and-swap on the exact stored value (read as text so no
+ * float rounding hides a change): if another request moved the balance between
+ * our read and write, the update matches no row and we re-read. A plain
+ * read-then-write lost one of two overlapping updates (BUD-87, 2026-10-28).
  *
  * Also logs the change to account_balance_history for audit trail.
  */
@@ -42,52 +50,73 @@ export async function adjustAccountBalance(
 
   const admin = supabaseAdmin();
 
-  // Atomic read + update in a single query using RPC
-  // We read current balance first for history logging
-  const { data: current, error: readError } = await admin
-    .from("account_balances")
-    .select("balance")
-    .eq("account_id", accountId)
-    .maybeSingle();
-
-  let balanceRow = current;
-
-  if (readError || !balanceRow) {
-    // Balance row missing — auto-create it so the operation can proceed
-    await admin
+  const readStoredBalance = async () => {
+    const { data, error } = await admin
       .from("account_balances")
-      .insert({
-        account_id: accountId,
-        balance: 0,
-        user_id: metadata?.userId ?? "",
-      });
-    // Re-fetch after insert
-    const { data: created } = await admin
-      .from("account_balances")
-      .select("balance")
+      .select("balance::text")
       .eq("account_id", accountId)
       .maybeSingle();
-    if (!created) return { newBalance: 0, previousBalance: 0 };
-    balanceRow = created;
+    return { stored: (data?.balance as string | undefined) ?? null, error };
+  };
+
+  let previousBalance = 0;
+  let newBalance = 0;
+  let applied = false;
+
+  for (let attempt = 0; attempt < MAX_BALANCE_CAS_ATTEMPTS; attempt++) {
+    const read = await readStoredBalance();
+    let stored = read.stored;
+
+    if (read.error || stored === null) {
+      // Balance row missing — auto-create it so the operation can proceed
+      // (a concurrent creator wins the UNIQUE(account_id) race harmlessly)
+      await admin
+        .from("account_balances")
+        .insert({
+          account_id: accountId,
+          balance: 0,
+          user_id: metadata?.userId ?? "",
+        });
+      ({ stored } = await readStoredBalance());
+      if (stored === null) return { newBalance: 0, previousBalance: 0 };
+    }
+
+    previousBalance = Number(stored);
+    newBalance = previousBalance + delta;
+
+    const { data: swapped, error: updateError } = await admin
+      .from("account_balances")
+      .update({
+        balance: newBalance,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("account_id", accountId)
+      .eq("balance", stored)
+      .select("account_id");
+
+    if (updateError) {
+      await logBalanceIssue(
+        admin,
+        metadata?.userId,
+        "Account balance update failed",
+        updateError,
+      );
+      return { newBalance: previousBalance, previousBalance };
+    }
+
+    if ((swapped?.length ?? 0) > 0) {
+      applied = true;
+      break;
+    }
+    // Another writer moved the balance after our read — re-read and retry
   }
 
-  const previousBalance = Number(balanceRow.balance);
-  const newBalance = previousBalance + delta;
-
-  const { error: updateError } = await admin
-    .from("account_balances")
-    .update({
-      balance: newBalance,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("account_id", accountId);
-
-  if (updateError) {
+  if (!applied) {
     await logBalanceIssue(
       admin,
       metadata?.userId,
-      "Account balance update failed",
-      updateError,
+      "Account balance update lost to concurrent writers",
+      { accountId, delta, changeType },
     );
     return { newBalance: previousBalance, previousBalance };
   }

@@ -545,6 +545,7 @@ export async function prepareTransfer(
               toAccountId: toAcc.id,
               fromName: fromAcc.name,
               toName: toAcc.name,
+              clientId: crypto.randomUUID(),
             },
           },
         };
@@ -603,6 +604,7 @@ export async function prepareTransfer(
           toAccountId: toAccount.id,
           fromName: fromAccount.name,
           toName: toAccount.name,
+          clientId: crypto.randomUUID(),
         },
       },
     };
@@ -620,6 +622,8 @@ export async function executeTransfer(
   action: Extract<EraNativeAction, { type: "transfer" }>,
 ): Promise<NativeExecuteResult> {
   const outcome = await postMoney<{ id: string }>("/api/transfers", {
+    // Minted with the card: re-confirming after "uncertain" replays the same row
+    ...(action.clientId && { id: action.clientId }),
     from_account_id: action.fromAccountId,
     to_account_id: action.toAccountId,
     amount: action.amount,

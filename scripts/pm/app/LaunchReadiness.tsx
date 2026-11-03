@@ -16,6 +16,10 @@ export function LaunchReadiness({ result, connected, loading, checking, checkedA
   const rows = readinessRows(result);
   const issues = readinessIssues(result, rows);
   const needsSetup = rows.some(row => row.state === "fix");
+  const blockers = rows.filter(row => row.state === "fix").length;
+  const pending = rows.filter(row => row.state === "start").length;
+  const summary = [blockers ? `${blockers} blocker${blockers === 1 ? "" : "s"}` : null,
+    pending ? `${pending} pending` : null].filter(Boolean).join(" · ") || "All passed";
   const ready = !!result && readinessCanStart(result, result.selection);
   const title = !connected ? "Laptop offline" : checking ? "Checking readiness…" : error ? "Check failed"
     : loading && !result ? "Loading readiness…" : !result ? "Readiness unavailable"
@@ -38,10 +42,10 @@ export function LaunchReadiness({ result, connected, loading, checking, checkedA
     <p className="launch-authorization">{result?.authorization?.expiresAt === null ? "Confirms saved authorization" : "Renews authorization · 24h"}</p>
     {result?.authorization?.expiresAt && <p className="launch-authorization">Authorized until <time dateTime={result.authorization.expiresAt}>{new Date(result.authorization.expiresAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time></p>}
     {rows.length > 0 && <details className="launch-check-details">
-      <summary>{error ? "Previous checks" : "Check details"}{!error && !checking && <span>{rows.filter(row => row.state === "ok").length}/{rows.length}</span>}</summary>
+      <summary>{error ? "Previous checks" : "Check details"}{!error && !checking && <span>{summary}</span>}</summary>
       <ul className="launch-check-list">{rows.map(row => <li key={row.gate} data-state={row.state}>
         {row.state === "ok" ? <Check size={15} /> : row.state === "fix" ? <ShieldAlert size={15} /> : <Clock size={15} />}
-        <span>{row.label}</span><small>{row.state === "ok" ? "Passed" : row.state === "fix" ? "Needs attention" : "Checked at Start"}</small>
+        <span>{row.label}</span><small>{row.state === "ok" ? "Passed" : row.state === "fix" ? "Needs attention" : needsSetup ? "Waiting for setup" : "Checked at Start"}</small>
         {row.state === "fix" && <code className="launch-check-explanation">{result?.facts[row.gate]?.code}{typeof result?.facts[row.gate]?.detail === "string" ? ` · ${result.facts[row.gate].detail}` : ""}</code>}
       </li>)}</ul>
     </details>}

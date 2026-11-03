@@ -41,7 +41,7 @@ describe("readiness projection", () => {
     const docker = staleLive({ runtime: readinessFact("blocked", "runtime-observed"), environment: readinessFact("blocked", "environment-observed", "Docker is not running"),
       modelAvailability: readinessFact("unknown", "native-model-observed") }, { stages });
     expect(readinessRows(docker).find(row => row.gate === "environment")?.state).toBe("fix");
-    expect(readinessIssues(docker)).toEqual(["Start Docker Desktop"]);
+    expect(readinessIssues(docker)).toEqual(["Start/restart Docker Desktop"]);
     const signIn = staleLive({ runtime: readinessFact("satisfied", "runtime-observed"), authentication: readinessFact("blocked", "subscription-observed", "sign-in expired (run codex once)") },
       { stages: [{ name: "environment", outcome: "satisfied", code: null, durationMs: 1 }, { name: "credential-sync", outcome: "blocked", code: "credential-sync-unavailable", durationMs: 1 }] });
     expect(readinessIssues(signIn)).toEqual(["sign-in expired (run codex once)"]);

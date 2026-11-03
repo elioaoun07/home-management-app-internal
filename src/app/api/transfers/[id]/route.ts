@@ -4,8 +4,28 @@ import { getTransferDeltas } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
+
+const nonNegative = z.coerce.number().min(0);
+const updateTransferSchema = z.object({
+  amount: z.coerce.number().positive().optional(),
+  // Undo replays the cached row, where legacy transfers can carry null
+  description: z
+    .string()
+    .max(500)
+    .nullish()
+    .transform((value) => (value === null ? "" : value)),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((value) => !isNaN(Date.parse(value)), "Invalid date format")
+    .optional(),
+  fee_amount: nonNegative.optional(),
+  returned_amount: nonNegative.optional(),
+  to_amount: z.coerce.number().positive().optional(),
+});
 
 const TRANSFER_SELECT = `
   id,
@@ -129,30 +149,41 @@ export async function DELETE(
   const { data: transfer, error: fetchError } = await supabase
     .from("transfers")
     .select(
-      "id, from_account_id, to_account_id, amount, to_amount, returned_amount, transfer_type",
+      "id, from_account_id, to_account_id, amount, to_amount, returned_amount, transfer_type, deleted_at",
     )
     .eq("id", id)
     .eq("user_id", user.id)
-    .is("deleted_at", null)
-    .single();
+    .maybeSingle();
 
   if (fetchError || !transfer) {
     return NextResponse.json({ error: "Transfer not found" }, { status: 404 });
   }
 
-  // Soft-delete the transfer (kept in Recycle Bin for 30 days)
-  const { error: deleteError } = await supabase
+  // Already deleted (a retry, or a second tap): the first request reversed the
+  // balances — doing it again would move money that never came back.
+  if (transfer.deleted_at) {
+    return NextResponse.json({ success: true, alreadyDeleted: true });
+  }
+
+  // Soft-delete the transfer (kept in Recycle Bin for 30 days). The
+  // `deleted_at IS NULL` guard makes this the gate: only the request that
+  // actually flips the row reverses the balances.
+  const { data: flipped, error: deleteError } = await supabase
     .from("transfers")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", id)
     .eq("user_id", user.id)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .select("id");
 
   if (deleteError) {
     return NextResponse.json(
       { error: "Failed to delete transfer" },
       { status: 500 },
     );
+  }
+  if (!flipped || flipped.length === 0) {
+    return NextResponse.json({ success: true, alreadyDeleted: true });
   }
 
   // Reverse the balance effects of the deleted transfer
@@ -162,27 +193,26 @@ export async function DELETE(
     (transfer.transfer_type || "self") as "self" | "household",
     transfer.to_amount != null ? Number(transfer.to_amount) : undefined,
   );
-  // Reverse: negate the original deltas
-  await adjustAccountBalance(
-    transfer.from_account_id,
-    -fromDelta,
-    "transfer_deleted",
-    {
-      userId: user.id,
-      transferId: transfer.id,
-      reason: "Deleted transfer reversal",
-    },
-  );
-  await adjustAccountBalance(
-    transfer.to_account_id,
-    -toDelta,
-    "transfer_deleted",
-    {
-      userId: user.id,
-      transferId: transfer.id,
-      reason: "Deleted transfer reversal",
-    },
-  );
+  // Reverse: negate the original deltas (distinct accounts → run together)
+  const reversal = {
+    userId: user.id,
+    transferId: transfer.id,
+    reason: "Deleted transfer reversal",
+  };
+  await Promise.all([
+    adjustAccountBalance(
+      transfer.from_account_id,
+      -fromDelta,
+      "transfer_deleted",
+      reversal,
+    ),
+    adjustAccountBalance(
+      transfer.to_account_id,
+      -toDelta,
+      "transfer_deleted",
+      reversal,
+    ),
+  ]);
 
   return NextResponse.json({ success: true });
 }
@@ -202,15 +232,23 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const body = await req.json();
+  const parsed = updateTransferSchema.safeParse(
+    await req.json().catch(() => null),
+  );
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
   const { amount, description, date, fee_amount, returned_amount, to_amount } =
-    body;
+    parsed.data;
 
   // Only the creator can update
   const { data: currentTransfer, error: fetchError } = await supabase
     .from("transfers")
     .select(
-      "id, amount, to_amount, exchange_rate, fee_amount, returned_amount, from_account_id, to_account_id, transfer_type",
+      "id, amount, to_amount, exchange_rate, fee_amount, returned_amount, from_account_id, to_account_id, transfer_type, updated_at",
     )
     .eq("id", id)
     .eq("user_id", user.id)
@@ -228,34 +266,15 @@ export async function PATCH(
   }
 
   if (date !== undefined) {
-    const valid = /^\d{4}-\d{2}-\d{2}$/.test(date) && !isNaN(Date.parse(date));
-    if (!valid) {
-      return NextResponse.json(
-        { error: "Invalid date format" },
-        { status: 400 },
-      );
-    }
     updateFields.date = date;
   }
 
   if (fee_amount !== undefined) {
-    if (fee_amount < 0) {
-      return NextResponse.json(
-        { error: "Fee amount cannot be negative" },
-        { status: 400 },
-      );
-    }
-    updateFields.fee_amount = Number(fee_amount);
+    updateFields.fee_amount = fee_amount;
   }
 
   if (returned_amount !== undefined) {
-    if (returned_amount < 0) {
-      return NextResponse.json(
-        { error: "Returned amount cannot be negative" },
-        { status: 400 },
-      );
-    }
-    updateFields.returned_amount = Number(returned_amount);
+    updateFields.returned_amount = returned_amount;
   }
 
   // Validate final amounts
@@ -301,14 +320,7 @@ export async function PATCH(
       : undefined;
 
   if (to_amount !== undefined) {
-    const parsedToAmount = Number(to_amount);
-    if (!(parsedToAmount > 0)) {
-      return NextResponse.json(
-        { error: "to_amount must be positive" },
-        { status: 400 },
-      );
-    }
-    newToAmount = parsedToAmount;
+    newToAmount = to_amount;
     updateFields.to_amount = newToAmount;
     updateFields.exchange_rate = newToAmount / newAmount;
   } else if (
@@ -355,39 +367,18 @@ export async function PATCH(
   const fromDiff = newDeltas.fromDelta - oldDeltas.fromDelta;
   const toDiff = newDeltas.toDelta - oldDeltas.toDelta;
 
-  if (fromDiff !== 0) {
-    await adjustAccountBalance(
-      currentTransfer.from_account_id,
-      fromDiff,
-      "transfer_updated",
-      {
-        userId: user.id,
-        transferId: currentTransfer.id,
-        reason: "Transfer updated",
-      },
-    );
-  }
-  if (toDiff !== 0) {
-    await adjustAccountBalance(
-      currentTransfer.to_account_id,
-      toDiff,
-      "transfer_updated",
-      {
-        userId: user.id,
-        transferId: currentTransfer.id,
-        reason: "Transfer updated",
-      },
-    );
-  }
-
-  const { data: updated, error: updateError } = await supabase
+  // Row first, guarded on the version the diff was computed from. Two
+  // overlapping edits would otherwise each apply the same diff; the loser now
+  // matches no row and moves no money. (Balances used to move before the row
+  // update, so a failed update left them changed with the row unchanged.)
+  const { data: updatedRows, error: updateError } = await supabase
     .from("transfers")
     .update(updateFields)
     .eq("id", id)
     .eq("user_id", user.id)
+    .eq("updated_at", currentTransfer.updated_at)
     .is("deleted_at", null)
-    .select(TRANSFER_SELECT)
-    .single();
+    .select(TRANSFER_SELECT);
 
   if (updateError) {
     return NextResponse.json(
@@ -395,6 +386,34 @@ export async function PATCH(
       { status: 500 },
     );
   }
+  const updated = updatedRows?.[0];
+  if (!updated) {
+    return NextResponse.json(
+      { error: "Transfer changed meanwhile — refresh and retry" },
+      { status: 409 },
+    );
+  }
+
+  // adjustAccountBalance short-circuits a zero diff
+  const edit = {
+    userId: user.id,
+    transferId: currentTransfer.id,
+    reason: "Transfer updated",
+  };
+  await Promise.all([
+    adjustAccountBalance(
+      currentTransfer.from_account_id,
+      fromDiff,
+      "transfer_updated",
+      edit,
+    ),
+    adjustAccountBalance(
+      currentTransfer.to_account_id,
+      toDiff,
+      "transfer_updated",
+      edit,
+    ),
+  ]);
 
   return NextResponse.json(formatTransfer(updated, user.id));
 }

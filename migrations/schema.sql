@@ -1002,7 +1002,7 @@ CREATE TABLE public.account_balance_history (
   previous_balance numeric NOT NULL DEFAULT 0,
   new_balance numeric NOT NULL,
   change_amount numeric NOT NULL,
-  change_type text NOT NULL CHECK (change_type = ANY (ARRAY['initial_set'::text, 'manual_set'::text, 'manual_adjustment'::text, 'transfer_in'::text, 'transfer_out'::text, 'transaction_expense'::text, 'transaction_income'::text, 'transaction_deleted'::text, 'split_bill_paid'::text, 'split_bill_received'::text, 'draft_confirmed'::text, 'correction'::text, 'transaction'::text, 'transfer'::text, 'split_bill'::text, 'future_payment'::text, 'debt_settled'::text, 'auto_reconciliation'::text])),
+  change_type text NOT NULL,
   transaction_id uuid,
   transfer_id uuid,
   reason text,
@@ -1016,7 +1016,10 @@ CREATE TABLE public.account_balance_history (
   CONSTRAINT abh_account_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id),
   CONSTRAINT abh_user_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT abh_transaction_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id),
-  CONSTRAINT abh_transfer_fkey FOREIGN KEY (transfer_id) REFERENCES public.transfers(id)
+  CONSTRAINT abh_transfer_fkey FOREIGN KEY (transfer_id) REFERENCES public.transfers(id),
+  -- 2026-11-03 (BUD-88): live name; the migration also keeps any value the
+  -- previous live constraint allowed or the table already stored.
+  CONSTRAINT abh_change_type_check CHECK (change_type = ANY (ARRAY['auto_reconciliation'::text, 'correction'::text, 'debt_settled'::text, 'draft_confirmed'::text, 'future_payment'::text, 'initial_set'::text, 'manual_adjustment'::text, 'manual_set'::text, 'split_bill'::text, 'split_bill_paid'::text, 'split_bill_received'::text, 'split_deleted'::text, 'statement_import'::text, 'statement_import_revert'::text, 'transaction'::text, 'transaction_deleted'::text, 'transaction_expense'::text, 'transaction_income'::text, 'transaction_moved'::text, 'transaction_restored'::text, 'transaction_updated'::text, 'transfer'::text, 'transfer_deleted'::text, 'transfer_in'::text, 'transfer_out'::text, 'transfer_updated'::text]))
 );
 CREATE TABLE public.account_balance_archives (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

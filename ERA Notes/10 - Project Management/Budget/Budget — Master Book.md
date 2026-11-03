@@ -37,6 +37,7 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+
 🟠 **BUD-85** `POST /api/recurring-payments/[id]/mark-covered` advances `next_due_date` on every call with no duplicate guard, so a repeated or replayed cover skips a real period (recurrence-safety: exactly-once coverage). Found 2026-09-27 while building ERA's "mark rent as paid" (HUB-79). Evidence: the route recomputes `advanceRecurringPastDate` from the current `next_due_date` each time and never checks whether this transaction already covered it. ERA works around it by re-checking the snapshot on tap; the Recurring page has no guard. Fix: key coverage on (payment, period) or reject a transaction already linked.
 
 🟠 **BUD-32** Verify deleted-row recognition and restore choice. See [acceptance](<#bud-32>) for the root cause, evidence and gate.
@@ -66,6 +67,45 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### BUD-87
+
+**Outcome:** A transfer lands exactly once and both balances move on screen immediately, however slow the network.
+
+**Kind:** bug
+**Implementation:** done
+**UAT:** pending
+**Touches:** src/features/transfers/hooks.ts, src/app/api/transfers/route.ts, src/app/api/transfers/[id]/route.ts, src/lib/balance.ts, src/components/expense/TransferDialog.tsx, src/features/era/intents/resolvers/budget.ts, src/features/era/types.ts
+
+- **Incident (2026-10-28, owner report):** the partner's $20 Wallet→account transfer was inserted twice. `created_at` values were 17:13:21.80 and 17:13:30.26. The first row was soft-deleted at 17:15:47, and afterwards the balance showed no change.
+- **Root cause (source, 2026-11-03):** The client POST carried no id, under the 8 s `safeFetch` default. `TransferDialog` stayed open and filled after the timeout toast, so re-submitting inserted a second row. Two other gaps made the balance unreliable:
+  - `adjustAccountBalance` did a read-then-write, so overlapping legs lost an update.
+  - The insert and the two legs are separate calls.
+  Either gap makes "delete the duplicate" reverse ±20 that never fully landed, for a net change of 0. DELETE also ignored affected rows, so two overlapping DELETEs both reversed. PATCH moved balances before the row update, and its body had no Zod schema.
+- **Acceptance:** One submit, a timeout, then a retry gives one row and one pair of legs. The same id with a different payload, or after Undo, gets `409`. A second DELETE gets `alreadyDeleted` with no reversal. A replayed PATCH moves `0`. Two overlapping −20 on Wallet 100 leave 60, not 80. In the dialog, balances and the list move on submit. An unconfirmed outcome rolls back, refetches and offers **Retry** with the same id.
+- **Evidence:** `src/app/api/transfers/route.test.ts` (8), `src/features/transfers/hooks.test.ts` (11), `src/lib/balance.test.ts` (+3 CAS). Scoped suites 48 files / 790 tests pass, typecheck clean, lint 0 errors. Not exercised in a running app, because local dev writes the production DB (Hard Rule 26).
+- **UAT (owner):**
+  1. Open Transfer, Wallet → Savings $1. Both balances move as the dialog closes, and the toast reads "Transfer completed!".
+  2. Undo. Both return.
+  3. Turn on airplane mode, submit $1, and wait for "Offline — transfer not sent". Turn the network back on and tap **Retry**. Exactly one $1 row appears.
+  4. Delete it from Activity → Transfers. Balances return, and tapping Delete again on a stale row changes nothing.
+- **Incident data:** owner runs the read-only check in the session report. It reads `account_balance_history` for transfer ids `a9dcf212-…` and `170425d7-…`. Any repair is a `data-repair` deliverable after that evidence.
+- **Remaining:** single-transaction insert + legs + history is **BUD-63**. History CHECK drift is **BUD-88**.
+
+### BUD-88
+
+**Outcome:** Every balance history row the app writes is accepted by the live CHECK constraint.
+
+**Kind:** bug
+**Implementation:** done
+**UAT:** pending — owner runs `migrations/2026-11-03_balance-history-change-types.sql`
+**Touches:** migrations/2026-11-03_balance-history-change-types.sql, migrations/schema.sql, src/features/balance/hooks.ts
+
+- **Owner evidence (2026-11-03):** `error_logs` 2026-10-28 17:15:48 and 17:15:50 show `23514` from `abh_change_type_check` on `transfer_deleted`, for transfer `a9dcf212-…`. The balances did reverse (1760→1780 and 630→610); the history rows were dropped. schema.sql showed an unnamed inline CHECK, so it had drifted.
+- **Fix:** the migration rebuilds `abh_change_type_check` as the union of what the live constraint allows, what the table already stores, and every value `src/` writes. Values added: `transfer_updated`, `transfer_deleted`, `transaction_updated`, `transaction_moved`, `transaction_restored`, `split_deleted`, `statement_import`, `statement_import_revert`. It is non-destructive, re-runnable, and ends with a verification SELECT. schema.sql now records the named end state. `BalanceChangeType` and the history labels cover the new values.
+- **Acceptance:** after the run, the verification SELECT returns one constraint listing the new values, and no new "Account balance history log failed" rows with code `23514` appear.
+- **Not included:** recreating history rows dropped in the past. That needs a `data-repair` runbook, rebuilt from the failing-row details in `error_logs`.
+- **Reading guide:** `grep -rn "adjustAccountBalance(" src/app/api`. Compare the third argument against the CHECK in `migrations/schema.sql` (`account_balance_history`). Follow the `db-migration` skill. Hard Rule 26: hand the SQL over, never apply it.
 
 ### BUD-85
 
@@ -759,6 +799,7 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 **Outcome:** Commit balance and history atomically.
 
 - **Acceptance:** Concurrent balance deltas and required history commit atomically at the shared boundary; current owner DB evidence precedes the manual migration.
+- **Interim (2026-11-03, BUD-87):** `adjustAccountBalance` now does a compare-and-swap on the exact stored value (`balance::text`) with up to 5 re-reads. Concurrent deltas both count without a migration. Still open here: history in the same transaction, failure propagation (the wrapper still returns the previous balance on error), and insert + legs atomicity for transfers. When the RPC lands, the wrapper delegates to it and the CAS loop goes away.
 
 **Retained contract — ASTRA-BUD-1:**
 
@@ -2172,6 +2213,8 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - ✅ 2026-09-27 — **BUD-84** Show split total and prefill partner share — [criteria](<Budget — Master Book.md#bud-84>). Source implementation: notification payload and all tap paths carry total/share; older pending requests prefer the richer server notification; review drawer displays total and prefills an editable amount. Split arithmetic and payload tests pass (9 tests); typecheck clean; ESLint has no errors in touched files. Browser/device verification pending because no browser session was available.
 
 - ✅ 2026-10-24 — **BUD-86** Incoming partner transfer acknowledgment: bottom sheet (amount, Cancel / Acknowledge) opens when the household partner sends a transfer. `src/components/expense/IncomingTransferSheet.tsx`, mounted in `DeferredComponents.tsx`; polls `/api/transfers` every 60 s, household transfers under 48 h. Acknowledge is device-local (localStorage), Cancel hides until next load; no DB change, no money logic touched. 2026-10-24 follow-up: Cancel removed; acknowledgement now synced via new `transfer_acknowledgements` table + `/api/transfers/acknowledgements` (owner must run `migrations/2026-10-24_transfer-acknowledgements.sql`; until then falls back to localStorage). Code-shipped; not device-verified.
+- ✅ 2026-11-03 — **BUD-87** Create transfers exactly once with optimistic, race-safe balances — [criteria](<Budget — Master Book.md#bud-87>)
+- ✅ 2026-11-03 — **BUD-88** Accept every written change type in balance history — [criteria](<Budget — Master Book.md#bud-88>)
 
 ## Delivery session log
 

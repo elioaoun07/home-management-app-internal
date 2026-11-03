@@ -48,7 +48,7 @@ const CODE_FIXES: Record<string, string> = {
 function stageFix(name: string, result: V2Readiness) {
   const detail = (gate: string) => (typeof result.facts[gate]?.detail === "string" ? String(result.facts[gate].detail) : null);
   switch (name) {
-    case "docker": return "Start Docker Desktop";
+    case "docker": return "Start/restart Docker Desktop";
     case "credential-sync":
     case "authentication": return detail("authentication") || "Sign in again on this laptop";
     case "environment": return detail("environment") || "Environment check failed";
