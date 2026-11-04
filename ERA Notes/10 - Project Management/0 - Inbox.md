@@ -15,6 +15,7 @@ owner: Elio
 Add raw ideas here. Triage assigns an owner and either a canonical task, a decision or a research option; capture is not implementation approval.
 - [ ] Personal feeling status: Meter for relaxed, andry, happy,... Available for work, need rest...
 - [ ] New hook: Personal feeling status: Meter for relaxed, andry, happy,... Available for work, need rest...
+- [ ] 2026-11-04 audit (source reading, not reproduced): [Mutation Integrity Audit](<../01 - Architecture/Mutation Integrity Audit.md>) §0 lists findings no campaign item covers yet — global `mutations.retry: 1` replays non-idempotent writes; recurring confirm ignores a failed due-date advance; split-bill complete and future-payment confirm are check-then-act; debt settle/create write money before the debt row; notification `complete_task` writes the non-existent `items.completed_at`; Postpone Undo leaves the due date moved; shopping `toggle_check` retried as a flip. Triage into Budget / Schedule / Notifications / Hub owners; link BUD-63/64/65/71/24, HUB-116, R48, NOTIF-20 rather than duplicating them.
 
 ## Processed
 

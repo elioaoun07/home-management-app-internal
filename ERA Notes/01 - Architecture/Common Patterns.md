@@ -12,6 +12,7 @@ tags:
 # Common Patterns & Mistakes to Avoid
 
 > Reference this file when implementing mutations, modals, drag-and-drop, or adding new type values.
+> Where the codebase currently departs from §1 (optimistic UI), from all-or-nothing writes, and from consistent failure handling: [Mutation Integrity Audit](<Mutation Integrity Audit.md>) (2026-11-04).
 
 ---
 
