@@ -34,6 +34,10 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟠 **NOTIF-22** `cron/purge-recycle-bin` and `cron/gcal-reconcile` authorize `Bearer undefined` when `CRON_SECRET` is unset; purge hard-deletes. Found 2026-11-04 by source audit; see [Major Bug Sweep](<../Research/Major Bug Sweep.md#s2>).
+
+🟠 **NOTIF-23** `cron/item-reminders` pushes before claiming the alert (`last_fired_at` set after send), so overlapping or crashed runs send duplicates. Found 2026-11-04 by source audit; see [Major Bug Sweep](<../Research/Major Bug Sweep.md#n1>).
+
 🟠 **NOTIF-19** Centralize recipient delivery policy. See [acceptance](<#notif-19>) for the root cause, evidence and gate.
 
 🟠 **NOTIF-2.1** Verify the bell and unread state on phones. See [acceptance](<#notif-21>) for the root cause, evidence and gate.

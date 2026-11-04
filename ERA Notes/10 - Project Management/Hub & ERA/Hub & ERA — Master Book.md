@@ -71,6 +71,16 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🔴 **HUB-118** Guest Portal `?all=true` on `/api/guest-portal/allergies` and `/drinks` returns every guest's allergies and drinks with no auth; the tag id is handed to every guest by the session route. Found 2026-11-04 by source audit; see [Major Bug Sweep](<../Research/Major Bug Sweep.md#s1>).
+
+🔴 **HUB-119** Offline sync deletes any queued non-fitness write older than 24 h with no notice (`removeStaleOperations`) and deletes replays that get a 401. Found 2026-11-04 by source audit; see [Major Bug Sweep](<../Research/Major Bug Sweep.md#o1>).
+
+🟠 **HUB-120** A replay that times out is retried; transaction creates carry no idempotency key, so a committed-but-timed-out expense posts twice. Found 2026-11-04 by source audit; see [Major Bug Sweep](<../Research/Major Bug Sweep.md#o2>).
+
+🟠 **HUB-121** ~23 `household_links` reads use `.maybeSingle()` without `limit(1)` and error on duplicate active rows (which the cron code says exist); the `limit(1)` helpers don't exclude unclaimed invite rows. Found 2026-11-04 by source audit; see [Major Bug Sweep](<../Research/Major Bug Sweep.md#h1>).
+
+🟡 **HUB-122** Guest bot answers are hard-coded for one party night (allergy check never checks allergens); bot/chat ignore `is_active`; chat lets a guest post as `host`. Found 2026-11-04 by source audit; see [Major Bug Sweep](<../Research/Major Bug Sweep.md#g1>).
+
 - 🟠 **HUB-94 acceptance gap — source review, 2026-10-25.** The current typed event composer passes structured capture through `useEraTurn` → `resolveIntent` → `resolveScheduleCapture`; that path returns the event receipt without the older event resolver's Where?/Save-to-Places follow-up. [H06](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h06--create-a-placecontact-use-the-place-and-open-its-artifact>) retains the accepted expectation and labels the divergence. No runtime reproduction or owner FAIL is claimed; a bounded follow-up needs its own engineering scope before implementation.
 
 🟠 **HUB-117** ERA missed "Location for Women's night is Kobeize" (ERA report, 2026-10-18). See [acceptance](<#hub-117>).
