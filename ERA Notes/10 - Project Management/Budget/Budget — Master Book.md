@@ -38,6 +38,18 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 ## Pain Inventory
 
 
+🔴 **BUD-89** Undo after deleting a transaction POSTs a new copy instead of restoring the soft-deleted row, so a later Recycle Bin restore double-counts and the copy loses LBP change/receipt/split links (`useDashboardTransactions.ts:537`). Found 2026-11-04 by source audit; see [Major Bug Sweep](<../Research/Major Bug Sweep.md#m1>).
+
+🔴 **BUD-90** Recurring confirm, future-payment confirm, split-bill completion and debt settlement have no compare-and-set, so a double tap, lost-response retry or offline replay posts money twice. Found 2026-11-04 by source audit; see [Major Bug Sweep](<../Research/Major Bug Sweep.md#m2>).
+
+🟠 **BUD-91** Recurring/future-payment/draft confirm and split-bill move the balance of any client-supplied `account_id` via the service-role client without `getAccessibleAccount().canWrite`, and default an unreadable account's type to `expense` (wrong sign). Found 2026-11-04 by source audit; see [Major Bug Sweep](<../Research/Major Bug Sweep.md#m3>).
+
+🟠 **BUD-92** Recycle Bin restore of a completed split re-applies only the payer leg; the collaborator's balance stays off by `collaborator_amount`. Found 2026-11-04 by source audit; see [Major Bug Sweep](<../Research/Major Bug Sweep.md#m4>).
+
+🟠 **BUD-93** Server defaults money dates to UTC today (debt settle always; transfers, drafts, future-payment confirm, transaction create when no date): Beirut 00:00–03:00 entries land on yesterday / the previous billing month. Found 2026-11-04 by source audit; see [Major Bug Sweep](<../Research/Major Bug Sweep.md#t1>).
+
+🟡 **BUD-94** Money routes without Zod pass raw JSON amounts to `adjustAccountBalance`, which adds without coercion (string amount ⇒ concatenated balance); debt settle has no server-side cap at the remaining amount. Found 2026-11-04 by source audit; see [Major Bug Sweep](<../Research/Major Bug Sweep.md#m5>).
+
 🟠 **BUD-85** `POST /api/recurring-payments/[id]/mark-covered` advances `next_due_date` on every call with no duplicate guard, so a repeated or replayed cover skips a real period (recurrence-safety: exactly-once coverage). Found 2026-09-27 while building ERA's "mark rent as paid" (HUB-79). Evidence: the route recomputes `advanceRecurringPastDate` from the current `next_due_date` each time and never checks whether this transaction already covered it. ERA works around it by re-checking the snapshot on tap; the Recurring page has no guard. Fix: key coverage on (payment, period) or reject a transaction already linked.
 
 🟠 **BUD-32** Verify deleted-row recognition and restore choice. See [acceptance](<#bud-32>) for the root cause, evidence and gate.

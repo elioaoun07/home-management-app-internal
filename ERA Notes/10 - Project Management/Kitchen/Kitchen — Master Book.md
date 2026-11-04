@@ -34,6 +34,8 @@ Unresolved policy choices live in the [decision register](../_Decisions.md); ori
 
 ## Pain Inventory
 
+🟡 **KIT-28** Recipe search puts raw text into a PostgREST `.or()` filter, so a comma or parenthesis breaks the query (Catalogue already uses `toIlikeTerm`). Found 2026-11-04 by source audit; see [Major Bug Sweep](<../Research/Major Bug Sweep.md#k1>).
+
 🟠 **KIT-10** Validate ingredient payloads at every writer. See [acceptance](#kit-10) for the root cause, evidence and gate.
 
 🟠 **KIT-4** Expose scoped meal coverage to ERA. See [acceptance](#kit-4) for the root cause, evidence and gate.
