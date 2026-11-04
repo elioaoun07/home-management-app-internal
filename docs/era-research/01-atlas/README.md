@@ -13,12 +13,12 @@ A capability and architecture atlas of the whole ERA repository: what exists, ho
 
 ## Files
 
-| File                                             | Use it to                                                                                                                                                                                                                                                                                |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [CAPABILITY-MAP.md](CAPABILITY-MAP.md)           | See every capability by life area, classified **Implemented / Partial / Documented-only / Unclear**, with entry points, persistence, AI features, integrations and background processes.                                                                                                 |
-| [ARCHITECTURE.md](ARCHITECTURE.md)               | Understand the layers, data-access styles, caches and write contracts; read the findings (duplicated responsibilities, isolated modules, undocumented behaviour, stale docs), three proposals, and the owner decisions. Starts with the **reader guide for returning after six months**. |
-| [CRITICAL-FLOWS.md](CRITICAL-FLOWS.md)           | Follow five journeys step by step (a spend on a weak connection, an ERA reminder, a shared shopping list, a medication course, a phone-approved Delivery), with failure cases and fictional acceptance examples.                                                                         |
-| [CHANGE-IMPACT-GUIDE.md](CHANGE-IMPACT-GUIDE.md) | Before editing a shared component: its consumers, how a mistake would show up, which existing checks to run and which steps only the owner can take.                                                                                                                                     |
+| File | Use it to |
+|---|---|
+| [CAPABILITY-MAP.md](CAPABILITY-MAP.md) | See every capability by life area, classified **Implemented / Partial / Documented-only / Unclear**, with entry points, persistence, AI features, integrations and background processes. |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Understand the layers, data-access styles, caches and write contracts; read the findings (duplicated responsibilities, isolated modules, undocumented behaviour, stale docs), three proposals, and the owner decisions. Starts with the **reader guide for returning after six months**. |
+| [CRITICAL-FLOWS.md](CRITICAL-FLOWS.md) | Follow five journeys step by step (a spend on a weak connection, an ERA reminder, a shared shopping list, a medication course, a phone-approved Delivery), with failure cases and fictional acceptance examples. |
+| [CHANGE-IMPACT-GUIDE.md](CHANGE-IMPACT-GUIDE.md) | Before editing a shared component: its consumers, how a mistake would show up, which existing checks to run and which steps only the owner can take. |
 
 ## Labels used throughout
 

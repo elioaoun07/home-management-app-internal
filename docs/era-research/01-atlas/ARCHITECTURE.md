@@ -95,15 +95,15 @@ flowchart TB
   DB -. "triggers fan out: activity log, health and fitness mirrors" .-> DB
 ```
 
-| Layer        | What is there                                                                                                                                             | Size at `53443c0`                                                   |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Interfaces   | 42 `page.tsx`, 22 `layout.tsx`, the ERA shell (`src/components/era/`), the service worker (`public/sw.js`, 1,415 lines)                                   | `src/components/` holds 36 folders                                  |
-| Client logic | 35 folders under `src/features/` (one is a `graphify-out` cache); pure libraries in `src/lib/`                                                            | —                                                                   |
-| Transport    | `safeFetch` (`src/lib/safeFetch.ts`), offline queue and sync engine, `supabaseBrowser()` singleton, Supabase Realtime                                     | —                                                                   |
-| API          | 256 `route.ts` files; largest groups: trips 24, notifications 17, era 16, healthcare 15, catalogue 13, hub 12                                             | 49 route files use the service-role client                          |
-| Server logic | `src/services/transaction.service.ts`, `src/lib/balance.ts`, `src/lib/items/*`, `src/lib/gcal/*`, `src/lib/health/*`, `src/lib/fitness/*`, `src/lib/ai/*` | —                                                                   |
-| Data         | 122 tables (`schema.sql`), 79 functions in the 2026-08-04 snapshot plus later migrations, ~30 RPCs called from code                                       | 46 dated migrations                                                 |
-| Tooling      | `scripts/pm/` (188 files), `scripts/delivery/` (33), `scripts/delivery-v2/` (85)                                                                          | ~89,000 lines of script code vs ~309,000 lines of non-test app code |
+| Layer | What is there | Size at `53443c0` |
+|---|---|---|
+| Interfaces | 42 `page.tsx`, 22 `layout.tsx`, the ERA shell (`src/components/era/`), the service worker (`public/sw.js`, 1,415 lines) | `src/components/` holds 36 folders |
+| Client logic | 35 folders under `src/features/` (one is a `graphify-out` cache); pure libraries in `src/lib/` | — |
+| Transport | `safeFetch` (`src/lib/safeFetch.ts`), offline queue and sync engine, `supabaseBrowser()` singleton, Supabase Realtime | — |
+| API | 256 `route.ts` files; largest groups: trips 24, notifications 17, era 16, healthcare 15, catalogue 13, hub 12 | 49 route files use the service-role client |
+| Server logic | `src/services/transaction.service.ts`, `src/lib/balance.ts`, `src/lib/items/*`, `src/lib/gcal/*`, `src/lib/health/*`, `src/lib/fitness/*`, `src/lib/ai/*` | — |
+| Data | 122 tables (`schema.sql`), 79 functions in the 2026-08-04 snapshot plus later migrations, ~30 RPCs called from code | 46 dated migrations |
+| Tooling | `scripts/pm/` (188 files), `scripts/delivery/` (33), `scripts/delivery-v2/` (85) | ~89,000 lines of script code vs ~309,000 lines of non-test app code |
 
 The module rule in `CLAUDE.md` (standalone feature folders never import each other) mostly holds inside `src/features/`. The only standalone→standalone import is `chores → items` (3 files); `era` imports eight feature folders as a Junction should. Coupling moves elsewhere instead:
 
@@ -117,14 +117,14 @@ The module rule in `CLAUDE.md` (standalone feature folders never import each oth
 
 ERA uses six ways to reach data. Each has different authorization and failure behaviour.
 
-| Style                       | How                                                                                                                                                      | Authorization                                                            | Where it is used                                                                                                                                                       | Failure behaviour                                                                                                                                                 |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A. API route, user session  | `supabaseServer()` in `src/app/api/**`                                                                                                                   | RLS plus route checks (e.g. `getAccessibleAccount()`, `canMutateItem()`) | Most modules                                                                                                                                                           | Route returns JSON errors; client `safeFetch` maps timeouts and offline                                                                                           |
-| B. API route, service role  | `supabaseAdmin()`                                                                                                                                        | Bypasses RLS; the route's own checks are the only guard                  | 49 route files: money balances, recycle bin, guest portal, crons, storage signed URLs, household names                                                                 | A missing check is a visibility or integrity hole (M3, S1)                                                                                                        |
-| C. Browser-direct PostgREST | `supabaseBrowser().from(...)` in hooks                                                                                                                   | RLS only                                                                 | Schedule updates/deletes/subtasks/exceptions (`src/features/items/useItems.ts`, `useItemActions.ts`, `useFlexibleRoutines.ts`), PM relay, a few reads; 17 client files | No API side effects run (Google Calendar sync, alert deactivation) unless the hook re-implements them (`src/features/items/gcalSync.ts` header says exactly this) |
-| D. Bundle RPCs              | `get_schedule_bundle`, `get_trip_bundle`, `get_health_bundle`, `get_fitness_bundle`                                                                      | SECURITY DEFINER; visibility coded in SQL                                | Hot reads (Hard Rule 21)                                                                                                                                               | Function bodies for older RPCs live only in the snapshot                                                                                                          |
-| E. Write RPCs               | `create_item_complete`, `create_items_bulk`, `health_*`, `fitness_*`, `claim_household_code`, `activate_trip`                                            | SECURITY DEFINER or invoker, per migration                               | Item creation, health, fitness, household claim, trips                                                                                                                 | Missing function → `PGRST202` → "not started" (`src/lib/items/createContract.ts:151`)                                                                             |
-| F. Triggers                 | Generic `capture_household_activity` on 80 tables; `health_mirror_occurrence_action` and `fitness_mirror_occurrence_action` on `item_occurrence_actions` | Run inside the source transaction                                        | Activity Log, medication doses, workout completion                                                                                                                     | A trigger error rolls back the user's write (Activity Log Overview §write path)                                                                                   |
+| Style | How | Authorization | Where it is used | Failure behaviour |
+|---|---|---|---|---|
+| A. API route, user session | `supabaseServer()` in `src/app/api/**` | RLS plus route checks (e.g. `getAccessibleAccount()`, `canMutateItem()`) | Most modules | Route returns JSON errors; client `safeFetch` maps timeouts and offline |
+| B. API route, service role | `supabaseAdmin()` | Bypasses RLS; the route's own checks are the only guard | 49 route files: money balances, recycle bin, guest portal, crons, storage signed URLs, household names | A missing check is a visibility or integrity hole (M3, S1) |
+| C. Browser-direct PostgREST | `supabaseBrowser().from(...)` in hooks | RLS only | Schedule updates/deletes/subtasks/exceptions (`src/features/items/useItems.ts`, `useItemActions.ts`, `useFlexibleRoutines.ts`), PM relay, a few reads; 17 client files | No API side effects run (Google Calendar sync, alert deactivation) unless the hook re-implements them (`src/features/items/gcalSync.ts` header says exactly this) |
+| D. Bundle RPCs | `get_schedule_bundle`, `get_trip_bundle`, `get_health_bundle`, `get_fitness_bundle` | SECURITY DEFINER; visibility coded in SQL | Hot reads (Hard Rule 21) | Function bodies for older RPCs live only in the snapshot |
+| E. Write RPCs | `create_item_complete`, `create_items_bulk`, `health_*`, `fitness_*`, `claim_household_code`, `activate_trip` | SECURITY DEFINER or invoker, per migration | Item creation, health, fitness, household claim, trips | Missing function → `PGRST202` → "not started" (`src/lib/items/createContract.ts:151`) |
+| F. Triggers | Generic `capture_household_activity` on 80 tables; `health_mirror_occurrence_action` and `fitness_mirror_occurrence_action` on `item_occurrence_actions` | Run inside the source transaction | Activity Log, medication doses, workout completion | A trigger error rolls back the user's write (Activity Log Overview §write path) |
 
 ---
 
@@ -132,14 +132,14 @@ ERA uses six ways to reach data. Each has different authorization and failure be
 
 A value shown on screen may come from any of these layers:
 
-| Layer                      | Holds                                                                                                                                                      | Lifetime                                                                   | Invalidated by                                                                                                      |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| React Query memory         | Every query                                                                                                                                                | `gcTime` 24 h, `staleTime` 5 min default (`src/app/providers.tsx:112-114`) | `invalidateQueries`, theme change (Hard Rule 10)                                                                    |
-| Persisted query cache      | Only `STABLE_KEYS`: accounts, categories, account-balance, preferences, recurring payments, trips, fitness, household allergens, … (`providers.tsx:23-47`) | 7 days, localStorage key `hm-rq-cache-v3`, buster `hm-v4`                  | Restored before queries run; cleared on user switch (`:191-205`)                                                    |
-| localStorage side caches   | `balance_cache_*`, `user_preferences` (`src/lib/queryConfig.ts:68-147`)                                                                                    | Until overwritten                                                          | Used by `AccountBalance.tsx` when offline                                                                           |
-| Service-worker API cache   | GETs under `/api/accounts`, `/api/user-preferences`, `/api/categories`, `/api/onboarding`, `/api/drafts`, `/api/future-payments` (`public/sw.js:57-65`)    | Until the SW cache name changes                                            | **Never invalidated by app code**; returns the cached response first, then refreshes in the background (`:184-209`) |
-| Service-worker shell cache | `/offline`, `/expense`, `/dashboard`, `/reminders`, `/recurring`, `/`                                                                                      | Cache name `app-shell-v5`                                                  | SW update                                                                                                           |
-| IndexedDB offline queue    | Unsent mutations                                                                                                                                           | Deleted after 24 h except fitness (`src/lib/offlineQueue.ts:422-435`)      | Replay or expiry                                                                                                    |
+| Layer | Holds | Lifetime | Invalidated by |
+|---|---|---|---|
+| React Query memory | Every query | `gcTime` 24 h, `staleTime` 5 min default (`src/app/providers.tsx:112-114`) | `invalidateQueries`, theme change (Hard Rule 10) |
+| Persisted query cache | Only `STABLE_KEYS`: accounts, categories, account-balance, preferences, recurring payments, trips, fitness, household allergens, … (`providers.tsx:23-47`) | 7 days, localStorage key `hm-rq-cache-v3`, buster `hm-v4` | Restored before queries run; cleared on user switch (`:191-205`) |
+| localStorage side caches | `balance_cache_*`, `user_preferences` (`src/lib/queryConfig.ts:68-147`) | Until overwritten | Used by `AccountBalance.tsx` when offline |
+| Service-worker API cache | GETs under `/api/accounts`, `/api/user-preferences`, `/api/categories`, `/api/onboarding`, `/api/drafts`, `/api/future-payments` (`public/sw.js:57-65`) | Until the SW cache name changes | **Never invalidated by app code**; returns the cached response first, then refreshes in the background (`:184-209`) |
+| Service-worker shell cache | `/offline`, `/expense`, `/dashboard`, `/reminders`, `/recurring`, `/` | Cache name `app-shell-v5` | SW update |
+| IndexedDB offline queue | Unsent mutations | Deleted after 24 h except fitness (`src/lib/offlineQueue.ts:422-435`) | Replay or expiry |
 
 **Consequence (CURRENT IMPLEMENTATION).** Right after a spend, the mutation invalidates `account-balance`; React Query refetches `/api/accounts/<id>/balance`; an active service worker answers that refetch from `api-cache-v1` with the **previous** response and only then stores the fresh one. The fresh value appears on the next refetch. The same applies to ERA's balance and draft reads (`src/features/era/intents/resolvers/budgetFamilies.ts:101`, `budget.ts:786`). Whether phones run this SW version is UNKNOWN.
 
@@ -147,17 +147,17 @@ A value shown on screen may come from any of these layers:
 
 ## 5. Write contracts
 
-| Domain                      | Contract in code                                                                                                                                              | Exactly-once guard                                                                                   | Atomicity                                                                                                             |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Money: transactions         | `createTransaction()` inserts, then `adjustAccountBalance()` (`src/services/transaction.service.ts:383-556`)                                                  | None (no client id)                                                                                  | Row and balance are separate writes; a failed balance CAS is logged, not raised (`src/lib/balance.ts:114-122`)        |
-| Money: transfers            | Client id, same-id retry, server replay on 23505 (`src/features/transfers/hooks.ts`, `src/app/api/transfers/route.ts`)                                        | Yes                                                                                                  | Two balance writes, not one DB transaction (BUD-63)                                                                   |
-| Money: confirm/settle flows | Read, check, write                                                                                                                                            | Draft confirm only (`is_draft = true`)                                                               | No (M2)                                                                                                               |
-| Money: statement import     | Import record, then rows, then the revert ledger, then one balance write per account (`src/app/api/statement-import/commit/route.ts:236-1004`)                | Unique `statement_hash` per account                                                                  | Balances wait for the ledger; rows do not (Mutation Integrity Audit #9). Revert planner `src/lib/statement-revert.ts` |
-| Schedule: create            | `prepareItemCreate()` → `create_item_complete` → typed receipt `complete / partial / not_started / rolled_back / unknown` (`src/lib/items/createContract.ts`) | Offline replay fenced with `reviewRequired` before dispatch (`src/lib/offlineSyncEngine.ts:240-270`) | One SQL transaction                                                                                                   |
-| Schedule: bulk              | Client ids, ≤50 items, per-item outcome (`src/app/api/items/bulk/route.ts`)                                                                                   | Yes                                                                                                  | Per chunk                                                                                                             |
-| Schedule: edit/delete       | Browser-direct writes, or API when replayed offline                                                                                                           | None                                                                                                 | Varies by hook                                                                                                        |
-| AI proposals                | Model output → Zod → capability admission → confirm card → `executePlan()` (`src/features/era/capabilities/plan.ts`)                                          | A card is consumed once (`confirmation.ts`)                                                          | Up to six sequential steps; no whole-plan rollback (AI Assistant Overview, HUB-108)                                   |
-| PM phone commands           | Row id = command id end to end; laptop journal claim → started → effected (`scripts/pm/relay.mjs:197-266`)                                                    | Yes                                                                                                  | Per command                                                                                                           |
+| Domain | Contract in code | Exactly-once guard | Atomicity |
+|---|---|---|---|
+| Money: transactions | `createTransaction()` inserts, then `adjustAccountBalance()` (`src/services/transaction.service.ts:383-556`) | None (no client id) | Row and balance are separate writes; a failed balance CAS is logged, not raised (`src/lib/balance.ts:114-122`) |
+| Money: transfers | Client id, same-id retry, server replay on 23505 (`src/features/transfers/hooks.ts`, `src/app/api/transfers/route.ts`) | Yes | Two balance writes, not one DB transaction (BUD-63) |
+| Money: confirm/settle flows | Read, check, write | Draft confirm only (`is_draft = true`) | No (M2) |
+| Money: statement import | Import record, then rows, then the revert ledger, then one balance write per account (`src/app/api/statement-import/commit/route.ts:236-1004`) | Unique `statement_hash` per account | Balances wait for the ledger; rows do not (Mutation Integrity Audit #9). Revert planner `src/lib/statement-revert.ts` |
+| Schedule: create | `prepareItemCreate()` → `create_item_complete` → typed receipt `complete / partial / not_started / rolled_back / unknown` (`src/lib/items/createContract.ts`) | Offline replay fenced with `reviewRequired` before dispatch (`src/lib/offlineSyncEngine.ts:240-270`) | One SQL transaction |
+| Schedule: bulk | Client ids, ≤50 items, per-item outcome (`src/app/api/items/bulk/route.ts`) | Yes | Per chunk |
+| Schedule: edit/delete | Browser-direct writes, or API when replayed offline | None | Varies by hook |
+| AI proposals | Model output → Zod → capability admission → confirm card → `executePlan()` (`src/features/era/capabilities/plan.ts`) | A card is consumed once (`confirmation.ts`) | Up to six sequential steps; no whole-plan rollback (AI Assistant Overview, HUB-108) |
+| PM phone commands | Row id = command id end to end; laptop journal claim → started → effected (`scripts/pm/relay.mjs:197-266`) | Yes | Per command |
 
 ---
 
@@ -227,11 +227,11 @@ ERA (`/era`, native router + Claude Ask AI, tables `era_conversations`, `era_mes
 
 #### F-D2 Three meanings of "delete an item"
 
-| Path                                                             | Code                                                                                                           | Result                                                                             |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `useDeleteItem()` online                                         | `supabase.from("items").delete()` (`src/features/items/useItems.ts:649-679`)                                   | **Hard delete**; cascades children; not in Recycle Bin; Google event removed first |
-| `useDeleteItemWithUndo()` (day planner)                          | `update({ archived_at })` (`src/features/items/useItemActions.ts:704-740`)                                     | Archive; Undo clears `archived_at`                                                 |
-| `DELETE /api/items/[id]` (offline replay, ERA `reminder.delete`) | `update({ deleted_at })`, deactivates alerts, removes Google event (`src/app/api/items/[id]/route.ts:192-260`) | Soft delete into Recycle Bin for 30 days                                           |
+| Path | Code | Result |
+|---|---|---|
+| `useDeleteItem()` online | `supabase.from("items").delete()` (`src/features/items/useItems.ts:649-679`) | **Hard delete**; cascades children; not in Recycle Bin; Google event removed first |
+| `useDeleteItemWithUndo()` (day planner) | `update({ archived_at })` (`src/features/items/useItemActions.ts:704-740`) | Archive; Undo clears `archived_at` |
+| `DELETE /api/items/[id]` (offline replay, ERA `reminder.delete`) | `update({ deleted_at })`, deactivates alerts, removes Google event (`src/app/api/items/[id]/route.ts:192-260`) | Soft delete into Recycle Bin for 30 days |
 
 The same tap in Catalogue, Event dialog or Assign gives a hard delete online and a recoverable soft delete when it was queued offline. ERA's delete is always recoverable. Not documented as a choice anywhere found. Not tracked.
 
@@ -241,14 +241,14 @@ Item **creates** go through `/api/items`; item **edits** go browser-direct to Po
 
 #### F-D4 Several occurrence expanders
 
-| Expander                                                                                                                                                 | Used by                                                                        |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `getOccurrencesInRange()` (`src/lib/utils/date.ts:224`)                                                                                                  | `dayOccurrences.ts`, `RemindersInsightsPage.tsx`                               |
-| `expandOccurrencesInRange()` (`src/lib/utils/dayOccurrences.ts:39`)                                                                                      | `WebDayPlanner.tsx`, `WebTodayView.tsx`, `choreWeek.ts`, ERA schedule resolver |
-| Inline `RRule.fromString(rule.rrule).after(now)` without the DTSTART builder                                                                             | `SwipeableItemCard.tsx:462`                                                    |
-| Inline `RRule.fromString(buildFullRRuleString(...)).after(...)`                                                                                          | `cron/item-reminders/route.ts:434-435`                                         |
-| Own logic                                                                                                                                                | `WebCalendar.tsx`, `ItemsListView.tsx`                                         |
-| `expandOccurrencesForRange()` in `src/lib/schedule/expandOccurrences.ts`, whose header calls it the "single canonical" helper replacing the inline loops | **Only its own test**                                                          |
+| Expander | Used by |
+|---|---|
+| `getOccurrencesInRange()` (`src/lib/utils/date.ts:224`) | `dayOccurrences.ts`, `RemindersInsightsPage.tsx` |
+| `expandOccurrencesInRange()` (`src/lib/utils/dayOccurrences.ts:39`) | `WebDayPlanner.tsx`, `WebTodayView.tsx`, `choreWeek.ts`, ERA schedule resolver |
+| Inline `RRule.fromString(rule.rrule).after(now)` without the DTSTART builder | `SwipeableItemCard.tsx:462` |
+| Inline `RRule.fromString(buildFullRRuleString(...)).after(...)` | `cron/item-reminders/route.ts:434-435` |
+| Own logic | `WebCalendar.tsx`, `ItemsListView.tsx` |
+| `expandOccurrencesForRange()` in `src/lib/schedule/expandOccurrences.ts`, whose header calls it the "single canonical" helper replacing the inline loops | **Only its own test** |
 
 The recurrence-safety skill already warns that "item recurrence has diverging expansion engines". The unwired canonical helper is the concrete form of that warning. Tracked: Schedule Master Book staged recurrence refactor.
 
@@ -286,17 +286,17 @@ Cron authorization is hand-written in six routes, two of them failing open (S2/N
 
 A static import scan of `src/` (excluding Next.js entry files and tests) finds **48 files with no importers**. The ones docs still present as live:
 
-| File                                                                                                                                                 | Documented as                                                          |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `src/lib/schedule/expandOccurrences.ts`                                                                                                              | Canonical expander (its own header)                                    |
-| `src/features/items/useFocusInsights.ts`                                                                                                             | Focus insights hook (Feature Map `focus.md`)                           |
-| `src/features/voice-conversation/{azureWake,sttCapture,vadGate}.ts`                                                                                  | Voice pipeline (Feature Map `ai-assistant.md`)                         |
-| `src/components/nfc/PwaRedirectBanner.tsx`                                                                                                           | NFC tap → PWA prompt (Feature Map `nfc-tags.md`)                       |
-| `src/components/dashboard/TransactionsTable.tsx`, `src/components/expense/EditableWidgetGrid.tsx`                                                    | Dashboard pieces (Feature Map `dashboard.md`)                          |
-| `src/components/web/WebBottomNav.tsx`, `src/components/navigation/AppModeToggle.tsx`                                                                 | Navigation (Feature Map `layout-and-nav.md`)                           |
-| `src/components/shared/EraAvatar.tsx`                                                                                                                | ERA avatar (Feature Map `ai-assistant.md`)                             |
-| `src/components/items/MobileItemForm.tsx`                                                                                                            | Dead per one line of `items-and-reminders.md`, "open this" per another |
-| `src/components/watch/WatchVoiceEntry.tsx`, `src/components/expense/DraftTransactionsBadge.tsx`, `src/components/web/DisableCatalogueItemDialog.tsx` | Watch, Drafts, Catalogue maps                                          |
+| File | Documented as |
+|---|---|
+| `src/lib/schedule/expandOccurrences.ts` | Canonical expander (its own header) |
+| `src/features/items/useFocusInsights.ts` | Focus insights hook (Feature Map `focus.md`) |
+| `src/features/voice-conversation/{azureWake,sttCapture,vadGate}.ts` | Voice pipeline (Feature Map `ai-assistant.md`) |
+| `src/components/nfc/PwaRedirectBanner.tsx` | NFC tap → PWA prompt (Feature Map `nfc-tags.md`) |
+| `src/components/dashboard/TransactionsTable.tsx`, `src/components/expense/EditableWidgetGrid.tsx` | Dashboard pieces (Feature Map `dashboard.md`) |
+| `src/components/web/WebBottomNav.tsx`, `src/components/navigation/AppModeToggle.tsx` | Navigation (Feature Map `layout-and-nav.md`) |
+| `src/components/shared/EraAvatar.tsx` | ERA avatar (Feature Map `ai-assistant.md`) |
+| `src/components/items/MobileItemForm.tsx` | Dead per one line of `items-and-reminders.md`, "open this" per another |
+| `src/components/watch/WatchVoiceEntry.tsx`, `src/components/expense/DraftTransactionsBadge.tsx`, `src/components/web/DisableCatalogueItemDialog.tsx` | Watch, Drafts, Catalogue maps |
 
 Five unimported files sit in `src/components/ui/`, which Hard Rule 11 protects from edits. The full list is reproducible with the scan in §10.
 
@@ -374,25 +374,25 @@ Code reads `GEMINI_API_KEY` (`src/lib/ai/gemini.ts:4`), ENV.md says `GOOGLE_AI_A
 
 ### 8.4 Conflicting or stale sources
 
-| Source                                                                             | Says                                                                                                                                        | Code at `53443c0`                                                                                                                                                                  |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Design Doctrine §4                                                                 | "All balance writes through `adjustAccountBalance()`"                                                                                       | Deltas do; the manual balance set upserts `account_balances` directly (`src/app/api/accounts/[id]/balance/route.ts:182-190`), and account creation seeds zero rows                 |
-| `ERA Notes/03 - Junction Modules/ERA/Overview.md` (created 2026-05-03)             | "Phase 0 (skeleton)", "DB Tables: none", stub `IntentRouter`, mic is a stub, lists `FaceHeader.tsx`, `FaceCanvas.tsx`, `QuickFaceChips.tsx` | Six `era_*` tables, Claude Ask AI, voice; those components were deleted (Feature Map, HUB-17). The current account is the AI Assistant Overview plus Feature Map `ai-assistant.md` |
-| `Sync and Offline.md`                                                              | SW 3.2.0, API network-only; queue features without `trip`/`fitness`                                                                         | F-U1; `src/lib/offlineQueue.ts:14`                                                                                                                                                 |
-| `CLAUDE.md`, Feature Maps `shopping-list.md`, `sync-and-offline.md`, `hub-chat.md` | The legacy localStorage queue is used by the Hub shopping list                                                                              | No producer (F-U9)                                                                                                                                                                 |
-| `CLAUDE.md` Junction table, Feature Map `notifications.md`                         | Notifications connect "Recurring (payment reminders), Budget (spending alerts)"                                                             | Neither producer exists                                                                                                                                                            |
-| Feature Map `recurring-payments.md`                                                | A cron auto-posts due payments                                                                                                              | No such cron; confirm is manual (vault Recurring Payments Overview agrees with code)                                                                                               |
-| `CLAUDE.md` Feature Index, Feature Map `focus.md`                                  | `src/app/focus/`, `src/components/focus/`, route `/focus`                                                                                   | None of these exist                                                                                                                                                                |
-| Feature Map `drafts.md`                                                            | Table `transaction_drafts`                                                                                                                  | `transactions.is_draft`                                                                                                                                                            |
-| Feature Map `statement-import.md`                                                  | Commit "writes the revert ledger BEFORE touching money"                                                                                     | Rows are written before the ledger; only balances wait for it (Mutation Integrity Audit #9)                                                                                        |
-| Feature Map `transactions.md`                                                      | `safeFetch` default 3 s                                                                                                                     | 8 s (`src/lib/safeFetch.ts:14`); the Design Doctrine was corrected 2026-10-17, this map was not                                                                                    |
-| Feature Map `items-and-reminders.md`                                               | `MobileItemForm.tsx` is dead code, and also the file to open first                                                                          | No importers                                                                                                                                                                       |
-| Feature Map `outfits.md` one-liner                                                 | Weekly planner and wear log                                                                                                                 | Not built (vault Outfits Overview: Phases 2 + 4 remain)                                                                                                                            |
-| Feature Map `plan-my-day.md`                                                       | Migration `2026-06-16_plan-my-day.sql`                                                                                                      | Not in `migrations/`                                                                                                                                                               |
-| `ERA Notes/03 - Junction Modules/Prerequisites/Overview.md`                        | `item_completed` "✅ Implemented"; "item completion" is a trigger event                                                                     | Never emitted (F-U12)                                                                                                                                                              |
-| `migrations/README.md`                                                             | Lists `add_account_balances.sql`, `add_default_account.sql`                                                                                 | Neither exists; earliest file is 2026-08-03                                                                                                                                        |
-| `CLAUDE.md` Engineer Playbooks                                                     | Lists a `graphify` playbook                                                                                                                 | No `.claude/skills/graphify/`; only `src/graphify-out/` and `src/features/graphify-out/` cache folders                                                                             |
-| `docs/ENV.md`                                                                      | Variable names                                                                                                                              | F-U10                                                                                                                                                                              |
+| Source | Says | Code at `53443c0` |
+|---|---|---|
+| Design Doctrine §4 | "All balance writes through `adjustAccountBalance()`" | Deltas do; the manual balance set upserts `account_balances` directly (`src/app/api/accounts/[id]/balance/route.ts:182-190`), and account creation seeds zero rows |
+| `ERA Notes/03 - Junction Modules/ERA/Overview.md` (created 2026-05-03) | "Phase 0 (skeleton)", "DB Tables: none", stub `IntentRouter`, mic is a stub, lists `FaceHeader.tsx`, `FaceCanvas.tsx`, `QuickFaceChips.tsx` | Six `era_*` tables, Claude Ask AI, voice; those components were deleted (Feature Map, HUB-17). The current account is the AI Assistant Overview plus Feature Map `ai-assistant.md` |
+| `Sync and Offline.md` | SW 3.2.0, API network-only; queue features without `trip`/`fitness` | F-U1; `src/lib/offlineQueue.ts:14` |
+| `CLAUDE.md`, Feature Maps `shopping-list.md`, `sync-and-offline.md`, `hub-chat.md` | The legacy localStorage queue is used by the Hub shopping list | No producer (F-U9) |
+| `CLAUDE.md` Junction table, Feature Map `notifications.md` | Notifications connect "Recurring (payment reminders), Budget (spending alerts)" | Neither producer exists |
+| Feature Map `recurring-payments.md` | A cron auto-posts due payments | No such cron; confirm is manual (vault Recurring Payments Overview agrees with code) |
+| `CLAUDE.md` Feature Index, Feature Map `focus.md` | `src/app/focus/`, `src/components/focus/`, route `/focus` | None of these exist |
+| Feature Map `drafts.md` | Table `transaction_drafts` | `transactions.is_draft` |
+| Feature Map `statement-import.md` | Commit "writes the revert ledger BEFORE touching money" | Rows are written before the ledger; only balances wait for it (Mutation Integrity Audit #9) |
+| Feature Map `transactions.md` | `safeFetch` default 3 s | 8 s (`src/lib/safeFetch.ts:14`); the Design Doctrine was corrected 2026-10-17, this map was not |
+| Feature Map `items-and-reminders.md` | `MobileItemForm.tsx` is dead code, and also the file to open first | No importers |
+| Feature Map `outfits.md` one-liner | Weekly planner and wear log | Not built (vault Outfits Overview: Phases 2 + 4 remain) |
+| Feature Map `plan-my-day.md` | Migration `2026-06-16_plan-my-day.sql` | Not in `migrations/` |
+| `ERA Notes/03 - Junction Modules/Prerequisites/Overview.md` | `item_completed` "✅ Implemented"; "item completion" is a trigger event | Never emitted (F-U12) |
+| `migrations/README.md` | Lists `add_account_balances.sql`, `add_default_account.sql` | Neither exists; earliest file is 2026-08-03 |
+| `CLAUDE.md` Engineer Playbooks | Lists a `graphify` playbook | No `.claude/skills/graphify/`; only `src/graphify-out/` and `src/features/graphify-out/` cache folders |
+| `docs/ENV.md` | Variable names | F-U10 |
 
 ---
 
@@ -451,17 +451,17 @@ PROPOSED DESIGN only. Each is small, reuses an existing choke point and can be a
 
 Work on the rest of the atlas did not wait on these.
 
-| ID  | Decision                                                                                                           | Why it is the owner's                                      |
-| --- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| D-1 | Should deleting a Schedule item always be recoverable (soft delete), or is hard delete intended for some surfaces? | Product semantics and data retention (F-D2)                |
-| D-2 | Keep the floating Gemini assistant beside ERA, merge it, or retire it?                                             | Two assistant brains contradict a standing decision (F-D1) |
-| D-3 | May money screens trade instant paint for correctness (P2)?                                                        | Changes perceived speed on weak networks                   |
-| D-4 | What should happen to offline writes older than 24 h? (Already HUB-119; restated because P1 relies on it.)         | Data-loss policy                                           |
-| D-5 | Before TRIP-39 re-enables the cascade, fix or accept the three F-U6 behaviours?                                    | Household schedule semantics; SQL is owner-run             |
-| D-6 | Build payment reminders and spending alerts, or remove them from `CLAUDE.md` and the Notifications docs?           | Scope                                                      |
-| D-7 | Refresh `db-state.json` and confirm the five missing tables and the cron scheduler                                 | Only the owner may touch production (Hard Rule 26)         |
-| D-8 | Which document is authoritative for ERA when the ERA Overview and the AI Assistant Overview disagree; retire one?  | Documentation ownership                                    |
-| D-9 | Which watch screen is canonical?                                                                                   | Product surface                                            |
+| ID | Decision | Why it is the owner's |
+|---|---|---|
+| D-1 | Should deleting a Schedule item always be recoverable (soft delete), or is hard delete intended for some surfaces? | Product semantics and data retention (F-D2) |
+| D-2 | Keep the floating Gemini assistant beside ERA, merge it, or retire it? | Two assistant brains contradict a standing decision (F-D1) |
+| D-3 | May money screens trade instant paint for correctness (P2)? | Changes perceived speed on weak networks |
+| D-4 | What should happen to offline writes older than 24 h? (Already HUB-119; restated because P1 relies on it.) | Data-loss policy |
+| D-5 | Before TRIP-39 re-enables the cascade, fix or accept the three F-U6 behaviours? | Household schedule semantics; SQL is owner-run |
+| D-6 | Build payment reminders and spending alerts, or remove them from `CLAUDE.md` and the Notifications docs? | Scope |
+| D-7 | Refresh `db-state.json` and confirm the five missing tables and the cron scheduler | Only the owner may touch production (Hard Rule 26) |
+| D-8 | Which document is authoritative for ERA when the ERA Overview and the AI Assistant Overview disagree; retire one? | Documentation ownership |
+| D-9 | Which watch screen is canonical? | Product surface |
 
 ---
 
@@ -469,14 +469,14 @@ Work on the rest of the atlas did not wait on these.
 
 Commands and scans, all read-only and local (reproduce them from the repo root):
 
-| Question                     | Method                                                                                                                         |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Routes and methods           | `find src/app/api -name route.ts` and a grep for exported `GET/POST/PUT/PATCH/DELETE`                                          |
-| Tables in schema vs snapshot | Parse `CREATE TABLE` in `migrations/schema.sql`; parse `migrations/db-state.json`; `node scripts/check-db-state.mjs`           |
-| Tables used by code          | Grep `.from("…")` in `src/`, minus `.storage.from(...)` buckets                                                                |
-| Unimported modules           | Resolve `@/…` and relative imports across `src/`, `tests/`, `scripts/`; exclude `page`, `layout`, `route`, `loading` and tests |
-| Orphan routes                | Search API path prefixes in `src/`, `public/`, `scripts/` outside `src/app/api/`                                               |
-| Cross-feature imports        | Grep `from "@/features/<x>"` inside `src/features/<y>`                                                                         |
-| Test census                  | `find src tests -name "*.test.ts"` grouped by folder                                                                           |
+| Question | Method |
+|---|---|
+| Routes and methods | `find src/app/api -name route.ts` and a grep for exported `GET/POST/PUT/PATCH/DELETE` |
+| Tables in schema vs snapshot | Parse `CREATE TABLE` in `migrations/schema.sql`; parse `migrations/db-state.json`; `node scripts/check-db-state.mjs` |
+| Tables used by code | Grep `.from("…")` in `src/`, minus `.storage.from(...)` buckets |
+| Unimported modules | Resolve `@/…` and relative imports across `src/`, `tests/`, `scripts/`; exclude `page`, `layout`, `route`, `loading` and tests |
+| Orphan routes | Search API path prefixes in `src/`, `public/`, `scripts/` outside `src/app/api/` |
+| Cross-feature imports | Grep `from "@/features/<x>"` inside `src/features/<y>` |
+| Test census | `find src tests -name "*.test.ts"` grouped by folder |
 
 Not done: `pnpm typecheck`, `pnpm lint`, `pnpm test` (no `node_modules` in this container; the Major Bug Sweep records `pnpm test` passing at `e053ac9`), any browser or device run, any production or paid call. Web pages at `nextjs.org` and `vercel.com` were blocked by the session's network policy.
