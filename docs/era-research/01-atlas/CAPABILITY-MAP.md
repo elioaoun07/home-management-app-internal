@@ -1,0 +1,308 @@
+---
+created: 2026-11-04
+updated: 2026-11-04
+type: research
+status: draft
+owner: Elio
+evidence_cutoff: "commit 53443c0 (2026-11-04 20:36 +0200), clean working tree, shallow clone (50 commits back to 2026-09-26). Source, migration and doc reading only. No production DB, live RLS, deployment, device, paid model or speech API was touched. RLS snapshot migrations/db-state.json generated 2026-08-04 (92 days old)."
+---
+
+# ERA Capability Map
+
+[README](README.md) · **Capability Map** · [Architecture](ARCHITECTURE.md) · [Critical Flows](CRITICAL-FLOWS.md) · [Change Impact](CHANGE-IMPACT-GUIDE.md)
+
+What ERA can do, where each capability lives, and how sure we are. Every row separates what the code does from what documents say it does.
+
+## How to read this file
+
+**Status of a capability**
+
+| Status | Meaning |
+|---|---|
+| **Implemented** | An end-to-end path exists in the repo: entry point → client hook → API route or RPC → table. This says nothing about whether it is deployed or used. |
+| **Partial** | Some of the documented scope exists; a named part is stubbed, disabled, unwired or missing. |
+| **Documented-only** | Docs describe it; no implementing code was found. |
+| **Unclear** | Code exists but depends on something the repo cannot evidence (a table missing from both `schema.sql` and the RLS snapshot, an orphan route), or sources conflict. |
+
+**Basis of a claim**
+
+| Label | Meaning |
+|---|---|
+| CURRENT IMPLEMENTATION | Read in code or migrations at `53443c0`. |
+| DOCUMENTED INTENT | Stated in repo docs (vault, `CLAUDE.md`, Master Books), not fully verified in code. |
+| PROPOSED DESIGN | This atlas's recommendation. Only in [ARCHITECTURE.md §9](ARCHITECTURE.md#9-proposed-designs). |
+| UNKNOWN | Not answerable from the repo: deployed build, applied migrations, live RLS, scheduler, devices, real usage. |
+
+**Migration-gated (⛁).** The capability needs a dated migration newer than the 2026-08-04 RLS snapshot. 41 of the 46 dated migration files are newer than that snapshot. The repo has no applied-migration ledger, so whether each one ran is UNKNOWN. 23 tables in `schema.sql` have no RLS evidence at all for the same reason (`node scripts/check-db-state.mjs`, run 2026-11-04).
+
+Defect IDs such as `BUD-89` or `S1` point to the existing [Major Bug Sweep](<../../../ERA Notes/10 - Project Management/Research/Major Bug Sweep.md>); "Mutation Integrity Audit #n" points to [that audit's top findings](<../../../ERA Notes/01 - Architecture/Mutation Integrity Audit.md>). Both were written the same day against `e053ac9`. This file lists their IDs so a capability's trust level is visible. It does not re-derive them.
+
+---
+
+## 1. Personal-life modules
+
+### 1.1 Money (Budget campaign)
+
+| Capability | Status | Entry → logic → data (CURRENT IMPLEMENTATION) | Documented intent, gaps, UNKNOWN |
+|---|---|---|---|
+| Accounts and balances (expense / income / saving, multi-currency, default, default-income, reorder, hide, public) | Implemented | `/expense`, `/dashboard` → `src/features/accounts/hooks.ts`, `src/components/expense/AccountBalance.tsx` → `src/app/api/accounts/route.ts`, `accounts/[id]/balance/route.ts` → `accounts`, `account_balances`, `account_balance_history`. Every balance **delta** goes through `adjustAccountBalance()` (`src/lib/balance.ts:37`), a compare-and-swap with up to 5 retries (`:23`), service-role client; manual absolute sets write the row directly (§2). | The balance write is not in the same DB transaction as the row that caused it. A failed CAS logs to `error_logs` and returns the old balance (`src/lib/balance.ts:114-122`). History `effective_date` defaults to UTC today (`:126`, T1/BUD-93). `account_balance_archives` and `account_daily_summaries` exist in `schema.sql` but no code reads them: the archive/daily routes compute from `transactions`, `transfers` and history. |
+| Transactions (precision form, quick and QR variants, templates, LBP change, trip tag) | Implemented | `/expense`, `/quick-expense`, `/qr/expense` → `src/components/expense/MobileExpenseForm.tsx`, `src/features/transactions/useDashboardTransactions.ts` → `src/app/api/transactions/route.ts` → `SupabaseTransactionService.createTransaction()` (`src/services/transaction.service.ts:383`) → insert, then `adjustAccountBalance()` (`:551`). | No Zod schema on the POST route (Hard Rule 12); validation is ad hoc in the service. No client id or idempotency key, so a timed-out offline replay can post twice (O2/HUB-120). Delete → Undo re-creates a copy instead of restoring (M1/BUD-89). |
+| Drafts (partial, voice, AI-proposed spends) | Implemented | Drafts drawer, `/expense/drafts` → `src/features/drafts/useDrafts.ts` → `src/app/api/drafts/route.ts`, `drafts/[id]/route.ts` → **`transactions` rows with `is_draft = true`** (`migrations/schema.sql`, `transactions.is_draft`). Draft confirm has a `.eq("is_draft", true)` guard. | Feature Map `drafts.md` names a `transaction_drafts` table; none exists. Draft confirm trusts the body's `account_id` (M3/BUD-91). |
+| Transfers (own accounts; partner household transfers; incoming-transfer acknowledgement) | Implemented ⛁ | `TransferDialog.tsx` → `src/features/transfers/hooks.ts` (`sendTransferWrite`, client id + same-id retry) → `src/app/api/transfers/route.ts` (`replayTransfer`, 23505 → replay) → `transfers`, both balances. `IncomingTransferSheet.tsx` polls and acknowledges → `transfer_acknowledgements` (`2026-10-24_transfer-acknowledgements.sql`). | The two legs are separate balance writes, not one DB transaction (BUD-63). Tests: `src/app/api/transfers/route.test.ts`, `src/features/transfers/hooks.test.ts`. |
+| Recurring payments (commitment console, confirm, mark covered, match suggestions) | Partial | `/recurring` → `src/features/recurring/useRecurringPayments.ts`, `commitments.ts` → `recurring-payments/[id]/route.ts` (confirm creates a transaction), `[id]/mark-covered` → `recurring_payments`, `transactions`. | **Auto-posting is documented-only.** Feature Map `recurring-payments.md` says a cron auto-posts; the six cron routes contain no recurring runner and nothing in `src/` auto-posts. Confirm is not exactly-once (M2/BUD-90). |
+| Future payments (upcoming instances, confirm into a transaction) | Implemented | `FuturePaymentsDrawer.tsx` → `src/features/recurring/useFuturePayments.ts` → `src/app/api/future-payments/*` | Confirm filters on `id` only (M2). `/api/future-payments` is served cache-first by the service worker (see §4). |
+| Debts (owed to / owed by, settle) | Implemented | `DebtsDrawer.tsx`, `DebtSettlementModal.tsx` → `src/features/debts/useDebts.ts` → `src/app/api/debts/*` | Settlement is a lost-update read-modify-write (M2); amount is unvalidated (M5). ERA Reach Matrix: settle waits on BUD-68. |
+| Split bill with partner | Implemented | `SplitBillModal.tsx`, global `SplitBillHandler` → `src/features/transactions/useSplitBill.ts` → `src/app/api/transactions/split-bill/route.ts` | Completion is not exactly-once (M2). Restore re-applies only the payer leg (M4/BUD-92). |
+| Budget allocation (envelopes per category, AI suggestion) | Implemented | `src/components/web/WebBudget.tsx` → `src/features/budget/hooks.ts` → `src/app/api/budget-allocations/route.ts`, `ai-suggest/route.ts` (Gemini when `GEMINI_API_KEY` is set) → `budget_allocations`, `ai_budget_suggestions` | Period is the custom billing month (`startOfCustomMonth()`, `src/lib/utils/date.ts:55`). |
+| Future purchases (wishlist, allocate, AI spending analysis) | Implemented | `src/components/web/WebFuturePurchases.tsx` → `src/features/future-purchases/hooks.ts` → `src/app/api/future-purchases/*`; analysis via `src/lib/ai/analysisReport.ts` (Gemini) | — |
+| Statement import (PDF/CSV parse, reconcile, commit with revert ledger, merchant memory, standing skips) | Implemented ⛁ | `/statement-import` → `src/features/statement-import/hooks.ts`, `sessionModel.ts` → `src/app/api/statement-import/{parse,reconcile,commit,imports}` → `src/lib/statement-reconcile.ts`, `statement-revert.ts`, `bank-statement-parser.ts` → `statement_imports`, `statement_import_entries`, `statement_skipped_rows`, `merchant_mappings` | Order in `commit/route.ts`: import record (`:236`), then transaction/transfer rows (`:407-932`), then the revert ledger (`:981`), then balances (`:1004`). A ledger failure returns 503 after rows exist but before any balance moves (`:996`). The Feature Map's "ledger BEFORE touching money" holds for balances only (Mutation Integrity Audit #9). Needs the 2026-08-19 and 2026-08-24 migration set. Best-tested money flow (`commit/route.test.ts`, `reconcile/route.test.ts`, `statement-*.test.ts`). |
+| Categories and merchant mappings | Implemented | `CategoryGrid.tsx`, `CategoryManagement.tsx` → `src/features/categories/*` → `src/app/api/categories/*`, `user-categories/*`, `merchant-mappings/route.ts` | Categories are account-scoped (`user_categories.account_id NOT NULL`) and matched across partners by slug (Categories vault doc). |
+| Receipts (attach photo, export) | Implemented | `ReceiptSheet.tsx`, `/receipts` → `src/app/api/transactions/[id]/receipt/route.ts`, `receipts/export`, `receipts/signed-url` → storage bucket `receipts` | The same `receipts` bucket also stores Hub item-chat photos (`src/app/api/hub/item-chat-photo/route.ts:8`). |
+| Analytics and net worth (charts, world map) | Implemented | `/dashboard` → `src/features/analytics/useAnalytics.ts`, `useNetWorth.ts` → `src/app/api/analytics/route.ts`; map topology fetched from `cdn.jsdelivr.net` (`src/components/charts/InteractiveWorldMap.tsx:17`) | `src/components/charts/WorldMap.tsx` has no importers. |
+| Spending-threshold alerts | Documented-only | — | `CLAUDE.md` Junction table and Feature Map `notifications.md` list "Budget (spending alerts)". No producer exists in `src/app/api/cron/` or `src/app/api/notifications/`. |
+| Payment reminders (recurring due) | Documented-only | — | Same documents list "Recurring (payment reminders)". No cron or notification route reads `recurring_payments`. |
+
+### 1.2 Time and routines (Schedule campaign)
+
+| Capability | Status | Entry → logic → data (CURRENT IMPLEMENTATION) | Documented intent, gaps, UNKNOWN |
+|---|---|---|---|
+| Items: reminders, tasks, events with details, alerts, subtasks, recurrence (RRULE), exceptions, pauses, snoozes | Implemented ⛁ | `/reminders` → `MobileReminderForm.tsx`, `WebDayPlanner.tsx` → `src/features/items/useItems.ts` (reads via `get_schedule_bundle` RPC, `:80`) → **creates** via `POST /api/items` → `create_item_complete` RPC (`src/app/api/items/route.ts:23`); **updates, deletes, archive, subtasks, exceptions and rule edits are written directly from the browser** with `supabaseBrowser().from(...)` (`useItems.ts:463-2111`) | Every create depends on `create_item_complete` from `2026-10-11_atomic-item-create.sql`, marked owner-run in the Feature Map. Without it the RPC lookup fails (`PGRST202` → `not_started`, `src/lib/items/createContract.ts:151`) and the route returns 500. Applied state UNKNOWN. Delete has three meanings; see [ARCHITECTURE §8 F-D2](ARCHITECTURE.md#f-d2-three-meanings-of-delete-an-item). |
+| Bulk create / complete (chores, multi-day placement) | Implemented ⛁ | `src/features/items/bulkItems.ts`, `bulkComplete.ts` → `src/app/api/items/bulk/route.ts`, `bulk/complete/route.ts` → `create_items_bulk` RPC (`2026-10-17_items-bulk-create.sql`) | Client ids make replay safe (comment at `src/lib/offlineSyncEngine.ts:202`). |
+| Flexible routines (period targets, slot placement) | Implemented | `/reminders?tab=…` Assign → `src/features/items/useFlexibleRoutines.ts` → `item_flexible_schedules` (browser-direct writes) | — |
+| Plan My Day (day plans, checklist) | Implemented | `/reminders?plan=1` (`/today` redirects, `src/app/today/page.tsx:17`) → `src/features/day-plan/useDayPlan.ts` → `src/app/api/day-plans/*` → `day_plans` | Its migration `2026-06-16_plan-my-day.sql` is cited by the Feature Map but is not in `migrations/`. The table is in `schema.sql` and the snapshot. |
+| Chores (week agenda, assign, rooms, check-in, responsibility hand-off) | Implemented ⛁ | `/chores` → `src/components/chores/ChoresView.tsx` → `src/features/chores/{choreWeek,useChores,useChoreActions}.ts` → item bulk paths + `items/[id]/actions` → `items`, `item_occurrence_actions`, `item_flexible_schedules`, `home_rooms` (`2026-10-10_*` migrations) | `src/features/chores` imports `src/features/items` (3 files), the only standalone→standalone feature import in the repo. |
+| Focus page `/focus` | Documented-only | No `src/app/focus/` and no `src/components/focus/` | `CLAUDE.md` Feature Index and Feature Map `focus.md` still list both. The Reach Matrix points to `/reminders?tab=focus`. |
+| Focus insights / AI briefing | Partial | `src/app/api/focus-insights/route.ts` (Gemini) + `src/features/items/useFocusInsights.ts` | The hook has **no importers**, so no screen requests insights. `CLAUDE.md` still carries a "Focus briefing cache" hard rule for it. |
+| Prerequisites (dormant items woken by NFC state or another item's completion) | Partial | `PrerequisitePicker.tsx` → `src/app/api/items/[id]/prerequisites/route.ts` → `src/lib/prerequisites/engine.ts`; the only caller of `findAndActivateTriggeredItems` is `src/app/api/nfc/[slug]/tap/route.ts:138`. `completeItems.ts` only calls `resetCompletedPrerequisiteItem` (`:201`) | Four of six evaluators are stubs that always return `met: false`: weather, time window, schedule, custom formula (`src/lib/prerequisites/evaluators/*.ts`); the picker offers time window and schedule. No code emits an `item_completed` trigger, so an item waiting only on another item's completion never wakes. The Prerequisites Overview marks `item_completed` "✅ Implemented". The snapshot shows RLS **disabled** on `item_prerequisites`. |
+| NFC tags (tap, admin, checklist, state log, history) | Implemented | Physical tag → `/nfc/[tag]` → `src/app/api/nfc/[slug]/*` → `nfc_tags`, `nfc_state_log`, `nfc_checklist_items`, `nfc_checklist_completions` | `src/components/nfc/PwaRedirectBanner.tsx` (listed in the Feature Map) has no importers. |
+| Item reminder push | Implemented | `src/app/api/cron/item-reminders/route.ts` (scans due `item_alerts`, sends via `sendPushToUser`) | Scheduler UNKNOWN: there is no `vercel.json` and no scheduler config in the repo; Notifications decision D1 assigns it to an owner-configured Supabase pg_cron/pg_net job. Sends before claiming the alert (N1/NOTIF-23). |
+| Daily summaries (items due/overdue; "log your spending" nudge) | Implemented | `cron/daily-items-reminder`, `cron/daily-reminder` (local-time slots from `notification_preferences`) | Scheduler UNKNOWN. Four older endpoints are kept only as deprecated shims (`notifications/send-due`, `send-transaction-reminders`, `daily-reminder`, `sync`). |
+| Google Calendar one-way backup | Implemented | Settings → `src/app/api/gcal/{connect,callback,connection,sync-item}` → `src/lib/gcal/{client,sync}.ts`; browser writes call `triggerGcalSync()` (`src/features/items/gcalSync.ts`); `cron/gcal-reconcile` heals drift | Live verification blocked on credentials (Notifications Master Book). Scope `calendar.app.created` (`src/lib/gcal/client.ts:14`). |
+| AI schedule suggestions | Unclear | `src/app/api/suggest-schedule/route.ts` | No caller anywhere in the repo, and it reads `item_completion_patterns`, a table absent from `schema.sql` and from the snapshot. |
+| Item categories, completion stats | Unclear | `useCreateItemCategory` (`useItems.ts:909`), `useItemStats` (`useItemActions.ts:331`) | Read tables `item_categories` and `item_completion_stats`, absent from `schema.sql` and the snapshot. |
+
+### 1.3 Home and kitchen (Kitchen campaign)
+
+| Capability | Status | Entry → logic → data (CURRENT IMPLEMENTATION) | Documented intent, gaps, UNKNOWN |
+|---|---|---|---|
+| Shared shopping list (lists, groups, quantities, assignment, colours, item links, product comparison, item chat) | Implemented | `/chat` shopping threads → `src/components/hub/ShoppingListView.tsx`, `src/features/hub/hooks.ts` → `src/app/api/hub/{messages,shopping-groups,item-links,item-chat-photo}` → **`hub_messages`** rows in threads with `purpose = 'shopping'` (`checked_at`, `item_quantity`, `shopping_group_id`) | Offline add is queued (`hooks.ts:1062-1070`, feature `hub-message`). The seven PATCH writes in `ShoppingListView.tsx` (lines 1292-2075) use raw `fetch`, so check-off and edits are neither timed out nor queued. Product pages are read through the third-party reader `r.jina.ai` (`src/app/api/hub/item-links/route.ts:93`). |
+| Recipes (book, versions, cooking mode, cooking log, allergen warnings) | Implemented | `/recipe` → `src/components/web/WebRecipes.tsx` and family → `src/features/recipes/hooks.ts` → `src/app/api/recipes/*` → `recipes`, `recipe_versions`, `cooking_logs` | Search breaks on commas/parentheses (K1/KIT-28). |
+| Recipe AI (generate, optimize, scale, substitute, extract from URL) | Implemented | `src/features/recipes/hooks.ts:127,482,500,519,779` → `recipes/[id]/{generate,optimize,scale,substitute}`, `recipes/extract-from-url` (server fetches the URL with an 8 s timeout, then Gemini) | Results are applied by the user in the recipe UI; not reviewed in this atlas beyond routing. |
+| Meal planning (calendar, coverage, add to shopping) | Implemented | `/meal-plan` → `src/components/web/WebMealPlanCalendar.tsx` → `src/features/meal-planning/hooks.ts` → `src/app/api/meal-plans/*` → `meal_plans`; coverage rules `src/lib/mealPlanCoverage.ts` (shared with ERA Chef) | — |
+| Inventory (stock, restock history, low stock, barcode lookup, add to shopping) | Implemented | Mounted in Catalogue → `src/components/inventory/InventoryView.tsx` → `src/features/inventory/hooks.ts` → `src/app/api/inventory/*` → `inventory_stock`, `inventory_restock_history`, RPC `get_low_stock_items` | Barcode lookup searches only the household's own catalogue metadata (`inventory/barcode/[barcode]/route.ts:28-33`), not an external product database. **"Buying restocks inventory"** (Feature Maps `shopping-list.md`, `inventory.md`) is documented-only: no Hub code calls restock. |
+| Catalogue (modules, categories, items, sub-items, rooms, document images, chores definitions, places, contacts) | Implemented ⛁ | `/catalogue` → `src/components/web/WebCatalogue.tsx` → `src/features/catalogue/hooks.ts` → `src/app/api/catalogue/*` → `catalogue_*`, `home_rooms`; bucket `documents` | `catalogue_items.revision` and the RLS collapse need the 2026-10-04/05 migrations. Catalogue search via ERA waits on HUB-69 (Reach Matrix). |
+
+### 1.4 Health and body
+
+| Capability | Status | Entry → logic → data (CURRENT IMPLEMENTATION) | Documented intent, gaps, UNKNOWN |
+|---|---|---|---|
+| Health profiles, allergies, conditions, vaccines | Implemented | `/healthcare` → `src/app/healthcare/HealthcareClient.tsx` → `src/features/healthcare/hooks.ts` (`get_health_bundle` RPC) → `src/app/api/healthcare/*` → `health_*` | Profiles private by default; allergies always household-visible via `get_household_allergens()` (Feature Map `healthcare.md`). |
+| Medication courses → urgent daily reminders → dose checklist | Implemented ⛁ | `MedicationsSection.tsx` → `src/lib/health/medicationServer.ts` → RPCs `health_save_medication`, `health_rebuild_medication_reminders` (deletes and re-inserts the course's `items`, rules and alerts in SQL, `2026-09-26_healthcare-medications.sql:177-306`), `health_set_dose`; trigger `health_mirror_occurrence_action` ticks the dose when the reminder is completed (`:489-562`) | A third item-creation path that bypasses `create_item_complete`. Dose logging from ERA waits on HLTH-19/25 (Reach Matrix). |
+| Measurements (weight, height, BMI), shared with Fitness | Implemented ⛁ | `src/components/health/MeasurementsCard.tsx` → `src/app/api/healthcare/measurements/*` → `health_measurements` (`2026-10-12_fitness-module.sql`) | Owner-private. |
+| Allergen warnings on recipes | Implemented | `src/components/web/RecipeAllergenWarning.tsx` → `src/lib/health/allergenMatch.ts`, `src/hooks/useHouseholdAllergens.ts` | Persisted offline (`household-allergens` in `STABLE_KEYS`, `src/app/providers.tsx:23`). |
+| Doctors/insurance in Catalogue; Hub + AI health briefing | Documented-only | — | Feature Map `healthcare.md` "Planned: Phase 3 / Phase 4". |
+| Fitness (PT plan import, weekly slots in Schedule, workout logging with rest timer, rewards, ranks, partner summary) | Implemented ⛁ | `/fitness` → `src/components/fitness/FitnessPage.tsx` → `src/features/fitness/hooks.ts` (`writeFitness`, offline overlay) → `src/app/api/fitness/*` → 34 `fitness_*` SQL functions; slots become private flexible Schedule items; `fitness_mirror_occurrence_action` trigger (`2026-10-12_fitness-module.sql:1114-1176`) | Plans are imported as JSON (`src/lib/fitness/ptPlan.ts`); the app offers a prompt to paste into an external AI, it makes no model call. Workout ops are never aged out of the offline queue (`src/lib/offlineQueue.ts:429`). |
+| Outfits: wardrobe catalog with on-device background removal; outfit builder | Implemented ⛁ | `/outfits` → `src/components/outfits/*` → `src/features/outfits/hooks.ts` → `src/app/api/outfits/*` → `wardrobe_*`, `outfits`, `outfit_items`; bucket `wardrobe`; `@imgly/background-removal` loaded lazily (`src/lib/backgroundRemoval.ts:44`) | Personal only, never household-shared (locked D4). Where the background-removal model assets are downloaded from is the library default; not configured in the repo (UNKNOWN). |
+| Outfits: weekly planner and wear log | Documented-only | No `outfit_plans` table | The vault doc says "Phases 1 + 3 built; Phases 2 + 4 remain". The Feature Map one-liner describes the planner as if it existed. |
+
+### 1.5 Travel (Trips campaign)
+
+| Capability | Status | Entry → logic → data (CURRENT IMPLEMENTATION) | Documented intent, gaps, UNKNOWN |
+|---|---|---|---|
+| Trips: plan, places (with attachments), packing (categories, checkpoints, restore), document vault, clone | Implemented ⛁ | `/trips`, `/trips/[id]` → `src/components/trips/*` → `src/features/trips/hooks.ts` (`get_trip_bundle`) → 24 routes under `src/app/api/trips/` → `trip_*`; bucket `trip-documents` | Trip data is persisted for offline travel (`trips` in `STABLE_KEYS`). |
+| Trip spend (account transactions ∪ tagged transactions) | Implemented ⛁ | `GET /api/trips/[id]/spend` → `summarizeTripSpend()` (`src/lib/tripSpend.ts`); tag via `transactions.trip_id` (`2026-09-19_transactions-trip-id.sql`), checked by `canAccessTrip()` (`src/lib/tripAccess.ts`) | Per-currency totals, no conversion. |
+| Trip activation cascade (skip chores, pause recurring events, cancel in-window events, skip meals, reassign items) and its reversal | Partial | `POST /api/trips/[id]/activate` creates the trip expense account. The cascade RPCs are switched off: `TRIP_CASCADE_ENABLED = false` (`src/features/trips/cascade.ts:9`, owner decision 2026-10-05) | The RPC bodies are not in any repo migration; the only copy is the 2026-08-04 snapshot. That copy skips each chore once, at the trip's start date, and its meal-plan loop matches `household_id IS NOT NULL` rows in a SECURITY DEFINER function. See [ARCHITECTURE §8 F-U6](ARCHITECTURE.md#f-u6-the-trip-cascade-that-would-return-is-only-visible-in-a-stale-snapshot). Re-enabling is TRIP-39. |
+
+### 1.6 Household and social (Hub & ERA campaign)
+
+| Capability | Status | Entry → logic → data (CURRENT IMPLEMENTATION) | Documented intent, gaps, UNKNOWN |
+|---|---|---|---|
+| Household linking (invite code, claim, partner discovery) | Implemented | Settings → `LinkHouseholdDialog.tsx` → `src/app/api/household/route.ts`, `household/claim` → `claim_household_code` RPC → `household_links`, `profiles` | 45 API route files and 9 other modules each query `household_links` themselves; there is no shared helper (H1/HUB-121). `hub_messages.household_id` is a foreign key to `household_links.id`, so the Hub needs a link row. |
+| Hub chat (threads, private chats, topics/notes, voice messages, read receipts, realtime) | Implemented | `/chat` → `src/components/hub/HubPage.tsx` → `src/features/hub/hooks.ts` (realtime channels at `:403,850,991,1130,1151`) → `src/app/api/hub/*` → `hub_chat_threads`, `hub_messages`, `hub_message_receipts`, `hub_notes_topics`; bucket `voice-messages` (created on demand by `src/app/api/hub/voice-message/route.ts:109-125`) | Voice transcripts arrive from the client (`formData.get("transcript")`, `:26`); the server does not transcribe. |
+| Message actions (message → draft spend or reminder) | Implemented | `AddTransactionFromMessageModal.tsx`, `AddReminderFromMessageModal.tsx` → `src/features/hub/messageActions.ts` → `/api/drafts` or items, then `POST /api/hub/message-actions` → `hub_message_actions` | Two separate writes, so a source record can exist without its back-link. `useDeleteMessageAction()` calls `/api/hub/message-actions/[id]`, a route that does not exist; the hook has no callers. |
+| Chat push notifications | Implemented | Immediate push in `src/app/api/hub/messages/route.ts`; batched unread push in `cron/chat-notifications` | Scheduler UNKNOWN (cron header says every minute). |
+| Guest portal (public pages behind a tag: session, Wi-Fi, drinks, allergies, feedback, chat with host, bot) | Implemented | NFC/QR → `/g/[tag]`, `/g/drinks-admin` → `src/app/api/guest-portal/*` (all service-role) → `guest_*` | Unauthenticated `all=true` reads leak every guest's allergies (S1/HUB-118). Bot answers are hard-coded for one event (G1/HUB-122). `guest_drinks` RLS disabled in the snapshot. |
+| Activity Log (household ledger of source activity) | Implemented ⛁ | `/activity-log` → `src/features/activity-log/hooks.ts` (polls every 15 s) → `src/app/api/activity-log/route.ts` → `get_household_activity` RPC → `household_activity`, filled by **one generic AFTER trigger installed on 80 tables** (`2026-09-26_household-activity-log.sql:305-328`) | Reach Matrix: "Needs HUB-72's owner SQL". If the migration was not run, the page has no data. |
+
+### 1.7 Assistant, voice and wearables
+
+| Capability | Status | Entry → logic → data (CURRENT IMPLEMENTATION) | Documented intent, gaps, UNKNOWN |
+|---|---|---|---|
+| ERA command bar, native intents (budget, schedule, chef, brain, events, places, contacts, shopping, transfers, debts, drafts) | Implemented | `/era`, Hub, mobile drawer → `CommandBar.tsx` → `useEraTurn().runTurn()` (`src/features/era/useEraTurn.ts`) → `rootIntentRouter.parse()` → `resolveIntent()` → resolvers in `src/features/era/intents/resolvers/` → existing source APIs | Native typing and native Send never call a model (AI Assistant Overview, HUB-112/113). |
+| ERA Ask AI (model proposals, up to six-step plans, confirm cards) | Implemented | ✨ button or guarded auto-escalation (cap 15/day, `src/app/api/era/ask/route.ts:48`) → `/api/era/ask` → `generateClaudeJson()` (`src/lib/ai/anthropic.ts`, default `claude-haiku-5-5`, `:5`) → `eraAskProposal.ts` (Zod + capability admission) → confirm → `capabilities/plan.ts` | 18 registered capabilities (`src/features/era/capabilities/registry.ts`). Twelve model-recording tests were stale at HUB-108. Current-model acceptance is pending (AI Assistant Overview). |
+| ERA artifacts (every ERA write leaves a record; Undo/Redo) | Implemented ⛁ | `src/lib/era/artifacts.ts` (`eraArtifact()`), `src/features/era/recordArtifacts.ts` → `/api/era/actions` → `era_actions` (`2026-08-26_era-actions.sql`, `2026-10-04_era-artifacts-any-entity.sql`) | — |
+| ERA conversations, history, Report, lexicon, templates, typing memory | Implemented ⛁ | `src/features/era/useEraConversation.ts` (realtime `era:${id}`) → `/api/era/{conversations,messages,issues,lexicon,templates,capture-memory}` → `era_conversations`, `era_messages`, `era_lexicon`, `era_templates` | Reports are imported into PM by `scripts/pm/era-issues.mjs`. |
+| ERA durable execution journal (resume after interruption) | Partial ⛁ | `src/features/era/execution/*` → `/api/era/runs` → `era_runs`, RPC `save_era_run` | Off unless `NEXT_PUBLIC_ERA_DURABLE_EXECUTION=true` after the owner runs `2026-10-10_era-execution-journal.sql` (`docs/ENV.md`). |
+| Brain notes / household memory | Unclear | `memory.save`, `memory.recall` capabilities → `/api/memories` → table `household_memories` (`src/app/api/memories/route.ts:39`) | `household_memories` is not in `schema.sql`, not in the snapshot, and no migration creates it. |
+| ERA faces 6–10 (Health, Trip, Fitness, Outfit, Memory) | Documented-only | — | Feature Map `ai-assistant.md`: "roadmap, not shipped". |
+| Voice conversation (Azure STT/TTS, VAD, spoken replies) | Partial | `src/features/voice-conversation/conversationEngine.ts` → `/api/azure-speech/token`, `/api/tts` (Azure REST, `src/app/api/tts/route.ts:45`), `/api/ai-chat/stream` on the `/chat` path | On `/era` voice goes through the shared `runTurn`; `/chat` keeps a legacy `classifyIntent` path (Feature Map). `azureWake.ts`, `sttCapture.ts`, `vadGate.ts` have no importers; wake-word is "not the accepted product target". |
+| Legacy AI chat assistant (floating, Gemini) | Implemented | `DeferredComponents.tsx:8` mounts `AIChatAssistant` for every signed-in user → `/api/ai-chat` (`src/app/api/ai-chat/route.ts`) → `ai_sessions`, `ai_messages` | A second assistant surface beside ERA. See [ARCHITECTURE §8 F-D1](ARCHITECTURE.md#f-d1-two-assistant-brains). |
+| Watch (PWA) | Implemented | `/watch` → `WatchEraFace.tsx`; watch mode inside `/expense` → `WatchView.tsx`; inside `/dashboard` and `TabContainer` → `SimpleWatchView.tsx`; voice → raw `fetch("/api/drafts")` | `WatchView.tsx` and `SimpleWatchView.tsx` are near-identical copies. `WatchVoiceEntry.tsx` has no importers. |
+| Native Wear OS app | Documented-only | — | `docs/WEAR_OS_NATIVE_APP_IMPLEMENTATION.md` is an implementation brief. |
+
+### 1.8 Platform and owner tools
+
+| Capability | Status | Entry → logic → data (CURRENT IMPLEMENTATION) | Documented intent, gaps, UNKNOWN |
+|---|---|---|---|
+| Dashboard (mobile, web, review dashboards, tablet) | Implemented | `/dashboard` → `DashboardClientPage.tsx` → `EnhancedMobileDashboard.tsx`, `dashboard-v2/ReviewDashboard.tsx`, `web/WebDashboard.tsx` | `TransactionsTable.tsx` and `EditableWidgetGrid.tsx`, both named in Feature Map `dashboard.md`, have no importers. |
+| Settings and preferences (theme, LBP rate in thousands, billing-month start, section order, notification preferences) | Implemented | `/settings` → `src/features/preferences/*` → `src/app/api/user-preferences/route.ts`, `notifications/preferences/route.ts` → `user_preferences`, `notification_preferences` | Quiet hours are accepted and stored but read nowhere else (Notifications Master Book). The preferences route also reads `notification_templates`, absent from `schema.sql` and the snapshot. |
+| Notifications center, in-app alerts, critical alert gate | Implemented | Bell, `/alerts` → `src/hooks/useNotifications.ts` (polls 30–60 s, realtime `notifications-realtime`) → `src/app/api/notifications/in-app/route.ts` → `notifications` | Most mutations in `useNotifications.ts` use raw `fetch` (X1/R44). |
+| Recycle Bin (soft delete, restore, empty, 30-day purge) | Implemented | `/recycle-bin` → `src/features/recycle-bin/hooks.ts` → `src/app/api/recycle-bin/*` → registry of 9 sources (`src/lib/recycleBin/registry.ts`); `cron/purge-recycle-bin` hard-deletes | Purge cron fails open when `CRON_SECRET` is unset (S2/NOTIF-22). |
+| Error logs | Implemented | `ErrorLogger.tsx` (root layout) → `/api/error-logs` → `error_logs`; `/error-logs` viewer | Server code also writes `error_logs` directly (`src/lib/balance.ts:9`). |
+| Onboarding and auth (sign up, log in, reset) | Implemented | `/signup`, `/login`, `/reset-password`, `/welcome` → Supabase Auth via `@supabase/ssr`; `src/app/api/onboarding` → `user_onboarding` | `/api/auth/{login,logout,test-connection}` have no in-repo callers (static scan). |
+| Atlas (in-app page map) | Implemented | `/atlas` → `src/components/atlas/*` → `public/atlas/atlas.json`, generated from `ERA Notes/04 - UI & Design/Page & Feature Atlas/` by `scripts/build-atlas.mjs` | — |
+| AI Usage tracker (manual log of external AI subscriptions) | Implemented | `/ai-usage` → `src/features/ai-usage/*` → `src/app/api/ai-usage/*` → `ai_usage_models`, `ai_session_types`, `ai_sessions` | Excluded from the Feature Index as "not part of the application" (`CLAUDE.md`). |
+| PM Command Center and Delivery (local server, hosted read-only `/pm`, phone `/pm/live`, Delivery V1/V2, UAT wizard, ERA Steward, Drive publish) | Implemented (tooling) | Laptop `pnpm pm` → `scripts/pm-server.mjs`, `scripts/pm/`, `scripts/delivery/`, `scripts/delivery-v2/`; phone → `src/app/pm/live/page.tsx` → Supabase `pm_live`, `pm_commands` → laptop bridge `scripts/pm/bridge.mjs`, `relay.mjs` → `POST /api/pm/notify` | Markdown under `ERA Notes/10 - Project Management/` is the task store. Owner UAT for most Delivery scopes is Pending (`docs/Delivery-UAT-Scenarios-2026-10-25.md`). |
+| Installable apps | Implemented | Root `public/manifest.json` (`/expense` scope) + 17 files in `public/manifests/` + `public/pm.webmanifest` | Rules in `.claude/skills/pwa-install/SKILL.md`; checked by `pnpm pwa:check`. |
+
+---
+
+## 2. Shared foundations
+
+Things every module leans on. A change here is a change everywhere; [CHANGE-IMPACT-GUIDE.md](CHANGE-IMPACT-GUIDE.md) gives each one's blast radius.
+
+| Foundation | CURRENT IMPLEMENTATION | Notes |
+|---|---|---|
+| Auth and session | `@supabase/ssr`; root layout reads `getSession()` from cookies (`src/app/layout.tsx`); `src/middleware.ts` gates only `/pm`, `/pm.html`, `/pm/live` | Root `proxy.ts` is never loaded (S3/R83, corroborated below). |
+| Supabase clients | `supabaseBrowser()` singleton (`src/lib/supabase/client.ts`), `supabaseServer()` / `supabaseServerRSC()` (`server.ts`), `supabaseAdmin()` service role (`admin.ts`, env `NEXT_SUPABASE_SERVICE_ROLE_KEY`) | 49 API route files use `supabaseAdmin()`. `src/app/providers.tsx` creates a second browser client for its auth listener. |
+| Household scope | `household_links` (one row per pair), `profiles`, `is_public` flags, `ownOnly` query params; canonical pattern `src/app/api/accounts/route.ts:28-52` | No shared lookup helper (H1). |
+| Mutation transport | `safeFetch()` (`src/lib/safeFetch.ts`, 8 s default `:14`, `RequestTimeoutError` vs `OfflineError`) | About 100 client mutations still use raw `fetch` (Major Bug Sweep X1/R44 counts 100; Mutation Integrity Audit #10 counts 98). |
+| Connectivity truth | `isReallyOnline()`, HEAD `/api/health` every 30 s online, 3 s probe timeout (`src/lib/connectivityManager.ts:8-12`); SyncContext adds a 5 s realtime-channel check (`src/contexts/SyncContext.tsx:468`) | — |
+| Offline queue | IndexedDB `budget-offline` / `pending-ops`, ≤200 ops, ≤64 KB each, features `transaction · item · hub-message · subtask · recurring · trip · fitness` (`src/lib/offlineQueue.ts:6-14`); replay `src/lib/offlineSyncEngine.ts` | Ops older than 24 h are deleted without notice except fitness (`offlineQueue.ts:422-435`, O1/HUB-119). The legacy localStorage queue in `SyncContext` still runs but nothing adds to it (`addPendingOperation`, `:580`, has no callers). |
+| Query cache | TanStack Query: memory (24 h gc), persisted to localStorage `hm-rq-cache-v3` for `STABLE_KEYS` (`src/app/providers.tsx:22-47`, buster `hm-v4` `:156`); key factories `qk` (`src/lib/queryKeys.ts`), `queryKeys` (`src/lib/queryConfig.ts:47`), 9 feature `queryKeys.ts` | 236 inline `queryKey: ["…"]` arrays remain. |
+| Service worker | `public/sw.js`: app-shell, static and API caches; push, notification actions, `pushsubscriptionchange`, `periodicsync` health check | Serves `/api/accounts*`, `/api/user-preferences`, `/api/categories`, `/api/onboarding`, `/api/drafts`, `/api/future-payments` **cache-first** (`:57-65`, `:184-209`). |
+| Money choke point | `adjustAccountBalance()` + `getBalanceDelta()` (`src/lib/balance-utils.ts`) | Every **delta** goes through it (12 files); it is not transactional with the source row. Absolute sets bypass it: the manual balance set upserts `account_balances` directly (`src/app/api/accounts/[id]/balance/route.ts:182-190`), and new accounts and trip accounts seed a zero row (`src/app/api/accounts/route.ts:160`, `:351`; `src/app/api/trips/[id]/activate/route.ts:90`). |
+| Schedule source contract | `prepareItemCreate()`, receipts (`src/lib/items/createContract.ts`), `create_item_complete`, `get_schedule_bundle` | Other create paths: bulk RPC, medication SQL rebuild, fitness activation. |
+| Occurrence expansion | `getOccurrencesInRange()` (`src/lib/utils/date.ts:224`), `expandOccurrencesInRange()` (`src/lib/utils/dayOccurrences.ts:39`) | Several more inline expanders; the "canonical" `src/lib/schedule/expandOccurrences.ts` is used only by its test. |
+| Notifications pipeline | `notifications` table, `src/lib/notifications/registry.tsx`, `sendPushToUser()` (`src/lib/pushSender.ts:46`), `push_subscriptions`, `push_event_logs` | Guest chat configures `web-push` separately (`src/app/api/guest-portal/chat/route.ts:5-15`). |
+| Activity recording | Generic DB trigger on 80 tables → `household_activity` | ⛁ |
+| Soft delete | `deleted_at` columns + Recycle Bin registry | Not every module is registered (debts, meals, trips, health, fitness, outfits use their own paths or none). |
+| ERA artifact registry | `eraArtifact()` (`src/lib/era/artifacts.ts`) + contract test `src/features/era/artifacts.contract.test.ts` | Owner rule 2026-10-04: every ERA write leaves an artifact. |
+| UI system | Theme via `data-theme` + CSS variables (`src/contexts/ThemeContext.tsx`), person-absolute colours, `sonner` toasts with Undo, shared `DropdownMenu`/`Sheet`, `src/components/ui/` (hook-protected) | Rules in `.claude/skills/ui-guardrails/SKILL.md`. |
+| Shell and navigation | `src/app/layout.tsx` → `Providers` → `ConditionalHeader`, `MobileNav`, `TabContainer`, `DeferredComponents`, `DeepLinkHandler`, `EagerDataPrefetch` | Isolated-route lists live in both `ConditionalHeader.tsx` and `MobileNav.tsx`. |
+
+---
+
+## 3. User entry points
+
+| Entry point | Who | Path in | Evidence |
+|---|---|---|---|
+| App routes (42 `page.tsx`) | Owner, partner | Browser / installed PWA | `find src/app -name page.tsx`; root `/` redirects signed-in users to `/dashboard` (`src/app/page.tsx:15`) |
+| Installable PWA identities (18 + PM) | Owner, partner | Home-screen icons, each scoped to one route | `public/manifest.json`, `public/manifests/*.webmanifest` |
+| ERA command bar and chat drawer | Owner, partner | `/era`, Hub, mobile drawer on dashboards (`EraChatDrawer.tsx`) | Feature Map `ai-assistant.md` |
+| Voice | Owner, partner | Mic in ERA / Hub; spoken replies | `src/features/voice-conversation/` |
+| Push notification and its action buttons | Owner, partner | Service worker `notificationclick` → snooze, dismiss, mark read, confirm transactions, complete item, open app | `public/sw.js:654`, `:1103-1313`; these are **writes made by the service worker**, outside `safeFetch` and the offline queue |
+| Deep links | Owner, partner | `?era=` handoffs, `DeepLinkHandler` → `TabContext` pending ids | `src/components/DeepLinkHandler.tsx`, `src/features/era/engine.ts` |
+| NFC tags and QR codes | Owner, partner, guests | `/nfc/[tag]`, `/qr/expense`, `/g/[tag]` | Slug routes; guest pages unauthenticated |
+| Watch | Owner | `/watch` PWA | `src/app/watch/page.tsx` |
+| Phone PM relay | Owner | `/pm/live` | `src/app/pm/live/page.tsx` |
+| Laptop tools | Owner, AI agents | `pnpm pm`, `pnpm pm:*`, `pnpm era:capabilities`, `pnpm db:verify-rls` | `package.json` scripts |
+| ERA Steward (OpenAI Dot) | Owner's delegate | Private MCP plugin → four Delivery operations | `docs/ERA-Steward-Runbook.md`, `scripts/delivery-v2/steward-mcp.mjs` |
+| Scheduler calls | Machine | `Authorization: Bearer CRON_SECRET` to six cron routes | `src/app/api/cron/*`; scheduler itself UNKNOWN |
+
+---
+
+## 4. Persistence
+
+| Store | What lives there | Evidence and caveats |
+|---|---|---|
+| Supabase Postgres | 122 tables in `migrations/schema.sql` (tables/columns/constraints only; "not meant to be run", line 1); 37 SECURITY DEFINER functions and 340 policies in the 2026-08-04 snapshot | 23 newer tables have no RLS evidence. `item_prerequisites` and `guest_drinks` had RLS disabled at snapshot time. RPC bodies for trips live only in the snapshot. |
+| Tables referenced in code but absent from both `schema.sql` and the snapshot | `household_memories`, `item_categories`, `item_completion_patterns`, `item_completion_stats`, `notification_templates` | Calls may fail at runtime or the tables may exist live. UNKNOWN until the owner refreshes `migrations/db-state.sql`. |
+| Tables in `schema.sql` that no app code reads | `account_balance_archives`, `account_daily_summaries`, `default_categories`, `household_members`, `item_attachments`, plus tables used only by SQL (`household_activity`, `activity_log_sources`, `trip_side_effects`, several fitness/health logs) | Static `.from("…")` scan of `src/` |
+| Supabase Storage buckets | `receipts` (also Hub item-chat photos), `trip-documents`, `wardrobe`, `documents`, `voice-messages` | Bucket policies UNKNOWN |
+| Supabase Realtime | Hub threads/presence/item chat, notifications, ERA conversations, PM relay | 21 `.channel(` sites; server routes also broadcast (`src/app/api/hub/messages/route.ts:1082`) |
+| Browser: localStorage | Persisted query cache, `color-theme`, `hm-theme`, `balance_cache_*`, `user_preferences`, `ack-incoming-transfers`, ERA new-chat marker, UI toggles | Cleared on user switch (`src/app/providers.tsx:191-205`) |
+| Browser: IndexedDB | Offline queue `budget-offline`; statement-import review session (`src/lib/statementImportSession.ts`) | Memory fallback in private browsing (lost on close) |
+| Browser: Cache Storage | `app-shell-v5`, `static-assets-v1`, `api-cache-v1` | `public/sw.js:51-53` |
+| Laptop | `.delivery/` (Delivery store, SQLite supervisor), `ERA Notes/10 - Project Management/.pm/`, `.tmp/` | Git-ignored (`.gitignore`) |
+| Markdown vault | PM backlog, decisions, Master Books (the PM system's only task store) | `ERA Notes/10 - Project Management/` |
+| Google Drive | One-way PM publication for ERA Steward | `scripts/pm/drive-publish.mjs` |
+
+---
+
+## 5. AI features
+
+| Feature | Provider and route | What the model may do | Evidence |
+|---|---|---|---|
+| ERA Ask AI | Claude via `@anthropic-ai/sdk`; `/api/era/ask` (`maxDuration = 60`) | Propose structured actions; nothing writes until the person confirms; invalid proposals get a deterministic refusal | `src/lib/ai/anthropic.ts` (40 s timeout, SDK retries off, wrapper retries free rejections once), `src/lib/ai/eraAskProposal.ts`, `src/features/era/useEraAskAI.ts` |
+| ERA native understanding | None (deterministic) | Parse, ask for missing details, autocomplete from the person's own history | `src/features/era/capture*.ts`, `src/lib/era/captureMemory.ts`, `/api/era/capture-memory` |
+| Legacy AI chat | Gemini; `/api/ai-chat`, `/api/ai-chat/stream` | Conversational answers with budget/schedule context | `src/app/api/ai-chat/route.ts`, context `src/lib/ai/context.ts` (calendar month, not billing month — AI Assistant Overview) |
+| Recipe AI ×5 | Gemini | Generate, optimize, scale, substitute, extract from a URL | `src/app/api/recipes/**` |
+| Budget allocation suggestions | Gemini | Suggest envelopes; stored as a suggestion | `src/app/api/budget-allocations/ai-suggest/route.ts` |
+| Spending analysis report | Gemini | Report on spending for future purchases | `src/lib/ai/analysisReport.ts`, `src/components/ai/AnalysisDashboard.tsx` |
+| Focus insights | Gemini | Cached insights | Route exists; no screen calls it |
+| Schedule suggestions | Gemini when `useAI` | Suggest slots | Orphan route; table missing |
+| Guest bot | None | Hard-coded answers | `src/app/api/guest-portal/bot/route.ts` (G1) |
+
+Shared controls: Gemini wrapper retries 429 and 5xx then falls back to a lite model on a separate quota (`src/lib/ai/gemini.ts:6-12`, `generateContentWithFallback`); usage and per-minute limits in `src/lib/ai/rateLimit.ts` (global 10 requests/minute, 1,000,000 tokens/month, `:9-15`), recorded in `ai_messages`. The test suite blocks paid hosts (`tests/setup/blockPaidApis.ts`, Hard Rule 29). Live accuracy, latency and cost of either provider are UNKNOWN.
+
+---
+
+## 6. Integrations
+
+| Service | Used for | Code | Configuration (`docs/ENV.md` vs code) |
+|---|---|---|---|
+| Supabase (Postgres, PostgREST, Auth, Realtime, Storage) | Everything | `src/lib/supabase/*` | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_SUPABASE_SERVICE_ROLE_KEY` (ENV.md's Backend section names `SUPABASE_SERVICE_ROLE_KEY`) |
+| Google Gemini | Legacy chat, recipes, budget, analysis, insights | `src/lib/ai/gemini.ts` | Code reads **`GEMINI_API_KEY`** (`gemini.ts:4`); ENV.md documents `GOOGLE_AI_API_KEY` |
+| Anthropic Claude | ERA Ask AI | `src/lib/ai/anthropic.ts` | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` |
+| Azure Speech | STT token, TTS, optional custom wake word | `src/app/api/azure-speech/token/route.ts`, `src/app/api/tts/route.ts`, `src/features/voice-conversation/azure*.ts` | Code prefers `AZURE_SPEECH_KEY/REGION`, falls back to `AZURE_TTS_*`; ENV.md lists only the TTS names |
+| Google Calendar API | One-way backup of eligible items | `src/lib/gcal/*`, `src/app/api/gcal/*`, `cron/gcal-reconcile` | `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI`; without them connect returns 503 |
+| Web Push (VAPID) | All push notifications | `src/lib/pushSender.ts`, `public/sw.js` | `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` |
+| r.jina.ai | Reading product pages for shopping comparison | `src/app/api/hub/item-links/route.ts:93` | No key; user-supplied URLs go to a third party |
+| Arbitrary recipe URLs | Recipe extraction | `src/app/api/recipes/extract-from-url/route.ts:100-138` | Server-side fetch |
+| @imgly/background-removal | On-device garment cutouts | `src/lib/backgroundRemoval.ts` | Asset host UNKNOWN (library default) |
+| jsDelivr, Google Fonts, Google Maps links | World-map topology, guest scene font, trip place links | `InteractiveWorldMap.tsx:17`, `DeceptionBoxScene.tsx:51` | — |
+| Docker, Codex, Claude Agent SDK | Delivery V2 workers | `scripts/delivery-v2/` | Local only; `ERA_CODEX_BIN`, `CODEX_HOME` |
+| Google Drive | PM status publication | `scripts/pm/drive-publish.mjs` | Local credentials |
+| OpenAI Dot ("ERA Steward") | Starts and reports Delivery runs | `scripts/delivery-v2/steward-*.mjs`, `docs/ERA-Steward-*.md` | Owner sign-off pending (`docs/ERA-Steward-Signoff-Plan-2026-10-24.md`) |
+
+`docs/ENV.md` also documents `VOICE_SECRET`, which no code reads.
+
+---
+
+## 7. Background processes
+
+| Process | Trigger | What it does | Liveness evidence |
+|---|---|---|---|
+| `cron/item-reminders` | External scheduler, intended every minute | Pushes due item alerts | UNKNOWN; no last-run stamp |
+| `cron/chat-notifications` | External, every minute (header) | Batched unread-chat push | UNKNOWN |
+| `cron/daily-reminder` | External, every few minutes | Local-time "log your spending" nudges | `notification_preferences.metadata.last_sent_slots` dedupes |
+| `cron/daily-items-reminder` | External | Morning due / evening overdue summaries | Same dedupe pattern |
+| `cron/gcal-reconcile` | External, daily | Re-push eligible items, delete stale events | `google_calendar_connections.last_synced_at` (route header) |
+| `cron/purge-recycle-bin` | External, daily | Hard-delete Recycle Bin rows older than 30 days | UNKNOWN; fails open without `CRON_SECRET` (S2) |
+| DB triggers | Every write to registered tables | Activity log (80 tables), medication and fitness mirrors on `item_occurrence_actions`, owner-sync triggers, `updated_at` touches, message receipts, feed rows | Only for migrations actually applied (UNKNOWN for post-08-04) |
+| DB cleanup functions | Unknown | `run_data_cleanup`, `purge_*`, `cleanup_*`, `archive_*` (snapshot function list) | No scheduler for them in the repo |
+| Service worker | Push, notification click/close, subscription change, periodic sync | Shows pushes, performs notification actions, re-syncs subscriptions | `public/sw.js:471-1092` |
+| Client loops | While the app is open | Connectivity probe (30 s), realtime health check (5 s), offline replay on reconnect/focus/visibility, polling: notifications 30/60 s, activity log 15 s, ERA runs 10 s, incoming transfers, Hub fallback poll | `src/lib/connectivityManager.ts`, `src/contexts/SyncContext.tsx`, `src/hooks/useNotifications.ts:111,137` |
+| Eager prefetch | First paint, signed in | Accounts, preferences, drafts, onboarding | `src/components/EagerDataPrefetch.tsx` |
+| Laptop bridge | `pnpm pm --bridge` | Claims phone commands, publishes snapshots, calls `/api/pm/notify` | `scripts/pm/bridge.mjs`, `relay.mjs` |
+| PM import jobs | `pnpm pm` startup | ERA reports → Hub & ERA backlog; UAT feedback → work | `scripts/pm/era-issues.mjs`, `scripts/pm/uat-feedback.mjs` |
+
+---
+
+## 8. Classification summary
+
+Counts are of the 74 capability rows in §1.
+
+| Status | Rows |
+|---|---|
+| Implemented | 58, of which 15 are migration-gated ⛁ |
+| Partial | 6: recurring payments, focus insights, prerequisites, trip activation cascade, ERA durable journal ⛁, voice conversation |
+| Documented-only | 7: spending alerts, payment reminders, `/focus` page, health Phase 3/4, outfits planner and wear log, ERA faces 6–10, native Wear OS app |
+| Unclear | 3: AI schedule suggestions, item categories and completion stats, Brain memory |
+
+Two more gaps sit inside Implemented rows rather than in their own: shopping → inventory restock is documented-only (Inventory row), and `notification_templates` is unclear (Settings row).
+
+The counts are a reading aid, not a maturity score. "Implemented" never means "accepted by the owner"; Master Books record most recent work as owner UAT pending.
+
+## 9. Unknowns that change a capability's real status
+
+1. Which of the 41 post-snapshot migrations have been applied. This decides whether Schedule creation, Activity Log, Fitness, Medications, ERA artifacts/lexicon/templates/journal and Transfer acknowledgements work at all.
+2. Whether a scheduler calls the six cron routes, how often, and with which secret.
+3. Live RLS for the 23 tables without snapshot coverage, and whether `item_prerequisites` / `guest_drinks` still have RLS disabled.
+4. Whether the five code-referenced tables exist live.
+5. Which service-worker version phones are running, and therefore whether money GETs are served cache-first.
+6. Deployed revision, environment variables actually set (Gemini key name, Azure names), and which feature flags are on.
+7. How either person actually uses any module. Nothing in the repo measures usage, and this atlas does not infer it.
+
+**External verification (2026-11-04).** The Next.js 16 `proxy`/`middleware` file location was checked by web search; results summarised the nextjs.org docs as requiring the file "in the project root, or inside `src` if applicable, … at the same level as `pages` or `app`", which supports S3. Sources (titles and links only; the pages themselves could not be opened): [Next.js `proxy` file convention](https://nextjs.org/docs/pages/api-reference/file-conventions/proxy), [Next.js `middleware` file convention](https://nextjs.org/docs/app/api-reference/file-conventions/middleware), [Vercel Academy: proxy basics](https://vercel.com/academy/nextjs-foundations/proxy-basics). Direct fetches of `nextjs.org` and `vercel.com` were refused by this session's network policy, so the exact wording, and Vercel cron configuration, remain unverified.
