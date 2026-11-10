@@ -54,6 +54,9 @@ Labels `F2-n` are local to this folder. Every finding has one disposition.
 | F2-23 | Backlog arrival exceeds departure; 34 items in Now | Seen | Owner recommendations in [Backlog health](<10 - Project Management/Portfolio/Backlog Health.md>) |
 | F2-24 | The largest files (Hub page 5,972 lines) cap what lower tiers can edit | Measured | Routing constraint; existing BUD-9 |
 | F2-25 | Six areas need a deeper read than this pass gave | Stated | Studies H1 to H6, unadopted options in [Research options](<../Research/Options.md#fable-2-heavyweight-studies>) |
+| F2-26 | 7 of 29 Hard Rules have any mechanism behind them; 22 are text only | Read, measured | [R94](<../PM Tooling/PM Tooling — Master Book.md#r94>) |
+| F2-27 | The setup differs per agent (Codex gets 2 of 18 skills, older hooks, machine-specific paths); 13 conflict classes are live | Measured | [R92](<../PM Tooling/PM Tooling — Master Book.md#r92>), [R93](<../PM Tooling/PM Tooling — Master Book.md#r93>) |
+| F2-28 | Ordinary agent sessions leave no record, and every skill's inputs are prose | Read | [R95](<../PM Tooling/PM Tooling — Master Book.md#r95>), [R96](<../PM Tooling/PM Tooling — Master Book.md#r96>), [R98](<../PM Tooling/PM Tooling — Master Book.md#r98>); cockpit [R97](<../PM Tooling/PM Tooling — Master Book.md#r97>), [R99](<../PM Tooling/PM Tooling — Master Book.md#r99>) |
 
 ## Folder map
 
@@ -67,9 +70,10 @@ Labels `F2-n` are local to this folder. Every finding has one disposition.
 | 10 - Project Management / Command Center | [Usability and visual review](<10 - Project Management/Command Center/1 - Usability and Visual Review.md>) · [Functional roadmap](<10 - Project Management/Command Center/2 - Functional Roadmap.md>) |
 | 10 - Project Management / Delivery | [Diagnosis](<10 - Project Management/Delivery/1 - Diagnosis.md>) · [Local lane design](<10 - Project Management/Delivery/2 - Local Lane Design.md>) · [Gate disposition](<10 - Project Management/Delivery/3 - Gate Disposition.md>) · [Migration and retirement](<10 - Project Management/Delivery/4 - Migration and Retirement.md>) |
 | 10 - Project Management / Portfolio | [Research-to-queue leak](<10 - Project Management/Portfolio/Research-to-Queue Leak.md>) · [Backlog health](<10 - Project Management/Portfolio/Backlog Health.md>) |
+| Agentic OS | [Index](<Agentic OS/_index.md>): the plan to evolve the Command Center into PM.2 — setup registry, rule detectors, conflict check, flight recorder, scorecards, skill launchpad, cockpit design, roadmap (12 documents) |
 | Model Tiers | [Routing rules](<Model Tiers/_Routing.md>) · [CLAUDE_HIGH](<Model Tiers/CLAUDE_HIGH/Work Packets.md>) · [CLAUDE_MID](<Model Tiers/CLAUDE_MID/Work Packets.md>) · [CLAUDE_LOW](<Model Tiers/CLAUDE_LOW/Work Packets.md>) · [CODEX](<Model Tiers/CODEX/Work Packets.md>) |
 
-The folders mirror the vault's sections. Sections 05 to 07 have no folder because this pass produced nothing for them.
+The folders mirror the vault's sections. Sections 05 to 07 have no folder because this pass produced nothing for them. `Model Tiers` and `Agentic OS` are topic folders with no vault counterpart.
 
 ## Read in this order
 
@@ -78,10 +82,11 @@ The folders mirror the vault's sections. Sections 05 to 07 have no folder becaus
 3. [Environments and data safety](<01 - Architecture/Environments and Data Safety.md>).
 4. [Research-to-queue leak](<10 - Project Management/Portfolio/Research-to-Queue Leak.md>) and [Backlog health](<10 - Project Management/Portfolio/Backlog Health.md>).
 5. [Model tier routing](<Model Tiers/_Routing.md>) when handing an item to a session.
+6. [Agentic OS](<Agentic OS/_index.md>) for the PM.2 direction.
 
 ## Items filed on 2026-11-10
 
-Thirty lines, in Next or Later, none in Now. Fifteen are the sweep's findings, fifteen are new.
+Thirty-eight lines, in Next or Later, none in Now. Fifteen are the sweep's findings, fifteen are new from the analysis, eight are the Agentic OS roadmap steps.
 
 | Campaign | Next | Later |
 |---|---|---|
@@ -89,7 +94,7 @@ Thirty lines, in Next or Later, none in Now. Fifteen are the sweep's findings, f
 | Hub & ERA | HUB-118, HUB-119, HUB-120, HUB-121 | HUB-122 |
 | Notifications & Alerts | NOTIF-22, NOTIF-23 | |
 | Kitchen | | KIT-28 |
-| PM Tooling | R84, R85, R86, R87, R88 | R83, R89, R90, R91 |
+| PM Tooling | R84, R85, R86, R87, R88, R92 | R83, R89, R90, R91, R93 to R99 |
 | Delivery | DLV-150, DLV-151, DLV-152, DLV-153 | DLV-154, DLV-155 |
 
-Recommended for the owner to move into Now: **R84, HUB-118, BUD-95, BUD-89, BUD-90, HUB-119**, then **DLV-150**.
+Recommended for the owner to move into Now: **R84, HUB-118, BUD-95, BUD-89, BUD-90, HUB-119**, then **DLV-150**. For the Agentic OS, **R92, R93 and R94** are the smallest version worth having.

@@ -38,6 +38,7 @@ evidence_cutoff: "commit 8da80ae, 2026-11-10."
 | Exactly-once | Twelve separate items | No shared contract | [Exactly-once](<../03 - Junction Modules/Sync & Offline/Exactly-Once Remains Open.md>) |
 | Portfolio | Conventions and lint | No look at arrival versus departure | [Backlog health](<../10 - Project Management/Portfolio/Backlog Health.md>) |
 | Model choice | Registry of aliases | No per-item routing | [Model tiers](<../Model Tiers/_Routing.md>) |
+| Agent setup | Skills, hooks and rules written and listed in `docs/Skills-and-Agents.md` | No view of the whole, no per-agent parity, no deterministic evaluation of sessions | [Agentic OS](<../Agentic OS/_index.md>) |
 
 ## Still not covered by anyone
 

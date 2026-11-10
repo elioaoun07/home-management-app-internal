@@ -18,6 +18,8 @@ Keep work identifiable, reviewable and recoverable across PM surfaces. Tooling c
 
 ## Current state & evidence
 
+**2026-11-10 — Agentic OS plan filed (documentation only):** R92 to R99 added with criteria below, one per step of the [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>): setup parity, registry and conflict check, rule detectors, flight recorder, scorecards, the PM.2 cockpit, the skill launchpad, Arena and game layer. Owner commission of the same date. Nothing is implemented.
+
 **2026-11-10 — Fable 2 filing (documentation only):** R84, R85, R86, R87, R88, R83, R89, R90, R91 added to the checklist with criteria below. Sources are the 2026-11-04 Major Bug Sweep, whose IDs had not been filed, and the [Fable 2 analysis](<../Fable 2/_index.md>) at commit `8da80ae`. Nothing is implemented, applied or verified by this entry.
 
 **2026-10-25 — R81 UAT discovery repair:** Delivery opens with **Review & sign off**, visible work IDs, date, readiness and **Start test / Continue / View steps** links. Search spans IDs, titles and campaigns; To test / Not ready / Feedback / History / All retain search, filter and pagination when returning from the wizard. Apply/conflict actions have their own **Delivery actions** section. The initial local store had 62 records (49 draft, 13 incomplete), not 62 owner-ready tests. Nineteen steps lacked explicit expected-result markers, one more used a comma before lowercase expect, and two used lowercase expect after a sentence/semicolon; wording and the parser are repaired without inferring PASS or readiness. Verification and owner steps are recorded under R81.
@@ -116,6 +118,8 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟠 **R92** The agent setup differs per agent and holds dead, duplicate and machine-specific configuration (2026-11-10 inventory). See [acceptance](<#r92>).
+
 🔴 **R84** Deny Supabase write tools in every tool namespace. Filed 2026-11-10 from [Fable 2 finding F2-12](<../Fable 2/01 - Architecture/Environments and Data Safety.md>) (2026-11-10). See [acceptance](<#r84>).
 
 🟠 **R85** Disposition the ERA research packs into the backlog. Filed 2026-11-10 from [Fable 2 finding F2-11](<../Fable 2/10 - Project Management/Portfolio/Research-to-Queue Leak.md>) (2026-11-10). See [acceptance](<#r85>).
@@ -169,6 +173,108 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### R92
+
+**Outcome:** Codex and other agents get the same skills and guards as Claude from generated copies, and the setup holds no dead, duplicate or machine-specific configuration.
+
+**Kind:** maintenance
+**Touches:** `.codex/`, `.agents/`, `.claude/hooks/`, `.husky/pre-commit`, `.claude/skills/start-task/SKILL.md`, `.claude/skills/finish-task/SKILL.md`
+
+- **Source:** [Agentic OS conflict classes](<../Fable 2/Agentic OS/05 - Conflict and Drift Detector.md>) and [setup inventory](<../Fable 2/Agentic OS/02 - Current Setup Inventory.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** First confirm by observation which hook file Codex reads and that a hook fires. Then: `.agents/skills/` and the Codex hook scripts are generated from the Claude sources and byte-equal to them; one Codex hook config remains, with relative paths; `.claude/hooks/sync-copilot.sh` is removed or wired; `.husky/pre-commit` is executable; the junction list in `start-task` and the campaign list in `finish-task` match their owners; the name clash between root `CODEX.md` and `ERA Notes/CODEX.md` is resolved. Owner decides first whether Codex stays a first-class agent and whether `settings.local.json` stays committed.
+- **Tier:** CLAUDE_MID. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
+- **Reading guide:** At the cutoff: 2 of 18 skills mirrored and one is 13 lines stale; all four same-named Codex hooks differ; `.codex/hooks.json` uses an absolute Windows user path and disagrees with `.codex/settings.json`. Pairs with R84 and R91.
+
+### R93
+
+**Outcome:** One command lists every rule, skill, hook, permission, mirror and check per agent, and another reports contradictions and drift between them.
+
+**Kind:** feature
+**Touches:** `scripts/`, `tests/`, `package.json`, `.github/workflows/ci.yml`
+
+- **Source:** [Agentic OS setup registry](<../Fable 2/Agentic OS/03 - Setup Registry.md>), [conflict detector](<../Fable 2/Agentic OS/05 - Conflict and Drift Detector.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** `pnpm os:scan` writes a versioned registry with a setup fingerprint, with zero dependencies and no network. At the current commit it reproduces the counts in the hand-made inventory. `pnpm os:check` implements the conflict classes as queries, exits non-zero on error-level rows, and runs in CI. An injected mirror drift is reported.
+- **Tier:** CLAUDE_MID. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
+- **Reading guide:** Reuse `scripts/pm/shared/` parsers and `scripts/pm/scan.mjs` walking. Rule identities `HR-1` to `HR-29` are stable. Add a `# enforces: HR-n` first-line comment to hooks and checks.
+
+### R94
+
+**Outcome:** For any commit range, a script reports which Hard Rules the change broke, improved or left alone, with file and line.
+
+**Kind:** feature
+**Depends on:** R93
+**Touches:** `scripts/`, `tests/`
+
+- **Source:** [Agentic OS rule enforcement matrix](<../Fable 2/Agentic OS/04 - Rule Enforcement Matrix.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** `pnpm os:eval <base>..<head>` runs the first eight detectors (rules 22, 6, 19, 7, 24, 25, 8, 12) on the diff and prints pass, fail, improved or n/a per rule. Each detector has fail, pass and not-applicable fixtures and a version. Verdicts judge what the change added or removed, never the existing baseline. First slice only; the remaining detectors belong to R96.
+- **Tier:** CLAUDE_MID; CLAUDE_LOW for repeats. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
+- **Reading guide:** Today 7 of 29 rules have a mechanism. Baselines on `main`: rule 22 at 184 calls, rule 6 at 96, rule 8 failing on 2 of 6 cron routes.
+
+### R95
+
+**Outcome:** Each Claude session leaves a record of its setup, skills loaded, hooks fired, checks, rule verdicts and cost, readable as Markdown.
+
+**Kind:** feature
+**Depends on:** R93
+**Touches:** `scripts/`, `tests/`, `.claude/settings.json`, `.gitignore`
+
+- **Source:** [Agentic OS flight recorder](<../Fable 2/Agentic OS/06 - Flight Recorder.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** A runner wraps the existing hooks and logs each firing with exit code and duration; an equivalence test shows hooks receive the same input and return the same output and exit code with and without it. The session transcript is read, never modified, for skills, reads, tool calls and usage. Rows are stored under a gitignored `.os/`; `pnpm os:report <session>` prints the report. If recording fails the session is unaffected. No transcript text beyond short excerpts is stored; key-like values are redacted.
+- **Tier:** CLAUDE_HIGH for the hook runner, then CLAUDE_MID. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
+- **Reading guide:** The Stop hook already parses the transcript and the hook payload (`transcript_path`, `tool_input.file_path`). SQLite pattern: `scripts/delivery-v2/store.mjs`.
+
+### R96
+
+**Outcome:** Every session has a scorecard of rules, checks, process, scope, autonomy and cost, and every item a delivery scorecard, computed without a model.
+
+**Kind:** feature
+**Depends on:** R94, R95
+**Touches:** `scripts/`, `tests/`
+
+- **Source:** [Agentic OS deterministic evaluation](<../Fable 2/Agentic OS/07 - Deterministic Evaluation.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** The process panel uses a path-to-skill `requires` table: a session that edits a money path without loading `money-rules` shows a process failure. The remaining detectors from the matrix are added. Delivery scorecards count sessions, rework, UAT result, escapes within 30 days and reverts. Comparisons group by tier alias, effort and item class, always print n, and draw no ranking under ten sessions. Adapters project Delivery V2 runs and, once its log format is confirmed, Codex sessions.
+- **Tier:** CLAUDE_MID. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
+- **Reading guide:** No blended score and no model review in the pipeline. Escapes and reverts are the quality signal the other panels predict.
+
+### R97
+
+**Outcome:** An interactive dashboard shows what to do now, the setup per agent, each session's flight report and scores; the existing Command Center remains the place for documents.
+
+**Kind:** feature
+**Depends on:** R93
+**Touches:** `scripts/pm/`, `tests/pm-ui/`
+
+- **Source:** [Agentic OS PM.2 product design](<../Fable 2/Agentic OS/09 - PM.2 Product Design.md>), [visual and motion language](<../Fable 2/Agentic OS/10 - Visual, Motion and Game Layer.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** Split before dispatch. Slices: Setup (map, rulebook, conflicts) from the registry alone; Sessions from the recorder; Bridge; Score. Home, Delivery and Analytics move into PM.2 and no screen exists in both products; PM.1 keeps documents, checklists, inbox, decisions and history. Every number opens its evidence in one click; motion respects reduced-motion; clearing `.os/` loses no backlog or rule. Arrival retires the two older UI generations (R6).
+- **Tier:** CLAUDE_MID; CLAUDE_HIGH for the setup map. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
+- **Reading guide:** Sessions needs R95. Absorbs R86's Today block as the Bridge. Load `ui-guardrails`; Hard Rule 28 applies to PM.2's own text.
+
+### R98
+
+**Outcome:** The owner picks a skill, fills a form generated from the skill's declared inputs, and gets a ready prompt or a launched session with no follow-up questions about inputs.
+
+**Kind:** feature
+**Depends on:** R93
+**Touches:** `.claude/skills/`, `scripts/`, `tests/`
+
+- **Source:** [Agentic OS skill launchpad](<../Fable 2/Agentic OS/08 - Skill Launchpad.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** A `form.json` sidecar schema with typed fields, defaults, conditional fields, pre-launch checks and an optional dry-run preview. Forms for `new-module`, `era-wire`, `fix-bug`, `add-feature`, `db-migration`, `triage-inbox`, `data-repair` and `wizard`. Pickers read the registry and the PM scan. Copy prompt works without any launcher; launching into a worktree is enabled when DLV-150 exists. The registry reports a skill with an inputs table and no form, form drift, and a model name where a tier alias belongs.
+- **Tier:** CLAUDE_MID. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
+- **Reading guide:** `new-module` already lists eight inputs and a `--dry-run`. `era-wire` names a model where the Model Registry requires an alias.
+
+### R99
+
+**Outcome:** Two tiers can be run on the same frozen case with a hidden oracle, and PM.2 shows streaks, shields, debt bars and parity as an optional layer over real measurements.
+
+**Kind:** feature
+**Depends on:** R96, R97
+**Touches:** `scripts/`, `tests/`
+
+- **Source:** [Agentic OS evaluation, Arena](<../Fable 2/Agentic OS/07 - Deterministic Evaluation.md>), [game layer](<../Fable 2/Agentic OS/10 - Visual, Motion and Game Layer.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** Admission gate: R96 scorecards in use and the owner wants tier comparison. Cases are harvested from shipped items (start commit, brief, the item's own test as the hidden oracle). Only the owner starts an Arena run, paced, subscription only. The game layer awards nothing for activity, opens the evidence behind every counter, and can be switched off.
+- **Tier:** CLAUDE_HIGH for the Arena. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
+- **Reading guide:** Patterns: the ERA Gym replay and `tests/delivery-oracles/`.
 
 ### R84
 

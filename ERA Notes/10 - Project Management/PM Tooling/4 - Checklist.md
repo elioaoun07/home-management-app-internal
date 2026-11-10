@@ -35,6 +35,10 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **R87** Close elapsed sprint weeks and roll their work forward — [criteria](<PM Tooling — Master Book.md#r87>) _(friction - S)_
 - [ ] **R88** Make cited evidence verifiable and run the docs check in CI — [criteria](<PM Tooling — Master Book.md#r88>) _(friction - S)_
 
+**Filed 2026-11-10 (Fable 2, Agentic OS).** One item per roadmap step; criteria carry the plan links.
+
+- [ ] **R92** Give every agent the same setup and remove the current drift — [criteria](<PM Tooling — Master Book.md#r92>) _(friction - S)_
+
 ## Later
 
 - [ ] **R36** Type the shared PM parsing core — [criteria](<PM Tooling — Master Book.md#r36>) _(friction - M)_
@@ -53,3 +57,13 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **R89** Hold each Master Book to a size budget — [criteria](<PM Tooling — Master Book.md#r89>) _(friction - M)_
 - [ ] **R90** Cover every service-role route with an authorization contract — [criteria](<PM Tooling — Master Book.md#r90>) _(friction - M)_
 - [ ] **R91** Make `pnpm typecheck` run in a 15 GB container — [criteria](<PM Tooling — Master Book.md#r91>) _(annoyance - S)_
+
+**Filed 2026-11-10 (Fable 2, Agentic OS).** One item per roadmap step; criteria carry the plan links.
+
+- [ ] **R93** Generate a setup registry and check it for conflicts — [criteria](<PM Tooling — Master Book.md#r93>) _(friction - M)_
+- [ ] **R94** Decide Hard Rule verdicts for any change with detectors — [criteria](<PM Tooling — Master Book.md#r94>) _(friction - M)_
+- [ ] **R95** Record every agent session as a flight report — [criteria](<PM Tooling — Master Book.md#r95>) _(friction - M)_
+- [ ] **R96** Score sessions and deliveries from recorded facts — [criteria](<PM Tooling — Master Book.md#r96>) _(friction - M)_
+- [ ] **R97** Build the PM.2 cockpit and keep PM.1 as the library — [criteria](<PM Tooling — Master Book.md#r97>) _(friction - L)_
+- [ ] **R98** Launch skills from forms with validated inputs — [criteria](<PM Tooling — Master Book.md#r98>) _(friction - M)_
+- [ ] **R99** Compare tiers on identical work and add the game layer — [criteria](<PM Tooling — Master Book.md#r99>) _(parked - L)_
