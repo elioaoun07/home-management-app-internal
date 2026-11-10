@@ -9,7 +9,7 @@ evidence_cutoff: "commit 8da80ae, 2026-11-10. Proposed design; nothing here is i
 
 # Delivery — the Local lane (proposed design)
 
-[Fable 2 index](<../../_index.md>) · [Diagnosis](<1 - Diagnosis.md>) · [Gate disposition](<3 - Gate Disposition.md>) · [Migration](<4 - Migration and Retirement.md>)
+[Fable 2 index](<../../_index.md>) · [Diagnosis](<1 - Diagnosis.md>) · [Gate disposition](<3 - Gate Disposition.md>) · [Migration](<4 - Migration and Retirement.md>) · [Supervisor contract](<5 - Supervisor Contract.md>)
 
 **Status: proposed.** Owner direction 2026-11-10: deliver locally, build UATs, ship; relax the restrictions and give the AI more freedom. Four guardrails survive, by the owner's choice: no production DB writes, subscription only, owner ships, risk-domain review. Canonical work: [DLV-150](<../../../Delivery/Delivery — Master Book.md#dlv-150>) to [DLV-155](<../../../Delivery/Delivery — Master Book.md#dlv-155>).
 

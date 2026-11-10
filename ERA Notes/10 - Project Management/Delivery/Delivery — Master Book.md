@@ -18,6 +18,8 @@ Produce useful product outcomes with bounded authority and truthful evidence. To
 
 ## Current state & evidence
 
+**2026-11-10 — ERA Steward subject closed in one document (documentation only):** the [supervisor contract](<../Fable 2/10 - Project Management/Delivery/5 - Supervisor Contract.md>) records why no Steward-started delivery shipped (the furthest reached a plan awaiting approval, `r-262a6aee5ed3`; the applied R44 run was owner-driven and has no recorded sign-off), defines the conductor state machine, the verbs, the mandate and the escalation table, and sets four exercises as the acceptance. DLV-156 added. Nothing is implemented.
+
 **2026-11-10 — Fable 2 filing (documentation only):** DLV-150, DLV-151, DLV-152, DLV-153, DLV-154, DLV-155 added to the checklist with criteria below. Sources are the 2026-11-04 Major Bug Sweep, whose IDs had not been filed, and the [Fable 2 analysis](<../Fable 2/_index.md>) at commit `8da80ae`. Nothing is implemented, applied or verified by this entry.
 
 **2026-10-31, 18:17 Beirut — KIT-10 readiness recovered, no launch:** following the owner's request to diagnose Check directly, existing saved local owner access sent Check (no new pairing). Authorization renewed until 2026-11-01T16:13:15.570Z and prepared-plan Touches were derived automatically. Collection isolated `docker-unavailable`: frontend alive, backend absent, missing Linux engine pipe. Supported Start falsely said already running; Restart failed on lingering processes. Stopping verified Docker frontend processes and launching the installed main executable recovered engine 28.5.1 without changing Docker settings or deleting resources. A second Check without renewal passed **11/11, ready: true**, completed 2026-10-31T16:17:01.069Z, native 0.156.1 / Codex Luna low, zero provider turns, both probe cleanup signals true. No delivery Start, Apply, bridge restart or policy replacement. R82 owns the blocker/pending presentation fix. Historical browser-click outcome and the Docker backend's original exit cause remain unestablished; readiness expires normally and Start rechecks live facts.
@@ -127,6 +129,8 @@ V2 S0/S1 code and synthetic fixtures landed Sep7–9, but no native baseline, ad
 Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/Delivery/Delivery — Master Book.md>) preserves detailed older narratives and receipts.
 
 ## Vision & Decisions
+
+- **Supervisor contract, 2026-11-10 (owner commission to close the ERA Steward subject).** Delivery is run by a deterministic conductor that needs no assistant; a supervisor (Dot now, Claude Duet or another later) is an optional caller of eight verbs on the Local lane only, with authority fixed by which verbs exist. It never approves a risk review, ships, or edits the mandate. The browser-driving procedure is retired when DLV-156 ships; the tunnel and private plugin are an optional transport; UAT scenario M1 (tools-only proof) is dropped as unprovable and unnecessary. All choices are closed in the [contract](<../Fable 2/10 - Project Management/Delivery/5 - Supervisor Contract.md>) §10. Proposed design; not implemented.
 
 - **Owner direction 2026-11-10 — relax Delivery for supervised local use.** In the owner's words: "The docker feels an overkill, the feature seems too restrictive to a point that it feels unusable. From my point of view, I will be delivering locally, build UATs, and eventually ship the feature … I want to relax everything, and give more freedom to AI to ship." Four guardrails survive by the owner's choice: no production DB writes (Hard Rule 26), subscription only (Hard Rule 29), the owner ships after UAT sign-off, and money, recurrence, auth/RLS and migration changes are reviewed before they land. Everything else becomes advisory or is dropped in a new Local lane ([design](<../Fable 2/10 - Project Management/Delivery/2 - Local Lane Design.md>), [gate disposition](<../Fable 2/10 - Project Management/Delivery/3 - Gate Disposition.md>)); work is DLV-150 to DLV-155. For the Local lane only, this supersedes the V1 "no Git writes/worktrees" freeze, the 2026-09-11 container boundary direction, DEC-16's protected Apply and DLV-96/97 qualification. The confined V2 path is unchanged and frozen. Not implemented.
 
@@ -242,6 +246,19 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### DLV-156
+
+**Outcome:** A supervising assistant, or the owner alone, drives a local delivery from start to shipped through one small command contract with a fixed state machine.
+
+**Kind:** feature
+**Depends on:** DLV-150, DLV-152, DLV-153
+**Touches:** `scripts/delivery-v2/`, `scripts/pm/app/`, `tests/delivery-v2/`, `package.json`
+
+- **Source:** [ERA Steward supervisor contract](<../Fable 2/10 - Project Management/Delivery/5 - Supervisor Contract.md>) (2026-11-10, owner commission to close the Steward subject). Filed 2026-11-10; not started.
+- **Acceptance:** One implementation behind the CLI, the stdio MCP server and the Command Center buttons provides eight Steward verbs (`next`, `start`, `status`, `wait`, `answer`, `handover`, `stop`, `report`) and five owner verbs (`mandate`, `review`, `signoff`, `ship`, `undo`) with the documented exit codes. Each run has an append-only log and a state file naming the state, the next actor and the next action; `start` is idempotent per item. The mandate file is enforced before every start and cannot be changed with the Steward credential. The escalation table is code: an unlisted situation is reported, never handled. Exercises E1 to E4 in the contract pass, E1 (no supervisor, one small item from start to shipped) first. The browser-driving procedure in the runbook is retired; the tunnel stays optional.
+- **Tier:** CLAUDE_HIGH, effort high. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Reuse `scripts/delivery-v2/steward-mcp.mjs`, `steward-tools.mjs` (intent receipts, last-known state, status templates) and re-point them from launch routes to the verbs. The contract's §4 is the state machine, §7 the mandate, §8 the escalation table, §11 the acceptance.
 
 ### DLV-150
 

@@ -61,6 +61,7 @@ Two signals or more: **CLAUDE_HIGH**. One: **CLAUDE_MID**. None: **CLAUDE_LOW**.
 | DLV-153 Ship and Undo by merge | CLAUDE_HIGH | default | Git effects plus PM trace |
 | DLV-154 Development database | CLAUDE_HIGH | default | Design; several owner steps |
 | DLV-155 Retire the confined stack | CLAUDE_MID | default | Deletion with the suite as the oracle |
+| DLV-156 Supervisor command contract | CLAUDE_HIGH | high | State machine and authority boundary |
 | R92 Same setup for every agent | CLAUDE_MID | default | Configuration across three agents |
 | R93 Setup registry and conflict check | CLAUDE_MID | default | Parsing existing files; the hand inventory is the test |
 | R94 Rule detectors | CLAUDE_MID, then CLAUDE_LOW | default | Small pure functions with fixtures |

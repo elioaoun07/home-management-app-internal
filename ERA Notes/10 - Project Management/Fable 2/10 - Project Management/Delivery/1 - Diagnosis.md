@@ -9,7 +9,7 @@ evidence_cutoff: "commit 8da80ae, 2026-11-10. Source read and suites run in a cl
 
 # Delivery — why it feels unusable
 
-[Fable 2 index](<../../_index.md>) · next: [Local lane design](<2 - Local Lane Design.md>) · [Gate disposition](<3 - Gate Disposition.md>) · [Migration](<4 - Migration and Retirement.md>)
+[Fable 2 index](<../../_index.md>) · next: [Local lane design](<2 - Local Lane Design.md>) · [Gate disposition](<3 - Gate Disposition.md>) · [Migration](<4 - Migration and Retirement.md>) · [Supervisor contract](<5 - Supervisor Contract.md>)
 
 ## Verdict
 

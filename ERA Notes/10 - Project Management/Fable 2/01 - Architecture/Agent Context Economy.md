@@ -59,4 +59,4 @@ Then "read the campaign's Master Book before working it":
 
 ## Note on this folder
 
-Fable 2 adds 39 files and about 202 KB to the estate it criticises (13 of them the Agentic OS plan). Each file is under 12 KB, none needs to be read to work an item (the criteria sections carry what is needed), and the retirement condition is in the [index](<../_index.md>).
+Fable 2 adds 40 files and about 223 KB to the estate it criticises (13 of them the Agentic OS plan). Each file is under 12 KB except the supervisor contract at about 20 KB, none needs to be read to work an item (the criteria sections carry what is needed), and the retirement condition is in the [index](<../_index.md>).

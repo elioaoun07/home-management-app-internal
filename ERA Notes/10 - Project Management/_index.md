@@ -25,7 +25,7 @@ Start with a campaign checklist. The eleven checklists form **one backlog**, gro
 | Healthcare | Health profiles, allergies, medications, body measurements, Fitness and care-reference consumers | 18 | [Backlog](<Healthcare/4 - Checklist.md>) · [Master Book](<Healthcare/Healthcare — Master Book.md>) |
 | Outfits | Personal wardrobe, outfit builder/plans and wear history | 12 | [Backlog](<Outfits/4 - Checklist.md>) · [Master Book](<Outfits/Outfits — Master Book.md>) |
 | PM Tooling | PM desktop/static/mobile reading, task identity and governance; Atlas tooling | 35 | [Backlog](<PM Tooling/4 - Checklist.md>) · [Master Book](<PM Tooling/PM Tooling — Master Book.md>) |
-| Delivery | V1 operation and V2 execution boundary/value trial | 20 | [Backlog](<Delivery/4 - Checklist.md>) · [Master Book](<Delivery/Delivery — Master Book.md>) |
+| Delivery | V1 operation and V2 execution boundary/value trial | 21 | [Backlog](<Delivery/4 - Checklist.md>) · [Master Book](<Delivery/Delivery — Master Book.md>) |
 | Native App | Native shell, device bridge, store distribution and watch options | 8 | [Backlog](<Native App/4 - Checklist.md>) · [Master Book](<Native App/Native App — Master Book.md>) |
 
 Campaigns group related modules; they do not change the source code’s Standalone/Junction import rules. The [Feature Map](<../01 - Architecture/Feature Map/_index.md>) routes intent to code; module Overview docs remain authoritative for product architecture. Cross-module work has one owning task with linked prerequisites, never matching checkboxes in two campaigns.
@@ -43,7 +43,7 @@ Campaigns group related modules; they do not change the source code’s Standalo
 | Delivery UAT wizard, sign-off and feedback-to-work specification | [Build specification](<Plans/Delivery UAT Sign-off and Feedback.md>); [existing-delivery scenario index](<../../docs/Delivery-UAT-Scenarios-2026-10-25.md>). Documentation only; runtime implementation remains a separate job. |
 | Accepted Command Center product direction and phases | [Command Center](<Plans/Command Center.md>); phases map to PM Tooling and Delivery IDs |
 | Catalogue’s accepted reference/definition design | [Final build plan §10](<../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>); [packet ownership](<Research/Options.md#catalogue-packet-ownership>) |
-| Whole-repository analysis of 2026-11-10: Delivery Local lane, Command Center review, cross-cutting findings and per-item model tiers | [Fable 2](<Fable 2/_index.md>), including the [Agentic OS plan](<Fable 2/Agentic OS/_index.md>) for PM.2; a study, not a queue. Its 38 items live in the campaign checklists |
+| Whole-repository analysis of 2026-11-10: Delivery Local lane, Command Center review, cross-cutting findings and per-item model tiers | [Fable 2](<Fable 2/_index.md>), including the [Agentic OS plan](<Fable 2/Agentic OS/_index.md>) for PM.2; a study, not a queue. Its 39 items live in the campaign checklists |
 | Unadopted ideas, experiments and alternatives | [Research options](<Research/Options.md>), linked to archived originals |
 | Completed work and verification receipts | Master Book Shipped Log; detailed old narratives in the archive |
 | Historical plans, studies and cancelled work | [_Archive](<_Archive/_index.md>); never a second queue |

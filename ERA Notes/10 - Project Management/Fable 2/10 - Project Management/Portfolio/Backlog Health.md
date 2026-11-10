@@ -51,4 +51,4 @@ No new checklist items here except where an ID is named; these are owner calls.
 
 ## What this filing does to the numbers
 
-It adds 30 open items (15 already-found defects that were missing, 15 new) and raises the total to 273. A second filing the same day added the eight Agentic OS roadmap steps (R92 to R99), for 281. That is the wrong direction for the count and the right one for visibility: the 15 defects existed whether or not the board showed them. Recommendations 1, 3 and 5 are how the total comes back down.
+It adds 30 open items (15 already-found defects that were missing, 15 new) and raises the total to 273. A second filing the same day added the eight Agentic OS roadmap steps (R92 to R99) and one for the supervisor contract (DLV-156), for 282. That is the wrong direction for the count and the right one for visibility: the 15 defects existed whether or not the board showed them. Recommendations 1, 3 and 5 are how the total comes back down.

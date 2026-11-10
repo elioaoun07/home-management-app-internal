@@ -57,6 +57,7 @@ Labels `F2-n` are local to this folder. Every finding has one disposition.
 | F2-26 | 7 of 29 Hard Rules have any mechanism behind them; 22 are text only | Read, measured | [R94](<../PM Tooling/PM Tooling — Master Book.md#r94>) |
 | F2-27 | The setup differs per agent (Codex gets 2 of 18 skills, older hooks, machine-specific paths); 13 conflict classes are live | Measured | [R92](<../PM Tooling/PM Tooling — Master Book.md#r92>), [R93](<../PM Tooling/PM Tooling — Master Book.md#r93>) |
 | F2-28 | Ordinary agent sessions leave no record, and every skill's inputs are prose | Read | [R95](<../PM Tooling/PM Tooling — Master Book.md#r95>), [R96](<../PM Tooling/PM Tooling — Master Book.md#r96>), [R98](<../PM Tooling/PM Tooling — Master Book.md#r98>); cockpit [R97](<../PM Tooling/PM Tooling — Master Book.md#r97>), [R99](<../PM Tooling/PM Tooling — Master Book.md#r99>) |
+| F2-29 | No Steward-started delivery shipped: the supervisor sat on the confined path, acted through a human screen, needed a five-link connection and had no power to finish | From the Steward docs and the Delivery book | [DLV-156](<../Delivery/Delivery — Master Book.md#dlv-156>); [contract](<10 - Project Management/Delivery/5 - Supervisor Contract.md>) |
 
 ## Folder map
 
@@ -68,7 +69,7 @@ Labels `F2-n` are local to this folder. Every finding has one disposition.
 | 03 - Junction Modules | [Evidence matrix](<03 - Junction Modules/_Junction Evidence Matrix.md>) · [Service-role surface](<03 - Junction Modules/Household Sharing/Service-Role Authorization Surface.md>) · [Exactly-once](<03 - Junction Modules/Sync & Offline/Exactly-Once Remains Open.md>) |
 | 04 - UI & Design | [Largest files and client-rule debt](<04 - UI & Design/Mega-Components.md>) |
 | 10 - Project Management / Command Center | [Usability and visual review](<10 - Project Management/Command Center/1 - Usability and Visual Review.md>) · [Functional roadmap](<10 - Project Management/Command Center/2 - Functional Roadmap.md>) |
-| 10 - Project Management / Delivery | [Diagnosis](<10 - Project Management/Delivery/1 - Diagnosis.md>) · [Local lane design](<10 - Project Management/Delivery/2 - Local Lane Design.md>) · [Gate disposition](<10 - Project Management/Delivery/3 - Gate Disposition.md>) · [Migration and retirement](<10 - Project Management/Delivery/4 - Migration and Retirement.md>) |
+| 10 - Project Management / Delivery | [Diagnosis](<10 - Project Management/Delivery/1 - Diagnosis.md>) · [Local lane design](<10 - Project Management/Delivery/2 - Local Lane Design.md>) · [Gate disposition](<10 - Project Management/Delivery/3 - Gate Disposition.md>) · [Migration and retirement](<10 - Project Management/Delivery/4 - Migration and Retirement.md>) · [Supervisor contract](<10 - Project Management/Delivery/5 - Supervisor Contract.md>) (ERA Steward, Dot, Duet: closed) |
 | 10 - Project Management / Portfolio | [Research-to-queue leak](<10 - Project Management/Portfolio/Research-to-Queue Leak.md>) · [Backlog health](<10 - Project Management/Portfolio/Backlog Health.md>) |
 | Agentic OS | [Index](<Agentic OS/_index.md>): the plan to evolve the Command Center into PM.2 — setup registry, rule detectors, conflict check, flight recorder, scorecards, skill launchpad, cockpit design, roadmap (12 documents) |
 | Model Tiers | [Routing rules](<Model Tiers/_Routing.md>) · [CLAUDE_HIGH](<Model Tiers/CLAUDE_HIGH/Work Packets.md>) · [CLAUDE_MID](<Model Tiers/CLAUDE_MID/Work Packets.md>) · [CLAUDE_LOW](<Model Tiers/CLAUDE_LOW/Work Packets.md>) · [CODEX](<Model Tiers/CODEX/Work Packets.md>) |
@@ -86,7 +87,7 @@ The folders mirror the vault's sections. Sections 05 to 07 have no folder becaus
 
 ## Items filed on 2026-11-10
 
-Thirty-eight lines, in Next or Later, none in Now. Fifteen are the sweep's findings, fifteen are new from the analysis, eight are the Agentic OS roadmap steps.
+Thirty-nine lines, in Next or Later, none in Now. Fifteen are the sweep's findings, fifteen are new from the analysis, eight are the Agentic OS roadmap steps, one is the supervisor contract.
 
 | Campaign | Next | Later |
 |---|---|---|
@@ -95,6 +96,6 @@ Thirty-eight lines, in Next or Later, none in Now. Fifteen are the sweep's findi
 | Notifications & Alerts | NOTIF-22, NOTIF-23 | |
 | Kitchen | | KIT-28 |
 | PM Tooling | R84, R85, R86, R87, R88, R92 | R83, R89, R90, R91, R93 to R99 |
-| Delivery | DLV-150, DLV-151, DLV-152, DLV-153 | DLV-154, DLV-155 |
+| Delivery | DLV-150, DLV-151, DLV-152, DLV-153, DLV-156 | DLV-154, DLV-155 |
 
 Recommended for the owner to move into Now: **R84, HUB-118, BUD-95, BUD-89, BUD-90, HUB-119**, then **DLV-150**. For the Agentic OS, **R92, R93 and R94** are the smallest version worth having.

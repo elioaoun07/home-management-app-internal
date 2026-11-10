@@ -40,6 +40,7 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **DLV-151** Start a local delivery with three checks and no pairing on loopback — [criteria](<Delivery — Master Book.md#dlv-151>) _(friction - M)_
 - [ ] **DLV-152** Enforce the four surviving guardrails in code — [criteria](<Delivery — Master Book.md#dlv-152>) _(friction - M)_
 - [ ] **DLV-153** Ship by owner merge after UAT sign-off and undo by revert — [criteria](<Delivery — Master Book.md#dlv-153>) _(friction - M)_
+- [ ] **DLV-156** Drive a local delivery through one supervisor command contract — [criteria](<Delivery — Master Book.md#dlv-156>) _(friction - M)_
 
 ## Later
 

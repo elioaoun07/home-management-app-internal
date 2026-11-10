@@ -9,7 +9,7 @@ evidence_cutoff: "commit 8da80ae, 2026-11-10. Proposed dispositions for the Loca
 
 # Delivery — gate disposition for the Local lane
 
-[Fable 2 index](<../../_index.md>) · [Diagnosis](<1 - Diagnosis.md>) · [Local lane design](<2 - Local Lane Design.md>) · [Migration](<4 - Migration and Retirement.md>)
+[Fable 2 index](<../../_index.md>) · [Diagnosis](<1 - Diagnosis.md>) · [Local lane design](<2 - Local Lane Design.md>) · [Migration](<4 - Migration and Retirement.md>) · [Supervisor contract](<5 - Supervisor Contract.md>)
 
 **Keep** = still blocks. **Advisory** = shown, never blocks. **Drop** = not evaluated in the Local lane.
 
