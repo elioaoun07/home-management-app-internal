@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-18
+updated: 2026-11-10
 type: checklist
 status: active
 owner: Elio
@@ -49,6 +49,13 @@ Now-lane exception: reports filed from the ERA chat arrive under **ERA reports**
 - [ ] **HUB-61** Verify guest-drinks household access — [criteria](<Hub & ERA — Master Book.md#hub-61>) _(friction - M)_
 - [ ] **HUB-116** Move every multi-write flow onto the optimistic bulk path and stop slow writes flipping the app offline — [criteria](<Hub & ERA — Master Book.md#hub-116>) _(friction - L)_
 
+**Filed 2026-11-10 (Fable 2).** Criteria carry the source, tier and reading guide.
+
+- [ ] **HUB-118** Require host sign-in for Guest Portal bulk reads — [criteria](<Hub & ERA — Master Book.md#hub-118>) _(blocker - S)_
+- [ ] **HUB-119** Keep every queued offline write until the user decides — [criteria](<Hub & ERA — Master Book.md#hub-119>) _(blocker - M)_
+- [ ] **HUB-120** Make transaction creates safe to replay — [criteria](<Hub & ERA — Master Book.md#hub-120>) _(friction - M)_
+- [ ] **HUB-121** Resolve the household link in one place — [criteria](<Hub & ERA — Master Book.md#hub-121>) _(friction - M)_
+
 ## Later
 
 - [ ] **HUB-102** Every Artifact row, including debts, memories, meal plans and updates, can be undone and redone — [criteria](<Hub & ERA — Master Book.md#hub-102>) _(annoyance - M)_
@@ -80,3 +87,7 @@ Now-lane exception: reports filed from the ERA chat arrive under **ERA reports**
 - [ ] **HUB-69** Expose authorized catalogue search to ERA — [criteria](<Hub & ERA — Master Book.md#hub-69>) _(friction - M)_
 - [ ] **HUB-70** Correct saved notes with ID and revision preconditions — [criteria](<Hub & ERA — Master Book.md#hub-70>) _(friction - M)_
 - [ ] **HUB-71** Ground reference retrieval and correction in sources — [criteria](<Hub & ERA — Master Book.md#hub-71>) _(friction - M)_
+
+**Filed 2026-11-10 (Fable 2).** Criteria carry the source, tier and reading guide.
+
+- [ ] **HUB-122** Tighten Guest Portal bot and chat routes — [criteria](<Hub & ERA — Master Book.md#hub-122>) _(annoyance - M)_

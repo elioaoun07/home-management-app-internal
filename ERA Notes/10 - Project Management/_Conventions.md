@@ -1,6 +1,6 @@
 ---
 created: 2026-07-15
-updated: 2026-09-26
+updated: 2026-11-10
 type: reference
 status: living
 owner: Elio
@@ -67,7 +67,7 @@ Use bold paragraphs for grouping within lanes; deeper headings reset the parser'
 | Historical studies, superseded plans, cancelled work, refactor provenance | `_Archive/` |
 | Runtime/job state | The relevant runtime store; Markdown records intent and accepted outcomes, not invented runtime truth |
 
-Each campaign root has exactly two files: its book and checklist. Do not recreate ASTRA/FABLED generations, per-module roadmaps, independent action plans or status reports. Optional substantial research/specification belongs under the shared `Research/` or `Plans/` area only when it answers a distinct question the book cannot contain economically.
+Each campaign root has exactly two files: its book and checklist. Do not recreate ASTRA/FABLED generations, per-module roadmaps, independent action plans or status reports. **One named exception (owner commission, 2026-11-10):** the [Fable 2](<Fable 2/_index.md>) folder holds a whole-repository study organised by vault section and model tier. It follows every other rule here: no checkboxes, one disposition per finding, work only in campaign checklists, and a stated retirement condition. Optional substantial research/specification belongs under the shared `Research/` or `Plans/` area only when it answers a distinct question the book cannot contain economically.
 
 Keep these parser contracts exact:
 

@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-27
+updated: 2026-11-10
 type: research-register
 status: active
 owner: Elio
@@ -151,3 +151,18 @@ The [accepted final build plan](<../../../docs/Catalogue — ASTRA Deep Dive.md#
 | C18 | [SCH-19](<../Schedule/Schedule — Master Book.md#sch-19>) |
 
 C19 remains one optional extraction/proactive reuse pilot after the foundational contracts; no extra execution task is admitted. C04a remains a bounded first child of SCH-4.3b, not a promise that the whole recurrence refactor fits one session.
+
+## Fable 2 heavyweight studies
+
+**Unadopted, recorded 2026-11-10.** Six studies proposed by the [Fable 2 analysis](<../Fable 2/_index.md>); none is commissioned and none has an ID. Specifications: [high-tier work packets](<../Fable 2/Model Tiers/CLAUDE_HIGH/Work Packets.md>).
+
+| Label | Question | Admission |
+|---|---|---|
+| H1 | Is the stored balance equal to its checkpoint plus every delta on all write paths, and what read-only reconciler proves it? | Before BUD-63's atomic write is designed |
+| H2 | One exactly-once contract for creates and state transitions, applied to the open Budget, Hub and Notifications items | Before the second of BUD-90, HUB-120, BUD-64 is started |
+| H3 | Per shared table: who may read and write, enforced where, tested how | After the owner refreshes `migrations/db-state.json` |
+| H4 | Can either recurrence engine create a duplicate across DST, pause, skip and catch-up? | Before the next recurrence feature |
+| H5 | Which household and health data reaches which AI provider in which prompt? | Before ERA gains new context sources |
+| H6 | Every way a Local-lane agent could reach production data or `main`, and the guardrail that stops it | Before DLV-152 ships |
+
+Also unadopted from the same analysis: a lint ratchet (fail CI when a rule's warning count rises), and the backlog recommendations in [Backlog health](<../Fable 2/10 - Project Management/Portfolio/Backlog Health.md>) (one global Now of five, cull of Later, decisions sitting).

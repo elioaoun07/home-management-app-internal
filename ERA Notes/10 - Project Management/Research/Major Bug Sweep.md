@@ -291,6 +291,8 @@ Use test accounts or a local stack. Never production data (Hard Rule #26). Tick 
 
 ## Disposition
 
+**Filed 2026-11-10.** The 15 IDs marked "(new)" below existed only in this document until that date. Each now has a checklist line and a criteria section in its campaign ([record](<../Fable 2/10 - Project Management/Portfolio/Research-to-Queue Leak.md>)).
+
 | Source label   | Canonical owner/ID                                      | Acceptance/boundary                                            |
 | -------------- | ------------------------------------------------------- | -------------------------------------------------------------- |
 | S1             | Hub & ERA **HUB-118** (new)                             | Guest bulk reads require host auth; S1 UAT passes              |

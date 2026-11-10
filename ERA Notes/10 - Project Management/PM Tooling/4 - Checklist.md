@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-03
+updated: 2026-11-10
 type: checklist
 status: active
 owner: Elio
@@ -27,6 +27,14 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **R46** Warn on API mutation routes without Zod validation — [criteria](<PM Tooling — Master Book.md#r46>) _(friction - M)_
 - [ ] **R48** Replace raw client mutation fetch calls — [criteria](<PM Tooling — Master Book.md#r48>) _(friction - L)_
 
+**Filed 2026-11-10 (Fable 2).** Criteria carry the source, tier and reading guide.
+
+- [ ] **R84** Deny Supabase write tools in every tool namespace — [criteria](<PM Tooling — Master Book.md#r84>) _(blocker - S)_
+- [ ] **R85** Disposition the ERA research packs into the backlog — [criteria](<PM Tooling — Master Book.md#r85>) _(friction - M)_
+- [ ] **R86** Show the next action, what needs the owner and what is running on Home — [criteria](<PM Tooling — Master Book.md#r86>) _(friction - M)_
+- [ ] **R87** Close elapsed sprint weeks and roll their work forward — [criteria](<PM Tooling — Master Book.md#r87>) _(friction - S)_
+- [ ] **R88** Make cited evidence verifiable and run the docs check in CI — [criteria](<PM Tooling — Master Book.md#r88>) _(friction - S)_
+
 ## Later
 
 - [ ] **R36** Type the shared PM parsing core — [criteria](<PM Tooling — Master Book.md#r36>) _(friction - M)_
@@ -38,3 +46,10 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **R62** Compare Delivery outcomes using observed run data — [criteria](<PM Tooling — Master Book.md#r62>) _(annoyance - M)_
 - [ ] **R71** Point the PM Stop hook at the current campaign files — [criteria](<PM Tooling — Master Book.md#r71>) _(annoyance - S)_
 - [ ] **R79** Carry UAT to the phone relay and show Done apart from Shipped in Work, Sprints and Analytics — [criteria](<PM Tooling — Master Book.md#r79>) _(friction - L)_
+
+**Filed 2026-11-10 (Fable 2).** Criteria carry the source, tier and reading guide.
+
+- [ ] **R83** Keep one session proxy file or none — [criteria](<PM Tooling — Master Book.md#r83>) _(annoyance - S)_
+- [ ] **R89** Hold each Master Book to a size budget — [criteria](<PM Tooling — Master Book.md#r89>) _(friction - M)_
+- [ ] **R90** Cover every service-role route with an authorization contract — [criteria](<PM Tooling — Master Book.md#r90>) _(friction - M)_
+- [ ] **R91** Make `pnpm typecheck` run in a 15 GB container — [criteria](<PM Tooling — Master Book.md#r91>) _(annoyance - S)_

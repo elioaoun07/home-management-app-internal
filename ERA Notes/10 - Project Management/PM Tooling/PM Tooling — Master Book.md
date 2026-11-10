@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-03
+updated: 2026-11-10
 type: master-book
 status: active
 owner: Elio
@@ -17,6 +17,8 @@ Item plans follow [the shared execution-plan convention](<../_Conventions.md#9-i
 Keep work identifiable, reviewable and recoverable across PM surfaces. Tooling campaign for desktop, static and mobile PM reading and task controls.
 
 ## Current state & evidence
+
+**2026-11-10 — Fable 2 filing (documentation only):** R84, R85, R86, R87, R88, R83, R89, R90, R91 added to the checklist with criteria below. Sources are the 2026-11-04 Major Bug Sweep, whose IDs had not been filed, and the [Fable 2 analysis](<../Fable 2/_index.md>) at commit `8da80ae`. Nothing is implemented, applied or verified by this entry.
 
 **2026-10-25 — R81 UAT discovery repair:** Delivery opens with **Review & sign off**, visible work IDs, date, readiness and **Start test / Continue / View steps** links. Search spans IDs, titles and campaigns; To test / Not ready / Feedback / History / All retain search, filter and pagination when returning from the wizard. Apply/conflict actions have their own **Delivery actions** section. The initial local store had 62 records (49 draft, 13 incomplete), not 62 owner-ready tests. Nineteen steps lacked explicit expected-result markers, one more used a comma before lowercase expect, and two used lowercase expect after a sentence/semicolon; wording and the parser are repaired without inferring PASS or readiness. Verification and owner steps are recorded under R81.
 
@@ -114,6 +116,24 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🔴 **R84** Deny Supabase write tools in every tool namespace. Filed 2026-11-10 from [Fable 2 finding F2-12](<../Fable 2/01 - Architecture/Environments and Data Safety.md>) (2026-11-10). See [acceptance](<#r84>).
+
+🟠 **R85** Disposition the ERA research packs into the backlog. Filed 2026-11-10 from [Fable 2 finding F2-11](<../Fable 2/10 - Project Management/Portfolio/Research-to-Queue Leak.md>) (2026-11-10). See [acceptance](<#r85>).
+
+🟠 **R86** Show the next action, what needs the owner and what is running on Home. Filed 2026-11-10 from [Fable 2 usability review U1, U5, U6, U8](<../Fable 2/10 - Project Management/Command Center/1 - Usability and Visual Review.md>) (2026-11-10). See [acceptance](<#r86>).
+
+🟠 **R87** Close elapsed sprint weeks and roll their work forward. Filed 2026-11-10 from [Fable 2 usability review U4](<../Fable 2/10 - Project Management/Command Center/1 - Usability and Visual Review.md>) (2026-11-10). See [acceptance](<#r87>).
+
+🟠 **R88** Make cited evidence verifiable and run the docs check in CI. Filed 2026-11-10 from [Fable 2 finding F2-20](<../Fable 2/01 - Architecture/Agent Context Economy.md>) (2026-11-10). See [acceptance](<#r88>).
+
+🟡 **R83** Keep one session proxy file or none. Filed 2026-11-10 from [Major Bug Sweep S3](<../Research/Major Bug Sweep.md#s3>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#r83>).
+
+🟠 **R89** Hold each Master Book to a size budget. Filed 2026-11-10 from [Fable 2 finding F2-21](<../Fable 2/01 - Architecture/Agent Context Economy.md>) (2026-11-10). See [acceptance](<#r89>).
+
+🟠 **R90** Cover every service-role route with an authorization contract. Filed 2026-11-10 from [Fable 2 finding F2-14](<../Fable 2/03 - Junction Modules/Household Sharing/Service-Role Authorization Surface.md>) (2026-11-10). See [acceptance](<#r90>).
+
+🟡 **R91** Make `pnpm typecheck` run in a 15 GB container. Filed 2026-11-10 from [Fable 2 finding F2-19](<../Fable 2/01 - Architecture/Verification Pyramid.md>) (2026-11-10). See [acceptance](<#r91>).
+
 - 🟠 **R82 — Readiness's pass ratio conflated blockers with unrun checks (2026-10-31).** Owner KIT-10 report: Check appeared to leave `4/11`. Initial inspection found expired authorization, missing scope and five unobserved live gates. An authorized local Check through the existing saved owner session renewed authorization, derived KIT-10's prepared scope and isolated `docker-unavailable`. Docker's frontend was alive but its backend and Linux engine pipe were absent. Supported Start said already running; supported Restart failed to stop lingering processes. Stopping only verified Docker frontend processes and launching the installed main executable restored engine 28.5.1. The second Check passed all eleven gates at 16:17:01 UTC (18:17 Beirut), with zero provider turns and confirmed probe cleanup. No delivery Start, bridge restart, policy replacement or Apply. The original browser click's response remains unknown; this direct reproduction establishes the current blocker and recovery, not that historical response. Docker's original backend-exit cause and permanent prevention remain unproven.
 
 - 🟠 **R81 — UAT steps were buried and their readiness was overstated.** Only ready handovers reached Needs you; draft/incomplete instructions were hidden with finished records under collapsed Test records. The local store had no ready handovers. Resolved locally with the visible review area and explicit expected-result repair; build validation and owner acceptance remain separate.
@@ -149,6 +169,114 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### R84
+
+**Outcome:** Hard Rule 26 is enforced by configuration in local and cloud sessions alike.
+
+**Kind:** maintenance
+**Touches:** `.claude/settings.json`
+
+- **Source:** [Fable 2 finding F2-12](<../Fable 2/01 - Architecture/Environments and Data Safety.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** The deny list contains both `mcp__claude_ai_Supabase__*` and `mcp__Supabase__*` forms of `execute_sql`, `apply_migration`, `deploy_edge_function`, the branch tools, `create_project`, `pause_project`, `restore_project`. `Database RLS Posture.md` §Agent access lists both. A cloud session's attempt to call a write tool is refused.
+- **Tier:** CLAUDE_LOW. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** `.claude/settings.json:8-19` names only the first form. The cloud tool list on 2026-11-10 showed the second.
+
+### R85
+
+**Outcome:** Every meaningful finding in `docs/era-research/` has one recorded disposition and the packs are linked from the PM index.
+
+**Kind:** investigation
+**Touches:** none
+
+- **Source:** [Fable 2 finding F2-11](<../Fable 2/10 - Project Management/Portfolio/Research-to-Queue Leak.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** Starting from `docs/era-research/20-synthesis/`, each finding is marked incorporated into an existing ID, a new ID, a held decision, an unadopted option, disproved or superseded (`_Conventions.md` §8). The PM index links the packs. No implementation is started by this item.
+- **Tier:** CLAUDE_HIGH, effort high. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Fourteen folders, 70 files. Use `triage-inbox` rules: preserve wording, search existing IDs first.
+
+### R86
+
+**Outcome:** The first screen of the Command Center says what to do next.
+
+**Kind:** feature
+**Touches:** `scripts/pm/app/Home.tsx`, `scripts/pm/app/PrimaryNavigation.tsx`
+
+- **Source:** [Fable 2 usability review U1, U5, U6, U8](<../Fable 2/10 - Project Management/Command Center/1 - Usability and Visual Review.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** Above the fold at 1440x900 and 390x844, Home shows three short lists: Needs you, Running, Next up (top three by lane order). One lane vocabulary (Now / Next / Later) is used on Home, Work and Analytics, with Blocked as a filter. Decisions is reachable in one tap with its count. Hero headlines are one line or gone.
+- **Tier:** CLAUDE_MID. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** [Functional roadmap](<../Fable 2/10 - Project Management/Command Center/2 - Functional Roadmap.md>), changes 1 and 4. Load `ui-guardrails`; tests in `tests/pm-ui/`.
+
+### R87
+
+**Outcome:** Sprints never shows a week whose end date has passed as in play or planned.
+
+**Kind:** bug
+**Touches:** `scripts/pm/shared/planning.mjs`, `scripts/pm/planning.mjs`, `scripts/pm/app/Sprints.tsx`
+
+- **Source:** [Fable 2 usability review U4](<../Fable 2/10 - Project Management/Command Center/1 - Usability and Visual Review.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** On 2026-11-10 the week of 2026-10-05 reads Closed with its real delivered count, and unfinished members appear in the current week or back in their lane. A fixture test covers a week ending yesterday.
+- **Tier:** CLAUDE_MID. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** `_Planning.json` holds `sprint-2026-10-05` with `"state": "active"`.
+
+### R88
+
+**Outcome:** `pnpm pm:check-docs` passes and runs on every push.
+
+**Kind:** maintenance
+**Touches:** `.github/workflows/ci.yml`
+
+- **Source:** [Fable 2 finding F2-20](<../Fable 2/01 - Architecture/Agent Context Economy.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** The 17 broken links (15 in the Delivery book, 2 in `Plans/Delivery Optimization Closeout.md`) are either committed receipts or reworded as local-only evidence with no link. CI runs `pnpm pm:check-docs`. The check also fails when a research or plan document links an ID anchor that does not exist.
+- **Tier:** CLAUDE_LOW. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** 58 distinct `.tmp/` paths are cited; `.tmp/` and `.delivery/` are gitignored.
+
+### R83
+
+**Outcome:** The repository has one proxy or middleware file that Next loads, or none that pretends to run.
+
+**Kind:** bug
+**Touches:** `proxy.ts`, `src/middleware.ts`
+
+- **Source:** [Major Bug Sweep S3](<../Research/Major Bug Sweep.md#s3>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Acceptance:** Either one `src/proxy.ts` carries both the session refresh and the `/pm` gate, or root `proxy.ts` is deleted. The `/pm` gate still works. The owner decides which before work starts.
+- **Tier:** CLAUDE_MID; owner decision first. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Next 16 loads only from the parent of the app directory (`src/`).
+
+### R89
+
+**Outcome:** Working one item no longer requires loading a book of several hundred kilobytes.
+
+**Kind:** maintenance
+**Touches:** none
+
+- **Source:** [Fable 2 finding F2-21](<../Fable 2/01 - Architecture/Agent Context Economy.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** Each book's state log keeps its last three entries and moves older ones to a dated archive file; criteria for shipped IDs move with them. `CLAUDE.md` tells agents to read the checklist, the one ID section and the Successor Briefing, not the whole book. `pm:lint` and `pm:check-docs` pass; no ID, shipped record or decision is lost.
+- **Tier:** CLAUDE_MID. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Books total 1.78 MB; Delivery is 387 KB. Retention rule already exists in `_Conventions.md` §6. Editing `CLAUDE.md` needs `pnpm sync:ai`.
+
+### R90
+
+**Outcome:** A route that uses the service-role client cannot be added or changed without a declared, tested access rule.
+
+**Kind:** feature
+**Touches:** `src/app/api/`
+
+- **Source:** [Fable 2 finding F2-14](<../Fable 2/03 - Junction Modules/Household Sharing/Service-Role Authorization Surface.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** One table-driven test enumerates every route importing `supabaseAdmin` and fails when one is missing from the table. Each row declares public, owner only, owner or partner, or host of tag, and is exercised as anonymous, unrelated user and partner. First slice: the table plus five rows including the Guest Portal reads.
+- **Tier:** CLAUDE_HIGH to design, CLAUDE_MID to fill. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** 43 routes outside `cron/`. Model: `src/features/era/artifacts.contract.test.ts`.
+
+### R91
+
+**Outcome:** The documented typecheck command works in cloud agent sessions.
+
+**Kind:** maintenance
+**Touches:** `package.json`
+
+- **Source:** [Fable 2 finding F2-19](<../Fable 2/01 - Architecture/Verification Pyramid.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** `pnpm typecheck` exits 0 on a 4-core, 15 GB Linux container and still passes in CI. `.husky/pre-commit` is committed with the executable bit, so a commit on a Linux clone runs the hook (its `tsc` step needs the same heap setting).
+- **Tier:** CLAUDE_LOW. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Plain `tsc` aborted with a heap error; with `--max-old-space-size=10240` it passed in 85 s.
 
 ### R82
 

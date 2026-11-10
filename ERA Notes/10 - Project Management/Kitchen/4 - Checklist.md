@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-10
+updated: 2026-11-10
 type: checklist
 status: active
 owner: Elio
@@ -41,3 +41,7 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **KIT-14** Revalidate the dormant stock-update ID path — [criteria](<Kitchen — Master Book.md#kit-14>) _(friction - M)_
 - [ ] **KIT-15** Cover recipe AI and scaling boundaries — [criteria](<Kitchen — Master Book.md#kit-15>) _(friction - M)_
 - [ ] **KIT-23** Promote recipe clippings into one executable recipe — [criteria](<Kitchen — Master Book.md#kit-23>) _(friction - M)_
+
+**Filed 2026-11-10 (Fable 2).** Criteria carry the source, tier and reading guide.
+
+- [ ] **KIT-28** Accept punctuation in recipe search — [criteria](<Kitchen — Master Book.md#kit-28>) _(annoyance - S)_

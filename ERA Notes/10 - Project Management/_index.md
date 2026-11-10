@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-26
+updated: 2026-11-10
 type: pm-index
 status: active
 owner: Elio
@@ -16,16 +16,16 @@ Start with a campaign checklist. The eleven checklists form **one backlog**, gro
 
 | Campaign | Owns | Pending | Canonical documents |
 |---|---|---:|---|
-| Budget | Accounts, transactions, imports, drafts, recurring payments, allocation, debts, analytics/dashboard, future purchases, money restore | 33 | [Backlog](<Budget/4 - Checklist.md>) · [Master Book](<Budget/Budget — Master Book.md>) |
-| Schedule | Items/reminders, calendar, recurrence, chores, Focus mode, Plan My Day, prerequisites and NFC behavior | 31 | [Backlog](<Schedule/4 - Checklist.md>) · [Master Book](<Schedule/Schedule — Master Book.md>) |
-| Kitchen | Recipes, Inventory, Catalogue, Meal Planning and Shopping List | 20 | [Backlog](<Kitchen/4 - Checklist.md>) · [Master Book](<Kitchen/Kitchen — Master Book.md>) |
-| Trips | Planner, packing/documents, trip lifecycle and trip-side integrations | 19 | [Backlog](<Trips/4 - Checklist.md>) · [Master Book](<Trips/Trips — Master Book.md>) |
-| Hub & ERA | Hub/ERA/Brain, household sharing, shared sync/offline, message actions, guest access, theme/person identity, AI usage/errors | 42 | [Backlog](<Hub & ERA/4 - Checklist.md>) · [Master Book](<Hub & ERA/Hub & ERA — Master Book.md>) |
-| Notifications & Alerts | Notification policy, drawer/Alerts, push and Google alarm transport evidence | 12 | [Backlog](<Notifications & Alerts/4 - Checklist.md>) · [Master Book](<Notifications & Alerts/Notifications & Alerts — Master Book.md>) |
+| Budget | Accounts, transactions, imports, drafts, recurring payments, allocation, debts, analytics/dashboard, future purchases, money restore | 40 | [Backlog](<Budget/4 - Checklist.md>) · [Master Book](<Budget/Budget — Master Book.md>) |
+| Schedule | Items/reminders, calendar, recurrence, chores, Focus mode, Plan My Day, prerequisites and NFC behavior | 33 | [Backlog](<Schedule/4 - Checklist.md>) · [Master Book](<Schedule/Schedule — Master Book.md>) |
+| Kitchen | Recipes, Inventory, Catalogue, Meal Planning and Shopping List | 22 | [Backlog](<Kitchen/4 - Checklist.md>) · [Master Book](<Kitchen/Kitchen — Master Book.md>) |
+| Trips | Planner, packing/documents, trip lifecycle and trip-side integrations | 20 | [Backlog](<Trips/4 - Checklist.md>) · [Master Book](<Trips/Trips — Master Book.md>) |
+| Hub & ERA | Hub/ERA/Brain, household sharing, shared sync/offline, message actions, guest access, theme/person identity, AI usage/errors | 59 | [Backlog](<Hub & ERA/4 - Checklist.md>) · [Master Book](<Hub & ERA/Hub & ERA — Master Book.md>) |
+| Notifications & Alerts | Notification policy, drawer/Alerts, push and Google alarm transport evidence | 14 | [Backlog](<Notifications & Alerts/4 - Checklist.md>) · [Master Book](<Notifications & Alerts/Notifications & Alerts — Master Book.md>) |
 | Healthcare | Health profiles, allergies, medications, body measurements, Fitness and care-reference consumers | 18 | [Backlog](<Healthcare/4 - Checklist.md>) · [Master Book](<Healthcare/Healthcare — Master Book.md>) |
 | Outfits | Personal wardrobe, outfit builder/plans and wear history | 12 | [Backlog](<Outfits/4 - Checklist.md>) · [Master Book](<Outfits/Outfits — Master Book.md>) |
-| PM Tooling | PM desktop/static/mobile reading, task identity and governance; Atlas tooling | 17 | [Backlog](<PM Tooling/4 - Checklist.md>) · [Master Book](<PM Tooling/PM Tooling — Master Book.md>) |
-| Delivery | V1 operation and V2 execution boundary/value trial | 12 | [Backlog](<Delivery/4 - Checklist.md>) · [Master Book](<Delivery/Delivery — Master Book.md>) |
+| PM Tooling | PM desktop/static/mobile reading, task identity and governance; Atlas tooling | 27 | [Backlog](<PM Tooling/4 - Checklist.md>) · [Master Book](<PM Tooling/PM Tooling — Master Book.md>) |
+| Delivery | V1 operation and V2 execution boundary/value trial | 20 | [Backlog](<Delivery/4 - Checklist.md>) · [Master Book](<Delivery/Delivery — Master Book.md>) |
 | Native App | Native shell, device bridge, store distribution and watch options | 8 | [Backlog](<Native App/4 - Checklist.md>) · [Master Book](<Native App/Native App — Master Book.md>) |
 
 Campaigns group related modules; they do not change the source code’s Standalone/Junction import rules. The [Feature Map](<../01 - Architecture/Feature Map/_index.md>) routes intent to code; module Overview docs remain authoritative for product architecture. Cross-module work has one owning task with linked prerequisites, never matching checkboxes in two campaigns.
@@ -43,6 +43,7 @@ Campaigns group related modules; they do not change the source code’s Standalo
 | Delivery UAT wizard, sign-off and feedback-to-work specification | [Build specification](<Plans/Delivery UAT Sign-off and Feedback.md>); [existing-delivery scenario index](<../../docs/Delivery-UAT-Scenarios-2026-10-25.md>). Documentation only; runtime implementation remains a separate job. |
 | Accepted Command Center product direction and phases | [Command Center](<Plans/Command Center.md>); phases map to PM Tooling and Delivery IDs |
 | Catalogue’s accepted reference/definition design | [Final build plan §10](<../../docs/Catalogue — ASTRA Deep Dive.md#10-final-build-plan--2026-09-07>); [packet ownership](<Research/Options.md#catalogue-packet-ownership>) |
+| Whole-repository analysis of 2026-11-10: Delivery Local lane, Command Center review, cross-cutting findings and per-item model tiers | [Fable 2](<Fable 2/_index.md>); a study, not a queue. Its 30 items live in the campaign checklists |
 | Unadopted ideas, experiments and alternatives | [Research options](<Research/Options.md>), linked to archived originals |
 | Completed work and verification receipts | Master Book Shipped Log; detailed old narratives in the archive |
 | Historical plans, studies and cancelled work | [_Archive](<_Archive/_index.md>); never a second queue |

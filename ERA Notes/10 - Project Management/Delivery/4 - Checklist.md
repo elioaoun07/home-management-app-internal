@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-17
+updated: 2026-11-10
 type: checklist
 status: active
 owner: Elio
@@ -34,6 +34,13 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 
 **DLV-137 — 2026-10-17 recovery source/fixtures:** Explicit service observations now feed desktop/mobile readiness and server admission. Passive reads stay effect-free. DLV-133 operational evidence, coordinated restart and phone acceptance remain pending. Durable command recovery is DLV-138.
 
+**Filed 2026-11-10 (Fable 2).** Criteria carry the source, tier and reading guide.
+
+- [ ] **DLV-150** Deliver an item on a branch in a local worktree with host checks — [criteria](<Delivery — Master Book.md#dlv-150>) _(friction - M)_
+- [ ] **DLV-151** Start a local delivery with three checks and no pairing on loopback — [criteria](<Delivery — Master Book.md#dlv-151>) _(friction - M)_
+- [ ] **DLV-152** Enforce the four surviving guardrails in code — [criteria](<Delivery — Master Book.md#dlv-152>) _(friction - M)_
+- [ ] **DLV-153** Ship by owner merge after UAT sign-off and undo by revert — [criteria](<Delivery — Master Book.md#dlv-153>) _(friction - M)_
+
 ## Later
 
 - [ ] **DLV-133** Run the deterministic typecheck inside the protected checker — [criteria](<Delivery — Master Book.md#dlv-133>) _(friction - L)_
@@ -50,3 +57,8 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 **DLV-133 — 2026-10-17 Stage 1 source update; operational witness pending.** Separate target-platform staging, full inventory, cold/warm receipts and managed identity binding are implemented locally. The legacy bare setup now refuses. Use the Master Book’s recipe/runbook; no Docker preparation, installed policy/volume switch or provider execution occurred. Real same-environment/full-program container evidence and owner activation remain open. DLV-137 depends on this item; DLV-118 remains independent.
 
 **DLV-114 — 2026-09-20 partial; parked 2026-09-26 (supervised use runs `advisory`).** In-job stopping is implemented and covered by 25 isolated cases (`npx vitest run tests/delivery-v2/budget-stop.test.ts`). Still owed: the bounded **real stop witness** (UAT U20), a wall-time limit and the `Increase limit` / `Change model` / `Reduce scope` escalation actions. Reopen before any unattended use.
+
+**Filed 2026-11-10 (Fable 2).** Criteria carry the source, tier and reading guide.
+
+- [ ] **DLV-154** Give agents and UAT a disposable development database — [criteria](<Delivery — Master Book.md#dlv-154>) _(friction - L)_
+- [ ] **DLV-155** Retire the confined stack after five local deliveries — [criteria](<Delivery — Master Book.md#dlv-155>) _(parked - L)_
