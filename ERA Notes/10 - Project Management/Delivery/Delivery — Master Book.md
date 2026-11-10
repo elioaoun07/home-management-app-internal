@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-19
+updated: 2026-11-10
 type: master-book
 status: active
 owner: Elio
@@ -17,6 +17,10 @@ Item plans follow [the shared execution-plan convention](<../_Conventions.md#9-i
 Produce useful product outcomes with bounded authority and truthful evidence. Tooling campaign; V1 operation and V2 construction have separate contracts.
 
 ## Current state & evidence
+
+**2026-11-10 — ERA Steward subject closed in one document (documentation only):** the [supervisor contract](<../Fable 2/10 - Project Management/Delivery/5 - Supervisor Contract.md>) records why no Steward-started delivery shipped (the furthest reached a plan awaiting approval, `r-262a6aee5ed3`; the applied R44 run was owner-driven and has no recorded sign-off), defines the conductor state machine, the verbs, the mandate and the escalation table, and sets four exercises as the acceptance. DLV-156 added. Nothing is implemented.
+
+**2026-11-10 — Fable 2 filing (documentation only):** DLV-150, DLV-151, DLV-152, DLV-153, DLV-154, DLV-155 added to the checklist with criteria below. Sources are the 2026-11-04 Major Bug Sweep, whose IDs had not been filed, and the [Fable 2 analysis](<../Fable 2/_index.md>) at commit `8da80ae`. Nothing is implemented, applied or verified by this entry.
 
 **2026-10-31, 18:17 Beirut — KIT-10 readiness recovered, no launch:** following the owner's request to diagnose Check directly, existing saved local owner access sent Check (no new pairing). Authorization renewed until 2026-11-01T16:13:15.570Z and prepared-plan Touches were derived automatically. Collection isolated `docker-unavailable`: frontend alive, backend absent, missing Linux engine pipe. Supported Start falsely said already running; Restart failed on lingering processes. Stopping verified Docker frontend processes and launching the installed main executable recovered engine 28.5.1 without changing Docker settings or deleting resources. A second Check without renewal passed **11/11, ready: true**, completed 2026-10-31T16:17:01.069Z, native 0.156.1 / Codex Luna low, zero provider turns, both probe cleanup signals true. No delivery Start, Apply, bridge restart or policy replacement. R82 owns the blocker/pending presentation fix. Historical browser-click outcome and the Docker backend's original exit cause remain unestablished; readiness expires normally and Start rechecks live facts.
 
@@ -126,6 +130,10 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 ## Vision & Decisions
 
+- **Supervisor contract, 2026-11-10 (owner commission to close the ERA Steward subject).** Delivery is run by a deterministic conductor that needs no assistant; a supervisor (Dot now, Claude Duet or another later) is an optional caller of eight verbs on the Local lane only, with authority fixed by which verbs exist. It never approves a risk review, ships, or edits the mandate. The browser-driving procedure is retired when DLV-156 ships; the tunnel and private plugin are an optional transport; UAT scenario M1 (tools-only proof) is dropped as unprovable and unnecessary. All choices are closed in the [contract](<../Fable 2/10 - Project Management/Delivery/5 - Supervisor Contract.md>) §10. Proposed design; not implemented.
+
+- **Owner direction 2026-11-10 — relax Delivery for supervised local use.** In the owner's words: "The docker feels an overkill, the feature seems too restrictive to a point that it feels unusable. From my point of view, I will be delivering locally, build UATs, and eventually ship the feature … I want to relax everything, and give more freedom to AI to ship." Four guardrails survive by the owner's choice: no production DB writes (Hard Rule 26), subscription only (Hard Rule 29), the owner ships after UAT sign-off, and money, recurrence, auth/RLS and migration changes are reviewed before they land. Everything else becomes advisory or is dropped in a new Local lane ([design](<../Fable 2/10 - Project Management/Delivery/2 - Local Lane Design.md>), [gate disposition](<../Fable 2/10 - Project Management/Delivery/3 - Gate Disposition.md>)); work is DLV-150 to DLV-155. For the Local lane only, this supersedes the V1 "no Git writes/worktrees" freeze, the 2026-09-11 container boundary direction, DEC-16's protected Apply and DLV-96/97 qualification. The confined V2 path is unchanged and frozen. Not implemented.
+
 - **DLV-143 — A Start result remains reportable.** Ordinary and Steward launches share durable prelaunch receipts without conflating attribution. Recovery reads the original request; uncertain outcomes never authorize a new Start. Confirmed blockers remain visible independently of passive readiness, including when browser result persistence fails. *(IMPLEMENTED 2026-10-24 — source/offline fixtures; operational activation pending.)*
 
 - **DLV-141 — One clear next action on desktop and phone.** Keep advanced launch settings and gate diagnostics disclosed; show request progress and an explicit outcome even if blockers do not change. A confirmed cancelled request offers New/Open before Start. Server authority and original receipts remain authoritative. *(IMPLEMENTED 2026-10-24 — offline checks/browser fixtures; physical-phone UAT pending.)*
@@ -159,6 +167,18 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+🟠 **DLV-150** Deliver an item on a branch in a local worktree with host checks. Filed 2026-11-10 from [Fable 2 Local lane design](<../Fable 2/10 - Project Management/Delivery/2 - Local Lane Design.md>) (2026-11-10, owner direction). See [acceptance](<#dlv-150>).
+
+🟠 **DLV-151** Start a local delivery with three checks and no pairing on loopback. Filed 2026-11-10 from [Fable 2 gate disposition](<../Fable 2/10 - Project Management/Delivery/3 - Gate Disposition.md>) (2026-11-10). See [acceptance](<#dlv-151>).
+
+🟠 **DLV-152** Enforce the four surviving guardrails in code. Filed 2026-11-10 from [Fable 2 Local lane design, guardrails](<../Fable 2/10 - Project Management/Delivery/2 - Local Lane Design.md>) (2026-11-10, owner direction). See [acceptance](<#dlv-152>).
+
+🟠 **DLV-153** Ship by owner merge after UAT sign-off and undo by revert. Filed 2026-11-10 from [Fable 2 Local lane design, steps 6 to 8](<../Fable 2/10 - Project Management/Delivery/2 - Local Lane Design.md>) (2026-11-10, owner direction). See [acceptance](<#dlv-153>).
+
+🟠 **DLV-154** Give agents and UAT a disposable development database. Filed 2026-11-10 from [Fable 2 finding F2-05](<../Fable 2/01 - Architecture/Environments and Data Safety.md>) (2026-11-10). See [acceptance](<#dlv-154>).
+
+⚪ **DLV-155** Retire the confined stack after five local deliveries. Filed 2026-11-10 from [Fable 2 migration and retirement](<../Fable 2/10 - Project Management/Delivery/4 - Migration and Retirement.md>) (2026-11-10). See [acceptance](<#dlv-155>).
 
 ⚪ **DLV-149 — 2026-10-31, resolved same day: false "Offline · viewing last known work" while the server ran.** DLV-148's directory scopes expanded in every `loadExecutionPolicy`, so the bridge's 5-second run poll walked 3,492 files per run on the server's only thread. Measured live: `/api/health` p50 4.6 s, max 8.1 s against the browser's 3 s probe; 28 of 106 browser probes aborted. Fixed in code; needs a `pnpm pm` restart. [Criteria](<#dlv-149>).
 
@@ -226,6 +246,95 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### DLV-156
+
+**Outcome:** A supervising assistant, or the owner alone, drives a local delivery from start to shipped through one small command contract with a fixed state machine.
+
+**Kind:** feature
+**Depends on:** DLV-150, DLV-152, DLV-153
+**Touches:** `scripts/delivery-v2/`, `scripts/pm/app/`, `tests/delivery-v2/`, `package.json`
+
+- **Source:** [ERA Steward supervisor contract](<../Fable 2/10 - Project Management/Delivery/5 - Supervisor Contract.md>) (2026-11-10, owner commission to close the Steward subject). Filed 2026-11-10; not started.
+- **Acceptance:** One implementation behind the CLI, the stdio MCP server and the Command Center buttons provides eight Steward verbs (`next`, `start`, `status`, `wait`, `answer`, `handover`, `stop`, `report`) and five owner verbs (`mandate`, `review`, `signoff`, `ship`, `undo`) with the documented exit codes. Each run has an append-only log and a state file naming the state, the next actor and the next action; `start` is idempotent per item. The mandate file is enforced before every start and cannot be changed with the Steward credential. The escalation table is code: an unlisted situation is reported, never handled. Exercises E1 to E4 in the contract pass, E1 (no supervisor, one small item from start to shipped) first. The browser-driving procedure in the runbook is retired; the tunnel stays optional.
+- **Tier:** CLAUDE_HIGH, effort high. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Reuse `scripts/delivery-v2/steward-mcp.mjs`, `steward-tools.mjs` (intent receipts, last-known state, status templates) and re-point them from launch routes to the verbs. The contract's §4 is the state machine, §7 the mandate, §8 the escalation table, §11 the acceptance.
+
+### DLV-150
+
+**Outcome:** One item can be built by a native agent session in its own worktree and checked on the host, with no container, policy file or qualification record.
+
+**Kind:** feature
+**Touches:** `scripts/delivery-v2/`
+
+- **Source:** [Fable 2 Local lane design](<../Fable 2/10 - Project Management/Delivery/2 - Local Lane Design.md>) (2026-11-10, owner direction). Filed 2026-11-10; not started.
+- **Acceptance:** From the CLI: create branch `delivery/<ID>` in a worktree outside the main checkout; start one Claude or Codex session there that loads the repository's CLAUDE.md, skills and hooks; when it stops, the supervisor runs typecheck, lint, tests and `pm:lint` on the host and records the output on the session. Proven on one small non-risk item. No production key is present in the agent's environment.
+- **Tier:** CLAUDE_HIGH, effort high. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** [Diagnosis](<../Fable 2/10 - Project Management/Delivery/1 - Diagnosis.md>), [gate disposition](<../Fable 2/10 - Project Management/Delivery/3 - Gate Disposition.md>). Reuse the session record, activity stream and adapters; do not build a second status engine.
+
+### DLV-151
+
+**Outcome:** From a fresh browser on `127.0.0.1`, one click on an item reaches a running local session.
+
+**Kind:** feature
+**Depends on:** DLV-150
+**Touches:** `scripts/pm/app/LaunchReadiness.tsx`, `scripts/pm/app/BrowserSession.tsx`, `scripts/delivery-v2/readiness-contract.mjs`, `scripts/delivery-v2/local-auth.mjs`
+
+- **Source:** [Fable 2 gate disposition](<../Fable 2/10 - Project Management/Delivery/3 - Gate Disposition.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** Local Start blocks only on source (base known, tree clean), authentication (subscription CLI signed in, no API key) and environment (dependencies match the lockfile). Coordination, model availability and budget are shown and never block. No pairing form on a loopback origin; LAN and relay access still pair.
+- **Tier:** CLAUDE_MID. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Eleven gates today in `readiness-contract.mjs:3`. The confined path keeps all eleven.
+
+### DLV-152
+
+**Outcome:** A local delivery cannot hold production keys, use a paid API key, or ship a risk-domain change without the owner's review.
+
+**Kind:** feature
+**Depends on:** DLV-150
+**Touches:** `scripts/delivery-v2/`
+
+- **Source:** [Fable 2 Local lane design, guardrails](<../Fable 2/10 - Project Management/Delivery/2 - Local Lane Design.md>) (2026-11-10, owner direction). Filed 2026-11-10; not started.
+- **Acceptance:** The agent process starts from an allowlisted environment with no `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET` or provider key, and the worktree has no `.env`. A versioned path classifier flags money, recurrence, auth/RLS/household, migrations and rule files, and any route importing `supabaseAdmin`. A flagged diff cannot be shipped before the owner opens the review; an unflagged diff can. One test per domain.
+- **Tier:** CLAUDE_HIGH, effort high. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Risk-domain list in the design doc. State the residual risk in the UI: without a container the scrub prevents accidents, not a determined process.
+
+### DLV-153
+
+**Outcome:** The owner ships a local delivery with one action after UAT, and can undo it with one action.
+
+**Kind:** feature
+**Depends on:** DLV-150, DLV-152
+**Touches:** `scripts/delivery-v2/`, `scripts/pm/app/`
+
+- **Source:** [Fable 2 Local lane design, steps 6 to 8](<../Fable 2/10 - Project Management/Delivery/2 - Local Lane Design.md>) (2026-11-10, owner direction). Filed 2026-11-10; not started.
+- **Acceptance:** Ship is enabled only after a UAT sign-off on the current branch head; it merges, pushes, writes the Shipped Log entry and sweeps the checklist line. Undo reverts the merge commit. No agent session can push to `main`. One item shipped and one reverted through the Command Center.
+- **Tier:** CLAUDE_HIGH. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Replaces frozen-diff Apply and the rollback journal for the Local lane only. Branch protection on `main` is an owner setting.
+
+### DLV-154
+
+**Outcome:** A local build and an agent session can run against data that is not production.
+
+**Kind:** feature
+**Touches:** `docs/ENV.md`, `migrations/`
+
+- **Source:** [Fable 2 finding F2-05](<../Fable 2/01 - Architecture/Environments and Data Safety.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** A documented way to create and reset a development database with the production schema, policies and functions and a synthetic seed; a worktree `.env` that points at it; Hard Rule 26 text names the production project so writes to the development one are allowed. Split before dispatch: design and runbook first, then seed, then wiring.
+- **Tier:** CLAUDE_HIGH; several owner steps. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Options in the Local lane design: a second hosted project (recommended, no Docker), the local stack, or in-process Postgres for tests. `schema.sql` alone lacks RLS and functions; the schema must come from an owner-run dump.
+
+### DLV-155
+
+**Outcome:** Code that only the confined path needs is removed once the Local lane has shipped five items and the owner confirms unattended delivery is not wanted.
+
+**Kind:** maintenance
+**Depends on:** DLV-153
+**Touches:** `scripts/delivery-v2/`, `scripts/delivery/`, `tests/delivery-v2/`, `tests/delivery/`
+
+- **Source:** [Fable 2 migration and retirement](<../Fable 2/10 - Project Management/Delivery/4 - Migration and Retirement.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** Admission gate: five items shipped through DLV-153 and an explicit owner decision on phone-started delivery. Then container boundary, qualification, checker staging, policy, authorization and allowance modules and their tests are deleted with the suite green. Coordinates with DLV-103 (V1) and R6 (older UIs).
+- **Tier:** CLAUDE_MID. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Sizes at 8da80ae: V1 16,584 lines; confinement 5,203; policy and coordination 2,157.
 
 ### DLV-149
 

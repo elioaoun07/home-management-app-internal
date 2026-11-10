@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-27
+updated: 2026-11-10
 type: master-book
 status: active
 owner: Elio
@@ -15,6 +15,8 @@ owner: Elio
 Reliable balances, transactions, commitments and financial decisions. Standalone campaign; Budget also owns its money bridges.
 
 ## Current state & evidence
+
+**2026-11-10 — Fable 2 filing (documentation only):** BUD-89, BUD-90, BUD-91, BUD-92, BUD-93, BUD-95, BUD-94 added to the checklist with criteria below. Sources are the 2026-11-04 Major Bug Sweep, whose IDs had not been filed, and the [Fable 2 analysis](<../Fable 2/_index.md>) at commit `8da80ae`. Nothing is implemented, applied or verified by this entry.
 
 **2026-10-25 ? delivered-slice UAT drafts (documentation only):** [Product walkthroughs](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md>) provide numbered owner actions, expected results, setup and cleanup for this campaign’s identified completed slices. Existing owner results and broader open integration/deployment gates remain unchanged; the new draft scenarios record no test execution. [All UAT scenarios](<../../../docs/Delivery-UAT-Scenarios-2026-10-25.md>).
 
@@ -36,6 +38,20 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+🔴 **BUD-89** Restore the original transaction on Undo. Filed 2026-11-10 from [Major Bug Sweep M1](<../Research/Major Bug Sweep.md#m1>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#bud-89>).
+
+🔴 **BUD-90** Post money once per confirm or settle. Filed 2026-11-10 from [Major Bug Sweep M2](<../Research/Major Bug Sweep.md#m2>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#bud-90>).
+
+🟠 **BUD-91** Write balances only to accounts the caller may change. Filed 2026-11-10 from [Major Bug Sweep M3](<../Research/Major Bug Sweep.md#m3>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#bud-91>).
+
+🟠 **BUD-92** Re-apply both legs when a split is restored. Filed 2026-11-10 from [Major Bug Sweep M4](<../Research/Major Bug Sweep.md#m4>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#bud-92>).
+
+🟠 **BUD-93** Stop deriving money dates from server UTC. Filed 2026-11-10 from [Major Bug Sweep T1](<../Research/Major Bug Sweep.md#t1>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#bud-93>).
+
+🟠 **BUD-95** Send a private cache header on the transactions read. Filed 2026-11-10 from [Fable 2 finding F2-13](<../Fable 2/02 - Standalone Modules/Transactions/Shared-Cache Header on the Transactions Read.md>) (2026-11-10). See [acceptance](<#bud-95>).
+
+🟡 **BUD-94** Validate money amounts before they reach a balance. Filed 2026-11-10 from [Major Bug Sweep M5](<../Research/Major Bug Sweep.md#m5>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#bud-94>).
 
 
 🟠 **BUD-85** `POST /api/recurring-payments/[id]/mark-covered` advances `next_due_date` on every call with no duplicate guard, so a repeated or replayed cover skips a real period (recurrence-safety: exactly-once coverage). Found 2026-09-27 while building ERA's "mark rent as paid" (HUB-79). Evidence: the route recomputes `advanceRecurringPastDate` from the current `next_due_date` each time and never checks whether this transaction already covered it. ERA works around it by re-checking the snapshot on tap; the Recurring page has no guard. Fix: key coverage on (payment, period) or reject a transaction already linked.
@@ -67,6 +83,90 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### BUD-89
+
+**Outcome:** Undo after deleting a transaction restores the original row; no copy is created.
+
+**Kind:** bug
+**Touches:** `src/features/transactions/useDashboardTransactions.ts`
+
+- **Source:** [Major Bug Sweep M1](<../Research/Major Bug Sweep.md#m1>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Acceptance:** Undo calls `/api/recycle-bin/restore` with the original id and never `POST /api/transactions`. After delete → Undo → open Recycle Bin, the row is not there and the balance equals its value before the delete. A hook test asserts both.
+- **Tier:** CLAUDE_MID, effort high; owner review (money). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** `src/features/transactions/useDashboardTransactions.ts:537-548` builds the copy today; ERA's inverse already calls restore. Load `money-rules`.
+
+### BUD-90
+
+**Outcome:** Recurring confirm, future-payment confirm, split-bill completion and debt settlement each post money at most once.
+
+**Kind:** bug
+**Touches:** `src/app/api/recurring-payments/[id]/route.ts`, `src/app/api/future-payments/[id]/confirm/route.ts`, `src/app/api/transactions/split-bill/route.ts`, `src/app/api/debts/[id]/route.ts`
+
+- **Source:** [Major Bug Sweep M2](<../Research/Major Bug Sweep.md#m2>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Acceptance:** For each of the four flows, two concurrent calls give one 200 and one 409, with exactly one `adjustAccountBalance` call. Each flow claims first with a conditional update that returns the row only to the winner. Recurring confirm accepts a client-generated transaction id and treats `23505` as a replay, as transfers do.
+- **Tier:** CLAUDE_HIGH, effort high; owner review (money). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Pattern: `src/app/api/transfers/route.ts` (BUD-87). Related, not replaced: BUD-64, BUD-85, BUD-63. Load `money-rules` and `recurrence-safety`. [Exactly-once across campaigns](<../Fable 2/03 - Junction Modules/Sync & Offline/Exactly-Once Remains Open.md>).
+
+### BUD-91
+
+**Outcome:** No money route adjusts a balance for an account the caller cannot write, and none defaults the account type.
+
+**Kind:** bug
+**Touches:** `src/app/api/recurring-payments/[id]/route.ts`, `src/app/api/future-payments/[id]/confirm/route.ts`, `src/app/api/drafts/[id]/route.ts`, `src/app/api/transactions/split-bill/route.ts`
+
+- **Source:** [Major Bug Sweep M3](<../Research/Major Bug Sweep.md#m3>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Acceptance:** Each of the four routes resolves the account with `getAccessibleAccount` and returns 404 without a balance call when `canWrite` is false; the account's real type is used. Route tests: partner's non-public account → 404 and no balance call; own saving account → positive delta.
+- **Tier:** CLAUDE_MID, effort high; owner review (money). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** `src/lib/accountAccess.ts:101`; transfers already do this at `src/app/api/transfers/route.ts:303-304`. [Service-role surface](<../Fable 2/03 - Junction Modules/Household Sharing/Service-Role Authorization Surface.md>).
+
+### BUD-92
+
+**Outcome:** Restoring a deleted, completed split-bill transaction re-applies the payer and the collaborator legs exactly once.
+
+**Kind:** bug
+**Touches:** `src/app/api/recycle-bin/restore/route.ts`, `src/lib/recycleBin/registry.ts`
+
+- **Source:** [Major Bug Sweep M4](<../Research/Major Bug Sweep.md#m4>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Acceptance:** Restore of a completed split calls `adjustAccountBalance` twice with the exact inverse of the delete; a second restore attempt changes nothing. The registry selects the split columns.
+- **Tier:** CLAUDE_HIGH; owner review (money). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Delete side: `src/app/api/transactions/[id]/route.ts:550-578`. Related: BUD-24. Same claim-first rule as BUD-90.
+
+### BUD-93
+
+**Outcome:** No money row gets its calendar date from the server's UTC clock.
+
+**Kind:** bug
+**Touches:** `src/app/api/debts/`, `src/app/api/future-payments/[id]/confirm/route.ts`, `src/app/api/transfers/route.ts`, `src/app/api/drafts/route.ts`, `src/services/transaction.service.ts`, `src/lib/balance.ts`
+
+- **Source:** [Major Bug Sweep T1](<../Research/Major Bug Sweep.md#t1>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Acceptance:** With the clock mocked to `2026-11-04T23:30:00Z` and a client `localDate` of `2026-11-05`, each listed route stores `2026-11-05`. Routes require `date` or accept `localDate`.
+- **Tier:** CLAUDE_MID; owner review (money). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** `localDate` handling in `src/app/api/era/ask/route.ts:114-117`. Load `timezone-handling`.
+
+### BUD-95
+
+**Outcome:** `GET /api/transactions` is never stored or replayed by a shared cache.
+
+**Kind:** bug
+**Touches:** `src/app/api/transactions/route.ts`
+
+- **Source:** [Fable 2 finding F2-13](<../Fable 2/02 - Standalone Modules/Transactions/Shared-Cache Header on the Transactions Read.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Acceptance:** The response carries `Cache-Control: private, no-store` and `Vary: Cookie`; a route test asserts neither `public` nor `s-maxage` appears. `grep -rn "s-maxage" src/app/api` returns nothing.
+- **Tier:** CLAUDE_LOW; owner review (money read path). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Line 34 today sends `public, s-maxage=60, stale-while-revalidate=300`. Model: `src/app/api/activity-log/route.ts:11` and its test.
+
+### BUD-94
+
+**Outcome:** A non-numeric or non-finite amount can never change a stored balance.
+
+**Kind:** bug
+**Touches:** `src/lib/balance.ts`, `src/app/api/recurring-payments/[id]/route.ts`, `src/app/api/debts/[id]/route.ts`, `src/app/api/transactions/split-bill/route.ts`
+
+- **Source:** [Major Bug Sweep M5](<../Research/Major Bug Sweep.md#m5>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Acceptance:** Each route parses its body with a Zod schema using a positive finite number; `adjustAccountBalance` throws on a non-finite delta; a debt settlement is capped at the remaining amount on the server. Tests cover a string amount and an over-settlement.
+- **Tier:** CLAUDE_MID; owner review (money). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** `src/lib/balance.ts:85`. Related: existing R46.
 
 ### BUD-87
 

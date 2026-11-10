@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-10-18
+updated: 2026-11-10
 type: master-book
 status: active
 owner: Elio
@@ -15,6 +15,8 @@ owner: Elio
 A dependable daily assistant that reads broadly, proposes safely and speaks first when useful. Junction and primary interaction layer; owns household, shared sync and cross-module AI contracts.
 
 ## Current state & evidence
+
+**2026-11-10 — Fable 2 filing (documentation only):** HUB-118, HUB-119, HUB-120, HUB-121, HUB-122 added to the checklist with criteria below. Sources are the 2026-11-04 Major Bug Sweep, whose IDs had not been filed, and the [Fable 2 analysis](<../Fable 2/_index.md>) at commit `8da80ae`. Nothing is implemented, applied or verified by this entry.
 
 **2026-10-25 — owner UAT wording backfilled (documentation only):** [Hub and ERA walkthroughs](<../../../docs/Delivery-UAT-Hub-2026-10-25.md>) give completed slices awaiting acceptance numbered navigation/actions, expected results, setup and cleanup. Partial broader items retain their open engineering gates; old receipts and owner observations are unchanged. New manual results are Pending. [Delivery-wide index and feedback format](<../../../docs/Delivery-UAT-Scenarios-2026-10-25.md>). No app/provider/production acceptance was exercised during drafting.
 
@@ -70,6 +72,16 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](<../_Decisions.md>); original exploratory ideas live in [Research options](<../Research/Options.md>). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+🔴 **HUB-118** Require host sign-in for Guest Portal bulk reads. Filed 2026-11-10 from [Major Bug Sweep S1](<../Research/Major Bug Sweep.md#s1>) (2026-11-04: evidence, fix, test and UAT); re-verified 2026-11-10: [Fable 2 note](<../Fable 2/02 - Standalone Modules/Guest Portal/Guest Data Exposure Still Unqueued.md>). See [acceptance](<#hub-118>).
+
+🔴 **HUB-119** Keep every queued offline write until the user decides. Filed 2026-11-10 from [Major Bug Sweep O1](<../Research/Major Bug Sweep.md#o1>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#hub-119>).
+
+🟠 **HUB-120** Make transaction creates safe to replay. Filed 2026-11-10 from [Major Bug Sweep O2](<../Research/Major Bug Sweep.md#o2>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#hub-120>).
+
+🟠 **HUB-121** Resolve the household link in one place. Filed 2026-11-10 from [Major Bug Sweep H1](<../Research/Major Bug Sweep.md#h1>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#hub-121>).
+
+🟡 **HUB-122** Tighten Guest Portal bot and chat routes. Filed 2026-11-10 from [Major Bug Sweep G1](<../Research/Major Bug Sweep.md#g1>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#hub-122>).
 
 - 🟠 **HUB-94 acceptance gap — source review, 2026-10-25.** The current typed event composer passes structured capture through `useEraTurn` → `resolveIntent` → `resolveScheduleCapture`; that path returns the event receipt without the older event resolver's Where?/Save-to-Places follow-up. [H06](<../../../docs/Delivery-UAT-Hub-2026-10-25.md#h06--create-a-placecontact-use-the-place-and-open-its-artifact>) retains the accepted expectation and labels the divergence. No runtime reproduction or owner FAIL is claimed; a bounded follow-up needs its own engineering scope before implementation.
 
@@ -154,6 +166,66 @@ The remaining retained defects, decisions and enhancements are indexed below and
 🟡 **HUB-100** Ask AI says "I don't have a shopping list feature". Its catalog (`src/features/era/capabilities/registry.ts`) has no `shopping.add`, so the model can't propose one. See [acceptance](#hub-100).
 
 ## Acceptance Criteria Index
+
+### HUB-118
+
+**Outcome:** Only the tag's host (or household partner) can list every guest's allergies and drinks.
+
+**Kind:** bug
+**Touches:** `src/app/api/guest-portal/allergies/route.ts`, `src/app/api/guest-portal/drinks/route.ts`, `src/app/g/drinks-admin/page.tsx`
+
+- **Source:** [Major Bug Sweep S1](<../Research/Major Bug Sweep.md#s1>) (2026-11-04: evidence, fix, test and UAT); re-verified 2026-11-10: [Fable 2 note](<../Fable 2/02 - Standalone Modules/Guest Portal/Guest Data Exposure Still Unqueued.md>). Filed 2026-11-10; not started.
+- **Acceptance:** Anonymous `GET ?all=true` → 401; host of another tag → 403; owning host → 200. The public routes no longer accept `all`. `/g/drinks-admin` requires login and resolves the tag from the host's own tags.
+- **Tier:** CLAUDE_MID, effort high; owner review (auth). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** `src/app/api/guest-portal/allergies/route.ts:14-18`. If a refreshed `migrations/db-state.json` still shows RLS disabled on `guest_drinks`, hand the owner the migration in the same change (Hard Rules 24, 26).
+
+### HUB-119
+
+**Outcome:** No queued offline operation is deleted without the user choosing to discard it.
+
+**Kind:** bug
+**Touches:** `src/lib/offlineQueue.ts`, `src/lib/offlineSyncEngine.ts`
+
+- **Source:** [Major Bug Sweep O1](<../Research/Major Bug Sweep.md#o1>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Acceptance:** A 25-hour-old transaction operation is still queued and flagged for review. A 401 during replay increments the retry count and keeps the operation. Only 400, 403, 404, 409 and 422 are terminal, and terminal operations go to review, not deletion.
+- **Tier:** CLAUDE_HIGH. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** `src/lib/offlineSyncEngine.ts:157`, `:327-338`; `src/lib/offlineQueue.ts:422-435`. Related: HUB-116.
+
+### HUB-120
+
+**Outcome:** A replayed or retried transaction create never produces a second row.
+
+**Kind:** bug
+**Touches:** `src/app/api/transactions/route.ts`, `src/services/transaction.service.ts`, `src/lib/offlineSyncEngine.ts`
+
+- **Source:** [Major Bug Sweep O2](<../Research/Major Bug Sweep.md#o2>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Acceptance:** `POST /api/transactions` accepts a client-generated id, inserts with it and returns the existing row on `23505`. Queued operations carry that id from creation. Test: the same create replayed after a timeout yields one row and one balance adjustment.
+- **Tier:** CLAUDE_HIGH; owner review (money). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Pattern: `replayTransfer` in `src/app/api/transfers/route.ts`. Do after BUD-90, by the same author.
+
+### HUB-121
+
+**Outcome:** Every route resolves the active partner through one helper, and the database allows one active claimed link per user.
+
+**Kind:** bug
+**Touches:** `src/lib/accountAccess.ts`, `migrations/`
+
+- **Source:** [Major Bug Sweep H1](<../Research/Major Bug Sweep.md#h1>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Acceptance:** One `getActiveHouseholdLink` filters `active = true` and a non-null partner, newest first, limit 1; no route keeps an inline `.maybeSingle()` lookup. A migration file deactivates stale duplicates and adds a partial unique index; the owner applies it. Tests cover two active rows and a pending invite newer than the real link.
+- **Tier:** CLAUDE_HIGH; owner review (household, migration). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** About 23 call sites per the sweep. Read `migrations/db-state.json` first (Hard Rule 27); it is 97 days old, so ask the owner to refresh it.
+
+### HUB-122
+
+**Outcome:** Guest routes answer only for an active tag, guests cannot post as host or bot, and messages are validated.
+
+**Kind:** bug
+**Touches:** `src/app/api/guest-portal/bot/route.ts`, `src/app/api/guest-portal/chat/route.ts`
+
+- **Source:** [Major Bug Sweep G1](<../Research/Major Bug Sweep.md#g1>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Acceptance:** Every guest route refuses an inactive tag. The public chat POST forces `sender: "guest"` and validates the body with a Zod schema including a length cap. Bot answers derive from `bio_data` and recipes.
+- **Tier:** CLAUDE_MID; owner review (public routes). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Follow HUB-118 in the same area.
 
 ### HUB-117
 

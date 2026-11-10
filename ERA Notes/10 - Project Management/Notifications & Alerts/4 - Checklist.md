@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-10
+updated: 2026-11-10
 type: checklist
 status: active
 owner: Elio
@@ -23,6 +23,11 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **NOTIF-3.2** Convert quick actions to **icon-only/compact** controls with `aria-label`/tooltip; one primary inline, secondary in an overflow — [criteria](<Notifications & Alerts — Master Book.md#notif-32>) _(friction - M)_
 - [ ] **NOTIF-6.6** Live-verify Google Calendar sync end-to-end once credentials are set (connect — [criteria](<Notifications & Alerts — Master Book.md#notif-66>) _(friction - M)_
 - [ ] **NOTIF-21** Recover recipient-event delivery durably — [criteria](<Notifications & Alerts — Master Book.md#notif-21-1>) _(friction - M)_
+
+**Filed 2026-11-10 (Fable 2).** Criteria carry the source, tier and reading guide.
+
+- [ ] **NOTIF-22** Refuse cron calls when the secret is unset — [criteria](<Notifications & Alerts — Master Book.md#notif-22>) _(friction - S)_
+- [ ] **NOTIF-23** Claim an item alert before sending it — [criteria](<Notifications & Alerts — Master Book.md#notif-23>) _(friction - S)_
 
 ## Later
 

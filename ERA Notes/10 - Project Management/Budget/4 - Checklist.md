@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-27
+updated: 2026-11-10
 type: checklist
 status: active
 owner: Elio
@@ -35,6 +35,15 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **BUD-70** Match commitments exclusively with account provenance — [criteria](<Budget — Master Book.md#bud-70>) _(friction - M)_
 - [ ] **BUD-74** Cover core money route contracts — [criteria](<Budget — Master Book.md#bud-74>) _(friction - M)_
 
+**Filed 2026-11-10 (Fable 2).** Criteria carry the source, tier and reading guide.
+
+- [ ] **BUD-89** Restore the original transaction on Undo — [criteria](<Budget — Master Book.md#bud-89>) _(blocker - S)_
+- [ ] **BUD-90** Post money once per confirm or settle — [criteria](<Budget — Master Book.md#bud-90>) _(blocker - M)_
+- [ ] **BUD-91** Write balances only to accounts the caller may change — [criteria](<Budget — Master Book.md#bud-91>) _(friction - M)_
+- [ ] **BUD-92** Re-apply both legs when a split is restored — [criteria](<Budget — Master Book.md#bud-92>) _(friction - M)_
+- [ ] **BUD-93** Stop deriving money dates from server UTC — [criteria](<Budget — Master Book.md#bud-93>) _(friction - M)_
+- [ ] **BUD-95** Send a private cache header on the transactions read — [criteria](<Budget — Master Book.md#bud-95>) _(friction - S)_
+
 ## Later
 
 - [ ] **BUD-64** Confirm transaction drafts exactly once — [criteria](<Budget — Master Book.md#bud-64>) _(friction - M)_
@@ -53,3 +62,7 @@ One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds
 - [ ] **BUD-75** Resolve income-draft available-balance semantics — [criteria](<Budget — Master Book.md#bud-75>) _(friction - M)_
 - [ ] **BUD-76** Define currency contracts for debt, split and NFC consumers — [criteria](<Budget — Master Book.md#bud-76>) _(friction - M)_
 - [ ] **BUD-77** Promote a saved wish into a Budget goal — [criteria](<Budget — Master Book.md#bud-77>) _(friction - M)_
+
+**Filed 2026-11-10 (Fable 2).** Criteria carry the source, tier and reading guide.
+
+- [ ] **BUD-94** Validate money amounts before they reach a balance — [criteria](<Budget — Master Book.md#bud-94>) _(annoyance - M)_

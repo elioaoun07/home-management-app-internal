@@ -10,7 +10,8 @@ import { executionKind, implementationDone } from './shared/work-lifecycle.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const pm = path.join(root, 'ERA Notes/10 - Project Management');
 const campaigns = ['Budget', 'Schedule', 'Kitchen', 'Trips', 'Hub & ERA', 'Notifications & Alerts', 'Healthcare', 'Outfits', 'PM Tooling', 'Delivery', 'Native App'];
-const allowedDirectories = new Set([...campaigns, 'Plans', 'Research', '_Templates', '_Archive', '.pm']);
+// 'Fable 2' is the owner-commissioned 2026-11-10 study folder (_Conventions.md §8); it holds no checkboxes.
+const allowedDirectories = new Set([...campaigns, 'Plans', 'Research', 'Fable 2', '_Templates', '_Archive', '.pm']);
 const errors = [];
 const activeFiles = [];
 const ids = new Map();

@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-26
+updated: 2026-11-10
 type: master-book
 status: active
 owner: Elio
@@ -15,6 +15,8 @@ owner: Elio
 Turn food and household references into useful, reversible daily actions. Campaign for Recipes, Inventory and Catalogue standalones plus Meal Planning/Shopping junctions.
 
 ## Current state & evidence
+
+**2026-11-10 — Fable 2 filing (documentation only):** KIT-28 added to the checklist with criteria below. Sources are the 2026-11-04 Major Bug Sweep, whose IDs had not been filed, and the [Fable 2 analysis](<../Fable 2/_index.md>) at commit `8da80ae`. Nothing is implemented, applied or verified by this entry.
 
 **2026-10-25 ? delivered-slice UAT drafts (documentation only):** [Product walkthroughs](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md>) provide numbered owner actions, expected results, setup and cleanup for this campaign’s identified completed slices. Existing owner results and broader open integration/deployment gates remain unchanged; the new draft scenarios record no test execution. [All UAT scenarios](<../../../docs/Delivery-UAT-Scenarios-2026-10-25.md>).
 
@@ -33,6 +35,8 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 Unresolved policy choices live in the [decision register](../_Decisions.md); original exploratory ideas live in [Research options](../Research/Options.md). A Later item is retained work, not automatic permission to start.
 
 ## Pain Inventory
+
+🟡 **KIT-28** Accept punctuation in recipe search. Filed 2026-11-10 from [Major Bug Sweep K1](<../Research/Major Bug Sweep.md#k1>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#kit-28>).
 
 🟠 **KIT-10** Validate ingredient payloads at every writer. See [acceptance](#kit-10) for the root cause, evidence and gate.
 
@@ -67,6 +71,18 @@ The remaining retained defects, decisions and enhancements are indexed below and
 🟡 **KIT-26** Catalogue RLS verified 2026-10-04 (`migrations/output.md`): two overlapping policy sets on `catalogue_items` (one via `household_members` with no `active` check, one via `household_links`), owner-only SELECT on `catalogue_sub_items` (a partner sees a shared item with an empty checklist), and a module delete policy whose `is_system = false` guard is OR-ed away. Fix written 2026-10-05 as `migrations/2026-10-05_catalogue-rls-collapse.sql`; waiting on the owner to run it. See [acceptance](#kit-26).
 
 ## Acceptance Criteria Index
+
+### KIT-28
+
+**Outcome:** A recipe search containing a comma or a parenthesis returns results instead of an error.
+
+**Kind:** bug
+**Touches:** `src/app/api/recipes/route.ts`
+
+- **Source:** [Major Bug Sweep K1](<../Research/Major Bug Sweep.md#k1>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Acceptance:** Searching `a, b (c)` returns 200. The route uses `toIlikeTerm`.
+- **Tier:** CLAUDE_LOW. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** `src/app/api/recipes/route.ts:59-61`; helper in `src/lib/catalogue/itemPatch.ts`.
 
 **Plan navigation:** Open items below carry embedded drafts under [item execution plans](../_Conventions.md#9-item-execution-plans). Read only the selected ID and its dependencies. Prepared 2026-09-26 against source HEAD `45b28899`; implementation review, owner SQL application and device acceptance remain separate. No plan is owner-reviewed or dispatched by this document update.
 

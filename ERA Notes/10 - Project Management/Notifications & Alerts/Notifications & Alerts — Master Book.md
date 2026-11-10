@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-26
+updated: 2026-11-10
 type: master-book
 status: active
 owner: Elio
@@ -15,6 +15,8 @@ owner: Elio
 Deliver the right event to the right person and resolving screen. Junction across Schedule, Budget, recurring payments and Hub.
 
 ## Current state & evidence
+
+**2026-11-10 — Fable 2 filing (documentation only):** NOTIF-22, NOTIF-23 added to the checklist with criteria below. Sources are the 2026-11-04 Major Bug Sweep, whose IDs had not been filed, and the [Fable 2 analysis](<../Fable 2/_index.md>) at commit `8da80ae`. Nothing is implemented, applied or verified by this entry.
 
 **2026-10-25 ? delivered-slice UAT drafts (documentation only):** [Product walkthroughs](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md>) provide numbered owner actions, expected results, setup and cleanup for this campaign’s identified completed slices. Existing owner results and broader open integration/deployment gates remain unchanged; the new draft scenarios record no test execution. [All UAT scenarios](<../../../docs/Delivery-UAT-Scenarios-2026-10-25.md>).
 
@@ -34,6 +36,10 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟠 **NOTIF-22** Refuse cron calls when the secret is unset. Filed 2026-11-10 from [Major Bug Sweep S2](<../Research/Major Bug Sweep.md#s2>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#notif-22>).
+
+🟠 **NOTIF-23** Claim an item alert before sending it. Filed 2026-11-10 from [Major Bug Sweep N1](<../Research/Major Bug Sweep.md#n1>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#notif-23>).
+
 🟠 **NOTIF-19** Centralize recipient delivery policy. See [acceptance](<#notif-19>) for the root cause, evidence and gate.
 
 🟠 **NOTIF-2.1** Verify the bell and unread state on phones. See [acceptance](<#notif-21>) for the root cause, evidence and gate.
@@ -43,6 +49,30 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### NOTIF-22
+
+**Outcome:** No cron route accepts `Bearer undefined`.
+
+**Kind:** bug
+**Touches:** `src/app/api/cron/purge-recycle-bin/route.ts`, `src/app/api/cron/gcal-reconcile/route.ts`
+
+- **Source:** [Major Bug Sweep S2](<../Research/Major Bug Sweep.md#s2>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Acceptance:** With `CRON_SECRET` unset, `Authorization: Bearer undefined` returns 401 on all six cron routes. One shared `isCronAuthorized(req)` is used by all six.
+- **Tier:** CLAUDE_LOW; owner review (cron). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Both routes compare at line 22; the other four guard first (for example `item-reminders/route.ts:84-86`).
+
+### NOTIF-23
+
+**Outcome:** Overlapping reminder runs send each alert once.
+
+**Kind:** bug
+**Touches:** `src/app/api/cron/item-reminders/route.ts`
+
+- **Source:** [Major Bug Sweep N1](<../Research/Major Bug Sweep.md#n1>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Acceptance:** The route sets `last_fired_at` with a conditional update that returns the row, and sends only when a row is returned. Test: two overlapping invocations send one push.
+- **Tier:** CLAUDE_MID; owner review (cron). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Select at line 137, send at 380, mark at 392 today.
 
 Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execution-plans>). Read only the selected ID, its declared dependencies and relevant source; planning does not certify deployment or mark work complete.
 
