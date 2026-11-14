@@ -1,0 +1,46 @@
+.provider-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 22px;
+  min-width: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.provider-status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.provider-status-name {
+  color: var(--ink);
+  font-weight: 600;
+}
+.provider-status-item small {
+  font-size: 11px;
+}
+.provider-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: var(--ink-muted);
+}
+.provider-status-item[data-status="installed"] .provider-status-dot {
+  background: var(--success, #57d9ad);
+}
+.provider-status-item[data-status="missing"] .provider-status-dot {
+  background: var(--warning-ink);
+}
+@media (max-width: 520px) {
+  .provider-status {
+    gap: 4px 16px;
+  }
+  .provider-status-item {
+    gap: 5px;
+  }
+}

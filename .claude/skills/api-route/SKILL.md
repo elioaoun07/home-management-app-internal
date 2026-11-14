@@ -110,7 +110,7 @@ All three lines are mandatory: `maxDuration`, the Bearer check, `supabaseAdmin()
 
 ## Performance rules (these are correctness rules here)
 
-1. **Parent + N child tables on a hot read path → ONE `get_*_bundle()` SECURITY DEFINER RPC**, not N PostgREST calls. Each extra call costs ~170–200 ms of floor latency (Hard Rule 21). Canonical: `get_schedule_bundle` (`migrations/2026-05-11_schedule_bundle_rpc.sql`).
+1. **Parent + N child tables on a hot read path → ONE `get_*_bundle()` SECURITY DEFINER RPC**, not N PostgREST calls. Each extra call costs ~170–200 ms of floor latency (Hard Rule 21). Canonical: `get_schedule_bundle` (its body is recorded in `migrations/db-state.json`; the original migration file is no longer in the repo).
 2. No per-row queries in loops on request paths (seed/one-time flows like account seeding are the tolerated exception).
 3. Long external calls (AI, third-party APIs) inside a route: remember the **client** calling this route must pass `timeoutMs` to `safeFetch` — say so in your handoff notes when you add such a route.
 

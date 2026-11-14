@@ -10,6 +10,15 @@ import { extname, join, relative, resolve } from "node:path";
 // git for history/grep but is invisible to every PM tool: board, static build, bridge, lint.
 const SKIP_DIR = /^\.|^_Archive$/;
 
+/** Directory facts for Library file operations, including empty folders. */
+export function walkDirectories(dir, base = "") {
+  return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    if (!entry.isDirectory() || entry.isSymbolicLink() || SKIP_DIR.test(entry.name)) return [];
+    const rel = base + entry.name;
+    return [rel, ...walkDirectories(join(dir,entry.name), rel + "/")];
+  });
+}
+
 // Explicit read-only history projection. The archive is never traversed or
 // added to files/tasks/search; this one canonical receipt feeds Outcomes only.
 export function readCancelledLog(pmDir) {

@@ -1,0 +1,25 @@
+{
+  "skill": "data-repair",
+  "title": "Data repair",
+  "tier": "CLAUDE_MID",
+  "effort": "default",
+  "launch": "worktree",
+  "fields": [
+    {
+      "id": "repairClass",
+      "label": "Class",
+      "type": "enum",
+      "options": ["SQL", "browser storage", "balance"],
+      "default": "SQL",
+      "mention": "SQL"
+    },
+    {
+      "id": "symptom",
+      "label": "Symptom",
+      "type": "multiline",
+      "required": true,
+      "mention": "bad data"
+    }
+  ],
+  "checks": []
+}

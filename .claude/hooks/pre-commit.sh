@@ -8,6 +8,12 @@ if ! pnpm docs:check; then
   exit 2
 fi
 
+echo "Checking generated agent setup..."
+if ! pnpm sync:ai:check; then
+  echo "Generated agent setup drifted; run pnpm sync:ai." >&2
+  exit 2
+fi
+
 echo "Checking PWA manifests..."
 if ! pnpm -s pwa:check; then
   echo "PWA manifest scopes collide - see .claude/skills/pwa-install/SKILL.md" >&2
@@ -26,10 +32,13 @@ if ! pnpm test; then
   exit 2
 fi
 
-STAGED=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -E '\.(ts|tsx)$' || true)
-if [ -n "$STAGED" ]; then
+STAGED=()
+while IFS= read -r -d '' file; do
+  [[ "$file" == *.ts || "$file" == *.tsx ]] && STAGED+=("$file")
+done < <(git diff --cached --name-only --diff-filter=ACM -z)
+if [ "${#STAGED[@]}" -gt 0 ]; then
   echo "Running ESLint on staged files..."
-  if ! echo "$STAGED" | xargs pnpm eslint --max-warnings=0; then
+  if ! pnpm eslint --max-warnings=0 -- "${STAGED[@]}"; then
     echo "ESLint errors — fix before committing." >&2
     exit 2
   fi

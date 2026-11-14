@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBridge } from "../scripts/pm/bridge.mjs";
+import type { Cockpit } from "../scripts/pm/app/cockpitTypes";
 import { walk } from "../scripts/pm/scan.mjs";
 import {
   RELAY_SCHEMA,
@@ -356,7 +357,7 @@ describe("the bridge relays V2 commands exactly once", () => {
     rmSync(DATA, { recursive: true, force: true });
   });
 
-  function bridgeFor({ supabase, journey, pushes = [] as Loose[] }: { supabase: ReturnType<typeof createFakeSupabase>; journey: Loose; pushes?: Loose[] }) {
+  function bridgeFor({ supabase, journey, pushes = [] as Loose[], readCockpit }: { supabase: ReturnType<typeof createFakeSupabase>; journey: Loose; pushes?: Loose[]; readCockpit?:()=>Cockpit }) {
     const PM_DIR = join(ROOT, PM_REL);
     const deliveryCtx = createDeliveryContext({
       ROOT,
@@ -375,7 +376,7 @@ describe("the bridge relays V2 commands exactly once", () => {
       hasStore: () => true,
       describeExecutors: async () => ({ executors: [{ id: "claude", label: "Claude", permitted: true, qualified: true, available: true }], policy: { policy_revision: 1 }, refusals: [] }),
     };
-    const buildData = () => ({ generatedAt: new Date().toISOString(), cancelledLog: "", files: walk(PM_DIR).map((file: Loose) => ({ relPath: file.relPath, raw: file.raw, mtimeMs: file.mtimeMs })) });
+    const buildData = () => ({ generatedAt: new Date().toISOString(), cancelledLog: "", ...(readCockpit?{cockpit:readCockpit()}:{}), files: walk(PM_DIR).map((file: Loose) => ({ relPath: file.relPath, raw: file.raw, mtimeMs: file.mtimeMs })) });
     const bridge = createBridge({
       PM_DIR,
       deliveryCtx,
@@ -521,6 +522,29 @@ describe("the bridge relays V2 commands exactly once", () => {
     await bridge.drainOnce();
     expect(supabase.tables.pm_commands.get(id)!.status).toBe("pending");
     expect(store.getRun(run_id)!.waiting_reason).not.toBe("paused");
+  });
+
+  it("publishes the latest completed OS snapshot after an in-flight startup publish, without parallel writes",async()=>{
+    const supabase=createFakeSupabase({allowedStatuses:["pending","claimed","done","failed","expired","unknown"]});
+    const journey=journeyFor({root:ROOT,data:DATA,store,harness:makeHarness(ROOT)});
+    let release!:()=>void,entered!:()=>void;
+    const gate=new Promise<void>(resolve=>{release=resolve;}),started=new Promise<void>(resolve=>{entered=resolve;});
+    const from=supabase.from;let first=true;
+    supabase.from=(table:string)=>{
+      const api=from(table),upsert=api.upsert,then=api.then;
+      api.upsert=(rows:Loose|Loose[])=>{
+        if(first){first=false;api.then=(resolve:(value:unknown)=>void,reject:(error:unknown)=>void)=>{entered();void gate.then(()=>then(resolve,reject));};}
+        return upsert(rows);
+      };
+      return api;
+    };
+    let value:Cockpit={setup:null,records:[],groups:[],deliveries:[],filed:[],conflicts:[],warnings:[],pending:true};
+    const bridge=bridgeFor({supabase,journey,readCockpit:()=>value});
+    const publishing=bridge.publishCorpus();await started;
+    value={...value,pending:false,warnings:["Completed recorder snapshot"]};
+    await bridge.publishCorpus();release();await publishing;
+    const manifest=[...supabase.tables.pm_live.values()].find(row=>parseRowId(row.id)?.kind===ROW_KINDS.MANIFEST)!;
+    expect(manifest.payload.cockpit).toEqual(value);
   });
 
   it("publishes the corpus, capabilities, runs and heartbeat without any secret value", async () => {

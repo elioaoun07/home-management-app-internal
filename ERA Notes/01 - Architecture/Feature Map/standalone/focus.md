@@ -1,30 +1,25 @@
 # Focus
 
 **Type:** Standalone
-**Route:** `/focus`
+**Status:** page retired 2026-06-06. There is no `/focus` route, `src/app/focus/` or `src/components/focus/`.
+**Vault doc:** `ERA Notes/02 - Standalone Modules/Focus/` (what was retired and why)
 
-## What it does
+## What remains
 
-A focus surface — flexible routines (untimed daily todos), insights, and a scheduling sheet for promoting a flexible routine into a scheduled item.
+"Focus" is a per-item action (opens the item's detail view) and the flexible-routines data layer that other surfaces consume.
 
-## Files at a glance
-
-- **Page entry**: `src/app/focus/page.tsx`, `src/app/focus/layout.tsx`
-- **Components**:
-  - `src/components/focus/FocusPage.tsx`
-  - `src/components/focus/FlexibleRoutinesPool.tsx`
-  - `src/components/focus/ScheduleRoutineSheet.tsx`
 - **Hooks**:
   - `src/features/items/useFlexibleRoutines.ts`
   - `src/features/items/useFocusInsights.ts`
-- **API routes**: `src/app/api/focus-insights/`
-- **DB tables**: items + a flexible-flag column (see `schema.sql`)
+- **API route**: `src/app/api/focus-insights/`
+- **Where flexible routines are placed today**: `src/components/planner/` (see [Plan My Day](../junction/plan-my-day.md)) and the web schedule views in `src/components/web/`
 
 ## Common edit scenarios
 
-- **"Add a new routine type"** → schema column → hook → `FlexibleRoutinesPool.tsx`.
-- **"Edit how routines are scheduled"** → `ScheduleRoutineSheet.tsx` + `useFlexibleRoutines.ts`.
+- **"Change how a flexible routine is scheduled"** → `useFlexibleRoutines.ts`, then the planner component that calls it. Read [Items & Reminders](items-and-reminders.md) first; this is item recurrence territory (`recurrence-safety` skill).
+- **"The focus page"** → it no longer exists. Ask which surface is meant: the Schedule Focus tab is [Plan My Day](../junction/plan-my-day.md).
 
 ## Connected modules
 
-- **Items & Reminders** — promoting a routine creates an item.
+- **Items & Reminders** — owns the hooks above.
+- **Plan My Day** — the surface that places flexible routines into a day.

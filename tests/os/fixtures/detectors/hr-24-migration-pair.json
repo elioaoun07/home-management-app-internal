@@ -1,0 +1,5 @@
+[
+  { "expected": "fail", "changes": [{ "file": "migrations/schema.sql", "before": "-- schema\n", "after": "-- changed schema\n" }] },
+  { "expected": "pass", "changes": [{ "file": "migrations/schema.sql", "before": "-- schema\n", "after": "-- changed schema\n" }, { "file": "migrations/2026-11-10_cards.sql", "before": null, "after": "-- Owner-run migration\n" }] },
+  { "expected": "n/a", "changes": [{ "file": "README.md", "before": null, "after": "# Notes\n" }] }
+]

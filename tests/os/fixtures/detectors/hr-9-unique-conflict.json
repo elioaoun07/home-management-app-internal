@@ -1,0 +1,32 @@
+[
+  {
+    "expected": "fail",
+    "changes": [
+      {
+        "file": "src/app/api/cards/route.ts",
+        "before": null,
+        "after": "db.from('cards').insert({});"
+      }
+    ]
+  },
+  {
+    "expected": "pass",
+    "changes": [
+      {
+        "file": "src/app/api/cards/route.ts",
+        "before": null,
+        "after": "db.from('cards').insert({}); if (error.code === '23505') return Response.json({}, {status:409});"
+      }
+    ]
+  },
+  {
+    "expected": "n/a",
+    "changes": [
+      {
+        "file": "README.md",
+        "before": null,
+        "after": "Text"
+      }
+    ]
+  }
+]

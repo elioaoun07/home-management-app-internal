@@ -372,7 +372,18 @@ export function createJourney({
   loadAllowances = readAllowances,
   saveAllowances = writeAllowances,
 }) {
-  const getStore = typeof store === "function" ? store : () => store;
+  const rawStore = typeof store === "function" ? store : () => store;
+  // Local shares persistence and activity, never confined grants, slots or Apply.
+  const isLocal = run => parseJson(run?.base_manifest_json, null)?.lane === "local";
+  const getStore = () => {
+    const raw = rawStore();
+    return { ...raw,
+      getRun: id => { const row = raw.getRun(id); return isLocal(row) ? null : row; },
+      listRuns: () => raw.listRuns().filter(row => !isLocal(row)),
+      ...Object.fromEntries(["listAllJobs", "listOutstandingJobs", "listClaimedUndispatched"].map(name => [name,
+        (...args) => raw[name](...args).filter(job => !isLocal(raw.getRun(job.run_id)))])),
+    };
+  };
   const pending = new Set();
   const failures = [];
   const inFlight = new Map();

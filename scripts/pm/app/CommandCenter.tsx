@@ -3,11 +3,12 @@
 // transport before mounting; the views never know which one they have.
 import { App } from "./App";
 import { Providers } from "./state";
+import { LibraryActions } from "./LibraryActions";
 
 export function CommandCenter() {
   return (
     <Providers>
-      <App />
+      <LibraryActions><App /></LibraryActions>
     </Providers>
   );
 }

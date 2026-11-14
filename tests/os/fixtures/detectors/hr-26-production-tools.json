@@ -1,0 +1,49 @@
+[
+  {
+    "expected": "fail",
+    "session": {
+      "agent": "claude",
+      "coverage": "transcript",
+      "timeline": [
+        {
+          "signals": {
+            "productionWrite": true
+          }
+        }
+      ],
+      "reads": [],
+      "skills": []
+    },
+    "changes": [
+      {
+        "file": "src/components/Card.tsx",
+        "before": null,
+        "after": "export const c=1;"
+      }
+    ]
+  },
+  {
+    "expected": "pass",
+    "session": {
+      "agent": "claude",
+      "coverage": "transcript",
+      "timeline": [],
+      "reads": [],
+      "skills": []
+    },
+    "changes": [
+      {
+        "file": "src/components/Card.tsx",
+        "before": null,
+        "after": "export const c=1;"
+      }
+    ]
+  },
+  {
+    "expected": "n/a",
+    "session": {
+      "agent": "manual"
+    },
+    "changes": []
+  }
+]

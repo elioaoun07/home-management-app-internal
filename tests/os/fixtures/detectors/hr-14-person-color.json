@@ -1,0 +1,32 @@
+[
+  {
+    "expected": "fail",
+    "changes": [
+      {
+        "file": "src/components/Person.tsx",
+        "before": null,
+        "after": "<div className=\"bg-blue-400\" />;"
+      }
+    ]
+  },
+  {
+    "expected": "pass",
+    "changes": [
+      {
+        "file": "src/components/Person.tsx",
+        "before": null,
+        "after": "<div className={personColor} />;"
+      }
+    ]
+  },
+  {
+    "expected": "n/a",
+    "changes": [
+      {
+        "file": "README.md",
+        "before": null,
+        "after": "Text"
+      }
+    ]
+  }
+]

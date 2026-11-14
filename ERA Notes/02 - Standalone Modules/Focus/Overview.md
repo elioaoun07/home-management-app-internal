@@ -15,7 +15,7 @@ related:
 # Focus — Retired 2026-06-06
 
 > **Was:** `src/app/focus/` | `src/components/focus/`
-> **Decision:** [Schedule · 2 — Decision 1](<../../10 - Project Management/Schedule/2 - Vision, Target Design & Decisions.md>)
+> **Decision:** [Schedule · 2 — Decision 1](<../../10 - Project Management/_Archive/Schedule/2 - Vision & Roadmap.md>)
 
 The standalone `/focus` page has been retired. "Focus" is now a **per-item action** available from `ItemActionsSheet` (and `ItemDetailModal`) — it opens the item's detail view for a focused look at that single item.
 
@@ -41,7 +41,7 @@ The page was dull, redundant, and unused. Its two jobs were:
 1. **Flexible routine assignment** — already done via the Week view's "Flexible this week" strip.
 2. **AI briefing** — feeds Today view and ERA; not tied to the page.
 
-Retiring it removes dead-weight maintenance and reduces surface sprawl (7 surfaces → 6). See [Schedule · 1 — Feature State & Pain Inventory, Cluster 2](<../../10 - Project Management/Schedule/1 - Feature State & Pain Inventory.md>).
+Retiring it removes dead-weight maintenance and reduces surface sprawl (7 surfaces → 6). See [Schedule · 1 — Feature State & Pain Inventory, Cluster 2](<../../10 - Project Management/_Archive/Schedule/1 - Feature State.md>).
 
 ## See Also
 

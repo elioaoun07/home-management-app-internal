@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-09-10
+updated: 2026-11-11
 type: archive-index
 status: baseline-frozen
 ---
@@ -13,6 +13,9 @@ This tree is excluded from every PM backlog scan. Old `Now`, unchecked boxes, st
 
 | Material | Role |
 |---|---|
+| `Shipped/<Campaign>.md` | Written by `pnpm pm:ship`: the full receipt and acceptance criteria of every completed item, and Master Book state-log entries older than the newest three. Each Shipped Log line links here |
+| `Studies/Delivery Consumption (2026-09)/` | The six September token-consumption investigations and implementation reports for the confined executor (archived 2026-11-11; results live in DLV-118 and the Delivery book) |
+| `Plans/` — Delivery First-Run Hotfix, Delivery Optimization Closeout, Execution Plans Coverage | September plans whose work is implemented or recorded in the item sections (archived 2026-11-11) |
 | [Refactor receipt](<2026-09-10 PM Refactor/README.md>) | File/task trace, original canonical-document preimages and disposition evidence |
 | [ASTRA portfolio](<Studies/ASTRA/ASTRA — 10x Portfolio.md>) | September campaign research, source findings and original bounded sheets |
 | [Top Layer study](<Studies/Top Layer/Top Layer — ASTRA Architecture.md>) | Evidence behind accepted Top Layer refinements |

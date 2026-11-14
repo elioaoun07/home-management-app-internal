@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Lightbulb, Send } from "lucide-react";
+import { Lightbulb, Send } from "lucide-react";
 import { useRoute, useWorld, useCommand, type UndoSnapshot } from "./state";
 import { transport } from "./transport";
 import { liveRuns, sourceFile } from "./model";
@@ -15,6 +15,7 @@ import {
   WorkLink,
 } from "./components";
 import { UndoNotice } from "./Work";
+import { DocumentBody, DocumentNavigation, FileTools } from "./Library";
 
 export function Attention() {
   const { world, runs } = useWorld();
@@ -92,17 +93,18 @@ export function Reader() {
   const route = useRoute();
   const path = route.query.get("file") || route.parts.slice(1).join("/");
   const file = sourceFile(world, path);
-  const anchor = route.query.get("anchor");
+  const anchor = route.query.get("anchor") || route.query.get("h");
+  const checkbox = route.query.get("cb");
   useEffect(() => {
-    if (!anchor) return;
+    if (!anchor && checkbox === null) return;
     const timer = setTimeout(() => {
-      const target = document.getElementById(anchor);
+      const target = anchor ? document.getElementById(anchor) : document.querySelector(`[data-cbidx="${CSS.escape(checkbox || "")}"]`);
       target?.scrollIntoView({ block: "start" });
       target?.classList.add("anchor-highlight");
       setTimeout(() => target?.classList.remove("anchor-highlight"), 2200);
     }, 0);
     return () => clearTimeout(timer);
-  }, [path, anchor, file]);
+  }, [path, anchor, checkbox, file]);
   return (
     <div className="reader-page">
       <Back />
@@ -111,21 +113,10 @@ export function Reader() {
         title={path.split("/").at(-1)?.replace(/\.md$/, "") || "Reference"}
       />
       {file ? (
-        <Markdown
-          raw={file.raw.replace(/^---\n[\s\S]*?\n---\n/, "")}
-          file={file.relPath}
-        />
+        <><DocumentNavigation key={`nav:${file.relPath}`} file={file}/><FileTools path={file.relPath} onChange={(p,kind)=>location.hash=kind==="folder"?`/library?folder=${encodeURIComponent(p)}`:`/read?file=${encodeURIComponent(p)}`}/><DocumentBody key={file.relPath} file={file}/></>
       ) : (
         <Empty title="This reference is outside the live collection">
-          {transport().capabilities.referenceTools && (
-            <a
-              className="secondary"
-              href={`/?ui=classic#/doc/${encodeURI(path)}`}
-            >
-              Open reference tools
-              <ArrowRight size={15} />
-            </a>
-          )}
+          <a className="secondary" href={`#/library?q=${encodeURIComponent(path.split("/").at(-1)||path)}`}>Find document</a>
         </Empty>
       )}
     </div>

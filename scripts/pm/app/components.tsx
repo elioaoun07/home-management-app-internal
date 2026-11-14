@@ -28,6 +28,7 @@ import {
 import { ERAMark, type ERAModuleKey } from "@/components/shared/ERAMark";
 import { headingAnchors, resolveRelativeMd } from "../shared/links.mjs";
 import { checklistAnchors } from "../shared/work-id.mjs";
+import { scanCheckboxes } from "../shared/md-scan.mjs";
 import { sessionStatus, workTitle } from "../shared/product.mjs";
 import { go, useRoute, useWorld } from "./state";
 import {
@@ -253,7 +254,8 @@ export function Sheet({
     </Dialog.Root>
   );
 }
-export function Markdown({ raw, file = "" }: { raw: string; file?: string }) {
+export function Markdown({ raw, file = "", onToggle }: { raw: string; file?: string; onToggle?: (ordinal: number) => void }) {
+  const checkboxRows = scanCheckboxes(raw);
   const anchors = new Map(
     headingAnchors(raw).map((entry) => [entry.line, entry.anchor]),
   );
@@ -273,9 +275,11 @@ export function Markdown({ raw, file = "" }: { raw: string; file?: string }) {
           h2: ({ node, children }) => <h2 id={headingId(node)}>{children}</h2>,
           h3: ({ node, children }) => <h3 id={headingId(node)}>{children}</h3>,
           h4: ({ node, children }) => <h4 id={headingId(node)}>{children}</h4>,
-          li: ({ node, children }) => (
-            <li id={checklistId(node)}>{children}</li>
-          ),
+          li: ({ node, children }) => {
+            const ordinal = checkboxRows.findIndex(row => row.line === (node?.position?.start.line || 1) - 1);
+            return <li id={checklistId(node)} data-cbidx={ordinal>=0?ordinal:undefined}>{onToggle && ordinal >= 0 && <button className="library-checkbox secondary" aria-label={`Toggle checklist row ${ordinal+1}`} aria-pressed={checkboxRows[ordinal].state === "done"} onClick={() => onToggle(ordinal)}>{checkboxRows[ordinal].state === "done" ? "✓" : "○"}</button>}{children}</li>;
+          },
+          input: ({ checked }) => onToggle ? null : <input type="checkbox" checked={!!checked} disabled readOnly />,
           a: ({ href, children }) => {
             let target = href;
             if (file && href?.startsWith("#") && !href.startsWith("#/"))

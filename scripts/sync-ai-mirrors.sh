@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-node scripts/sync-ai-mirrors.mjs
+cd "$(dirname "$0")/.."
+node scripts/sync-ai-mirrors.mjs "$@"

@@ -1,0 +1,32 @@
+[
+  {
+    "expected": "fail",
+    "changes": [
+      {
+        "file": "src/components/ui/card.tsx",
+        "before": null,
+        "after": "export const n=1;"
+      }
+    ]
+  },
+  {
+    "expected": "pass",
+    "changes": [
+      {
+        "file": "src/components/ui/card.tsx",
+        "before": "export const n=1;",
+        "after": "export const n=1;"
+      }
+    ]
+  },
+  {
+    "expected": "n/a",
+    "changes": [
+      {
+        "file": "README.md",
+        "before": null,
+        "after": "Text"
+      }
+    ]
+  }
+]

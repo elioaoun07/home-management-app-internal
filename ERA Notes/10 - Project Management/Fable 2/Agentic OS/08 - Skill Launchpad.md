@@ -9,6 +9,22 @@ evidence_cutoff: "commit e5f537a, 2026-11-10. Proposed design. The input lists a
 
 # Agentic OS — skill launchpad
 
+**2026-11-14 implementation (A6/R98, copy-launch slice):** the eight sidecars,
+strict validation/defaults/conditions, A1 registry + PM pickers, real new-module
+dry-run, A4 required attachments, two file-backed recipes and visible
+copy-prompt/PowerShell-command flow are implemented. A complete new-module
+form → preview → clipboard flow ran with zero input questions; desktop and
+390 px Blue/Pink evidence is recorded in [Skills and Agents](<../../../../docs/Skills-and-Agents.md#skill-launchpad-a6--r98>).
+The schema uses an allowlisted preview identifier and a shared JSON-input
+renderer instead of executing sidecar command strings. The design below remains
+the proposal, not a literal supported schema example.
+
+**Native boundary:** DLV-150 exists, but its Local start contract requires a
+tracked item ID/file and constructs a prompt from that item's brief. It cannot
+accept this skill prompt, values, attachments and setup fingerprint. Native
+worktree launch and genuine flight-report binding remain pending; copy never
+creates an executed-session receipt. R98 stays open at that boundary. No A7 work.
+
 [Agentic OS index](<_index.md>) · [Deterministic evaluation](<07 - Deterministic Evaluation.md>) · next: [PM.2 product design](<09 - PM.2 Product Design.md>) · item: [R98](<../../PM Tooling/PM Tooling — Master Book.md#r98>)
 
 ## The problem

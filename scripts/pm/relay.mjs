@@ -128,7 +128,7 @@ export function findSecrets(text, env = process.env, extraSecrets = []) {
 /**
  * Document rows and a manifest for the Markdown corpus the local app reads.
  *
- * @param {{data:{generatedAt:string, cancelledLog?:string, planning?:any, planningReadiness?:any, planningError?:string|null, files:{relPath:string, raw:string, mtimeMs?:number}[]},
+ * @param {{data:{generatedAt:string, cockpit?:import("./app/cockpitTypes").Cockpit, directories?:string[], cancelledLog?:string, planning?:any, planningReadiness?:any, planningError?:string|null, files:{relPath:string, raw:string, mtimeMs?:number}[]},
  *   installation_id:string, previous?:Map<string, string>}} input  previous: relPath → sha last published
  */
 export function buildCorpusRows({ data, installation_id, previous = new Map() }) {
@@ -150,6 +150,8 @@ export function buildCorpusRows({ data, installation_id, previous = new Map() })
     generatedAt: data.generatedAt,
     files,
     cancelledLog: data.cancelledLog || "",
+    ...(data.directories ? { directories: data.directories } : {}),
+    ...(data.cockpit !== undefined ? { cockpit: data.cockpit } : {}),
     ...(data.planning !== undefined ? { planning: data.planning, planningReadiness: data.planningReadiness || {}, planningError: data.planningError || null } : {}),
   };
   return {

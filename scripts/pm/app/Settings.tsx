@@ -11,6 +11,7 @@ import { transport } from "./transport";
 import { Empty, ErrorNotice, Sheet } from "./components";
 import { PairV2, useV2Session } from "./DeliveryV2";
 import { TestGateCard, useTestGate } from "./TestGate";
+import { GameSetting } from "./GameLayer";
 import { compact } from "./deliveryReviewModel";
 import type { V2AllowanceRun, V2Allowances } from "./types";
 
@@ -315,6 +316,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
   else body = <SettingsBody data={query.data} />;
   return (
     <Sheet title="Settings" open={open} onClose={onClose} side>
+      <GameSetting />
       {body}
     </Sheet>
   );

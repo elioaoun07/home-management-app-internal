@@ -86,7 +86,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** `src/lib/pushSender.ts` is the right chokepoint and currently enforces nothing but VAPID config and 410/404 deactivation — read `ensureVapidConfigured()`, `sendPushToUser()` and the `PushResult` shape. Eight real producers call it (verified 2026-09-20): the four crons `chat-notifications`, `daily-items-reminder`, `daily-reminder`, `item-reminders`, plus `src/app/api/hub/messages/route.ts`, `src/app/api/notifications/in-app/route.ts`, `.../notifications/test/route.ts` and `src/app/api/pm/notify/route.ts`. **`quiet_start`/`quiet_end` already exist in `src/app/api/notifications/preferences/route.ts`'s Zod schema and are read nowhere else in `src/` — the preference is stored and ignored.** Severity/class vocabulary to reuse rather than reinvent: `src/lib/notifications/registry.tsx` (`NotificationTypeSpec`, `NotificationClass`, `takeoverEligible`). Beirut quiet hours must go through `src/lib/utils/date.ts`, not raw `Date` (Hard Rule #18). DEC-01 gates activation; durable send recovery is NOTIF-21, not this.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** implementation draft; briefing activation held on DEC-01.
@@ -156,7 +155,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** Verification-first — the behaviour is already implemented, so reproduce before editing. `src/components/notifications/NotificationBell.tsx` holds all of it: the `prefers-reduced-motion` media query, the `prevCountRef` effect that sets `justArrived` only when the count *rises*, the `animate-notification-ring` / `animate-notification-badge` classes, and the `Notifications, N unread` aria-label with its urgent suffix. Count source is `useUnreadNotificationCount()` in `src/hooks/useNotifications.ts`. The keyframes live in the global stylesheet, not the component. Implement only a reproduced discrepancy, and verify under all four themes on a mobile viewport (Hard Rules #5, #10).
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** investigation first.
@@ -216,7 +214,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** The drawer is `src/components/notifications/NotificationCenter.tsx` (row rendering, empty state) with `src/components/notifications/NotificationModal.tsx` for the expanded view; both are exported via `src/components/notifications/index.ts`. Row content vocabulary — icon, title, class, route — comes from `src/lib/notifications/registry.tsx` (`NotificationIconSpec`, `resolveRoute`), so change the registry rather than adding per-row conditionals. Hard Rule #15 applies literally: a floating drawer uses `tc.bgPage` from `useThemeClasses()`, never `neo-card`. Action controls belong to NOTIF-3.2 and Undo semantics to NOTIF-5.6 — don't absorb them.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** implementation draft.
@@ -273,7 +270,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Quick actions are typed in `src/lib/notifications/registry.tsx` (`QuickActionId`, `QuickAction`, and each type's action list) and executed by `useCompleteNotificationAction()` in `src/hooks/useNotifications.ts`; the rendering surfaces are `src/components/notifications/NotificationModal.tsx` and the row actions in `NotificationCenter.tsx`. Pick the primary from the registry entry rather than hardcoding per type. Icon-only controls still need Undo on anything destructive (Hard Rule #1, `ToastIcons` from `src/lib/toastIcons.tsx`), and labels follow Hard Rule #28 — a verb, not a sentence.
-
 
 **Execution plan — 2026-09-26**
 
@@ -333,7 +329,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** Blocked on credentials; this is a live-verification outcome, not a code change. Read this so you can tell a real failure from a missing credential: `src/lib/gcal/client.ts` (`isGoogleCalendarConfigured()`, `getOAuth2Client()`, `getAuthUrl()`, `exchangeCodeForTokens()`, `getCalendarClientForUser()`, `isGoogleNotFoundError()`) and `src/lib/gcal/sync.ts` (`syncItemToGoogleCalendar()`, `deleteItemFromGoogleCalendar()`). Which notification types sync at all is the `calendarSync` flag in `src/lib/notifications/registry.tsx`. The drift healer is `src/app/api/cron/gcal-reconcile/route.ts` — it has `maxDuration = 60` and the `Bearer CRON_SECRET` check, but there is no `vercel.json`, so it runs only if an external scheduler calls it. That is exactly why the acceptance demands a recorded last-run trace.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** owner evidence.
@@ -386,7 +381,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Provenance:** [Notifications & Alerts — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/Notifications & Alerts — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Depends on NOTIF-19 and is a different problem: policy eligibility versus exactly-once arrival. There is no claim record today — `sendPushToUser()` in `src/lib/pushSender.ts` loops subscriptions in-process, counts `sent`/`failed`, deactivates on 410/404 and optionally stamps `notifications.push_status`; a crash mid-loop leaves no durable per-recipient state. Read that loop, `src/lib/pushLogger.ts` (`logPushEvent`, the existing observation trail) and `src/app/api/notifications/subscription-health/route.ts`. The exactly-once discipline to copy is the one in `.claude/skills/recurrence-safety/SKILL.md`: a claim row, idempotent replay, no silent redelivery. Any new table follows Hard Rules #24 and #27 — give it a policy in the same migration.
-
 
 **Execution plan — 2026-09-26**
 
@@ -449,7 +443,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** The card implementation is `AlertsView` in `src/components/hub/HubPage.tsx` (source read 2026-09-26), with `useInAppNotifications()`, date grouping and `group_key` deduplication. `src/app/alerts/page.tsx` is only the standalone HubPage wrapper with top padding. Use `src/lib/notifications/registry.tsx` for shared icons/class vocabulary. Preserve the empty state, actions and source data; verify no red individual rows, person/theme identity and fixed-header clearance at a mobile viewport. Do not perform a broad HubPage extraction for this style change.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** implementation draft.
@@ -504,7 +497,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** The action-first `daily_reminder` special card is in `src/components/hub/HubPage.tsx`, not the thin `/alerts` wrapper. Its All Done/Log Now/Snooze/Change Time labels are local; registry labels drive other quick-action consumers. Notification title/message text is produced by `src/app/api/cron/daily-reminder/route.ts`. Shorten the actual source of each string while preserving handler meaning and layout; preview shared registry/producer consumers when touching shared copy. Hard Rule28 supplies the wording boundary.
-
 
 **Execution plan — 2026-09-26**
 
@@ -563,7 +555,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Held for DEC-06; the deliverable is a recorded owner decision, not an edit. Both sides of the tension are current: Hard Rule #22 permits `console.error` under `src/app/api/` (the Vercel log stream), while this module's older locked decision removed all cron logging. Read the six routes under `src/app/api/cron/` for what diagnostics exist today, and `src/lib/pushLogger.ts` for the structured alternative that already exists. Record the resolution in `_Decisions.md` before any scoped change.
-
 
 **Execution plan — 2026-09-26**
 
@@ -626,7 +617,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** Trace `useDismissNotification`, `useSnoozeNotification` and the actual `useNotificationQuickAction` callers in `src/hooks/useNotifications.ts`, `NotificationModal.tsx` and HubPage's AlertsView. An inverse must restore the prior domain state and check the response, not merely invalidate queries. CriticalAlertGate has an existing Undo affordance, but source inspection on 2026-09-26 shows its helper resets flags to false/null and does not inspect the PATCH status; do not cite that as verified inverse correctness or blindly copy it. Keep the accepted drawer/Alerts scope and ToastIcons; separate Schedule Done semantics under NOTIF-20.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** investigation first.
@@ -687,7 +677,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** Start with `useMarkAllNotificationsRead()` in `src/hooks/useNotifications.ts`: it already sends an IDs array in one PATCH to `/api/notifications/in-app`. Confirm that route's batch validation and ownership semantics before extending it. The live category/filter/grouping UI is HubPage's AlertsView, not the thin `/alerts` wrapper. Define whether all means loaded, selected or all authorized rows before implementing an ambiguous batch. Reuse NOTIF-5.6's real prior-state inverse and invalidate once after the batch, retaining partial/uncertain outcomes.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** investigation first.
@@ -747,7 +736,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Provenance:** [Notifications & Alerts — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Notifications & Alerts/Notifications & Alerts — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Held for DEC-05 and dependent on SCH-14. Trace registry `complete_task` through `useNotificationQuickAction()` in `src/hooks/useNotifications.ts` and the actions route; `useCompleteNotificationAction()` only marks notification flags and is not the Schedule completion authority. Compare navigation to the full occurrence sheet with a shortcut that delegates the same occurrence identity/Undo contract. Record the owner's interaction choice before changing behavior; never guess a recurring occurrence or update the series parent blindly.
-
 
 **Execution plan — 2026-09-26**
 
@@ -819,7 +807,7 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - ✅ 2026-07-10 — **alerts page unified** onto the bell's data source: realtime, date-grouped, `group_key`-deduped, filter chips, shared icon vocabulary
 - ✅ 2026-07-10 — actions-route column bug fixed (quick actions had silently no-opped for weeks)
 - ✅ 2026-07-10 — **critical-alert takeover gate** (`CriticalAlertGate.tsx`) for `item_due` / `item_overdue` / `bill_overdue` / `budget_exceeded` at high/urgent priority, with Undo and a session-scoped "Later"
-- ✅ 2026-07-10 — **Google Calendar backup sync** (one-way, Calendar API not ICS) for Scheduled notifications, with three same-day fix passes — including catching its own "code-complete" claim being false when sync never fired from online mutations
+- ✅ 2026-07-10 — **Google Calendar backup sync** (one-way, Calendar API not ICS) for Scheduled notifications, with three same-day fix passes — including catching its own "code-complete"… → [record](<../_Archive/Shipped/Notifications & Alerts.md#2026-07-10--google-calendar-backup-sync>)
 - ✅ 2026-07-10 — private-thread exclusion enforced on the immediate Hub push path as well as the cron, closing an owner-only visibility leak; the Budget/Reminder purpose allowlist removed from both paths
 - ✅ 2026-07-10 — `console.*` stripped from `/api/notifications/in-app` and `/api/notifications/actions`
 

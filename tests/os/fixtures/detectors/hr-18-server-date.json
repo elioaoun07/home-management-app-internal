@@ -1,0 +1,32 @@
+[
+  {
+    "expected": "fail",
+    "changes": [
+      {
+        "file": "src/services/cards.ts",
+        "before": null,
+        "after": "const date = new Date().toISOString().split('T')[0];"
+      }
+    ]
+  },
+  {
+    "expected": "pass",
+    "changes": [
+      {
+        "file": "src/services/cards.ts",
+        "before": null,
+        "after": "const date = localDay(now);"
+      }
+    ]
+  },
+  {
+    "expected": "n/a",
+    "changes": [
+      {
+        "file": "README.md",
+        "before": null,
+        "after": "Text"
+      }
+    ]
+  }
+]

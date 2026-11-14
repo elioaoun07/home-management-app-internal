@@ -9,20 +9,40 @@ evidence_cutoff: "commit e5f537a, 2026-11-10. Proposed sequence. Session counts 
 
 # Agentic OS — roadmap
 
+**A7 partial — 2026-11-14:** Settings supplies the optional game switch and
+360 ms reduced-motion-aware transition; Score retains the same facts when off.
+Shipped KIT-11 is frozen with its oracle hash and baseline/solution controls;
+the comparison shell uses A4 records. Real Claude/Codex runs stop at Local's
+unprotected oracle read boundary. A protected execution boundary needs an owner
+scope decision; no live calls or two-tier acceptance claim. R99 remains open.
+[Acceptance and verification](<../../../../docs/Skills-and-Agents.md#arena-and-game-layer-a7--r99-partial>).
+
+**A6 copy-launch slice — 2026-11-14:** R98 now supplies eight validated forms,
+registry/PM pickers, required attachments from A4, recipes, new-module dry-run
+and visible Copy prompt / Copy command. The complete new-module copy flow was
+observed without input questions, including desktop/390 px Blue/Pink. Native
+worktree launch and flight-report binding remain open: Local accepts tracked
+item contracts rather than arbitrary skill prompts. This is the requested stop
+boundary, with no A7 expansion. [Acceptance and verification](<../../../../docs/Skills-and-Agents.md#skill-launchpad-a6--r98>).
+
 [Agentic OS index](<_index.md>) · [Architecture](<11 - Architecture.md>) · tiers: [Model tier routing](<../Model Tiers/_Routing.md>)
 
 Eight steps. The first three need no interface and already answer the owner's main questions. Each step ends with something usable, so stopping after any of them leaves working tools, not half a product.
+
+**A5 implementation — 2026-11-14:** R97 adds Bridge, Setup, Sessions and Score to the shared React shell; Library retains the document tools. Native and Delivery records use A1–A4 directly. Read-only phone Sessions ride the existing relay manifest. Current Delivery launch is retained; the A6 launchpad and A7 game/Arena are untouched. Local rollback UI retirement is gated by the R6 desktop/390 px and fake-driver walkthrough. Evidence and remaining data limits: [Skills and Agents](<../../../../docs/Skills-and-Agents.md#pm2-cockpit-a5--r97>).
+
+A0, A1 and A2 implemented locally 2026-11-10. A0's native Codex blocking and Linux clone hook evidence is recorded under [R92](<../../_Archive/Shipped/PM Tooling.md#r92>); A1's registry, conflict checks and fixture evidence is under [R93](<../../_Archive/Shipped/PM Tooling.md#r93>); A2's eight versioned diff detectors and historical violation replay are under [R94](<../../_Archive/Shipped/PM Tooling.md#r94>). A3 implemented locally 2026-11-11: passthrough logging, Claude ingest, persistence and Markdown export, verified with a real historical session and local hook processes ([R95](<../../_Archive/Shipped/PM Tooling.md#r95>)). A4 implemented locally 2026-11-11 (R96): full rules/process scorecards, remaining matrix detector coverage, Codex and read-only Delivery adapters, and CLI evidence exports. Existing setup conflicts intentionally fail `os:check`; A6 and A7 remain planned.
 
 ## Steps
 
 | Step | Outcome | Item | Depends on | Tier | Estimate |
 |---|---|---|---|---|---|
-| A0 | The setup is the same for every agent: Codex and `.agents` copies generated from the Claude sources, dead and duplicate config removed, paths portable, pre-commit executable, stale lists corrected | [R92](<../../PM Tooling/PM Tooling — Master Book.md#r92>) | none (pairs with R84) | CLAUDE_MID | 1 session |
-| A1 | `pnpm os:scan` writes the registry; `pnpm os:check` lists conflicts and runs in CI | [R93](<../../PM Tooling/PM Tooling — Master Book.md#r93>) | none | CLAUDE_MID | 1–2 sessions |
-| A2 | `pnpm os:eval <base>..<head>` prints rule verdicts for any change, from eight detectors with fixtures | [R94](<../../PM Tooling/PM Tooling — Master Book.md#r94>) | R93 | CLAUDE_MID, CLAUDE_LOW for repeats | 2 sessions |
-| A3 | Every Claude session leaves a flight report: hook runner, transcript ingest, store, Markdown export | [R95](<../../PM Tooling/PM Tooling — Master Book.md#r95>) | R93 | CLAUDE_HIGH for the runner, then CLAUDE_MID | 2–3 sessions |
-| A4 | Full scorecards: process panel from the `requires` table, delivery scorecard, remaining detectors, Codex and Delivery adapters | [R96](<../../PM Tooling/PM Tooling — Master Book.md#r96>) | R94, R95 | CLAUDE_MID | 2 sessions |
-| A5 | PM.2: Setup (map, rulebook, conflicts), Sessions, Bridge, Score; Home, Delivery and Analytics move into it; older UIs retired | [R97](<../../PM Tooling/PM Tooling — Master Book.md#r97>) | R93 for Setup; R95 for Sessions | CLAUDE_MID, with CLAUDE_HIGH for the map | 4–6 sessions, split before dispatch |
+| A0 | The setup is the same for every agent: Codex and `.agents` copies generated from the Claude sources, dead and duplicate config removed, paths portable, pre-commit executable, stale lists corrected | [R92](<../../_Archive/Shipped/PM Tooling.md#r92>) | none (pairs with R84) | CLAUDE_MID | 1 session |
+| A1 | `pnpm os:scan` writes the registry; `pnpm os:check` lists conflicts and runs in CI | [R93](<../../_Archive/Shipped/PM Tooling.md#r93>) | none | CLAUDE_MID | 1–2 sessions |
+| A2 | `pnpm os:eval <base>..<head>` prints rule verdicts for any change, from eight detectors with fixtures | [R94](<../../_Archive/Shipped/PM Tooling.md#r94>) | R93 | CLAUDE_MID, CLAUDE_LOW for repeats | 2 sessions |
+| A3 | Every Claude session leaves a flight report: hook runner, transcript ingest, store, Markdown export | [R95](<../../_Archive/Shipped/PM Tooling.md#r95>) | R93 | CLAUDE_HIGH for the runner, then CLAUDE_MID | 2–3 sessions |
+| A4 | Full scorecards: process panel from the `requires` table, delivery scorecard, remaining detectors, Codex and Delivery adapters | [R96](<../../_Archive/Shipped/PM Tooling.md#r96>) | R94, R95 | CLAUDE_MID | 2 sessions |
+| A5 | PM.2: Setup (map, rulebook, conflicts), Sessions, Bridge, Score; Home, Delivery and Analytics move into it; older UIs retired | [R97](<../../_Archive/Shipped/PM Tooling.md#r97>) | R93 for Setup; R95 for Sessions | CLAUDE_MID, with CLAUDE_HIGH for the map | 4–6 sessions, split before dispatch |
 | A6 | Launchpad: forms for eight skills, recipes, copy prompt; launch into a worktree once the Local lane exists | [R98](<../../PM Tooling/PM Tooling — Master Book.md#r98>) | R93; DLV-150 for launching | CLAUDE_MID | 2–3 sessions |
 | A7 | Arena cases harvested from shipped items; the game layer | [R99](<../../PM Tooling/PM Tooling — Master Book.md#r99>) | R96, R97 | CLAUDE_HIGH for the Arena | open |
 

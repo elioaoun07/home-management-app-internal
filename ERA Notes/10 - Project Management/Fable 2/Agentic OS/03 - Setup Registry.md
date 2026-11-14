@@ -9,7 +9,7 @@ evidence_cutoff: "commit e5f537a, 2026-11-10. Proposed design; no scanner exists
 
 # Agentic OS — the setup registry
 
-[Agentic OS index](<_index.md>) · [Inventory](<02 - Current Setup Inventory.md>) · next: [Rule enforcement matrix](<04 - Rule Enforcement Matrix.md>) · item: [R93](<../../PM Tooling/PM Tooling — Master Book.md#r93>)
+[Agentic OS index](<_index.md>) · [Inventory](<02 - Current Setup Inventory.md>) · next: [Rule enforcement matrix](<04 - Rule Enforcement Matrix.md>) · item: [R93](<../../_Archive/Shipped/PM Tooling.md#r93>)
 
 Everything else in this plan reads one generated file. If the registry is right, the map, the rulebook, the conflict list and the session reports are queries over it.
 

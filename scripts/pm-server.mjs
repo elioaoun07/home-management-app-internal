@@ -8,7 +8,7 @@
 //     relay bridge for /pm/live (mobile checklist + delivery command surface).
 //     Never widens this server's own 127.0.0.1 binding — see scripts/pm/bridge.mjs.
 //
-// Serves the React application by default; ?ui=classic opens the Preact reference UI.
+// Serves the shared React cockpit and Library. Static export is built separately.
 // Reads PM markdown LIVE from disk
 // and exposes a small REST API so checkboxes, moves, renames, reorders, creates and
 // deletes write straight back to the .md files. Bound to localhost only.
@@ -44,9 +44,7 @@ import {
 } from "./pm/mutations.mjs";
 import { archiveItem, monthlySweep, restoreSnapshots } from "./pm/archive.mjs";
 import { hostAllowed } from "./pm/net.mjs";
-import { collectSources, readCancelledLog, readSourceFile, walk } from "./pm/scan.mjs";
-import { buildHtml, buildHtmlLegacy } from "./pm/ui.mjs";
-import { createBundleWatcher } from "./pm/build.mjs";
+import { collectSources, readCancelledLog, readSourceFile, walk, walkDirectories } from "./pm/scan.mjs";
 import { createAppWatcher } from "./pm/app-build.mjs";
 import { appAsset, buildAppShell } from "./pm/app-shell.mjs";
 import { routeHealth } from "./pm/health.mjs";
@@ -66,11 +64,14 @@ import { createDeliveryV2Context, routeDeliveryV2 } from "./delivery-v2/service.
 import { readDispatchMode } from "./delivery-v2/entry.mjs";
 import { issuePairingCode } from "./delivery-v2/local-auth.mjs";
 import { observePlanningProgress, planningSnapshot, routePlanning } from "./pm/planning.mjs";
+import { createCockpitReader } from "./pm/cockpit-reader.mjs";
+import { routeLaunchpad } from "./pm/launchpad-route.mjs";
 
 loadDotenv({ path: ".env" });
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
+const cockpitReader=createCockpitReader({root:ROOT,onChange:()=>broadcastCockpit()});
 const PM_REL = join("ERA Notes", "10 - Project Management");
 const PM_DIR = join(ROOT, PM_REL);
 const ASSET_DIR = join(__dirname, "pm", "assets");
@@ -95,8 +96,6 @@ const deliveryV2Ctx = createDeliveryV2Context({ ROOT, pmRel: PM_REL });
 const argv = process.argv.slice(2);
 const noOpen = argv.includes("--no-open");
 const portArg = argv.find((a) => a.startsWith("--port="));
-const uiArg = argv.find((a) => a.startsWith("--ui="));
-const UI_MODE = ["old", "classic"].includes(uiArg?.slice(5)) ? uiArg.slice(5) : "app";
 const PORT = parseInt(
   portArg ? portArg.slice(7) : process.env.PM_PORT || "4317",
   10,
@@ -166,6 +165,8 @@ function buildData() {
     collectSources(files, ROOT, { keysOnly: true }),
   );
   const data = {
+    cockpit: cockpitReader.read(),
+    directories: walkDirectories(PM_DIR),
     generatedAt: new Date().toISOString(),
     cancelledLog: readCancelledLog(PM_DIR),
     repoRootFileUrl: pathToFileURL(ROOT).href.replace(/\/$/, "") + "/",
@@ -266,6 +267,7 @@ function opReorder(b) {
     if (!existsSync(join(dirAbs, name))) throw fail(404, "missing: " + name);
   });
   const ops = computeRenumber(order);
+  const before = new Map(order.map(name => [name, readFileSync(join(dirAbs,name),"utf8")]));
   // two-phase temp rename to avoid collisions within the permutation
   ops.forEach((o, i) =>
     renameSync(join(dirAbs, o.from), join(dirAbs, "__pmtmp_" + i + "__")),
@@ -273,7 +275,8 @@ function opReorder(b) {
   ops.forEach((o, i) =>
     renameSync(join(dirAbs, "__pmtmp_" + i + "__"), join(dirAbs, o.to)),
   );
-  return { ok: true, changed: ops.length };
+  const paths = [...new Set([...order,...ops.map(op=>op.to)])];
+  return { ok: true, changed: ops.length, undo: paths.map(name=>({path:pmRel(join(dirAbs,name)),raw:before.get(name) ?? null})) };
 }
 
 function opCreate(b) {
@@ -444,6 +447,15 @@ function broadcastUi() {
     }
   }
 }
+
+// Derived OS observations refresh views/relay only. They must not enter the PM
+// document observation or Drive publication paths used by explicit PM writes.
+function broadcastCockpit() {
+  for(const res of sseClients){
+    try{res.write("data: reload\n\n");}catch{sseClients.delete(res);}
+  }
+  if(bridge)void bridge.publishCorpus();
+}
 try {
   watch(PM_DIR, { recursive: true }, () => {
     if (Date.now() < suppressUntil) return; // ignore our own writes
@@ -457,10 +469,8 @@ try {
 // This explicit startup worker is separate from every HTTP read path.
 setImmediate(observeSprints);
 
-let bundleWatcher;
 let appWatcher;
 try {
-  bundleWatcher = await createBundleWatcher(broadcastUi);
   appWatcher = await createAppWatcher(broadcastUi);
 } catch (error) {
   throw new Error(`PM UI build failed. Run pnpm install, then retry. ${error.message}`);
@@ -546,11 +556,7 @@ const server = createServer(async (req, res) => {
     const path = u.pathname;
 
     if (req.method === "GET" && path === "/") {
-      const requested = u.searchParams.get("ui");
-      const requestMode = ["old", "classic"].includes(requested) ? requested : UI_MODE;
-      const html = requestMode === "old"
-        ? buildHtmlLegacy({ mode: "server", dataJson: "null" })
-        : requestMode === "classic" ? buildHtml({ mode: "server", dataJson: "null", bundle: bundleWatcher.current() }) : buildAppShell();
+      const html = buildAppShell();
       res.writeHead(200, {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
@@ -612,6 +618,15 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && path === "/api/launchpad") {
+      let body;
+      try { body = JSON.parse(await readBody(req)); }
+      catch { return sendJson(res, 400, { error: "invalid json" }); }
+      const result = await routeLaunchpad({ root: ROOT, body, headers: req.headers,
+        loopbackPeer: ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress) });
+      return sendJson(res, result.status, result.json);
+    }
+
     if (path.startsWith("/api/delivery/")) {
       let body = {};
       if (req.method === "POST") {
@@ -632,7 +647,8 @@ const server = createServer(async (req, res) => {
           return sendJson(res, result.status, result.json);
         }
         const v2 = await routeDeliveryV2(
-          { method: req.method, path, query: u.searchParams, body, headers: req.headers },
+          { method: req.method, path, query: u.searchParams, body, headers: req.headers,
+            loopbackPeer: ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress) },
           deliveryV2Ctx,
         );
         // A recorded UAT result, sign-off or report changes the mirrored status.

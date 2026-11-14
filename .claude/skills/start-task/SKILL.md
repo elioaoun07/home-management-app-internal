@@ -9,9 +9,11 @@ description: "Operating protocol + task router for this repo. Invoke at the STAR
 
 This repo is heavily indexed. The winning move is never "search broadly and improvise" — it is "read the right 3 files, then act". This skill tells you which 3 files.
 
-## Step 1 — Restate the task (before any tool call)
+**Scale the ceremony to the task.** A one-file mechanical edit needs Step 2 (routing) and the Feature Map lookup, nothing more. Steps 1 and 4 are for work that spans files or layers, touches a risk domain, or arrives with unclear scope. The domain-risk gate in Step 2 applies to every task regardless of size.
 
-Write this block in your response. If you cannot fill a line, ask the user now — not halfway through.
+## Step 1 — Restate the task
+
+For multi-file, risky or ambiguous work, write this block before the first tool call. If you cannot fill a line, ask the user now — not halfway through.
 
 ```
 GOAL: <one sentence — what changes for the user>
@@ -61,6 +63,8 @@ Do this BEFORE any Glob/Grep/Read of source files:
 
 > Feature Map = *which files*. Vault doc = *why it's built that way*. Doctrine = *how to decide*. Don't substitute one for another.
 
+**Working a tracked item (`BUD-89`, `HUB-118`, …)?** Read its row in `ERA Notes/10 - Project Management/<Campaign>/4 - Checklist.md`, then only its `### <ID>` section in `<Campaign> — Master Book.md` (acceptance, reading guide, plan) and that book's **Successor Briefing**. Never load a whole Master Book. The section is a dated plan: check it against the code before trusting it.
+
 ## Step 4 — Assumption ledger (the anti-guessing gate)
 
 Before your first edit, list every assumption your plan rests on, and verify each with a tool call:
@@ -79,7 +83,7 @@ If an assumption can't be verified and materially changes the approach → STOP 
 ## Scope rules (module model)
 
 - **Standalone** modules (`src/features/<name>/`) must not import from other standalone feature dirs. Shared code goes in `src/components/`, `src/lib/`, `src/types/`.
-- **Junction** modules (Hub Chat, Shopping List, AI Assistant, Notifications, Household Sharing, Sync & Offline, Prerequisites, Plan My Day, Trips) bridge standalones — before editing one, read the vault docs of **every connected standalone** and trace the cascade.
+- **Junction** modules are listed in `CLAUDE.md` §Module Model (the owner of this enumeration). Before editing one, read the vault docs of **every connected standalone** and trace the cascade.
 - Never edit `src/components/ui/` (blocked by hook).
 
 ## Environment & commands
@@ -91,9 +95,10 @@ If an assumption can't be verified and materially changes the approach → STOP 
 | Tests | `pnpm test` | vitest run (scope: `pnpm vitest run <path>`) |
 | Dev server | `pnpm dev` | Turbopack |
 | Docs/index sync check | `pnpm docs:check` | Fails commit if Feature Index ↔ Feature Map drift |
-| Regenerate AI mirrors | `pnpm sync:ai` | After CLAUDE.md edits |
+| Regenerate AI mirrors | `pnpm sync:ai` | After editing `CLAUDE.md` or anything under `.claude/` (a hook also runs it) |
+| Finish a tracked item | `pnpm pm:ship <ID> --note "<evidence>"` | Ticks, stamps the Shipped Log, archives the criteria, runs the PM checks |
 
-Platform is Windows; use forward-slash-safe commands and never assume POSIX-only tooling in scripts.
+Workstations may use Windows; CI and cloud sessions use Linux. Use portable Node scripts; existing Bash hooks require Bash, Node and jq (Git Bash on Windows).
 
 ## STOP conditions — ask the user instead of proceeding
 

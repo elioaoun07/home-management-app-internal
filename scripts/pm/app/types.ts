@@ -6,6 +6,8 @@ export interface SourceFile {
   mtimeMs?: number;
 }
 export interface Snapshot {
+  directories?: string[];
+  cockpit?: import("./cockpitTypes").Cockpit;
   files: SourceFile[];
   cancelledLog?: string;
   generatedAt: string;
@@ -85,6 +87,8 @@ export interface Space {
   history: Receipt[];
 }
 export interface World {
+  directories?: string[];
+  cockpit?: import("./cockpitTypes").Cockpit;
   spaces: Space[];
   work: Work[];
   choices: Choice[];

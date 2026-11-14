@@ -17,6 +17,18 @@
       "mcp__claude_ai_Supabase__pause_project",
       "mcp__claude_ai_Supabase__restore_project",
       "mcp__claude_ai_Supabase__confirm_cost",
+      "mcp__Supabase__execute_sql",
+      "mcp__Supabase__apply_migration",
+      "mcp__Supabase__deploy_edge_function",
+      "mcp__Supabase__create_branch",
+      "mcp__Supabase__delete_branch",
+      "mcp__Supabase__merge_branch",
+      "mcp__Supabase__reset_branch",
+      "mcp__Supabase__rebase_branch",
+      "mcp__Supabase__create_project",
+      "mcp__Supabase__pause_project",
+      "mcp__Supabase__restore_project",
+      "mcp__Supabase__confirm_cost",
       "Bash(supabase:*)",
       "Bash(npx supabase:*)",
       "Bash(pnpm supabase:*)",
@@ -24,7 +36,9 @@
       "Bash(psql:*)",
       "PowerShell(supabase*)",
       "PowerShell(npx supabase*)",
-      "PowerShell(psql*)"
+      "PowerShell(psql*)",
+      "PowerShell(pnpm supabase*)",
+      "PowerShell(pnpm dlx supabase*)"
     ]
   },
   "hooks": {
@@ -33,23 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/session-brief.sh",
-            "shell": "bash"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "input=$(cat); msg=$(echo \"$input\" | jq -r '.message // .prompt // \"\"' 2>/dev/null); if echo \"$msg\" | grep -iqE '(unfamiliar|onboard|audit.*(architecture|codebase)|trace.*cascade|what.?s connected to|map.*(module relationships|the architecture)|how does the .* (system|module|engine) work|cross.?module cascades)'; then echo '{\"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": \"GRAPHIFY REMINDER: This looks like a true codebase exploration task (unfamiliar territory or cross-module audit). Run /graphify before reading individual files. For routine edits/bug fixes, prefer the Feature Map instead.\"}}'; fi",
-            "shell": "bash"
-          },
-          {
-            "type": "command",
-            "command": "input=$(cat); msg=$(echo \"$input\" | jq -r '.message // .prompt // \"\"' 2>/dev/null); if echo \"$msg\" | grep -iqE '(bug in |bugs? on |broken |not working|fix the |fix a |fix this|update the |edit the |change the |modify the |tweak the |adjust the |add (a |an |the )?(field|button|column|option|toggle|setting|tab|view) (to|on|in) |why (is|does|isn.?t) .* (broken|failing|not)|where (is|does) .* (live|render|come from)|which files? .*(touch|render|handle|implement))'; then echo '{\"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": \"FEATURE MAP REMINDER: This looks like an edit or bug-fix task. Read `ERA Notes/01 - Architecture/Feature Map/_index.md` first (one small MD) to find the matching module file, then read that module file to get the exact source file paths. This is faster and cheaper than grepping. Only fall back to /graphify or Glob/Grep if the Feature Map does not cover the feature.\"}}'; fi",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && node scripts/os/hook.mjs session-brief SessionStart -- bash .claude/hooks/session-brief.sh",
             "shell": "bash"
           }
         ]
@@ -61,7 +59,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/block-ui-dir.sh",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && node scripts/os/hook.mjs block-ui-dir PreToolUse -- bash .claude/hooks/block-ui-dir.sh",
             "shell": "bash"
           }
         ]
@@ -73,17 +71,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && node scripts/sync-ai-mirrors.mjs --hook",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && node scripts/os/hook.mjs sync-ai-mirrors PostToolUse -- node scripts/sync-ai-mirrors.mjs --hook",
             "shell": "bash"
           },
           {
             "type": "command",
-            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/update-atlas.sh",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && node scripts/os/hook.mjs update-atlas PostToolUse -- bash .claude/hooks/update-atlas.sh",
             "shell": "bash"
           },
           {
             "type": "command",
-            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/check-migration.sh",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && node scripts/os/hook.mjs check-migration PostToolUse -- bash .claude/hooks/check-migration.sh",
             "shell": "bash"
           }
         ]
@@ -94,7 +92,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && bash .claude/hooks/check-pm-update.sh",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && node scripts/os/hook.mjs check-pm-update Stop -- bash .claude/hooks/check-pm-update.sh",
             "shell": "bash"
           }
         ]

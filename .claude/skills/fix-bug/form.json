@@ -1,0 +1,38 @@
+{
+  "skill": "fix-bug",
+  "title": "Fix bug",
+  "tier": "CLAUDE_MID",
+  "effort": "default",
+  "launch": "worktree",
+  "fields": [
+    { "id": "item", "label": "Item", "type": "item", "mention": "bug" },
+    {
+      "id": "symptom",
+      "label": "Symptom",
+      "type": "multiline",
+      "mention": "bug"
+    },
+    {
+      "id": "module",
+      "label": "Module",
+      "type": "module",
+      "required": true,
+      "mention": "module"
+    },
+    {
+      "id": "reproduction",
+      "label": "Reproduction",
+      "type": "multiline",
+      "required": true,
+      "mention": "REPRO"
+    },
+    {
+      "id": "expected",
+      "label": "Expected",
+      "type": "multiline",
+      "required": true,
+      "mention": "EXPECTED"
+    }
+  ],
+  "checks": [{ "kind": "any", "fields": ["item", "symptom"] }]
+}

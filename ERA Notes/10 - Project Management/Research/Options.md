@@ -129,7 +129,7 @@ The [accepted final build plan](<../../../docs/Catalogue — ASTRA Deep Dive.md#
 | C00 | [HUB-62](<../Hub & ERA/Hub & ERA — Master Book.md#hub-62>) |
 | C01a | [KIT-18](<../Kitchen/Kitchen — Master Book.md#kit-18>) |
 | C01b | [KIT-19](<../Kitchen/Kitchen — Master Book.md#kit-19>) |
-| C02 | [KIT-20](<../Kitchen/Kitchen — Master Book.md#kit-20>) |
+| C02 | [KIT-20](<../_Archive/Shipped/Kitchen.md#kit-20>) |
 | C03 | [KIT-21](<../Kitchen/Kitchen — Master Book.md#kit-21>) |
 | C04a | [SCH-4.3b](<../Schedule/Schedule — Master Book.md#sch-43b>) |
 | C04b | [SCH-14](<../Schedule/Schedule — Master Book.md#sch-14>) |

@@ -44,6 +44,7 @@ import { readExecutorSelection, routeDeliveryV2 as routeEntry } from "./entry.mj
 import { buildDeliver, loadExecutionPolicy } from "./policy.mjs";
 import { EXECUTORS, resolveExecutorChoice, admitExecutorProfile, createExecutor, describeExecutor, listExecutors } from "./adapters/registry.mjs";
 import { createJourney } from "./journey.mjs";
+import { createLocalLane } from "./local-lane.mjs";
 import { loadQualification } from "./qualification.mjs";
 import { createContainerRuntime } from "./worker-boundary.mjs";
 import { inspectReadiness } from "./inspect-readiness.mjs";
@@ -141,6 +142,7 @@ export function createDeliveryV2Context({
   let handle = null;
   let runtimeHandle = null;
   let journeyHandle = null;
+  let localHandle = null;
   let journeyDigest = undefined;
   let reconciled = false;
   const readinessCache = new Map();
@@ -172,6 +174,10 @@ export function createDeliveryV2Context({
 
   const context = {
     root: ROOT,
+    get local() {
+      if (!localHandle) localHandle = createLocalLane({ root: ROOT, store: () => context.store, hasStore: () => context.hasStore() });
+      return localHandle;
+    },
     allowedOrigins: origins,
     get store() {
       if (!handle) handle = open({ path: storePath });

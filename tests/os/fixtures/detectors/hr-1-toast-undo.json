@@ -1,0 +1,32 @@
+[
+  {
+    "expected": "fail",
+    "changes": [
+      {
+        "file": "src/components/Card.tsx",
+        "before": null,
+        "after": "toast.success('Saved');"
+      }
+    ]
+  },
+  {
+    "expected": "pass",
+    "changes": [
+      {
+        "file": "src/components/Card.tsx",
+        "before": null,
+        "after": "toast.success('Saved', {action: { label: 'Undo', onClick: undo }});"
+      }
+    ]
+  },
+  {
+    "expected": "n/a",
+    "changes": [
+      {
+        "file": "README.md",
+        "before": null,
+        "after": "Text"
+      }
+    ]
+  }
+]

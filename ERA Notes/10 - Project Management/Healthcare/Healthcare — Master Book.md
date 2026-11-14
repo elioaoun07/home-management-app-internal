@@ -54,8 +54,6 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 🟠 **HLTH-21** Distinguish unavailable allergy evidence from a completed check. See [acceptance](<#hlth-21>) for the root cause, evidence and gate.
 
-
-
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
@@ -76,34 +74,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - **ERA evidence:** the Fitness `ERA_REACH` row changes the ERA agent prompt; `tests/era-gym/agent-record.test.ts` needs an owner-approved, bounded live refresh (`$env:ERA_AGENT_RECORD='1'; pnpm vitest run tests/era-gym/agent-record.test.ts`, Hard Rule 29). Two replay cases already failed before this change.
 - **Install (2026-10-12):** `/fitness` is now its own installable PWA (`public/manifests/fitness.webmanifest`, scope `/fitness`, 4 icons, layout manifest link; `pnpm pwa:check` ✓). Install via the in-app Install pill, not the ⋮ menu. Phone install not yet witnessed.
 - **Evidence so far, 2026-10-12:** local only (see HLTH-28). No production DB or device witness.
-
-### HLTH-28
-
-**Outcome:** Fitness module — imported PT plans, workout logging, recovery and gamified progress.
-
-**Kind:** feature
-
-**Implementation:** done
-
-- **Acceptance:** PTPlanV1 import with field-path validation, review drafts and duplicate detection; versioned plans; activation into weekly flexible Schedule slots bounded by duration; one authoritative completion across Fitness and Schedule with Undo; exactly-once deterministic rewards with replay-safe receipts; offline workout logging with held conflicts; shared owner-private measurements with dated BMI; partner opt-in summary; four tabs + focused workout at 390 px and desktop in all themes with reduced motion.
-- **Evidence, 2026-10-12:** `src/lib/fitness/fitness.database.test.ts` 16/16 (PGlite, real SCH-24 + Fitness migrations: atomic import/replay/duplicate, draft gating, activation shape and duration bound, pause/resume/archive/restore, versioning without history rewrite, finish/Undo across Schedule, daily XP cap, quests, Schedule-created minimal session + enrichment + revert, skip earns nothing, conflict, records by exercise/equipment/load, DST week mapping, partner privacy). Unit: `ptPlan.test.ts` 15, `progress.test.ts`, `offline.test.ts`, `measurements.test.ts`, `OfflineSyncEngine.fitness.test.ts`. Typecheck/lint clean. Fixture screenshots (CDP device emulation, 390×844 blue + frost, 1280 pink). Deployment and phone acceptance: HLTH-29.
-
-### HLTH-27
-
-**Outcome:** Show doses as an interactive daily timeline.
-
-- **Acceptance:** Scheduled doses appear as connected circles in time order; tapping a circle toggles its Taken/Not taken state and updates the day progress. As-needed doses use circular Take controls; Morning and Evening opportunities show their individual states and can be untaken from the same control. Existing dose Undo and server limits remain in effect.
-- **Evidence, 2026-09-27:** UI implemented in `MedicationsSection.tsx`; local typecheck, scoped lint and medication schedule tests passed. Phone visual and live medication acceptance remain in HLTH-25.
-
-### HLTH-26
-
-**UAT instructions:** [Delivered-slice owner wizard](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#health--medication-checklist-and-schedule>) (drafted 2026-10-25; original results and remaining gates retained).
-
-**Outcome:** Represent and enforce the owner's three medication instructions.
-
-- **Acceptance:** A full course can store a two-pill dose at morning/evening times with any food timing; an as-needed stomach-pain medicine can store one pill, with food, and an eight-hour minimum gap; an as-needed medicine can store one pill, empty stomach, and one Morning plus one Evening opportunity per local day.
-- **Evidence, 2026-09-27:** `node scripts/check-medication-prn.mjs` covers replay, gap, named slots, Undo, daily maximum and course regression in isolated PGlite; `medicationSchedule.test.ts` covers local-day slot state. This is not a live DB or phone witness.
-- **Deployment:** Owner reports the earlier Morning/Noon PRN migration applied. Run `migrations/2026-09-27_medication-evening-upgrade.sql` to convert current options and preserve historical Noon logs. HLTH-25 retains phone acceptance.
 
 ### HLTH-25
 
@@ -133,7 +103,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Healthcare/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Owner-executed verification; no code change. Read enough to interpret a failure. The page is one RPC: `src/app/api/healthcare/route.ts` calls `get_health_bundle()` (SECURITY DEFINER — its own comment says it returns own profiles plus shared household ones), consumed by `useHealthBundle()` in `src/features/healthcare/hooks.ts` and rendered by `src/app/healthcare/HealthcareClient.tsx`. The allergen half is a *separate* feed: `src/app/api/healthcare/allergens/route.ts` → `get_household_allergens()`, deliberately ignoring `shared_with_household` so a partner cooking sees the allergy, with no medical notes. Both-accounts privacy is therefore two different questions — and per Hard Rule #27 the only repo artifact that is evidence about it is `migrations/db-state.json`, never `schema.sql` or a vault doc. The route slug is `healthcare`, not `health`. Recipe warning surface: `src/components/web/RecipeAllergenWarning.tsx`.
-
 
 **Execution plan — 2026-09-26**
 
@@ -188,7 +157,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Healthcare/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Authoring task, and it gates HLTH-8/9. Follow `.claude/skills/skill-factory/SKILL.md` — it has the decision gate and the house template — and ground every rule in code rather than prose. The domains it must cover already have anchors: dose math and exactly-once materialization → `.claude/skills/recurrence-safety/SKILL.md` and `src/lib/schedule/materializeOccurrence.ts`; asymmetric visibility → `get_health_bundle()` (shared/private) versus `get_household_allergens()` (always household-wide) in `src/app/api/healthcare/`; keyword matching's limits → `src/lib/health/allergenMatch.ts` (`deriveDefaultKeywords`, `ALLERGEN_SYNONYMS`, `matchIngredient`) and its own test file. "Do not infer medical safety from ingredient text matching" is the load-bearing sentence — the existing component already calls itself a warning aid, not a guarantee.
-
 
 **Execution plan — 2026-09-26**
 
@@ -254,7 +222,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** The defect is one line and verified 2026-09-20: `useRecipeAllergenMatches()` in `src/components/web/RecipeAllergenWarning.tsx` destructures `const { data: allergens = [] }` from `useHouseholdAllergens()`, so loading, offline and a 503 all collapse into the same empty array as "nobody is allergic". The feed is `useHouseholdAllergens()` in `src/hooks/useHouseholdAllergens.ts` — note it lives in `src/hooks/` on purpose so Recipes can use it without a standalone→standalone import, it is persisted to localStorage via `STABLE_KEYS` in `src/app/providers.tsx`, and its `fetchHouseholdAllergens()` swallows a malformed payload with `data.allergens ?? []` (the second half of the bug). The adapter the contract asks for must preserve `status`/`dataUpdatedAt`; matching itself (`matchRecipeIngredients`, per-ingredient flags) stays untouched. Render sites: `RecipeAllergenWarning.tsx` and `src/components/web/RecipeDetailView.tsx`. Hard Rule #28 — a compact `i` affordance, not a banner. `tests/allergen-feed-state.test.ts` does not exist yet; `src/lib/health/allergenMatch.test.ts` does.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** implementation draft.
@@ -303,68 +270,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 }
 ```
 
-### HLTH-8
-
-**Outcome:** Define idempotent medication storage and materialization.
-
-- **Status 2026-09-26:** delivered as code by HLTH-24 (see Shipped Log) — `health_medications`, `health_medication_logs` with the slot-keyed unique index, `items.source_medication_id` (+ partial index, ON DELETE CASCADE), the occurrence-action mirror triggers and the save / delete / dose / rebuild RPCs. Deviation: edits hard-delete and recreate reminder items (children cascade) rather than archiving; history stays in logs. Application is HLTH-25. The plan below is historical.
-
-- **Acceptance:** *(packet **M-07a** of the [ERA Top Layer — Master Plan](<../_Archive/Plans/ERA Top Layer — Master Plan (2026-09-02).md>); plan sacrifice #3 if a gate is missed)* (Phase 2) Medications migration — `health_medications` + `health_medication_logs` (idempotent unique key), `items.source_medication_id` FK + partial index, occurrence-action mirror trigger, materialization RPCs
-- **Depends on:** [HLTH-7](<Healthcare — Master Book.md#hlth-7>), [HLTH-19](<Healthcare — Master Book.md#hlth-19>).
-
-**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Healthcare/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
-
-- **Reading guide:** Migration-first and blocked on HLTH-19. Read `migrations/schema.sql` for the `items` table and the existing health tables before designing `health_medications`/`health_medication_logs`; the idempotent unique key is the whole point, so read `.claude/skills/recurrence-safety/SKILL.md` before writing the materialization RPCs — this repo's historical failure mode is duplicate occurrence generation, and there are already two recurrence systems not to add a third to. `items.source_medication_id` follows the existing `source_catalogue_item_id` precedent (see `src/app/api/items/route.ts` and `src/app/api/items/[id]/promote/route.ts`). The occurrence-action mirror trigger has to agree with `src/lib/schedule/materializeOccurrence.ts` and `alertResolution.ts`. Hard Rules #20 (no EXISTS policies on hot child tables), #24 (migration file, then `schema.sql`) and #26 (hand the SQL to the owner; never apply it).
-
-
-**Execution plan — 2026-09-26**
-
-**Readiness:** split first.
-
-**Verify:** Proposed isolated SQL fixtures cover two dose times, duplicate operation, simultaneous materialization, dependent profile, cross-owner refusal and rollback after child failure. Owner applies reviewed SQL separately; run `pnpm typecheck` and relevant schema/type checks after local changes.
-
-```delivery-plan-v1
-{
-  "outcome": "Medication storage materializes one reminder per dose time and records each dose action once.",
-  "acceptance": [
-    "Provide medications/logs, item linkage, partial index, action mirror and transactional materialization RPCs.",
-    "Dose log identity includes medication, occurrence date and dose time; repeated actions do not duplicate records."
-  ],
-  "scope": [
-    "migrations/schema.sql",
-    "src/features/healthcare/types.ts"
-  ],
-  "steps": [
-    "Wait for HLTH-7 current privacy evidence and HLTH-19 safety rules; read current items/health schema and occurrence-action contracts.",
-    "Specify dose units, local-time/occurrence identity, authorization and archive/recreate edit behavior before choosing constraints.",
-    "Write a proposed dated migration first, then schema end-state and types; reuse existing item recurrence and efficient access enforcement.",
-    "Exercise transactional/race fixtures in isolation and prepare owner inspect/apply/verify instructions; record application separately."
-  ],
-  "invariants": [
-    "No third recurrence/alert engine.",
-    "Medication, dose-time reminders and required links commit atomically.",
-    "Schedule edits preserve adherence history; nullable dependent user_id is valid."
-  ],
-  "exclusions": [
-    "Routes/calendar delivery HLTH-9, UI HLTH-11, stock/refill features or agent-applied SQL."
-  ],
-  "risks": [
-    "A unique key missing dose time merges distinct daily doses; a non-atomic materializer leaves orphan reminders."
-  ],
-  "unknowns": [
-    "Exact medication columns, dose-unit contract and current occurrence trigger semantics require the safety/design pass."
-  ],
-  "dependencies": [
-    "HLTH-7",
-    "HLTH-19"
-  ],
-  "risk": "high",
-  "provenance": "2026-09-26 planning from Healthcare acceptance, vault model and Plans/ERA Top Layer.md. Medication implementation is pending; source/schema and prerequisite evidence must be revalidated at dispatch.",
-  "checks": [],
-  "ownerReviewed": false
-}
-```
-
 ### HLTH-9
 
 **Outcome:** Verify medication calendar sync with status bookkeeping.
@@ -372,12 +277,11 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - **Rescoped 2026-09-26:** per-dose reminder creation shipped in HLTH-24 (transactional `health_rebuild_medication_reminders()`, one urgent recurring reminder per dose time). Google sync currently runs best-effort around the RPCs in `src/lib/health/medicationServer.ts` (`unsyncMedicationReminders` before a rebuild, `syncMedicationReminders` after). Remaining: an awaited, *verified* sync outcome persisted as `gcal_status`, and warn-but-allow when disconnected.
 
 - **Acceptance:** Medications routes — transactional item materialization (one `urgent` reminder item per dose-time), **awaited verified** gcal sync with `gcal_status` bookkeeping, warn-but-allow when Google disconnected → `src/lib/gcal/sync.ts`
-- **Depends on:** [HLTH-8](<Healthcare — Master Book.md#hlth-8>).
+- **Depends on:** [HLTH-8](<../_Archive/Shipped/Healthcare.md#hlth-8>).
 
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Healthcare/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Depends on HLTH-8. Two existing systems to join, not replace. Item creation: `src/app/api/items/route.ts` is the canonical shape for writing an `items` row, and one `urgent` reminder per dose-time must be transactional with the medication write. Calendar: `src/lib/gcal/sync.ts` (`syncItemToGoogleCalendar`, `deleteItemFromGoogleCalendar`) and `src/lib/gcal/client.ts` (`isGoogleCalendarConfigured` for server setup; inspect the authenticated connection separately; `isGoogleNotFoundError` detects a missing Google resource). "Awaited verified" is the operative word: the known historical failure here was a sync that reported success without firing from online mutations, so await the result and record `gcal_status` from it. Warn-but-allow when Google is disconnected is the already-decided behaviour. Hard Rule #6 — an external API call needs an explicit `timeoutMs`. Timezone through `src/lib/utils/date.ts` (Hard Rule #18).
-
 
 **Execution plan — 2026-09-26**
 
@@ -438,7 +342,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** Small extension of an existing cron: `src/app/api/cron/gcal-reconcile/route.ts`, which already has `maxDuration = 60`, the `Bearer CRON_SECRET` check and `supabaseAdmin()` (Hard Rule #8). Read its current reconcile loop and put med items first; healing `gcal_status` both ways means it can also clear a stale status, not only set one. The sync primitives it calls are in `src/lib/gcal/sync.ts`. There is no `vercel.json` — this cron only runs if an external scheduler invokes it, so any acceptance needs a last-run trace, not an assumption.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** implementation draft.
@@ -498,7 +401,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Healthcare/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** UI only, on top of HLTH-9's data. The page is `src/app/healthcare/HealthcareClient.tsx`; add the meds card beside the existing allergy/condition/vaccine cards and follow their mutation pattern in `src/features/healthcare/hooks.ts` (`useCreateHealthAllergy` and siblings are the template — optimistic mutation, `healthcareKeys` invalidation from `src/features/healthcare/queryKeys.ts`). The "Connect Google" CTA uses the authenticated connection-status API; server configuration alone is insufficient, and refresh tokens never enter the client. Hard Rules: #1 (Undo on destructive actions, `ToastIcons`), #3 (no red on individual rows), #5 (mobile-first), #28 (a status pill and a number, not explanatory prose).
-
 
 **Execution plan — 2026-09-26**
 
@@ -564,7 +466,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** A verification battery, not a feature — most of it cannot be proved in-repo. What the repo can tell you: exactly-once is a property of HLTH-8's unique key and the RPCs, edit-without-duplicates is a property of `src/lib/schedule/materializeOccurrence.ts` and `expandOccurrences.ts` (which has its own test, `expandOccurrences.test.ts`), and offline dose replay is a property of the IndexedDB queue in `src/lib/offlineQueue.ts` plus `src/lib/offlineSyncEngine.ts` — replay-to-exactly-one-row is that queue's idempotency, so read `ERA Notes/01 - Architecture/Sync and Offline.md`. The Google Calendar native alarm with the app closed needs a real phone; this does not require the Native App shell to be built. Nothing in this repo proves physical delivery.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** split first.
@@ -622,7 +523,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** Re-inventory before testing — the historical ten-route count is not a guarantee. Re-inventoried 2026-09-26: there are 10 route files under `src/app/api/healthcare/` (`route.ts` = the `get_health_bundle` bundle, plus `allergens/`, and collection+`[id]` pairs for `allergies`, `conditions`, `profiles`, `vaccines`), and a separate `src/app/api/health/route.ts` that is the connectivity probe used by `safeFetch`/`isReallyOnline` — not a healthcare route; do not test or change it here. Template for what a correct route looks like: `.claude/skills/api-route/SKILL.md` and `src/app/api/accounts/route.ts` (auth → Zod → household linking → error mapping, 23505→409). The four contract axes each have a concrete anchor: authentication (every route's `supabase.auth.getUser()` guard), dependent profiles (nullable `user_id` on health profiles — check `migrations/schema.sql`), partner sharing/opt-in (`shared_with_household` honoured by `get_health_bundle()` but deliberately *not* by `get_household_allergens()`), and unavailable allergy feed (HLTH-21 owns the client half; here it is the route's error shape). Depends on HLTH-7.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** implementation draft.
@@ -679,7 +579,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Healthcare/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Read `HealthcareItemMetadata` and `DocumentItemMetadata` in `src/types/catalogue.ts`; doctor/contact fields and document `expiry_date` already exist. The actual edit/detail surfaces are `src/components/web/CatalogueItemDialog.tsx` and `CatalogueItemDetailDialog.tsx`, with Catalogue route validation. Confirm the bounded insurance field list, then keep types, validation and UI aligned without replacing unrelated metadata. A JSON metadata field change does not itself require a table migration; follow migration-first only when a database schema/constraint change is actually needed. Expiry behavior belongs to HLTH-14.
-
 
 **Execution plan — 2026-09-26**
 
@@ -740,7 +639,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** The link column already exists and is used: `items.source_catalogue_item_id` is written in `src/app/api/items/route.ts`, read back in `src/app/api/catalogue/items/[id]/route.ts` and `src/app/api/items/[id]/promote/route.ts`, and surfaced as `isLinkedToCatalogue` in `src/components/items/ItemDetailModal.tsx`. So this is a materialization choke point over an existing relation, not a new one — and HLTH-16 is meant to reuse the same one, so design it generically. `DocumentItemMetadata.expiry_date` in `src/types/catalogue.ts` is the dead field to revive. Exactly-once rules: `.claude/skills/recurrence-safety/SKILL.md`; do not add a third expansion engine. Dates through `src/lib/utils/date.ts`.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** split first.
@@ -798,7 +696,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Healthcare/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Two small surfaces. Doctors live in the catalogue's `healthcare` category (`src/types/catalogue.ts`, `doctor_name` at ~line 483) — the picker should read catalogue items through `src/features/catalogue/`, and because Healthcare and Catalogue are both standalone, any shared picker belongs in `src/components/` or `src/lib/`, never a cross-feature import. The forms to extend are the record dialogs in `src/app/healthcare/HealthcareClient.tsx` with mutations from `src/features/healthcare/hooks.ts`. The Care Contacts card is a read-only card on the same page.
-
 
 **Execution plan — 2026-09-26**
 
@@ -859,7 +756,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** Deliberately dependent on HLTH-14's choke point — read that guide first and reuse it rather than writing a vaccine-specific path. The vaccine record and its `next_due_on` come through `get_health_bundle()` (`src/app/api/healthcare/route.ts`, typed in `src/features/healthcare/types.ts`) and the CRUD routes under `src/app/api/healthcare/vaccines/`. Mutations: `useCreateHealthVaccine`/`useUpdateHealthVaccine` in `src/features/healthcare/hooks.ts`.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** implementation draft after materialization contract.
@@ -919,7 +815,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/Healthcare/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Use the shared ERA turn/capability/proposal path (`src/features/era/capabilities/`, `intents/`, `useEraAskAI.ts`) rather than extending the floating `/api/ai-chat` assistant. Medication dose identity/materialization comes from HLTH-8/9 and its safety contract from HLTH-19. The model proposes an exact dose candidate; the human confirms through the medication owner's route. Briefing integration reads the authorized health bundle through HUB-41 coverage/provenance, preserving profile privacy; pending medication features remain fixture-only. Two bounded sheets, no direct model dose logging.
-
 
 **Execution plan — 2026-09-26**
 
@@ -984,7 +879,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** The blocker is in the payload, and it is stated in the title: the recipe *list* endpoint does not return ingredients, so a list-card dot has nothing to match on. Start by reading the recipe list route under `src/app/api/recipes/` and confirming that, then decide between widening the payload and a separate lightweight allergen-relevant field — widening a list payload has a real cost on mobile. The matching side is already built and shared: `matchRecipeIngredients()` in `src/lib/health/allergenMatch.ts` with `useHouseholdAllergens()` from `src/hooks/useHouseholdAllergens.ts`, rendered by `src/components/web/RecipeAllergenWarning.tsx`. Meal planning is `src/features/meal-planning/` and `src/components/web/WebMealPlanCalendar.tsx`. Land HLTH-21 first or the badge will silently show "clear" on a failed feed.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** implementation draft after availability contract.
@@ -1045,7 +939,6 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 - **Reading guide:** Parked. HLTH-8 must establish the medication model before stock can be designed. The owner has not yet specified stock units, refill threshold, variable/as-needed use or the consumption/Undo contract; a counter on the medication row is an option, not an accepted schema. On resumption, compare the existing Inventory patterns and HLTH-14 materialization boundary, then record the smallest accepted stock/refill contract before implementation. Do not infer prescribed usage or depletion dates.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** parked; exploration only.
@@ -1100,12 +993,11 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 **Outcome:** Select private medical reference records.
 
 - **Acceptance:** Catalogue C15: healthcare reference pickers respect source privacy and lineage; a contact/document link does not become a medication or grant household access.
-- **Depends on:** [KIT-20](<../Kitchen/Kitchen — Master Book.md#kit-20>), [HLTH-7](<Healthcare — Master Book.md#hlth-7>).
+- **Depends on:** [KIT-20](<../_Archive/Shipped/Kitchen.md#kit-20>), [HLTH-7](<Healthcare — Master Book.md#hlth-7>).
 
 **Provenance:** [Healthcare — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Healthcare/Healthcare — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Depends on KIT-20 and HLTH-7; the accepted specification is the linked Catalogue build plan §10 (packet C15) — read it before the code. The privacy asymmetry is the crux and it already exists in code: `get_health_bundle()` in `src/app/api/healthcare/route.ts` respects `shared_with_household`, while `get_household_allergens()` deliberately does not. A reference picker must not launder the first into the second. Catalogue side: `src/types/catalogue.ts` (the `healthcare` category and its metadata interfaces), `src/features/catalogue/`, and the lineage column `source_catalogue_item_id` used in `src/app/api/items/[id]/promote/route.ts`. "A contact/document link does not become a medication" is a type/lineage invariant, so enforce it in the route and the type, not in the UI.
-
 
 **Execution plan — 2026-09-26**
 
@@ -1161,18 +1053,18 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 
 ## Shipped Log
 
-- ✅ 2026-10-12 — **HLTH-28** Fitness module: PT plan import (contract/schema/examples/AI prompt), weekly flexible Schedule slots, workout logging + rest timer + offline queue, deterministic rewards/quests/badges/records/ranks, shared owner-private measurements + BMI, partner opt-in summary ([criteria](<Healthcare — Master Book.md#hlth-28>); PGlite 16/16, unit tests, typecheck + lint; `migrations/2026-10-12_fitness-module.sql` **code-complete, not yet run** — HLTH-29)
-- ✅ 2026-09-26 — **HLTH-24** Medications: list (dose, full course / as needed, food timing, dose times, course length), day-by-day taken checklist, one urgent recurring Schedule reminder per dose time synced both ways with the checklist (`migrations/2026-09-26_healthcare-medications.sql` — **code-complete, migration not yet run**, HLTH-25; PGlite fixtures 31/31, `medicationSchedule.test.ts` 14/14, typecheck + lint clean) [Owner UAT draft, 2026-10-25](<../../../docs/Delivery-UAT-Product-Followups-2026-10-25.md#health--medication-checklist-and-schedule>); historical result unchanged.
-- ✅ 2026-09-26 — **HLTH-8** Idempotent medication storage and materialization — delivered inside HLTH-24 (same evidence; migration pending HLTH-25)
+- ✅ 2026-10-12 — **HLTH-28** Fitness module: PT plan import (contract/schema/examples/AI prompt), weekly flexible Schedule slots, workout logging + rest timer + offline… → [record](<../_Archive/Shipped/Healthcare.md#hlth-28>)
+- ✅ 2026-09-26 — **HLTH-24** Medications: list (dose, full course / as needed, food timing, dose times, course length), day-by-day taken checklist, one urgent recurring… → [record](<../_Archive/Shipped/Healthcare.md#hlth-24>)
+- ✅ 2026-09-26 — **HLTH-8** Idempotent medication storage and materialization — delivered inside HLTH-24… → [record](<../_Archive/Shipped/Healthcare.md#hlth-8>)
 
 - ✅ 2026-07-17 — **HLTH-1** module scaffold: six index surfaces, slug `healthcare` (`node scripts/check-feature-index.mjs` green)
-- ✅ 2026-07-17 — **HLTH-2** core DB: `health_profiles` / `health_allergies` / `health_conditions` / `health_vaccines`, owner-only RLS + `managing_user_id` sync trigger, `get_health_bundle()` + `get_household_allergens()` RPCs (`migrations/2026-07-17_healthcare-core.sql` — **code-complete, migration not yet run**)
+- ✅ 2026-07-17 — **HLTH-2** core DB: health_profiles / health_allergies / health_conditions / health_vaccines, owner-only RLS + managing_user_id sync trigger,… → [record](<../_Archive/Shipped/Healthcare.md#hlth-2>)
 - ✅ 2026-07-17 — **HLTH-3** CRUD API routes (profiles, allergies with keyword seeding, conditions, vaccines) + bundle + allergen feed, typecheck clean
 - ✅ 2026-07-17 — **HLTH-4** allergen matcher: word-boundary + plurals, Lebanese-staples synonyms, editable per-allergy keywords (`allergenMatch.test.ts` 12/12)
 - ✅ 2026-07-17 — **HLTH-5** recipe allergen warnings: detail-view banner + per-ingredient flags, both partners' allergies, offline-persisted feed (`household-allergens` in `STABLE_KEYS`)
 - ✅ 2026-07-17 — **HLTH-6** health page UI: profile chips including dependents, allergies with severity/keywords, medical history, vaccines, Undo on every mutation
-- ✅ 2026-09-27 — **HLTH-26** Cover three medication dosing instructions: course morning/evening, eight-hour as-needed gap, and one Morning plus one Evening as-needed opportunity ([criteria](<Healthcare — Master Book.md#hlth-26>); isolated PGlite and schedule tests; evening upgrade pending owner application).
-- ✅ 2026-09-27 — **HLTH-27** Show doses as an interactive daily timeline — [criteria](<Healthcare — Master Book.md#hlth-27>)
+- ✅ 2026-09-27 — **HLTH-26** Cover three medication dosing instructions: course morning/evening, eight-hour as-needed gap, and one Morning plus one Evening as-needed… → [record](<../_Archive/Shipped/Healthcare.md#hlth-26>)
+- ✅ 2026-09-27 — **HLTH-27** Show doses as an interactive daily timeline → [record](<../_Archive/Shipped/Healthcare.md#hlth-27>)
 
 ## Delivery session log
 

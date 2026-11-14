@@ -24,12 +24,12 @@ describe("Delivery navigation activity", () => {
   });
   it.each([false, true])("shares destination order, links and accessible running status (mobile=%s)", mobile => {
     const html = renderToStaticMarkup(createElement(PrimaryNavigation, {
-      section: "/delivery", mobile, delivery: { count: 1, state: "running" },
+      section: "/sessions", mobile, delivery: { count: 1, state: "running" },
     }));
     expect([...html.matchAll(/<strong>(.*?)<\/strong>/g)].map(match => match[1]))
-      .toEqual(["Home", "Sprints", "Delivery", "Work", "Analytics"]);
-    expect(html).toContain('href="#/delivery" class="nav-delivery" data-delivery-state="running"');
-    expect(html).toContain('aria-label="Delivery, 1 running" aria-current="page"');
+      .toEqual(["Bridge", "Launch", "Sessions", "Setup", "Score"]);
+    expect(html).toContain('href="#/sessions" class="nav-delivery" data-delivery-state="running"');
+    expect(html).toContain('aria-label="Sessions, 1 running" aria-current="page"');
     expect(html).toContain('aria-hidden="true"');
   });
 });

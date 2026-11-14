@@ -1,0 +1,32 @@
+[
+  {
+    "expected": "fail",
+    "changes": [
+      {
+        "file": "src/features/cards/hooks.ts",
+        "before": null,
+        "after": "useMutation({ mutationFn: save });"
+      }
+    ]
+  },
+  {
+    "expected": "pass",
+    "changes": [
+      {
+        "file": "src/features/cards/hooks.ts",
+        "before": null,
+        "after": "useMutation({ mutationFn: save, onSuccess: () => qc.invalidateQueries({queryKey:qk.cards()}) });"
+      }
+    ]
+  },
+  {
+    "expected": "n/a",
+    "changes": [
+      {
+        "file": "README.md",
+        "before": null,
+        "after": "Text"
+      }
+    ]
+  }
+]

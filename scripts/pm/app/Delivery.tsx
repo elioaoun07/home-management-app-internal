@@ -15,8 +15,10 @@ import { canDeliver, workPath } from "./model";
 import { Back, Empty, ErrorNotice, PageTitle, SpaceIcon } from "./components";
 import { returnFromLaunch, selectionFromRoute } from "./Work";
 import { LaunchV2 } from "./DeliveryV2";
+import { LocalLaunch, offersLocalLane } from "./LocalDelivery";
 import { DeliveryHome } from "./DeliveryHome";
 import type { Capabilities, Preflight, Recommendation, Work } from "./types";
+import { Launchpad } from "./Launchpad";
 
 export function Delivery() {
   return (
@@ -54,15 +56,7 @@ export function Launch() {
   ) : work ? (
     <LaunchWork key={work.key + work.rawLine} work={work} />
   ) : (
-    <div className="focus-page">
-      <Back />
-      <Empty title="Choose your next outcome">
-        <a className="primary" href="#/explore">
-          Explore
-          <ArrowRight size={17} />
-        </a>
-      </Empty>
-    </div>
+    <Launchpad />
   );
 }
 const paces = [
@@ -72,6 +66,10 @@ const paces = [
   ["DEEP", "Deep", "Complex, connected work"],
 ];
 function LaunchWork({ work }: { work: Work }) {
+  const route = useRoute();
+  return offersLocalLane() && route.query.get("lane") !== "confined" ? <LocalLaunch work={work} /> : <ConfinedLaunchWork work={work} />;
+}
+function ConfinedLaunchWork({ work }: { work: Work }) {
   const { connected, runs } = useWorld();
   const route = useRoute();
   const [provider, setProvider] = useState("claude"),

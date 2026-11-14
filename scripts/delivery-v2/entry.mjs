@@ -39,6 +39,7 @@ import { z } from "zod";
 import { acceptLaunchRequest, getLaunchRequestReceipt, updateStewardRequest, projectStewardRequest, stewardStaleMs } from "./steward-requests.mjs";
 import { STEWARD_REFUSALS, stewardRoutePermitted } from "./steward-surface.mjs";
 import { routeUat } from "./uat-routes.mjs";
+import { routeLocal } from "./local-routes.mjs";
 import { accountingReport, admitSupportJob, authorizeSupport, closeSupport, recordChatOverhead, settleSupportJob } from "./support-ledger.mjs";
 
 import { ContractError, fingerprint, contentId, deepFreeze, normalizePath, evaluateGrant } from "./contracts.mjs";
@@ -58,6 +59,7 @@ import {
   revokeSession,
   sessionCookie,
   sessionView,
+  loopbackBrowserSession,
 } from "./local-auth.mjs";
 
 /** The installation-wide switch. Exactly two values; there is no per-item choice. */
@@ -786,13 +788,14 @@ const json = (status, body) => ({ status, json: body });
  * credential, never from the body. The executor is chosen per run.
  *
  * @param {{method:string, path:string, query?:URLSearchParams, body?:any,
- *   headers?:Record<string, any>}} req
+ *   headers?:Record<string, any>, loopbackPeer?:boolean}} req
  * @param {{root:string, store?:any, allowedOrigins?:string[], deliver?:any, journey?:any,
  *   describeExecutors?:any, readiness?:any, hasStore?:any, listExecutors?:any,
- *   activeV1Writers?:any, unreconciledV2Jobs?:any, now?:any}} ctx
+ *   activeV1Writers?:any, unreconciledV2Jobs?:any, now?:any,
+ *   local?:ReturnType<typeof import("./local-lane.mjs").createLocalLane>}} ctx
  * @returns {Promise<({status:number, json:any, headers?:Record<string, string>}|null)>}
  */
-export async function routeDeliveryV2({ method, path, query, body = {}, headers = {} }, ctx) {
+export async function routeDeliveryV2({ method, path, query, body = {}, headers = {}, loopbackPeer = false }, ctx) {
   if (!path.startsWith("/api/delivery/v2/")) return null;
 
   if (method === "GET" && path === "/api/delivery/v2/mode") {
@@ -801,6 +804,8 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
 
   // Whether this browser is paired, and its CSRF token. Readable only same-origin.
   if (method === "GET" && path === "/api/delivery/v2/session") {
+    const local = loopbackBrowserSession({ root: ctx.root, headers, loopbackPeer });
+    if (local) return { status: 200, json: { ...local.view, scope: fingerprint(ctx.root) }, headers: local.cookie ? { "Set-Cookie": local.cookie } : {} };
     return json(200, { ...sessionView({ root: ctx.root, headers }), scope: fingerprint(ctx.root) });
   }
 
@@ -852,6 +857,8 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
     // Attribution cannot be dropped or borrowed: a Steward Start is a Steward Start.
     if (path === "/api/delivery/v2/deliver") body = { ...body, initiatedBy: "era-steward" };
   }
+
+  if (path.startsWith("/api/delivery/v2/local")) return routeLocal({ method, path, query, body, loopbackPeer }, auth, ctx);
 
   // Accounting: Delivery / Support / Chat overhead, kept apart (read-only).
   if (method === "GET" && path === "/api/delivery/v2/accounting") {
@@ -915,7 +922,7 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
 
   if (method === "GET" && path === "/api/delivery/v2/runs") {
     const available = ctx.journey && (!ctx.hasStore || ctx.hasStore());
-    return json(200, { runs: available ? ctx.journey.list() : [], requests: ctx.stewardRequests?.() || [] });
+    return json(200, { runs: [...(available ? ctx.journey.list() : []), ...(ctx.local && ctx.hasStore?.() ? ctx.local.list() : [])], requests: ctx.stewardRequests?.() || [] });
   }
 
   // Command Center Phase 5: slots, waiting items with their verdicts, owner

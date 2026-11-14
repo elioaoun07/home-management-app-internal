@@ -1,0 +1,5 @@
+[
+  { "expected": "fail", "changes": [{ "file": "src/lib/cards.ts", "before": null, "after": "export const cards = [];\n" }] },
+  { "expected": "pass", "changes": [{ "file": "src/lib/cards.ts", "before": null, "after": "export const cards = [];\n" }, { "file": "ERA Notes/10 - Project Management/PM Tooling/PM Tooling — Master Book.md", "before": "# Book\n", "after": "# Book\n- R94 verified locally.\n" }] },
+  { "expected": "n/a", "changes": [{ "file": "scripts/cards.mjs", "before": null, "after": "export const cards = [];\n" }] }
+]

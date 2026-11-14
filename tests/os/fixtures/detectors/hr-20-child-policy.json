@@ -1,0 +1,32 @@
+[
+  {
+    "expected": "fail",
+    "changes": [
+      {
+        "file": "migrations/2026-11-11_child.sql",
+        "before": null,
+        "after": "CREATE POLICY p ON public.item_occurrences USING (EXISTS (SELECT 1 FROM items));"
+      }
+    ]
+  },
+  {
+    "expected": "pass",
+    "changes": [
+      {
+        "file": "migrations/2026-11-11_child.sql",
+        "before": null,
+        "after": "CREATE POLICY p ON public.item_occurrences USING (user_id = auth.uid());"
+      }
+    ]
+  },
+  {
+    "expected": "n/a",
+    "changes": [
+      {
+        "file": "README.md",
+        "before": null,
+        "after": "Text"
+      }
+    ]
+  }
+]

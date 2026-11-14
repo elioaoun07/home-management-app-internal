@@ -77,7 +77,7 @@ These support **DOCUMENTED INTENT**, and historical notes are not substituted fo
 - [AI Assistant overview](<../../../ERA Notes/03 - Junction Modules/AI Assistant/Overview.md>) — capability boundaries, proposals, source artifacts, historical validation caveats.
 - [Plan My Day overview](<../../../ERA Notes/03 - Junction Modules/Plan My Day/Overview.md>) — triage-first/save-gated interaction, deferred hourly/energy optimizer.
 - [Budget Allocation overview](<../../../ERA Notes/02 - Standalone Modules/Budget Allocation/Overview.md>) — suggestion/estimate explanations and manual control.
-- [Meal Planning overview](<../../../ERA Notes/03 - Junction Modules/Meal Planning/Overview.md>) — leftovers, household assignment, future weekly shopping.
+- [Meal Planning overview](<../../../ERA Notes/02 - Standalone Modules/Meal Planning/Overview.md>) — leftovers, household assignment, future weekly shopping.
 - [Shopping List overview](<../../../ERA Notes/03 - Junction Modules/Shopping List/Overview.md>), [Recipes overview](<../../../ERA Notes/02 - Standalone Modules/Recipes/Overview.md>), [Inventory overview](<../../../ERA Notes/02 - Standalone Modules/Inventory/Overview.md>).
 - [Household Sharing overview](<../../../ERA Notes/03 - Junction Modules/Household Sharing/Overview.md>), [Notifications overview](<../../../ERA Notes/03 - Junction Modules/Notifications/Overview.md>), [Sync & Offline overview](<../../../ERA Notes/03 - Junction Modules/Sync & Offline/Overview.md>).
 - [start-task](../../../.claude/skills/start-task/SKILL.md) and [finish-task](../../../.claude/skills/finish-task/SKILL.md) — repository protocol read; no code/migration lifecycle changes made.

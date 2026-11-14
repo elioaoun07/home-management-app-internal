@@ -50,12 +50,15 @@ On failure: fix the cause. Never suppress with `any`-casts, eslint-disable, `--n
 
 ## Gate E — PM Command Center (Hard Rule 25 — Stop hook enforces this)
 
-If you touched `src/` or `migrations/`, update the module's campaign folder under `ERA Notes/10 - Project Management/` (`Budget/`, `Schedule/`, `Kitchen/`, `Trips/`, `Hub & ERA/`, `Notifications & Alerts/`) **in this same session**:
+If you touched `src/` or `migrations/`, record it in the owning campaign under `ERA Notes/10 - Project Management/` **in this same session**. `_index.md` there lists the campaigns; `_Conventions.md` owns the grammar. Do not keep a second list here.
 
-1. **The campaign Master Book** — add a `- ✅ YYYY-MM-DD — **ID** …` line to its **Shipped Log**. If the work was a bug that was never logged, add it to the **Pain Inventory** first (emoji severity + root cause + evidence), then move it to the Shipped Log.
-2. **File `4 - Checklist.md`** — check the `[x]`.
-3. **The Master Book's Vision & Decisions section** — add `*(IMPLEMENTED YYYY-MM-DD)*` where the realized decision is described.
-4. **Grammar:** any checklist line you add or edit follows `ERA Notes/10 - Project Management/_Conventions.md` — `- [ ] **PREFIX-n** outcome _(severity - effort)_` under a Now/Next/Later lane; done-stamps `✅ YYYY-MM-DD` in file 1. If you touched any `4 - Checklist.md`, run **`pnpm pm:lint`** and fix errors before finishing.
+1. **Tracked item finished and verified** → `pnpm pm:ship <ID> --note "<what you verified: tests, typecheck, flow exercised>"`. One command ticks the row, writes the dated `✅` receipt to the Master Book's Shipped Log, moves the item's criteria to `_Archive/Shipped/`, refreshes `_index.md` and runs `pm:lint` + `pm:check-docs`. If the owner still has to run a migration or check a device, add `**Implementation:** done` and `**UAT:** pending` to the `### <ID>` section **before** shipping: the section then stays in the book and the item appears under "Awaiting your acceptance".
+2. **Untracked work** → first add the row to `4 - Checklist.md` (next free number; copy the row shape of its neighbours: bold ID, outcome, criteria link, `_(severity - effort)_`) and a `### <ID>` section with **Outcome** and **Acceptance** in the Master Book; then ship it as in 1.
+3. **Partly done** → leave the row open; add a dated progress line inside its `### <ID>` section.
+4. **Bug found but not fixed** → a Pain Inventory entry in the Master Book (🔴/🟠/🟡/⚪ lead, cause, evidence).
+5. **A decision was realized** → mark `*(IMPLEMENTED YYYY-MM-DD)*` where the Master Book's Vision & Decisions describes it.
+
+After any hand edit of a checklist run **`pnpm pm:lint`**. `pnpm pm:ship --undo` restores the files of the last ship run.
 
 Pure tooling/config/hook changes with no PM-trackable story: state that explicitly in your report and finish — the hook fires once and accepts it.
 

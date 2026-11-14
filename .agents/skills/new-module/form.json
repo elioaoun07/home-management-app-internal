@@ -1,0 +1,82 @@
+{
+  "skill": "new-module",
+  "title": "New module",
+  "tier": "CLAUDE_MID",
+  "effort": "default",
+  "launch": "worktree",
+  "fields": [
+    {
+      "id": "name",
+      "label": "Slug",
+      "type": "slug",
+      "required": true,
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "maxLength": 60,
+      "mention": "--name"
+    },
+    {
+      "id": "title",
+      "label": "Title",
+      "type": "text",
+      "required": true,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9 &-]*$",
+      "default": { "from": "name", "transform": "titleCase" },
+      "mention": "--title"
+    },
+    {
+      "id": "type",
+      "label": "Type",
+      "type": "enum",
+      "options": ["standalone", "junction"],
+      "default": "standalone",
+      "mention": "--type"
+    },
+    {
+      "id": "connects",
+      "label": "Connects",
+      "type": "modules",
+      "showIf": { "type": "junction" },
+      "required": true,
+      "mention": "--connects"
+    },
+    {
+      "id": "table",
+      "label": "Table",
+      "type": "text",
+      "required": true,
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "default": { "from": "name", "transform": "snakeCase" },
+      "mention": "--table"
+    },
+    {
+      "id": "oneLiner",
+      "label": "One line",
+      "type": "text",
+      "required": true,
+      "maxLength": 140,
+      "pattern": "^[^|\\r\\n]+$",
+      "mention": "--one-liner"
+    },
+    {
+      "id": "intent",
+      "label": "Lookup phrase",
+      "type": "text",
+      "required": true,
+      "pattern": "^[^|\\r\\n]+$",
+      "default": { "from": "title" },
+      "mention": "--intent"
+    },
+    {
+      "id": "noPage",
+      "label": "No page",
+      "type": "boolean",
+      "default": false,
+      "mention": "--no-page"
+    }
+  ],
+  "checks": [
+    { "kind": "notExists", "path": "src/features/{name}" },
+    { "kind": "notInFeatureIndex", "value": "{name}" }
+  ],
+  "preview": "new-module"
+}

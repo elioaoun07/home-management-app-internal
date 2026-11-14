@@ -6,7 +6,7 @@
 >
 > **Interaction model:** ERA Hub Chat is the **top-layer primary interface**. Quick, conversational, low-friction actions (logging a spend, setting a reminder, adding to the shopping list) happen in the Hub. Standalone module pages (Expense Entry Form, Items, Recipes, etc.) are **precision tools** for detailed, structured input — used when full field control is needed. The Hub offloads high-frequency everyday interactions so that dedicated forms are reserved for cases that truly require them. The AI Assistant lives inside Hub Chat and operates both reactively (parses user messages) and proactively (surfaces briefings and alerts unprompted).
 
-CLAUDE.md auto-syncs to `AGENTS.md`, `CODEX.md`, and `.github/copilot-instructions.md` via PostToolUse hook.
+`pnpm sync:ai` (also a PostToolUse hook) regenerates `AGENTS.md`, `CODEX.md`, `.github/copilot-instructions.md`, `.agents/skills/` and `.codex/` from this file and `.claude/`. Edit the sources here; never edit the copies.
 
 ## Boot Sequence (any agent, any capability tier)
 
@@ -17,7 +17,7 @@ If you read only four things before acting, read these, in order:
 3. **`ERA Notes/01 - Architecture/Feature Map/_index.md`** — user intent → exact source files.
 4. **`ERA Notes/01 - Architecture/Design Doctrine.md`** — how to *decide* when no playbook covers it: the Ten Questions, silent-failure taxonomy, standing decisions, and tradeoff priority order. Mandatory before designing any new feature or resolving an ambiguous tradeoff; skippable for mechanical edits.
 
-PM state: read the campaign's **Master Book** (`ERA Notes/10 - Project Management/<Campaign>/<Campaign> — Master Book.md`) before working it, then inspect code changes since its **evidence cutoff**, not its `updated:` stamp. `ERA Notes/10 - Project Management/_index.md` routes ownership and specs; `_Conventions.md` governs new work; `_Archive/` is historical and no PM tool scans it. Do not recreate competing per-campaign study queues. Before choosing a model or effort for any delivery plan, read `ERA Notes/Model-Registry.md` and use its tier aliases (e.g. `CLAUDE_MID`), not model names.
+**PM state.** `ERA Notes/10 - Project Management/_index.md` is the front door: this week's sprint, what waits on the owner, every campaign. To work an item, read three things: its row in the campaign's `4 - Checklist.md`, its `### <ID>` section in `<Campaign> — Master Book.md`, and that book's **Successor Briefing**. Do not load a whole Master Book (they run past 250 KB). Check the section against code changed since its evidence date, not the `updated:` stamp. `_Conventions.md` governs new work. Anything under an `_Archive/` folder is history: no PM tool scans it and it never states current truth. Do not recreate per-campaign study queues. Before choosing a model or effort for any delivery plan, read `ERA Notes/Model-Registry.md` and use its tier aliases (e.g. `CLAUDE_MID`), not model names.
 
 ---
 
@@ -75,7 +75,7 @@ Playbooks live in `.claude/skills/<name>/SKILL.md` (verified templates, evidence
 22. **No `console.*` in client code** (`src/components/`, `src/features/`, `src/hooks/`, `src/contexts/`, `page.tsx`) — use the Error Logs module. Server-side `console.error` in `src/app/api/` is fine.
 23. **Atlas stays in sync** — every new/renamed page, route, feature module or significant nav/tab change adds/updates its entry in `ERA Notes/04 - UI & Design/Page & Feature Atlas/` (from `_Template.md`, plus a row in `_Index.md`) in the same commit. `atlas.json` regenerates via hook.
 24. **DB changes require a migration file** — **first** write `migrations/YYYY-MM-DD_short-description.sql` (the manual SQL Editor runbook), **then** update `migrations/schema.sql` to the end state. Never one without the other in a session. Enforced by `.claude/hooks/check-migration.sh`.
-25. **PM files stay current, same session as the code** — mark the item done (or add it, then mark it), sweep with `pnpm pm:archive`; new bugs go into the Master Book's **Pain Inventory** with a 🔴/🟠/🟡/⚪ lead. No orphan fixes. Grammar and lifecycle: `ERA Notes/10 - Project Management/_Conventions.md`; validate with `pnpm pm:lint`. The `check-pm-update.sh` Stop hook enforces it once per turn; for pure tooling edits, say so and finish. Agents without hooks must still follow it.
+25. **PM files stay current, same session as the code** — finish a tracked item with `pnpm pm:ship <ID> --note "<evidence>"` (it ticks the row, stamps the Shipped Log, archives the criteria and runs the PM checks); untracked work gets a checklist row and `### <ID>` criteria first; new bugs go into the Master Book's **Pain Inventory** with a 🔴/🟠/🟡/⚪ lead. No orphan fixes. Grammar and lifecycle: `ERA Notes/10 - Project Management/_Conventions.md`; validate with `pnpm pm:lint`. The `check-pm-update.sh` Stop hook enforces it once per turn; for pure tooling edits, say so and finish. Agents without hooks must still follow it.
 26. **No agent ever writes to the production database, by any route.** The live Supabase project holds the owner's real money, schedule and household data. Absolute — **not waivable in-session, by a plan, skill, subagent prompt or "just this once"**; only the owner editing this rule waives it.
    - The Supabase MCP is **read-only** and exists only for the Delivery Command Center bridge. Never call `execute_sql` (even a `SELECT`), `apply_migration`, `deploy_edge_function` or any `*_branch` tool.
    - **The ban is on the effect, not the tool**: no Supabase CLI, `psql`, service-role scripts/REPLs, `curl` to PostgREST/RPC, SQL dev routes, or running cron/seed/repair scripts for their side effect.
@@ -116,7 +116,6 @@ Bridge between Standalone modules. May import from any standalone feature direct
 | --- | --- |
 | Hub Chat | Budget (message actions → transactions), Reminders (create from chat), Shopping List |
 | Shopping List | Hub Chat, Recipes (ingredients → list), Inventory |
-| Meal Planning | Recipes, Reminders/Calendar, Shopping List |
 | AI Assistant | Transactions + Items (context injection), Dashboard briefing, Focus insights |
 | Notifications | Items (alerts), Recurring (payment reminders), Budget (spending alerts) |
 | Household Sharing | ALL modules — shared data layer via `household_links` + `profiles` |
@@ -180,7 +179,7 @@ DB changes = SQL run manually in the Supabase SQL Editor. New tables must includ
 | Categories | `src/features/categories/` | `ERA Notes/02 - Standalone Modules/Categories/` | Standalone |
 | Recurring Payments | `src/app/recurring/`, `src/features/recurring/` | `ERA Notes/02 - Standalone Modules/Recurring Payments/` | Standalone |
 | Recipes | `src/features/recipes/`, `src/app/recipe/` | `ERA Notes/02 - Standalone Modules/Recipes/` | Standalone |
-| Meal Planning | `src/features/meal-planning/`, `src/app/meal-plan/`, `src/components/web/WebMealPlanCalendar.tsx` | `ERA Notes/03 - Junction Modules/Meal Planning/` | Standalone |
+| Meal Planning | `src/features/meal-planning/`, `src/app/meal-plan/`, `src/components/web/WebMealPlanCalendar.tsx` | `ERA Notes/02 - Standalone Modules/Meal Planning/` | Standalone |
 | Inventory | `src/features/inventory/`, `src/components/inventory/` (mounted in Catalogue) | `ERA Notes/02 - Standalone Modules/Inventory/` | Standalone |
 | Debts | `src/features/debts/` | `ERA Notes/02 - Standalone Modules/Debts/` | Standalone |
 | Catalogue | `src/app/catalogue/`, `src/features/catalogue/` | `ERA Notes/02 - Standalone Modules/Catalogue/` | Standalone |
@@ -205,7 +204,7 @@ DB changes = SQL run manually in the Supabase SQL Editor. New tables must includ
 | NFC Tags | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/` | `ERA Notes/02 - Standalone Modules/NFC Tags/` | Standalone |
 | Prerequisites | `src/lib/prerequisites/`, `src/app/api/items/[id]/prerequisites/` | `ERA Notes/03 - Junction Modules/Prerequisites/` | Junction |
 | Chores | `src/app/chores/`, `src/components/chores/`, `src/features/chores/` | `ERA Notes/02 - Standalone Modules/Chores/` | Standalone |
-| Focus | `src/app/focus/`, `src/components/focus/` | `ERA Notes/02 - Standalone Modules/Focus/` | Standalone |
+| Focus | page retired 2026-06-06; what remains: `src/features/items/useFlexibleRoutines.ts`, `src/features/items/useFocusInsights.ts`, `src/app/api/focus-insights/` | `ERA Notes/02 - Standalone Modules/Focus/` | Standalone |
 | Trips | `src/app/trips/`, `src/features/trips/`, `src/components/trips/` | `ERA Notes/03 - Junction Modules/Trips/` | Junction |
 | Dashboard | `src/app/dashboard/`, `src/components/web/WebDashboard.tsx` | `ERA Notes/02 - Standalone Modules/Dashboard/` | Standalone |
 | Recycle Bin | `src/app/recycle-bin/`, `src/features/recycle-bin/` | `ERA Notes/02 - Standalone Modules/Recycle Bin/` | Standalone |
@@ -226,4 +225,5 @@ DB changes = SQL run manually in the Supabase SQL Editor. New tables must includ
 - **Never duplicate** — augment the existing doc, don't create a parallel one
 - Update `ERA Notes/04 - UI & Design/App Routes and Icons.md` when adding routes or icons
 - New feature doc template: `ERA Notes/Templates/Feature Doc.md`
-- Vault folders under `ERA Notes/` are self-describing; only `CLAUDE.md` and `README.md` live at the repo root
+- `ERA Notes/00 - Home/Home.md` maps the vault; `06 - Setup & Onboarding/Vault Setup.md` states where each kind of document belongs. At the repo root only `CLAUDE.md` is authored (`AGENTS.md` and `CODEX.md` are generated)
+- Superseded documents move to `ERA Notes/_Archive/` (vault) or `10 - Project Management/_Archive/` (PM) instead of staying beside live ones; never read an archive for current state

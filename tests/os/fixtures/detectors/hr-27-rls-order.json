@@ -1,0 +1,59 @@
+[
+  {
+    "expected": "fail",
+    "session": {
+      "agent": "claude",
+      "coverage": "transcript",
+      "timeline": [],
+      "reads": [
+        {
+          "path": "src/app/api/cards/route.ts",
+          "order": 0
+        }
+      ],
+      "skills": [],
+      "visibilityBug": true
+    },
+    "changes": [
+      {
+        "file": "src/components/Card.tsx",
+        "before": null,
+        "after": "export const c=1;"
+      }
+    ]
+  },
+  {
+    "expected": "pass",
+    "session": {
+      "agent": "claude",
+      "coverage": "transcript",
+      "timeline": [],
+      "reads": [
+        {
+          "path": "migrations/db-state.json",
+          "order": 0
+        },
+        {
+          "path": "src/app/api/cards/route.ts",
+          "order": 1
+        }
+      ],
+      "skills": [],
+      "visibilityBug": true
+    },
+    "changes": [
+      {
+        "file": "src/components/Card.tsx",
+        "before": null,
+        "after": "export const c=1;"
+      }
+    ]
+  },
+  {
+    "expected": "n/a",
+    "session": {
+      "agent": "manual"
+    },
+    "changes": []
+  }
+]

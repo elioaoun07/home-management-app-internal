@@ -42,6 +42,8 @@ export const pmKeys = {
     ["pm-app", "run", id, "transcript", turn] as const,
   preflight: (id: string) => ["pm-app", "preflight", id] as const,
   v2session: ["pm-app", "v2", "session"] as const,
+  localReadiness: (executor: string) => ["pm-app", "local", "readiness", executor] as const,
+  localRun: (id: string) => ["pm-app", "local", "run", id] as const,
   v2runs: ["pm-app", "v2", "runs"] as const,
   v2run: (id: string) => ["pm-app", "v2", "run", id] as const,
   v2executors: ["pm-app", "v2", "executors"] as const,
@@ -116,6 +118,8 @@ export interface UndoSnapshot {
   expectCurrent: string | null;
 }
 export interface CommandReply {
+  path?: string;
+  trashed?: string;
   undo?: UndoSnapshot[];
   raw?: string;
   state?: string;

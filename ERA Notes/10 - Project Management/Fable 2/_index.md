@@ -36,7 +36,7 @@ Labels `F2-n` are local to this folder. Every finding has one disposition.
 | F2-05 | No non-production database exists | Read | [DLV-154](<../Delivery/Delivery — Master Book.md#dlv-154>) |
 | F2-06 | About 35,000 lines of frozen or superseded tooling stay live (V1, confinement, two older UIs) | Measured | [DLV-155](<../Delivery/Delivery — Master Book.md#dlv-155>); existing DLV-103, R6 |
 | F2-07 | Workers run without the repo's CLAUDE.md, skills and hooks | Read | DLV-150 |
-| F2-08 | Home shows counts, not a next action; decisions are in an overflow menu; two vocabularies for one queue | Seen | [R86](<../PM Tooling/PM Tooling — Master Book.md#r86>) |
+| F2-08 | Home shows counts, not a next action; decisions are in an overflow menu; two vocabularies for one queue | Seen | [R86](<../_Archive/Shipped/PM Tooling.md#r86>) |
 | F2-09 | Sprints still shows the week of 5 October as in play | Seen, read | [R87](<../PM Tooling/PM Tooling — Master Book.md#r87>) |
 | F2-10 | Fifteen bug-sweep IDs existed only as text in a research file | Measured | Filed: BUD-89 to 94, HUB-118 to 122, NOTIF-22, NOTIF-23, R83, KIT-28 |
 | F2-11 | `docs/era-research/` (70 files) is linked from nowhere in the vault and has no dispositions | Measured | [R85](<../PM Tooling/PM Tooling — Master Book.md#r85>) |
@@ -49,14 +49,14 @@ Labels `F2-n` are local to this folder. Every finding has one disposition.
 | F2-18 | 101 of 215 mutating routes import no schema | Measured | Existing R46, BUD-94 |
 | F2-19 | `pnpm typecheck` runs out of memory in a 15 GB container | Measured | [R91](<../PM Tooling/PM Tooling — Master Book.md#r91>) |
 | F2-20 | 58 cited evidence paths are gitignored; 17 broken links; the docs check is not in CI | Measured | [R88](<../PM Tooling/PM Tooling — Master Book.md#r88>) |
-| F2-21 | Reading rules cost 77,000 to 112,000 tokens before the first source file | Measured | [R89](<../PM Tooling/PM Tooling — Master Book.md#r89>) |
+| F2-21 | Reading rules cost 77,000 to 112,000 tokens before the first source file | Measured | [R89](<../_Archive/Shipped/PM Tooling.md#r89>) |
 | F2-22 | Twelve items solve exactly-once separately | From the books and the sweep | Study H2, unadopted option |
 | F2-23 | Backlog arrival exceeds departure; 34 items in Now | Seen | Owner recommendations in [Backlog health](<10 - Project Management/Portfolio/Backlog Health.md>) |
 | F2-24 | The largest files (Hub page 5,972 lines) cap what lower tiers can edit | Measured | Routing constraint; existing BUD-9 |
 | F2-25 | Six areas need a deeper read than this pass gave | Stated | Studies H1 to H6, unadopted options in [Research options](<../Research/Options.md#fable-2-heavyweight-studies>) |
-| F2-26 | 7 of 29 Hard Rules have any mechanism behind them; 22 are text only | Read, measured | [R94](<../PM Tooling/PM Tooling — Master Book.md#r94>) |
-| F2-27 | The setup differs per agent (Codex gets 2 of 18 skills, older hooks, machine-specific paths); 13 conflict classes are live | Measured | [R92](<../PM Tooling/PM Tooling — Master Book.md#r92>), [R93](<../PM Tooling/PM Tooling — Master Book.md#r93>) |
-| F2-28 | Ordinary agent sessions leave no record, and every skill's inputs are prose | Read | [R95](<../PM Tooling/PM Tooling — Master Book.md#r95>), [R96](<../PM Tooling/PM Tooling — Master Book.md#r96>), [R98](<../PM Tooling/PM Tooling — Master Book.md#r98>); cockpit [R97](<../PM Tooling/PM Tooling — Master Book.md#r97>), [R99](<../PM Tooling/PM Tooling — Master Book.md#r99>) |
+| F2-26 | 7 of 29 Hard Rules have any mechanism behind them; 22 are text only | Read, measured | [R94](<../_Archive/Shipped/PM Tooling.md#r94>) |
+| F2-27 | The setup differs per agent (Codex gets 2 of 18 skills, older hooks, machine-specific paths); 13 conflict classes are live | Measured | [R92](<../_Archive/Shipped/PM Tooling.md#r92>), [R93](<../_Archive/Shipped/PM Tooling.md#r93>) |
+| F2-28 | Ordinary agent sessions leave no record, and every skill's inputs are prose | Read | [R95](<../_Archive/Shipped/PM Tooling.md#r95>), [R96](<../_Archive/Shipped/PM Tooling.md#r96>), [R98](<../PM Tooling/PM Tooling — Master Book.md#r98>); cockpit [R97](<../_Archive/Shipped/PM Tooling.md#r97>), [R99](<../PM Tooling/PM Tooling — Master Book.md#r99>) |
 | F2-29 | No Steward-started delivery shipped: the supervisor sat on the confined path, acted through a human screen, needed a five-link connection and had no power to finish | From the Steward docs and the Delivery book | [DLV-156](<../Delivery/Delivery — Master Book.md#dlv-156>); [contract](<10 - Project Management/Delivery/5 - Supervisor Contract.md>) |
 
 ## Folder map

@@ -75,7 +75,7 @@ pnpm eslint <changed files>
 ```
 The new ids are absent from the `B ✗` list; the contract test has your row and passes. The Gym release gates (zero wrong money effects, negation writes nothing) are hard. Diff the `B ✗` list against the step-4 baseline. Lines may disappear but none may appear. A new line is a regression, so narrow your grammar.
 
-**7 — Close the PM item.** Hub & ERA `4 - Checklist.md`: `[ ]` → `[x]` on HUB-n. Run `pnpm pm:archive`, then `pnpm pm:lint`. Final reply, 4 lines max: class · route reused · files touched · Gym result. Add `Device check pending` because the owner confirms on the phone.
+**7 — Close the PM item.** Add `**Implementation:** done` and `**UAT:** pending` to the item's `### HUB-n` section (the owner confirms on the phone), then run `pnpm pm:ship HUB-n --note "<Gym case + contract row>"`. It ticks the row, stamps the Shipped Log and runs the PM checks. Final reply, 4 lines max: class · route reused · files touched · Gym result. Add `Device check pending` because the owner confirms on the phone.
 
 ## Known failure modes
 

@@ -1,4 +1,5 @@
 #!/bin/bash
+# enforces: HR-25
 # Stop hook: enforces Hard Rule #25 (PM files must stay current).
 # Blocks the agent from ending its turn if source/migration files were edited
 # this session but no ERA Notes/10 - Project Management file was touched.
@@ -31,7 +32,7 @@ code_changed=$( { echo "$touched" | grep -E '/(src|migrations)/' | grep -v 'ERA 
 pm_touched=$( { echo "$touched" | grep -i 'ERA Notes/10 - Project Management'; echo "$disk_pm"; } | grep -v '^$')
 
 if [ -n "$code_changed" ] && [ -z "$pm_touched" ]; then
-  reason="Hard Rule #25 (PM files must stay current): this session edited source or migration files, but no file under ERA Notes/10 - Project Management/ was touched. Before finishing: open the relevant module's campaign folder, mark completed work with today's date in the Feature State / Pain Inventory file, check it off in the Execution Plan, and note *(IMPLEMENTED YYYY-MM-DD)* in the Vision/Decisions file. If a new issue surfaced instead, add it to the relevant backlog section. If this change genuinely has no PM-trackable story (pure tooling/config/hook edit unrelated to product features), say so explicitly, then finish."
+  reason="Hard Rule #25 (PM files must stay current): this session edited source or migration files, but no file under ERA Notes/10 - Project Management/ was touched. Before finishing, in the owning campaign folder: if the work completes a tracked item, run 'pnpm pm:ship <ID>' (ticks it in '4 - Checklist.md', stamps the Master Book's Shipped Log and archives its criteria); if the work is untracked, add the item to '4 - Checklist.md' with its '### <ID>' criteria in the Master Book first, then ship it; if a new bug surfaced instead, add it to the Master Book's Pain Inventory. Finish with 'pnpm pm:lint'. If this change genuinely has no PM-trackable story (pure tooling/config/hook edit unrelated to product features), say so explicitly, then finish."
   jq -n --arg reason "$reason" '{decision: "block", reason: $reason}'
   exit 0
 fi

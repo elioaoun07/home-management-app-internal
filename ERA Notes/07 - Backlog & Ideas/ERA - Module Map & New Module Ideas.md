@@ -11,7 +11,7 @@ tags:
 
 > **One page, two jobs.** Part 1 is the complete map of what exists today — every Standalone module and every Junction, with repeats where a module lives in several junctions. Part 2 is the candidate list of **new modules** that fit the target: **ERA — Household AI Proactive Assistant**.
 >
-> Sources: [Feature Map](<../01 - Architecture/Feature Map/_index.md>) (validated by `pnpm docs:check`), CLAUDE.md Module Model, [FABLED 2 Master Index](<../00 - Home/FABLED 2 Master Index.md>) (2026-07-06). Long-range poetic versions of many Part 2 ideas live in the **Future Vision Vols. 1–5** in this folder — this doc distills them into *module-shaped* proposals (type, connections, proactive move) and adds new ones.
+> Sources: [Feature Map](<../01 - Architecture/Feature Map/_index.md>) (validated by `pnpm docs:check`), CLAUDE.md Module Model, [FABLED 2 Master Index](<../_Archive/Vault Audits/FABLED 2 Master Index.md>) (2026-07-06). Long-range poetic versions of many Part 2 ideas live in the **Future Vision Vols. 1–5** in this folder — this doc distills them into *module-shaped* proposals (type, connections, proactive move) and adds new ones.
 
 ---
 

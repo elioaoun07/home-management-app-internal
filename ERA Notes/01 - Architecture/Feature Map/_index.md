@@ -83,7 +83,7 @@ activity log                                                  | [junction/activi
 | Error Logs         | Persistent structured error log viewer.                                                | [standalone/error-logs.md](standalone/error-logs.md)                              |
 | AI Usage           | Track Claude/OpenAI token usage; upcoming sessions.                                    | [standalone/ai-usage.md](standalone/ai-usage.md)                                  |
 | Chores             | `/chores` week list, weekday assignment, check-in; own install identity.               | [standalone/chores.md](standalone/chores.md)                                      |
-| Focus              | Flexible routines / focus page.                                                        | [standalone/focus.md](standalone/focus.md)                                        |
+| Focus              | Page retired 2026-06-06; flexible-routine hooks and focus insights remain.             | [standalone/focus.md](standalone/focus.md)                                        |
 | Dashboard          | Main landing page after login — KPI cards, recent transactions.                        | [standalone/dashboard.md](standalone/dashboard.md)                                |
 | Recycle Bin        | Soft-deleted items with restore.                                                       | [standalone/recycle-bin.md](standalone/recycle-bin.md)                            |
 | Healthcare        | Family health profiles: allergies, conditions, vaccines, medications                  | [standalone/healthcare.md](standalone/healthcare.md)                       |

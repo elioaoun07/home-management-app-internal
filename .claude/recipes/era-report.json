@@ -1,0 +1,9 @@
+{
+  "id": "era-report",
+  "title": "ERA report, low cost",
+  "skill": "era-wire",
+  "values": {},
+  "attachments": ["api-route"],
+  "tier": "CLAUDE_MID",
+  "effort": "medium"
+}

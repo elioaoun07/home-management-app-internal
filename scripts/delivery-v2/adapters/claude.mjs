@@ -212,7 +212,8 @@ export function deriveNativeSessionId(dispatch_key) {
  *
  * @param {{workspaceRoot:string, mode?:"build"|"review", model?:(string|null),
  *   maxTurns?:(number|null), forbiddenPaths?:string[], additionalDirectories?:string[],
- *   effort?:(string|null), thresholdUsd?:(number|null), observe?:((input:any)=>void)|null}} input
+ *   effort?:(string|null), thresholdUsd?:(number|null), observe?:((input:any)=>void)|null,
+ *   local?:boolean, env?:Record<string,string>|null}} input
  */
 export function buildSessionOptions({
   workspaceRoot,
@@ -224,6 +225,8 @@ export function buildSessionOptions({
   effort = null,
   thresholdUsd = null,
   observe = null,
+  local = false,
+  env = null,
 }) {
   if (!isNonEmptyString(workspaceRoot)) throw new ContractError("claude adapter: a job needs a workspace root");
   if (mode !== "build" && mode !== "review") throw new ContractError("claude adapter: unknown mode " + mode);
@@ -240,6 +243,12 @@ export function buildSessionOptions({
     additionalDirectories: [...additionalDirectories],
     sandbox: { enabled: true, failIfUnavailable: true },
   };
+  if (local) {
+    options.settingSources = ["project"];
+    options.skills = "all";
+    options.systemPrompt = { type: "preset", preset: "claude_code" };
+  }
+  if (env) options.env = env;
   if (model) options.model = model;
   if (effort) options.effort = effort;
   if (typeof maxTurns === "number" && maxTurns > 0) options.maxTurns = maxTurns;
@@ -759,6 +768,8 @@ export function createClaudeAdapter(options = {}) {
           thresholdUsd: request.native_limits && request.native_limits.thresholdUsd ? Number(request.native_limits.thresholdUsd) : null,
           forbiddenPaths: runOptions.forbiddenPaths || [],
           observe: (input) => observeHookInput(state, input),
+          local: options.local === true,
+          env: options.env || null,
         }),
         abortController: controller,
       },

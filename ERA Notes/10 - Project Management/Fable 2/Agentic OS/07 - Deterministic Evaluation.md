@@ -9,7 +9,9 @@ evidence_cutoff: "commit e5f537a, 2026-11-10. Proposed design; no scorecard has 
 
 # Agentic OS — deterministic evaluation
 
-[Agentic OS index](<_index.md>) · [Flight recorder](<06 - Flight Recorder.md>) · next: [Skill launchpad](<08 - Skill Launchpad.md>) · items: [R96](<../../PM Tooling/PM Tooling — Master Book.md#r96>), [R99](<../../PM Tooling/PM Tooling — Master Book.md#r99>)
+**A4 implemented locally, 2026-11-11 (R96):** six separate session panels, 21 diff detectors plus four fixture-gated transcript detectors (four rules remain UAT judgment), native Codex rollout ingest, and read-only Delivery V2 projection. `os:report` includes stored scorecards; `os:score item <ID>`, `os:score session delivery:<job>`, and `os:score compare` export delivery/session/cohort evidence. No blended score, model review, new provider session, PM.2 surface, or A5+ work. Commands, verification, and conservative limits: [Skills and Agents](<../../../../docs/Skills-and-Agents.md#agentic-os-scorecards-a4--r96>).
+
+[Agentic OS index](<_index.md>) · [Flight recorder](<06 - Flight Recorder.md>) · next: [Skill launchpad](<08 - Skill Launchpad.md>) · items: [R96](<../../_Archive/Shipped/PM Tooling.md#r96>), [R99](<../../PM Tooling/PM Tooling — Master Book.md#r99>)
 
 The aim is to answer "did this session do good work, and which model does it best" with numbers a script produced, so the answer is the same tomorrow and does not depend on asking a model.
 
@@ -95,5 +97,5 @@ This is the only place where two models can be compared on identical work. It sp
 ## Honest limits
 
 - A detector measures what it was written to see. A clean scorecard means "no known rule was broken", not "the change is correct". UAT stays.
-- Process facts depend on transcripts. Sessions without one (Codex until its adapter exists, manual commits) get the Rules, Checks and Scope panels only.
+- Process facts depend on transcripts. Sessions without one (unsupported transcript formats, manual commits) get the Rules, Checks and Scope panels only.
 - Small numbers. One owner, one repository: expect tens of sessions a month. The value is in catching the specific failure today, and in trends over a quarter, not in statistics.

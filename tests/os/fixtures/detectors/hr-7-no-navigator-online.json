@@ -1,0 +1,5 @@
+[
+  { "expected": "fail", "changes": [{ "file": "src/lib/network.ts", "before": null, "after": "export const online = navigator.onLine;\n" }] },
+  { "expected": "pass", "changes": [{ "file": "src/lib/network.ts", "before": null, "after": "// navigator.onLine is unreliable\nexport const online = isReallyOnline();\n" }] },
+  { "expected": "n/a", "changes": [{ "file": "src/lib/connectivityManager.ts", "before": null, "after": "export const hint = navigator.onLine;\n" }] }
+]

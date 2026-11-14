@@ -1,0 +1,32 @@
+[
+  {
+    "expected": "fail",
+    "changes": [
+      {
+        "file": "src/components/ItemRow.tsx",
+        "before": null,
+        "after": "<div className=\"text-red-400\" />;"
+      }
+    ]
+  },
+  {
+    "expected": "pass",
+    "changes": [
+      {
+        "file": "src/components/ItemRow.tsx",
+        "before": null,
+        "after": "<div className=\"text-cyan-400\" />;"
+      }
+    ]
+  },
+  {
+    "expected": "n/a",
+    "changes": [
+      {
+        "file": "README.md",
+        "before": null,
+        "after": "Text"
+      }
+    ]
+  }
+]

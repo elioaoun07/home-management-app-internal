@@ -89,7 +89,7 @@ const DEDUP_WINDOW_MS = 5_000; // 5 second deduplication
 >
 > **Fix shipped**:
 >
-> 1. **Centralized helper** [`generateContentWithFallback`](src/lib/ai/gemini.ts) — every Gemini caller now goes through it. Behavior:
+> 1. **Centralized helper** [`generateContentWithFallback`](<../../../src/lib/ai/gemini.ts>) — every Gemini caller now goes through it. Behavior:
 >    - Up to 3 attempts on the primary model, backing off using Google's own `retryDelay` hint (capped 30s) or exponential 1s → 2s → 4s.
 >    - One final attempt on a fallback model (`gemini-flash-lite-latest` by default) — separate quota bucket, lighter weight, often succeeds when primary is throttled.
 >    - On total exhaustion, throws `GeminiRateLimitError` with `daily: boolean` and `retryAfterSeconds` based on whether the error had `retryDelay` (per-minute) or not (per-day).
@@ -98,7 +98,7 @@ const DEDUP_WINDOW_MS = 5_000; // 5 second deduplication
 > 3. **Daily-quota detection** — `isDailyQuotaError(err)` returns true when `RESOURCE_EXHAUSTED` has no `retryDelay`. The chat route surfaces a distinct message: `"Gemini daily free-tier quota reached. Resets at midnight Pacific time."` and `dailyQuotaExhausted: true` in the JSON, with `retryAfterSeconds` computed as seconds-until-Pacific-midnight.
 > 4. **Removed the silent quota burner**: `useFocusInsights`'s auto-fire `useEffect` was deleted. Insight generation is now strictly user-gesture only via the existing `refresh()` callback. Cached insights still display normally; UI shows a "Refresh" affordance when `shouldRefresh` is true.
 >
-> **Env knobs** ([docs/ENV.md](docs/ENV.md)):
+> **Env knobs** ([docs/ENV.md](<../../../docs/ENV.md>)):
 >
 > - `GEMINI_MODEL` — primary (default `gemini-flash-latest`). Uses Google's `-latest` alias, which auto-updates to the newest Flash model **without requiring code changes** when Google releases a new version. No deprecation risk.
 > - `GEMINI_FALLBACK_MODEL` — secondary, separate quota bucket (default `gemini-flash-lite-latest`). Also uses `-latest` alias for automatic updates. Set to the same value as `GEMINI_MODEL` to disable fallback.

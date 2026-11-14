@@ -1,0 +1,5 @@
+[
+  { "expected": "fail", "changes": [{ "file": "src/app/api/cards/route.ts", "before": null, "after": "export async function POST(req: Request) {\n  const body = await req.json();\n  return Response.json(body);\n}\n" }] },
+  { "expected": "pass", "changes": [{ "file": "src/app/api/cards/route.ts", "before": null, "after": "import { z } from 'zod';\nconst schema = z.object({ name: z.string() });\nexport async function POST(req: Request) {\n  const parsed = schema.safeParse(await req.json());\n  return Response.json(parsed);\n}\n" }] },
+  { "expected": "n/a", "changes": [{ "file": "scripts/cards.mjs", "before": null, "after": "export async function POST() {}\n" }] }
+]

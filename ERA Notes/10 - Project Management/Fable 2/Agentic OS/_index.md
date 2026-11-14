@@ -13,6 +13,8 @@ evidence_cutoff: "commit e5f537a, 2026-11-10. Inventory and baseline numbers wer
 
 **Owner commission, 2026-11-10 (second request).** Evolve the PM Command Center into an operating layer for the AI agents working in this repository: see everything the Claude Code and Codex setup contains, evaluate every session deterministically (which Hard Rule failed, which hook contradicts what), launch skills from forms, and get an interactive, animated, gamified dashboard (PM.2) while the existing Command Center stays the place for documents. Plans only.
 
+**A4 implemented locally, 2026-11-11 (R96):** six separate session panels, 21 diff detectors plus four fixture-gated transcript detectors (four rules remain UAT judgment), native Codex rollout ingest, and read-only Delivery V2 projection. `os:report` includes stored scorecards; `os:score item <ID>`, `os:score session delivery:<job>`, and `os:score compare` export delivery/session/cohort evidence. No blended score, model review, new provider session, PM.2 surface, or A5+ work. Commands, verification, and conservative limits: [Skills and Agents](<../../../../docs/Skills-and-Agents.md#agentic-os-scorecards-a4--r96>).
+
 ## The plan in one picture
 
 ```text
@@ -27,7 +29,7 @@ evidence_cutoff: "commit e5f537a, 2026-11-10. Inventory and baseline numbers wer
                               PM.1 stays the Library
 ```
 
-## What is true today (measured)
+## Historical baseline (2026-11-10, before A0-A4)
 
 - **7 of 29 Hard Rules have any mechanism behind them**; 22 are text. None is fully covered for Codex.
 - **Claude gets 18 skills and 8 hook wirings; Codex gets 2 skills (one stale) and hook configuration that points at one machine's absolute path.**
@@ -73,12 +75,12 @@ Filed in PM Tooling on 2026-11-10: R92 in Next, the rest in Later. None is start
 
 | Step | Item | Outcome |
 |---|---|---|
-| A0 | [R92](<../../PM Tooling/PM Tooling — Master Book.md#r92>) | One setup for every agent; current drift removed |
-| A1 | [R93](<../../PM Tooling/PM Tooling — Master Book.md#r93>) | Setup registry and conflict check |
-| A2 | [R94](<../../PM Tooling/PM Tooling — Master Book.md#r94>) | Rule detectors and `os:eval` |
-| A3 | [R95](<../../PM Tooling/PM Tooling — Master Book.md#r95>) | Flight recorder |
-| A4 | [R96](<../../PM Tooling/PM Tooling — Master Book.md#r96>) | Scorecards |
-| A5 | [R97](<../../PM Tooling/PM Tooling — Master Book.md#r97>) | PM.2 cockpit |
+| A0 | [R92](<../../_Archive/Shipped/PM Tooling.md#r92>) | One setup for every agent; current drift removed |
+| A1 | [R93](<../../_Archive/Shipped/PM Tooling.md#r93>) | Setup registry and conflict check |
+| A2 | [R94](<../../_Archive/Shipped/PM Tooling.md#r94>) | Rule detectors and `os:eval` |
+| A3 | [R95](<../../_Archive/Shipped/PM Tooling.md#r95>) | Flight recorder |
+| A4 | [R96](<../../_Archive/Shipped/PM Tooling.md#r96>) | Scorecards |
+| A5 | [R97](<../../_Archive/Shipped/PM Tooling.md#r97>) | PM.2 cockpit |
 | A6 | [R98](<../../PM Tooling/PM Tooling — Master Book.md#r98>) | Skill launchpad |
 | A7 | [R99](<../../PM Tooling/PM Tooling — Master Book.md#r99>) | Arena and game layer |
 

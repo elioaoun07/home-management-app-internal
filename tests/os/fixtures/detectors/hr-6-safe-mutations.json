@@ -1,0 +1,5 @@
+[
+  { "expected": "fail", "changes": [{ "file": "src/features/cards/hooks.ts", "before": null, "after": "export const save = () => fetch('/api/cards', {\n  method: 'POST',\n  body: '{}',\n});\n" }] },
+  { "expected": "pass", "changes": [{ "file": "src/features/cards/hooks.ts", "before": null, "after": "import { safeFetch } from '@/lib/safeFetch';\nexport const ask = () => safeFetch('/api/ai-chat', {\n  method: 'POST', timeoutMs: 60000,\n});\nexport const list = () => fetch('/api/cards');\n" }] },
+  { "expected": "n/a", "changes": [{ "file": "src/app/api/cards/route.ts", "before": null, "after": "await fetch('https://example.invalid', { method: 'POST' });\n" }] }
+]

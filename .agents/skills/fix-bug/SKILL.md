@@ -1,0 +1,112 @@
+---
+name: fix-bug
+description: "Evidence-first debugging playbook for this repo: reproduce, locate via Feature Map, root-cause with proof, minimal fix, verify, PM trace. Use for any bug report, error, regression, crash, wrong value, or 'X doesn't work'. NOT for new features (use add-feature)."
+---
+
+# /fix-bug — Debugging Playbook
+
+> **Contract:** you may not edit a file until Phase 4 produces a root cause **with evidence** (`path:line` you read this session). Fixing a symptom without a proven cause is the #1 failure mode of this task type. If after Phase 4 you have only a hypothesis, say so and present it as a hypothesis — do not code it silently.
+
+Prerequisite: run the `start-task` protocol (restate, route, read docs in order). This playbook assumes you did.
+
+## Phase 1 — Pin the bug down
+
+Write this block. If you can't fill it from the user's report, ask now:
+
+```
+EXPECTED: <what should happen>
+ACTUAL: <what happens instead — exact error text / wrong value>
+WHERE: <page/flow — mobile or desktop? which theme? which user (self vs partner)?>
+REPRO: <steps, or "not reproducible — evidence is X">
+```
+
+- "Which user" matters here: many bugs are household-linking bugs that only occur for partner-owned data.
+- If the user references a logged error, check the Error Logs module (`src/app/error-logs/`, API `src/app/api/error-logs/`) for the structured entry before theorizing.
+
+## Phase 1.5 — GATE: is this a visibility bug? Then get DB state before reading code
+
+**Trigger:** ACTUAL is "can't see it" / "list is empty" / "works for me, not for my partner" / "shared record not showing" / any permission-shaped symptom **with no error message**.
+
+**Do this before Phase 2.** Reading routes cannot clear RLS, because RLS lives only in the live DB — `migrations/schema.sql` is a tables-only export (Hard Rule #27). Hand the owner Hard Rule #27's two queries (`pg_class.relrowsecurity` + `pg_policies`, untruncated) and wait.
+
+Why this is non-negotiable — the 2026-08-04 Trips bug, which is why this gate exists:
+- Household trips were invisible to the partner. `GET /api/trips`, `getAccessibleTrip()` and `get_trip_bundle()` were **all correct**.
+- `trips`/`trip_places`/`trip_packing_items` had RLS **on** with own-user-only policies. RLS stripped the rows before the route's filter ran: correct logic, zero rows, **no error**.
+- Three repo documents asserted "no RLS on the trips family." All three were wrong, and one had caused a new table to ship deliberately policy-free.
+- Cost: five turns of re-reading correct code, one confidently-wrong root cause, and a near-miss "fix" to a working route.
+
+Fast discriminators, in order:
+1. **Does a SECURITY DEFINER RPC path work where the PostgREST path doesn't?** (e.g. detail loads via `get_*_bundle` but the list is empty.) SECURITY DEFINER bypasses RLS — this disagreement is near-proof of RLS.
+2. **Does a sibling feature with the same sharing model work?** If Accounts shares fine but Trips doesn't, partner *resolution* is fine and the difference is per-table policy.
+3. **Silent + asymmetric = RLS.** Errors point at code; silence points at the DB.
+
+**STOP conditions:**
+- Never conclude "the code is fine, so it must be data" without the `pg_policies` output in hand.
+- Never edit a route you have just verified is correct in order to chase the symptom. Say it's correct, and go get DB state.
+- Treat a truncated `pg_policies` result as no result — you need `permissive` and `qual`, or a permissive policy you add may be overridden by a restrictive one you never saw.
+
+## Phase 2 — Locate via the index, not via search
+
+1. `ERA Notes/01 - Architecture/Feature Map/_index.md` → module file → **exact source paths**.
+2. Read the module's vault doc, **gotchas section first** — a large share of "bugs" here are documented gotchas or known-issue areas. If the gotcha explains the bug, your job shrinks to applying the documented remedy.
+3. Check `ERA Notes/10 - Project Management/<Campaign>/<Campaign> — Master Book.md` — the bug may already be in its Pain Inventory with a root cause, or the area may be mid-refactor (e.g. recurrence/occurrence actions) per its Vision & Decisions. **Never "fix" something the book says is being redesigned** without flagging it.
+
+## Phase 3 — Trace the data path (write it down)
+
+Map the full chain before forming opinions. For a typical bug:
+
+```
+UI component (src/features/<m>/... or src/components/...)
+  → hook (useQuery/useMutation in src/features/<m>/hooks*.ts)
+    → fetch/safeFetch → API route (src/app/api/<m>/route.ts)
+      → Supabase query → table (verify columns in migrations/schema.sql)
+```
+
+Read every link in the chain that the bug could live in. Note query keys and invalidation calls as you pass them — cache bugs hide there.
+
+## Phase 4 — Root cause, checked against the known-cause table
+
+This app's recurring bug signatures — check these FIRST before inventing a novel theory:
+
+| Symptom | Likely cause | Where to confirm |
+|---|---|---|
+| UI shows stale data after a save/delete | Missing/incomplete cache invalidation | Mutation's `onSuccess` — see `cache-invalidation` skill; balance-affecting mutations must call `invalidateAccountData(queryClient, accountId?)` from `src/lib/queryInvalidation.ts` |
+| A long operation times out | `safeFetch` call missing an appropriate `timeoutMs` — the default is the CRUD budget (see `DEFAULT_TIMEOUT_MS` in `src/lib/safeFetch.ts`) | The mutation's `safeFetch(...)` options; a timeout must trigger a health probe, not directly call `markOffline()` or enter the offline queue |
+| Partner's data missing (or leaking when it shouldn't) | **1st: RLS has no household-aware policy** (silent row-strip — see the Phase 1.5 gate). 2nd: household-link logic — `ownOnly` / `is_public` / `household=true` flag mismatch | **RLS first**: `pg_class.relrowsecurity` + `pg_policies` for every table in the path. Only then `src/app/api/accounts/route.ts` GET (canonical pattern) and `getActiveHouseholdPartnerId` in `src/lib/accountAccess.ts` |
+| ERA answers "Not sure what you're after" / opens a module page for an add-sentence the manual app supports | Missing ERA grammar + adapter (an ERA report) | Use `era-wire`, not this playbook |
+| 500 error when creating a duplicate | Unique violation `23505` not mapped to `409` | The route's insert error handling |
+| Times shift by 2–3 h, or recurrence lands on wrong hour after DST | Naive date string / hand-rolled RRule | `timezone-handling` skill; utils in `src/lib/utils/date.ts` |
+| A page/list got dramatically slow | RLS `EXISTS`-subquery on a hot child table, or N sequential PostgREST calls instead of one bundle RPC | Hard Rules 20/21; `get_schedule_bundle` is the canonical fix pattern |
+| Wrong person's color on an item | Color treated role-relative instead of person-absolute | `ERA Notes/01 - Architecture/Color Identity.md`; `ui-guardrails` skill |
+| Text bleeding through a dropdown/popover | `neo-card` (translucent) used on a floating panel | Swap to `tc.bgPage` from `useThemeClasses()` |
+| Content hidden under the header | `fixed`/`sticky` header without matching `pt-*`, or `ConditionalHeader`/`MobileNav` not hidden on a standalone route | The page's layout wrapper |
+| iOS number input scrolls/mangles decimals | `type="number"` | Must be `type="text"` + `inputMode="decimal"` |
+| Monthly totals wrong near month boundaries | Calendar month used instead of custom billing month | `startOfCustomMonth(date, monthStartDay)` from `src/lib/utils/date.ts` |
+| Recurring payment posted twice / occurrence duplicated or silently skipped | Confirm/cover not idempotent, skip-vs-postpone conflation, or diverging expansion engines | `recurrence-safety` skill — read it BEFORE touching this area |
+| Balance wrong but every transaction looks right | Direct `account_balances` write bypassing `adjustAccountBalance`, transfer counted as spend, or `date` vs `inserted_at` | `money-rules` skill invariants 1–4 |
+| Bug's cause is bad ROWS, not bad code (stale match, orphan, corrupt state) | Data needs repair, possibly plus a producer fix | `data-repair` skill — never hand-write ad-hoc UPDATEs |
+
+For each candidate cause: **prove or eliminate it by reading the actual code path** — don't stop at the first plausible match. State the confirmed cause as: *"Root cause: `<file:line>` does X, but Y is required because Z."*
+
+If you need runtime evidence, add temporary logging — and remove it before finishing (no committed `console.*`, Hard Rule 22).
+
+## Phase 5 — The minimal fix
+
+- Smallest diff that removes the **cause**. No drive-by refactors, renames, or formatting churn in the same change.
+- Fix at the layer where the cause lives (don't patch the UI to hide an API bug).
+- If the fix touches a Junction module, list the connected standalones and check each one's flow is unaffected.
+- If the same defect pattern obviously exists in sibling code (e.g. the same missing invalidation in 3 mutations), fix all instances **and say you did** — a half-fixed pattern is a future bug report.
+- Never edit `src/components/ui/`.
+
+## Phase 6 — Verify the fix
+
+1. `pnpm typecheck` → clean.
+2. If a test file covers the area (e.g. `src/lib/balance.test.ts`), run it: `pnpm vitest run <path>`. If the bug was in pure logic (a `src/lib/` function), **add a regression test** reproducing the original failure.
+3. Exercise the real flow the user reported (dev server, same viewport/theme/user-side as the report). The bug's REPRO steps from Phase 1 must now produce EXPECTED.
+4. Re-check the one adjacent flow most likely to regress (the other caller of the function you changed).
+
+## Phase 7 — Close out
+
+Run `.claude/skills/finish-task/SKILL.md`. PM specifics for bugs (Hard Rule 25):
+- If the bug wasn't already logged: add it to the campaign Master Book's **Pain Inventory** (emoji severity lead, root cause, evidence) and give it a checklist row with `### <ID>` criteria. When fixed and verified, `pnpm pm:ship <ID> --note "<evidence>"` (finish-task Gate E).
+- Report format: root cause → fix → how verified → what you did NOT verify.

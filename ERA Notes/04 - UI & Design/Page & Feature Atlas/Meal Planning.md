@@ -53,7 +53,7 @@ tags: [food, household, week-view]
 
 ## Related vault doc
 
-- `ERA Notes/03 - Junction Modules/Meal Planning/Overview.md`
+- `ERA Notes/02 - Standalone Modules/Meal Planning/Overview.md`
 
 ## Notes
 

@@ -1,0 +1,31 @@
+{
+  "skill": "add-feature",
+  "title": "Add feature",
+  "tier": "CLAUDE_MID",
+  "effort": "default",
+  "launch": "worktree",
+  "fields": [
+    {
+      "id": "item",
+      "label": "Item",
+      "type": "item",
+      "required": true,
+      "mention": "feature"
+    },
+    {
+      "id": "module",
+      "label": "Module",
+      "type": "module",
+      "required": true,
+      "mention": "MODULE"
+    },
+    {
+      "id": "acceptance",
+      "label": "Acceptance",
+      "type": "multiline",
+      "required": true,
+      "mention": "DONE-WHEN"
+    }
+  ],
+  "checks": []
+}

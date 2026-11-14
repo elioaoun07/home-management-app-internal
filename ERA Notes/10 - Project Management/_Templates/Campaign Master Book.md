@@ -1,6 +1,6 @@
 ---
 created: 2026-07-30
-updated: 2026-09-10
+updated: 2026-11-11
 type: template
 status: template
 owner: Elio
@@ -28,9 +28,11 @@ evidence_cutoff: <date/commit; no runtime inference>
 
 <Outcome this campaign owns; modules it covers; standalone/junction relationships. Link the existing architecture/vault docs. Name producer/consumer owners.>
 
-## Current State
+## Current state & evidence
 
-<Dated facts, evidence and limits. Distinguish implemented, fixture-tested, owner-applied and device-verified.>
+**YYYY-MM-DD — <what changed>:** <Dated facts, evidence and limits, newest entry first. Distinguish implemented, fixture-tested, owner-applied and device-verified. `pnpm pm:ship` keeps the three newest dated entries here and archives the rest.>
+
+<Closing base statement: what the campaign has, in two sentences.>
 
 ## Pain Inventory
 
@@ -43,6 +45,9 @@ evidence_cutoff: <date/commit; no runtime inference>
 ## Acceptance Criteria Index
 
 ### PREFIX-1
+
+**Outcome:** <One sentence: what is true for the user when this is done.>
+
 - **Acceptance:** <Concrete pass/fail outcome including failure/retry cases where material.>
 - **Depends on:** <ID or owner evidence, or none.>
 - **Evidence/source:** <Original request/study label and link; verified paths.>
@@ -53,6 +58,8 @@ evidence_cutoff: <date/commit; no runtime inference>
 <Optional plain bullets for broad goals. Every outstanding concrete requirement has a queue ID; no duplicate checkboxes.>
 
 ## Shipped Log
+
+<Written by `pnpm pm:ship`: one dated line per item, `- ✅ YYYY-MM-DD — **PREFIX-1** Outcome → [record](…)`. Full receipts and criteria live in ../_Archive/Shipped/<Campaign>.md.>
 
 ## Delivery session log
 

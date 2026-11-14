@@ -145,7 +145,7 @@ Evidence was reviewed on 25 October against HEAD `735d3881` plus uncommitted cha
 | [Run.tsx](../../../scripts/pm/app/Run.tsx) and [bridge.mjs](../../../scripts/pm/bridge.mjs) retain V1 UAT/acceptance paths. | Adapt retained V1 records without fabricating V2 identities or erasing their observed results. A shared projection must preserve the original lifecycle semantics. |
 | [era-issues.mjs](../../../scripts/pm/era-issues.mjs), lines 177–225 and 302–331, creates source-marked campaign work with a local journal; writes checklist then book then journal. [pm-server.mjs](../../../scripts/pm-server.mjs) invokes synchronization on startup. | Follow the deterministic importer pattern and shared write infrastructure, but add explicit crash/concurrency recovery for the new multi-file UAT operation. Ordinary Idea Inbox triage is documented separately; this verified startup hook is for ERA reports. |
 | [drive-publish.mjs](../../../scripts/pm/drive-publish.mjs), lines 134–225, publishes bounded run status without manual scenarios/results. | Extend the read-only allowlist/projection and retained handover publication; keep one-way authority and stale handling. |
-| [R75](<../PM Tooling/PM Tooling — Master Book.md#r75>) and [R74](<../PM Tooling/PM Tooling — Master Book.md#r74>) record current delivery grouping and Drive publishing. | Allocate follow-up scope, not duplicate or reopen their shipped outcomes. |
+| [R75](<../_Archive/Shipped/PM Tooling.md#r75>) and [R74](<../_Archive/Shipped/PM Tooling.md#r74>) record current delivery grouping and Drive publishing. | Allocate follow-up scope, not duplicate or reopen their shipped outcomes. |
 
 ## 8. Bounded build sequence
 

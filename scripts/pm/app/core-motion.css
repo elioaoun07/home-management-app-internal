@@ -1,0 +1,232 @@
+/* Game-only motion. The clock preserves wheel phase across speed/state changes. */
+.bridge-core.era-session-core {
+  --core-color: var(--accent);
+  --core-secondary: var(--chart-2);
+  --core-hue: 205;
+  --core-sat: 80%;
+  background: radial-gradient(
+    ellipse at 50% 45%,
+    color-mix(in srgb, var(--core-color) 10%, var(--theme-bg)),
+    var(--theme-bg) 72%
+  );
+  border-color: color-mix(in srgb, var(--core-color) 32%, var(--line));
+  transition: border-color 0.35s;
+}
+.era-session-core[data-state="running"] {
+  --core-color: #ff6546;
+  --core-secondary: #ffbd59;
+  --core-hue: 12;
+}
+.era-session-core[data-state="attention"] {
+  --core-color: #f5c451;
+  --core-secondary: #fde6a5;
+  --core-hue: 43;
+}
+.era-session-core[data-state="success"] {
+  --core-color: #53dba0;
+  --core-secondary: #bbf7d0;
+  --core-hue: 155;
+}
+.era-session-core[data-state="failed"] {
+  --core-color: #94a3b8;
+  --core-secondary: #94a3b8;
+  --core-sat: 0%;
+}
+.era-session-core[data-state="unknown"] {
+  --core-color: var(--ink-muted);
+  --core-secondary: var(--ink-muted);
+  --core-sat: 0%;
+}
+.core-throttle {
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  isolation: isolate;
+  color: var(--core-color);
+}
+.core-throttle:focus-visible {
+  outline: 2px solid var(--core-color);
+  outline-offset: 5px;
+}
+.core-throttle:hover {
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--core-color) 8%, transparent),
+    transparent 70%
+  );
+}
+.core-wheel {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  --core-heat-mix: 0%;
+}
+.era-session-core .core-wheel-lines {
+  color: color-mix(in srgb, #ff6546 var(--core-heat-mix), var(--core-color));
+}
+.core-wheel-lines .orbit-inner {
+  stroke: color-mix(
+    in srgb,
+    #ffbd59 var(--core-heat-mix),
+    var(--core-secondary)
+  );
+}
+.core-wheel-lines .orbit-node {
+  fill: currentColor !important;
+}
+.core-wheel-lines .orbit-arc {
+  opacity: 0.95;
+}
+.core-rotor,
+.core-counter-rotor {
+  transform-origin: 150px 150px;
+  will-change: transform;
+}
+.core-wheel-lines .orbit-guide {
+  opacity: 0.12;
+}
+.core-wheel-lines .orbit-arc {
+  stroke-width: 2;
+  stroke-dasharray: 22 14 8 20 12 24;
+}
+.core-hub {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  animation: core-breathe 4s ease-in-out infinite;
+  pointer-events: none;
+}
+.core-hub .era-mark {
+  --hue: var(--wheel-hue, var(--core-hue)) !important;
+  --sat: var(--core-sat) !important;
+  transition: none;
+}
+.core-hub .era-core {
+  transition: none;
+}
+.core-hub .bridge-core-wordmark {
+  text-shadow: 0 0 14px color-mix(in srgb, var(--core-color) 40%, transparent);
+}
+.era-session-core .bridge-core-caption > strong > span {
+  color: var(--core-color);
+}
+.era-session-core > .bridge-kicker,
+.era-session-core .bridge-core-caption,
+.era-session-core .bridge-core-link {
+  position: relative;
+  z-index: 2;
+}
+.core-heat {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0;
+  background: conic-gradient(
+    from 30deg,
+    #ff4c1d 0deg,
+    transparent 34deg,
+    #ffba46 72deg,
+    #fff1b3 93deg,
+    transparent 120deg,
+    #ff4c1d 158deg,
+    transparent 210deg,
+    #ffb334 250deg,
+    #fff1b3 275deg,
+    transparent 302deg,
+    #ff4c1d 360deg
+  );
+  mask-image: radial-gradient(
+    circle,
+    transparent 53%,
+    black 54%,
+    black 55%,
+    transparent 57%
+  );
+  filter: blur(0.6px);
+  pointer-events: none;
+}
+.core-friction-halo {
+  position: absolute;
+  inset: -28%;
+  opacity: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    transparent 30%,
+    #ff571318 39%,
+    #ff6a282e 43%,
+    #ed301518 49%,
+    transparent 65%
+  );
+  pointer-events: none;
+}
+.core-exhaust {
+  position: absolute;
+  left: -65%;
+  top: -65%;
+  width: 230%;
+  height: 230%;
+  pointer-events: none;
+}
+.era-session-core[data-state="attention"] .core-hub {
+  animation-duration: 7s;
+}
+.core-split-ring {
+  display: none;
+  stroke: var(--core-color);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.era-session-core[data-state="failed"] .core-split-ring {
+  display: block;
+}
+.era-session-core[data-state="failed"] .core-rotor,
+.era-session-core[data-state="failed"] .core-counter-rotor {
+  opacity: 0;
+}
+.era-session-core[data-state="failed"] .core-hub {
+  opacity: 0.65;
+  animation: none;
+}
+.era-session-core[data-state="failed"] .orbit-track {
+  opacity: 0;
+}
+.era-session-core[data-state="failed"] .orbit-guide {
+  stroke-dasharray: 80 25;
+}
+.era-session-core[data-motion="paused"] *,
+.era-session-core[data-motion="paused"] *::before,
+.era-session-core[data-motion="paused"] *::after {
+  animation-play-state: paused !important;
+  transition: none !important;
+}
+@keyframes core-breathe {
+  0%,
+  100% {
+    transform: scale(0.97);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .era-session-core .core-hub .era-mark {
+    --hue: var(--core-hue) !important;
+  }
+  .era-session-core *,
+  .era-session-core *::before,
+  .era-session-core *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .era-session-core .core-exhaust,
+  .era-session-core .core-heat,
+  .era-session-core .core-friction-halo {
+    display: none;
+  }
+}

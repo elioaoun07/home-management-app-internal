@@ -18,60 +18,21 @@ Keep work identifiable, reviewable and recoverable across PM surfaces. Tooling c
 
 ## Current state & evidence
 
+**2026-11-12 — PM restructure (owner commission; tooling and documents only):** `pnpm pm:ship` ships, archives and verifies in one command ([R100](<../_Archive/Shipped/PM Tooling.md#r100>), [R89](<../_Archive/Shipped/PM Tooling.md#r89>)). Master Books went from 1.84 MB to 1.42 MB, with shipped criteria and long receipts in `_Archive/Shipped/`. Checklists are grouped by theme with owner-only rows under **Needs you**; Now is one global sprint slice; `_index.md` carries a generated block. The elapsed 5 October sprint is closed and four weeks are drafted ([R87](<#r87>), data part). [R84](<#r84>) and [R71](<../_Archive/Shipped/PM Tooling.md#r71>) are closed. No product code, database or paid API was touched.
+
+**2026-11-10 — R94 / Agentic OS A2 implemented locally:** `pnpm os:eval <base>..<head>` runs eight versioned detectors over immutable Git blobs and emits verdict/rule/file/line/excerpt evidence. Fail/pass/n/a fixtures gate execution; Git tests cover old debt, removals, renames, dirty files and invalid ranges. PR CI evaluates exact base/head SHAs. This session stops at A2; no recorder, session store or PM.2 UI. Evidence and owner replay are under [R94](<../_Archive/Shipped/PM Tooling.md#r94>).
+
 **2026-11-10 — Agentic OS plan filed (documentation only):** R92 to R99 added with criteria below, one per step of the [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>): setup parity, registry and conflict check, rule detectors, flight recorder, scorecards, the PM.2 cockpit, the skill launchpad, Arena and game layer. Owner commission of the same date. Nothing is implemented.
 
-**2026-11-10 — Fable 2 filing (documentation only):** R84, R85, R86, R87, R88, R83, R89, R90, R91 added to the checklist with criteria below. Sources are the 2026-11-04 Major Bug Sweep, whose IDs had not been filed, and the [Fable 2 analysis](<../Fable 2/_index.md>) at commit `8da80ae`. Nothing is implemented, applied or verified by this entry.
-
-**2026-10-25 — R81 UAT discovery repair:** Delivery opens with **Review & sign off**, visible work IDs, date, readiness and **Start test / Continue / View steps** links. Search spans IDs, titles and campaigns; To test / Not ready / Feedback / History / All retain search, filter and pagination when returning from the wizard. Apply/conflict actions have their own **Delivery actions** section. The initial local store had 62 records (49 draft, 13 incomplete), not 62 owner-ready tests. Nineteen steps lacked explicit expected-result markers, one more used a comma before lowercase expect, and two used lowercase expect after a sentence/semicolon; wording and the parser are repaired without inferring PASS or readiness. Verification and owner steps are recorded under R81.
-
-**2026-10-25 — R80 Delivery identity/navigation/session repair (local source and offline fixtures):** shared legacy rows now show the work ID/campaign and recorded date/time, with older update-only responses labelled Updated. History is newest-first, paginates beyond 50 and retains its outcome filter on return. More restores Activity, Decisions, Idea inbox and Documents. Shared pairing recovery covers Delivery and direct Test links; UAT reads wait for pairing. Unavailable/stale reads cannot claim Nothing running, and a known Apply decision survives a missing queue. V1 Accepted remains distinct from Applied. Typecheck, changed-file lint and 383 PM/relay tests pass; 32 isolated browser scenarios cover 320/390/701/1440 px and Blue/Pink with synthetic pairing only. Existing local health/assets return 200 and serve the recovery code; its V1 response contains all 16 IDs but only update times. No operational pairing, provider, launch, Apply or DB write was performed. [Owner scenarios](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m14--restore-delivery-identity-navigation-and-browser-access>).
-
-**2026-10-25 — novice UAT instructions and sign-off workflow specified (documentation only):** [PM/Delivery walkthroughs](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md>) cover the completed review, lifecycle, phone, search, Analytics and sprint scopes awaiting owner acceptance; [current attempts](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md>) include R73/R74/R75. The separate [UAT wizard/sign-off/feedback specification](<../Plans/Delivery UAT Sign-off and Feedback.md>) defines future UI and deterministic import into the canonical backlog, preserving engineering Done and historical receipts. [Coverage index](<../../../docs/Delivery-UAT-Scenarios-2026-10-25.md>). No new UI/importer is implemented and no manual result is inferred from drafting.
-
-**2026-10-24 — R73 navigation, local source/fixtures:** shared desktop/phone order is Home / Sprints / Delivery / Work / Analytics. Delivery is raised above the bar; observed execution softly alternates gold/purple, waiting stays steady, and unconfirmed/closed states do not animate. Existing V1/V2 read queries supply the signal. 305 PM UI tests passed; typecheck/scoped lint clean. Isolated Chrome fixtures exercised 1280/701/390/320 px, Blue/Pink, navigation, idle/running/waiting/stale/offline and matched reduced-motion CSS. No provider job, launch, policy change, service restart or deploy; hosted phone acceptance remains pending.
-
-**2026-10-03 weekly delivery (R61):** Home / Sprints / Work / Delivery / Analytics now share the desktop and phone shell. Eight editable draft weeks start October 5 with 25 canonical item references and 42 known points at planning revision 4; weekly capacity remains six provisional points and 90 review minutes. Mixed-module and module-focus previews can replan drafts or append weeks. Start freezes commitment and its criteria witnesses; scope edits and explicit carryover are recorded. Each visit derives To do / Active / Review / Done and blocked/input reasons from the current corpus and V1/V2 receipts. Candidate/run status never fabricates a shipped item. Closed weeks freeze their observed outcome; Analytics uses the same work/history definitions. Named deliverable groups, capacity/unknown estimates, milestone badges and reduced-motion behavior are included. Local writes use existing pairing, revision checks, durable command IDs and an OS-released native mutex. Watcher-only observations record observed UTC time and known source receipt dates without inventing historical occurrence dates. Verification uses copied fixtures and Chromium at 1440/820/700/390/320 px in blue/pink; no production DB access, provider run, deploy or physical-phone acceptance. Phone planning edits need the owner migration and `PM_SPRINT_RELAY=1` in [PM Relay Setup](<../../06 - Setup & Onboarding/PM Relay Setup.md>).
-
-**2026-09-26 Command Center navigation and question presentation (R69):** the shared local/phone UI now uses the ERA Memory mark, puts Now / Up next / Waiting / Someday and all module cards on Home, and adds Analytics as a fourth destination. `#/analytics` retains `#/dashboard` as an alias and combines the existing detailed metrics with In focus, fourteen daily shipped-record counts and receipt drilldowns. Work cards show their source ID; search survives To do / Done and Board / List navigation. Delivery question options already present in question text become selectable answers, with an explicitly marked recommendation first and editable free text retained. This is presentation work only: no worker instructions, execution contracts, relay commands, approval or Apply behavior changed. Verification and the remaining question-generation limitation are recorded under [R69](<#r69>); this entry does not claim deployment or physical-phone acceptance.
-
-**2026-09-15 Delivery production-view cleanup (R66):** launch no longer prints recommendation prose or raw coordination/resource codes. Unavailable executors open one owner-facing cause. A blocked run now names its actual blocker rather than presenting a generic “Ready” verdict beside it. Review order is Plan → Verification → Activity → Changes; Changes remains the final Apply surface. Plan has a desktop artifact rail and visible Risks/Unknowns sections; verification, application history, token comparison and run facts no longer depend on collapsed disclosures. The global slogan/reference footer is gone. Component, model, bundle, type and lint evidence is local; no browser was connected for a fresh visual pass, so desktop/phone owner UAT remains pending.
-
-**2026-09-15 lifecycle correction:** the earlier rule kept code-complete work open pending owner acceptance. The checklist now contains remaining executable work; done scopes have exact Shipped Log receipts, and owner-only checks retain their IDs under [UAT](<../../../docs/Delivery-UAT.md>). Done means implemented locally with recorded verification, not deployed or owner-accepted. Historical status narratives below must be read at their evidence dates.
-
-**2026-09-14 Phase 3 history/readability foundation (local, not owner-accepted):** a Work page now discovers V2 attempts by stable campaign/normalized work ID and retains a history shell when the current checklist row no longer exists. Delivery shows recorded profile recommendation/override beside settings. This is a narrow R55/R64 foundation, proven by targeted Delivery/PM fixtures and typecheck; it does not yet provide full historical filters/pagination, relay walkthrough, responsive owner acceptance or completion of R55/R64.
-
-**2026-09-14 first Delivery trial hotfix planning:** the owner tested `r-c1d69bb666cf` / DLV-107 and reported unreadable text, weak review/control and no path back to the attempt. Runtime/journal inspection confirms a plan-approved one-line candidate, repeated inconclusive check Results, successful Apply and successful rollback. Work only follows active V1 runs, while V2 is separately loaded on Delivery. R55 now includes permanent item attempt history; R64 owns desktop/mobile reading and decision hierarchy. [Hotfix specification](<../Plans/Delivery First-Run Hotfix.md>) contains all 13 concerns and evidence. This is documentation only; no UI or runtime change was made. Browser unavailable; no new visual/phone acceptance.
-
-**2026-09-13 owner-requested review:** six targeted PM suites passed 46 tests; typecheck passed; ESLint completed with no errors (repository warning debt remains). A rendered navigation defect is filed as Delivery [DLV-107](<../Delivery/Delivery — Master Book.md#dlv-107>) at the owner's request and prepared as the first small Focused/FAST trial. It remains unfixed. The shared Home/Work V2 activity omission is now explicit under R55. No available browser was connected, so this adds source/fixture evidence, not mobile/device acceptance.
-
-**2026-09-12 Command Center Phase 6a (R62, dashboard in code; sprint and delivery comparisons outstanding):** `#/dashboard`, opened from Home, reads one history parser and one metric contract, locally and on `/pm/live`: open work by campaign and priority, completed and cancelled exact IDs by week with undated records and records lacking an exact ID shown apart, declared bugs, delivery attempts and dispositions apart from work, known usage per unit, and history coverage. Each chart has a table and a drilldown; totals reconcile on the live corpus. Sprint charts wait for R61 and value comparisons for real Delivery receipts. No presentation path was retired (R6) — see [R62](<#r62>).
-
-**2026-09-12 Command Center Phase 4 presentation (R63, code landed; phone acceptance outstanding):** `/pm/live` now mounts the same React views as `pnpm pm` through a transport seam — local server or authenticated relay — instead of a separate phone app; the earlier view stays at `?ui=legacy` as the rollback. Views ask the transport's capabilities: on the relay, checklist writes, V1 launch/detail and classic links are absent, capture and every V2 command are relayed, and a status strip keeps laptop reachability, the last receipt and worker availability apart. Recovery and Apply are Delivery's ([DLV-104](<../Delivery/Delivery — Master Book.md#dlv-104>), [DLV-105](<../Delivery/Delivery — Master Book.md#dlv-105>)). Evidence is fixture, build and synthetic-render only; no real phone — see [R63](<#r63>).
-
-**2026-09-11 Command Center Phase 1 (R60):** the primary React app's Work page and every module page now share one Board/List component over the canonical backlog — Now/Next/Later lanes, campaign/kind/status filters and view mode round-trip through the URL, blocked/active/review are badges rather than a relocated priority, and moves stay keyboard/tap-operable with the existing guarded Undo. Checklist rows get the same anchor slug as their brief heading, so Work items open and highlight the exact checklist line, distinct from the Master Book acceptance heading. Verified against 120 passing `pm-ui` tests and a live walkthrough (desktop plus a same-origin-iframe 390/320 px probe, since this sandbox's window resize had no effect); no real phone and no exhaustive Checklist/Brief sweep — see [R60](<#r60>) for the full evidence and limits.
-
-**2026-09-11 Command Center adoption and Phase 0 (R59):** the owner approved [Command Center](<../Plans/Command Center.md>). Phase 0 repaired canonical IDs, acceptance lookup and source/history anchors, and checkbox writes from the React, classic and legacy clients now refuse witness-less, reordered, mismatched and duplicate-ID targets. A read-only scan of the live corpus afterwards: 234 open outcomes in 11 campaigns (28 Now / 85 Next / 121 Later), zero empty contracts, zero unresolved references, every brief anchor present. Fixture and scan evidence only; no browser walkthrough, provider run or phone.
-
-**2026-09-11 theme/connectivity correction (R58):** the local React app uses ERA's existing Blue palette (navy, cyan, violet) and Pink alternate. The health handler now accepts the shared connectivity manager's uncached `HEAD` probes as well as `GET`. The owner's running pre-fix process reproduced `HEAD 404` / `GET 200`; a server restart is required to load this backend change.
-
-**2026-09-10 product experience reboot (R57):** `pnpm pm` now opens a standalone React 19 + TypeScript application with TanStack Query, Framer Motion, Radix sheets and the shared ERA mark. Today, Explore and Delivery replace the dashboard navigation and permanent inspector. The local Node server still owns Markdown and execution; the personal app remains Next.js 16. The Preact interface is an explicit `?ui=classic` reference fallback, and static/hosted exports remain secondary snapshots. R54/R56 read models and Delivery contracts are retained; their primary visual architecture is superseded.
-
-**2026-09-10 comprehension pass (R56):** Project is the opening screen: all eleven areas, cross-area topics, Now/Blocked/Needs you/Delivering perspectives, live run summaries and dated changes. Selection and work previews stay beside the project on desktop and open in a keyboard-operable phone dialog. Area ownership remains canonical; perspectives are read-only projections.
-
-**2026-09-10 product refactor (R54):** the local Preact app now follows Overview → Campaign → Work → Delivery setup → live execution → outcome. Campaigns derive only from canonical checklists and their Master Books; open decisions come from `_Decisions.md`. Shipped and cancelled numbers count dated log records, not a fabricated percent-complete denominator. The static Preact twin shares the product views, while `/pm/live` remains its separate React/relay application.
-
-**Verification boundary:** desktop 1536 px and mobile 390 px Chromium fixtures exercised planning screens, the launch/approval/pause/accept/ship flow, artifact keyboard focus, retry and static read-only mode. Launch previews and preflight were generated by the actual Delivery route handlers against copied fixture documents; execution states and mutations in the browser walkthrough were simulated. No real provider session, production DB write or phone/PWA installation was exercised. R6, R37, R42 and R51 retain their broader acceptance.
-
-
-The local React application, Preact reference/static outputs and separate React relay share parsing contracts. There is no claim of one visual bundle everywhere. Browser offline/Undo evidence for the new app is under R57; broader legacy-client, hosted provenance and real-device acceptance remain separate.
-
-Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a5c37a97` and dated source studies. This date records document reconciliation, not a fresh runtime, DB or device witness. The [pre-refactor record](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/PM Tooling — Master Book.md>) preserves detailed older narratives and receipts.
-
-**2026-10-03 sprint start correction (R61):** A paired local browser could read the sprint and show Start, then receive `local-session-required`. The browser cookie is scoped to `/api/delivery/v2`, while the new planning POST went to `/api/planning`; that request therefore had no cookie. Sprint writes now use `/api/delivery/v2/planning` under the existing paired-session and CSRF checks. The phone relay still uses its bridge credential. A local browser fixture with a real scoped cookie and the targeted auth/relay suite verify the correction; physical-phone UAT remains pending.
-
-**2026-10-03 disabled Start correction (R61):** The owner's revision-6 replan exposed a second defect: forecasts leave review estimates unknown, but Start disabled itself and the transition refused unknown estimates. Estimates are now optional planning aids, retained as null in the frozen commitment; over-capacity remains visible without preventing Start. Unsplit L work still needs an explicit point estimate. Unknown totals display a dash, partial totals a plus; active weeks no longer offer the draft-only estimate editor. Disabled Start gives a short reason and links to Delivery pairing or the active week where applicable. Regression coverage includes unknown/over-capacity commitment, persistence and close; copied-plan browser verification covers the real paired-cookie path and a second active-week refusal. The owner's plan stays unchanged.
-
 ## Vision & Decisions
+
+- Owner-approved Bridge revision 2026-11-14: retain Needs you / Running / Next up in calm mode; make Game mode a chart-led ERA cockpit; place guards/conflicts in Setup and clean streak in Score; show passive Claude/Codex SDK status. Explicit view changes may use a longer 1.8 s enter / 1.0 s exit sequence, with nonblocking controls and reduced motion. *(IMPLEMENTED locally 2026-11-14: [R102](<#r102>); owner visual/device acceptance pending.)*
+
+- Owner commission 2026-11-10: A2 is a local-only commit-range evaluator using eight detector modules and fixtures; no flight recorder or PM.2 UI. *(IMPLEMENTED 2026-11-10: R94.)*
+
+- Owner commission 2026-11-10: A1 adds local-only setup scanning and conflict checks, with errors failing CI; existing setup defects remain reported. A2+ and PM.2 UI are separate work. *(IMPLEMENTED 2026-11-10: R93.)*
+
+- Owner commission 2026-11-10: Agentic OS A0 keeps Codex first-class, generates its hooks and `.agents` skills from Claude sources, and retains committed `settings.local.json` by explicit owner choice. *(IMPLEMENTED 2026-11-10: R92; hook trust remains owner-controlled.)*
 
 - Owner report 2026-10-25: asking for sign-off is unusable without an obvious entry point. Put **Review & sign off** first in Delivery, keep preparation separate from testing, and retain work-ID search on return. *(IMPLEMENTED locally 2026-10-25: R81; owner UAT pending.)*
 
@@ -89,7 +50,7 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 
 - Owner decision 2026-09-15: Work/Deliver contains actionable implementation only; completed source appears as Done, with UAT pending separately. Owner-only gates leave the backlog and remain in the UAT. Partial scope is split into explicit remaining engineering. *(IMPLEMENTED 2026-09-15: lifecycle reconciliation; PM Tooling R65 owns the app and guards.)*
 
-- Owner request (2026-09-14): Delivery must be comfortable on desktop and follow mobile UI rules on phones; every work item retains visible delivery attempt history across success, cancellation, failure and rollback. Implement the proposed [hotfix](<../Plans/Delivery First-Run Hotfix.md>) under R64/R55 and linked Delivery owners, with short product copy and full details on demand. R64 implementation is Done; R55 retains explicit remaining history work. Owner UAT is tracked separately; candidate verification alone does not complete an implementation item.
+- Owner request (2026-09-14): Delivery must be comfortable on desktop and follow mobile UI rules on phones; every work item retains visible delivery attempt history across success, cancellation, failure and rollback. Implement the proposed [hotfix](<../_Archive/Plans/Delivery First-Run Hotfix (2026-09-14).md>) under R64/R55 and linked Delivery owners, with short product copy and full details on demand. R64 implementation is Done; R55 retains explicit remaining history work. Owner UAT is tracked separately; candidate verification alone does not complete an implementation item.
 
 - Adopted 2026-09-11 ([Command Center](<../Plans/Command Center.md>)): keep the React experience and its three destinations, shown as Home/Work/Delivery with existing deep-link aliases. Board/List (R60) and Sprints (R61) are views over the same checklist outcomes; the planned `_Planning.json` holds references and planning facts only. Metric definitions precede new charts (R62). The phone is a core milestone served from the shared views (R63). Duplicate presentation paths retire under R6 once replacements pass. No new campaign, task store or UI architecture. *(IMPLEMENTED 2026-09-11: R60 — Home/Work labels, shared Board/List component, badges-not-lanes. 2026-09-12: R63 in code — `/pm/live` mounts the shared views through the transport seam; phone acceptance outstanding. 2026-09-12: R62 in code — one history parser and metric contract behind `#/dashboard`; sprint charts and delivery comparisons outstanding; nothing retired under R6.)*
 - IDs compare normalized, display in source spelling and link to GitHub heading slugs shared with `pnpm pm:check-docs`. Checkbox writes carry a row witness; ordinal-only writes are refused. *(IMPLEMENTED 2026-09-11: R59)*
@@ -118,13 +79,15 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
-🟠 **R92** The agent setup differs per agent and holds dead, duplicate and machine-specific configuration (2026-11-10 inventory). See [acceptance](<#r92>).
+🟠 **R101 — Agentic OS UI rejected as unusable (2026-11-14).** Equal-weight content, long initial forms, raw JSON reports and an always-expanded graph hid daily actions. Corrected presentation and expanded-view browser verification are tracked under R101.
+
+🟠 **R92** The agent setup differs per agent and holds dead, duplicate and machine-specific configuration (2026-11-10 inventory). See [acceptance](<../_Archive/Shipped/PM Tooling.md#r92>).
 
 🔴 **R84** Deny Supabase write tools in every tool namespace. Filed 2026-11-10 from [Fable 2 finding F2-12](<../Fable 2/01 - Architecture/Environments and Data Safety.md>) (2026-11-10). See [acceptance](<#r84>).
 
 🟠 **R85** Disposition the ERA research packs into the backlog. Filed 2026-11-10 from [Fable 2 finding F2-11](<../Fable 2/10 - Project Management/Portfolio/Research-to-Queue Leak.md>) (2026-11-10). See [acceptance](<#r85>).
 
-🟠 **R86** Show the next action, what needs the owner and what is running on Home. Filed 2026-11-10 from [Fable 2 usability review U1, U5, U6, U8](<../Fable 2/10 - Project Management/Command Center/1 - Usability and Visual Review.md>) (2026-11-10). See [acceptance](<#r86>).
+🟠 **R86** Show the next action, what needs the owner and what is running on Home. Filed 2026-11-10 from [Fable 2 usability review U1, U5, U6, U8](<../Fable 2/10 - Project Management/Command Center/1 - Usability and Visual Review.md>) (2026-11-10). See [acceptance](<../_Archive/Shipped/PM Tooling.md#r86>).
 
 🟠 **R87** Close elapsed sprint weeks and roll their work forward. Filed 2026-11-10 from [Fable 2 usability review U4](<../Fable 2/10 - Project Management/Command Center/1 - Usability and Visual Review.md>) (2026-11-10). See [acceptance](<#r87>).
 
@@ -132,7 +95,7 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 🟡 **R83** Keep one session proxy file or none. Filed 2026-11-10 from [Major Bug Sweep S3](<../Research/Major Bug Sweep.md#s3>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#r83>).
 
-🟠 **R89** Hold each Master Book to a size budget. Filed 2026-11-10 from [Fable 2 finding F2-21](<../Fable 2/01 - Architecture/Agent Context Economy.md>) (2026-11-10). See [acceptance](<#r89>).
+🟠 **R89** Hold each Master Book to a size budget. Filed 2026-11-10 from [Fable 2 finding F2-21](<../Fable 2/01 - Architecture/Agent Context Economy.md>) (2026-11-10). See [acceptance](<../_Archive/Shipped/PM Tooling.md#r89>).
 
 🟠 **R90** Cover every service-role route with an authorization contract. Filed 2026-11-10 from [Fable 2 finding F2-14](<../Fable 2/03 - Junction Modules/Household Sharing/Service-Role Authorization Surface.md>) (2026-11-10). See [acceptance](<#r90>).
 
@@ -150,19 +113,17 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 🟠 **R66 — 2026-09-15: Delivery exposes internal policy and hides major review facts.** Launch printed scope/fleet verdicts and recommendation rationales; the session hid Risks, Unknowns, verification history, application history and run facts in low-prominence disclosures. Token receipts repeated unknown/reserved/allowance fields, and global footer copy made the application read like a draft. Owner screenshots supplied desktop and mobile evidence.
 
-🟠 **R64 — 2026-09-14: Delivery compresses decisions into small technical rows.** Source CSS uses 9px plan disclosures, 10px check states and 11px check/resource/list text. Plan, cost, evidence and application counters compete without a clear decision hierarchy; owner reports desktop/mobile usability failure. Responsive screenshot/device acceptance is pending. [Hotfix UX contract](<../Plans/Delivery First-Run Hotfix.md>).
+🟠 **R64 — 2026-09-14: Delivery compresses decisions into small technical rows.** Source CSS uses 9px plan disclosures, 10px check states and 11px check/resource/list text. Plan, cost, evidence and application counters compete without a clear decision hierarchy; owner reports desktop/mobile usability failure. Responsive screenshot/device acceptance is pending. [Hotfix UX contract](<../_Archive/Plans/Delivery First-Run Hotfix (2026-09-14).md>).
 
 🟠 **R55 — 2026-09-14: a real V2 attempt disappears from the item's navigation.** Work's `runFor` uses active V1 sessions only; terminal V2 attempts live behind Delivery history and no item attempt list exists. The run itself remains stored; this is a presentation/navigation omission, not production RLS. Preserve all attempts and their distinct plan/candidate/result/application versions.
 
-🟡 **2026-09-13 — “See what changed” opens the backlog.** Actual-component rendering reproduced `Work.tsx`'s `view=story` / `SpaceView`'s `tab=story` mismatch. Owned once by Delivery [DLV-107](<../Delivery/Delivery — Master Book.md#dlv-107>) as the requested first trial.
+🟡 **2026-09-13 — “See what changed” opens the backlog.** Actual-component rendering reproduced `Work.tsx`'s `view=story` / `SpaceView`'s `tab=story` mismatch. Owned once by Delivery [DLV-107](<../_Archive/Shipped/Delivery.md#dlv-107>) as the requested first trial.
 
 🟠 **2026-09-13 — Home/Work omit V2 activity.** `state.tsx:143` fetches only `source.v1Runs`; Home and Work consume that list. A V2 run can appear on Delivery while Home has no active ribbon and Work offers no corresponding Follow delivery link. Retained under [R55](<#r55>), not a duplicate work item.
 
 🟡 **2026-09-12 — HUB-23 names two different outcomes.** Hub & ERA's Shipped Log records **HUB-23** "Ask AI" (2026-08-26) while the open checklist row HUB-23 is "Rank signals using explicit feedback". The dashboard counts it as Reopened, not completed, and a prerequisite on HUB-23 reads the open row. Cause: an ID reused after shipment. Fix is a Hub & ERA rename with an alias record, not a parser change. Found by R62's read-only live-corpus scan.
 
 🔴 **R43** Verify hot-child RLS and read contracts. See [acceptance](<#r43>) for the root cause, evidence and gate.
-
-🔴 **R44** Guard new client mutations against raw fetch. See [acceptance](<#r44>) for the root cause, evidence and gate.
 
 🟠 **R47** Enforce the client-only console rule. See [acceptance](<#r47>) for the root cause, evidence and gate.
 
@@ -174,81 +135,109 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Acceptance Criteria Index
 
-### R92
-
-**Outcome:** Codex and other agents get the same skills and guards as Claude from generated copies, and the setup holds no dead, duplicate or machine-specific configuration.
-
-**Kind:** maintenance
-**Touches:** `.codex/`, `.agents/`, `.claude/hooks/`, `.husky/pre-commit`, `.claude/skills/start-task/SKILL.md`, `.claude/skills/finish-task/SKILL.md`
-
-- **Source:** [Agentic OS conflict classes](<../Fable 2/Agentic OS/05 - Conflict and Drift Detector.md>) and [setup inventory](<../Fable 2/Agentic OS/02 - Current Setup Inventory.md>) (2026-11-10). Filed 2026-11-10; not started.
-- **Acceptance:** First confirm by observation which hook file Codex reads and that a hook fires. Then: `.agents/skills/` and the Codex hook scripts are generated from the Claude sources and byte-equal to them; one Codex hook config remains, with relative paths; `.claude/hooks/sync-copilot.sh` is removed or wired; `.husky/pre-commit` is executable; the junction list in `start-task` and the campaign list in `finish-task` match their owners; the name clash between root `CODEX.md` and `ERA Notes/CODEX.md` is resolved. Owner decides first whether Codex stays a first-class agent and whether `settings.local.json` stays committed.
-- **Tier:** CLAUDE_MID. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
-- **Reading guide:** At the cutoff: 2 of 18 skills mirrored and one is 13 lines stale; all four same-named Codex hooks differ; `.codex/hooks.json` uses an absolute Windows user path and disagrees with `.codex/settings.json`. Pairs with R84 and R91.
-
-### R93
-
-**Outcome:** One command lists every rule, skill, hook, permission, mirror and check per agent, and another reports contradictions and drift between them.
-
+### R106
+**Outcome:** The animated Game core reads as ERA's orbital mark, with slightly softer effects.
 **Kind:** feature
-**Touches:** `scripts/`, `tests/`, `package.json`, `.github/workflows/ci.yml`
+**Implementation:** done
+**UAT:** pending
+**Touches:** `scripts/pm/app/EraCore.tsx`, `scripts/pm/app/core-motion.css`, `scripts/pm/app/coreParticles.ts`, `scripts/pm/app/useCoreMotion.ts`, `ERA Notes/`
+- **Acceptance:** Remove tire-like spokes, tread and the heavy continuous hot rim; preserve the ERA mark and light orbital arcs. Reduce sparks/smoke, heat and local vibration while retaining acceleration, sustained running and natural cooldown. Keep observed state colors, navigation, reduced motion and mobile/theme support. Verify local desktop/mobile Blue/Pink presentation and throttle/coast.
+- **Source:** Owner, 2026-11-14: the overload animation is good; retain it, restore ERA identity instead of a tire silhouette, and make it slightly less dramatic. This refines R105's literal wheel treatment.
+- **Verification (2026-11-14):** Typecheck, PM build, scoped ESLint and formatting pass; 11 focused core dynamics/state tests pass. An isolated browser check passes desktop/mobile at 1440/390 px in Blue/Pink, original ERA mark presence, open orbital geometry, click feedback, natural coast, sustained running and reduced motion. No horizontal overflow, browser errors, writes or provider calls. Root inspected laptop Blue and phone Pink throttle screenshots. App source hashes match the tested credential-free fixture. Evidence: [browser receipt](<../../../.pm/r106-evidence/browser-result.json>) and [candidate](<../../../.pm/r106-evidence/candidate.json>). These local changes are not deployed.
+- **Owner check:** Refresh local PM, enable Game layer and click ERA. Confirm the orbital shape and softer intensity on laptop/phone suit the requested appearance. Physical-device smoothness and aesthetic acceptance remain pending.
 
-- **Source:** [Agentic OS setup registry](<../Fable 2/Agentic OS/03 - Setup Registry.md>), [conflict detector](<../Fable 2/Agentic OS/05 - Conflict and Drift Detector.md>) (2026-11-10). Filed 2026-11-10; not started.
-- **Acceptance:** `pnpm os:scan` writes a versioned registry with a setup fingerprint, with zero dependencies and no network. At the current commit it reproduces the counts in the hand-made inventory. `pnpm os:check` implements the conflict classes as queries, exits non-zero on error-level rows, and runs in CI. An injected mirror drift is reported.
-- **Tier:** CLAUDE_MID. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
-- **Reading guide:** Reuse `scripts/pm/shared/` parsers and `scripts/pm/scan.mjs` walking. Rule identities `HR-1` to `HR-29` are stable. Add a `# enforces: HR-n` first-line comment to hooks and checks.
-
-### R94
-
-**Outcome:** For any commit range, a script reports which Hard Rules the change broke, improved or left alone, with file and line.
-
+### R105
+**Outcome:** The Game-layer ERA core feels like a wheel spinning under heavy friction and settles gradually after the throttle ends.
 **Kind:** feature
-**Depends on:** R93
-**Touches:** `scripts/`, `tests/`
+**Implementation:** done
+**UAT:** pending
+**Touches:** `scripts/pm/app/`, `tests/pm-ui/`, `docs/Skills-and-Agents.md`, `ERA Notes/`
+- **Acceptance:** A click/keyboard throttle has a visibly stronger acceleration, red/orange heat, outward flame/ember spray, smoke and localized vibration. Running sessions sustain the treatment. Ending a burst or leaving the running state decelerates naturally rather than snapping to idle speed or removing all effects at once. Repeated activation preserves continuous rotation and bounded effects. The observed caption/state, Open sessions link, no-command behavior, theme support, reduced-motion behavior and hidden/offscreen pause remain intact. Verify laptop/mobile and both themes, timed acceleration/cooldown, retrigger, session transitions, accessibility and no layout overflow.
+- **Source:** Owner review of R104, 2026-11-14: the core looks fine, but its simulated running effect should feel like an overloaded wheel with heavy friction, flame particles and vibration; stopping should slow naturally. Owner expressly requested implementation and online animation references.
+- **Implementation (2026-11-14):** `useCoreMotion.ts` owns one visible-time clock for `coreDynamics.ts` and bounded canvas effects in `coreParticles.ts`. Click/keyboard drive lasts 2.4 s toward 240 rpm; observed running sustains 180 rpm. Acceleration and exponential coast preserve angular phase, while heat, smoke, flame trails, sparks and local vibration follow energy. Repeated activation extends drive without resetting position or accumulating timers. An initially failed core stays stationary; running-to-failed immediately exposes the grey split ring while residual momentum coasts. R104 state/caption semantics remain unchanged.
+- **Verification (2026-11-14):** Final typecheck, PM build (1,234,553 B JS / 281,384 B CSS), scoped ESLint, formatting and changed-file hard-rule/whitespace checks pass. All 37 scoped tests are covered successfully: the concurrent eight-file run passed 36 and hit one 5 s cockpit timing timeout while compiler/browser checks ran; the unchanged cockpit file then passed all 10 tests in isolation. Six dynamics tests verify acceleration, gradual release, frame-rate independence, retrigger, sustained sessions, failure and paused/invalid time. The main browser suite passes 24 state/theme/viewport cases at 1440/390 px Blue/Pink, repeated click/keyboard, session success/failure coast, reduced-motion state-color updates, hidden/offscreen pause, calm removal and bounds. Peak throttle was 233.5 rpm; release samples decayed through 131, 65, 27, 9 and 4.57 rpm, with particles ending at zero. A final visual refinement changed hue interpolation to the shortest arc, avoiding a misleading green midpoint between blue and red. The supplemental pass on the final source sampled 503 desktop Blue and 539 mobile Pink frames with no green-band crossings, and verified reduced-motion state hues. Zero browser errors, writes or provider/native calls. Root visually inspected laptop running, phone throttle and the final Pink hue-corrected peak. Both verified isolated fixtures were stopped.
+- **Candidate:** Direct local uncommitted source, bound by SHA-256 in [candidate manifest](<../../../.pm/r105-evidence/candidate.json>). No deployment or owner sign-off is implied.
+- **Browser evidence:** [Main motion receipt](<../../../.pm/r105-evidence/browser-result.json>) records the full matrix before the final shortest-arc hue correction. [Final hue amendment](<../../../.pm/r105-evidence/hue-amendment.json>) binds the final five application files and updated browser harness. The 13-file candidate manifest includes application/dependency/test sources and both verification references. Original motion frames remain historical; `hue-contact-sheet.png`, `hue-replay.html` and the hue-prefixed screenshots show the final treatment in `.pm/r105-evidence/`.
 
-- **Source:** [Agentic OS rule enforcement matrix](<../Fable 2/Agentic OS/04 - Rule Enforcement Matrix.md>) (2026-11-10). Filed 2026-11-10; not started.
-- **Acceptance:** `pnpm os:eval <base>..<head>` runs the first eight detectors (rules 22, 6, 19, 7, 24, 25, 8, 12) on the diff and prints pass, fail, improved or n/a per rule. Each detector has fail, pass and not-applicable fixtures and a version. Verdicts judge what the change added or removed, never the existing baseline. First slice only; the remaining detectors belong to R96.
-- **Tier:** CLAUDE_MID; CLAUDE_LOW for repeats. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
-- **Reading guide:** Today 7 of 29 rules have a mechanism. Baselines on `main`: rule 22 at 184 calls, rule 6 at 96, rule 8 failing on 2 of 6 cron routes.
+#### R105 owner scenarios
 
-### R95
+**Environment/data:** open the local address printed by `pnpm pm`, refresh, choose Bridge and enable Game layer with the Orbit icon in the header. Existing sessions remain read-only; the core click does not start a delivery. Use the supplied state screenshots when current sessions do not include a running/failed state. All results below remain **Pending**.
 
-**Outcome:** Each Claude session leaves a record of its setup, skills loaded, hooks fired, checks, rule verdicts and cost, readable as Markdown.
+1. **R105-M1 — Throttle, repeat and cooldown.** On a nonfailed core (or the supplied fixture), click ERA, then try Enter/Space while it has focus. Expect rapid acceleration, a red/orange hot rim, outward sparks and flame trails, smoke and vibration confined to the wheel. The real session label remains unchanged. After the 2.4 s drive, expect several seconds of smoothly decreasing speed, heat and vibration; sparks finish their paths. Click again during cooldown: the same wheel accelerates from its current rotation without jumping back to a starting angle. A failed core retains its grey broken form and responds as a stalled wheel instead of becoming healthy. The adjacent Open sessions link remains separate. **Actual:** Pending.
+2. **R105-M2 — Session state and navigation.** Observe an already-running session or the fixture evidence. Expect sustained friction effects. When existing evidence becomes waiting or completed, the caption changes to that real state while the wheel cools gradually. Waiting settles to gentle yellow, explicit success to green, and failure to the grey split ring. Click Open sessions and return to Bridge: normal navigation remains usable. Do not create a live run solely for this test. **Actual:** Pending.
+3. **R105-M3 — Phone, theme and motion preference.** Inspect laptop and phone-width layouts in Blue/Pink; sparks must stay within the core card, labels/link must stay readable, and the page must not shake or scroll sideways. Enable system reduced motion: there is no spinning, vibration or particle emission, but state colors remain readable. Restore motion, hide the tab or scroll the core offscreen, then return: motion resumes without a backlog burst. Turn Game layer off: calm Bridge stays still. Restore preferred theme/Game/motion settings. **Actual:** Pending.
 
+**Untested owner limits:** visual intensity preference, physical-device smoothness/comfort and deployed `/pm/live` acceptance remain pending. Automated fixture evidence does not establish owner PASS or a native running-session witness.
+
+### R104
+**Outcome:** The Game-layer ERA core rotates and reacts to session state, with a visual throttle action.
 **Kind:** feature
-**Depends on:** R93
-**Touches:** `scripts/`, `tests/`, `.claude/settings.json`, `.gitignore`
+**Implementation:** done
+**UAT:** pending
+**Touches:** `scripts/pm/app/`, `tests/pm-ui/`, `docs/Skills-and-Agents.md`, `ERA Notes/`
+- **Acceptance:** Game mode permits sustained core rotation. Observed running sessions use red/orange friction, smoke and embers; awaiting delivery approval/action uses gentler yellow motion; explicit successful completion uses green; failed completion uses a grey broken offset ring. The core is a session indicator: standing backlog decisions remain in Needs you but do not mask the latest session result. Click/keyboard activation triggers a bounded visual throttle burst independent of the Open sessions link. Unknown/stale data cannot become a successful outcome, and cancelled/partial sessions do not earn green. Reduced motion disables movement; hidden/offscreen animation pauses. Calm mode remains static. Verify desktop/mobile, both themes, state changes, repeat activation and no command dispatch.
+- **Source:** Owner's explicit Game-mode override of the original 400 ms/no-loop doctrine and request for throttle/clutch-kick core animation, 2026-11-14.
+- **Verification (2026-11-14):** Frozen implementation, typecheck, PM build, scoped ESLint, 31 tests across seven files, formatting and the exact changed-file whitespace gate pass. The new core browser suite passes all 24 state/theme/viewport combinations plus standing-decision masking, sustained effects, repeated throttle/focus/keyboard, hidden/offscreen pause, reduced motion and calm removal, with zero overflow/errors/writes/native sessions. Existing Bridge browser regression also passes. The isolated fixture was stopped after PID/root verification. Root visually inspected running/attention/failed laptop Blue, running/failed phone Pink and throttle phone Blue. This slice changes local presentation and deterministic state derivation only.
+- **Candidate:** Direct local uncommitted source, bound with nine application/verification files by SHA-256 in [candidate manifest](<../../../.pm/r104-evidence/candidate.json>). No deployment or owner sign-off is implied.
+- **Browser receipt:** [Synthetic core checks](<../../../.pm/r104-evidence/browser-result.json>); state/theme screenshots in `.pm/r104-evidence/` are fixture evidence. Owner aesthetics, physical-device motion comfort and deployed-phone acceptance remain Pending.
 
-- **Source:** [Agentic OS flight recorder](<../Fable 2/Agentic OS/06 - Flight Recorder.md>) (2026-11-10). Filed 2026-11-10; not started.
-- **Acceptance:** A runner wraps the existing hooks and logs each firing with exit code and duration; an equivalence test shows hooks receive the same input and return the same output and exit code with and without it. The session transcript is read, never modified, for skills, reads, tool calls and usage. Rows are stored under a gitignored `.os/`; `pnpm os:report <session>` prints the report. If recording fails the session is unaffected. No transcript text beyond short excerpts is stored; key-like values are redacted.
-- **Tier:** CLAUDE_HIGH for the hook runner, then CLAUDE_MID. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
-- **Reading guide:** The Stop hook already parses the transcript and the hook payload (`transcript_path`, `tool_input.file_path`). SQLite pattern: `scripts/delivery-v2/store.mjs`.
+#### R104 owner scenarios
 
-### R96
+**Environment:** local PM Bridge with existing read-only delivery evidence; no new provider run is required. Screenshot/fixture evidence may be used for states absent from current sessions. All owner results remain **Pending**.
 
-**Outcome:** Every session has a scorecard of rules, checks, process, scope, autonomy and cost, and every item a delivery scorecard, computed without a model.
+1. **R104-M1 — Game motion and throttle.** On Bridge, turn Game layer on. Expect sustained ERA rotation. Click the ERA core and activate it with Enter/Space; repeat during a burst. Expect a bounded throttle effect, no session launch and no navigation. Open sessions remains a separate link. Turn Game layer off: the animated core is absent and the calm queues remain. **Actual:** Pending.
+2. **R104-M2 — Meaningful state.** Inspect current session evidence or the supplied state screenshots. Observed running is red/orange with sustained friction/smoke/embers; awaiting approval/action is gentler yellow; explicit success is green; failure is a grey broken offset ring. A waiting count must not hide simultaneously running work. Unknown/stale, partial or cancelled evidence must not look successful. **Actual:** Pending.
+3. **R104-M3 — Laptop, phone and motion preference.** Inspect at laptop and 390 px in Blue/Pink. Expect readable labels, reachable core/link and no page overflow. Enable reduced motion: state remains legible with no rotation/particles. Move the core offscreen or hide the tab: animation pauses, resuming when visible. Restore preferred theme/Game and motion settings. **Actual:** Pending.
 
+### R103
+**Outcome:** The header Game layer toggle uses the original Orbit SVG, white when off and shining blue when on, with an obvious rotation.
+**Kind:** bug
+**Implementation:** done
+**UAT:** pending
+**Touches:** `scripts/pm/app/GameLayer.tsx`, `scripts/pm/app/game.css`
+- **Acceptance:** Preserve header placement, switch accessibility and persisted mode. Reuse Lucide Orbit instead of the replacement circular-arrow SVG. Off strokes are white; on strokes use a bright blue gradient with glow. Activation visibly turns 45 degrees and deactivation returns to rest. Reduced motion skips rotation. Verify laptop/mobile in Blue/Pink.
+- **Source:** Owner's three corrections after reviewing another AI's header-toggle change, 2026-11-14.
+- **Cause:** The replacement hand-authored SVG changed icon identity; gray gradient stops and a 14-degree transform weakened the requested appearance.
+- **Owner refinement (2026-11-14):** Increase activation to 90 degrees clockwise. Off strokes inherit the same theme ink as neighboring header icons, replacing the earlier pure-white override. This supersedes the original 45-degree/off-white acceptance values above; owner visual UAT remains pending.
+- **Refinement verification:** Isolated browser checks at 1440/390 px in Blue/Pink pass: off gradient stops equal the neighboring icon color, intermediate angles are clockwise, the final angle is 90 degrees, and active blue styling, keyboard, reduced motion and page bounds remain correct. Receipt: `.pm/r103-update-evidence/result.json`. PM build and PM documentation checks pass.
+- **Verification:** Typecheck and scoped ESLint pass. Isolated browser checks at 1440/390 px in Blue/Pink confirm Orbit identity, white off strokes, intermediate rotation frames, final -45-degree angle, blue gradient/glow, keyboard operation, 40 px controls, reduced motion, and no page overflow/errors/writes. Evidence: `.pm/r103-evidence/result.json` and off/on screenshots. Owner visual acceptance remains pending.
+
+### R102
+**Outcome:** Bridge keeps daily actions clear with Game layer off and becomes a chart-led ERA cockpit with Game layer on.
 **Kind:** feature
-**Depends on:** R94, R95
-**Touches:** `scripts/`, `tests/`
+**Implementation:** done
+**UAT:** pending
+**Touches:** `scripts/pm/app/`, `tests/pm-ui/`, `docs/Skills-and-Agents.md`, `ERA Notes/`
+- **Acceptance:** Both modes retain Needs you / Running / Next up and New task. Guard coverage and conflicts live in Setup with a numberless actionable-attention indicator; consecutive clean sessions remain in Score. The Bridge footer reports Claude/Codex SDK installation from passive local evidence and distinguishes unknown/stale or unavailable data. Game mode adds a real-state core and charts derived from recorded outcomes/session evidence, with explicit unknown/empty states and evidence links. The persisted toggle is reachable from Bridge and Settings. Owner-approved cinematic enter/exit transitions exceed the former 400 ms ceiling, never loop or block controls, and disable under reduced motion. Verify laptop and 390 px Blue/Pink, keyboard toggle, persistence, rapid toggles, missing/stale data, and existing queue navigation.
+- **Source:** Owner's page-by-page Bridge review and explicit approval of charts, longer infrequent view transitions, Setup/Score placement and SDK footer, 2026-11-14.
+- **Implementation (2026-11-14):** Calm Bridge retains its three queues; Game mode adds an ERA core, canonical eight-week outcome bars and non-Arena quality counts. Header/Settings share the persisted mode. The approved 1.8 s enter / 1.0 s exit choreography preserves clickable controls and text scale; reduced motion disables it and reload does not replay it. SDK footer and Setup attention use passive evidence; the timestamp-free relay catalogue remains stale/unknown. Existing Score evidence mirrors remain. No production/provider/native execution or deployment occurred.
+- **Verification (2026-11-14):** Final typecheck, PM React build, changed-file ESLint and 31 focused replay tests across seven files pass. `bridge-game.browser.mjs` passes on the frozen candidate at 390/768/1440 px Blue/Pink: keyboard/persistence, action-link parity, one-shot enter/exit durations, pointer-transparent overlay, intermediate text scale, 40 px mobile controls, chart evidence drilldowns, empty/idle/unpaired/read-failure states, delayed UAT uncertainty, pending/saved evidence and missing/unknown SDKs. No page overflow, browser errors, writes or native calls. Existing cockpit usability and game/Arena browser regressions pass. Parent visually inspected settled laptop/phone themes and transition frames. [Browser receipt](<../../../.pm/r102-evidence/result.json>); screenshots and motion frames in `.pm/r102-evidence/`. Full-repository lint remains the separately recorded R101 baseline, not a clean gate for this slice.
+- **Owner acceptance:** After implementation, refresh local `pnpm pm`, open Bridge, switch Game layer on and off, and inspect queue links, charts and SDK details at laptop/phone widths. Confirm motion comfort and visual hierarchy. Automated viewport evidence does not claim a physical-phone deployment or owner PASS.
 
-- **Source:** [Agentic OS deterministic evaluation](<../Fable 2/Agentic OS/07 - Deterministic Evaluation.md>) (2026-11-10). Filed 2026-11-10; not started.
-- **Acceptance:** The process panel uses a path-to-skill `requires` table: a session that edits a money path without loading `money-rules` shows a process failure. The remaining detectors from the matrix are added. Delivery scorecards count sessions, rework, UAT result, escapes within 30 days and reverts. Comparisons group by tier alias, effort and item class, always print n, and draw no ranking under ten sessions. Adapters project Delivery V2 runs and, once its log format is confirmed, Codex sessions.
-- **Tier:** CLAUDE_MID. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
-- **Reading guide:** No blended score and no model review in the pipeline. Escapes and reverts are the quality signal the other panels predict.
+#### R102 owner scenarios
 
-### R97
+**Candidate:** direct local source delivery on HEAD `78245c60fc19c7f8e47e47c257f92a406c8b41fe` plus the uncommitted R102 changes. [Candidate manifest](<../../../.pm/r102-evidence/candidate.json>) binds 19 application/verification files by SHA-256. This local build is not deployed and has no Delivery run or owner sign-off.
 
-**Outcome:** An interactive dashboard shows what to do now, the setup per agent, each session's flight report and scores; the existing Command Center remains the place for documents.
+**Environment/data:** the locally built `pnpm pm` interface and its current read-only backlog/session evidence, viewed in Chrome. No new session, provider probe or data seed is required. A missing history is a valid empty-state check. All owner results below remain **Pending**.
 
-**Kind:** feature
-**Depends on:** R93
-**Touches:** `scripts/pm/`, `tests/pm-ui/`
+1. **R102-M1 — Calm Bridge and placement.** Open the address printed by `pnpm pm` and choose **Bridge**. Turn **Game layer** off if needed. Expect Needs you, Running and Next up, New task, and Claude/Codex SDK status. The former Guarded rules / Setup conflicts / Clean streak tile row is absent. Open **Setup**: guard coverage, conflicts and any missing declared guards remain available; its numberless dot reflects actionable evidence. Open **Score**: consecutive clean sessions remain there, including the existing supporting evidence. Return to Bridge. **Actual:** Pending.
+2. **R102-M2 — Cinematic view and chart evidence.** On Bridge, turn **Game layer** on. Expect one 1.8 s transition, an ERA state core, the same three queues, eight-week shipped-outcome bars and a session-quality count chart. Click a weekly bar, then an available work ID: it opens recorded work evidence. Return, select a quality category and open an available session: it opens its record. Zero data shows zero/empty evidence rather than an invented success rate. Use Back or Bridge to return; do not press a Delivery Start or submit an approval. **Actual:** Pending.
+3. **R102-M3 — Persistence, motion and screen size.** With Game layer on, refresh. Expect it to remain on without replaying the cinematic sequence. Switch off, then on; try a rapid second toggle. Expect the last selected mode, responsive controls and no stranded overlay. At laptop width and a 390 px viewport, inspect queues, charts and footer in Blue and Pink: no page-level horizontal scroll or covered actions. With browser reduced-motion emulation enabled, toggle again: choreography is disabled. **Actual:** Pending.
+4. **R102-M4 — Honest SDK state.** Read both footer labels. Local **SDK installed** means package presence only; it must not say Online or authenticated. If the current environment lacks a package, expect **SDK missing**. A failed/unavailable observation must remain Unknown or Stale, not green. The shared relay view cannot date its catalogue observation and therefore keeps known entries Stale and missing entries Unknown; actual deployed-phone validation remains separate. **Actual:** Pending.
 
-- **Source:** [Agentic OS PM.2 product design](<../Fable 2/Agentic OS/09 - PM.2 Product Design.md>), [visual and motion language](<../Fable 2/Agentic OS/10 - Visual, Motion and Game Layer.md>) (2026-11-10). Filed 2026-11-10; not started.
-- **Acceptance:** Split before dispatch. Slices: Setup (map, rulebook, conflicts) from the registry alone; Sessions from the recorder; Bridge; Score. Home, Delivery and Analytics move into PM.2 and no screen exists in both products; PM.1 keeps documents, checklists, inbox, decisions and history. Every number opens its evidence in one click; motion respects reduced-motion; clearing `.os/` loses no backlog or rule. Arrival retires the two older UI generations (R6).
-- **Tier:** CLAUDE_MID; CLAUDE_HIGH for the setup map. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
-- **Reading guide:** Sessions needs R95. Absorbs R86's Today block as the Bridge. Load `ui-guardrails`; Hard Rule 28 applies to PM.2's own text.
+**Reset:** restore the preferred Game layer and theme settings; disable any browser viewport/reduced-motion emulation. These scenarios do not mutate product records. **Untested owner limits:** aesthetic acceptance, physical-device motion comfort and deployed `/pm/live` remain pending; automated checks are recorded separately below.
+
+### R101
+**Outcome:** Refactor the Agentic OS presentation around daily actions and readable evidence.
+**Implementation:** done
+**UAT:** pending
+**Touches:** `scripts/pm/app/`, `scripts/os/forms.mjs`, `tests/pm-ui/`, `tests/os/launchpad.test.ts`, `docs/Skills-and-Agents.md`, `ERA Notes/`
+- **Acceptance:** Bridge separates action queues from supporting metrics; Launch offers skill cards before a compact form; Setup is searchable without navigating the entire graph; session details summarize facts before raw evidence; Score has consistent navigation and readable cohorts. Existing evidence, comparison, clipboard validation and Delivery links remain accessible. Verify desktop and 390 px Blue/Pink, keyboard controls, empty and populated states, typecheck and relevant replay tests.
+- **Source:** Owner usability rejection, 2026-11-14; review of Agentic OS product design and local A5–A7 fixture screenshots.
+- **Progress (2026-11-14):** Review found equal-weight panels, plain link clusters, raw JSON reports, an always-expanded six-column graph and a long initial Launch form. Presentation-only scope; existing data and launch boundaries retained.
+- **Verification (2026-11-14):** Typecheck and changed-file ESLint pass; 39 tests in seven targeted files pass; PM React build, docs:check, pm:lint and pm:check-docs pass. Credential-free Chrome checks cover all five destinations at 390/768/1024/1440 px in Blue/Pink, keyboard skill selection, searchable Setup, expanded graph without page overflow, rule file/line evidence, two-session comparison and empty recorder. Existing Launchpad copy/recipe/stale-preview and game/Arena suites pass. `.pm/r101-evidence/` holds screenshots/results. The empty-slug title default and expanded-map overflow were reproduced and fixed during this pass. Full-repository lint is a separate baseline check.
+- **Owner acceptance:** Refresh local `pnpm pm`; compare Bridge, choose a Launch skill, inspect a session failure, and search Setup. Confirm visual hierarchy and density fit daily use. No deployed or physical-phone acceptance is claimed. R98/R99 native execution boundaries remain open.
+- **Full lint (2026-11-14):** completed with 9,285 errors / 51,983 warnings, matching the A6 baseline recorded in `docs/Skills-and-Agents.md`. Changed-file lint passes with zero warnings. Full output: `.pm/r101-evidence/lint-full.txt`.
 
 ### R98
 
@@ -258,7 +247,10 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Depends on:** R93
 **Touches:** `.claude/skills/`, `scripts/`, `tests/`
 
-- **Source:** [Agentic OS skill launchpad](<../Fable 2/Agentic OS/08 - Skill Launchpad.md>) (2026-11-10). Filed 2026-11-10; not started.
+- **Progress (2026-11-14):** A6 copy-launch slice implemented: all eight form sidecars, strict typed/default/conditional checks, fresh A1 registry + PM picker validation, bounded real new-module dry-run, A4-required attachments, versioned recipes and visible prompt/PowerShell command copying. Complete new-module browser copy launch had zero follow-up input questions; 390 px Blue/Pink, junction, stale-result and recipe flows pass. [Acceptance/evidence](<../../../docs/Skills-and-Agents.md#skill-launchpad-a6--r98>). R98 remains open: Local's item-ID/file start contract has no skill-prompt/values/attachments/fingerprint input. Native worktree launch and binding its genuine A3 flight report require that contract extension; no synthetic session record or provider run was created. This is the owner's requested boundary, with A7 untouched. Full lint still fails across the existing checkout; focused changed-file lint is clean.
+- **Verification (2026-11-14):** full typecheck, focused ESLint (zero warnings), 212 tests in 12 files, final Chrome copy-flow/390 px Blue/Pink witness and PM app build pass. `docs:check`, `pm:lint` (0 errors/warnings), `pm:check-docs`, mirror check and scoped whitespace checks pass. Full `pnpm lint` reports 9,285 errors / 51,983 warnings across the existing tree, including generated scratch bundles; this slice does not change the lint configuration.
+
+- **Source:** [Agentic OS skill launchpad](<../Fable 2/Agentic OS/08 - Skill Launchpad.md>) (2026-11-10). Filed 2026-11-10; copy-launch slice implemented 2026-11-14, native boundary open.
 - **Acceptance:** A `form.json` sidecar schema with typed fields, defaults, conditional fields, pre-launch checks and an optional dry-run preview. Forms for `new-module`, `era-wire`, `fix-bug`, `add-feature`, `db-migration`, `triage-inbox`, `data-repair` and `wizard`. Pickers read the registry and the PM scan. Copy prompt works without any launcher; launching into a worktree is enabled when DLV-150 exists. The registry reports a skill with an inputs table and no form, form drift, and a model name where a tier alias belongs.
 - **Tier:** CLAUDE_MID. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
 - **Reading guide:** `new-module` already lists eight inputs and a `--dry-run`. `era-wire` names a model where the Model Registry requires an alias.
@@ -275,6 +267,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Admission gate: R96 scorecards in use and the owner wants tier comparison. Cases are harvested from shipped items (start commit, brief, the item's own test as the hidden oracle). Only the owner starts an Arena run, paced, subscription only. The game layer awards nothing for activity, opens the evidence behind every counter, and can be switched off.
 - **Tier:** CLAUDE_HIGH for the Arena. Plan: [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>).
 - **Reading guide:** Patterns: the ERA Gym replay and `tests/delivery-oracles/`.
+- **Progress (2026-11-14, partial):** owner chose a Settings toggle with a futuristic transition and Claude/Codex comparison. Implemented identical-facts calm/game views, a 360 ms reduced-motion-aware scan, frozen shipped KIT-11 case and offline oracle controls (baseline: four expected failures; solution: 12/12), plus six-panel side-by-side rendering from the existing A4 store. 36 affected tests pass; broad suite has nine existing 5-second timeouts. **Blocked before native dispatch:** Local's read boundary cannot keep the oracle hidden; selecting/extending protected execution isolation needs an owner scope decision. No model calls; synthetic UI fixtures are not two real runs. R99 stays open. [Acceptance and evidence](<../../../docs/Skills-and-Agents.md#arena-and-game-layer-a7--r99-partial>).
 
 ### R84
 
@@ -287,6 +280,10 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** The deny list contains both `mcp__claude_ai_Supabase__*` and `mcp__Supabase__*` forms of `execute_sql`, `apply_migration`, `deploy_edge_function`, the branch tools, `create_project`, `pause_project`, `restore_project`. `Database RLS Posture.md` §Agent access lists both. A cloud session's attempt to call a write tool is refused.
 - **Tier:** CLAUDE_LOW. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
 - **Reading guide:** `.claude/settings.json:8-19` names only the first form. The cloud tool list on 2026-11-10 showed the second.
+- **Implementation:** done
+- **UAT:** pending
+- **Evidence (2026-11-12):** `.claude/settings.json` denies the twelve write tools (`execute_sql`, `apply_migration`, `deploy_edge_function`, the five branch tools, `create_project`, `pause_project`, `restore_project`, `confirm_cost`) under both `mcp__claude_ai_Supabase__` and `mcp__Supabase__`, plus the Supabase CLI and `psql` forms for Bash and PowerShell. [Database RLS Posture](<../../01 - Architecture/Database RLS Posture.md>) §Agent access names both namespaces. `pnpm os:check` no longer reports `NAME-BOUND … Supabase deny coverage missing for mcp__Supabase`. Not observed: a cloud session's refusal.
+- **Owner check:** in a cloud session, ask the agent to call `mcp__Supabase__execute_sql` with `select 1`. Expect a permission refusal, not an approval prompt.
 
 ### R85
 
@@ -300,18 +297,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Tier:** CLAUDE_HIGH, effort high. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
 - **Reading guide:** Fourteen folders, 70 files. Use `triage-inbox` rules: preserve wording, search existing IDs first.
 
-### R86
-
-**Outcome:** The first screen of the Command Center says what to do next.
-
-**Kind:** feature
-**Touches:** `scripts/pm/app/Home.tsx`, `scripts/pm/app/PrimaryNavigation.tsx`
-
-- **Source:** [Fable 2 usability review U1, U5, U6, U8](<../Fable 2/10 - Project Management/Command Center/1 - Usability and Visual Review.md>) (2026-11-10). Filed 2026-11-10; not started.
-- **Acceptance:** Above the fold at 1440x900 and 390x844, Home shows three short lists: Needs you, Running, Next up (top three by lane order). One lane vocabulary (Now / Next / Later) is used on Home, Work and Analytics, with Blocked as a filter. Decisions is reachable in one tap with its count. Hero headlines are one line or gone.
-- **Tier:** CLAUDE_MID. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
-- **Reading guide:** [Functional roadmap](<../Fable 2/10 - Project Management/Command Center/2 - Functional Roadmap.md>), changes 1 and 4. Load `ui-guardrails`; tests in `tests/pm-ui/`.
-
 ### R87
 
 **Outcome:** Sprints never shows a week whose end date has passed as in play or planned.
@@ -323,6 +308,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** On 2026-11-10 the week of 2026-10-05 reads Closed with its real delivered count, and unfinished members appear in the current week or back in their lane. A fixture test covers a week ending yesterday.
 - **Tier:** CLAUDE_MID. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
 - **Reading guide:** `_Planning.json` holds `sprint-2026-10-05` with `"state": "active"`.
+- **Progress (2026-11-11, data only):** `sprint-2026-10-05` was closed through the planning engine (`writePlanningCommand`, action `close`): delivered R44; carryover SCH-7, SCH-4.2, R34, SCH-5.5. The seven stale drafts (weeks of 12 October to 23 November) were replaced by four current weeks, 9 November to 6 December (planning revision 9). Still open: the code change so an elapsed week never reads as in play, and its fixture test.
+- **Progress (2026-11-12, data only):** the weeks of 23 and 30 November were re-drafted after DLV-150 to DLV-153 shipped on 2026-11-11, ahead of their planned week (planning revision 10). A draft still names its members by hand: the engine does not drop a member that ships before its week starts, which is the same defect this item fixes.
 
 ### R88
 
@@ -347,18 +334,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** Either one `src/proxy.ts` carries both the session refresh and the `/pm` gate, or root `proxy.ts` is deleted. The `/pm` gate still works. The owner decides which before work starts.
 - **Tier:** CLAUDE_MID; owner decision first. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
 - **Reading guide:** Next 16 loads only from the parent of the app directory (`src/`).
-
-### R89
-
-**Outcome:** Working one item no longer requires loading a book of several hundred kilobytes.
-
-**Kind:** maintenance
-**Touches:** none
-
-- **Source:** [Fable 2 finding F2-21](<../Fable 2/01 - Architecture/Agent Context Economy.md>) (2026-11-10). Filed 2026-11-10; not started.
-- **Acceptance:** Each book's state log keeps its last three entries and moves older ones to a dated archive file; criteria for shipped IDs move with them. `CLAUDE.md` tells agents to read the checklist, the one ID section and the Successor Briefing, not the whole book. `pm:lint` and `pm:check-docs` pass; no ID, shipped record or decision is lost.
-- **Tier:** CLAUDE_MID. Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
-- **Reading guide:** Books total 1.78 MB; Delivery is 387 KB. Retention rule already exists in `_Conventions.md` §6. Editing `CLAUDE.md` needs `pnpm sync:ai`.
 
 ### R90
 
@@ -421,7 +396,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Verification (2026-10-25):** 383 tests passed across 46 PM UI/relay files; typecheck and changed-file lint pass. Isolated real-component browser fixture: 32 passes at 320/390/701/1440 px × Blue/Pink × ready/initially-unpaired/revoked-session/queue-error, including one synthetic pairing request where required, zero protected reads before initial pairing, zero command replays, no overflow, 76-record pagination and navigation/filter return. Evidence: `.tmp/pm-delivery-recovery-20261025/verification.json`, source hashes/check summary in `validation.json` and viewport PNGs. Browser test helpers required two corrections (scoped evaluation variables and Boolean wait results) before the successful pass; application assertions were retained. Repo-wide `pnpm lint` failed while scanning generated `.tmp`/`.delivery` trees and existing debt; the task's generated JS/CSS assets were removed after QA and all changed application/test files pass scoped lint. No repository-wide clean claim.
 - **Availability/limits:** primary source is updated; no supervisor restart, production mutation, launch, policy change, candidate Apply or deployment was performed. CUA could not start because of Windows sandbox initialization, so the original owner browser and physical phone were not operated. Pair that browser using the visible form and a fresh owner-issued code. R79 continues to own UAT phone transport and broader Done/Shipped projections.
 
-
 ### R79
 
 **Outcome:** The phone relay carries UAT handovers, results and feedback, and Work, Sprints, Analytics and the archive Ship action distinguish engineering Done from owner-accepted Shipped.
@@ -475,69 +449,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Implementation:** done
 - **UAT:** pending
 - **Verification (2026-10-25):** `tests/pm-ui/uat-model.test.ts` (23: labels and grouping, a delivery listed once, step navigation, receipt wording, local drafts and pending commands without storage, the server-rendered wizard in each state, device label) and `delivery-home.test.ts`; typecheck, scoped ESLint and `pm:build-app` clean. Isolated Chrome at desktop and a 390 px iframe: no horizontal overflow in the wizard, All steps, the Fail note, the Needs-changes sheet and the Delivery list; every control at least 43 px. Fixed from that pass: the green chip's text was invisible; Draft handovers offered result buttons. Not exercised: keyboard-only and screen-reader operation (labels and focus order are in the markup only), reduced motion (CSS rule only), two themes, the Outcome-tab row, the phone.
-
-### R75
-
-**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#direct-75--find-each-delivery-once>) (drafted 2026-10-25; original results retained).
-
-**Outcome:** The Delivery tab shows each delivery once, grouped by what it asks of the owner, instead of stacked launch receipts, a queue panel and a history list that repeated the same runs.
-**Kind:** feature
-**Touches:** `scripts/pm/app/DeliveryHome.tsx`, `scripts/pm/app/deliveryHomeModel.ts`, `scripts/pm/app/Delivery.tsx`, `scripts/pm/app/DeliveryV2.tsx`, `scripts/pm/app/StewardRequests.tsx`, `scripts/pm/app/delivery.css`, `scripts/pm/app/responsive.css`, `tests/pm-ui/delivery-home.test.ts`
-
-- **Acceptance:** groups, in order, each hidden when empty: **Needs you** (queue decisions such as Apply / Conflict / Review plan, and launch requests that are blocked before a run exists), **In progress**, **Waiting** (queue verdict beside the row), **In focus** (Now-lane outcomes not already being delivered, always shown, with an All link) and **Earlier deliveries** (collapsed; outcome filter; excludes anything still under Needs you). A run is never listed twice. A launch receipt with a run is a tag on that run's row (`Owner` / `ERA Steward` under the status) and keeps its full card on the run and launch pages; a receipt without a run is a row whose Request disclosure holds the same card (UUID, timestamps, stage, evidence, `Status unconfirmed`). Writers/Jobs show once, as plain text with an `i` hint, in the first of In progress / Waiting that has rows, and not at all when idle. Pairs is renamed Overlaps. The Room-for-your-next-idea hero is removed. Every non-link figure is plain text, not a pill. No horizontal overflow at 390 px; the status column stays visible.
-- **Verification (2026-10-25):** `tests/pm-ui/delivery-home.test.ts` (8: Apply decision once and not in history, queue-less fallback, progress/waiting split, receipt folded into run row, blocked vs pending vs terminal receipt without a run, V1 split, outcome counts/delivered ids, id-prefix stripping); `steward-requests`, `coordination-model`, `work-lifecycle`, `steward-entry` suites still pass; typecheck, scoped ESLint and `pnpm pm:build-app` clean. Live desktop (4317) showed Needs you 2, In focus 3 (BUD-83 no longer repeated), Earlier deliveries 22 with the three R44 runs as one row each and `ERA Steward` / `Owner` attribution; a 390 px iframe had no overflow. In progress, Waiting and the Capacity line were not exercised: nothing was running or queued, so they are fixture-tested only. The running server served the rebuilt bundle (`pnpm pm:build-app`) with no restart.
-
-### R74
-
-**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#direct-74--read-the-drive-mirror>) (drafted 2026-10-25; original results retained).
-
-**Outcome:** The PM Command Center mirrors selected PM documents and delivery status one-way to Google Drive for ERA Steward.
-**Kind:** feature
-**Touches:** `scripts/pm/drive-publish.mjs`, `scripts/pm/drive-publish-cli.mjs`, `scripts/pm-server.mjs`, `tests/pm-drive-publish.test.ts`, `package.json`
-
-- **Acceptance:** `G:\My Drive\ERA PM Command Center` (`PM_DRIVE_DIR` overrides, `PM_DRIVE_PUBLISH=0` disables) gets `01 - PM Documentation` (allowlist: `_index`, `_Conventions`, `_Decisions`, `0 - Inbox`, each campaign's Master Book and checklist, `Plans/`, `Research/`, and `docs/Delivery-*`, `ERA-Steward-*`, `R44-*`; credential-shaped files withheld and removed from Drive), `02 - Delivery Status` (`status.json` + `status.md`: run ID, phase, progress, blockers, pending owner actions, request state, evidence IDs and links, campaign roll-ups, timestamps; rewritten only on change plus a 5-minute heartbeat) and `03 - Steward Proposals` (created, never written or read back, except kept copies of Drive edits). The PM server publishes after PM changes, delivery session changes, a 15 s status poll and at start; `pnpm pm:drive` is the manual full pass (`--dry-run` writes nothing). Local is authoritative: nothing is read from Drive into the repository, a Drive edit is kept under `03 - Steward Proposals/Drive edits` and overwritten. A missing folder, I/O error or hang fails closed (no folder is invented), is bounded to 30 s, never overlaps another pass, and retries at 30 s to 5 min. Status uses read-only store methods only (no journey, Start, plan approval, Apply or reconcile); an unreadable store keeps the last data marked stale.
-- **Verification (2026-10-25):** `tests/pm-drive-publish.test.ts` (17: allowlist, secret withholding, read-only store Proxy, first/idempotent/incremental/prune passes, one-way and Drive-edit preservation, recreate, change-only status, stale fallback, missing folder then recovery, hung call, write failure, no delivery-mutating imports, server wiring and CLI read-only store). Live dry-run then initial publish of 47 documents plus status to the real Drive folder; second run wrote nothing.
-
-### R73
-
-**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-Current-Attempts-2026-10-25.md#direct-73--find-delivery-in-the-navigation>) (drafted 2026-10-25; original results retained).
-
-**Outcome:** Delivery is the raised central navigation destination, with a quiet lightning signal for observed running work.
-
-**Kind:** feature
-**Touches:** scripts/pm/app/App.tsx, scripts/pm/app/PrimaryNavigation.tsx, scripts/pm/app/navigation.css, scripts/pm/app/responsive.css, tests/pm-ui/primary-navigation.test.ts
-
-- **Acceptance:** desktop and phone order is Home / Sprints / Delivery / Work / Analytics. Delivery projects slightly above the bar, retains its label and direct route, and softly alternates gold/purple while V1/V2 work is running. Waiting sessions remain steady; closed receipts do not animate; offline/stale/error observations do not claim current execution. Reduced motion keeps a static signal. Verify desktop, 390/320 px, two themes and unchanged navigation.
-- **Verification (2026-10-24):** all 305 PM UI tests in 39 files passed, including five navigation cases and React/classic/static builds; typecheck/scoped ESLint clean. Final navigation/bundle rerun: 6 passed. Initial sandbox-only build failures were resolved by running the same offline suite with parent-directory access. Chrome fixture at 1280/701/390/320 px confirmed destination order, raised placement, >=44 px targets and no horizontal overflow in Blue/Pink. V2 running glows on Work as well as Delivery; waiting/closed/stale/offline do not animate. The actual reduced-motion CSS rules were matched in an isolated stylesheet and yielded a static gold glow; OS preferences were not changed. Fixture blocks every operational API call and dispatch. The running local desktop picked up the finished navigation, correctly idle; R44's contract section and installed policy are unchanged. PM lint and Feature Index pass; document-link check retains the same 15 missing historical Delivery recovery artifacts. Evidence: `.tmp/r73-nav/verification.json`. Hosted deployment, physical phone and a real running job remain unverified; no delivery was started for this test.
-
-### R72
-
-**Outcome:** Reports filed from the ERA chat become Hub & ERA work and appear on the current sprint as Hotfixes / Defects.
-**Kind:** feature
-**Touches:** `scripts/pm/era-issues.mjs`, `scripts/pm/bridge.mjs`, `scripts/pm/app/sprintModel.ts`, `scripts/pm/app/Sprints.tsx`, `scripts/pm/app/sprints.css`, `package.json`
-**Depends on:** Hub & ERA/HUB-85
-
-- **Acceptance:** with the bridge running, every `issue_report` row older than the 2-minute Undo grace is imported exactly once into `Hub & ERA/4 - Checklist.md` › Now › **ERA reports** (ID above every `HUB-n` in the corpus; `blocker` for Wrong, `friction` for Missed; effort S to re-estimate) with a Pain Inventory line and a `### HUB-n` section carrying `**Kind:** bug`, `**Source:** ERA report <id>`, acceptance, transcript and ERA actions. The DB is only read; idempotence is the corpus marker plus `.pm/era-issues.jsonl`; untrusted text is neutralised and credential-shaped text withheld; writes use the bridge's undo journal. `pnpm pm:era-issues` previews and `--apply` writes. Sprints shows open Now items with the marker as a Hotfixes lane above the week's work — Hotfix (wrong) first, then Defect, oldest first — on any non-closed week and when no sprint exists; they never become members or change planned points; moving one out of Now removes it.
-- **Verification (2026-10-03):** `tests/pm-era-issues.test.ts` (6: shape, `lintChecklist` clean, once-only + grace + journal, allocation above archived IDs, Markdown/secret handling, wrong → blocker hotfix); `tests/pm-ui/sprint-model.test.ts` `eraHotfixes` (ordering; done or triaged items drop off); `tests/pm-bridge.test.ts` green; `pnpm pm:build-app` builds. Not run against production — the bridge is owner-run.
-
-### R71
-
-**Outcome:** The PM Stop hook's block message names the current two-file campaign layout.
-**Kind:** bug
-**Touches:** `.claude/hooks/check-pm-update.sh`
-
-- **Acceptance:** when the hook blocks, its reason directs the agent to tick `4 - Checklist.md` and sweep to the Master Book's Shipped Log (`pnpm pm:archive`), or to add a Pain Inventory entry, and never names Feature State, Execution Plan or Vision/Decisions files. Blocking conditions are unchanged.
-
-### R70
-
-**Implementation:** done
-
-**Outcome:** The UI-folder guard and Atlas rebuild hooks run on real Claude Code payloads.
-**Kind:** bug
-**Touches:** `.claude/hooks/block-ui-dir.sh`, `.claude/hooks/update-atlas.sh`, `public/atlas/atlas.json`, `CLAUDE.md`
-
-- **Acceptance:** an Edit/Write to `src/components/ui/` is blocked (exit 2) for Windows, forward-slash and relative paths; other paths pass and malformed input fails open. Editing a Page & Feature Atlas entry rebuilds `public/atlas/atlas.json`; source and other vault edits do not.
-- **Verification (2026-10-03):** both scripts read `file_path` from the payload's top level, but Claude Code sends `tool_input.file_path` (a backslash path on Windows), so both were silent no-ops: an Edit payload for `src\components\ui\button.tsx` exited 0, and `atlas.json` had not changed since 2026-09-12. Both now read `tool_input.file_path` (legacy fallback kept) and normalize separators, as `check-migration.sh` already did. `update-atlas.sh` also fired on `src/` edits while skipping Atlas entries — the reverse of `scripts/build-atlas.mjs`, whose only inputs are the Atlas entries and screenshots — so it now fires on Atlas entries. Payload tests: three `ui/` path styles blocked; non-`ui/` and malformed input allowed; two Atlas paths rebuild; `src/app` and other vault docs do not. One rebuild takes ~0.46 s. `atlas.json` regenerated (83 nodes); Hard Rule #23 wording updated to the Atlas-entry trigger.
 
 ### R69
 
@@ -601,29 +512,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Kind:** feature
 **Touches:** `scripts/pm/app/DeliveryV2.tsx`, `scripts/pm/app/delivery.css`, `scripts/pm/app/responsive.css`, `scripts/pm/app/styles.css`, `scripts/pm/app/components.tsx`, `scripts/pm/app/types.ts`, `tests/pm-ui/`
 
-- **Acceptance:** implement [hotfix §4 and packet G](<../Plans/Delivery First-Run Hotfix.md>): purposeful Plan/Changes/Checks/Activity views, persistent current outcome/usage, readable desktop width and one-column phone behavior; body/input 16px, control text at least 14px, metadata at least 12px and 44px touch actions. Full plan/approval and rollback confirmation remain owned by DLV-116/115; do not duplicate their backend scope. Test 320/390/430/768/1440/1920px, 200% zoom, keyboard/focus, mobile keyboard/safe areas, theme contrast and no page overflow. Logs and engineering rationale remain disclosed, not inline product essays.
+- **Acceptance:** implement [hotfix §4 and packet G](<../_Archive/Plans/Delivery First-Run Hotfix (2026-09-14).md>): purposeful Plan/Changes/Checks/Activity views, persistent current outcome/usage, readable desktop width and one-column phone behavior; body/input 16px, control text at least 14px, metadata at least 12px and 44px touch actions. Full plan/approval and rollback confirmation remain owned by DLV-116/115; do not duplicate their backend scope. Test 320/390/430/768/1440/1920px, 200% zoom, keyboard/focus, mobile keyboard/safe areas, theme contrast and no page overflow. Logs and engineering rationale remain disclosed, not inline product essays.
 - **Evidence boundary:** CSS/source and owner's report establish the problem; no available browser was connected in the planning audit. Capture actual desktop and phone evidence before claiming acceptance.
-
-### R59
-
-**Outcome:** Repair canonical work identity, acceptance lookup and source links.
-
-- **Cause (reproduced 2026-09-11):** reference parsing had no suffix letters and heading lookup was exact-case, so `SCH-4.3b`, `SCH-1b.4`, `SCH-1c.1` and `SCH-1c.2` projected empty contracts and `SCH-4.3b` references collapsed to a nonexistent `SCH-4`. Work lowercased IDs for anchors (`sch-4.2`) while headings slug to `sch-42`; the shared slug collapsed hyphens that authored links keep; cancelled history linked to a file the reader could not open. Checkbox writes from the classic and legacy clients were ordinal-only, and no write refused a duplicate ID.
-- **Change:** `scripts/pm/shared/work-id.mjs` owns chip grammar, normalized comparison, reference extraction and `### <ID>` lookup for the scanner, read models, write guards and V2. `links.mjs` emits GitHub slugs with duplicate suffixes, now also used by `pnpm pm:check-docs`. Work shows the source spelling and opens the exact acceptance heading (or the checklist when none exists); history opens the Shipped Log or the campaign section of the explicitly read Cancelled Log, which stays out of the scan. `write-guards.mjs` requires `expectLine` for toggle, move, ship and discard (428) and refuses a changed row, a mismatched `expectId` or a duplicate ID (409); the React, classic and legacy clients send witnesses.
-- **Verification (2026-09-11):** `tests/pm-ui` 113 passed in 20 files, including the React, classic and static builds, `work-identity.test.ts` (Schedule rows, references, duplicate headings, anchors, brief/history paths) and new `write-guards` cases (missing witness, reorder, unknown ordinal, ID mismatch, duplicate ID). Relay suites 91 passed. `pnpm typecheck` exit 0; ESLint on changed files clean; `pnpm pm:lint` 0/0; `pnpm pm:check-docs` passed. Live read-only corpus scan: four Schedule contracts resolve (2,822 / 198 / 231 / 309 characters), zero unresolved references, 234/234 brief anchors exist.
-- **Limits:** fixture and scan evidence; the changed links were not walked in a browser at 390/320 px and no phone was used. R51 keeps its remaining acceptance.
-- **Provenance:** [Command Center Phase 0](<../Plans/Command Center.md#phase-0--establish-a-trustworthy-baseline-and-adopt-the-direction>), owner approval 2026-09-11.
-
-### R60
-
-**Outcome:** Complete Home, Work Board/List and module views over the canonical backlog.
-
-- **Acceptance:** Command Center Phase 1. All eleven campaigns and the complete open backlog are reachable. Board and List show the same IDs with Now/Next/Later lanes, campaign/kind/status filters and shareable URLs; blocked/active/review are badges or filters, never relocated priority; a move, reload and Undo work at desktop and 390/320 px; a CLI edit refreshes global and module views; Checklist and Brief links open every tested active, completed and cancelled record at the exact ID with the return location kept; core navigation never sends the owner to classic tools. Labels follow Hard Rule 28.
-- **Depends on:** [R59](<#r59>). Keeps the R57/R58 foundation; refines R6/R42 where they overlap.
-- **Change:** `scripts/pm/app/Board.tsx` (new) is the shared Board/List component, used unmodified on Work (`Explore.tsx`, promoted from the discovery page via a `view=board|list` toggle that preserves the existing search landing) and on the module page (`SpaceView`, campaign locked, replacing the old bespoke bucket-tab list). Lanes are `work.section` directly (Now/Next/Later only); blocked/active/review render as badges from a new `activityBadges()` and never relocate the row. Filters (status/campaign/kind) and the view mode round-trip through the URL via `parseBoardQuery`/`boardQueryString` (`model.ts`) — `view` is always written, since an absent `view` is what tells Work to render Search instead of Board. Move is a `<select>` (keyboard/tap, always present) plus native HTML5 `draggable` (never mixed with Framer Motion drag per Common Patterns §4); both call the existing guarded `move-task` op and reuse `Work.tsx`'s `UndoNotice`. `work.kind` is new, sourced from an optional `**Kind:** ` line in the Master Book ID section (`portfolio.js#kindOf`) and defaulting to `unclassified` — nothing was guessed from severity or text. `work-id.mjs#checklistAnchors` gives every checklist chip the same anchor slug its brief heading would use, so `model.ts#checklistPath` and the Markdown `li` renderer (`components.tsx`) can open and highlight the exact checklist row; `briefPath`'s no-book fallback now points at that same row instead of a bare file (verified test updated). `Work.tsx` adds distinct Checklist/Brief links (only when they differ) and an "Open in CLI" clipboard handoff (ID, source, outcome, acceptance). `Home.tsx`'s `SpaceShelf` cards gained a blocked-count/active badge row and one next-action link (top Now item, or the space itself). Nav labels renamed Today→Home, Explore→Work (routes/aliases unchanged).
-- **Verification (2026-09-11):** `pnpm exec vitest run tests/pm-ui`: 120 passed in 21 files (7 new in `board.test.ts`: checklist anchors, declared-Kind parsing, checklist/brief distinction, lane grouping, badge combinations, filter URL round-trip, filter matching). `pnpm typecheck` and `pnpm exec eslint` on every changed file: exit 0. `pnpm pm:lint` 0/0; `pnpm pm:check-docs` 11 pairs / 241 tasks pass. Live `pnpm pm` walkthrough against the real corpus: all 11 campaigns selectable and the full 241-item backlog reachable from Work; Board and List render the same filtered IDs; a keyboard Move (Budget item, Now→Next) produces a guarded write, an Undo clicked promptly restores the exact prior line, and a stale-toast click is safely a no-op (confirmed by design, not a defect — the guard is `expectLine`, not the toast); reloading a filtered URL (`?view=list&campaigns=Budget`) restores the identical filtered List. A same-origin iframe probe (window resize was unavailable in this sandboxed Chromium) confirmed the compact Now/Next/Later lane switcher and tap-to-change-lane at true 390 px and 320 px, with no horizontal overflow — fixed one found there: `.page-title` needed `flex-wrap` at ≤700 px once a text action (Board/Search instead) sat beside the heading, not just the round Capture button. Checklist and Brief links opened `BUD-39` at its exact row/heading with a visible scroll-and-flash highlight and preserved the return path back through the module page.
-- **Limits:** "CLI edit refreshes both views" is verified by construction, not an isolated raw-file-edit probe — every check here (moves, restores) is itself a filesystem write picked up by the same unchanged `fs.watch`→SSE→invalidate pipeline R57 already verified; no separate external-editor test was run. Checklist/Brief distinct-link and highlight behavior was exercised on one representative open item (`BUD-39`), not swept across all 241; done/cancelled records keep their existing `historyPath` (unchanged by this work, since a shipped/cancelled row has no checklist line left to highlight). "Linked sessions" on the item page still shows only the current live run (`runFor`), not a persisted per-item session history — no such read model exists yet. No real phone/PWA install was exercised. Drag-and-drop was wired per Common Patterns §4 but only keyboard/tap Move was interaction-tested end to end; drag is progressive enhancement over the same guarded mutation. A Budget checklist reorder made and undone during testing was manually restored to its original row order as a precaution.
-- **Provenance:** [Command Center Phase 1](<../Plans/Command Center.md#phase-1--complete-the-home-work-and-module-experience>).
 
 ### R61
 
@@ -640,11 +530,10 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Implemented 2026-10-03:** `Sprints.tsx`, `sprintModel.ts`, the revisioned `_Planning.json` contract and shared metrics provide the accepted weekly flow. Fixtures cover stale plan revisions and acceptance witnesses, idempotent retries, native crash-lock recovery, cancellation versus delivery, removed/re-added scope, missing references, conditional prerequisites, capacity, carryover, CLI observations and frozen close outcomes. Browser fixtures exercised Edit/Undo, Start, Delivery entry, active/review/done states, Close with carryover, alternative forecast selection and Analytics table. Desktop/mobile viewports and both themes pass; actual phone relay/deployment remain owner UAT. Migration `2026-10-03_pm-sprint-planning-relay.sql` is **written, not applied**. Current-source readiness reads the complete ID section; `portfolio.contract` can end at Provenance and must not be treated as the full lifecycle/readiness witness. Observation files live under root `.pm/`, never in GET/buildWorld. Existing September planning instructions below are historical and must not cause this feature to be built again.
 
 - **Acceptance:** Command Center Phase 2. A validated, revisioned `_Planning.json` (references and planning facts, never copied titles, acceptance, checkbox state or lanes) supports draft/start/close sprints, relative and owner-review capacity, deliverables and Ready / Needs input / Blocked readiness. The same item moves on the board, joins a sprint, completes through the CLI and updates every view once; cancellation reduces remaining work without adding delivered work; a criteria edit invalidates its readiness witness; overcapacity and unestimated work are visible; a conditional dependency can be planned but cannot launch early; concurrent stale edits to `_Planning.json` conflict instead of overwriting.
-- **Depends on:** [R60](<#r60>).
+- **Depends on:** [R60](<../_Archive/Shipped/PM Tooling.md#r60>).
 - **Delivery Phase 5 note (2026-09-12):** parallel coordination landed before this item ([Delivery/DLV-106](<../Delivery/Delivery — Master Book.md#dlv-106>)). "Can it run now?" should call `scripts/delivery-v2/coordination.mjs` (`itemReasons`, `coordinate`) rather than restate prerequisite and scope rules. Prerequisites and `**Touches:**` are read through `scripts/pm/shared/declarations.mjs`. No sprint view shows parallel verdicts yet.
 - **Provenance:** [Command Center Phase 2](<../Plans/Command Center.md#phase-2--add-practical-sprints-deliverables-and-readiness>).
 - **Reading guide (updated 2026-10-03):** use the PM Feature Map's weekly-sprint entry. `planning.mjs` owns source facts/authenticated writes/observations; `shared/planning.mjs` owns validation and transitions; `sprintModel.ts` owns forecast and item status; `metrics.mjs#sprintProgress` owns reconciled charts. Planning never authorizes a worker; normal Delivery still decides dispatch. Dates are calendar dates plus an IANA timezone; actual command and observation events are UTC instants.
-
 
 **Execution plan — 2026-09-26**
 
@@ -703,7 +592,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Outcome:** Add sprint and comparable-run metrics.
 
 - **Acceptance:** Command Center Phase 6 metric contract: one history parser shared locally and by the relay; open work, completed/cancelled outcomes, bugs by explicit kind, sprint scope and delivery outcomes follow the plan's definitions; chart totals reconcile to their drilldowns; incomplete historical coverage is visible; no project percentage or fabricated dates.
-- **Depends on:** [R60](<#r60>) for current metrics; sprint charts need [R61](<#r61>); delivery comparisons need [Delivery/DLV-102](<../Delivery/Delivery — Master Book.md#dlv-102>) receipts.
+- **Depends on:** [R60](<../_Archive/Shipped/PM Tooling.md#r60>) for current metrics; sprint charts need [R61](<#r61>); delivery comparisons need [Delivery/DLV-102](<../Delivery/Delivery — Master Book.md#dlv-102>) receipts.
 - **Implemented (2026-09-12) — Phase 6a current-state metrics:**
   - *One parser:* `scripts/pm/shared/history.mjs`. Records are bullets in a campaign's `## Shipped Log` (✅) or its Cancelled Log section (❌) only; Pain Inventory, session logs, fences and prose are not records, and other lines in those sections are returned as notes. Identity is `exact` (one canonical ID, optionally `: title` or a non-partial `(alias)`), `referenced` (pairs, ranges, partials, follow-ups) or `unidentified`. Dates are `day`, same-month `range` or `unrecorded`. `shared/product.mjs#parseOutcomes` (React app locally and on `/pm/live`, classic build) and `bridge.mjs#createHistorySnapshotBuilder` (legacy phone row) both call it; the legacy row no longer counts Pain Inventory, session-log or table stamps and sets `idChip` only for exact receipts. `shared/portfolio.mjs` treats a prerequisite as shipped only from an exact receipt.
   - *Metric contract:* `scripts/pm/shared/metrics.mjs` — `openWork` (distinct WorkRefs; blocked separate; the Board's lane rule), `workOutcomes` (latest dated receipt per exact ID, repeats kept, an open ID is Reopened, a ticked unswept row is completed without a date), `outcomeSeries` (Monday weeks; buckets + undated + earlier + later = total), `bugs` (declared `**Kind:** bug` only, by severity), `sprintProgress` (unavailable without planning), `deliveryAttempts` (V1 SHIPPED = Accepted with disposition unrecorded; V2 outcome from `closed_outcome`; verified candidate and applied change as reached levels), `resourceRows` (estimate, tokens and settled amount per unit, with known/total), `historyCoverage`. V2 run summaries carry `resources` (`journey.mjs#resourceBrief`), so the relay row has them too.
@@ -713,7 +602,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Pending:** a sprint scope chart (R61 has no planning file); delivery and resource comparisons from real runs ([Delivery/DLV-102](<../Delivery/Delivery — Master Book.md#dlv-102>): no V2 run exists); a non-empty bug chart needs owner-declared kinds; a live relay read of the Dashboard on a real phone (parity is fixture-level); `next build` was not rerun after adding the dashboard stylesheet import to `CommandCenterLive.tsx`.
 - **Provenance:** [Command Center Phase 6](<../Plans/Command Center.md#phase-6--finish-the-dashboard-calibrate-value-and-retire-duplication>).
 - **Reading guide:** Current metrics/history are implemented. Reuse `scripts/pm/shared/metrics.mjs`, `history.mjs`, `scripts/pm/app/Dashboard.tsx` and shared relay projections. R61 supplies the missing planning contract for sprint charts; DLV-102/118 must establish comparable trial evidence for run charts. September 26 KIT-11 receipts supersede old statements that no V2 run exists, but run existence alone does not prove a fair comparison. Keep unknown units/coverage visible and reconcile every chart to its drilldown; no project percentage or inferred bug kinds.
-
 
 **Execution plan — 2026-09-26**
 
@@ -783,52 +671,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Implementation landed (2026-09-12); acceptance outstanding.** `scripts/pm/app/transport.ts` defines the seam (snapshot and source reads, V1 runs, dispatch mode, capability flags, V2 session/runs/run/executors, versioned V2 commands, live events, connection state) and `PendingCommand`, so a command without a final receipt renders as `Not acknowledged` / `Acknowledged` / `Outcome unknown` with Check (same id), never as a failure. `localTransport.ts` holds the requests the app always made; `api.ts` and `state.tsx` delegate; `CommandCenter.tsx` is what both shells mount (`main.tsx` locally; `src/app/pm/live/CommandCenterEntry.tsx` → `CommandCenterLive.tsx` on the phone, CSS loaded only with that chunk). Capability gates: Work Organize and Board moves (`planWrites`), V1 launch (`v1Launch`) and V1 session detail (`v1Detail`, which links to the legacy view), pairing (`pairing`), classic links (`referenceTools`), Apply (`apply`). `DeliveryV2.tsx` gains the Apply panel (Apply / Resume / Recheck / Roll back, conflicts, written/not written/changed since, integrated checks) and sends `contract_revision` with plan decisions; `App.tsx` shows the relay strip. PWA shortcuts now open `#/explore?view=board` and `#/delivery`. **Evidence:** pm-ui, relay and delivery suites in the 1961-test finish gate; typecheck, ESLint and `next build` (Turbopack) clean with `/pm/live` compiled; both local builds via `tests/pm-ui`. Synthetic render (headless Edge, same-origin iframes at true 390 and 320 px, relay capabilities, real PM corpus, synthetic V2 run): Home, Delivery, the Run view with the Apply panel, a pending Apply showing `Acknowledged · Check`, and a Work item — no horizontal overflow, relay strip present, no Organize control and no classic links. **Not evidenced:** a real phone or installed PWA, a live relay read or command, swipe/haptics (R42), theme interplay with the household ThemeProvider on the deployed route.
 - **Provenance:** [Command Center Phase 4](<../Plans/Command Center.md#phase-4--deliver-the-same-workflow-from-the-phone>).
 
-### R58
-
-**Outcome:** Restore ERA's theme and correct PM connectivity detection.
-
-- **Cause:** R57 introduced independent green/cream palettes. Its health route handled GET only, so the shared client's HEAD probe received 404 and marked the app offline despite successful data reads. The earlier preview accepted every method and masked this mismatch.
-- **Change:** existing ERA Blue/Pink surface and accent values, dark module covers, themed dialogs and browser chrome; saved light/dark values migrate to Blue. `scripts/pm/health.mjs` serves uncached GET/HEAD and is called by the production server and test fixture. The primary shell includes `mobile-web-app-capable` alongside Apple compatibility metadata.
-- **Verification (2026-09-11):** 189 tests across 20 PM UI/Delivery-route files, including actual HTTP HEAD/GET responses, empty HEAD bodies, no-store and unsupported method/path fallthrough. Isolated Chromium exercised initial and periodic real HEAD probes (all 200), genuine service-worker offline reload and reconnect, legacy preference migration, Blue/Pink persistence, desktop/390/320px layouts and opaque capture sheets. No browser errors or online console warnings; no mutation requests. Typecheck passes; lint reports zero errors and 911 pre-existing warnings.
-- **Runtime boundary:** the owner's existing server returned HEAD 404 / GET 200 before restart. Browser checks use the same corrected health handler in a read-only isolated preview; normal PM startup, live Delivery and the production bridge were not run by this check. Restart `pnpm pm` and reload to activate the backend fix.
-- **Provenance:** owner's two-point theme and false-offline correction request, 2026-09-11.
-
-### R57
-
-**Outcome:** Reboot PM as a focused, enjoyable application for running ERA.
-
-- **Diagnosis:** the owner rejected R54/R56’s dashboard composition, permanent inspector, explicit Area/Topic distinction and desktop-derived phone layout. Their data models remained useful.
-- **Acceptance:** visual Today briefing with actual priority counts, all eleven swipeable spaces, attention and active Delivery; dedicated space/outcome journeys; natural global discovery; four progressively opened backlog collections; two-step launch with secondary technical settings; real run stages, plan steps, checks, resources, changed files, reviews and evidence; keyboard sheets, responsive layouts, reduced motion, offline reading and guarded planning Undo.
-- **Architecture:** `scripts/pm/app/` is the typed React app. `app-build.mjs` emits separate ESM JavaScript and CSS, and `app-shell.mjs` is a data-free bootstrap. Existing `pm-server.mjs` serves these assets, `/api/data`, SSE and existing Delivery routes. Shared `safeFetch` and connectivity probing protect writes; feature query keys and post-mutation invalidation keep views current. The server adds `/api/health`, optional expected-line checks for toggle/ship/discard and guarded post-write Undo snapshots. The whole restore batch is checked before any write.
-- **Data boundary:** Markdown remains the only backlog. Read models, dependency direction, exact IDs, cancelled/shipped separation and recorded runtime projections are reused. Canonical CRLF checkbox scanning now preserves Windows rows and ordinal witnesses. Search excludes verification/provenance boilerplate; visual counts describe recorded open work and dated shipments, not project percent-complete.
-- **Verification (2026-09-10):** 186 tests across 19 PM UI/Delivery-route files pass, including the new application build, canonical discovery/identity/history and stale-file/whole-batch Undo cases. Isolated Chromium walkthroughs cover 1440px desktop and 390/320px phones, light/dark, module/search return, bounded lists, launch witnesses and dirty-tree acknowledgement, scope/plan gates, artifact focus/Escape, recorded steps, pause/resume, guidance, transcript, dead-runner restart, accept/ship, failed-read retry and held V2 setup. A separate real service-worker check reopens cached shell/JS/CSS/data offline, disables mutations and reconnects. In-memory document tests exercise complete, move, discard, capture and Undo with query refresh.
-- **Retained secondary tools:** `?ui=classic` serves source browsing, file operations, rollups and advanced Delivery context/configuration; `?ui=old` remains the older rollback. Portable HTML and hosted `/pm` keep the Preact read-only experience. `/pm/live` remains the independent authenticated relay. V2 qualification/dispatch is still held under R55/DLV-96/DLV-97.
-- **Verification limits:** no live provider run, production data mutation, real phone installation or hosted deployment. The UI tests use copied/in-memory documents and simulated execution; normal server boot writebacks/monthly sweep were not executed. R6/R37/R42/R51 keep their remaining acceptance; this commission does not authorize executing project backlog items.
-- **Provenance:** owner’s Product Experience Reboot commission on 2026-09-10.
-
-
-### R56
-
-**Outcome:** Make the whole project understandable through continuous area, topic, work and Delivery exploration.
-
-- **Diagnosis:** R54's opening queue obscured the project shape; only four campaigns were visible, cross-area context remained in book prose, and routine exploration required full-page changes.
-- **Acceptance:** all eleven canonical areas on the opening map; topic perspectives over the same work; Now, explicit blocking, owner choices and active execution; inline work previews; linked prerequisites/downstream work/decisions; detailed contracts and matching evidence on demand; stable return context through launch, run tabs, decisions and area pages; topic and area outcome history; mobile keyboard and static parity.
-- **Evidence (2026-09-10):** 175 PM UI and Delivery-route tests pass, including ten portfolio cases for shorthand/dotted IDs, dependency direction, unresolved/cancelled references, scope-only topic evidence, separate history and route identity. Chromium walkthrough against the actual PM corpus and isolated Delivery fixtures passed at 1536/1280/1024/768/390 px, with light/dark, cross-area selection, dependency preview, launch/cancel/run return, tab retention, live-run filtering, focus containment, Escape and static mode. Typecheck, lint (including explicit JSX), bundle and PM grammar checks complete the finish gates.
-- **Read model:** `scripts/pm/src/lib/portfolio.js` derives topics, references and dependency states. No new persisted labels, task database or runtime state. Severity is not a dependency; an open related decision alone is not a blocked dependency. Missing references remain unresolved. Topic assignments are deterministic search perspectives with inspectable source evidence, not an asserted exhaustive ontology.
-- **Continuity:** `ProjectExplorer.jsx` owns the map and inspector; `WorkItem.jsx` owns the dedicated work screen and shared relationship display. Existing Delivery APIs, mutation guards and review controls remain authoritative. Project run summaries refresh while visible; actual provider execution, real devices and hosted deployment were not exercised.
-- **Deliberate omissions:** no decorative network graph, flip-card interaction, duplicate backlog, generated project-health score, invented progress percentage, metadata editor or new execution engine.
-- **Provenance:** owner's 2026-09-10 Second UX Pass commission.
-
-### R54
-
-**Outcome:** Refactor the PM product journey from overview through Delivery outcome.
-
-- **Acceptance:** canonical campaign cards and work Board/List, stable item details with book acceptance/related decisions, direct guarded launch, live state/plan/activity/files/checks/resources/handoff, recoverable errors, keyboard-operable dialogs, desktop/mobile layouts and static read-only parity.
-- **Evidence (2026-09-10):** `tests/pm-ui/product-model.test.ts`, `session-model.test.ts`, `session-races.test.ts`; PM UI plus Delivery server-route suite: 165 tests passed. Browser fixture walkthrough covered scope/plan review, late artifact close, pause/resume, accept/ship, error retry, V2 readiness and static mode. Full typecheck and bundle passed. The repository lint command and explicit `eslint --ext .jsx` checks on every changed JSX component pass; esbuild and browser execution also verify JSX.
-- **Architecture:** `scripts/pm/src/lib/product.js` and `app/productStore.js` are derived read models only. `features/delivery/sessionModel.js` projects recorded runtime evidence. No execution engine, SDK, policy or production data change. The sole server payload extension is the explicit read of `_Archive/Cancelled Log.md`, used only for outcome history and never added to scanned files, work, search or dispatch.
-- **Preserved:** the portable static build, hosted prebuild pipeline, `--ui=old` rollback, source tools, canonical mutation/Undo APIs, Delivery controls and review gates, and the separate `/pm/live` app. Stable item navigation and launch checks do not claim to fix the remaining ordinal-mutation/Undo work in R51.
-- **Provenance:** owner's 2026-09-10 Full Product UI/UX Refactor commission.
-
 ### R55
 
 **Remaining engineering (2026-09-15):** complete attempt pagination/filter retention, retry ancestry and active V2 activity on Home. Stable Work history and Done-item links exist; do not rebuild them.
@@ -838,14 +680,13 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **2026-09-14 scope:** fixture-backed presentation work is ready under the owner's hotfix commission; further native trials await the resource gates in Delivery DLV-114/119 and existing DLV-97 acceptance. Earlier qualification holds below describe the pre-trial state.
 **Kind:** feature
 **Touches:** `scripts/pm/app/Work.tsx`, `scripts/pm/app/Home.tsx`, `scripts/pm/app/Delivery.tsx`, `scripts/pm/app/state.tsx`, `scripts/pm/app/model.ts`, `scripts/pm/app/v2model.ts`, `scripts/pm/app/types.ts`, `scripts/delivery-v2/journey.mjs`, `scripts/delivery-v2/store.mjs`, `scripts/pm/relay-shared.mjs`, `src/features/pm-live/relay/`, `tests/pm-ui/`, `tests/delivery-v2/`
-- **Hotfix acceptance:** [packet G](<../Plans/Delivery First-Run Hotfix.md>) adds visible permanent history keyed by stable work identity for active, failed, cancelled, verified, applied and rolled-back attempts, including moved/shipped/discarded items. Separate attempt number from plan revision, candidate generation, Result version and application events. Retain explicit retry ancestry, exact deep links and originating filters through Back/Forward/reload/second-tab/offline views. Native observations and application state remain authoritative; no invented successful job or removed runtime history. Verify local/relay parity and retain V1 receipts.
+- **Hotfix acceptance:** [packet G](<../_Archive/Plans/Delivery First-Run Hotfix (2026-09-14).md>) adds visible permanent history keyed by stable work identity for active, failed, cancelled, verified, applied and rolled-back attempts, including moved/shipped/discarded items. Separate attempt number from plan revision, candidate generation, Result version and application events. Retain explicit retry ancestry, exact deep links and originating filters through Back/Forward/reload/second-tab/offline views. Native observations and application state remain authoritative; no invented successful job or removed runtime history. Verify local/relay parity and retain V1 receipts.
 - **Acceptance:** once qualification and dispatch policy are accepted, map the canonical V2 job lifecycle, executor identity, refusal reasons, check evidence and Result disposition into the run and outcome views. Use V2 routes and preserve admission/approval/evidence boundaries; never fall back to V1 or invent a running job after admission. Verify real event shapes with fixture and admitted pilot evidence. Reuse the R54 layout and keep V1 history readable.
 - **Command Center mapping (2026-09-11):** Phase 3 connects the canonical V2 list/detail/events/decision/control/result projections to Delivery and Run here, including per-run executor, model and effort.
 - **Review delta (2026-09-13):** `scripts/pm/app/state.tsx:143` / `:181` expose only V1 sessions through `useWorld().runs`; `Home.tsx:15`, `model.ts:129` and WorkView's `runFor` consume them. `Delivery.tsx` separately queries V2. Acceptance must also cover Home/attention and Work's Follow delivery action for an active or review-waiting V2 run, locally and over relay, with stable campaign/item identity and no duplicate display beside V1 history. Source-verified gap; no real V2 session exists to provide device evidence.
 - **Phase 3 presentation landed (2026-09-12), acceptance still held:** `scripts/pm/app/DeliveryV2.tsx` + `v2model.ts` read `journey.mjs` projections over paired-session routes (`api.ts` `v2Read`/`v2Post` send `x-era-csrf`; command ids minted per intent and reused on retry). Launch in v2 mode offers Claude/Codex with a one-word refusal when unqualified/unpermitted, Focused/Investigate, catalog model and SDK-supported effort; `#/delivery/run/<id>` shows the stage projection, blocking questions and plan Approve/Revise above activity, observed agents only, “Not tested” for zero-test checks, Result obligations, unknown cost as “Unknown”, guidance receipts and Pause/Resume/Stop/Reconcile/Retry writeback. The Delivery list shows V2 runs beside V1 sessions with explicit engine labels (`V1 ·` / `V2 ·`); V1 views are unchanged. Evidence: `tests/pm-ui/delivery-v2-model.test.ts` (8), pm-ui 128/128 incl. both builds, typecheck and ESLint clean; in a real browser against a synthetic fixture server (real bundle, V2 routes and journey; scripted executors), pairing by code loaded the run, and `#/delivery`, both run states and `#/deliver/Budget/BUD-14` had no horizontal overflow or sub-36 px controls at 390 and 320 px (same-origin iframe probe; window resizing had no effect, as in R60). **Not yet evidenced:** real event shapes from an admitted pilot (none can run until DLV-96/97 qualify an executor), phone/PWA. See [Delivery DLV-97](<../Delivery/Delivery — Master Book.md#dlv-97>).
 - **Provenance:** R54 product implementation exposed this dependency; dispatch/qualification remain owned by Delivery.
 - **Reading guide:** Stable Work history and Done-item links already exist. Start with `scripts/pm/app/Work.tsx`, `Home.tsx`, `Delivery.tsx`, `model.ts` and `state.tsx`; then trace the current V2 list through `journey.mjs`/`store.mjs`. Remaining scope includes paging/filter retention, retry ancestry and active V2 Home attention, not paging alone. Coordinate pagination with DLV-121 and verify identical projections through `relay-shared.mjs` and the phone transport. Use synthetic evidence for implementation; admitted pilot and device acceptance remain separate.
-
 
 **Execution plan — 2026-09-26**
 
@@ -908,7 +749,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Reading guide:** Evidence-gathering, not code. Hard Rule #27 governs the whole item: **`migrations/db-state.json` is the only repo artifact permitted as evidence about RLS** — generated by the owner running `migrations/db-state.sql`, validated by `pnpm db:verify-rls`, and reported on by the SessionStart hook `.claude/hooks/session-brief.sh`. `schema.sql` is tables-only and has actively lied here before. The hot child tables Hard Rule #20 names are `item_alerts`, `item_subtasks`, `reminder_details`, `event_details`, `item_recurrence_rules`, `recurrence_pauses`; the two sanctioned patterns are a SECURITY DEFINER bundle RPC (`get_schedule_bundle`, `get_health_bundle`, `get_household_allergens` are the live examples) or a denormalized `user_id` with a direct policy. Read the bundle read paths in `src/app/api/` that consume them before proposing any amendment. No policy rewrite and no denormalization on a guess.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** Owner evidence first; read-only investigation.
@@ -967,7 +807,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Reading guide:** Start with `eslint.config.mjs` and its flat-config override pattern; `src/lib/safeFetch.ts` defines the sanctioned mutation behavior. Add a warning scoped to client directories and cover literal mutating methods with actual ESLint fixtures. Correction (2026-09-26): `tests/pm-ui/lint-rules.test.ts` tests PM checklist grammar, not ESLint rules; do not add JavaScript-rule assertions to that unrelated suite. R48 owns replacement and eventual error-level promotion.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** Implementation draft; bounded config change.
@@ -1012,6 +851,10 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **2026-10-17 recovery preparation:** Exact publication paths are declared for the proposed single pilot; implementation remains open. Protected oracle `tests/delivery-oracles/r44-fetch-guard.mjs` is prepared under DLV-133 and checks warnings across four client directories, read calls/safeFetch and server exclusions. No application guard, live job or owner-reviewed plan is claimed. The later pilot preserves Codex / gpt-6-luna / low and exact phone plan approval; R48 still owns burn-down.
 
+- **Implementation:** done
+- **UAT:** pending
+- **Closed 2026-11-11 as already completed:** the guard was applied on 2026-10-24 (run `r-46688acd1b86`, evidence above). `tests/pm-ui/raw-fetch-guard.test.ts` passes 5 tests on 2026-11-11. The row had stayed open while waiting for owner sign-off; that sign-off is the pending UAT, not open engineering. The burn-down of existing raw mutating fetch calls is R48.
+
 ### R47
 
 **Outcome:** Enforce the client-only console rule.
@@ -1021,7 +864,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Same file and same shape as R44: a scoped override block in `eslint.config.mjs` turning `no-console` on for `src/components/`, `src/features/`, `src/hooks/`, `src/contexts/` and `page.tsx` files only. The rule's wording matters — Hard Rule #22 was *corrected* on 2026-08-01 to client-only, and `console.error` under `src/app/api/` is permitted by design (it is the Vercel log stream), so the override must not reach server routes. The stated 202 sites are a historical count, not a target; recount before claiming progress. Warn-level.
-
 
 **Execution plan — 2026-09-26**
 
@@ -1063,76 +905,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 }
 ```
 
-### R6
-
-**Outcome:** Verify the replacement PM UI before retiring rollback files.
-
-- **Acceptance:** Complete the desktop + 390 px visual UAT and a fake-driver delivery walkthrough, then delete the legacy `client.js` / `styles.css` / `body.html` and the `?ui=old` rollback surface
-- **Command Center Phase 6 (2026-09-11):** retiring duplicate presentation and control paths happens here after R60 and the Delivery trial (DLV-102); extract shared parser/model dependencies first and keep V1 history readable.
-- **Phase 6 status (2026-09-12): dependencies extracted; nothing retired.** `shared/product.mjs`, `portfolio.mjs`, `history.mjs` and `metrics.mjs` now serve the primary app, bridge and relay; `scripts/pm/src/lib/` only re-exports for the classic build. Retirement did not start: the DLV-102 trial has no receipts, and this gate's desktop/390 px UAT of classic-only journeys (document checkboxes, file operations, the fake-driver three-gate walkthrough) was not rerun — the React Reader is still read-only. Candidates once those pass: `?ui=old` (`client.js`, `body.html`, `styles.css`, `buildHtmlLegacy`); `?ui=classic` presentation once its remaining tools have React replacements; `/pm/live?ui=legacy` after R63/R42 phone acceptance. Keep: the static/hosted read-only export and the V1 session reader.
-
-**Retained contract — ASTRA-R-3:**
-
-- **Outcome:** One maintained desktop UI serves the owner and every successor agent.
-- **Money/schedule math?:** No.
-- **Gate:** `pnpm vitest run tests/pm-ui/build-smoke.test.ts tests/pm-ui/static-twin.test.ts tests/pm-ui/ordinal-parity.test.ts` → all pass, nonzero tests. `rg -n "buildHtmlLegacy|ui=old" scripts/pm/ui.mjs scripts/pm-server.mjs` → no matches, exit 1 expected. `Get-Item -LiteralPath scripts/pm/client.js,scripts/pm/styles.css,scripts/pm/body.html -ErrorAction SilentlyContinue` → no output. UAT evidence at desktop and 390px: Overview, Work Queue filters/reload, document checkboxes, Search, Inbox, fake-driver launch/three gate decisions/final acceptance; static twin offers no mutations. `pnpm typecheck` and `pnpm pm:lint` → exit 0.
-
-**Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
-
-- **Reading guide:** Deletion gated on verification. The files to retire exist and are real: `scripts/pm/client.js`, `scripts/pm/styles.css`, `scripts/pm/body.html`, and the escape hatch is documented in `scripts/pm/ui.mjs` ("`--ui=old` or `?ui=old` keeps the proven legacy surface available during final parity QA") — grep `ui=old` there before deleting anything, because the flag is also plumbed through the server. The replacement is the React app under `scripts/pm/app/` built by `scripts/pm/build.mjs` and served via `scripts/pm/app-shell.mjs`. Existing coverage to lean on: `tests/pm-ui/build-smoke.test.ts`, `react-app-build.test.ts`, `static-twin.test.ts`. The 390 px visual UAT and the fake-driver walkthrough are the two things no test currently proves — do them before the delete, not after.
-
-
-**Execution plan — 2026-09-26**
-
-**Readiness:** Held for replacement coverage and trial evidence; deletion is last.
-
-**Verify:** `pnpm exec vitest run tests/pm-ui/build-smoke.test.ts tests/pm-ui/static-twin.test.ts tests/pm-ui/ordinal-parity.test.ts`; capture desktop/390px journeys with a fake driver and no bridge before deletion.
-
-```delivery-plan-v1
-{
-  "outcome": "Retire only rollback presentation paths whose replacement journeys are proven.",
-  "acceptance": [
-    "Replacement journeys pass before deletion.",
-    "Static read-only export and V1 session history remain usable."
-  ],
-  "scope": [
-    "scripts/pm/client.js",
-    "scripts/pm/styles.css",
-    "scripts/pm/body.html",
-    "scripts/pm/ui.mjs",
-    "scripts/pm-server.mjs",
-    "tests/pm-ui/"
-  ],
-  "steps": [
-    "Inventory old-only document/file actions and check replacement coverage; missing actions are blockers, not permission to drop functionality.",
-    "Collect R60 and DLV-102 evidence plus desktop/mobile fake-driver receipts using node scripts/pm-server.mjs --no-bridge.",
-    "Remove the three legacy files and ui=old wiring only after the named gate passes.",
-    "Run both retained builds and history/static tests; document precisely which rollback surface retired."
-  ],
-  "invariants": [
-    "No agent starts the production relay.",
-    "Shared parsers are retained."
-  ],
-  "exclusions": [
-    "Classic or phone-legacy retirement without their separate gates."
-  ],
-  "checks": [],
-  "risks": [
-    "React Reader is documented as read-only; parity cannot be assumed."
-  ],
-  "unknowns": [
-    "Current replacement parity and real DLV-102 trial receipt."
-  ],
-  "dependencies": [
-    "R60",
-    "DLV-102"
-  ],
-  "risk": "medium",
-  "ownerReviewed": false,
-  "provenance": "2026-09-26 at 45b28899. Accepted retirement gates reviewed; no visual or device acceptance performed."
-}
-```
-
 ### R45
 
 **Outcome:** Resolve the mutation-toast Undo rule.
@@ -1142,7 +914,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Held for DEC-07; the deliverable is a recorded owner decision, not an edit. Hard Rule #1 currently says *all* toasts carry Undo, and the question is whether a pure confirmation or error toast should. Survey before proposing: the toast vocabulary is `ToastIcons` in `src/lib/toastIcons.tsx`, and the best-behaved examples are `src/components/notifications/CriticalAlertGate.tsx` and the optimistic mutations in `src/features/*/hooks.ts`. Record the resolution in `_Decisions.md`; this PM refactor does not waive the rule in the meantime.
-
 
 **Execution plan — 2026-09-26**
 
@@ -1210,7 +981,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Small, and it attaches to something that already exists: `.claude/hooks/session-brief.sh` is the SessionStart hook that injects the freshness brief (it already reports DB-snapshot staleness for Hard Rule #27). Add the oldest open S-effort item to it. Backlog identity comes from the existing parsers — `scripts/pm/shared/tasks.mjs` and `scripts/pm/shared/work-id.mjs` parse `- [ ] **ID** title _(severity - effort)_`, and `scripts/pm/shared/metrics.mjs` `openWork()` already enumerates open work with `SEVERITIES`. "No new subsystem" is the constraint: read the checklists through the existing scanner, do not add a second one.
-
 
 **Execution plan — 2026-09-26**
 
@@ -1289,7 +1059,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Reading guide:** A PostToolUse hook, and the acceptance names its template: `.claude/hooks/check-migration.sh`. Read that plus `.claude/hooks/check-pm-update.sh` (which shows the once-per-turn, non-looping discipline) before writing anything; both are registered in `.claude/settings.json`. The check itself is textual: a file under `src/app/api/` exporting `POST`/`PATCH`/`PUT` with no `zod` import violates Hard Rule #12. The canonical compliant route is `src/app/api/accounts/route.ts`; `.claude/skills/api-route/SKILL.md` has the template. The 113-of-170 count is historical — recount when you land it. Warn, do not block.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** Implementation draft; advisory hook only.
@@ -1343,7 +1112,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** The burn-down half of R44, and the acceptance is explicit that the historical 98/13/8 counts are not targets — recount first with a grep for mutating `fetch(` under `src/components/`, `src/features/`, `src/hooks/`, `src/contexts/`. Read `src/lib/safeFetch.ts` before replacing anything: it does a pre-flight online check, defaults to an 8 s timeout, and — the subtle part — treats a timeout as latency, not disconnection, probing `/api/health` before `markOffline()`, so `isOfflineError()` stays false for endpoint timeouts and they cannot enqueue a duplicate mutation. That is why AI calls, uploads and external APIs must pass an explicit `timeoutMs` (Hard Rule #6). Start where the acceptance says: the Hub shopping writers in `src/components/hub/ShoppingListView.tsx` and the notification writers in `src/hooks/useNotifications.ts`. Offline queue background: `ERA Notes/01 - Architecture/Sync and Offline.md`. Flip R44 to error only at zero.
-
 
 **Execution plan — 2026-09-26**
 
@@ -1408,7 +1176,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Reading guide:** Scope has drifted: the acceptance says "five files of pure functions", but `scripts/pm/shared/` now holds twelve — `md-scan.mjs`, `tasks.mjs`, `text.mjs`, `work-id.mjs`, `work-lifecycle.mjs`, `declarations.mjs`, `frontmatter.mjs`, `history.mjs`, `links.mjs`, `metrics.mjs`, `portfolio.mjs`, `product.mjs` (verified 2026-09-20). Re-scope before starting. The mechanism: `tsconfig.json` already sets `allowJs: true`, and **no file in `scripts/pm/` currently carries `@ts-check`**, including the `lint.mjs` the acceptance calls the template — so check what "the lint.mjs fix" actually refers to rather than assuming it is done. `md-scan.mjs` (`scanCore`, `scanLines`) is the root everything else trusts, so type it first. Existing behavioural cover: `tests/pm-ui/shared-parsing.test.ts`, `work-identity.test.ts`, `ordinal-parity.test.ts`.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** Split first; freeze the parser boundary before typing it.
@@ -1472,7 +1239,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Reading guide:** Two separable claims, and the acceptance says the existing tests do not prove them. Read `scripts/pm/app-shell.mjs` first — its opening line is the provenance statement ("The local app fetches canonical Markdown through /api/data; HTML contains no snapshot") — with `appAsset()` and `buildAppShell()`, and `scripts/pm/build.mjs` (`buildBundle`, `createBundleWatcher`) for how the bundle is produced. Existing tests that are *not* sufficient on their own: `tests/pm-ui/static-twin.test.ts`, `ordinal-parity.test.ts`, `build-smoke.test.ts`. What is missing is a build/cache fixture: a stale cached shell against fresh data must refuse writes. The write path to refuse in is `scripts/pm/mutations.mjs` with `scripts/pm/write-guards.mjs` (`assertExpectedCheckbox`, `guardUndo`, `assertRestoreCurrent`). R53 depends on this.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** Investigation first; source compatibility is distinct from cached freshness.
@@ -1534,7 +1300,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Reading guide:** The 90-day convention already exists; add only a compact suggestion to `.claude/hooks/session-brief.sh`, coordinated with R34. The scanner supplies raw documents and `shared/links.mjs` resolves references. `shared/history.mjs` explicitly excludes session prose: a small session-narrative detector is still needed. Establish dated closure and active-evidence markers from actual documents first; ambiguity means retain. `scripts/pm/archive.mjs` sweeps checklist rows, not session prose. Do not invoke it to move histories.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** Investigation first; establish reliable closure markers, then surface candidates without moving history.
@@ -1592,7 +1357,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Reading guide:** Measurement, not a change. The index is the React app under `scripts/pm/app/` (search is `Explore.tsx` with `tests/pm-ui/search.test.ts`); the "complete static twin" is the fixture exercised by `tests/pm-ui/static-twin.test.ts`. Largest note: find it with a size sort over `ERA Notes/` rather than assuming. Record numbers; R9 only unparks if this proves offline load materially slow.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** Investigation first; measurement only.
@@ -1645,7 +1409,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Provenance:** [4 - Checklist.md](<../_Archive/2026-09-10 PM Refactor/Before/PM Tooling/4 - Checklist.md>). The source is historical; this entry owns the retained outcome.
 
 - **Reading guide:** Conditional on R8 proving font-related offline delay. The primary PM styles load Geist Regular/SemiBold in `scripts/pm/app/styles.css`; `scripts/pm/app-build.mjs` embeds woff2 for React, while `scripts/pm/build.mjs` builds the separate classic/static bundle with the same loader kind. Measure the affected bundle and required glyphs before proposing local subsets. Main web-app fonts remain outside this item.
-
 
 **Execution plan — 2026-09-26**
 
@@ -1706,7 +1469,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Reading guide:** Depends on R37 (provenance/cache), and the symptom is a read-model gap, not a write failure — so confirm the capture actually persists before touching the UI. The Inbox file is `ERA Notes/10 - Project Management/0 - Inbox.md`; the readers are `scripts/pm/app/Auxiliary.tsx` (the desktop view), `scripts/pm/check-docs.mjs` and `scripts/pm/bridge.mjs` (the phone relay). Note there is also a legacy `scripts/pm/src/features/inbox/InboxView.jsx` under the old UI — R6 is retiring that surface, so do not fix it there. Stable identity plus a receipt after refresh is the same durability problem the relay solves elsewhere: read `src/features/pm-live/relay/` and the bridge's command journal. Owner-bound cache semantics must be preserved. Filing raw captures is `.claude/skills/triage-inbox/SKILL.md` — this item is about visibility, not triage.
 
-
 **Execution plan — 2026-09-26**
 
 **Readiness:** Investigation first; establish persisted capture and snapshot provenance.
@@ -1765,71 +1527,90 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Shipped Log
 
-- ✅ 2026-10-03 — **R70** Guardrail hooks fire on real payloads: `block-ui-dir.sh` blocks `src/components/ui/` edits and `update-atlas.sh` rebuilds `atlas.json` when an Atlas entry changes. Both had read the wrong payload field, so Hard Rules #11 and #23 were unenforced. (Payload tests; [acceptance and verification](<#r70>).)
+- ✅ 2026-10-03 — **R70** Guardrail hooks fire on real payloads: block-ui-dir.sh blocks src/components/ui/ edits and update-atlas.sh rebuilds atlas.json when an… → [record](<../_Archive/Shipped/PM Tooling.md#r70>)
 
-- ✅ 2026-09-26 — **R69** Shared Command Center Memory mark, Home queue/module cards, Analytics navigation and daily receipts, visible work IDs, persistent search across status/layout changes, and selectable question options from supplied text. Existing Delivery execution and answer commands are preserved; guaranteed AI-generated choices remain a separate suggestion. (Local implementation; [acceptance and verification](<#r69>); physical-phone UAT pending.)
+- ✅ 2026-09-26 — **R69** Shared Command Center Memory mark, Home queue/module cards, Analytics navigation and daily receipts, visible work IDs, persistent search… → [record](<../_Archive/Shipped/PM Tooling.md#r69>)
 
-- ✅ 2026-09-26 — **R68** Active highlights readable on `/pm/live` + Earlier deliveries filter. Same class as R67: the Next app's `:root[data-theme="blue"]` (and `.dark`) `--accent: #f1f5f9` out-ranked the PM app's bare `:root { --accent }`, so the selected bottom-nav tab, the selected Delivery tab (Outcome/Plan/…) and every accent icon (Spec/Plan rows) rendered light grey. Fix: `styles.css`/`dashboard.css` token blocks now also declare on `[data-pm-live]` (element-level beats any inherited `:root` value), incl. pink. Collision sweep of every PM token vs `src/**/*.css`: only `--accent`, `--chart-2`, `--chart-3` collided — all covered. Earlier deliveries gained an outcome filter (All / To apply / Applied / Cancelled / Other, zero-count chips hidden) via `pastOutcomeV1/V2` in `model.ts`. (`tests/pm-ui/app-model.test.ts` 6/6, typecheck clean; phone check pending.)
+- ✅ 2026-09-26 — **R68** Active highlights readable on /pm/live + Earlier deliveries filter → [record](<../_Archive/Shipped/PM Tooling.md#r68>)
 
-- ✅ 2026-09-22 — **R67** Muted text readable on `/pm/live`: the Next app's `:root[data-theme="blue"] { --muted: #1a2942 }` (a surface shade, specificity 0,2,0) beat the PM app's `:root { --muted: #94a3b8 }`, so every secondary label — bottom nav included — rendered near-background. Renamed the PM token to `--ink-muted` in all six `scripts/pm/app/*.css` files so it can't collide. (Grep: 0 remaining `--muted` in `scripts/pm/app`; phone check pending.)
+- ✅ 2026-09-22 — **R67** Muted text readable on /pm/live: the Next app's :root[data-theme="blue"] { --muted: #1a2942 } (a surface shade, specificity 0,2,0) beat the… → [record](<../_Archive/Shipped/PM Tooling.md#r67>)
 
-- ✅ 2026-09-15 — **R66** Removed Delivery launch/footer noise and rebuilt review hierarchy around visible plan sections, verification history, run facts and final Changes/Apply; unavailable executors now reveal their actual blocker. (Targeted tests, React bundle, typecheck and lint; browser UAT pending.)
+- ✅ 2026-09-15 — **R66** Removed Delivery launch/footer noise and rebuilt review hierarchy around visible plan sections, verification history, run facts and final… → [record](<../_Archive/Shipped/PM Tooling.md#r66>)
 
-- ✅ 2026-09-15 — **R65** Actionable To do, searchable Done, completed scope/session history, separate owner UAT, and shared V1/V2 launch guards. Reconciled 11 prior implementations and 11 manual checks; split remaining engineering. (800 passing tests, typecheck/lint, 28 browser observations; [UAT](<../../../docs/Delivery-UAT.md>).)
+- ✅ 2026-09-15 — **R65** Actionable To do, searchable Done, completed scope/session history, separate owner UAT, and shared V1/V2 launch guards → [record](<../_Archive/Shipped/PM Tooling.md#r65>)
 
-- ✅ 2026-09-11 — **R51** Witnessed task mutations and guarded Undo implemented under R59; remaining owner acceptance moved to UAT. (Reconciled 2026-09-15 from dated implementation/test evidence; [UAT](<../../../docs/Delivery-UAT.md>).)
+- ✅ 2026-09-11 — **R51** Witnessed task mutations and guarded Undo implemented under R59 → [record](<../_Archive/Shipped/PM Tooling.md#r51>)
 
-- ✅ 2026-09-12 — **R63** Shared Command Center views mounted on the phone relay through the transport seam; owner deployment/device acceptance pending. (Reconciled 2026-09-15 from dated implementation/test evidence; [UAT](<../../../docs/Delivery-UAT.md>).)
+- ✅ 2026-09-12 — **R63** Shared Command Center views mounted on the phone relay through the transport seam → [record](<../_Archive/Shipped/PM Tooling.md#r63>)
 
-- ✅ 2026-09-15 — **R64** Responsive Delivery review workspace implemented and browser-verified at 320 through 1920 px; physical-phone UAT pending. (Reconciled 2026-09-15 from dated implementation/test evidence; [UAT](<../../../docs/Delivery-UAT.md>).)
+- ✅ 2026-09-15 — **R64** Responsive Delivery review workspace implemented and browser-verified at 320 through 1920 px → [record](<../_Archive/Shipped/PM Tooling.md#r64>)
 
-- ✅ 2026-09-10 — **R57** Replaced the primary dashboard with the React ERA application, focused mobile/desktop journeys and truthful Delivery story — [evidence](<PM Tooling — Master Book.md#r57>)
+- ✅ 2026-09-10 — **R57** Replaced the primary dashboard with the React ERA application, focused mobile/desktop journeys and truthful Delivery story — evidence → [record](<../_Archive/Shipped/PM Tooling.md#r57>)
 
-- ✅ 2026-09-10 — **R56** Added whole-project area/topic exploration, contextual work previews, dependencies and continuous Delivery return paths — [evidence](<PM Tooling — Master Book.md#r56>)
+- ✅ 2026-09-10 — **R56** Added whole-project area/topic exploration, contextual work previews, dependencies and continuous Delivery return paths — evidence → [record](<../_Archive/Shipped/PM Tooling.md#r56>)
 
-- ✅ 2026-07-13 — **R-series** the Preact/esbuild Command Center became the default dashboard: hash routes, history, themes, module/document views, backlinks, interactive checkboxes, task board + table, global search, rollups, file operations, re-skinned Delivery
+- ✅ 2026-07-13 — **R-series** the Preact/esbuild Command Center became the default dashboard: hash routes, history, themes, module/document views, backlinks, interactive… → [record](<../_Archive/Shipped/PM Tooling.md#2026-07-13--r-series>)
 - ✅ 2026-07-13 — checkbox identity got a constructional guard: one dependency-free scanner serving mutations, Markdown, tasks and tests, with a 358-file parity test against the literal legacy algorithm
 - ✅ 2026-07-13 — the portable twin builds from the same bundle with Geist vendored and inlined, and Delivery/edit entry points hidden in static mode
 - ✅ 2026-07-17 — the PM Center became an installable PWA with an opt-in LAN mode (house-style icon family, `pm.webmanifest`, DNS-rebinding host guard, 23 new net-guard tests)
 - ✅ 2026-07-17 — a dedicated mobile home + bottom nav below 700 px, with a "needs your decision" feed sourced from the existing delivery `awaiting` field
 - ✅ 2026-07-17 — Delivery gates, questions, monitoring and the launch wizard made usable one-handed (48 px targets, `?tab=` deep links to Q&A, horizontally scrolling tabs, full-screen modals below 700 px)
 - ✅ 2026-07-17 — long checklist items stay readable: a shared `TaskCard` (chips on one line, full text wrapped, never truncated) grouped into collapsible lanes with a campaign filter
-- ✅ 2026-07-18 — **R16** the read-only PM Console shipped as a first-class page of the deployed app at `/pm` — own manifest and icons, installable on a phone, offline via the app service worker, laptop off; rebuilt by `pnpm pm:public` in `prebuild`, gated behind the app's Supabase login
+- ✅ 2026-07-18 — **R16** the read-only PM Console shipped as a first-class page of the deployed app at /pm — own manifest and icons, installable on a phone, offline… → [record](<../_Archive/Shipped/PM Tooling.md#r16>)
 - ✅ 2026-07-18 — **R15** superseded by R16: the phone-offline goal is met by hosting inside the already-HTTPS deployed app, so no self-signed-cert LAN path is needed
 - ✅ 2026-07-18 — **R26** `lintChecklist` JSDoc typing fixed — `pnpm typecheck` had been broken repo-wide for five days by an untyped options bag
-- ✅ 2026-07-22 — **R27** Idea Inbox: `0 - Inbox.md` capture surface (New/Processed), the 💡 topbar quick-capture reusing the existing `append` mutation with no server changes, the `/triage-inbox` skill, and the §7 grammar
+- ✅ 2026-07-22 — **R27** Idea Inbox: 0 - Inbox.md capture surface (New/Processed), the 💡 topbar quick-capture reusing the existing append mutation with no server… → [record](<../_Archive/Shipped/PM Tooling.md#r27>)
 - ✅ 2026-07-25 — **R28** the Delivery launch wizard became a full page (`#/delivery/new`) instead of a 620 px-capped modal, with the flight-check grid replaced by a masonry `columns` layout
-- ✅ 2026-07-25 — **R29** `/pm/live` shipped as the third mobile surface: live checklist + live delivery control fed by an outbound-only Supabase relay, distinct from the frozen `/pm` snapshot and the loopback-only `pnpm pm`
-- ✅ 2026-07-30 — **R30** hide-completed made real: the document view now partitions each list and collapses completed rows behind a per-list "N completed hidden — show" pill (clicking it clears the toggle, so the affordance leads somewhere), and the control moved to the topbar where it is reachable at every width instead of living in the off-canvas sidebar (`scripts/pm/src/features/doc/Markdown.jsx`, `app/App.jsx`)
-- ✅ 2026-07-30 — **R31** Search and the Idea Inbox became first-class destinations: sidebar entries, mobile tabs (Checklist stepped out of the 5-tab bar, being one tap from Home), command-palette actions, a dedicated `#/inbox` route with New/Processed lists and inline capture, and `lane:` / `e:` / `id:` added to the query language — with `idChip` and `effort` promoted to stored fields so the filters can actually read them (`features/inbox/InboxView.jsx`, `features/search/queryLang.js`)
-- ✅ 2026-07-30 — **R32** a real board toolbar on Tasks and Checklist: always-visible search, one-tap quick-filter chips (Blockers / Now / Small / Done), native group-by and sort-by selects, and **filter state in the URL** — `#/tasks?q=…&group=…&sort=…` survives a reload and can be pasted to yourself. Defaults are omitted from the hash so an unfiltered board keeps a clean link. The logic is pure and tested (`boardState.js`, 16 cases); Bugs gained the same search + severity chips (`features/tasks/BoardToolbar.jsx`)
-- ✅ 2026-07-30 — **R33** visual pass: sticky lane headers on both the board and the checklist rollup, tabular-figure count pills, ~20% tighter cards, a checkbox press animation, per-lane "Nothing here." states and a Clear-filters action in the empty state — all behind `prefers-reduced-motion` (`styles/tasks.css`)
-- ✅ 2026-07-30 — memory files refreshed for the new layout (`project_pm_command_center`, `project_fable_handoff`, `project_agentic_delivery_workspace`) and the last delivery-script comment paths repointed at the Master Books
-- ✅ 2026-07-30 — **R7** vault consolidation: every campaign reduced to a Master Book + `4 - Checklist.md`, superseded layers moved to `_Archive/` and made invisible to every PM tool (`scan.mjs` skip), the lint campaign map, bridge rollups/history reads and delivery packet-context reads repointed at the books, and CLAUDE.md / skills / `00 - Home` indexes updated
-- ✅ 2026-07-31 — **R39** `/pm/live` rebuilt phone-only (owner: "too cluttered, texts are too much, size is too small") — the `lg:` desktop layout and `SideNav` are gone, nav is 4 tabs + a raised centre Capture FAB (long-press = quick Launch), a 12px content-text floor with `neo-card`-style elevation replaces the old 4%-opacity/10px surface, Board rows and detail sheets stop printing the ID chip and severity/effort twice (see R40), Campaigns is reachable on the phone for the first time (was `desktopOnly`), Usage moved off the tab bar onto a Home "Spend" tile, and `/pm/live` gained its own installable manifest (`public/manifests/pm-live.webmanifest`, distinct from `/pm`'s). All four session panes (Q&A/Chat/Files/Cost) kept, enlarged, with badge counts always visible.
-- ✅ 2026-07-31 — **R40** fixed the display-layer duplication bug: `PmTask.text` still carries the ID chip and the `(severity - effort)` suffix because `cleanInlineText()` in `scripts/pm/shared/text.mjs` strips the underscores the meta-regex needs before that regex runs, so it never matches — every row rendering the ID chip and severity/effort as their own affordances was printing both twice. Added `displayText(task)` in `derive.ts` (display-only; `task.text` stays the raw search corpus) with test coverage in `tests/pm-live-derive.test.ts`. The upstream one-line fix in `text.mjs` was deliberately not taken here — shared by `lint.mjs`, the desktop Preact app and the bridge, wider blast radius than a UI pass — see the `## Next` item below.
-- ✅ 2026-08-01 — **R49** Automate the checklist sweep — Ship / Discard row actions with Undo, a git-dated `pnpm pm:archive` CLI, and a once-a-month auto-sweep on `pnpm pm` boot; discarded items land in `_Archive/Cancelled Log.md` → `scripts/pm/archive.mjs`
+- ✅ 2026-07-25 — **R29** /pm/live shipped as the third mobile surface: live checklist + live delivery control fed by an outbound-only Supabase relay, distinct from… → [record](<../_Archive/Shipped/PM Tooling.md#r29>)
+- ✅ 2026-07-30 — **R30** hide-completed made real: the document view now partitions each list and collapses completed rows behind a per-list "N completed hidden —… → [record](<../_Archive/Shipped/PM Tooling.md#r30>)
+- ✅ 2026-07-30 — **R31** Search and the Idea Inbox became first-class destinations: sidebar entries, mobile tabs… → [record](<../_Archive/Shipped/PM Tooling.md#r31>)
+- ✅ 2026-07-30 — **R32** a real board toolbar on Tasks and Checklist: always-visible search, one-tap quick-filter chips (Blockers / Now / Small / Done), native… → [record](<../_Archive/Shipped/PM Tooling.md#r32>)
+- ✅ 2026-07-30 — **R33** visual pass: sticky lane headers on both the board and the checklist rollup, tabular-figure count pills, 20% tighter cards, a checkbox… → [record](<../_Archive/Shipped/PM Tooling.md#r33>)
+- ✅ 2026-07-30 — memory files refreshed for the new layout (project_pm_command_center, project_fable_handoff, project_agentic_delivery_workspace) and the… → [record](<../_Archive/Shipped/PM Tooling.md#2026-07-30--memory-files-refreshed-for-the-new-layout>)
+- ✅ 2026-07-30 — **R7** vault consolidation: every campaign reduced to a Master Book + 4 - Checklist.md, superseded layers moved to Archive/ and made invisible to… → [record](<../_Archive/Shipped/PM Tooling.md#r7>)
+- ✅ 2026-07-31 — **R39** /pm/live rebuilt phone-only (owner: "too cluttered, texts are too much, size is too small") — the lg: desktop layout and SideNav are gone,… → [record](<../_Archive/Shipped/PM Tooling.md#r39>)
+- ✅ 2026-07-31 — **R40** fixed the display-layer duplication bug: PmTask.text still carries the ID chip and the (severity - effort) suffix because cleanInlineText()… → [record](<../_Archive/Shipped/PM Tooling.md#r40>)
+- ✅ 2026-08-01 — **R49** Automate the checklist sweep — Ship / Discard row actions with Undo, a git-dated pnpm pm:archive CLI, and a once-a-month auto-sweep on pnpm… → [record](<../_Archive/Shipped/PM Tooling.md#r49>)
 - ✅ 2026-08-03 — **R41** fixed the shared task-text stripping order so every PM consumer receives clean prose instead of duplicated ID/severity metadata (`shared/text.mjs`; parsing regression test)
-- ✅ 2026-08-03 — **R50** transformed `pnpm pm` around real owner workflows: action-led Overview, movable Work Queue with undoable Markdown lane changes, portfolio Projects, unified Activity/audit history, visible execution lanes, compact preview-aligned light/dark themes, and responsive workspace navigation (`scripts/pm/src/`; 60 PM UI tests + bundle + typecheck)
+- ✅ 2026-08-03 — **R50** transformed pnpm pm around real owner workflows: action-led Overview, movable Work Queue with undoable Markdown lane changes, portfolio… → [record](<../_Archive/Shipped/PM Tooling.md#r50>)
 
 - ✅ 2026-09-10 — **R35** Meta-work budget and explicit owner-commission exception established in _Conventions.md.
-- ✅ 2026-09-10 — **R52** Refactored the full PM knowledge system: canonical queues/criteria, accepted plans, decision and option disposition, archive provenance, templates and navigation; validation recorded in the refactor receipt.
-- ✅ 2026-09-10 — **R54** Refactor the PM product journey through Delivery outcome — [evidence](<PM Tooling — Master Book.md#r54>)
-- ✅ 2026-09-11 — **R58** Restore ERA's theme and correct PM connectivity detection — [evidence](<PM Tooling — Master Book.md#r58>)
-- ✅ 2026-09-11 — **R59** Repaired canonical work identity, acceptance lookup and source/history links; checkbox writes refuse stale, duplicate and witness-less targets — [evidence](<PM Tooling — Master Book.md#r59>)
-- ✅ 2026-09-11 — **R60** Completed Home, Work Board/List and module views: badges (not lanes) for blocked/active/review, shareable filtered URLs, checklist-row highlighting, distinct Checklist/Brief links and an Open-in-CLI handoff — [evidence](<PM Tooling — Master Book.md#r60>)
-- ✅ 2026-09-26 — **R68** Phone content no longer hides behind the fixed bottom nav: `.app-main` reserves the nav height plus the safe area (`scripts/pm/app/responsive.css`); the clearance had lived on `.app-footer`, which the app no longer renders. Verified at 390 px on Home, Work and Delivery (last content above the nav). Reported by the owner on `/pm/live`.
-- ✅ 2026-10-03 — **R61** Plan sprints, deliverables and readiness over the same work; corrected Start authentication, optional-estimate commitment and visible disabled reasons — [criteria](<PM Tooling — Master Book.md#r61>)
-- ✅ 2026-10-03 — **R72** ERA chat reports import into Hub & ERA › Now › ERA reports (bridge every 5 min, read-only toward the DB, once-only via the Source marker + `.pm/era-issues.jsonl`, undo-journaled writes; `pnpm pm:era-issues` preview / `--apply`) and Sprints shows them as a Hotfixes lane on the current week, never as members. (`tests/pm-era-issues.test.ts`, `sprint-model.test.ts`, bridge tests green, `pnpm pm:build-app`; [acceptance and verification](<#r72>).)
-- ✅ 2026-10-24 — **R73** Center Delivery navigation and signal running sessions — [criteria](<PM Tooling — Master Book.md#r73>)
-- ✅ 2026-10-25 — **R74** Mirror PM documents and delivery status one-way to Google Drive for ERA Steward — [criteria](<PM Tooling — Master Book.md#r74>)
-- ✅ 2026-10-25 — **R75** Delivery home groups every delivery once by what it asks of the owner — [criteria](<PM Tooling — Master Book.md#r75>)
+- ✅ 2026-09-10 — **R52** Refactored the full PM knowledge system: canonical queues/criteria, accepted plans, decision and option disposition, archive provenance,… → [record](<../_Archive/Shipped/PM Tooling.md#r52>)
+- ✅ 2026-09-10 — **R54** Refactor the PM product journey through Delivery outcome — evidence → [record](<../_Archive/Shipped/PM Tooling.md#r54>)
+- ✅ 2026-09-11 — **R58** Restore ERA's theme and correct PM connectivity detection — evidence → [record](<../_Archive/Shipped/PM Tooling.md#r58>)
+- ✅ 2026-09-11 — **R59** Repaired canonical work identity, acceptance lookup and source/history links → [record](<../_Archive/Shipped/PM Tooling.md#r59>)
+- ✅ 2026-09-11 — **R60** Completed Home, Work Board/List and module views: badges (not lanes) for blocked/active/review, shareable filtered URLs, checklist-row… → [record](<../_Archive/Shipped/PM Tooling.md#r60>)
+- ✅ 2026-09-26 — **R68** Phone content no longer hides behind the fixed bottom nav: .app-main reserves the nav height plus the safe area… → [record](<../_Archive/Shipped/PM Tooling.md#r68>)
+- ✅ 2026-10-03 — **R61** Plan sprints, deliverables and readiness over the same work → [record](<../_Archive/Shipped/PM Tooling.md#r61>)
+- ✅ 2026-10-03 — **R72** ERA chat reports import into Hub & ERA › Now › ERA reports… → [record](<../_Archive/Shipped/PM Tooling.md#r72>)
+- ✅ 2026-10-24 — **R73** Center Delivery navigation and signal running sessions → [record](<../_Archive/Shipped/PM Tooling.md#r73>)
+- ✅ 2026-10-25 — **R74** Mirror PM documents and delivery status one-way to Google Drive for ERA Steward → [record](<../_Archive/Shipped/PM Tooling.md#r74>)
+- ✅ 2026-10-25 — **R75** Delivery home groups every delivery once by what it asks of the owner → [record](<../_Archive/Shipped/PM Tooling.md#r75>)
 - ✅ 2026-10-25 — **R76** Walk the owner through a delivery's test steps and record Pass, Fail or Blocked — [criteria](<PM Tooling — Master Book.md#r76>)
 - ✅ 2026-10-25 — **R77** Turn submitted UAT feedback into linked campaign work on the next pnpm pm — [criteria](<PM Tooling — Master Book.md#r77>)
 - ✅ 2026-10-25 — **R78** Publish UAT status to Drive and show engineering Done apart from owner-accepted Shipped — [criteria](<PM Tooling — Master Book.md#r78>)
 - ✅ 2026-10-25 — **R80** Restore delivery item IDs, navigation access and browser-pairing recovery — [criteria](<PM Tooling — Master Book.md#r80>)
 - ✅ 2026-10-25 — **R81** Find UAT steps and sign-off directly from Delivery — [criteria](<PM Tooling — Master Book.md#r81>)
 - ✅ 2026-10-31 — **R82** Separate readiness blockers from pending live checks — [criteria](<PM Tooling — Master Book.md#r82>)
+- ✅ 2026-11-10 — **R92** Give every agent the same setup and remove the current drift → [record](<../_Archive/Shipped/PM Tooling.md#r92>)
+- ✅ 2026-11-10 — **R93** Generate a setup registry and check it for conflicts → [record](<../_Archive/Shipped/PM Tooling.md#r93>)
+- ✅ 2026-11-10 — **R94** Decide Hard Rule verdicts for any change with detectors → [record](<../_Archive/Shipped/PM Tooling.md#r94>)
+- ✅ 2026-10-24 — **R44** Guard new client mutations against raw fetch → [record](<../_Archive/Shipped/PM Tooling.md#r44>)
+- ✅ 2026-11-11 — **R95** Record every agent session as a flight report → [record](<../_Archive/Shipped/PM Tooling.md#r95>)
+- ✅ 2026-11-11 — **R96** Score sessions and deliveries from recorded facts → [record](<../_Archive/Shipped/PM Tooling.md#r96>)
+- ✅ 2026-11-12 — **R84** Deny Supabase write tools in every tool namespace — [criteria](<PM Tooling — Master Book.md#r84>)
+- ✅ 2026-11-12 — **R71** Point the PM Stop hook at the current campaign files → [record](<../_Archive/Shipped/PM Tooling.md#r71>)
+- ✅ 2026-11-12 — **R89** Hold each Master Book to a size budget → [record](<../_Archive/Shipped/PM Tooling.md#r89>)
+- ✅ 2026-11-12 — **R100** Ship work with one command and keep one navigable front door → [record](<../_Archive/Shipped/PM Tooling.md#r100>)
+- ✅ 2026-11-14 — **R6** Verify the replacement PM UI before retiring rollback files → [record](<../_Archive/Shipped/PM Tooling.md#r6>)
+- ✅ 2026-11-14 — **R86** Show the next action, what needs the owner and what is running on Home → [record](<../_Archive/Shipped/PM Tooling.md#r86>)
+- ✅ 2026-11-14 — **R97** Build the PM.2 cockpit and keep PM.1 as the library → [record](<../_Archive/Shipped/PM Tooling.md#r97>)
+- ✅ 2026-11-14 — **R101** Make the Agentic OS cockpit readable and actionable → [record](<../_Archive/Shipped/PM Tooling.md#r101>)
+- ✅ 2026-11-14 — **R102** Give Bridge calm and cinematic views with truthful charts → [record](<../_Archive/Shipped/PM Tooling.md#r102>)
+- ✅ 2026-11-14 — **R103** Restore the header Game layer icon and visible rotation → [record](<../_Archive/Shipped/PM Tooling.md#r103>)
+- ✅ 2026-11-14 — **R104** Animate the Game-layer ERA core from delivery state → [record](<../_Archive/Shipped/PM Tooling.md#r104>)
+- ✅ 2026-11-14 — **R105** Give the ERA core overload intensity and gradual cooldown → [record](<../_Archive/Shipped/PM Tooling.md#r105>)
+- ✅ 2026-11-14 — **R106** Restore ERA core identity and soften Game motion → [record](<../_Archive/Shipped/PM Tooling.md#r106>)
 
 ## Delivery session log
 
@@ -1841,10 +1622,25 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - 2026-10-19 — **R44** V2 run `r-262a6aee5ed3` · cancelled · codex gpt-6-luna <!-- v2:res-d15d62b4752b@1 -->
 ## Successor Briefing
 
+**2026-11-14 R106:** the owner accepted R105's animation and requested ERA identity plus slightly softer intensity. The core now has thin open arcs, an elliptical counter-orbit and the existing ERA mark; tire spokes/tread/track and ground-contact particles are removed. Emission is 160/s instead of 225/s at full energy, with lighter smoke, shorter trails and softer vibration/heat/glow. R105 timing, phase continuity, state semantics and cooldown remain. Typecheck/build/scoped lint/11 focused tests and local desktop/mobile Blue/Pink browser checks pass. Evidence is in `.pm/r106-evidence/`; appearance/device UAT remains pending under [R106](<#r106>). No deployment or provider execution.
+
+**2026-11-14 R105:** the core's overload refinement supersedes R104's 1.7 s hard-ended throttle. A 2.4 s drive accelerates toward 240 rpm; real running sustains 180 rpm. One motion clock preserves angle through retrigger and natural coast; bounded canvas sparks/flame/smoke and localized vibration fade with energy. Failed state preserves its split form and only coasts existing momentum. State labels and all command boundaries remain unchanged. Final typecheck/build/scoped lint/format pass; 37 tests are covered with one concurrent cockpit timeout resolved by its isolated 10/10 rerun. The frozen browser suite passes 24 state/theme/viewport combinations and interaction/lifecycle checks; evidence and 13-file candidate hashes are in `.pm/r105-evidence/`. Owner aesthetic/physical-device acceptance remains Pending under [R105](<#r105>). No deployment or native/provider run occurred.
+
+**R105 final hue amendment:** visual review caught blue-to-red interpolation passing through green. The final hook takes the shorter violet/red path; the supplemental `hue-amendment.json` binds current source and checks 1,042 rendered samples across desktop Blue/mobile Pink with no green crossing, plus static reduced-motion state hues. The original full-motion receipt is retained as prior evidence; the candidate manifest and final build checks bind the amended source.
+
+**2026-11-14 R104:** Game-mode ERA now sustains rotation and displays delivery state through red/orange running friction, gentle yellow delivery approval/action, green explicit success and a grey broken offset ring for failure. `EraCore.tsx` / `core-motion.css` own the cosmetic 1.7 s click/keyboard throttle; `coreState.ts` owns honest state precedence and terminal ordering. Standing backlog decisions stay in Needs you and do not mask session results. Hidden/offscreen motion pauses; reduced motion disables movement/particles; calm mode has no animated core. Owner explicitly exempted Game motion from the former 400 ms/no-loop ceiling. Typecheck/build/scoped lint/31 tests and both core/Bridge browser suites pass; nine candidate hashes match. Evidence is in `.pm/r104-evidence/`. Implementation is done; owner aesthetics/physical-device UAT remains Pending under [R104](<#r104>). No deployment, provider call or native session was performed.
+
+**2026-11-14 R102:** Bridge now has calm and chart-led Game views over the same action queues, an ERA state core, canonical outcome/quality charts, passive SDK footer and Setup attention dot. Owner approved the 1.8 s enter / 1.0 s exit exception; reduced motion, persistence, rapid toggles and mobile controls are covered. Frozen-source browser evidence is in `.pm/r102-evidence/`; typecheck/build/31 replay tests and changed-file lint pass. Owner aesthetic/physical-device acceptance remains Pending under [R102](<#r102>). Relay SDK facts cannot prove freshness and stay Stale/Unknown. Score retains its existing evidence mirrors; other pages await the owner's page-by-page review. No deployment or native provider run.
+
+**2026-11-14 R99/A7 partial:** Settings switch and evidence-backed game facts exist; R102 supersedes the initial 360 ms scan. `os:arena case|controls KIT-11` freezes and checks the shipped cooking-count case. Score's Arena subview reads existing A4 session bindings and refuses incompatible comparisons. There is no native dispatch or import path that claims a protected oracle. Current Local adapters do not establish oracle read isolation; the architecture excludes the confined boundary from automatic reuse. Stop at that owner scope decision, then implement real owner-started paced subscription runs and A3 report binding before closing R99. [Evidence/limits](<../../../docs/Skills-and-Agents.md#arena-and-game-layer-a7--r99-partial>).
+
+**2026-11-14 R98/A6:** Eight sidecars and two recipes now feed the existing Launch destination through A1 registry and PM facts. Complete new-module form/dry-run/clipboard flow verified without input questions, including 390 px Blue/Pink. Native worktree launch is deliberately disabled: Local's start contract accepts a tracked item ID/file and no arbitrary skill-prompt/values/attachments/fingerprint. Extend that existing contract and bind a genuine A3 report before closing R98. Copy creates no synthetic flight. No A7/detector-system expansion. [Acceptance and limits](<../../../docs/Skills-and-Agents.md#skill-launchpad-a6--r98>).
+
+**2026-11-14 R97/R6/R86:** PM.2 is the shared local cockpit: Bridge / Launch / Sessions / Setup / Score; Library retains documents and work, Plan is the existing Sprints view. Old local rollback entry points and their three legacy assets are retired after parity/browser/fake-driver gates; static export, V1 execution/recovery/history and the separate legacy phone reader remain. A1–A4 are unchanged inputs. Full read-only session facts ride the existing relay manifest; the publisher coalesces a completed snapshot behind an in-flight startup publish. The OS worker never triggers PM observation or Drive publishing. A6 launchpad and A7 expansion remain open. Historical setup source hashes are unrecorded; physical-phone deployment remains separate from the 390 px/relay-double evidence. [Implementation and validation](<../../../docs/Skills-and-Agents.md#pm2-cockpit-a5--r97>).
+
 **2026-09-15 R65:** keep implemented scope in Done and owner tests in UAT. `work-lifecycle.mjs` governs explicit owner/completed refusal; the source scanner and both launch backends use it. Do not restore acceptance-only checkboxes. Work > Done opens immutable completion evidence plus available attempts.
 
 Command Center Phase 6a is in code (R62): `scripts/pm/shared/history.mjs` and `metrics.mjs`, `scripts/pm/app/Dashboard.tsx`, `tests/pm-ui/metrics.test.ts`; `product`/`portfolio` live in `scripts/pm/shared/` with classic re-exports. A sprint chart plugs into `sprintProgress` once R61 exists; retire paths under R6 only after the DLV-102 trial and R6's UAT. Command Center Phases 0 and 1 are complete (R59, R60). Phase 2 is R61 in `scripts/pm/app/`, depending on R60's Board/List and filter model (`model.ts`, `Board.tsx`); read the phase text in [Command Center](<../Plans/Command Center.md>) and the [PM Feature Map entry](<../../01 - Architecture/Feature Map/cross-cutting/pm-command-center.md>) before editing. R57 supersedes the R54/R56 primary visual architecture; retain their parsers and evidence, not their inspector or navigation as design constraints. Work in `scripts/pm/app/` for the primary local experience. Preact reference/static and React relay remain distinct. R55 is the held V2 job presentation follow-on. R6 governs retirement; R37/R42 retain hosted/real-device evidence, and R51 retains legacy-client/remaining concurrency acceptance. R60's stated limits (no real phone, one representative Checklist/Brief sweep, no persisted per-item session history) are real gaps, not closed — R63 (phone) and R55 (session history) still own them.
-
 
 Read the checklist, the selected acceptance entry and its dependencies; then use the [Feature Map](<../../01 - Architecture/Feature Map/_index.md>) for source routing and the module architecture docs for invariants. Delta from the source cutoff before implementation. Use current owner-supplied DB evidence for access/application questions; agents never apply production SQL. Record code, applied migration and device/runtime acceptance separately.
 

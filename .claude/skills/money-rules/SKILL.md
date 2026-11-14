@@ -9,7 +9,7 @@ description: "Financial-correctness invariants for ALL money modules (accounts, 
 
 Applies to: `src/features/accounts|balance|transactions|transfers|recurring|debts|budget|drafts|analytics/`, `src/app/api/accounts|transactions|transfers|recurring-payments/`, `src/lib/balance.ts`, `src/lib/balance-utils.ts`, trip budgets.
 
-## The balance model (verified against `ERA Notes/.../Balance System.md` + `src/lib/balance.ts`)
+## The balance model (verified against `ERA Notes/02 - Standalone Modules/Accounts & Balance/Balance System.md` + `src/lib/balance.ts`)
 
 Baseline + dynamic delta:
 

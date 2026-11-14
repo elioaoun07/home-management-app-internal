@@ -1,0 +1,12 @@
+{
+  "schema": "os/case@1",
+  "id": "KIT-11",
+  "title": "Return the correct cooking count",
+  "start": "880ecd285dce629d047887380fb287842c4b4e6a",
+  "solution": "5f2f4e755c82341f5fda889b1cc9baaf37ef2ee4",
+  "brief": "Fix only the recipe cooking-log POST statistics update. Read the count metadata of the existing HEAD query. Preserve a reported zero. If the count is missing or the query fails, leave times_cooked unwritten. Still return the inserted log with 201; preserve the average rating and both timestamps. Do not repair stored data or change the GET handler.",
+  "paths": ["src/app/api/recipes/[id]/cooking-log/route.ts"],
+  "source": "ERA Notes/10 - Project Management/_Archive/Shipped/Kitchen.md#kit-11",
+  "oracle": "tests/delivery-oracles/kit11-cooking-count.mjs",
+  "oracleHash": "sha256:4cb34e473366af06c337cb711abcf5ae7869d9497464a362d9b3062aa581ce5e"
+}

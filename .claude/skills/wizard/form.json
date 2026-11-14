@@ -1,0 +1,24 @@
+{
+  "skill": "wizard",
+  "title": "Wizard",
+  "tier": "CLAUDE_MID",
+  "effort": "default",
+  "launch": "worktree",
+  "fields": [
+    {
+      "id": "system",
+      "label": "System",
+      "type": "text",
+      "required": true,
+      "mention": "setup"
+    },
+    {
+      "id": "goal",
+      "label": "Goal",
+      "type": "multiline",
+      "required": true,
+      "mention": "GOAL"
+    }
+  ],
+  "checks": []
+}

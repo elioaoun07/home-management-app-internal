@@ -9,7 +9,7 @@ evidence_cutoff: "commit e5f537a, 2026-11-10. Every example below was observed i
 
 # Agentic OS — conflict and drift detector
 
-[Agentic OS index](<_index.md>) · [Setup registry](<03 - Setup Registry.md>) · next: [Flight recorder](<06 - Flight Recorder.md>) · items: [R92](<../../PM Tooling/PM Tooling — Master Book.md#r92>) (fix what exists), [R93](<../../PM Tooling/PM Tooling — Master Book.md#r93>) (detect it from now on)
+[Agentic OS index](<_index.md>) · [Setup registry](<03 - Setup Registry.md>) · next: [Flight recorder](<06 - Flight Recorder.md>) · items: [R92](<../../_Archive/Shipped/PM Tooling.md#r92>) (fix what exists), [R93](<../../_Archive/Shipped/PM Tooling.md#r93>) (detect it from now on)
 
 The owner's question, "which hook is contradicting another thing", has a deterministic answer once the setup is data: a conflict is a query over the [registry](<03 - Setup Registry.md>) that returns rows. `pnpm os:check` runs the queries.
 
@@ -64,4 +64,4 @@ Errors fail CI. Warnings appear in PM.2's Conflicts view with the two sources si
 
 ## Fix once, then keep it fixed
 
-The current rows are one small session of work ([R92](<../../PM Tooling/PM Tooling — Master Book.md#r92>)): generate the Codex and `.agents` copies from the Claude sources instead of keeping them by hand, delete the dead and duplicate files, make paths relative, set the executable bit, and correct the three stale enumerations. The first decision in that session is whether Codex reads `.codex/hooks.json` at all; nothing in the repository proves either Codex hook file has ever fired, so confirm it by observation before generating more of them.
+The current rows are one small session of work ([R92](<../../_Archive/Shipped/PM Tooling.md#r92>)): generate the Codex and `.agents` copies from the Claude sources instead of keeping them by hand, delete the dead and duplicate files, make paths relative, set the executable bit, and correct the three stale enumerations. The first decision in that session is whether Codex reads `.codex/hooks.json` at all; nothing in the repository proves either Codex hook file has ever fired, so confirm it by observation before generating more of them.

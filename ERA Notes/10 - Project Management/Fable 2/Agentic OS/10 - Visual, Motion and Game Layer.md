@@ -1,6 +1,6 @@
 ---
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-14
 type: study
 status: active
 owner: Elio
@@ -9,11 +9,23 @@ evidence_cutoff: "commit e5f537a, 2026-11-10. Proposed design. Baseline numbers 
 
 # Agentic OS — visual, motion and game layer
 
-[Agentic OS index](<_index.md>) · [PM.2 product design](<09 - PM.2 Product Design.md>) · next: [Architecture](<11 - Architecture.md>) · items: [R97](<../../PM Tooling/PM Tooling — Master Book.md#r97>), [R99](<../../PM Tooling/PM Tooling — Master Book.md#r99>)
+**A7 initial partial implementation (2026-11-14; motion superseded by R102 below):** the owner requested the Game layer
+switch in Settings and a futuristic transition. The per-browser switch starts
+off; enabling/disabling plays one 360 ms scan, never blocks input, and respects
+reduced motion. Score shows the same expandable evidence with game labels or
+plain labels. Streaks require known checks, full rule coverage and known order;
+debt stays a recorded baseline, missing evidence stays unknown, and exercises
+earn nothing. The frozen KIT-11 Arena case and comparison shell exist, but native
+dispatch stops before usage because Local cannot hide the oracle. R99 stays
+open. [Acceptance/evidence](<../../../../docs/Skills-and-Agents.md#arena-and-game-layer-a7--r99-partial>).
+
+[Agentic OS index](<_index.md>) · [PM.2 product design](<09 - PM.2 Product Design.md>) · next: [Architecture](<11 - Architecture.md>) · items: [R97](<../../_Archive/Shipped/PM Tooling.md#r97>), [R99](<../../PM Tooling/PM Tooling — Master Book.md#r99>)
 
 The current Command Center already has a coherent dark theme, good type and a clean phone bar ([visual review](<../10 - Project Management/Command Center/1 - Usability and Visual Review.md>)). PM.2 keeps that language and adds a small set of visuals that each show one true thing.
 
 ## Signature visuals
+
+**R101 usability amendment (2026-11-14):** signature visuals support reading rather than occupying the default screen. Setup's graph is disclosed after the searchable browser; rule ticks become numbered, touch-sized targets under a Rules disclosure; the flight path opens readable facts with raw export secondary. Calm/game totals use the same large-number layout. Primary navigation no longer raises Sessions above the other four destinations. All five destinations, expanded graph, rule finding and comparison are checked at desktop and 390 px in both themes.
 
 | Visual | Shows | Built from |
 |---|---|---|
@@ -29,7 +41,7 @@ The current Command Center already has a coherent dark theme, good type and a cl
 
 ## Motion
 
-Each animation exists because it tells the owner something happened.
+Ordinary motion tells the owner something happened. Game mode also permits the owner's requested animated ERA core and cosmetic throttle interaction below.
 
 | Moment | Motion | Meaning |
 |---|---|---|
@@ -42,7 +54,28 @@ Each animation exists because it tells the owner something happened.
 | The setup changes | The fingerprint glyph morphs to the new pattern | Rules are no longer the same as before |
 | A conflict is resolved | Its row folds away and the conflict count ticks down | One less contradiction |
 
-Rules for motion: under 400 ms, never looping, never blocking input, and all of it off under the system's reduced-motion setting (the existing app already reads it). No sound.
+Rules for ordinary calm-mode motion: under 400 ms, never looping, never blocking input, and all of it off under the system's reduced-motion setting (the existing app already reads it). No sound. The owner explicitly exempted Game-mode core animation from the duration and no-loop limits on 2026-11-14.
+
+**Owner-approved Bridge exception — 2026-11-14 (R102):** switching between calm and Game views is an infrequent mode change, so the owner explicitly permits a longer cinematic sequence. Enter takes 1.8 s; exit takes 1.0 s. The accent sweep, assembling ERA core, drawing chart lines and settling cards communicate that change. The sequence plays only on an explicit toggle, not on reload; it never locks input or loops. Rapid toggles must resolve to the last selected state. Reduced motion disables the choreography. The later R104 amendment below also permits sustained motion inside the Game-mode core.
+
+**Owner-approved Game-core amendment — 2026-11-14 (R104):** while Game layer is on, ERA may continuously rotate rather than settle into a static mark. This is an explicit playful exception, not evidence of a running job. Session intensity/color remains deterministic:
+
+| Observed state | Core treatment |
+|---|---|
+| Idle | Theme-colored rotation, 16 s main ring with a counter-rotating ring |
+| Running session | Red/orange wheel friction, rapid rotation with sustained smoke, flame/ember spray and localized vibration; refined by R105 below |
+| Awaiting delivery approval/action | Yellow, 32 s rotation and lower intensity; this means waiting, not a stale transport |
+| Explicit successful completion | Green, 12 s rotation |
+| Explicit failed completion | Static grey broken, offset split ring |
+| Unknown, stale, cancelled or partial | No inferred success; retain an honest non-success state |
+
+The core is a session indicator. Standing backlog decisions stay in the Needs you queue and cannot mask a completed session's state. Observed running work takes precedence over delivery approvals/actions. Terminal colors require explicit outcomes and trustworthy ordering; an unknown or ambiguous latest result cannot become green. Labels distinguish Candidate verified, Applied and Shipped; successful candidate verification is not owner acceptance or deployment. Clicking or keyboard-activating the core triggers a cosmetic throttle/clutch-kick burst without any provider/session command or change to the observed state. Open sessions is a separate navigation action. Animation pauses while hidden/offscreen, reduced motion disables movement and particles, and calm mode stays still. The intensity carries no score, reward or claim of real work.
+
+**Owner-approved overload refinement — 2026-11-14 (R105):** the simulated wheel accelerates into an intense red/orange friction effect, with outward sparks and flame trails, layered smoke and vibration confined to the wheel. Running sessions sustain the same visual language. A single motion clock preserves angular phase through acceleration, repeat activation and release; restarting the throttle extends the drive without remounting the wheel or stacking timers. When drive ends, angular speed, heat, emissions and vibration decay gradually back to the observed state's baseline. Existing particles finish their trajectories. The caption remains the real session state even during a simulated red throttle. The effect stays bounded within the core card and does not shake the page or obstruct its links. The original R104 1.7 s hard-ended burst is superseded by this lifecycle.
+
+Bridge's Game view uses an observed-state ERA core, eight weeks of recorded shipped outcomes and non-Arena clean/failed/unknown session evidence. Charts keep source access, date-coverage limits and empty states. The calm view retains the same three action queues and SDK footer. Setup owns guards/conflicts and a numberless actionable-attention dot; Score owns clean streak. The [Bridge contract](<09 - PM.2 Product Design.md#bridge>) supersedes the original first-screen sketch below.
+
+**ERA identity refinement — 2026-11-14 (R106):** the owner retained the motion but rejected the literal tire silhouette. The core now uses the ERA mark with thin, open orbital arcs and an elliptical counter-orbit. Spokes, tread ticks, the solid track and bottom contact patch are removed. Heat is a narrow orbital trace; sparks are fewer and shorter, smoke is lighter, and vibration/glow are about a quarter softer. R105 acceleration, sustained running and gradual cooldown remain the motion contract. This supersedes R105's literal wheel appearance and intensity.
 
 ## The game layer
 
@@ -68,7 +101,7 @@ A game is only worth adding if winning it is the same as doing the right work. E
 - **No rewards for the tool itself.** Building PM.2 earns no badge. Only product items count toward the weekly five.
 - **A calm switch.** One setting turns the game layer off and leaves the same facts as plain numbers.
 
-## A first-screen sketch with the layer on
+## Original first-screen sketch (superseded by R102)
 
 ```text
  era · PM.2                                   ◈ setup 91ab   ✦ streak 3   ◐ 7/29

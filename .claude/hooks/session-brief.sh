@@ -1,79 +1,50 @@
 #!/bin/bash
-# SessionStart hook: inject a compact freshness brief so every session starts
-# knowing whether the PM layer it will read is live or historical.
-# Fail-silent by design — this must NEVER block or slow a session start.
+# SessionStart hook: a compact freshness brief, printed only when something the
+# session will rely on is stale. Fail-silent by design — this must NEVER block
+# or slow a session start.
 
 pm="ERA Notes/10 - Project Management"
 now=$(date +%s)
 
-warn_stale() { # $1=file  $2=frontmatter-key  $3=threshold-days  $4=label
-  [ -f "$1" ] || return 0
-  stamp=$(grep -m1 "^$2:" "$1" | sed "s/$2:[[:space:]]*//" | tr -d '\r"' | cut -c1-10)
-  [ -n "$stamp" ] || return 0
-  then=$(date -d "$stamp" +%s 2>/dev/null) || return 0
-  days=$(( (now - then) / 86400 ))
-  if [ "$days" -gt "$3" ]; then
-    echo "- $4 is stamped $stamp ($days days old) — treat as historical, not current."
-    return 1
-  fi
-  return 0
+days_since() { # $1=YYYY-MM-DD -> days, or empty when unparsable
+  local then
+  then=$(date -d "$1" +%s 2>/dev/null) || return 0
+  echo $(( (now - then) / 86400 ))
 }
 
-warn_stale_body() { # $1=file  $2=threshold-days  $3=label — matches "Updated YYYY-MM-DD" anywhere in body
-  [ -f "$1" ] || return 0
-  stamp=$(grep -oE "Updated [0-9]{4}-[0-9]{2}-[0-9]{2}" "$1" | tail -1 | cut -d' ' -f2)
-  [ -n "$stamp" ] || return 0
-  then=$(date -d "$stamp" +%s 2>/dev/null) || return 0
-  days=$(( (now - then) / 86400 ))
-  if [ "$days" -gt "$2" ]; then
-    echo "- $3 was last stamped Updated $stamp ($days days old) — treat as historical, not current."
-    return 1
-  fi
-  return 0
-}
-
-# Freshness now tracks the LIVING execution queues (the campaign checklists),
-# not the archived root files. Warn only if the newest of them has gone stale.
+# Campaign checklists are the living queues. Every folder holding a
+# '4 - Checklist.md' is a campaign, so a new campaign needs no edit here.
 newest=""
-for c in "Budget" "Schedule" "Kitchen" "Trips" "Hub & ERA" "Notifications & Alerts" "Healthcare" "Outfits"; do
-  f="$pm/$c/4 - Checklist.md"
+for f in "$pm"/*/"4 - Checklist.md"; do
   [ -f "$f" ] || continue
   s=$(grep -m1 "^updated:" "$f" | sed 's/updated:[[:space:]]*//' | tr -d '\r"' | cut -c1-10)
   [ -n "$s" ] || continue
   if [ -z "$newest" ] || [ "$s" \> "$newest" ]; then newest="$s"; fi
 done
 
-out=""
 if [ -n "$newest" ]; then
-  then=$(date -d "$newest" +%s 2>/dev/null) && {
-    days=$(( (now - then) / 86400 ))
-    [ "$days" -gt 14 ] && out="- No campaign checklist has been updated since $newest ($days days ago) — the execution queues may be stale."
-  }
-fi
-
-# DB state snapshot freshness (Hard Rule #27). RLS/cascade/SECURITY DEFINER facts
-# live ONLY in migrations/db-state.json — schema.sql structurally cannot hold them.
-# A missing or stale snapshot must be announced, or an agent will silently fall
-# back to trusting repo prose about RLS, which is exactly how the 2026-08-04
-# invisible-household-trips bug happened.
-db_state="migrations/db-state.json"
-if [ ! -f "$db_state" ]; then
-  echo "DB STATE: migrations/db-state.json is MISSING. This repo currently cannot answer any question about RLS, policy bodies, FK cascade rules, or SECURITY DEFINER functions. Do NOT infer RLS from schema.sql or from any vault/PM doc (Hard Rule #27) — ask the owner to run migrations/db-state.sql. Verify with 'pnpm db:verify-rls'."
-else
-  stamp=$(grep -m1 '"generated_at"' "$db_state" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
-  if [ -n "$stamp" ]; then
-    then=$(date -d "$stamp" +%s 2>/dev/null) && {
-      days=$(( (now - then) / 86400 ))
-      if [ "$days" -gt 30 ]; then
-        echo "DB STATE: migrations/db-state.json was generated $stamp ($days days ago). Treat its RLS/policy/cascade contents as historical. Re-run migrations/db-state.sql before relying on it (Hard Rule #27)."
-      fi
-    }
+  days=$(days_since "$newest")
+  if [ -n "$days" ] && [ "$days" -gt 14 ]; then
+    echo "PM FRESHNESS: no campaign checklist has been updated since $newest ($days days ago) — the queues may be stale. Verify an item against the code before trusting its lane."
   fi
 fi
 
-if [ -n "$out" ]; then
-  echo "PM FRESHNESS RADAR (SessionStart hook):"
-  echo "$out"
-  echo "Each PM campaign is exactly two files: '<Campaign> — Master Book.md' (state, shipped log, pains, decisions, Successor Briefing with its task-tier map and traps) and '4 - Checklist.md' (the Now/Next/Later queue, grammar in _Conventions.md, viewed via 'pnpm pm'). Read the Master Book before working a campaign, then delta with git log --since its updated: stamp. Vault sections keep their own FABLED 3 audits; superseded PM material lives in _Archive/ and is invisible to every PM tool. If this session ships work, tick the checklist and sweep the record into the Master Book's Shipped Log (Hard Rule 25)."
+# DB state snapshot freshness (Hard Rule #27). RLS, policy bodies, FK cascades
+# and SECURITY DEFINER facts live ONLY in migrations/db-state.json — schema.sql
+# cannot hold them. A missing or stale snapshot must be announced, or an agent
+# falls back to trusting repo prose about RLS (the 2026-08-04 failure).
+db_state="migrations/db-state.json"
+if [ ! -f "$db_state" ]; then
+  echo "DB STATE: migrations/db-state.json is MISSING. This repo cannot answer any question about RLS, policy bodies, FK cascade rules or SECURITY DEFINER functions. Do NOT infer RLS from schema.sql or any doc (Hard Rule #27) — ask the owner to run migrations/db-state.sql. Verify with 'pnpm db:verify-rls'."
+else
+  # The snapshot may be pasted as one escaped JSON string (\"generated_at\": \"…\"),
+  # so match the key without its quotes.
+  stamp=$(grep -oE 'generated_at[^0-9]{0,12}[0-9]{4}-[0-9]{2}-[0-9]{2}' "$db_state" | head -1 | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+  if [ -n "$stamp" ]; then
+    days=$(days_since "$stamp")
+    if [ -n "$days" ] && [ "$days" -gt 30 ]; then
+      echo "DB STATE: migrations/db-state.json was generated $stamp ($days days ago). Treat its RLS/policy/cascade contents as historical; ask the owner to re-run migrations/db-state.sql before relying on it (Hard Rule #27)."
+    fi
+  fi
 fi
 exit 0

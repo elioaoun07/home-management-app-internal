@@ -2,16 +2,43 @@
 # Runs TypeScript check and ESLint on staged TS/TSX files.
 # Sourced by .husky/pre-commit.
 
+echo "Checking AI guidance docs..."
+if ! pnpm docs:check; then
+  echo "AI guidance docs drifted; fix before committing." >&2
+  exit 2
+fi
+
+echo "Checking generated agent setup..."
+if ! pnpm sync:ai:check; then
+  echo "Generated agent setup drifted; run pnpm sync:ai." >&2
+  exit 2
+fi
+
+echo "Checking PWA manifests..."
+if ! pnpm -s pwa:check; then
+  echo "PWA manifest scopes collide - see .claude/skills/pwa-install/SKILL.md" >&2
+  exit 2
+fi
+
 echo "Running TypeScript check..."
 if ! pnpm tsc --noEmit; then
   echo "TypeScript errors — fix before committing." >&2
   exit 2
 fi
 
-STAGED=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -E '\.(ts|tsx)$' || true)
-if [ -n "$STAGED" ]; then
+echo "Running unit tests..."
+if ! pnpm test; then
+  echo "Unit tests failed — fix before committing." >&2
+  exit 2
+fi
+
+STAGED=()
+while IFS= read -r -d '' file; do
+  [[ "$file" == *.ts || "$file" == *.tsx ]] && STAGED+=("$file")
+done < <(git diff --cached --name-only --diff-filter=ACM -z)
+if [ "${#STAGED[@]}" -gt 0 ]; then
   echo "Running ESLint on staged files..."
-  if ! echo "$STAGED" | xargs pnpm eslint --max-warnings=0; then
+  if ! pnpm eslint --max-warnings=0 -- "${STAGED[@]}"; then
     echo "ESLint errors — fix before committing." >&2
     exit 2
   fi

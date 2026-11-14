@@ -141,8 +141,9 @@ export function lintChecklist(raw, { campaign, resolveMd = () => null, resolveCo
     add(0, "error", "E2", `lanes must be in order Now → Next → Later (found ${canonicalOrder.join(" → ")})`);
   }
 
-  // W2 — empty lane
-  for (const l of seenLanes) if ((laneOpenCount.get(l) || 0) === 0) add(0, "warn", "W2", `"## ${l}" lane has no open items`);
+  // W2 — empty lane. Now is one global sprint slice across all campaigns
+  // (_Conventions §2), so most campaigns legitimately have nothing in it.
+  for (const l of seenLanes) if (l !== "Now" && (laneOpenCount.get(l) || 0) === 0) add(0, "warn", "W2", `"## ${l}" lane has no open items`);
 
   return out;
 }

@@ -1,0 +1,3 @@
+# Shell entrypoints must remain runnable on Linux and Git Bash checkouts.
+*.sh text eol=lf
+.husky/* text eol=lf

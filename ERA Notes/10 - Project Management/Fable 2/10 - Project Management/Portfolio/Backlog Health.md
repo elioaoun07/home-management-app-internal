@@ -41,7 +41,7 @@ No new checklist items here except where an ID is named; these are owner calls.
 
 | # | Recommendation | Effect |
 |---|---|---|
-| 1 | **One global Now of five.** Pick five items across all campaigns; everything else in Now moves to Next. The Home "Next up" list in [R86](<../../../PM Tooling/PM Tooling — Master Book.md#r86>) then shows something real | The queue names what happens next |
+| 1 | **One global Now of five.** Pick five items across all campaigns; everything else in Now moves to Next. The Home "Next up" list in [R86](<../../../_Archive/Shipped/PM Tooling.md#r86>) then shows something real | The queue names what happens next |
 | 2 | **Promote the four critical sweep items into that five:** HUB-118, BUD-89, BUD-90, HUB-119 | Known data-exposure and money-duplication defects stop waiting |
 | 3 | **Move owner-evidence lines out of the queue** into `docs/Delivery-UAT.md` rows with `**Execution:** owner` in the book, as the convention already says | Now shrinks to executable work |
 | 4 | **Decide or drop the 21 decisions in one sitting.** For each: choose, or record "keep current behaviour" and close | Releases a share of the 70 waiting items |

@@ -1,0 +1,17 @@
+{
+  "skill": "era-wire",
+  "title": "ERA report",
+  "tier": "CLAUDE_MID",
+  "effort": "medium",
+  "launch": "worktree",
+  "fields": [
+    {
+      "id": "item",
+      "label": "Report",
+      "type": "item",
+      "required": true,
+      "mention": "HUB-n"
+    }
+  ],
+  "checks": [{ "kind": "eraReport", "field": "item" }]
+}

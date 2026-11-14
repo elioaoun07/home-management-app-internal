@@ -52,7 +52,7 @@ Then "read the campaign's Master Book before working it":
 
 | # | Change | Item |
 |---|---|---|
-| 1 | Give each Master Book a size budget (for example 60 KB). Rotate the state log to `_Archive/` by date, keep the last three entries, keep criteria only for open IDs | [R89](<../../PM Tooling/PM Tooling — Master Book.md#r89>) |
+| 1 | Give each Master Book a size budget (for example 60 KB). Rotate the state log to `_Archive/` by date, keep the last three entries, keep criteria only for open IDs | [R89](<../../_Archive/Shipped/PM Tooling.md#r89>) |
 | 2 | Change the boot instruction to: checklist first, then the one `### <ID>` section, then the Successor Briefing; the whole book only for campaign-level work | R89 (same change) |
 | 3 | Make `.tmp/` evidence either committed under `docs/evidence/` as small text receipts or cited as "local only, not verifiable from the repo"; fix the 17 broken links; run `pm:check-docs` in CI | [R88](<../../PM Tooling/PM Tooling — Master Book.md#r88>) |
 | 4 | Link `docs/era-research/` from the PM index and disposition its findings | [R85](<../../PM Tooling/PM Tooling — Master Book.md#r85>) |

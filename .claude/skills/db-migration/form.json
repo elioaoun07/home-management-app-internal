@@ -1,0 +1,33 @@
+{
+  "skill": "db-migration",
+  "title": "DB migration",
+  "tier": "CLAUDE_MID",
+  "effort": "default",
+  "launch": "worktree",
+  "fields": [
+    {
+      "id": "description",
+      "label": "Description",
+      "type": "multiline",
+      "required": true,
+      "mention": "WHY"
+    },
+    {
+      "id": "kind",
+      "label": "Kind",
+      "type": "enum",
+      "options": ["table", "column", "index", "policy", "RPC", "enum"],
+      "default": "table",
+      "mention": "Database"
+    },
+    {
+      "id": "tables",
+      "label": "Tables",
+      "type": "text",
+      "required": true,
+      "pattern": "^[a-z][a-z0-9_]*(, *[a-z][a-z0-9_]*)*$",
+      "mention": "tables"
+    }
+  ],
+  "checks": []
+}

@@ -2,7 +2,7 @@
 
 **Type:** Standalone (filed under Junction in CLAUDE.md but lives in `src/features/meal-planning/`)
 **Route:** `/meal-plan`
-**Vault doc:** `ERA Notes/03 - Junction Modules/Meal Planning/`
+**Vault doc:** `ERA Notes/02 - Standalone Modules/Meal Planning/`
 
 ## What it does
 

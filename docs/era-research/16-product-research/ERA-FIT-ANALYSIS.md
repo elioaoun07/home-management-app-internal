@@ -26,7 +26,7 @@ The following inventory separates executable boundaries from navigation and docu
 
 The [Design Doctrine](<../../../ERA Notes/01 - Architecture/Design Doctrine.md>) describes two people plus an assistant, near-zero capture cost, foresight, source-owned operations, offline resilience, Undo, and proposals before AI writes. These are design requirements, not blanket statements about today's compliance.
 
-The [Plan My Day overview](<../../../ERA Notes/03 - Junction Modules/Plan My Day/Overview.md>) specifies a triage-first, save-gated day plan and explicitly defers hourly timeline and energy optimization. The [Meal Planning overview](<../../../ERA Notes/03 - Junction Modules/Meal Planning/Overview.md>) describes household assignment/leftovers and lists further nutrition and weekly shopping ambitions. The [Budget Allocation overview](<../../../ERA Notes/02 - Standalone Modules/Budget Allocation/Overview.md>) describes non-destructive inline suggestions with reasoning and manual values taking precedence.
+The [Plan My Day overview](<../../../ERA Notes/03 - Junction Modules/Plan My Day/Overview.md>) specifies a triage-first, save-gated day plan and explicitly defers hourly timeline and energy optimization. The [Meal Planning overview](<../../../ERA Notes/02 - Standalone Modules/Meal Planning/Overview.md>) describes household assignment/leftovers and lists further nutrition and weekly shopping ambitions. The [Budget Allocation overview](<../../../ERA Notes/02 - Standalone Modules/Budget Allocation/Overview.md>) describes non-destructive inline suggestions with reasoning and manual values taking precedence.
 
 ### UNKNOWN
 

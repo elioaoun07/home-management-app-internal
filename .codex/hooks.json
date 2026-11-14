@@ -1,12 +1,25 @@
 {
+  "description": "Generated from .claude/settings.json by pnpm sync:ai; do not edit.",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/run-agent-hook.mjs\" SessionStart 0 0",
+            "commandWindows": "& node (Join-Path (git rev-parse --show-toplevel) 'scripts/run-agent-hook.mjs') SessionStart 0 0; exit $LASTEXITCODE"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "bash 'C:\\Users\\aoune\\WebApp\\budget-app\\.codex\\hooks\\block-ui-dir.sh'"
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/run-agent-hook.mjs\" PreToolUse 0 0",
+            "commandWindows": "& node (Join-Path (git rev-parse --show-toplevel) 'scripts/run-agent-hook.mjs') PreToolUse 0 0; exit $LASTEXITCODE"
           }
         ]
       }
@@ -17,11 +30,29 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash 'C:\\Users\\aoune\\WebApp\\budget-app\\.codex\\hooks\\sync-copilot.sh'"
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/run-agent-hook.mjs\" PostToolUse 0 0",
+            "commandWindows": "& node (Join-Path (git rev-parse --show-toplevel) 'scripts/run-agent-hook.mjs') PostToolUse 0 0; exit $LASTEXITCODE"
           },
           {
             "type": "command",
-            "command": "bash 'C:\\Users\\aoune\\WebApp\\budget-app\\.codex\\hooks\\update-atlas.sh'"
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/run-agent-hook.mjs\" PostToolUse 0 1",
+            "commandWindows": "& node (Join-Path (git rev-parse --show-toplevel) 'scripts/run-agent-hook.mjs') PostToolUse 0 1; exit $LASTEXITCODE"
+          },
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/run-agent-hook.mjs\" PostToolUse 0 2",
+            "commandWindows": "& node (Join-Path (git rev-parse --show-toplevel) 'scripts/run-agent-hook.mjs') PostToolUse 0 2; exit $LASTEXITCODE"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/run-agent-hook.mjs\" Stop 0 0",
+            "commandWindows": "& node (Join-Path (git rev-parse --show-toplevel) 'scripts/run-agent-hook.mjs') Stop 0 0; exit $LASTEXITCODE"
           }
         ]
       }

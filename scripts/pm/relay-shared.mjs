@@ -126,6 +126,8 @@ export function assembleSnapshot(manifest, docs) {
     missing: [],
     reason: null,
     snapshot: { files, cancelledLog: manifest.cancelledLog || "", generatedAt: manifest.generatedAt,
+      ...(manifest.directories ? { directories: manifest.directories } : {}),
+      ...(manifest.cockpit !== undefined ? { cockpit: manifest.cockpit } : {}),
       ...(manifest.planning !== undefined ? { planning: manifest.planning, planningReadiness: manifest.planningReadiness || {}, planningError: manifest.planningError || null } : {}),
     },
   };

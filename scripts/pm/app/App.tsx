@@ -5,21 +5,37 @@ import {
   MotionConfig,
   useReducedMotion,
 } from "framer-motion";
-import { Palette, Search, Settings as SettingsIcon } from "lucide-react";
+import {
+  BookOpen,
+  Palette,
+  Search,
+  Settings as SettingsIcon,
+} from "lucide-react";
 import { ERAMark } from "@/components/shared/ERAMark";
+import { setupAttention } from "./setupAttention";
 import { SettingsSheet } from "./Settings";
+import { GameProvider, GameToggle } from "./GameLayer";
 import { client, pmKeys, useRoute, useWorld } from "./state";
 import { transport } from "./transport";
 import { RunV2, useV2Runs } from "./DeliveryV2";
 import { connectionChips } from "./v2model";
-import { deliveryNavState, MoreNavigation, PrimaryNavigation } from "./PrimaryNavigation";
+import {
+  deliveryNavState,
+  MoreNavigation,
+  PrimaryNavigation,
+} from "./PrimaryNavigation";
 import { CaptureButton, Empty } from "./components";
-import { Home } from "./Home";
+import { Bridge } from "./Bridge";
+import { Setup } from "./Setup";
+import { Sessions } from "./Sessions";
+import { Score } from "./Score";
+import { Library } from "./Library";
+import { cockpitAlias } from "./cockpitModel";
+import "./cockpit.css";
 import { Explore, SpaceView } from "./Explore";
 import { WorkView } from "./Work";
 import { Activity, Attention, Capture, Reader } from "./Auxiliary";
-import { Dashboard } from "./Dashboard";
-import { Delivery, Launch } from "./Delivery";
+import { Launch } from "./Delivery";
 import { Run } from "./Run";
 import { UatPage } from "./UatWizard";
 import { Sprints } from "./Sprints";
@@ -35,11 +51,9 @@ class Boundary extends Component<{ children: ReactNode }, { error: boolean }> {
         <button className="secondary" onClick={() => location.reload()}>
           Reload
         </button>
-        {transport().capabilities.referenceTools && (
-          <a className="plain-link" href="/?ui=classic">
-            Open fallback
-          </a>
-        )}
+        <a className="plain-link" href="#/library">
+          Library
+        </a>
       </Empty>
     ) : (
       this.props.children
@@ -48,7 +62,8 @@ class Boundary extends Component<{ children: ReactNode }, { error: boolean }> {
 }
 export function App() {
   const route = useRoute();
-  const { world, runs, connected, readError, runError, connection } = useWorld();
+  const { world, runs, connected, readError, runError, connection } =
+    useWorld();
   const v2 = useV2Runs();
   const capabilities = transport().capabilities;
   const [capture, setCapture] = useState(false);
@@ -64,15 +79,27 @@ export function App() {
   const reduced = useReducedMotion();
   const main = useRef<HTMLElement>(null);
   const root = route.parts[0] || "";
-  const section = ["delivery", "deliver"].includes(root)
-    ? "/delivery"
-    : root === "sprints"
-      ? "/sprints"
-    : ["explore", "space", "work", "module", "project"].includes(root)
-      ? "/explore"
-      : ["analytics", "dashboard"].includes(root)
-        ? "/analytics"
-        : root === "" ? "/" : "";
+  const section = ["deliver", "launch"].includes(root)
+    ? "/launch"
+    : ["delivery", "sessions"].includes(root)
+      ? "/sessions"
+      : root === "setup"
+        ? "/setup"
+        : ["score", "analytics", "dashboard"].includes(root)
+          ? "/score"
+          : root === "sprints"
+            ? "/sprints"
+            : ["explore", "space", "work", "module", "project"].includes(root)
+              ? "/explore"
+              : ["analytics", "dashboard"].includes(root)
+                ? "/analytics"
+                : ["", "home", "bridge"].includes(root)
+                  ? "/bridge"
+                  : "";
+  useEffect(() => {
+    const alias = cockpitAlias(root, route.query, route.parts.length > 1);
+    if (alias) location.replace("#" + alias);
+  }, [root, route.query, route.parts.length]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document
@@ -113,7 +140,18 @@ export function App() {
   let view: ReactNode;
   switch (root) {
     case "":
-      view = <Home capture={() => setCapture(true)} />;
+    case "home":
+    case "bridge":
+      view = <Bridge />;
+      break;
+    case "setup":
+      view = <Setup />;
+      break;
+    case "sessions":
+      view = <Sessions />;
+      break;
+    case "library":
+      view = <Library />;
       break;
     case "sprints":
       view = <Sprints />;
@@ -140,6 +178,7 @@ export function App() {
         );
       break;
     case "deliver":
+    case "launch":
       view = <Launch />;
       break;
     case "delivery":
@@ -153,7 +192,7 @@ export function App() {
         ) : route.parts[1] === "new" ? (
           <Launch />
         ) : (
-          <Delivery />
+          <Sessions />
         );
       break;
     case "attention":
@@ -166,7 +205,8 @@ export function App() {
       break;
     case "analytics":
     case "dashboard":
-      view = <Dashboard />;
+    case "score":
+      view = <Score />;
       break;
     case "read":
     case "doc":
@@ -181,84 +221,118 @@ export function App() {
         </Empty>
       );
   }
-  const delivery = deliveryNavState(runs, v2.data?.runs || [],
-    connected && !connection.stale && !readError && !runError && !v2.isError);
+  const delivery = deliveryNavState(
+    runs,
+    v2.data?.runs || [],
+    connected && !connection.stale && !readError && !runError && !v2.isError,
+  );
   return (
-    <MotionConfig reducedMotion="user">
-      <a
-        className="skip-link"
-        href="#main-content"
-        onClick={(event) => {
-          event.preventDefault();
-          main.current?.focus();
-        }}
-      >
-        Skip to content
-      </a>
-      <header className="app-header">
-        <a className="wordmark" href="#/" aria-label="ERA Home">
-          <ERAMark module="memory" size={38} />
-          <b>era</b>
+    <GameProvider>
+      <MotionConfig reducedMotion="user">
+        <a
+          className="skip-link"
+          href="#main-content"
+          onClick={(event) => {
+            event.preventDefault();
+            main.current?.focus();
+          }}
+        >
+          Skip to content
         </a>
-        <PrimaryNavigation section={section} delivery={delivery} />
-        <div className="header-tools">
-          <a
-            className="icon-button search-shortcut"
-            aria-label="Search work"
-            href="#/explore"
-          >
-            <Search size={18} />
+        <header className="app-header">
+          <a className="wordmark" href="#/" aria-label="ERA Home">
+            <ERAMark module="memory" size={38} />
+            <b>era</b>
+            <small className="os-wordmark">Agentic OS</small>
           </a>
-          <CaptureButton onClick={() => setCapture(true)} />
-          <button
-            className="icon-button"
-            aria-label={theme === "blue" ? "Use pink theme" : "Use blue theme"}
-            title={theme === "blue" ? "Use pink theme" : "Use blue theme"}
-            onClick={() => setTheme(theme === "blue" ? "pink" : "blue")}
-          >
-            <Palette size={18} />
-          </button>
-          <button className="icon-button" aria-label="Settings" title="Settings" onClick={() => setSettings(true)}>
-            <SettingsIcon size={18} />
-          </button>
-          <MoreNavigation referenceTools={capabilities.referenceTools} />
-        </div>
-      </header>
-      {!connected && (
-        <div className="offline-banner" role="status">
-          {readError ? "Refresh unavailable" : "Offline"} · viewing{" "}
-          {world.cachedAt ? "saved work" : "last known work"}
-          <button onClick={() => location.reload()}>Reconnect</button>
-        </div>
-      )}
-      {capabilities.kind === "relay" && (
-        <div className="connection-strip" role="status" aria-label="Connection">
-          {connectionChips(connection, Date.now()).map((chip) => (
-            <span key={chip.key} data-tone={chip.tone}>
-              <b>{chip.label}</b>
-              {chip.value}
-            </span>
-          ))}
-        </div>
-      )}
-      <main ref={main} id="main-content" className="app-main" tabIndex={-1}>
-        <Boundary key={route.path}>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={route.path}
-              initial={{ opacity: 0, y: reduced ? 0 : 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: reduced ? 0 : -6 }}
-              transition={{ duration: reduced ? 0 : 0.18 }}
+          <PrimaryNavigation
+            section={section}
+            delivery={delivery}
+            setupNeedsAttention={setupAttention(world.cockpit).needsAttention}
+          />
+          <div className="header-tools">
+            <a
+              className="icon-button"
+              href="#/library"
+              aria-label="Library"
+              title="Library"
             >
-              {view}
-            </motion.div>
-          </AnimatePresence>
-        </Boundary>
-      </main>
-      <PrimaryNavigation section={section} delivery={delivery} mobile />
-      <Capture open={capture} onClose={() => setCapture(false)} />
-      <SettingsSheet open={settings} onClose={() => setSettings(false)} />
-    </MotionConfig>
+              <BookOpen size={18} />
+            </a>
+            <a
+              className="icon-button search-shortcut"
+              aria-label="Search work"
+              href="#/explore"
+            >
+              <Search size={18} />
+            </a>
+            {section === "/bridge" && <GameToggle />}
+            <button
+              className="icon-button"
+              aria-label={
+                theme === "blue" ? "Use pink theme" : "Use blue theme"
+              }
+              title={theme === "blue" ? "Use pink theme" : "Use blue theme"}
+              onClick={() => setTheme(theme === "blue" ? "pink" : "blue")}
+            >
+              <Palette size={18} />
+            </button>
+            <button
+              className="icon-button"
+              aria-label="Settings"
+              title="Settings"
+              onClick={() => setSettings(true)}
+            >
+              <SettingsIcon size={18} />
+            </button>
+            <MoreNavigation referenceTools={capabilities.referenceTools} />
+          </div>
+        </header>
+        {!connected && (
+          <div className="offline-banner" role="status">
+            {readError ? "Refresh unavailable" : "Offline"} · viewing{" "}
+            {world.cachedAt ? "saved work" : "last known work"}
+            <button onClick={() => location.reload()}>Reconnect</button>
+          </div>
+        )}
+        {capabilities.kind === "relay" && (
+          <div
+            className="connection-strip"
+            role="status"
+            aria-label="Connection"
+          >
+            {connectionChips(connection, Date.now()).map((chip) => (
+              <span key={chip.key} data-tone={chip.tone}>
+                <b>{chip.label}</b>
+                {chip.value}
+              </span>
+            ))}
+          </div>
+        )}
+        <main ref={main} id="main-content" className="app-main" tabIndex={-1}>
+          <Boundary key={route.path}>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={route.path}
+                initial={{ opacity: 0, y: reduced ? 0 : 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: reduced ? 0 : -6 }}
+                transition={{ duration: reduced ? 0 : 0.18 }}
+              >
+                {view}
+              </motion.div>
+            </AnimatePresence>
+          </Boundary>
+        </main>
+        <PrimaryNavigation
+          section={section}
+          delivery={delivery}
+          mobile
+          setupNeedsAttention={setupAttention(world.cockpit).needsAttention}
+        />
+        <Capture open={capture} onClose={() => setCapture(false)} />
+        <SettingsSheet open={settings} onClose={() => setSettings(false)} />
+      </MotionConfig>
+    </GameProvider>
   );
 }

@@ -108,5 +108,5 @@ If you need runtime evidence, add temporary logging — and remove it before fin
 ## Phase 7 — Close out
 
 Run `.claude/skills/finish-task/SKILL.md`. PM specifics for bugs (Hard Rule 25):
-- If the bug wasn't already logged: add it to the campaign Master Book's **Pain Inventory** (emoji severity lead, root cause, evidence). When fixed, move it to the **Shipped Log** as `- ✅ YYYY-MM-DD — **ID** …` and tick `[x]` in `4 - Checklist.md`.
+- If the bug wasn't already logged: add it to the campaign Master Book's **Pain Inventory** (emoji severity lead, root cause, evidence) and give it a checklist row with `### <ID>` criteria. When fixed and verified, `pnpm pm:ship <ID> --note "<evidence>"` (finish-task Gate E).
 - Report format: root cause → fix → how verified → what you did NOT verify.

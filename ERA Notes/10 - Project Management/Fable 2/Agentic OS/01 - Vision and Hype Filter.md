@@ -52,7 +52,7 @@ The promise for the owner: **open one screen and see what the setup can do, what
 4. **Same yardstick for every author.** Claude, Codex and manual commits go through the same evaluation.
 5. **Local, private, subscription only.** No cloud service, no production database, no API keys (Hard Rules 26 and 29). Transcripts never leave the machine.
 6. **Text is a cost here too** (Hard Rule 28). PM.2 shows numbers, states and short labels.
-7. **Every animation carries information.** If removing the motion loses nothing, remove it.
+7. **Ordinary animation carries information.** In calm mode, remove motion that adds no information. The owner-approved Game-mode ERA core may also sustain rotation and offer a visual throttle burst for play; its session colors still come from observed state ([R104 motion contract](<10 - Visual, Motion and Game Layer.md#motion>)).
 8. **PM.1 keeps the documents; PM.2 is the cockpit.** One of each. No third home screen ([product design](<09 - PM.2 Product Design.md>)).
 
 ## Non-goals

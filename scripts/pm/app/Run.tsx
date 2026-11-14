@@ -533,13 +533,6 @@ function RunStory({
               )}
             </pre>
           </details>
-          <a
-            className="plain-link"
-            href={"/?ui=classic#/delivery/session/" + id}
-          >
-            Advanced workspace
-            <ArrowRight size={15} />
-          </a>
         </section>
       )}
       <ArtifactSheet
@@ -610,6 +603,7 @@ function Gate({
     [confirm, setConfirm] = useState(""),
     [slice, setSlice] = useState(""),
     [scopeAck, setScopeAck] = useState(""),
+    [tick, setTick] = useState(true),
     [usd, setUsd] = useState(""),
     [tokens, setTokens] = useState("");
   const title: Record<string, string> = {
@@ -640,7 +634,7 @@ function Gate({
         note: note || undefined,
         answer: note || undefined,
         confirmText: confirm,
-        tickCheckbox: true,
+        tickCheckbox: tick,
         ...(slice ? { scopeSlice: Number(slice) } : {}),
         scopeAck,
         ...extra,
@@ -722,6 +716,7 @@ function Gate({
           />
         </label>
       )}
+      {gate === "uat" && <label><input type="checkbox" checked={tick} onChange={event=>setTick(event.target.checked)}/> Tick source</label>}
       {gate === "budget" && (
         <div className="budget-fields">
           <label>
@@ -746,6 +741,7 @@ function Gate({
       <div className="gate-actions">
         {["spec", "plan"].includes(gate) ? (
           <>
+            {gate === "spec" && detail.packet.lanePolicy?.mergedDiscoveryPlan && detail.packet.lanePolicy.lane === "INSTANT" && <button className="primary" disabled={disabled || !scopeReady} onClick={()=>send("approve",{alsoApprovePlan:true})}>Approve both</button>}
             <button
               className="primary"
               disabled={
@@ -782,7 +778,8 @@ function Gate({
               Revise
             </button>
           </>
-        ) : gate === "question" ? (
+        ) : gate === "question" ? (<>
+          {awaiting.proposalReady && <button className="primary" disabled={disabled || !note.trim()} onClick={()=>send("answer",{acceptProposal:true})}>Approve proposal</button>}
           <button
             className="primary"
             disabled={disabled || !note.trim()}
@@ -791,6 +788,7 @@ function Gate({
             Answer
             <Send size={16} />
           </button>
+          </>
         ) : gate === "blocked" ? (
           <button
             className="primary"
@@ -835,12 +833,7 @@ function Gate({
             Raise limit
           </button>
         ) : (
-          <a
-            className="secondary"
-            href={"/?ui=classic#/delivery/session/" + id}
-          >
-            Open decision
-          </a>
+          <span>Unrecognized gate</span>
         )}
         {command.isSuccess && <small role="status">Decision queued</small>}
       </div>

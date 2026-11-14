@@ -153,7 +153,11 @@ export function Dashboard() {
   const { world, runs, connected } = useWorld();
   const route = useRoute();
   const query = parseDashboardQuery(route.query);
-  const set = (patch: Partial<DashboardQuery>) => go(`/analytics${dashboardQueryString({ ...query, ...patch })}`);
+  const set = (patch: Partial<DashboardQuery>) => {
+    const params = new URLSearchParams(dashboardQueryString({ ...query, ...patch }));
+    params.set("view", "backlog");
+    go(`/score?${params}`);
+  };
   const session = useV2Session();
   const v2 = useV2Runs();
   const campaign = query.campaign;

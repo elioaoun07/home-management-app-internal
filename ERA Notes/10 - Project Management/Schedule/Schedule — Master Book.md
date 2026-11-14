@@ -1673,7 +1673,7 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 **Outcome:** Activate reusable definitions atomically.
 
 - **Acceptance:** Catalogue C05: explicit activation checks source rights and destination, commits one execution instance with lineage and handles replay through the existing queue. No phantom success or duplicate activation.
-- **Depends on:** [SCH-14](<Schedule — Master Book.md#sch-14>), [HUB-46](<../Hub & ERA/Hub & ERA — Master Book.md#hub-46>), [KIT-20](<../Kitchen/Kitchen — Master Book.md#kit-20>).
+- **Depends on:** [SCH-14](<Schedule — Master Book.md#sch-14>), [HUB-46](<../Hub & ERA/Hub & ERA — Master Book.md#hub-46>), [KIT-20](<../_Archive/Shipped/Kitchen.md#kit-20>).
 
 **Provenance:** [Schedule — Master Book.md](<../_Archive/2026-09-10 PM Refactor/Before/Schedule/Schedule — Master Book.md>). The source is historical; this entry owns the retained outcome.
 
@@ -2193,32 +2193,32 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 ## Shipped Log
 
 - ✅ 2026-10-24 — **SCH-27** Mobile chore assignment: search, "Assign all N", per-row person selector, tabs inside a room, fixed-height sheet — [criteria](<Schedule — Master Book.md#sch-27>)
-- ✅ 2026-05-31 — partner-edit 403 fixed: the PATCH route ran its own creator-only check **stricter than the RLS policy underneath**; now uses `canMutateItem()` (creator OR responsible OR public+partner), matching `items_update`
+- ✅ 2026-05-31 — partner-edit 403 fixed: the PATCH route ran its own creator-only check stricter than the RLS policy underneath → [record](<../_Archive/Shipped/Schedule.md#2026-05-31--partner-edit-403-fixed-the-patch-route-ran-its-own-creator-only>)
 - ✅ 2026-05-31 — DELETE shares the same `canMutateItem()` guard, matching `items_delete`
 - ✅ 2026-05-31 — edit and "act" made consistent — the same household-aware predicate everywhere
 - ✅ 2026-05-31 — **myth corrected**: RLS *is* enabled on `items` and every child table; the repo's `schema.sql` was stale because the Supabase export captures tables only (`migrations/_verify_schedule_rls.md`)
 - ✅ 2026-06-06 — "Pass to partner" / "Take it back" one-tap actions in `ItemActionsSheet` with Undo toast (no new endpoint — RLS already permits it)
 - ✅ 2026-06-06 — "Assigned to me" and "Assigned out" collapsible sections with one-tap Return/Reclaim
-- ✅ 2026-06-06 — **Decision 1 shipped**: `/focus` page retired (`FocusPage`, `FlexibleRoutinesPool`, `ScheduleRoutineSheet` deleted); Focus becomes a per-item action; Week view's "Flexible this week" strip covers routine assignment
+- ✅ 2026-06-06 — **Decision 1 shipped** /focus page retired (FocusPage, FlexibleRoutinesPool, ScheduleRoutineSheet deleted) → [record](<../_Archive/Shipped/Schedule.md#2026-06-06--decision-1-shipped>)
 - ✅ 2026-06-06 — **Decision 3 shipped**: schema drift captured — table DDL, `get_schedule_bundle` body and all RLS policies now in `migrations/schema.sql`
 - ✅ 2026-06-06 — capture friction addressed on the live form (`MobileReminderForm.tsx`): title-only "someday" save, quick date chips, At-Home/Place/Map location
 - ✅ 2026-06-16 — **Plan My Day** shipped: `/today` triage page for one-time/recurring/flexible items landing on a day, push-off, both-direction prepone, ad-hoc tasks, checkpoints, persisted via `day_plans`
 - ✅ 2026-06-16 — Plan My Day save-gated draft model replaced auto-save-per-keystroke (edit form + one Save vs read-only preview card with Edit/Delete)
 - ✅ 2026-06-17 — **W9 surface consolidation**: `/reminders` merged with Plan My Day into `WebDayPlanner.tsx`; `StandaloneRemindersPage.tsx` deleted; `/today` redirects
-- ✅ 2026-06-19 — **Recurrence Stage 1**: the "skip → next occurrence" trap removed from **four** surfaces (`WebEvents`, `ItemActionsSheet`, `WebTabletMissionControl`, `ItemDetailModal`); `calculateNextOccurrence` and the `next_occurrence` postpone type deleted
-- ✅ 2026-06-19 — real **Skip this occurrence** wired everywhere (`onSkip` → `handleSkip`/`useSkipItem` on all 4 callers); Cancel is now one-off-only; `WebTabletMissionControl`'s misleadingly-named `handleSkip` renamed and branched correctly
+- ✅ 2026-06-19 — **Recurrence Stage 1** the "skip → next occurrence" trap removed from four surfaces (WebEvents, ItemActionsSheet, WebTabletMissionControl, ItemDetailModal) → [record](<../_Archive/Shipped/Schedule.md#2026-06-19--recurrence-stage-1>)
+- ✅ 2026-06-19 — real Skip this occurrence wired everywhere (onSkip → handleSkip/useSkipItem on all 4 callers) → [record](<../_Archive/Shipped/Schedule.md#2026-06-19--real-skip-this-occurrence-wired-everywhere>)
 - ✅ 2026-06-19 — `/reminders` show/hide-completed toggle (Eye/EyeOff in the FilterBar, default hide, `localStorage`-persisted) + collapsible "Completed (n)" section
-- ✅ 2026-06-19 — occurrence-action unit tests (`src/lib/utils/dayOccurrences.test.ts`): the exact repro (skip a past occurrence → no duplicate), complete, move-to-date, postponed/next-occurrence collision dedup, `isOccurrenceCompleted` per action type
+- ✅ 2026-06-19 — occurrence-action unit tests (src/lib/utils/dayOccurrences.test.ts): the exact repro (skip a past occurrence → no duplicate), complete,… → [record](<../_Archive/Shipped/Schedule.md#2026-06-19--occurrence-action-unit-tests-srclibutilsdayoccurrencestestts>)
 - ✅ 2026-06-21 — "Responsible: All Household" badge no longer hides the real assignee — `ResponsibleUserBadge` always renders, "Notifying household" becomes a supplementary badge
-- ✅ 2026-06-21 — **All-Household reminders now buzz both phones**: the `item-reminders` cron used `.maybeSingle()` on `household_links`, which *errors* on >1 active row (re-linking leaves stale-but-active rows), silently falling back to creator-only. Now collects every owner/partner id across all active links into a deduped Set
-- ✅ 2026-06-21 — a completed occurrence older than 30 days keeps its strikethrough — `useAllOccurrenceActions` filtered `item_occurrence_actions` by *occurrence* date, so old occurrences never reached `isOccurrenceCompleted`; the window was removed entirely
-- ✅ 2026-06-21 — **Decision 4 shipped**: all four occurrence-action inserts are idempotent `.upsert(..., { onConflict: "item_id,occurrence_date,action_type" })`, ending the 500-then-retry-forever loop on double-tap/offline replay
-- ✅ 2026-07-10 — **Google Calendar sync** (`2783b1d`, 12 files, +727): OAuth connect/callback/connection routes, `sync-item`, `google_calendar_connections` table, `items.google_synced_at`, and a two-pass idempotent `cron/gcal-reconcile` (migration `2026-07-10_google-calendar-sync.sql`)
-- ✅ 2026-10-03 — **SCH-20** Chores got its own page and install icon (`/chores`, `/chores-app`), a Catalogue → Chores section and two-tap weekday assignment; refined the UI into a mobile day agenda and web week/planning workspace with search, theme-aware responsive dialogs and date-link parity. Web Chores renders independently of Budget loading/errors. Fixed the length-keyed `useFlexibleRoutines` cache and missing schedule-items invalidation on `is_chore` edits ([criteria](<Schedule — Master Book.md#sch-20>), `src/features/chores/choreWeek.test.ts`)
+- ✅ 2026-06-21 — **All-Household reminders now buzz both phones** the item-reminders cron used .maybeSingle() on household_links, which errors on >1 active row (re-linking leaves stale-but-active rows),… → [record](<../_Archive/Shipped/Schedule.md#2026-06-21--all-household-reminders-now-buzz-both-phones>)
+- ✅ 2026-06-21 — a completed occurrence older than 30 days keeps its strikethrough — useAllOccurrenceActions filtered item_occurrence_actions by occurrence… → [record](<../_Archive/Shipped/Schedule.md#2026-06-21--a-completed-occurrence-older-than-30-days-keeps-its-strikethrough>)
+- ✅ 2026-06-21 — **Decision 4 shipped** all four occurrence-action inserts are idempotent .upsert(..., { onConflict: "item_id,occurrence_date,action_type" }), ending the… → [record](<../_Archive/Shipped/Schedule.md#2026-06-21--decision-4-shipped>)
+- ✅ 2026-07-10 — **Google Calendar sync** (2783b1d, 12 files, +727): OAuth connect/callback/connection routes, sync-item, google_calendar_connections table, items.google_synced_at,… → [record](<../_Archive/Shipped/Schedule.md#2026-07-10--google-calendar-sync>)
+- ✅ 2026-10-03 — **SCH-20** Chores got its own page and install icon (/chores, /chores-app), a Catalogue → Chores section and two-tap weekday assignment → [record](<../_Archive/Shipped/Schedule.md#sch-20>)
 - ✅ 2026-10-03 — **SCH-22** Install Chores as its own app alongside Budget — [criteria](<Schedule — Master Book.md#sch-22>)
 - ✅ 2026-10-03 — **SCH-23** Install a second app from the in-app Install button — [criteria](<Schedule — Master Book.md#sch-23>)
-- ✅ 2026-10-10 — Chores polish on SCH-20: `/chores` page uses the themed `tc.bgPage` (the `--background` gradient rendered near-black in blue dark), **Assign** opens preselected on the selected day (Today by default), and the assign dialog has previous/next week chevrons
-- ✅ 2026-10-10 — Web View on a phone-width screen (`WebViewContainer`): the header's module tabs and avatar were clipped off-screen, so Mobile View and module switching were unreachable. Below `lg` the tabs are replaced by a module-switcher dropdown and the avatar stays visible; `lg`+ unchanged
+- ✅ 2026-10-10 — Chores polish on SCH-20: /chores page uses the themed tc.bgPage (the --background gradient rendered near-black in blue dark), Assign opens… → [record](<../_Archive/Shipped/Schedule.md#2026-10-10--chores-polish-on-sch-20-chores-page-uses-the-themed-tcbgpage>)
+- ✅ 2026-10-10 — Web View on a phone-width screen (WebViewContainer): the header's module tabs and avatar were clipped off-screen, so Mobile View and module… → [record](<../_Archive/Shipped/Schedule.md#2026-10-10--web-view-on-a-phone-width-screen-webviewcontainer-the-headers>)
 - ✅ 2026-10-11 — **SCH-24** Acknowledge complete item and prerequisite effects truthfully — [criteria](<Schedule — Master Book.md#sch-24>)
 - ✅ 2026-10-17 — **SCH-25** Assign many chores at once: optimistic rows, one idempotent bulk request, queue-safe offline and truthful refusals — [criteria](<Schedule — Master Book.md#sch-25>)
 - ✅ 2026-10-20 — **SCH-26** Group a chore across rooms and mark every room done in one tap — [criteria](<Schedule — Master Book.md#sch-26>)

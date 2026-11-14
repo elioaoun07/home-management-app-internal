@@ -9,7 +9,18 @@ evidence_cutoff: "commit e5f537a, 2026-11-10. Proposed design. Facts about the h
 
 # Agentic OS — flight recorder
 
-[Agentic OS index](<_index.md>) · [Rule matrix](<04 - Rule Enforcement Matrix.md>) · next: [Deterministic evaluation](<07 - Deterministic Evaluation.md>) · item: [R95](<../../PM Tooling/PM Tooling — Master Book.md#r95>)
+**A4 implemented locally, 2026-11-11 (R96):** six separate session panels, 21 diff detectors plus four fixture-gated transcript detectors (four rules remain UAT judgment), native Codex rollout ingest, and read-only Delivery V2 projection. `os:report` includes stored scorecards; `os:score item <ID>`, `os:score session delivery:<job>`, and `os:score compare` export delivery/session/cohort evidence. No blended score, model review, new provider session, PM.2 surface, or A5+ work. Commands, verification, and conservative limits: [Skills and Agents](<../../../../docs/Skills-and-Agents.md#agentic-os-scorecards-a4--r96>).
+
+**A3 implementation, 2026-11-11:** the passthrough runner, Claude ingest,
+versioned local SQLite rows and `pnpm os:report <session>` are implemented.
+Stop attempts bounded automatic ingest; explicit `os:ingest` supports historical
+transcripts and an optional A2 commit range. Historical setup/exit codes remain
+unknown; checks are transcript observations, not newly launched supervisor runs.
+The real-session export, privacy limits, rollback instructions and test evidence
+are in [Skills and Agents](<../../../../docs/Skills-and-Agents.md#agentic-os-flight-recorder-a3--r95>).
+The broader record/report below remains the design target; full process scoring and Codex/Delivery adapters are delivered by A4 above; PM.2 remains A5+. No new native API session was launched.
+
+[Agentic OS index](<_index.md>) · [Rule matrix](<04 - Rule Enforcement Matrix.md>) · next: [Deterministic evaluation](<07 - Deterministic Evaluation.md>) · item: [R95](<../../_Archive/Shipped/PM Tooling.md#r95>)
 
 A flight recorder makes every session leave the same record, whoever flew: Claude Code, Codex, a Delivery run or the owner at the keyboard. The record is what the scorecard, the session view and the "which rule failed" answer are computed from.
 

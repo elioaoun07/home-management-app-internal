@@ -9,9 +9,25 @@ evidence_cutoff: "commit e5f537a, 2026-11-10. Proposed design. 'Reuse' rows name
 
 # Agentic OS — architecture
 
+**A4 implemented locally, 2026-11-11 (R96):** six separate session panels, 21 diff detectors plus four fixture-gated transcript detectors (four rules remain UAT judgment), native Codex rollout ingest, and read-only Delivery V2 projection. `os:report` includes stored scorecards; `os:score item <ID>`, `os:score session delivery:<job>`, and `os:score compare` export delivery/session/cohort evidence. No blended score, model review, new provider session, PM.2 surface, or A5+ work. Commands, verification, and conservative limits: [Skills and Agents](<../../../../docs/Skills-and-Agents.md#agentic-os-scorecards-a4--r96>).
+
+**Implementation delta (2026-11-11):** A0/A1 setup tools and A2's eight-detector
+commit-range evaluator are present. A2 reads immutable Git blobs, uses the
+installed TypeScript parser for source syntax and gates detector execution on
+its three fixtures. `os:eval` emits text or versioned JSON and runs on PR ranges
+in CI. A3 adds `hook.mjs`, `ingest.mjs` / `ingest/claude.mjs`, `store.mjs`
+and `report.mjs`: local event JSONL, transactional derived session/event/verdict/
+check rows and Markdown export. Stop attempts ingest after the original hook;
+recording failures preserve the hook result. A2 remains read-only; A3 imports its
+existing verdicts and launches no supervisor checks. A4 adds the scorecard and adapter modules described above; API, forms and PM.2 layout below remain proposed A5+ capabilities.
+Operational scope: [R94](<../../_Archive/Shipped/PM Tooling.md#r94>) and
+[R95](<../../_Archive/Shipped/PM Tooling.md#r95>).
+
 [Agentic OS index](<_index.md>) · [Visual, motion and game layer](<10 - Visual, Motion and Game Layer.md>) · next: [Roadmap](<12 - Roadmap.md>)
 
 ## Data flow
+
+**A5 delta — 2026-11-14:** `scripts/pm/cockpit.mjs` projects the A1 `check()` result and A4 `collect()` / `comparisons()` outputs. `cockpit-reader.mjs` and `cockpit-worker.mjs` keep Git/SQLite work off the server event loop, coalesce reads and preserve an explicitly stale snapshot after errors. No persistence or schema was added. The existing corpus manifest carries the projection to the owner/installation-bound phone cache; this is the owner-approved exception to the original local-only proposal. The four screens and Library live in `scripts/pm/app/`, using the current build and transport. The proposed separate `scripts/pm2/` folder below was not created. Local legacy/classic server routes retire after parity verification; static export and V1 execution/history remain.
 
 ```text
  repo files ──────────────► scan ──► setup.json ──► check ──► conflicts
@@ -60,6 +76,7 @@ tests/os/             fixtures and tests
 | `pnpm os:check` | Conflicts and drift | Locally and in CI |
 | `pnpm os:eval <session or base..head>` | Rule verdicts, checks, scorecard | After any session; in CI on pull requests for the Rules panel |
 | `pnpm os:report <session>` | Markdown flight report | On demand |
+| `pnpm os:ingest <transcript> [--range <base>..<head>]` | Claude transcript + hook events → derived rows; historical facts stay unknown | Locally; also attempted by Stop |
 | `pnpm os:arena <case> --tier <alias>` | One gym run | Owner only |
 
 ## Reuse

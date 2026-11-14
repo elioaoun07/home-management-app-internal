@@ -18,6 +18,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A1's inventory acceptance fixture reads the documented e5f537a cutoff.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -29,6 +32,16 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      - name: Agentic OS conflicts and drift
+        run: pnpm os:check
+
+      - name: Agentic OS rule verdicts
+        if: always() && github.event_name == 'pull_request'
+        env:
+          OS_BASE: ${{ github.event.pull_request.base.sha }}
+          OS_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: pnpm os:eval "$OS_BASE..$OS_HEAD"
 
       - name: Typecheck
         run: pnpm typecheck

@@ -39,6 +39,7 @@ export function createLocalTransport(): Transport {
   }
 
   async function read<T>(path: string, signal?: AbortSignal): Promise<T> {
+    if (path.startsWith("/api/delivery/v2/local/")) return v2Read<T>(path, signal);
     const response = await fetch(path, { headers: { Accept: "application/json" }, signal });
     const payload = await response.json();
     if (!response.ok) throw new PmError(payload.error || `Request failed (${response.status})`, response.status);
@@ -95,7 +96,7 @@ export function createLocalTransport(): Transport {
   }
 
   return {
-    capabilities: { kind: "local", planWrites: true, sprintWrites: true, eraSync: true, capture: true, v1Launch: true, v1Detail: true, v2: true, pairing: true, apply: true, referenceTools: true },
+    capabilities: { kind: "local", planWrites: true, sprintWrites: true, eraSync: true, capture: true, v1Launch: true, v1Detail: true, v2: true, pairing: true, apply: true, referenceTools: false },
 
     start() {
       startProbing();

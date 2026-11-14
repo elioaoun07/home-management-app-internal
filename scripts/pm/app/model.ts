@@ -22,9 +22,9 @@ import type {
 } from "./types";
 export const buckets: { id: Bucket; label: string; note: string }[] = [
   { id: "now", label: "Now", note: "In focus" },
-  { id: "next", label: "Up next", note: "Ready to follow" },
-  { id: "waiting", label: "Waiting", note: "A prerequisite remains" },
-  { id: "later", label: "Someday", note: "Kept for later" },
+  { id: "next", label: "Next", note: "Ready to follow" },
+  { id: "waiting", label: "Blocked", note: "A prerequisite remains" },
+  { id: "later", label: "Later", note: "Kept for later" },
 ];
 export function bucketOf(work: Work): Bucket {
   return work.blocked
@@ -90,6 +90,8 @@ export function buildWorld(snapshot: Snapshot): World {
   );
   return {
     spaces,
+    cockpit: snapshot.cockpit,
+    directories: snapshot.directories,
     work,
     choices,
     history: spaces

@@ -1,0 +1,32 @@
+[
+  {
+    "expected": "fail",
+    "changes": [
+      {
+        "file": "src/components/Card.tsx",
+        "before": null,
+        "after": "<p>This is a very long explanation that repeats the obvious interface behavior and adds more than eighteen words to the page.</p>;"
+      }
+    ]
+  },
+  {
+    "expected": "pass",
+    "changes": [
+      {
+        "file": "src/components/Card.tsx",
+        "before": null,
+        "after": "<p>Saved</p>;"
+      }
+    ]
+  },
+  {
+    "expected": "n/a",
+    "changes": [
+      {
+        "file": "README.md",
+        "before": null,
+        "after": "Text"
+      }
+    ]
+  }
+]

@@ -109,21 +109,26 @@ ERA typing memory API (HUB-113): `GET /api/era/capture-memory`, authenticated an
 
 ## PM Command Center (shared local and phone navigation)
 
+Local delivery (DLV-150–153): existing Deliver and run hash routes mount `LocalDelivery.tsx` on loopback; Confined retains the previous lane. Local server endpoints `/api/delivery/v2/local`, `/local/readiness` and `/local/run` require a browser owner session and an observed loopback socket. Ship merges/pushes after current-head UAT and any required review; Undo reverts the merge. No new Next.js page, icon or install identity.
+
 Local Delivery opens with **Review & sign off** (R81): search a work ID or title, choose To test / Not ready / Feedback / History / All, then Start test / Continue / View steps. The existing `#/delivery/test/<handover id>` route retains review search and filters on Back. Apply/conflict decisions live under **Delivery actions**. Phone UAT relay remains R79.
 
-**More navigation (R80, 2026-10-25):** the header's Lucide `Menu` icon opens the shared portaled sheet on desktop and phone. It links Activity (`#/activity`), Decisions (`#/attention`), Idea inbox (`#/read?file=0%20-%20Inbox.md`) and Documents (`#/read?file=_index.md`); Reference tools is shown only for the local transport. These restore existing hash destinations alongside the five primary tabs.
+**More navigation (R97, 2026-11-14):** the header's Lucide `Menu` icon opens the shared portaled sheet on desktop and phone. Plan (`#/sprints`), Conflicts (`#/setup?tab=conflicts`), Library (`#/library`), Activity, Decisions, Inbox and Documents use their existing sources. Library also has a one-click `BookOpen` header button. Local reference/rollback entry points are retired; static export and the separate phone V1 reader remain.
 
 `pnpm pm` and `/pm/live` mount the same React navigation from `scripts/pm/app/App.tsx`. These are hash destinations within the existing shell, not new Next.js pages. The wordmark uses `ERAMark module="memory"` from `src/components/shared/ERAMark.tsx`.
 
 | Hash route | Destination | Icon (lucide-react) |
 | --- | --- | --- |
-| `#/` | Home | `Home` |
-| `#/sprints` | Sprints — weekly scope, status and Delivery | `Flag` |
-| `#/explore` | Work | `Compass` |
-| `#/delivery` | Delivery | `Zap` |
-| `#/analytics` | Analytics | `ChartNoAxesCombined` |
+| `#/bridge` | Bridge — owner actions, running, next up | `Home` |
+| `#/launch` | Existing Delivery launch; A6 forms remain deferred | `Zap` |
+| `#/sessions` | Recorder, comparison and Delivery evidence | `Compass` |
+| `#/setup` | Map, Rulebook, Conflicts | `Shield` |
+| `#/score` | Session/tier evidence; Backlog tab retains Analytics | `ChartNoAxesCombined` |
+| `#/score?view=arena` | KIT-11 frozen case and Claude/Codex scorecard comparison; native launch blocked (R99 partial) | existing Score icon |
+| `#/library` | Work, documents, inbox, decisions and history | `BookOpen` |
+| `#/sprints` | Plan — existing Sprints | `Flag` |
 
-`#/dashboard` remains an alias for Analytics. Home queue links open Work with `lane=now`, `next`, `waiting` or `later`; module cards open the corresponding Work space. See [PM Live](<Page & Feature Atlas/pm-live.md>) and PM Tooling R69 for the shared desktop/phone presentation scope.
+`#/` and `#/home` redirect to Bridge. Base `#/delivery` redirects to Sessions' Delivery view; run/UAT deep links remain intact. `#/analytics` and `#/dashboard` redirect to Score's Backlog view, preserving filters. Work stays under Library at `#/explore`; Now / Next / Later are the lane labels and Blocked is a filter. See [PM Live](<Page & Feature Atlas/pm-live.md>) and R97.
 
 ---
 

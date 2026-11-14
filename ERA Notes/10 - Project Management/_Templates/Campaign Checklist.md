@@ -1,6 +1,6 @@
 ---
 created: 2026-07-15
-updated: 2026-09-10
+updated: 2026-11-11
 type: template
 status: template
 owner: Elio
@@ -19,20 +19,29 @@ status: active
 owner: Elio
 ---
 
-# <Campaign> — Backlog
+# <Campaign> — Checklist
 
-> [Master Book](<<Campaign> — Master Book.md>) · [PM home](<../_index.md>)
-> Order: <first prerequisite → next outcome>. Held work is labelled; acceptance lives in the book.
+[Master Book](<<Campaign> — Master Book.md>) · [All campaigns](<../_index.md>) · [Grammar](<../_Conventions.md>)
+
+**Now** is this week's sprint. **Next** is the ordered queue. **Later** is parked or conditional. Each ID links to its acceptance. Finish one with `pnpm pm:ship <ID>`.
 
 ## Now
 
-- [ ] **PREFIX-1** Verifiable next outcome → [Scope](<<Campaign> — Master Book.md#prefix-1>) _(friction - S)_
-
 ## Next
+
+**Needs you**
+
+- [ ] **PREFIX-1** Run the migration and witness the result on both phones — [criteria](<<Campaign> — Master Book.md#prefix-1>) _(blocker - S)_
+
+**<Theme>**
+
+- [ ] **PREFIX-2** Verifiable next outcome — [criteria](<<Campaign> — Master Book.md#prefix-2>) _(friction - S)_
 
 ## Later
 
-- [ ] **PREFIX-2** HELD — Decide the unresolved scope → [Scope](<<Campaign> — Master Book.md#prefix-2>) _(parked - S)_
+**Parked**
+
+- [ ] **PREFIX-3** HELD — DEC-00 — Decide the unresolved scope — [criteria](<<Campaign> — Master Book.md#prefix-3>) _(parked - S)_
 ```
 
-Only executable implementation, investigation or automated verification belongs here. Move completed implementation into Done even when owner UAT is pending; retain manual test results in a UAT document. Do not copy owner acceptance checkboxes, research sheets, completed tasks or duplicate cross-campaign outcomes into this queue. Run `pnpm pm:lint` and `pnpm pm:check-docs` after filling it.
+Now stays empty until an item joins the current sprint. Group rows under a bold label on its own line; `**Needs you**` is reserved for rows only the owner can close. Keep notes out of the lanes: progress and evidence go in the item's Master Book section. Do not copy research sheets, completed tasks or another campaign's outcome into this queue. Run `pnpm pm:lint`, `pnpm pm:check-docs` and `pnpm pm:index` after filling it.

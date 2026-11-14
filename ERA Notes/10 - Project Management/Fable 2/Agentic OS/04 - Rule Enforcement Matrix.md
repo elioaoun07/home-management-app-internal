@@ -9,7 +9,15 @@ evidence_cutoff: "commit e5f537a, 2026-11-10. 'Today' is from reading the hooks,
 
 # Agentic OS — rule enforcement matrix
 
-[Agentic OS index](<_index.md>) · [Setup registry](<03 - Setup Registry.md>) · next: [Conflict and drift detector](<05 - Conflict and Drift Detector.md>) · item: [R94](<../../PM Tooling/PM Tooling — Master Book.md#r94>)
+**A4 implemented locally, 2026-11-11 (R96):** six separate session panels, 21 diff detectors plus four fixture-gated transcript detectors (four rules remain UAT judgment), native Codex rollout ingest, and read-only Delivery V2 projection. `os:report` includes stored scorecards; `os:score item <ID>`, `os:score session delivery:<job>`, and `os:score compare` export delivery/session/cohort evidence. No blended score, model review, new provider session, PM.2 surface, or A5+ work. Commands, verification, and conservative limits: [Skills and Agents](<../../../../docs/Skills-and-Agents.md#agentic-os-scorecards-a4--r96>).
+
+**A2 implementation delta (2026-11-10):** the first eight diff detectors below
+(22/6/19/7/24/25/8/12) now run through `pnpm os:eval <base>..<head>`, with
+versioned evidence and fail/pass/n/a load-gating fixtures. The original “Today”
+and baseline columns retain their stated historical cutoff. Static syntax,
+scope limits and replay commands: [Skills and Agents](<../../../../docs/Skills-and-Agents.md#agentic-os-diff-evaluation-a2--r94>).
+
+[Agentic OS index](<_index.md>) · [Setup registry](<03 - Setup Registry.md>) · next: [Conflict and drift detector](<05 - Conflict and Drift Detector.md>) · item: [R94](<../../_Archive/Shipped/PM Tooling.md#r94>)
 
 ## Enforcement levels
 

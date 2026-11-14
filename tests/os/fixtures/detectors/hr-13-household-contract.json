@@ -1,0 +1,32 @@
+[
+  {
+    "expected": "fail",
+    "changes": [
+      {
+        "file": "src/app/api/cards/route.ts",
+        "before": null,
+        "after": "const db=supabaseAdmin();"
+      }
+    ]
+  },
+  {
+    "expected": "pass",
+    "changes": [
+      {
+        "file": "src/app/api/cards/route.ts",
+        "before": null,
+        "after": "const db=supabaseAdmin(); db.from('household_links');"
+      }
+    ]
+  },
+  {
+    "expected": "n/a",
+    "changes": [
+      {
+        "file": "README.md",
+        "before": null,
+        "after": "Text"
+      }
+    ]
+  }
+]

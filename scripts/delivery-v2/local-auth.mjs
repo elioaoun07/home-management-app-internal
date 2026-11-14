@@ -147,6 +147,23 @@ export function pairBridgeSession({ root, now = Date.now(), random = randomBytes
   return pairSession({ root, code, kind: "bridge", now, random });
 }
 
+/** Bootstrap only a same-origin browser on an observed loopback socket.
+ * Host and peer are both checked; forwarded headers never establish locality.
+ * LAN, relay and opaque/cross-site requests still require ordinary pairing.
+ */
+export function loopbackBrowserSession({ root, headers = {}, loopbackPeer = false, random = randomBytes }) {
+  const h = lowerHeaders(headers);
+  if (!loopbackPeer || h["sec-fetch-site"] !== "same-origin" || !isLoopbackOrigin("http://" + h.host)) return null;
+  if (h.origin && (!isLoopbackOrigin(h.origin) || new URL(h.origin).host !== h.host)) return null;
+  const existing = sessionView({ root, headers });
+  if (existing.paired) return { view: existing, cookie: null };
+  const state = ensureAuthState({ root, random });
+  const token = random(32).toString("base64url");
+  const hash = sha256(token);
+  writeState(root, { ...state, sessions: [...(state.sessions || []), { session_hash: hash, kind: "browser", actor: "owner", created_at: new Date().toISOString() }] });
+  return { view: { paired: true, actor: "owner", csrf: csrfToken({ secret: state.secret, session_hash: hash }) }, cookie: sessionCookie(token) };
+}
+
 /** Remove one session by its token. */
 export function revokeSession({ root, token }) {
   const state = readState(root);

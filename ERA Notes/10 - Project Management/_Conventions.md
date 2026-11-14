@@ -1,6 +1,6 @@
 ---
 created: 2026-07-15
-updated: 2026-11-10
+updated: 2026-11-11
 type: reference
 status: living
 owner: Elio
@@ -10,12 +10,14 @@ owner: Elio
 
 The campaign checklists together are **one implementation backlog**. Work contains actionable changes, investigations and automated verification. Manual owner acceptance belongs in a UAT document, never in the Deliver queue.
 
+The six-line version of these rules is in [the PM index](<_index.md#rules-in-one-minute>). This file is the full grammar, read when adding, moving or closing work.
+
 ## 1. Checklist item
 
 Only `<Campaign>/4 - Checklist.md` owns pending work:
 
 ```md
-- [ ] **BUD-67** Verify the transfer migration and owner acceptance → [Scope](<Budget — Master Book.md#bud-67>) _(blocker - S)_
+- [ ] **BUD-89** Restore the original transaction on Undo — [criteria](<Budget — Master Book.md#bud-89>) _(blocker - S)_
 ```
 
 - One verifiable outcome, one owning campaign, one lifetime ID. Use a short title; keep detailed acceptance, evidence, dependencies and provenance in the Master Book's matching ID section.
@@ -35,22 +37,31 @@ Exactly these H2 headings, once each and in order:
 ## Later
 ```
 
-**Now:** the next executable slice. **Next:** committed follow-on work, in dependency order. **Later:** deferred improvements, conditional work and unresolved design choices. Keep Now short (normally up to three outcomes per campaign); list any necessary exception in its header. Do not promote a blocked dependent because it is severe.
+**Now** is one global slice, not a per-campaign quota: the members of the current sprint across all campaigns (about five), plus ERA reports. A campaign with nothing in the sprint has an empty Now, and that is correct. **Next** is the ordered queue: committed follow-on work in dependency order, grouped by theme. **Later** holds deferred improvements, conditional work and unresolved design choices. Do not promote a blocked dependent because it is severe. When a sprint is planned or closed, move its members into or out of Now in the same change (adopted 2026-11-11 from the [backlog-health review](<Fable 2/10 - Project Management/Portfolio/Backlog Health.md>)).
 
-Use bold paragraphs for grouping within lanes; deeper headings reset the parser's lane. Empty lanes are valid; a lint W2 warning is not a reason to invent work. Campaign-wide acceptance belongs in the book as plain bullets, not duplicate `D1` tasks. Legacy `## Definition of Done` is parser-supported but no longer used for new checklists.
+Group rows inside a lane under a bold label on its own line (`**Money posts exactly once**`); deeper headings reset the parser's lane. Two labels are reserved:
+
+- `**Needs you**` — rows only the owner can close: a migration to run, a device or two-phone witness, an account or credential to set up, a choice to make. Agents never work or dispatch these; the PM index lists them together. A row leaves the group when its remaining work becomes executable.
+- `**ERA reports**` — written by the ERA issue import into Hub & ERA's Now lane; do not rename it.
+
+Empty lanes are valid; the lint W2 warning (Next or Later only) is not a reason to invent work. Queue notes do not belong between rows: put progress and evidence in the item's Master Book section. Campaign-wide acceptance belongs in the book as plain bullets, not duplicate `D1` tasks. Legacy `## Definition of Done` is parser-supported but no longer used for new checklists.
 
 ### 2.1 Completion, merge and cancellation
 
 | Disposition | Record |
 |---|---|
-| Completed | Tick, verify, then sweep to the book's `## Shipped Log`; remove the checklist line. |
+| Completed | Verify, then `pnpm pm:ship <ID> --note "<evidence>"`. The row leaves the checklist, the book's `## Shipped Log` gets its dated line and the criteria move to `_Archive/Shipped/<Campaign>.md`. |
 | Merged/renamed | Remove the duplicate checkbox immediately. In the book's `## Backlog reconciliation`, record old ID → surviving ID, date and preserved scope. This is not shipped work. |
-| Already completed elsewhere | Link the original shipped evidence and remove the stale checkbox. Do not claim a new implementation or fabricate today's completion date. |
+| Already completed elsewhere | Link the original shipped evidence and remove the stale checkbox with `pnpm pm:ship <ID> --date <real date>`. Do not claim a new implementation or fabricate today's completion date. |
 | Cancelled | Record original ID, outcome, date and reason in `_Archive/Cancelled Log.md`; remove the checkbox. |
 | Owner acceptance only | Remove the Delivery checkbox; retain its ID and scope in the book with `**Execution:** owner`, and link the pending UAT row. This is neither completed implementation nor cancellation. |
 | Uncertain | Keep a bounded executable investigation when code evidence is needed; put owner-only evidence requests in UAT. Never guess completion. |
 
-`pnpm pm:archive --dry-run` previews completed-item sweeps; `pnpm pm:archive` applies them; `--undo` restores the last sweep. The dashboard Ship/Discard actions use the same engine. On the first `pnpm pm` boot of a month, completed lines are swept automatically. Dates come from git when available, otherwise today. Review before a sweep: `[x]` means the recorded implementation scope is complete and verified. Owner UAT, deployment and manual SQL application have separate statuses; pending acceptance does not reopen completed implementation. Split remaining engineering into a precise follow-up before completing a broad item. The CLI's file restoration is not a substitute for checking later edits before Undo.
+**`pnpm pm:ship [ID …]`** is the one command for finished work. It ticks the named rows, sweeps every ticked row into its Shipped Log, compacts the Master Books (below), refreshes the generated block of `_index.md` and runs `pm:lint` and `pm:check-docs`. `--note "…"` records evidence on the receipt, `--date YYYY-MM-DD` records an earlier real completion date, `--dry-run` reports only, `--undo` restores every file the last run touched. With no ID it sweeps rows already ticked (by hand or in the dashboard) and compacts.
+
+**Compaction** keeps each Master Book to live state. For an ID with an exact Shipped Log receipt and no open row, the `### <ID>` section moves to `_Archive/Shipped/<Campaign>.md` together with the full receipt; the Shipped Log keeps one dated line ending in `→ [record](…)`. Any receipt longer than 200 characters is shortened the same way. `## Current state & evidence` keeps its three newest dated entries and its closing base statements; older entries move to the same archive file. Links to moved anchors are retargeted in every active document. A section that declares `**UAT:** pending` or `**Execution:** owner` is live state and stays in the book.
+
+`pnpm pm:archive` is the sweep alone (`--dry-run` previews, `--undo` restores the last sweep); the dashboard Ship/Discard actions use the same engine. On the first `pnpm pm` boot of a month, completed lines are swept automatically. Dates come from git when available, otherwise today. Review before a sweep: `[x]` means the recorded implementation scope is complete and verified. Owner UAT, deployment and manual SQL application have separate statuses; pending acceptance does not reopen completed implementation. Split remaining engineering into a precise follow-up before completing a broad item. The CLI's file restoration is not a substitute for checking later edits before Undo.
 
 ## 3. Master Books and sources of truth
 
@@ -64,6 +75,8 @@ Use bold paragraphs for grouping within lanes; deeper headings reset the parser'
 | Raw thoughts | `0 - Inbox.md` › New |
 | PM rules and reusable forms | This file and `_Templates/` |
 | Product architecture, source routing and domain invariants | Feature Map and existing module vault docs outside PM |
+| Full receipts and criteria of shipped items, older state-log entries | `_Archive/Shipped/<Campaign>.md`, written by `pnpm pm:ship` |
+| This week's sprint, owner actions, per-campaign counts | The generated block of `_index.md` (`pnpm pm:index`); sprint membership itself in `_Planning.json` |
 | Historical studies, superseded plans, cancelled work, refactor provenance | `_Archive/` |
 | Runtime/job state | The relevant runtime store; Markdown records intent and accepted outcomes, not invented runtime truth |
 
@@ -125,13 +138,14 @@ Examples: Notifications owns shared delivery policy (NOTIF-19); Hub consumes it.
 
 ## 6. Verification and maintenance
 
-- Run `pnpm pm:lint` for task grammar and `pnpm pm:check-docs` for structure, active links, duplicate identities and task acceptance.
+- Run `pnpm pm:lint` for task grammar and `pnpm pm:check-docs` for structure, active links, duplicate identities and task acceptance. `pnpm pm:ship` runs both; after a hand edit run them yourself, then `pnpm pm:index` to refresh the generated block of `_index.md`.
 - Rebuild the local read-only view with `pnpm pm:dashboard` after structural PM changes. Hosted `/pm` is refreshed by its normal build; a local rebuild does not deploy it.
 - `_Archive/` and dot-folders are not scanned. The product Outcomes view explicitly reads only `_Archive/Cancelled Log.md` as read-only history; it never enters the scanned file list, search, backlog or dispatch. Template metadata is hidden by the normal view. Plans/research contain no task checkboxes and are never independent execution queues.
 - Before closing a work session, reconcile the touched campaign: shipped work, pending owner verification, open pains and links. Once a week, review Now, new Inbox captures, held decisions and old small tasks; check evidence before changing status.
 - A PM/tooling-only session names the product or operational outcome it unblocks. After two consecutive ordinary meta-only sessions, take a product session before more discretionary meta-work. Explicit owner commissions, including this knowledge-system refactor, are scoped exceptions; do not reinterpret them as permission to implement backlog features.
 - Keep useful delivery session summaries in the book. At campaign review, move closed session narratives older than 90 days to dated archive material if they obscure current state; retain shipped evidence, decisions, unresolved incidents and pointers. Do not alter live runtime retention from a documentation policy.
-- Editing `CLAUDE.md` requires `pnpm sync:ai`. Generated mirrors are not independently authored.
+- Editing `CLAUDE.md` or anything under `.claude/` requires `pnpm sync:ai`. Generated mirrors are not independently authored.
+- A plan or study whose work is incorporated moves to `_Archive/Plans/` or `_Archive/Studies/<subject>/` in the session that incorporates it; `Plans/` and `Research/` hold only documents that still govern open work.
 
 ## 7. Idea Inbox
 
@@ -175,4 +189,4 @@ Promotion to prepared Focused requires the actual `preparedPlanFor` gates: expli
 
 **Later remains Later.** A plan for a parked or conditional item starts with its actual admission gate: evidence, an owner decision, a prerequisite or the next real feature touching that code. Do not turn an exploratory title into an adopted provider, data policy or feature expansion. A researched outcome may be to retain the current behavior or leave an option parked. Complete/shipped records need no retrospective execution plan merely to fill coverage.
 
-The [coverage and findings record](<Plans/Now and Next Execution Plans.md>) is navigation and a dated analysis receipt, not a queue. Update the selected plan when its contract changes; refresh the coverage record only when needed. Actual consumption savings require comparable run receipts; compact plans alone prove no token or cache savings.
+The 2026-09-26 [coverage and findings record](<_Archive/Plans/Execution Plans Coverage (2026-09-26).md>) is archived: it was a dated analysis receipt, not a queue. Update the selected plan when its contract changes. Actual consumption savings require comparable run receipts; compact plans alone prove no token or cache savings.

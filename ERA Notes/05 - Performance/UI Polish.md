@@ -118,6 +118,6 @@ hover:shadow-xl          → Primary CTAs
 
 ## Gotchas
 
-- `backdrop-filter: blur()` not supported on older watch/embedded browsers — always provide solid color fallback (see [WATCH_UI.md](../ui/watch/WATCH_UI.md))
+- `backdrop-filter: blur()` not supported on older watch/embedded browsers — always provide solid color fallback (see [WATCH_UI.md](<../04 - UI & Design/Watch/Watch UI.md>))
 - `.shimmer` uses a `::after` pseudo-element — ensure parent has `position: relative; overflow: hidden`
 - `will-change: transform` on too many elements can increase VRAM usage — apply globally only on animate/transition classes, not all elements

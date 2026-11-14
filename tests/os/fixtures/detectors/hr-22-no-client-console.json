@@ -1,0 +1,5 @@
+[
+  { "expected": "fail", "changes": [{ "file": "src/components/Card.tsx", "before": null, "after": "export function Card() {\n  console.log('new');\n  return null;\n}\n" }] },
+  { "expected": "pass", "changes": [{ "file": "src/components/Card.tsx", "before": null, "after": "// console.log('example');\nexport const text = 'console.warn(1)';\n" }] },
+  { "expected": "n/a", "changes": [{ "file": "src/app/api/cards/route.ts", "before": null, "after": "console.error('server');\n" }] }
+]

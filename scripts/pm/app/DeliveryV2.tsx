@@ -17,6 +17,7 @@ import {
 import { durableV2Command, newDeliveryIntent, storedIntent } from "./commandIntents";
 import { v2Post } from "./api";
 import { PairV2, useV2Session } from "./BrowserSession";
+import { LocalRun } from "./LocalDelivery";
 export { PairV2, useV2Session } from "./BrowserSession";
 import { client, go, pmKeys, useRoute, useWorld } from "./state";
 import { readinessCanLaunch, readinessCanStart } from "./readinessModel";
@@ -511,6 +512,9 @@ export function LaunchV2({ work }: { work: Work }) {
 }
 
 export function RunV2({ id }: { id: string }) {
+  return id.startsWith("local-") ? <LocalRun id={id} /> : <ConfinedRunV2 id={id} />;
+}
+function ConfinedRunV2({ id }: { id: string }) {
   const { connected } = useWorld();
   const session = useV2Session();
   const deliveries = useV2Runs();

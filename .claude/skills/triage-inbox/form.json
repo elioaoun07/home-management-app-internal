@@ -1,0 +1,9 @@
+{
+  "skill": "triage-inbox",
+  "title": "Triage inbox",
+  "tier": "CLAUDE_MID",
+  "effort": "default",
+  "launch": "worktree",
+  "fields": [],
+  "checks": []
+}

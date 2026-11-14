@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-11-10
+updated: 2026-11-11
 type: checklist
 status: active
 owner: Elio
@@ -10,56 +10,42 @@ owner: Elio
 
 [Master Book](<Delivery — Master Book.md>) · [All campaigns](<../_index.md>) · [Grammar](<../_Conventions.md>)
 
-One checkbox per outcome. Follow the ID link for acceptance, dependencies, holds and its **Reading guide** (where to start in the code). Lane order is priority, not authorization; owner evidence and policy gates still apply.
-
-**2026-09-26 owner scope decision:** Delivery closes as **accepted for supervised use, laptop + phone** once the KIT-11 A→B trial, Apply/rollback on arm B and one phone pass are recorded in [owner UAT](<../../../docs/Delivery-UAT.md>). **Now** holds only what that evidence closes. Everything in **Later** is an enhancement, reopened only when a real run shows a blocker, a safety problem or real friction. V1 items were cancelled the same day (see `_Archive/Cancelled Log.md`); V1 stays frozen.
+**Now** is this week's sprint. **Next** is the ordered queue. **Later** is parked or conditional. Each ID links to its acceptance. Finish one with `pnpm pm:ship <ID>`.
 
 ## Now
+
+## Next
+
+**Local lane**
+
+- [ ] **DLV-156** Drive a local delivery through one supervisor command contract — [criteria](<Delivery — Master Book.md#dlv-156>) _(friction - M)_
+
+**Confined V2, awaiting a real run**
 
 - [ ] **DLV-118** Prepare runnable checks and bounded context for Fast lane — [criteria](<Delivery — Master Book.md#dlv-118>) _(friction - M)_
 - [ ] **DLV-109** Show observed activity while an executor is running — [criteria](<Delivery — Master Book.md#dlv-109>) _(friction - M)_
 - [ ] **DLV-122** Let the owner cancel a waiting run — [criteria](<Delivery — Master Book.md#dlv-122>) _(friction - M)_
-
-**DLV-118 — 2026-09-20 preparation done, nothing launched.** KIT-11 is prepared as the prepared-vs-staged measurement task: a protected behavioural oracle over the real route (`tests/delivery-oracles/kit11-cooking-count.mjs`, discriminating on a host checkout and inside the pinned worker image), a validated **but uninstalled** execution policy revision 7, one `delivery-plan-v1` body, both arms' Master Book section text generated from it, and verified eligibility — `no-single-prepared-plan` for the staged arm, eligible for the prepared arm once the owner sets `ownerReviewed`. `ownerReviewed` is still `false` on disk. Zero provider jobs, runs, reservations or tokens. Everything remaining is owner-only: install the policy, review the plan, choose the qualified selection and limits, launch. Packet: `.delivery/v2/preparations/kit11/LAUNCH-PACKET.md`.
-
-**DLV-118 — 2026-09-26 run A (`r-54d5cf10d995`, staged, Codex Luna medium).** Plan → one build → typecheck satisfied (host fallback). The KIT-11 oracle exited 0 with "12 of 12 checks passed", but the count parser only read "tests passed", so the run stopped at `checks-inconclusive`. Parser fixed in `checks.mjs parseTestCounts()` (harness wording, not the candidate); one owner Recheck → **verified_candidate**, oracle 12/12. Measured: 2 jobs (plan 26 s, build 33 s), 0 repairs, 0 plan revisions, **80,028 tokens** (68,096 cached input, 10,312 fresh input, 1,620 output incl. 542 reasoning); checks 2 min 18 s (host typecheck). Not applied. During the Recheck the PM server answered 33/33 health probes in ≤ 0.03 s (DLV-135 live witness).
-
-**DLV-118 — 2026-09-26 run B (`r-fa5c81702ec7`, prepared, same settings).** Owner set `ownerReviewed: true`; prepared plan approved in 8 s; 1 job (build 36 s), 0 repairs, no Recheck → **verified_candidate** (oracle 12/12, typecheck satisfied on host, checks 3 min 29 s). **47,573 tokens** (34,816 cached input, 11,639 fresh input, 1,118 output incl. 456 reasoning). Not applied yet. **A vs B:** both candidates make the same change to the one route (only a local variable name differs). B used 1 job instead of 2 and **32,455 fewer tokens (−40.6 %)**. The saving is cached context (−33,280) and output (−502); fresh input was **+1,327 (+12.9 %)**. Limits of the evidence: one run per arm, on a two-line fix; the tokens spent writing the prepared plan (2026-09-20) are not counted in B.
-
-**DLV-109 / DLV-122 — implemented 2026-09-20, fixture-tested.** Live activity is observed during the KIT-11 runs; the waiting-run Cancel is exercised if either arm waits. Both are swept once seen on a real run.
-
-## Next
-
 - [ ] **DLV-137** HELD — DLV-133 — Prepare Delivery runs with one readiness result — [criteria](<Delivery — Master Book.md#dlv-137>) _(friction - L)_
 
-**DLV-137 — 2026-10-17 recovery source/fixtures:** Explicit service observations now feed desktop/mobile readiness and server admission. Passive reads stay effect-free. DLV-133 operational evidence, coordinated restart and phone acceptance remain pending. Durable command recovery is DLV-138.
-
-**Filed 2026-11-10 (Fable 2).** Criteria carry the source, tier and reading guide.
-
-- [ ] **DLV-150** Deliver an item on a branch in a local worktree with host checks — [criteria](<Delivery — Master Book.md#dlv-150>) _(friction - M)_
-- [ ] **DLV-151** Start a local delivery with three checks and no pairing on loopback — [criteria](<Delivery — Master Book.md#dlv-151>) _(friction - M)_
-- [ ] **DLV-152** Enforce the four surviving guardrails in code — [criteria](<Delivery — Master Book.md#dlv-152>) _(friction - M)_
-- [ ] **DLV-153** Ship by owner merge after UAT sign-off and undo by revert — [criteria](<Delivery — Master Book.md#dlv-153>) _(friction - M)_
-- [ ] **DLV-156** Drive a local delivery through one supervisor command contract — [criteria](<Delivery — Master Book.md#dlv-156>) _(friction - M)_
-
 ## Later
+
+**Confined V2 enhancements**
 
 - [ ] **DLV-133** Run the deterministic typecheck inside the protected checker — [criteria](<Delivery — Master Book.md#dlv-133>) _(friction - L)_
 - [ ] **DLV-114** Enforce the subscription token ceiling during each native job — [criteria](<Delivery — Master Book.md#dlv-114>) _(friction - M)_
 - [ ] **DLV-113** Let an owner revise a checked candidate from recorded findings — [criteria](<Delivery — Master Book.md#dlv-113>) _(friction - M)_
 - [ ] **DLV-117** Recommend qualified models and effort for each item — [criteria](<Delivery — Master Book.md#dlv-117>) _(friction - M)_
-- [ ] **DLV-111** Refresh subscription sign-ins before unattended remote launches *(refusal + reconnect action fixture-tested 2026-09-20; phone UAT U22 and idle refresh open)* — [criteria](<Delivery — Master Book.md#dlv-111>) _(friction - M)_
+- [ ] **DLV-111** Refresh subscription sign-ins before unattended remote launches — [criteria](<Delivery — Master Book.md#dlv-111>) _(friction - M)_
 - [ ] **DLV-121** Page frozen diffs and older candidate artifacts — [criteria](<Delivery — Master Book.md#dlv-121>) _(friction - M)_
-- [ ] **DLV-52** Reduce measured type debt at the validation boundary — [criteria](<Delivery — Master Book.md#dlv-52>) _(friction - L)_
-- [ ] **DLV-84** Burn down `react-hooks/exhaustive-deps` (50 across 25 files) — [criteria](<Delivery — Master Book.md#dlv-84>) _(friction - L)_
-- [ ] **DLV-103** Retire V1 only after a supported replacement — [criteria](<Delivery — Master Book.md#dlv-103>) _(friction - M)_
 - [ ] **DLV-146** Have the delivering worker emit the structured UAT handover and the supervisor capture it — [criteria](<Delivery — Master Book.md#dlv-146>) _(friction - L)_
 
-**DLV-133 — 2026-10-17 Stage 1 source update; operational witness pending.** Separate target-platform staging, full inventory, cold/warm receipts and managed identity binding are implemented locally. The legacy bare setup now refuses. Use the Master Book’s recipe/runbook; no Docker preparation, installed policy/volume switch or provider execution occurred. Real same-environment/full-program container evidence and owner activation remain open. DLV-137 depends on this item; DLV-118 remains independent.
-
-**DLV-114 — 2026-09-20 partial; parked 2026-09-26 (supervised use runs `advisory`).** In-job stopping is implemented and covered by 25 isolated cases (`npx vitest run tests/delivery-v2/budget-stop.test.ts`). Still owed: the bounded **real stop witness** (UAT U20), a wall-time limit and the `Increase limit` / `Change model` / `Reduce scope` escalation actions. Reopen before any unattended use.
-
-**Filed 2026-11-10 (Fable 2).** Criteria carry the source, tier and reading guide.
+**Environment and retirement**
 
 - [ ] **DLV-154** Give agents and UAT a disposable development database — [criteria](<Delivery — Master Book.md#dlv-154>) _(friction - L)_
 - [ ] **DLV-155** Retire the confined stack after five local deliveries — [criteria](<Delivery — Master Book.md#dlv-155>) _(parked - L)_
+- [ ] **DLV-103** Retire V1 only after a supported replacement — [criteria](<Delivery — Master Book.md#dlv-103>) _(friction - M)_
+
+**Code health**
+
+- [ ] **DLV-52** Reduce measured type debt at the validation boundary — [criteria](<Delivery — Master Book.md#dlv-52>) _(friction - L)_
+- [ ] **DLV-84** Burn down the exhaustive-deps lint findings — [criteria](<Delivery — Master Book.md#dlv-84>) _(friction - L)_

@@ -1018,10 +1018,16 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
     for (const row of data) if (row.relPath && row.sha) publishedDocs.set(row.relPath, row.sha);
   }
 
-  let corpusBusy = false;
+  let corpusBusy = false, corpusQueued = false;
   async function publishCorpus() {
-    if (typeof buildData !== "function" || corpusBusy) return;
+    if (typeof buildData !== "function") return;
+    if (corpusBusy) { corpusQueued = true; return; }
     corpusBusy = true;
+    try {
+      do { corpusQueued = false; await publishCorpusOnce(); } while (corpusQueued);
+    } finally { corpusBusy = false; }
+  }
+  async function publishCorpusOnce() {
     try {
       await loadPublishedDocs();
       const data = buildData();
@@ -1055,8 +1061,6 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
       await publishRow(rows.manifest.id, rows.manifest.kind, { ...rows.manifest.payload, withheld });
     } catch (err) {
       console.error("[pm-bridge] corpus publish error:", err.message);
-    } finally {
-      corpusBusy = false;
     }
   }
 

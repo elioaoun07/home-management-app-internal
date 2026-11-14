@@ -1,0 +1,5 @@
+[
+  { "expected": "fail", "changes": [{ "file": "src/components/Amount.tsx", "before": null, "after": "export const Amount = () => <input\n  type={'number'}\n/>;\n" }] },
+  { "expected": "pass", "changes": [{ "file": "src/components/Amount.tsx", "before": null, "after": "export const Amount = () => <input type='text' inputMode='decimal' />;\n" }] },
+  { "expected": "n/a", "changes": [{ "file": "src/components/ui/input.tsx", "before": null, "after": "export const Input = () => <input type='number' />;\n" }] }
+]

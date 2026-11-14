@@ -1,0 +1,5 @@
+[
+  { "expected": "fail", "changes": [{ "file": "src/app/api/cron/cards/route.ts", "before": null, "after": "export async function GET(req: Request) {\n  return Response.json({ ok: true });\n}\n" }] },
+  { "expected": "pass", "changes": [{ "file": "src/app/api/cron/cards/route.ts", "before": null, "after": "import { supabaseAdmin } from '@/lib/supabase/admin';\nexport const maxDuration = 60;\nexport async function GET(req: Request) {\n  const secret = process.env.CRON_SECRET;\n  const authHeader = req.headers.get('authorization');\n  if (!secret || authHeader !== `Bearer ${secret}`) {\n    return Response.json({ error: 'Unauthorized' }, { status: 401 });\n  }\n  const db = supabaseAdmin();\n  return Response.json({ ok: true });\n}\n" }] },
+  { "expected": "n/a", "changes": [{ "file": "src/app/api/cards/route.ts", "before": null, "after": "export async function GET() { return Response.json([]); }\n" }] }
+]

@@ -17,7 +17,7 @@ evidence_cutoff: 2026-10-25; HEAD 735d3881 plus current working tree; source and
 
 Use the existing [candidate handover template](../../../docs/Delivery-UAT.md#candidate-handover-template). This is already a process requirement; automatic generation, validation and display remain the gap. Keep implementation complete, automated checks, handover complete, applied/deployed and owner UAT as separate facts.
 
-**Scope:** proposed follow-up owned by Delivery, with PM Tooling owning the view and Drive projection. Build on [R75](<../PM Tooling/PM Tooling — Master Book.md#r75>) and [R74](<../PM Tooling/PM Tooling — Master Book.md#r74>); do not reopen their shipped scope. Allocate bounded follow-up IDs in the existing checklists before implementation. This document is a plan, not another execution queue.
+**Scope:** proposed follow-up owned by Delivery, with PM Tooling owning the view and Drive projection. Build on [R75](<../_Archive/Shipped/PM Tooling.md#r75>) and [R74](<../_Archive/Shipped/PM Tooling.md#r74>); do not reopen their shipped scope. Allocate bounded follow-up IDs in the existing checklists before implementation. This document is a plan, not another execution queue.
 
 ## Phase 1 — Check existing coverage
 

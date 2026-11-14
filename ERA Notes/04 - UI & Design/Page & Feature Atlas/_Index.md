@@ -83,8 +83,8 @@ tags:
 | `statement-import` | `/statement-import` | [[statement-import]] |
 | `atlas`         | `/atlas`         | [[atlas]]         |
 | `offline`       | `/offline`       | [[offline]]       |
-| `pm`            | `/pm`            | [[pm]] — shared navigation with central live Delivery; readiness/recovery; hosted reference/export |
-| `pm-live`       | `/pm/live`       | [[pm-live]] — shared navigation, delivery readiness and command recovery |
+| `pm`            | `/pm`            | [[pm]] — calm/game Bridge, outcome charts, SDK status, skill picker and searchable setup; hosted export retained |
+| `pm-live`       | `/pm/live`       | [[pm-live]] — shared calm/game Bridge, chart evidence, stale-aware SDK status and delivery recovery |
 
 ## Feature Modules (Standalone)
 
