@@ -1,6 +1,6 @@
 // Replay-only: real temporary Git worktrees/remotes, synthetic subscription and
 // native session; all UAT receipts below are fixture-owner actions.
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
@@ -15,18 +15,21 @@ import { loopbackBrowserSession, authenticateLocal, sessionView } from "../../sc
 import { recordAvailability, recordResult, signOff, retractSignOff } from "../../scripts/delivery-v2/uat.mjs";
 import { createJourney } from "../../scripts/delivery-v2/journey.mjs";
 import { routeLocal } from "../../scripts/delivery-v2/local-routes.mjs";
+import { listStewardRequests } from "../../scripts/delivery-v2/steward-requests.mjs";
 import { buildSessionOptions } from "../../scripts/delivery-v2/adapters/claude.mjs";
 import { routeDeliveryV2 } from "../../scripts/delivery-v2/entry.mjs";
 import type { LocalRunView } from "../../scripts/pm/app/LocalDelivery";
 
 const roots: string[] = [];
 const stores: ReturnType<typeof openStore>[] = [];
-afterEach(() => { stores.splice(0).forEach(s => s.close()); roots.splice(0).forEach(root => rmSync(root, { recursive: true, force: true })); });
+afterEach(() => { vi.unstubAllEnvs(); stores.splice(0).forEach(s => s.close()); roots.splice(0).forEach(root => rmSync(root, { recursive: true, force: true })); });
 function temp() { const root = mkdtempSync(join(tmpdir(), "era-local-")); roots.push(root); return root; }
-const git = (root: string, ...args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }).trim();
+// Git hooks export GIT_INDEX_FILE; a fixture worktree must use its own index,
+// just like the production Local supervisor's scrubbed Git environment.
+const git = (root: string, ...args: string[]) => execFileSync("git", args, { cwd: root, env: { ...localEnvironment(), NODE_ENV: "test" }, encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }).trim();
 const put = (root: string, path: string, value: string) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), value); };
 const PM = "ERA Notes/10 - Project Management";
-async function fixture(risk = false, red = false) {
+async function fixture(risk = false, red = false, failFirst = false) {
   const parent = temp(), root = join(parent, "repo"), remote = join(parent, "origin.git");
   mkdirSync(root); git(root, "init", "-b", "main"); git(root, "config", "user.email", "fixture@example.invalid"); git(root, "config", "user.name", "Fixture");
   git(parent, "init", "--bare", remote); git(root, "remote", "add", "origin", remote);
@@ -44,12 +47,17 @@ async function fixture(risk = false, red = false) {
   const store = openStore({ path: join(root, ".delivery/v2/supervisor.sqlite") }); stores.push(store);
   const credential = join(parent, "subscription"); mkdirSync(credential); put(credential, ".credentials.json", JSON.stringify({ fixture: true }));
   let launches = 0;
+  let releaseFirst: () => void = () => {};
   let requestedSettings: unknown = null;
   const lane = createLocalLane({ root, store, authenticate: () => ({ ok: true, method: "fixture", directory: credential }),
     catalog: () => ({ revision: 1, models: { claude: [{ id: "fixture-claude", efforts: ["medium"] }, { id: "disabled-claude", disabled: true }] } }),
     prepareDependencies: async (workspace: string) => { put(workspace, "node_modules/.pnpm/lock.yaml", readFileSync(join(workspace, "pnpm-lock.yaml"), "utf8")); return { status: 0 }; },
     session: async ({ request, env }: { request: { workspace: { root: string }; instruction: string }; env: Record<string, string> }) => {
       launches++;
+      if (failFirst && launches === 1) {
+        await new Promise<void>(resolve => { releaseFirst = resolve; });
+        throw new Error("synthetic native startup failure");
+      }
       requestedSettings = (request as typeof request & { settings: unknown }).settings;
       const workspace = request.workspace.root;
       expect(readFileSync(join(workspace, "CLAUDE.md"), "utf8")).toContain("Fixture instructions");
@@ -61,7 +69,7 @@ async function fixture(risk = false, red = false) {
       return { status: "finished", observations: { nativeOutcome: "succeeded", usage: { input: 1, output: 1 } } };
     } });
   const input = { file: "Delivery/4 - Checklist.md", id: "DLV-900", executor: "claude" };
-  return { parent, root, remote, store, lane, input, launches: () => launches, requestedSettings: () => requestedSettings };
+  return { parent, root, remote, store, lane, input, launches: () => launches, releaseFirst: () => releaseFirst(), requestedSettings: () => requestedSettings };
 }
 async function built(risk = false, red = false) {
   const f = await fixture(risk, red);
@@ -120,6 +128,17 @@ describe("versioned Local guardrails", () => {
     expect(options.settingSources).toEqual(["project"]); expect(options.skills).toBe("all");
     expect(options.sandbox).toEqual({ enabled: true, failIfUnavailable: true }); expect(options.env).toEqual({ PATH: "fixture" });
   });
+  it("snapshots the real Node environment without attempting to freeze the host object", () => {
+    const options = buildSessionOptions({ workspaceRoot: temp(), local: true, env: process.env });
+    expect(options.env).not.toBe(process.env);
+    expect(Object.isFrozen(options.env)).toBe(true);
+    expect(Object.isFrozen(process.env)).toBe(false);
+    expect(options.sandbox).toEqual({ enabled: true, failIfUnavailable: true });
+    const custom = { PATH: "fixture" };
+    const snapshot = buildSessionOptions({ workspaceRoot: temp(), local: true, env: custom });
+    custom.PATH = "changed";
+    expect(snapshot.env.PATH).toBe("fixture");
+  });
 });
 
 describe("loopback bootstrap", () => {
@@ -139,6 +158,52 @@ describe("loopback bootstrap", () => {
 });
 
 describe("Local worktree to owner merge and revert", () => {
+  it("projects actual execution, terminal failure and interrupted work without inventing owner gates", async () => {
+    const f = await fixture(false, false, true);
+    const start = await f.lane.start(f.input);
+    expect(f.lane.list()[0]).toMatchObject({ lane: "local", active: true, ownerActionKind: "none" });
+    await expect.poll(f.launches).toBe(1);
+    f.releaseFirst();
+    await f.lane.wait(start.run_id!);
+    expect(f.lane.list()[0]).toMatchObject({ active: false, lifecycle: "CLOSED", closed_outcome: "failed", ownerActionKind: "none" });
+    const old = await f.lane.detail(start.run_id!);
+    const retry = await f.lane.start(f.input);
+    await f.lane.wait(retry.run_id!);
+    const next = await f.lane.detail(retry.run_id!);
+    expect(next.workspace).not.toBe(old.workspace);
+    expect(next.branch).not.toBe(old.branch);
+    expect(existsSync(old.workspace)).toBe(true);
+    expect((await f.lane.detail(start.run_id!)).error).toBe("synthetic native startup failure");
+    expect(f.lane.list().find((row: { run_id: string }) => row.run_id === retry.run_id)).toMatchObject({ active: false, ownerActionKind: "local-review" });
+    const restarted = createLocalLane({ root: f.root, store: f.store });
+    const row = f.store.getRun(start.run_id!);
+    const data = JSON.parse(row.base_manifest_json);
+    f.store.updateRun(start.run_id!, { lifecycle: "ACTIVE", base_manifest_json: { ...data, phase: "preparing" } });
+    expect(restarted.list().find((row: { run_id: string }) => row.run_id === start.run_id)).toMatchObject({ active: false, ownerAction: "Interrupted", ownerActionKind: "inspect-session" });
+    expect((await restarted.detail(start.run_id!)).interrupted).toBe(true);
+  });
+  it("retains refused Local Starts in the existing launch store and replays a UUID once", async () => {
+    const f = await fixture();
+    put(f.root, "pending.txt", "dirty source\n");
+    const request = { method: "POST", path: "/api/delivery/v2/local", loopbackPeer: true,
+      body: { ...f.input, action: "start", command_id: randomUUID() } };
+    const ctx = { local: f.lane, store: f.store };
+    const auth = { kind: "browser", actor: "fixture-owner" };
+    expect((await routeLocal(request, auth, ctx))?.status).toBe(409);
+    expect(listStewardRequests(f.store, 180_000)).toMatchObject([{ status: "blocked", workId: "DLV-900", run_id: null }]);
+    const again = await routeLocal(request, auth, ctx);
+    expect(again?.status).toBe(409);
+    expect(listStewardRequests(f.store, 180_000)).toHaveLength(1);
+    expect(f.launches()).toBe(0);
+    git(f.root, "add", "pending.txt"); git(f.root, "commit", "-m", "fixture source update");
+    request.body.command_id = randomUUID();
+    const started = await routeLocal(request, auth, ctx);
+    expect(started?.status).toBe(200);
+    const replayed = await routeLocal(request, auth, ctx);
+    expect(replayed?.json.run_id).toBe(started?.json.run_id);
+    await f.lane.wait(started!.json.run_id);
+    expect(f.launches()).toBe(1);
+  });
   it("validates and passes the selected model and effort into the native session", async () => {
     const f = await fixture();
     await expect(f.lane.start({ ...f.input, model: "missing" })).rejects.toThrow("not in this installation");
@@ -217,6 +282,7 @@ describe("Local worktree to owner merge and revert", () => {
   }, 30_000);
   it("invalidates UAT and review on a changed branch head", async () => {
     const f = await built(true); accept(f.root, f.view.handover!); await f.lane.review(f.id);
+    vi.stubEnv("GIT_INDEX_FILE", ".git/index");
     put(f.view.workspace, "later.txt", "later"); git(f.view.workspace, "add", "."); git(f.view.workspace, "commit", "-m", "later");
     expect((await f.lane.detail(f.id)).canShip).toBe(false); await expect(f.lane.ship(f.id)).rejects.toThrow();
   }, 30_000);

@@ -320,6 +320,7 @@ export interface StewardRequest {
 export interface V2RunSummary {
   run_id: string;
   engine: "v2";
+  lane?: "local";
   title: string;
   alias: string | null;
   file: string | null;

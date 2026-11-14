@@ -18,6 +18,8 @@ tags:
 
 ## Files
 
+**Local session review (2026-11-14, R117):** the local React run route restores milestones, work brief, Verification, Activity, Changes and UAT controls in the existing session visual language. Errors and worktree paths are disclosed, missing checks stay Not run, null-exit results stay Inconclusive, and New attempt opens Deliver without dispatch. Bridge displays active Local execution in red, newest explicit failure/interruption/blocked launch as a grey split ring, and owner review in yellow. Local blocked Starts reuse existing retained launch receipts. Hosted Preact export is unchanged. [Owner cases and backend restart boundary](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r117--local-session-review-bridge-states-and-startup-recovery>).
+
 **Markdown launch recommendations (2026-11-14, R115):** both React Deliver forms resolve an item's Tier/effort from its contract plus the existing Model Registry setup snapshot. Supported recommendations preselect settings; sparkle markers persist beside recommended options and a model/effort button restores the original tuple. Overrides survive late snapshot updates. Missing or unsupported recommendations never cause a guessed model substitution.
 
 **Local settings (2026-11-14, R114):** Local Deliver exposes catalogue-backed Model and Effort in calm/Game, with Default options and dependent selection reset. The Local supervisor validates and records the chosen settings before dispatch. UI updates live; backend validation needs an owner bridge restart. No Docker dependency is introduced.

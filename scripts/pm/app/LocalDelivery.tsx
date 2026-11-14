@@ -11,6 +11,7 @@ import { DeliveryMission } from "./DeliveryMission";
 import { effortsFor } from "./v2model";
 import { launchRecommendation } from "./launchRecommendationModel";
 import { LaunchRecommendation } from "./LaunchRecommendation";
+import { LocalRunReview } from "./LocalRunReview";
 import type { UatHandover, Work } from "./types";
 
 export const offersLocalLane = () => transport().capabilities.kind === "local" && isLoopbackOrigin(location.origin);
@@ -21,7 +22,9 @@ export interface LocalReadiness {
 export interface LocalRunView {
   run_id: string; phase: string; workspace: string; branch: string; head: string | null; current_head: string | null;
   canShip: boolean; canUndo: boolean; interrupted: boolean; error?: string;
-  work: { id: string; title: string }; risk?: { required: boolean; flagged: { path: string; domains: string[] }[] };
+  work: { id: string; title: string; campaign?: string; file?: string; brief?: string };
+  settings?: { executor: string; model: string | null; effort: string | null };
+  risk?: { required: boolean; flagged: { path: string; domains: string[] }[] };
   checks: { name: string; exit: number | null; stdout: string; stderr: string; error: string | null }[];
   activity: { at: string; summary: string | null }[];
   usage: Record<string, number | string | null> | null;
@@ -107,6 +110,7 @@ export function LocalLaunch({ work }: { work: Work }) {
         "local",
         {
           action: "start",
+          command_id: crypto.randomUUID(),
           id: work.idChip || work.id,
           file: work.file,
           executor,
@@ -235,7 +239,7 @@ export function LocalActions({ run, busy, act }: { run: Pick<LocalRunView, "phas
     {run.handover && <a className="secondary" href={`#/delivery/test/${run.handover.handover_id}`}>Test steps</a>}
     <button className="primary" disabled={busy || !(run.canShip || run.phase === "push-pending")} onClick={() => act("ship")}>{run.phase === "push-pending" ? "Retry push" : "Ship"}</button>
     {(run.canUndo || run.phase === "revert-push-pending") && <button className="secondary" disabled={busy} onClick={() => act("undo")}>Undo</button>}
-    {["building", "checking"].includes(run.phase) && !run.interrupted && <button className="secondary" disabled={busy} onClick={() => act("cancel")}>Cancel</button>}
+    {["preparing", "building", "checking"].includes(run.phase) && !run.interrupted && <button className="secondary" disabled={busy} onClick={() => act("cancel")}>Cancel</button>}
   </div>;
 }
 
@@ -250,17 +254,8 @@ export function LocalRun({ id }: { id: string }) {
   const run = detail.data;
   if (session.data && !session.data.paired) return <PairV2 />;
   if (!offersLocalLane()) return <p>Open on the laptop</p>;
-  return <div className="focus-page" style={{ minWidth: 0, overflowWrap: "anywhere" }}><Back fallback="/delivery" /><ErrorNotice error={detail.error || command.error} />
-    {run && <><header className="launch-heading"><span className="eyebrow">{run.work.id} · Local</span><h1>{run.work.title}</h1><p role="status">{run.interrupted ? "Interrupted · inspect session" : run.phase}</p></header>
-      {run.error && <p role="alert">{run.error}</p>}
-      <code>{run.branch}</code>
-      <details><summary>Worktree</summary><code style={{ overflowWrap: "anywhere" }}>{run.workspace}</code></details>
-      <LocalActions run={run} busy={command.isPending} act={action => command.mutate(action)} />
-      {run.risk?.required && <details><summary>Review required</summary><ul>{run.risk.flagged.map(file => <li key={file.path}><code>{file.path}</code> · {file.domains.join(", ")}</li>)}</ul></details>}
-      {patch !== null && <pre style={{ overflow: "auto", maxHeight: "60vh", maxWidth: "100%" }}>{patch}</pre>}
-      <section><h2>Checks</h2>{run.checks.map(check => <details key={check.name}><summary>{check.name} · {check.exit === 0 ? "Passed" : "Failed"}</summary><pre style={{ overflow: "auto" }}>{check.stdout}{check.stderr}{check.error}</pre></details>)}</section>
-      <section><h2>Activity</h2>{run.activity.slice(-30).map((entry, index) => <p key={index}>{entry.summary}</p>)}</section><HostLimits />
-      {run.usage && <details><summary>Usage</summary><dl>{Object.entries(run.usage).filter(([, value]) => typeof value === "number").map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl></details>}
-    </>}
+  return <div className="run-page local-run-page"><Back fallback="/delivery" /><ErrorNotice error={session.error || detail.error || command.error} retry={() => void detail.refetch()} />
+    {!run && detail.isPending && <p role="status">Loading session…</p>}
+    {run && <><LocalRunReview run={run} busy={command.isPending} act={action => command.mutate(action)} patch={patch} /><HostLimits /></>}
   </div>;
 }

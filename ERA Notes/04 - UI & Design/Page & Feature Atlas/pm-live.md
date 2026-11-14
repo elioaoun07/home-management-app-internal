@@ -19,6 +19,8 @@ tags:
 
 ## Files
 
+**Shared Bridge state repair (2026-11-14, R117):** observed running takes priority over unrelated UAT, and the newest explicit failed/interrupted session or blocked launch displays the grey split ring. Genuine owner review stays yellow; reduced motion stays static. Local run review and retry stay desktop-only. Relay deployment/physical-phone acceptance remain separate from source and local viewport evidence.
+
 **Markdown launch recommendations (2026-11-14, R115):** shared Confined Deliver resolves item Tier/effort from the existing relayed contract and setup registry. Sparkle markers and a persistent restore control preserve the recommendation after overrides. Relay freshness/permission remains authoritative; no new command or schema is introduced. Physical-phone deployment remains separate.
 
 **Shared Deliver launch (2026-11-14, R113):** the shared Confined view collects checks through Start and reports refusal afterward, preserving durable relay intent recovery. Game Mode has a separate orbital mission layout with reduced-motion and visibility pause. Local remains loopback-only; explicit owner renewal requires the updated bridge. Source/browser-fixture evidence does not establish phone deployment or physical-device acceptance.

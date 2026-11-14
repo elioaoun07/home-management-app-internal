@@ -79,6 +79,8 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟠 **R117 — Local session loses structured review, Bridge stays yellow, native launch crashes (2026-11-14).** Owner run `local-b52041fb-b6c8-46cd-ab03-8fa669ea6f23` (HUB-118) failed before provider work: `buildSessionOptions` passes Node's special `process.env` into `deepFreeze`, throwing `TypeError: Cannot freeze`. `LocalRun` bypasses the existing session sections, and `local-lane.list` labels every non-UAT phase `review-result`, masking execution and terminal failure as owner attention. Failed attempts also retain a deterministic worktree/branch that prevents a fresh Start. Preserve the failed evidence; repair the causes and verify offline.
+
 🟠 **R116 — Valid Local subscription reported as missing (2026-11-14).** HUB-118 Start screenshot shows Source/Dependencies passed, Sign-in blocked. Read-only credential metadata confirms Claude Pro subscription token/inference scope and no embedded API key. Loading PM's `.env` adds ANTHROPIC_API_KEY and Azure TTS variables; `localSubscription` checks the unsanitized host environment and rejects these before examining the valid login. The native worker already receives `localEnvironment()` without those variables. Align subscription lookup with that environment while preserving custom credential directories and strict credential-file validation.
 
 🟠 **R113 — Deliver hides launch blockers behind disabled Start (2026-11-14).** Owner reports an unchanged Game view, disabled Local Start, confusing Confined executor availability and a separate Check readiness step. Local UI gates on passive readiness (current workspace is dirty); Confined conflates installed SDKs with policy permission and gates Start even though the server collects readiness. Both subscriptions and dependencies pass local passive inspection; installed policy revision 13 permits only Codex in Confined. Keep admission checks, move them behind explicit Start, and give Game Mode its own launch composition.
@@ -144,6 +146,19 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### R117
+
+**Outcome:** Local sessions have a structured review, the Bridge reflects actual execution/failure, and native startup can pass environment construction.
+
+- **Kind:** bug
+- **Acceptance:** Local run page retains identity, stages, plan/brief, four host checks with honest unrun/inconclusive states, activity, changes and UAT controls at desktop/390 px Blue/Pink. Observed Local execution remains red and continuously turning even with unrelated owner UAT; failed/interrupted sessions and blocked launches show the grey offset split ring. UAT/approval stays yellow. Claude options accept `process.env` without freezing it or weakening the sandbox. A fresh explicit owner attempt preserves previous runs/worktrees and still enforces admission and one active run per work item.
+- **Touches:** `scripts/pm/app/`, `scripts/delivery-v2/local-lane.mjs`, `scripts/delivery-v2/adapters/claude.mjs`, `tests/pm-ui/`, `tests/delivery-v2/`
+- **Verification:** Offline adapter/local-lane/state/render tests; required PM suite, typecheck, changed-file lint and PM build; credential-free desktop/mobile browser flow. No live provider test, production write, merge or push.
+- **Implementation:** done
+- **Verified (2026-11-14):** 597 tests pass across all PM UI suites plus Local/executor/launch-receipt suites; 44 adjacent auth/recovery/dynamics checks pass. Repository typecheck, changed-file ESLint, PM React build, docs and PM validation pass. `local-session.browser.mjs` records 28 desktop/390 px Blue/Pink screenshots, live running→failed polling, blocked/interrupted/review states and reduced motion with no writes/runtime errors. A separate read-only browser check on the actual reported run confirms the restored sections and real Bridge failed state. Original failed run/worktree remain intact. Evidence and candidate hashes: `.pm/r117-evidence/`; [owner restart/retest](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r117--local-session-review-bridge-states-and-startup-recovery>). Backend activation/live provider acceptance remain owner-run.
+- **Hook regression:** the full pre-commit pass exposed inherited `GIT_INDEX_FILE=.git/index` in the disposable worktree helper (5,025 tests passed, one failed). Reproduced with that variable alone; fixture Git now uses the same scrubbed environment as the Local supervisor, and the UAT changed-head case explicitly covers the hook override. No verification guard is skipped.
+- **UAT:** pending
 
 ### R116
 
@@ -1777,6 +1792,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-11-14 — **R114** Choose model and effort for Local delivery → [record](<../_Archive/Shipped/PM Tooling.md#r114>)
 - ✅ 2026-11-14 — **R115** Default delivery settings from the item's Markdown recommendation → [record](<../_Archive/Shipped/PM Tooling.md#r115>)
 - ✅ 2026-11-14 — **R116** Validate Local sign-in against its cleaned worker environment → [record](<../_Archive/Shipped/PM Tooling.md#r116>)
+- ✅ 2026-11-14 — **R117** Restore Local session review and accurate Bridge execution states → [record](<../_Archive/Shipped/PM Tooling.md#r117>)
 
 ## Delivery session log
 
@@ -1787,6 +1803,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - 2026-10-24 — **R44** V2 run `r-69bc10ef3c60` · cancelled · codex gpt-6-luna <!-- v2:res-802d062b976a@1 -->
 - 2026-10-19 — **R44** V2 run `r-262a6aee5ed3` · cancelled · codex gpt-6-luna <!-- v2:res-d15d62b4752b@1 -->
 ## Successor Briefing
+
+**2026-11-14 R117:** repaired the actual HUB-118 Local startup exception by snapshotting the Claude SDK environment before freezing options; Node's `process.env` stays mutable and the sandbox remains fail-if-unavailable. Local review now has evidence-backed stages, work brief, four host checks, activity, changes and UAT controls. Local list metadata distinguishes active work, terminal outcomes and interrupted preparation/build/check phases. Bridge no longer lets old UAT hide active red execution or the latest grey failed/blocked state. Local refused Starts reuse the existing Delivery launch receipts and UUID replay; new explicit attempts preserve older run/worktree evidence with unique branch/path names. 597 relevant tests plus 44 adjacent checks, typecheck/build/scoped lint/docs checks and 28 desktop/mobile Blue/Pink browser screenshots pass. A read-only check against the owner's actual failed run confirms the UI and grey Bridge state. The running `--bridge` backend still needs an owner restart under Hard Rule 26; no live provider retry was executed. [Owner handover](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r117--local-session-review-bridge-states-and-startup-recovery>).
 
 **2026-11-14 R113:** Deliver has a distinct animated Game layout and one explicit Start flow. Local no longer polls/displays readiness before launch; its server performs all three admission checks. Confined removes the manual Check readiness UI and passive gates on Start; explicit owner Start sends `renewAuthorization: true`, renewed once within the durable receipt before existing readiness collection. Restricted Steward credentials cannot renew. Both executor cards can be selected; actual Confined policy permission is reported after Start, with Use Local on loopback. Current dirty source blocks Local; both sign-ins/dependencies pass. Policy revision 13 permits Codex only, unchanged. Replay and desktop/mobile fixture evidence passes; no real delivery was started. The frontend watcher has loaded the changes. Owner must stop the current PM terminal and run `pnpm pm --bridge --no-open` for backend renewal; agent restart is barred by the production relay write effect. UAT and candidate hashes: [R113 handover](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r113--deliver-launch-and-game-mode>).
 

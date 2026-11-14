@@ -1,0 +1,128 @@
+.local-run-page {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.local-run-page > .gate-actions {
+  margin: 20px 0 32px;
+  flex-wrap: wrap;
+}
+.local-run-page h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.local-run-page pre {
+  max-width: 100%;
+  max-height: 55vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.local-run-failure {
+  padding: 20px 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+.local-run-failure h2 {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+.local-run-failure > a {
+  margin-top: 14px;
+}
+.local-run-page .journey [data-stage-state="stopped"] span {
+  color: var(--ink-muted);
+  background: var(--surface-soft);
+  border-color: var(--ink-muted);
+  box-shadow: none;
+}
+.local-run-page .journey [data-stage-state="stopped"] strong {
+  color: var(--ink-muted);
+}
+.local-run-story > section {
+  min-width: 0;
+}
+.local-run-plan > h2 {
+  margin-bottom: 20px;
+  font-size: 16px;
+}
+.local-run-plan .prose {
+  font-size: 13px;
+}
+.local-check {
+  border-bottom: 1px solid var(--line);
+}
+.local-check summary {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 44px;
+  font-size: 12px;
+}
+.local-check strong {
+  margin-left: auto;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+.local-check [data-pass="true"] {
+  color: var(--accent);
+}
+.local-run-activity,
+.local-run-changes {
+  margin-top: 34px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.local-run-activity h2,
+.local-run-changes h2 {
+  font-size: 16px;
+  margin: 0 0 18px;
+}
+.local-run-activity ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 26rem;
+  overflow: auto;
+}
+.local-run-activity li {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.local-run-activity time {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.local-run-changes dd {
+  margin: 5px 0 14px;
+}
+@media (max-width: 700px) {
+  .local-run-story {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+  .local-run-story .run-checks {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 24px 0 0;
+  }
+  .local-run-activity li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+  .local-run-page .gate-actions > button,
+  .local-run-page .gate-actions > a {
+    min-height: 44px;
+  }
+  .local-run-failure {
+    padding: 18px;
+  }
+}

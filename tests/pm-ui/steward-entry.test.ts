@@ -11,15 +11,16 @@ import { createLocalTransport } from "../../scripts/pm/app/localTransport";
 let steward = true;
 vi.mock("../../scripts/pm/app/state", async (original) => ({
   ...(await original<typeof import("../../scripts/pm/app/state")>()),
-  useWorld: () => ({ connected: true }),
+  useWorld: () => ({ connected: true, world: { cockpit: null } }),
   useRoute: () => ({
     path: "/deliver/DLV-140",
     query: new URLSearchParams(steward ? "initiator=era-steward" : ""),
   }),
 }));
-afterEach(() => client.clear());
+afterEach(() => { client.clear(); vi.unstubAllGlobals(); });
 
-it("lets the real Steward entry record missing setup while ordinary Start stays gated", () => {
+it("requires executor selection for owner and Steward and retains cancelled launch recovery", () => {
+  vi.stubGlobal("location", new URL("http://127.0.0.1:4317/"));
   const work = buildWorld({
     generatedAt: "2026-10-20T10:00:00Z",
     files: [
@@ -55,7 +56,7 @@ it("lets the real Steward entry record missing setup while ordinary Start stays 
   const attributed = render();
   expect(attributed).toContain("ERA Steward");
   expect(attributed).toMatch(
-    /<button class="primary">[\s\S]*?Start<\/button>/u,
+    /<button class="primary" disabled="">[\s\S]*?Start<\/button>/u,
   );
   steward = false;
   const ordinary = render();

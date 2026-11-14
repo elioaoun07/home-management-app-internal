@@ -589,6 +589,10 @@ owner: Elio
 
 - ✅ 2026-11-14 — **R116** Validate Local sign-in against its cleaned worker environment — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r116>) (23 Local replay tests, scoped lint and PM checks pass; corrected offline subscription lookup passes existing Claude Pro credentials despite host app API config. Owner restart/UAT pending; no native or provider session started.)
 
+### R117
+
+- ✅ 2026-11-14 — **R117** Restore Local session review and accurate Bridge execution states — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r117>) (Restored Local session review; corrected active/failed/blocked Bridge states; fixed process.env freeze crash; preserved failed attempts. 597 relevant plus 44 adjacent tests, typecheck/build/scoped lint/docs and 28 desktop/mobile browser screenshots pass; actual run/Bridge read-only verification passes. Owner bridge restart and live retry pending.)
+
 ## State log
 
 _Moved from the Master Book on 2026-11-11._

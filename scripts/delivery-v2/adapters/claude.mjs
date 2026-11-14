@@ -213,7 +213,7 @@ export function deriveNativeSessionId(dispatch_key) {
  * @param {{workspaceRoot:string, mode?:"build"|"review", model?:(string|null),
  *   maxTurns?:(number|null), forbiddenPaths?:string[], additionalDirectories?:string[],
  *   effort?:(string|null), thresholdUsd?:(number|null), observe?:((input:any)=>void)|null,
- *   local?:boolean, env?:Record<string,string>|null}} input
+ *   local?:boolean, env?:Record<string,string|undefined>|null}} input
  */
 export function buildSessionOptions({
   workspaceRoot,
@@ -248,7 +248,9 @@ export function buildSessionOptions({
     options.skills = "all";
     options.systemPrompt = { type: "preset", preset: "claude_code" };
   }
-  if (env) options.env = env;
+  // process.env is a Node host object that Object.freeze cannot freeze. Own a
+  // plain snapshot so freezing SDK options neither throws nor mutates callers.
+  if (env) options.env = { ...env };
   if (model) options.model = model;
   if (effort) options.effort = effort;
   if (typeof maxTurns === "number" && maxTurns > 0) options.maxTurns = maxTurns;

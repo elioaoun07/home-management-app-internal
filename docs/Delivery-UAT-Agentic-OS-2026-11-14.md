@@ -4,6 +4,21 @@ Authored 2026-11-14 from the linked item criteria and current source. **All owne
 
 These instructions supersede navigation names in older handovers: **Plan** opens Sprints, **Work** remains in Search work / More, and **Sessions** contains session and owner-test queues. Read-only cases need no new provider run. Mutation, native-run, schema and shipping cases require the owner-controlled environment named in their Setup; the assistant does not execute them.
 
+## R117 — Local session review, Bridge states and startup recovery
+
+**Acceptance:** R117
+**Environment:** local
+**Setup:** Updated Command Center; Game layer enabled for Bridge checks. The owner restarts the existing publishing server with `pnpm pm --bridge --no-open` to load backend changes (Hard Rule 26). Local Start requires a clean main checkout. Existing failed run: `local-b52041fb-b6c8-46cd-ab03-8fa669ea6f23`, HUB-118. Use the credential-free A5 fixture for synthetic running/blocked states; the agent does not start a live provider.
+**Source:** `LocalDelivery.tsx`, `LocalRunReview.tsx`, `localRunModel.ts`, `Bridge.tsx`, `coreState.ts`; `local-lane.mjs`, `local-routes.mjs`, `adapters/claude.mjs`. Candidate hashes and screenshots: `.pm/r117-evidence/`.
+
+1. Open the original failed run from Sessions. Expect its work identity, Setup / Plan & build / Verify / Test / Ship stages, work brief, Verification, Activity and Changes. The failure remains recorded, with the stack under Error details; all four host checks read Not run and Ship is disabled. Expand the error and worktree at desktop and 390 px, Blue/Pink. Expect no horizontal page overflow.
+2. Open Bridge in the isolated fixture with an actively building Local session and an older owner-test session. Expect a red continuously turning core and a Running entry. Change that same session to failed without reloading. Expect the grey offset split ring, Session failed caption and no new launch. An interrupted Local process also shows the split ring; an ordinary owner review alone remains yellow.
+3. In the fixture, reject Local Start at preflight, then open Bridge. Expect Launch blocked and the split ring. Reload and inspect Sessions. Expect one retained request, including its blocker; resending the same command UUID returns its prior outcome. A newer owner-ready session supersedes the older blocked state.
+4. From the real failed run select New attempt. Expect its existing Deliver form; selecting the link alone starts nothing. After owner restart and clean-source checks, the owner may explicitly Start a fresh attempt. Expect a new run, unique worktree/branch and the original failure/worktree retained. This is a real provider action and was not run by the agent. Stop at the first new failure; retain its error instead of repeated live attempts.
+5. Enable system reduced motion in the fixture. Expect correct state/color/geometry with no rotation. During Verify, null-exit/error results read Inconclusive; missing checks remain Not run. UAT/risk/current-head checks must still gate Ship.
+
+**Actual:** Pending owner restart and live-session acceptance. Automated replay/browser evidence is separate from owner results. **Reset:** Restore preferred theme/Game setting; fixture data is disposable. No failed real run, worktree, credentials or production rows were deleted or rewritten. **Limits:** Fixing the observed environment-construction exception does not establish native sandbox availability, subscription freshness or successful HUB-118 implementation. No real provider turn, production write, push or deployment was performed.
+
 ## R116 — Local sign-in with app API configuration
 
 **Acceptance:** R116

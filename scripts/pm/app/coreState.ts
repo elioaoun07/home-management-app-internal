@@ -1,4 +1,4 @@
-import type { RunSummary, V2RunSummary } from "./types";
+import type { RunSummary, StewardRequest, V2RunSummary } from "./types";
 
 export interface CoreSessionState {
   state: "idle" | "running" | "attention" | "success" | "failed" | "unknown";
@@ -22,6 +22,8 @@ function timestamp(value: string | undefined) {
 
 function v2Terminal(run: V2RunSummary): Terminal {
   const base = { at: timestamp(run.updated_at) };
+  if (run.lane === "local" && run.closed_outcome === "shipped")
+    return { ...base, state: "success", label: "Shipped" };
   if (run.closed_outcome === "failed")
     return { ...base, state: "failed", label: "Session failed" };
   if (
@@ -58,12 +60,14 @@ export function coreSessionState({
   uncertain,
   v1Runs,
   v2Runs,
+  requests = [],
 }: {
   needs: number;
   running: number;
   uncertain: boolean;
   v1Runs: RunSummary[];
   v2Runs: V2RunSummary[];
+  requests?: StewardRequest[];
 }): CoreSessionState {
   // Execution wins even when some other session is waiting on its owner.
   if (running > 0)
@@ -74,22 +78,6 @@ export function coreSessionState({
       unit: running === 1 ? "session" : "sessions",
       ...(uncertain ? { detail: "Status incomplete" } : {}),
     };
-  if (needs > 0)
-    return {
-      state: "attention",
-      label: "Awaiting you",
-      value: needs,
-      unit: needs === 1 ? "action" : "actions",
-      ...(uncertain ? { detail: "Status incomplete" } : {}),
-    };
-  if (uncertain)
-    return {
-      state: "unknown",
-      label: "Unconfirmed",
-      value: null,
-      unit: "Delivery status",
-    };
-
   const terminal: Terminal[] = [
     ...v1Runs
       .filter((run) => ["SHIPPED", "FAILED", "CANCELLED"].includes(run.state))
@@ -111,7 +99,67 @@ export function coreSessionState({
         }),
       ),
     ...v2Runs.filter((run) => run.lifecycle === "CLOSED").map(v2Terminal),
+    ...v2Runs
+      .filter(
+        (run) =>
+          run.lane === "local" &&
+          run.lifecycle !== "CLOSED" &&
+          !run.active &&
+          ["preparing", "building", "checking"].includes(run.stage),
+      )
+      .map(
+        (run): Terminal => ({
+          at: timestamp(run.updated_at),
+          state: "failed",
+          label: "Session interrupted",
+        }),
+      ),
+    ...requests
+      .filter((request) => request.status === "blocked" && !request.run_id)
+      .map(
+        (request): Terminal => ({
+          at: timestamp(request.lastConfirmedAt),
+          state: "failed",
+          label: "Launch blocked",
+        }),
+      ),
   ];
+  // A new failure must remain visible even with unrelated UAT waiting. A newer
+  // session/attempt supersedes it; missing or tied mixed evidence stays unknown.
+  const latestObserved = Math.max(
+    0,
+    ...v1Runs.map((run) => timestamp(run.updatedAt) || 0),
+    ...v2Runs.map((run) => timestamp(run.updated_at) || 0),
+    ...requests.map((request) => timestamp(request.lastConfirmedAt) || 0),
+  );
+  const recent = terminal.filter((run) => run.at === latestObserved);
+  if (
+    recent.length &&
+    recent.every((run) => run.state === "failed") &&
+    !terminal.some((run) => run.at === null)
+  )
+    return {
+      state: "failed",
+      label: recent[0].label,
+      value: null,
+      unit: "Latest session",
+      ...(uncertain ? { detail: "Status incomplete" } : {}),
+    };
+  if (needs > 0)
+    return {
+      state: "attention",
+      label: "Awaiting you",
+      value: needs,
+      unit: needs === 1 ? "action" : "actions",
+      ...(uncertain ? { detail: "Status incomplete" } : {}),
+    };
+  if (uncertain)
+    return {
+      state: "unknown",
+      label: "Unconfirmed",
+      value: null,
+      unit: "Delivery status",
+    };
   if (!terminal.length)
     return {
       state: "idle",

@@ -90,9 +90,12 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     if (!hasStore()) return [];
     return s().listRuns().filter(localRecord).map(row => {
       const d = localRecord(row);
+      const active = tasks.has(row.run_id);
+      const interrupted = ["preparing", "building", "checking"].includes(d.phase) && !active;
       return { run_id: row.run_id, engine: "v2", lane: "local", title: d.work.title, alias: d.work.id, file: d.work.file, campaign: d.work.campaign,
         lifecycle: row.lifecycle, closed_outcome: row.closed_outcome, waiting_reason: null, executor: d.settings.executor, model: d.settings.model,
-        effort: d.settings.effort, ownerAction: d.phase, ownerActionKind: d.phase === "uat-ready" ? "local-review" : "review-result", active: tasks.has(row.run_id),
+        effort: d.settings.effort, ownerAction: interrupted ? "Interrupted" : d.phase,
+        ownerActionKind: row.lifecycle === "CLOSED" || active ? "none" : d.phase === "uat-ready" ? "local-review" : "inspect-session", active,
         created_at: row.created_at, updated_at: row.updated_at, resources: null, application: null, stage: d.phase, branch: d.branch };
     });
   }
@@ -123,7 +126,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     const observed = parse(job?.observations_json);
     return { ...d, run_id: id, current_head: head, clean, risk: changes.risk, patch: changes.patch, activity: s().listActivity(id), usage: observed?.usage || null,
       handover, canShip: current && reviewed && signed && d.phase === "uat-ready" && d.checks?.every(c => c.exit === 0 && !c.error),
-      canUndo: d.phase === "shipped", interrupted: ["building", "checking"].includes(d.phase) && !tasks.has(id) };
+      canUndo: d.phase === "shipped", interrupted: ["preparing", "building", "checking"].includes(d.phase) && !tasks.has(id) };
   }
 
   async function build(id, controller) {
@@ -219,10 +222,15 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       const ready = await readiness(input);
       if (!ready.ready) return { ok: false, readiness: ready, error: "local-preflight-failed" };
       const id = "local-" + randomUUID();
-      const workspace = join(dirname(root), `${root.split(/[/\\]/u).at(-1)}-delivery`, input.id);
+      // A failed attempt owns its worktree and evidence permanently. A fresh
+      // owner Start uses a new branch/path instead of deleting or reusing it.
+      const previous = list().filter(row => row.alias === input.id && row.file === input.file);
+      const suffix = previous.length ? `${input.id}-${id.slice(6)}` : input.id;
+      const workspace = join(dirname(root), `${root.split(/[/\\]/u).at(-1)}-delivery`, suffix);
       if (existsSync(workspace)) throw new Error("worktree-already-exists; inspect the previous attempt");
-      await git(root, "worktree", "add", "-b", `delivery/${input.id}`, workspace, ready.base);
-      const d = { lane: "local", work, settings: settings.settings, workspace, base: ready.base, branch: `delivery/${input.id}`, phase: "building", checks: [], head: null };
+      const branch = `delivery/${suffix}`;
+      await git(root, "worktree", "add", "-b", branch, workspace, ready.base);
+      const d = { lane: "local", work, settings: settings.settings, workspace, base: ready.base, branch, phase: "preparing", checks: [], head: null };
       s().insertRun({ run_id: id, work_id: input.id, contract_id: id, contract_revision: 1, lifecycle: "ACTIVE" });
       save(id, d);
       s().insertJob({ job_id: id, run_id: id, dispatch_key: id, purpose: "start", backend_id: d.settings.backend_id,

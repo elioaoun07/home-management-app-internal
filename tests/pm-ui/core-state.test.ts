@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { coreSessionState } from "../../scripts/pm/app/coreState";
-import type { RunSummary, V2RunSummary } from "../../scripts/pm/app/types";
+import type {
+  RunSummary,
+  StewardRequest,
+  V2RunSummary,
+} from "../../scripts/pm/app/types";
 
 const base = { needs: 0, running: 0, uncertain: false, v1Runs: [], v2Runs: [] };
 const v1 = (state: string, updatedAt = "2026-11-14T10:00:00Z"): RunSummary => ({
@@ -37,6 +41,54 @@ const v2 = (
 });
 
 describe("ERA core delivery state", () => {
+  it("keeps a new Local failure or blocked launch grey even with unrelated owner UAT", () => {
+    const failed = { ...v2("failed"), lane: "local" as const };
+    expect(
+      coreSessionState({ ...base, needs: 20, v2Runs: [failed] }).state,
+    ).toBe("failed");
+    expect(
+      coreSessionState({ ...base, needs: 20, running: 1, v2Runs: [failed] })
+        .state,
+    ).toBe("running");
+    const interrupted = {
+      ...failed,
+      lifecycle: "ACTIVE",
+      closed_outcome: null,
+      stage: "building",
+    };
+    expect(
+      coreSessionState({ ...base, needs: 20, v2Runs: [interrupted] }),
+    ).toMatchObject({ state: "failed", label: "Session interrupted" });
+    const request = {
+      status: "blocked",
+      run_id: null,
+      lastConfirmedAt: "2026-11-14T12:00:00Z",
+    } as StewardRequest;
+    expect(
+      coreSessionState({ ...base, needs: 20, requests: [request] }),
+    ).toMatchObject({ state: "failed", label: "Launch blocked" });
+    const newer = {
+      ...failed,
+      lifecycle: "ACTIVE",
+      closed_outcome: null,
+      stage: "uat-ready",
+      updated_at: "2026-11-14T13:00:00Z",
+    };
+    expect(
+      coreSessionState({
+        ...base,
+        needs: 1,
+        v2Runs: [newer],
+        requests: [request],
+      }).state,
+    ).toBe("attention");
+    expect(
+      coreSessionState({
+        ...base,
+        v2Runs: [{ ...failed, closed_outcome: "shipped" }],
+      }),
+    ).toMatchObject({ state: "success", label: "Shipped" });
+  });
   it("prioritizes observed execution over unrelated attention and preserves uncertainty", () => {
     expect(
       coreSessionState({ ...base, needs: 26, running: 1, uncertain: true }),

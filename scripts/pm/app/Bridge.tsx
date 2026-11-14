@@ -66,7 +66,7 @@ export function Bridge() {
     r.kind === "v1"
       ? !!r.run.awaiting
       : r.kind === "v2"
-        ? !["none", "waiting", undefined].includes(r.run.ownerActionKind)
+        ? !r.run.active && !["none", "waiting", undefined].includes(r.run.ownerActionKind)
         : false,
   );
   const needs = [...groups.needs, ...owner];
@@ -76,8 +76,9 @@ export function Bridge() {
       (r.kind === "v1"
         ? r.run.runnerAlive === true
         : r.kind === "v2"
-          ? r.run.active || r.run.lifecycle === "ACTIVE"
-          : r.kind === "request" && r.request.status === "running"),
+          ? r.run.active
+          : r.kind === "request" && ["pending", "started", "running"].includes(r.request.status)
+            && Date.now() - Date.parse(r.request.lastConfirmedAt) < r.request.staleAfterMs),
   );
   const taken = deliveredIds(groups);
   const next = world.work
@@ -137,6 +138,7 @@ export function Bridge() {
             uncertain={uncertain}
             v1Runs={runs}
             v2Runs={v2.data?.runs || []}
+            requests={v2.data?.requests || []}
           />
         )}
         <motion.section
