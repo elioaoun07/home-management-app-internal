@@ -577,6 +577,10 @@ owner: Elio
 
 - ✅ 2026-11-14 — **R113** Simplify Deliver launch and add a distinct Game view — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r113>) (139 backend replay and 31 frontend tests; typecheck, PM build, scoped lint and docs pass; desktop/mobile calm/game browser flows pass. Owner UAT and bridge restart pending; no live session launched.)
 
+### R114
+
+- ✅ 2026-11-14 — **R114** Choose model and effort for Local delivery — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r114>) (Local Model/Effort controls and catalogue validation; 25 replay tests, typecheck, scoped lint, PM build, browser payload/reset/mobile checks pass. Owner bridge restart and UAT pending.)
+
 ## State log
 
 _Moved from the Master Book on 2026-11-11._

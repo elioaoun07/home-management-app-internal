@@ -8,6 +8,7 @@ import { client, go, pmKeys, useRoute, useWorld } from "./state";
 import { RefusedCommand, transport } from "./transport";
 import { useGameLayer } from "./GameLayer";
 import { DeliveryMission } from "./DeliveryMission";
+import { effortsFor } from "./v2model";
 import type { UatHandover, Work } from "./types";
 
 export const offersLocalLane = () => transport().capabilities.kind === "local" && isLoopbackOrigin(location.origin);
@@ -75,11 +76,19 @@ export function LocalReadinessPanel({ data }: { data: LocalReadiness }) {
 
 export function LocalLaunch({ work }: { work: Work }) {
   const [executor, setExecutor] = useState("claude");
+  const [model, setModel] = useState("");
+  const [effort, setEffort] = useState("");
   const { connected } = useWorld();
   const route = useRoute();
   const game = useGameLayer();
   const starting = useRef(false);
   const session = useV2Session();
+  const catalogue = useQuery({
+    queryKey: pmKeys.v2executors,
+    queryFn: ({ signal }) => transport().v2Executors(signal),
+    enabled: connected,
+  });
+  const chosen = catalogue.data?.executors.find(entry => entry.id === executor);
   const start = useMutation({
     mutationFn: () =>
       v2Post<{ run_id: string }>(
@@ -89,6 +98,8 @@ export function LocalLaunch({ work }: { work: Work }) {
           id: work.idChip || work.id,
           file: work.file,
           executor,
+          model: model || null,
+          effort: effort || null,
         },
         120_000,
       ),
@@ -114,6 +125,8 @@ export function LocalLaunch({ work }: { work: Work }) {
           disabled={start.isPending}
           onChange={(event) => {
             setExecutor(event.target.value);
+            setModel("");
+            setEffort("");
             start.reset();
           }}
         >
@@ -121,7 +134,25 @@ export function LocalLaunch({ work }: { work: Work }) {
           <option value="codex">Codex</option>
         </select>
       </label>
-      <ErrorNotice error={session.error || (refusal ? null : start.error)} />
+      <div className="budget-fields">
+        <label htmlFor="local-model">Model
+          <select id="local-model" aria-label="Model" value={model} disabled={start.isPending || !chosen} onChange={event => {
+            setModel(event.target.value); setEffort(""); start.reset();
+          }}>
+            <option value="">Default</option>
+            {chosen?.models.map(entry => <option key={entry.id} value={entry.id} disabled={entry.disabled}>{entry.label || entry.id}</option>)}
+          </select>
+        </label>
+        <label htmlFor="local-effort">Effort
+          <select id="local-effort" aria-label="Effort" value={effort} disabled={start.isPending || !chosen} onChange={event => {
+            setEffort(event.target.value); start.reset();
+          }}>
+            <option value="">Default</option>
+            {chosen && effortsFor(chosen, model).map(value => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
+      </div>
+      <ErrorNotice error={catalogue.error || session.error || (refusal ? null : start.error)} retry={catalogue.error ? () => void catalogue.refetch() : undefined} />
       {refusal && (
         <section aria-label="Start result" role="status">
           <h2>Start blocked</h2>

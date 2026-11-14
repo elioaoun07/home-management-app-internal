@@ -4,6 +4,21 @@ Authored 2026-11-14 from the linked item criteria and current source. **All owne
 
 These instructions supersede navigation names in older handovers: **Plan** opens Sprints, **Work** remains in Search work / More, and **Sessions** contains session and owner-test queues. Read-only cases need no new provider run. Mutation, native-run, schema and shipping cases require the owner-controlled environment named in their Setup; the assistant does not execute them.
 
+## R114 — Local Model and Effort
+
+**Acceptance:** R114
+**Environment:** local
+**Setup:** Updated UI; owner restarts the existing bridge with `pnpm pm --bridge --no-open` to load Local catalogue validation. Use the credential-free fixture for launch verification; a ready real Start can launch a provider session.
+**Source:** `scripts/pm/app/LocalDelivery.tsx`, `scripts/delivery-v2/local-lane.mjs`.
+
+1. Open `#/deliver/Budget/BUD-89?from=%2Fbridge`. Expect Executor, Model and Effort before Start in both calm and Game Mode.
+2. Choose a listed model and effort. Expect disabled models unavailable and effort choices limited to that model/provider's declared support. Default remains available.
+3. Change Model. Expect Effort to return to Default. Change Executor. Expect both Model and Effort to return to Default with the new provider's options.
+4. In the isolated fixture choose its model and medium effort, then Start. Expect exactly those values in the request. Replay tests also capture those values in the native request and retained run, while unknown/disabled models and unsupported efforts are refused before a session launches.
+5. Repeat at 390 px in Blue/Pink. Expect reachable fields and Start without horizontal overflow.
+
+**Actual:** Pending owner acceptance. **Reset:** Restore preferred selections/theme. **Limits:** No real provider inference or phone deployment; catalogue declarations do not prove provider entitlement. Backend changes require owner restart under Hard Rule 26.
+
 ## R113 — Deliver launch and Game Mode
 
 **Acceptance:** R113

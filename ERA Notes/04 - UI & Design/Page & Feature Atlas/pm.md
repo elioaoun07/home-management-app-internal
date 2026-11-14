@@ -18,6 +18,8 @@ tags:
 
 ## Files
 
+**Local settings (2026-11-14, R114):** Local Deliver exposes catalogue-backed Model and Effort in calm/Game, with Default options and dependent selection reset. The Local supervisor validates and records the chosen settings before dispatch. UI updates live; backend validation needs an owner bridge restart. No Docker dependency is introduced.
+
 **Deliver launch (2026-11-14, R113):** shared React Local/Confined forms show readiness failures only after Start; the server checks admission and explicit owner Start renews authorization through its durable receipt. Policy permission is distinct from SDK installation. Game Mode adds `DeliveryMission.tsx` / `delivery-mission.css`: orbital artwork, a separate controls deck, future delivery stages and reduced-motion/visibility handling. The hosted Preact export is unchanged. [Owner cases](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r113--deliver-launch-and-game-mode>).
 
 **Setup clarity (2026-11-14, R112)** adds Overview / Rule coverage / Conflicts / Configuration to the shared React shell. Overview summarizes 29 active hard rules as automated checks, human review and missing guards. Coverage checks the referenced mechanisms, including disabled or mismatched detectors, and exposes full wording, review steps and recorded evidence. Conflicts presents errors and warnings with repair guidance, with informational findings under Setup notes. Configuration contains agent/category filtering, module rules and the disclosed connection map. Selecting an entry preserves its surrounding list. Legacy `#/setup?tab=map&rule=...` opens the rule detail. Source ownership is `scripts/pm/app/Setup.tsx`, `setup.css`, `setupModel.ts` and `setupAttention.ts`. This entry records the source delta.

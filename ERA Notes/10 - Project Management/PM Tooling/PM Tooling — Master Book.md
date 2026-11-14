@@ -143,6 +143,22 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Acceptance Criteria Index
 
+### R114
+
+**Outcome:** Local Deliver exposes Model and Effort before Start in calm and Game mode.
+
+**Implementation:** done
+**UAT:** pending
+**UAT instructions:** [Local Model and Effort](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r114--local-model-and-effort>)
+
+**Kind:** bug
+**Touches:** `scripts/pm/app/LocalDelivery.tsx`, `scripts/delivery-v2/local-lane.mjs`, `tests/delivery-v2/local-lane.test.ts`, `tests/pm-ui/delivery-launch.browser.mjs`
+
+- **Acceptance:** Catalogue-backed model choices respect disabled models; effort choices respect provider/model support. Executor changes clear model/effort, model changes clear effort. Default remains available. Start sends the chosen settings, the Local supervisor validates against the installation catalogue, and the worker/session record retains them. No Docker requirement or provider inference for verification.
+- **Source:** Owner follow-up to R113, 2026-11-14: Local lacks Model/Effort controls.
+- **Verify:** Local supervisor replay test including rejected models/efforts and captured native request; browser selects fields and inspects the mocked Start payload at desktop/mobile sizes; typecheck/build/scoped lint.
+- **Evidence (2026-11-14):** 25 Local supervisor/UI replay tests pass; typecheck, changed-file ESLint, PM build and PM documentation checks pass. Browser suite verifies selected model/effort in the Local Start payload, reset on executor change and calm/Game 1440/390 px Blue/Pink layouts. Screenshots and synthetic request evidence: `.pm/delivery-launch-evidence/`. Native request/run record values are captured by replay; no inference or live session launched. Existing bridge needs owner restart for backend catalogue validation, under Hard Rule 26.
+
 ### R113
 
 **Outcome:** Start performs launch checks and only then reports actionable blockers; Game Mode has a distinct animated Deliver layout.
@@ -1725,6 +1741,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-11-14 — **R111** Show actionable session states and per-item UAT without backlog clutter → [record](<../_Archive/Shipped/PM Tooling.md#r111>)
 - ✅ 2026-11-14 — **R112** Repair Agentic OS setup diagnostics and clarify rule coverage → [record](<../_Archive/Shipped/PM Tooling.md#r112>)
 - ✅ 2026-11-14 — **R113** Simplify Deliver launch and add a distinct Game view → [record](<../_Archive/Shipped/PM Tooling.md#r113>)
+- ✅ 2026-11-14 — **R114** Choose model and effort for Local delivery → [record](<../_Archive/Shipped/PM Tooling.md#r114>)
 
 ## Delivery session log
 

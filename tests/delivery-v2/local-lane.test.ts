@@ -44,10 +44,13 @@ async function fixture(risk = false, red = false) {
   const store = openStore({ path: join(root, ".delivery/v2/supervisor.sqlite") }); stores.push(store);
   const credential = join(parent, "subscription"); mkdirSync(credential); put(credential, ".credentials.json", JSON.stringify({ fixture: true }));
   let launches = 0;
+  let requestedSettings: unknown = null;
   const lane = createLocalLane({ root, store, authenticate: () => ({ ok: true, method: "fixture", directory: credential }),
+    catalog: () => ({ revision: 1, models: { claude: [{ id: "fixture-claude", efforts: ["medium"] }, { id: "disabled-claude", disabled: true }] } }),
     prepareDependencies: async (workspace: string) => { put(workspace, "node_modules/.pnpm/lock.yaml", readFileSync(join(workspace, "pnpm-lock.yaml"), "utf8")); return { status: 0 }; },
     session: async ({ request, env }: { request: { workspace: { root: string }; instruction: string }; env: Record<string, string> }) => {
       launches++;
+      requestedSettings = (request as typeof request & { settings: unknown }).settings;
       const workspace = request.workspace.root;
       expect(readFileSync(join(workspace, "CLAUDE.md"), "utf8")).toContain("Fixture instructions");
       expect(existsSync(join(workspace, ".claude/skills/start-task/SKILL.md"))).toBe(true);
@@ -58,7 +61,7 @@ async function fixture(risk = false, red = false) {
       return { status: "finished", observations: { nativeOutcome: "succeeded", usage: { input: 1, output: 1 } } };
     } });
   const input = { file: "Delivery/4 - Checklist.md", id: "DLV-900", executor: "claude" };
-  return { parent, root, remote, store, lane, input, launches: () => launches };
+  return { parent, root, remote, store, lane, input, launches: () => launches, requestedSettings: () => requestedSettings };
 }
 async function built(risk = false, red = false) {
   const f = await fixture(risk, red);
@@ -125,6 +128,18 @@ describe("loopback bootstrap", () => {
 });
 
 describe("Local worktree to owner merge and revert", () => {
+  it("validates and passes the selected model and effort into the native session", async () => {
+    const f = await fixture();
+    await expect(f.lane.start({ ...f.input, model: "missing" })).rejects.toThrow("not in this installation");
+    await expect(f.lane.start({ ...f.input, model: "disabled-claude" })).rejects.toThrow("disabled");
+    await expect(f.lane.start({ ...f.input, model: "fixture-claude", effort: "high" })).rejects.toThrow("does not offer");
+    expect(f.launches()).toBe(0);
+    const result = await f.lane.start({ ...f.input, model: "fixture-claude", effort: "medium" });
+    await f.lane.wait(result.run_id!);
+    expect(f.requestedSettings()).toMatchObject({ executor: "claude", model: "fixture-claude", effort: "medium", catalog_revision: 1 });
+    const recorded = f.lane.list().find((row: { run_id: string }) => row.run_id === result.run_id);
+    expect(recorded).toMatchObject({ model: "fixture-claude", effort: "medium" });
+  });
   it("runs all four real host commands and records their output in the shared session", async () => {
     const f = await built();
     expect(f.view.phase).toBe("uat-ready"); expect(relative(f.root, f.view.workspace).startsWith("..")).toBe(true);

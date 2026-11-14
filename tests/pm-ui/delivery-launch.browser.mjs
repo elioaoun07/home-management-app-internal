@@ -176,11 +176,17 @@ const doubleStart = async () => {
 try {
   await open();
   await initial();
+  await page.getByLabel("Model", { exact: true }).selectOption("fixture-claude");
+  await page.getByLabel("Effort", { exact: true }).selectOption("medium");
   await doubleStart();
   await page.getByText("Commit or stash pending changes", { exact: false }).first().waitFor();
   assert.equal(launchRequests[0].body.executor, "claude");
+  assert.equal(launchRequests[0].body.model, "fixture-claude");
+  assert.equal(launchRequests[0].body.effort, "medium");
   await capture("local-blocked-desktop");
   await page.getByLabel(/Executor/).selectOption("codex");
+  assert.equal(await page.getByLabel("Model", { exact: true }).inputValue(), "");
+  assert.equal(await page.getByLabel("Effort", { exact: true }).inputValue(), "");
   assert.equal(await page.getByText("Commit or stash pending changes", { exact: false }).count(), 0, "changing Local executor clears prior failure");
   await initial();
 

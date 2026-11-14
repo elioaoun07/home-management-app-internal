@@ -7,6 +7,7 @@ import { installedDependencies, hostChecks, nativeLocalSession, pnpmCommand } fr
 import { localEnvironment, localSubscription, assertNoLocalSecrets, classifyLocalDiff } from "./local-guardrails.mjs";
 import { LOCAL_ADVISORIES, LOCAL_LAUNCH_GATES } from "./readiness-contract.mjs";
 import { validateRunSettings } from "./adapters/registry.mjs";
+import { loadExecutionPolicy } from "./policy.mjs";
 import { makeJobRequest } from "./adapters/adapter.mjs";
 import { parseWorkItems } from "./work-ref.mjs";
 import { idSection } from "../pm/shared/work-id.mjs";
@@ -24,10 +25,11 @@ const PM = "ERA Notes/10 - Project Management";
  * session?:typeof nativeLocalSession, authenticate?:typeof localSubscription,
  * dependencies?:typeof installedDependencies, checks?:typeof hostChecks,
  * prepareDependencies?:((workspace:string)=>Promise<{status:number|null}>)|null,
- * baseBranch?:string, remote?:string, hasStore?:()=>boolean}} options */
+ * baseBranch?:string, remote?:string, hasStore?:()=>boolean, catalog?:()=>object|null}} options */
 export function createLocalLane({ root, store, run = runProcess, session = nativeLocalSession,
   authenticate = localSubscription, dependencies = installedDependencies, checks = hostChecks,
-  prepareDependencies = null, baseBranch = "main", remote = "origin", hasStore = () => true }) {
+  prepareDependencies = null, baseBranch = "main", remote = "origin", hasStore = () => true,
+  catalog = () => { const loaded = loadExecutionPolicy({ root }); return loaded.ok ? loaded.policy.executors.catalog : null; } }) {
   const s = () => typeof store === "function" ? store() : store;
   const tasks = new Map();
   const env = () => localEnvironment();
@@ -211,7 +213,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     return locked(async () => {
       const existing = list().find(row => row.alias === input.id && row.file === input.file && row.lifecycle !== "CLOSED");
       if (existing) return { ok: true, run_id: existing.run_id };
-      const settings = validateRunSettings(input);
+      const settings = validateRunSettings({ ...input, catalog: catalog() });
       if (!settings.ok) throw new Error(settings.refusals[0].detail);
       const work = selected(input.file, input.id);
       const ready = await readiness(input);
