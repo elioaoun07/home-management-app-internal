@@ -18,6 +18,8 @@ tags:
 
 ## Files
 
+**Markdown launch recommendations (2026-11-14, R115):** both React Deliver forms resolve an item's Tier/effort from its contract plus the existing Model Registry setup snapshot. Supported recommendations preselect settings; sparkle markers persist beside recommended options and a model/effort button restores the original tuple. Overrides survive late snapshot updates. Missing or unsupported recommendations never cause a guessed model substitution.
+
 **Local settings (2026-11-14, R114):** Local Deliver exposes catalogue-backed Model and Effort in calm/Game, with Default options and dependent selection reset. The Local supervisor validates and records the chosen settings before dispatch. UI updates live; backend validation needs an owner bridge restart. No Docker dependency is introduced.
 
 **Deliver launch (2026-11-14, R113):** shared React Local/Confined forms show readiness failures only after Start; the server checks admission and explicit owner Start renews authorization through its durable receipt. Policy permission is distinct from SDK installation. Game Mode adds `DeliveryMission.tsx` / `delivery-mission.css`: orbital artwork, a separate controls deck, future delivery stages and reduced-motion/visibility handling. The hosted Preact export is unchanged. [Owner cases](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r113--deliver-launch-and-game-mode>).

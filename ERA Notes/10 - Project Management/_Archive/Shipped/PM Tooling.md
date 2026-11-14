@@ -581,6 +581,10 @@ owner: Elio
 
 - ✅ 2026-11-14 — **R114** Choose model and effort for Local delivery — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r114>) (Local Model/Effort controls and catalogue validation; 25 replay tests, typecheck, scoped lint, PM build, browser payload/reset/mobile checks pass. Owner bridge restart and UAT pending.)
 
+### R115
+
+- ✅ 2026-11-14 — **R115** Default delivery settings from the item's Markdown recommendation — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r115>) (Markdown tier/effort defaults and sparkle restore markers in Local/Confined; 11 focused tests, typecheck, build, scoped lint and desktop/mobile browser checks pass. No provider calls; owner UAT pending.)
+
 ## State log
 
 _Moved from the Master Book on 2026-11-11._

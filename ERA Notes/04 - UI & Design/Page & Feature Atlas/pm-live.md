@@ -19,6 +19,8 @@ tags:
 
 ## Files
 
+**Markdown launch recommendations (2026-11-14, R115):** shared Confined Deliver resolves item Tier/effort from the existing relayed contract and setup registry. Sparkle markers and a persistent restore control preserve the recommendation after overrides. Relay freshness/permission remains authoritative; no new command or schema is introduced. Physical-phone deployment remains separate.
+
 **Shared Deliver launch (2026-11-14, R113):** the shared Confined view collects checks through Start and reports refusal afterward, preserving durable relay intent recovery. Game Mode has a separate orbital mission layout with reduced-motion and visibility pause. Local remains loopback-only; explicit owner renewal requires the updated bridge. Source/browser-fixture evidence does not establish phone deployment or physical-device acceptance.
 
 **Shared Setup clarity (2026-11-14, R112)** uses Overview / Rule coverage / Conflicts / Configuration. The shared snapshot supplies the 29-hard-rule summary, actual guard checks, manual review steps, actionable errors/warnings and informational Setup notes. Module rules remain reachable through Configuration, whose agent/category filters remain independent of the selected detail. Legacy map-and-rule links open coverage details. `Setup.tsx`, `setup.css`, `setupModel.ts` and `setupAttention.ts` own the shared presentation. Saved relay snapshots retain their stale status. This entry records source behavior, with browser and device acceptance tracked in R112.

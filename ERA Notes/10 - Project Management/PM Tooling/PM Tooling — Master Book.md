@@ -143,6 +143,22 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Acceptance Criteria Index
 
+### R115
+
+**Outcome:** Deliver defaults to its item's declared Tier and effort, and keeps an AI-marked recommendation available after overrides.
+
+**Implementation:** done
+**UAT:** pending
+**UAT instructions:** [Markdown defaults and AI markers](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r115--markdown-defaults-and-ai-markers>)
+
+**Kind:** feature
+**Touches:** `scripts/pm/app/`, `tests/pm-ui/`
+
+- **Acceptance:** Read only the selected item's explicit Tier declaration, resolve aliases through existing setup Model Registry entities, use explicit effort then registry default. Local and Confined preselect supported recommendations without overwriting manual choices after late data arrives. Sparkle marks identify recommended executor/model/effort and a persistent restore button names the recommended model/effort. Missing/unavailable recommendations stay honest; no model substitution, policy bypass, new inference call or backend route.
+- **Source:** Owner request, 2026-11-14, following R114.
+- **Verify:** Parser tests for precedence, missing/unsupported data and fenced examples; isolated browser defaults/override/restore/late snapshot checks plus desktop/390 px themes, typecheck, build and scoped lint.
+- **Evidence (2026-11-14):** 11 focused parser/Local/readiness tests, typecheck, PM build, scoped ESLint, Feature Map/PM checks pass. Synthetic browser suite verifies Local and Confined MD defaults, explicit effort overriding the registry default, manual executor override and restore, option sparkle marker, desktop/390 px Blue/Pink and reduced-motion behavior. No provider call, readiness GET or uncontrolled write; evidence/screenshots in `.pm/delivery-launch-evidence/`. Existing setup snapshot supplies registry mappings; no backend restart required for this UI feature. Owner/device acceptance remains pending.
+
 ### R114
 
 **Outcome:** Local Deliver exposes Model and Effort before Start in calm and Game mode.
@@ -1742,6 +1758,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-11-14 — **R112** Repair Agentic OS setup diagnostics and clarify rule coverage → [record](<../_Archive/Shipped/PM Tooling.md#r112>)
 - ✅ 2026-11-14 — **R113** Simplify Deliver launch and add a distinct Game view → [record](<../_Archive/Shipped/PM Tooling.md#r113>)
 - ✅ 2026-11-14 — **R114** Choose model and effort for Local delivery → [record](<../_Archive/Shipped/PM Tooling.md#r114>)
+- ✅ 2026-11-14 — **R115** Default delivery settings from the item's Markdown recommendation → [record](<../_Archive/Shipped/PM Tooling.md#r115>)
 
 ## Delivery session log
 

@@ -35,6 +35,8 @@ export interface Entity {
   moduleType?: string;
   paths?: string[];
   alias?: string;
+  selector?: string;
+  defaultEffort?: string | null;
   efforts?: string;
   disabled?: boolean;
   blocking?: boolean;

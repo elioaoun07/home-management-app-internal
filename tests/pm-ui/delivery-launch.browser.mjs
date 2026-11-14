@@ -62,11 +62,21 @@ function blockedReadiness(settings = selection, policyBlocked = false) {
 let releaseLaunch;
 let delayLaunch = false;
 let localSuccess = false;
+let withRecommendation = false;
 const localRunId = "local-00000000-0000-4000-8000-000000000001";
 await page.route("**/*", async (route) => {
   const request = route.request(), url = new URL(request.url());
   if (url.origin !== origin) return route.abort();
   const path = url.pathname;
+  if (path === "/api/data" && withRecommendation) {
+    const response = await route.fetch();
+    const snapshot = await response.json();
+    for (const file of snapshot.files) if (file.relPath === "Budget/Budget — Master Book.md")
+      file.raw = file.raw.replace("### BUD-1\n", "### BUD-1\n- **Tier:** CLAUDE_MID, effort medium.\n");
+    snapshot.cockpit.setup.entities = snapshot.cockpit.setup.entities.filter(entry => entry.id !== "tier:CLAUDE_MID");
+    snapshot.cockpit.setup.entities.push({ id: "tier:CLAUDE_MID", kind: "tier", alias: "CLAUDE_MID", selector: "fixture-claude", defaultEffort: "low" });
+    return json(route, snapshot);
+  }
   if (path === "/api/delivery/v2/session")
     return json(route, { paired: true, actor: "browser-fixture", csrf: "fixture", scope: "delivery-launch-fixture" });
   if (path === "/api/delivery/v2/mode") return json(route, { mode: "v2" });
@@ -213,6 +223,19 @@ try {
   await page.evaluate(() => {
     for (const key of Object.keys(localStorage)) if (key.startsWith("pm-command-intent:") || key.startsWith("pm-command-receipt:")) localStorage.removeItem(key);
   });
+  withRecommendation = true;
+  await open();
+  await page.getByRole("button", { name: "Use Markdown recommendation" }).waitFor();
+  await page.waitForFunction(() => document.querySelector('#local-model')?.value === 'fixture-claude');
+  assert.equal(await page.getByLabel("Effort", { exact: true }).inputValue(), "medium");
+  await page.getByLabel(/Executor/).selectOption("codex");
+  await page.getByRole("button", { name: "Use Markdown recommendation" }).click();
+  assert.equal(await page.getByLabel("Model", { exact: true }).inputValue(), "fixture-claude");
+  assert.equal(await page.getByLabel("Effort", { exact: true }).inputValue(), "medium");
+  assert.match(await page.locator('#local-model option:checked').innerText(), /✨/u);
+  await open("confined");
+  await page.getByRole("button", { name: "Use Markdown recommendation" }).waitFor();
+  await page.waitForFunction(() => document.querySelector('.launch-settings summary')?.textContent.includes('Claude'));
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 960 });
     for (const theme of ["blue", "pink"]) {

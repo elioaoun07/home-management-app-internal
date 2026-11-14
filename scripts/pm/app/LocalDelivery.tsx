@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { isLoopbackOrigin } from "../../delivery-v2/local-auth-browser.mjs";
 import { read, v2Post } from "./api";
@@ -9,6 +9,8 @@ import { RefusedCommand, transport } from "./transport";
 import { useGameLayer } from "./GameLayer";
 import { DeliveryMission } from "./DeliveryMission";
 import { effortsFor } from "./v2model";
+import { launchRecommendation } from "./launchRecommendationModel";
+import { LaunchRecommendation } from "./LaunchRecommendation";
 import type { UatHandover, Work } from "./types";
 
 export const offersLocalLane = () => transport().capabilities.kind === "local" && isLoopbackOrigin(location.origin);
@@ -78,7 +80,8 @@ export function LocalLaunch({ work }: { work: Work }) {
   const [executor, setExecutor] = useState("claude");
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("");
-  const { connected } = useWorld();
+  const { connected, world } = useWorld();
+  const selectionTouched = useRef(false);
   const route = useRoute();
   const game = useGameLayer();
   const starting = useRef(false);
@@ -89,6 +92,15 @@ export function LocalLaunch({ work }: { work: Work }) {
     enabled: connected,
   });
   const chosen = catalogue.data?.executors.find(entry => entry.id === executor);
+  const recommendation = launchRecommendation(work, world.cockpit?.setup?.entities, catalogue.data);
+  const restoreRecommendation = () => {
+    if (!recommendation?.supported) return;
+    setExecutor(recommendation.executor); setModel(recommendation.model); setEffort(recommendation.effort);
+  };
+  useEffect(() => {
+    if (selectionTouched.current || !recommendation?.supported) return;
+    setExecutor(recommendation.executor); setModel(recommendation.model); setEffort(recommendation.effort);
+  }, [recommendation?.executor, recommendation?.model, recommendation?.effort, recommendation?.supported]);
   const start = useMutation({
     mutationFn: () =>
       v2Post<{ run_id: string }>(
@@ -118,37 +130,41 @@ export function LocalLaunch({ work }: { work: Work }) {
   if (session.data && !session.data.paired) return <PairV2 />;
   const controls = (
     <>
+      <LaunchRecommendation recommendation={recommendation} disabled={start.isPending} onRestore={() => {
+        selectionTouched.current = true; restoreRecommendation(); start.reset();
+      }} />
       <label>
         Executor
         <select
           value={executor}
           disabled={start.isPending}
           onChange={(event) => {
+            selectionTouched.current = true;
             setExecutor(event.target.value);
             setModel("");
             setEffort("");
             start.reset();
           }}
         >
-          <option value="claude">Claude</option>
-          <option value="codex">Codex</option>
+          <option value="claude">Claude{recommendation?.executor === "claude" ? " ✨" : ""}</option>
+          <option value="codex">Codex{recommendation?.executor === "codex" ? " ✨" : ""}</option>
         </select>
       </label>
       <div className="budget-fields">
         <label htmlFor="local-model">Model
           <select id="local-model" aria-label="Model" value={model} disabled={start.isPending || !chosen} onChange={event => {
-            setModel(event.target.value); setEffort(""); start.reset();
+            selectionTouched.current = true; setModel(event.target.value); setEffort(""); start.reset();
           }}>
             <option value="">Default</option>
-            {chosen?.models.map(entry => <option key={entry.id} value={entry.id} disabled={entry.disabled}>{entry.label || entry.id}</option>)}
+            {chosen?.models.map(entry => <option key={entry.id} value={entry.id} disabled={entry.disabled}>{entry.label || entry.id}{recommendation?.executor === executor && recommendation.model === entry.id ? " ✨" : ""}</option>)}
           </select>
         </label>
         <label htmlFor="local-effort">Effort
           <select id="local-effort" aria-label="Effort" value={effort} disabled={start.isPending || !chosen} onChange={event => {
-            setEffort(event.target.value); start.reset();
+            selectionTouched.current = true; setEffort(event.target.value); start.reset();
           }}>
             <option value="">Default</option>
-            {chosen && effortsFor(chosen, model).map(value => <option key={value} value={value}>{value}</option>)}
+            {chosen && effortsFor(chosen, model).map(value => <option key={value} value={value}>{value}{recommendation?.executor === executor && recommendation.model === model && recommendation.effort === value ? " ✨" : ""}</option>)}
           </select>
         </label>
       </div>
@@ -165,6 +181,7 @@ export function LocalLaunch({ work }: { work: Work }) {
           disabled={!connected || !session.data?.paired || start.isPending}
           onClick={() => {
             if (starting.current) return;
+            selectionTouched.current = true;
             starting.current = true;
             start.mutate();
           }}

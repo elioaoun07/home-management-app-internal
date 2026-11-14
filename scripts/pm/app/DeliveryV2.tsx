@@ -23,6 +23,8 @@ import { client, go, pmKeys, useRoute, useWorld } from "./state";
 import { LaunchResult } from "./LaunchResult";
 import { useGameLayer } from "./GameLayer";
 import { DeliveryMission } from "./DeliveryMission";
+import { launchRecommendation } from "./launchRecommendationModel";
+import { LaunchRecommendation } from "./LaunchRecommendation";
 import { PendingCommand, RefusedCommand, transport } from "./transport";
 import { Back, Empty, ErrorNotice, RunOrb, Sheet } from "./components";
 import { returnFromLaunch } from "./Work";
@@ -234,7 +236,8 @@ const PROFILES = [
 ] as const;
 
 export function LaunchV2({ work }: { work: Work }) {
-  const { connected } = useWorld();
+  const { connected, world } = useWorld();
+  const selectionTouched = useRef(false);
   const game = useGameLayer();
   const route = useRoute();
   const session = useV2Session();
@@ -249,6 +252,11 @@ export function LaunchV2({ work }: { work: Work }) {
   const [effort, setEffort] = useState("");
   const start = useV2Command();
   const starting = useRef(false);
+  const recommendation = launchRecommendation(work, world.cockpit?.setup?.entities, catalogue.data);
+  useEffect(() => {
+    if (selectionTouched.current || !recommendation?.supported) return;
+    setExecutor(recommendation.executor); setModel(recommendation.model); setEffort(recommendation.effort);
+  }, [recommendation?.executor, recommendation?.model, recommendation?.effort, recommendation?.supported]);
   const deliveries = useV2Runs();
   const steward = route.query.get("initiator") === "era-steward";
   const itemId = String(work.idChip || work.id || "");
@@ -294,12 +302,12 @@ export function LaunchV2({ work }: { work: Work }) {
     const preferred =
       entries.find((entry) => entry.available !== false && entry.permitted) ||
       entries[0];
-    if (executor || !preferred) return;
+    if (executor || !preferred || recommendation?.supported) return;
     const next = preferred.suggestions?.[profile];
     setExecutor(preferred.id);
     setModel(next?.model || "");
     setEffort(next?.effort || "");
-  }, [catalogue.data, executor, profile]);
+  }, [catalogue.data, executor, profile, recommendation?.supported]);
   useEffect(() => {
     if (!start.isPending) starting.current = false;
   }, [start.isPending]);
@@ -309,6 +317,7 @@ export function LaunchV2({ work }: { work: Work }) {
     (entry) => entry.id === executor,
   );
   const applySuggestion = (id: string, name: string) => {
+    selectionTouched.current = true;
     const entry = catalogue.data?.executors.find(
       (candidate) => candidate.id === id,
     );
@@ -318,6 +327,7 @@ export function LaunchV2({ work }: { work: Work }) {
   };
   const deliver = () => {
     if (starting.current) return;
+    selectionTouched.current = true;
     starting.current = true;
     start.send(
       "deliver",
@@ -345,6 +355,11 @@ export function LaunchV2({ work }: { work: Work }) {
 
   const controls = (
     <div className="launch-v2">
+      <LaunchRecommendation recommendation={recommendation} disabled={start.isPending || !!start.pending || newDelivery.isPending} onRestore={() => {
+        if (!recommendation?.supported) return;
+        selectionTouched.current = true; start.reset();
+        setExecutor(recommendation.executor); setModel(recommendation.model); setEffort(recommendation.effort);
+      }} />
       {steward && <span className="eyebrow">ERA Steward</span>}
       <details
         className="launch-settings"
@@ -384,7 +399,7 @@ export function LaunchV2({ work }: { work: Work }) {
                     }}
                   >
                     <Sparkles size={21} />
-                    <strong>{entry.label}</strong>
+                    <strong>{entry.label}{recommendation?.executor === entry.id && <Sparkles size={14} aria-label="Markdown recommendation" />}</strong>
                     {executor === entry.id && <Check size={17} />}
                   </button>
                 );
@@ -420,6 +435,7 @@ export function LaunchV2({ work }: { work: Work }) {
                   <select
                     value={model}
                     onChange={(event) => {
+                    selectionTouched.current = true;
                       start.reset();
                       setModel(event.target.value);
                       setEffort("");
@@ -432,7 +448,7 @@ export function LaunchV2({ work }: { work: Work }) {
                         value={entry.id}
                         disabled={entry.disabled}
                       >
-                        {entry.label || entry.id}
+                      {entry.label || entry.id}{recommendation?.executor === executor && recommendation.model === entry.id ? " ✨" : ""}
                       </option>
                     ))}
                   </select>
@@ -442,13 +458,14 @@ export function LaunchV2({ work }: { work: Work }) {
                   <select
                     value={effort}
                     onChange={(event) => {
+                    selectionTouched.current = true;
                       start.reset();
                       setEffort(event.target.value);
                     }}
                   >
                     <option value="">Default</option>
                     {effortsFor(chosen, model).map((value) => (
-                      <option key={value}>{value}</option>
+                    <option key={value} value={value}>{value}{recommendation?.executor === executor && recommendation.model === model && recommendation.effort === value ? " ✨" : ""}</option>
                     ))}
                   </select>
                 </label>

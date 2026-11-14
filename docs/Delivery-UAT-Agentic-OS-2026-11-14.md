@@ -4,6 +4,21 @@ Authored 2026-11-14 from the linked item criteria and current source. **All owne
 
 These instructions supersede navigation names in older handovers: **Plan** opens Sprints, **Work** remains in Search work / More, and **Sessions** contains session and owner-test queues. Read-only cases need no new provider run. Mutation, native-run, schema and shipping cases require the owner-controlled environment named in their Setup; the assistant does not execute them.
 
+## R115 — Markdown defaults and AI markers
+
+**Acceptance:** R115
+**Environment:** local
+**Setup:** Updated UI and loaded Setup snapshot containing Model Registry tiers. Example BUD-89 declares CLAUDE_MID, effort high. Model Registry resolves its concrete selector. Use the isolated browser fixture for Start payload checks.
+**Source:** `launchRecommendationModel.ts`, `LaunchRecommendation.tsx`, `LocalDelivery.tsx`, `DeliveryV2.tsx`.
+
+1. Open `#/deliver/Budget/BUD-89?from=%2Fbridge`. Expect the declared executor/model/high effort to be selected once the registry and catalogue load, and a sparkle-marked recommendation naming the model and effort.
+2. Choose a different model or executor. Expect your override to remain selected, with the recommendation still visible. Open the relevant selectors. Expect a sparkle beside the recommended entries; effort is marked for its recommended model.
+3. Select **Use Markdown recommendation** (the sparkle recommendation button). Expect all three settings restored. Revisit in Game Mode and at 390 px in Blue/Pink; expect the same behavior without overflow.
+4. Open Confined. Expect the same declared recommendation selected if its model/effort are supported. Policy restrictions are still enforced on Start; a recommendation does not grant permission.
+5. Use a fixture with no Tier, a missing alias or a disabled/unsupported model. Expect no invented recommendation for absent Tier; unavailable declarations retain their marker and an unavailable label, without an enabled restore action or substituted model. An omitted effort uses the registry default only when one exists.
+
+**Actual:** Pending owner acceptance. **Reset:** Restore preferred theme/Game setting. **Limits:** Registry/catalogue declarations do not establish entitlement; no real inference, deployment or native launch is performed. Existing setup snapshot supplies aliases without a new backend route.
+
 ## R114 — Local Model and Effort
 
 **Acceptance:** R114
