@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { isLoopbackOrigin } from "../../delivery-v2/local-auth-browser.mjs";
 import { read, v2Post } from "./api";
 import { PairV2, useV2Session } from "./BrowserSession";
 import { Back, ErrorNotice } from "./components";
-import { client, go, pmKeys } from "./state";
-import { transport } from "./transport";
+import { client, go, pmKeys, useRoute, useWorld } from "./state";
+import { RefusedCommand, transport } from "./transport";
+import { useGameLayer } from "./GameLayer";
+import { DeliveryMission } from "./DeliveryMission";
 import type { UatHandover, Work } from "./types";
 
 export const offersLocalLane = () => transport().capabilities.kind === "local" && isLoopbackOrigin(location.origin);
@@ -24,32 +26,155 @@ export interface LocalRunView {
 }
 
 export function LocalReadinessPanel({ data }: { data: LocalReadiness }) {
-  const labels: Record<string, string> = { source: "Source", authentication: "Sign-in", environment: "Dependencies", coordination: "Sessions", modelAvailability: "Model", budget: "Usage" };
-  return <section className="launch-readiness" aria-label="Local readiness">
-    <ul className="launch-check-list">{Object.entries(data.facts).map(([name, fact]) => <li key={name}>
-      <span>{labels[name] || name}</span><small>{fact.state === "pass" ? "Passed" : fact.state === "advisory" ? `Advisory · ${fact.code.replaceAll("-", " ")}` : fact.code.replaceAll("-", " ")}</small>
-    </li>)}</ul>
-  </section>;
+  const labels: Record<string, string> = {
+    source: "Source",
+    authentication: "Sign-in",
+    environment: "Dependencies",
+    coordination: "Sessions",
+    modelAvailability: "Model",
+    budget: "Usage",
+  };
+  const fixes: Record<string, string> = {
+    "commit-or-stash-changes": "Commit or stash pending changes",
+    "checkout-main": "Switch to the main branch",
+    "base-unknown": "Main branch unavailable",
+    "subscription-sign-in-required-no-api-keys": "Sign in to your subscription",
+    "install-frozen-dependencies": "Install dependencies from the lockfile",
+  };
+  const blockers = Object.entries(data.facts).filter(
+    ([, fact]) => !["pass", "advisory"].includes(fact.state),
+  );
+  return (
+    <section
+      className="launch-readiness local-readiness"
+      aria-label="Local readiness"
+    >
+      {blockers.map(([name, fact]) => (
+        <p key={name}>{fixes[fact.code] || fact.code.replaceAll("-", " ")}</p>
+      ))}
+      <details className="launch-check-details">
+        <summary>Check details</summary>
+        <ul className="launch-check-list">
+          {Object.entries(data.facts).map(([name, fact]) => (
+            <li key={name}>
+              <span>{labels[name] || name}</span>
+              <small>
+                {fact.state === "pass"
+                  ? "Passed"
+                  : fact.state === "advisory"
+                    ? `Advisory · ${fact.code.replaceAll("-", " ")}`
+                    : fact.code.replaceAll("-", " ")}
+              </small>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </section>
+  );
 }
 
 export function LocalLaunch({ work }: { work: Work }) {
   const [executor, setExecutor] = useState("claude");
+  const { connected } = useWorld();
+  const route = useRoute();
+  const game = useGameLayer();
+  const starting = useRef(false);
   const session = useV2Session();
-  const readiness = useQuery({ queryKey: pmKeys.localReadiness(executor),
-    queryFn: ({ signal }) => read<LocalReadiness>(`/api/delivery/v2/local/readiness?executor=${executor}`, signal),
-    enabled: !!session.data?.paired, refetchInterval: 15_000 });
-  const start = useMutation({ mutationFn: () => v2Post<{ run_id: string }>("local", { action: "start", id: work.idChip || work.id, file: work.file, executor }, 120_000),
-    onSuccess: result => go(`/delivery/run/${result.run_id}`), onSettled: () => client.invalidateQueries({ queryKey: pmKeys.all }) });
+  const start = useMutation({
+    mutationFn: () =>
+      v2Post<{ run_id: string }>(
+        "local",
+        {
+          action: "start",
+          id: work.idChip || work.id,
+          file: work.file,
+          executor,
+        },
+        120_000,
+      ),
+    onSuccess: (result) => go(`/delivery/run/${result.run_id}`),
+    onSettled: () => {
+      starting.current = false;
+      return client.invalidateQueries({ queryKey: pmKeys.all });
+    },
+  });
+  const refusal =
+    start.error instanceof RefusedCommand
+      ? (start.error.payload.readiness as LocalReadiness | undefined)
+      : undefined;
+  const query = new URLSearchParams(route.query);
+  query.set("lane", "confined");
   if (session.data && !session.data.paired) return <PairV2 />;
-  return <div className="focus-page launch-page"><Back fallback="/delivery" />
-    <header className="launch-heading"><span className="eyebrow">{work.idChip || work.id} · Local</span><h1>{work.title}</h1></header>
-    <label>Executor<select value={executor} onChange={event => setExecutor(event.target.value)}><option value="claude">Claude</option><option value="codex">Codex</option></select></label>
-    <ErrorNotice error={readiness.error || start.error} />
-    {readiness.data && <LocalReadinessPanel data={readiness.data} />}
-    <div className="gate-actions"><button className="primary" disabled={!readiness.data?.ready || start.isPending} onClick={() => start.mutate()}>{start.isPending ? "Starting…" : "Start"}</button>
-      <a className="secondary" href={`${location.hash}${location.hash.includes("?") ? "&" : "?"}lane=confined`}>Confined</a></div>
-    <HostLimits />
-  </div>;
+  const controls = (
+    <>
+      <label>
+        Executor
+        <select
+          value={executor}
+          disabled={start.isPending}
+          onChange={(event) => {
+            setExecutor(event.target.value);
+            start.reset();
+          }}
+        >
+          <option value="claude">Claude</option>
+          <option value="codex">Codex</option>
+        </select>
+      </label>
+      <ErrorNotice error={session.error || (refusal ? null : start.error)} />
+      {refusal && (
+        <section aria-label="Start result" role="status">
+          <h2>Start blocked</h2>
+          <LocalReadinessPanel data={refusal} />
+        </section>
+      )}
+      <div className="gate-actions">
+        <button
+          className="primary"
+          disabled={!connected || !session.data?.paired || start.isPending}
+          onClick={() => {
+            if (starting.current) return;
+            starting.current = true;
+            start.mutate();
+          }}
+        >
+          {start.isPending ? "Checking…" : "Start"}
+        </button>
+        {!start.isPending && (
+          <a className="secondary" href={`#${route.path}?${query}`}>
+            Confined
+          </a>
+        )}
+      </div>
+      {!connected && <p role="status">Laptop offline</p>}
+      <HostLimits />
+    </>
+  );
+  return (
+    <div
+      className={`focus-page launch-page${game.enabled ? " delivery-game-page" : ""}`}
+    >
+      <Back fallback="/delivery" />
+      {game.enabled ? (
+        <DeliveryMission
+          work={work}
+          lane="local"
+          busy={start.isPending}
+          blocked={!!start.error}
+        >
+          {controls}
+        </DeliveryMission>
+      ) : (
+        <>
+          <header className="launch-heading">
+            <span className="eyebrow">{work.idChip || work.id} · Local</span>
+            <h1>{work.title}</h1>
+          </header>
+          {controls}
+        </>
+      )}
+    </div>
+  );
 }
 
 function HostLimits() {

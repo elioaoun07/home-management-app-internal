@@ -79,6 +79,14 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟠 **R113 — Deliver hides launch blockers behind disabled Start (2026-11-14).** Owner reports an unchanged Game view, disabled Local Start, confusing Confined executor availability and a separate Check readiness step. Local UI gates on passive readiness (current workspace is dirty); Confined conflates installed SDKs with policy permission and gates Start even though the server collects readiness. Both subscriptions and dependencies pass local passive inspection; installed policy revision 13 permits only Codex in Confined. Keep admission checks, move them behind explicit Start, and give Game Mode its own launch composition.
+
+🟠 **R112 — Setup obscures real repairs and rule coverage (2026-11-14).** Owner reports that Setup, unguarded rules and Conflicts are unclear. Source evidence shows that coverage counts trust declared levels even when guards are missing, all diagnostic severities share one conflict count, and selecting an inventory entry also silently filters the list. The scan additionally treats workstation-only permissions and intentional review requirements as setup failures. Repair real configuration defects, retain accurate scope and evidence, and make the required action visible.
+
+🟠 **R108 — The skill launcher adds steps without delivering work (2026-11-14).** Owner: "i honestly don't see any value in it". R107 improved composition but still requires review/copy/switching into a native agent. Local execution already reads start-task and repository skills automatically. Promote the existing outcome/acceptance/Deliver path and retain forms only as a secondary utility; do not invent another backlog or executor.
+
+🟠 **R107 — Launch obscures free skill use (2026-11-14).** Owner finds Recipes and Item confusing and the page weak. Launch shows only eight form-backed skills, requires a backlog item for add-feature, and presents two saved presets as a separate top-level concept. Replace the default with slash-skill composition, optional module context and clearly optional structure.
+
 🟠 **R101 — Agentic OS UI rejected as unusable (2026-11-14).** Equal-weight content, long initial forms, raw JSON reports and an always-expanded graph hid daily actions. Corrected presentation and expanded-view browser verification are tracked under R101.
 
 🟠 **R92** The agent setup differs per agent and holds dead, duplicate and machine-specific configuration (2026-11-10 inventory). See [acceptance](<../_Archive/Shipped/PM Tooling.md#r92>).
@@ -135,7 +143,86 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ## Acceptance Criteria Index
 
+### R113
+
+**Outcome:** Start performs launch checks and only then reports actionable blockers; Game Mode has a distinct animated Deliver layout.
+
+**Kind:** bug
+**Touches:** `scripts/pm/app/`, `scripts/delivery-v2/entry.mjs`, `tests/pm-ui/`, `tests/delivery-v2/`
+
+- **Acceptance:** Local and Confined show an enabled Start once the browser is connected, paired and a selection exists. No separate Check readiness control or initial readiness failure list. Start retains server validation, exact-selection authorization, durable Confined receipts and duplicate-click protection. Confined policy restrictions never masquerade as missing SDKs or bypass qualification. A failed attempt shows its cause; changing selection clears unrelated failure presentation. Game Mode uses animated mission artwork and a separate layout, with mobile/theme/reduced-motion/hidden-view support and no invented progress.
+- **Source:** Owner request at `#/deliver/Budget/BUD-89?from=%2Fbridge`, 2026-11-14. BUD-89 remains the selected work example, not this interface change's completion claim.
+- **Verify:** Replay-only launch/authorization/regression tests; typecheck, scoped lint, PM build; browser fixture at desktop and 390 px in Blue/Pink, failure/retry, duplicate click and reduced motion. No provider inference or production database write.
+**Implementation:** done
+**UAT:** pending
+**UAT instructions:** [Deliver launch and Game Mode](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r113--deliver-launch-and-game-mode>)
+
+- **Evidence (2026-11-14):** 139 affected backend replay tests and 58 frontend launch/readiness/recovery/build tests pass; final authorization rerun 18/18. Typecheck, PM build, changed-file ESLint, Feature Map and PM checks pass. Both browser suites pass: Local/Confined, calm/Game, desktop/390 px Blue/Pink, duplicate click, refusal/reset, Local success navigation, reduced motion and offscreen pause. Four mocked launch POSTs; zero provider calls, page errors, external requests or readiness GETs. Screenshots/results and candidate manifest are under `.pm/delivery-launch-evidence/`. Full repository lint retains 9,285 existing errors (changed-file lint is clean). UI assets are live at 4317; backend activation needs the owner to restart the existing `--bridge` process because startup writes production relay rows (Hard Rule 26). Native execution, deployment and owner/device acceptance remain unverified. Existing workspace edits and Confined policy restrictions remain real blockers.
+
+### R112
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r112--setup-and-rule-coverage>)
+
+**Outcome:** Setup clearly shows configuration health, actual rule protection, required human reviews and installed agent configuration.
+**Kind:** bug
+**Implementation:** done
+**UAT:** pending
+**Touches:** `scripts/os/`, `.claude/`, generated AI mirrors, `scripts/pm/app/Setup.tsx`, `scripts/pm/app/setupAttention.ts`, `scripts/pm/app/setupModel.ts`, `scripts/pm/app/cockpitTypes.ts`, `scripts/pm/app/setup.css`, `tests/os/`, `tests/pm-ui/`, `docs/Skills-and-Agents.md`, `ERA Notes/`
+
+- **Acceptance:** Audit every current error/warning, repair its cause or represent a verified intentional configuration accurately. Missing, disabled and mismatched guards remain actionable. Whole-tree baseline and runtime enforcement stay explicit when unknown.
+- **Acceptance:** Overview prioritizes actual errors and broken guards. Rule coverage distinguishes automated checks, reminders and manual review with inspectable evidence. Conflicts have readable names, severity, source and remediation. Informational inventory findings remain discoverable.
+- **Acceptance:** Browsing or selecting a setup entity never silently narrows the inventory. Existing rule/session links and configuration graph remain usable. Desktop and 390 px Blue/Pink browser checks cover real scan data, broken guards and empty/error states.
+- **Verify:** Agentic OS scanner/guard tests, focused PM model tests, credential-free browser fixture, typecheck, changed-file lint, PM build and PM/docs checks. No provider or production database calls.
+- **Verification (2026-11-14):** 193 Agentic OS tests and 74 PM model/navigation/build tests pass. Typecheck, changed-file ESLint, mirror parity and PM build pass. The final credential-free browser pass covers desktop/390 px Blue/Pink, rule evidence, module links after prior search, independent inventory selection, missing/disabled guards, actionable conflicts, notes and saved/unavailable snapshots. Six UI source hashes match the tested fixture. Existing cockpit regression also passes at 1440/1024/768/390 px. The running local server serves matching JavaScript/CSS and a current scan with zero errors, zero warnings and twelve notes. Evidence is retained in `.pm/setup-evidence/result.json` and `.pm/setup-evidence/served.json`. Runtime hook loading, physical-phone and owner aesthetic acceptance require their own observations.
+
+### R111
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r111--sessions-and-per-item-tests>)
+
+**Outcome:** Sessions answers what is running, waiting, needing a decision or ready for owner testing, with bounded visual cards and direct step-by-step UAT.
+**Implementation:** done
+**UAT:** pending
+**Kind:** feature
+**Touches:** `scripts/pm/app/`, `scripts/delivery-v2/uat-item.mjs`, `scripts/delivery-v2/uat-routes.mjs`, `tests/pm-ui/`, `tests/delivery-v2/`, `docs/Delivery-UAT-Agentic-OS-2026-11-14.md`
+
+- **Acceptance:** Replace the R110 backlog/attempt split and nested tabs with one session workspace. State counts name their unit, recorder/run/request bindings do not duplicate the same session, unknown observations never appear live or successful, and closed failures/cancellations remain explicit.
+- **Acceptance:** A 71-item UAT queue is navigable by campaign and search with six cards per page. Pending items open their own authored action/expected-result steps directly, not the full Markdown document. Existing handovers reuse the current result/signoff engine; absent test instructions stay explicitly missing.
+- **Acceptance:** Existing admission, pairing, stable command identities, source/build bindings, result undo and signoff gates remain; no provider or production-database actions. Desktop/390 px Blue/Pink tests use realistic queue scale, cover all states and UAT steps, and report incomplete source coverage honestly.
+
+### R109
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r109--realign-the-planned-dates>)
+**Outcome:** Plan is the primary planning destination; skipped work can move forward with one shared day offset.
+**Kind:** feature
+**Implementation:** done
+**UAT:** pending
+**Touches:** `scripts/pm/app/PrimaryNavigation.tsx`, `scripts/pm/app/Sprints.tsx`, `scripts/pm/shared/planning.mjs`, `scripts/pm/shared/sprint-realignment.mjs`, `scripts/pm/planning.mjs`, `scripts/pm/realign-sprints.mjs`, `tests/pm-ui/`, `package.json`, `ERA Notes/`, `docs/Skills-and-Agents.md`
+- **Acceptance:** Plan opens Sprints; Work remains available through the existing filter. Realign previews a target start for the earliest unfinished sprint and applies the same calendar-day offset to active/draft ranges, preserving order, spacing, membership, estimates, commitment and scope history. Closed sprints stay fixed. Exclusively linked milestone target dates shift too; historical/shared and unrelated milestones stay fixed. Writes use existing paired planning commands, CAS, idempotency, lock, atomic replace and a pre-write backup; UI supports revision-bound Undo. CLI previews by default, applies only with `--apply`, and defaults to today in sprint timezone without pulling future plans backward. Tests cover DST, stale/repeated commands, closed history, unchanged fields, backups and UI desktop/390 px Blue/Pink. No provider or production DB writes.
+- **Source:** Owner, 2026-11-14: promote Sprints (Plan) because Work is reachable through filters; push skipped work exactly as planned with a days offset.
+- **Boundary:** R87 remains separate: no automatic close, regrouping or pruning completed members. Realign changes planned dates only and retains actual historical event timestamps.
+- **Verification (2026-11-14):** 99 focused planning/navigation/model tests, typecheck, changed-file ESLint, PM build and PM/docs checks pass. Isolated Chrome exercised Plan entry, Realign preview, authenticated Apply, inverse Undo and Work access on 1440/390 px Blue/Pink; eight writes were realign/inverse commands to the isolated plan only. Five runtime hashes match the tested fixture. Existing Work/acceptance/Deliver/back-context browser regression also passes. Root inspected phone Blue/Pink previews. Evidence: [browser receipt](<../../../.pm/sprint-realignment-evidence/result.json>). The current real plan preview is +5 calendar days (Nov 9 → Nov 14); actual dates remain untouched.
+- **Runtime diagnosis (2026-11-14):** Owner screenshot shows Realign +7-day preview but Apply returns Invalid planning command: Invalid input. Running local bridge/server PID 24924 started at 17:12:12; the statically imported planning command schema was updated at 17:16:47. The hot-built UI sees realign while that process retains the old discriminator. A fresh import accepts the same realign/toDate shape. Restart the existing owner-managed bridge command, then reload; no planning write was attempted during diagnosis. The agent did not restart the live bridge because its startup can trigger production writes.
+- **Owner check / limits:** Restart `pnpm pm` for the new planning command, open Plan → Realign and inspect the target date. Apply shifts every nonclosed range together; Undo restores dates unless the plan revision changed. CLI `pnpm pm:realign` previews; `--to YYYY-MM-DD --apply` writes. Original planning bytes are retained in `.pm/planning-backups/`. No provider execution, DB change or deployment. Physical-device and owner acceptance remain pending.
+
+### R108
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r108--work-remains-directly-reachable>)
+**Outcome:** Make actual work the primary entry; stop asking the owner to manage skills before starting a task.
+**Kind:** maintenance
+**Implementation:** done
+**UAT:** pending
+**Touches:** `scripts/pm/app/` navigation, Work entry and Local readiness layout; `tests/pm-ui/`, `docs/Skills-and-Agents.md`, `ERA Notes/`
+- **Acceptance:** Primary Work opens the existing Explore screen with its filters and task details. Item-specific Deliver keeps current admission/readiness/execution contracts and shows Work active. Bare Launch shows existing Work. Setup exposes Prompt tools as a secondary utility; it has no primary navigation slot. Bridge's action describes its real destination. Existing capture, session/results/review, library and form/copy behavior stay reachable. Desktop and 390 px Blue/Pink checks prove Work → acceptance → Deliver/readiness without starting an agent; no provider or DB writes.
+- **Decision:** The generic skill composer has insufficient incremental value over native chat. Skills remain agent procedures and inspectable setup; primary owner choices concern outcomes and acceptance. The narrow deterministic form/dry-run utility remains optional. This is navigation consolidation, not a new execution system or evidence of productivity gains.
+- **Source:** Owner requests a first-principles challenge and replacement, 2026-11-14; evidence: `local-lane.mjs` already directs start-task/repository skills, `Work.tsx` already carries acceptance and Deliver, and current Launch ends in clipboard output.
+- **Visual repair:** Local readiness reused a three-column icon/name/value grid with only name/value children. Browser text bounds reproduced overlap; a scoped two-column grid preserves readable labels and wrapped statuses without changing Confined readiness.
+- **Verification (2026-11-14):** 57 focused navigation, cockpit, Work-filter and Local-delivery tests pass; typecheck, PM build, changed-file ESLint and PM/docs checks pass. Isolated Chrome exercises Work search → acceptance → Deliver/Local readiness → exact return, primary selection, legacy bare/contextual Launch and Setup utility at 1440/390 px Blue/Pink. Readiness overlap regression fails the old grid and passes the scoped fix. Existing cockpit and prompt utility suites pass. All 13 runtime hashes match the tested fixture; root inspected desktop detail and phone readiness screenshots. Evidence: [candidate](<../../../.pm/work-entry-evidence/candidate.json>) and [Work browser receipt](<../../../.pm/work-entry-evidence/work-entry-result.json>).
+- **Owner check:** Refresh local PM. Work should open Now, show the existing backlog and retain a selected task's acceptance, Deliver and return context. Setup → Prompt tools retains the optional composer. Judge whether this removes an unnecessary choice; owner product acceptance is pending.
+- **Limits:** Browser readiness is explicitly synthetic/unavailable; Start was never clicked. No provider execution, live DB writes or deployment. Navigation proof does not demonstrate a productivity gain. Full-repository lint retains the previously recorded baseline failures; changed-file ESLint is clean. App's tracked CRLF is preserved; the existing compact sections in delivery.css still fail whole-file Prettier, so unrelated formatting was left intact.
+
 ### R106
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r106--era-identity-and-softer-motion>)
 **Outcome:** The animated Game core reads as ERA's orbital mark, with slightly softer effects.
 **Kind:** feature
 **Implementation:** done
@@ -147,6 +234,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Owner check:** Refresh local PM, enable Game layer and click ERA. Confirm the orbital shape and softer intensity on laptop/phone suit the requested appearance. Physical-device smoothness and aesthetic acceptance remain pending.
 
 ### R105
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r105--throttle-and-gradual-cooldown>)
 **Outcome:** The Game-layer ERA core feels like a wheel spinning under heavy friction and settles gradually after the throttle ends.
 **Kind:** feature
 **Implementation:** done
@@ -170,6 +259,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Untested owner limits:** visual intensity preference, physical-device smoothness/comfort and deployed `/pm/live` acceptance remain pending. Automated fixture evidence does not establish owner PASS or a native running-session witness.
 
 ### R104
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r104--session-state-on-the-era-core>)
 **Outcome:** The Game-layer ERA core rotates and reacts to session state, with a visual throttle action.
 **Kind:** feature
 **Implementation:** done
@@ -190,6 +281,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 3. **R104-M3 — Laptop, phone and motion preference.** Inspect at laptop and 390 px in Blue/Pink. Expect readable labels, reachable core/link and no page overflow. Enable reduced motion: state remains legible with no rotation/particles. Move the core offscreen or hide the tab: animation pauses, resuming when visible. Restore preferred theme/Game and motion settings. **Actual:** Pending.
 
 ### R103
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r103--game-switch-appearance-and-persistence>)
 **Outcome:** The header Game layer toggle uses the original Orbit SVG, white when off and shining blue when on, with an obvious rotation.
 **Kind:** bug
 **Implementation:** done
@@ -203,6 +296,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Verification:** Typecheck and scoped ESLint pass. Isolated browser checks at 1440/390 px in Blue/Pink confirm Orbit identity, white off strokes, intermediate rotation frames, final -45-degree angle, blue gradient/glow, keyboard operation, 40 px controls, reduced motion, and no page overflow/errors/writes. Evidence: `.pm/r103-evidence/result.json` and off/on screenshots. Owner visual acceptance remains pending.
 
 ### R102
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r102--bridge-queues-charts-and-sdk-evidence>)
 **Outcome:** Bridge keeps daily actions clear with Game layer off and becomes a chart-led ERA cockpit with Game layer on.
 **Kind:** feature
 **Implementation:** done
@@ -228,6 +323,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Reset:** restore the preferred Game layer and theme settings; disable any browser viewport/reduced-motion emulation. These scenarios do not mutate product records. **Untested owner limits:** aesthetic acceptance, physical-device motion comfort and deployed `/pm/live` remain pending; automated checks are recorded separately below.
 
 ### R101
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r101--searchable-setup-and-readable-evidence>)
 **Outcome:** Refactor the Agentic OS presentation around daily actions and readable evidence.
 **Implementation:** done
 **UAT:** pending
@@ -240,6 +337,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Full lint (2026-11-14):** completed with 9,285 errors / 51,983 warnings, matching the A6 baseline recorded in `docs/Skills-and-Agents.md`. Changed-file lint passes with zero warnings. Full output: `.pm/r101-evidence/lint-full.txt`.
 
 ### R98
+
+**Product disposition (2026-11-14, R108):** The owner rejected the generic skill launcher as insufficiently useful. Primary entry is now existing Work; the form/copy utility moves under Setup. Remaining native generic-prompt expansion is HELD, not implied by the retained code. Revisit only for a concrete repeated workflow with value beyond native chat; no provider launch is authorized by this item.
 
 **Outcome:** The owner picks a skill, fills a form generated from the skill's declared inputs, and gets a ready prompt or a launched session with no follow-up questions about inputs.
 
@@ -270,6 +369,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Progress (2026-11-14, partial):** owner chose a Settings toggle with a futuristic transition and Claude/Codex comparison. Implemented identical-facts calm/game views, a 360 ms reduced-motion-aware scan, frozen shipped KIT-11 case and offline oracle controls (baseline: four expected failures; solution: 12/12), plus six-panel side-by-side rendering from the existing A4 store. 36 affected tests pass; broad suite has nine existing 5-second timeouts. **Blocked before native dispatch:** Local's read boundary cannot keep the oracle hidden; selecting/extending protected execution isolation needs an owner scope decision. No model calls; synthetic UI fixtures are not two real runs. R99 stays open. [Acceptance and evidence](<../../../docs/Skills-and-Agents.md#arena-and-game-layer-a7--r99-partial>).
 
 ### R84
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r84--production-write-guards>)
 
 **Outcome:** Hard Rule 26 is enforced by configuration in local and cloud sessions alike.
 
@@ -409,6 +510,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### R78
 
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r78--uat-in-the-drive-mirror>)
+
 **Outcome:** UAT status and handover documents reach the one-way Drive mirror, and the Delivery tab shows each finished delivery's acceptance state apart from engineering Done.
 **Kind:** feature
 **Execution:** delivery
@@ -422,6 +525,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Verification (2026-10-25):** `tests/pm-drive-publish.test.ts` (+5: UAT section and one retained document per handover without a local path, no rewrite until a record changes, a Drive edit never reaching the records and the edited document overwritten, last good section kept stale when the records cannot be read, drafts after real records and the 120 cap) with the existing 17 still passing, including the import and server-wiring isolation checks; `uat-model.test.ts` for the row labels. The mirror does not check whether a run's candidate has since changed (`candidate: "unchecked"`). Not run: a real publish to the Drive folder.
 
 ### R77
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r77--feedback-becomes-one-work-item>)
 
 **Outcome:** A submitted **Needs changes** report becomes one linked, unchecked work item in its owning campaign on the next `pnpm pm`, with no agent started.
 **Kind:** feature
@@ -437,6 +542,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Verification (2026-10-25):** `tests/pm-uat-feedback.test.ts` (21: one item with feedback verbatim, Now vs Next, allocation above archived IDs per campaign including hyphenless R numbers and past heading slugs such as `SCH-3.1` vs `SCH-31`, Markdown and secret neutralizing, nothing for comments, withdrawn, resolved or in-window reports, blocked campaign, repeat startup, double submit, amendment, withdrawal after import, lost journal, a crash after the intent, after each file and before `committed`, an edit between planning and writing, a held lock); `lintChecklist` clean on the result. Isolated server: a Change submitted in the wizard became `SCH-31` on the next start (checklist row, book section with marker, journal intent then committed); that run showed the slug collision, now fixed. Not run: against the live corpus, two real PM processes, the monthly archive racing an import.
 
 ### R76
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r76--follow-resume-and-record-a-test>)
 
 **Outcome:** The owner opens a delivery's **Test steps**, follows one numbered action at a time with its expected result, records Pass / Fail / Blocked, and signs off or submits **Needs changes** from the same screen.
 **Kind:** feature
@@ -1611,6 +1718,13 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-11-14 — **R104** Animate the Game-layer ERA core from delivery state → [record](<../_Archive/Shipped/PM Tooling.md#r104>)
 - ✅ 2026-11-14 — **R105** Give the ERA core overload intensity and gradual cooldown → [record](<../_Archive/Shipped/PM Tooling.md#r105>)
 - ✅ 2026-11-14 — **R106** Restore ERA core identity and soften Game motion → [record](<../_Archive/Shipped/PM Tooling.md#r106>)
+- ✅ 2026-11-14 — **R107** Compose skill prompts freely with optional module context → [record](<../_Archive/Shipped/PM Tooling.md#r107>)
+- ✅ 2026-11-14 — **R108** Replace the redundant skill-launch destination with actual Work → [record](<../_Archive/Shipped/PM Tooling.md#r108>)
+- ✅ 2026-11-14 — **R109** Open Plan directly and realign unfinished sprints without reshuffling → [record](<../_Archive/Shipped/PM Tooling.md#r109>)
+- ✅ 2026-11-14 — **R110** Make Sessions and Delivery status and item details readable → [record](<../_Archive/Shipped/PM Tooling.md#r110>)
+- ✅ 2026-11-14 — **R111** Show actionable session states and per-item UAT without backlog clutter → [record](<../_Archive/Shipped/PM Tooling.md#r111>)
+- ✅ 2026-11-14 — **R112** Repair Agentic OS setup diagnostics and clarify rule coverage → [record](<../_Archive/Shipped/PM Tooling.md#r112>)
+- ✅ 2026-11-14 — **R113** Simplify Deliver launch and add a distinct Game view → [record](<../_Archive/Shipped/PM Tooling.md#r113>)
 
 ## Delivery session log
 
@@ -1621,6 +1735,20 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - 2026-10-24 — **R44** V2 run `r-69bc10ef3c60` · cancelled · codex gpt-6-luna <!-- v2:res-802d062b976a@1 -->
 - 2026-10-19 — **R44** V2 run `r-262a6aee5ed3` · cancelled · codex gpt-6-luna <!-- v2:res-d15d62b4752b@1 -->
 ## Successor Briefing
+
+**2026-11-14 R113:** Deliver has a distinct animated Game layout and one explicit Start flow. Local no longer polls/displays readiness before launch; its server performs all three admission checks. Confined removes the manual Check readiness UI and passive gates on Start; explicit owner Start sends `renewAuthorization: true`, renewed once within the durable receipt before existing readiness collection. Restricted Steward credentials cannot renew. Both executor cards can be selected; actual Confined policy permission is reported after Start, with Use Local on loopback. Current dirty source blocks Local; both sign-ins/dependencies pass. Policy revision 13 permits Codex only, unchanged. Replay and desktop/mobile fixture evidence passes; no real delivery was started. The frontend watcher has loaded the changes. Owner must stop the current PM terminal and run `pnpm pm --bridge --no-open` for backend renewal; agent restart is barred by the production relay write effect. UAT and candidate hashes: [R113 handover](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r113--deliver-launch-and-game-mode>).
+
+**2026-11-14 R112:** Setup now opens scan health and actual hard-rule coverage, with separate Rule coverage, Conflicts and Configuration views. The audit repaired shared Windows permission placement, generated hook recognition, false advisory-strength claims, launch-declaration classification and a literal model reference. Static findings are zero errors and zero warnings, with twelve informational notes. Four judgment rules carry explicit review steps. Missing or invalid declared guards remain actionable. Inventory filters are independent of detail selection, and hard/module rule deep links bypass old search text. Local PM's existing fifteen-second worker refresh loads scanner changes and its app watcher rebuilds the UI. Owner aesthetic and physical-device acceptance remain pending.
+
+**2026-11-14 R111:** replaces the rejected R110 backlog widgets and Item overview / Runs & reviews split with one Sessions workspace: Running / Needs you / To test / Waiting / Finished / Unconfirmed. Counts retain their session/request/item units; only explicit runtime/recorder/request/UAT bindings deduplicate. Large queues open campaign collections and six-card pages with search. Agent evidence remains secondary. `#/uat-item/<campaign>/<id>` opens authored Action/Expect steps directly, and local Start test binds current source through the existing durable UAT command and result/signoff engine. Existing relay handovers work; authored-step import is local-only. All 71 pending canonical items resolve authored instructions; parked native/schema exercises still have explicit owner prerequisites and no invented Pass. Replay and desktop/390 px Blue/Pink evidence is in `.pm/session-workspace-evidence/`; Start test/result/reload ran only in a credential-free disposable fixture. Restart the local PM server for the new handler. Implementation evidence does not establish owner aesthetic or physical-device acceptance; no deployment, production write or provider launch.
+
+**2026-11-14 R110 — rejected, superseded by R111:** the earlier status-widget and nested-tab design failed owner review despite passing its implementation tests. R111 replaces that architecture. Work detail's Later → Next → Now → Done path, visible acceptance and reference cards remain with the original command witnesses and Undo. Historical evidence is in `.pm/delivery-overview-evidence/`; it does not establish product acceptance.
+
+**2026-11-14 R109:** owner promotes Sprints/Plan over R108's Work entry. Primary navigation is Bridge / Plan / Sessions / Setup / Score. Bridge opens Plan; desktop Search work and More > Work retain the backlog (the header shortcut is hidden on mobile, so the More link is required). Sprints adds Realign preview/Apply/revision-bound Undo using the existing planning seam; CLI `pnpm pm:realign [--to YYYY-MM-DD] [--apply]` previews by default. Active/draft dates and exclusively linked milestone targets translate together; members, gaps, duration, scope, lifecycle and closed history remain intact. Backups precede atomic writes. Browser Apply/Undo ran only in a temp fixture, not the owner's real plan; preview shows +5 days for today. R87's automatic elapsed-week lifecycle cleanup remains separate. Restart local PM for the new action handler; remote use needs a matching bridge. Evidence: `.pm/sprint-realignment-evidence/result.json`; owner/device acceptance pending under [R109](<#r109>).
+
+**2026-11-14 R108:** owner rejected the primary skill launcher despite R107's passing usability checks. Primary Work now opens existing Explore → Now and preserves acceptance → Deliver/readiness → Sessions/review. Bridge's Find work shares that destination; contextual launch URLs remain intact. Optional composer lives at Setup → Prompt tools. Native generic-prompt expansion R98 is HELD; do not revive it as a default next step. Local readiness's overlapping two-child/three-column layout is fixed. 57 focused tests, typecheck/build/scoped lint and docs/PM checks pass; desktop/390 px Blue/Pink browser evidence and 13 matching runtime hashes are in `.pm/work-entry-evidence/`. Readiness was synthetic; no execution or deployment was tested. Product acceptance remains pending under [R108](<#r108>).
+
+**2026-11-14 R107 — product rejected, superseded by R108:** the 18-skill composer and eight guided forms remain optional Prompt tools. Original request, module/work context and target paths survive modes; presets stay skill-scoped. Its 50 replay tests and desktop/mobile clipboard evidence remain valid implementation evidence in `.pm/launch-composer-evidence/`, not proof of owner value. Full lint retains 9,285 baseline errors outside clean changed files. Existing local PM servers need a restart for that earlier request-schema change.
 
 **2026-11-14 R106:** the owner accepted R105's animation and requested ERA identity plus slightly softer intensity. The core now has thin open arcs, an elliptical counter-orbit and the existing ERA mark; tire spokes/tread/track and ground-contact particles are removed. Emission is 160/s instead of 225/s at full energy, with lighter smoke, shorter trails and softer vibration/heat/glow. R105 timing, phase continuity, state semantics and cooldown remain. Typecheck/build/scoped lint/11 focused tests and local desktop/mobile Blue/Pink browser checks pass. Evidence is in `.pm/r106-evidence/`; appearance/device UAT remains pending under [R106](<#r106>). No deployment or provider execution.
 

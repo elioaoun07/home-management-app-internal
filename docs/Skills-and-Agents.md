@@ -80,14 +80,52 @@ rebuilding. `.os/` is disposable and ignored by Git. Rule tombstones are retaine
 when rebuilding an existing registry. Unknown versions are refused.
 
 Warnings do not fail CI. `BASELINE` stays unknown without recorded whole-tree
-evidence; A2 evaluates diffs only and does not invent baseline counts. Contradiction
-queries cover owned module/campaign lists, platform and campaign-reading claims,
-not arbitrary prose. Existing namespace/portability/parity errors are reported,
-not repaired or grandfathered. `TRACKED-LOCAL` remains visible despite the owner's
-choice to keep the local settings file. The CI job runs `os:check`; its checkout
-includes history for the `e5f537a` hand-inventory acceptance fixture.
+evidence. A2 evaluates diffs and retains unknown baseline counts. Contradiction
+queries cover owned module/campaign lists, platform and campaign-reading claims.
+Shared machine-specific permissions, missing hooks and parity errors remain
+actionable. Workstation-local permissions and the owner's tracked-local choice
+appear as informational notes. The CI job runs `os:check` with history for the
+`e5f537a` hand-inventory acceptance fixture.
 
 Verification: `pnpm vitest run tests/os` (A0–A2 fixtures).
+
+### Setup repairs and rule coverage (R112)
+
+The November 14 repair moved two Windows-specific grants from shared settings
+into local settings with identical permission values. The scanner resolves the
+generated pre-commit mirror through its wired canonical source and detects
+missing referenced hook scripts. Launch declarations use syntax inspection to
+recognize the confined worker's explicit isolation and Local's project-loading
+branch. Missing Local setup or weakened declarations still produce findings.
+The era-wire skill now references the `CLAUDE_MID` tier alias.
+
+Advisory detectors retain their scope and remediation. A rule claiming stronger
+enforcement than its guard supplies produces a warning. Conditional Stop guards
+have explicit metadata. Four judgment requirements share one registry between
+Setup and session scorecards, covering interaction semantics, icon selection,
+header clearance and bundled reads. The scan retains all nineteen module rules
+with their authored source paths.
+
+Setup opens with scan health and hard-rule coverage. Rule coverage exposes guard
+sources, fixture counts, individual baseline evidence, recorded session links
+and manual review steps. Missing, disabled, malformed or mismatched guards are
+excluded from valid coverage. Automated checks include advisory detectors whose
+limited scope is shown in their evidence. Configuration has independent agent
+and category filters, selection and search. Conflicts displays errors and
+warnings first, with informational notes under disclosure. Old `tab=map&rule=`
+links open the matching rule detail. Module rules open from Configuration.
+
+The fresh source scan after repair has zero errors, zero warnings and twelve
+informational facts. Refresh the saved registry after edits with `pnpm os:scan`.
+Configuration presence establishes static coverage. Runtime hook loading and
+physical-device acceptance require their own observations.
+
+Verification on November 14 includes 193 Agentic OS tests, 74 PM regression
+tests, typecheck, changed-file lint, mirror parity and PM build. The browser
+fixture exercises desktop and 390 px Blue/Pink with real scan data and injected
+broken guards, conflicts and missing snapshots. The local server's served
+JavaScript and CSS match the verified build. Evidence is in
+`.pm/setup-evidence/result.json` and `.pm/setup-evidence/served.json`.
 
 ## Agentic OS diff evaluation (A2 / R94)
 
@@ -294,6 +332,10 @@ via NODE_PATH because this workspace's root plugin links are incomplete.
 
 ## PM.2 cockpit (A5 / R97)
 
+**Deliver launch, 2026-11-14 (R113):** Local and Confined wait until explicit Start to show readiness failures. Start stays usable once connected, paired and a selection exists; the server retains all source/authentication/dependency/policy/qualification/test gates. Confined Start includes explicit owner authorization renewal under the durable receipt; a replay cannot renew twice and restricted Steward credentials cannot renew. Claude/Codex SDK presence is separate from Confined policy permission. Game Mode wraps both launch forms in `DeliveryMission.tsx` with orbital artwork, a controls deck and an uncompleted delivery route; reduced motion and hidden/offscreen pause apply. No fabricated progress or extra provider call. UI rebuilds live, but renewal requires a server restart; the current `--bridge` restart is owner-run under Hard Rule 26. Tests and owner cases: [R113 handover](Delivery-UAT-Agentic-OS-2026-11-14.md#r113--deliver-launch-and-game-mode).
+
+**Sessions workspace, 2026-11-14 (R111):** replaces R110's rejected backlog widgets and Item overview / Runs & reviews split. `SessionWorkspace.tsx` and `sessionBoardModel.ts` render Running, Needs you, To test, Waiting, Finished and Unconfirmed. Explicit bindings combine representations of the same session; counts keep session/request/acceptance units separate. Large queues open by campaign, then six cards per page. `ItemUatWizard.tsx` resolves an item's authored Action/Expect steps through `uat-item.mjs`; Start test freezes them into the existing source-bound UAT engine without recording availability, results or signoff. The shared `uat-item-selection.mjs` excludes superseded tests and changed instruction revisions; a new Start creates a fresh attempt without inheriting earlier results. Explicit owner questions remain visible above unfinished UAT preparation. No inference API or parallel acceptance store. Existing frozen handovers work over the relay; new authored-step preparation is laptop-only. Evidence inspection/comparison remains `#/sessions?view=history`. R110's Work planning path and conservative acceptance/reference cards remain. Tests: `session-board.test.ts`, `uat-item.test.ts`, `session-workspace.browser.mjs`; realistic 71-item desktop/390 px Blue/Pink evidence is under `.pm/session-workspace-evidence/`. Physical-phone deployment remains separate.
+
 **Usability refactor, 2026-11-14 (R101):** `CockpitUI.tsx` shares subnavigation, linked metrics and readable evidence disclosures. Bridge separated queues from metrics (superseded by R102 below); Setup opens a searchable agent/category browser with the graph behind Connection map and conflicts grouped in disclosures; Sessions adds search, numbered touch-sized rule links and readable fact panels before raw JSON; Score uses consistent Sessions / Backlog / Arena tabs and structured cohort details. The five primary destinations have equal navigation weight. Routes, records, pairing and Delivery commands retain their contracts. The corrected interaction specification is in Agentic OS `09 - PM.2 Product Design.md`; browser regression: `tests/pm-ui/cockpit-usability.browser.mjs` against the credential-free `a5-browser.mjs --launchpad --arena` fixture. Screenshots and results live in `.pm/r101-evidence/`. Hosted export and physical-phone deployment are separate.
 
 R101 verification: typecheck, PM React build, zero-warning changed-file ESLint, 39 targeted tests in seven files, docs/PM checks and three browser suites pass. The cockpit suite covers 390/768/1024/1440 px in Blue/Pink plus expanded graph, rule evidence, comparison and empty recorder. Full lint completes with 9,285 errors / 51,983 warnings, matching the previously recorded A6 baseline; it is not a clean repository-wide gate. No paid API, production write or native agent launch was used.
@@ -374,6 +416,20 @@ state. Later fixture launches explicitly disable publishing. Repair and
 verification evidence remains under `.pm/a5-evidence/`.
 
 ## Skill Launchpad (A6 / R98)
+
+**Plan and realignment, 2026-11-14 (R109):** Plan replaces Work in primary navigation and opens Sprints. Search work and More > Work retain the backlog; contextual Work/Deliver highlights Plan. Bridge offers Open plan. Sprints > Realign previews a target date for the earliest unfinished sprint and shifts every active/draft range by the same calendar-day offset. Contents, order, spacing, durations, names, capacity, scope and actual commitment timestamps remain intact; closed history stays fixed. Exclusively linked milestone target dates move too; shared/historical and unrelated milestones stay fixed. Apply uses existing paired/CSRF planning commands, CAS, idempotency, locking and atomic replacement. Undo is revision-bound; pre-write originals are saved under `.pm/planning-backups/`. `pnpm pm:realign [--to YYYY-MM-DD] [--apply]` previews by default using today in the sprint timezone, never pulling future plans backward. No regrouping, automatic closing, dispatch or DB access; R87 remains separate. Restart local PM for the new handler; remote clients need a matching bridge.
+
+**Product correction, 2026-11-14 (R108):** The owner rejected the standalone launcher's incremental value. It adds configuration/review/copy steps to a request the native agent already understands, and a copied preload is not evidence that a rule was enforced. The primary second destination is now **Work**, opening the existing Now list at `#/explore?lane=now`. Existing task details hold acceptance and Deliver; contextual launch/readiness, native execution and review keep their contracts. The Local worker already invokes start-task and repository skills. Bridge's action now says Find work and opens that list. Bare `#/launch` redirects to Work, preserving filters and leaving `file`/`cb` delivery links alone.
+
+The optional form/dry-run/copy utility remains at **Setup → Prompt tools** (`#/skill-tools`) with Setup active. Its narrow uses include deterministic scaffold validation and preparing a structured handoff; it is not the daily entry. Native open-ended conversation remains in the native agent. R98's generic native-prompt expansion is held following this product rejection. No new backlog, task store, executor, automatic PM filing or provider invocation was introduced. The benefit claimed is removing duplicate navigation/input, not measured productivity or improved model quality.
+
+**Prompt composer, 2026-11-14 (R107):** Launch now opens with `/skill` plus a free request and optional Module. The searchable library lists all canonical skills from A1, including those without a form; slash completion works with arrow keys and Enter/Tab. Selecting another skill preserves the request, resets skill-specific overrides, and clears an incompatible ERA-report link. The eight strict forms remain under **Guided**. Module, work link and the original request survive mode changes; guided preparation still requires its declared fields and retains the real new-module dry-run.
+
+**Context & settings** holds optional **Work item**, tier/effort, paths and knowledge skills. The two authored recipes are now labelled **Preset**, shown only for their matching skill: Money bug changes the tier and preloads money/API rules; ERA report preloads the API rule. Prompt mode accepts add-feature without a backlog task. `era-wire` retains its required current ERA-report check. Free requests are never labelled complete guided inputs and never invoke a scaffold preview. Both modes share fresh membership/path/tier validation, automatic knowledge-skill inclusion, stale-result retirement and literal PowerShell quoting. Copy prepares a handoff; it does not run an agent or establish a flight record. No new persistence, DB writes or provider calls.
+
+Guided preparation supplements sidecars that lack Module/Work item with validated optional context, retains explicit Target paths and the owner's verbatim request, and still enforces every declared field/check. Restart an already-running local `pnpm pm` once to load the new server request schema. Runtime evidence, screenshots and source hashes are under `.pm/launch-composer-evidence/`; physical-device and owner acceptance remain separate.
+
+R107 verification: 50 focused replay tests, typecheck, PM build, zero-warning changed-file lint and docs/PM checks pass. Final browser evidence is bound to all four runtime source hashes and covers slash keyboard selection, free and guided prompts, context/path retention, preset isolation, copy, stale review, failed prepare/retry and 390 px Blue/Pink. The cockpit regression also passes at 390/768/1024/1440 px. Full lint remains failing with 9,285 errors / 51,985 warnings; that broader gate is not claimed clean.
 
 **UI correction, 2026-11-14 (R101):** Launch now starts with eight skill cards and recipes. Selecting one opens a compact two-column desktop / one-column phone form. **Review prompt** validates as before, then focuses the rendered result; Copy prompt / Copy command still disappear when inputs become stale. Unsupported native worktree launch has no inert button. The title-case default generator now returns an empty title/lookup phrase for an empty slug instead of the literal `undefined`; both unit and browser regressions cover it.
 

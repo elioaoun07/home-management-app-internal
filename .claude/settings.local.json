@@ -1,6 +1,8 @@
 {
   "permissions": {
     "allow": [
+      "PowerShell(npx vitest run 2>&1)",
+      "PowerShell(npm run dev 2>&1)",
       "Bash(ls:*)",
       "Bash(find:*)",
       "Bash(echo:*)",

@@ -13,7 +13,7 @@ import type { RunSummary, UatSummary } from "../../scripts/pm/app/types";
 const fixture = vi.hoisted(() => ({ paired: false, stale: false, error: null as Error | null, queueError: null as Error | null, uat: [] as UatSummary[], query: "" }));
 vi.mock("../../scripts/pm/app/state", async original => ({
   ...await original<typeof import("../../scripts/pm/app/state")>(),
-  useWorld: () => ({ connected: true, connection: { stale: fixture.stale }, runsReady: true, runs: [], runError: null, world: { work: [] } }),
+  useWorld: () => ({ connected: true, connection: { stale: fixture.stale }, runsReady: true, runs: [], runError: null, world: { work: [], spaces: [], history: [] } }),
   useRoute: () => ({ path: "/delivery", full: `/delivery?${fixture.query}`, query: new URLSearchParams(fixture.query) }),
 }));
 vi.mock("../../scripts/pm/app/DeliveryV2", async original => ({
@@ -32,15 +32,16 @@ const render = () => renderToStaticMarkup(createElement(QueryClientProvider, { c
 
 it("opens draft review rows without a disclosure and retains the review search on return", () => {
   fixture.paired = true;
-  fixture.query = "tests=all&testSearch=R80";
+  fixture.query = "state=waiting&q=R80";
   fixture.uat = [{ handover_id: "draft-r80", status: "draft", acceptance: { state: "pending", shipped: false }, subject: { type: "direct", run_id: null, delivery_ref: "direct:R80", campaign: "PM Tooling", work_id: "R80", title: "Browser access" }, created_at: "2026-10-25T10:00:00Z", scenarios: [] } as unknown as UatSummary];
   const html = render();
-  expect(html).toContain("Review &amp; sign off");
-  expect(html).toContain("Work ID or title");
-  expect(html).toContain("R80 · PM Tooling");
+  expect(html).toContain("Session states");
+  expect(html).toContain("Find a session or test");
+  expect(html).toContain("R80");
+  expect(html).toContain("PM Tooling");
   expect(html).toContain("View steps");
-  expect(html).toContain("Draft");
-  expect(html).toContain("test/draft-r80?from=%2Fdelivery%3Ftests%3Dall%26testSearch%3DR80");
+  expect(html).toContain("Test steps pending");
+  expect(html).toContain("test/draft-r80?from=%2Fdelivery%3Fstate%3Dwaiting%26q%3DR80");
   expect(html).not.toContain("Test records");
   expect(html).not.toContain("Start test");
 });
@@ -50,8 +51,9 @@ it("shows the pairing recovery path instead of a raw session error or false idle
   const html = render();
   expect(html).toContain("Pair this browser");
   expect(html).toContain("pnpm pm:pair");
-  expect(html).toContain("Delivery status unavailable");
+  expect(html).toContain("Delivery status unconfirmed");
   expect(html).not.toContain("Nothing running");
+  expect(html).not.toContain("No running sessions");
   expect(html).not.toContain("session is not recognised");
 });
 

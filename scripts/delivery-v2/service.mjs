@@ -313,7 +313,7 @@ export function createDeliveryV2Context({
     async readinessSnapshots() {
       return Promise.all([...readinessCache.keys()].map(key => context.readiness(JSON.parse(key))));
     },
-    // Called only by the explicit owner Check command, never by Start/polling.
+    // Called only by an explicit owner Start/Check command, never by polling.
     renewAuthorization({ actor, command_id }) {
       const loaded = loadExecutionPolicy({ root: ROOT });
       if (!loaded.ok) return { ok: false, refusals: loaded.refusals };

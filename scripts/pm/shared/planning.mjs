@@ -2,6 +2,7 @@
 // are always resolved from the canonical Markdown corpus, never copied here.
 import { z } from "zod";
 import { CHIP_ID_SOURCE, normalizeWorkId } from "./work-id.mjs";
+import { realignmentPreview } from "./sprint-realignment.mjs";
 
 export const PLANNING_SCHEMA = "pm-planning@1";
 export const PLANNING_FILE = "_Planning.json";
@@ -122,6 +123,7 @@ export function validatePlanning(input) {
 const baseCommand = { expectedRevision: z.number().int().nonnegative(), command_id: z.string().uuid() };
 const criteriaRevisions = z.record(z.string(), z.string().min(1).max(200));
 export const planningCommandSchema = z.discriminatedUnion("action", [
+  z.object({ ...baseCommand, action: z.literal("realign"), toDate: date }).strict(),
   z.object({ ...baseCommand, action: z.literal("save"), sprint: sprintDraftSchema, deliverables: z.array(deliverableSchema).optional() }).strict(),
   z.object({ ...baseCommand, action: z.literal("save-many"), sprints: z.array(sprintDraftSchema).max(52), replaceDraftIds: z.array(id).max(52).optional(), deliverables: z.array(deliverableSchema).optional() }).strict(),
   z.object({ ...baseCommand, action: z.literal("delete-draft"), sprintId: id }).strict(),
@@ -170,7 +172,18 @@ export function applyPlanningCommand(input, rawCommand, { facts = {}, now = new 
   if (planning.revision !== command.expectedRevision) refuse("Sprint plan changed. Refresh and retry.", 409);
   const next = structuredClone(planning);
   let sprint = next.sprints.find((entry) => entry.id === command.sprintId);
-  if (command.action === "save" || command.action === "save-many") {
+  if (command.action === "realign") {
+    let preview;
+    try { preview = realignmentPreview(next, command.toDate); }
+    catch (error) { refuse(error.message, 409); }
+    if (!preview.days) refuse("Sprint dates are already aligned", 409);
+    for (const moved of preview.sprints) {
+      const target = next.sprints.find((entry) => entry.id === moved.id);
+      target.startDate = moved.startDate;
+      target.endExclusive = moved.endExclusive;
+    }
+    for (const moved of preview.deliverables) next.deliverables.find((entry) => entry.id === moved.id).targetDate = moved.targetDate;
+  } else if (command.action === "save" || command.action === "save-many") {
     const drafts = command.action === "save" ? [command.sprint] : command.sprints;
     const replaced = command.action === "save-many" ? command.replaceDraftIds || [] : [];
     if (!drafts.length && !replaced.length) refuse("Choose drafts to save or replace");

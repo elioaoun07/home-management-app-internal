@@ -34,7 +34,7 @@ function fixture(guard = true) {
   if (guard) for (const file of [".claude/hooks/guard.sh", ".codex/hooks/guard.sh"]) write(root, file, "#!/bin/sh\n# enforces: HR-26\nexit 2\n");
   write(root, "package.json", JSON.stringify({ scripts: { "os:scan": "node scripts/os/scan.mjs", "os:check": "node scripts/os/check.mjs" } }));
   symlinkSync(join(repo, "node_modules"), join(root, "node_modules"), "junction");
-  for (const file of ["scripts/os/scan.mjs", "scripts/os/check.mjs", "scripts/os/forms.mjs", "scripts/pm/shared/frontmatter.mjs"]) {
+  for (const file of ["scripts/os/scan.mjs", "scripts/os/check.mjs", "scripts/os/forms.mjs", "scripts/os/review-requirements.mjs", "scripts/os/launch-settings.mjs", "scripts/os/detector-support.mjs", "scripts/pm/shared/frontmatter.mjs"]) {
     mkdirSync(dirname(join(root, file)), { recursive: true });
     cpSync(join(repo, file), join(root, file));
   }
@@ -184,6 +184,79 @@ describe("A1 conflict classes, isolated repositories", () => {
     expect(rows(root, "TRACKED-LOCAL")).toHaveLength(0);
     git(root, "add", "-f", ".claude/settings.local.json");
     expect(rows(root, "TRACKED-LOCAL")).toHaveLength(1);
+  });
+  it("keeps workstation permissions visible without making the shared setup nonportable", () => {
+    const root = fixture();
+    write(root, ".claude/settings.local.json", JSON.stringify({ permissions: { allow: ["PowerShell(pnpm test)", "Bash(C:\\Users\\owner\\guard.sh)"] } }));
+    expect(rows(root, "PORTABLE")).toEqual([expect.objectContaining({ severity: "info", message: "2 workstation-specific permission entries" })]);
+    config(root, ".claude/settings.json", (value) => { (value.permissions as { allow: string[] }).allow = ["PowerShell(pnpm test)"]; });
+    expect(rows(root, "PORTABLE")).toEqual(expect.arrayContaining([expect.objectContaining({ severity: "error", source: ".claude/settings.json:permissions.allow[0]" })]));
+  });
+  it("recognizes a generated mirror of the wired pre-commit script, while drift remains visible", () => {
+    const root = fixture();
+    write(root, ".husky/pre-commit", "bash .claude/hooks/pre-commit.sh\n");
+    for (const directory of [".claude", ".codex"]) write(root, `${directory}/hooks/pre-commit.sh`, "#!/bin/sh\nexit 0\n");
+    expect(rows(root, "DEAD")).toEqual([]);
+    write(root, ".codex/hooks/pre-commit.sh", "#!/bin/sh\nexit 1\n");
+    expect(rows(root, "MIRROR")).toEqual(expect.arrayContaining([expect.objectContaining({ source: ".codex/hooks/pre-commit.sh" })]));
+    expect(rows(root, "DEAD")).toEqual(expect.arrayContaining([expect.objectContaining({ source: ".codex/hooks/pre-commit.sh" })]));
+  });
+  it("reports a referenced hook script that has disappeared", () => {
+    const root = fixture();
+    rmSync(join(root, ".claude/hooks/guard.sh"));
+    expect(rows(root, "INPUT")).toEqual(expect.arrayContaining([expect.objectContaining({
+      severity: "error", source: ".claude/hooks/guard.sh", message: "Required setup source is missing",
+    })]));
+  });
+  it("preserves advisory limits and warns if their rule is incorrectly promoted", () => {
+    const root = fixture();
+    write(root, "scripts/check.mjs", "// enforces: HR-24\n");
+    config(root, "package.json", (value) => { value.scripts = { check: "node scripts/check.mjs" }; });
+    const setup = scan(root);
+    expect(conflicts(setup, root)).toEqual(expect.arrayContaining([expect.objectContaining({ code: "SOFT-CLAIM", rule: "HR-24", severity: "info" })]));
+    setup.entities.find((entity: { id: string }) => entity.id === "HR-24").level = "checked";
+    expect(conflicts(setup, root)).toEqual(expect.arrayContaining([expect.objectContaining({ code: "SOFT-CLAIM", rule: "HR-24", severity: "warning" })]));
+  });
+  it("shows explicit review requirements without claiming automated coverage", () => {
+    const setup = scan(fixture());
+    for (const id of ["HR-2", "HR-4", "HR-16", "HR-21"]) {
+      expect(setup.entities.find((entry: { id: string }) => entry.id === id)).toMatchObject({
+        level: "documented", enforcedBy: [], review: { required: true, verify: expect.any(String), source: expect.any(String) },
+      });
+    }
+  });
+  it("flags a literal model introduced into a skill", () => {
+    const root = fixture();
+    write(root, ".claude/skills/example/SKILL.md", "---\nname: example\n---\nUse Sonnet 5.5 with medium effort.\n");
+    expect(rows(root, "TIER-LITERAL")).toEqual([expect.objectContaining({
+      severity: "warning", source: ".claude/skills/example/SKILL.md",
+    })]);
+  });
+  it("recognizes confined settings only with the boundary and the Local project-loading branch", () => {
+    const root = fixture();
+    const source = "scripts/delivery-v2/adapters/claude.mjs";
+    const body = `function buildSessionOptions({ local }) {
+      const options = { skills: [], settingSources: [], strictMcpConfig: true,
+        canUseTool: buildCanUseTool({}), sandbox: { enabled: true, failIfUnavailable: true } };
+      if (local) { options.skills = "all"; options.settingSources = ["project"]; }
+      return options;
+    }`;
+    write(root, source, body);
+    expect(rows(root, "UNLOADED")).toEqual([expect.objectContaining({ severity: "info" })]);
+    write(root, source, body.replace('options.settingSources = ["project"]', 'options.settingSources = []'));
+    expect(rows(root, "UNLOADED")).toEqual([expect.objectContaining({ severity: "warning" })]);
+    write(root, source, body.replace("failIfUnavailable: true", "failIfUnavailable: false"));
+    expect(rows(root, "UNLOADED")).toEqual([expect.objectContaining({ severity: "warning" })]);
+    write(root, source, '// skills: []\nconst text = "settingSources: []";');
+    expect(rows(root, "UNLOADED")).toEqual([]);
+  });
+  it("keeps unknown tracked-local decisions actionable and the documented owner choice visible", () => {
+    const root = fixture();
+    write(root, ".claude/settings.local.json", "{}");
+    git(root, "add", "-f", ".claude/settings.local.json");
+    expect(rows(root, "TRACKED-LOCAL")).toEqual([expect.objectContaining({ severity: "warning" })]);
+    write(root, "docs/Skills-and-Agents.md", "`.claude/settings.local.json` remains committed by\nowner choice (2026-11-10).\n");
+    expect(rows(root, "TRACKED-LOCAL")).toEqual([expect.objectContaining({ severity: "info" })]);
   });
   it("BASELINE: reports recorded evidence only; no measurement is fabricated in A1", () => {
     const root = fixture(), setup = scan(root);

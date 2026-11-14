@@ -8,10 +8,10 @@ import {
   setupDiff,
 } from "./cockpitModel";
 import { Fingerprint } from "./Setup";
-import { DeliveryHome } from "./DeliveryHome";
+import { SessionWorkspace } from "./SessionWorkspace";
 import type { Flight } from "./cockpitTypes";
 import { DetailLink } from "./DetailLink";
-import { Evidence, RawEvidence, SectionNav } from "./CockpitUI";
+import { Evidence, RawEvidence } from "./CockpitUI";
 import { Search } from "lucide-react";
 
 const rules = Array.from({ length: 29 }, (_, i) => `HR-${i + 1}`);
@@ -196,13 +196,23 @@ export function FlightReport({ record }: { record: Flight }) {
   );
 }
 export function Sessions() {
+  const route = useRoute();
+  const evidence =
+    !!route.parts[1] ||
+    route.query.get("view") === "history" ||
+    ["pin", "rule", "cohort", "item", "agent"].some((key) =>
+      route.query.has(key),
+    );
+  return evidence ? <AgentHistory /> : <SessionWorkspace />;
+}
+function AgentHistory() {
   const [search, setSearch] = useState("");
   const { world } = useWorld(),
     route = useRoute();
   const data = world.cockpit;
   const records = data?.records || [];
   if (data?.pending && route.query.get("view") !== "delivery")
-    return <Empty title="Loading sessions" />;
+    return <Empty title="Loading agent history" />;
   const id = route.parts[1],
     record = records.find((r) => r.session.id === id);
   const item = route.query.get("item"),
@@ -239,26 +249,10 @@ export function Sessions() {
   };
   return (
     <div className="cockpit">
-      <PageTitle title="Sessions" />
+      <Back fallback="/sessions" label="Sessions" />
+      <PageTitle title="Agent evidence" />
       {data?.stale && <span role="status">Saved snapshot</span>}
-      <SectionNav
-        label="Session views"
-        items={[
-          {
-            label: "Recorded",
-            href: "#/sessions",
-            active: route.query.get("view") !== "delivery",
-          },
-          {
-            label: "Delivery",
-            href: "#/sessions?view=delivery",
-            active: route.query.get("view") === "delivery",
-          },
-        ]}
-      />
-      {route.query.get("view") === "delivery" ? (
-        <DeliveryHome />
-      ) : (
+      {
         <>
           {data?.warnings.map((w) => (
             <details key={w}>
@@ -310,6 +304,7 @@ export function Sessions() {
             )
           ) : (
             <>
+              <p className="quiet">Saved prompts, edits and checks</p>
               <div className="cockpit-tools">
                 <label className="cockpit-search">
                   <Search size={17} />
@@ -341,7 +336,7 @@ export function Sessions() {
                 {(item || rule || cohort || agent || search) && (
                   <a
                     className="secondary"
-                    href="#/sessions"
+                    href="#/sessions?view=history"
                     onClick={() => setSearch("")}
                   >
                     Clear filters
@@ -406,7 +401,7 @@ export function Sessions() {
             </>
           )}
         </>
-      )}
+      }
     </div>
   );
 }

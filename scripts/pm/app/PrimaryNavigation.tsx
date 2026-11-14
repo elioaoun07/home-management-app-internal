@@ -3,8 +3,8 @@ import {
   ChartNoAxesCombined,
   Compass,
   Home,
+  CalendarDays,
   Menu,
-  Zap,
   Shield,
 } from "lucide-react";
 import { Sheet } from "./components";
@@ -12,16 +12,50 @@ import { liveRuns } from "./model";
 import type { RunSummary, V2RunSummary } from "./types";
 import "./navigation.css";
 
-const links = [
+const links: {
+  path: string;
+  href?: string;
+  label: string;
+  icon: typeof Home;
+}[] = [
   { path: "/bridge", label: "Bridge", icon: Home },
-  { path: "/launch", label: "Launch", icon: Zap },
+  {
+    path: "/sprints",
+    label: "Plan",
+    icon: CalendarDays,
+  },
   { path: "/sessions", label: "Sessions", icon: Compass },
   { path: "/setup", label: "Setup", icon: Shield },
   { path: "/score", label: "Score", icon: ChartNoAxesCombined },
 ];
 
+/** Plan owns sprint, backlog and work admission; prompt utilities belong to Setup. */
+export function primarySection(parts: string[]) {
+  const root = parts[0] || "";
+  if (
+    [
+      "deliver",
+      "launch",
+      "explore",
+      "space",
+      "work",
+      "module",
+      "project",
+      "projects",
+    ].includes(root) ||
+    (root === "delivery" && parts[1] === "new")
+  )
+    return "/sprints";
+  if (["delivery", "sessions", "uat-item"].includes(root)) return "/sessions";
+  if (["setup", "skill-tools"].includes(root)) return "/setup";
+  if (["score", "analytics", "dashboard"].includes(root)) return "/score";
+  if (root === "sprints") return "/sprints";
+  if (["", "home", "bridge"].includes(root)) return "/bridge";
+  return "";
+}
+
 export const secondaryLinks = [
-  { href: "#/sprints", label: "Plan" },
+  { href: "#/explore", label: "Work" },
   { href: "#/setup?tab=conflicts", label: "Conflicts" },
   { href: "#/library", label: "Library" },
   { href: "#/activity", label: "Activity" },
@@ -106,7 +140,7 @@ export function PrimaryNavigation({
       className={mobile ? "primary-nav mobile-nav" : "primary-nav desktop-nav"}
       aria-label={mobile ? "Mobile navigation" : "Main navigation"}
     >
-      {links.map(({ path, label, icon: Icon }) => {
+      {links.map(({ path, href, label, icon: Icon }) => {
         const isDelivery = path === "/sessions";
         const setupAttention = path === "/setup" && setupNeedsAttention;
         const status =
@@ -118,7 +152,7 @@ export function PrimaryNavigation({
         return (
           <a
             key={path}
-            href={"#" + path}
+            href={href || "#" + path}
             className={isDelivery ? "nav-delivery" : undefined}
             data-delivery-state={isDelivery ? delivery.state : undefined}
             aria-label={

@@ -1,9 +1,6 @@
 {
   "permissions": {
-    "allow": [
-      "PowerShell(npx vitest run 2>&1)",
-      "PowerShell(npm run dev 2>&1)"
-    ],
+    "allow": [],
     "deny": [
       "mcp__claude_ai_Supabase__execute_sql",
       "mcp__claude_ai_Supabase__apply_migration",

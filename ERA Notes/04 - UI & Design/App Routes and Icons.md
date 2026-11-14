@@ -120,15 +120,23 @@ Local Delivery opens with **Review & sign off** (R81): search a work ID or title
 | Hash route | Destination | Icon (lucide-react) |
 | --- | --- | --- |
 | `#/bridge` | Bridge — owner actions, running, next up | `Home` |
-| `#/launch` | Existing Delivery launch; A6 forms remain deferred | `Zap` |
-| `#/sessions` | Recorder, comparison and Delivery evidence | `Compass` |
-| `#/setup` | Map, Rulebook, Conflicts | `Shield` |
+| `#/explore?lane=now` | Work - backlog, acceptance and Deliver | Header Search / More; Plan active |
+| `#/sessions` | Sessions — Running, Needs you, To test, Waiting, Finished and Unconfirmed | `Compass` |
+| `#/sessions?view=history` | Secondary agent evidence and comparison | Sessions active |
+| `#/uat-item/<campaign>/<id>` | Per-item Action / Expect wizard; local authored-step import or existing relay handover | Sessions active |
+| `#/setup` | Setup overview and 29-hard-rule coverage summary | `Shield` |
+| `#/setup?tab=rulebook` | Rule coverage, filters and rule evidence | Setup active |
+| `#/setup?tab=conflicts` | Errors, warnings, repair guidance and Setup notes | Setup active |
+| `#/setup?tab=configuration` | Agent/category browser, module rules and connection map | Setup active |
+| `#/skill-tools` | Optional Prompt tools, linked from Setup | Setup active; no primary icon |
 | `#/score` | Session/tier evidence; Backlog tab retains Analytics | `ChartNoAxesCombined` |
 | `#/score?view=arena` | KIT-11 frozen case and Claude/Codex scorecard comparison; native launch blocked (R99 partial) | existing Score icon |
 | `#/library` | Work, documents, inbox, decisions and history | `BookOpen` |
-| `#/sprints` | Plan — existing Sprints | `Flag` |
+| `#/sprints` | Primary Plan - Sprints and Realign | `CalendarDays` |
 
-`#/` and `#/home` redirect to Bridge. Base `#/delivery` redirects to Sessions' Delivery view; run/UAT deep links remain intact. `#/analytics` and `#/dashboard` redirect to Score's Backlog view, preserving filters. Work stays under Library at `#/explore`; Now / Next / Later are the lane labels and Blocked is a filter. See [PM Live](<Page & Feature Atlas/pm-live.md>) and R97.
+`#/` and `#/home` redirect to Bridge. Base `#/delivery` and legacy `#/sessions?view=delivery` open the Sessions workspace; run/UAT deep links remain intact. `#/analytics` and `#/dashboard` redirect to Score's Backlog view, preserving filters. Bare `#/launch` redirects to Work's Now list (or preserves supplied filters); item-selected `#/launch?file=…&cb=…` and `#/deliver/…` retain their execution flow with Plan active. Work also stays reachable from Library; Now / Next / Later are the lane labels and Blocked is a filter. Bridge's Open plan opens Sprints. Search work and More > Work open the backlog. See [PM Live](<Page & Feature Atlas/pm-live.md>), R109 and R111.
+
+R112 preserves `#/setup?tab=map&rule=<id>` as a rule-detail link. Coverage links accept hard-rule and module-rule IDs. Configuration accepts `agent` and `entity` query values, with selection independent of list filtering. Its overview counts active hard rules, while module rules remain accessible in Configuration.
 
 ---
 

@@ -9,12 +9,12 @@
 // guessed. Nothing here marks a scenario ready or records a result.
 import { basename } from "node:path";
 import { CAMPAIGNS } from "../pm/lint.mjs";
-import { slugify } from "../pm/shared/links.mjs";
+import { headingAnchors, slugify } from "../pm/shared/links.mjs";
 
 const CAMPAIGN_BY_PREFIX = Object.freeze(Object.fromEntries(Object.entries(CAMPAIGNS).map(([name, prefix]) => [prefix, name])));
 const WORK = /\b(?:(?:BUD|SCH|KIT|TRIP|HUB|NOTIF|HLTH|OUT|DLV|NAT)-\d+(?:\.\d+)?[a-z]?|R\d{1,3})\b/gu;
 const RUN = /\br-[0-9a-f]{12}\b/gu;
-const PM_LOCAL = /Current-Attempts|Legacy-Attempts|PM-Review/u;
+const PM_LOCAL = /Current-Attempts|Legacy-Attempts|PM-Review|Agentic-OS/u;
 /** Sections that tell the tester how to start, not what to test: they become every handover's setup. */
 const PREFACE = /^(?:before you begin|before starting|start here|prepare once|choose the test)\b/iu;
 
@@ -102,11 +102,12 @@ const ID_TITLE = /^([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)\s+[—–-]\s+(.+)$/
  */
 export function extractSections(markdown) {
   const lines = String(markdown || "").replace(/\r\n/gu, "\n").split("\n");
+  const anchors = new Map(headingAnchors(markdown).map(entry => [entry.line, entry.anchor]));
   const blocks = [];
   let section = null;
   let current = null;
   let fenced = false;
-  for (const line of lines) {
+  for (const [lineNumber, line] of lines.entries()) {
     if (/^\s*```/u.test(line)) {
       fenced = !fenced;
       continue;
@@ -122,7 +123,7 @@ export function extractSections(markdown) {
         rawTitle: stripMd(title),
         id: split ? split[1] : null,
         title: split ? split[2] : stripMd(title),
-        anchor: heading ? slugify(stripMd(heading[2])) : null,
+        anchor: heading ? anchors.get(lineNumber) || slugify(stripMd(heading[2])) : null,
         steps: [],
         text: [],
       };
@@ -241,7 +242,7 @@ export function handoversFromDoc(markdown, { file }) {
         limits: pick(sectionPairs, /^limits?\b/u).join("\n"),
         scenarios,
       },
-      environment: { target: PM_LOCAL.test(name) ? "local" : "hosted" },
+      environment: { target: pick(sectionPairs, /^environment$/u).find(value => value === "local" || value === "hosted") || (PM_LOCAL.test(name) ? "local" : "hosted") },
       source: { kind: "docs", ref: `docs/${name}#${section.anchor}` },
     });
   }

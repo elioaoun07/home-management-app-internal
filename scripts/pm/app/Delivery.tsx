@@ -18,7 +18,8 @@ import { LaunchV2 } from "./DeliveryV2";
 import { LocalLaunch, offersLocalLane } from "./LocalDelivery";
 import { DeliveryHome } from "./DeliveryHome";
 import type { Capabilities, Preflight, Recommendation, Work } from "./types";
-import { Launchpad } from "./Launchpad";
+import { Explore } from "./Explore";
+import { useGameLayer } from "./GameLayer";
 
 export function Delivery() {
   return (
@@ -56,7 +57,7 @@ export function Launch() {
   ) : work ? (
     <LaunchWork key={work.key + work.rawLine} work={work} />
   ) : (
-    <Launchpad />
+    <Explore />
   );
 }
 const paces = [
@@ -67,10 +68,15 @@ const paces = [
 ];
 function LaunchWork({ work }: { work: Work }) {
   const route = useRoute();
-  return offersLocalLane() && route.query.get("lane") !== "confined" ? <LocalLaunch work={work} /> : <ConfinedLaunchWork work={work} />;
+  return offersLocalLane() && route.query.get("lane") !== "confined" ? (
+    <LocalLaunch work={work} />
+  ) : (
+    <ConfinedLaunchWork work={work} />
+  );
 }
 function ConfinedLaunchWork({ work }: { work: Work }) {
   const { connected, runs } = useWorld();
+  const game = useGameLayer();
   const route = useRoute();
   const [provider, setProvider] = useState("claude"),
     [model, setModel] = useState(""),
@@ -190,24 +196,32 @@ function ConfinedLaunchWork({ work }: { work: Work }) {
       options: { capabilitiesDrop: dropped },
     });
   return (
-    <div className={`focus-page launch-page${mode.data?.mode === "v2" ? " launch-page-v2" : ""}`}>
+    <div
+      className={`focus-page launch-page${mode.data?.mode === "v2" ? " launch-page-v2" : ""}${mode.data?.mode === "v2" && game.enabled ? " delivery-game-page" : ""}`}
+    >
       <Back fallback="/delivery" />
-      {mode.data?.mode !== "v2" && <div className="launch-progress">
-        <span className={!review ? "current" : "complete"}>
-          1 <b>Shape it</b>
-        </span>
-        <i />
-        <span className={review ? "current" : ""}>
-          2 <b>Ready to go</b>
-        </span>
-      </div>}
-      <header className="launch-heading">
-        {mode.data?.mode !== "v2" && <SpaceIcon name={work.module} size={25} />}
-        <span className="eyebrow">
-          {work.module} · {work.id}
-        </span>
-        <h1>{work.title}</h1>
-      </header>
+      {mode.data?.mode !== "v2" && (
+        <div className="launch-progress">
+          <span className={!review ? "current" : "complete"}>
+            1 <b>Shape it</b>
+          </span>
+          <i />
+          <span className={review ? "current" : ""}>
+            2 <b>Ready to go</b>
+          </span>
+        </div>
+      )}
+      {!(mode.data?.mode === "v2" && game.enabled) && (
+        <header className="launch-heading">
+          {mode.data?.mode !== "v2" && (
+            <SpaceIcon name={work.module} size={25} />
+          )}
+          <span className="eyebrow">
+            {work.module} · {work.id}
+          </span>
+          <h1>{work.title}</h1>
+        </header>
+      )}
       <ErrorNotice
         error={mode.error || caps.error || recommendation.error}
         retry={() => {
@@ -304,7 +318,11 @@ function ConfinedLaunchWork({ work }: { work: Work }) {
                   Suggested{rec ? " · " + rec.model : ""}
                 </option>
                 {caps.data?.providers[provider]?.models?.map((value) => (
-                  <option value={value.id} key={value.id} disabled={value.disabled}>
+                  <option
+                    value={value.id}
+                    key={value.id}
+                    disabled={value.disabled}
+                  >
                     {value.label || value.id}
                   </option>
                 ))}

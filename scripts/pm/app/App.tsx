@@ -23,8 +23,9 @@ import {
   deliveryNavState,
   MoreNavigation,
   PrimaryNavigation,
+  primarySection,
 } from "./PrimaryNavigation";
-import { CaptureButton, Empty } from "./components";
+import { Empty } from "./components";
 import { Bridge } from "./Bridge";
 import { Setup } from "./Setup";
 import { Sessions } from "./Sessions";
@@ -36,6 +37,8 @@ import { Explore, SpaceView } from "./Explore";
 import { WorkView } from "./Work";
 import { Activity, Attention, Capture, Reader } from "./Auxiliary";
 import { Launch } from "./Delivery";
+import { Launchpad } from "./Launchpad";
+import { ItemUatWizard } from "./ItemUatWizard";
 import { Run } from "./Run";
 import { UatPage } from "./UatWizard";
 import { Sprints } from "./Sprints";
@@ -79,23 +82,7 @@ export function App() {
   const reduced = useReducedMotion();
   const main = useRef<HTMLElement>(null);
   const root = route.parts[0] || "";
-  const section = ["deliver", "launch"].includes(root)
-    ? "/launch"
-    : ["delivery", "sessions"].includes(root)
-      ? "/sessions"
-      : root === "setup"
-        ? "/setup"
-        : ["score", "analytics", "dashboard"].includes(root)
-          ? "/score"
-          : root === "sprints"
-            ? "/sprints"
-            : ["explore", "space", "work", "module", "project"].includes(root)
-              ? "/explore"
-              : ["analytics", "dashboard"].includes(root)
-                ? "/analytics"
-                : ["", "home", "bridge"].includes(root)
-                  ? "/bridge"
-                  : "";
+  const section = primarySection(route.parts);
   useEffect(() => {
     const alias = cockpitAlias(root, route.query, route.parts.length > 1);
     if (alias) location.replace("#" + alias);
@@ -147,8 +134,20 @@ export function App() {
     case "setup":
       view = <Setup />;
       break;
+    case "skill-tools":
+      view = <Launchpad />;
+      break;
     case "sessions":
       view = <Sessions />;
+      break;
+    case "uat-item":
+      view = (
+        <ItemUatWizard
+          key={route.path}
+          campaign={route.parts[1]}
+          id={route.parts[2]}
+        />
+      );
       break;
     case "library":
       view = <Library />;

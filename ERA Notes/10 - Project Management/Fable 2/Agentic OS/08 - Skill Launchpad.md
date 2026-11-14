@@ -1,6 +1,6 @@
 ---
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-14
 type: study
 status: active
 owner: Elio
@@ -8,6 +8,8 @@ evidence_cutoff: "commit e5f537a, 2026-11-10. Proposed design. The input lists a
 ---
 
 # Agentic OS — skill launchpad
+
+**Product correction — 2026-11-14 (R108):** the owner rejected the generic launcher as adding no useful step beyond native chat. Primary navigation now opens existing Work → Now; task acceptance and Deliver remain the structured route. The form/dry-run/copy implementation is retained only as optional Setup → Prompt tools. Native free-prompt launch expansion under R98 is held. The original proposal below is historical design rationale, not an instruction to restore a primary skill launcher.
 
 **2026-11-14 implementation (A6/R98, copy-launch slice):** the eight sidecars,
 strict validation/defaults/conditions, A1 registry + PM pickers, real new-module
@@ -22,8 +24,8 @@ the proposal, not a literal supported schema example.
 **Native boundary:** DLV-150 exists, but its Local start contract requires a
 tracked item ID/file and constructs a prompt from that item's brief. It cannot
 accept this skill prompt, values, attachments and setup fingerprint. Native
-worktree launch and genuine flight-report binding remain pending; copy never
-creates an executed-session receipt. R98 stays open at that boundary. No A7 work.
+worktree launch and genuine flight-report binding are unimplemented; copy never
+creates an executed-session receipt. R98 is held by the product correction above. No A7 work.
 
 [Agentic OS index](<_index.md>) · [Deterministic evaluation](<07 - Deterministic Evaluation.md>) · next: [PM.2 product design](<09 - PM.2 Product Design.md>) · item: [R98](<../../PM Tooling/PM Tooling — Master Book.md#r98>)
 

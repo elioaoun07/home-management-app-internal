@@ -147,18 +147,35 @@ export function conflicts(setup, root = ROOT) {
   const absolute =
     /[A-Za-z]:[\\/]|\/(?:Users|home)\/[^\s/]+|~[\\/]|\\\\[^\s\\]+\\/;
   for (const { source, config } of configs) {
+    const localPermissions = [];
     for (const [action, patterns] of Object.entries(config.permissions ?? {})) {
       for (const [index, pattern] of patterns.entries())
         if (
           absolute.test(pattern) ||
           (action === "allow" && /^(?:PowerShell|cmd)\(/i.test(pattern))
-        )
+        ) {
+          if (source.includes(".local.")) {
+            localPermissions.push(`${action}[${index}]`);
+            continue;
+          }
           add(
             "PORTABLE",
             `${source}:permissions.${action}[${index}]`,
             "Machine-specific path or Windows-only shell permission",
           );
+        }
     }
+    if (localPermissions.length)
+      add(
+        "PORTABLE",
+        source,
+        `${localPermissions.length} workstation-specific permission entries`,
+        {
+          severity: "info",
+          resolution:
+            "Workstation permissions are scoped to the local configuration file.",
+        },
+      );
     const inspect = (value, location) => {
       if (
         typeof value === "string" &&
@@ -195,7 +212,16 @@ export function conflicts(setup, root = ROOT) {
       );
   }
   for (const file of setup.inventory.hookFiles)
-    if (!setup.inventory.referencedScripts.includes(file))
+    if (
+      !setup.inventory.referencedScripts.includes(file) &&
+      !(
+        file.startsWith(".codex/hooks/") &&
+        setup.inventory.referencedScripts.includes(
+          file.replace(".codex/hooks/", ".claude/hooks/"),
+        ) &&
+        read(file) === read(file.replace(".codex/hooks/", ".claude/hooks/"))
+      )
+    )
       add(
         "DEAD",
         file,
@@ -285,7 +311,13 @@ export function conflicts(setup, root = ROOT) {
         "SOFT-CLAIM",
         rule.source,
         `${rule.id} has only advisory or unverified mechanisms`,
-        { rule: rule.id },
+        {
+          rule: rule.id,
+          severity: ["blocked", "checked"].includes(rule.level)
+            ? "warning"
+            : "info",
+          resolution: "Review the rule alongside its advisory findings.",
+        },
       );
     if (
       guards.some(
@@ -299,8 +331,13 @@ export function conflicts(setup, root = ROOT) {
       add(
         "SOFT-CLAIM",
         rule.source,
-        `${rule.id} stop guard is conditional and only blocks once`,
-        { rule: rule.id },
+        `${rule.id} stop reminder blocks once per turn`,
+        {
+          rule: rule.id,
+          severity: "info",
+          resolution:
+            "Review completion evidence and the recorded PM trace check before shipping.",
+        },
       );
   }
   const claude = read("CLAUDE.md") ?? "",
@@ -442,15 +479,39 @@ export function conflicts(setup, root = ROOT) {
         );
     }
   }
-  for (const source of setup.inventory.launches)
+  for (const source of setup.inventory.launches) {
+    const policy = setup.inventory.launchPolicies?.find(
+      (entry) => entry.source === source,
+    );
+    const scoped = policy?.isolated && policy.localProjectSetup !== false;
     add(
       "UNLOADED",
       source,
-      "Launch explicitly empties skills or settingSources",
+      scoped
+        ? "Confined worker excludes automatic project discovery"
+        : "Launch excludes project skills or settings",
+      {
+        severity: scoped ? "info" : "warning",
+        resolution: scoped
+          ? policy.localProjectSetup === true
+            ? "Local sessions load project settings and all skills."
+            : "The confined profile declares its own tool guard and sandbox."
+          : "Restore project loading or declare and verify the confined launch boundary.",
+      },
     );
+  }
   for (const { path } of setup.inventory.tracked)
     if (/\.local\./.test(path))
-      add("TRACKED-LOCAL", path, "Personal configuration is tracked by Git");
+      add("TRACKED-LOCAL", path, "Personal configuration is tracked by Git", {
+        severity:
+          path === ".claude/settings.local.json" &&
+          /\.claude\/settings\.local\.json` remains committed by\s+owner choice \(2026-11-10\)/.test(
+            read("docs/Skills-and-Agents.md") ?? "",
+          )
+            ? "info"
+            : "warning",
+        resolution: "Review the repository's configuration-sharing decision.",
+      });
   // No product scanning here: A2 owns detector execution and main-branch counts.
   const baselines = byKind("detector").filter((entity) =>
     Number.isFinite(entity.baseline),

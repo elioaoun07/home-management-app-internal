@@ -162,6 +162,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### DLV-150
 
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#dlv-150--native-session-and-host-checks>)
+
 **Outcome:** One item can be built by a native agent session in its own worktree and checked on the host, with no container, policy file or qualification record.
 
 **Kind:** feature
@@ -178,6 +180,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Reading guide:** [Diagnosis](<../Fable 2/10 - Project Management/Delivery/1 - Diagnosis.md>), [gate disposition](<../Fable 2/10 - Project Management/Delivery/3 - Gate Disposition.md>). Reuse the session record, activity stream and adapters; do not build a second status engine.
 
 ### DLV-151
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#dlv-151--fresh-local-entry>)
 
 **Outcome:** From a fresh browser on `127.0.0.1`, one click on an item reaches a running local session.
 
@@ -197,6 +201,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### DLV-152
 
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#dlv-152--risk-review-belongs-to-the-checked-head>)
+
 **Outcome:** A local delivery cannot hold production keys, use a paid API key, or ship a risk-domain change without the owner's review.
 
 **Kind:** feature
@@ -214,6 +220,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Reading guide:** Risk-domain list in the design doc. State the residual risk in the UI: without a container the scrub prevents accidents, not a determined process.
 
 ### DLV-153
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#dlv-153--ship-and-undo-the-approved-test-item>)
 
 **Outcome:** The owner ships a local delivery with one action after UAT, and can undo it with one action.
 
@@ -304,6 +312,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Not started:** until this ships, handovers enter through `pnpm pm:uat` (drafted documents) or the authenticated import route, never from a running worker.
 
 ### DLV-145
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#dlv-145--bound-results-and-sign-off>)
 
 **Outcome:** Each delivery has one canonical, candidate-bound UAT handover; the owner's Pass / Fail / Blocked results, feedback and sign-off are append-only receipts; **Shipped** exists only after an explicit valid sign-off.
 **Kind:** feature
@@ -1233,7 +1243,7 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 
 ### DLV-77
 
-**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m13--keep-owner-prerequisites-and-deferred-witnesses-explicit>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#dlv-77--relay-prerequisite-evidence>)
 
 **Execution:** owner
 **UAT:** pending — folded into the 2026-09-26 phone pass
@@ -1430,7 +1440,7 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 
 ### DLV-100
 
-**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m13--keep-owner-prerequisites-and-deferred-witnesses-explicit>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#dlv-100--real-boundary-recovery-witness>)
 
 **Execution:** owner
 **UAT:** pending — parked to Later as an enhancement (owner 2026-09-26)
@@ -1446,7 +1456,7 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 
 ### DLV-101
 
-**UAT instructions:** [Step-by-step owner wizard](<../../../docs/Delivery-UAT-PM-Review-2026-10-25.md#pm-m13--keep-owner-prerequisites-and-deferred-witnesses-explicit>) (2026-10-25 draft; actual result Pending; earlier evidence retained).
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#dlv-101--deep-dive-resume-witness>)
 
 **Execution:** owner
 **UAT:** pending — parked to Later as an enhancement (owner 2026-09-26)

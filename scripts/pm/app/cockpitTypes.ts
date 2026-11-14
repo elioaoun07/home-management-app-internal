@@ -37,6 +37,18 @@ export interface Entity {
   alias?: string;
   efforts?: string;
   disabled?: boolean;
+  blocking?: boolean;
+  conditional?: boolean;
+  enforces?: string[] | string;
+  fixtures?: string[];
+  rule?: string;
+  type?: string;
+  review?: {
+    required: boolean;
+    reason: string;
+    verify: string;
+    source: string;
+  };
 }
 export interface Setup {
   schema: string;
@@ -57,6 +69,7 @@ export interface Cockpit {
     source: string;
     related?: string;
     message: string;
+    resolution?: string;
   }[];
   records: Flight[];
   deliveries: ReturnType<typeof deliveryScorecard>[];

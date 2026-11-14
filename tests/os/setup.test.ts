@@ -82,7 +82,7 @@ describe("A0 generated setup", () => {
       expect(windows.stderr).toContain("Blocked: src/components/ui/");
     }
     expect(toolPaths({ tool_name: "apply_patch", tool_input: { command: "*** Delete File: src/other/../components/ui/x.ts" } })).toEqual(["src/components/ui/x.ts"]);
-  });
+  }, 15_000); // Eight native shell launches exceed Vitest's 5 s default on Windows.
 
   it("Git invokes the executable pre-commit, and failed checks reject an isolated commit", () => {
     const dir = join(scratch, "commit");

@@ -521,6 +521,62 @@ owner: Elio
 
 - ✅ 2026-11-14 — **R106** Restore ERA core identity and soften Game motion — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r106>) (Restored orbital ERA identity and softened heat, sparks, smoke and vibration. Typecheck, PM build, scoped lint/format and 11 core tests pass. Isolated 1440/390 Blue/Pink browser geometry, throttle/coast, running and reduced-motion checks pass with zero overflow/errors/writes/provider calls. Owner appearance/device UAT pending; local only.)
 
+### R107
+
+- ✅ 2026-11-14 — **R107** Compose skill prompts freely with optional module context — [criteria](#r107) (Slash-skill Launch composer with optional Module/work context and Guided forms. 50 replay tests, typecheck, PM build, scoped ESLint, docs checks and source-bound desktop/390px Blue/Pink browser flows pass. Full lint retains 9285 errors; native execution and owner UAT remain separate.)
+
+**Outcome:** Use any registered skill with a free prompt and optional module context; keep guided forms available.
+**Kind:** feature
+**Implementation:** done
+**UAT:** rejected — owner found no incremental product value, 2026-11-14; primary workflow superseded by R108.
+**Touches:** `scripts/pm/app/Launchpad.tsx`, `scripts/pm/app/launchpad.css`, `scripts/os/forms.mjs`, `scripts/os/launchpad.mjs`, `tests/os/launchpad.test.ts`, `tests/pm-ui/`, `docs/Skills-and-Agents.md`, `ERA Notes/`
+- **Acceptance:** Default slash-skill composer supports all canonical registered skills, preserves prompt text when choosing a skill, and prepares add-feature without a PM task. Module remains visible and optional. Work item is clearly labelled optional context except era-wire's required ERA report. Eight existing guided forms retain strict validation and new-module dry run. Presets are scoped to the chosen skill. Preview/copy retires on edits; module/item/tier/path checks, required guardrails and PowerShell quoting remain. Verify desktop and 390 px Blue/Pink, keyboard selection, failures and clipboard; no native execution or provider calls.
+- **Source:** Owner Launch review, 2026-11-14.
+- **Boundary:** R98 still owns native launch and genuine report binding. This outcome prepares and copies prompts only.
+- **Implementation (2026-11-14):** Free slash composition exposes all 18 current canonical skills; Guided retains eight sidecars. Work item is optional context except era-wire's validated report. Presets are skill-scoped and their overrides reset on skill changes. The original request, module/work context and explicit paths survive Prompt/Guided transitions, including forms without declared context fields. Automatic knowledge skills, current registry/PM checks, PowerShell quoting, guarded dry-run and stale-preview retirement remain.
+- **Owner test / candidate:** Restart local `pnpm pm` once to load the updated server request schema, then open Launch. Candidate hashes and browser receipts: [R107 evidence](<../../../../.pm/launch-composer-evidence/candidate.json>). No production data, credentials or native session are needed.
+  - Type `/add-feature Let me filter recipes by preparation time`, choose Module → Recipes, then Review prompt → Copy prompt. Expected: original words and module are present; no work item is required. Edit the request: old Copy controls disappear.
+  - In Context & settings, choose a current Work item and an existing Target path. Switch to Guided, fill required fields and review. Expected: original Request, Module, work link and path survive. Switch to a skill without a form, such as `/pwa-install`: free composition is available.
+  - Choose `/fix-bug`, apply Money bug under Preset, then choose `/wizard`. Expected: wizard uses its default tier and no inherited Money-bug attachments. Check the same flow at phone width in Blue and Pink; actions remain reachable. These manual acceptance results are unrecorded.
+- **Limits:** Copy does not execute an agent. Native selector entitlement, physical-phone deployment and owner visual acceptance remain unverified; R98 stays open. Full-repository lint still fails with 9,285 errors / 51,985 warnings; changed-file lint is clean. Full output: `.pm/launch-composer-evidence/lint-full.txt`.
+- **Verification (2026-11-14):** 50 focused replay tests pass (Launch, registry and cockpit); typecheck, PM React build, changed-file ESLint, format/whitespace and docs/PM checks pass. Final isolated Chrome suite matches all four runtime source hashes and covers free/no-item composition, skills without forms, keyboard slash completion, shared Request/Module/Work item/Target paths through Guided, presets and reset, stale results, real clipboard, required ERA report, failed preparation/retry, new-module dry-run/junction, and 390 px Blue/Pink. Earlier cockpit regression passes at 390/768/1024/1440 px. Root inspected desktop and phone screenshots. Fixtures were stopped. [Browser receipt](<../../../../.pm/launch-composer-evidence/browser-result.json>).
+
+### R108
+
+- ✅ 2026-11-14 — **R108** Replace the redundant skill-launch destination with actual Work — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r108>) (Replaced primary skill launch with existing Work/Now and retained optional Setup prompt tools; 57 focused tests, typecheck, PM build, scoped lint, docs checks and isolated desktop/390px Blue/Pink navigation flows pass. Fixed reproduced Local readiness text overlap. 13 runtime hashes match fixture; no agent execution or deployment; owner acceptance pending.)
+
+### R109
+
+- ✅ 2026-11-14 — **R109** Open Plan directly and realign unfinished sprints without reshuffling — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r109>) (Plan opens Sprints; Realign preview/Apply/Undo and preview-first CLI shift active/draft ranges together with backups and preserved scope/history. 99 tests, typecheck, build, scoped lint, docs checks and isolated desktop/390px Blue/Pink realignment plus Work navigation pass. Actual plan not shifted; owner UAT pending.)
+
+### R110
+
+- ✅ 2026-11-14 — **R110** Make Sessions and Delivery status and item details readable — [criteria](#r110) (Agent history naming, canonical delivery status dashboard and visible item planning/acceptance/reference panels. Verified 76 focused offline tests, typecheck, PM build, changed-file lint, documentation checks and credential-free desktop1440/mobile390 Blue/Pink browser flows; zero writes/external requests. Owner visual/device acceptance pending.)
+
+**Outcome:** Sessions clearly distinguishes agent history from delivery work; delivery status counts and item details are readable without opening a stack of disclosures.
+**Implementation:** done
+**UAT:** rejected — superseded by R111
+
+**Owner review (2026-11-14):** rejects the backlog widgets, long lists, Item overview / Runs & reviews split and Markdown UAT redirects. R111 replaces the information architecture; R110's passing fixtures did not establish product acceptance.
+**Kind:** feature
+**Touches:** `scripts/pm/app/Sessions.tsx`, `scripts/pm/app/DeliveryHome.tsx`, `scripts/pm/app/DeliveryOverview.tsx`, `scripts/pm/app/deliveryOverviewModel.ts`, `scripts/pm/app/delivery-overview.css`, `scripts/pm/app/Work.tsx`, `scripts/pm/app/work-detail.css`, `tests/pm-ui/`
+
+- **Acceptance:** Recorded is named Agent history with a short explanation. Delivery shows filterable counts for Not started, In progress, UAT, Waiting and Completed previously, retaining unknown/stale evidence and canonical item identity. Attempts, cancellations and reopened work cannot inflate completed items.
+- **Acceptance:** Item details retain Deliver and Open in CLI, show organization as a visible path, acceptance as readable criteria, and references as visible cards. Existing mutation, Undo and launch boundaries remain.
+- **Acceptance:** Desktop and 390 px Blue/Pink browser checks cover filters, drilldowns and visible detail sections; focused model tests, typecheck, build, changed-file lint and PM checks pass. No live provider or production database action.
+
+### R111
+
+- ✅ 2026-11-14 — **R111** Show actionable session states and per-item UAT without backlog clutter — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r111>) (Replaced nested Sessions dashboards with one state workspace, campaign collections and six-card pages; authored per-item Action/Expect wizard with durable source-bound starts and active-revision safeguards. Verified 149 focused replay tests, typecheck, PM build, scoped lint, desktop/390 px Blue/Pink with 71 queued tests, and disposable-fixture Start/result/reload plus revised instructions creating a fresh Pending attempt. Owner visual and physical-device acceptance remains pending; no production writes or provider runs.)
+
+### R112
+
+- ✅ 2026-11-14 — **R112** Repair Agentic OS setup diagnostics and clarify rule coverage — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r112>) (Repaired setup configuration and diagnostics. Fresh scan has zero errors and warnings with 12 informational notes. 193 OS tests and 74 PM tests pass, along with typecheck, scoped lint, mirror parity and PM build. Final desktop and 390px Blue/Pink browser checks pass, and running local server assets match. Owner UAT pending.)
+
+### R113
+
+- ✅ 2026-11-14 — **R113** Simplify Deliver launch and add a distinct Game view — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r113>) (139 backend replay and 31 frontend tests; typecheck, PM build, scoped lint and docs pass; desktop/mobile calm/game browser flows pass. Owner UAT and bridge restart pending; no live session launched.)
+
 ## State log
 
 _Moved from the Master Book on 2026-11-11._

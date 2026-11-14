@@ -7,10 +7,10 @@ import { AUTHORIZATION_REL, renewAuthorization, renewedGrant } from "../../scrip
 import { buildGrant, loadExecutionPolicy } from "../../scripts/delivery-v2/policy.mjs";
 import { createDeliveryV2Context } from "../../scripts/delivery-v2/service.mjs";
 import { openStore } from "../../scripts/delivery-v2/store.mjs";
-import { routeDeliveryV2 } from "../../scripts/delivery-v2/entry.mjs";
+import { routeDeliveryV2, setDispatchMode } from "../../scripts/delivery-v2/entry.mjs";
 import { inspectReadiness } from "../../scripts/delivery-v2/inspect-readiness.mjs";
 import { CSRF_HEADER, REMOTE_ACTOR_HEADER, SESSION_COOKIE, issuePairingCode, pairSession, sessionView } from "../../scripts/delivery-v2/local-auth.mjs";
-import { seedRoot, writePolicy, SELECT, makeHarness, journeyFor, plannedRun } from "./fixtures/v2-harness";
+import { seedRoot, writePolicy, SELECT, makeHarness, journeyFor, plannedRun, bookPathIn } from "./fixtures/v2-harness";
 
 const roots: string[] = [];
 const contexts: ReturnType<typeof createDeliveryV2Context>[] = [];
@@ -39,7 +39,7 @@ function headers(root: string, remote = false) {
   return { cookie, [CSRF_HEADER]: sessionView({ root, headers: { cookie } }).csrf };
 }
 
-describe("owner authorization through Check readiness", () => {
+describe("owner authorization through Start and Check readiness", () => {
   it("renews expired authority, preserves settings and survives restart without growing time on reads", () => {
     const f = fixture(), original = readFileSync(f.file, "utf8"), before = policy(f.root);
     const receipt = renew(f.root);
@@ -160,6 +160,104 @@ describe("owner authorization through Check readiness", () => {
     await ctx.refreshReadiness(selection);
     expect(existsSync(f.journal)).toBe(false);
     expect(policy(f.root).grant.expires_at).toBe(oldExpiry);
+  });
+
+  it.each([
+    { remote: false, initiatedBy: undefined },
+    { remote: false, initiatedBy: "era-steward" },
+    { remote: true, initiatedBy: undefined },
+  ])("renews once inside an owner Start before collecting exact selection ($remote, $initiatedBy)", async ({ remote, initiatedBy }) => {
+    const f = fixture(), service = createDeliveryV2Context({ ROOT: f.root });
+    contexts.push(service);
+    setDispatchMode({ root: f.root, mode: "v2", actor: "owner" });
+    const original = readFileSync(f.file, "utf8");
+    const paired = headers(f.root, remote);
+    const body = { ...SELECT, executor: "claude", model: "claude-test", effort: "low", workProfile: "focused",
+      command_id: randomUUID(), renewAuthorization: true, ...(initiatedBy ? { initiatedBy } : {}) };
+    const renew = vi.fn(service.renewAuthorization);
+    const refresh = vi.fn(async () => {
+      expect(Date.parse(policy(f.root).grant.expires_at || "")).toBeGreaterThan(Date.parse(oldExpiry));
+      return { ready: true };
+    });
+    const deliver = vi.fn(async () => ({ ok: true, run_id: "r-owner-start" }));
+    const ctx = { root: f.root, store: service.store, renewAuthorization: renew,
+      readiness: async () => ({ ready: false }), refreshReadiness: refresh, journey: { deliver } };
+    const send = (h: Record<string, unknown> = paired, b = body) => routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers: h, body: b }, ctx);
+    expect((await send({}))!.status).toBe(401);
+    expect(existsSync(f.journal)).toBe(false);
+    const started = await send();
+    expect(started!.json).toEqual({ ok: true, run_id: "r-owner-start" });
+    expect(refresh).toHaveBeenCalledExactlyOnceWith({ file: SELECT.file, id: SELECT.expectId,
+      executor: "claude", model: "claude-test", effort: "low", workProfile: "focused" });
+    expect(deliver).toHaveBeenCalledTimes(1);
+    const receipt = JSON.parse(readFileSync(f.journal, "utf8")).receipts[0];
+    expect(receipt.command_id).toBe(body.command_id);
+    expect(receipt.actor).toBe(remote ? "remote:supabase:owner-phone" : sessionView({ root: f.root, headers: paired }).actor);
+    const journal = readFileSync(f.journal, "utf8");
+    expect(await send()).toEqual(started);
+    expect(readFileSync(f.journal, "utf8")).toBe(journal);
+    expect(readFileSync(f.file, "utf8")).toBe(original);
+    expect(renew).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(deliver).toHaveBeenCalledTimes(1);
+  });
+
+  it("prepares missing Touches inside Start and retains the refusal without dispatch or repeat work", async () => {
+    const f = fixture(), ctx = createDeliveryV2Context({ ROOT: f.root });
+    contexts.push(ctx);
+    setDispatchMode({ root: f.root, mode: "v2", actor: "owner" });
+    const book = bookPathIn(f.root);
+    writeFileSync(book, readFileSync(book, "utf8").replace("- **Acceptance:**", "**Outcome:** Change `src/amount.ts`.\n\n- **Acceptance:**"));
+    const refresh = vi.spyOn(ctx, "refreshReadiness");
+    const body = { ...SELECT, executor: "claude", model: "claude-test", effort: "low", workProfile: "focused",
+      command_id: randomUUID(), renewAuthorization: true };
+    const paired = headers(f.root);
+    const send = () => routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers: paired, body }, ctx);
+    const result = await send();
+    expect(result!.status).toBe(409);
+    expect(result!.json.error).toBe("delivery-not-ready");
+    expect(readFileSync(book, "utf8")).toContain("**Touches:** `src/amount.ts`");
+    expect(existsSync(f.journal)).toBe(true);
+    expect(ctx.store.listRuns()).toEqual([]);
+    const prepared = readFileSync(book, "utf8"), journal = readFileSync(f.journal, "utf8");
+    expect(await send()).toEqual(result);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(readFileSync(book, "utf8")).toBe(prepared);
+    expect(readFileSync(f.journal, "utf8")).toBe(journal);
+  });
+
+  it("refuses failed owner renewal before observations or admission and retains the result", async () => {
+    const f = fixture(), service = createDeliveryV2Context({ ROOT: f.root });
+    contexts.push(service);
+    setDispatchMode({ root: f.root, mode: "v2", actor: "owner" });
+    const renew = vi.fn(() => ({ ok: false, refusals: [{ code: "authorization-unreadable" }] }));
+    const readiness = vi.fn(async () => ({ ready: true })), deliver = vi.fn();
+    const ctx = { root: f.root, store: service.store, renewAuthorization: renew, readiness, journey: { deliver } };
+    const body = { ...SELECT, executor: "claude", command_id: randomUUID(), renewAuthorization: true };
+    const paired = headers(f.root);
+    const send = () => routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers: paired, body }, ctx);
+    const refused = await send();
+    expect(refused!.status).toBe(409);
+    expect(refused!.json.error).toBe("authorization-renewal-failed");
+    expect(await send()).toEqual(refused);
+    expect(renew).toHaveBeenCalledTimes(1);
+    expect(readiness).not.toHaveBeenCalled();
+    expect(deliver).not.toHaveBeenCalled();
+  });
+
+  it("keeps restricted Steward starts unable to renew, even with owner attribution", async () => {
+    const f = fixture(), ctx = createDeliveryV2Context({ ROOT: f.root });
+    contexts.push(ctx);
+    setDispatchMode({ root: f.root, mode: "v2", actor: "owner" });
+    const { code } = issuePairingCode({ root: f.root });
+    const paired = pairSession({ root: f.root, code, kind: "steward" });
+    const cookie = SESSION_COOKIE + "=" + paired.token;
+    const h = { cookie, [CSRF_HEADER]: sessionView({ root: f.root, headers: { cookie } }).csrf };
+    const body = { ...SELECT, executor: "claude", command_id: randomUUID(), renewAuthorization: true, actor: "owner" };
+    const result = await routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/deliver", headers: h, body }, ctx);
+    expect(result!.status).toBe(403);
+    expect(existsSync(f.journal)).toBe(false);
+    expect(ctx.hasStore()).toBe(false);
   });
 
   it("does not invalidate another item's observation context when only renewal time changes", async () => {

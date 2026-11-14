@@ -42,7 +42,7 @@ owner: Elio
 
 **Agentic OS (PM.2)**
 
-- [ ] **R98** Launch skills from forms with validated inputs — [criteria](<PM Tooling — Master Book.md#r98>) _(friction - M)_
+- [ ] **R98** Launch skills from forms with validated inputs — HELD — primary workflow rejected under R108 — [criteria](<PM Tooling — Master Book.md#r98>) _(parked - M)_
 - [ ] **R99** Compare tiers on identical work and add the game layer — [criteria](<PM Tooling — Master Book.md#r99>) _(parked - L)_
 
 **Command Center polish**

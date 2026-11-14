@@ -155,6 +155,14 @@ export function writePlanningCommand({ root, pmDir, data, command, now = new Dat
     const hash = digest(JSON.stringify(canonical(parsed.data)));
     const next = applyPlanningCommand(current, parsed.data, { facts: buildPlanningFacts(data), now, hash });
     if (next.revision === current.revision) return { ok: true, planning: next, appliedRevision: current.commands.find((entry) => entry.id === parsed.data.command_id).revision, replayed: true };
+    if (parsed.data.action === "realign") {
+      const backup = join(root, ".pm", "planning-backups", `${current.revision}-${parsed.data.command_id}.json`);
+      mkdirSync(dirname(backup), { recursive: true });
+      const original = readFileSync(join(pmDir, PLANNING_FILE));
+      if (existsSync(backup)) {
+        if (!readFileSync(backup).equals(original)) throw new PlanningError(409, "Realignment backup differs; refresh before retrying");
+      } else writeFileSync(backup, original, { flag: "wx" });
+    }
     writeFileSync(temp, JSON.stringify(next, null, 2) + "\n", { encoding: "utf8", flag: "wx" });
     renameSync(temp, join(pmDir, PLANNING_FILE));
     let journalRecorded = true;

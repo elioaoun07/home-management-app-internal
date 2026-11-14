@@ -44,6 +44,7 @@
     "pm:ship": "node scripts/pm/ship.mjs",
     "pm:index": "node scripts/pm/ship.mjs --index-only",
     "pm:era-issues": "node scripts/pm/era-issues.mjs",
+    "pm:realign": "node --disable-warning=ExperimentalWarning scripts/pm/realign-sprints.mjs",
     "pm:uat-feedback": "node scripts/pm/uat-feedback.mjs",
     "pm:build-app": "node scripts/pm/app-build.mjs",
     "pm:build-ui": "node scripts/pm/build.mjs",

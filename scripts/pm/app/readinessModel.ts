@@ -36,9 +36,9 @@ export function readinessRows(result: V2Readiness | null | undefined): Readiness
 }
 
 const CODE_FIXES: Record<string, string> = {
-  "grant-expired": "Authorization expired — check readiness",
+  "grant-expired": "Authorization expired — retry Start",
   "owner-tests-pending": "Record your test result",
-  "source-scope-unknown": "Check readiness sets Touches",
+  "source-scope-unknown": "Item scope could not be prepared",
   "scope-not-authorized": "Item scope is outside the policy",
   "environment-manifest-mismatch": "package.json or lockfile changed",
   "environment-check-input-mismatch": "Check files changed",

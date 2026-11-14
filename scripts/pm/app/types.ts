@@ -808,6 +808,7 @@ export interface UatBase {
   status: UatStatus;
   subject: { type: "run" | "direct"; run_id: string | null; delivery_ref: string; work_id: string | null; campaign: string | null; title: string | null };
   binding: { kind: "candidate" | "source"; candidate_id?: string; source_revision?: string } | null;
+  source?: { kind: string; ref: string };
   environment: { target: "local" | "hosted" | "phone" | "none"; build: string | null; url: string | null; device: string | null };
   created_at: string;
   summary: string;
@@ -832,4 +833,23 @@ export interface UatSummary extends UatBase {
 }
 export interface UatHandover extends UatBase {
   scenarios: UatScenario[];
+}
+export interface ItemUatRead {
+  campaign: string;
+  id: string;
+  title: string;
+  handovers: UatSummary[];
+  preview: {
+    available: boolean;
+    revision: string;
+    sources: string[];
+    environment: { target: "local" | "hosted" };
+    problems: UatBase["problems"];
+    content: {
+      summary: string;
+      setup: string;
+      limits: string;
+      scenarios: Array<Pick<UatScenario, "id" | "title" | "setup" | "starting" | "cleanup" | "limits" | "steps">>;
+    };
+  } | null;
 }

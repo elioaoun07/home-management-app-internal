@@ -9,6 +9,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
+import { itemUatPlan, matchingItemHandovers } from "./uat-item.mjs";
+import { activeItemHandovers } from "./uat-item-selection.mjs";
 import {
   bindDirect,
   bindRun,
@@ -57,6 +59,7 @@ const short = (max) => z.string().max(max);
 const environment = z.object({ target: z.enum(["local", "hosted", "phone", "none"]).optional(), build: short(200).nullish(), url: short(500).nullish(), device: short(200).nullish() });
 
 const BODY = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("start-item"), campaign: short(80), work_id: short(64), revision: z.string().regex(/^[0-9a-f]{64}$/), command_id: command }),
   z.object({ action: z.literal("import"), run_id: short(128).nullish(), delivery_ref: short(300).nullish(), work_id: short(64).nullish(), campaign: short(80).nullish(), title: short(200).nullish(),
     content: z.unknown(), criteria: z.array(short(64)).max(40).optional(), source_revision: short(64).nullish(), ready: z.boolean().optional(), environment: environment.optional() }),
   z.object({ action: z.literal("ready"), handover_id: id, source_revision: short(64).nullish(), environment: environment.optional() }),
@@ -133,6 +136,15 @@ export function routeUat({ method, path, query, body }, auth, ctx) {
   const importStatus = readImportStatus({ root: ctx.root });
 
   if (method === "GET" && path === "/api/delivery/v2/uat") {
+    if (query?.has("work_id")) {
+      const campaign = query.get("campaign") || "", work_id = query.get("work_id") || "";
+      const plan = itemUatPlan({ root: ctx.root, campaign, id: work_id });
+      const all = listUat({ root: ctx.root, contextFor, importStatus, now });
+      const handovers = matchingItemHandovers(all.handovers, campaign, work_id).map(slim);
+      if (!plan.ok && !handovers.length) return json(404, { error: plan.code });
+      return json(200, { campaign, id: work_id, title: plan.title || handovers[0]?.subject.title || work_id, handovers,
+        preview: plan.ok ? { available: plan.available, revision: plan.revision, sources: plan.sources, content: plan.content, problems: plan.problems, environment: plan.environment } : null });
+    }
     const wanted = query?.get("id") || "";
     if (wanted) {
       const view = viewOne({ root: ctx.root, handover_id: wanted, contextFor, importStatus, now });
@@ -152,6 +164,38 @@ export function routeUat({ method, path, query, body }, auth, ctx) {
   const afterWrite = (outcome, handover_id) => (outcome.ok ? { ...outcome, handover: viewOne({ root, handover_id, contextFor, importStatus: readImportStatus({ root }), now }) } : outcome);
 
   switch (input.action) {
+    case "start-item": {
+      if (auth.kind !== "browser") return json(403, { error: "local-owner-only" });
+      const commandRef = `${input.command_id}:${input.revision}`;
+      const prior = readUat({ root }).handovers.find(row => row.source?.kind === "item-uat" && row.source.ref.startsWith(`${input.command_id}:`));
+      const plan = itemUatPlan({ root, campaign: input.campaign, id: input.work_id });
+      if (prior) {
+        if (prior.source.ref !== commandRef || prior.subject.campaign !== input.campaign || prior.subject.work_id !== input.work_id.toUpperCase())
+          return json(409, { error: "command-conflict" });
+        const handover = viewOne({ root, handover_id: prior.handover_id, contextFor, importStatus, now });
+        if (!handover || !activeItemHandovers([handover], plan.revision).length)
+          return json(409, { error: "handover-retired", detail: "Reload test steps" });
+        return json(200, { ok: true, repeated: true, handover });
+      }
+      if (!plan.ok) return json(404, { error: plan.code });
+      if (plan.revision !== input.revision) return json(409, { error: "instructions-changed", detail: "Reload test steps" });
+      if (!plan.available) return json(409, { error: "test-instructions-incomplete", problems: plan.problems });
+      // A late/repeated entry preserves existing observations instead of rebinding them.
+      const existing = activeItemHandovers(matchingItemHandovers(listUat({ root, contextFor, importStatus, now }).handovers, input.campaign, input.work_id), plan.revision)
+        .find(row => row.status === "ready");
+      if (existing) return json(200, { ok: true, repeated: true, handover: existing });
+      let identity;
+      try { identity = (ctx.sourceIdentity || gitIdentity)(root); }
+      catch { return json(409, { error: "source-unavailable", detail: "The tested source could not be identified" }); }
+      // An explicit new attempt has its own identity; an identical freeze must
+      // not resurrect an earlier attempt retired by a newer draft or candidate.
+      const subject = { ...plan.subject, delivery_ref: `${plan.subject.delivery_ref}:${input.command_id}` };
+      const binding = bindDirect({ delivery_ref: subject.delivery_ref, ...identity });
+      if (!binding) return json(409, { error: "source-unavailable" });
+      const outcome = freezeHandover({ root, subject, binding, content: plan.content, criteria: [plan.id], environment: plan.environment,
+        source: { kind: "item-uat", ref: commandRef }, ready: true, now });
+      return replyFor(outcome.ok ? { ...outcome, handover: viewOne({ root, handover_id: outcome.handover.handover_id, contextFor, importStatus, now }) } : outcome);
+    }
     case "import": {
       // Identity comes from the supervisor's own record of the run, never from this body.
       const known = input.run_id ? runContext(ctx, input.run_id) : null;

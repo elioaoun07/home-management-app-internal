@@ -77,7 +77,8 @@ export function Explore() {
     setLimit(18);
     go(explorePath(route.query, patch));
   };
-  const isDone = route.query.get("view") === "done" || filters.status === "review";
+  const isDone =
+    route.query.get("view") === "done" || filters.status === "review";
   const doneCount = checked.length + completed.length;
   const viewPath = (view: Parameters<typeof exploreViewPath>[1]) =>
     `#${exploreViewPath(route.query, view)}`;
@@ -204,7 +205,7 @@ export function Explore() {
     return (
       <div className="explore-page">
         <PageTitle
-          title="Organize your work."
+          title="Work"
           action={
             <a className="secondary" href={viewPath("search")}>
               <Search size={15} />
@@ -221,7 +222,7 @@ export function Explore() {
   return (
     <div className="explore-page">
       <PageTitle
-        title="Find your next move."
+        title="Work"
         action={
           <a className="secondary" href={viewPath("board")}>
             Board

@@ -568,6 +568,12 @@
   font-size: 11px;
   color: var(--ink-muted);
 }
+.local-readiness .launch-check-list li {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+.local-readiness .launch-check-list small {
+  overflow-wrap: anywhere;
+}
 .launch-check-list li[data-state="fix"] svg {
   color: var(--accent);
 }

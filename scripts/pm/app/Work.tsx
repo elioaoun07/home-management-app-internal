@@ -3,7 +3,11 @@ import {
   ArrowRight,
   Check,
   ClipboardCopy,
+  FileText,
+  ListChecks,
   LockKeyhole,
+  Route,
+  Target,
   Undo2,
 } from "lucide-react";
 import { useCommand, useRoute, useWorld, type UndoSnapshot } from "./state";
@@ -32,6 +36,8 @@ import type { Work } from "./types";
 import { useV2Runs, V2RunLink } from "./DeliveryV2";
 import { idSection } from "../shared/work-id.mjs";
 import { executionKind } from "../shared/work-lifecycle.mjs";
+import { acceptanceMarkdown } from "./workAcceptance";
+import "./work-detail.css";
 
 export function UndoNotice({
   snapshots,
@@ -220,7 +226,7 @@ export function WorkView({ campaign, id }: { campaign: string; id: string }) {
   const checklistHref = checklistPath(work, route.full);
   const briefHref = briefPath(work, world, route.full);
   return (
-    <div className="focus-page">
+    <div className="focus-page work-detail">
       <Back fallback={spacePath(campaign)} label="Back to your place" />
       <header className="outcome-heading">
         <a className="outcome-space" href={`#${spacePath(campaign)}`}>
@@ -268,6 +274,79 @@ export function WorkView({ campaign, id }: { campaign: string; id: string }) {
           </span>
         )}
       </div>
+      <section
+        className="work-panel work-organization"
+        aria-labelledby="work-organization-title"
+      >
+        <header className="work-panel-heading">
+          <Route size={19} aria-hidden="true" />
+          <h2 id="work-organization-title">Organize</h2>
+          <span>{work.state === "done" ? "Done" : work.section}</span>
+        </header>
+        <ol className="work-planning-path" aria-label="Planning path">
+          {["Later", "Next", "Now", "Done"].map((stage) => {
+            const selected =
+              work.state === "done" ? stage === "Done" : stage === work.section;
+            return (
+              <li key={stage}>
+                <button
+                  aria-current={selected ? "step" : undefined}
+                  aria-label={
+                    stage === "Done" ? "Complete item" : `Move to ${stage}`
+                  }
+                  disabled={
+                    !transport().capabilities.planWrites ||
+                    !connected ||
+                    command.isPending ||
+                    selected ||
+                    work.state === "done"
+                  }
+                  onClick={() =>
+                    void (
+                      stage === "Done"
+                        ? change("toggle")
+                        : change("move-task", { toHeading: stage })
+                    ).catch(() => {})
+                  }
+                >
+                  {stage === "Done" && <Check size={16} aria-hidden="true" />}
+                  <span>{stage}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+        {transport().capabilities.planWrites && (
+          <div className="work-organization-actions">
+            {work.state === "done" && (
+              <>
+                <button
+                  className="secondary"
+                  disabled={!connected || command.isPending}
+                  onClick={() => void change("toggle").catch(() => {})}
+                >
+                  <Undo2 size={15} /> Reopen
+                </button>
+                <button
+                  className="secondary"
+                  disabled={!connected || command.isPending}
+                  onClick={() => void change("ship").catch(() => {})}
+                >
+                  Ship
+                </button>
+              </>
+            )}
+            <button
+              className="text-button"
+              disabled={!connected || command.isPending}
+              onClick={() => void change("discard").catch(() => {})}
+            >
+              Discard
+            </button>
+          </div>
+        )}
+        <ErrorNotice error={command.error} />
+      </section>
       {work.dependencies.length > 0 && (
         <section className="focus-section">
           <h2>Before this can move</h2>
@@ -318,13 +397,64 @@ export function WorkView({ campaign, id }: { campaign: string; id: string }) {
           ))}
         </section>
       )}
-      <details className="focus-disclosure">
-        <summary>What done looks like</summary>
-        <Markdown
-          raw={work.contract || "No acceptance recorded."}
-          file={source}
-        />
-      </details>
+      <div className="work-brief-grid">
+        <section
+          className="work-panel work-acceptance"
+          aria-labelledby="work-acceptance-title"
+        >
+          <header className="work-panel-heading">
+            <Target size={19} aria-hidden="true" />
+            <h2 id="work-acceptance-title">What done looks like</h2>
+          </header>
+          <Markdown
+            raw={acceptanceMarkdown(work.contract) || "No acceptance recorded."}
+            file={source}
+          />
+        </section>
+        <section
+          className="work-panel work-references"
+          aria-labelledby="work-references-title"
+        >
+          <header className="work-panel-heading">
+            <FileText size={19} aria-hidden="true" />
+            <h2 id="work-references-title">References</h2>
+          </header>
+          <div className="work-reference-links">
+            {briefHref !== checklistHref && (
+              <a className="work-reference-card" href={`#${briefHref}`}>
+                <FileText size={21} aria-hidden="true" />
+                <span>
+                  <strong>Brief</strong>
+                  <small>
+                    {work.label} · {campaign}
+                  </small>
+                </span>
+                <ArrowRight size={17} aria-hidden="true" />
+              </a>
+            )}
+            <a className="work-reference-card" href={`#${checklistHref}`}>
+              <ListChecks size={21} aria-hidden="true" />
+              <span>
+                <strong>Checklist</strong>
+                <small>
+                  {work.section} · {campaign}
+                </small>
+              </span>
+              <ArrowRight size={17} aria-hidden="true" />
+            </a>
+          </div>
+          {work.topicEvidence.some((match) => match.id !== "other") && (
+            <div className="work-reference-matches">
+              <h3>Related topics</h3>
+              {work.topicEvidence
+                .filter((match) => match.id !== "other")
+                .map((match) => (
+                  <p key={match.id}>{match.evidence}</p>
+                ))}
+            </div>
+          )}
+        </section>
+      </div>
       {followers.length > 0 && (
         <details className="focus-disclosure">
           <summary>
@@ -346,75 +476,6 @@ export function WorkView({ campaign, id }: { campaign: string; id: string }) {
           ))}
         </section>
       )}
-      {transport().capabilities.planWrites && (
-        <details className="focus-disclosure">
-          <summary>Organize</summary>
-          <div className="organize-actions">
-            <label>
-              When
-              <select
-                value={work.section}
-                disabled={
-                  !connected || command.isPending || work.state !== "open"
-                }
-                onChange={(event) =>
-                  void change("move-task", {
-                    toHeading: event.target.value,
-                  }).catch(() => {})
-                }
-              >
-                {["Now", "Next", "Later"].map((lane) => (
-                  <option key={lane}>{lane}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              className="secondary"
-              disabled={!connected || command.isPending}
-              onClick={() => void change("toggle").catch(() => {})}
-            >
-              {work.state === "done" ? "Reopen" : "Complete"}
-              <Check size={15} />
-            </button>
-            {work.state === "done" && (
-              <button
-                className="secondary"
-                disabled={!connected || command.isPending}
-                onClick={() => void change("ship").catch(() => {})}
-              >
-                Ship
-              </button>
-            )}
-            <button
-              className="text-button"
-              disabled={!connected || command.isPending}
-              onClick={() => void change("discard").catch(() => {})}
-            >
-              Discard
-            </button>
-          </div>
-        </details>
-      )}
-      <ErrorNotice error={command.error} />
-      <details className="focus-disclosure">
-        <summary>References</summary>
-        <a className="plain-link" href={`#${checklistHref}`}>
-          Checklist
-          <ArrowRight size={15} />
-        </a>
-        {briefHref !== checklistHref && (
-          <a className="plain-link" href={`#${briefHref}`}>
-            Brief
-            <ArrowRight size={15} />
-          </a>
-        )}
-        <details>
-          <summary>Discovery matches</summary>
-          {work.topicEvidence.map((match) => (
-            <p key={match.id}>{match.evidence}</p>
-          ))}
-        </details>
-      </details>
       {undo && <UndoNotice snapshots={undo} onClose={() => setUndo(null)} />}
     </div>
   );

@@ -86,6 +86,8 @@ const request = (
   skill: string,
   values: Record<string, unknown> = {},
 ): {
+  mode?: "prompt" | "guided";
+  prompt?: string;
   skill: string;
   values: Record<string, unknown>;
   tier: string;
@@ -102,6 +104,223 @@ const request = (
 });
 const run = (input: ReturnType<typeof request>) =>
   prepare(root, input, setup, items);
+const freeRequest = (
+  skill: string,
+  values: Record<string, unknown> = { prompt: "Help with this task" },
+) => ({ ...request(skill, values), mode: "prompt" as const });
+
+describe("Launch free prompts", () => {
+  it("accepts new feature work without a PM item or guided acceptance fields", async () => {
+    const result = await run(
+      freeRequest("add-feature", {
+        prompt: "Let me filter recipes by preparation time",
+        module: "Recipes",
+      }),
+    );
+    expect(result.ok, JSON.stringify(result.errors)).toBe(true);
+    expect(result.prompt).toMatch(
+      /^\/add-feature\nLet me filter recipes by preparation time/,
+    );
+    expect(result.prompt).toContain("Module: Recipes");
+    expect(result.prompt).toContain(".claude/skills/add-feature/SKILL.md");
+    expect(result.prompt).not.toContain("Inputs (complete");
+    expect(result.prompt).not.toContain("Work item:");
+    expect(result.launch?.enabled).toBe(false);
+  });
+  it("offers canonical skills without forms and refuses invented skills or modes", async () => {
+    expect(
+      data.skills.some(
+        (skill: { name: string }) => skill.name === "pwa-install",
+      ),
+    ).toBe(true);
+    expect(
+      data.forms.some(
+        (form: { skill: string }) => form.skill === "pwa-install",
+      ),
+    ).toBe(false);
+    expect((await run(freeRequest("pwa-install"))).ok).toBe(true);
+    await expect(run(freeRequest("invented"))).rejects.toThrow("Unknown skill");
+    await expect(
+      prepare(
+        root,
+        { ...freeRequest("fix-bug"), mode: "invented" },
+        setup,
+        items,
+      ),
+    ).rejects.toThrow();
+    const mirrored = catalog({
+      ...setup,
+      entities: [
+        ...setup.entities,
+        { kind: "skill", id: "skill:codex:pwa-install", name: "pwa-install" },
+      ],
+    });
+    expect(
+      mirrored.skills.filter(
+        (skill: { name: string }) => skill.name === "pwa-install",
+      ),
+    ).toHaveLength(1);
+  });
+  it("validates free text and any optional context using current registry and PM facts", async () => {
+    for (const values of [
+      {},
+      { prompt: " \n " },
+      { prompt: true },
+      { prompt: "Fix it", module: "invented" },
+      { prompt: "Fix it", item: "HUB-202" },
+      { prompt: "Fix it", item: "HUB-999" },
+      { prompt: "Fix it", acceptance: "Guided-only input" },
+    ])
+      expect((await run(freeRequest("fix-bug", values))).ok).toBe(false);
+    await expect(
+      run(freeRequest("fix-bug", { prompt: "x".repeat(8001) })),
+    ).rejects.toThrow();
+    const result = await run(
+      freeRequest("fix-bug", { prompt: "Fix it", item: "HUB-203" }),
+    );
+    expect(result.ok).toBe(true);
+    expect(result.prompt).toContain("Work item: HUB-203");
+  });
+  it("retains the ERA report restriction in free prompts", async () => {
+    for (const item of ["", "HUB-202", "HUB-203", "HUB-999"])
+      expect(
+        (
+          await run(
+            freeRequest("era-wire", { prompt: "Wire this report", item }),
+          )
+        ).ok,
+      ).toBe(false);
+    expect(
+      (
+        await run(
+          freeRequest("era-wire", {
+            prompt: "Wire this report",
+            item: "HUB-201",
+          }),
+        )
+      ).ok,
+    ).toBe(true);
+  });
+  it("retains verbatim text and explicit paths while deriving mandatory guardrails", async () => {
+    const prompt = "  Owner's \"exact\" wording\n$(throw 'executed') `n; ↔\n ";
+    const result = await run({
+      ...freeRequest("fix-bug", { prompt }),
+      paths: ["src/app/api/accounts/route.ts", "src/app/recurring/page.tsx"],
+    });
+    expect(result.ok).toBe(true);
+    expect(result.prompt).toContain(`/fix-bug\n${prompt}\n\n`);
+    expect(result.prompt).toContain(
+      "Target paths:\n- src/app/api/accounts/route.ts\n- src/app/recurring/page.tsx",
+    );
+    expect(result.automatic).toEqual(
+      expect.arrayContaining([
+        "money-rules",
+        "api-route",
+        "recurrence-safety",
+        "ui-guardrails",
+      ]),
+    );
+    expect(result.command?.endsWith(psQuote(result.prompt))).toBe(true);
+    const primaryRule = await run({
+      ...freeRequest("money-rules"),
+      paths: ["src/app/api/accounts/route.ts"],
+      attachments: ["money-rules"],
+    });
+    expect(primaryRule.ok).toBe(true);
+    expect(primaryRule.automatic).not.toContain("money-rules");
+    expect(primaryRule.attachments).not.toContain("money-rules");
+  });
+  it("keeps tier, effort, attachment and path safety in prompt mode", async () => {
+    const base = freeRequest("add-feature");
+    for (const patch of [
+      { tier: "CODEX_HIGH" },
+      { tier: "CODEX_MID" },
+      { effort: "turbo" },
+      { attachments: ["invented"] },
+      { paths: ["../escape"] },
+      { paths: ["C:/Windows"] },
+      { paths: [".env"] },
+    ])
+      expect((await run({ ...base, ...patch })).ok).toBe(false);
+  });
+  it("never dry-runs a free new-module prompt and leaves guided validation strict", async () => {
+    const result = await run(freeRequest("new-module"));
+    expect(result.ok).toBe(true);
+    expect(result.preview).toBeNull();
+    for (const mode of [undefined, "guided"] as const) {
+      const guided = await run({
+        ...request("add-feature", {
+          module: "Recipes",
+          acceptance: "Can save",
+        }),
+        ...(mode ? { mode } : {}),
+      });
+      expect(guided.ok).toBe(false);
+      expect(guided.errors).toHaveProperty("item");
+    }
+    await expect(run(request("pwa-install"))).rejects.toThrow(
+      "Unknown skill form",
+    );
+  });
+  it("retains the original request alongside guided fields without weakening their validation", async () => {
+    const prompt = "  Keep my 'exact' request\n$(literal) `n ↔\n ";
+    const input = {
+      ...request("add-feature", {
+        item: "HUB-203",
+        module: "Recipes",
+        acceptance: "Can filter by preparation time",
+      }),
+      mode: "guided" as const,
+      prompt,
+      paths: ["src/features/recipes/hooks.ts"],
+    };
+    const result = await run(input);
+    expect(result.ok).toBe(true);
+    expect(result.prompt).toContain(`Request:\n${prompt}\nTarget paths:`);
+    expect(result.prompt).toContain(
+      "Target paths:\n- src/features/recipes/hooks.ts\nInputs (complete",
+    );
+    expect(result.prompt).toContain(
+      '"acceptance": "Can filter by preparation time"',
+    );
+    expect(result.command?.endsWith(psQuote(result.prompt))).toBe(true);
+    expect(
+      (await run({ ...input, values: { module: "Recipes" } })).errors,
+    ).toMatchObject({
+      item: "Required",
+      acceptance: "Required",
+    });
+    await expect(run({ ...input, prompt: "x".repeat(8001) })).rejects.toThrow();
+  });
+  it("retains and validates optional shared context for guided forms without context fields", async () => {
+    const input = {
+      ...request("wizard", {
+        system: "Recipe device",
+        goal: "Connect it",
+        module: "Recipes",
+        item: "HUB-203",
+      }),
+      mode: "guided" as const,
+    };
+    const result = await run(input);
+    expect(result.ok).toBe(true);
+    expect(result.values).toMatchObject({ module: "Recipes", item: "HUB-203" });
+    expect(result.prompt).toContain('"module": "Recipes"');
+    expect(result.prompt).toContain('"item": "HUB-203"');
+    for (const patch of [
+      { module: "invented" },
+      { item: "HUB-202" },
+      { item: "HUB-999" },
+    ])
+      expect(
+        (await run({ ...input, values: { ...input.values, ...patch } })).ok,
+      ).toBe(false);
+    expect(
+      (await run(request("wizard", { system: "Device", goal: "Connect it" })))
+        .ok,
+    ).toBe(true);
+  });
+});
 
 describe("R98 / A6 form launches", () => {
   it("keeps derived title and lookup fields blank until a slug is entered", () => {
@@ -142,11 +361,7 @@ describe("R98 / A6 form launches", () => {
       data.tiers.find((t: { alias: string }) => t.alias === "CODEX_HIGH")
         .disabled,
     ).toBe(true);
-    expect(setup.gaps).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: "TIER-LITERAL" }),
-      ]),
-    );
+    expect(setup.gaps.filter((gap: { code: string }) => gap.code === "TIER-LITERAL")).toEqual([]);
   });
   it("finishes new-module's complete copy launch with derived inputs, automatic attachments and the real dry-run", async () => {
     const result = await run(

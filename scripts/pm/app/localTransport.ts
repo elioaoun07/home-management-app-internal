@@ -160,6 +160,7 @@ export function createLocalTransport(): Transport {
     v2Allowances: async (signal) => (await v2Read<{ allowances: V2Allowances | null }>("/api/delivery/v2/allowances", signal)).allowances,
     v2Uat: (signal) => v2Read<{ handovers: UatSummary[] }>("/api/delivery/v2/uat", signal),
     v2UatOne: (id, signal) => v2Read<{ handover: UatHandover }>("/api/delivery/v2/uat?id=" + encodeURIComponent(id), signal),
+    v2UatItem: (campaign, id, signal) => v2Read("/api/delivery/v2/uat?campaign=" + encodeURIComponent(campaign) + "&work_id=" + encodeURIComponent(id), signal),
     v2Readiness: (selection, signal) => {
       const query = new URLSearchParams(Object.entries(selection).filter((entry): entry is [string, string] => entry[1] !== null));
       return read<V2Readiness>("/api/delivery/v2/readiness?" + query, signal);

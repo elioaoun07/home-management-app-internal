@@ -17,12 +17,12 @@ import {
 import { durableV2Command, newDeliveryIntent, storedIntent } from "./commandIntents";
 import { v2Post } from "./api";
 import { PairV2, useV2Session } from "./BrowserSession";
-import { LocalRun } from "./LocalDelivery";
+import { LocalRun, offersLocalLane } from "./LocalDelivery";
 export { PairV2, useV2Session } from "./BrowserSession";
 import { client, go, pmKeys, useRoute, useWorld } from "./state";
-import { readinessCanLaunch, readinessCanStart } from "./readinessModel";
-import { LaunchReadiness } from "./LaunchReadiness";
 import { LaunchResult } from "./LaunchResult";
+import { useGameLayer } from "./GameLayer";
+import { DeliveryMission } from "./DeliveryMission";
 import { PendingCommand, RefusedCommand, transport } from "./transport";
 import { Back, Empty, ErrorNotice, RunOrb, Sheet } from "./components";
 import { returnFromLaunch } from "./Work";
@@ -60,7 +60,7 @@ import { OutcomeReview } from "./OutcomeReview";
 import { DeliveryQuestion } from "./DeliveryQuestion";
 import { TestGateCard } from "./TestGate";
 import { StewardRequests } from "./StewardRequests";
-import type { V2Executor, V2Readiness, V2ReadinessSelection, V2Reason, V2RunDetail, Work } from "./types";
+import type { V2Readiness, V2Reason, V2RunDetail, Work } from "./types";
 
 type Body = Record<string, unknown>;
 // Start may first collect live readiness (Docker, sign-in, model) on the laptop.
@@ -235,6 +235,7 @@ const PROFILES = [
 
 export function LaunchV2({ work }: { work: Work }) {
   const { connected } = useWorld();
+  const game = useGameLayer();
   const route = useRoute();
   const session = useV2Session();
   const catalogue = useQuery({
@@ -246,23 +247,14 @@ export function LaunchV2({ work }: { work: Work }) {
   const [profile, setProfile] = useState<string>("focused");
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("");
-  const [blockedExecutor, setBlockedExecutor] = useState<V2Executor | null>(null);
   const start = useV2Command();
+  const starting = useRef(false);
   const deliveries = useV2Runs();
   const steward = route.query.get("initiator") === "era-steward";
-  const refresh = useMutation({
-    mutationFn: async (selection: V2ReadinessSelection) => {
-      const data = await transport().v2Command<{ readiness: V2Readiness }>("control", { action: "refresh-readiness", renewAuthorization: true, selection, command_id: crypto.randomUUID() }, LAUNCH_TIMEOUT_MS);
-      if (!data.readiness || !("authorization" in data.readiness)) throw new Error("Restart Command Center to enable renewal");
-      return { ...data, checkedAt: Date.now() };
-    },
-    onMutate: selection => client.cancelQueries({ queryKey: pmKeys.v2readiness(selection) }),
-    onSuccess: (data, selection) => client.setQueryData(pmKeys.v2readiness(selection), data.readiness),
-    onSettled: () => client.invalidateQueries({ queryKey: pmKeys.all }),
-  });
   const itemId = String(work.idChip || work.id || "");
   const launchIntent = ["deliver", work.file, itemId.toUpperCase()].join(":");
-  const intentScope = (session.data?.scope || "") + ":" + (session.data?.actor || "");
+  const intentScope =
+    (session.data?.scope || "") + ":" + (session.data?.actor || "");
   const previousLaunch = useQuery({
     queryKey: pmKeys.v2intent(intentScope, launchIntent),
     queryFn: () => storedIntent(intentScope, launchIntent, localStorage),
@@ -272,39 +264,49 @@ export function LaunchV2({ work }: { work: Work }) {
     mutationFn: () => newDeliveryIntent(launchIntent),
     onSettled: () => client.invalidateQueries({ queryKey: pmKeys.all }),
   });
-  const cancelledLaunch = deliveries.data?.runs.some(run =>
-    run.run_id === previousLaunch.data?.runId && run.lifecycle === "CLOSED" && run.closed_outcome === "cancelled");
-  const launchFailure = start.failure instanceof RefusedCommand ? start.failure : previousLaunch.data?.refusal;
-  const existingLaunch = previousLaunch.data && !previousLaunch.data.refusal ? previousLaunch.data : null;
-  const readinessSelection = { file: work.file, id: itemId, executor, model: model || null, effort: effort || null, workProfile: profile };
-  const readiness = useQuery({
-    queryKey: pmKeys.v2readiness(readinessSelection),
-    queryFn: ({ signal }) => transport().v2Readiness?.(readinessSelection, signal) || Promise.resolve(null),
-    enabled: connected && !!itemId,
-    refetchInterval: 30_000,
-  });
-  const assessment = readiness.data?.assessment;
-  const testGate = readiness.data?.testGate;
-  const testsLocked = !!testGate?.locked;
-  // A policy that permits one executor has made the choice: preselect it with
-  // the lane's suggested model/effort, so a hand-off link needs only Start.
+  const cancelledLaunch = deliveries.data?.runs.some(
+    (run) =>
+      run.run_id === previousLaunch.data?.runId &&
+      run.lifecycle === "CLOSED" &&
+      run.closed_outcome === "cancelled",
+  );
+  const saved = previousLaunch.data;
+  const matchingSavedSettings =
+    saved?.body.executor === executor &&
+    (saved.body.model || "") === model &&
+    (saved.body.effort || "") === effort &&
+    saved.body.workProfile === profile;
+  const launchFailure =
+    start.failure instanceof RefusedCommand
+      ? start.failure
+      : matchingSavedSettings
+        ? saved?.refusal
+        : null;
+  const existingLaunch =
+    previousLaunch.data && !previousLaunch.data.refusal
+      ? previousLaunch.data
+      : null;
+  const testGate = (launchFailure?.payload.readiness as V2Readiness | undefined)
+    ?.testGate;
+  // Defaults reduce launch friction; only Start's server checks admit a run.
   useEffect(() => {
-    const allowed = (catalogue.data?.executors || []).filter((entry) => entry.available !== false && entry.permitted);
-    if (executor || allowed.length !== 1) return;
-    const next = allowed[0].suggestions?.[profile];
-    setExecutor(allowed[0].id);
+    const entries = catalogue.data?.executors || [];
+    const preferred =
+      entries.find((entry) => entry.available !== false && entry.permitted) ||
+      entries[0];
+    if (executor || !preferred) return;
+    const next = preferred.suggestions?.[profile];
+    setExecutor(preferred.id);
     setModel(next?.model || "");
     setEffort(next?.effort || "");
   }, [catalogue.data, executor, profile]);
+  useEffect(() => {
+    if (!start.isPending) starting.current = false;
+  }, [start.isPending]);
   if (session.data && !session.data.paired && transport().capabilities.pairing)
     return <PairV2 />;
-  const refreshCurrent = !!refresh.variables && Object.entries(readinessSelection).every(([key, value]) => refresh.variables?.[key as keyof V2ReadinessSelection] === value);
-
   const chosen = catalogue.data?.executors.find(
     (entry) => entry.id === executor,
-  );
-  const noRuntime = !!catalogue.data?.refusals?.some(
-    (entry) => entry.code === "no-worker-runtime-configured",
   );
   const applySuggestion = (id: string, name: string) => {
     const entry = catalogue.data?.executors.find(
@@ -314,7 +316,9 @@ export function LaunchV2({ work }: { work: Work }) {
     setModel(next?.model || "");
     setEffort(next?.effort || "");
   };
-  const deliver = () =>
+  const deliver = () => {
+    if (starting.current) return;
+    starting.current = true;
     start.send(
       "deliver",
       launchIntent,
@@ -327,6 +331,7 @@ export function LaunchV2({ work }: { work: Work }) {
         model: model || null,
         effort: effort || null,
         workProfile: profile,
+        renewAuthorization: true,
         ...(steward ? { initiatedBy: "era-steward" } : {}),
       },
       (data) =>
@@ -334,180 +339,267 @@ export function LaunchV2({ work }: { work: Work }) {
           `/delivery/run/${String(data.run_id)}?from=${encodeURIComponent(returnFromLaunch(route.query))}`,
         ),
     );
+  };
+  const localQuery = new URLSearchParams(route.query);
+  localQuery.delete("lane");
 
-  return (
+  const controls = (
     <div className="launch-v2">
       {steward && <span className="eyebrow">ERA Steward</span>}
-      <details className="launch-settings" open={!executor && !catalogue.isPending ? true : undefined}>
-        <summary><span>{chosen ? `${chosen.label} · ${PROFILES.find(([value]) => value === profile)?.[1] || profile}` : "Choose executor"}</span><span>Settings</span></summary>
-        {chosen && <p className="launch-settings-selection">{chosen.models.find(entry => entry.id === model)?.label || model || "Default model"} · {effort || "Default effort"}</p>}
-        <fieldset disabled={refresh.isPending || start.isPending || newDelivery.isPending}>
-      <section className="launch-section">
-        <h2>Executor</h2>
-        <div className="provider-choices">
-          {(catalogue.data?.executors || []).map((entry) => {
-            const verified = executor === entry.id && readinessCanStart(readiness.data, readinessSelection);
-            const selectable = entry.available !== false && entry.permitted;
-            return (
-              <button
-                key={entry.id}
-                aria-pressed={executor === entry.id}
-                aria-disabled={!selectable}
-                onClick={() => {
-                  if (!selectable) {
-                    setBlockedExecutor(entry);
-                    return;
-                  }
-                  setExecutor(entry.id);
-                  applySuggestion(entry.id, profile);
-                }}
-              >
-                <Sparkles size={21} />
-                <strong>{entry.label}</strong>
-                {!verified ? (
-                  <small>{selectable ? "Unverified" : "Unavailable"}</small>
-                ) : (
-                  <Check size={17} />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </section>
-      <section className="launch-section">
-        <h2>Lane</h2>
-        <div className="pace-choices">
-          {PROFILES.map(([value, label]) => (
-            <button
-              key={value}
-              aria-pressed={profile === value}
-              onClick={() => {
-                setProfile(value);
-                if (executor) applySuggestion(executor, value);
-              }}
+      <details
+        className="launch-settings"
+        open={!executor && !catalogue.isPending ? true : undefined}
+      >
+        <summary>
+          <span>
+            {chosen
+              ? `${chosen.label} · ${PROFILES.find(([value]) => value === profile)?.[1] || profile}`
+              : "Choose executor"}
+          </span>
+          <span>Settings</span>
+        </summary>
+        {chosen && (
+          <p className="launch-settings-selection">
+            {chosen.models.find((entry) => entry.id === model)?.label ||
+              model ||
+              "Default model"}{" "}
+            · {effort || "Default effort"}
+          </p>
+        )}
+        <fieldset
+          disabled={start.isPending || !!start.pending || newDelivery.isPending}
+        >
+          <section className="launch-section">
+            <h2>Executor</h2>
+            <div className="provider-choices">
+              {(catalogue.data?.executors || []).map((entry) => {
+                return (
+                  <button
+                    key={entry.id}
+                    aria-pressed={executor === entry.id}
+                    onClick={() => {
+                      start.reset();
+                      setExecutor(entry.id);
+                      applySuggestion(entry.id, profile);
+                    }}
+                  >
+                    <Sparkles size={21} />
+                    <strong>{entry.label}</strong>
+                    {executor === entry.id && <Check size={17} />}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+          <section className="launch-section">
+            <h2>Lane</h2>
+            <div className="pace-choices">
+              {PROFILES.map(([value, label]) => (
+                <button
+                  key={value}
+                  aria-pressed={profile === value}
+                  onClick={() => {
+                    start.reset();
+                    setProfile(value);
+                    if (executor) applySuggestion(executor, value);
+                  }}
+                >
+                  <span>
+                    <strong>{label}</strong>
+                  </span>
+                  {profile === value && <Check size={17} />}
+                </button>
+              ))}
+            </div>
+          </section>
+          {chosen && (
+            <section className="launch-section">
+              <div className="budget-fields">
+                <label>
+                  Model
+                  <select
+                    value={model}
+                    onChange={(event) => {
+                      start.reset();
+                      setModel(event.target.value);
+                      setEffort("");
+                    }}
+                  >
+                    <option value="">Default</option>
+                    {chosen.models.map((entry) => (
+                      <option
+                        key={entry.id}
+                        value={entry.id}
+                        disabled={entry.disabled}
+                      >
+                        {entry.label || entry.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Effort
+                  <select
+                    value={effort}
+                    onChange={(event) => {
+                      start.reset();
+                      setEffort(event.target.value);
+                    }}
+                  >
+                    <option value="">Default</option>
+                    {effortsFor(chosen, model).map((value) => (
+                      <option key={value}>{value}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </section>
+          )}
+          {!steward && (
+            <a
+              className="secondary"
+              href={`#${route.path}?${new URLSearchParams([...route.query.entries(), ["initiator", "era-steward"]])}`}
             >
-              <span>
-                <strong>{label}</strong>
-              </span>
-              {profile === value && <Check size={17} />}
-            </button>
-          ))}
-        </div>
-      </section>
-      {chosen && (
-        <section className="launch-section">
-          <div className="budget-fields">
-            <label>
-              Model
-              <select
-                value={model}
-                onChange={(event) => {
-                  setModel(event.target.value);
-                  setEffort("");
-                }}
-              >
-                <option value="">Default</option>
-                {chosen.models.map((entry) => (
-                  <option key={entry.id} value={entry.id} disabled={entry.disabled}>
-                    {entry.label || entry.id}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Effort
-              <select
-                value={effort}
-                onChange={(event) => setEffort(event.target.value)}
-              >
-                <option value="">Default</option>
-                {effortsFor(chosen, model).map((value) => (
-                  <option key={value}>{value}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </section>
-      )}
-        {!steward && <a className="secondary" href={`#${route.path}?${new URLSearchParams([...route.query.entries(), ["initiator", "era-steward"]])}`}>Use Steward</a>}
+              Use Steward
+            </a>
+          )}
         </fieldset>
       </details>
       <ErrorNotice
         error={catalogue.error || session.error}
         retry={() => void catalogue.refetch()}
       />
-      {launchFailure && !start.isPending && <LaunchResult failure={launchFailure} commandId={start.failure instanceof RefusedCommand ? start.failure.commandId : previousLaunch.data?.commandId} />}
-      <ErrorNotice error={start.failure instanceof RefusedCommand ? null : start.failure} />
-      <ErrorNotice error={previousLaunch.error} retry={() => void previousLaunch.refetch()} />
-      <ErrorNotice error={newDelivery.error} retry={() => newDelivery.mutate()} />
-      <LaunchReadiness result={readiness.data} connected={connected} loading={readiness.isPending} checking={refreshCurrent && refresh.isPending}
-        checkedAt={refreshCurrent ? refresh.data?.checkedAt : undefined} error={(refreshCurrent && refresh.error) || readiness.error}
-        disabled={!connected || !executor || !model || start.isPending || newDelivery.isPending}
-        onCheck={() => refresh.mutate(readinessSelection)} />
+      {launchFailure && !start.isPending && (
+        <LaunchResult
+          failure={launchFailure}
+          commandId={
+            start.failure instanceof RefusedCommand
+              ? start.failure.commandId
+              : previousLaunch.data?.commandId
+          }
+        />
+      )}
+      {launchFailure &&
+        !start.isPending &&
+        chosen &&
+        (chosen.available === false || !chosen.permitted) && (
+          <div className="launch-executor-fix" role="status">
+            <p>{executorBlockMessage(chosen)}</p>
+            {offersLocalLane() && (
+              <a className="secondary" href={`#${route.path}?${localQuery}`}>
+                Use Local
+              </a>
+            )}
+          </div>
+        )}
+      <ErrorNotice
+        error={start.failure instanceof RefusedCommand ? null : start.failure}
+      />
+      <ErrorNotice
+        error={previousLaunch.error}
+        retry={() => void previousLaunch.refetch()}
+      />
+      <ErrorNotice
+        error={newDelivery.error}
+        retry={() => newDelivery.mutate()}
+      />
       <CommandReceipt
         pending={start.pending}
         onCheck={start.check}
         busy={start.isPending}
       />
       {testGate?.locked && <TestGateCard gate={testGate} />}
-      {existingLaunch && <section className="launch-previous" aria-label="Previous delivery">
-        <span>{cancelledLaunch ? "Previous delivery cancelled" : existingLaunch.completed ? "Existing delivery" : "Unresolved request"}</span>
-        <div className="launch-previous-actions">
-        {cancelledLaunch && <button className="primary" disabled={!connected || start.isPending || newDelivery.isPending || refresh.isPending} onClick={() => newDelivery.mutate()}>{newDelivery.isPending ? "Preparing…" : "New delivery"}</button>}
-        <button className={cancelledLaunch ? "secondary" : "primary"} disabled={!connected || start.isPending || refresh.isPending} onClick={() => {
-          const saved = existingLaunch;
-          start.send(saved.path, launchIntent, saved.body, data => go(`/delivery/run/${String(data.run_id)}`), true);
-        }}>{existingLaunch.completed ? "Open delivery" : "Check status"}</button>
-        </div>
-      </section>}
-      {!existingLaunch && <div className="launch-footer launch-v2-actions">
-        <button
-          className="primary"
-          disabled={
-            !connected ||
-            (start.failure instanceof RefusedCommand && !!start.failure.persistenceError) ||
-            !!existingLaunch || !!previousLaunch.error || previousLaunch.isPending || newDelivery.isPending ||
-            (!steward && (!chosen || !chosen.permitted)) ||
-            (!steward && !readinessCanLaunch(readiness.data, readinessSelection)) ||
-            (!steward && (!!readiness.error || (refreshCurrent && refresh.isError))) ||
-            (!steward && noRuntime) ||
-            start.isPending || refresh.isPending ||
-            work.state !== "open" ||
-            (!steward && assessment?.startable === false) ||
-            (!steward && testsLocked)
-          }
-          onClick={deliver}
-        >
-          <Zap size={17} />
-          {start.isPending ? "Starting…" : "Start"}
-        </button>
-      </div>}
-      <StewardRequests requests={(deliveries.data?.requests || []).filter(request => request.file === work.file && request.workId.toUpperCase() === itemId.toUpperCase())} />
-      <Sheet
-        title={`${blockedExecutor?.label || "Executor"} unavailable`}
-        open={!!blockedExecutor}
-        onClose={() => setBlockedExecutor(null)}
-      >
-        {blockedExecutor && (
-          <>
-            <p className="executor-block-message">
-              {executorBlockMessage(blockedExecutor)}
-            </p>
-            <div className="gate-actions">
+      {existingLaunch && (
+        <section className="launch-previous" aria-label="Previous delivery">
+          <span>
+            {cancelledLaunch
+              ? "Previous delivery cancelled"
+              : existingLaunch.completed
+                ? "Existing delivery"
+                : "Unresolved request"}
+          </span>
+          <div className="launch-previous-actions">
+            {cancelledLaunch && (
               <button
                 className="primary"
-                onClick={() => {
-                  setBlockedExecutor(null);
-                  void catalogue.refetch();
-                }}
+                disabled={
+                  !connected || start.isPending || newDelivery.isPending
+                }
+                onClick={() => newDelivery.mutate()}
               >
-                Retry
+                {newDelivery.isPending ? "Preparing…" : "New delivery"}
               </button>
-            </div>
-          </>
+            )}
+            <button
+              className={cancelledLaunch ? "secondary" : "primary"}
+              disabled={!connected || start.isPending}
+              onClick={() => {
+                const saved = existingLaunch;
+                start.send(
+                  saved.path,
+                  launchIntent,
+                  saved.body,
+                  (data) => go(`/delivery/run/${String(data.run_id)}`),
+                  true,
+                );
+              }}
+            >
+              {existingLaunch.completed ? "Open delivery" : "Check status"}
+            </button>
+          </div>
+        </section>
+      )}
+      {!existingLaunch && (
+        <div className="launch-footer launch-v2-actions">
+          <button
+            className="primary"
+            disabled={
+              !connected ||
+              (start.failure instanceof RefusedCommand &&
+                !!start.failure.persistenceError) ||
+              !!existingLaunch ||
+              !!previousLaunch.error ||
+              previousLaunch.isPending ||
+              newDelivery.isPending ||
+              !session.data?.paired ||
+              !chosen ||
+              start.isPending ||
+              !!start.pending ||
+              work.state !== "open"
+            }
+            onClick={deliver}
+          >
+            <Zap size={17} />
+            {start.isPending ? "Checking…" : "Start"}
+          </button>
+          {offersLocalLane() && !start.isPending && (
+            <a className="secondary" href={`#${route.path}?${localQuery}`}>
+              Local
+            </a>
+          )}
+        </div>
+      )}
+      {!connected && <p role="status">Laptop offline</p>}
+      <StewardRequests
+        requests={(deliveries.data?.requests || []).filter(
+          (request) =>
+            request.file === work.file &&
+            request.workId.toUpperCase() === itemId.toUpperCase(),
         )}
-      </Sheet>
+      />
     </div>
+  );
+  return game.enabled ? (
+    <DeliveryMission
+      work={work}
+      lane="confined"
+      busy={start.isPending}
+      blocked={!!launchFailure}
+    >
+      {controls}
+    </DeliveryMission>
+  ) : (
+    controls
   );
 }
 

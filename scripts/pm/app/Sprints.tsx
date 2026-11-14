@@ -41,6 +41,7 @@ import {
 import type { Planning, Sprint, SprintMember } from "./planningTypes";
 import type { World } from "./types";
 import "./sprints.css";
+import { realignmentPreview } from "../shared/sprint-realignment.mjs";
 
 const EMPTY: Planning = {
   schema: "pm-planning@1",
@@ -174,7 +175,10 @@ function HotfixLane({
   };
   if (!hotfixes.length && !canSync) return null;
   return (
-    <section className="sprint-hotfixes" aria-labelledby="sprint-hotfixes-title">
+    <section
+      className="sprint-hotfixes"
+      aria-labelledby="sprint-hotfixes-title"
+    >
       <div className="section-title">
         <h2 id="sprint-hotfixes-title">Hotfixes</h2>
         <span className="quiet">
@@ -214,7 +218,9 @@ function HotfixLane({
                 <h3>{work.title}</h3>
                 {comment && <p className="sprint-hotfix-comment">{comment}</p>}
                 <span className="sprint-item-bottom">
-                  <span className={`sprint-hotfix-badge ${label.toLowerCase()}`}>
+                  <span
+                    className={`sprint-hotfix-badge ${label.toLowerCase()}`}
+                  >
                     {label}
                   </span>
                 </span>
@@ -261,7 +267,7 @@ export function Sprints() {
     a.startDate.localeCompare(b.startDate),
   );
   const [editor, setEditor] = useState<
-    "forecast" | "edit" | "close" | "add" | null
+    "forecast" | "edit" | "close" | "add" | "realign" | null
   >(null);
   const [undo, setUndo] = useState<Record<string, unknown> | null>(null);
   useEffect(() => {
@@ -464,10 +470,21 @@ export function Sprints() {
       <PageTitle
         title="Sprints"
         action={
-          <button className="secondary" onClick={() => setEditor("forecast")}>
-            <Plus size={17} />
-            Plan weeks
-          </button>
+          <div className="cockpit-tools">
+            <button
+              className="secondary"
+              disabled={
+                !writable || !weeks.some((week) => week.state !== "closed")
+              }
+              onClick={() => setEditor("realign")}
+            >
+              <RotateCcw size={17} /> Realign
+            </button>
+            <button className="secondary" onClick={() => setEditor("forecast")}>
+              <Plus size={17} />
+              Plan weeks
+            </button>
+          </div>
         }
       />
       {world.planningError && (
@@ -998,17 +1015,33 @@ export function Sprints() {
       )}
       <Sheet
         title={
-          editor === "forecast"
-            ? "Plan your weeks"
-            : editor === "close"
-              ? "Close the week"
-              : editor === "add"
-                ? "Adjust scope"
-                : "Edit week"
+          editor === "realign"
+            ? "Realign sprints"
+            : editor === "forecast"
+              ? "Plan your weeks"
+              : editor === "close"
+                ? "Close the week"
+                : editor === "add"
+                  ? "Adjust scope"
+                  : "Edit week"
         }
         open={!!editor}
         onClose={() => setEditor(null)}
       >
+        {editor === "realign" && (
+          <RealignEditor
+            planning={planning}
+            today={today}
+            busy={command.isPending}
+            writable={writable}
+            onSave={(toDate, fromDate) =>
+              void act(
+                { action: "realign", toDate },
+                { action: "realign", toDate: fromDate },
+              )
+            }
+          />
+        )}
         {editor === "forecast" && (
           <ForecastEditor
             world={world}
@@ -1098,6 +1131,77 @@ export function Sprints() {
         )}
         {command.error && <ErrorNotice error={command.error} />}
       </Sheet>
+    </div>
+  );
+}
+
+function RealignEditor({
+  planning,
+  today,
+  busy,
+  writable,
+  onSave,
+}: {
+  planning: Planning;
+  today: string;
+  busy: boolean;
+  writable: boolean;
+  onSave: (toDate: string, fromDate: string) => void;
+}) {
+  const anchor =
+    planning.sprints
+      .filter((week) => week.state !== "closed")
+      .map((week) => week.startDate)
+      .sort()[0] || today;
+  const [toDate, setToDate] = useState(today > anchor ? today : anchor);
+  let preview: ReturnType<typeof realignmentPreview> | null = null;
+  let error = "";
+  try {
+    preview = realignmentPreview(planning, toDate);
+  } catch (reason) {
+    error = reason instanceof Error ? reason.message : "Choose a date";
+  }
+  return (
+    <div className="sprint-editor">
+      <label>
+        First unfinished sprint
+        <input
+          type="date"
+          value={toDate}
+          disabled={busy}
+          onChange={(event) => setToDate(event.target.value)}
+        />
+      </label>
+      {error && <p role="alert">{error}</p>}
+      {preview && (
+        <>
+          <p>
+            {preview.days > 0 ? "+" : ""}
+            {preview.days} days
+          </p>
+          <ul>
+            {preview.sprints.map((week) => (
+              <li key={week.id}>
+                {week.name}: {shortDay(week.before)} →{" "}
+                {shortDay(week.startDate)}
+              </li>
+            ))}
+            {preview.deliverables.map((entry) => (
+              <li key={entry.id}>
+                {entry.title}: {shortDay(entry.before!)} →{" "}
+                {shortDay(entry.targetDate)}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <button
+        className="primary"
+        disabled={!writable || busy || !preview?.days}
+        onClick={() => preview && onSave(preview.toDate, preview.fromDate)}
+      >
+        Apply
+      </button>
     </div>
   );
 }

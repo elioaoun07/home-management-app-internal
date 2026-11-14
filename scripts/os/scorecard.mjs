@@ -2,6 +2,7 @@ import { reworkLines } from "./rework.mjs";
 import { processPanel } from "./process.mjs";
 import { evaluateTranscript } from "./transcript-eval.mjs";
 import { outcome } from "./detector-support.mjs";
+import { REVIEW_REQUIREMENTS } from "./review-requirements.mjs";
 const sumKnown = (values) =>
   values.length && values.every((v) => Number.isFinite(v))
     ? values.reduce((a, b) => a + b, 0)
@@ -10,13 +11,13 @@ const sumKnown = (values) =>
 export function sessionScorecard(record, changes = null, item = {}) {
   const { session: s, events = [], checks = [], verdicts = [] } = record;
   const rules = [...verdicts, ...evaluateTranscript(s, changes)];
-  for (const rule of ["HR-2", "HR-4", "HR-16", "HR-21"])
+  for (const [rule, review] of Object.entries(REVIEW_REQUIREMENTS))
     rules.push({
       rule,
       version: 1,
       level: "judgment",
       verdict: "n/a",
-      findings: [{ message: "UAT judgment; no deterministic detector" }],
+      findings: [{ message: review.verify, source: review.source }],
     });
   const required = [
     "typecheck",

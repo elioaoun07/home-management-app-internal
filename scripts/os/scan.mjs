@@ -12,6 +12,8 @@ import { dirname, resolve, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseFrontmatter } from "../pm/shared/frontmatter.mjs";
 import { formSchema, recipeSchema } from "./forms.mjs";
+import { REVIEW_REQUIREMENTS } from "./review-requirements.mjs";
+import { launchSettings } from "./launch-settings.mjs";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 export const SCHEMA = "os/setup@1";
@@ -480,7 +482,7 @@ export function scan(root = ROOT, previous = null) {
           }
           const scripts = pathsIn(command);
           for (const file of scripts) {
-            read(file);
+            read(file, true);
             referencedScripts.add(file);
           }
           const body = scripts.map((file) => read(file)).join("\n"),
@@ -498,6 +500,7 @@ export function scan(root = ROOT, previous = null) {
             scripts,
             delegated,
             blocking: /\bexit\s+2\b/.test(body),
+            conditional: /stop_hook_active/.test(body),
             enforces: enforces.length ? enforces : "unknown",
           });
           if (delegated)
@@ -562,6 +565,7 @@ export function scan(root = ROOT, previous = null) {
   read("scripts/run-agent-hook.mjs");
   read("scripts/sync-ai-mirrors.mjs");
   read("scripts/pm/shared/frontmatter.mjs");
+  read("docs/Skills-and-Agents.md");
   for (const file of walk("scripts/os")) read(file);
   for (const file of walk("scripts/os/detectors")) {
     const raw = read(file),
@@ -691,15 +695,19 @@ export function scan(root = ROOT, previous = null) {
     ".claude/skills/finish-task/SKILL.md",
   ])
     read(file);
-  const launches = [];
+  const launches = [],
+    launchPolicies = [];
   for (const file of [
     ...walk("scripts/delivery-v2/profiles"),
     "scripts/delivery-v2/adapters/claude.mjs",
     "scripts/delivery-v2/adapters/codex.mjs",
   ]) {
     const raw = read(file);
-    if (/\b(?:skills|settingSources)["']?\s*:\s*\[\s*\]/.test(raw))
+    const policy = launchSettings(file, raw);
+    if (policy) {
       launches.push(file);
+      launchPolicies.push(policy);
+    }
   }
   const git = (...args) => {
     const result = spawnSync("git", args, {
@@ -735,7 +743,9 @@ export function scan(root = ROOT, previous = null) {
     rule.detectors = guards
       .filter((entity) => entity.kind === "detector")
       .map((entity) => entity.id);
-    rule.level = guards.some((entity) => entity.blocking)
+    if (REVIEW_REQUIREMENTS[rule.id])
+      rule.review = REVIEW_REQUIREMENTS[rule.id];
+    rule.level = guards.some((entity) => entity.blocking && !entity.conditional)
       ? "blocked"
       : guards.some(
             (entity) =>
@@ -769,6 +779,7 @@ export function scan(root = ROOT, previous = null) {
       referencedScripts: [...referencedScripts].sort(),
       tracked: tracked.filter(({ path }) => /\.local\.|^\.husky\//.test(path)),
       launches,
+      launchPolicies,
       subagents: walk(".claude/agents"),
       commands: walk(".claude/commands"),
       mcp: existsSync(resolve(root, ".mcp.json")) ? "present" : "absent",

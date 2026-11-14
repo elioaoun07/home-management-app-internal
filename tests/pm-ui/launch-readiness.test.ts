@@ -30,7 +30,7 @@ it("confirms a completed check even when the same blockers remain", () => {
   const html = render({ result: result(true), checkedAt: Date.now() });
   expect(html).toContain("Setup required");
   expect(html).toContain("Checked ");
-  expect(html).toContain("Authorization expired — check readiness");
+  expect(html).toContain("Authorization expired — retry Start");
   expect(html).not.toContain("Checks passed");
   expect(html).toContain('<details class="launch-check-details">');
   expect(html).toContain("1 blocker");
@@ -49,8 +49,8 @@ it("separates setup blockers from checks that have not run, instead of a pass ra
   expect(html).toContain("Waiting for setup");
   expect(html).not.toContain("4/11");
   expect(html).not.toContain("Checked at Start");
-  expect(html).toContain("Authorization expired — check readiness");
-  expect(html).toContain("Check readiness sets Touches");
+  expect(html).toContain("Authorization expired — retry Start");
+  expect(html).toContain("Item scope could not be prepared");
 });
 
 it("makes request failures visible without treating cached ready facts as success", () => {

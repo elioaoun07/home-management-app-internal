@@ -116,8 +116,8 @@ export function Bridge() {
         title="Bridge"
         action={
           <div className="bridge-actions">
-            <a className="primary" href="#/launch">
-              New task <ArrowRight size={16} />
+            <a className="primary" href="#/sprints">
+              Open plan <ArrowRight size={16} />
             </a>
           </div>
         }

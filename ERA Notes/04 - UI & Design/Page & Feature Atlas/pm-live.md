@@ -19,6 +19,14 @@ tags:
 
 ## Files
 
+**Shared Deliver launch (2026-11-14, R113):** the shared Confined view collects checks through Start and reports refusal afterward, preserving durable relay intent recovery. Game Mode has a separate orbital mission layout with reduced-motion and visibility pause. Local remains loopback-only; explicit owner renewal requires the updated bridge. Source/browser-fixture evidence does not establish phone deployment or physical-device acceptance.
+
+**Shared Setup clarity (2026-11-14, R112)** uses Overview / Rule coverage / Conflicts / Configuration. The shared snapshot supplies the 29-hard-rule summary, actual guard checks, manual review steps, actionable errors/warnings and informational Setup notes. Module rules remain reachable through Configuration, whose agent/category filters remain independent of the selected detail. Legacy map-and-rule links open coverage details. `Setup.tsx`, `setup.css`, `setupModel.ts` and `setupAttention.ts` own the shared presentation. Saved relay snapshots retain their stale status. This entry records source behavior, with browser and device acceptance tracked in R112.
+
+**Sessions workspace (2026-11-14, R111):** shared Sessions uses one state selector, campaign collections for large queues and six-card pages. Unknown/stale relay observations never imply running or success. `#/uat-item/<campaign>/<id>` opens existing handovers on the relay; resolving new authored steps and starting a new source-bound handover currently require the laptop transport. No relay schema change is introduced. Agent evidence remains a secondary inspector. Local viewport verification does not establish deployed-phone acceptance.
+
+**Shared Plan entry (2026-11-14, R109):** Plan opens Sprints; Search work and More > Work retain the backlog with Plan active. Realign uses the existing authenticated planning command to translate active/draft dates together, with preview and revision-bound Undo. Closed history stays fixed. Use a matching updated bridge for remote planning. Existing relay/device limits remain; local mobile verification is not deployed-phone acceptance.
+
 **Shared Game-core animation (2026-11-14, R104):** the shared Bridge core permits sustained visible rotation and a cosmetic throttle action, with delivery-derived running/waiting/success/failure treatments. Relay uncertainty remains explicit and cannot create a successful result. Reduced motion and hidden/offscreen pause rules apply. Local mobile-viewport evidence does not establish deployed or physical-phone acceptance.
 
 **Shared overload refinement (2026-11-14, R105):** the core adds stronger friction, flame/ember spray, smoke and local vibration, with continuous angular phase and gradual cooldown. Simulated throttle preserves the real state caption and sends no command. Local viewport checks remain separate from deployed-phone and physical-device acceptance.

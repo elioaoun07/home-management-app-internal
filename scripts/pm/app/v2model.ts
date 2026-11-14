@@ -107,7 +107,7 @@ export function launchState(executor: V2Executor) {
 /** One owner-facing cause for an unavailable executor. Internal gate codes stay out of the launch screen. */
 export function executorBlockMessage(executor: V2Executor) {
   if (executor.available === false) return "This executor is not installed.";
-  if (!executor.permitted) return "This executor is disabled in Delivery settings.";
+  if (!executor.permitted) return `${executor.label} is not enabled for Confined.`;
   const codes = new Set([
     ...executor.refusals.map((entry) => entry.code),
     ...executor.qualification.refusals.map((entry) => entry.code),

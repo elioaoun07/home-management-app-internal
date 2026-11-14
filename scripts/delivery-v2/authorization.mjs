@@ -1,6 +1,6 @@
 // Explicit owner renewal, separate from immutable settings and run receipts.
-// Only the authenticated Check readiness command writes this journal. Polling,
-// Start's internal observations and loading the policy are read-only.
+// Only authenticated owner Start/Check commands write this journal. Polling,
+// internal observation collection and loading the policy never renew authority.
 import { existsSync, readFileSync, renameSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";

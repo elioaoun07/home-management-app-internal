@@ -154,7 +154,15 @@ export function defaults(form, input = {}) {
   }
   return values;
 }
-export function renderPrompt(form, values, attachments, tier, effort) {
+export function renderPrompt(
+  form,
+  values,
+  attachments,
+  tier,
+  effort,
+  prompt = "",
+  paths = [],
+) {
   // JSON values are data for the agent, never interpolated shell text.
   const inputs = Object.fromEntries(
     form.fields
@@ -167,11 +175,52 @@ export function renderPrompt(form, values, attachments, tier, effort) {
     attachments.length
       ? `Preload: ${attachments.map((s) => `.claude/skills/${s}/SKILL.md`).join(", ")}`
       : "",
+    prompt.trim() ? `Request:\n${prompt}` : "",
+    paths.length
+      ? `Target paths:\n${paths.map((path) => `- ${path}`).join("\n")}`
+      : "",
     "Inputs (complete; apply the skill's safety and verification gates):",
     JSON.stringify(inputs, null, 2),
   ]
     .filter(Boolean)
     .join("\n");
+}
+// Prompt launches retain the owner's words; structured context is supplementary.
+// This form shares typed validation without claiming the guided inputs are complete.
+export function promptForm(skill) {
+  return {
+    skill,
+    fields: [
+      { id: "prompt", type: "multiline", required: true },
+      { id: "module", type: "module" },
+      { id: "item", type: "item", required: skill === "era-wire" },
+    ],
+    checks: skill === "era-wire" ? [{ kind: "eraReport", field: "item" }] : [],
+  };
+}
+export function renderFreePrompt(
+  skill,
+  values,
+  attachments,
+  tier,
+  effort,
+  paths = [],
+) {
+  return [
+    `/${skill}\n${values.prompt}`,
+    values.module ? `Module: ${values.module}` : "",
+    values.item ? `Work item: ${values.item}` : "",
+    paths.length
+      ? `Target paths:\n${paths.map((path) => `- ${path}`).join("\n")}`
+      : "",
+    `Tier: ${tier}; effort: ${effort}.`,
+    `Apply .claude/skills/${skill}/SKILL.md, including its safety and verification gates.`,
+    attachments.length
+      ? `Preload: ${attachments.map((s) => `.claude/skills/${s}/SKILL.md`).join(", ")}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 export function moduleArgs(values) {
   return [

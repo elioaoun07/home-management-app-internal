@@ -9,6 +9,8 @@ import {
   defaults,
   visible,
   renderPrompt,
+  renderFreePrompt,
+  promptForm,
   moduleArgs,
   psQuote,
   KNOWLEDGE_SKILLS,
@@ -20,6 +22,8 @@ import { fileTasks, isChecklistPath } from "../pm/shared/tasks.mjs";
 export const ATTACHMENTS = KNOWLEDGE_SKILLS;
 export const requestSchema = z
   .object({
+    mode: z.enum(["prompt", "guided"]).default("guided"),
+    prompt: z.string().max(8000).default(""),
     skill: z.string().max(80),
     values: z.record(
       z.string(),
@@ -39,6 +43,9 @@ export function catalog(setup) {
   const entities = setup.entities;
   return {
     fingerprint: setup.fingerprint,
+    skills: entities.filter(
+      (e) => e.kind === "skill" && e.id === `skill:claude:${e.name}`,
+    ),
     forms: entities.filter((e) => e.kind === "form").map((e) => e.definition),
     recipes: entities
       .filter((e) => e.kind === "recipe")
@@ -104,7 +111,27 @@ export async function prepare(
 ) {
   const input = requestSchema.parse(raw),
     data = catalog(setup);
-  const form = data.forms.find((f) => f.skill === input.skill);
+  if (!data.skills.some((skill) => skill.name === input.skill))
+    throw Error("Unknown skill");
+  const guidedForm = data.forms.find((f) => f.skill === input.skill);
+  const form =
+    input.mode === "prompt"
+      ? promptForm(input.skill)
+      : guidedForm
+        ? {
+            ...guidedForm,
+            fields: [
+              ...guidedForm.fields,
+              ...promptForm(input.skill).fields.filter(
+                (field) =>
+                  ["module", "item"].includes(field.id) &&
+                  !guidedForm.fields.some(
+                    (declared) => declared.id === field.id,
+                  ),
+              ),
+            ],
+          }
+        : undefined;
   if (!form) throw Error("Unknown skill form");
   const errors = {};
   const fail = (key, message) => {
@@ -271,10 +298,12 @@ export async function prepare(
     );
   if (input.attachments.some((s) => !data.attachments.includes(s)))
     fail("attachments", "Unknown attachment");
-  const attachments = [...new Set([...automatic, ...input.attachments])].sort();
+  const attachments = [...new Set([...automatic, ...input.attachments])]
+    .filter((name) => name !== form.skill)
+    .sort();
   if (Object.keys(errors).length) return { ok: false, errors, automatic };
   let preview = null;
-  if (form.preview) {
+  if (input.mode === "guided" && form.preview) {
     if (form.skill !== "new-module") throw Error("Preview not allowlisted");
     // Fixed executable and script, argv array, shell disabled, always --dry-run.
     try {
@@ -304,7 +333,25 @@ export async function prepare(
       };
     }
   }
-  const prompt = renderPrompt(form, values, attachments, input.tier, effort);
+  const prompt =
+    input.mode === "prompt"
+      ? renderFreePrompt(
+          form.skill,
+          values,
+          attachments,
+          input.tier,
+          effort,
+          input.paths,
+        )
+      : renderPrompt(
+          form,
+          values,
+          attachments,
+          input.tier,
+          effort,
+          input.prompt,
+          input.paths,
+        );
   const command =
     tier.provider.toLowerCase() === "claude"
       ? `claude --model ${psQuote(tier.selector)} --effort ${psQuote(effort)} ${psQuote(prompt)}`

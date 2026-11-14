@@ -83,8 +83,8 @@ tags:
 | `statement-import` | `/statement-import` | [[statement-import]] |
 | `atlas`         | `/atlas`         | [[atlas]]         |
 | `offline`       | `/offline`       | [[offline]]       |
-| `pm`            | `/pm`            | [[pm]] — calm/game Bridge, outcome charts, SDK status, skill picker and searchable setup; hosted export retained |
-| `pm-live`       | `/pm/live`       | [[pm-live]] — shared calm/game Bridge, chart evidence, stale-aware SDK status and delivery recovery |
+| `pm`            | `/pm`            | [[pm]] — calm/game Bridge, Plan, Sessions and per-item tests, Setup coverage/conflicts/configuration, hosted export |
+| `pm-live`       | `/pm/live`       | [[pm-live]] — shared Sessions, handover tests, delivery recovery and Setup coverage/conflicts/configuration |
 
 ## Feature Modules (Standalone)
 

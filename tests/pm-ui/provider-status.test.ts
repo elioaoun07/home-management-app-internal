@@ -50,7 +50,7 @@ describe("Setup attention", () => {
       { id: "HR-4", kind: "rule", level: "checked", enforcedBy: ["detector:active"] },
       { id: "HR-5", kind: "rule", level: "blocked", retired: true },
       { id: "detector:disabled", kind: "detector", disabled: true },
-      { id: "detector:active", kind: "detector" },
+      { id: "detector:active", kind: "detector", level: "checked", fixtures: ["pass.json", "fail.json"] },
     ]));
     expect(result.missingGuards.map((rule) => rule.id)).toEqual(["HR-1", "HR-2", "HR-3"]);
     expect(result.needsAttention).toBe(true);

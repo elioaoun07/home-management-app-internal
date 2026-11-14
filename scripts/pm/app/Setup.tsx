@@ -1,17 +1,29 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 import { useWorld, useRoute } from "./state";
 import { Empty, PageTitle, Markdown } from "./components";
+import { chain, column, ruleFact, sessionHref } from "./cockpitModel";
+import type { Cockpit, Entity, Setup as SetupData } from "./cockpitTypes";
+import { SectionNav } from "./CockpitUI";
 import {
-  chain,
-  column,
-  hardRules,
-  ruleFact,
-  sessionHref,
-} from "./cockpitModel";
-import type { Setup as SetupData } from "./cockpitTypes";
-import { SectionNav, Metric } from "./CockpitUI";
-import { Search, Cpu, ArrowRight } from "lucide-react";
+  Search,
+  Cpu,
+  ArrowRight,
+  ShieldCheck,
+  ShieldAlert,
+  Eye,
+  CheckCircle2,
+  CircleHelp,
+} from "lucide-react";
 import { setupAttention } from "./setupAttention";
+import {
+  ruleCoverage,
+  setupCoverage,
+  ruleTitle,
+  coverageLabel,
+  conflictPresentation,
+  groupSetupConflicts,
+} from "./setupModel";
+import "./setup.css";
 
 export function Fingerprint({ hash }: { hash?: string | null }) {
   const bits = (hash || "").replace(/^sha256:/, "");
@@ -44,53 +56,20 @@ const columns = [
   "Checks · detectors",
   "Rules",
 ];
-function RuleShield({ level }: { level?: string }) {
-  const id = useId(),
-    fill =
-      (
-        { documented: 0, reminded: 0.5, checked: 0.75, blocked: 1 } as Record<
-          string,
-          number
-        >
-      )[level || ""] || 0;
-  return (
-    <svg
-      width="22"
-      height="24"
-      viewBox="0 0 24 26"
-      role="img"
-      aria-label={`Shield ${level || "unknown"}`}
-    >
-      <defs>
-        <clipPath id={id}>
-          <path d="M12 1 23 5v8c0 6-7 10-11 12C8 23 1 19 1 13V5Z" />
-        </clipPath>
-      </defs>
-      <rect
-        x="0"
-        y={26 * (1 - fill)}
-        width="24"
-        height={26 * fill}
-        fill="currentColor"
-        opacity=".55"
-        clipPath={`url(#${id})`}
-      />
-      <path
-        d="M12 1 23 5v8c0 6-7 10-11 12C8 23 1 19 1 13V5Z"
-        fill="none"
-        stroke="currentColor"
-      />
-    </svg>
-  );
-}
 export function SetupMap({ setup }: { setup: SetupData }) {
   const route = useRoute();
-  const [selected, setSelected] = useState(
-    route.query.get("rule") || "agent:claude",
+  const initial = route.query.get("entity") || route.query.get("rule") || "";
+  const initialEntry = setup.entities.find((entry) => entry.id === initial);
+  const [selected, setSelected] = useState(initial);
+  const [agentFilter, setAgentFilter] = useState(
+    route.query.get("agent") || "",
   );
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState(route.query.get("rule") ? 5 : 2);
+  const [category, setCategory] = useState(
+    initialEntry ? Math.max(1, column(initialEntry)) : 2,
+  );
   const lit = chain(setup, selected);
+  const members = agentFilter ? chain(setup, agentFilter) : null;
   const grouped = columns.map((_, i) =>
     setup.entities.filter((e) => column(e) === i && !e.retired),
   );
@@ -100,6 +79,13 @@ export function SetupMap({ setup }: { setup: SetupData }) {
   const positions = new Map(nodes.map((n) => [n.e.id, n]));
   const height = Math.max(...grouped.map((g) => g.length), 1) * 48 + 50;
   const current = setup.entities.find((e) => e.id === selected);
+  const entries = grouped[category].filter(
+    (e) =>
+      (!members || members.has(e.id)) &&
+      `${e.id} ${e.name || ""} ${e.title || ""} ${e.source || ""}`
+        .toLowerCase()
+        .includes(search.toLowerCase()),
+  );
   return (
     <>
       <div className="setup-agents" aria-label="Agents">
@@ -114,8 +100,11 @@ export function SetupMap({ setup }: { setup: SetupData }) {
               <button
                 className="agent-card"
                 key={agent.id}
-                aria-pressed={selected === agent.id}
-                onClick={() => setSelected(agent.id)}
+                aria-pressed={agentFilter === agent.id}
+                onClick={() => {
+                  setAgentFilter(agentFilter === agent.id ? "" : agent.id);
+                  setSelected("");
+                }}
               >
                 <Cpu size={23} />
                 <strong>{agent.name || agent.id.replace("agent:", "")}</strong>
@@ -147,46 +136,57 @@ export function SetupMap({ setup }: { setup: SetupData }) {
               </option>
             ))}
           </select>
-          <button className="secondary" onClick={() => setSelected("")}>
-            Show all
+          <button
+            className="secondary"
+            aria-pressed={!agentFilter}
+            onClick={() => {
+              setAgentFilter("");
+              setSearch("");
+            }}
+          >
+            All agents
           </button>
         </div>
         <div className="setup-entries">
-          {grouped[category]
-            .filter(
-              (e) =>
-                (!selected || lit.has(e.id)) &&
-                `${e.id} ${e.name} ${e.title} ${e.source}`
-                  .toLowerCase()
-                  .includes(search.toLowerCase()),
-            )
-            .map((e) => (
-              <button
-                className="setup-entry"
-                key={e.id}
-                onClick={() => setSelected(e.id)}
-                aria-pressed={selected === e.id}
-              >
-                <strong>{e.name || e.title?.split(/[—·]/)[0] || e.id}</strong>
-                <small>{e.level || e.kind}</small>
-                <code>{e.source || e.id}</code>
-              </button>
-            ))}
+          {entries.map((e) => (
+            <button
+              className="setup-entry"
+              key={e.id}
+              onClick={() => setSelected(e.id)}
+              aria-pressed={selected === e.id}
+            >
+              <strong>
+                {e.kind === "rule" ? ruleTitle(e) : e.name || e.id}
+              </strong>
+              <small>{e.disabled ? "Disabled" : e.kind}</small>
+              <code>{e.source || e.id}</code>
+            </button>
+          ))}
         </div>
-        {!grouped[category].some(
-          (e) =>
-            (!selected || lit.has(e.id)) &&
-            `${e.id} ${e.name} ${e.title} ${e.source}`
-              .toLowerCase()
-              .includes(search.toLowerCase()),
-        ) && <div className="queue-empty">No matching entries</div>}
+        {!entries.length && (
+          <div className="queue-empty">No matching entries</div>
+        )}
         {current && (
           <details className="setup-selection" open key={selected}>
             <summary>{current.name || current.id}</summary>
             <Markdown raw={current.title || current.name || current.id} />
             <code>{current.source}</code>
-            {current.kind === "rule" && !current.enforcedBy?.length && (
-              <p>No enforcement chain</p>
+            {current.kind === "rule" && (
+              <a
+                className="secondary"
+                href={`#/setup?tab=rulebook&rule=${encodeURIComponent(current.id)}`}
+              >
+                View coverage <ArrowRight size={16} />
+              </a>
+            )}
+            {!!current.enforcedBy?.length && (
+              <div className="setup-source-list">
+                {current.enforcedBy.map((id) => (
+                  <code key={id}>
+                    {setup.entities.find((e) => e.id === id)?.source || id}
+                  </code>
+                ))}
+              </div>
             )}
           </details>
         )}
@@ -238,13 +238,180 @@ export function SetupMap({ setup }: { setup: SetupData }) {
     </>
   );
 }
+function RuleEvidence({
+  rule,
+  data,
+}: {
+  rule: Entity;
+  data: Cockpit & { setup: SetupData };
+}) {
+  const guards = data.setup.entities.filter((entry) =>
+    rule.enforcedBy?.includes(entry.id),
+  );
+  const missing = (rule.enforcedBy || []).filter(
+    (id) => !guards.some((guard) => guard.id === id),
+  );
+  const observations = data.records.flatMap((record) => {
+    const fact = ruleFact(record, rule.id);
+    return fact ? [{ record, fact }] : [];
+  });
+  const failed = observations.find(({ fact }) => fact.verdict === "fail");
+  const baselines = guards.filter((guard) => guard.baseline != null);
+  return (
+    <details className="setup-rule-evidence">
+      <summary>Checks & evidence</summary>
+      <Markdown raw={rule.title || rule.name || rule.id} />
+      <code>{rule.source}</code>
+      {rule.review && (
+        <section className="setup-review-steps">
+          <h3>Review steps</h3>
+          <p>{rule.review.verify}</p>
+          <code>{rule.review.source}</code>
+        </section>
+      )}
+      <div className="setup-guard-list">
+        {guards.map((guard) => (
+          <div key={guard.id}>
+            <strong>{guard.name || guard.id}</strong>
+            <span>
+              {guard.disabled
+                ? "Disabled"
+                : guard.kind === "detector"
+                  ? guard.level === "advisory"
+                    ? "Advisory check"
+                    : "Automated check"
+                  : guard.conditional
+                    ? "Conditional stop guard"
+                    : guard.blocking || guard.level === "blocked"
+                      ? "Blocking guard"
+                      : "Reminder"}
+            </span>
+            <code>{guard.source}</code>
+            {!!guard.fixtures?.length && (
+              <small>{guard.fixtures.length} regression fixtures</small>
+            )}
+            {guard.baseline != null && (
+              <small>{guard.baseline} recorded baseline findings</small>
+            )}
+          </div>
+        ))}
+        {missing.map((id) => (
+          <div key={id}>
+            <strong>Guard missing</strong>
+            <code>{id}</code>
+          </div>
+        ))}
+      </div>
+      <dl className="setup-evidence-facts">
+        <div>
+          <dt>Baseline evidence</dt>
+          <dd>
+            {baselines.length
+              ? `${baselines.length} of ${guards.length} guards measured`
+              : "Unmeasured"}
+          </dd>
+        </div>
+        <div>
+          <dt>Recorded sessions</dt>
+          <dd>{observations.length}</dd>
+        </div>
+      </dl>
+      {failed && (
+        <a
+          className="secondary"
+          href={`${sessionHref(failed.record.session.id)}?rule=${rule.id}`}
+        >
+          Last failure <ArrowRight size={16} />
+        </a>
+      )}
+      {observations.length > 0 && (
+        <details>
+          <summary>Session history</summary>
+          {observations.map(({ record, fact }) => (
+            <a
+              className="session-identity"
+              key={record.session.id}
+              href={`${sessionHref(record.session.id)}?rule=${rule.id}`}
+            >
+              {record.session.startedAt || record.session.id} · {fact.verdict}
+              {fact.added != null && fact.removed != null
+                ? ` · +${fact.added} / −${fact.removed}`
+                : ""}
+            </a>
+          ))}
+        </details>
+      )}
+    </details>
+  );
+}
+
+function ConflictGroups({
+  entries,
+  open = true,
+}: {
+  entries: Cockpit["conflicts"];
+  open?: boolean;
+}) {
+  return (
+    <div className="conflict-groups">
+      {[...new Set(entries.map((entry) => entry.code))].map((code) => {
+        const rows = entries.filter((entry) => entry.code === code);
+        const presentation = conflictPresentation(rows[0]);
+        return (
+          <details
+            className="cockpit-panel setup-conflict"
+            key={code}
+            open={open}
+          >
+            <summary>
+              <strong>{presentation.title}</strong>
+              <span className="count-badge">{rows.length}</span>
+            </summary>
+            <div className="setup-remedy">
+              <span>{presentation.action}</span>
+              {presentation.command && <code>{presentation.command}</code>}
+            </div>
+            {rows.map((entry, index) => (
+              <article
+                className="conflict-row"
+                key={`${entry.source}-${index}`}
+              >
+                <p>{entry.message}</p>
+                {entry.resolution &&
+                  entry.resolution !== presentation.action && (
+                    <p className="setup-remedy">{entry.resolution}</p>
+                  )}
+                <div className="setup-source-list">
+                  <code>{entry.source}</code>
+                  {entry.related && <code>{entry.related}</code>}
+                </div>
+                {entry.severity !== "info" && (
+                  <a
+                    className="secondary"
+                    href={`#/library?capture=${encodeURIComponent(`${entry.code}: ${entry.message}\n${entry.source}\n${entry.related || ""}`)}`}
+                  >
+                    Capture issue <ArrowRight size={16} />
+                  </a>
+                )}
+              </article>
+            ))}
+          </details>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Setup() {
   const { world } = useWorld();
   const route = useRoute();
   const data = world.cockpit,
     setup = data?.setup;
-  const tab = route.query.get("tab") || "map";
-  const [weakest, setWeakest] = useState(true);
+  const requestedTab = route.query.get("tab") || "map";
+  const tab =
+    requestedTab === "map" && route.query.has("rule")
+      ? "rulebook"
+      : requestedTab;
   const [search, setSearch] = useState("");
   if (!setup)
     return (
@@ -252,254 +419,350 @@ export function Setup() {
         {data?.warnings.join(" · ")}
       </Empty>
     );
-  const levels = ["documented", "reminded", "checked", "blocked"];
-  const rules = hardRules(setup).sort((a, b) =>
-    weakest
-      ? levels.indexOf(a.level || "") - levels.indexOf(b.level || "") ||
-        Number(a.id.slice(3)) - Number(b.id.slice(3))
-      : Number(a.id.slice(3)) - Number(b.id.slice(3)),
+  const coverage = setupCoverage(setup);
+  const attention = setupAttention(data);
+  const issues = groupSetupConflicts(data.conflicts);
+  const selectedRule = route.query.get("rule");
+  const filter = route.query.get("coverage") || "all";
+  const ruleEntries = selectedRule
+    ? setup.entities.filter(
+        (entry) => entry.kind === "rule" && !entry.retired && !entry.disabled,
+      )
+    : coverage.rules;
+  const rules = ruleEntries
+    .filter((rule) => {
+      const status = ruleCoverage(rule, setup);
+      return (
+        (!selectedRule || rule.id === selectedRule) &&
+        (filter === "all" ||
+          (filter === "automated" && ["checked", "blocked"].includes(status)) ||
+          (filter === "manual" &&
+            ["reminded", "documented"].includes(status)) ||
+          (filter === "missing" && status === "missing")) &&
+        (Boolean(selectedRule) ||
+          `${rule.id} ${rule.title || ""}`
+            .toLowerCase()
+            .includes(search.toLowerCase()))
+      );
+    })
+    .sort((a, b) => Number(a.id.slice(3)) - Number(b.id.slice(3)));
+  const manualCount = coverage.manual;
+  const actionable = issues.errors.length + issues.warnings.length;
+  const agents = setup.entities.filter(
+    (entry) => entry.kind === "agent" && !entry.retired,
   );
   return (
-    <div className="cockpit">
+    <div className="cockpit setup-page">
       <PageTitle
         title="Setup"
-        action={<Fingerprint hash={setup.fingerprint} />}
+        eyebrow="Agent instructions & safeguards"
+        action={
+          <div className="cockpit-tools">
+            <a className="secondary" href="#/skill-tools">
+              Prompt tools <ArrowRight size={16} />
+            </a>
+          </div>
+        }
       />
-      {data.stale && <span role="status">Saved snapshot</span>}
+      {data.stale && (
+        <span role="status" className="setup-stale">
+          Saved setup snapshot
+        </span>
+      )}
       <SectionNav
         label="Setup tabs"
         items={[
-          { label: "Overview", href: "#/setup?tab=map", active: tab === "map" },
+          { label: "Overview", href: "#/setup", active: tab === "map" },
           {
-            label: "Rulebook",
+            label: "Rule coverage",
             href: "#/setup?tab=rulebook",
             active: tab === "rulebook",
           },
           {
-            label: `Conflicts · ${data.conflicts.length}`,
+            label: `Conflicts${actionable ? ` · ${actionable}` : ""}`,
             href: "#/setup?tab=conflicts",
             active: tab === "conflicts",
+          },
+          {
+            label: "Configuration",
+            href: "#/setup?tab=configuration",
+            active: tab === "configuration",
           },
         ]}
       />
       {tab === "map" ? (
         <>
-          <div className="cockpit-metrics">
-            <Metric
-              label="Rules"
-              value={rules.length}
-              href="#/setup?tab=rulebook"
-            />
-            <Metric
-              label="Guarded rules"
-              value={
-                rules.filter((r) =>
-                  ["checked", "blocked"].includes(r.level || ""),
-                ).length
-              }
-              href="#/setup?tab=rulebook"
-            />
-            <Metric
-              label="Conflicts"
-              value={data.conflicts.length}
-              href="#/setup?tab=conflicts"
-            />
-          </div>
-          {setupAttention(data).missingGuards.length > 0 && (
+          <section
+            className="setup-health"
+            data-attention={attention.needsAttention || data.stale || undefined}
+            aria-label="Setup health"
+          >
+            {attention.needsAttention || data.stale ? (
+              <ShieldAlert size={28} />
+            ) : (
+              <CheckCircle2 size={28} />
+            )}
+            <div>
+              <h2>
+                {data.stale
+                  ? "Saved setup status"
+                  : attention.needsAttention
+                    ? "Setup needs attention"
+                    : "Setup checks clear"}
+              </h2>
+              <span>
+                {issues.errors.length} errors · {issues.warnings.length}{" "}
+                warnings · {attention.missingGuards.length} missing guards
+              </span>
+            </div>
+            <a className="secondary" href="#/setup?tab=conflicts">
+              Inspect <ArrowRight size={16} />
+            </a>
+          </section>
+          {attention.missingGuards.length > 0 && (
             <section className="cockpit-panel" aria-label="Missing guards">
-              <h2>Missing guards</h2>
-              {setupAttention(data).missingGuards.map((rule) => (
+              <h2>Restore missing guards</h2>
+              {attention.missingGuards.map((rule) => (
                 <a
-                  className="session-identity"
+                  className="setup-action-row"
                   key={rule.id}
-                  href={`#/setup?tab=map&rule=${encodeURIComponent(rule.id)}`}
+                  href={`#/setup?tab=rulebook&rule=${encodeURIComponent(rule.id)}`}
                 >
-                  {rule.id} ·{" "}
-                  {rule.title?.split(/[—·]/)[0] || "Guard unavailable"}
+                  <span>
+                    <b>{rule.id}</b> {ruleTitle(rule)}
+                  </span>
+                  <ArrowRight size={16} />
                 </a>
               ))}
             </section>
           )}
-          <SetupMap key={route.query.get("rule") || "overview"} setup={setup} />
+          {actionable > 0 && (
+            <section className="cockpit-panel">
+              <h2>Resolve conflicts</h2>
+              {[
+                ...new Set(
+                  [...issues.errors, ...issues.warnings].map(
+                    (entry) => entry.code,
+                  ),
+                ),
+              ].map((code) => {
+                const entries = [...issues.errors, ...issues.warnings].filter(
+                  (entry) => entry.code === code,
+                );
+                return (
+                  <a
+                    className="setup-action-row"
+                    href="#/setup?tab=conflicts"
+                    key={code}
+                  >
+                    <span>{conflictPresentation(entries[0]).title}</span>
+                    <span>
+                      {entries.length} <ArrowRight size={16} />
+                    </span>
+                  </a>
+                );
+              })}
+            </section>
+          )}
+          <div className="setup-overview-grid">
+            <section
+              className="cockpit-panel setup-coverage-summary"
+              aria-label="Rule coverage"
+            >
+              <h2>
+                Rule coverage <small>{coverage.rules.length} hard rules</small>
+              </h2>
+              <a
+                className="setup-coverage-row"
+                href="#/setup?tab=rulebook&coverage=automated"
+              >
+                <ShieldCheck size={20} />
+                <span>Automated checks</span>
+                <strong>{coverage.automated}</strong>
+                <ArrowRight size={16} />
+              </a>
+              <a
+                className="setup-coverage-row"
+                href="#/setup?tab=rulebook&coverage=manual"
+              >
+                <Eye size={20} />
+                <span>Human review</span>
+                <strong>{manualCount}</strong>
+                <ArrowRight size={16} />
+              </a>
+              <a
+                className="setup-coverage-row"
+                href="#/setup?tab=rulebook&coverage=missing"
+              >
+                <ShieldAlert size={20} />
+                <span>Missing guards</span>
+                <strong>{coverage.missing}</strong>
+                <ArrowRight size={16} />
+              </a>
+              <details className="setup-help">
+                <summary>
+                  <CircleHelp size={15} /> How coverage works
+                </summary>
+                <p>Configured checks cover specific patterns.</p>
+                <p>Human review covers behavior and design judgment.</p>
+                <p>Missing guards require a configuration repair.</p>
+              </details>
+            </section>
+            <section className="cockpit-panel">
+              <h2>Agent configuration</h2>
+              {agents.map((agent) => {
+                const membership = chain(setup, agent.id);
+                const skills = setup.entities.filter(
+                  (entry) =>
+                    entry.kind === "skill" &&
+                    !entry.retired &&
+                    membership.has(entry.id),
+                ).length;
+                return (
+                  <a
+                    className="setup-agent-row"
+                    key={agent.id}
+                    href={`#/setup?tab=configuration&agent=${encodeURIComponent(agent.id)}`}
+                  >
+                    <Cpu size={20} />
+                    <span>
+                      <strong>
+                        {agent.name || agent.id.replace("agent:", "")}
+                      </strong>
+                      <small>{skills} skills</small>
+                    </span>
+                    <ArrowRight size={16} />
+                  </a>
+                );
+              })}
+            </section>
+          </div>
+          <details className="setup-snapshot">
+            <summary>Scan details</summary>
+            <dl className="setup-evidence-facts">
+              <div>
+                <dt>Scanned</dt>
+                <dd>
+                  <time dateTime={setup.generatedAt}>
+                    {new Date(setup.generatedAt).toLocaleString()}
+                  </time>
+                </dd>
+              </div>
+              <div>
+                <dt>Fingerprint</dt>
+                <dd>
+                  <code>{setup.fingerprint}</code>
+                </dd>
+              </div>
+            </dl>
+            <a className="secondary" href="#/setup?tab=conflicts">
+              {issues.info.length} setup notes <ArrowRight size={16} />
+            </a>
+          </details>
         </>
       ) : tab === "rulebook" ? (
         <>
           <div className="cockpit-tools">
-            <label className="cockpit-search">
-              <Search size={17} />
-              <input
-                aria-label="Search rules"
-                placeholder="Find a rule"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </label>
-            <button
-              className="secondary"
-              aria-pressed={weakest}
-              onClick={() => setWeakest(!weakest)}
-            >
-              Weakest first
-            </button>
+            {!selectedRule && (
+              <>
+                <label className="cockpit-search">
+                  <Search size={17} />
+                  <input
+                    aria-label="Search rules"
+                    placeholder="Find a rule"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </label>
+                <select
+                  aria-label="Rule coverage filter"
+                  value={filter}
+                  onChange={(event) => {
+                    location.hash = `/setup?tab=rulebook&coverage=${event.target.value}`;
+                  }}
+                >
+                  <option value="all">All rules</option>
+                  <option value="automated">Automated checks</option>
+                  <option value="manual">Human review</option>
+                  <option value="missing">Missing guards</option>
+                </select>
+              </>
+            )}
+            {selectedRule && (
+              <a
+                className="secondary"
+                href="#/setup?tab=rulebook"
+                onClick={() => setSearch("")}
+              >
+                All rules
+              </a>
+            )}
           </div>
           <div className="rule-grid">
-            {rules
-              .filter((rule) =>
-                `${rule.id} ${rule.title}`
-                  .toLowerCase()
-                  .includes(search.toLowerCase()),
-              )
-              .map((rule) => {
-                const guards = setup.entities.filter((e) =>
-                  rule.enforcedBy?.includes(e.id),
-                );
-                const baselines = guards.filter((e) => e.baseline != null);
-                const failed = data.records.find(
-                  (r) => ruleFact(r, rule.id)?.verdict === "fail",
-                );
-                const changes = data.records
-                  .slice()
-                  .reverse()
-                  .flatMap((record) => {
-                    const fact = ruleFact(record, rule.id);
-                    return fact && fact.added != null && fact.removed != null
-                      ? [
-                          {
-                            id: record.session.id,
-                            at: record.session.startedAt,
-                            added: fact.added,
-                            removed: fact.removed,
-                          },
-                        ]
-                      : [];
-                  });
-                const max = Math.max(1, ...changes.map((c) => c.added));
-                return (
-                  <article key={rule.id} className="cockpit-panel">
-                    <a href={`#/setup?tab=map&rule=${rule.id}`}>
-                      <b>{rule.id}</b> ·{" "}
-                      <span aria-label={`Shield ${rule.level}`}>
-                        <RuleShield level={rule.level} /> {rule.level}
-                      </span>
+            {rules.map((rule) => {
+              const status = ruleCoverage(rule, setup);
+              return (
+                <article
+                  key={rule.id}
+                  className="cockpit-panel setup-rule"
+                  data-rule={rule.id}
+                  data-coverage={status}
+                >
+                  <div className="setup-rule-heading">
+                    <a href={`#/setup?tab=rulebook&rule=${rule.id}`}>
+                      {rule.id}
                     </a>
-                    <h2 title={rule.title}>
-                      {rule.title?.split(/[—·]/)[0].slice(0, 80)}
-                    </h2>
-                    <details>
-                      <summary>
-                        Baseline{" "}
-                        {baselines.length
-                          ? baselines.reduce((n, e) => n + (e.baseline || 0), 0)
-                          : "unknown"}{" "}
-                      </summary>
-                      {guards.map((e) => (
-                        <p key={e.id}>
-                          <code>{e.source}</code> · {e.baseline ?? "unknown"}
-                        </p>
-                      ))}
-                    </details>
-                    {changes.length > 1 && (
-                      <>
-                        <small>Session Δ</small>
-                        <svg
-                          className="rule-trend"
-                          viewBox="0 0 200 48"
-                          role="img"
-                          aria-label="New violations by recorded session"
-                        >
-                          <polyline
-                            points={changes
-                              .map(
-                                (c, i) =>
-                                  `${8 + (i * 184) / (changes.length - 1)},${40 - (c.added / max) * 30}`,
-                              )
-                              .join(" ")}
-                            fill="none"
-                            stroke="currentColor"
-                          />
-                          {changes.map((c, i) => (
-                            <a
-                              key={c.id}
-                              href={`${sessionHref(c.id)}?rule=${rule.id}`}
-                            >
-                              <circle
-                                cx={8 + (i * 184) / (changes.length - 1)}
-                                cy={40 - (c.added / max) * 30}
-                                r="5"
-                                fill="currentColor"
-                              >
-                                <title>
-                                  {c.at || c.id}: {c.added} added
-                                </title>
-                              </circle>
-                            </a>
-                          ))}
-                        </svg>
-                      </>
-                    )}
-                    {failed ? (
-                      <a
-                        href={`${sessionHref(failed.session.id)}?rule=${rule.id}`}
-                      >
-                        Last failure
-                      </a>
-                    ) : (
-                      <span>Last failure unrecorded</span>
-                    )}
-                    <details>
-                      <summary>Evidence</summary>
-                      {changes.map((c) => (
-                        <a
-                          className="session-identity"
-                          key={c.id}
-                          href={`${sessionHref(c.id)}?rule=${rule.id}`}
-                        >
-                          {c.at || c.id} · +{c.added} / −{c.removed}
-                        </a>
-                      ))}
-                      {guards.map((e) => (
-                        <p key={e.id}>
-                          <code>{e.source}</code> · {e.baseline ?? "unknown"}
-                        </p>
-                      ))}
-                    </details>
-                  </article>
-                );
-              })}
-          </div>
-        </>
-      ) : (
-        <div className="conflict-groups">
-          {!data.conflicts.length && <Empty title="No setup conflicts" />}
-          {[...new Set(data.conflicts.map((r) => r.code))].map((code) => (
-            <details key={code} className="cockpit-panel">
-              <summary>
-                {code}
-                <span className="count-badge">
-                  {data.conflicts.filter((r) => r.code === code).length}
-                </span>
-              </summary>
-              {data.conflicts
-                .filter((r) => r.code === code)
-                .map((r, i) => (
-                  <article className="conflict-row" key={i}>
-                    <b>{r.severity}</b>
-                    <p>{r.message}</p>
-                    <div className="compare-grid">
-                      <code>{r.source}</code>
-                      <code>{r.related || "No paired source"}</code>
-                    </div>
-                    <a
-                      className="secondary"
-                      href={`#/library?capture=${encodeURIComponent(`${r.code}: ${r.message}\n${r.source}\n${r.related || ""}`)}`}
+                    <span
+                      className="setup-coverage-label"
+                      data-coverage={status}
                     >
-                      Open as item
-                    </a>
-                  </article>
-                ))}
+                      {coverageLabel(status)}
+                    </span>
+                  </div>
+                  <h2>{ruleTitle(rule)}</h2>
+                  {status === "missing" && <p>Restore the declared guard.</p>}
+                  {rule.review && (
+                    <p className="setup-review-reason">{rule.review.reason}</p>
+                  )}
+                  <RuleEvidence rule={rule} data={{ ...data, setup }} />
+                </article>
+              );
+            })}
+          </div>
+          {!rules.length && <Empty title="No matching rules" />}
+        </>
+      ) : tab === "configuration" ? (
+        <SetupMap
+          key={`${route.query.get("entity") || ""}-${route.query.get("agent") || ""}`}
+          setup={setup}
+        />
+      ) : (
+        <>
+          <div className="setup-diagnostic-counts">
+            <span>{issues.errors.length} errors</span>
+            <span>{issues.warnings.length} warnings</span>
+            <span>{issues.info.length} notes</span>
+          </div>
+          {!actionable && <Empty title="No setup conflicts" />}
+          {issues.errors.length > 0 && (
+            <section aria-label="Setup errors">
+              <h2 className="setup-section-heading">Errors</h2>
+              <ConflictGroups entries={issues.errors} />
+            </section>
+          )}
+          {issues.warnings.length > 0 && (
+            <section aria-label="Setup warnings">
+              <h2 className="setup-section-heading">Warnings</h2>
+              <ConflictGroups entries={issues.warnings} />
+            </section>
+          )}
+          {issues.info.length > 0 && (
+            <details className="setup-notes">
+              <summary>Setup notes · {issues.info.length}</summary>
+              <ConflictGroups entries={issues.info} open={false} />
             </details>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   );

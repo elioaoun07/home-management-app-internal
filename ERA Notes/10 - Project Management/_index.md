@@ -17,7 +17,7 @@ _Generated 2026-11-14 by `pnpm pm:ship` / `pnpm pm:index`. Edit the checklists, 
 
 ### This week
 
-**Week of Nov 9** · 2026-11-09 → 2026-11-15 · draft · Close the critical holes
+**Week of Nov 9** · 2026-11-16 → 2026-11-22 · draft · Close the critical holes
 
 | Item | Outcome | Size | Lane |
 |---|---|---|---|
@@ -95,7 +95,7 @@ Built and logged as shipped; the item's section still reads `UAT: pending`. Reco
 - **Budget** (3): [BUD-87](<Budget/Budget — Master Book.md#bud-87>), [BUD-88](<Budget/Budget — Master Book.md#bud-88>), [BUD-83](<Budget/Budget — Master Book.md#bud-83>)
 - **Schedule** (9): [SCH-20](<Schedule/Schedule — Master Book.md#sch-20>), [SCH-22](<Schedule/Schedule — Master Book.md#sch-22-1>), [SCH-23](<Schedule/Schedule — Master Book.md#sch-23-1>), [SCH-24](<Schedule/Schedule — Master Book.md#sch-24>), [SCH-25](<Schedule/Schedule — Master Book.md#sch-25>), [SCH-26](<Schedule/Schedule — Master Book.md#sch-26>), [SCH-27](<Schedule/Schedule — Master Book.md#sch-27>), [SCH-29](<Schedule/Schedule — Master Book.md#sch-29>), [SCH-30](<Schedule/Schedule — Master Book.md#sch-30>)
 - **Delivery** (21): [DLV-150](<Delivery/Delivery — Master Book.md#dlv-150>), [DLV-151](<Delivery/Delivery — Master Book.md#dlv-151>), [DLV-152](<Delivery/Delivery — Master Book.md#dlv-152>), [DLV-153](<Delivery/Delivery — Master Book.md#dlv-153>), [DLV-145](<Delivery/Delivery — Master Book.md#dlv-145>), [DLV-144](<Delivery/Delivery — Master Book.md#dlv-144>), [DLV-143](<Delivery/Delivery — Master Book.md#dlv-143>), [DLV-141](<Delivery/Delivery — Master Book.md#dlv-141>), [DLV-140](<Delivery/Delivery — Master Book.md#dlv-140>), [DLV-139](<Delivery/Delivery — Master Book.md#dlv-139>), [DLV-119](<Delivery/Delivery — Master Book.md#dlv-119>), [DLV-115](<Delivery/Delivery — Master Book.md#dlv-115>), [DLV-116](<Delivery/Delivery — Master Book.md#dlv-116>), [DLV-112](<Delivery/Delivery — Master Book.md#dlv-112>), [DLV-97](<Delivery/Delivery — Master Book.md#dlv-97>), [DLV-77](<Delivery/Delivery — Master Book.md#dlv-77>), [DLV-100](<Delivery/Delivery — Master Book.md#dlv-100>), [DLV-101](<Delivery/Delivery — Master Book.md#dlv-101>), [DLV-104](<Delivery/Delivery — Master Book.md#dlv-104>), [DLV-105](<Delivery/Delivery — Master Book.md#dlv-105>), [DLV-106](<Delivery/Delivery — Master Book.md#dlv-106>)
-- **PM Tooling** (20): [R106](<PM Tooling/PM Tooling — Master Book.md#r106>), [R105](<PM Tooling/PM Tooling — Master Book.md#r105>), [R104](<PM Tooling/PM Tooling — Master Book.md#r104>), [R103](<PM Tooling/PM Tooling — Master Book.md#r103>), [R102](<PM Tooling/PM Tooling — Master Book.md#r102>), [R101](<PM Tooling/PM Tooling — Master Book.md#r101>), [R84](<PM Tooling/PM Tooling — Master Book.md#r84>), [R81](<PM Tooling/PM Tooling — Master Book.md#r81>), [R80](<PM Tooling/PM Tooling — Master Book.md#r80>), [R78](<PM Tooling/PM Tooling — Master Book.md#r78>), [R77](<PM Tooling/PM Tooling — Master Book.md#r77>), [R76](<PM Tooling/PM Tooling — Master Book.md#r76>), [R69](<PM Tooling/PM Tooling — Master Book.md#r69>), [R66](<PM Tooling/PM Tooling — Master Book.md#r66>), [R65](<PM Tooling/PM Tooling — Master Book.md#r65>), [R64](<PM Tooling/PM Tooling — Master Book.md#r64>), [R61](<PM Tooling/PM Tooling — Master Book.md#r61>), [R63](<PM Tooling/PM Tooling — Master Book.md#r63>), [R44](<PM Tooling/PM Tooling — Master Book.md#r44>), [R51](<PM Tooling/PM Tooling — Master Book.md#r51>)
+- **PM Tooling** (25): [R113](<PM Tooling/PM Tooling — Master Book.md#r113>), [R112](<PM Tooling/PM Tooling — Master Book.md#r112>), [R111](<PM Tooling/PM Tooling — Master Book.md#r111>), [R109](<PM Tooling/PM Tooling — Master Book.md#r109>), [R108](<PM Tooling/PM Tooling — Master Book.md#r108>), [R106](<PM Tooling/PM Tooling — Master Book.md#r106>), [R105](<PM Tooling/PM Tooling — Master Book.md#r105>), [R104](<PM Tooling/PM Tooling — Master Book.md#r104>), [R103](<PM Tooling/PM Tooling — Master Book.md#r103>), [R102](<PM Tooling/PM Tooling — Master Book.md#r102>), [R101](<PM Tooling/PM Tooling — Master Book.md#r101>), [R84](<PM Tooling/PM Tooling — Master Book.md#r84>), [R81](<PM Tooling/PM Tooling — Master Book.md#r81>), [R80](<PM Tooling/PM Tooling — Master Book.md#r80>), [R78](<PM Tooling/PM Tooling — Master Book.md#r78>), [R77](<PM Tooling/PM Tooling — Master Book.md#r77>), [R76](<PM Tooling/PM Tooling — Master Book.md#r76>), [R69](<PM Tooling/PM Tooling — Master Book.md#r69>), [R66](<PM Tooling/PM Tooling — Master Book.md#r66>), [R65](<PM Tooling/PM Tooling — Master Book.md#r65>), [R64](<PM Tooling/PM Tooling — Master Book.md#r64>), [R61](<PM Tooling/PM Tooling — Master Book.md#r61>), [R63](<PM Tooling/PM Tooling — Master Book.md#r63>), [R44](<PM Tooling/PM Tooling — Master Book.md#r44>), [R51](<PM Tooling/PM Tooling — Master Book.md#r51>)
 
 ### Campaigns
 
@@ -111,8 +111,8 @@ Built and logged as shipped; the item's section still reads `UAT: pending`. Reco
 | **Notifications & Alerts** | 1 | 7 | 6 | 8 | [Checklist](<Notifications & Alerts/4 - Checklist.md>) · [Master Book](<Notifications & Alerts/Notifications & Alerts — Master Book.md>) |
 | **Native App** | 0 | 2 | 6 | 1 | [Checklist](<Native App/4 - Checklist.md>) · [Master Book](<Native App/Native App — Master Book.md>) |
 | **Delivery** | 0 | 5 | 12 | 115 | [Checklist](<Delivery/4 - Checklist.md>) · [Master Book](<Delivery/Delivery — Master Book.md>) |
-| **PM Tooling** | 0 | 10 | 13 | 72 | [Checklist](<PM Tooling/4 - Checklist.md>) · [Master Book](<PM Tooling/PM Tooling — Master Book.md>) |
-| **Total** | 7 | 117 | 142 | 420 | |
+| **PM Tooling** | 0 | 10 | 13 | 79 | [Checklist](<PM Tooling/4 - Checklist.md>) · [Master Book](<PM Tooling/PM Tooling — Master Book.md>) |
+| **Total** | 7 | 117 | 142 | 427 | |
 
 <!-- pm:generated:end -->
 

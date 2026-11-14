@@ -10,7 +10,10 @@ export function cockpitAlias(
   const q = new URLSearchParams(query);
   let path: string;
   if (["", "home"].includes(root)) path = "/bridge";
-  else if (["analytics", "dashboard"].includes(root)) {
+  else if (root === "launch" && !hasDetail && !q.has("file") && !q.has("cb")) {
+    path = "/explore";
+    if (!q.size) q.set("lane", "now");
+  } else if (["analytics", "dashboard"].includes(root)) {
     path = "/score";
     q.set("view", "backlog");
   } else if (root === "delivery" && !hasDetail) {

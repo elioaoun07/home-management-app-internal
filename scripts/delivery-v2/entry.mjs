@@ -854,6 +854,9 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
     if (!stewardRoutePermitted(method, path)) {
       return json(403, { error: STEWARD_REFUSALS.NOT_PERMITTED, detail: method + " " + path });
     }
+    if (path === "/api/delivery/v2/deliver" && body.renewAuthorization === true) {
+      return json(403, { error: STEWARD_REFUSALS.NOT_PERMITTED, detail: "Authorization renewal requires the owner" });
+    }
     // Attribution cannot be dropped or borrowed: a Steward Start is a Steward Start.
     if (path === "/api/delivery/v2/deliver") body = { ...body, initiatedBy: "era-steward" };
   }
@@ -1051,6 +1054,14 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
       // seconds that a UI-driven agent missed in practice (2026-10-19). When the
       // cached evidence is not current, collect it inside this request. Dispatch
       // still re-observes under its own claim.
+      // The owner's Start replaces the separate Check gesture. Renewal is an
+      // explicit part of its durable payload, never a side effect of reads or
+      // restricted Steward starts. Replays return the retained launch result.
+      if (body.renewAuthorization === true && !ctx.commandStatus?.(body.command_id)) {
+        if (!ctx.renewAuthorization) return json(503, { ok: false, error: "authorization-renewal-unavailable" });
+        const renewed = ctx.renewAuthorization({ actor: auth.actor, command_id: body.command_id });
+        if (!renewed.ok) return json(409, { ok: false, error: "authorization-renewal-failed", refusals: renewed.refusals });
+      }
       if (ctx.readiness && !ctx.commandStatus?.(body.command_id)) {
         const selection = { file: body.file, id: body.expectId || body.witness?.alias, executor: body.executor, model: body.model, effort: body.effort, workProfile: body.workProfile };
         let readiness = await ctx.readiness(selection);
@@ -1107,7 +1118,7 @@ export async function routeDeliveryV2({ method, path, query, body = {}, headers 
     // Existing commands from before launch receipts retain their original journey.
     if (body.initiatedBy == null && !previous && ctx.commandStatus?.(body.command_id)) return launch();
     const steward = body.initiatedBy === "era-steward";
-    const parsed = z.object({ initiatedBy: z.literal("era-steward").optional(), command_id: z.string().uuid(),
+    const parsed = z.object({ initiatedBy: z.literal("era-steward").optional(), renewAuthorization: z.boolean().optional(), command_id: z.string().uuid(),
       file: z.string().min(1).max(1024), expectId: z.string().min(1).max(128) }).safeParse(body);
     if (!parsed.success) return json(400, { ok: false, error: steward ? "invalid-steward-request" : "invalid-launch-request" });
     const at = () => ctx.now ? ctx.now() : new Date().toISOString();

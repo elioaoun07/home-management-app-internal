@@ -216,6 +216,29 @@ describe("R97 evidence and parity semantics", () => {
     );
     expect(cockpitAlias("delivery", new URLSearchParams(), true)).toBeNull();
   });
+  it("opens priorities from bare Launch while preserving existing work filters", () => {
+    expect(cockpitAlias("launch", new URLSearchParams())).toBe(
+      "/explore?lane=now",
+    );
+    const query = new URLSearchParams("campaign=Kitchen&q=recipes&lane=next");
+    expect(cockpitAlias("launch", query)).toBe(
+      "/explore?campaign=Kitchen&q=recipes&lane=next",
+    );
+    expect(query.toString()).toBe("campaign=Kitchen&q=recipes&lane=next");
+    expect(cockpitAlias("launch", new URLSearchParams("view=list"))).toBe(
+      "/explore?view=list",
+    );
+  });
+  it("does not redirect a contextual launch or delivery handoff", () => {
+    for (const query of [
+      "file=Budget%2F4+-+Checklist.md&cb=0",
+      "file=Budget%2F4+-+Checklist.md",
+      "cb=0",
+    ])
+      expect(cockpitAlias("launch", new URLSearchParams(query))).toBeNull();
+    expect(cockpitAlias("launch", new URLSearchParams(), true)).toBeNull();
+    expect(cockpitAlias("deliver", new URLSearchParams(), true)).toBeNull();
+  });
   const setup: Setup = {
     schema: "os/setup@1",
     fingerprint: "test",

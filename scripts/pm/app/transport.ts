@@ -113,6 +113,8 @@ export interface Transport {
   /** Delivery UAT list (R76). Absent where the transport cannot carry it; the phone relay joins in R79. */
   v2Uat?(signal?: AbortSignal): Promise<{ handovers: UatSummary[] }>;
   v2UatOne?(id: string, signal?: AbortSignal): Promise<{ handover: UatHandover }>;
+  /** Authored per-item test preview; absent on relays that only carry frozen handovers. */
+  v2UatItem?(campaign: string, id: string, signal?: AbortSignal): Promise<import("./types").ItemUatRead>;
   /** One V2 command. `body.command_id` is minted before the first send and reused on retry. */
   v2Command<T>(path: string, body: Record<string, unknown>, timeoutMs?: number): Promise<T>;
   /** Observe an existing command only. A missing receipt must never send it. */

@@ -7,7 +7,7 @@ description: "Cheap, deterministic lane for ERA reports (HUB-n items under **ERA
 
 > **Contract:** every wiring is the same thing — *ERA using the app's functionality*. ERA learns a sentence by **reusing the route the manual form already calls**, never new business logic, and **every write leaves an Artifact** (shown in /era → Artifacts, opening the exact item; the Activity Log's ERA row opens it too). The fix is proven by an ERA Gym case built from the report's own sentence (red before, green after, full Gym still green) **and** a row in the artifact contract test. No Gym green, no contract row, no done. If any STOP condition is hit, edit nothing and report `ESCALATE: <reason>`.
 >
-> **Budget:** Sonnet 5.5, medium effort, one session per report (or per batch of reports on the same module). This skill replaces `start-task` routing and `finish-task` for this lane: steps 6–7 are the definition of done. Read files by **grep anchor + line range**, never whole (`gym.ts` is 1.3k lines, `index.ts` 340).
+> **Budget:** `CLAUDE_MID`, medium effort, one session per report (or per batch of reports on the same module). Resolve the tier through `ERA Notes/Model-Registry.md`. This skill replaces `start-task` routing and `finish-task` for this lane: steps 6–7 are the definition of done. Read files by **grep anchor + line range**, never whole (`gym.ts` is 1.3k lines, `index.ts` 340).
 
 ## The verified model (canonical example: contact-add, HUB-89)
 

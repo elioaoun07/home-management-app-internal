@@ -169,6 +169,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 ### BUD-87
 
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#bud-87--transfer-and-undo-exactly-once>)
+
 **Outcome:** A transfer lands exactly once and both balances move on screen immediately, however slow the network.
 
 **Kind:** bug
@@ -192,6 +194,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Remaining:** single-transaction insert + legs + history is **BUD-63**. History CHECK drift is **BUD-88**.
 
 ### BUD-88
+
+**UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#bud-88--balance-history-constraint-verification>)
 
 **Outcome:** Every balance history row the app writes is accepted by the live CHECK constraint.
 
