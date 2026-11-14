@@ -4,6 +4,19 @@ Authored 2026-11-14 from the linked item criteria and current source. **All owne
 
 These instructions supersede navigation names in older handovers: **Plan** opens Sprints, **Work** remains in Search work / More, and **Sessions** contains session and owner-test queues. Read-only cases need no new provider run. Mutation, native-run, schema and shipping cases require the owner-controlled environment named in their Setup; the assistant does not execute them.
 
+## R116 — Local sign-in with app API configuration
+
+**Acceptance:** R116
+**Environment:** local
+**Setup:** Existing Claude/Codex subscription login; PM host may load app API/speech variables. Owner restarts the current bridge with `pnpm pm --bridge --no-open` to activate the helper. Agent does not restart the publishing bridge (Hard Rule 26).
+**Source:** `scripts/delivery-v2/local-guardrails.mjs#localWorkerSubscription`, `local-lane.mjs`. Screenshot origin: HUB-118 Local Start, 2026-11-14.
+
+1. Keep the application's `.env` unchanged. Run the offline credential check or inspect Local readiness after the updated server loads. Expect the existing subscription login to pass even with app API/Azure speech configuration present; no provider request is needed.
+2. Use the isolated replay credential fixture with only an API key instead of a subscription token. Expect Sign-in to remain blocked; an app key must never replace subscription login.
+3. If the owner intends to run HUB-118, open its Local Deliver screen and select Start after activating the fix. Expect the false sign-in blocker to disappear. Other current source/dependency/settings gates may still refuse. This step can launch a real session and is owner-run; it was not executed by the agent.
+
+**Actual:** Pending owner restart/session acceptance. Offline metadata check passes with the existing Claude Pro login and no network call. **Reset:** No real credentials or environment values were changed. **Limits:** Offline shape validation does not establish token freshness/provider entitlement or prove native execution.
+
 ## R115 — Markdown defaults and AI markers
 
 **Acceptance:** R115

@@ -46,6 +46,16 @@ export function localSubscription(executor, { env = process.env, home = homedir(
   return { ok: true, method: claude ? "claude.ai" : "chatgpt", directory: dir };
 }
 
+/** The PM host also loads app API keys. Authenticate the subscription against
+ * the worker's scrubbed environment, retaining only its credential lookup paths.
+ * The credential file itself still has to be a subscription login. */
+/** @param {string} executor @param {{env?:Record<string,string|undefined>,home?:string}} options */
+export function localWorkerSubscription(executor, { env = process.env, home = homedir() } = {}) {
+  const clean = localEnvironment(env);
+  for (const key of ["CLAUDE_CONFIG_DIR", "CODEX_HOME"]) if (env[key]) clean[key] = env[key];
+  return localSubscription(executor, { env: clean, home });
+}
+
 /** Check ignored and nested env files as well; linked trees may hide secrets. */
 export function assertNoLocalSecrets(root) {
   for (const entry of readdirSync(root, { withFileTypes: true })) {

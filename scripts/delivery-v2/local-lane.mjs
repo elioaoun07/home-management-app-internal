@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmdirSync, wr
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { runProcess } from "./process.mjs";
 import { installedDependencies, hostChecks, nativeLocalSession, pnpmCommand } from "./local-process.mjs";
-import { localEnvironment, localSubscription, assertNoLocalSecrets, classifyLocalDiff } from "./local-guardrails.mjs";
+import { localEnvironment, localWorkerSubscription, assertNoLocalSecrets, classifyLocalDiff } from "./local-guardrails.mjs";
 import { LOCAL_ADVISORIES, LOCAL_LAUNCH_GATES } from "./readiness-contract.mjs";
 import { validateRunSettings } from "./adapters/registry.mjs";
 import { loadExecutionPolicy } from "./policy.mjs";
@@ -22,12 +22,12 @@ const at = () => new Date().toISOString();
 const PM = "ERA Notes/10 - Project Management";
 
 /** @param {{root:string, store:object|Function, run?:typeof runProcess,
- * session?:typeof nativeLocalSession, authenticate?:typeof localSubscription,
+ * session?:typeof nativeLocalSession, authenticate?:typeof localWorkerSubscription,
  * dependencies?:typeof installedDependencies, checks?:typeof hostChecks,
  * prepareDependencies?:((workspace:string)=>Promise<{status:number|null}>)|null,
  * baseBranch?:string, remote?:string, hasStore?:()=>boolean, catalog?:()=>object|null}} options */
 export function createLocalLane({ root, store, run = runProcess, session = nativeLocalSession,
-  authenticate = localSubscription, dependencies = installedDependencies, checks = hostChecks,
+  authenticate = localWorkerSubscription, dependencies = installedDependencies, checks = hostChecks,
   prepareDependencies = null, baseBranch = "main", remote = "origin", hasStore = () => true,
   catalog = () => { const loaded = loadExecutionPolicy({ root }); return loaded.ok ? loaded.policy.executors.catalog : null; } }) {
   const s = () => typeof store === "function" ? store() : store;

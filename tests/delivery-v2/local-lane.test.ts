@@ -8,7 +8,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { openStore } from "../../scripts/delivery-v2/store.mjs";
 import { createLocalLane } from "../../scripts/delivery-v2/local-lane.mjs";
-import { classifyLocalDiff, localEnvironment, localSubscription, assertNoLocalSecrets } from "../../scripts/delivery-v2/local-guardrails.mjs";
+import { classifyLocalDiff, localEnvironment, localSubscription, localWorkerSubscription, assertNoLocalSecrets } from "../../scripts/delivery-v2/local-guardrails.mjs";
 import { installedDependencies } from "../../scripts/delivery-v2/local-process.mjs";
 import { LOCAL_LAUNCH_GATES, LAUNCH_GATES } from "../../scripts/delivery-v2/readiness-contract.mjs";
 import { loopbackBrowserSession, authenticateLocal, sessionView } from "../../scripts/delivery-v2/local-auth.mjs";
@@ -80,6 +80,17 @@ function accept(root: string, handover: { handover_id: string; revision: number 
 }
 
 describe("versioned Local guardrails", () => {
+  it("authenticates a subscription despite unrelated PM host API configuration, preserving custom credential paths", () => {
+    const home = temp();
+    const directory = join(home, "custom-claude");
+    put(directory, ".credentials.json", JSON.stringify({ claudeAiOauth: { accessToken: "synthetic", subscriptionType: "pro", scopes: ["user:inference"] } }));
+    const env = { CLAUDE_CONFIG_DIR: directory, ANTHROPIC_API_KEY: "synthetic-app-key", AZURE_TTS_KEY: "synthetic-speech-key", AZURE_TTS_REGION: "fixture" };
+    expect(localWorkerSubscription("claude", { env, home })).toMatchObject({ ok: true, method: "claude.ai", directory });
+    expect(() => localSubscription("claude", { env, home })).toThrow("API or alternate-provider");
+    expect(env.ANTHROPIC_API_KEY).toBe("synthetic-app-key");
+    put(directory, ".credentials.json", JSON.stringify({ apiKey: "synthetic" }));
+    expect(() => localWorkerSubscription("claude", { env, home })).toThrow("Claude subscription login required");
+  });
   it.each([
     ["src/features/accounts/a.ts", "money", ""], ["src/lib/schedule/a.ts", "recurrence", ""],
     ["src/app/api/notes/route.ts", "auth-household", 'import { supabaseAdmin } from "@/lib/supabase/admin"'],

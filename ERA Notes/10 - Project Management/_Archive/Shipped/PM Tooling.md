@@ -585,6 +585,10 @@ owner: Elio
 
 - ✅ 2026-11-14 — **R115** Default delivery settings from the item's Markdown recommendation — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r115>) (Markdown tier/effort defaults and sparkle restore markers in Local/Confined; 11 focused tests, typecheck, build, scoped lint and desktop/mobile browser checks pass. No provider calls; owner UAT pending.)
 
+### R116
+
+- ✅ 2026-11-14 — **R116** Validate Local sign-in against its cleaned worker environment — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r116>) (23 Local replay tests, scoped lint and PM checks pass; corrected offline subscription lookup passes existing Claude Pro credentials despite host app API config. Owner restart/UAT pending; no native or provider session started.)
+
 ## State log
 
 _Moved from the Master Book on 2026-11-11._

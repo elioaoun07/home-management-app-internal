@@ -79,6 +79,8 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟠 **R116 — Valid Local subscription reported as missing (2026-11-14).** HUB-118 Start screenshot shows Source/Dependencies passed, Sign-in blocked. Read-only credential metadata confirms Claude Pro subscription token/inference scope and no embedded API key. Loading PM's `.env` adds ANTHROPIC_API_KEY and Azure TTS variables; `localSubscription` checks the unsanitized host environment and rejects these before examining the valid login. The native worker already receives `localEnvironment()` without those variables. Align subscription lookup with that environment while preserving custom credential directories and strict credential-file validation.
+
 🟠 **R113 — Deliver hides launch blockers behind disabled Start (2026-11-14).** Owner reports an unchanged Game view, disabled Local Start, confusing Confined executor availability and a separate Check readiness step. Local UI gates on passive readiness (current workspace is dirty); Confined conflates installed SDKs with policy permission and gates Start even though the server collects readiness. Both subscriptions and dependencies pass local passive inspection; installed policy revision 13 permits only Codex in Confined. Keep admission checks, move them behind explicit Start, and give Game Mode its own launch composition.
 
 🟠 **R112 — Setup obscures real repairs and rule coverage (2026-11-14).** Owner reports that Setup, unguarded rules and Conflicts are unclear. Source evidence shows that coverage counts trust declared levels even when guards are missing, all diagnostic severities share one conflict count, and selecting an inventory entry also silently filters the list. The scan additionally treats workstation-only permissions and intentional review requirements as setup failures. Repair real configuration defects, retain accurate scope and evidence, and make the required action visible.
@@ -142,6 +144,21 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### R116
+
+**Outcome:** A valid Local Claude/Codex subscription is not rejected because the PM host loads the application's API configuration.
+
+**Implementation:** done
+**UAT:** pending
+**UAT instructions:** [Local sign-in with app API configuration](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r116--local-sign-in-with-app-api-configuration>)
+
+**Kind:** bug
+**Touches:** `scripts/delivery-v2/local-guardrails.mjs`, `scripts/delivery-v2/local-lane.mjs`, `tests/delivery-v2/local-lane.test.ts`
+
+- **Acceptance:** Readiness and build credential lookup validate using the existing cleaned worker environment, preserving explicit Claude/Codex credential directories. Subscription file validation still rejects API-key/unknown credentials. Parent environment stays intact; worker credential isolation and all admission gates remain. No inference/real session during verification.
+- **Verify:** Regression with synthetic app API/Azure config and valid custom-directory Claude Pro login, unchanged parent values and rejected API-key credential file; Local suite, typecheck, scoped lint and offline real-login metadata check.
+- **Evidence (2026-11-14):** 23 Local replay tests, typecheck, scoped lint and PM checks pass. Offline corrected lookup returns Claude subscription pass against existing credentials with PM `.env` loaded; no network/provider call or credential change. Readiness and build share the same cleaned lookup. Owner bridge restart required under Hard Rule 26; real HUB-118 execution remains unstarted.
 
 ### R115
 
@@ -1759,6 +1776,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-11-14 — **R113** Simplify Deliver launch and add a distinct Game view → [record](<../_Archive/Shipped/PM Tooling.md#r113>)
 - ✅ 2026-11-14 — **R114** Choose model and effort for Local delivery → [record](<../_Archive/Shipped/PM Tooling.md#r114>)
 - ✅ 2026-11-14 — **R115** Default delivery settings from the item's Markdown recommendation → [record](<../_Archive/Shipped/PM Tooling.md#r115>)
+- ✅ 2026-11-14 — **R116** Validate Local sign-in against its cleaned worker environment → [record](<../_Archive/Shipped/PM Tooling.md#r116>)
 
 ## Delivery session log
 
