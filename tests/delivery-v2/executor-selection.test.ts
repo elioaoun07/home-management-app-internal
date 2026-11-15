@@ -193,7 +193,7 @@ describe("claude adapter — interface findings are re-read, not asserted", () =
     expect(first).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
   });
 
-  it("never emits bypassPermissions and always requests a fail-loud sandbox", () => {
+  it("never emits bypassPermissions and requires a fail-loud sandbox for confined jobs", () => {
     const options = buildSessionOptions({ workspaceRoot: "C:/scratch/job" });
     expect(options.permissionMode).toBe("acceptEdits");
     expect(options.sandbox).toEqual({ enabled: true, failIfUnavailable: true });
@@ -201,6 +201,43 @@ describe("claude adapter — interface findings are re-read, not asserted", () =
     expect(options.settingSources).toEqual([]);
     expect(options.skills).toEqual([]);
     expect(options.disallowedTools).toContain("mcp__*");
+  });
+
+  it.each(["win32", "linux", "darwin"])("never offers an unsandboxed shell on %s", async platform => {
+    const descriptor = Object.getOwnPropertyDescriptor(process, "platform")!;
+    Object.defineProperty(process, "platform", { value: platform });
+    try {
+      const workspaceRoot = join(tmpdir(), "claude-options-fixture");
+      const options = buildSessionOptions({ workspaceRoot, local: true, forbiddenPaths: ["protected.txt"] });
+      const noShell = platform === "win32";
+      expect(options.permissionMode).toBe("acceptEdits");
+      expect(options.tools.includes("Bash")).toBe(!noShell);
+      expect(options.disallowedTools.includes("Bash")).toBe(noShell);
+      expect(options.sandbox).toEqual(noShell ? { enabled: false } : { enabled: true, failIfUnavailable: true });
+      expect(options.disallowedTools).toContain("mcp__*");
+      expect(options.tools).not.toContain("WebFetch");
+      expect(options.tools).not.toContain("WebSearch");
+      const guard = options.canUseTool;
+      expect((await guard("Write", { file_path: join(workspaceRoot, "protected.txt") })).behavior).toBe("deny");
+      expect((await guard("Read", { file_path: join(workspaceRoot, "../outside.txt") })).behavior).toBe("deny");
+      expect((await guard("Read", { file_path: join(workspaceRoot, ".env") })).behavior).toBe("deny");
+      expect((await guard("Write", { file_path: join(workspaceRoot, "source.ts") })).behavior).toBe("allow");
+      for (const directory of [".claude", ".codex", ".agents", ".husky"]) {
+        const file_path = join(workspaceRoot, directory, "nested/hook.json");
+        expect((await guard("Read", { file_path })).behavior).toBe("allow");
+        for (const tool of ["Write", "Edit", "NotebookEdit"]) {
+          expect((await guard(tool, { file_path, notebook_path: file_path })).behavior).toBe(noShell ? "deny" : "allow");
+        }
+      }
+      const confined = buildSessionOptions({ workspaceRoot });
+      expect(confined.tools).toContain("Bash");
+      expect(confined.sandbox).toEqual({ enabled: true, failIfUnavailable: true });
+      const review = buildSessionOptions({ workspaceRoot, local: true, mode: "review" });
+      expect(review.tools).toEqual(["Read", "Grep", "Glob"]);
+      expect(review.disallowedTools).toContain("Bash");
+    } finally {
+      Object.defineProperty(process, "platform", descriptor);
+    }
   });
 
   it("hard-restricts the toolset for a review dispatch", () => {

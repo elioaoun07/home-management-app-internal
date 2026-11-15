@@ -198,10 +198,9 @@ export function deriveNativeSessionId(dispatch_key) {
  *                        hooks inside a delivery job.
  *   - `skills: []`       skills stay readable on disk; their descriptions leave
  *                        the system prompt.
- *   - `sandbox`          requested, with `failIfUnavailable: true` so an
- *                        unsupported platform produces an error result rather
- *                        than a quiet unsandboxed run. This is the one option
- *                        that must never be softened to make a launch succeed.
+ *   - `sandbox`          required whenever Bash is available. Local Windows
+ *                        sessions have no shell and protect hook configuration
+ *                        from file-tool writes instead.
  *
  * `bypassPermissions` has no code path: `assertNeverBypass` is the V1 guard and
  * this function never emits the mode in the first place.
@@ -231,9 +230,13 @@ export function buildSessionOptions({
   if (!isNonEmptyString(workspaceRoot)) throw new ContractError("claude adapter: a job needs a workspace root");
   if (mode !== "build" && mode !== "review") throw new ContractError("claude adapter: unknown mode " + mode);
 
+  const noShell = local && process.platform === "win32";
+  const protectedPaths = noShell
+    ? [".claude", ".codex", ".agents", ".husky"].flatMap(path => [path, `${path}/**`])
+    : [];
   const options = {
     cwd: workspaceRoot,
-    canUseTool: buildCanUseTool({ cwd: workspaceRoot, sessionDir: null, forbiddenPaths }),
+    canUseTool: buildCanUseTool({ cwd: workspaceRoot, sessionDir: null, forbiddenPaths: [...forbiddenPaths, ...protectedPaths] }),
     permissionMode: mode === "build" ? "acceptEdits" : "default",
     tools: mode === "build" ? [...BUILD_MODE_TOOLS] : [...REVIEW_MODE_TOOLS],
     disallowedTools: mode === "build" ? ["mcp__*"] : ["Write", "Edit", "Bash", "NotebookEdit", "mcp__*"],
@@ -243,6 +246,11 @@ export function buildSessionOptions({
     additionalDirectories: [...additionalDirectories],
     sandbox: { enabled: true, failIfUnavailable: true },
   };
+  if (noShell) {
+    options.tools = options.tools.filter(tool => tool !== "Bash");
+    if (!options.disallowedTools.includes("Bash")) options.disallowedTools.push("Bash");
+    options.sandbox = { enabled: false };
+  }
   if (local) {
     options.settingSources = ["project"];
     options.skills = "all";

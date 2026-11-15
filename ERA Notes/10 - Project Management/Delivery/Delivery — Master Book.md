@@ -70,6 +70,8 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟠 **DLV-157 — Local workers stop before editing on Windows.** The private Codex home omits `[windows] sandbox`, Claude requires a Bash sandbox unavailable on native Windows, and both prompts ask for a commit their guards deny. Confirmed 2026-11-15 in `local-lane.mjs#build` and `adapters/claude.mjs#buildSessionOptions`; owner-provided failed-run and no-model sandbox probe evidence is retained in [the executor blockers plan](<../_Archive/Plans/Local Delivery Executor Blockers.md>).
+
 🟠 **DLV-150** Deliver an item on a branch in a local worktree with host checks. Filed 2026-11-10 from [Fable 2 Local lane design](<../Fable 2/10 - Project Management/Delivery/2 - Local Lane Design.md>) (2026-11-10, owner direction). See [acceptance](<#dlv-150>).
 
 🟠 **DLV-151** Start a local delivery with three checks and no pairing on loopback. Filed 2026-11-10 from [Fable 2 gate disposition](<../Fable 2/10 - Project Management/Delivery/3 - Gate Disposition.md>) (2026-11-10). See [acceptance](<#dlv-151>).
@@ -146,6 +148,22 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### DLV-157
+
+**Outcome:** Owner-started Windows Local sessions can edit with Codex's unelevated sandbox or Claude's file tools; the supervisor commits and runs checks.
+
+**Kind:** bug
+**Depends on:** DLV-150, DLV-152
+**Touches:** `scripts/delivery-v2/local-lane.mjs`, `scripts/delivery-v2/adapters/claude.mjs`, `tests/delivery-v2/local-lane.test.ts`, `tests/delivery-v2/executor-selection.test.ts`
+**Implementation:** done
+**UAT:** pending
+
+- **Source:** [Local Delivery executor blockers](<../_Archive/Plans/Local Delivery Executor Blockers.md>) (owner execution request, 2026-11-15). Recommended option 3A selected; no WSL installation or failed-attempt cleanup.
+- **Acceptance:** Windows private Codex config selects `unelevated`; worker prompts delegate commits to the supervisor. Local Windows Claude omits and disallows Bash, disables only the unused shell sandbox and denies file writes beneath `.claude`, `.codex`, `.agents` and `.husky` while preserving reads and caller constraints. Other platforms and confined dispatches retain fail-loud sandboxing. Replay-only Delivery tests and typecheck pass; no paid run is started by an agent.
+- **Owner UAT:** [Windows executor retest](<../../../docs/Delivery-UAT.md#windows-local-executor-retest--dlv-157>). Owner starts HUB-118 with Codex, then Claude; expect edits followed by Host checks started, without read-only/policy/sandbox startup failure. Live results remain pending.
+
+**Evidence (2026-11-15):** `pnpm vitest run tests/delivery-v2` passed 1,226 tests (70 files); 8 opt-in operational tests remain skipped (3 files). The focused executor suites passed 71 tests, including a synthetic Codex session's private Windows config, supervisor commit and four host checks, plus Windows/Linux/macOS Claude options, protected-file denials, preserved reads/caller constraints and unchanged confined sandboxing. `pnpm typecheck`, four-file scoped ESLint, `pm:lint`, `pm:check-docs`, `docs:check` and `git diff --check` passed. No provider call, production DB write, backend restart, WSL install or retained-worktree cleanup occurred. This tooling-only change has no UI/mobile or migration gate; native executor behavior remains owner UAT, including the known Codex outside-worktree read gap.
 
 ### DLV-156
 
@@ -1782,6 +1800,7 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - ✅ 2026-11-11 — **DLV-151** Start a local delivery with three checks and no pairing on loopback → [record](<../_Archive/Shipped/Delivery.md#dlv-151>)
 - ✅ 2026-11-11 — **DLV-152** Enforce the four surviving guardrails in code → [record](<../_Archive/Shipped/Delivery.md#dlv-152>)
 - ✅ 2026-11-11 — **DLV-153** Ship by owner merge after UAT sign-off and undo by revert → [record](<../_Archive/Shipped/Delivery.md#dlv-153>)
+- ✅ 2026-11-15 — **DLV-157** Unblock local executors on Windows without an unsandboxed shell → [record](<../_Archive/Shipped/Delivery.md#dlv-157>)
 
 DW-3 conversation search/highlighting shipped 2026-07-16; removed the stale DLV-71 duplicate on 2026-09-10. This is a reconciliation, not a second implementation.
 

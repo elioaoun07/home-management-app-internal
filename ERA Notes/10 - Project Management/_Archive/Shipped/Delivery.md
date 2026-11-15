@@ -1,6 +1,6 @@
 ---
 created: 2026-11-11
-updated: 2026-11-11
+updated: 2026-11-15
 type: archive
 status: superseded
 owner: Elio
@@ -501,6 +501,10 @@ owner: Elio
 ### DLV-153
 
 - ✅ 2026-11-11 — **DLV-153** Ship by owner merge after UAT sign-off and undo by revert — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-153>) (Engineering verified: 1229 replay tests pass, 8 existing opt-in skips; PM bundle builds; native/browser owner UAT remains pending)
+
+### DLV-157
+
+- ✅ 2026-11-15 — **DLV-157** Unblock local executors on Windows without an unsandboxed shell — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-157>) (Windows executor config, no-shell Claude and supervisor commit handoff implemented; Delivery suite 1226 passed, 8 opt-in skipped; typecheck, scoped ESLint and docs checks pass. Owner subscription retest pending.)
 
 ## State log
 

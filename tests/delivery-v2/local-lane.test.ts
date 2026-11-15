@@ -29,7 +29,7 @@ function temp() { const root = mkdtempSync(join(tmpdir(), "era-local-")); roots.
 const git = (root: string, ...args: string[]) => execFileSync("git", args, { cwd: root, env: { ...localEnvironment(), NODE_ENV: "test" }, encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }).trim();
 const put = (root: string, path: string, value: string) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), value); };
 const PM = "ERA Notes/10 - Project Management";
-async function fixture(risk = false, red = false, failFirst = false) {
+async function fixture(risk = false, red = false, failFirst = false, executor = "claude") {
   const parent = temp(), root = join(parent, "repo"), remote = join(parent, "origin.git");
   mkdirSync(root); git(root, "init", "-b", "main"); git(root, "config", "user.email", "fixture@example.invalid"); git(root, "config", "user.name", "Fixture");
   git(parent, "init", "--bare", remote); git(root, "remote", "add", "origin", remote);
@@ -46,11 +46,12 @@ async function fixture(risk = false, red = false, failFirst = false) {
   git(root, "add", "."); git(root, "commit", "-m", "fixture base"); git(root, "push", "origin", "main");
   const store = openStore({ path: join(root, ".delivery/v2/supervisor.sqlite") }); stores.push(store);
   const credential = join(parent, "subscription"); mkdirSync(credential); put(credential, ".credentials.json", JSON.stringify({ fixture: true }));
+  put(credential, "auth.json", JSON.stringify({ fixture: true }));
   let launches = 0;
   let releaseFirst: () => void = () => {};
   let requestedSettings: unknown = null;
   const lane = createLocalLane({ root, store, authenticate: () => ({ ok: true, method: "fixture", directory: credential }),
-    catalog: () => ({ revision: 1, models: { claude: [{ id: "fixture-claude", efforts: ["medium"] }, { id: "disabled-claude", disabled: true }] } }),
+    catalog: () => ({ revision: 1, models: { claude: [{ id: "fixture-claude", efforts: ["medium"] }, { id: "disabled-claude", disabled: true }], codex: [{ id: "fixture-codex", efforts: ["medium"] }] } }),
     prepareDependencies: async (workspace: string) => { put(workspace, "node_modules/.pnpm/lock.yaml", readFileSync(join(workspace, "pnpm-lock.yaml"), "utf8")); return { status: 0 }; },
     session: async ({ request, env }: { request: { workspace: { root: string }; instruction: string }; env: Record<string, string> }) => {
       launches++;
@@ -64,11 +65,24 @@ async function fixture(risk = false, red = false, failFirst = false) {
       expect(existsSync(join(workspace, ".claude/skills/start-task/SKILL.md"))).toBe(true);
       expect(env).not.toHaveProperty("SUPABASE_SERVICE_ROLE_KEY"); expect(env).not.toHaveProperty("CRON_SECRET"); expect(env).not.toHaveProperty("OPENAI_API_KEY");
       expect(request.instruction).toContain("DLV-900");
+      expect(request.instruction).toContain("Do not commit; the supervisor commits your work.");
+      expect(request.instruction).not.toMatch(/Commit the change|commit it/);
+      if (executor === "codex") {
+        const config = readFileSync(join(env.CODEX_HOME, "config.toml"), "utf8");
+        expect(config).toContain('forced_login_method = "chatgpt"');
+        expect(config).toContain('cli_auth_credentials_store = "file"');
+        if (process.platform === "win32") expect(config).toContain('[windows]\nsandbox = "unelevated"');
+        else expect(config).not.toContain("[windows]");
+      }
+      if (executor === "claude" && process.platform === "win32") {
+        expect(request.instruction).toContain("You have no shell. The supervisor runs the checks after you finish.");
+        expect(request.instruction).not.toContain("Finish with checks");
+      } else expect(request.instruction).not.toContain("You have no shell");
       put(workspace, risk ? "src/features/accounts/change.ts" : "greeting.txt", "after\n");
       put(workspace, ".delivery-handover.json", JSON.stringify({ summary: "Changed greeting", scenarios: [{ id: "greeting", title: "Greeting", required: true, steps: [{ action: "Read greeting", expected: "after" }] }] }));
       return { status: "finished", observations: { nativeOutcome: "succeeded", usage: { input: 1, output: 1 } } };
     } });
-  const input = { file: "Delivery/4 - Checklist.md", id: "DLV-900", executor: "claude" };
+  const input = { file: "Delivery/4 - Checklist.md", id: "DLV-900", executor };
   return { parent, root, remote, store, lane, input, launches: () => launches, releaseFirst: () => releaseFirst(), requestedSettings: () => requestedSettings };
 }
 async function built(risk = false, red = false) {
@@ -123,17 +137,20 @@ describe("versioned Local guardrails", () => {
     put(root, "pnpm-lock.yaml", "a"); put(root, "node_modules/.pnpm/lock.yaml", "b");
     expect(installedDependencies(root)).toBe(false);
   });
-  it("loads Claude project skills/hooks while retaining its sandbox", () => {
+  it("loads Claude project skills/hooks with a sandbox whenever a shell is available", () => {
     const options = buildSessionOptions({ workspaceRoot: temp(), local: true, env: { PATH: "fixture" } });
     expect(options.settingSources).toEqual(["project"]); expect(options.skills).toBe("all");
-    expect(options.sandbox).toEqual({ enabled: true, failIfUnavailable: true }); expect(options.env).toEqual({ PATH: "fixture" });
+    expect(options.sandbox).toEqual(process.platform === "win32" ? { enabled: false } : { enabled: true, failIfUnavailable: true });
+    expect(options.tools.includes("Bash")).toBe(options.sandbox.enabled);
+    if (!options.sandbox.enabled) expect(options.disallowedTools).toContain("Bash");
+    expect(options.env).toEqual({ PATH: "fixture" });
   });
   it("snapshots the real Node environment without attempting to freeze the host object", () => {
     const options = buildSessionOptions({ workspaceRoot: temp(), local: true, env: process.env });
     expect(options.env).not.toBe(process.env);
     expect(Object.isFrozen(options.env)).toBe(true);
     expect(Object.isFrozen(process.env)).toBe(false);
-    expect(options.sandbox).toEqual({ enabled: true, failIfUnavailable: true });
+    expect(options.tools.includes("Bash")).toBe(options.sandbox.enabled);
     const custom = { PATH: "fixture" };
     const snapshot = buildSessionOptions({ workspaceRoot: temp(), local: true, env: custom });
     custom.PATH = "changed";
@@ -158,6 +175,16 @@ describe("loopback bootstrap", () => {
 });
 
 describe("Local worktree to owner merge and revert", () => {
+  it("provisions Codex's private sandbox config and lets the supervisor commit and check uncommitted work", async () => {
+    const f = await fixture(false, false, false, "codex");
+    const launched = await f.lane.start(f.input);
+    expect(launched.ok).toBe(true);
+    await f.lane.wait(launched.run_id!);
+    const view = await f.lane.detail(launched.run_id!);
+    expect(view.phase).toBe("uat-ready");
+    expect(view.head).not.toBe(view.base);
+    expect(view.checks.map((check: { exit: number }) => check.exit)).toEqual([0, 0, 0, 0]);
+  });
   it("projects actual execution, terminal failure and interrupted work without inventing owner gates", async () => {
     const f = await fixture(false, false, true);
     const start = await f.lane.start(f.input);

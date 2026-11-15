@@ -146,7 +146,9 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       mkdirSync(configDir, { recursive: true, mode: 0o700 });
       const credentialName = d.settings.executor === "claude" ? ".credentials.json" : "auth.json";
       cpSync(join(login.directory, credentialName), join(configDir, credentialName));
-      if (d.settings.executor === "codex") writeFileSync(join(configDir, "config.toml"), 'forced_login_method = "chatgpt"\ncli_auth_credentials_store = "file"\n');
+      if (d.settings.executor === "codex") writeFileSync(join(configDir, "config.toml"),
+        'forced_login_method = "chatgpt"\ncli_auth_credentials_store = "file"\n' +
+        (process.platform === "win32" ? '\n[windows]\nsandbox = "unelevated"\n' : ""));
       const hooks = join(root, ".delivery/local", id, "hooks");
       mkdirSync(hooks, { recursive: true });
       const originalHooks = join(d.workspace, ".husky");
@@ -168,10 +170,13 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
         GIT_CONFIG_KEY_1: "remote.origin.receivepack", GIT_CONFIG_VALUE_1: "false",
         GIT_CONFIG_KEY_2: "core.hooksPath", GIT_CONFIG_VALUE_2: hooks };
       d = { ...d, phase: "building" }; save(id, d); event(id, "Native session started");
+      const checkInstruction = d.settings.executor === "claude" && process.platform === "win32"
+        ? "You have no shell. The supervisor runs the checks after you finish."
+        : "Finish with checks.";
       const request = makeJobRequest({ job_id: id, run_id: id, backend_id: d.settings.backend_id, contract: { contract_id: id, revision: 1 },
         grant: { grant_id: "local-owner", revision: 1 }, reservation: { unit: "tokens", basis: "subscription-advisory" },
         workspace: { root: d.workspace, access: "write", backing: "git-worktree" }, settings: d.settings,
-        instruction: `Implement only ${d.work.id}. Read CLAUDE.md and start-task; use the repository skills and hooks. Work only in this worktree. Never push, merge, read the main checkout's secrets or write any database. Commit the change. Do not ship PM records; the owner ships. Finish with checks and write .delivery-handover.json with the UAT schema {summary,scenarios:[{id,title,required:true,steps:[{action,expected}]}]}; commit it.\n\n${d.work.brief}` });
+        instruction: `Implement only ${d.work.id}. Read CLAUDE.md and start-task; use the repository skills and hooks. Work only in this worktree. Never push, merge, read the main checkout's secrets or write any database. Do not commit; the supervisor commits your work. Do not ship PM records; the owner ships. ${checkInstruction} Write .delivery-handover.json with the UAT schema {summary,scenarios:[{id,title,required:true,steps:[{action,expected}]}]}.\n\n${d.work.brief}` });
       // makeJobRequest carries model/effort; executor is the local dispatch choice.
       s().markDispatchStarted(id, at());
       const result = await session({ request: { ...request, settings: d.settings }, env: childEnv, signal: controller.signal,
