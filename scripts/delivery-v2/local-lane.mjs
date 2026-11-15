@@ -110,17 +110,23 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     return { files, risk: classifyLocalDiff(files), patch: await git(data.workspace, "diff", "--no-ext-diff", "--no-textconv", data.base, head) };
   }
 
-  async function detail(id) {
+  async function detail(id, { inspect = false } = {}) {
     const d = dataOf(id);
     let head = null, clean = false, changes = { files: [], risk: d.risk, patch: "" };
-    try {
+    // A history poll must not reread every changed blob. Candidate risk was
+    // recorded at build time and is bound to its immutable head. Owner actions
+    // request a fresh inspection; failed attempts without a candidate need none.
+    if (d.head) try {
       head = await git(d.workspace, "rev-parse", "HEAD");
       clean = !(await git(d.workspace, "status", "--porcelain", "--untracked-files=all"));
-      changes = await diff(d, head);
-    } catch { /* retained session still visible after a missing worktree */ }
+      if (inspect && clean && head === d.head) changes = await diff(d, head);
+    } catch {
+      // History remains readable after worktree loss; action verification fails closed.
+      if (inspect) clean = false;
+    }
     const handover = d.handover_id ? viewOne({ root, handover_id: d.handover_id, now: at() }) : null;
     const current = clean && head === d.head;
-    const reviewed = !changes.risk?.required || (d.reviewed_head === head && d.reviewed_risk === sha(JSON.stringify(changes.risk)));
+    const reviewed = !!changes.risk && (!changes.risk.required || (d.reviewed_head === head && d.reviewed_risk === sha(JSON.stringify(changes.risk))));
     const signed = handover?.acceptance.state === "accepted" && handover.status === "ready" && handover.blockers.length === 0 && handover.binding?.source_revision === head;
     const job = s().getJob(id);
     const observed = parse(job?.observations_json);
@@ -250,7 +256,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
   }
 
   async function review(id) {
-    const view = await detail(id);
+    const view = await detail(id, { inspect: true });
     if (!view.clean || view.current_head !== view.head) throw new Error("candidate-changed");
     const d = dataOf(id);
     save(id, { ...d, reviewed_head: view.current_head, reviewed_risk: sha(JSON.stringify(view.risk)) });
@@ -263,7 +269,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       let d = dataOf(id);
       if (d.phase === "shipped") return detail(id);
       if (d.phase !== "push-pending") {
-        const v = await detail(id);
+        const v = await detail(id, { inspect: true });
         if (!v.canShip) throw new Error("current-head-uat-checks-and-risk-review-required");
         if (await git(root, "symbolic-ref", "--short", "HEAD") !== baseBranch || await git(root, "status", "--porcelain", "--untracked-files=all")) throw new Error("main-checkout-must-be-clean");
         if (await git(root, "rev-parse", "HEAD") !== d.base) throw new Error("main-advanced; rebuild and repeat UAT");

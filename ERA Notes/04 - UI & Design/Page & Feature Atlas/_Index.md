@@ -83,7 +83,7 @@ tags:
 | `statement-import` | `/statement-import` | [[statement-import]] |
 | `atlas`         | `/atlas`         | [[atlas]]         |
 | `offline`       | `/offline`       | [[offline]]       |
-| `pm`            | `/pm`            | [[pm]] — calm/game Bridge, Plan, Sessions and per-item tests, Setup coverage/conflicts/configuration, hosted export |
+| `pm`            | `/pm`            | [[pm]] — calm/game Bridge, living Local workshop, Plan, Sessions and per-item tests, Setup coverage/conflicts/configuration, hosted export |
 | `pm-live`       | `/pm/live`       | [[pm-live]] — shared Sessions, handover tests, delivery recovery and Setup coverage/conflicts/configuration |
 
 ## Feature Modules (Standalone)

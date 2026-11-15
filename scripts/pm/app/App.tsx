@@ -265,7 +265,7 @@ export function App() {
             >
               <Search size={18} />
             </a>
-            {section === "/bridge" && <GameToggle />}
+            <GameToggle />
             <button
               className="icon-button"
               aria-label={

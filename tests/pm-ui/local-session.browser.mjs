@@ -1,5 +1,6 @@
 // Credential-free A5 fixture only. All session responses are synthetic; every
-// write and non-fixture request is blocked. Never starts a native provider.
+// non-fixture write/request is blocked. One review response is fulfilled in the
+// browser without reaching the server. Never starts a native provider.
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 const { chromium } = await import(
@@ -15,29 +16,35 @@ const context = await browser.newContext({
   serviceWorkers: "block",
   viewport: { width: 1440, height: 960 },
 });
-await context.addInitScript(() => localStorage.setItem("pm-game-layer", "on"));
+await context.addInitScript(() => {
+  if (localStorage.getItem("pm-game-layer") === null)
+    localStorage.setItem("pm-game-layer", "on");
+});
 const page = await context.newPage();
 const base = process.env.ERA_COCKPIT_URL || "http://127.0.0.1:4397/";
 const origin = new URL(base).origin;
-const evidence = ".pm/r117-evidence";
+const evidence = ".pm/r118-evidence";
 mkdirSync(evidence, { recursive: true });
 const errors = [],
   writes = [],
+  simulatedReviews = [],
   observations = [];
 page.on("pageerror", (error) => errors.push(error.message));
 let scene = "failed",
-  sequence = 0;
+  sequence = 0,
+  toolEvent = null;
 const id = "local-00000000-0000-4000-8000-000000000117";
+const otherId = "local-00000000-0000-4000-8000-000000000118";
 const at = "2026-11-14T18:23:36Z";
-const local = () => ({
-  run_id: id,
+const local = (requestedId = id) => ({
+  run_id: requestedId,
   phase: scene === "interrupted" ? "building" : scene,
   branch: "delivery/BUD-1",
   workspace: "C:/fixture/very-long-worktree-path/retained-failed-attempt/BUD-1",
   head: ["checking", "uat-ready"].includes(scene) ? "c".repeat(40) : null,
   current_head: "b".repeat(40),
   work: {
-    id: "BUD-1",
+    id: requestedId === otherId ? "BUD-2" : "BUD-1",
     campaign: "Budget",
     title: "BUD-1 Verify cockpit fixture — criteria",
     brief:
@@ -51,7 +58,7 @@ const local = () => ({
     scene === "failed"
       ? "native session exited 1: TypeError: Cannot freeze\n    at deepFreeze (file:///C:/fixture/scripts/delivery-v2/contracts.mjs:172:12)"
       : undefined,
-  activity: [{ at, summary: "Native session started" }],
+  activity: [{ at, summary: "Native session started" }, ...(toolEvent ? [{ at, ...toolEvent }] : [])],
   usage: null,
   checks:
     scene === "checking"
@@ -120,6 +127,11 @@ await page.route("**/*", async (route) => {
     url = new URL(request.url());
   if (url.origin !== origin) return route.abort();
   if (!["GET", "HEAD"].includes(request.method())) {
+    const body = request.postDataJSON();
+    if (url.pathname === "/api/delivery/v2/local" && body?.action === "review" && body.run_id === id) {
+      simulatedReviews.push(body.run_id);
+      return json(route, { patch: "diff --git a/fixture-only-first-run.ts b/fixture-only-first-run.ts\n--- a/fixture-only-first-run.ts\n+++ b/fixture-only-first-run.ts\n+fixture-only-first-run" });
+    }
     writes.push(url.pathname);
     return route.abort();
   }
@@ -128,7 +140,7 @@ await page.route("**/*", async (route) => {
   if (url.pathname === "/api/delivery/sessions")
     return json(route, { sessions: [] });
   if (url.pathname === "/api/delivery/v2/local/run")
-    return json(route, local());
+    return json(route, local(url.searchParams.get("id") || id));
   if (url.pathname === "/api/delivery/v2/runs")
     return json(route, {
       runs: [
@@ -169,6 +181,7 @@ await page.route("**/*", async (route) => {
 });
 async function open(path, next, theme) {
   scene = next;
+  toolEvent = null;
   await page.goto(`${base}?local-scene=${++sequence}#${path}`);
   const toggle = page.getByRole("button", { name: /Use (pink|blue) theme/ });
   await toggle.waitFor();
@@ -178,6 +191,10 @@ async function open(path, next, theme) {
     (expected) => document.documentElement.dataset.theme === expected,
     theme,
   );
+}
+async function selectTool(name) {
+  await page.getByRole("tab", { name, exact: name !== "Verification" }).click();
+  await page.getByRole("tabpanel").waitFor();
 }
 async function capture(name) {
   assert.ok(
@@ -206,12 +223,34 @@ try {
         .getByRole("alert")
         .filter({ hasText: "Agent could not start" })
         .waitFor();
-      for (const name of ["Plan", "Verification", "Activity", "Changes"])
+      assert.equal(await page.locator(".delivery-workshop").count(), 1);
+      assert.equal(await page.locator(".delivery-workshop").getAttribute("data-active"), "false");
+      for (const name of ["Plan", "Verification", "Changes"])
         assert.equal(
           await page.getByRole("region", { name, exact: true }).count(),
-          1,
+          0,
         );
+      await selectTool("Brief");
+      await page.getByRole("region", { name: "Plan", exact: true }).waitFor();
+      await page.getByText("Anonymous bulk read returns 401.", { exact: false }).waitFor();
+      await capture(`${key}-brief`);
+      await page.getByRole("button", { name: "Open verification", exact: true }).click();
+      assert.equal(await page.getByRole("tab", { name: "Verification", exact: false }).getAttribute("aria-selected"), "true");
       assert.equal(await page.getByText("Not run", { exact: true }).count(), 4);
+      await capture(`${key}-verification`);
+      await selectTool("Changes");
+      await page.getByText("Candidate pending", { exact: true }).waitFor();
+      await selectTool("Worktree");
+      await page.getByRole("region", { name: "Worktree", exact: true }).waitFor();
+      await page.getByText("C:/fixture/very-long-worktree-path/retained-failed-attempt/BUD-1", { exact: true }).waitFor();
+      await capture(`${key}-worktree`);
+      await selectTool("Host limits");
+      await page.getByText("Credential scrub prevents accidents, not deliberate host access.", { exact: true }).waitFor();
+      await page.getByRole("tab", { name: "Host limits", exact: true }).press("Home");
+      assert.equal(await page.getByRole("tab", { name: "Activity", exact: true }).getAttribute("aria-selected"), "true");
+      await page.getByRole("tab", { name: "Activity", exact: true }).press("ArrowRight");
+      assert.equal(await page.getByRole("tab", { name: "Brief", exact: true }).getAttribute("aria-selected"), "true");
+      await selectTool("Activity");
       await page.getByText("Error details", { exact: true }).click();
       await capture(`${key}-failed-session`);
       const retry = page.getByRole("link", {
@@ -231,10 +270,19 @@ try {
       await page.getByRole("button", { name: "Start", exact: true }).waitFor();
       await open(`/delivery/run/${id}`, "building", theme);
       await page.getByRole("button", { name: "Cancel", exact: true }).waitFor();
+      assert.equal(await page.locator(".delivery-workshop").getAttribute("data-active"), "true");
+      toolEvent = { kind: "tool", summary: "Read" };
+      await page.waitForFunction(() => document.querySelector(".delivery-workshop")?.dataset.station === "source");
+      await capture(`${key}-reading-session`);
+      toolEvent = { kind: "edit", summary: "src/features/fixture/panel.tsx" };
+      await page.waitForFunction(() => document.querySelector(".delivery-workshop")?.dataset.station === "forge");
+      await page.getByText("src/features/fixture/panel.tsx", { exact: true }).first().waitFor();
       await capture(`${key}-running-session`);
       await open(`/delivery/run/${id}`, "checking", theme);
+      await selectTool("Verification");
       await page.getByText("Inconclusive", { exact: true }).waitFor();
       assert.equal(await page.getByText("Passed", { exact: true }).count(), 1);
+      assert.equal(await page.locator(".delivery-workshop").getAttribute("data-station"), "lab");
       await open(`/delivery/run/${id}`, "uat-ready", theme);
       await page
         .getByRole("link", { name: "Test steps", exact: true })
@@ -246,6 +294,10 @@ try {
         true,
       );
       await capture(`${key}-uat-session`);
+      assert.equal(await page.locator(".delivery-workshop").getAttribute("data-active"), "false");
+      await open(`/delivery/run/${id}`, "interrupted", theme);
+      await page.getByRole("alert").filter({ hasText: "Session interrupted" }).waitFor();
+      assert.equal(await page.locator(".delivery-workshop").getAttribute("data-active"), "false");
       await open("/bridge", "building", theme);
       await waitState("running");
       await page.waitForFunction(
@@ -284,6 +336,32 @@ try {
       await waitState("attention");
       await capture(`${key}-waiting-core`);
     }
+  await open(`/delivery/run/${id}`, "checking", "blue");
+  await page.locator(".run-game-commandbar").getByRole("button", { name: "Review diff", exact: true }).click();
+  await page.locator(".run-game-patch").filter({ hasText: "fixture-only-first-run" }).waitFor();
+  await page.evaluate(nextId => { location.hash = `/delivery/run/${nextId}`; }, otherId);
+  await page.locator(".run-game-tag").filter({ hasText: "BUD-2" }).first().waitFor();
+  await selectTool("Changes");
+  assert.equal(await page.locator(".run-game-patch").count(), 0, "another run cannot inherit the first run's diff");
+  await capture("diff-run-isolation");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await open(`/delivery/run/${id}`, "building", "blue");
+  await page.locator(".delivery-workshop").waitFor();
+  assert.equal(await page.locator(".delivery-workshop").getAttribute("data-motion"), "paused");
+  await capture("reduced-workshop");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.locator(".delivery-workshop").scrollIntoViewIfNeeded();
+  await page.waitForFunction(() => document.querySelector(".delivery-workshop")?.dataset.motion === "active");
+  await page.locator(".run-game-console").evaluate(el => { el.style.marginTop = "1500px"; });
+  await page.getByRole("tablist", { name: "Session tools" }).scrollIntoViewIfNeeded();
+  await page.waitForFunction(() => document.querySelector(".delivery-workshop")?.dataset.motion === "paused");
+  // The calm surface keeps the original structured review over the same evidence.
+  await page.evaluate(() => localStorage.setItem("pm-game-layer", "off"));
+  await open(`/delivery/run/${id}`, "building", "blue");
+  for (const name of ["Plan", "Verification", "Activity", "Changes"])
+    assert.equal(await page.getByRole("region", { name, exact: true }).count(), 1);
+  await capture("calm-review");
+  await page.evaluate(() => localStorage.setItem("pm-game-layer", "on"));
   await page.emulateMedia({ reducedMotion: "reduce" });
   await open("/bridge", "building", "blue");
   await waitState("running");
@@ -294,11 +372,12 @@ try {
     "reduced motion stays static",
   );
   assert.deepEqual(writes, []);
+  assert.deepEqual(simulatedReviews, [id]);
   assert.deepEqual(errors, []);
   writeFileSync(
     `${evidence}/result.json`,
     JSON.stringify(
-      { observations, errors, writes, reducedMotion: true },
+      { observations, errors, writes, simulatedReviews, reducedMotion: true },
       null,
       2,
     ),

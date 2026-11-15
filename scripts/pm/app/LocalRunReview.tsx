@@ -2,6 +2,8 @@ import { Check, FileText, GitBranch, ListChecks } from "lucide-react";
 import { Markdown, RunOrb } from "./components";
 import { bareTitle } from "./deliveryHomeModel";
 import { LocalActions, type LocalRunView } from "./LocalDelivery";
+import { useGameLayer } from "./GameLayer";
+import { LocalRunGame } from "./LocalRunGame";
 import {
   LOCAL_CHECKS,
   localCheckLabel,
@@ -22,6 +24,17 @@ export function LocalRunReview({
   act: (action: "review" | "ship" | "undo" | "cancel") => void;
   patch: string | null;
 }) {
+  const game = useGameLayer();
+  if (game.enabled)
+    return (
+      <LocalRunGame
+        key={run.run_id}
+        run={run}
+        busy={busy}
+        act={act}
+        patch={patch}
+      />
+    );
   const running =
     ["preparing", "building", "checking"].includes(run.phase) &&
     !run.interrupted;

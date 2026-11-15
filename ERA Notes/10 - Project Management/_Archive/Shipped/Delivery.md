@@ -506,6 +506,10 @@ owner: Elio
 
 - ✅ 2026-11-15 — **DLV-157** Unblock local executors on Windows without an unsandboxed shell — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-157>) (Windows executor config, no-shell Claude and supervisor commit handoff implemented; Delivery suite 1226 passed, 8 opt-in skipped; typecheck, scoped ESLint and docs checks pass. Owner subscription retest pending.)
 
+### DLV-158
+
+- ✅ 2026-11-15 — **DLV-158** Open retained Local deliveries without full diff inspection — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-158>) (Fixed history GET performing per-file Git reads; 30 replay tests, typecheck and scoped lint pass. Corrected handler against real read-only local store: 200 in 6ms,35 events and brief retained. Owner backend restart and browser UAT pending.)
+
 ## State log
 
 _Moved from the Master Book on 2026-11-11._

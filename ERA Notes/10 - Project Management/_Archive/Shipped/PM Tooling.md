@@ -1,6 +1,6 @@
 ---
 created: 2026-11-11
-updated: 2026-11-14
+updated: 2026-11-15
 type: archive
 status: superseded
 owner: Elio
@@ -592,6 +592,14 @@ owner: Elio
 ### R117
 
 - ✅ 2026-11-14 — **R117** Restore Local session review and accurate Bridge execution states — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r117>) (Restored Local session review; corrected active/failed/blocked Bridge states; fixed process.env freeze crash; preserved failed attempts. 597 relevant plus 44 adjacent tests, typecheck/build/scoped lint/docs and 28 desktop/mobile browser screenshots pass; actual run/Bridge read-only verification passes. Owner bridge restart and live retry pending.)
+
+### R118
+
+- ✅ 2026-11-15 — **R118** Make Local delivery Game mode a living ERA workshop — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r118>) (Living Local workshop implemented; typecheck/build/scoped lint, 12 replay tests, 47 synthetic browser screenshots and final motion/status checks pass; UAT pending; actual run detail GET stayed pending beyond 30s, no backend restart.)
+
+### R119
+
+- ✅ 2026-11-15 — **R119** Isolate pre-commit tests from the parent Git environment — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r119>) (Fixed pre-commit Git environment leak. Regression reproduced before fix;38 affected tests pass directly and inside a real disposable commit; typecheck/lint/mirrors pass. Preserved original HUB-118 edits and recovery patch without changing failed run or invoking AI.)
 
 ## State log
 

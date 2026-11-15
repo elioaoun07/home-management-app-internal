@@ -79,6 +79,10 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟠 **R119 — Completed Local work fails during supervisor commit.** The reported HUB-118 run hit ten tooling-test failures inside pre-commit. On 2026-11-15 all 38 tests in the same three suites passed outside the hook; a real disposable commit regression proved the hook forwards Git-local index/config variables into tests that create foreign repositories. This can redirect fixture Git operations into the parent repository. Clear Git's canonical local-env-vars only inside the test subprocess; preserve hook and staged-file behavior.
+
+🟠 **R118 verification residual — existing Local run detail stays pending (2026-11-15).** A separate read-only browser context requested `/api/delivery/v2/local/run` for `local-cac958d7-1f8e-4e65-9cb8-1471c839f796` and received no response within 30 seconds; the page remained Loading session while session/runs/data endpoints returned 200. Cause is unestablished. No active-session command or backend restart was performed. The synthetic workshop UI verification does not establish that this actual session rendered.
+
 🟠 **R117 — Local session loses structured review, Bridge stays yellow, native launch crashes (2026-11-14).** Owner run `local-b52041fb-b6c8-46cd-ab03-8fa669ea6f23` (HUB-118) failed before provider work: `buildSessionOptions` passes Node's special `process.env` into `deepFreeze`, throwing `TypeError: Cannot freeze`. `LocalRun` bypasses the existing session sections, and `local-lane.list` labels every non-UAT phase `review-result`, masking execution and terminal failure as owner attention. Failed attempts also retain a deterministic worktree/branch that prevents a fresh Start. Preserve the failed evidence; repair the causes and verify offline.
 
 🟠 **R116 — Valid Local subscription reported as missing (2026-11-14).** HUB-118 Start screenshot shows Source/Dependencies passed, Sign-in blocked. Read-only credential metadata confirms Claude Pro subscription token/inference scope and no embedded API key. Loading PM's `.env` adds ANTHROPIC_API_KEY and Azure TTS variables; `localSubscription` checks the unsanitized host environment and rejects these before examining the valid login. The native worker already receives `localEnvironment()` without those variables. Align subscription lookup with that environment while preserving custom credential directories and strict credential-file validation.
@@ -146,6 +150,40 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### R119
+
+**Implementation:** done
+
+**Outcome:** Pre-commit tests use isolated temporary Git repositories while ordinary commit gates remain enforced.
+**Kind:** bug
+**Touches:** `.claude/hooks/pre-commit.sh`, `tests/os/setup.test.ts`
+- **Acceptance:** A real isolated Git commit verifies the test subprocess has no inherited repository-local index/directory/config variables; failing checks still reject commits and staged filenames with spaces still reach ESLint unchanged.
+- **Acceptance:** The three suites from the failed delivery pass; generated hook mirrors remain synchronized. No provider session, failed-worktree mutation or production write is needed to verify the repair.
+**Evidence:** 2026-11-15: unchanged recorder/setup/registry baseline 38/38 passes; new hook environment assertion fails on the unchanged hook.
+**Verification:** 2026-11-15: repaired hook passes the regression; all 38 affected suite tests pass both directly and inside a real disposable commit (17.1 s, receipt `.pm/r119-hook-output.log`). Typecheck, scoped ESLint and mirror checks pass. No provider session or production write. Read-only inspection also confirmed the old failed branch head is `Revert "fixture"` with only README/.gitignore tracked; an alternate index against the recorded original base recovered the three implementation files, vault doc, PM section and handover into `.pm/r119-preserved-HUB-118/` with checksums and a patch. Original worktree/index/branch and supervisor receipts are untouched. This validates the hook repair, not HUB-118 acceptance or a recovered delivery candidate.
+**Handover:** Existing failed delivery remains a retained record. Use the updated hook on the next owner-started delivery; do not bypass checks or alter the old run's receipts.
+**UAT:** pending
+
+### R118
+
+**Outcome:** Local delivery Game mode shows ERA moving through observed work in a living workshop, with supporting evidence available on demand.
+**Kind:** feature
+**Source:** Owner commission 2026-11-15 while observing Local run `local-cac958d7-1f8e-4e65-9cb8-1471c839f796`: make activity feel natural and alive; show phase transitions, file work and checks; move the work brief and verification behind controls; give changes, worktree and host limits the same considered Game treatment.
+**Touches:** `scripts/pm/app/LocalDelivery.tsx`, `scripts/pm/app/LocalRunReview.tsx`, `scripts/pm/app/LocalRunGame.tsx`, `scripts/pm/app/local-run-game.css`, `scripts/pm/app/DeliveryWorkshop.tsx`, `scripts/pm/app/delivery-workshop.css`, `scripts/pm/app/localRunActivityModel.ts`, `tests/pm-ui/`, `docs/Delivery-UAT.md`, `ERA Notes/01 - Architecture/Feature Map/cross-cutting/pm-command-center.md`
+
+- **Acceptance:** Game mode centers a responsive spatial workshop whose active station follows recorded session/tool evidence. Reading/searching, editing/building, checking and owner review remain distinguishable; missing telemetry remains explicit and never becomes an invented thinking trace, progress percentage or fabricated success.
+- **Acceptance:** Brief, verification, changes, worktree and host limits open through clear controls. Checks keep actual Passed/Failed/Inconclusive/Not run states, and existing review/test/ship/undo/cancel actions retain their admission conditions.
+- **Acceptance:** New events arrive without reloading the page; terminal/interrupted sessions stop implying active work. Game mode motion pauses when hidden/offscreen, respects reduced motion and remains usable with keyboard, on 390 px and desktop, in Blue and Pink.
+- **Acceptance:** Calm mode preserves the existing readable review. No provider invocation, database write, session command or backend restart is needed for this UI change.
+
+**Reading guide:** Feature Map › PM Command Center; `LocalRunReview.tsx`, `localRunModel.ts`, `LocalDelivery.tsx`; existing `DeliveryMission.tsx` and Game layer conventions.
+**Verify:** PM UI typecheck/build, scoped lint, deterministic activity-model tests and credential-free browser scenarios. Owner visual acceptance and live-provider telemetry remain separately unverified.
+**Handover:** [Living Local workshop owner scenarios](<../../../docs/Delivery-UAT.md#living-local-workshop--r118>).
+**Implementation:** done
+**UAT:** pending
+
+**2026-11-15 implementation evidence:** Typecheck, scoped ESLint, PM React build, 12 deterministic replay tests, docs:check, PM lint/check-docs and diff whitespace checks pass. The credential-free browser suite passed 47 screenshots covering desktop/390 px Blue/Pink, tools/keyboard, polled station changes, calm review, reduced/offscreen motion and run-bound diff isolation. One review response was intercepted entirely in-browser; no application writes or provider turns occurred. Final motion/status refinement has a separate candidate-bound receipt. The actual owner's run detail GET remained pending beyond 30 seconds, so its live render is unverified; cause is unestablished and the active backend was not restarted. Evidence/hashes: `.pm/r118-evidence/`; owner aesthetic/physical-device acceptance remains Pending.
 
 ### R117
 
@@ -1793,6 +1831,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-11-14 — **R115** Default delivery settings from the item's Markdown recommendation → [record](<../_Archive/Shipped/PM Tooling.md#r115>)
 - ✅ 2026-11-14 — **R116** Validate Local sign-in against its cleaned worker environment → [record](<../_Archive/Shipped/PM Tooling.md#r116>)
 - ✅ 2026-11-14 — **R117** Restore Local session review and accurate Bridge execution states → [record](<../_Archive/Shipped/PM Tooling.md#r117>)
+- ✅ 2026-11-15 — **R118** Make Local delivery Game mode a living ERA workshop → [record](<../_Archive/Shipped/PM Tooling.md#r118>)
+- ✅ 2026-11-15 — **R119** Isolate pre-commit tests from the parent Git environment → [record](<../_Archive/Shipped/PM Tooling.md#r119>)
 
 ## Delivery session log
 

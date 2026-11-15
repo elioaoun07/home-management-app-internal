@@ -60,7 +60,7 @@ Wired in `.claude/settings.json`; scripts in `.claude/hooks/`. Each command runs
 | PostToolUse (Edit, Write) | `check-migration.sh` | Reminds when `schema.sql` and a dated migration are not edited together (Hard Rule 24). | No |
 | Stop | `check-pm-update.sh` | Once per turn, blocks finishing when `src/` or `migrations/` changed and no PM file did; the message points to `pnpm pm:ship <ID>` (Hard Rule 25). | Once |
 
-`pre-commit.sh` is run by Husky, not by an agent event. The two keyword-matching `UserPromptSubmit` reminders (Feature Map, graphify) were removed on 2026-11-11: `CLAUDE.md` and `start-task` already carry the Feature Map rule, and the keyword match fired on unrelated prompts.
+`pre-commit.sh` is run by Husky, not by an agent event. Its test subprocess clears the repository-local variables listed by `git rev-parse --local-env-vars` (R119, 2026-11-15), so fixture repositories cannot reuse the committing worktree's index, directory or `-c` configuration. The surrounding hook retains its Git context for staged-file linting. The two keyword-matching `UserPromptSubmit` reminders (Feature Map, graphify) were removed on 2026-11-11: `CLAUDE.md` and `start-task` already carry the Feature Map rule, and the keyword match fired on unrelated prompts.
 
 ## Agentic OS setup tools (A1 / R93)
 

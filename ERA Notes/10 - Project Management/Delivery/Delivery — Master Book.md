@@ -70,6 +70,8 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟠 **DLV-158 — Previous Local deliveries remain on Loading session.** Confirmed 2026-11-15: the owner's failed `local-cac958d7-1f8e-4e65-9cb8-1471c839f796` has no candidate head; its workspace comparison spans 4,485 files. `local-lane.mjs#detail` awaited two sequential blob reads per file on every GET before returning saved history. This establishes the cause of R118's pending-detail residual.
+
 🟠 **DLV-157 — Local workers stop before editing on Windows.** The private Codex home omits `[windows] sandbox`, Claude requires a Bash sandbox unavailable on native Windows, and both prompts ask for a commit their guards deny. Confirmed 2026-11-15 in `local-lane.mjs#build` and `adapters/claude.mjs#buildSessionOptions`; owner-provided failed-run and no-model sandbox probe evidence is retained in [the executor blockers plan](<../_Archive/Plans/Local Delivery Executor Blockers.md>).
 
 🟠 **DLV-150** Deliver an item on a branch in a local worktree with host checks. Filed 2026-11-10 from [Fable 2 Local lane design](<../Fable 2/10 - Project Management/Delivery/2 - Local Lane Design.md>) (2026-11-10, owner direction). See [acceptance](<#dlv-150>).
@@ -148,6 +150,20 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### DLV-158
+
+**Implementation:** done
+
+**Outcome:** Retained Local delivery history opens independently of full diff inspection.
+**Kind:** bug
+**Touches:** `scripts/delivery-v2/local-lane.mjs`, `tests/delivery-v2/local-lane.test.ts`
+- **Acceptance:** Failed attempts without a candidate return recorded activity without Git inspection; candidate polls inspect identity/status without reading every changed blob.
+- **Acceptance:** Review and Ship perform fresh diff inspection and fail closed when inspection fails; existing UAT/current-head gates remain intact.
+**Evidence:** 2026-11-15 read-only inspection of the reported local run found phase failed, head null and 4,485 changed paths; individual identity/status/path-list operations completed in under 150 ms.
+**Verification:** Corrected GET handler against the real local SQLite store opened read-only: 200 in 6 ms, failed phase, 35 activity events, work brief present, Ship disabled. Thirty replay regressions, typecheck and scoped lint passed. No production writes or provider calls. The current `--bridge` backend retains the old module until owner restart; its startup publishes production relay data and Hard Rule 26 prohibits the agent initiating that write.
+**Handover:** Restart the PM backend after active runs finish, reopen the reported URL in Game and calm modes, and verify saved status, activity and brief load. Do not start a provider session to test history. Candidate Review and Ship remain explicit owner actions.
+**UAT:** pending
 
 ### DLV-157
 
@@ -1801,6 +1817,7 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - ✅ 2026-11-11 — **DLV-152** Enforce the four surviving guardrails in code → [record](<../_Archive/Shipped/Delivery.md#dlv-152>)
 - ✅ 2026-11-11 — **DLV-153** Ship by owner merge after UAT sign-off and undo by revert → [record](<../_Archive/Shipped/Delivery.md#dlv-153>)
 - ✅ 2026-11-15 — **DLV-157** Unblock local executors on Windows without an unsandboxed shell → [record](<../_Archive/Shipped/Delivery.md#dlv-157>)
+- ✅ 2026-11-15 — **DLV-158** Open retained Local deliveries without full diff inspection → [record](<../_Archive/Shipped/Delivery.md#dlv-158>)
 
 DW-3 conversation search/highlighting shipped 2026-07-16; removed the stale DLV-71 duplicate on 2026-09-10. This is a reconciliation, not a second implementation.
 

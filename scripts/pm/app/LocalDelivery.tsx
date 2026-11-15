@@ -26,7 +26,7 @@ export interface LocalRunView {
   settings?: { executor: string; model: string | null; effort: string | null };
   risk?: { required: boolean; flagged: { path: string; domains: string[] }[] };
   checks: { name: string; exit: number | null; stdout: string; stderr: string; error: string | null }[];
-  activity: { at: string; summary: string | null }[];
+  activity: { at: string; summary: string | null; kind?: string; seq?: number; job_id?: string | null }[];
   usage: Record<string, number | string | null> | null;
   handover: UatHandover | null;
 }
@@ -245,17 +245,21 @@ export function LocalActions({ run, busy, act }: { run: Pick<LocalRunView, "phas
 
 export function LocalRun({ id }: { id: string }) {
   const session = useV2Session();
-  const [patch, setPatch] = useState<string | null>(null);
+  const game = useGameLayer();
+  const [patch, setPatch] = useState<{ runId: string; value: string } | null>(null);
   const detail = useQuery({ queryKey: pmKeys.localRun(id), queryFn: ({ signal }) => read<LocalRunView>(`/api/delivery/v2/local/run?id=${encodeURIComponent(id)}`, signal),
     enabled: !!session.data?.paired && offersLocalLane(), refetchInterval: 4000 });
-  const command = useMutation({ mutationFn: (action: "review" | "ship" | "undo" | "cancel") => v2Post<{ patch?: string }>("local", { action, run_id: id }, 120_000),
-    onSuccess: result => { if (result.patch !== undefined) setPatch(result.patch); },
+  const command = useMutation({ mutationFn: async (action: "review" | "ship" | "undo" | "cancel") => {
+    const runId = id;
+    return { ...await v2Post<{ patch?: string }>("local", { action, run_id: runId }, 120_000), runId };
+  },
+    onSuccess: result => { if (result.patch !== undefined) setPatch({ runId: result.runId, value: result.patch }); },
     onSettled: () => client.invalidateQueries({ queryKey: pmKeys.all }) });
   const run = detail.data;
   if (session.data && !session.data.paired) return <PairV2 />;
   if (!offersLocalLane()) return <p>Open on the laptop</p>;
-  return <div className="run-page local-run-page"><Back fallback="/delivery" /><ErrorNotice error={session.error || detail.error || command.error} retry={() => void detail.refetch()} />
+  return <div className={`run-page local-run-page${game.enabled ? " local-run-game-page" : ""}`}><Back fallback="/delivery" /><ErrorNotice error={session.error || detail.error || command.error} retry={() => void detail.refetch()} />
     {!run && detail.isPending && <p role="status">Loading session…</p>}
-    {run && <><LocalRunReview run={run} busy={command.isPending} act={action => command.mutate(action)} patch={patch} /><HostLimits /></>}
+    {run && <><LocalRunReview run={run} busy={command.isPending} act={action => command.mutate(action)} patch={patch?.runId === id ? patch.value : null} />{!game.enabled && <HostLimits />}</>}
   </div>;
 }

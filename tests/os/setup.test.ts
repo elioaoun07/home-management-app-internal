@@ -107,7 +107,7 @@ describe("A0 generated setup", () => {
     expect(rejected.status).not.toBe(0);
     expect(rejected.stdout + rejected.stderr).toContain("Generated agent setup drifted");
     expect(readFileSync(join(dir, "checks.log"), "utf8").trim().split(/\r?\n/)).toEqual(["docs:check", "sync:ai:check"]);
-    writeFileSync(join(dir, "bin/pnpm"), '#!/bin/sh\necho "$*" >> checks.log\nif [ "$1" = eslint ]; then [ "$#" -eq 4 ] && [ "$4" = "src/a file.ts" ]; fi\n', { mode: 0o755 });
+    writeFileSync(join(dir, "bin/pnpm"), '#!/bin/sh\necho "$*" >> checks.log\nif [ "$1" = test ]; then\n  [ -z "${GIT_INDEX_FILE+x}" ] && [ -z "${GIT_DIR+x}" ] && [ -z "${GIT_CONFIG_PARAMETERS+x}" ] || exit 1\nfi\nif [ "$1" = eslint ]; then [ "$#" -eq 4 ] && [ "$4" = "src/a file.ts" ]; fi\n', { mode: 0o755 });
     mkdirSync(join(dir, "src"));
     writeFileSync(join(dir, "src/a file.ts"), "export {};\n");
     expect(git("add", "src/a file.ts").status).toBe(0);

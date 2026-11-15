@@ -27,7 +27,15 @@ if ! pnpm tsc --noEmit; then
 fi
 
 echo "Running unit tests..."
-if ! pnpm test; then
+if ! (
+  # Tests create foreign repositories. Git's hook environment must not make
+  # their commands use this checkout's index, worktree or -c configuration.
+  test_git_env=$(git rev-parse --local-env-vars) || exit 1
+  while IFS= read -r test_git_variable; do
+    unset "$test_git_variable"
+  done <<< "$test_git_env"
+  pnpm test
+); then
   echo "Unit tests failed — fix before committing." >&2
   exit 2
 fi

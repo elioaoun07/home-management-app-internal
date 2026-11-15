@@ -101,6 +101,30 @@ function accept(root: string, handover: { handover_id: string; revision: number 
   expect(signOff({ ...args, command_id: randomUUID() }).ok).toBe(true);
 }
 
+describe("Local history reads", () => {
+  function history(head: string | null = null) {
+    const data = { lane: "local", phase: "failed", workspace: "missing-history-worktree", base: "base", head, checks: [], risk: { required: false, flagged: [] } };
+    const run = vi.fn(async (_command: string, _args: string[], _options?: unknown) => ({ status: 0, stdout: "candidate\n", stderr: "", error: null, signal: null }));
+    const store = { getRun: () => ({ base_manifest_json: JSON.stringify(data) }), getJob: () => null, listActivity: () => [{ summary: "Retained failure" }] };
+    return { lane: createLocalLane({ root: temp(), store, run }), run };
+  }
+  it("opens a failed attempt without inspecting its unrelated worktree diff", async () => {
+    const f = history();
+    expect(await f.lane.detail("history")).toMatchObject({ phase: "failed", canShip: false, activity: [{ summary: "Retained failure" }] });
+    expect(f.run).not.toHaveBeenCalled();
+  });
+  it("polls candidate identity without reading changed blobs", async () => {
+    const f = history("candidate");
+    await f.lane.detail("history");
+    expect(f.run.mock.calls.map(call => call[1][1])).toEqual(["rev-parse", "status"]);
+  });
+  it("refuses review when fresh inspection fails", async () => {
+    const f = history("candidate");
+    f.run.mockImplementation(async (_command, args) => ({ status: args[1] === "diff" ? 1 : 0, stdout: args[1] === "rev-parse" ? "candidate\n" : "", stderr: "", error: null, signal: null }));
+    await expect(f.lane.review("history")).rejects.toThrow("candidate-changed");
+  });
+});
+
 describe("versioned Local guardrails", () => {
   it("authenticates a subscription despite unrelated PM host API configuration, preserving custom credential paths", () => {
     const home = temp();
