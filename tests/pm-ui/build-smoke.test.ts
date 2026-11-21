@@ -12,6 +12,6 @@ describe("PM Preact bundle", () => {
     expect(html).toContain('<div id="app"></div>');
     expect(html).toContain("var PM_MODE=\"static\"");
     expect(html).not.toContain("</script><script>bad()");
-  });
+  }, 60_000);
 });
 

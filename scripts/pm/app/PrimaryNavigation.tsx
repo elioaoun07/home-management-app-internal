@@ -29,13 +29,14 @@ const links: {
   { path: "/score", label: "Score", icon: ChartNoAxesCombined },
 ];
 
-/** Plan owns sprint, backlog and work admission; prompt utilities belong to Setup. */
+/** Plan owns sprint, backlog, work admission and retired launcher addresses. */
 export function primarySection(parts: string[]) {
   const root = parts[0] || "";
   if (
     [
       "deliver",
       "launch",
+      "skill-tools",
       "explore",
       "space",
       "work",
@@ -47,7 +48,7 @@ export function primarySection(parts: string[]) {
   )
     return "/sprints";
   if (["delivery", "sessions", "uat-item"].includes(root)) return "/sessions";
-  if (["setup", "skill-tools"].includes(root)) return "/setup";
+  if (root === "setup") return "/setup";
   if (["score", "analytics", "dashboard"].includes(root)) return "/score";
   if (root === "sprints") return "/sprints";
   if (["", "home", "bridge"].includes(root)) return "/bridge";

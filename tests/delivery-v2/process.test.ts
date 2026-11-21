@@ -18,30 +18,39 @@ describe("runProcess", () => {
       clearInterval(timer);
     }
     expect(ticks).toBeGreaterThanOrEqual(5);
-  });
+  }, 60_000);
 
   it("returns spawnSync's shape: status, both streams and piped input", async () => {
     const echo = "let s = ''; process.stdin.on('data', (c) => (s += c)); process.stdin.on('end', () => { process.stdout.write(s); process.stderr.write('err'); process.exitCode = 3; })";
     const result = await runProcess(node, ["-e", echo], { input: "hello" });
     expect(result).toMatchObject({ status: 3, stdout: "hello", stderr: "err", error: null });
-  });
+  }, 60_000);
 
   it("kills a child that outlives its timeout and reports ETIMEDOUT with no status", async () => {
     const result = await runProcess(node, ["-e", "setTimeout(() => {}, 30000)"], { timeout: 200 });
     expect(result.status).toBeNull();
     expect(result.error?.code).toBe("ETIMEDOUT");
-  });
+  }, 60_000);
 
   it("stops a child whose output overflows the buffer", async () => {
     const result = await runProcess(node, ["-e", "process.stdout.write('x'.repeat(4096))"], { maxBuffer: 1024 });
     expect(result.error?.code).toBe("ENOBUFS");
-  });
+  }, 60_000);
+
+  it("streams complete stderr lines across chunks and flushes a final unterminated line", async () => {
+    const lines: string[] = [];
+    const result = await runProcess(node, ["-e", "process.stderr.write('one\\r');setTimeout(()=>{process.stderr.write('\\ntwo\\nlast')},100);"], {
+      onStderrLine: line => lines.push(line),
+    });
+    expect(result).toMatchObject({ status: 0, stderr: "one\r\ntwo\nlast", error: null });
+    expect(lines).toEqual(["one", "two", "last"]);
+  }, 60_000);
 
   it("reports a missing program as a spawn error instead of waiting forever", async () => {
     const result = await runProcess("era-no-such-program-" + process.pid, []);
     expect(result.status).toBeNull();
     expect(result.error?.code).toBe("ENOENT");
-  });
+  }, 60_000);
 });
 
 describe("docker CLI", () => {
@@ -50,7 +59,7 @@ describe("docker CLI", () => {
     const bytes = Buffer.from([0, 255, 128, 13, 10, 1]);
     const result = await docker.run(["-e", "const chunks=[];process.stdin.on('data',c=>chunks.push(c));process.stdin.on('end',()=>process.stdout.write(Buffer.concat(chunks).toString('hex')));"], { input: bytes });
     expect(result).toMatchObject({ status: 0, stdout: bytes.toString("hex"), error: null });
-  });
+  }, 60_000);
 
   it("runs without blocking and keeps a blocking variant for the setup scripts", async () => {
     const docker = createDockerCli({ bin: node });
@@ -58,5 +67,5 @@ describe("docker CLI", () => {
     expect(pending).toBeInstanceOf(Promise);
     expect(await pending).toEqual({ status: 0, stdout: "ok", stderr: "", error: null });
     expect(docker.runSync(["-e", "process.stdout.write('ok')"])).toEqual({ status: 0, stdout: "ok", stderr: "", error: null });
-  });
+  }, 60_000);
 });

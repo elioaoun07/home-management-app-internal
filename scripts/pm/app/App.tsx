@@ -37,7 +37,6 @@ import { Explore, SpaceView } from "./Explore";
 import { WorkView } from "./Work";
 import { Activity, Attention, Capture, Reader } from "./Auxiliary";
 import { Launch } from "./Delivery";
-import { Launchpad } from "./Launchpad";
 import { ItemUatWizard } from "./ItemUatWizard";
 import { Run } from "./Run";
 import { UatPage } from "./UatWizard";
@@ -133,9 +132,6 @@ export function App() {
       break;
     case "setup":
       view = <Setup />;
-      break;
-    case "skill-tools":
-      view = <Launchpad />;
       break;
     case "sessions":
       view = <Sessions />;

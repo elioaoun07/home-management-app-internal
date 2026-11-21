@@ -16,6 +16,14 @@ owner: Elio
 
 ## Next
 
+**Agentic OS corrections**
+
+- [ ] **R126** Give the Local Game board a mission layout, follow camera and zone identity — [criteria](<PM Tooling — Master Book.md#r126>) _(friction - L)_
+
+**Local Game stage**
+
+- [ ] **R131** Sit across from ERA and read, replay or receive a delivery — [criteria](<PM Tooling — Master Book.md#r131>) _(friction - L)_
+
 **Needs you**
 
 - [ ] **R43** Verify hot-child RLS and read contracts — [criteria](<PM Tooling — Master Book.md#r43>) _(blocker - M)_
@@ -42,7 +50,6 @@ owner: Elio
 
 **Agentic OS (PM.2)**
 
-- [ ] **R98** Launch skills from forms with validated inputs — HELD — primary workflow rejected under R108 — [criteria](<PM Tooling — Master Book.md#r98>) _(parked - M)_
 - [ ] **R99** Compare tiers on identical work and add the game layer — [criteria](<PM Tooling — Master Book.md#r99>) _(parked - L)_
 
 **Command Center polish**

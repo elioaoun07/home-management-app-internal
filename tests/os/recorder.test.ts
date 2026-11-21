@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  existsSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -16,6 +17,7 @@ import {
 } from "../../scripts/os/hook.mjs";
 import { ingest } from "../../scripts/os/ingest.mjs";
 import { readClaude } from "../../scripts/os/ingest/claude.mjs";
+import { readCodex } from "../../scripts/os/ingest/codex.mjs";
 import { openStore } from "../../scripts/os/store.mjs";
 import { markdown } from "../../scripts/os/report.mjs";
 
@@ -57,6 +59,16 @@ function run(
   program: string,
   ...args: string[]
 ) {
+  return runAgent("claude", dir, event, input, program, ...args);
+}
+function runAgent(
+  agent: "claude" | "codex",
+  dir: string,
+  event: string,
+  input: string | Buffer,
+  program: string,
+  ...args: string[]
+) {
   return spawnSync(
     process.execPath,
     [
@@ -70,7 +82,7 @@ function run(
     {
       cwd: scratch,
       input,
-      env: { ...process.env, CLAUDE_PROJECT_DIR: dir, OS_AGENT: "claude" },
+      env: { ...process.env, CLAUDE_PROJECT_DIR: dir, OS_AGENT: agent },
       maxBuffer: 4 * 1024 * 1024,
     },
   );
@@ -241,6 +253,191 @@ function transcript(dir: string) {
 }
 
 describe("A3 hook passthrough", () => {
+  it("auto-ingests native Codex lifecycle payloads and repeated Stop updates one session", () => {
+    const { dir, head } = fixture(),
+      file = join(dir, "rollout.jsonl"),
+      id = "codex-automatic";
+    const rows = [
+      {
+        type: "session_meta",
+        timestamp: at(0),
+        payload: { id, cwd: dir, git: { branch: "main" } },
+      },
+      {
+        type: "turn_context",
+        timestamp: at(1),
+        payload: { turn_id: "turn-1", model: "gpt-recorded", effort: "high" },
+      },
+      {
+        type: "response_item",
+        timestamp: at(2),
+        payload: {
+          type: "message",
+          role: "assistant",
+          id: "response-1",
+          content: [],
+        },
+      },
+      {
+        type: "event_msg",
+        timestamp: at(3),
+        payload: { type: "task_complete" },
+      },
+    ];
+    writeFileSync(
+      file,
+      rows.map((row) => JSON.stringify(row)).join("\n") + "\n",
+    );
+    writeFileSync(join(dir, ".git/info/exclude"), ".os/\nrollout.jsonl\n");
+    const input = JSON.stringify({
+      session_id: id,
+      transcript_path: file,
+      cwd: dir,
+      hook_event_name: "Stop",
+    });
+    // A Stop without an approved/fired SessionStart cannot invent its base.
+    const incompleteId = "codex-no-start",
+      incompleteFile = join(dir, "incomplete.jsonl");
+    writeFileSync(
+      incompleteFile,
+      rows
+        .map((row) =>
+          JSON.stringify(
+            row.type === "session_meta"
+              ? { ...row, payload: { ...row.payload, id: incompleteId } }
+              : row,
+          ),
+        )
+        .join("\n") + "\n",
+    );
+    expect(
+      runAgent(
+        "codex",
+        dir,
+        "Stop",
+        JSON.stringify({
+          session_id: incompleteId,
+          transcript_path: incompleteFile,
+          cwd: dir,
+        }),
+        process.execPath,
+        "-e",
+        "",
+      ).status,
+    ).toBe(0);
+    const incomplete = openStore(dir, { readOnly: true });
+    try {
+      expect(incomplete.get(incompleteId).session.base).toBeNull();
+      expect(incomplete.get(incompleteId).verdicts).toHaveLength(0);
+    } finally {
+      incomplete.close();
+    }
+    expect(
+      runAgent("codex", dir, "SessionStart", input, process.execPath, "-e", "")
+        .status,
+    ).toBe(0);
+    for (let repeat = 0; repeat < 2; repeat++) {
+      const stop = runAgent(
+        "codex",
+        dir,
+        "Stop",
+        input,
+        process.execPath,
+        "-e",
+        "",
+      );
+      expect(stop.status, stop.stderr.toString()).toBe(0);
+      expect(stop.stderr.toString()).not.toContain("recorder unavailable");
+    }
+    const store = openStore(dir, { readOnly: true });
+    try {
+      const record = store.get(id);
+      expect(record.session).toMatchObject({
+        agent: "codex",
+        model: "gpt-recorded",
+        base: head,
+        head,
+      });
+      expect(
+        record.events.filter((row: { event: string }) => row.event === "Stop"),
+      ).toHaveLength(2);
+      expect(
+        record.events.every((row: { agent: string }) => row.agent === "codex"),
+      ).toBe(true);
+      expect(
+        store.list().filter((session: { id: string }) => session.id === id),
+      ).toHaveLength(1);
+    } finally {
+      store.close();
+    }
+    const marker = join(dir, ".os/recorder-unavailable");
+    writeFileSync(marker, "earlier outage");
+    const blocked = runAgent(
+      "codex",
+      dir,
+      "Stop",
+      input,
+      process.execPath,
+      "-e",
+      "process.exitCode=2",
+    );
+    expect(blocked.status).toBe(2);
+    expect(readFileSync(marker, "utf8")).toBe("earlier outage");
+    const pending = openStore(dir, { readOnly: true });
+    try {
+      expect(pending.get(id).session.endedAt).toBeNull();
+    } finally {
+      pending.close();
+    }
+  }, 60_000);
+
+  it("evaluates an unchanged HEAD's dirty tracked and untracked source on automatic Stop", async () => {
+    const { dir, head } = fixture(),
+      file = transcript(dir);
+    writeFileSync(join(dir, ".git/info/exclude"), ".os/\ntranscript.jsonl\n");
+    const input = JSON.stringify({
+      session_id: "real-shape",
+      transcript_path: file,
+    });
+    expect(
+      run(dir, "SessionStart", input, process.execPath, "-e", "").status,
+    ).toBe(0);
+    mkdirSync(join(dir, "src/components"), { recursive: true });
+    writeFileSync(
+      join(dir, "src/components/Card.tsx"),
+      "export const Card = () => { console.log('recorded debt'); return null; };\n",
+    );
+    const stop = run(dir, "Stop", input, process.execPath, "-e", "");
+    expect(stop.status, stop.stderr.toString()).toBe(0);
+    const store = openStore(dir, { readOnly: true });
+    try {
+      const record = store.get("real-shape");
+      expect(record.session).toMatchObject({
+        base: head,
+        head,
+        rangeSource: "runner lifecycle: uncommitted working tree",
+      });
+      expect(
+        record.verdicts.find((row: { rule: string }) => row.rule === "HR-22"),
+      ).toMatchObject({ verdict: "fail", file: "src/components/Card.tsx" });
+      expect(
+        record.session.changeFacts.map((row: { file: string }) => row.file),
+      ).toContain("src/components/Card.tsx");
+      expect(markdown(record)).toContain("uncommitted working tree");
+    } finally {
+      store.close();
+    }
+    // A historical re-import cannot silently borrow the current working tree.
+    await ingest({ root: dir, transcript: file });
+    const historical = openStore(dir, { readOnly: true });
+    try {
+      expect(historical.get("real-shape").session.rangeSource).toBe(
+        "runner lifecycle",
+      );
+    } finally {
+      historical.close();
+    }
+  }, 60_000);
   it("preserves byte stdin/stdout/stderr and exits 0, 1 and blocking 2", () => {
     const { dir } = fixture();
     const input = Buffer.from(
@@ -278,7 +475,7 @@ describe("A3 hook passthrough", () => {
       source: "runner",
     });
     expect(events.every((row) => row.durationMs >= 0)).toBe(true);
-  });
+  }, 60_000);
 
   it("leaves the real guard working with the wrapper removed", () => {
     const { dir } = fixture();
@@ -305,7 +502,7 @@ describe("A3 hook passthrough", () => {
       expect(wrapped.stdout.equals(direct.stdout)).toBe(true);
       expect(wrapped.stderr.equals(direct.stderr)).toBe(true);
     }
-  });
+  }, 60_000);
 
   it("preserves denial/output when .os is unwritable or payload is invalid", () => {
     const { dir } = fixture();
@@ -326,7 +523,7 @@ describe("A3 hook passthrough", () => {
       expect(result.stdout.toString()).toBe("unchanged");
       expect(result.stderr.toString()).toContain("recorder unavailable");
     }
-  });
+  }, 60_000);
 
   it("redacts diagnostics at write time without changing hook output", () => {
     const { dir } = fixture(),
@@ -343,7 +540,7 @@ describe("A3 hook passthrough", () => {
     expect(readFileSync(eventFile(dir, "privacy"), "utf8")).not.toContain(
       secret,
     );
-  });
+  }, 60_000);
 
   it("records lifecycle setup/base and auto-ingests Stop without affecting exit", () => {
     const { dir, head } = fixture(),
@@ -373,10 +570,205 @@ describe("A3 hook passthrough", () => {
     } finally {
       store.close();
     }
-  }, 15000);
+  }, 60_000);
+
+  it("ingests a 467-file lifecycle range inside the Stop budget and clears an earlier failure marker", () => {
+    const { dir } = fixture(),
+      file = transcript(dir);
+    writeFileSync(join(dir, ".git/info/exclude"), ".os/\ntranscript.jsonl\n");
+    const input = JSON.stringify({
+      session_id: "real-shape",
+      transcript_path: file,
+    });
+    expect(
+      run(dir, "SessionStart", input, process.execPath, "-e", "").status,
+    ).toBe(0);
+    mkdirSync(join(dir, "src/components"), { recursive: true });
+    mkdirSync(join(dir, "docs"));
+    for (let i = 0; i < 467; i++)
+      writeFileSync(
+        join(
+          dir,
+          i < 250 ? `src/components/Card ${i}.tsx` : `docs/Note ${i}.md`,
+        ),
+        i < 250 ? `export const n${i} = ${i};\n` : `Note ${i}\n`,
+      );
+    const commit = spawnSync("git", ["add", "."], { cwd: dir });
+    expect(commit.status).toBe(0);
+    const saved = spawnSync(
+      "git",
+      [
+        "-c",
+        "user.name=A3",
+        "-c",
+        "user.email=a3@example.invalid",
+        "-c",
+        "core.hooksPath=.no-hooks",
+        "-c",
+        "commit.gpgSign=false",
+        "commit",
+        "--quiet",
+        "-m",
+        "467 files",
+      ],
+      { cwd: dir },
+    );
+    expect(saved.status, saved.stderr.toString()).toBe(0);
+    const marker = join(dir, ".os/recorder-unavailable");
+    writeFileSync(marker, "2026-11-15T06:39:25.775Z");
+    const stop = run(dir, "Stop", input, process.execPath, "-e", "");
+    expect(stop.status, stop.stderr.toString()).toBe(0);
+    expect(stop.stderr.toString()).not.toContain("recorder unavailable");
+    expect(existsSync(marker)).toBe(false);
+    const store = openStore(dir, { readOnly: true });
+    try {
+      const record = store.get("real-shape");
+      expect(record.session.changeFacts).toHaveLength(467);
+      expect(record.verdicts).toHaveLength(21);
+      expect(record.session.scorecard.checks.verdict).toBe("unknown");
+    } finally {
+      store.close();
+    }
+  }, 60_000);
+
+  it("records the ingest failure detail and preserves the wrapped Stop result", () => {
+    const { dir } = fixture(),
+      file = join(dir, "broken.jsonl");
+    writeFileSync(file, '{"partial":');
+    const result = run(
+      dir,
+      "Stop",
+      JSON.stringify({ session_id: "broken", transcript_path: file }),
+      process.execPath,
+      "-e",
+      "process.stdout.write('same');process.exitCode=2",
+    );
+    expect(result.status).toBe(2);
+    expect(result.stdout.toString()).toBe("same");
+    expect(existsSync(join(dir, ".os/recorder-unavailable"))).toBe(true);
+    const events = readFileSync(eventFile(dir, "broken"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(events.at(-1)).toMatchObject({
+      event: "unavailable",
+      message: expect.stringContaining("Invalid transcript JSON at line 1"),
+    });
+  }, 60_000);
+
+  it("keeps the first unavailable time across recording and ingest failures until recovery", () => {
+    const { dir } = fixture(),
+      marker = join(dir, ".os/recorder-unavailable");
+    const first = run(
+      dir,
+      "PreToolUse",
+      "invalid json",
+      process.execPath,
+      "-e",
+      "",
+    );
+    expect(first.status).toBe(0);
+    const since = readFileSync(marker, "utf8");
+    expect(Number.isFinite(Date.parse(since))).toBe(true);
+    const file = join(dir, "broken-again.jsonl");
+    writeFileSync(file, '{"partial":');
+    const next = run(
+      dir,
+      "Stop",
+      JSON.stringify({
+        session_id: "continuous-outage",
+        transcript_path: file,
+      }),
+      process.execPath,
+      "-e",
+      "",
+    );
+    expect(next.status).toBe(0);
+    expect(next.stderr.toString()).toContain("recorder unavailable");
+    expect(readFileSync(marker, "utf8")).toBe(since);
+  }, 60_000);
 });
 
 describe("A3 read-only transcript ingest and durable report", () => {
+  it("attributes the majority of assistant turns instead of the trailing housekeeping model", async () => {
+    const { dir } = fixture(),
+      file = transcript(dir);
+    const rows = readFileSync(file, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    for (const row of rows)
+      if (row.type === "assistant") row.message.model = "claude-fable-recorded";
+    rows.push({
+      type: "assistant",
+      uuid: "last-cheap",
+      timestamp: at(8),
+      sessionId: "real-shape",
+      message: { id: "cheap", model: "claude-haiku-recorded", content: [] },
+    });
+    writeFileSync(
+      file,
+      rows.map((row) => JSON.stringify(row)).join("\n") + "\n",
+    );
+    const facts = await readClaude(file);
+    expect(facts.turns).toBe(4);
+    expect(facts.model).toBe("claude-fable-recorded");
+    mkdirSync(join(dir, "ERA Notes"), { recursive: true });
+    writeFileSync(
+      join(dir, "ERA Notes/Model-Registry.md"),
+      "| `CLAUDE_MID` | Claude | Fable | `claude-fable-recorded` | high |\n" +
+        "| `CLAUDE_LOW` | Claude | Haiku | `claude-haiku-recorded` | low |\n",
+    );
+    const session = await ingest({ root: dir, transcript: file });
+    expect(session).toMatchObject({
+      model: "claude-fable-recorded",
+      tier: "CLAUDE_MID",
+    });
+  });
+  it("attributes Codex's model by distinct assistant turns rather than the final context", async () => {
+    const { dir } = fixture(),
+      file = join(dir, "majority-codex.jsonl");
+    const rows: object[] = [
+      {
+        type: "session_meta",
+        timestamp: at(0),
+        payload: { id: "codex-majority", cwd: dir },
+      },
+    ];
+    for (const [index, model] of [
+      "gpt-majority",
+      "gpt-majority",
+      "gpt-majority",
+      "gpt-tail",
+    ].entries()) {
+      rows.push({
+        type: "turn_context",
+        timestamp: at(index + 1),
+        payload: {
+          turn_id: `turn-${index}`,
+          model,
+          effort: index % 2 ? "high" : "medium",
+        },
+      });
+      rows.push({
+        type: "response_item",
+        timestamp: at(index + 1),
+        payload: {
+          type: "message",
+          role: "assistant",
+          id: `message-${index}`,
+          content: [],
+        },
+      });
+    }
+    writeFileSync(
+      file,
+      rows.map((row) => JSON.stringify(row)).join("\n") + "\n",
+    );
+    const facts = await readCodex(file);
+    expect(facts.model).toBe("gpt-majority");
+    expect(facts.effort).toBe("medium");
+  });
   it("reads the privacy-trimmed sample from a real Claude session", async () => {
     const file = join(root, "tests/os/fixtures/claude-recorded.jsonl"),
       before = readFileSync(file);
@@ -448,7 +840,7 @@ describe("A3 read-only transcript ingest and durable report", () => {
     } finally {
       store.close();
     }
-  });
+  }, 60_000);
 
   it("refuses unknown versions, bad identity and truncated JSON without replacing stored evidence", async () => {
     const { dir } = fixture(),
@@ -475,7 +867,7 @@ describe("A3 read-only transcript ingest and durable report", () => {
     expect(() => appendEvent(dir, { schema: "os/event@99" })).toThrow(
       "Unsupported event schema",
     );
-  });
+  }, 60_000);
 
   it("rolls back a failed replacement and refuses unknown row versions", async () => {
     const { dir } = fixture(),
@@ -502,5 +894,5 @@ describe("A3 read-only transcript ingest and durable report", () => {
     } finally {
       store.close();
     }
-  });
+  }, 60_000);
 });

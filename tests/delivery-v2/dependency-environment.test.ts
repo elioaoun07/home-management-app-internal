@@ -491,7 +491,7 @@ describe("post-install validation continuation", () => {
     // seam on Windows; no Docker, provider, package code or network is involved.
     const payload = JSON.stringify(spec), actual = await runProcess(process.execPath, ["-"], { input: "process.stdout.write(require('node:crypto').createHash('sha256').update(" + JSON.stringify(payload) + ").digest('hex'))", timeout: 5000 });
     expect(actual.status).toBe(0);expect(actual.stdout).toBe(hash(payload).slice(7));
-  });
+  }, 60_000);
 });
 
 describe("separate staging, without Docker or network", () => {

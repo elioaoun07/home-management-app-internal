@@ -131,7 +131,7 @@ export function groupDelivery({
     };
     // A failed queue read must not hide an owner decision already confirmed by
     // the run projection. Do not infer an action from a candidate alone.
-    if (run.ownerActionKind === "apply" || run.ownerActionKind === "local-review") groups.needs.push(row);
+    if (["apply", "local-review", "local-question"].includes(run.ownerActionKind ?? "")) groups.needs.push(row);
     else if (run.lifecycle === "CLOSED")
       groups.past.push({ row, outcome: pastOutcomeV2(run) });
     else if (queued || run.ownerActionKind === "waiting")

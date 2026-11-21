@@ -14,18 +14,27 @@ export type LocalActivityStation =
   | "lab"
   | "review";
 
-interface RecordedActivity {
+export interface LocalActivityAgent {
+  role?: string;
+  id?: string | null;
+  executor?: string;
+  model?: string | null;
+}
+
+export interface RecordedActivity {
   at: string;
   summary: string | null;
-  kind?: string;
+  kind?: string | null;
   seq?: number;
   job_id?: string | null;
+  agent_json?: LocalActivityAgent | string | null;
 }
 
 interface ActivityRun {
   phase: string;
   interrupted: boolean;
   error?: string;
+  workspace?: string;
   activity: RecordedActivity[];
   checks: { name: string; exit: number | null; error: string | null }[];
 }
@@ -38,11 +47,213 @@ export interface LocalActivityEvent {
   detail: string | null;
   summary: string;
   station: LocalActivityStation;
+  paths: string[];
+  command: string | null;
+  agent: LocalActivityAgent | null;
 }
 
 const checkResult = /^(typecheck|lint|test|pm:lint):\s*(-?\d+|null)$/u;
 const checkCommand =
-  /(?:^|[\s;&|])(?:pnpm|npm|yarn|bun)(?:\s+(?:run|exec))?\s+(?:typecheck|lint|test|vitest|pm:lint)(?:\s|$)/u;
+  /(?:^|[\s;&|])(?:(?:pnpm|npm|yarn|bun)(?:\s+(?:run|exec))?\s+(?:typecheck|lint|test|vitest|eslint|tsc|pm:lint)|(?:eslint|tsc|vitest))(?:\s|$)/u;
+const readCommand =
+  /^(?:Get-Content|gc|cat|type|rg|grep|Select-String|ls|dir|Get-ChildItem|Get-Item|head|tail|find)\b|^sed\s+-n(?:\s|$)|^git\s+(?:diff|status|log|show)(?:\s|$)/iu;
+const searchCommand = /^(?:rg|grep|Select-String|find)\b/iu;
+
+function unquote(value: string) {
+  const trimmed = value.trim();
+  return trimmed.length > 1 &&
+    ["'", '"'].includes(trimmed[0]) &&
+    trimmed.at(-1) === trimmed[0]
+    ? trimmed.slice(1, -1)
+    : trimmed;
+}
+
+/** Remove only recognised shell launchers; never evaluate recorded shell text. */
+export function unwrapLocalCommand(summary: string): string {
+  let command = summary.trim();
+  for (let depth = 0; depth < 3; depth += 1) {
+    const wrapper =
+      /^(?:"[^"]*(?:powershell|pwsh)(?:\.exe)?"|'[^']*(?:powershell|pwsh)(?:\.exe)?'|[^\s]*(?:powershell|pwsh)(?:\.exe)?)(?:\s+.*?)?\s+-(?:Command|c)\s+([\s\S]+)$/iu.exec(
+        command,
+      ) ||
+      /^(?:"[^"]*(?:bash|sh)"|'[^']*(?:bash|sh)'|[^\s]*(?:bash|sh))\s+-[a-z]*c\s+([\s\S]+)$/iu.exec(
+        command,
+      ) ||
+      /^(?:"[^"]*cmd(?:\.exe)?"|'[^']*cmd(?:\.exe)?'|[^\s]*cmd(?:\.exe)?)\s+\/c\s+([\s\S]+)$/iu.exec(
+        command,
+      );
+    if (!wrapper) break;
+    command = unquote(wrapper[1]);
+  }
+  // Native summaries can end before the shell's closing quote. Its opening
+  // quote is launcher syntax, not part of the observed command's leading verb.
+  if (["'", '"'].includes(command[0]) && command.at(-1) !== command[0])
+    command = command.slice(1);
+  return command;
+}
+
+export function relativeLocalPath(path: string, workspace = ""): string {
+  let normal = unquote(path).replaceAll("\\", "/").replace(/^\.\//u, "");
+  const base = workspace.replaceAll("\\", "/").replace(/\/+$/u, "");
+  if (base && normal.toLowerCase().startsWith(`${base.toLowerCase()}/`))
+    normal = normal.slice(base.length + 1);
+  return normal;
+}
+
+function commandParts(command: string) {
+  return (command.match(/"[^"]*"|'[^']*'|[^\s]+/gu) || []).map(unquote);
+}
+
+const cappedSummary = (summary: string) =>
+  summary.length === 240 || summary.length === 400;
+
+/** A cap-sized capture cannot prove that its last argument is complete. Keep
+ * earlier arguments; discard the whole final token, including an open quote. */
+function completeCommandPrefix(command: string): string {
+  let quote: string | null = null;
+  let tokenStart = 0;
+  let inToken = false;
+  for (let index = 0; index < command.length; index += 1) {
+    const character = command[index];
+    if (quote) {
+      if (character === quote) {
+        if (command[index + 1] === quote) index += 1;
+        else quote = null;
+      }
+    } else if (/\s/u.test(character)) inToken = false;
+    else {
+      if (!inToken) tokenStart = index;
+      inToken = true;
+      if (character === "'" || character === '"') quote = character;
+    }
+  }
+  return command.slice(0, tokenStart).trimEnd();
+}
+
+function relativeCommand(command: string, workspace?: string) {
+  if (!workspace) return command;
+  const roots = new Set([
+    workspace.replaceAll("\\", "/"),
+    workspace.replaceAll("/", "\\"),
+  ]);
+  let result = command;
+  for (const root of roots) {
+    const escaped = root
+      .replace(/[/\\]+$/u, "")
+      .replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    result = result.replace(new RegExp(`${escaped}[/\\\\]`, "giu"), "");
+  }
+  return result;
+}
+
+function searchQuery(command: string) {
+  const tokens = commandParts(command);
+  const explicit = tokens.findIndex((token) =>
+    ["-e", "--regexp", "-pattern"].includes(token.toLowerCase()),
+  );
+  if (explicit >= 0) return tokens[explicit + 1];
+  const valueFlags = new Set([
+    "-g",
+    "--glob",
+    "-t",
+    "--type",
+    "-m",
+    "--max-count",
+    "-a",
+    "-b",
+    "-c",
+    "--context",
+    "--encoding",
+    "-path",
+    "-literalpath",
+  ]);
+  for (let index = 1; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (valueFlags.has(token.toLowerCase())) {
+      index += 1;
+      continue;
+    }
+    if (!token.startsWith("-")) return token;
+  }
+  return undefined;
+}
+
+function readPaths(command: string, workspace?: string) {
+  const tokens = commandParts(command);
+  const verb = tokens[0]?.toLowerCase();
+  const search = searchCommand.test(command);
+  const pathFlags = new Set(["-literalpath", "-path"]);
+  const valueFlags = new Set([
+    "-encoding",
+    "-totalcount",
+    "-readcount",
+    "-tail",
+    "-head",
+    "-g",
+    "--glob",
+    "-t",
+    "--type",
+    "-e",
+    "--regexp",
+    "-pattern",
+    "-maxdepth",
+    "-mindepth",
+  ]);
+  const paths: string[] = [];
+  let skippedQuery = false;
+  for (let index = 1; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (/^[;|&]$/u.test(token)) break;
+    if (pathFlags.has(token.toLowerCase())) {
+      if (tokens[index + 1])
+        paths.push(relativeLocalPath(tokens[++index], workspace));
+      continue;
+    }
+    if (
+      valueFlags.has(token.toLowerCase()) ||
+      (token === "-n" && ["head", "tail", "sed"].includes(verb || ""))
+    ) {
+      if (["-e", "--regexp", "-pattern"].includes(token.toLowerCase()))
+        skippedQuery = true;
+      index += 1;
+      continue;
+    }
+    if (token.startsWith("-")) continue;
+    if (search && !skippedQuery) {
+      skippedQuery = true;
+      continue;
+    }
+    if (verb === "git" && index === 1) continue;
+    const looksLikeFile = /(?:^|[/\\])\.[^/\\]+$|\.[a-z0-9_-]+$/iu.test(token);
+    const directRead = [
+      "get-content",
+      "gc",
+      "cat",
+      "type",
+      "head",
+      "tail",
+    ].includes(verb || "");
+    if ((looksLikeFile || directRead) && !/[;|&]$|[*?]/u.test(token))
+      paths.push(relativeLocalPath(token, workspace));
+  }
+  return [...new Set(paths)];
+}
+
+function observedAgent(
+  value: RecordedActivity["agent_json"],
+): LocalActivityAgent | null {
+  try {
+    const parsed: unknown =
+      typeof value === "string" ? JSON.parse(value) : value;
+    return parsed && typeof parsed === "object"
+      ? (parsed as LocalActivityAgent)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const basename = (path: string) => path.split("/").at(-1) || path;
 const requestedTools: Record<
   string,
   { kind: LocalActivityKind; station: LocalActivityStation; label: string }
@@ -79,8 +290,22 @@ function activityEvent(
     detail: summary === "Event recorded" ? null : summary,
     summary,
     station: "forge",
+    paths: [],
+    command: null,
+    agent: observedAgent(entry.agent_json),
   };
-  if (summary === run.error || summary.startsWith("native session exited")) {
+  const nativeKind = ["message", "command", "tool", "edit", "search"].includes(
+    entry.kind ?? "",
+  );
+  if (
+    !nativeKind &&
+    (summary === run.error ||
+      summary.startsWith("native session exited") ||
+      // The store retains only 400 characters of a supervisor error row while
+      // run.error keeps the full hook output. Match that recorded prefix only
+      // for supervisor status rows, never assistant prose or tool commands.
+      (entry.kind === "status" && !!run.error && run.error.startsWith(summary)))
+  ) {
     return {
       ...result,
       kind: "failure",
@@ -99,26 +324,69 @@ function activityEvent(
     return { ...result, label: "Tool requested" };
   }
   if (entry.kind === "edit") {
+    // The store/provider cap can cut a path anywhere, including mid-directory.
+    // A plausible suffix is still not evidence of a sixth complete filename.
+    const completePaths = cappedSummary(summary)
+      ? summary.slice(0, Math.max(0, summary.lastIndexOf(",")))
+      : summary;
+    const paths = entry.summary
+      ? completePaths
+          .split(/,\s*/u)
+          .filter(Boolean)
+          .map((path) => relativeLocalPath(path, run.workspace))
+      : [];
     return {
       ...result,
       kind: "edit",
-      label: "File change recorded",
+      label: paths.length
+        ? `Edited ${basename(paths[0])}`
+        : "File change recorded",
+      detail: paths.length ? paths.join(", ") : result.detail,
+      paths,
       station: "forge",
     };
   }
   if (entry.kind === "command") {
+    const command = relativeCommand(unwrapLocalCommand(summary), run.workspace);
+    const complete = cappedSummary(summary)
+      ? completeCommandPrefix(command)
+      : command;
+    const reading = readCommand.test(command);
+    const paths = reading ? readPaths(complete, run.workspace) : [];
+    const search = searchCommand.test(command);
+    const query = search
+      ? searchQuery(complete)
+      : commandParts(complete)
+          .slice(1)
+          .find((token) => !token.startsWith("-"));
+    const target = paths.length
+      ? basename(paths[0])
+      : query || (cappedSummary(summary) ? null : command);
     return {
       ...result,
-      kind: "command",
-      label: "Command completed",
-      station: checkCommand.test(summary) ? "lab" : "forge",
+      kind: reading ? "read" : "command",
+      label: reading
+        ? target
+          ? `${search ? "Searched" : "Read"} ${search && query ? query : target}`
+          : search
+            ? "Search completed"
+            : "Read"
+        : `Ran ${command}`,
+      detail: paths.length ? paths.join(", ") : command,
+      paths,
+      command,
+      station: reading
+        ? "source"
+        : checkCommand.test(command)
+          ? "lab"
+          : "forge",
     };
   }
   if (entry.kind === "search") {
     return {
       ...result,
       kind: "read",
-      label: "Search completed",
+      label: entry.summary ? `Searched ${summary}` : "Search completed",
       station: "source",
     };
   }
@@ -151,6 +419,29 @@ function activityEvent(
       detail: null,
       station: "launch",
     };
+  }
+  if (entry.kind === "status") {
+    const startingCheck = /^(typecheck|lint|test|pm:lint) started$/u.exec(
+      summary,
+    );
+    const supervisorStation: Record<string, LocalActivityStation> = {
+      "Installing dependencies": "launch",
+      "Committing candidate": "forge",
+      "Hook: docs": "forge",
+      "Hook: mirrors": "forge",
+      "Hook: manifests": "forge",
+      "Hook: typecheck": "forge",
+      "Hook: tests": "forge",
+      "Hook: lint": "forge",
+      "Freezing handover": "review",
+    };
+    if (startingCheck || supervisorStation[summary])
+      return {
+        ...result,
+        label: summary,
+        detail: startingCheck?.[1] ?? null,
+        station: startingCheck ? "lab" : supervisorStation[summary],
+      };
   }
   if (summary === "Host checks started") {
     return {

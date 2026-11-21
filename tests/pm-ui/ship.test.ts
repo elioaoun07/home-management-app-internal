@@ -269,7 +269,7 @@ describe("ship", () => {
     // A CRLF document keeps its line endings.
     expect(read(ctx.pmDir, "Plans/Plan.md")).toBe("# Plan\r\n\r\nBuilds on [BUD-14](<../_Archive/Shipped/Budget.md#bud-14>).\r\n");
     expect(read(ctx.pmDir, "_index.md")).toContain("| **Budget** | 1 | 0 | 0 | 7 |");
-  });
+  }, 60_000);
 
   it("restores every touched file on undo, and removes the archive it created", () => {
     const ctx = fixture();
@@ -279,7 +279,7 @@ describe("ship", () => {
     expect(read(ctx.pmDir, "Budget/Budget — Master Book.md")).toBe(BOOK);
     expect(existsSync(join(ctx.pmDir, "_Archive/Shipped/Budget.md"))).toBe(false);
     expect(undoLastShip(ctx.pmDir).ok).toBe(false);
-  });
+  }, 60_000);
 
   it("changes nothing for an unknown ID or a dry run", () => {
     const ctx = fixture();

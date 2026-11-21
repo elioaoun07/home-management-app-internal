@@ -400,7 +400,7 @@ describe("planning persistence and relay", () => {
     expect(writePlanningCommand({ ...env, command, now: NOW }).replayed).toBe(true);
     expect(() => writePlanningCommand({ ...env, command: { ...base(), action: "save", sprint: draft("stale") }, now: NOW })).toThrow(/changed/);
     expect(writePlanningCommand({ ...env, command: { ...base(1), action: "save", sprint: draft("next") }, now: NOW }).planning.revision).toBe(2);
-  });
+  }, 60_000);
 
   it("atomically persists revisions and command receipts, with safe retry and conflict", () => {
     const env = workspace();

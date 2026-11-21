@@ -43,6 +43,13 @@ jobs:
           OS_HEAD: ${{ github.event.pull_request.head.sha }}
         run: pnpm os:eval "$OS_BASE..$OS_HEAD"
 
+      - name: Agentic OS main push verdicts
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          OS_BASE: ${{ github.event.before }}
+          OS_HEAD: ${{ github.sha }}
+        run: pnpm os:eval "$OS_BASE..$OS_HEAD"
+
       - name: Typecheck
         run: pnpm typecheck
 

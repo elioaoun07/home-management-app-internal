@@ -1,0 +1,64 @@
+﻿.foundry-standby {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: var(--board-stage-min);
+  overflow: hidden;
+  isolation: isolate;
+  border: 0;
+  background: var(--theme-bg);
+}
+.foundry-standby-canvas {
+  display: block;
+  width: 100%;
+  height: calc(100% - var(--board-topbar-height));
+}
+.board-standby-topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--board-topbar-height);
+  padding: 0 4px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.board-standby-topbar h1 {
+  flex: 1;
+  margin: 0;
+  font: 600 13px var(--font-ui, sans-serif);
+}
+.board-standby-topbar button {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+}
+.foundry-standby-caption {
+  position: absolute;
+  top: calc(var(--board-topbar-height) + 16px);
+  right: 20px;
+  color: var(--ink-muted);
+  font: 11px var(--font-mono, monospace);
+}
+.board-standby-error {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  left: 16px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--theme-bg);
+  color: var(--ink);
+}
+.board-standby-error summary,
+.board-standby-error button {
+  min-height: 40px;
+}
+.board-standby-error pre {
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+}

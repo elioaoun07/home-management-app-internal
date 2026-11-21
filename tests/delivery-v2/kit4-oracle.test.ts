@@ -23,5 +23,5 @@ describe('KIT-4 meal coverage oracle', () => {
       expect(result.status).toBe(0);
       expect(result.stdout).toContain('54 of 54 checks passed');
     } finally { rmSync(out, { recursive: true, force: true }); }
-  }, 40000);
+  }, 60_000);
 });

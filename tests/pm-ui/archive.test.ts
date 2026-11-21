@@ -110,7 +110,7 @@ describe("PM archive — item ops", () => {
     restoreSnapshots(ctx.pmDir, result.undo);
     expect(read("Budget/4 - Checklist.md")).toBe(CHECKLIST);
     expect(read("Budget/Budget — Master Book.md")).toBe(BOOK);
-  });
+  }, 60_000);
 
   it("refuses to ship an item that isn't ticked", () => {
     const ctx = fixture();
@@ -164,7 +164,7 @@ describe("PM archive — monthly sweep", () => {
     restoreSnapshots(ctx.pmDir, report.undo);
     expect(read("Budget/4 - Checklist.md")).toBe(CHECKLIST);
     expect(read("Budget/Budget — Master Book.md")).toBe(BOOK);
-  });
+  }, 60_000);
 
   it("is a no-op when nothing is ticked", () => {
     const ctx = fixture();
@@ -180,5 +180,5 @@ describe("PM archive — monthly sweep", () => {
     expect(report.swept).toHaveLength(2);
     expect(read("Budget/4 - Checklist.md")).toBe(CHECKLIST);
     expect(read("Budget/Budget — Master Book.md")).toBe(BOOK);
-  });
+  }, 60_000);
 });

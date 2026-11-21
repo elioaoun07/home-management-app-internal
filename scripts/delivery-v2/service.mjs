@@ -221,6 +221,7 @@ export function createDeliveryV2Context({
 
     // Passive publication over the already-open connection; never initializes a runtime.
     stewardRequests: () => handle ? listStewardRequests(handle, stewardStaleMs(process.env.PM_STEWARD_STALE_MS)) : [],
+    passiveStore: () => handle ? handle.readOnlyView() : null,
     stewardCommandState: id => context.hasStore() ? stewardCommandState(context.store, id, stewardStaleMs(process.env.PM_STEWARD_STALE_MS)) : null,
 
     /** Whether a supervisor store exists yet; reads never create one. */

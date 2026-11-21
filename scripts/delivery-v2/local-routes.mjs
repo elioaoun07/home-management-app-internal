@@ -3,7 +3,13 @@ import { randomUUID } from "node:crypto";
 import { acceptLaunchRequest, updateStewardRequest } from "./steward-requests.mjs";
 const start = z.object({ action: z.literal("start"), id: z.string().min(1).max(64), file: z.string().min(1).max(300),
   executor: z.enum(["claude", "codex"]), model: z.string().max(128).nullish(), effort: z.string().max(16).nullish(), command_id: z.string().uuid().optional() });
-const command = z.discriminatedUnion("action", [start, z.object({ action: z.enum(["review", "ship", "undo", "cancel"]), run_id: z.string().regex(/^local-[0-9a-f-]{36}$/u) })]);
+const runId = z.string().regex(/^local-[0-9a-f-]{36}$/u);
+// DLV-164: answers keyed by the agent's question text, as AskUserQuestion returns them.
+const answer = z.object({ action: z.literal("answer"), run_id: runId, question_id: z.string().regex(/^[\w-]{1,200}$/u),
+  answers: z.record(z.string().max(2000), z.string().max(4000)).refine(value => Object.keys(value).length >= 1 && Object.keys(value).length <= 4) });
+// DLV-165: an owner message to a running or parked session.
+const message = z.object({ action: z.literal("message"), run_id: runId, text: z.string().min(1).max(4000) });
+const command = z.discriminatedUnion("action", [start, answer, message, z.object({ action: z.enum(["review", "ship", "undo", "cancel"]), run_id: runId })]);
 export async function routeLocal({ method, path, query = null, body, loopbackPeer }, auth, ctx) {
   if (!path.startsWith("/api/delivery/v2/local")) return null;
   // First Local lane is desktop-only, including reads of paths/diffs. Relay
@@ -32,7 +38,10 @@ export async function routeLocal({ method, path, query = null, body, loopbackPee
       try { value = { ...await ctx.local.start(input), command_id }; }
       catch (error) { value = { ok: false, error: String(error.message), command_id }; }
       updateStewardRequest(ctx.store, command_id, value.ok === false ? "blocked" : "run-created", at(), value);
-    } else value = input.action === "start" ? await ctx.local.start(input) : await ctx.local[input.action](input.run_id);
+    } else value = input.action === "start" ? await ctx.local.start(input)
+      : input.action === "answer" ? await ctx.local.answer(input.run_id, input.question_id, input.answers)
+        : input.action === "message" ? await ctx.local.message(input.run_id, input.text)
+          : await ctx.local[input.action](input.run_id);
     return { status: value?.ok === false ? 409 : 200, json: { ok: true, ...(typeof value === "string" ? { patch: value } : value) } };
   } catch (error) { return { status: 409, json: { ok: false, error: String(error.message) } }; }
 }

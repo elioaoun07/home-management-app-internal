@@ -3,6 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   appendFileSync,
+  existsSync,
   mkdirSync,
   readdirSync,
   statSync,
@@ -46,6 +47,12 @@ export function appendEvent(root, event) {
     `${JSON.stringify(safeFacts(event))}\n`,
     { mode: 0o600 },
   );
+}
+
+function markUnavailable(root, timestamp) {
+  mkdirSync(resolve(root, ".os"), { recursive: true });
+  const marker = resolve(root, ".os/recorder-unavailable");
+  if (!existsSync(marker)) writeFileSync(marker, timestamp);
 }
 
 export async function runHook({ root, name, event, program, args, input }) {
@@ -134,7 +141,7 @@ export async function runHook({ root, name, event, program, args, input }) {
       }
     }
     appendEvent(root, row);
-    if (event === "Stop" && row.agent === "claude" && payload.transcript_path) {
+    if (event === "Stop" && payload.transcript_path) {
       try {
         // Keep SQLite's optional driver/warnings and ingest failures outside the
         // passthrough process. Bound the work; a hung importer cannot hold Stop.
@@ -146,6 +153,9 @@ export async function runHook({ root, name, event, program, args, input }) {
             payload.transcript_path,
             "--session",
             sessionId,
+            "--agent",
+            row.agent,
+            "--working-tree",
           ],
           {
             cwd: root,
@@ -154,16 +164,26 @@ export async function runHook({ root, name, event, program, args, input }) {
             timeout: 20000,
           },
         );
-        if (imported.status !== 0) throw new Error("Ingest failed");
-      } catch {
+        if (imported.status !== 0)
+          throw new Error(
+            short(
+              imported.error?.message ||
+                imported.stderr ||
+                `Ingest exited ${imported.status ?? imported.signal ?? "unknown"}`,
+              1000,
+            ),
+          );
+      } catch (error) {
+        const timestamp = new Date().toISOString();
+        markUnavailable(root, timestamp);
         appendEvent(root, {
           schema: "os/event@1",
           id: randomUUID(),
           sessionId,
           source: "recorder",
           event: "unavailable",
-          timestamp: new Date().toISOString(),
-          message: "recorder unavailable: ingest failed",
+          timestamp,
+          message: "recorder unavailable: " + short(error.message, 1000),
         });
         process.stderr.write(
           "os: recorder unavailable (ingest); hook result preserved\n",
@@ -174,11 +194,7 @@ export async function runHook({ root, name, event, program, args, input }) {
     // Best effort marker: a read-only/full .os may prevent this too. Ingest also
     // reports absent lifecycle evidence, rather than treating it as zero hooks.
     try {
-      mkdirSync(resolve(root, ".os"), { recursive: true });
-      writeFileSync(
-        resolve(root, ".os/recorder-unavailable"),
-        new Date().toISOString(),
-      );
+      markUnavailable(root, new Date().toISOString());
     } catch {
       /* no writable recorder */
     }

@@ -48,9 +48,9 @@ cpSync(
   join(root, ".claude/skills/start-task"),
   { recursive: true },
 );
-// A6 reuses this isolated server/credential-free runner fixture.
+// Retained flag supplies the complete skill inventory to credential-free checks.
 if (process.argv.includes("--launchpad")) {
-  for (const path of [".claude/skills", ".claude/recipes", "ERA Notes/Model-Registry.md", "ERA Notes/01 - Architecture/Feature Map"])
+  for (const path of [".claude/skills", "ERA Notes/Model-Registry.md", "ERA Notes/01 - Architecture/Feature Map"])
     cpSync(join(source, path), join(root, path), { recursive: true });
 }
 const pm = join(root, "ERA Notes/10 - Project Management");

@@ -209,10 +209,19 @@ export function deriveNativeSessionId(dispatch_key) {
  * stop threshold rather than a bound; `observe` receives each tool-use hook input,
  * which is where the SDK reports the effort actually applied.
  *
+ * `ask` (DLV-164, Local build only) advertises AskUserQuestion. The call is
+ * decided only by `ask`: owner answers, a refusal, or `park` — the question is
+ * recorded upstream and the turn ends so the session can resume with the answer
+ * (DLV-165). It never resolves on its own and never reaches the path screening.
+ * `inbox` (DLV-165, Local build only) returns owner messages not yet delivered;
+ * PostToolUse adds them as context and Stop keeps the conversation going.
+ *
  * @param {{workspaceRoot:string, mode?:"build"|"review", model?:(string|null),
  *   maxTurns?:(number|null), forbiddenPaths?:string[], additionalDirectories?:string[],
  *   effort?:(string|null), thresholdUsd?:(number|null), observe?:((input:any)=>void)|null,
- *   local?:boolean, env?:Record<string,string|undefined>|null}} input
+ *   local?:boolean, env?:Record<string,string|undefined>|null,
+ *   ask?:((input:any, context:{signal?:AbortSignal, id?:string})=>Promise<{answers?:Record<string,string>, refused?:string, park?:boolean}>)|null,
+ *   inbox?:(()=>string|null)|null}} input
  */
 export function buildSessionOptions({
   workspaceRoot,
@@ -226,6 +235,8 @@ export function buildSessionOptions({
   observe = null,
   local = false,
   env = null,
+  ask = null,
+  inbox = null,
 }) {
   if (!isNonEmptyString(workspaceRoot)) throw new ContractError("claude adapter: a job needs a workspace root");
   if (mode !== "build" && mode !== "review") throw new ContractError("claude adapter: unknown mode " + mode);
@@ -256,6 +267,10 @@ export function buildSessionOptions({
     options.skills = "all";
     options.systemPrompt = { type: "preset", preset: "claude_code" };
   }
+  if (local && mode === "build" && typeof ask === "function") {
+    options.tools.push(ASK_TOOL);
+    options.canUseTool = withOwnerQuestions(options.canUseTool, ask);
+  }
   // process.env is a Node host object that Object.freeze cannot freeze. Own a
   // plain snapshot so freezing SDK options neither throws nor mutates callers.
   if (env) options.env = { ...env };
@@ -263,21 +278,53 @@ export function buildSessionOptions({
   if (effort) options.effort = effort;
   if (typeof maxTurns === "number" && maxTurns > 0) options.maxTurns = maxTurns;
   if (typeof thresholdUsd === "number" && Number.isFinite(thresholdUsd) && thresholdUsd > 0) options.maxBudgetUsd = thresholdUsd;
+  const hooks = {};
   if (typeof observe === "function") {
-    options.hooks = {
-      PreToolUse: [
-        {
-          hooks: [
-            async (input) => {
-              observe(input);
-              return { continue: true };
-            },
-          ],
-        },
-      ],
-    };
+    hooks.PreToolUse = [
+      {
+        hooks: [
+          async (input) => {
+            observe(input);
+            return { continue: true };
+          },
+        ],
+      },
+    ];
   }
+  if (local && mode === "build" && typeof inbox === "function") {
+    hooks.PostToolUse = [{ hooks: [async () => {
+      const text = inbox();
+      return text ? { continue: true, hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: text } } : { continue: true };
+    }] }];
+    hooks.Stop = [{ hooks: [async () => {
+      const text = inbox();
+      return text ? { decision: "block", reason: text } : { continue: true };
+    }] }];
+  }
+  if (Object.keys(hooks).length) options.hooks = hooks;
   return deepFreeze(assertNeverBypass(options));
+}
+
+export const ASK_TOOL = "AskUserQuestion";
+export const PARK_MESSAGE = "Paused for the owner. Their answer arrives as your next message; stop here until then.";
+
+/** Decide AskUserQuestion from the owner; every other tool keeps its screening. */
+export function withOwnerQuestions(canUseTool, ask) {
+  return async function canUseToolWithQuestions(toolName, input, context) {
+    if (toolName !== ASK_TOOL) return canUseTool(toolName, input, context);
+    let reply;
+    try {
+      reply = await ask(input, { signal: context?.signal, id: context?.toolUseID });
+    } catch (error) {
+      reply = { refused: "The question did not reach the owner: " + String((error && error.message) || error) };
+    }
+    if (reply && reply.answers && typeof reply.answers === "object") {
+      return { behavior: "allow", updatedInput: { ...input, answers: { ...reply.answers } } };
+    }
+    // DLV-165: recorded upstream; end the turn so a later resume carries the answer.
+    if (reply && reply.park) return { behavior: "deny", message: PARK_MESSAGE, interrupt: true };
+    return { behavior: "deny", message: (reply && reply.refused) || "The owner did not answer. Decide with sensible defaults and continue." };
+  };
 }
 
 /** Record what a hook input reports about the turn's applied effort. */
@@ -603,7 +650,7 @@ async function loadSdk() {
  * both things a fixture can hold.
  *
  * @param {{importSdk?:Function, now?:Function, readNativeRecords?:Function,
- *   sessionHomeDir?:(string|null)}} [options]
+ *   sessionHomeDir?:(string|null), local?:boolean, env?:Record<string,string|undefined>|null}} [options]
  */
 export function createClaudeAdapter(options = {}) {
   const importSdk = options.importSdk || loadSdk;
@@ -706,6 +753,8 @@ export function createClaudeAdapter(options = {}) {
             return;
           }
         }
+        // DLV-165: the interrupted turn's result closes a parked dispatch.
+        if (state.parked) return;
       }
     }
   }
@@ -748,9 +797,21 @@ export function createClaudeAdapter(options = {}) {
       observeUsage: typeof runOptions.observeUsage === "function" ? runOptions.observeUsage : null,
       controller: null,
       budget: null,
+      parked: null,
     };
     const settings = request.settings || { model: null, effort: null };
     const readOnly = Boolean(request.workspace && request.workspace.access === "read-only");
+    // DLV-164/165: an owner question parks this dispatch; messages wait while parked.
+    const ask = typeof runOptions.askOwner === "function"
+      ? async (input, context) => {
+        const reply = await runOptions.askOwner(input, context);
+        if (reply && reply.park && !state.parked) state.parked = { id: reply.id || context?.id || null, at: now() };
+        return reply;
+      }
+      : null;
+    const inbox = typeof runOptions.takeOwnerMessages === "function"
+      ? () => (state.parked ? null : runOptions.takeOwnerMessages())
+      : null;
 
     const sdk = await importSdk();
     if (!sdk || typeof sdk.query !== "function") {
@@ -780,6 +841,8 @@ export function createClaudeAdapter(options = {}) {
           observe: (input) => observeHookInput(state, input),
           local: options.local === true,
           env: options.env || null,
+          ask,
+          inbox,
         }),
         abortController: controller,
       },
@@ -800,10 +863,12 @@ export function createClaudeAdapter(options = {}) {
       return bindAdapterResult({
         operation,
         executionRef: state.ref,
-        status: state.terminal === "finished" ? "finished" : "unknown",
+        status: state.parked || state.terminal === "finished" ? "finished" : "unknown",
         dispatchAttempted: true,
         observations: {
           error: String((error && error.message) || error),
+          parked: state.parked,
+          ...(state.parked ? { nativeOutcome: "parked" } : {}),
           usage: mergeUsageReadings(state.usageReadings),
           usageReadings: state.usageReadings,
           subscription: subscriptionRecord(state.subscription),
@@ -828,7 +893,7 @@ export function createClaudeAdapter(options = {}) {
     return bindAdapterResult({
       operation,
       executionRef: state.ref,
-      status: state.terminal === "finished" ? "finished" : "unknown",
+      status: state.parked || state.terminal === "finished" ? "finished" : "unknown",
       dispatchAttempted: true,
       observations: {
         usage: mergeUsageReadings(state.usageReadings),
@@ -836,8 +901,10 @@ export function createClaudeAdapter(options = {}) {
         subscription: subscriptionRecord(state.subscription),
         nativeMessageCount: state.messageCount,
         finalText: state.finalText,
-        failure: state.failure,
-        nativeOutcome: state.terminal === "finished" ? (state.failure ? "failed" : "succeeded") : null,
+        failure: state.parked ? null : state.failure,
+        // DLV-165: an interrupted turn that parked on a question is not a failure.
+        nativeOutcome: state.parked ? "parked" : state.terminal === "finished" ? (state.failure ? "failed" : "succeeded") : null,
+        parked: state.parked,
         requested: { model: settings.model, effort: settings.effort },
         effective: effectiveView(state),
         activity: state.activity,
@@ -864,7 +931,8 @@ export function createClaudeAdapter(options = {}) {
      *
      * @param {import("./adapter.mjs").JobRequest} request
      * @param {{onDispatchStart?:Function, signal?:AbortSignal, model?:string,
-     *   forbiddenPaths?:string[]}} [runOptions]
+     *   forbiddenPaths?:string[], observeActivity?:Function, observeUsage?:Function,
+     *   askOwner?:Function, takeOwnerMessages?:Function}} [runOptions]
      */
     async start(request, runOptions = {}) {
       if (request.executionRef.backend_id !== BACKEND_ID) {

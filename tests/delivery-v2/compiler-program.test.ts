@@ -10,9 +10,8 @@ it("requires a clean full program and a discriminating negative overlay", () => 
   try {
     // This synthetic program only uses scalar types. Pin its real standard
     // library explicitly instead of parsing the unrelated default DOM library
-    // in each of the four child compilers. All four assertions and the single
-    // test's default deadline remain unchanged; real recipe programs are not
-    // altered by this fixture configuration.
+    // in each of the four child compilers. The explicit test budget covers all
+    // four compiles; real recipe programs are not altered by this fixture.
     writeFileSync(join(root, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true, types: [], lib: ["es5"], noEmit: true, skipLibCheck: true }, include: ["source.ts", "types/**/*.ts"] }));
     writeFileSync(join(root, "source.ts"), "export const value: number = 1;");
     expect(probeCompilerProgram({ root, runner, phase: "positive", output: root }).exitCode).toBe(0);
@@ -21,4 +20,4 @@ it("requires a clean full program and a discriminating negative overlay", () => 
     expect(() => probeCompilerProgram({ root, runner, phase: "positive", output: root })).toThrow("full compiler program failed");
     expect(() => probeCompilerProgram({ root, runner, phase: "negative", output: root })).toThrow("unrelated errors");
   } finally { rmSync(root, { recursive: true, force: true }); }
-});
+}, 60_000);

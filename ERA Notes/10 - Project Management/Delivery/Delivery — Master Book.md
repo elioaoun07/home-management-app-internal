@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-11-10
+updated: 2026-11-15
 type: master-book
 status: active
 owner: Elio
@@ -69,6 +69,12 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 - **2026-09-26 owner scope decision:** Delivery closes as **accepted for supervised use, laptop + phone** once the KIT-11 A→B trial, Apply/rollback on arm B and one phone pass are recorded in [owner UAT](<../../../docs/Delivery-UAT.md>). **Now** holds only what that evidence closes. Everything in **Later** is an enhancement, reopened only when a real run shows a blocker, a safety problem or real friction. V1 items were cancelled the same day (see `_Archive/Cancelled Log.md`); V1 stays frozen. *(moved from the checklist header 2026-11-11)*
 
 ## Pain Inventory
+
+🔴 **DLV-159 — A Local candidate with changes cannot be committed (2026-11-15).** `local-lane.mjs:37` limits every Git command to 30 s; the build commit, ship commit and revert run the repository hook, whose test stage alone took 300.91 s on run `local-cac958d7`. The runner returns `ETIMEDOUT` with `status: null`, so the lane throws even when the hook passes. Seven real attempts, none reached host checks. [Evidence and fix](<../Plans/Agentic OS Delivery Reliability.md#dlv-159--supervisor-git-steps-outlive-the-hook>). Fixture resolution reverified 2026-11-15; owner W1 and real hook timing remain pending.
+
+🟠 **DLV-160 — Failed Local runs hide the stored reason (2026-11-15).** Runs 2–3 showed "native session did not confirm success" while `observations.error` held the sandbox refusal; runs 4–6 showed "candidate needs a change" while the worker's final text said the workspace was read-only. Fixture resolution verified 2026-11-15; owner W1 remains pending.
+
+🟠 **DLV-161 — A failed ship strands `main`; a dead process leaves the command lock; credential copies outlive runs (2026-11-15).** Source-confirmed in `local-lane.mjs#ship` and `#locked`; seven copies of the subscription login remain under `.delivery/local/<id>/home/`. No ship has been attempted, so the first two are unobserved.
 
 🟠 **DLV-158 — Previous Local deliveries remain on Loading session.** Confirmed 2026-11-15: the owner's failed `local-cac958d7-1f8e-4e65-9cb8-1471c839f796` has no candidate head; its workspace comparison spans 4,485 files. `local-lane.mjs#detail` awaited two sequential blob reads per file on every GET before returning saved history. This establishes the cause of R118's pending-detail residual.
 
@@ -150,6 +156,116 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### DLV-159
+
+**Outcome:** The supervisor's commit, merge commit and revert wait for the repository hook, and a timeout is reported as a timeout.
+**Kind:** bug
+**Source:** [Agentic OS delivery reliability](<../Plans/Agentic OS Delivery Reliability.md#dlv-159--supervisor-git-steps-outlive-the-hook>), 2026-11-15 review of the seven failed HUB-118 runs. The sheet is the execution plan.
+**Touches:** `scripts/delivery-v2/local-lane.mjs`, `scripts/delivery-v2/process.mjs`, `scripts/pm/app/localRunFailure.ts`, `tests/delivery-v2/local-lane.test.ts`, `tests/pm-ui/`
+
+- **Acceptance:** A fixture hook that outlasts 30 s no longer fails the build commit; ship and undo use the same limit. A timeout kills the hook's process tree and reads `timed out after <n> s`. The hook's six stage lines appear as supervisor rows, in order.
+- **Tier:** `CLAUDE_MID`, effort high. CLI session, not the lane. Owner restart of `pnpm pm` activates it.
+**Implementation:** done (2026-11-15). Ordinary Git remains 30 s; commit/merge/revert use 25 minutes and push uses 5 minutes. Timeout kills the process tree and has its own failure title; six deduplicated hook stages are recorded as Seal evidence. Real-Git fixtures verify a 31 s successful hook, timeout with both hook processes gone and HEAD unchanged, unchanged failing-hook text, ordered stage rows and build/ship/undo limits. [Verification and handover](<../../../.pm/dlv159-evidence/README.md>).
+**Reverification (2026-11-15):** Existing implementation preserved; the required PowerShell delivery-v2 + pm-ui command passes 156 files / 2,129 tests (3 files / 8 tests skipped), and three final full runs each pass 348 files / 5,420 tests (3 files / 24 tests skipped). The real-Git 31-second hook, descendant kill/unchanged HEAD, stage ordering, nonzero hook text and injected build/ship/undo/push limits pass. Actual multi-minute Windows repository-hook timing and a real provider run remain unverified. [Current packet evidence](<../../../.pm/reliability-20261115/README.md>). The prior ship receipt is retained; no duplicate ship.
+**Audit recheck (2026-11-15):** No implementation gap found. Fresh required PowerShell suite passes 156 files / 2,129 tests, with 3 files / 8 tests skipped; real-Git hook, descendant termination, stage provenance and limit assertions pass. Typecheck, full lint, changed-file ESLint and PM lint pass. Existing source and ship receipt preserved; no second ship. [Recheck evidence](<../../../.pm/reliability-recheck-20261115.md>).
+**UAT:** pending. Owner restart required. W1 is owner-only after DLV-160 and R124; no live delivery, Ship or Undo was run here. [Owner steps](<../../../docs/Delivery-UAT.md#supervisor-git-limits--dlv-159>).
+
+### DLV-160
+
+**Outcome:** A failed Local run shows the reason the worker or the check recorded, before any raw log.
+**Kind:** bug
+**Source:** [Agentic OS delivery reliability](<../Plans/Agentic OS Delivery Reliability.md#dlv-160--every-failure-names-its-real-cause>), 2026-11-15.
+**Touches:** `scripts/delivery-v2/local-lane.mjs`, `scripts/delivery-v2/failure-lines.mjs`, `scripts/pm/app/localRunFailure.ts`, `tests/delivery-v2/`, `tests/pm-ui/`
+
+- **Acceptance:** The run stores `failure { code, step, detail }` for the nine codes in the sheet. Native errors and no-change endings carry the worker's own words. Decisive lines are extracted from test, type and lint output. Stored runs without the field still decode.
+- **Tier:** `CLAUDE_MID`.
+**Implementation:** done (2026-11-15). The nine specified failure codes persist with their recorded reasons beside raw errors. Decisive lines strip ANSI and preserve up to twelve diagnostics; the trimmed retained-run fixture yields ten FAIL lines plus both totals. Calm and Game show the detail before collapsed raw output, old records decode without the field, and replay hides terminal failure facts. Ordinary Git faults and candidate drift retain their accurate legacy titles.
+**Verification (2026-11-15):** Final typecheck and changed-file ESLint pass; required `npx vitest run tests/delivery-v2 tests/pm-ui` passes 156 files / 2,129 tests, with 3 files / 8 tests skipped. Three final full runs each pass 348 files / 5,420 tests, with 3 files / 24 tests skipped and zero failures. Eight current-source static browser cases (Calm/Game, 390/1440 px, Blue/Pink) verify detail order, raw-log disclosure and overflow. [Evidence and complete file list](<../../../.pm/reliability-20261115/README.md>).
+**Audit recheck (2026-11-15):** All nine specified failure codes, decisive-line extraction, legacy decoding and Calm/Game detail placement remain covered. Fresh required suite passes 156 files / 2,129 tests, with 3 files / 8 tests skipped; typecheck, full lint, changed-file ESLint and PM lint pass. The 41 source hashes match the existing acceptance packet. Existing ship receipt retained. [Recheck evidence](<../../../.pm/reliability-recheck-20261115.md>).
+**UAT:** pending. Owner restart of pnpm pm required. No real provider/Local run, actual multi-minute Windows hook timing, hydrated app or physical-device witness. [Owner scenarios](<../../../docs/Delivery-UAT.md#local-failure-reasons--dlv-160>). DLV-161–163 remain held for owner confirmation of W1.
+
+### DLV-161
+
+**Outcome:** After any failed or interrupted Ship, Undo or command, the next click works; closed runs leave no credential copy and can release their worktree.
+**Kind:** bug
+**Depends on:** DLV-159
+**Source:** [Agentic OS delivery reliability](<../Plans/Agentic OS Delivery Reliability.md#dlv-161--ship-undo-and-locks-recover-closed-runs-clean-up>), 2026-11-15.
+**Touches:** `scripts/delivery-v2/local-lane.mjs`, `scripts/delivery-v2/local-routes.mjs`, `scripts/delivery-v2/local-cli.mjs`, `scripts/pm/app/`, `tests/delivery-v2/`
+
+- **Acceptance:** Ship validates the candidate's checklist row before merging, aborts the merge on any failure and returns to `uat-ready`; a run found in `merging` recovers. A lock held by a dead process is reclaimed with a recorded row. The private credential home is removed when a run ends, and for runs already closed. An owner `discard` removes a closed attempt's worktree and branch and keeps its record.
+- **Tier:** `CLAUDE_HIGH`.
+**Implementation:** pending
+
+**2026-11-16 progress — parts 1–2:** candidate checklist validation now precedes merge; failed/matching interrupted Ship and Undo restore retry state only after proving ownership of the staged/worktree bytes. Exact recorded inverse recovery also handles Git's hook failure without `REVERT_HEAD`. Extra owner edits, foreign operations, advanced HEAD and ambiguous post-commit interruptions fail closed. Dead-PID command locks recover with an activity row; live/unknown locks remain protected. Twenty-four focused recovery/safety cases passed before the final broad run. W1 is pending. Parts 3–4 (credential-home cleanup and Discard files) are not implemented; this parent remains open. [Owner scenarios](<../../../docs/Delivery-UAT.md#agentic-os-v0-corrections--dlv-161-parts-12--r121--r129--r130>).
+
+### DLV-162
+
+**Outcome:** A delivery runs each verification command once, shows each as its own check, and stores rule verdicts on the run.
+**Kind:** feature
+**Depends on:** DLV-159
+**Source:** [Agentic OS delivery reliability](<../Plans/Agentic OS Delivery Reliability.md#dlv-162--each-gate-runs-once-visibly-with-rule-verdicts>), 2026-11-15. Admission: one delivery has shipped through the lane, and owner decision D1 in the [review](<../Plans/Agentic OS Review.md#8-owner-decisions>) is recorded.
+**Touches:** `scripts/delivery-v2/local-lane.mjs`, `scripts/delivery-v2/local-process.mjs`, `scripts/pm/app/`, `scripts/os/`, `tests/delivery-v2/`, `tests/pm-ui/`
+
+- **Acceptance:** Checks come from one declared list that a parity test ties to `.claude/hooks/pre-commit.sh`. `os:eval <base>..<head>` is a check and its verdicts are stored. No command runs twice in one delivery. A Local run with every check passed and no failing verdict counts as clean in Score.
+- **Tier:** `CLAUDE_HIGH`.
+**Implementation:** pending
+
+**2026-11-16 admission:** the owner approved D1: the supervisor may disable hooks for its build/ship commits and execute every declared gate itself, once each. W1 has not been run; the sheet explicitly forbids starting this rewrite before it passes. Existing hooks and four host checks remain active; no duplicate-gate or Local clean-score claim is made by the replay-only corrections.
+
+### DLV-163
+
+**Outcome:** The worker starts with its playbook, risk skills, rules and Feature Map file already named, and Deliver shows them.
+**Kind:** feature
+**Source:** [Agentic OS delivery reliability](<../Plans/Agentic OS Delivery Reliability.md#dlv-163--deliver-routes-the-item-before-launch>), 2026-11-15; the part of the rejected skill launcher (R98, R108) worth keeping. Admission: one delivery has shipped through the lane.
+**Touches:** `scripts/delivery-v2/route.mjs`, `scripts/delivery-v2/local-lane.mjs`, `scripts/os/process.mjs`, `scripts/pm/app/`, `tests/delivery-v2/`, `tests/pm-ui/`
+
+- **Acceptance:** A pure `routeFor` resolves playbook, skills from the existing `requires` table, rules and the Feature Map file from the item's Kind and Touches. The instruction carries a Route block; Deliver shows it as chips. A routed skill the session never read is a process failure through the existing detector.
+- **Tier:** `CLAUDE_MID`.
+**Implementation:** pending
+
+### DLV-164
+
+**Outcome:** A Local Claude session can stop and ask the owner a question, with its recommended option preselected, and continues with the answer — shown as a chat in the session view.
+**Kind:** feature
+**Source:** owner request, 2026-11-21: "why aren't I able to have Agent SDKs in my PM Deliveries to ask me questions? … let the questions have recommended answer … I want to feel like I'm talking here in chat."
+**Touches:** `scripts/delivery-v2/adapters/claude.mjs`, `scripts/delivery-v2/local-questions.mjs`, `scripts/delivery-v2/local-worker.mjs`, `scripts/delivery-v2/local-worker-channel.mjs`, `scripts/delivery-v2/local-process.mjs`, `scripts/delivery-v2/local-lane.mjs`, `scripts/delivery-v2/local-routes.mjs`, `scripts/pm/app/`, `tests/delivery-v2/`, `tests/pm-ui/`
+
+- **Acceptance:** A Local Claude build offers `AskUserQuestion`. The call is answered only by the owner, through `canUseTool`. Review jobs, Confined and Codex runs do not get the tool. The worker relays each call to the supervisor. The supervisor validates its shape, records it in `.delivery/local-questions/<run>.json` and holds the session until an answer is given or the session ends.
+- **Acceptance:** `POST /api/delivery/v2/local {action:"answer"}` accepts the owner's answers only while the session runs. It needs one answer per question and treats a repeated identical answer as a replay. It refuses closed, unknown and conflicting answers.
+- **Acceptance:** The instruction tells Claude to ask only for decisions that belong to the owner and to put its recommended option first, marked "(Recommended)". The UI preselects that option and shows the description and preview. "Other" accepts free text, and multi-select joins choices.
+- **Acceptance:** Calm view shows a Chat thread (main-thread narration, questions, answers). In Game view the question card appears in the Needs you rail. An open question reads "Question for you" (owner's turn, not "No signal"). Sessions and Delivery home put the run under Needs you. Replay hides questions and answers that come after the cursor.
+- **Tier:** `CLAUDE_MID`.
+**Implementation:** done (2026-11-21). Replay-only coverage: `tests/delivery-v2/local-questions.test.ts` (shape, adapter tool gating and `canUseTool` answers, worker channel, real child-process round trip through the fixture worker) and the `DLV-164 owner questions` block in `tests/delivery-v2/local-lane.test.ts` (hold and resume, route answer, replay/conflict, cancel closes, malformed refused); `tests/pm-ui/local-chat.test.ts` (recommendations, Other, thread order, card render, attention, liveness, replay masking, Needs you lanes). No live provider run.
+**Limits:** Codex has no equivalent tool, so Codex runs never ask. Questions are desktop-only, like the rest of Local; the phone relay does not carry them. A PM server restart while a question is open interrupts the session, as any restart does. Free mid-run messages from the owner are not part of this item.
+**Superseded in part (2026-11-21):** [DLV-165](<#dlv-165>) replaces holding the process with park-and-resume. It moves the ledger to `.delivery/local-chat/<run>.json`, adds owner messages and gives Codex `ask_owner`. The three limits above no longer apply, except desktop-only. The question card, recommendation and Needs you placement are unchanged.
+**UAT:** pending. Covered by DLV-165's owner scenarios, which include everything here.
+
+### DLV-165
+
+**Outcome:** An owner question no longer holds a live process. The session parks and resumes with the answer, surviving PM restarts. The owner can message the agent at any time, and Local Codex runs can ask too.
+**Kind:** feature
+**Source:** owner, 2026-11-21, after DLV-164: "is there a better approach?" → agreed plan (park-and-resume, two-way chat, Codex parity) → "do all the steps now".
+**Touches:** `scripts/delivery-v2/local-lane.mjs`, `scripts/delivery-v2/local-questions.mjs`, `scripts/delivery-v2/local-worker.mjs`, `scripts/delivery-v2/local-worker-channel.mjs`, `scripts/delivery-v2/local-process.mjs`, `scripts/delivery-v2/local-routes.mjs`, `scripts/delivery-v2/local-ask-mcp.mjs`, `scripts/delivery-v2/adapters/claude.mjs`, `scripts/delivery-v2/adapters/codex.mjs`, `scripts/pm/app/`, `tests/delivery-v2/`, `tests/pm-ui/`
+**Depends on:** DLV-164
+
+- **Acceptance (park):** A question is validated in the worker. A malformed one is refused back to the agent, and nothing is recorded. A valid one is recorded, and the turn ends: Claude through `canUseTool` deny with `interrupt`, Codex by stopping on the next work item. The run stays `building` with `parked` set and the job `paused`. No process remains, `interrupted` is false, and Bridge does not call it interrupted.
+- **Acceptance (resume):** An answer, or an owner message, resumes the same native session under job `<run>:r<n>` with the original native id. Delivered answers and messages are marked. Counters add up across segments. Resume works after a PM restart. An answer given while the session is still winding down resumes at once. A session that parks without a recorded question fails rather than waiting.
+- **Acceptance (messages):** `POST /api/delivery/v2/local {action:"message"}` is accepted only while the session can take it. A running Claude session gets messages at its next tool call (PostToolUse context) or when it tries to stop (Stop hook, conversation continues). Messages no session took resume it before checks. A message to a parked session closes the open question as unanswered and resumes. Cancel closes a parked session directly.
+- **Acceptance (Codex):** The private `config.toml` registers `era_owner`, the stdio `local-ask-mcp.mjs`. Its `ask_owner` tool mirrors the AskUserQuestion shape, and the instruction names it. The tool only validates and acknowledges; the worker records the call from the event stream.
+- **Acceptance (UI):** The chat thread shows owner messages with a Queued or Delivered mark. A composer (text, Enter to send) appears in calm view, and in Game view's Activity panel, while `canMessage`. Replay hides future messages.
+- **Tier:** `CLAUDE_MID`.
+**Implementation:** done (2026-11-21). Replay-only coverage:
+- `tests/delivery-v2/local-questions.test.ts`: ledger, Claude parking against a fake SDK, resume identity, message hooks, Codex parking against a fake SDK, the MCP server, and the worker channel with a real child-process park and live message.
+- The `DLV-164/165` block in `tests/delivery-v2/local-lane.test.ts`: park, restart, answer and resume; message resume; live delivery without resume; undelivered-message resume; answer while winding down; parked cancel; park without a question; Codex config.
+- `tests/pm-ui/local-chat.test.ts`: owner messages, composer, replay masking, and the Bridge core not calling a parked run interrupted.
+
+No live provider run.
+**Limits:**
+- These SDK behaviours are verified only against fakes: Claude's handling of `interrupt: true` on AskUserQuestion, a Claude resume after it, and Codex MCP tool calls and thread resume after an aborted turn. One owner-started run per executor is needed.
+- Codex gets messages only between turns, not mid-turn.
+- Still desktop-only.
+**UAT:** pending. [Owner scenarios](<../../../docs/Delivery-UAT.md#local-questions-and-chat--dlv-164--dlv-165>).
 
 ### DLV-158
 
@@ -1818,6 +1934,10 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - ✅ 2026-11-11 — **DLV-153** Ship by owner merge after UAT sign-off and undo by revert → [record](<../_Archive/Shipped/Delivery.md#dlv-153>)
 - ✅ 2026-11-15 — **DLV-157** Unblock local executors on Windows without an unsandboxed shell → [record](<../_Archive/Shipped/Delivery.md#dlv-157>)
 - ✅ 2026-11-15 — **DLV-158** Open retained Local deliveries without full diff inspection → [record](<../_Archive/Shipped/Delivery.md#dlv-158>)
+- ✅ 2026-11-15 — **DLV-159** Let supervisor Git steps outlive the commit hook → [record](<../_Archive/Shipped/Delivery.md#dlv-159>)
+- ✅ 2026-11-15 — **DLV-160** Name the real cause of every failed Local run → [record](<../_Archive/Shipped/Delivery.md#dlv-160>)
+- ✅ 2026-11-21 — **DLV-164** Let a Local Claude session ask the owner, with recommended answers, in chat → [record](<../_Archive/Shipped/Delivery.md#dlv-164>)
+- ✅ 2026-11-21 — **DLV-165** Park Local sessions on questions, chat with the agent both ways, and let Codex ask → [record](<../_Archive/Shipped/Delivery.md#dlv-165>)
 
 DW-3 conversation search/highlighting shipped 2026-07-16; removed the stale DLV-71 duplicate on 2026-09-10. This is a reconciliation, not a second implementation.
 

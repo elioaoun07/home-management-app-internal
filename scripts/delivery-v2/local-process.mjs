@@ -14,11 +14,14 @@ export function pnpmCommand(env = process.env) {
   return [process.execPath, launcher];
 }
 
-export async function hostChecks({ workspace, env, run = runProcess, onCheck = () => {} }) {
+/** @typedef {{name:string, started_at:string, finished_at:string, exit:number|null, stdout:string, stderr:string, error:string|null}} HostCheck */
+/** @param {{workspace:string, env:NodeJS.ProcessEnv, run?:typeof runProcess, onCheck?:(check:HostCheck)=>void, onStart?:(name:string)=>void}} options */
+export async function hostChecks({ workspace, env, run = runProcess, onCheck = () => {}, onStart = () => {} }) {
   const [bin, launcher] = pnpmCommand();
   const checks = [];
   for (const name of ["typecheck", "lint", "test", "pm:lint"]) {
     const started_at = new Date().toISOString();
+    onStart(name);
     const output = await run(bin, [launcher, name], { cwd: workspace, env, timeout: 15 * 60_000 });
     const check = { name, started_at, finished_at: new Date().toISOString(), exit: output.status,
       stdout: output.stdout, stderr: output.stderr, error: output.error?.message || null };
@@ -28,10 +31,18 @@ export async function hostChecks({ workspace, env, run = runProcess, onCheck = (
   return checks;
 }
 
-/** A separate scrubbed process: no SDK can inherit the PM server's credentials. */
-export function nativeLocalSession({ request, env, signal, onActivity = () => {} }) {
+/** A separate scrubbed process: no SDK can inherit the PM server's credentials.
+ * stdin stays open after the request so owner messages can follow; the worker
+ * reports questions (the session then parks) and delivered messages (DLV-164/165).
+ * `onChannel` receives `send(message)` once the worker is spawned.
+ * @param {{request:any, env:any, signal:AbortSignal, onActivity?:(value:any)=>void,
+ *   onQuestion?:(value:any)=>void, onDelivered?:(ids:string[])=>void,
+ *   onChannel?:(send:(message:any)=>boolean)=>void, worker?:string}} options */
+export function nativeLocalSession({ request, env, signal, onActivity = () => {},
+  onQuestion = () => {}, onDelivered = () => {}, onChannel = () => {},
+  worker = fileURLToPath(new URL("./local-worker.mjs", import.meta.url)) }) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [fileURLToPath(new URL("./local-worker.mjs", import.meta.url))], {
+    const child = spawn(process.execPath, [worker], {
       cwd: request.workspace.root, env, windowsHide: true, detached: process.platform !== "win32", stdio: ["pipe", "pipe", "pipe"],
     });
     let pending = "", stderr = "", result = null;
@@ -51,7 +62,9 @@ export function nativeLocalSession({ request, env, signal, onActivity = () => {}
         try {
           const event = JSON.parse(line);
           if (event.type === "activity") onActivity(event.value);
-          if (event.type === "result") result = event.value;
+          if (event.type === "question") onQuestion(event.value);
+          if (event.type === "delivered" && Array.isArray(event.ids)) onDelivered(event.ids);
+          if (event.type === "result") { result = event.value; child.stdin.end(); }
         } catch { /* SDK diagnostics are not activity or completion */ }
       }
     });
@@ -63,7 +76,12 @@ export function nativeLocalSession({ request, env, signal, onActivity = () => {}
       else reject(new Error(signal?.aborted ? "cancelled" : `native session exited ${code}: ${stderr.slice(-1000)}`));
     });
     child.stdin.on("error", () => {});
-    child.stdin.end(JSON.stringify(request));
+    child.stdin.write(JSON.stringify(request) + "\n");
+    onChannel(message => {
+      if (result || !child.stdin.writable) return false;
+      child.stdin.write(JSON.stringify(message) + "\n");
+      return true;
+    });
     if (signal?.aborted) stop();
   });
 }

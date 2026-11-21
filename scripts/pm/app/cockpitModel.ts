@@ -1,5 +1,39 @@
 import type { Entity, Flight, Setup } from "./cockpitTypes";
 
+/** These are the two actionable severities; informational notes are not conflicts. */
+export const setupConflictCount = (conflicts: readonly { severity: string }[]) =>
+  conflicts.filter(entry => ["error", "warning"].includes(entry.severity)).length;
+
+export function cockpitCounts(board: { lanes: readonly { id: string; cards: readonly unknown[] }[] }, decisions: number) {
+  const needs = board.lanes.find(lane => lane.id === "needs")?.cards.length ?? 0;
+  const running = board.lanes.find(lane => lane.id === "running")?.cards.length ?? 0;
+  return { needs, running, decisions, needsTotal: needs + decisions };
+}
+
+export const cockpitUnits = (counts: { sessions: number; requests: number; acceptance: number }) =>
+  [counts.sessions && `${counts.sessions} session${counts.sessions === 1 ? "" : "s"}`,
+    counts.requests && `${counts.requests} request${counts.requests === 1 ? "" : "s"}`,
+    counts.acceptance && `${counts.acceptance} item${counts.acceptance === 1 ? "" : "s"}`]
+    .filter(Boolean).join(" · ") || "0 sessions";
+
+/** Missing observations explain unknown; this helper never upgrades a verdict. */
+export function sessionEvidenceGaps(record: Flight): string[] {
+  const s = record.session, score = s.scorecard, gaps: string[] = [];
+  if (!score) gaps.push("No scorecard");
+  if (!s.base) gaps.push("No base commit");
+  if (!s.head) gaps.push("No head commit");
+  if (!s.coverage) gaps.push("Transcript coverage unrecorded");
+  else if (s.coverage !== "transcript") gaps.push("Transcript not ingested");
+  if (s.changeFacts == null && score?.scope.files == null) gaps.push("Diff unrecorded");
+  const supervised = score?.checks.facts.some(fact => fact.source === "supervisor" && fact.exitCode !== null) ||
+    record.checks?.some(check => check.source === "supervisor" && check.exitCode != null);
+  if (!supervised) gaps.push("No supervisor check results");
+  else for (const fact of score?.checks.facts ?? []) {
+    if (fact.verdict === "unknown") gaps.push(`${fact.name} verdict unknown`);
+  }
+  return gaps;
+}
+
 export const sessionHref = (id: string) =>
   `#/sessions/${encodeURIComponent(id)}`;
 export function cockpitAlias(
@@ -10,7 +44,8 @@ export function cockpitAlias(
   const q = new URLSearchParams(query);
   let path: string;
   if (["", "home"].includes(root)) path = "/bridge";
-  else if (root === "launch" && !hasDetail && !q.has("file") && !q.has("cb")) {
+  else if (root === "skill-tools" ||
+    (root === "launch" && !hasDetail && !q.has("file") && !q.has("cb"))) {
     path = "/explore";
     if (!q.size) q.set("lane", "now");
   } else if (["analytics", "dashboard"].includes(root)) {

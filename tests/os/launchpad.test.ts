@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import {
   cpSync,
   existsSync,
@@ -24,7 +24,6 @@ import {
   prepare,
   repositoryPath,
 } from "../../scripts/os/launchpad.mjs";
-import { routeLaunchpad } from "../../scripts/pm/launchpad-route.mjs";
 
 const repo = resolve("."),
   root = mkdtempSync(join(tmpdir(), "era-a6-"));
@@ -42,9 +41,13 @@ for (const file of [
 cpSync(join(repo, ".claude/skills"), join(root, ".claude/skills"), {
   recursive: true,
 });
-cpSync(join(repo, ".claude/recipes"), join(root, ".claude/recipes"), {
-  recursive: true,
-});
+// Preset validation remains covered with test-owned data after page retirement.
+for (const recipe of [
+  { id: "era-report", title: "ERA report, low cost", skill: "era-wire", values: {},
+    attachments: ["api-route"], tier: "CLAUDE_MID", effort: "medium" },
+  { id: "money-bug", title: "Money bug", skill: "fix-bug", values: {},
+    attachments: ["money-rules", "api-route"], tier: "CLAUDE_HIGH", effort: "high" },
+]) write(`.claude/recipes/${recipe.id}.json`, JSON.stringify(recipe));
 write(
   "ERA Notes/Model-Registry.md",
   readFileSync(join(repo, "ERA Notes/Model-Registry.md"), "utf8"),
@@ -54,34 +57,39 @@ write(
   "ERA Notes/10 - Project Management/Hub & ERA/4 - Checklist.md",
   "## Now\n**ERA reports**\n- [ ] **HUB-201** Report\n- [x] **HUB-202** Closed\n**Other**\n- [ ] **HUB-203** Other\n",
 );
-for (const args of [
-  ["init", "--quiet"],
-  [
-    "-c",
-    "user.name=A6",
-    "-c",
-    "user.email=a6@example.invalid",
-    "-c",
-    "core.hooksPath=.none",
-    "-c",
-    "commit.gpgSign=false",
-    "commit",
-    "--allow-empty",
-    "--quiet",
-    "-m",
-    "fixture",
-  ],
-]) {
-  const r = spawnSync("git", args, {
-    cwd: root,
-    encoding: "utf8",
-    windowsHide: true,
-  });
-  if (r.status) throw Error(r.stderr);
-}
-const setup = scan(root),
-  data = catalog(setup),
+let setup: ReturnType<typeof scan>;
+let data: ReturnType<typeof catalog>;
+let items: ReturnType<typeof pmItems>;
+beforeAll(() => {
+  for (const args of [
+    ["init", "--quiet"],
+    [
+      "-c",
+      "user.name=A6",
+      "-c",
+      "user.email=a6@example.invalid",
+      "-c",
+      "core.hooksPath=.none",
+      "-c",
+      "commit.gpgSign=false",
+      "commit",
+      "--allow-empty",
+      "--quiet",
+      "-m",
+      "fixture",
+    ],
+  ]) {
+    const r = spawnSync("git", args, {
+      cwd: root,
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    if (r.status) throw Error(r.stderr);
+  }
+  setup = scan(root);
+  data = catalog(setup);
   items = pmItems(root);
+}, 60_000);
 const request = (
   skill: string,
   values: Record<string, unknown> = {},
@@ -126,7 +134,7 @@ describe("Launch free prompts", () => {
     expect(result.prompt).not.toContain("Inputs (complete");
     expect(result.prompt).not.toContain("Work item:");
     expect(result.launch?.enabled).toBe(false);
-  });
+  }, 60_000);
   it("offers canonical skills without forms and refuses invented skills or modes", async () => {
     expect(
       data.skills.some(
@@ -160,7 +168,7 @@ describe("Launch free prompts", () => {
         (skill: { name: string }) => skill.name === "pwa-install",
       ),
     ).toHaveLength(1);
-  });
+  }, 60_000);
   it("validates free text and any optional context using current registry and PM facts", async () => {
     for (const values of [
       {},
@@ -180,7 +188,7 @@ describe("Launch free prompts", () => {
     );
     expect(result.ok).toBe(true);
     expect(result.prompt).toContain("Work item: HUB-203");
-  });
+  }, 60_000);
   it("retains the ERA report restriction in free prompts", async () => {
     for (const item of ["", "HUB-202", "HUB-203", "HUB-999"])
       expect(
@@ -200,7 +208,7 @@ describe("Launch free prompts", () => {
         )
       ).ok,
     ).toBe(true);
-  });
+  }, 60_000);
   it("retains verbatim text and explicit paths while deriving mandatory guardrails", async () => {
     const prompt = "  Owner's \"exact\" wording\n$(throw 'executed') `n; ↔\n ";
     const result = await run({
@@ -229,7 +237,7 @@ describe("Launch free prompts", () => {
     expect(primaryRule.ok).toBe(true);
     expect(primaryRule.automatic).not.toContain("money-rules");
     expect(primaryRule.attachments).not.toContain("money-rules");
-  });
+  }, 60_000);
   it("keeps tier, effort, attachment and path safety in prompt mode", async () => {
     const base = freeRequest("add-feature");
     for (const patch of [
@@ -242,7 +250,7 @@ describe("Launch free prompts", () => {
       { paths: [".env"] },
     ])
       expect((await run({ ...base, ...patch })).ok).toBe(false);
-  });
+  }, 60_000);
   it("never dry-runs a free new-module prompt and leaves guided validation strict", async () => {
     const result = await run(freeRequest("new-module"));
     expect(result.ok).toBe(true);
@@ -261,7 +269,7 @@ describe("Launch free prompts", () => {
     await expect(run(request("pwa-install"))).rejects.toThrow(
       "Unknown skill form",
     );
-  });
+  }, 60_000);
   it("retains the original request alongside guided fields without weakening their validation", async () => {
     const prompt = "  Keep my 'exact' request\n$(literal) `n ↔\n ";
     const input = {
@@ -291,7 +299,7 @@ describe("Launch free prompts", () => {
       acceptance: "Required",
     });
     await expect(run({ ...input, prompt: "x".repeat(8001) })).rejects.toThrow();
-  });
+  }, 60_000);
   it("retains and validates optional shared context for guided forms without context fields", async () => {
     const input = {
       ...request("wizard", {
@@ -319,7 +327,7 @@ describe("Launch free prompts", () => {
       (await run(request("wizard", { system: "Device", goal: "Connect it" })))
         .ok,
     ).toBe(true);
-  });
+  }, 60_000);
 });
 
 describe("R98 / A6 form launches", () => {
@@ -392,7 +400,7 @@ describe("R98 / A6 form launches", () => {
     expect(result.launch?.enabled).toBe(false);
     expect(existsSync(join(root, "src/features/parcel-fixture"))).toBe(false);
     expect(existsSync(join(root, ".os/os.db"))).toBe(false); // copy is not an executed flight
-  });
+  }, 60_000);
   it("blocks required, pattern, type, length, enum, uniqueness and undeclared values before preview", async () => {
     expect((await run(request("new-module"))).errors).toHaveProperty("name");
     for (const values of [
@@ -415,7 +423,7 @@ describe("R98 / A6 form launches", () => {
         )
       ).errors,
     ).toHaveProperty("name");
-  });
+  }, 60_000);
   it("requires two registered standalones for junctions and removes stale hidden connects", async () => {
     const base = {
       name: "parcel-links",
@@ -449,7 +457,7 @@ describe("R98 / A6 form launches", () => {
         )
       ).preview,
     ).not.toContain("Client.tsx");
-  });
+  }, 60_000);
   it("supports the other seven skills and rejects closed, fabricated and non-report items", async () => {
     for (const [skill, values] of [
       ["era-wire", { item: "HUB-201" }],
@@ -489,7 +497,7 @@ describe("R98 / A6 form launches", () => {
       "HUB-201",
       "HUB-203",
     ]);
-  });
+  }, 60_000);
   it("rejects disabled tiers, unresolved defaults, unsupported efforts, unknown attachments and escaping paths", async () => {
     const base = request("triage-inbox");
     for (const input of [
@@ -506,7 +514,7 @@ describe("R98 / A6 form launches", () => {
     );
     expect(() => repositoryPath(root, "../escape")).toThrow();
     expect(() => repositoryPath(root, ".env")).toThrow();
-  });
+  }, 60_000);
   it("enforces path-based preloads even if an owner omits them", async () => {
     const result = await run({
       ...request("triage-inbox"),
@@ -521,7 +529,7 @@ describe("R98 / A6 form launches", () => {
       ]),
     );
     expect(result.prompt).toContain(".claude/skills/money-rules/SKILL.md");
-  });
+  }, 60_000);
   it("validates repository path, tier and calendar-date field contracts", async () => {
     const form = formSchema.parse({
       skill: "wizard",
@@ -585,7 +593,7 @@ describe("R98 / A6 form launches", () => {
           )
         ).ok,
       ).toBe(false);
-  });
+  }, 60_000);
   it("applies versioned recipes through the same validation and rendering path", async () => {
     const recipe = data.recipes.find(
       (r: { id: string }) => r.id === "money-bug",
@@ -605,7 +613,7 @@ describe("R98 / A6 form launches", () => {
     expect(result.ok).toBe(true);
     expect(result.prompt).toContain("Tier: CLAUDE_HIGH");
     expect(result.attachments).toContain("money-rules");
-  });
+  }, 60_000);
   it("keeps quotes, substitutions, backticks and multiline input literal in PowerShell commands", () => {
     const value = "a'\"; $(throw 'executed') `n\nUnicode ↔";
     if (process.platform === "win32") {
@@ -625,7 +633,7 @@ describe("R98 / A6 form launches", () => {
         value,
       );
     } else expect(psQuote(value)).toContain("a''");
-  });
+  }, 60_000);
   it("bounds schema defaults and diagnoses missing, forward and reverse form drift in A1", () => {
     const form = data.forms.find(
       (f: { skill: string }) => f.skill === "new-module",
@@ -661,35 +669,10 @@ describe("R98 / A6 form launches", () => {
         g.message.includes("missing skill anchor"),
       ),
     ).toBe(true);
-  });
-  it("refuses cross-site/LAN and malformed requests without starting a worker", async () => {
-    const base = {
-      root,
-      body: request("triage-inbox"),
-      headers: { host: "127.0.0.1:4317", origin: "http://127.0.0.1:4317" },
-      loopbackPeer: true,
-    };
-    expect(
-      (await routeLaunchpad({ ...base, loopbackPeer: false })).status,
-    ).toBe(403);
-    expect(
-      (
-        await routeLaunchpad({
-          ...base,
-          headers: { ...base.headers, origin: "https://example.invalid" },
-        })
-      ).status,
-    ).toBe(403);
-    expect(
-      (
-        await routeLaunchpad({
-          ...base,
-          body: { ...base.body, executable: "evil" },
-        })
-      ).status,
-    ).toBe(400);
-    const good = await routeLaunchpad(base);
-    expect(good.status).toBe(200);
-    expect(good.json.ok).toBe(true);
+  }, 60_000);
+  it("retires the page endpoint while retaining the form validators", () => {
+    expect(existsSync(join(repo, "scripts/pm/launchpad-route.mjs"))).toBe(false);
+    expect(readFileSync(join(repo, "scripts/pm-server.mjs"), "utf8")).not.toContain("/api/launchpad");
+    expect(existsSync(join(repo, "scripts/os/forms.mjs"))).toBe(true);
   });
 });

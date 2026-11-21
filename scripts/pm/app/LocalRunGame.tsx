@@ -1,580 +1,462 @@
-import { useId, useRef, useState } from "react";
-import {
-  Activity,
-  ArrowDown,
-  ArrowRight,
-  BookOpen,
-  Check,
-  ChevronRight,
-  Code2,
-  FileCode2,
-  FileText,
-  GitBranch,
-  Layers3,
-  ListChecks,
-  MessageSquare,
-  Radio,
-  Search,
-  Shield,
-  Terminal,
-  Workflow,
-} from "lucide-react";
-import { Markdown } from "./components";
-import { bareTitle } from "./deliveryHomeModel";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Armchair, Map, Maximize, RotateCw, X } from "lucide-react";
 import { LocalActions, type LocalRunView } from "./LocalDelivery";
 import { DeliveryWorkshop } from "./DeliveryWorkshop";
+import { LocalRunConsole, type Tool } from "./LocalRunConsole";
+import { buildTimeline, sceneAt } from "./localRunScene";
+import { clock, liveness, type LocalPollHealth } from "./localRunLiveness";
+import { useStageClock, type StagingUi } from "./useStageClock";
+import { LocalRunReplay } from "./LocalRunReplay";
+import { LOCAL_RUN_TOOLS, LocalRunTools } from "./LocalRunTools";
+import { BlackBox } from "./BlackBox";
+import { Debrief } from "./Debrief";
+import { StagePresence } from "./StagePresence";
+import { LocalChat } from "./LocalChat";
+import { TransferRoom } from "./TransferRoom";
+import type { LocalActivityEvent } from "./localRunActivityModel";
+import { openQuestion } from "./localChatModel";
+import { type AttentionItem } from "./localRunAttention";
 import {
-  localRunActivity,
-  type LocalActivityKind,
-} from "./localRunActivityModel";
+  attentionActionAllowed,
+  localBoardActionAllowed,
+} from "./localBoardActions";
 import {
-  LOCAL_CHECKS,
-  localCheckLabel,
-  localFailureTitle,
-  localRunLabel,
-  localRunStages,
-} from "./localRunModel";
+  useLocalAttention,
+  useRunHealth,
+  useAttentionProjection,
+} from "./useLocalAttention";
+import { useWorld } from "./state";
+import { cleanStageStreak, cleanShipIncrement } from "./stage/game";
+import { zoneEvidence } from "./stage/zoneModel";
+import { HUD, ZONE_BY_ID, type ZoneId } from "./stage/config";
+import { BoardClock, BoardTelemetry, AttentionAge } from "./stage/ClockLeaves";
+import type { BoardPlacement } from "./stage/types";
+import type { StageTempo, ReplayMode } from "./stage/director";
 import "./local-run-game.css";
-
-const tools = [
-  { id: "activity", label: "Activity", icon: Activity },
-  { id: "brief", label: "Brief", icon: BookOpen },
-  { id: "verification", label: "Verification", icon: ListChecks },
-  { id: "changes", label: "Changes", icon: FileCode2 },
-  { id: "worktree", label: "Worktree", icon: GitBranch },
-  { id: "limits", label: "Host limits", icon: Shield },
-] as const;
-type Tool = (typeof tools)[number]["id"];
-const eventIcons: Record<LocalActivityKind, typeof Search> = {
-  read: Search,
-  edit: Code2,
-  command: Terminal,
-  check: ListChecks,
-  message: MessageSquare,
-  event: Workflow,
-  failure: Radio,
-};
 
 export function LocalRunGame({
   run,
   busy,
   act,
   patch,
+  poll,
+  retry,
 }: {
   run: LocalRunView;
   busy: boolean;
   act: (action: "review" | "ship" | "undo" | "cancel") => void;
   patch: string | null;
+  poll?: LocalPollHealth;
+  retry?: () => void;
 }) {
-  const [tool, setTool] = useState<Tool>("activity");
-  const tabs = useRef<(HTMLButtonElement | null)[]>([]);
-  const panel = useRef<HTMLElement>(null);
-  const id = useId();
-  const activity = localRunActivity(run);
-  const stages = localRunStages(run);
-  const passed = run.checks.filter(
-    (check) => check.exit === 0 && !check.error,
-  ).length;
-  const title = bareTitle(run.work.title, run.work.id).replace(
-    /\s+— criteria$/u,
-    "",
+  const { world } = useWorld(),
+    streak = cleanStageStreak(world.cockpit);
+  const history = useRef({ previous: world.cockpit, current: world.cockpit });
+  if (history.current.current !== world.cockpit)
+    history.current = {
+      previous: history.current.current,
+      current: world.cockpit,
+    };
+  const cleanIncrement = cleanShipIncrement(
+    history.current.previous,
+    history.current.current,
+    run,
   );
-  const files =
-    patch
-      ?.split(/\r?\n/u)
-      .filter((line) => line.startsWith("diff --git "))
-      .map((line) => line.replace(/^diff --git a\/.* b\//u, "")) || [];
-  const selectTool = (index: number) => {
-    const next = (index + tools.length) % tools.length;
-    setTool(tools[next].id);
-    tabs.current[next]?.focus();
+  const timeline = useMemo(() => buildTimeline(run), [run]);
+  const [view, setView] = useState<"overview" | "seat">(() => {
+    try {
+      return localStorage.getItem("pm-local-game-view") === "seat" ? "seat" : "overview";
+    } catch {
+      return "overview";
+    }
+  });
+  const [visitedSeat, setVisitedSeat] = useState(view === "seat");
+  const consoleId = useId();
+  const [tool, setTool] = useState<Tool>("activity"),
+    [consoleOpen, setConsoleOpen] = useState(false),
+    [fileFilter, setFileFilter] = useState<string | null>(null);
+  const [replayMode, setReplayMode] = useState<ReplayMode>("recap"),
+    [replayTime, setReplayTime] = useState<number | null>(null),
+    [replayCursor, setReplayCursor] = useState<string | null>(null);
+  const [playing, setPlaying] = useState(false),
+    [speed, setSpeed] = useState<1 | 4>(1),
+    [tempo, setTempo] = useState<StageTempo>(1);
+  const [positions, setPositions] = useState<BoardPlacement[]>([]),
+    [railOpen, setRailOpen] = useState(() =>
+      typeof matchMedia === "undefined" || !matchMedia(`(max-width: ${HUD.railCollapseBelow - 1}px)`).matches),
+    [selectedAttentionId, setSelectedAttentionId] = useState<string>();
+  const [staging, setStaging] = useState<StagingUi>({
+    zone: null,
+    label: "",
+    event: null,
+    message: null,
+    beat: "idle",
+    gap: null,
+  });
+  const stageRef = useRef<HTMLElement>(null),
+    panel = useRef<HTMLElement>(null);
+  const realHealth = useRunHealth(run, poll);
+  const replay = replayTime !== null;
+  const cursorMissing = !!replayCursor && !timeline.events.some((event) => event.id === replayCursor);
+  const observed = useRef(Date.now());
+  if (realHealth.state !== "link-down") observed.current = Date.now();
+  const snapshot = useMemo(
+    () =>
+      sceneAt(
+        timeline,
+        cursorMissing && timeline.start !== null && replayTime !== null
+          ? Math.min(replayTime, timeline.start - 1)
+          : replayTime ?? (realHealth.state === "link-down" ? observed.current : Date.now()),
+        replayTime === null ? undefined : (replayCursor ?? undefined),
+      ),
+    [timeline, replayTime, replayCursor, realHealth.state, cursorMissing],
+  );
+  const health = liveness(
+    snapshot.run,
+    replayTime ?? Date.now(),
+    replayTime === null ? poll : {},
+  );
+  const {
+    attention: realAttention,
+    acknowledge,
+    seen,
+  } = useLocalAttention(run, realHealth.state);
+  const attention = useAttentionProjection(
+    run,
+    snapshot,
+    replayTime,
+    health.state,
+    seen,
+    realAttention,
+  );
+  const zones = useMemo(
+    () =>
+      zoneEvidence(
+        snapshot,
+        view === "overview" && staging.event && staging.beat !== "idle"
+          ? { event: staging.event, stage: staging.beat }
+          : null,
+        attention,
+      ),
+    [snapshot, staging.event, staging.beat, attention, view],
+  );
+  const replayAttention = useMemo(() => replay ? attention.map((item): AttentionItem =>
+    item.action.run === "brief" || item.action.run === "summary"
+      ? item
+      : { ...item, action: { label: "", run: "none" } },
+  ) : attention, [attention, replay]);
+  const onRailOpenChange = useCallback((open: boolean) => {
+    setRailOpen(open);
+    if (open && matchMedia(`(max-width: ${HUD.railBelow}px)`).matches)
+      setConsoleOpen(false);
+  }, []);
+  const selectTool = useCallback((next: Tool) => {
+    setTool(next);
+    setConsoleOpen(true);
+    if (matchMedia(`(max-width: ${HUD.railBelow}px)`).matches)
+      setRailOpen(false);
+  }, []);
+  const openTool = useCallback((next: Tool) => {
+    setTool(next);
+    setConsoleOpen(true);
+    if (matchMedia(`(max-width: ${HUD.railBelow}px)`).matches)
+      setRailOpen(false);
+    requestAnimationFrame(() => {
+      panel.current?.focus({ preventScroll: true });
+    });
+  }, []);
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      setConsoleOpen(false);
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, []);
+  const action = useCallback(
+    (value: "review" | "ship" | "undo" | "cancel") => {
+      if (replay || !localBoardActionAllowed(run, busy, value)) return;
+      if (value === "review") openTool("changes");
+      act(value);
+    },
+    [act, openTool, run, busy, replay],
+  );
+  const canAct = useCallback(
+    (item: AttentionItem) => attentionActionAllowed(run, busy, item),
+    [run, busy],
+  );
+  const onAttention = useCallback(
+    (item: AttentionItem, command?: "primary" | "done" | "copy") => {
+      if (replay && item.action.run !== "brief" && item.action.run !== "summary") return;
+      setSelectedAttentionId(item.id);
+      if (command === "done") {
+        if (item.kind === "sql") acknowledge(item.id, item.state !== "done");
+        return;
+      }
+      if (command === "copy" || item.action.run === "copy-path") {
+        if (item.detail)
+          void navigator.clipboard?.writeText(item.detail).catch(() => {});
+        return;
+      }
+      if (item.action.run === "brief") {
+        acknowledge(item.id);
+        openTool("brief");
+      } else if (item.action.run === "summary") {
+        acknowledge(item.id);
+        setFileFilter(null);
+        openTool("activity");
+      } else if (item.action.run === "review") action("review");
+      else if (item.action.run === "cancel") action("cancel");
+      else if (item.action.run === "retry")
+        action(run.phase === "revert-push-pending" ? "undo" : "ship");
+      else if (item.action.href)
+        location.hash = item.action.href.replace(/^#/u, "");
+      else if (item.action.run === "new-attempt" && run.work.campaign)
+        location.hash = `/deliver/${encodeURIComponent(run.work.campaign)}/${encodeURIComponent(run.work.id)}?from=${encodeURIComponent(`/delivery/run/${run.run_id}`)}`;
+    },
+    [acknowledge, openTool, action, run, replay],
+  );
+  const onZone = useCallback(
+    (zone: ZoneId) => {
+      const item = attention.find(
+        (entry) => entry.zone === zone && entry.state === "open",
+      );
+      if (item) setSelectedAttentionId(item.id);
+      if (zone === "brief") {
+        const brief = attention.find(
+          (entry) => entry.kind === "plan" && entry.zone === "brief",
+        );
+        if (brief) acknowledge(brief.id);
+      }
+      openTool(ZONE_BY_ID[zone].tab);
+    },
+    [attention, acknowledge, openTool],
+  );
+  const onReplayRow = useCallback((at: number, id: string | null) => {
+    if (cursorMissing) return;
+    setReplayTime(at);
+    setReplayCursor(id);
+  }, [cursorMissing]);
+  const seek = useCallback((event: LocalActivityEvent) => {
+    setPlaying(false);
+    setReplayTime(Date.parse(event.at));
+    setReplayCursor(event.id);
+  }, []);
+  const live = useCallback(() => {
+    setPlaying(false);
+    setReplayTime(null);
+    setReplayCursor(null);
+  }, []);
+  const play = () => {
+    if (!timeline.events.length) return;
+    const finalId = timeline.events.at(-1)?.id;
+    if ((!playing || cursorMissing) && (cursorMissing || replayTime === null ||
+      (replayTime >= (timeline.end ?? 0) && (!replayCursor || replayCursor === finalId)))) {
+      setReplayTime(timeline.start);
+      setReplayCursor(timeline.events[0]?.id ?? null);
+    }
+    setPlaying(cursorMissing || !playing);
+  };
+  const toggleView = () => {
+    const next = view === "seat" ? "overview" : "seat";
+    setPlaying(false);
+    setView(next);
+    if (next === "seat") {
+      setVisitedSeat(true);
+      setConsoleOpen(false);
+    }
+    try {
+      localStorage.setItem("pm-local-game-view", next);
+    } catch {
+      // The choice still applies to the current run.
+    }
+  };
+  const ask = realAttention.find((item) => item.kind === "question" && item.state === "open");
+  const test = !replay ? realAttention.find((item) => item.kind === "test" && item.action.href) : undefined;
+  const onEnd = useCallback(() => setPlaying(false), []);
+  useStageClock(stageRef, {
+    timeline,
+    snapshot,
+    state: health.state,
+    time: replayTime,
+    playing: playing && !cursorMissing,
+    speed,
+    tempo,
+    replayMode,
+    streak,
+    cleanIncrement,
+    attention,
+    onReplayRow,
+    onEnd,
+    onStage: setStaging,
+    onPlacements: setPositions,
+  }, view);
+  const theater = () => {
+    if (document.fullscreenElement)
+      void document.exitFullscreen().catch(() => {});
+    else void stageRef.current?.requestFullscreen().catch(() => {});
   };
   return (
-    <div className="run-game" data-phase={run.phase}>
-      <header className="run-game-heading">
-        <div className="run-game-identity">
-          <span className="run-game-tag">
-            <Layers3 size={13} /> {run.work.id}
-          </span>
-          <span>{run.work.campaign || "Delivery"}</span>
-          <span className="run-game-lane">
-            <GitBranch size={12} /> Local
-          </span>
-        </div>
-        <h1>{title}</h1>
-        <div className="run-game-meta">
-          <span className="run-game-state" data-active={activity.active}>
-            <i />
-            {localRunLabel(run)}
-          </span>
-          {run.settings && (
-            <span>
-              {[run.settings.executor, run.settings.model, run.settings.effort]
-                .filter(Boolean)
-                .join(" · ")}
-            </span>
-          )}
-        </div>
-      </header>
-
-      <nav className="run-game-journey" aria-label="Delivery stages">
-        {stages.map((stage, index) => (
-          <div
-            key={stage.label}
-            data-stage-state={stage.state}
-            aria-current={
-              stage.state === "current" || stage.state === "stopped"
-                ? "step"
-                : undefined
-            }
-          >
-            <span>
-              {stage.state === "done" ? (
-                <Check size={13} />
-              ) : (
-                String(index + 1).padStart(2, "0")
-              )}
-            </span>
-            <strong>{stage.label}</strong>
-            {index < stages.length - 1 && (
-              <ChevronRight size={13} className="run-game-stage-link" />
-            )}
-          </div>
-        ))}
-      </nav>
-
-      {(run.error || run.interrupted) && (
-        <section className="local-run-failure" aria-label="Session issue">
-          <h2 role="alert">
-            {run.interrupted
-              ? "Session interrupted"
-              : localFailureTitle(run.error!)}
-          </h2>
-          {run.error && (
-            <details>
-              <summary>Error details</summary>
-              <pre>{run.error}</pre>
-            </details>
-          )}
-          {run.work.campaign && ["failed", "cancelled"].includes(run.phase) && (
-            <a
-              className="primary"
-              href={`#/deliver/${encodeURIComponent(run.work.campaign)}/${encodeURIComponent(run.work.id)}?from=${encodeURIComponent(`/delivery/run/${run.run_id}`)}`}
-            >
-              New attempt
-            </a>
-          )}
-        </section>
-      )}
-
+    <div className="run-game board-game" data-phase={run.phase}>
       <DeliveryWorkshop
-        station={activity.station}
-        active={activity.active}
-        label={activity.label}
-        detail={activity.detail}
-        phase={run.interrupted ? "interrupted" : run.phase}
-        completed={run.phase === "shipped"}
-        onStationSelect={(station) => {
-          setTool(
-            station === "forge"
-              ? "changes"
-              : station === "lab"
-                ? "verification"
-                : station === "review"
-                  ? "brief"
-                  : "activity",
-          );
-          requestAnimationFrame(() => {
-            panel.current?.focus({ preventScroll: true });
-            panel.current?.parentElement?.scrollIntoView({
-              block: "start",
-              behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
-                ? "instant"
-                : "smooth",
-            });
-          });
-        }}
-      />
-
-      <div className="run-game-commandbar">
-        <span className="run-game-command-label">
-          <Workflow size={15} /> Mission controls
-        </span>
-        <LocalActions
-          run={run}
-          busy={busy}
-          act={(action) => {
-            if (action === "review") setTool("changes");
-            act(action);
+        stageRef={stageRef}
+        positions={positions}
+        staging={staging}
+        railOpen={railOpen}
+        seated={view === "seat"}
+        seat={visitedSeat && <TransferRoom
+          active={view === "seat"}
+          timeline={timeline}
+          scene={snapshot}
+          health={health}
+          liveHealth={realHealth}
+          replay={replay}
+          cursorMissing={cursorMissing}
+          playing={playing && !cursorMissing}
+          zones={zones}
+          question={!!ask}
+          onLive={live}
+          onSeek={seek}
+          onTransportKey={(key) => key === " " ? play() : live()}
+          onQuestion={() => {
+            live();
+            setConsoleOpen(false);
+            setRailOpen(true);
+            setSelectedAttentionId(ask?.id);
           }}
-        />
-      </div>
-
-      <div className="run-game-console">
-        <div
-          className="run-game-tools"
-          role="tablist"
-          aria-label="Session tools"
-        >
-          {tools.map((item, index) => (
-            <button
-              key={item.id}
-              ref={(el) => {
-                tabs.current[index] = el;
-              }}
-              type="button"
-              role="tab"
-              id={`${id}-${item.id}`}
-              aria-controls={`${id}-panel`}
-              aria-selected={tool === item.id}
-              tabIndex={tool === item.id ? 0 : -1}
-              onClick={() => setTool(item.id)}
-              onKeyDown={(event) => {
-                if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-                  event.preventDefault();
-                  selectTool(index + (event.key === "ArrowRight" ? 1 : -1));
-                }
-                if (event.key === "Home" || event.key === "End") {
-                  event.preventDefault();
-                  selectTool(event.key === "Home" ? 0 : tools.length - 1);
-                }
-              }}
-            >
-              <item.icon size={17} />
-              <span>{item.label}</span>
-              {item.id === "verification" && (
-                <small>
-                  {passed}/{LOCAL_CHECKS.length}
-                </small>
-              )}
-              {item.id === "changes" && files.length > 0 && (
-                <small>{files.length}</small>
-              )}
+          testSteps={test && <a className="primary room-test-link" href={test.action.href}>Test steps</a>}
+        />}
+        onZone={onZone}
+        snapshot={snapshot}
+        timeline={timeline}
+        state={health.state}
+        caption={health.caption}
+        replay={replayTime !== null}
+        streak={streak}
+        zones={zones}
+        attention={replayAttention}
+        tempo={tempo}
+        onTempo={setTempo}
+        stagedMessage={staging.message}
+        stageZone={staging.zone}
+        onAttention={onAttention}
+        canAct={canAct}
+        selectedAttentionId={selectedAttentionId}
+        onRailOpenChange={onRailOpenChange}
+        suppressRailAutoOpen={consoleOpen && typeof matchMedia !== "undefined" && matchMedia(`(max-width: ${HUD.railBelow}px)`).matches}
+        renderAge={(since: number | null) => <AttentionAge since={since} />}
+        clock={
+          <BoardClock
+            scene={snapshot}
+            timeline={timeline}
+            replayTime={replayTime}
+            poll={poll}
+          />
+        }
+        telemetry={
+          <BoardTelemetry
+            scene={snapshot}
+            timeline={timeline}
+            replayTime={replayTime}
+            frozen={health.state === "link-down"}
+          />
+        }
+        dockTools={<LocalRunTools id={consoleId} tool={tool} onSelect={selectTool}
+          open={consoleOpen}
+          passed={snapshot.run.checks.filter(check => check.exit === 0 && !check.error).length}
+          files={(replayTime === null || snapshot.run.head) ? (patch?.match(/^diff --git /gm)?.length ?? 0) : 0} />}
+        dockControls={<LocalRunReplay timeline={timeline} time={replayTime} cursor={replayCursor}
+          onCursor={setReplayCursor} replayMode={replayMode} gap={staging.gap} tempo={tempo} onTempo={setTempo}
+          onMode={value => { setPlaying(false); setReplayMode(value); }}
+          onTime={time => { setPlaying(false); setReplayTime(time); }}
+          playing={playing && !cursorMissing} onPlay={play} speed={speed} onSpeed={setSpeed}
+          onLive={live} />}
+        settingsControls={
+          <StagePresence
+            run={run}
+            state={realHealth.state}
+            caption={realHealth.caption}
+            elapsed={snapshot.elapsed === null ? "?" : clock(snapshot.elapsed)}
+            stageRef={stageRef}
+            replay={replayTime !== null}
+            attention={realAttention}
+            settingsOnly
+          />
+        }
+        theaterControl={
+          <>
+            <button type="button" className="stage-presence-button room-view-switch"
+              aria-label={view === "seat" ? "Overview" : "Take seat"} onClick={toggleView}>
+              {view === "seat" ? <Map size={16} /> : <Armchair size={16} />}
+              <span>{view === "seat" ? "Overview" : "Take seat"}</span>
             </button>
-          ))}
-        </div>
-        <section
-          ref={panel}
-          id={`${id}-panel`}
-          role="tabpanel"
-          aria-labelledby={`${id}-${tool}`}
-          tabIndex={0}
-          className="run-game-panel"
-        >
-          {tool === "activity" && (
-            <section aria-label="Activity" className="run-game-activity">
-              <div className="run-game-panel-heading">
-                <div>
-                  <span className="eyebrow">Mission feed</span>
-                  <h2>
-                    <Activity size={17} />
-                    Activity
-                  </h2>
-                </div>
-                <details className="run-game-feed-help">
-                  <summary aria-label="Activity information">i</summary>
-                  <p>
-                    Recent recorded events. File details depend on the executor.
-                  </p>
-                </details>
-              </div>
-              <div
-                className="run-game-counters"
-                aria-label="Recorded activity counts"
-              >
-                <span>
-                  <Search size={14} />
-                  <strong>{activity.counts.reads}</strong> Explore
-                </span>
-                <span>
-                  <Code2 size={14} />
-                  <strong>{activity.counts.edits}</strong> Edits
-                </span>
-                <span>
-                  <Terminal size={14} />
-                  <strong>{activity.counts.commands}</strong> Commands
-                </span>
-                <span>
-                  <ListChecks size={14} />
-                  <strong>{activity.counts.checks}</strong> Passed
-                </span>
-              </div>
-              {activity.events.length ? (
-                <ol className="run-game-events">
-                  {activity.events.slice(0, 30).map((entry, index) => {
-                    const Icon = eventIcons[entry.kind];
-                    return (
-                      <li
-                        key={entry.id}
-                        data-kind={entry.kind}
-                        data-latest={index === 0}
-                      >
-                        <span className="run-game-event-node">
-                          <Icon size={16} />
-                        </span>
-                        <div className="run-game-event-body">
-                          <div>
-                            <strong>{entry.label}</strong>
-                            <time dateTime={entry.at}>
-                              {entry.at.replace(/^.*T/u, "").slice(0, 8)} UTC
-                            </time>
-                          </div>
-                          {entry.detail && <code>{entry.detail}</code>}
-                          <details>
-                            <summary>
-                              Event <ArrowDown size={11} />
-                            </summary>
-                            <pre>
-                              {entry.summary === run.error ||
-                              entry.summary.startsWith("native session exited")
-                                ? "Session failed · see error details"
-                                : entry.summary}
-                            </pre>
-                          </details>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ol>
-              ) : (
-                <p className="quiet">Awaiting activity</p>
-              )}
-            </section>
-          )}
-
-          {tool === "brief" && (
-            <section aria-label="Plan" className="run-game-brief">
-              <div className="run-game-panel-heading">
-                <div>
-                  <span className="eyebrow">Work brief</span>
-                  <h2>
-                    <BookOpen size={18} />
-                    Plan
-                  </h2>
-                </div>
-                <span className="run-game-tag">{run.work.id}</span>
-              </div>
-              {run.work.brief ? (
-                <Markdown raw={run.work.brief} />
-              ) : (
-                <p className="quiet">Plan not recorded</p>
-              )}
-            </section>
-          )}
-
-          {tool === "verification" && (
-            <section aria-label="Verification">
-              <div className="run-game-panel-heading">
-                <div>
-                  <span className="eyebrow">Test lab</span>
-                  <h2>
-                    <ListChecks size={18} />
-                    Verification
-                  </h2>
-                </div>
-                <strong className="run-game-score">
-                  {passed}
-                  <small> / {LOCAL_CHECKS.length}</small>
-                </strong>
-              </div>
-              <div className="run-game-checks">
-                {LOCAL_CHECKS.map((name, index) => {
-                  const check = run.checks.find((entry) => entry.name === name);
-                  return (
-                    <details
-                      className="run-game-check"
-                      key={name}
-                      data-result={
-                        !check
-                          ? "pending"
-                          : check.exit === 0 && !check.error
-                            ? "passed"
-                            : "stopped"
-                      }
-                    >
-                      <summary>
-                        <span className="run-game-check-symbol">
-                          {check?.exit === 0 && !check.error ? (
-                            <Check size={18} />
-                          ) : (
-                            <Terminal size={17} />
-                          )}
-                        </span>
-                        <span>
-                          <small>
-                            CHECK {String(index + 1).padStart(2, "0")}
-                          </small>
-                          <strong>{name}</strong>
-                        </span>
-                        <em>{localCheckLabel(check)}</em>
-                        <ChevronRight size={15} />
-                      </summary>
-                      {check && (
-                        <pre>
-                          {[check.stdout, check.stderr, check.error]
-                            .filter(Boolean)
-                            .join("\n") || "No output recorded"}
-                        </pre>
-                      )}
-                    </details>
-                  );
-                })}
-              </div>
-              <div className="run-game-owner-test">
-                <Shield size={16} />
-                <span>Owner test</span>
-                <strong>
-                  {run.handover ? run.handover.acceptance.state : "Not ready"}
-                </strong>
-              </div>
-              {run.usage && (
-                <details className="run-game-disclosure">
-                  <summary>Usage</summary>
-                  <dl>
-                    {Object.entries(run.usage)
-                      .filter(([, value]) => typeof value === "number")
-                      .map(([name, value]) => (
-                        <div className="resource-line" key={name}>
-                          <dt>{name}</dt>
-                          <dd>{value}</dd>
-                        </div>
-                      ))}
-                  </dl>
-                </details>
-              )}
-            </section>
-          )}
-
-          {tool === "changes" && (
-            <section aria-label="Changes">
-              <div className="run-game-panel-heading">
-                <div>
-                  <span className="eyebrow">Build output</span>
-                  <h2>
-                    <FileCode2 size={18} />
-                    Changes
-                  </h2>
-                </div>
-                {run.head && (
-                  <code className="run-game-tag">{run.head.slice(0, 12)}</code>
-                )}
-              </div>
-              {files.length > 0 && (
-                <ul className="run-game-files">
-                  {files.map((file, index) => (
-                    <li key={`${file}-${index}`}>
-                      <FileText size={16} />
-                      <code>{file}</code>
-                      <Check size={14} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {patch === null ? (
-                <div className="run-game-output">
-                  <FileCode2 size={38} />
-                  <strong>
-                    {run.head ? "Candidate recorded" : "Candidate pending"}
-                  </strong>
-                  <button
-                    className="secondary"
-                    disabled={busy || !run.head}
-                    onClick={() => act("review")}
-                  >
-                    Review diff <ArrowRight size={14} />
-                  </button>
-                </div>
-              ) : (
-                <details className="run-game-disclosure" open>
-                  <summary>Patch</summary>
-                  <pre className="run-game-patch">{patch || "No changes"}</pre>
-                </details>
-              )}
-              {run.risk?.required && (
-                <details className="run-game-disclosure">
-                  <summary>Review required</summary>
-                  <ul>
-                    {run.risk.flagged.map((file) => (
-                      <li key={file.path}>
-                        <code>{file.path}</code> · {file.domains.join(", ")}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-            </section>
-          )}
-
-          {tool === "worktree" && (
-            <section aria-label="Worktree">
-              <div className="run-game-panel-heading">
-                <div>
-                  <span className="eyebrow">Workspace</span>
-                  <h2>
-                    <GitBranch size={18} />
-                    Worktree
-                  </h2>
-                </div>
-              </div>
-              <div className="run-game-branch">
-                <span className="run-game-branch-node">
-                  <GitBranch size={26} />
-                </span>
-                <div>
-                  <small>Branch</small>
-                  <code>{run.branch}</code>
-                </div>
-              </div>
-              <dl className="run-game-worktree-facts">
-                <div>
-                  <dt>Path</dt>
-                  <dd>
-                    <code>{run.workspace}</code>
-                  </dd>
-                </div>
-                <div>
-                  <dt>Candidate</dt>
-                  <dd>
-                    <code>{run.head || "Not recorded"}</code>
-                  </dd>
-                </div>
-                <div>
-                  <dt>Current head</dt>
-                  <dd>
-                    <code>{run.current_head || "Not recorded"}</code>
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          )}
-
-          {tool === "limits" && (
-            <section aria-label="Host limits">
-              <div className="run-game-panel-heading">
-                <div>
-                  <span className="eyebrow">Local boundary</span>
-                  <h2>
-                    <Shield size={18} />
-                    Host limits
-                  </h2>
-                </div>
-              </div>
-              <div className="run-game-boundary">
-                <span className="run-game-boundary-emblem">
-                  <Shield size={44} strokeWidth={1} />
-                </span>
-                <div>
-                  <strong>Host access</strong>
-                  <p>
-                    Credential scrub prevents accidents, not deliberate host
-                    access.
-                  </p>
-                </div>
-              </div>
-            </section>
-          )}
-        </section>
-      </div>
+            <button
+              type="button"
+              className="stage-presence-button"
+              aria-label="Theater"
+              onClick={theater}
+            >
+              <Maximize size={16} />
+            </button>
+            {health.state === "link-down" && (
+              <button type="button" aria-label="Retry" onClick={retry}>
+                <RotateCw size={16} />
+              </button>
+            )}
+          </>
+        }
+        actions={!replay && (
+          <div
+            className="run-game-commandbar"
+            data-stale={health.state === "stale"}
+            data-candidate={!!run.head}
+            data-closed-failed={["failed", "cancelled"].includes(run.phase)}
+          >
+            {["failed", "cancelled"].includes(run.phase) && run.work.campaign && <a className="primary" href={`#/deliver/${encodeURIComponent(run.work.campaign)}/${encodeURIComponent(run.work.id)}?from=${encodeURIComponent(`/delivery/run/${run.run_id}`)}`}>New attempt</a>}
+            {run.head ? <LocalActions run={run} busy={busy} act={action} /> : localBoardActionAllowed(run, busy, "cancel") || (["preparing", "building", "checking"].includes(run.phase) && !run.interrupted) ? <div className="gate-actions"><button className="secondary" disabled={busy} onClick={() => action("cancel")}>Cancel</button></div> : null}
+          </div>
+        )}
+        question={
+          replayTime === null && openQuestion(run) ? (
+            <LocalChat run={run} limit={8} compact composer={false} />
+          ) : null
+        }
+        failure={
+          snapshot.run.error || snapshot.run.failure || snapshot.run.interrupted ? (
+            <BlackBox run={snapshot.run} hideAttempt />
+          ) : null
+        }
+        debrief={
+          snapshot.phase === "shipped" ? (
+            <Debrief run={snapshot.run} timeline={timeline} scene={snapshot} />
+          ) : null
+        }
+      >
+      <details
+        className="board-console-drawer"
+        open={consoleOpen}
+        onToggle={(event) => setConsoleOpen(event.currentTarget.open)}
+      >
+        <summary aria-label="Close details">{LOCAL_RUN_TOOLS.find(item => item.id === tool)?.label}<X size={16} /></summary>
+        <LocalRunConsole
+          id={consoleId}
+          showTools={false}
+          run={run}
+          snapshot={snapshot}
+          timeline={timeline}
+          replay={replayTime !== null}
+          patch={patch}
+          tool={tool}
+          setTool={setTool}
+          panel={panel}
+          busy={busy}
+          act={action}
+          fileFilter={fileFilter}
+          selectedAttentionId={selectedAttentionId}
+          setFileFilter={setFileFilter}
+        />
+      </details>
+      </DeliveryWorkshop>
     </div>
   );
 }

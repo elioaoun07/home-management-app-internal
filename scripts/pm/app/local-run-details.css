@@ -1,0 +1,210 @@
+.run-game-brief .prose {
+  font-size: 13px;
+  max-width: 840px;
+}
+.run-game-score {
+  font-size: 30px;
+  font-weight: 500;
+  color: var(--accent);
+}
+.run-game-score small {
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+.run-game-checks {
+  display: grid;
+  gap: 10px;
+}
+.run-game-check {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.run-game-check summary {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 15px;
+  min-height: 70px;
+  cursor: pointer;
+}
+.run-game-check-symbol {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--ink-muted);
+  background: var(--surface-soft);
+  border-radius: 9px;
+}
+.run-game-check summary > span:nth-child(2) {
+  display: grid;
+  gap: 5px;
+}
+.run-game-check small {
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+}
+.run-game-check strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.run-game-check em {
+  font-style: normal;
+  font-size: 10px;
+  margin-left: auto;
+  color: var(--ink-muted);
+}
+.run-game-check[data-result="passed"] .run-game-check-symbol,
+.run-game-check[data-result="passed"] em {
+  color: var(--accent);
+}
+.run-game-check pre {
+  border-top: 1px solid var(--line);
+  padding: 16px;
+  margin: 0;
+  background: var(--theme-bg);
+}
+.run-game-owner-test {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  padding: 20px 2px 0;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+.run-game-owner-test strong {
+  margin-left: auto;
+  font-weight: 500;
+}
+.run-game-disclosure {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.run-game-disclosure summary {
+  min-height: 40px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.run-game-files {
+  list-style: none;
+  padding: 0;
+}
+.run-game-files li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--accent);
+}
+.run-game-files code {
+  min-width: 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+.run-game-files li > svg:last-child {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.run-game-output {
+  display: grid;
+  place-items: center;
+  gap: 16px;
+  padding: 32px;
+  color: var(--ink-muted);
+}
+.run-game-output > svg {
+  color: var(--accent);
+  stroke-width: 1;
+}
+.run-game-output strong {
+  font-size: 13px;
+  font-weight: 400;
+}
+.run-game-output button {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.run-game-patch {
+  border-radius: 10px;
+  padding: 18px;
+  background: var(--theme-bg);
+}
+.run-game-branch {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 0 28px;
+}
+.run-game-branch-node {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  color: var(--accent);
+  background: var(--accent-wash);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 0 35px var(--run-glow);
+}
+.run-game-branch > div {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+.run-game-branch small,
+.run-game-worktree-facts dt {
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+.run-game-branch code {
+  font-size: 14px;
+}
+.run-game-worktree-facts {
+  margin: 0;
+}
+.run-game-worktree-facts > div {
+  padding: 17px 0;
+  border-top: 1px solid var(--line);
+}
+.run-game-worktree-facts dd {
+  margin: 9px 0 0;
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.run-game-boundary {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  padding: 25px 12px;
+}
+.run-game-boundary-emblem {
+  display: grid;
+  place-items: center;
+  width: 86px;
+  height: 100px;
+  flex-shrink: 0;
+  background: var(--accent-wash);
+  color: var(--accent);
+  clip-path: polygon(50% 0, 100% 23%, 90% 75%, 50% 100%, 10% 75%, 0 23%);
+}
+.run-game-boundary strong {
+  font-weight: 500;
+  font-size: 14px;
+}
+.run-game-boundary p {
+  max-width: 440px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}

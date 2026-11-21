@@ -12,23 +12,70 @@ import { effortsFor } from "./v2model";
 import { launchRecommendation } from "./launchRecommendationModel";
 import { LaunchRecommendation } from "./LaunchRecommendation";
 import { LocalRunReview } from "./LocalRunReview";
+import type { LocalFailureRecord } from "./localRunFailure";
+import { displayTitle } from "./localRunModel";
+import {FoundryStandby} from './stage/FoundryStandby';
 import type { UatHandover, Work } from "./types";
+import type { LocalOwnerMessage, LocalQuestion } from "./localChatModel";
 
-export const offersLocalLane = () => transport().capabilities.kind === "local" && isLoopbackOrigin(location.origin);
+export const offersLocalLane = () =>
+  transport().capabilities.kind === "local" &&
+  isLoopbackOrigin(location.origin);
 export interface LocalReadiness {
   ready: boolean;
   facts: Record<string, { state: string; code: string; detail?: string }>;
 }
 export interface LocalRunView {
-  run_id: string; phase: string; workspace: string; branch: string; head: string | null; current_head: string | null;
-  canShip: boolean; canUndo: boolean; interrupted: boolean; error?: string;
-  work: { id: string; title: string; campaign?: string; file?: string; brief?: string };
+  base?: string | null;
+  run_id: string;
+  phase: string;
+  workspace: string;
+  branch: string;
+  head: string | null;
+  current_head: string | null;
+  reviewed_head?: string | null;
+  canShip: boolean;
+  canUndo: boolean;
+  interrupted: boolean;
+  error?: string;
+  failure?: LocalFailureRecord;
+  work: {
+    id: string;
+    title: string;
+    campaign?: string;
+    file?: string;
+    brief?: string;
+  };
   settings?: { executor: string; model: string | null; effort: string | null };
   risk?: { required: boolean; flagged: { path: string; domains: string[] }[] };
-  checks: { name: string; exit: number | null; stdout: string; stderr: string; error: string | null }[];
-  activity: { at: string; summary: string | null; kind?: string; seq?: number; job_id?: string | null }[];
+  checks: {
+    name: string;
+    exit: number | null;
+    stdout: string;
+    stderr: string;
+    error: string | null;
+    started_at?: string;
+    finished_at?: string;
+  }[];
+  activity: {
+    at: string;
+    summary: string | null;
+    kind?: string;
+    seq?: number;
+    job_id?: string | null;
+    agent_json?:
+      | { role?: string; id?: string; executor?: string; model?: string }
+      | string
+      | null;
+  }[];
   usage: Record<string, number | string | null> | null;
+  merge?: string | null;
   handover: UatHandover | null;
+  questions?: LocalQuestion[];
+  messages?: LocalOwnerMessage[];
+  /** DLV-165: waiting on the owner with no process; not interrupted. */
+  parked?: boolean;
+  canMessage?: boolean;
 }
 
 export function LocalReadinessPanel({ data }: { data: LocalReadiness }) {
@@ -220,7 +267,7 @@ export function LocalLaunch({ work }: { work: Work }) {
         <>
           <header className="launch-heading">
             <span className="eyebrow">{work.idChip || work.id} · Local</span>
-            <h1>{work.title}</h1>
+            <h1>{displayTitle({ work: { id: work.idChip || work.id, title: work.title } })}</h1>
           </header>
           {controls}
         </>
@@ -239,27 +286,80 @@ export function LocalActions({ run, busy, act }: { run: Pick<LocalRunView, "phas
     {run.handover && <a className="secondary" href={`#/delivery/test/${run.handover.handover_id}`}>Test steps</a>}
     <button className="primary" disabled={busy || !(run.canShip || run.phase === "push-pending")} onClick={() => act("ship")}>{run.phase === "push-pending" ? "Retry push" : "Ship"}</button>
     {(run.canUndo || run.phase === "revert-push-pending") && <button className="secondary" disabled={busy} onClick={() => act("undo")}>Undo</button>}
-    {["preparing", "building", "checking"].includes(run.phase) && !run.interrupted && <button className="secondary" disabled={busy} onClick={() => act("cancel")}>Cancel</button>}
+    {["preparing", "building", "checking"].includes(run.phase) && <button className="secondary" disabled={busy} onClick={() => act("cancel")}>Cancel</button>}
   </div>;
 }
 
 export function LocalRun({ id }: { id: string }) {
   const session = useV2Session();
   const game = useGameLayer();
-  const [patch, setPatch] = useState<{ runId: string; value: string } | null>(null);
-  const detail = useQuery({ queryKey: pmKeys.localRun(id), queryFn: ({ signal }) => read<LocalRunView>(`/api/delivery/v2/local/run?id=${encodeURIComponent(id)}`, signal),
-    enabled: !!session.data?.paired && offersLocalLane(), refetchInterval: 4000 });
-  const command = useMutation({ mutationFn: async (action: "review" | "ship" | "undo" | "cancel") => {
-    const runId = id;
-    return { ...await v2Post<{ patch?: string }>("local", { action, run_id: runId }, 120_000), runId };
-  },
-    onSuccess: result => { if (result.patch !== undefined) setPatch({ runId: result.runId, value: result.patch }); },
-    onSettled: () => client.invalidateQueries({ queryKey: pmKeys.all }) });
+  const [patch, setPatch] = useState<{ runId: string; value: string } | null>(
+    null,
+  );
+  const detail = useQuery({
+    queryKey: pmKeys.localRun(id),
+    queryFn: ({ signal }) =>
+      read<LocalRunView>(
+        `/api/delivery/v2/local/run?id=${encodeURIComponent(id)}`,
+        signal,
+      ),
+    enabled: !!session.data?.paired && offersLocalLane(),
+    refetchInterval: (query) => {
+      const phase = query.state.data?.phase;
+      return phase && ["failed", "cancelled", "reverted"].includes(phase)
+        ? false
+        : phase === "shipped"
+          ? 15_000
+          : 4000;
+    },
+  });
+  const command = useMutation({
+    mutationFn: async (action: "review" | "ship" | "undo" | "cancel") => {
+      const runId = id;
+      return {
+        ...(await v2Post<{ patch?: string }>(
+          "local",
+          { action, run_id: runId },
+          120_000,
+        )),
+        runId,
+      };
+    },
+    onSuccess: (result) => {
+      if (result.patch !== undefined)
+        setPatch({ runId: result.runId, value: result.patch });
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: pmKeys.all }),
+  });
   const run = detail.data;
   if (session.data && !session.data.paired) return <PairV2 />;
   if (!offersLocalLane()) return <p>Open on the laptop</p>;
-  return <div className={`run-page local-run-page${game.enabled ? " local-run-game-page" : ""}`}><Back fallback="/delivery" /><ErrorNotice error={session.error || detail.error || command.error} retry={() => void detail.refetch()} />
-    {!run && detail.isPending && <p role="status">Loading session…</p>}
-    {run && <><LocalRunReview run={run} busy={command.isPending} act={action => command.mutate(action)} patch={patch?.runId === id ? patch.value : null} />{!game.enabled && <HostLimits />}</>}
-  </div>;
+  return (
+    <div
+      className={`run-page local-run-page${game.enabled ? " local-run-game-page" : ""}`}
+    >
+      {!game.enabled && <Back fallback="/delivery" />}
+      {(!game.enabled || run) && <ErrorNotice
+        error={session.error || (game.enabled && run ? null : detail.error) || command.error}
+        retry={() => void detail.refetch()}
+      />}
+      {!run && (game.enabled ? <FoundryStandby error={session.error || detail.error || command.error} retry={() => void detail.refetch()} /> : detail.isPending && <p role="status">Loading session…</p>)}
+      {run && (
+        <>
+          <LocalRunReview
+            run={run}
+            busy={command.isPending}
+            act={(action) => command.mutate(action)}
+            patch={patch?.runId === id ? patch.value : null}
+            poll={{
+              dataUpdatedAt: detail.dataUpdatedAt,
+              isError: detail.isError,
+            }}
+            retry={() => void detail.refetch()}
+          />
+          {!game.enabled && <HostLimits />}
+        </>
+      )}
+    </div>
+  );
 }

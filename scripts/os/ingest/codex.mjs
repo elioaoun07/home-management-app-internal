@@ -51,11 +51,13 @@ export async function readCodex(file, expectedId = null) {
     first = null,
     last = null,
     endedAt = null,
+    turnId = null,
     visibilityBug = false,
     line = 0;
   const tools = new Map(),
     usageRows = new Map(),
     turns = new Set(),
+    turnModels = new Map(),
     seen = new Set();
   let cumulative = null;
   for await (const raw of createInterface({
@@ -91,6 +93,7 @@ export async function readCodex(file, expectedId = null) {
       model = p.model ? short(p.model) : model;
       effort = p.effort ? short(p.effort) : effort;
       if (p.turn_id) turns.add(p.turn_id);
+      turnId = p.turn_id ?? `context:${line}`;
     }
     if (row.type === "event_msg" && p.type === "user_message")
       visibilityBug ||=
@@ -115,6 +118,13 @@ export async function readCodex(file, expectedId = null) {
     )
       cumulative = p.info.total_token_usage;
     if (row.type !== "response_item") continue;
+    if (
+      turnId &&
+      model &&
+      (p.role === "assistant" ||
+        /^(?:function_call|custom_tool_call)$/.test(p.type))
+    )
+      turnModels.set(turnId, { model, effort });
     if (/^(?:function_call|custom_tool_call)$/.test(p.type)) {
       if (!p.call_id || tools.has(p.call_id)) continue;
       const name = [p.namespace, p.name].filter(Boolean).join(".");
@@ -192,6 +202,22 @@ export async function readCodex(file, expectedId = null) {
     firstEdit = timeline.findIndex((t) => t.edit),
     skills = [],
     reads = [];
+  const modelCounts = new Map();
+  for (const value of turnModels.values()) {
+    const count = modelCounts.get(value.model) ?? {
+      turns: 0,
+      efforts: new Map(),
+    };
+    count.turns++;
+    count.efforts.set(value.effort, (count.efforts.get(value.effort) ?? 0) + 1);
+    modelCounts.set(value.model, count);
+  }
+  const dominant = [...modelCounts].sort((a, b) => b[1].turns - a[1].turns)[0];
+  if (dominant) {
+    model = dominant[0];
+    effort =
+      [...dominant[1].efforts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  }
   for (const tool of timeline)
     if (tool.completed && !tool.failed)
       for (const path of tool.reads) {

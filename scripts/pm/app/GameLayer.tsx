@@ -9,7 +9,7 @@ import {
 import { useWorld } from "./state";
 import { Orbit } from "lucide-react";
 import { gameFacts } from "./gameModel";
-import { sessionHref } from "./cockpitModel";
+import { sessionHref, setupConflictCount } from "./cockpitModel";
 import "./game.css";
 
 type GameTransition = "enter" | "exit" | null;
@@ -193,15 +193,15 @@ export function GameLayer() {
       <details className="cockpit-panel">
         <summary>
           <span>
-            {enabled && data.setup && data.conflicts.length === 0
+            {enabled && data.setup && setupConflictCount(data.conflicts) === 0
               ? "Zero conflicts"
               : "Setup conflicts"}
           </span>
-          <strong>{data.setup ? data.conflicts.length : "—"}</strong>
+          <strong>{data.setup ? setupConflictCount(data.conflicts) : "—"}</strong>
         </summary>
         <a href="#/setup?tab=conflicts">Evidence</a>
         {data.stale && <span>Saved snapshot</span>}
-        {data.conflicts.map((r, i) => (
+        {data.conflicts.filter(r => ["error", "warning"].includes(r.severity)).map((r, i) => (
           <p key={i}>
             {r.severity} · {r.source} · {r.message}
           </p>

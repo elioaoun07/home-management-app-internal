@@ -1,6 +1,6 @@
 ---
 created: 2026-11-11
-updated: 2026-11-15
+updated: 2026-11-16
 type: archive
 status: superseded
 owner: Elio
@@ -601,6 +601,57 @@ owner: Elio
 
 - ✅ 2026-11-15 — **R119** Isolate pre-commit tests from the parent Git environment — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r119>) (Fixed pre-commit Git environment leak. Regression reproduced before fix;38 affected tests pass directly and inside a real disposable commit; typecheck/lint/mirrors pass. Preserved original HUB-118 edits and recovery patch without changing failed run or invoking AI.)
 
+### R120
+
+- ✅ 2026-11-15 — **R120** Make Local delivery a live evidence stage — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r120>) (Local Game slices 1-4: 600 tests, typecheck/lint/build, exact-bundle browser 99 + final-motion 37 screenshots pass; .pm/r120-evidence; owner UAT pending.)
+
+### R122
+
+- ✅ 2026-11-15 — **R122** Build the Local delivery Foundry world — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r122>) (All slices 0/A-H implemented. Typecheck, scoped ESLint, PM build, docs and 673 PM tests pass; 283 browser captures, final 4.2 ms p95 and 252 particles. Final served assets and 149 source hashes match; action admission unchanged; isolated fixture verified stopped. Implementation done, owner UAT pending. Evidence: .pm/r122-evidence/README.md)
+
+### R123
+
+- ✅ 2026-11-15 — **R123** Replace the Local Game stage with a solid board and owner attention rail — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r123>) (Implemented all eight board/attention slices plus the owner-approved provenance guard. Typecheck, scoped lint, PM build and docs gates pass; 2066 unique replay tests pass, 8 Docker-only skips. Headed DPR1.5 fixture about 60 FPS, 0.5 ms worst phase p95, 33 rest/76 beat calls; 102 legacy captures and 14 final focused checks pass. Final 191 app sources bind to accepted assets. Owner actual-specimen FPS, UAT and activation restart pending; no real session or owner backend restart.)
+
+### R124
+
+- ✅ 2026-11-15 — **R124** Make gates fail only for real defects — [criteria](#r124) (R124: lint 0 errors, 3 full runs each 5420 passed/24 skipped under concurrent typecheck; DLV-160: required suite 2129 passed/8 skipped, 8 UI cases; typecheck and scoped ESLint pass; owner restart/W1 pending)
+
+**Outcome:** `pnpm lint` and `pnpm test` fail only when tracked code is wrong, not from scratch folders or machine load.
+**Kind:** bug
+**Source:** [Agentic OS delivery reliability](<../../Plans/Agentic OS Delivery Reliability.md#r124--gates-fail-only-for-real-defects>), 2026-11-15 review.
+**Touches:** `eslint.config.mjs`, `tests/`
+
+- **Acceptance:** `pnpm lint` exits 0 in the main checkout with `.tmp/`, `.os/`, `.pm/` and `.delivery/` ignored. Every test or hook that starts a compiler, ESLint, a browser, a child process or a real Git repository has an explicit timeout of at least 60 s. Three consecutive full `pnpm test` runs pass while `pnpm typecheck` runs beside them. No retries.
+- **Tier:** `CLAUDE_MID`.
+**Implementation:** done (2026-11-15). Four scratch ignores; 116 explicit slow-test/hook budgets across 26 test files, including three native setups moved into timed hooks. Global defaults, retries and native-operation deadlines are unchanged.
+**Verification (2026-11-15):** Full lint exits 0 (zero errors, 974 existing warnings). Three consecutive final full `pnpm test` runs with continuous typecheck in a second PowerShell process each pass 348 files / 5,420 tests; 3 files / 24 tests are skipped, zero failures. Durations: 266.46 s, 264.43 s, 265.92 s. Final typecheck, all 41 changed code/test files under ESLint, PM lint and docs checks pass. [Exact timeout inventory, logs and handover](<../../../../.pm/reliability-20261115/README.md>).
+**Owner handover:** owner restart of pnpm pm required for the delivery packet; W1 remains owner-only. No provider turn, real Local run, production access or retained-run mutation.
+
+### R125
+
+- ✅ 2026-11-15 — **R125** Make the Local Game board fit, read and offer the right action — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r125>) (Typecheck, scoped ESLint, PM build and PowerShell PM UI replay suite pass (89 files/890 tests); final viewport corrections 15/15, interactions 4/4, 194 legacy captures at requested sizes in Blue/Pink. .pm/r125-evidence/README.md. Owner FPS/device/motion comfort pending; no session or restart.)
+
+### R128
+
+- ✅ 2026-11-15 — **R128** Keep the registry, recorder and cockpit counts true — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r128>) (891 PM replay tests; 213 backend regressions plus recorder-since cases; typecheck/scoped lint/PM build; strict fresh os:check 0 errors/warnings; 64 cockpit captures at four sizes Blue/Pink. Evidence .pm/r128-evidence/README.md. Owner restart/live ingestion pending; no session/restart.)
+
+### R127
+
+- ✅ 2026-11-15 — **R127** Retire the Prompt tools page and show skill use in Setup — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r127>) (Typecheck/scoped lint/PM build; 900 PM replay tests; focused retained-form and reader tests; mirrors/docs/os:check clean; 48 required viewport/theme captures plus exact-bundle legacy flows. D3 KEEP sidecars; R98 cancelled. .pm/r127-evidence/implementation.json; owner restart/UAT pending.)
+
+### R129
+
+- ✅ 2026-11-16 — **R129** Make every label on the Local Game board readable — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r129>) (Agentic OS v0: 2488 replay tests passed, 8 opt-in skips; typecheck and scoped lint pass; 24 Blue/Pink desktop/mobile browser profiles pass. Implementation verified; owner W1, native hook approval and device UAT remain pending.)
+
+### R130
+
+- ✅ 2026-11-16 — **R130** Record Codex sessions and score the working tree — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r130>) (Agentic OS v0: 2488 replay tests passed, 8 opt-in skips; typecheck and scoped lint pass; 24 Blue/Pink desktop/mobile browser profiles pass. Implementation verified; owner W1, native hook approval and device UAT remain pending.)
+
+### R121
+
+- ✅ 2026-11-16 — **R121** Recover an interrupted Local attempt — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r121>) (Agentic OS v0: 2488 replay tests passed, 8 opt-in skips; typecheck and scoped lint pass; 24 Blue/Pink desktop/mobile browser profiles pass. Implementation verified; owner W1, native hook approval and device UAT remain pending.)
+
 ## State log
 
 _Moved from the Master Book on 2026-11-11._
@@ -656,3 +707,7 @@ Refactored 2026-09-10 against repository HEAD `8d952332b0d7917369ce074730cfe830a
 _Moved from the Master Book on 2026-11-12._
 
 **2026-11-10 — Fable 2 filing (documentation only):** R84, R85, R86, R87, R88, R83, R89, R90, R91 added to the checklist with criteria below. Sources are the 2026-11-04 Major Bug Sweep, whose IDs had not been filed, and the [Fable 2 analysis](<../../Fable 2/_index.md>) at commit `8da80ae`. Nothing is implemented, applied or verified by this entry.
+
+_Moved from the Master Book on 2026-11-15._
+
+**2026-11-10 — Agentic OS plan filed (documentation only):** R92 to R99 added with criteria below, one per step of the [Agentic OS roadmap](<../../Fable 2/Agentic OS/12 - Roadmap.md>): setup parity, registry and conflict check, rule detectors, flight recorder, scorecards, the PM.2 cockpit, the skill launchpad, Arena and game layer. Owner commission of the same date. Nothing is implemented.

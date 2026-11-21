@@ -299,7 +299,12 @@ export function sessionBoard(input: SessionBoardInput) {
     card.stage = branchLabel(run.branch) || run.stage.replace(/[-_]/g, " ");
     card.outcome = outcome(run.closed_outcome);
     if (uncertain && !needsOwner) card.status = "Execution unconfirmed";
-    else if (run.active || (running && running.status !== "unknown")) {
+    // DLV-164: a running Local session holding on an owner question needs you.
+    else if (run.ownerActionKind === "local-question") {
+      card.lane = "needs";
+      card.status = run.ownerAction || "Question";
+      card.action = "Answer";
+    } else if (run.active || (running && running.status !== "unknown")) {
       card.lane = "running";
       card.status =
         branchLabel(run.branch) ||

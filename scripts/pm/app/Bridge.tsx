@@ -1,47 +1,16 @@
 import { useWorld } from "./state";
 import { canDeliver, workPath } from "./model";
 import { Empty, PageTitle } from "./components";
-import { useV2Queue, useV2Runs, useV2Session, PairV2 } from "./DeliveryV2";
-import { groupDelivery, deliveredIds, type HomeRow } from "./deliveryHomeModel";
-import { useUat } from "./UatWizard";
-import { sessionStatus } from "../shared/product.mjs";
-import { branchLabel, runningLabel } from "./v2model";
-import { label as requestLabel } from "./StewardRequests";
+import { PairV2 } from "./DeliveryV2";
+import { groupDelivery, deliveredIds } from "./deliveryHomeModel";
+import { useCockpitSessions } from "./useCockpitSessions";
+import { cockpitUnits } from "./cockpitModel";
 import { ArrowRight, CircleHelp, Radio, Layers } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useGameLayer } from "./GameLayer";
 import { BridgeCore, BridgeCharts } from "./BridgeVisuals";
 import { ProviderStatus } from "./ProviderStatus";
-import { transport } from "./transport";
 import "./bridge.css";
-function rowLink(row: HomeRow) {
-  if (row.kind === "v1")
-    return {
-      href: `#/delivery/session/${encodeURIComponent(row.run.sessionId)}`,
-      label: `${row.run.item.id || row.run.sessionId} · ${sessionStatus(row.run)}`,
-    };
-  if (row.kind === "uat")
-    return {
-      href: `#/delivery/test/${encodeURIComponent(row.item.handover_id)}`,
-      label: `UAT · ${row.item.subject.work_id || row.item.subject.title}`,
-    };
-  if (row.kind === "request")
-    return {
-      href: row.request.run_id
-        ? `#/delivery/run/${encodeURIComponent(row.request.run_id)}`
-        : "#/sessions?view=delivery",
-      label: `${row.request.workId} · ${requestLabel(row.request.status)}`,
-    };
-  if (row.kind === "decision")
-    return {
-      href: `#/delivery/run/${encodeURIComponent(row.item.run_id)}`,
-      label: `${row.item.alias} · ${row.item.label}`,
-    };
-  return {
-    href: `#/delivery/run/${encodeURIComponent(row.run.run_id)}`,
-    label: `${row.run.alias || row.run.title} · ${branchLabel(row.run.branch) || (row.running ? runningLabel(row.running) : row.run.ownerAction)}`,
-  };
-}
 export function Bridge() {
   const { enabled, transitioning } = useGameLayer();
   const reducedMotion = useReducedMotion();
@@ -49,12 +18,8 @@ export function Bridge() {
     duration: reducedMotion ? 0 : transitioning ? (enabled ? 1.8 : 1) : 0.25,
     ease: [0.4, 0, 0.2, 1] as [number, number, number, number],
   };
-  const { world, runs, runError, connection, connected, runsReady, readError } =
-    useWorld();
-  const session = useV2Session(),
-    v2 = useV2Runs(),
-    queue = useV2Queue(),
-    uat = useUat(!!session.data?.paired);
+  const { world, runs, readError } = useWorld();
+  const { board, counts, pending, uncertain, session, v2, queue, uat } = useCockpitSessions("/bridge");
   const groups = groupDelivery({
     v1Runs: runs,
     v2Runs: v2.data?.runs || [],
@@ -62,24 +27,8 @@ export function Bridge() {
     requests: v2.data?.requests || [],
     uat: uat.data,
   });
-  const owner = groups.progress.filter((r) =>
-    r.kind === "v1"
-      ? !!r.run.awaiting
-      : r.kind === "v2"
-        ? !r.run.active && !["none", "waiting", undefined].includes(r.run.ownerActionKind)
-        : false,
-  );
-  const needs = [...groups.needs, ...owner];
-  const running = groups.progress.filter(
-    (r) =>
-      !owner.includes(r) &&
-      (r.kind === "v1"
-        ? r.run.runnerAlive === true
-        : r.kind === "v2"
-          ? r.run.active
-          : r.kind === "request" && ["pending", "started", "running"].includes(r.request.status)
-            && Date.now() - Date.parse(r.request.lastConfirmedAt) < r.request.staleAfterMs),
-  );
+  const needs = board.lanes.find(lane => lane.id === "needs")!;
+  const running = board.lanes.find(lane => lane.id === "running")!;
   const taken = deliveredIds(groups);
   const next = world.work
     .filter(
@@ -94,19 +43,6 @@ export function Bridge() {
         ["Now", "Next"].indexOf(a.section) - ["Now", "Next"].indexOf(b.section),
     )
     .slice(0, 3);
-  const uncertain =
-    !connected ||
-    connection.stale ||
-    !!runError ||
-    v2.isError ||
-    queue.isError ||
-    !runsReady ||
-    !!readError ||
-    !v2.isSuccess ||
-    !queue.isSuccess ||
-    uat.isError ||
-    (Boolean(transport().v2Uat) && !uat.isSuccess) ||
-    !session.data?.paired;
   return (
     <div
       className="cockpit bridge"
@@ -124,7 +60,7 @@ export function Bridge() {
         }
       />
       {world.cockpit?.stale && <span role="status">Saved evidence</span>}
-      {uncertain && (
+      {uncertain && !pending && (
         <a className="cockpit-status" href="#/sessions?view=delivery">
           <CircleHelp size={16} /> Delivery status unconfirmed{" "}
           <ArrowRight size={14} />
@@ -133,8 +69,8 @@ export function Bridge() {
       <div className="bridge-grid bridge-workspace">
         {enabled && (
           <BridgeCore
-            needs={needs.length}
-            running={running.length}
+            needs={counts.needs}
+            running={counts.running}
             uncertain={uncertain}
             v1Runs={runs}
             v2Runs={v2.data?.runs || []}
@@ -152,23 +88,24 @@ export function Bridge() {
               <CircleHelp size={18} />
               <a href="#/sessions?view=delivery">
                 Needs you ·{" "}
-                {needs.length + world.choices.length || (uncertain ? "—" : 0)}
+                {pending ? <span className="cockpit-skeleton" aria-label="Loading" /> : counts.needsTotal}
               </a>
             </h2>
-            {needs.slice(0, 3).map((r) => {
-              const link = rowLink(r);
+            {!pending && <small className="bridge-queue-parts">{cockpitUnits(needs.counts)}{counts.decisions > 0 && ` · ${counts.decisions} decisions`}</small>}
+            {!pending && uncertain && <span className="cockpit-unconfirmed">Unconfirmed</span>}
+            {!pending && needs.cards.slice(0, 3).map((r) => {
               return (
-                <a className="session-identity" key={r.key} href={link.href}>
-                  {link.label}
+                <a className="session-identity" key={r.key} href={r.href}>
+                  {r.workId || r.title} · {r.status}
                 </a>
               );
             })}
-            {world.choices.length > 0 && (
+            {!pending && world.choices.length > 0 && (
               <a className="session-identity" href="#/attention">
                 Decisions · {world.choices.length}
               </a>
             )}
-            {!needs.length && !world.choices.length && (
+            {!pending && !needs.cards.length && !world.choices.length && (
               <div className="queue-empty">
                 {uncertain ? "Awaiting status" : "Nothing waiting"}
               </div>
@@ -185,18 +122,18 @@ export function Bridge() {
             <h2 className="queue-heading">
               <Radio size={18} />
               <a href="#/sessions?view=delivery">
-                Running · {running.length || (uncertain ? "—" : 0)}
+                Running · {pending ? <span className="cockpit-skeleton" aria-label="Loading" /> : counts.running}
               </a>
             </h2>
-            {running.slice(0, 3).map((r) => {
-              const link = rowLink(r);
+            {!pending && uncertain && <span className="cockpit-unconfirmed">Unconfirmed</span>}
+            {!pending && running.cards.slice(0, 3).map((r) => {
               return (
-                <a className="session-identity" key={r.key} href={link.href}>
-                  {link.label}
+                <a className="session-identity" key={r.key} href={r.href}>
+                  {r.workId || r.title} · {r.status}
                 </a>
               );
             })}
-            {!running.length && (
+            {!pending && !running.cards.length && (
               <div className="queue-empty">
                 {uncertain ? "Awaiting status" : "No active sessions"}
               </div>

@@ -96,7 +96,7 @@ describe("Primary destination selection", () => {
     { parts: ["uat-item", "Budget", "BUD-1"], expected: "/sessions" },
     { parts: ["sessions"], expected: "/sessions" },
     { parts: ["setup"], expected: "/setup" },
-    { parts: ["skill-tools"], expected: "/setup" },
+    { parts: ["skill-tools"], expected: "/sprints" },
     { parts: ["score"], expected: "/score" },
     { parts: ["analytics"], expected: "/score" },
     { parts: ["dashboard"], expected: "/score" },

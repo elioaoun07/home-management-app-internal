@@ -65,18 +65,19 @@ import { readDispatchMode } from "./delivery-v2/entry.mjs";
 import { issuePairingCode } from "./delivery-v2/local-auth.mjs";
 import { observePlanningProgress, planningSnapshot, routePlanning } from "./pm/planning.mjs";
 import { createCockpitReader } from "./pm/cockpit-reader.mjs";
-import { routeLaunchpad } from "./pm/launchpad-route.mjs";
+import { routeCockpitRescan } from "./pm/cockpit-route.mjs";
+import { captureDeliverySnapshot } from "./os/ingest/delivery-snapshot.mjs";
 
 loadDotenv({ path: ".env" });
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
-const cockpitReader=createCockpitReader({root:ROOT,onChange:()=>broadcastCockpit()});
 const PM_REL = join("ERA Notes", "10 - Project Management");
 const PM_DIR = join(ROOT, PM_REL);
 const ASSET_DIR = join(__dirname, "pm", "assets");
 const ASSET_TYPES = {
   ".png": "image/png",
+  ".webp": "image/webp",
   ".svg": "image/svg+xml",
   ".webmanifest": "application/manifest+json",
   ".js": "text/javascript; charset=utf-8",
@@ -91,6 +92,8 @@ const deliveryCtx = createDeliveryContext({ ROOT, PM_DIR, PM_REL });
 // per-port because `listen` retries upward when 4317 is taken, so the port this
 // process ends up on is not known here.
 const deliveryV2Ctx = createDeliveryV2Context({ ROOT, pmRel: PM_REL });
+const cockpitReader=createCockpitReader({root:ROOT,onChange:()=>broadcastCockpit(),
+  readDeliverySnapshot:()=>captureDeliverySnapshot(deliveryV2Ctx.passiveStore())});
 
 // ---- CLI args ----
 const argv = process.argv.slice(2);
@@ -618,11 +621,12 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === "POST" && path === "/api/launchpad") {
+    if (req.method === "POST" && path === "/api/delivery/v2/cockpit/rescan") {
       let body;
       try { body = JSON.parse(await readBody(req)); }
       catch { return sendJson(res, 400, { error: "invalid json" }); }
-      const result = await routeLaunchpad({ root: ROOT, body, headers: req.headers,
+      const result = await routeCockpitRescan({ root: ROOT, reader: cockpitReader,
+        headers: req.headers, body,
         loopbackPeer: ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress) });
       return sendJson(res, result.status, result.json);
     }

@@ -1,0 +1,209 @@
+.board-readouts {
+  position: absolute;
+  inset: auto 0 0;
+  height: var(--board-readout-height, 76px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--line);
+  background: var(--theme-bg);
+  z-index: 4;
+}
+.board-world {
+  position: absolute;
+  inset: 0 0 var(--board-readout-height, 76px);
+  overflow: hidden;
+}
+.board-readout-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.board-check-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.board-readout,
+.board-last-signal {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 3px 5px;
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--board-text-size, 11px) / 14px var(--font-mono, monospace);
+  white-space: nowrap;
+  pointer-events: auto;
+  user-select: text;
+}
+.board-main-title {
+  color: var(--ink-muted);
+  background: transparent;
+}
+.board-main-node i {
+  display: block;
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.board-main-node code {
+  color: inherit;
+  font: inherit;
+}
+.board-retry,
+.board-work-count {
+  color: var(--accent);
+}
+.board-check-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.board-check-readout b {
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.board-last-signal {
+  margin-left: auto;
+}
+.board-zone-target {
+  position: absolute;
+  z-index: 3;
+}
+.board-zone-focus {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  opacity: 0;
+  pointer-events: none;
+}
+.board-zone-focus polygon {
+  fill: none;
+  stroke: var(--accent);
+}
+.board-zone-target:has(.board-zone:focus-visible) .board-zone-focus {
+  opacity: 1;
+}
+.board-zone-target .board-zone:focus-visible {
+  outline: none;
+}
+.board-zone-attention {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  animation: board-owner-stripe ease-in-out infinite;
+}
+.board-stale-life {
+  position: absolute;
+  pointer-events: none;
+  animation: board-stale-arrive var(--stale-arrival) steps(1, end) both;
+}
+.board-stale-dish {
+  position: absolute;
+  left: 0;
+  top: var(--stale-dish-y);
+  width: var(--stale-dish-width);
+  height: var(--stale-dish-height);
+  margin-left: calc(var(--stale-dish-width) / -2);
+  border-radius: 50% 50% 25% 25%;
+  background: var(--board-hull-top);
+  transform-origin: center bottom;
+  animation: board-dish-sweep var(--stale-cycle) ease-in-out infinite;
+}
+.board-stale-dish:before {
+  content: "";
+  position: absolute;
+  inset: 20% 12% 40%;
+  border-radius: 50%;
+  background: var(--board-hull-left);
+}
+.board-stale-dish b {
+  position: absolute;
+  top: 100%;
+  left: 45%;
+  width: 10%;
+  height: var(--stale-stem);
+  background: var(--board-hull-right);
+}
+.board-stale-sonar {
+  position: absolute;
+  left: 0;
+  top: var(--stale-sonar-y);
+  box-sizing: border-box;
+  width: var(--stale-sonar-width);
+  height: var(--stale-sonar-height);
+  border: var(--stale-line) solid var(--accent);
+  border-radius: 50%;
+  animation: board-sonar var(--stale-cycle) linear infinite;
+}
+.board-workshop[data-motion="paused"] .board-stale-life,
+.board-workshop[data-motion="paused"] .board-stale-life *,
+.board-workshop[data-motion="paused"] .board-zone-attention,
+.board-stale-life[data-frozen="true"],
+.board-stale-life[data-frozen="true"] * {
+  animation-play-state: paused;
+}
+@keyframes board-owner-stripe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+@keyframes board-stale-arrive {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes board-dish-sweep {
+  0%,
+  100% {
+    transform: rotate(calc(0deg - var(--stale-sweep)));
+  }
+  50% {
+    transform: rotate(var(--stale-sweep));
+  }
+}
+@keyframes board-sonar {
+  from {
+    opacity: 0.45;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(var(--stale-scale));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-zone-attention,
+  .board-stale-life,
+  .board-stale-life * {
+    animation: none;
+  }
+  .board-stale-life {
+    opacity: 1;
+  }
+  .board-stale-sonar {
+    opacity: 0.2;
+    transform: translate(-50%, -50%);
+  }
+}

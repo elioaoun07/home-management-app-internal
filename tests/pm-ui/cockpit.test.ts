@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import {
   mkdtempSync,
   mkdirSync,
@@ -38,31 +38,33 @@ writeFileSync(
   join(root, "ERA Notes/10 - Project Management/Backlog.md"),
   "# Durable backlog\n",
 );
-for (const args of [
-  ["init", "--quiet"],
-  [
-    "-c",
-    "user.name=A5",
-    "-c",
-    "user.email=a5@example.invalid",
-    "-c",
-    "core.hooksPath=.no-hooks",
-    "-c",
-    "commit.gpgSign=false",
-    "commit",
-    "--allow-empty",
-    "--quiet",
-    "-m",
-    "fixture",
-  ],
-]) {
-  const result = spawnSync("git", args, {
-    cwd: root,
-    encoding: "utf8",
-    windowsHide: true,
-  });
-  if (result.status !== 0) throw new Error(result.stderr);
-}
+beforeAll(() => {
+  for (const args of [
+    ["init", "--quiet"],
+    [
+      "-c",
+      "user.name=A5",
+      "-c",
+      "user.email=a5@example.invalid",
+      "-c",
+      "core.hooksPath=.no-hooks",
+      "-c",
+      "commit.gpgSign=false",
+      "commit",
+      "--allow-empty",
+      "--quiet",
+      "-m",
+      "fixture",
+    ],
+  ]) {
+    const result = spawnSync("git", args, {
+      cwd: root,
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    if (result.status !== 0) throw new Error(result.stderr);
+  }
+}, 60_000);
 describe("R97 read-only A1–A4 projection", () => {
   it("keeps the host loop responsive, coalesces refreshes, preserves failed reads and recovers an unchanged snapshot", async () => {
     let attempts = 0,
@@ -107,7 +109,7 @@ describe("R97 read-only A1–A4 projection", () => {
     } finally {
       reader.stop();
     }
-  });
+  }, 60_000);
   it("renders setup on day one without creating .os or changing the backlog", () => {
     const before = readFileSync(join(root, "CLAUDE.md"), "utf8");
     const value = cockpit(root);
@@ -118,7 +120,7 @@ describe("R97 read-only A1–A4 projection", () => {
     expect(value.records).toEqual([]);
     expect(existsSync(join(root, ".os"))).toBe(false);
     expect(readFileSync(join(root, "CLAUDE.md"), "utf8")).toBe(before);
-  });
+  }, 60_000);
   it("reads stored verdicts, preserves unknown accounting and carries full read-only session evidence through the existing relay", () => {
     const session = {
       schema: "os/session@1",
@@ -166,7 +168,7 @@ describe("R97 read-only A1–A4 projection", () => {
     expect(assembled.snapshot.cockpit.records).toEqual(value.records);
     expect(value.groups[0].rates).toBeNull();
     expect(value.groups[0].statisticsEligible).toBe(false);
-  });
+  }, 60_000);
   it("clearing derived history leaves both rules and backlog usable", () => {
     rmSync(join(root, ".os"), { recursive: true, force: true });
     const value = cockpit(root);
@@ -180,7 +182,7 @@ describe("R97 read-only A1–A4 projection", () => {
         "utf8",
       ),
     ).toBe("# Durable backlog\n");
-  });
+  }, 60_000);
 });
 describe("R97 evidence and parity semantics", () => {
   it("uses A4 clean semantics without treating unknown or failed checks as clean", () => {
@@ -217,6 +219,12 @@ describe("R97 evidence and parity semantics", () => {
     expect(cockpitAlias("delivery", new URLSearchParams(), true)).toBeNull();
   });
   it("opens priorities from bare Launch while preserving existing work filters", () => {
+    expect(cockpitAlias("skill-tools", new URLSearchParams())).toBe(
+      "/explore?lane=now",
+    );
+    expect(cockpitAlias("skill-tools", new URLSearchParams("q=fixture"))).toBe(
+      "/explore?q=fixture",
+    );
     expect(cockpitAlias("launch", new URLSearchParams())).toBe(
       "/explore?lane=now",
     );

@@ -1,0 +1,80 @@
+.board-results {
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.board-results > h2 {
+  margin: 0 0 10px;
+  font: 600 12px var(--font-mono, monospace);
+  letter-spacing: 0.07em;
+  color: var(--accent);
+}
+.board-rank {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+  color: var(--accent);
+}
+.board-rank strong {
+  font: 800 46px/1 var(--font-mono, monospace);
+}
+.board-rank small {
+  display: none;
+  color: var(--ink-muted);
+  font: var(--board-text-size, 11px) / 1.5 var(--font-ui, sans-serif);
+}
+.board-rank:focus small {
+  display: block;
+}
+.board-result-numbers,
+.board-splits {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 10px 0;
+}
+.board-result-numbers dt,
+.board-splits dt {
+  color: var(--ink-muted);
+  font: var(--board-text-size, 11px) var(--font-mono, monospace);
+}
+.board-result-numbers dd,
+.board-splits dd {
+  margin: 3px 0 0;
+  font: 600 13px var(--font-mono, monospace);
+  color: var(--ink);
+}
+.board-result-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 0 0;
+  margin: 0;
+  list-style: none;
+  color: var(--ink-muted);
+  font: var(--board-text-size, 11px) var(--font-mono, monospace);
+}
+.board-result-badges li {
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.board-workshop .board-rail .stage-debrief {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.board-workshop .board-rail .stage-debrief > dl {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.board-workshop .board-rail .stage-debrief dd {
+  font-size: 14px;
+}
+.board-workshop .board-rail .stage-evidence-chips {
+  font-size: var(--board-text-size, 11px);
+  overflow-wrap: anywhere;
+}

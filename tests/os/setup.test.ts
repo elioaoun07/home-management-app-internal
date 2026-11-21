@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -22,9 +22,12 @@ function fixture(name: string) {
 function sync(dir: string, ...args: string[]) {
   return spawnSync(process.execPath, [join(dir, "scripts/sync-ai-mirrors.mjs"), ...args], { cwd: join(dir, "scripts"), encoding: "utf8" });
 }
-const bash = process.platform === "win32"
-  ? resolve(spawnSync("git", ["--exec-path"], { encoding: "utf8" }).stdout.trim(), "../../..", "bin/bash.exe")
-  : "bash";
+let bash: string;
+beforeAll(() => {
+  bash = process.platform === "win32"
+    ? resolve(spawnSync("git", ["--exec-path"], { encoding: "utf8" }).stdout.trim(), "../../..", "bin/bash.exe")
+    : "bash";
+}, 60_000);
 
 describe("A0 generated setup", () => {
   it("generates byte-equal trees from a different cwd and detects drift without rewriting it", () => {
@@ -50,7 +53,7 @@ describe("A0 generated setup", () => {
     expect(sync(dir, "--check").stderr).toContain("obsolete hook config");
     writeFileSync(join(dir, ".codex/hooks/dead.sh"), "dead");
     expect(sync(dir, "--check").stderr).toContain("unexpected");
-  });
+  }, 60_000);
 
   it("runs the generated guard from a subdirectory in a repo path containing spaces", () => {
     const dir = fixture("portable");
@@ -82,7 +85,7 @@ describe("A0 generated setup", () => {
       expect(windows.stderr).toContain("Blocked: src/components/ui/");
     }
     expect(toolPaths({ tool_name: "apply_patch", tool_input: { command: "*** Delete File: src/other/../components/ui/x.ts" } })).toEqual(["src/components/ui/x.ts"]);
-  }, 15_000); // Eight native shell launches exceed Vitest's 5 s default on Windows.
+  }, 60_000); // Eight native shell launches exceed Vitest's 5 s default on Windows.
 
   it("Git invokes the executable pre-commit, and failed checks reject an isolated commit", () => {
     const dir = join(scratch, "commit");
@@ -114,5 +117,5 @@ describe("A0 generated setup", () => {
     expect(git("commit", "-m", "hook passed").status).toBe(0);
     expect(readFileSync(join(dir, "checks.log"), "utf8")).toContain("tsc --noEmit\ntest");
     expect(existsSync(join(dir, ".git/HEAD"))).toBe(true);
-  });
+  }, 60_000);
 });

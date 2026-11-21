@@ -651,3 +651,824 @@
     transition: none !important;
   }
 }
+
+/* Local Run Live Stage. Geometry stays on the isometric deck; its energy is
+   supplied only by the recorded cue clock. */
+.delivery-workshop {
+  --stage-heat: 0;
+  --stage-frost: 0;
+  --stage-assembly: 1;
+  --stage-orbit: 0deg;
+  --stage-hover: 0px;
+  height: clamp(420px, 52vh, 620px);
+  color: var(--accent);
+}
+.delivery-workshop .workshop-map {
+  height: 100%;
+  background:
+    radial-gradient(
+      ellipse at 50% 48%,
+      color-mix(in srgb, var(--accent) 13%, transparent),
+      transparent 62%
+    ),
+    var(--theme-bg);
+  perspective: 1200px;
+  transition:
+    filter 0.6s,
+    opacity 0.6s;
+}
+.delivery-workshop .workshop-heading {
+  z-index: 8;
+  inset: 16px 20px auto;
+  align-items: center;
+  letter-spacing: 0.04em;
+  gap: 12px;
+}
+.workshop-heading .stage-hud-identity {
+  font-size: 10px;
+  max-width: 42vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workshop-heading .workshop-phase {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 12px;
+  white-space: nowrap;
+  gap: 10px;
+}
+.workshop-phase time {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+  letter-spacing: -0.03em;
+}
+.workshop-phase b {
+  font-size: 9px;
+  border: 1px solid var(--line);
+  padding: 4px 6px;
+  border-radius: 10px;
+  color: var(--ink-muted);
+}
+.stage-presence-controls {
+  display: flex;
+  gap: 2px;
+}
+.stage-presence-button {
+  display: grid;
+  place-items: center;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.stage-presence-button:hover,
+.stage-presence-button[aria-pressed="true"] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+.delivery-workshop .workshop-deck {
+  inset: 9% 0 0;
+  height: 82%;
+  transform: rotateX(var(--stage-tilt-x, 0deg))
+    rotateY(var(--stage-tilt-y, 0deg));
+  transition: transform 0.35s ease;
+}
+.workshop-deck-grid {
+  opacity: calc(0.25 + var(--stage-heat) * 0.6);
+}
+.workshop-atmosphere {
+  opacity: calc(0.08 + var(--stage-heat) * 0.16);
+}
+.delivery-workshop .workshop-signal-paths path {
+  animation: none;
+  stroke-dasharray: none;
+}
+.delivery-workshop[data-active="true"] .workshop-signal-paths {
+  opacity: calc(0.06 + var(--stage-heat) * 0.8);
+}
+.delivery-workshop .workshop-station {
+  width: 120px;
+}
+.delivery-workshop .workshop-station-source,
+.delivery-workshop .workshop-station-forge {
+  top: 34%;
+}
+.delivery-workshop .workshop-station-lab,
+.delivery-workshop .workshop-station-review {
+  top: 69%;
+}
+.delivery-workshop .workshop-station small {
+  display: none;
+}
+.delivery-workshop .workshop-coordinate {
+  display: none;
+}
+.delivery-workshop .workshop-presence {
+  width: 82px;
+  height: 91px;
+  transition: none;
+  left: 0;
+  top: 0;
+  transform: translate(var(--bot-x, 400px), var(--bot-y, 200px));
+}
+.delivery-workshop .workshop-bot {
+  animation: none !important;
+  transform: translateY(var(--stage-hover));
+}
+.delivery-workshop .workshop-bot-orbit {
+  animation: none !important;
+  transform: rotate(var(--stage-orbit));
+}
+.delivery-workshop .workshop-bot-eyes {
+  animation: none !important;
+}
+.delivery-workshop .workshop-station .workshop-file-float,
+.delivery-workshop .workshop-station .workshop-forge-cube,
+.delivery-workshop .workshop-station .workshop-review-shield,
+.delivery-workshop .workshop-station .workshop-lab-ring {
+  animation: none !important;
+}
+.delivery-workshop[data-cue="read"]
+  .workshop-station-source
+  .workshop-file-float {
+  transform: translateY(calc(-7px * var(--stage-beat, 0)));
+}
+.delivery-workshop[data-cue="edit"]
+  .workshop-station-forge
+  .workshop-forge-cube {
+  transform: translateY(calc(-9px * var(--stage-beat, 0)));
+}
+.delivery-workshop[data-cue="command"]
+  .workshop-station-lab
+  .workshop-lab-ring {
+  transform: translateY(calc(-12px * var(--stage-beat, 0)));
+}
+.stage-visor {
+  fill: currentColor;
+  stroke: none;
+  font-size: 12px;
+  font-family: monospace;
+}
+.workshop-cargo small {
+  position: absolute;
+  left: 22px;
+  top: 8px;
+  font-size: 8px;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+}
+.stage-drone {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  transform: rotate(var(--stage-orbit)) translateX(60px);
+  opacity: 0.25;
+  font-size: 18px;
+}
+.stage-drone[data-recent="true"] {
+  opacity: 1;
+}
+.build-core {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: 240px;
+  transform: translate(-50%, -50%)
+    scale(calc(0.9 + var(--stage-assembly) * 0.1));
+  color: var(--accent);
+  filter: drop-shadow(0 0 14px var(--workshop-glow));
+  transition:
+    left 1s,
+    top 1s,
+    opacity 0.6s;
+}
+.build-core:before {
+  content: "";
+  position: absolute;
+  inset: 15% 0 10%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, var(--workshop-glow), transparent 65%);
+  opacity: var(--stage-heat);
+  transform: scale(calc(0.8 + var(--stage-heat) * 0.2));
+  pointer-events: none;
+  z-index: -1;
+}
+.build-core svg {
+  width: 100%;
+  overflow: visible;
+}
+.build-core-halo {
+  stroke: currentColor;
+  stroke-dasharray: 2 8;
+  opacity: calc(0.22 + var(--stage-heat) * 0.5);
+  transform-origin: 120px 112px;
+  transform: rotate(calc(var(--stage-orbit) * -0.08));
+}
+.build-core-base {
+  fill: var(--surface);
+  stroke: var(--line);
+}
+.build-core-node {
+  stroke: currentColor;
+  fill: var(--theme-bg);
+  opacity: calc(0.25 + var(--stage-assembly) * 0.6);
+}
+.build-core-node[data-edited="true"] {
+  fill: color-mix(in srgb, var(--accent) 38%, var(--surface));
+  opacity: 1;
+}
+.build-core-node[data-edited="true"] path {
+  stroke-width: 1.5;
+}
+.build-core-fracture {
+  display: none;
+  stroke: var(--theme-bg);
+  stroke-width: 8;
+  stroke-linejoin: bevel;
+}
+.build-core-rail {
+  opacity: 0;
+  stroke: currentColor;
+  stroke-dasharray: 4 8;
+}
+.build-core-overflow {
+  position: absolute;
+  top: 38%;
+  left: 45%;
+  font-size: 19px;
+  color: var(--ink);
+}
+.build-core-seals {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  margin-top: -12px;
+}
+.build-core-seals span {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  color: var(--ink-muted);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+  background: var(--surface);
+}
+.build-core-seals [data-result="passed"] {
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 16px var(--workshop-glow);
+}
+.build-core-seals [data-result="failed"] {
+  border-style: dashed;
+  color: var(--warning-ink);
+  border-color: var(--warning-ink);
+  transform: rotate(18deg);
+}
+.build-core-seals [data-result="inconclusive"] {
+  border-color: var(--warning-ink);
+  color: var(--warning-ink);
+}
+.build-core-objectives {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 190px;
+  margin: 9px auto;
+}
+.build-core-objectives i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+.build-core[data-accepted="true"] .build-core-objectives i {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.stage-constellation {
+  position: absolute;
+  right: 28%;
+  top: 44%;
+  max-width: 130px;
+  display: grid;
+  gap: 9px;
+}
+.stage-constellation > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.stage-constellation small {
+  font-size: 8px;
+  letter-spacing: 0.02em;
+  color: var(--ink-muted);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stage-constellation span {
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 140px;
+}
+.stage-constellation button {
+  border: 0;
+  background: transparent;
+  padding: 2px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  opacity: 0.5;
+  min-width: 22px;
+  min-height: 22px;
+}
+.stage-constellation button[data-edited="true"] {
+  color: var(--accent);
+  opacity: 1;
+}
+.stage-constellation button[data-recent="true"] {
+  filter: drop-shadow(0 0 5px currentColor);
+  opacity: calc(0.5 + var(--stage-beat, 0) * 0.5);
+}
+.stage-fx {
+  position: absolute;
+  inset: 9% 0 0;
+  width: 100%;
+  height: 82%;
+  z-index: 4;
+  pointer-events: none;
+  color: var(--accent);
+}
+.stage-frost {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  pointer-events: none;
+  border: 2px solid var(--warning-ink);
+  background: radial-gradient(
+    ellipse at center,
+    transparent 45%,
+    color-mix(in srgb, var(--warning-ink) 14%, var(--surface))
+  );
+  opacity: var(--stage-frost);
+  box-shadow: inset 0 0 60px
+    color-mix(in srgb, var(--warning-ink) 12%, transparent);
+}
+.stage-bottom {
+  position: absolute;
+  z-index: 7;
+  left: 20px;
+  right: 20px;
+  bottom: 15px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 20px;
+  align-items: center;
+}
+.stage-stats {
+  font-size: 10px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.stage-number {
+  display: inline-block;
+  color: var(--ink);
+  font-weight: 500;
+}
+.delivery-workshop[data-motion="active"] .stage-number[data-changed="true"] {
+  transform: translateY(calc(var(--stage-beat, 0) * -5px));
+  opacity: calc(1 - var(--stage-beat, 0) * 0.15);
+}
+.stage-pulse {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--accent);
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+}
+.stage-pulse svg {
+  height: 26px;
+  width: 0;
+  min-width: 0;
+  flex: 1;
+  overflow: visible;
+}
+.stage-pulse circle {
+  fill: var(--accent);
+}
+.stage-pulse [data-kind="message"] {
+  fill: var(--ink-muted);
+}
+.stage-pulse [data-kind="check"] {
+  fill: var(--warning-ink);
+}
+.stage-pulse time {
+  flex-shrink: 0;
+  font-size: 10px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.stage-bottom .run-game-commandbar {
+  grid-row: 1/3;
+  grid-column: 2;
+  padding: 0;
+  max-width: 570px;
+}
+.stage-bottom .gate-actions {
+  gap: 6px;
+}
+.stage-bottom .gate-actions button,
+.stage-bottom .gate-actions a {
+  font-size: 10px;
+  padding: 8px 12px;
+  min-height: 40px;
+}
+.run-game-commandbar[data-stale="true"] button:last-child {
+  outline: 1px solid var(--warning-ink);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--warning-ink) 25%, transparent);
+}
+.stage-phase-card {
+  position: absolute;
+  z-index: 9;
+  inset: 40% 0 auto;
+  pointer-events: none;
+  text-align: center;
+  color: var(--ink);
+  font-size: clamp(25px, 5vw, 60px);
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-shadow: 0 0 45px var(--accent);
+  opacity: 0.8;
+}
+.delivery-workshop:not([data-card=""]) .stage-phase-card:after {
+  content: attr(data-card);
+}
+.delivery-workshop:after {
+  content: attr(data-card);
+  position: absolute;
+  inset: 35% 0 auto;
+  text-align: center;
+  pointer-events: none;
+  color: var(--ink);
+  font-size: 48px;
+  letter-spacing: 0.2em;
+  font-weight: 650;
+  opacity: 0.85;
+}
+.delivery-workshop .stage-black-box {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  right: auto;
+  top: 18%;
+  transform: translateX(-50%);
+  width: min(420px, 43%);
+  max-height: 245px;
+  border-color: var(--warning-ink);
+  box-shadow: -20px 0 70px color-mix(in srgb, var(--theme-bg) 70%, transparent);
+}
+.delivery-workshop .black-box-excerpt {
+  padding: 0;
+  text-align: left;
+}
+.delivery-workshop[data-liveness="failed"] {
+  --accent: var(--ink-muted);
+  border-color: var(--danger-ink, var(--warning-ink));
+}
+.delivery-workshop[data-liveness="failed"] .workshop-map {
+  filter: saturate(0);
+}
+.delivery-workshop[data-liveness="failed"] .build-core {
+  left: 40%;
+  top: 67%;
+  opacity: 0.8;
+  transform: translate(-50%, -50%) rotate(-5deg);
+}
+.delivery-workshop[data-liveness="failed"] .build-core-fracture {
+  display: block;
+}
+.delivery-workshop[data-liveness="failed"] .workshop-bot-face {
+  fill: var(--theme-bg);
+}
+.delivery-workshop[data-liveness="failed"] .stage-visor {
+  opacity: 0;
+}
+.delivery-workshop[data-liveness="failed"] .workshop-bot-mouth {
+  display: none;
+}
+.delivery-workshop[data-liveness="failed"]
+  .workshop-station[data-current="true"]
+  .workshop-station-light {
+  background: var(--warning-ink);
+  box-shadow: 0 0 15px var(--warning-ink);
+}
+.delivery-workshop[data-liveness="failed"][data-fault="forge-lab"]
+  [data-route="lab"] {
+  stroke-dasharray: 3 14;
+  opacity: 0.3;
+}
+.stage-entry-fault {
+  display: none;
+}
+.delivery-workshop[data-liveness="failed"][data-fault="launch"]
+  .stage-entry-fault {
+  display: block;
+  fill: var(--warning-ink);
+  stroke: var(--warning-ink);
+}
+.delivery-workshop[data-liveness="quiet"] .workshop-map {
+  filter: saturate(0.35);
+  opacity: 0.75;
+}
+.delivery-workshop[data-liveness="quiet"] .build-core {
+  opacity: 0.45;
+}
+.delivery-workshop[data-liveness="quiet"] .stage-pulse {
+  color: var(--ink-muted);
+}
+.delivery-workshop[data-liveness="stale"] {
+  border-color: var(--warning-ink);
+}
+.delivery-workshop[data-liveness="stale"] .workshop-phase,
+.delivery-workshop[data-liveness="stale"] .stage-pulse {
+  color: var(--warning-ink);
+}
+.delivery-workshop[data-liveness="stale"] .build-core {
+  opacity: 0.4;
+  filter: grayscale(0.7);
+}
+.delivery-workshop[data-liveness="stale"] .workshop-bot-aerial {
+  stroke: var(--warning-ink);
+  stroke-width: 1.3px;
+  opacity: calc(1 - var(--stage-sonar, 0) * 0.7);
+}
+.delivery-workshop[data-liveness="stale"] .workshop-presence:after {
+  content: "";
+  position: absolute;
+  left: 17%;
+  top: 0;
+  width: 60%;
+  aspect-ratio: 1;
+  border: 1px solid var(--warning-ink);
+  border-radius: 50%;
+  transform: scale(calc(0.4 + var(--stage-sonar, 0) * 2));
+  opacity: calc(1 - var(--stage-sonar, 0));
+  pointer-events: none;
+}
+.delivery-workshop[data-liveness="signal-lost"] .workshop-map {
+  opacity: 0.5;
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent 0 4px,
+    var(--line) 5px 6px
+  );
+}
+.delivery-workshop[data-liveness="signal-lost"] .workshop-bot-body,
+.delivery-workshop[data-liveness="signal-lost"] .workshop-bot-face {
+  fill: none;
+  stroke-dasharray: 3 3;
+}
+.delivery-workshop[data-liveness="signal-lost"] .workshop-connections {
+  stroke-dasharray: 3 10;
+  opacity: 0.08;
+}
+.delivery-workshop[data-liveness="signal-lost"] .stage-pulse polyline {
+  stroke-dasharray: 3 5;
+}
+.delivery-workshop[data-liveness="link-down"] .stage-pulse {
+  background: repeating-linear-gradient(
+    120deg,
+    transparent 0 5px,
+    var(--line) 6px 7px
+  );
+}
+.delivery-workshop[data-liveness="link-down"] * {
+  animation-play-state: paused !important;
+  transition: none !important;
+}
+.delivery-workshop[data-liveness="cancelled"] .workshop-map,
+.delivery-workshop[data-liveness="reverted"] .workshop-map {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+.delivery-workshop[data-liveness="your-turn"] .build-core {
+  left: 34%;
+  top: 63%;
+}
+.delivery-workshop[data-liveness="your-turn"]
+  .workshop-station-review
+  .workshop-station-light {
+  background: var(--warning-ink);
+  box-shadow: 0 0 24px var(--warning-ink);
+}
+.delivery-workshop[data-liveness="your-turn"] .build-core-objectives i {
+  border-color: var(--warning-ink);
+  opacity: calc(0.4 + var(--stage-beacon, 0) * 0.6);
+}
+.delivery-workshop[data-liveness="push-pending"] .build-core-rail {
+  opacity: 1;
+  stroke: var(--warning-ink);
+}
+.delivery-workshop[data-liveness="shipped"] .build-core {
+  opacity: 0.12;
+  top: 20%;
+  left: 65%;
+  transform: translate(-50%, -50%) scale(0.35);
+}
+.delivery-workshop[data-liveness="shipped"] .build-core-rail {
+  opacity: 0.6;
+}
+.delivery-workshop[data-motion="paused"] .stage-phase-card {
+  display: none;
+}
+.stage-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+@media (max-width: 600px) {
+  .delivery-workshop {
+    height: 300px;
+    border-radius: 18px;
+  }
+  .delivery-workshop .workshop-heading {
+    inset: 8px 10px auto;
+    gap: 0;
+    display: grid;
+    grid-template-columns: 1fr auto;
+  }
+  .workshop-heading > span:first-child {
+    display: none;
+  }
+  .workshop-heading .workshop-phase {
+    margin-left: 0;
+    font-size: 10px;
+    gap: 6px;
+  }
+  .workshop-phase time {
+    font-size: 13px;
+  }
+  .stage-presence-controls {
+    gap: 0;
+  }
+  .stage-presence-button {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 8px;
+  }
+  .delivery-workshop .workshop-deck {
+    inset: 13% -12% 0;
+    width: 124%;
+    height: 65%;
+    transform: none;
+  }
+  .delivery-workshop .workshop-station {
+    width: 65px;
+  }
+  .delivery-workshop .workshop-station-glyph {
+    width: 65px;
+    height: 53px;
+  }
+  .delivery-workshop .workshop-station-source,
+  .delivery-workshop .workshop-station-forge {
+    top: 32%;
+  }
+  .delivery-workshop .workshop-station-lab,
+  .delivery-workshop .workshop-station-review {
+    top: 65%;
+  }
+  .delivery-workshop .workshop-station strong {
+    font-size: 9px;
+    margin: 0;
+  }
+  .delivery-workshop .workshop-station-light {
+    margin-top: 4px;
+  }
+  .delivery-workshop .workshop-station-number {
+    display: none;
+  }
+  .delivery-workshop .workshop-presence {
+    width: 56px;
+    height: 61px;
+  }
+  .build-core {
+    width: 150px;
+    top: 45%;
+  }
+  .build-core-seals {
+    gap: 5px;
+    margin-top: -8px;
+  }
+  .build-core-seals span {
+    width: 17px;
+    height: 17px;
+    font-size: 7px;
+  }
+  .build-core-objectives {
+    margin-top: 5px;
+    gap: 3px;
+  }
+  .workshop-cargo small,
+  .stage-constellation {
+    display: none;
+  }
+  .stage-fx {
+    inset: 13% 0 0;
+    height: 65%;
+  }
+  .stage-bottom {
+    left: 10px;
+    right: 10px;
+    bottom: 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: stretch;
+  }
+  .stage-stats {
+    display: none;
+  }
+  .stage-pulse {
+    height: 18px;
+  }
+  .stage-pulse svg {
+    height: 16px;
+  }
+  .stage-bottom .run-game-commandbar {
+    max-width: 100%;
+    padding: 0;
+  }
+  .stage-bottom .gate-actions {
+    flex-wrap: nowrap;
+    gap: 4px;
+    width: 100%;
+  }
+  .stage-bottom .gate-actions > * {
+    min-width: 0;
+    flex: 1;
+    font-size: 9px !important;
+    padding: 7px 5px !important;
+    min-height: 40px !important;
+  }
+  .delivery-workshop .stage-black-box {
+    top: 49px;
+    left: 50%;
+    right: auto;
+    width: calc(100% - 148px);
+    max-height: 183px;
+    padding: 10px;
+  }
+  .delivery-workshop .stage-black-box dl {
+    margin: 5px 0;
+  }
+  .delivery-workshop .stage-black-box .black-box-excerpt {
+    max-height: 48px;
+    font-size: 9px;
+  }
+  .delivery-workshop .stage-black-box h2 {
+    font-size: 13px;
+  }
+  .delivery-workshop[data-liveness="failed"] .build-core {
+    left: 40%;
+    top: 61%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .delivery-workshop:after {
+    display: none;
+  }
+  .delivery-workshop .workshop-deck {
+    transform: none;
+  }
+  .stage-frost {
+    opacity: 1;
+  }
+  .delivery-workshop:not([data-liveness="stale"]) .stage-frost {
+    opacity: 0;
+  }
+  .build-core {
+    --stage-assembly: 1;
+  }
+}

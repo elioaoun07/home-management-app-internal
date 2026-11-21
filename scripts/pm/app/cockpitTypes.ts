@@ -61,6 +61,12 @@ export interface Setup {
   sources: { path: string; hash?: string; sha256?: string }[];
 }
 export interface Cockpit {
+  recorder?: { state: "recording" | "unavailable"; since: string | null };
+  skillUsage?: {
+    available: boolean;
+    recordedSessions: number;
+    skills: { name: string; lastUsed: string | null; sessions: number }[];
+  };
   pending?: boolean;
   stale?: boolean;
   filed: { id: string; file: string; filedAt: string | null }[];

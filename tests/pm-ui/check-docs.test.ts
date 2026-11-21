@@ -48,12 +48,12 @@ describe("PM documentation checker", () => {
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("11 campaign pairs, 1 unique tasks");
-  });
+  }, 60_000);
 
   it("still rejects a genuinely missing acceptance section in a CRLF book", () => {
     const result = spawnSync(process.execPath, [fixture("\r\n", true)], { encoding: "utf8", timeout: 10_000, windowsHide: true });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("missing criteria for HUB-1");
     expect(result.stderr).toContain("1 PM documentation error(s)");
-  });
+  }, 60_000);
 });

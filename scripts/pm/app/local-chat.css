@@ -1,0 +1,211 @@
+/* DLV-164. Local session chat: narration left, owner right, questions as cards. */
+.local-chat {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.local-chat h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chat-thread {
+  display: grid;
+  gap: 10px;
+  max-height: min(520px, 62vh);
+  margin: 0;
+  padding: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+.local-chat[data-compact] .chat-thread {
+  max-height: min(440px, 56vh);
+}
+.chat-thread > li {
+  display: grid;
+  gap: 4px;
+  max-width: min(560px, 92%);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow-wrap: anywhere;
+}
+.chat-thread > li p {
+  margin: 0;
+  white-space: pre-line;
+}
+.chat-thread time {
+  color: var(--ink-muted);
+  font-size: 11px;
+  justify-self: end;
+}
+.chat-agent {
+  justify-self: start;
+  background: var(--surface);
+  border-bottom-left-radius: 4px;
+}
+.chat-owner {
+  justify-self: end;
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  border-bottom-right-radius: 4px;
+}
+.chat-thread > .chat-ask {
+  max-width: min(640px, 100%);
+  width: 100%;
+}
+.local-chat[data-open] .chat-ask:last-child {
+  border-color: var(--warning-ink);
+  background: var(--surface);
+}
+.chat-chip {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+.chat-question {
+  display: grid;
+  gap: 14px;
+}
+.chat-question fieldset {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.chat-question legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.chat-options {
+  display: grid;
+  gap: 8px;
+}
+.chat-option {
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+}
+.chat-option:hover:not(:disabled),
+.chat-option[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+.chat-option[aria-pressed="true"] {
+  box-shadow: inset 3px 0 var(--accent);
+}
+.chat-option-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-weight: 600;
+}
+.chat-option-label small {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+.chat-option-detail {
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+.chat-preview {
+  max-height: 220px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow: auto;
+}
+.chat-other {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 16px;
+}
+.chat-send {
+  display: flex;
+  justify-content: flex-end;
+}
+.chat-send button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+.chat-thread time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.chat-composer {
+  display: grid;
+  gap: 6px;
+}
+.chat-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.chat-composer textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 160px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+.chat-composer button {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 12px;
+}
+.chat-asked {
+  display: grid;
+  gap: 6px;
+}
+.board-question-card {
+  display: grid;
+  padding: 10px;
+  border: 1px solid var(--warning-ink);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.board-question-card .chat-thread > li {
+  max-width: 100%;
+}

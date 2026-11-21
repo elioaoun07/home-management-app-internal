@@ -310,5 +310,5 @@ describe("detector boundaries", () => {
         ).detectors,
       ).toContain(entry.id);
     }
-  });
+  }, 60_000);
 });

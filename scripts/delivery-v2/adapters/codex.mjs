@@ -358,6 +358,14 @@ export function describeProfile({ observations = null, runtime = {}, qualificati
 // Observed activity and effective settings
 // ---------------------------------------------------------------------------
 
+/** DLV-165: the Local owner-question tool, served by ../local-ask-mcp.mjs. */
+export const OWNER_MCP_SERVER = "era_owner";
+export const OWNER_MCP_TOOL = "ask_owner";
+const PARKED_STOP_ITEMS = Object.freeze(["command_execution", "file_change", "mcp_tool_call"]);
+export const isOwnerQuestion = (event) =>
+  event.type === "item.completed" && !!event.item && event.item.type === "mcp_tool_call" &&
+  event.item.server === OWNER_MCP_SERVER && event.item.tool === OWNER_MCP_TOOL && event.item.status !== "failed";
+
 const ITEM_KINDS = Object.freeze({
   command_execution: "command",
   file_change: "edit",
@@ -493,7 +501,16 @@ export function createCodexAdapter(options = {}) {
     for await (const event of streamed.events) {
       state.events.push(event);
       if (!event || typeof event !== "object") continue;
+      // DLV-165: after an owner question the turn should end; new work stops it.
+      if (state.parked && event.type === "item.started" && event.item && PARKED_STOP_ITEMS.includes(event.item.type)) {
+        if (typeof state.abort === "function") state.abort();
+        return;
+      }
       observeCodexEvent(state, event, now);
+      if (isOwnerQuestion(event) && !state.parked && typeof state.askOwner === "function") {
+        const reply = await state.askOwner(event.item.arguments, {});
+        if (reply && reply.park) state.parked = { id: reply.id || null, at: now() };
+      }
       if (event.type === "thread.started" && event.thread_id) {
         state.nativeRef = event.thread_id;
         state.ref = withNativeRef(state.ref, event.thread_id);
@@ -575,6 +592,8 @@ export function createCodexAdapter(options = {}) {
       observeUsage: typeof runOptions.observeUsage === "function" ? runOptions.observeUsage : null,
       abort,
       budget: null,
+      askOwner: typeof runOptions.askOwner === "function" ? runOptions.askOwner : null,
+      parked: null,
     };
     const settings = request.settings || { model: null, effort: null };
 
@@ -591,10 +610,12 @@ export function createCodexAdapter(options = {}) {
       return bindAdapterResult({
         operation: request.purpose === "resume" ? "resume" : "start",
         executionRef: state.ref,
-        status: state.terminal === "finished" ? "finished" : "unknown",
+        status: state.parked || state.terminal === "finished" ? "finished" : "unknown",
         dispatchAttempted,
         observations: {
           error: String((error && error.message) || error),
+          parked: state.parked,
+          ...(state.parked ? { nativeOutcome: "parked" } : {}),
           usage: mergeUsageReadings(state.usageReadings),
           usageReadings: state.usageReadings,
           subscription: subscriptionRecord(state.subscription),
@@ -620,7 +641,7 @@ export function createCodexAdapter(options = {}) {
       // A budget stop is `unknown`, not `finished`: we aborted our own turn and
       // this interface returns no provider acknowledgement. The supervisor turns
       // it terminal only once the environment observes termination.
-      status: state.terminal === "failed" || state.terminal === "finished" ? "finished" : "unknown",
+      status: state.parked || state.terminal === "failed" || state.terminal === "finished" ? "finished" : "unknown",
       dispatchAttempted,
       observations: {
         usage: mergeUsageReadings(state.usageReadings),
@@ -628,8 +649,9 @@ export function createCodexAdapter(options = {}) {
         subscription: subscriptionRecord(state.subscription),
         nativeEventCount: state.events.length,
         finalText: state.finalText,
-        failure: state.failure,
-        nativeOutcome: state.terminal === "failed" ? "failed" : state.terminal === "finished" ? "succeeded" : null,
+        failure: state.parked ? null : state.failure,
+        nativeOutcome: state.parked ? "parked" : state.terminal === "failed" ? "failed" : state.terminal === "finished" ? "succeeded" : null,
+        parked: state.parked,
         requested: { model: settings.model, effort: settings.effort },
         effective: codexEffectiveView(state),
         activity: state.activity,
@@ -652,7 +674,8 @@ export function createCodexAdapter(options = {}) {
      * Begin one authorized native job in its confined workspace.
      *
      * @param {import("./adapter.mjs").JobRequest} request
-     * @param {{onDispatchStart?:Function, signal?:AbortSignal, model?:string, effort?:string}} [runOptions]
+     * @param {{onDispatchStart?:Function, signal?:AbortSignal, model?:string, effort?:string,
+     *   observeActivity?:Function, observeUsage?:Function, askOwner?:Function}} [runOptions]
      */
     async start(request, runOptions = {}) {
       if (request.executionRef.backend_id !== BACKEND_ID) {

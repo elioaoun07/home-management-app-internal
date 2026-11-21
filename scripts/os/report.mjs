@@ -53,7 +53,7 @@ export function markdown(record) {
     "",
     "## Rule verdicts",
     "",
-    `Range: ${cell(s.base)}..${cell(s.head)} (${cell(s.rangeSource)}); ${verdicts.length} versioned diff detectors, committed files only.`,
+    `Range: ${cell(s.base)}..${cell(s.head)} (${cell(s.rangeSource)}); ${verdicts.length} versioned diff detectors, ${s.rangeSource === "runner lifecycle: uncommitted working tree" ? "uncommitted working-tree snapshot" : "committed files only"}.`,
     "",
     ...(!verdicts.length
       ? ["Not evaluated."]

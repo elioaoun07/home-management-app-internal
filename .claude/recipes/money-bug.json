@@ -1,9 +1,0 @@
-{
-  "id": "money-bug",
-  "title": "Money bug",
-  "skill": "fix-bug",
-  "values": {},
-  "attachments": ["money-rules", "api-route"],
-  "tier": "CLAUDE_HIGH",
-  "effort": "high"
-}

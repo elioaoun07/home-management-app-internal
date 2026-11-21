@@ -1,0 +1,343 @@
+.flight-recorder {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  min-width: 0;
+  margin: 18px 0 24px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.flight-recorder-controls {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.flight-recorder-controls button {
+  min-height: 40px;
+  min-width: 40px;
+  padding: 8px;
+}
+.flight-recorder-controls output {
+  color: var(--ink-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.flight-recorder-window {
+  min-width: 0;
+  flex: 1;
+}
+.flight-bands {
+  height: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.flight-bands span {
+  position: absolute;
+  top: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  min-width: 2px;
+  font-size: 9px;
+  color: var(--ink-muted);
+  padding-left: 4px;
+  border-left: 1px solid var(--line);
+  height: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+.flight-slider {
+  position: relative;
+  height: 44px;
+  touch-action: pan-y;
+  cursor: crosshair;
+  border-radius: 4px;
+  outline-offset: 4px;
+}
+.flight-slider:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.flight-axis {
+  position: absolute;
+  top: 22px;
+  width: 100%;
+  height: 1px;
+  background: var(--line);
+}
+.flight-tick {
+  position: absolute;
+  top: 15px;
+  width: 2px;
+  height: 14px;
+  background: var(--accent);
+  opacity: 0.6;
+}
+.flight-tick[data-kind="message"] {
+  height: 8px;
+  top: 18px;
+  opacity: 0.35;
+}
+.flight-tick[data-kind="edit"] {
+  height: 24px;
+  top: 10px;
+  opacity: 1;
+}
+.flight-tick[data-kind="command"] {
+  height: 18px;
+  top: 13px;
+  opacity: 0.45;
+}
+.flight-tick[data-kind="failure"] {
+  background: var(--warning-ink);
+}
+.flight-check {
+  position: absolute;
+  top: 18px;
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--warning-ink);
+  background: var(--surface);
+  transform: translateX(-50%) rotate(45deg);
+}
+.flight-check[data-result="passed"] {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.flight-failure {
+  position: absolute;
+  top: 7px;
+  color: var(--warning-ink);
+  transform: translateX(-100%);
+  font-size: 22px;
+}
+.flight-cursor {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 1px;
+  background: var(--ink);
+  box-shadow: 0 0 8px var(--accent);
+  pointer-events: none;
+}
+.flight-cursor:before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -3px;
+  width: 7px;
+  height: 7px;
+  background: var(--ink);
+  transform: rotate(45deg);
+}
+.flight-time {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+.stage-black-box {
+  position: relative;
+  width: min(580px, 100%);
+  max-height: 270px;
+  overflow: auto;
+  padding: 17px 20px;
+  border: 1px solid var(--warning-ink);
+  border-radius: 14px;
+  background: var(--theme-bg);
+  box-shadow: 0 16px 60px color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+.stage-black-box header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--warning-ink);
+}
+.stage-black-box h2 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.3;
+}
+.stage-black-box dl {
+  display: flex;
+  gap: 20px;
+  margin: 12px 0;
+  font-size: 11px;
+}
+.stage-black-box dl div {
+  min-width: 0;
+}
+.stage-black-box dt {
+  color: var(--ink-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.stage-black-box dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.stage-black-box .black-box-excerpt {
+  margin: 10px 0;
+  font-size: 10px;
+  line-height: 1.5;
+  max-height: 95px;
+  background: transparent;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.black-box-actions {
+  display: flex;
+  gap: 8px;
+}
+.black-box-actions button,
+.black-box-actions a {
+  min-height: 36px;
+  font-size: 11px;
+  padding: 7px 12px;
+}
+.black-box-log {
+  margin-top: 10px;
+  font-size: 11px;
+}
+.black-box-log > button {
+  margin-top: 8px;
+}
+.black-box-log pre {
+  max-height: 230px;
+  font-size: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink-muted);
+}
+.stage-debrief {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  background: var(--surface);
+  margin-top: 16px;
+}
+.stage-debrief dl {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+.stage-debrief dt {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-muted);
+}
+.stage-debrief dd {
+  font-size: 20px;
+  margin: 5px 0 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.stage-debrief dd code {
+  font-size: 12px;
+}
+.stage-evidence-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  align-items: center;
+}
+.stage-evidence-chips > span {
+  font-size: 10px;
+  border: 1px solid var(--line);
+  padding: 5px 9px;
+  border-radius: 20px;
+  color: var(--accent);
+  position: relative;
+}
+.stage-evidence-chips small {
+  display: none;
+  margin-left: 8px;
+  color: var(--ink-muted);
+}
+.stage-evidence-chips span:focus small,
+.stage-evidence-chips span:hover small {
+  display: inline;
+}
+.stage-evidence-chips a {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+@media (max-width: 600px) {
+  .flight-recorder {
+    padding: 10px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .flight-recorder-controls {
+    width: 100%;
+  }
+  .flight-recorder-window {
+    flex-basis: 100%;
+    overflow-x: auto;
+  }
+  .flight-bands,
+  .flight-slider,
+  .flight-time {
+    min-width: 560px;
+  }
+  .stage-black-box {
+    max-height: 220px;
+    padding: 12px;
+    border-radius: 10px;
+  }
+  .stage-black-box h2 {
+    font-size: 14px;
+  }
+  .stage-black-box dl {
+    gap: 12px;
+  }
+  .stage-black-box .black-box-excerpt {
+    max-height: 65px;
+    font-size: 9px;
+  }
+  .stage-debrief dl {
+    gap: 16px;
+  }
+  .stage-debrief dd {
+    font-size: 17px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flight-cursor {
+    box-shadow: none;
+  }
+}
+.black-box-actions {
+  flex-wrap: wrap;
+}
+.stage-black-box > header {
+  position: sticky;
+  top: 0;
+  background: var(--theme-bg);
+  z-index: 1;
+  padding-block: 4px;
+}
+.stage-black-box > header svg {
+  flex-shrink: 0;
+}
+.flight-recorder[data-playing="true"] .flight-cursor {
+  left: 0 !important;
+  width: 100%;
+  border-left: 1px solid var(--ink);
+  background: transparent;
+  box-shadow: none;
+  transform: translateX(calc(var(--replay-progress, 0) * 100%));
+}
+.flight-slider {
+  overflow: hidden;
+}

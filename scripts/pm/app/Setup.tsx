@@ -1,9 +1,14 @@
 import { useState } from "react";
-import { useWorld, useRoute } from "./state";
+import { client, pmKeys, useWorld, useRoute } from "./state";
+import { useMutation } from "@tanstack/react-query";
+import { v2Post } from "./api";
+import { transport } from "./transport";
+import { useV2Session } from "./DeliveryV2";
 import { Empty, PageTitle, Markdown } from "./components";
-import { chain, column, ruleFact, sessionHref } from "./cockpitModel";
+import { chain, column, ruleFact, sessionHref, setupConflictCount } from "./cockpitModel";
 import type { Cockpit, Entity, Setup as SetupData } from "./cockpitTypes";
 import { SectionNav } from "./CockpitUI";
+import { SetupSkillUse } from "./SetupSkillUse";
 import {
   Search,
   Cpu,
@@ -56,7 +61,10 @@ const columns = [
   "Checks · detectors",
   "Rules",
 ];
-export function SetupMap({ setup }: { setup: SetupData }) {
+export function SetupMap({ setup, skillUsage }: {
+  setup: SetupData;
+  skillUsage?: Cockpit["skillUsage"];
+}) {
   const route = useRoute();
   const initial = route.query.get("entity") || route.query.get("rule") || "";
   const initialEntry = setup.entities.find((entry) => entry.id === initial);
@@ -147,7 +155,9 @@ export function SetupMap({ setup }: { setup: SetupData }) {
             All agents
           </button>
         </div>
-        <div className="setup-entries">
+        {category === 2 ? (
+          <SetupSkillUse entries={entries} usage={skillUsage} selected={selected} onSelect={setSelected} />
+        ) : <div className="setup-entries">
           {entries.map((e) => (
             <button
               className="setup-entry"
@@ -162,7 +172,7 @@ export function SetupMap({ setup }: { setup: SetupData }) {
               <code>{e.source || e.id}</code>
             </button>
           ))}
-        </div>
+        </div>}
         {!entries.length && (
           <div className="queue-empty">No matching entries</div>
         )}
@@ -413,6 +423,9 @@ export function Setup() {
       ? "rulebook"
       : requestedTab;
   const [search, setSearch] = useState("");
+  const session = useV2Session();
+  const rescan = useMutation({ mutationFn: () => v2Post("cockpit/rescan", {}, 60000),
+    onSuccess: () => client.invalidateQueries({ queryKey: pmKeys.data }) });
   if (!setup)
     return (
       <Empty title={data?.pending ? "Loading setup" : "Setup unavailable"}>
@@ -447,7 +460,7 @@ export function Setup() {
     })
     .sort((a, b) => Number(a.id.slice(3)) - Number(b.id.slice(3)));
   const manualCount = coverage.manual;
-  const actionable = issues.errors.length + issues.warnings.length;
+  const actionable = setupConflictCount(data.conflicts);
   const agents = setup.entities.filter(
     (entry) => entry.kind === "agent" && !entry.retired,
   );
@@ -458,12 +471,16 @@ export function Setup() {
         eyebrow="Agent instructions & safeguards"
         action={
           <div className="cockpit-tools">
-            <a className="secondary" href="#/skill-tools">
-              Prompt tools <ArrowRight size={16} />
-            </a>
+            <button className="secondary" disabled={rescan.isPending || transport().capabilities.kind !== "local" || !session.data?.paired} onClick={() => rescan.mutate()}>{rescan.isPending ? "Scanning" : "Rescan"}</button>
           </div>
         }
       />
+      <div className="setup-recorder" role="status">
+        {data.recorder?.state === "recording" ? "Recording" : data.recorder?.state === "unavailable" ? <>
+          Unavailable{data.recorder.since && <> since <time dateTime={data.recorder.since}>{Number.isFinite(Date.parse(data.recorder.since)) ? new Date(data.recorder.since).toLocaleString() : data.recorder.since}</time></>}
+        </> : "Recorder unknown"}
+      </div>
+      {rescan.error && <p role="alert">{rescan.error.message}</p>}
       {data.stale && (
         <span role="status" className="setup-stale">
           Saved setup snapshot
@@ -735,6 +752,7 @@ export function Setup() {
         <SetupMap
           key={`${route.query.get("entity") || ""}-${route.query.get("agent") || ""}`}
           setup={setup}
+          skillUsage={data.skillUsage}
         />
       ) : (
         <>

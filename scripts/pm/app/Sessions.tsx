@@ -6,6 +6,7 @@ import {
   ruleFact,
   sessionHref,
   setupDiff,
+  sessionEvidenceGaps,
 } from "./cockpitModel";
 import { Fingerprint } from "./Setup";
 import { SessionWorkspace } from "./SessionWorkspace";
@@ -104,6 +105,7 @@ export function FlightReport({ record }: { record: Flight }) {
   const delivery = world.cockpit?.deliveries.find((d) => d.itemId === s.itemId);
   const [station, setStation] = useState("prompt");
   const score = s.scorecard;
+  const gaps = sessionEvidenceGaps(record);
   const stations: { label: string; evidence: unknown }[] = [
     { label: "prompt", evidence: s.intent || "Unrecorded" },
     {
@@ -130,6 +132,10 @@ export function FlightReport({ record }: { record: Flight }) {
   return (
     <div className="flight-report">
       <Summary record={record} />
+      {gaps.length > 0 && <section className="cockpit-panel" aria-label="Missing facts">
+        <h2>Missing facts</h2>
+        <ul>{gaps.map(gap => <li key={gap}>{gap}</li>)}</ul>
+      </section>}
       {selected && (
         <section className="cockpit-panel" id="rule-evidence">
           <h2>

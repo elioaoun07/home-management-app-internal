@@ -2,6 +2,7 @@
 // all POSTs and external requests are blocked; Start is never clicked.
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { fixtureAssets, sourceSnapshot } from "./fixtures/local-stage-board.mjs";
 const { chromium } = await import(
   process.env.ERA_PLAYWRIGHT_MODULE || "playwright"
 );
@@ -16,8 +17,9 @@ const page = await browser.newPage({
   viewport: { width: 1440, height: 960 },
   reducedMotion: "reduce",
 });
-const evidence = ".pm/work-entry-evidence";
+const evidence = process.env.ERA_WORK_ENTRY_EVIDENCE || ".pm/work-entry-evidence";
 mkdirSync(evidence, { recursive: true });
+const assets = await fixtureAssets(evidence);
 const errors = [],
   writes = [],
   readinessReads = [];
@@ -25,11 +27,15 @@ page.on("pageerror", (error) => errors.push(error.message));
 await page.route("**/*", (route) => {
   const request = route.request(),
     url = new URL(request.url());
-  if (url.hostname !== "127.0.0.1") return route.abort();
+  if (url.origin !== new URL(assets.base).origin) return route.abort();
   if (!["GET", "HEAD"].includes(request.method())) {
     writes.push(url.pathname);
     return route.abort();
   }
+  if (url.pathname === "/app/assets/pm.js")
+    return route.fulfill({ contentType: "text/javascript", body: assets.bundle.js });
+  if (url.pathname === "/app/assets/pm.css")
+    return route.fulfill({ contentType: "text/css", body: assets.bundle.css });
   if (url.pathname === "/api/delivery/v2/local/readiness") {
     readinessReads.push(url.pathname);
     return route.fulfill({
@@ -47,7 +53,7 @@ await page.route("**/*", (route) => {
   }
   return route.continue();
 });
-const base = process.env.ERA_COCKPIT_URL || "http://127.0.0.1:4397/";
+const base = assets.base;
 const open = async (path) => {
   await page.goto(`${base}#/${path}`);
   await page.locator("main").waitFor();
@@ -155,21 +161,18 @@ try {
       await active("Plan");
       assert.match(new URL(page.url()).hash, /^#\/launch\?file=/);
       await open("setup");
-      await page
-        .getByRole("link", { name: "Prompt tools", exact: true })
-        .click();
-      await page
-        .getByRole("heading", { name: "Prompt tools", exact: true })
-        .waitFor();
-      await page.getByLabel("Prompt", { exact: true }).waitFor();
-      assert.equal(new URL(page.url()).hash, "#/skill-tools");
-      await active("Setup");
-      await capture(`prompt-utility-${width}-${theme}`);
+      assert.equal(await page.getByRole("link", { name: "Prompt tools", exact: true }).count(), 0);
+      await open("skill-tools");
+      await page.getByLabel("Find work", { exact: true }).waitFor();
+      assert.equal(new URL(page.url()).hash, "#/explore?lane=now");
+      await active("Plan");
+      await capture(`retired-prompt-tools-${width}-${theme}`);
     }
   }
   assert.deepEqual(errors, []);
   assert.deepEqual(writes, []);
   assert.deepEqual(readinessReads, []);
+  assert.deepEqual(sourceSnapshot(), assets.sourceFacts, "browser evidence is source-bound");
   writeFileSync(
     `${evidence}/work-entry-result.json`,
     JSON.stringify(
@@ -184,18 +187,20 @@ try {
         workNavSelection: true,
         legacyLaunchFallback: true,
         legacyContextualLaunch: true,
-        secondaryPromptUtility: true,
+        retiredPromptUtility: true,
         readiness: "deferred until Start; Start never clicked",
         errors,
         writes,
         readinessReads,
+        bundleFacts: assets.bundleFacts,
+        sourceFacts: assets.sourceFacts,
       },
       null,
       2,
     ),
   );
   process.stdout.write(
-    "Work entry browser PASS: outcome search → acceptance → Local admission → exact return; Plan navigation, legacy Launch fallback and Setup prompt utility; zero dispatch/writes.\n",
+    "Work entry browser PASS: outcome search → acceptance → Local admission → exact return; Plan navigation and retired Launch/Prompt tools fallbacks; zero dispatch/writes.\n",
   );
 } catch (error) {
   writeFileSync(

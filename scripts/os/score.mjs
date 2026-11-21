@@ -3,7 +3,8 @@ import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { openStore } from "./store.mjs";
-import { readDelivery } from "./ingest/delivery.mjs";
+import { readDelivery, projectDelivery } from "./ingest/delivery.mjs";
+import { deliverySnapshotStore } from "./ingest/delivery-snapshot.mjs";
 import { comparisons, deliveryScorecard } from "./scorecard.mjs";
 import { gitFact } from "./runtime.mjs";
 import { markdown } from "./report.mjs";
@@ -50,10 +51,12 @@ export function scoreMarkdown(value) {
     "\n"
   );
 }
+/** @param {{root:string, deliveryPath?:string, now?:string, deliverySnapshot?:import("./ingest/delivery-snapshot.mjs").DeliverySnapshot|null}} input */
 export function collect({
   root,
   deliveryPath = join(root, ".delivery/v2/supervisor.sqlite"),
   now = new Date().toISOString(),
+  deliverySnapshot = null,
 }) {
   let sessions = [];
   if (existsSync(join(root, ".os/os.db"))) {
@@ -64,11 +67,18 @@ export function collect({
       store.close();
     }
   }
-  let delivery = { records: [], deliveries: [] },
-    deliveryWarning = null;
-  if (existsSync(deliveryPath)) {
+  /** @type {ReturnType<typeof readDelivery>} */
+  let delivery = { records: [], deliveries: [] };
+  let deliveryWarning = null;
+  const nativeSessions = sessions.slice();
+  if (deliverySnapshot || existsSync(deliveryPath)) {
     try {
-      delivery = readDelivery({ root, path: deliveryPath, now });
+      delivery = deliverySnapshot
+        ? projectDelivery(deliverySnapshotStore(deliverySnapshot), {
+            root,
+            now,
+          })
+        : readDelivery({ root, path: deliveryPath, now });
     } catch (error) {
       deliveryWarning = "Delivery projection unavailable: " + error.message;
     }
@@ -104,6 +114,7 @@ export function collect({
     records: delivery.records,
     deliveries: delivery.deliveries,
     deliveryWarning,
+    nativeSessions,
   };
 }
 if (

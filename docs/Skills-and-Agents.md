@@ -26,6 +26,20 @@ Generated parity does not grant trust or translate Claude permissions into a
 Codex permission policy. `.claude/settings.local.json` remains committed by
 owner choice (2026-11-10). No provider calls are needed for parity checks.
 
+**R130 recorder correction (2026-11-16):** the Stop wrapper now imports both
+Claude and Codex transcripts automatically. Previously it explicitly excluded
+Codex, so even a recorded Codex Stop could not create a stored session. Native
+activation also needs approved SessionStart and Stop entries in `/hooks`; the
+observed workstation trust configuration approved only tool hooks. No trust
+entries are created by the recorder. Historical missing events stay unknown.
+
+At automatic Stop, an unchanged HEAD with a dirty tree and a recorded
+SessionStart is evaluated against the current working tree, including untracked
+source files. The report labels this snapshot **uncommitted** and warns that it
+includes pre-existing changes. Ordinary historical imports keep their committed
+range unless the current working-tree snapshot is explicitly requested. Model
+and tier attribution follow the model responsible for most assistant turns.
+
 | Skill                | What it does                                                                                                        |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `add-feature`        | Playbook for adding a feature to an existing module as a vertical slice (DB → API → types → hooks → UI → wiring).   |
@@ -419,106 +433,15 @@ verification evidence remains under `.pm/a5-evidence/`.
 
 ## Skill Launchpad (A6 / R98)
 
-**Plan and realignment, 2026-11-14 (R109):** Plan replaces Work in primary navigation and opens Sprints. Search work and More > Work retain the backlog; contextual Work/Deliver highlights Plan. Bridge offers Open plan. Sprints > Realign previews a target date for the earliest unfinished sprint and shifts every active/draft range by the same calendar-day offset. Contents, order, spacing, durations, names, capacity, scope and actual commitment timestamps remain intact; closed history stays fixed. Exclusively linked milestone target dates move too; shared/historical and unrelated milestones stay fixed. Apply uses existing paired/CSRF planning commands, CAS, idempotency, locking and atomic replacement. Undo is revision-bound; pre-write originals are saved under `.pm/planning-backups/`. `pnpm pm:realign [--to YYYY-MM-DD] [--apply]` previews by default using today in the sprint timezone, never pulling future plans backward. No regrouping, automatic closing, dispatch or DB access; R87 remains separate. Restart local PM for the new handler; remote clients need a matching bridge.
+**Retired 2026-11-15 (R127).** The Prompt tools page, its server endpoint, saved recipes and browser launch flow are removed. `#/skill-tools` and bare `#/launch` open Work; item-selected Delivery links retain their existing launch path. R98's remaining native generic-prompt expansion is cancelled, not shipped. [Cancellation record](<../ERA Notes/10 - Project Management/_Archive/Cancelled Log.md#pm-tooling>).
 
-**Product correction, 2026-11-14 (R108):** The owner rejected the standalone launcher's incremental value. It adds configuration/review/copy steps to a request the native agent already understands, and a copied preload is not evidence that a rule was enforced. The primary second destination is now **Work**, opening the existing Now list at `#/explore?lane=now`. Existing task details hold acceptance and Deliver; contextual launch/readiness, native execution and review keep their contracts. The Local worker already invokes start-task and repository skills. Bridge's action now says Find work and opens that list. Bare `#/launch` redirects to Work, preserving filters and leaving `file`/`cb` delivery links alone.
+Setup › Configuration › Skills shows **Last used** and **Sessions** from the recorder projection supplied through `cockpit-reader.mjs`. Counts represent distinct recorded sessions per skill. Missing timestamps show a dash; an unavailable recorder shows dashes in both columns. **Unused** requires zero observed use over at least twenty recorded sessions.
 
-The optional form/dry-run/copy utility remains at **Setup → Prompt tools** (`#/skill-tools`) with Setup active. Its narrow uses include deterministic scaffold validation and preparing a structured handoff; it is not the daily entry. Native open-ended conversation remains in the native agent. R98's generic native-prompt expansion is held following this product rejection. No new backlog, task store, executor, automatic PM filing or provider invocation was introduced. The benefit claimed is removing duplicate navigation/input, not measured productivity or improved model quality.
+**Owner decision D3, 2026-11-15: keep.** The eight `.claude/skills/*/form.json` sidecars, `scripts/os/forms.mjs`, `launchpad.mjs`, `launch-settings.mjs` and `tests/os/launchpad.test.ts` remain. The scanner still needs the settings parser and the retained tests exercise validation/defaults/conditions, registry/PM membership, required attachments, safe quoting and bounded scaffold preview. `FORM-MISSING` and `FORM-DRIFT` remain. Typed item intake has not been commissioned.
 
-**Prompt composer, 2026-11-14 (R107):** Launch now opens with `/skill` plus a free request and optional Module. The searchable library lists all canonical skills from A1, including those without a form; slash completion works with arrow keys and Enter/Tab. Selecting another skill preserves the request, resets skill-specific overrides, and clears an incompatible ERA-report link. The eight strict forms remain under **Guided**. Module, work link and the original request survive mode changes; guided preparation still requires its declared fields and retains the real new-module dry-run.
+The retained test suite owns synthetic recipe data; there is no shipped recipe directory or launcher API. Historical A6/R107/R108 implementation witnesses remain under `.pm/a6-evidence/`, `.pm/launch-composer-evidence/` and `.pm/work-entry-evidence/`. They describe the retired page and do not authorize its restoration. Current retirement/skill-use evidence is under `.pm/r127-evidence/`.
 
-**Context & settings** holds optional **Work item**, tier/effort, paths and knowledge skills. The two authored recipes are now labelled **Preset**, shown only for their matching skill: Money bug changes the tier and preloads money/API rules; ERA report preloads the API rule. Prompt mode accepts add-feature without a backlog task. `era-wire` retains its required current ERA-report check. Free requests are never labelled complete guided inputs and never invoke a scaffold preview. Both modes share fresh membership/path/tier validation, automatic knowledge-skill inclusion, stale-result retirement and literal PowerShell quoting. Copy prepares a handoff; it does not run an agent or establish a flight record. No new persistence, DB writes or provider calls.
-
-Guided preparation supplements sidecars that lack Module/Work item with validated optional context, retains explicit Target paths and the owner's verbatim request, and still enforces every declared field/check. Restart an already-running local `pnpm pm` once to load the new server request schema. Runtime evidence, screenshots and source hashes are under `.pm/launch-composer-evidence/`; physical-device and owner acceptance remain separate.
-
-R107 verification: 50 focused replay tests, typecheck, PM build, zero-warning changed-file lint and docs/PM checks pass. Final browser evidence is bound to all four runtime source hashes and covers slash keyboard selection, free and guided prompts, context/path retention, preset isolation, copy, stale review, failed prepare/retry and 390 px Blue/Pink. The cockpit regression also passes at 390/768/1024/1440 px. Full lint remains failing with 9,285 errors / 51,985 warnings; that broader gate is not claimed clean.
-
-**UI correction, 2026-11-14 (R101):** Launch now starts with eight skill cards and recipes. Selecting one opens a compact two-column desktop / one-column phone form. **Review prompt** validates as before, then focuses the rendered result; Copy prompt / Copy command still disappear when inputs become stale. Unsupported native worktree launch has no inert button. The title-case default generator now returns an empty title/lookup phrase for an empty slug instead of the literal `undefined`; both unit and browser regressions cover it.
-
-Implemented the copy-launch slice locally on 2026-11-14. Open `pnpm pm` →
-Launch (`#/launch`, with no selected Delivery item). Existing item-specific
-Delivery links retain their Local/Confined launch flow.
-
-The eight `.claude/skills/<skill>/form.json` sidecars cover `new-module`,
-`era-wire`, `fix-bug`, `add-feature`, `db-migration`, `triage-inbox`,
-`data-repair` and `wizard`. `scripts/os/forms.mjs` owns the strict Zod sidecar
-contract, ordered derived defaults, conditional visibility and JSON prompt
-rendering. Values remain data; no template evaluates code. `preview` is an
-allowlisted `new-module` identifier, not an executable command from a request.
-Its real script receives every argument in an argv array with `--dry-run`,
-`shell: false`, a timeout and bounded output. No scaffold is written.
-
-A1's existing `os/setup@1` registry contains form/recipe entities, module
-projections of the existing CLAUDE Feature Index, tier aliases and source
-fingerprints. A0 mirrors the sidecars; there is no second registry. Item pickers
-use the PM scan and canonical checkbox parser; the server repeats membership,
-open-state and ERA-report-group checks against current files. Fresh validation
-runs in a worker behind a loopback/same-origin POST `/api/launchpad`, leaving the
-PM health loop free. Required/conditional/type/length/pattern checks, module
-collisions, repository paths (including symlink containment), disabled tiers and
-effort membership block copy preparation. A Codex tier's unverified default
-requires an explicit effort.
-
-Knowledge skills are selectable attachments. Required attachments derive from
-A4's unchanged `REQUIRES` table, using selected module/new-module paths and any
-additional repository paths; the server includes them even if unchecked.
-`.claude/recipes/{era-report,money-bug}.json` are versioned saved presets over
-the same forms. Add a recipe by following `recipeSchema`; selection applies its
-values, attachments, tier and effort through normal validation. A1 reports
-`FORM-MISSING` for an inputs table without a sidecar, `FORM-DRIFT` for schema,
-declared-field/skill-anchor or recipe-reference mismatches, and `TIER-LITERAL`
-for skill model literals or literal form tiers. These are setup diagnostics,
-not additional A2 diff/transcript detectors. `era-wire`'s existing model literal
-is reported rather than silently rewritten. Prose drift detection uses explicit
-field `mention` anchors and declared input-table flags; it does not infer
-semantic equivalence from arbitrary prose.
-
-The rendered prompt is always visible before **Copy prompt** / **Copy command**.
-The command is labelled PowerShell; literals escape apostrophes and preserve
-quotes, substitutions, backticks and newlines. Alias selectors are resolved
-from the registry for the copied command only. Input/attachment/tier/effort,
-setup fingerprint or selected PM-row changes retire the prepared result.
-Clipboard refusal leaves selectable text and a visible failure. Offline/relay
-validation stays desktop-only; drafts are ephemeral and no command is queued.
-
-| A6 requirement | Evidence / disposition |
-| --- | --- |
-| Eight typed forms, defaults, conditionals, checks | `tests/os/launchpad.test.ts`; A1 lists eight form entities |
-| Registry/PM pickers, tier overrides | Fixture tests reject missing/closed/non-report IDs, unknown modules, disabled tiers and unsupported efforts |
-| Optional dry-run, complete prompt | Real `new-module.mjs --dry-run`; both standalone and two-standalone junction inputs pass without writes |
-| Attachments and recipes | A4 path-required preloads; ERA-report and Money-bug presets use the same validator |
-| Copy prompt and command | `tests/pm-ui/launchpad.browser.mjs`: real Chrome clipboard; complete `new-module` form → preview → prompt → copy with zero input questions |
-| Visible review and mobile | 1440 px desktop, 390×844 Blue/Pink; no horizontal overflow; stale results cannot be copied |
-| Registry diagnostics | Missing form, forward/reverse declared-field drift and literal-tier fixtures; existing era-wire literal is observed |
-| Native worktree launch and linked flight report | **Boundary, pending.** Local's route accepts an item ID/file and builds from the tracked item's brief; it accepts no skill-prompt/values/attachments/fingerprint contract |
-
-The remaining boundary is an extension to the existing Local admission and
-prompt construction contract, preserving its readiness, subscription settings,
-worktree checks, idempotency and review gates, plus binding a genuine native
-session's existing A3 flight report to the launch facts. No current-checkout or
-worktree session is started here. Copying is not execution and never creates a
-synthetic flight report. Copied native commands have not been used for inference;
-native selector/entitlement acceptance is unverified. R98 remains open at this
-explicit boundary. No A7/game/Arena, new detector system, DB migration or provider
-call is part of this slice.
-
-Reproduce the browser witness by starting
-`node tests/pm-ui/fixtures/a5-browser.mjs --launchpad`, then running
-`node tests/pm-ui/launchpad.browser.mjs` with `ERA_PLAYWRIGHT_MODULE` pointing to
-an existing Playwright module and optional `ERA_CHROME_PATH`. The disposable
-fixture has no `.env`, bridge, production DB credentials or inference; outbound
-browser requests are blocked. Local screenshots, clipboard witness and machine
-output are under gitignored `.pm/a6-evidence/`.
-
-Verification: full `pnpm typecheck` passes; focused ESLint on every touched code
-file passes with zero warnings; **212 targeted tests in 12 files** pass across
-`tests/os`, cockpit/navigation/Local UI and the Local lane. The browser witness
-above and `pm:build-app` pass. `docs:check`, `pm:lint` (zero errors/warnings),
-`pm:check-docs`, `sync:ai:check` and scoped whitespace checks pass. Full `pnpm lint` was also
-run and failed with **9,285 errors / 51,983 warnings** across this checkout,
-including generated `.tmp` bundles; the A5 baseline above already records the
-same broad failure. Focused lint is the separate clean gate, not a claim that
-repository-wide lint passes.
+An existing PM server requires an owner restart to unload the removed endpoint. No provider turn, real session or agent restart is part of this change.
 
 ## Bridge calm and game views (R102)
 

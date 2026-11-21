@@ -1,0 +1,312 @@
+.run-game-console {
+  scroll-margin-top: 100px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.run-game-tools {
+  display: flex;
+  gap: 4px;
+  padding: 9px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-soft) 40%, var(--surface));
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.run-game-tools button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 0 auto;
+  min-height: 45px;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.run-game-tools button[aria-selected="true"] {
+  color: var(--accent);
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: inset 0 -2px var(--accent);
+}
+.run-game-tools button:hover {
+  color: var(--ink);
+}
+.run-game button:focus-visible,
+.run-game-panel:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+.run-game-tools small {
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+.run-game-panel {
+  min-width: 0;
+  padding: 25px 28px 28px;
+  min-height: 280px;
+}
+.run-game-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.run-game-panel-heading .eyebrow {
+  font-size: 9px;
+  letter-spacing: 0.13em;
+  color: var(--ink-muted);
+}
+.run-game-panel-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 7px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.run-game-feed-help {
+  max-width: 240px;
+  align-self: flex-start;
+  text-align: right;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+.run-game-feed-help summary {
+  display: inline-grid;
+  place-items: center;
+  min-width: 40px;
+  min-height: 40px;
+  cursor: pointer;
+}
+.run-game-feed-help summary::after,
+.run-game-event-body summary::after {
+  content: none;
+}
+.run-game-feed-help p {
+  margin-top: 5px;
+  line-height: 1.5;
+}
+.run-game-counters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-bottom: 24px;
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+.run-game-counters > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.run-game-counters strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.run-game-events {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 520px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.run-game-events > li {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 15px;
+  position: relative;
+  padding: 0 3px 22px 0;
+}
+.run-game-events > li[data-latest="true"] {
+  animation: run-event-arrive 0.35s ease-out both;
+}
+@keyframes run-event-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.run-game-events > li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 37px;
+  left: 17px;
+  width: 1px;
+  bottom: 0;
+  background: var(--line);
+}
+.run-game-event-node {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-soft);
+  color: var(--ink-muted);
+}
+.run-game-events [data-latest="true"] .run-game-event-node {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  box-shadow: 0 0 18px var(--run-glow);
+}
+.run-game-events [data-kind="edit"] .run-game-event-node {
+  color: var(--run-violet);
+}
+.run-game-event-body {
+  min-width: 0;
+  padding: 8px 0 0;
+}
+.run-game-event-body > div {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.run-game-event-body strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.run-game-event-body time {
+  color: var(--ink-muted);
+  font-size: 9px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.run-game-event-body > code {
+  display: block;
+  margin-top: 9px;
+  padding: 10px 12px;
+  border-left: 2px solid var(--line);
+  background: color-mix(in srgb, var(--theme-bg) 55%, var(--surface));
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.run-game-event-body details {
+  margin-top: 6px;
+  color: var(--ink-muted);
+}
+.run-game-event-body summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  cursor: pointer;
+  min-height: 28px;
+}
+.run-game-event-body pre {
+  font-size: 11px;
+}
+@media (max-width: 700px) {
+  .run-game-heading h1 {
+    font-size: 27px;
+  }
+  .run-game-journey {
+    gap: 4px;
+    padding-bottom: 12px;
+  }
+  .run-game-journey > div {
+    flex-direction: column;
+    gap: 8px;
+    padding: 11px 0;
+    text-align: center;
+  }
+  .run-game-journey strong {
+    font-size: 9px;
+  }
+  .run-game-stage-link {
+    display: none;
+  }
+  .run-game-meta {
+    font-size: 10px;
+    gap: 8px;
+  }
+  .run-game-commandbar {
+    padding: 17px 0;
+    gap: 14px;
+  }
+  .run-game-commandbar .gate-actions {
+    width: 100%;
+  }
+  .run-game-commandbar .gate-actions > * {
+    flex: 1;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+  .run-game-console {
+    border-radius: 14px;
+  }
+  .run-game-tools {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 6px;
+    gap: 3px;
+  }
+  .run-game-tools button {
+    min-width: 0;
+    gap: 5px;
+    font-size: 10px;
+    min-height: 44px;
+    padding: 8px 4px;
+  }
+  .run-game-tools button small {
+    display: none;
+  }
+  .run-game-tools button span {
+    white-space: nowrap;
+  }
+  .run-game-panel {
+    padding: 21px 17px;
+  }
+  .run-game-counters {
+    gap: 12px 15px;
+  }
+  .run-game-events > li {
+    gap: 11px;
+  }
+  .run-game-event-body > div {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .run-game-event-body strong {
+    font-size: 11px;
+  }
+  .run-game-check summary {
+    gap: 10px;
+    padding: 12px;
+  }
+  .run-game-check em {
+    font-size: 9px;
+  }
+  .run-game-boundary {
+    padding: 15px 0;
+    gap: 18px;
+  }
+  .run-game-boundary-emblem {
+    width: 64px;
+    height: 76px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .run-game-events > li[data-latest="true"] {
+    animation: none;
+  }
+}

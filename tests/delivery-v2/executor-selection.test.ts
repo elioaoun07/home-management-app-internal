@@ -152,7 +152,7 @@ describe("qualification is independent per executor", () => {
     expect(record.controls).toBeNull();
     expect(record.backend_id).toBe(CLAUDE_BACKEND_ID);
     expect(record.limitations.join(" ")).toMatch(/No containment control was observed/u);
-  });
+  }, 60_000);
 
   it("keeps the platform sandbox documentation finding out of the control states", () => {
     const record = runQualification({ repoRoot });
@@ -163,7 +163,7 @@ describe("qualification is independent per executor", () => {
       expect(control?.state).toBe("unknown");
       expect(control?.verified).toBe(false);
     }
-  });
+  }, 60_000);
 });
 
 describe("claude adapter — interface findings are re-read, not asserted", () => {

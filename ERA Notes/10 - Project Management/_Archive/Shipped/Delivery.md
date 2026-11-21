@@ -1,6 +1,6 @@
 ---
 created: 2026-11-11
-updated: 2026-11-15
+updated: 2026-11-21
 type: archive
 status: superseded
 owner: Elio
@@ -509,6 +509,22 @@ owner: Elio
 ### DLV-158
 
 - ✅ 2026-11-15 — **DLV-158** Open retained Local deliveries without full diff inspection — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-158>) (Fixed history GET performing per-file Git reads; 30 replay tests, typecheck and scoped lint pass. Corrected handler against real read-only local store: 200 in 6ms,35 events and brief retained. Owner backend restart and browser UAT pending.)
+
+### DLV-159
+
+- ✅ 2026-11-15 — **DLV-159** Let supervisor Git steps outlive the commit hook — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-159>) (Replay verified: required suite 888/888 tests in 86 files; final superset with process runner 896/896 tests in 87 files, zero failed/skipped. Real 31-second hook, process-tree timeout cleanup, ordered Hook rows and build/ship/undo limits pass. Typecheck, scoped ESLint and PM lint pass. Owner restart required; W1 pending after DLV-160 and R124.)
+
+### DLV-160
+
+- ✅ 2026-11-15 — **DLV-160** Name the real cause of every failed Local run — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-160>) (R124: lint 0 errors, 3 full runs each 5420 passed/24 skipped under concurrent typecheck; DLV-160: required suite 2129 passed/8 skipped, 8 UI cases; typecheck and scoped ESLint pass; owner restart/W1 pending)
+
+### DLV-164
+
+- ✅ 2026-11-21 — **DLV-164** Let a Local Claude session ask the owner, with recommended answers, in chat — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-164>) (Replay-only: delivery-v2 + pm-ui + delivery suites 219 files / 3,559 tests passed (8 skipped); typecheck and changed-file ESLint clean; 390 px static render of the chat card checked. UAT pending: one owner-started Local Claude run.)
+
+### DLV-165
+
+- ✅ 2026-11-21 — **DLV-165** Park Local sessions on questions, chat with the agent both ways, and let Codex ask — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-165>) (Replay-only: delivery-v2 + pm-ui + delivery suites 219 files / 3,571 tests passed (8 skipped); typecheck and changed-file ESLint clean; 390 px render of chat + composer checked. UAT pending: one owner-started Local run per executor (Claude interrupt/resume, Codex MCP + resume are fake-verified only).)
 
 ## State log
 

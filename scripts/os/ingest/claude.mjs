@@ -33,6 +33,7 @@ export async function readClaude(transcript, expectedId = null) {
   const tools = new Map(),
     usages = new Map(),
     turns = new Set(),
+    turnModels = new Map(),
     seen = new Set(),
     hooks = [];
   let visibilityBug = false;
@@ -79,9 +80,10 @@ export async function readClaude(transcript, expectedId = null) {
           row.message.content,
         );
     if (row.type === "assistant") {
-      model = row.message?.model ? short(row.message.model) : model;
       const messageId = row.message?.id;
       if (messageId) turns.add(messageId);
+      if (messageId && row.message?.model)
+        turnModels.set(messageId, short(row.message.model));
       // Streaming content blocks repeat the same message/usage. Keep one reading.
       if (messageId && row.message?.usage)
         usages.set(messageId, row.message.usage);
@@ -162,6 +164,12 @@ export async function readClaude(transcript, expectedId = null) {
   if (typeof id !== "string" || !id || id.length > 200)
     throw new Error("Transcript has no supported session identity");
   const timeline = [...tools.values()];
+  // Count complete assistant messages, not streaming fragments or the final
+  // housekeeping model. A trailing cheap turn must not relabel the whole flight.
+  const modelCounts = new Map();
+  for (const value of turnModels.values())
+    modelCounts.set(value, (modelCounts.get(value) ?? 0) + 1);
+  model = [...modelCounts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
   const firstEdit = timeline.findIndex((tool) =>
     /^(Edit|Write|NotebookEdit)$/.test(tool.tool),
   );

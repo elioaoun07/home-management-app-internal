@@ -105,6 +105,8 @@ export function coreSessionState({
           run.lane === "local" &&
           run.lifecycle !== "CLOSED" &&
           !run.active &&
+          // DLV-165: a parked session waits on the owner by design.
+          run.ownerActionKind !== "local-question" &&
           ["preparing", "building", "checking"].includes(run.stage),
       )
       .map(

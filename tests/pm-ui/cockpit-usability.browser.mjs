@@ -1,6 +1,7 @@
 // Run fixtures/a5-browser.mjs --launchpad --arena first. No live services.
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { fixtureAssets, sourceSnapshot } from "./fixtures/local-stage-board.mjs";
 const { chromium } = await import(
   process.env.ERA_PLAYWRIGHT_MODULE || "playwright"
 );
@@ -18,18 +19,24 @@ const page = await browser.newPage({
 const evidence =
   process.env.ERA_COCKPIT_EVIDENCE || ".pm/work-entry-evidence/cockpit";
 mkdirSync(evidence, { recursive: true });
+const assets = await fixtureAssets(evidence);
 const errors = [],
   writes = [];
 page.on("pageerror", (e) => errors.push(e.message));
 page.on("request", (r) => {
   if (r.method() === "POST") writes.push(r.url());
 });
-await page.route("**/*", (route) =>
-  new URL(route.request().url()).hostname === "127.0.0.1"
-    ? route.continue()
-    : route.abort(),
-);
-const base = process.env.ERA_COCKPIT_URL || "http://127.0.0.1:4397/";
+await page.route("**/*", (route) => {
+  const url = new URL(route.request().url());
+  if (url.origin !== new URL(assets.base).origin) return route.abort();
+  if (!["GET", "HEAD"].includes(route.request().method())) return route.abort();
+  if (url.pathname === "/app/assets/pm.js")
+    return route.fulfill({ contentType: "text/javascript", body: assets.bundle.js });
+  if (url.pathname === "/app/assets/pm.css")
+    return route.fulfill({ contentType: "text/css", body: assets.bundle.css });
+  return route.continue();
+});
+const base = assets.base;
 const open = async (path) => {
   await page.goto(`${base}#/${path}`);
   await page.locator(".page-title").first().waitFor();
@@ -67,24 +74,18 @@ try {
     }
   }
   await open("setup");
-  await page.getByRole("link", { name: "Prompt tools", exact: true }).click();
-  await page
-    .getByRole("heading", { name: "Prompt tools", exact: true })
-    .waitFor();
-  const skill = page.getByRole("button", { name: "/new-module", exact: true });
-  await skill.focus();
-  await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: "Guided", exact: true }).click();
-  assert.equal(await page.getByLabel(/^Title/).inputValue(), "");
-  assert.ok(
-    await page.getByRole("button", { name: "Review prompt" }).isVisible(),
-  );
-  await capture("form-390");
+  assert.equal(await page.getByRole("link", { name: "Prompt tools", exact: true }).count(), 0);
+  await open("skill-tools");
+  await page.getByLabel("Find work", { exact: true }).waitFor();
+  assert.equal(new URL(page.url()).hash, "#/explore?lane=now");
+  await capture("retired-prompt-tools-390");
 
   await open("setup?tab=configuration");
   assert.equal(await page.locator(".setup-map").isVisible(), false);
   await page.getByLabel("Search setup").fill("start-task");
   assert.equal(await page.locator(".setup-entry").count(), 1);
+  assert.equal(await page.getByRole("columnheader", { name: "Last used", exact: true }).count(), 1);
+  assert.equal(await page.getByRole("columnheader", { name: "Sessions", exact: true }).count(), 1);
   await page.locator(".setup-entry").click();
   await page.getByText("Connection map", { exact: true }).click();
   assert.ok(await page.locator(".setup-map").isVisible());
@@ -139,6 +140,7 @@ try {
   await capture("sessions-empty-390");
   assert.deepEqual(errors, []);
   assert.deepEqual(writes, []);
+  assert.deepEqual(sourceSnapshot(), assets.sourceFacts, "browser evidence is source-bound");
   writeFileSync(
     `${evidence}/result.json`,
     JSON.stringify(
@@ -152,13 +154,15 @@ try {
         emptyRecorder: true,
         errors,
         writes,
+        bundleFacts: assets.bundleFacts,
+        sourceFacts: assets.sourceFacts,
       },
       null,
       2,
     ),
   );
   process.stdout.write(
-    "Cockpit browser PASS: Plan opens Sprints, Blue/Pink, desktop/390px, secondary prompt tools, setup search, rule evidence, comparison, empty recorder; zero writes.\n",
+    "Cockpit browser PASS: Plan opens Sprints, Blue/Pink, desktop/390px, retired prompt tools, setup search, rule evidence, comparison, empty recorder; zero writes.\n",
   );
 } catch (error) {
   await page.screenshot({ path: `${evidence}/failure.png`, fullPage: true });

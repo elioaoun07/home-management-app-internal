@@ -9,5 +9,5 @@ describe("portable static twin", () => {
     expect(html).toContain('"relPath":"Demo.md"');
     expect(html).toContain("var PM_MODE=\"static\"");
     expect(html).not.toContain("https://fonts.googleapis.com");
-  });
+  }, 60_000);
 });

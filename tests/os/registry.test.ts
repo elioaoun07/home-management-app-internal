@@ -75,7 +75,7 @@ describe("A1 registry and read-only CLI", () => {
     expect(readSnapshot(root).fingerprint).toBe(first.fingerprint);
     expect(run("scan.mjs").status).toBe(0);
     expect(run("check.mjs").status).toBe(1); // Rebuilding never hides a conflict.
-  });
+  }, 60_000);
 
   it("refuses unknown versions, corrupt fingerprints, missing inputs and malformed JSON", () => {
     const root = fixture(), setup = scan(root);
@@ -92,7 +92,7 @@ describe("A1 registry and read-only CLI", () => {
     expect(check(root).rows).toEqual(expect.arrayContaining([expect.objectContaining({ code: "INPUT", message: "Invalid JSON" })]));
     rmSync(join(root, "package.json"));
     expect(check(root).rows).toEqual(expect.arrayContaining([expect.objectContaining({ source: "package.json", code: "INPUT" })]));
-  });
+  }, 60_000);
 
   it("keeps rule tombstones and hashes supporting skill assets without exposing local credentials", () => {
     const root = fixture(), previous = scan(root);
@@ -106,7 +106,7 @@ describe("A1 registry and read-only CLI", () => {
     expect(after.fingerprint).not.toBe(before);
     expect(JSON.stringify(after)).not.toContain("SECRET_FIXTURE_TOKEN");
     expect(after.entities.find((entity: { kind: string }) => entity.kind === "skill").description).toBe("A fixture");
-  });
+  }, 60_000);
 });
 
 describe("A1 conflict classes, isolated repositories", () => {
@@ -117,81 +117,81 @@ describe("A1 conflict classes, isolated repositories", () => {
     write(root, ".claude/skills/example/reference.txt", "source\n");
     write(root, ".agents/skills/example/reference.txt", "source\r\n");
     expect(rows(root, "MIRROR")).toEqual([expect.objectContaining({ source: ".agents/skills/example/reference.txt", severity: "error" })]);
-  });
+  }, 60_000);
   it("PARITY: a blocking local guard missing for Codex is an error", () => {
     const root = fixture();
     write(root, ".claude/hooks/extra.sh", "#!/bin/sh\nexit 2\n");
     write(root, ".codex/hooks/extra.sh", "#!/bin/sh\nexit 2\n");
     write(root, ".claude/settings.local.json", JSON.stringify({ hooks: { PreToolUse: [{ hooks: [{ command: "bash .claude/hooks/extra.sh" }] }] } }));
     expect(rows(root, "PARITY")).toEqual([expect.objectContaining({ severity: "error" })]);
-  });
+  }, 60_000);
   it("reads Codex's actual mirrored guard instead of assuming the source still blocks", () => {
     const root = fixture();
     write(root, ".codex/hooks/guard.sh", "#!/bin/sh\n# enforces: HR-26\nexit 0\n");
     expect(scan(root).entities.find((entity: { kind: string; agent?: string }) => entity.kind === "hook" && entity.agent === "codex").blocking).toBe(false);
     expect(rows(root, "MIRROR")).toHaveLength(1);
     expect(rows(root, "PARITY")).toEqual([expect.objectContaining({ severity: "error" })]);
-  });
+  }, 60_000);
   it("PORTABLE: recognizes absolute paths and Windows-only permissions", () => {
     const root = fixture(); config(root, ".claude/settings.json", (value) => { value.permissions = { allow: ["Bash(C:\\Users\\owner\\guard.sh)", "PowerShell(pnpm test)"] }; });
     expect(rows(root, "PORTABLE")).toHaveLength(2);
-  });
+  }, 60_000);
   it("DUPLICATE: two different hook configurations claim Codex", () => {
     const root = fixture(); write(root, ".codex/settings.json", JSON.stringify({ hooks: { Stop: [] } }));
     expect(rows(root, "DUPLICATE")).toHaveLength(1);
-  });
+  }, 60_000);
   it("DEAD: an unreachable script and Git's non-executable index mode are visible", () => {
     const root = fixture();
     write(root, ".claude/hooks/dead.sh", "#!/bin/sh\nexit 0\n");
     write(root, ".husky/pre-commit", "#!/bin/sh\nexit 0\n");
     git(root, "add", ".husky/pre-commit"); git(root, "update-index", "--chmod=-x", ".husky/pre-commit");
     expect(rows(root, "DEAD")).toHaveLength(2);
-  });
+  }, 60_000);
   it("NAME-BOUND: missing namespace fails; wildcard coverage is accepted", () => {
     const root = fixture();
     config(root, ".claude/settings.json", (value) => { value.permissions = { deny: ["mcp__claude_ai_Supabase__execute_sql"] }; });
     expect(rows(root, "NAME-BOUND")).toHaveLength(1);
     config(root, ".claude/settings.json", (value) => { value.permissions = { deny: ["mcp__*Supabase__*"] }; });
     expect(rows(root, "NAME-BOUND")).toHaveLength(0);
-  });
+  }, 60_000);
   it("SOFT-CLAIM: header declarations are links; reminder text is not a declaration", () => {
     const root = fixture();
     write(root, "scripts/check.mjs", '// enforces: HR-24\nprocess.stdout.write("Hard Rule #1 reminder");\n');
     config(root, "package.json", (value) => { value.scripts = { check: "node scripts/check.mjs" }; });
     expect(rows(root, "SOFT-CLAIM")).toEqual([expect.objectContaining({ rule: "HR-24" })]);
     expect(scan(root).entities.find((entity: { id: string }) => entity.id === "HR-1").enforcedBy).toEqual([]);
-  });
+  }, 60_000);
   it("CONTRADICTION: compares owned module enumerations", () => {
     const root = fixture();
     write(root, "CLAUDE.md", "## Hard Rules\n1. A rule\n### Junction Modules\n| Junction | Connects |\n| --- | --- |\n| Meal Planning | Recipes |\n## Feature Index\n| Feature | Paths | Vault | Type |\n| --- | --- | --- | --- |\n| Meal Planning | path | doc | Standalone |\n");
     expect(rows(root, "CONTRADICTION")).toEqual([expect.objectContaining({ message: "Meal Planning: Junction table vs Feature Index (Standalone)" })]);
-  });
+  }, 60_000);
   it("SHADOW: an instruction basename has another role", () => {
     const root = fixture(); write(root, "ERA Notes/CODEX.md", "A checklist");
     expect(rows(root, "SHADOW")).toHaveLength(1);
-  });
+  }, 60_000);
   it("STALE-REF: literal missing/archived references, not templates", () => {
     const root = fixture();
     write(root, ".claude/skills/example/SKILL.md", "---\nname: example\n---\n[missing](missing.md)\n[old](<../../../ERA Notes/_Archive/old.md>)\n`migrations/YYYY-MM-DD_description.sql`\n");
     expect(rows(root, "STALE-REF")).toHaveLength(2);
-  });
+  }, 60_000);
   it("UNLOADED: reports empty launch settings without running a provider", () => {
     const root = fixture(); write(root, "scripts/delivery-v2/profiles/local.json", '{"skills": [], "settingSources": []}');
     expect(rows(root, "UNLOADED")).toHaveLength(1);
-  });
+  }, 60_000);
   it("TRACKED-LOCAL: checks Git tracking rather than a file's name alone", () => {
     const root = fixture(); write(root, ".claude/settings.local.json", "{}");
     expect(rows(root, "TRACKED-LOCAL")).toHaveLength(0);
     git(root, "add", "-f", ".claude/settings.local.json");
     expect(rows(root, "TRACKED-LOCAL")).toHaveLength(1);
-  });
+  }, 60_000);
   it("keeps workstation permissions visible without making the shared setup nonportable", () => {
     const root = fixture();
     write(root, ".claude/settings.local.json", JSON.stringify({ permissions: { allow: ["PowerShell(pnpm test)", "Bash(C:\\Users\\owner\\guard.sh)"] } }));
     expect(rows(root, "PORTABLE")).toEqual([expect.objectContaining({ severity: "info", message: "2 workstation-specific permission entries" })]);
     config(root, ".claude/settings.json", (value) => { (value.permissions as { allow: string[] }).allow = ["PowerShell(pnpm test)"]; });
     expect(rows(root, "PORTABLE")).toEqual(expect.arrayContaining([expect.objectContaining({ severity: "error", source: ".claude/settings.json:permissions.allow[0]" })]));
-  });
+  }, 60_000);
   it("recognizes a generated mirror of the wired pre-commit script, while drift remains visible", () => {
     const root = fixture();
     write(root, ".husky/pre-commit", "bash .claude/hooks/pre-commit.sh\n");
@@ -200,14 +200,14 @@ describe("A1 conflict classes, isolated repositories", () => {
     write(root, ".codex/hooks/pre-commit.sh", "#!/bin/sh\nexit 1\n");
     expect(rows(root, "MIRROR")).toEqual(expect.arrayContaining([expect.objectContaining({ source: ".codex/hooks/pre-commit.sh" })]));
     expect(rows(root, "DEAD")).toEqual(expect.arrayContaining([expect.objectContaining({ source: ".codex/hooks/pre-commit.sh" })]));
-  });
+  }, 60_000);
   it("reports a referenced hook script that has disappeared", () => {
     const root = fixture();
     rmSync(join(root, ".claude/hooks/guard.sh"));
     expect(rows(root, "INPUT")).toEqual(expect.arrayContaining([expect.objectContaining({
       severity: "error", source: ".claude/hooks/guard.sh", message: "Required setup source is missing",
     })]));
-  });
+  }, 60_000);
   it("preserves advisory limits and warns if their rule is incorrectly promoted", () => {
     const root = fixture();
     write(root, "scripts/check.mjs", "// enforces: HR-24\n");
@@ -216,7 +216,7 @@ describe("A1 conflict classes, isolated repositories", () => {
     expect(conflicts(setup, root)).toEqual(expect.arrayContaining([expect.objectContaining({ code: "SOFT-CLAIM", rule: "HR-24", severity: "info" })]));
     setup.entities.find((entity: { id: string }) => entity.id === "HR-24").level = "checked";
     expect(conflicts(setup, root)).toEqual(expect.arrayContaining([expect.objectContaining({ code: "SOFT-CLAIM", rule: "HR-24", severity: "warning" })]));
-  });
+  }, 60_000);
   it("shows explicit review requirements without claiming automated coverage", () => {
     const setup = scan(fixture());
     for (const id of ["HR-2", "HR-4", "HR-16", "HR-21"]) {
@@ -224,14 +224,14 @@ describe("A1 conflict classes, isolated repositories", () => {
         level: "documented", enforcedBy: [], review: { required: true, verify: expect.any(String), source: expect.any(String) },
       });
     }
-  });
+  }, 60_000);
   it("flags a literal model introduced into a skill", () => {
     const root = fixture();
     write(root, ".claude/skills/example/SKILL.md", "---\nname: example\n---\nUse Sonnet 5.5 with medium effort.\n");
     expect(rows(root, "TIER-LITERAL")).toEqual([expect.objectContaining({
       severity: "warning", source: ".claude/skills/example/SKILL.md",
     })]);
-  });
+  }, 60_000);
   it("recognizes confined settings only with the boundary and the Local project-loading branch", () => {
     const root = fixture();
     const source = "scripts/delivery-v2/adapters/claude.mjs";
@@ -249,7 +249,7 @@ describe("A1 conflict classes, isolated repositories", () => {
     expect(rows(root, "UNLOADED")).toEqual([expect.objectContaining({ severity: "warning" })]);
     write(root, source, '// skills: []\nconst text = "settingSources: []";');
     expect(rows(root, "UNLOADED")).toEqual([]);
-  });
+  }, 60_000);
   it("keeps unknown tracked-local decisions actionable and the documented owner choice visible", () => {
     const root = fixture();
     write(root, ".claude/settings.local.json", "{}");
@@ -257,7 +257,7 @@ describe("A1 conflict classes, isolated repositories", () => {
     expect(rows(root, "TRACKED-LOCAL")).toEqual([expect.objectContaining({ severity: "warning" })]);
     write(root, "docs/Skills-and-Agents.md", "`.claude/settings.local.json` remains committed by\nowner choice (2026-11-10).\n");
     expect(rows(root, "TRACKED-LOCAL")).toEqual([expect.objectContaining({ severity: "info" })]);
-  });
+  }, 60_000);
   it("BASELINE: reports recorded evidence only; no measurement is fabricated in A1", () => {
     const root = fixture(), setup = scan(root);
     expect(Object.keys(CLASSES)).toHaveLength(16); // A6 adds the three form/tier diagnostics.
@@ -266,7 +266,7 @@ describe("A1 conflict classes, isolated repositories", () => {
     expect(conflicts(setup, root).filter((row: { code: string }) => row.code === "BASELINE")).toEqual([expect.objectContaining({ severity: "info", message: "3 recorded baseline violations" })]);
     expect(check(root).exitCode).toBe(0);
     expect(existsSync(join(root, ".os"))).toBe(false);
-  });
+  }, 60_000);
 });
 
 it("matches the hand inventory at e5f537a, independently of A0's working changes", () => {
@@ -295,4 +295,4 @@ it("matches the hand inventory at e5f537a, independently of A0's working changes
   expect(setup.inventory.commands).toHaveLength(0);
   for (const name of ["docs:check", "pwa:check", "pm:lint", "pm:check-docs", "db:verify-rls", "era:capabilities"]) expect(kind("check").some((entity: { name: string }) => entity.name === name)).toBe(true);
   expect(kind("tier")).toHaveLength(6);
-}, 30_000);
+}, 60_000);

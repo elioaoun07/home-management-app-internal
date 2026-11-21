@@ -1,0 +1,436 @@
+.game-shell:has(.local-run-game-page) > .app-header,
+.game-shell:has(.local-run-game-page) > .mobile-nav {
+  display: none;
+}
+.app-main:has(.local-run-game-page) {
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+.app-main:has(.local-run-game-page) > div {
+  height: 100%;
+}
+.run-page.local-run-game-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+}
+.local-run-game-page > .error-notice {
+  flex-shrink: 0;
+}
+.local-run-game-page > .board-game {
+  flex: 1;
+  min-height: 0;
+}
+.board-game .delivery-workshop.board-workshop {
+  --board-text-size: 11px;
+  --board-readout-height: 76px;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  grid-template-areas: "topbar rail" "board rail" "dock dock";
+  grid-template-columns: minmax(0, 1fr) var(--board-rail-width);
+  grid-template-rows: var(--board-topbar-height) minmax(
+      var(--board-region-min),
+      1fr
+    ) var(--board-dock-height);
+}
+.board-game .board-workshop[data-rail="closed"] {
+  grid-template-columns: minmax(0, 1fr) var(--board-rail-closed);
+}
+.board-game .board-topbar {
+  gap: 8px;
+  padding-inline: 4px;
+}
+.board-topbar > .back,
+.board-standby-topbar > .back {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  margin: 0;
+  padding: 0;
+  font-size: 0;
+}
+.board-game .board-zone-track {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.board-game .board-title {
+  gap: 8px;
+}
+.board-game .board-caption,
+.board-game .board-replay-tag,
+.board-game .board-turn {
+  display: none;
+}
+.board-game .board-dock {
+  grid-area: dock;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: var(--board-dock-height);
+  padding: 0 8px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  z-index: 9;
+}
+.board-dock .board-telemetry {
+  position: relative;
+  inset: auto;
+  flex: 0 0 200px;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  padding: 0 40px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.board-dock .board-telemetry-values {
+  display: grid;
+  gap: 2px;
+}
+.board-dock .board-flow {
+  padding: 0;
+  gap: 6px;
+}
+.board-dock .board-flow strong {
+  font-size: 11px;
+}
+.board-dock .board-flow-meter {
+  flex: 0 0 24px;
+  width: 24px;
+}
+.board-dock .board-counters {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 1px 10px;
+  font-size: var(--board-text-size, 11px);
+}
+.board-dock .board-counters b {
+  font-size: 11px;
+}
+.board-dock .board-pulse {
+  display: none;
+}
+.board-dock .board-badge-count {
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  min-height: 40px;
+  min-width: 40px;
+}
+.board-replay-strip {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.board-replay-strip button,
+.board-dock-tempo {
+  flex-shrink: 0;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 4px 6px;
+  font-size: var(--board-text-size, 11px);
+}
+.board-replay-strip [aria-pressed="true"] {
+  color: var(--accent);
+}
+.foundry-replay-modes {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 4px;
+}
+.foundry-gap {
+  color: var(--ink-muted);
+  font: var(--board-text-size, 11px) var(--font-mono, monospace);
+}
+.board-replay-strip .flight-recorder {
+  flex: 1 0 160px;
+  flex-wrap: nowrap;
+  min-width: 160px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  gap: 4px;
+}
+.board-replay-strip .flight-recorder-controls {
+  width: auto;
+  gap: 4px;
+}
+.board-replay-strip .flight-recorder-controls > button:not([aria-label]),
+.board-replay-strip .flight-recorder-controls > output,
+.board-replay-strip .flight-bands,
+.board-replay-strip .flight-time {
+  display: none;
+}
+.board-replay-strip .flight-recorder-window {
+  display: block;
+  flex: 1;
+  min-width: 72px;
+  overflow: visible;
+}
+.board-replay-strip .flight-slider {
+  min-width: 72px;
+  height: 40px;
+}
+.board-dock-tempo {
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.board-dock-tools {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.board-dock .run-game-tools {
+  display: flex;
+  flex-wrap: nowrap;
+  padding: 0;
+  gap: 2px;
+  border: 0;
+  background: none;
+  overflow: visible;
+}
+.board-dock .run-game-tools button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 54px;
+  gap: 3px;
+  min-width: 40px;
+  min-height: 40px;
+  height: 48px;
+  padding: 4px;
+  border-radius: 5px;
+  font-size: var(--board-text-size, 11px);
+  white-space: nowrap;
+}
+.board-dock .run-game-tools small {
+  position: absolute;
+  top: 2px;
+  right: 1px;
+  font-size: var(--board-text-size, 11px);
+}
+.board-console-drawer {
+  grid-area: board;
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 6;
+  pointer-events: none;
+}
+.board-console-drawer > summary {
+  display: none;
+}
+.board-console-drawer[open] {
+  height: var(--board-drawer-height);
+  overflow: hidden;
+  background: var(--theme-bg);
+  border-top: 1px solid var(--line);
+  pointer-events: auto;
+}
+.board-console-drawer[open] > summary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 40px;
+  height: 40px;
+  padding: 0 12px;
+  color: var(--ink-muted);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 11px;
+  list-style: none;
+}
+.board-console-drawer > summary::after {
+  content: none;
+}
+.board-console-drawer .run-game-console {
+  height: calc(100% - 40px);
+  margin: 0;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+}
+.board-console-drawer .run-game-panel {
+  min-height: 0;
+  padding: 16px;
+}
+.board-game .board-rail-heading {
+  min-height: var(--board-topbar-height);
+}
+.board-game .board-rail-heading > button {
+  height: var(--board-topbar-height);
+  min-height: 40px;
+}
+.board-game .board-rail[data-open="false"] .board-rail-heading > button {
+  writing-mode: horizontal-tb;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 64px;
+  height: auto;
+  padding: 8px 2px;
+  gap: 6px;
+}
+.board-rail[data-open="false"] .board-rail-label {
+  display: none;
+}
+.board-game .board-rail button,
+.board-game .board-rail a,
+.board-game .board-rail summary {
+  min-height: 40px;
+}
+.board-game .board-rail .board-badge-shelf button {
+  min-width: 40px;
+}
+.board-game .board-rail button:disabled {
+  opacity: 1;
+  color: var(--ink-muted);
+  background: var(--surface);
+  border: 1px dashed var(--line);
+}
+@media (max-width: 720px) {
+  .board-game .delivery-workshop.board-workshop {
+    --board-text-size: 10px;
+    --board-readout-height: 112px;
+  }
+  .board-game .delivery-workshop.board-workshop,
+  .board-game .board-workshop[data-rail="closed"] {
+    grid-template-areas: "topbar" "board" "dock";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--board-topbar-height) minmax(
+        var(--board-region-min),
+        1fr
+      ) var(--board-mobile-dock-height);
+  }
+  .board-game .board-workshop[data-narrow="true"] .board-topbar {
+    gap: 4px;
+    padding-inline: 2px;
+  }
+  .board-game .board-title {
+    gap: 2px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .board-game .board-workshop[data-narrow="true"] .board-title h1 {
+    position: static;
+    width: 100%;
+    height: auto;
+    clip-path: none;
+    font-size: var(--board-text-size, 11px);
+  }
+  .board-game .board-workshop[data-narrow="true"] .board-line {
+    display: inline;
+    font-size: var(--board-text-size, 11px);
+  }
+  .board-game .board-clock > span {
+    display: none;
+  }
+  .board-game .board-top-controls {
+    gap: 0;
+  }
+  .board-game .board-dock {
+    display: grid;
+    grid-template-columns: minmax(0, 172px) minmax(0, 1fr);
+    grid-template-rows: var(--board-dock-height) var(--board-dock-height);
+    height: var(--board-mobile-dock-height);
+    padding: 0 6px;
+    gap: 0 6px;
+  }
+  .board-dock .board-telemetry {
+    padding-right: 44px;
+  }
+  .board-dock .board-telemetry-values {
+    display: grid;
+    gap: 3px;
+  }
+  .board-dock .board-flow strong {
+    font-size: var(--board-text-size, 11px);
+  }
+  .board-dock .board-flow-meter {
+    display: none;
+  }
+  .board-dock .board-counters {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 2px 6px;
+    font-size: var(--board-text-size, 11px);
+  }
+  .board-dock .board-counters b {
+    font-size: var(--board-text-size, 11px);
+  }
+  .board-dock .board-badge-count {
+    right: 0;
+  }
+  .board-replay-strip .flight-recorder {
+    order: -1;
+  }
+  .board-dock-tools {
+    grid-column: 1 / -1;
+  }
+  .board-dock .run-game-tools {
+    width: 100%;
+  }
+  .board-dock .run-game-tools button {
+    flex: 1 1 0;
+    width: 0;
+    padding: 4px 1px;
+    font-size: var(--board-text-size, 11px);
+  }
+  .board-game .board-workshop .board-rail {
+    grid-area: auto;
+    position: absolute;
+    right: 0;
+    bottom: calc(var(--board-mobile-dock-height) + var(--board-readout-height));
+    width: 100%;
+    max-height: calc(
+      100% - var(--board-topbar-height) - var(--board-mobile-dock-height)
+    );
+    height: 55%;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    z-index: 10;
+  }
+  .board-game .board-workshop .board-rail[data-open="false"] {
+    width: var(--board-rail-closed);
+    height: var(--board-rail-closed);
+    border-left: 1px solid var(--line);
+  }
+  .board-game .board-rail[data-open="false"] .board-rail-heading > button {
+    flex-direction: row;
+    min-height: 40px;
+    height: 40px;
+    gap: 3px;
+    padding: 2px;
+  }
+  .board-game .board-workshop .board-rail-body {
+    overflow: auto;
+  }
+}

@@ -8,9 +8,10 @@ export function createCockpitReader({
   intervalMs = 15000,
   timeoutMs = 15000,
   autoStart = true,
-  createWorker = () =>
+  readDeliverySnapshot = () => null,
+  createWorker = (data) =>
     new Worker(new URL("./cockpit-worker.mjs", import.meta.url), {
-      workerData: { root },
+      workerData: data,
     }),
 }) {
   /** @type {import("./app/cockpitTypes").Cockpit} */
@@ -28,8 +29,11 @@ export function createCockpitReader({
     pending = null,
     worker = null,
     stopped = false;
-  const refresh = () => {
-    if (pending) return pending;
+  const refresh = ({ forceRescan = false } = {}) => {
+    if (pending)
+      return forceRescan
+        ? pending.then(() => refresh({ forceRescan: true }))
+        : pending;
     if (stopped) return Promise.resolve();
     let settle;
     pending = new Promise((resolve) => {
@@ -72,7 +76,11 @@ export function createCockpitReader({
     }, timeoutMs);
     deadline.unref?.();
     try {
-      worker = createWorker();
+      worker = createWorker({
+        root,
+        forceRescan,
+        deliverySnapshot: readDeliverySnapshot(),
+      });
       worker.unref();
       worker.once("message", (reply) => finish(reply, null));
       worker.once("error", (error) => finish(null, error));
@@ -91,6 +99,7 @@ export function createCockpitReader({
   return {
     read: () => value,
     refresh,
+    rescan: () => refresh({ forceRescan: true }),
     stop: () => {
       stopped = true;
       if (timer) clearInterval(timer);

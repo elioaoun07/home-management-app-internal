@@ -2,12 +2,22 @@
 // non-fixture write/request is blocked. One review response is fulfilled in the
 // browser without reaching the server. Never starts a native provider.
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { basename, join, relative, resolve } from "node:path";
+import { installLocalSessionFixture, stateScenes } from "./local-session-fixture.mjs";
+import { checkSessionMatrix } from "./local-session-matrix.mjs";
+import { checkSessionRegressions } from "./local-session-regressions.mjs";
+const frozenBundle = await (await import("../../scripts/pm/app-build.mjs")).buildApp();
+const bundleFacts = frozenBundle ? Object.fromEntries(Object.entries(frozenBundle).map(([kind, text]) => [kind, { sha256: createHash("sha256").update(text).digest("hex"), bytes: Buffer.byteLength(text), characters: text.length }])) : null;
+const walkSources = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? walkSources(join(dir,entry.name)) : [join(dir,entry.name)]);
+const sourceFacts = Object.fromEntries(walkSources("scripts/pm/app").filter(path => /\.(?:ts|tsx|css)$/u.test(path)).map(path => [relative(".",path).replaceAll("\\","/"), { sha256: createHash("sha256").update(readFileSync(path)).digest("hex"), bytes: statSync(path).size, modifiedAt: statSync(path).mtime.toISOString() }]));
 const { chromium } = await import(
   process.env.ERA_PLAYWRIGHT_MODULE || "playwright"
 );
 const browser = await chromium.launch({
   headless: true,
+  args: ["--mute-audio"],
   ...(process.env.ERA_CHROME_PATH
     ? { executablePath: process.env.ERA_CHROME_PATH }
     : {}),
@@ -19,180 +29,79 @@ const context = await browser.newContext({
 await context.addInitScript(() => {
   if (localStorage.getItem("pm-game-layer") === null)
     localStorage.setItem("pm-game-layer", "on");
+  const NativeAudio = window.AudioContext;
+  if (NativeAudio) window.AudioContext = class extends NativeAudio {
+    constructor(...args) { super(...args); window.__stageAudioCreated = (window.__stageAudioCreated || 0) + 1; }
+  };
 });
 const page = await context.newPage();
 const base = process.env.ERA_COCKPIT_URL || "http://127.0.0.1:4397/";
 const origin = new URL(base).origin;
-const evidence = ".pm/r118-evidence";
+const fixture = JSON.parse(readFileSync(".pm/a5-evidence/fixture.json", "utf8"));
+assert.match(basename(fixture.root), /^era-a5-browser-/u);
+assert.notEqual(resolve(fixture.root), resolve("."));
+assert.equal(origin, new URL(fixture.url).origin, "legacy suite requires the isolated A5 fixture");
+const evidence = process.env.ERA_LOCAL_EVIDENCE || ".pm/r123-evidence/legacy-session";
 mkdirSync(evidence, { recursive: true });
+writeFileSync(`${evidence}/served-pm.js`, frozenBundle.js);
+writeFileSync(`${evidence}/served-pm.css`, frozenBundle.css);
 const errors = [],
   writes = [],
   simulatedReviews = [],
-  observations = [];
+  observations = [],
+  stageFacts = [],
+  firstFrameFacts = [],
+  parkedFacts = [];
 page.on("pageerror", (error) => errors.push(error.message));
-let scene = "failed",
-  sequence = 0,
-  toolEvent = null;
-const id = "local-00000000-0000-4000-8000-000000000117";
-const otherId = "local-00000000-0000-4000-8000-000000000118";
-const at = "2026-11-14T18:23:36Z";
-const local = (requestedId = id) => ({
-  run_id: requestedId,
-  phase: scene === "interrupted" ? "building" : scene,
-  branch: "delivery/BUD-1",
-  workspace: "C:/fixture/very-long-worktree-path/retained-failed-attempt/BUD-1",
-  head: ["checking", "uat-ready"].includes(scene) ? "c".repeat(40) : null,
-  current_head: "b".repeat(40),
-  work: {
-    id: requestedId === otherId ? "BUD-2" : "BUD-1",
-    campaign: "Budget",
-    title: "BUD-1 Verify cockpit fixture — criteria",
-    brief:
-      "**Outcome:** Verify cockpit fixture.\n\n- **Acceptance:** Only the owning host can read guest records.\n- Anonymous bulk read returns 401.\n- Host from another tag receives 403.\n- Owning host receives 200.",
-  },
-  settings: { executor: "claude", model: "fixture-claude", effort: "medium" },
-  canShip: false,
-  canUndo: false,
-  interrupted: scene === "interrupted",
-  error:
-    scene === "failed"
-      ? "native session exited 1: TypeError: Cannot freeze\n    at deepFreeze (file:///C:/fixture/scripts/delivery-v2/contracts.mjs:172:12)"
-      : undefined,
-  activity: [{ at, summary: "Native session started" }, ...(toolEvent ? [{ at, ...toolEvent }] : [])],
-  usage: null,
-  checks:
-    scene === "checking"
-      ? [
-          {
-            name: "typecheck",
-            exit: 0,
-            stdout: "Typecheck passed",
-            stderr: "",
-            error: null,
-          },
-          {
-            name: "lint",
-            exit: null,
-            stdout: "",
-            stderr: "",
-            error: "Checker interrupted",
-          },
-        ]
-      : [],
-  handover:
-    scene === "uat-ready"
-      ? { handover_id: "fixture-uat", acceptance: { state: "not-accepted" } }
-      : null,
-});
-const waiting = {
-  run_id: "local-older-uat",
-  engine: "v2",
-  lane: "local",
-  alias: "BUD-2",
-  title: "Older owner UAT",
-  lifecycle: "ACTIVE",
-  closed_outcome: null,
-  stage: "uat-ready",
-  active: false,
-  ownerAction: "Ready to test",
-  ownerActionKind: "local-review",
-  updated_at: "2026-11-14T17:00:00Z",
-  created_at: "2026-11-14T16:00:00Z",
-  branch: null,
-};
-const main = () => ({
-  run_id: id,
-  engine: "v2",
-  lane: "local",
-  alias: "BUD-1",
-  title: "Verify cockpit fixture",
-  lifecycle: scene === "failed" ? "CLOSED" : "ACTIVE",
-  closed_outcome: scene === "failed" ? "failed" : null,
-  stage: scene === "interrupted" ? "building" : scene,
-  active: ["preparing", "building", "checking"].includes(scene),
-  ownerAction: scene,
-  ownerActionKind: scene === "interrupted" ? "inspect-session" : "none",
-  updated_at: at,
-  created_at: at,
-  branch: "delivery/BUD-1",
-  application: null,
-});
-const json = (route, data) =>
-  route.fulfill({
-    contentType: "application/json",
-    body: JSON.stringify(data),
-  });
-await page.route("**/*", async (route) => {
-  const request = route.request(),
-    url = new URL(request.url());
-  if (url.origin !== origin) return route.abort();
-  if (!["GET", "HEAD"].includes(request.method())) {
-    const body = request.postDataJSON();
-    if (url.pathname === "/api/delivery/v2/local" && body?.action === "review" && body.run_id === id) {
-      simulatedReviews.push(body.run_id);
-      return json(route, { patch: "diff --git a/fixture-only-first-run.ts b/fixture-only-first-run.ts\n--- a/fixture-only-first-run.ts\n+++ b/fixture-only-first-run.ts\n+fixture-only-first-run" });
-    }
-    writes.push(url.pathname);
-    return route.abort();
-  }
-  if (url.pathname === "/api/delivery/v2/session")
-    return json(route, { paired: true, actor: "fixture", csrf: "fixture" });
-  if (url.pathname === "/api/delivery/sessions")
-    return json(route, { sessions: [] });
-  if (url.pathname === "/api/delivery/v2/local/run")
-    return json(route, local(url.searchParams.get("id") || id));
-  if (url.pathname === "/api/delivery/v2/runs")
-    return json(route, {
-      runs: [
-        waiting,
-        ...(["attention", "blocked"].includes(scene) ? [] : [main()]),
-      ],
-      requests:
-        scene === "blocked"
-          ? [
-              {
-                command_id: "blocked-fixture",
-                status: "blocked",
-                run_id: null,
-                terminal: false,
-                acceptedAt: at,
-                lastConfirmedAt: at,
-                staleAfterMs: 180000,
-                workId: "BUD-1",
-                blocker: { code: "fixture-blocked" },
-              },
-            ]
-          : [],
-    });
-  if (url.pathname === "/api/delivery/v2/queue")
-    return json(route, {
-      queue: {
-        running: [],
-        waiting: [],
-        decisions: [],
-        candidates: [],
-        applying: null,
-        unknown: { jobs: [] },
-      },
-    });
-  if (url.pathname === "/api/delivery/v2/uat")
-    return json(route, { handovers: [] });
-  return route.continue();
-});
+let sequence = 0;
+const matrixScenes = process.env.ERA_LOCAL_AMENDMENT ? ["live", "stale", "failed-hook", "signal-lost", "cancelled"] : stateScenes;
+const resultName = process.env.ERA_LOCAL_RESULT_NAME || "result";
+const assertionChanges = [
+  "R123 replaces four station hooks with eleven named board zones; the four legacy accessible tab-opening names survive.",
+  "R123 Settings portals Sound/Notify/Tempo/Rank/Pocket ERA; theater remains in the top bar.",
+  "R122 floating Mission/Terminal/results/burst art is retired; reserved Comms, zone chips, rail results and deduplicated cues replace those assertions.",
+  "R122 runtime gallery/pixel/bloom/quality instrumentation and headless scripting claims are retired; local-stage-art.browser.mjs owns R123 DPR1.5 canvas/performance budgets.",
+  "The retained suite preserves action admission, exact-row replay/future masking, tab restoration, sound opt-in, hidden/offscreen/reduced freeze, Calm and diff run isolation.",
+];
+const controls = await installLocalSessionFixture(page, { origin, frozenBundle, writes, simulatedReviews });
+const { id, otherId, iso } = controls;
 async function open(path, next, theme) {
-  scene = next;
-  toolEvent = null;
+  controls.scene = next;
+  controls.toolEvent = null;
+  controls.extraRows = [];
+  controls.localResponses = 0;
+  controls.at = new Date(Date.now() - 2000).toISOString();
+  if (!page.url().startsWith(origin)) await page.goto(base);
+  await page.evaluate(value => localStorage.setItem("pm-app-theme", value), theme);
   await page.goto(`${base}?local-scene=${++sequence}#${path}`);
-  const toggle = page.getByRole("button", { name: /Use (pink|blue) theme/ });
-  await toggle.waitFor();
-  if ((await toggle.getAttribute("aria-label")) === `Use ${theme} theme`)
-    await toggle.click();
   await page.waitForFunction(
     (expected) => document.documentElement.dataset.theme === expected,
     theme,
   );
+  if (path.startsWith("/delivery/run/")) {
+    if (await page.evaluate(() => localStorage.getItem("pm-game-layer") === "off")) {
+      await page.locator(".local-run-page").waitFor();
+      await page.getByRole("region", { name: "Plan", exact: true }).waitFor();
+      return;
+    }
+    await page.locator(".board-workshop").waitFor();
+    // The dedicated mission suite checks initial collapse. Retained checks
+    // deliberately open the rail to inspect the same visible evidence/cards.
+    if (await page.locator(".board-dock").count()) {
+      const rail = page.locator(".board-rail");
+      if (await rail.getAttribute("data-open") === "false")
+        await rail.locator(".board-rail-heading button").click();
+    }
+  }
 }
 async function selectTool(name) {
+  if (await page.locator(".board-dock").count()) {
+    await page.locator(".board-dock").getByRole("tab", { name, exact: name !== "Verification" }).click();
+    await page.getByRole("tabpanel").waitFor();
+    return;
+  }
+  const drawer = page.locator(".board-console-drawer");
+  if ((await drawer.getAttribute("open")) === null) await drawer.locator(":scope > summary").click();
   await page.getByRole("tab", { name, exact: name !== "Verification" }).click();
   await page.getByRole("tabpanel").waitFor();
 }
@@ -214,130 +123,106 @@ const waitState = (state) =>
     state,
   );
 try {
-  for (const width of [1440, 390])
-    for (const theme of ["blue", "pink"]) {
-      await page.setViewportSize({ width, height: width === 390 ? 844 : 960 });
-      const key = `${width}-${theme}`;
-      await open(`/delivery/run/${id}`, "failed", theme);
-      await page
-        .getByRole("alert")
-        .filter({ hasText: "Agent could not start" })
-        .waitFor();
-      assert.equal(await page.locator(".delivery-workshop").count(), 1);
-      assert.equal(await page.locator(".delivery-workshop").getAttribute("data-active"), "false");
-      for (const name of ["Plan", "Verification", "Changes"])
-        assert.equal(
-          await page.getByRole("region", { name, exact: true }).count(),
-          0,
-        );
-      await selectTool("Brief");
-      await page.getByRole("region", { name: "Plan", exact: true }).waitFor();
-      await page.getByText("Anonymous bulk read returns 401.", { exact: false }).waitFor();
-      await capture(`${key}-brief`);
-      await page.getByRole("button", { name: "Open verification", exact: true }).click();
-      assert.equal(await page.getByRole("tab", { name: "Verification", exact: false }).getAttribute("aria-selected"), "true");
-      assert.equal(await page.getByText("Not run", { exact: true }).count(), 4);
-      await capture(`${key}-verification`);
-      await selectTool("Changes");
-      await page.getByText("Candidate pending", { exact: true }).waitFor();
-      await selectTool("Worktree");
-      await page.getByRole("region", { name: "Worktree", exact: true }).waitFor();
-      await page.getByText("C:/fixture/very-long-worktree-path/retained-failed-attempt/BUD-1", { exact: true }).waitFor();
-      await capture(`${key}-worktree`);
-      await selectTool("Host limits");
-      await page.getByText("Credential scrub prevents accidents, not deliberate host access.", { exact: true }).waitFor();
-      await page.getByRole("tab", { name: "Host limits", exact: true }).press("Home");
-      assert.equal(await page.getByRole("tab", { name: "Activity", exact: true }).getAttribute("aria-selected"), "true");
-      await page.getByRole("tab", { name: "Activity", exact: true }).press("ArrowRight");
-      assert.equal(await page.getByRole("tab", { name: "Brief", exact: true }).getAttribute("aria-selected"), "true");
-      await selectTool("Activity");
-      await page.getByText("Error details", { exact: true }).click();
-      await capture(`${key}-failed-session`);
-      const retry = page.getByRole("link", {
-        name: "New attempt",
-        exact: true,
-      });
-      assert.ok(
-        (await retry.getAttribute("href")).includes("/deliver/Budget/BUD-1"),
-      );
-      assert.equal(
-        await page
-          .getByRole("button", { name: "Ship", exact: true })
-          .isDisabled(),
-        true,
-      );
-      await retry.click();
-      await page.getByRole("button", { name: "Start", exact: true }).waitFor();
-      await open(`/delivery/run/${id}`, "building", theme);
-      await page.getByRole("button", { name: "Cancel", exact: true }).waitFor();
-      assert.equal(await page.locator(".delivery-workshop").getAttribute("data-active"), "true");
-      toolEvent = { kind: "tool", summary: "Read" };
-      await page.waitForFunction(() => document.querySelector(".delivery-workshop")?.dataset.station === "source");
-      await capture(`${key}-reading-session`);
-      toolEvent = { kind: "edit", summary: "src/features/fixture/panel.tsx" };
-      await page.waitForFunction(() => document.querySelector(".delivery-workshop")?.dataset.station === "forge");
-      await page.getByText("src/features/fixture/panel.tsx", { exact: true }).first().waitFor();
-      await capture(`${key}-running-session`);
-      await open(`/delivery/run/${id}`, "checking", theme);
-      await selectTool("Verification");
-      await page.getByText("Inconclusive", { exact: true }).waitFor();
-      assert.equal(await page.getByText("Passed", { exact: true }).count(), 1);
-      assert.equal(await page.locator(".delivery-workshop").getAttribute("data-station"), "lab");
-      await open(`/delivery/run/${id}`, "uat-ready", theme);
-      await page
-        .getByRole("link", { name: "Test steps", exact: true })
-        .waitFor();
-      assert.equal(
-        await page
-          .getByRole("button", { name: "Ship", exact: true })
-          .isDisabled(),
-        true,
-      );
-      await capture(`${key}-uat-session`);
-      assert.equal(await page.locator(".delivery-workshop").getAttribute("data-active"), "false");
-      await open(`/delivery/run/${id}`, "interrupted", theme);
-      await page.getByRole("alert").filter({ hasText: "Session interrupted" }).waitFor();
-      assert.equal(await page.locator(".delivery-workshop").getAttribute("data-active"), "false");
-      await open("/bridge", "building", theme);
-      await waitState("running");
-      await page.waitForFunction(
-        () => Number(document.querySelector(".bridge-core")?.dataset.rpm) > 100,
-      );
-      const angle = Number(await core().getAttribute("data-angle"));
-      await page.waitForTimeout(300);
-      assert.ok(
-        Number(await core().getAttribute("data-angle")) > angle + 30,
-        "sustained rotation with unrelated UAT",
-      );
-      await capture(`${key}-running-core`);
-      // Poll the same mounted core: state/color/geometry must update without reload.
-      scene = "failed";
-      await waitState("failed");
-      assert.equal(
-        await page
-          .locator(".core-split-ring")
-          .evaluate((el) => getComputedStyle(el).display),
-        "block",
-      );
-      assert.equal(
-        await core().evaluate((el) =>
-          getComputedStyle(el).getPropertyValue("--core-sat").trim(),
-        ),
-        "0%",
-      );
-      await capture(`${key}-failed-core`);
-      await open("/bridge", "blocked", theme);
-      await waitState("failed");
-      await page.getByText("Launch blocked", { exact: true }).waitFor();
-      await capture(`${key}-blocked-core`);
-      await open("/bridge", "interrupted", theme);
-      await waitState("failed");
-      await open("/bridge", "attention", theme);
-      await waitState("attention");
-      await capture(`${key}-waiting-core`);
-    }
+  await checkSessionMatrix({ page, open, selectTool, capture, core, waitState, controls, id, matrixScenes, firstFrameFacts, parkedFacts, stageFacts });
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await open(`/delivery/run/${id}`, "shipped", "blue");
+  const recorder = page.getByRole("slider", { name: "Replay", exact: true });
+  await recorder.focus();
+  await recorder.press("Home");
+  await page.waitForFunction(() => document.querySelector(".delivery-workshop")?.dataset.replay === "true");
+  assert.equal(await page.locator(".delivery-workshop").getAttribute("data-seals"), "0", "replay does not borrow future checks");
+  assert.equal(await page.locator(".delivery-workshop").getAttribute("data-plates"), "0");
+  const firstValue = Number(await recorder.getAttribute("aria-valuenow"));
+  await recorder.press("ArrowRight");
+  assert.ok(Number(await recorder.getAttribute("aria-valuenow")) > firstValue);
+  assert.match(await recorder.getAttribute("aria-valuetext"), /Read route.ts/u);
+  await recorder.press("ArrowRight");
+  assert.equal(await page.locator(".delivery-workshop").getAttribute("data-plates"), "2");
+  await capture("replay-keyboard-middle");
+  await recorder.press("End");
+  assert.equal(await page.locator(".delivery-workshop").getAttribute("data-seals"), "4");
+  await recorder.press("Home");
+  await recorder.press(" ");
+  await page.getByRole("button", { name: "Pause", exact: true }).waitFor();
+  await capture("replay-playing");
+  await page.getByRole("button", { name: "1×", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).waitFor({ timeout: 12000 });
+  assert.equal(await page.locator(".delivery-workshop").getAttribute("data-seals"), "4");
+  await recorder.focus();
+  await recorder.press("l");
+  await page.waitForFunction(() => document.querySelector(".delivery-workshop")?.dataset.replay === "false");
+  await capture("replay-returned-live");
+
+  if (process.env.ERA_LOCAL_AMENDMENT) {
+    await open(`/delivery/run/${id}`, "replay-gap", "blue");
+    await page.getByRole("button", { name: "Play", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector(".delivery-workshop")?.dataset.liveness === "quiet", null, { timeout: 25000 });
+    await page.getByRole("button", { name: "Pause", exact: true }).click();
+    assert.equal(await page.locator(".delivery-workshop").getAttribute("data-replay"), "true");
+    await capture("replay-recorded-silence");
+    await open(`/delivery/run/${id}`, "replay-stale-gap", "blue");
+    await page.getByRole("button", { name: "Play", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector(".stage-announcement")?.textContent?.startsWith("No signal for "), null, { timeout: 25000 });
+    await page.getByRole("button", { name: "Pause", exact: true }).click();
+    assert.match(await page.locator(".stage-announcement").innerText(), /^No signal for [45] minutes$/u, "replay announcement follows virtual time rather than wall-clock age");
+    await capture("replay-recorded-stale-announcement");
+  }
+
+  // A single poll carrying nine observations produces nine separate cue beats.
+  await open(`/delivery/run/${id}`, "live", "blue");
+  await page.locator(".delivery-workshop").waitFor();
+  await page.evaluate(() => {
+    window.__stageBeats = [];
+    document.querySelector(".delivery-workshop").addEventListener("pm-stage-cue", event => window.__stageBeats.push({ at: performance.now(), kind: event.detail.kind }));
+  });
+  controls.extraRows = Array.from({ length: 9 }, (_, index) => ({ at: iso(-1000 + index * 10), kind: "edit", summary: `src/fixture/batch-${index}.ts`, seq: 100 + index, job_id: "native" }));
+  await page.waitForFunction(() => window.__stageBeats.length >= 9, null, { timeout: 12000 });
+  const beats = await page.evaluate(() => window.__stageBeats);
+  const frameBudget = null, canvasDpr = null; // R123 performance is measured by the dedicated board harness.
+  assert.equal(beats.length, 9);
+  assert.ok(beats.at(-1).at - beats[0].at <= 3000, "nine-row burst uses the R122350ms montage beats");
+  assert.ok(beats.at(-1).at - beats[0].at >= 2400, "all nine rows retain visible staging");
+  await capture("nine-row-cue-batch");
+  await page.waitForFunction(() => document.querySelector(".delivery-workshop")?.dataset.backlog === "0", null, { timeout: 5000 });
+  controls.extraRows.push(...Array.from({ length: 9 }, (_, index) => ({ at: new Date(Date.now()+index).toISOString(), kind: "edit", summary: `src/fixture/second-batch-${index}.ts`, seq: 200+index, job_id: "native" })));
+  await page.waitForFunction(() => window.__stageBeats.length >= 18, null, { timeout: 12000 });
+  const secondBurstFacts = { cues: (await page.evaluate(() => window.__stageBeats)).length };
+  assert.equal(secondBurstFacts.cues, 18, "a second nine-row poll observes only its nine new rows");
+  await capture("second-nine-row-burst");
+  await page.locator(".board-settings-trigger").click();
+  await page.getByRole("button", { name: "Sound", exact: true }).click();
+  assert.equal(await page.evaluate(() => window.__stageAudioCreated), 1);
+  assert.equal(await page.getByRole("button", { name: "Sound", exact: true }).getAttribute("aria-pressed"), "true");
+  await page.getByRole("button", { name: "Sound", exact: true }).click();
+  assert.equal(await page.getByRole("button", { name: "Sound", exact: true }).getAttribute("aria-pressed"), "false");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Theater", exact: true }).click();
+  await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 1000 }).catch(() => {});
+  const fullscreen = await page.evaluate(() => document.fullscreenElement?.classList.contains("delivery-workshop") || false);
+  if (fullscreen) {
+    // F is Follow in the mission camera. Exercise the retained Theater toggle
+    // through its own visible control on both entry and exit.
+    await page.getByRole("button", { name: "Theater", exact: true }).click();
+    await page.waitForFunction(() => !document.fullscreenElement);
+  }
+  await page.waitForTimeout(150);
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  assert.equal(await page.locator(".delivery-workshop").getAttribute("data-motion"), "paused");
+  const frozenPixels = await page.locator(".stage-fx").evaluate(el => el.toDataURL());
+  await page.waitForTimeout(150);
+  assert.equal(await page.locator(".stage-fx").evaluate(el => el.toDataURL()), frozenPixels, "hidden R123 motion canvas is static");
+  await page.evaluate(() => {
+    delete document.hidden;
+    delete document.visibilityState;
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await checkSessionRegressions({ page, open, selectTool, capture, controls, id });
   await open(`/delivery/run/${id}`, "checking", "blue");
-  await page.locator(".run-game-commandbar").getByRole("button", { name: "Review diff", exact: true }).click();
+  await page.locator(".board-rail > .run-game-commandbar").getByRole("button", { name: "Review diff", exact: true }).click();
   await page.locator(".run-game-patch").filter({ hasText: "fixture-only-first-run" }).waitFor();
   await page.evaluate(nextId => { location.hash = `/delivery/run/${nextId}`; }, otherId);
   await page.locator(".run-game-tag").filter({ hasText: "BUD-2" }).first().waitFor();
@@ -352,8 +237,11 @@ try {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.locator(".delivery-workshop").scrollIntoViewIfNeeded();
   await page.waitForFunction(() => document.querySelector(".delivery-workshop")?.dataset.motion === "active");
-  await page.locator(".run-game-console").evaluate(el => { el.style.marginTop = "1500px"; });
-  await page.getByRole("tablist", { name: "Session tools" }).scrollIntoViewIfNeeded();
+  await selectTool("Activity");
+  // The console now stays inside the stage. Move the observed stage offscreen
+  // directly, preserving the visibility contract without restoring page scroll.
+  await page.locator(".delivery-workshop").evaluate(el => { el.style.transform = "translateY(1500px)"; });
+  await page.evaluate(() => scrollTo(0, 0));
   await page.waitForFunction(() => document.querySelector(".delivery-workshop")?.dataset.motion === "paused");
   // The calm surface keeps the original structured review over the same evidence.
   await page.evaluate(() => localStorage.setItem("pm-game-layer", "off"));
@@ -372,12 +260,12 @@ try {
     "reduced motion stays static",
   );
   assert.deepEqual(writes, []);
-  assert.deepEqual(simulatedReviews, [id]);
+  assert.deepEqual(simulatedReviews, [id, id]);
   assert.deepEqual(errors, []);
   writeFileSync(
-    `${evidence}/result.json`,
+    `${evidence}/${resultName}.json`,
     JSON.stringify(
-      { observations, errors, writes, simulatedReviews, reducedMotion: true },
+      { observations, stageFacts, firstFrameFacts, parkedFacts, beats, secondBurstFacts, frameBudget, canvasDpr, fullscreen, errors, writes, simulatedReviews, reducedMotion: true, bundleFacts, sourceFacts, assertionChanges },
       null,
       2,
     ),
@@ -392,6 +280,8 @@ try {
     JSON.stringify(
       {
         url: page.url(),
+        bundleFacts,
+        sourceFacts,
         errors,
         writes,
         text: await page.locator("body").innerText(),

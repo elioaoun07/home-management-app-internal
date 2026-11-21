@@ -1,6 +1,6 @@
 ---
 created: 2026-11-10
-updated: 2026-11-14
+updated: 2026-11-15
 type: study
 status: active
 owner: Elio
@@ -8,6 +8,8 @@ evidence_cutoff: "commit e5f537a, 2026-11-10. Proposed design. The input lists a
 ---
 
 # Agentic OS — skill launchpad
+
+**Retired 2026-11-15 (R127).** Prompt tools, its endpoint and recipes are removed; old page addresses open Work. R98 is cancelled. Owner decision D3 keeps the eight form sidecars, form/settings parsers and validation tests; typed item intake is not commissioned. Setup now shows recorded skill use. The dated implementation notes and proposal below are history, not a request to restore the page.
 
 **Product correction — 2026-11-14 (R108):** the owner rejected the generic launcher as adding no useful step beyond native chat. Primary navigation now opens existing Work → Now; task acceptance and Deliver remain the structured route. The form/dry-run/copy implementation is retained only as optional Setup → Prompt tools. Native free-prompt launch expansion under R98 is held. The original proposal below is historical design rationale, not an instruction to restore a primary skill launcher.
 

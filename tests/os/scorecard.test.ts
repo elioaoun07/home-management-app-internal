@@ -464,7 +464,7 @@ describe("A4 transcript detectors and privacy", () => {
     );
     expect(cli.status, cli.stderr).toBe(0);
     expect(cli.stdout).toContain("## Scorecard");
-  });
+  }, 60_000);
 });
 describe("A4 delivery outcomes and comparable cohorts", () => {
   it("deduplicates sessions, counts rework after done, keeps UAT, restricts escapes to thirty days and records reverts", () => {

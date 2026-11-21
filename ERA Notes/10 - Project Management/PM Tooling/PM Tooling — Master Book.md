@@ -1,6 +1,6 @@
 ---
 created: 2026-09-10
-updated: 2026-11-10
+updated: 2026-11-15
 type: master-book
 status: active
 owner: Elio
@@ -18,11 +18,11 @@ Keep work identifiable, reviewable and recoverable across PM surfaces. Tooling c
 
 ## Current state & evidence
 
+**2026-11-15 — R124 gate recheck:** The existing implementation is complete and its ship receipt is retained. Read-only audit found no missing explicit 60-second native-start budgets; all 41 source hashes match the acceptance packet. The recorded three consecutive full runs each passed 348 files / 5,420 tests (3 files / 24 tests skipped) alongside 53 typechecks. Fresh typecheck, full lint (zero errors, 974 existing warnings), changed-file ESLint, PM lint and required delivery/UI suite (156 files / 2,129 tests passed; 3 files / 8 tests skipped) pass. [Recheck evidence](<../../../.pm/reliability-recheck-20261115.md>). Owner restart of pnpm pm required; W1 pending; DLV-161–163 untouched.
+
 **2026-11-12 — PM restructure (owner commission; tooling and documents only):** `pnpm pm:ship` ships, archives and verifies in one command ([R100](<../_Archive/Shipped/PM Tooling.md#r100>), [R89](<../_Archive/Shipped/PM Tooling.md#r89>)). Master Books went from 1.84 MB to 1.42 MB, with shipped criteria and long receipts in `_Archive/Shipped/`. Checklists are grouped by theme with owner-only rows under **Needs you**; Now is one global sprint slice; `_index.md` carries a generated block. The elapsed 5 October sprint is closed and four weeks are drafted ([R87](<#r87>), data part). [R84](<#r84>) and [R71](<../_Archive/Shipped/PM Tooling.md#r71>) are closed. No product code, database or paid API was touched.
 
 **2026-11-10 — R94 / Agentic OS A2 implemented locally:** `pnpm os:eval <base>..<head>` runs eight versioned detectors over immutable Git blobs and emits verdict/rule/file/line/excerpt evidence. Fail/pass/n/a fixtures gate execution; Git tests cover old debt, removals, renames, dirty files and invalid ranges. PR CI evaluates exact base/head SHAs. This session stops at A2; no recorder, session store or PM.2 UI. Evidence and owner replay are under [R94](<../_Archive/Shipped/PM Tooling.md#r94>).
-
-**2026-11-10 — Agentic OS plan filed (documentation only):** R92 to R99 added with criteria below, one per step of the [Agentic OS roadmap](<../Fable 2/Agentic OS/12 - Roadmap.md>): setup parity, registry and conflict check, rule detectors, flight recorder, scorecards, the PM.2 cockpit, the skill launchpad, Arena and game layer. Owner commission of the same date. Nothing is implemented.
 
 ## Vision & Decisions
 
@@ -78,6 +78,20 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 - **D4** A filtered board can be reloaded and shared by URL.
 
 ## Pain Inventory
+
+🟠 **R129 — Board readouts are unreadable and overlap (2026-11-16).** On run `local-cac958d7` at 1358 × 849, 15 on-board labels render at 7.6 px (`MAIN`, commit, `RETRY`, four counts, four check names and states); the check chips overlap `04 THINK` and hide `LINT`. Dock counters are 8 px, tab labels 9 px, badges 7 px (`local-run-mission.css:26,45,46`). R125 corrected only the eleven zone names.
+
+🟠 **R130 — The recorder misses Codex and cannot score an uncommitted session (2026-11-16).** 75 Codex transcripts dated 15–16 November left no event file and no stored session. Seven of eight stored Claude sessions have `base = head` with a dirty tree, so their verdict range is empty and Bridge shows 26 of 27 Unknown. Session `28e443a6` (Fable) is stored as Haiku, `CLAUDE_LOW`.
+
+🟠 **R125 — The Local Game board overflows short windows and a failed run has no New attempt (2026-11-15).** At 1358 × 696 the page is 908 px tall (`stage/config.ts:196` minimum 520 under a 207 px offset), the wheel is captured by the board (`stage/engine.ts:143-148`), the title repeats the ID and ends "— criteria", zone names are about 7 px, and the rail offers Review diff and Ship on a run with no candidate. [Ten corrections](<../Plans/Agentic OS Game and Cockpit Corrections.md#r125--the-board-fits-reads-and-offers-the-right-action>).
+
+🟠 **R128 — Agentic OS records are not current (2026-11-15).** `pnpm os:check` exits 1 on a stale registry; `.os/recorder-unavailable` is set since 06:39 UTC; 7 of 8 recorded sessions have no verdict; `os:eval` runs in CI only on pull requests; Bridge and Sessions, and Setup and Score, show different counts for the same thing.
+
+🟡 **R124 — Gates fail for non-defects (2026-11-15).** All 9,285 recorded lint errors are in ignored scratch folders (`.tmp/` 9,284, `.os/` 1). `tests/pm-ui/raw-fetch-guard.test.ts` timed out in its 10 s hook inside a 167-file run and passed alone in 5.4 s. Fixture/gate resolution verified 2026-11-15; final three-run evidence is under R124.
+
+🟠 **R123 verification — narrated milestones and duplicate poll banner.** Fixed in the current implementation: native narration could impersonate supervisor phase/failure/check-start rows, and `LocalDelivery.tsx:333` duplicated cached Game poll errors above the fixed-height board. The owner approved the narrow provenance guard; the banner fix excludes only the duplicate Game detail error while retaining session/command, Calm and no-data errors. These are R123 Acceptance1/14/15 regressions, under the existing R123 checklist/criteria. [Root cause](<../../../.pm/r123-evidence/linkdown-layout-root-cause.md>); focused final wrapper verification passes 14/14 checks under `.pm/r123-evidence/final-notice/`.
+
+🟠 **R121 — Interrupted Local attempts have no recovery.** The Local Run Game Mode plan (2026-11-15) records that cancel throws `session-not-running-in-this-process`, while start returns the same open run. R120 displays Signal lost; recovery commands remain separate work.
 
 🟠 **R119 — Completed Local work fails during supervisor commit.** The reported HUB-118 run hit ten tooling-test failures inside pre-commit. On 2026-11-15 all 38 tests in the same three suites passed outside the hook; a real disposable commit regression proved the hook forwards Git-local index/config variables into tests that create foreign repositories. This can redirect fixture Git operations into the parent repository. Clear Git's canonical local-env-vars only inside the test subprocess; preserve hook and staged-file behavior.
 
@@ -150,6 +164,193 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### R131
+
+**Outcome:** Local Game has a Transfer Room with a first-person bench, direct access to step outputs and exact action replay.
+**Kind:** feature
+**Touches:** `scripts/pm/app/`, `scripts/pm/assets/`, `scripts/pm-server.mjs`, `tests/pm-ui/`, Delivery UAT and vault guidance.
+
+- **Acceptance:** Seat and Overview share the same run and cursor. Each of the eleven zones opens its recorded evidence, including individual actions beyond the first thirty. Plan opens the frozen brief.
+- **Acceptance:** Jogging and comparing equal-time rows reveals only the evidence at each cursor. A poll can update Now without displacing the reader. Historical inspection sends no delivery commands.
+- **Acceptance:** A recorded handover brings the cassette to the owner. Current questions and UAT remain accessible through their existing controls. Failed, interrupted and link-down cases read distinctly.
+- **Acceptance:** Verify Blue and Pink at desktop and 390 px with reduced motion, keyboard and synthetic playback. Owner comfort, immersion and physical-device frame pacing are evaluated separately.
+
+[Design and implementation plan](<../Plans/Transfer Room/The Transfer Room.md>)
+
+### R129
+
+**Outcome:** Every label on the Local Game board and its dock can be read at a normal laptop window.
+**Kind:** bug
+**Depends on:** R125
+**Source:** [Agentic OS v0 review](<../Plans/Agentic OS v0 Review.md#2-required-before-relying-on-the-lane>) M3, 2026-11-16, measured on run `local-cac958d7` at 1358 × 849, DPR 1.65.
+**Touches:** `scripts/pm/app/stage/StageReadouts.tsx`, `scripts/pm/app/stage/stage-readouts.css`, `scripts/pm/app/local-run-mission.css`, `tests/pm-ui/`
+
+- **Acceptance:** No text inside the board, bar, dock or rail renders under 11 px effective size at 1280 × 640 and above, or under 10 px at 390 px, in Blue and Pink. Contrast at least 4.5:1.
+- **Acceptance:** No readout chip (check name, count, `MAIN`, commit, `RETRY`) overlaps a zone chip or another readout at any supported size, in Overview and Follow.
+- **Acceptance:** Scene, liveness, attention and game models unchanged; R123 performance budgets hold.
+- **Tier:** `CLAUDE_MID`.
+**Implementation:** done
+**UAT:** pending
+
+**2026-11-16 implementation:** factual board text now occupies a camera-reserved screen-space shelf; HUD/dock/rail text has 11 px desktop and 10 px phone floors, opaque readable disabled controls and wrapped counters. Live command labels use inverse camera scaling. All 24 Blue/Pink desktop/phone browser profiles pass, covering all conditional fact chips, rail states, actual Overview/Follow, contrast and occlusion. Minimum measured contrast is 4.72:1; no chip/dock collisions or out-of-board readouts. Evidence: `.pm/r129-evidence/result.json`. The combined replay suite passes 2,488 tests with eight opt-in skips; typecheck/scoped lint pass. Scene/liveness/attention/game models and canvas render paths are unchanged. Actual-owner FPS and device acceptance remain pending. [Owner scenarios](<../../../docs/Delivery-UAT.md#agentic-os-v0-corrections--dlv-161-parts-12--r121--r129--r130>).
+
+### R130
+
+**Outcome:** Sessions and Score show the agent that did the work and can call a session clean.
+**Kind:** bug
+**Source:** [Agentic OS v0 review](<../Plans/Agentic OS v0 Review.md#2-required-before-relying-on-the-lane>) M4, 2026-11-16.
+**Touches:** `scripts/os/hook.mjs`, `scripts/os/ingest.mjs`, `scripts/os/ingest/`, `scripts/os/eval.mjs`, `scripts/run-agent-hook.mjs`, `tests/os/`
+
+- **Acceptance:** A Codex session started and ended in the repository leaves event rows and one stored session without a manual command. Name the cause of the 15–16 November gap first; reproduce it in `tests/os/recorder.test.ts`.
+- **Acceptance:** A session that ends with a dirty tree and `base = head` is evaluated on its working-tree diff and stores a verdict, labelled as uncommitted.
+- **Acceptance:** Tier and model come from the model that produced most assistant turns. Fixture: a transcript with one Haiku turn and many Fable turns stores Fable.
+- **Acceptance:** Replay only; no provider turn (Hard Rule 29).
+- **Tier:** `CLAUDE_MID`.
+**Implementation:** done
+**UAT:** pending
+
+**2026-11-16 implementation:** `hook.mjs` explicitly excluded Codex from automatic Stop ingestion; the workstation also had only tool-hook trust entries. Stop now ingests either agent, repeated Stops update one session, same-HEAD dirty lifecycles evaluate a labelled current working-tree snapshot, and majority assistant-turn model attribution drives tier. Historical imports never borrow later dirty files. Recorder/eval replay: 26 passed; scoped ESLint and repository typecheck pass. Native SessionStart/Stop activation still requires owner `/hooks` approval; no historical backfill or provider turn. [Owner scenarios](<../../../docs/Delivery-UAT.md#agentic-os-v0-corrections--dlv-161-parts-12--r121--r129--r130>).
+
+### R125
+
+**Outcome:** At any window from 1280 × 640 up, the Local Game board fits without page scroll, its zone names are readable, and a failed run offers New attempt.
+**Kind:** bug
+**Source:** [Agentic OS Game and cockpit corrections](<../Plans/Agentic OS Game and Cockpit Corrections.md#r125--the-board-fits-reads-and-offers-the-right-action>), 2026-11-15 review of R123 on the failed HUB-118 run at 1358 × 696.
+**Touches:** `scripts/pm/app/stage/`, `scripts/pm/app/LocalRunGame.tsx`, `scripts/pm/app/localRunModel.ts`, `scripts/pm/app/LocalRunReview.tsx`, `scripts/pm/app/LocalDelivery.tsx`, `tests/pm-ui/`
+
+- **Acceptance:** The ten corrections in the sheet each pass their stated check in Blue and Pink, with reduced motion and keyboard. Scene, liveness, attention and game models are unchanged; Calm and `LocalActions` admission are untouched.
+- **Tier:** `CLAUDE_MID`.
+**Implementation:** done
+**UAT:** pending
+**Evidence (2026-11-15):** [R125 walkthrough](<../../../.pm/r125-evidence/README.md>) and [owner scenarios](<../../../docs/Delivery-UAT.md#game-board-and-cockpit-corrections--r125--r128--r127--r126>). Final viewport corrections 15/15 and interactions 4/4; 194 immutable-bundle legacy captures cover all four requested sizes in Blue and Pink, Calm, reduced motion, keyboard, no-head Cancel/New attempt and replay isolation. Typecheck, scoped lint, PM build and PowerShell replay checks pass. LocalActions compares byte-identically to HEAD. Owner actual-specimen FPS, physical phone and motion comfort remain Pending; no real session, backend restart, dependency, production write or commit.
+
+### R126
+
+**Outcome:** The Local Game view is the page: a full-window board with its own bar and dock, a camera that follows the work, eleven machines recognisable by shape, a gate lane and a failure scene.
+**Kind:** feature
+**Depends on:** R125
+**Source:** [Agentic OS Game and cockpit corrections](<../Plans/Agentic OS Game and Cockpit Corrections.md#r126--mission-layout-follow-camera-zone-identity-failure-scene>), 2026-11-15. Admission: R125 shipped and one real delivery recorded end to end; slice 4 also needs DLV-162.
+**Touches:** `scripts/pm/app/stage/`, `scripts/pm/app/LocalRunGame.tsx`, `scripts/pm/app/DeliveryWorkshop.tsx`, `scripts/pm/app/useStageClock.ts`, `tests/pm-ui/`
+
+- **Acceptance:** The ten acceptance checks in the sheet. Five slices, each shippable: layout, camera, zone identity and light, gate lane, failure scene and results. R123's truth contract and performance budgets hold.
+- **Tier:** `CLAUDE_HIGH`. Split by slice before dispatch.
+**Implementation:** partial — slices 1–3 verified; slices 4–5 deferred
+**UAT:** pending
+**Slice 1 evidence (2026-11-15):** [Mission layout receipt](<../../../.pm/r126-evidence/slice1/README.md>): full-window Game bar, dock, collapsible rail, lower 45% detail drawer, mobile two-row dock, and loading/error Back. Typecheck, scoped lint, PM build, 904 PowerShell PM replay tests and 55 browser checks/60 captures pass. LocalActions stays byte-identical to HEAD; Calm retains the earlier shared title correction. The owner explicitly requested slices 1–3; W1 is not yet recorded/exported, so witness FPS and physical-device/motion-comfort checks remain pending. Slice 4 is still gated on DLV-162; no R126 parent shipment.
+
+**Slice 2 evidence (2026-11-16):** [Camera receipt](<../../../.pm/r126-evidence/slice2/README.md>): Overview/Follow/Inspect, manual-pan hold, idle return, reduced cuts and unavailable-pose freeze. The independent checkpoint passed 921 PM tests, typecheck/lint/build and 41 browser checks/59 captures. All 88 Follow shots framed within 847.4 ms; all 106 observed cached bucket rebakes were at most 1.7 ms. Subsequent full-scene coverage found and fixed initial unavailable-before-first-resize fitting, with a dedicated controller ordering test and four viewport/theme captures. Failed probes and their corrections remain in the evidence; no budget was relaxed.
+
+**Slice 3 evidence (2026-11-16):** [Complete authorized-scope report](<../../../.pm/r126-evidence/README.md>): eleven silhouettes, exact recorded mechanical drivers, cached reached/off bodies and group light, 1.6× saturated ERA and the single recorded Ship/Revert capsule. Final typecheck, scoped lint, build and 100 PowerShell PM files/994 tests pass. Final full art: 205 checks; mission: 63; camera: 51; gallery: 89, with 330 clear native sprite bounds, zero strokes and an independent 11/11 blind review. All 134 bucket compositions are at most 1.4 ms; Full headed fixture replay measured 58.228 FPS / 0.6 ms p95, with zero static/state RAF draws. All required size/theme baselines and 2560×1440 DPR 2 fit without page scroll. Retained browser coverage combines a completed matrix and repaired tail with identical final source hashes; the original helper failures remain recorded. LocalActions matches HEAD and protected Calm/factual model hashes remain unchanged from R125. W1/owner FPS, physical device and comfort acceptance remain pending. No provider, real session, owner restart, dependency, production write or commit. R126 stays open; DLV-162 still gates slice 4 and slice 5 is outside this pass.
+
+### R127
+
+**Outcome:** The Prompt tools page is gone; Setup shows when each skill was last used.
+**Kind:** maintenance
+**Source:** [Agentic OS Game and cockpit corrections](<../Plans/Agentic OS Game and Cockpit Corrections.md#r127--retire-the-prompt-tools-page-show-skill-use-in-setup>), 2026-11-15; closes the page left behind by R98 and R108.
+**Touches:** `scripts/pm/app/`, `scripts/pm/launchpad-route.mjs`, `scripts/os/`, `.claude/recipes/`, `tests/`, `docs/Skills-and-Agents.md`, `ERA Notes/`
+
+- **Acceptance:** No route, button or bundle chunk for the page; `#/skill-tools` and bare `#/launch` open Work. Setup's skill list shows Last used and Sessions from recorded sessions, and tags a skill Unused only over at least 20 recorded sessions. The form sidecars are kept or deleted per owner decision D3. R98 is cancelled under the conventions.
+- **Tier:** `CLAUDE_LOW`.
+**Implementation:** done
+**UAT:** pending
+**Evidence (2026-11-15):** [R127 file/preservation manifest](<../../../.pm/r127-evidence/implementation.json>) and [browser evidence](<../../../.pm/r127-evidence/browser-summary.md>). Owner D3: **keep sidecars**; all eight forms and four retained machinery files compare byte-identically to their starting hashes. R98 is cancelled with original outcome/date/reason retained. Typecheck, scoped lint, PM build, 900 PowerShell PM replay tests, 79 focused tests, final reader/helper cases, fresh os:check, mirror/docs/PM checks and 48 viewport/theme captures pass; work-entry and cockpit-usability regressions pass against the exact source bundle. Node 22 SQLite fixture setup is isolated in a plain-JS helper to match the installed Node type version. Owner restart unloads the retired server endpoint. No provider turn, real session, PM restart, production write, dependency or commit.
+
+### R128
+
+**Outcome:** The setup registry refreshes itself, the recorder says when it is not recording, rule verdicts run on pushes to `main`, and one number means one thing on every cockpit page.
+**Kind:** bug
+**Source:** [Agentic OS Game and cockpit corrections](<../Plans/Agentic OS Game and Cockpit Corrections.md#r128--registry-recorder-and-counts-tell-the-truth>), 2026-11-15.
+**Touches:** `scripts/os/`, `scripts/pm/cockpit-worker.mjs`, `scripts/pm/cockpit-reader.mjs`, `scripts/pm/app/`, `.github/workflows/ci.yml`, `tests/os/`, `tests/pm-ui/`
+
+- **Acceptance:** `pnpm os:check` exits 0 on a fresh scan of the current setup and Setup rescans a stale registry. The recorder marker clears after a successful ingest and Setup shows its state. Each session without a verdict names the missing fact. CI evaluates `before..sha` on pushes to `main`. Bridge and Sessions, and Setup and Score, read the same counts; Bridge shows a skeleton until delivery status settles.
+- **Tier:** `CLAUDE_MID`.
+**Implementation:** done
+**UAT:** pending
+**Evidence (2026-11-15):** [R128 walkthrough](<../../../.pm/r128-evidence/README.md>). Required typecheck, scoped lint, PM build and PowerShell PM replay suite pass (89 files, 891 tests); 213 backend regressions and later focused recorder tests pass. Browser fixtures cover four sizes in Blue/Pink, 64 captures, delayed/failing reads and shared counts. Fresh scan/check: zero errors/warnings. The retained 467-file range evaluates in 890.6 ms instead of 46,780.5 ms under the unchanged 20 s ingest limit. No historical unknown is upgraded; the B09 historical ingest cause remains unrecorded. Owner restart activates backend changes; live marker recovery and retained-run projection after restart remain owner checks. No provider turn, real session, backend restart, production write, dependency or commit.
+
+### R123
+
+**Outcome:** The Local Game view is a solid eleven-zone board that fits the window, performs smoothly and makes recorded owner actions clear on the board, rail and tab together.
+**Kind:** feature
+**Source:** Owner commission 2026-11-15 after R122; [Local Run Stage Board and Attention](<../Plans/Local Run Stage Board and Attention.md>) is the governing execution sheet and supersedes conflicting R120/R122 art and performance rules.
+**Touches:** `scripts/pm/app/stage/`, `DeliveryWorkshop.tsx`, `LocalRunGame.tsx`, `useStageClock.ts`, `localRunAttention.ts`, `StagePresence.tsx`, `tabPresence.ts`, `tests/pm-ui/`; bounded optional supervisor rows in `scripts/delivery-v2/local-lane.mjs` and `local-process.mjs`.
+
+- **Acceptance:** All fifteen checks in the plan hold at 1494 x 934 / DPR 1.5 and 2560 x 1271 / DPR 1, Blue and Pink, with 390 px/reduced-motion/keyboard checks.
+- **Acceptance:** Static/state canvases draw only on their respective invalidations; the motion path respects the call/particle/3 ms p95 budgets and bans. Shift+P provides actual frame/call measurements; owner FPS acceptance remains separately recorded.
+- **Acceptance:** Eleven zones, build belt transit, solid materials and reserved HUD regions fit without cropping or overlap.
+- **Acceptance:** Attention is evidence-bound and unit-tested for every listed card, including future plan/question fixtures; owner acknowledgement cannot pretend to be server acceptance.
+- **Acceptance:** Kept R120/R122 models and tests, Calm, action admission and real-run presence remain intact. No provider turn, real session command, dependency installation or owner PM restart.
+
+**Execution:** delivery
+**Slice order:** Slices 1-7 in plan order; build optional slice 8 last only while delivery-v2 test edits remain expected-row updates. Its server activation needs an owner restart; never perform it here.
+**Verify:** Typecheck, scoped ESLint, PM build, PM Vitest, deterministic DPR 1.5 browser call counts, two desktop sizes/themes, mobile and actual headed-browser profiling. Evidence under `.pm/r123-evidence/`; no headless number is an owner FPS witness.
+**Implementation:** done
+**UAT:** pending
+
+**Delivery (2026-11-15):** All eight slices are implemented. Typecheck, scoped lint, PM build, PM/docs gates and 2,066 unique replay-only tests pass (eight pre-existing Docker-only skips). Final evidence covers 43 composed scenes / 60 art cases, 102 legacy captures, final 18-profile fit/runtime amendment and14 latest-wrapper/pulse/camera checks. Headed 1494 x 934 / DPR 1.5 measured about 60 FPS; worst phase p95 is0.5 ms, rest/beat calls 33/76, particles 51 and bake 1.3 ms. Static/state draw 0 in frames and between unchanged facts; terminal/reduced loops sleep. The latest accepted assets bind all 191 app-source hashes. The owner-approved scene/activity provenance guards reject narrated supervisor/failure phrases; the only prior game predicate change accepts genuine new Installing+Native start for existing awards. Canonical LocalActions remains byte-equal to HEAD and admission matches256 combinations. A final one-expression wrapper correction removes only duplicate cached-Game poll errors; session/command, Calm and no-data errors remain. [Walkthrough and exact receipt chain](<../../../.pm/r123-evidence/README.md>), [owner cases](<../../../docs/Delivery-UAT.md#local-run-board-and-attention--r123>). Actual-specimen FPS, appearance/device UAT and owner activation restart remain Pending. No production write, real provider/session, owner backend restart, repository commit or deployment occurred.
+
+### R122
+
+**Outcome:** The Local delivery Game stage becomes a living Foundry: a mind, a worker and a growing build, with recorded rows acted as scenes and health readable from motion.
+**Kind:** feature
+**Source:** Owner commission 2026-11-15 after R120: "It feels a primitive blueprint… more detailed, advanced, cooler, more animations, futuristic, more gamified… slower transitions… how someone would imagine AI thinking, working, showing off busy, realistic and gamified." Spec: [Local Run Stage Art and Motion](<../Plans/Local Run Stage Art and Motion.md>).
+**Touches:** `scripts/pm/app/stage/`, `scripts/pm/app/DeliveryWorkshop.tsx`, `scripts/pm/app/LocalRunGame.tsx`, `scripts/pm/app/LocalDelivery.tsx`, `scripts/pm/app/useStageClock.ts`, `scripts/pm/app/localRunActivityModel.ts`, `scripts/pm/app/StagePresence.tsx`, `scripts/pm/app/PocketEra.tsx`, `scripts/pm/app/stageSound.ts`, `scripts/pm/app/Debrief.tsx`, their CSS, `tests/pm-ui/`, `docs/Delivery-UAT.md`
+
+- **Acceptance:** All eleven quality bars in the art plan hold at 1440 px, Blue/Pink, with screenshot evidence.
+- **Acceptance:** Recorded rows use the six-stage beat, bounded backlog and Recap/Full replay; facts update immediately and staging trails no more than 12 seconds.
+- **Acceptance:** Vitality controls ambient life; at least fourteen moving elements while live, visible wind-down/recovery, hard freeze at link-down, Cortex cascades only during building.
+- **Acceptance:** All names/numbers have recorded evidence; truncated fragments never become files; wrapped reads count as Explore; tab presence always follows the real run.
+- **Acceptance:** Failure and all endings have the specified scenes; the black box docks beside the core with one scroll area.
+- **Acceptance:** Flow, badges, gauntlet and rank obey published rules and unit tests.
+- **Acceptance:** Calm remains untouched; keyboard, reduced motion, 390 px, Blue/Pink, hooks and unchanged LocalActions admission hold; scripting p95 is at most 6 ms.
+
+**Execution slices:** 0 truth fixes; A Golden Corner; B world; C mind/life; D states; E ceremonies; F game; G HUD/sound; H finish. The original intermediate visual-approval stop after A is superseded by the owner override below. All eleven quality bars still gate the full item.
+
+**Owner execution override (2026-11-15):** "regardless what it actually says, i want a full delivery of the plan, so keep going". Proceed through B–H without an intermediate A approval pause. Keep all visual quality and verification gates; the full plan remains R122's scope.
+**Reading guide:** `Plans/Local Run Stage Art and Motion.md`; R120 plan and models; `useStageClock.ts`; `coreParticles.ts`.
+**Verify:** Typecheck, scoped lint, PM build, PM Vitest, credential-free browser suite and entity gallery, under `.pm/r122-evidence/`. No provider turn, command or owner PM restart.
+**Verification (2026-11-15):** All authorized slices 0/A-H implemented. Typecheck, scoped ESLint, PM build, Feature Map/PM checks and 68 PM suites / 673 tests pass. Credential-free browser evidence: 163 settled art captures across 38 Blue/Pink state rows, 20 final loss/recovery captures and 100 retained-session regression captures. Actual world ink is 55.516% / 55.517%; all entity-size gates pass; genuine Full Edit is 4.392 s. Art profiling is 5.0 ms p95 / 132 peak particles; the final amended regression profile is 4.2 ms p95 / 252 peak particles, DPR 1.5. Replay ties, tempo changes, reduced-motion playback, two catch-up bursts, keyboard/camera, sound muting and hard freeze/recovery are verified. Final served JS/CSS and all 149 app sources match the transition and regression receipts. LocalActions, LocalLaunch and LocalReadinessPanel match HEAD exactly. Evidence and the plan walkthrough: `.pm/r122-evidence/README.md`; source-quality limits are explicit. No provider turn, real session command, production write, dependency installation or owner PM restart occurred.
+**Truth limits:** A current clean-streak increment requires a fresh, ordered canonical Score record joined by exact run ID and candidate head. Local's four host seals do not supply the separate `docs:check` and `os:check` evidence required by the canonical six-check clean verdict; a Ship phase alone never creates `+1`. Unknown usage/history remains unknown; no percentage, ETA or fabricated file is introduced.
+**Handover:** [Foundry owner scenarios](<../../../docs/Delivery-UAT.md#local-run-foundry-world--r122>). All automated/source gates have receipts; owner appearance and actual hardware/browser PiP, audio and notification acceptance remain Pending. This is a direct working-tree delivery over a9ef5bc1, with the preceding R120 work retained; no commit or live run was created.
+**Implementation:** done
+**UAT:** pending
+
+### R120
+
+**Successor scope (2026-11-15):** R122's accepted truth-contract amendments supersede this predecessor's motion/text/score restrictions for the new Foundry: facts remain evidence-bound, while abstract life follows vitality and game awards follow published rules. R120's original verification receipt remains historical; its data, replay and action-admission guarantees remain regression coverage.
+
+**Outcome:** The Local delivery Game view is a live stage: ERA visibly builds work from recorded evidence; quiet, stale, lost and failed sessions are recognisable at a glance.
+**Kind:** feature
+**Source:** Owner commission 2026-11-15 on HUB-118: "I feel it is dull… feel ERA literally working and advancing my work. If it is stale also hint it. If it is failed or broken, also hint that as well." Spec: [Local Run Game Mode](<../Plans/Local Run Game Mode.md>).
+**Touches:** `scripts/pm/app/`, `tests/pm-ui/`, `docs/Delivery-UAT.md`
+
+- **Acceptance:** All motion maps to recorded rows, checks or phases; distinct files build the core and only host checks earn seals. No percentage, ETA or score.
+- **Acceptance:** Quiet at 90 seconds, phase-specific No signal, interrupted Signal lost, actual poll failure Link down, and distinct terminal/owner states. Intentionally stopped or slowed terminal polling keeps its final state (owner decision 2026-11-15).
+- **Acceptance:** Failure decoding names the stopped stage and ANSI-stripped tail; commit-hook fixture reads Commit hook failed.
+- **Acceptance:** Live and keyboard-accessible replay share one pure scene function.
+- **Acceptance:** Wrapped reads count as Explore, paths are relative, narration is proportional.
+- **Acceptance:** Calm, reduced motion, keyboard, 390/1440, Blue/Pink and R118 hooks hold. LocalActions admission is unchanged.
+- **Acceptance:** Tab/favicon, optional Pocket ERA, theater, opt-in sound and notification controls follow the plan.
+
+**Reading guide:** `Plans/Local Run Game Mode.md`; `local-lane.mjs`; `useCoreMotion.ts`; `coreParticles.ts`; `LivePulse.tsx`.
+**Verify:** Typecheck, scoped lint, PM build, PM Vitest and credential-free browser scenes. No provider turn or backend restart.
+**Verification (2026-11-15):** 63 PM Vitest files / 600 tests, typecheck, changed-file ESLint, docs/PM checks pass. Exact root assets passed 99 browser screenshots across 12 state rows, Blue/Pink and 390/1440; the final hook-only amendment passed 37 focused screenshots covering initial placement, parked poses, replay silence/announcements and lifecycle regressions. Final motion sample: 298 frames, 0.4 ms p95 / 0.8 ms max, 123 peak particles, DPR 1. Bundle grew 43,119 B JS / 22,000 B CSS, within 45/25 KB limits. All 140 UI source files and final assets are hash-bound under `.pm/r120-evidence/`; `LocalActions` matches HEAD exactly. The credential-free temp fixture was stopped; no owner PM restart, provider turn or production write. [Owner scenarios](<../../../docs/Delivery-UAT.md#local-run-live-stage--r120>). Optional telemetry slice 5 is unstarted; interrupted-command recovery stays R121.
+**Implementation:** done
+**UAT:** pending
+
+### R121
+
+**Outcome:** An interrupted Local attempt can be closed and a new attempt started without losing retained evidence.
+**Kind:** bug
+**Source:** Local Run Game Mode plan, 2026-11-15; explicitly outside R120.
+**Touches:** `scripts/delivery-v2/local-lane.mjs`, `scripts/pm/app/LocalDelivery.tsx`, `scripts/pm/app/localBoardActions.ts`, `tests/delivery-v2/local-lane.test.ts`, `tests/pm-ui/local-delivery.test.ts`, `tests/pm-ui/local-board-actions.test.ts`
+- **Acceptance:** Owner cancellation of an interrupted attempt closes it without requiring a live supervisor task.
+- **Acceptance:** A subsequent explicit start creates a new attempt while preserving the old worktree and receipt.
+**Implementation:** done
+**UAT:** pending
+
+**2026-11-16 implementation:** new Local attempts persist supervisor PID/instance. Cancel closes a taskless attempt only after the recorded owner is proven dead, keeps its receipt/worktree and allows an explicit new attempt with a distinct path. Live siblings and legacy unknown ownership are refused without releasing the job. Calm and Game expose the same recovery command. Real-Git recovery and ownership regressions pass; native restart/cancel/relaunch remains owner UAT. Legacy records have no fabricated process identity. [Owner scenarios](<../../../docs/Delivery-UAT.md#agentic-os-v0-corrections--dlv-161-parts-12--r121--r129--r130>).
 
 ### R119
 
@@ -439,6 +640,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Full lint (2026-11-14):** completed with 9,285 errors / 51,983 warnings, matching the A6 baseline recorded in `docs/Skills-and-Agents.md`. Changed-file lint passes with zero warnings. Full output: `.pm/r101-evidence/lint-full.txt`.
 
 ### R98
+
+**Disposition:** cancelled 2026-11-15 under R127. The Prompt tools page and native generic-prompt expansion are retired; this is not shipped work. Owner decision D3 keeps the eight form sidecars, form/settings parsers and validation tests. Typed item intake is not commissioned. [Cancellation record](<../_Archive/Cancelled Log.md#pm-tooling>). The dated notes below preserve the original scope and implementation evidence.
 
 **Product disposition (2026-11-14, R108):** The owner rejected the generic skill launcher as insufficiently useful. Primary entry is now existing Work; the form/copy utility moves under Setup. Remaining native generic-prompt expansion is HELD, not implied by the retained code. Revisit only for a concrete repeated workflow with value beyond native chat; no provider launch is authorized by this item.
 
@@ -1833,6 +2036,16 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-11-14 — **R117** Restore Local session review and accurate Bridge execution states → [record](<../_Archive/Shipped/PM Tooling.md#r117>)
 - ✅ 2026-11-15 — **R118** Make Local delivery Game mode a living ERA workshop → [record](<../_Archive/Shipped/PM Tooling.md#r118>)
 - ✅ 2026-11-15 — **R119** Isolate pre-commit tests from the parent Git environment → [record](<../_Archive/Shipped/PM Tooling.md#r119>)
+- ✅ 2026-11-15 — **R120** Make Local delivery a live evidence stage → [record](<../_Archive/Shipped/PM Tooling.md#r120>)
+- ✅ 2026-11-15 — **R122** Build the Local delivery Foundry world → [record](<../_Archive/Shipped/PM Tooling.md#r122>)
+- ✅ 2026-11-15 — **R123** Replace the Local Game stage with a solid board and owner attention rail → [record](<../_Archive/Shipped/PM Tooling.md#r123>)
+- ✅ 2026-11-15 — **R124** Make gates fail only for real defects → [record](<../_Archive/Shipped/PM Tooling.md#r124>)
+- ✅ 2026-11-15 — **R125** Make the Local Game board fit, read and offer the right action → [record](<../_Archive/Shipped/PM Tooling.md#r125>)
+- ✅ 2026-11-15 — **R128** Keep the registry, recorder and cockpit counts true → [record](<../_Archive/Shipped/PM Tooling.md#r128>)
+- ✅ 2026-11-15 — **R127** Retire the Prompt tools page and show skill use in Setup → [record](<../_Archive/Shipped/PM Tooling.md#r127>)
+- ✅ 2026-11-16 — **R129** Make every label on the Local Game board readable → [record](<../_Archive/Shipped/PM Tooling.md#r129>)
+- ✅ 2026-11-16 — **R130** Record Codex sessions and score the working tree → [record](<../_Archive/Shipped/PM Tooling.md#r130>)
+- ✅ 2026-11-16 — **R121** Recover an interrupted Local attempt → [record](<../_Archive/Shipped/PM Tooling.md#r121>)
 
 ## Delivery session log
 
@@ -1843,6 +2056,10 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - 2026-10-24 — **R44** V2 run `r-69bc10ef3c60` · cancelled · codex gpt-6-luna <!-- v2:res-802d062b976a@1 -->
 - 2026-10-19 — **R44** V2 run `r-262a6aee5ed3` · cancelled · codex gpt-6-luna <!-- v2:res-d15d62b4752b@1 -->
 ## Successor Briefing
+
+**2026-11-15 R123 - current board:** [Local Run Stage Board and Attention](<../Plans/Local Run Stage Board and Attention.md>) governs the implemented eleven-zone solid board, reserved HUD and evidence-bound attention rail. Three canvases separate bakes, factual state and moving sprites; clocks/recorder subscribe without whole-page second ticks. All eight slices are built. Supervisor rows need an owner restart for future work; retained history is never backfilled. Preserve the approved supervisor-provenance guard and the setup-start compatibility predicate along with the prior director/vitality/game rules, Calm and LocalActions admission. The verified receipt is under [R123](<#r123>); owner actual-specimen FPS and UAT remain Pending. Do not archive the three plans until the owner accepts the implementation.
+
+**2026-11-15 R122 — shipped implementation, owner UAT Pending:** full 0/A-H delivery followed the owner's explicit gate waiver. Its final receipt records typecheck/scoped lint/build, 673 PM tests, 163 art captures, 20 transition captures and 100 session captures, with frozen application/served-asset identities in [the evidence walkthrough](<../../../.pm/r122-evidence/README.md>). This is a dated predecessor receipt. The R123 commission identifies the earlier 4.2 ms headless/DPR-1 profile as insufficient evidence for the owner's actual DPR-1.5 FPS; do not carry it forward as a performance acceptance witness. Retain R120's fact/liveness/failure boundaries and R122's evidence-derived game/beat rules. [Owner scenarios](<../../../docs/Delivery-UAT.md#local-run-foundry-world--r122>) remain Pending.
 
 **2026-11-14 R117:** repaired the actual HUB-118 Local startup exception by snapshotting the Claude SDK environment before freezing options; Node's `process.env` stays mutable and the sandbox remains fail-if-unavailable. Local review now has evidence-backed stages, work brief, four host checks, activity, changes and UAT controls. Local list metadata distinguishes active work, terminal outcomes and interrupted preparation/build/check phases. Bridge no longer lets old UAT hide active red execution or the latest grey failed/blocked state. Local refused Starts reuse the existing Delivery launch receipts and UUID replay; new explicit attempts preserve older run/worktree evidence with unique branch/path names. 597 relevant tests plus 44 adjacent checks, typecheck/build/scoped lint/docs checks and 28 desktop/mobile Blue/Pink browser screenshots pass. A read-only check against the owner's actual failed run confirms the UI and grey Bridge state. The running `--bridge` backend still needs an owner restart under Hard Rule 26; no live provider retry was executed. [Owner handover](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r117--local-session-review-bridge-states-and-startup-recovery>).
 

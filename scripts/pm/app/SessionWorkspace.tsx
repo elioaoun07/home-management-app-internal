@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -15,17 +14,16 @@ import {
   Search,
 } from "lucide-react";
 import { Back, ErrorNotice, PageTitle, SpaceIcon } from "./components";
-import { StewardRequests, useClock } from "./StewardRequests";
-import { PairV2, useV2Queue, useV2Runs, useV2Session } from "./DeliveryV2";
-import { useUat } from "./UatWizard";
+import { StewardRequests } from "./StewardRequests";
+import { PairV2 } from "./DeliveryV2";
 import { go, useRoute, useWorld } from "./state";
 import { transport } from "./transport";
 import {
-  sessionBoard,
   type SessionBoardCard,
-  type SessionBoardCounts,
   type SessionBoardLane,
 } from "./sessionBoardModel";
+import { useCockpitSessions } from "./useCockpitSessions";
+import { cockpitUnits as countLabel } from "./cockpitModel";
 import "./session-workspace.css";
 
 const ICONS = {
@@ -45,17 +43,6 @@ const EMPTY_STATES: Record<SessionBoardLane, string> = {
   finished: "No finished sessions",
   unknown: "No unconfirmed sessions",
 };
-const countLabel = (counts: SessionBoardCounts) =>
-  [
-    counts.sessions &&
-      `${counts.sessions} session${counts.sessions === 1 ? "" : "s"}`,
-    counts.requests &&
-      `${counts.requests} request${counts.requests === 1 ? "" : "s"}`,
-    counts.acceptance &&
-      `${counts.acceptance} item${counts.acceptance === 1 ? "" : "s"}`,
-  ]
-    .filter(Boolean)
-    .join(" · ") || "0 sessions";
 const shortDate = (value: string | null) =>
   value && Number.isFinite(Date.parse(value))
     ? new Intl.DateTimeFormat(undefined, {
@@ -150,53 +137,9 @@ function SessionCard({ card, from }: { card: SessionBoardCard; from: string }) {
 }
 
 export function SessionWorkspace() {
-  const { world, runs, runError, connected, connection, readError, runsReady } =
-    useWorld();
+  const { runError, readError } = useWorld();
   const route = useRoute();
-  const now = useClock(15000);
-  const session = useV2Session();
-  const v2 = useV2Runs();
-  const queue = useV2Queue();
-  const uat = useUat(!!session.data?.paired);
-  const statusKnown = !!(
-    connected &&
-    !connection.stale &&
-    !readError &&
-    runsReady &&
-    session.data?.paired &&
-    v2.isSuccess &&
-    !v2.isError &&
-    queue.isSuccess &&
-    !queue.isError &&
-    !session.isError
-  );
-  const board = useMemo(
-    () =>
-      sessionBoard({
-        world,
-        v1: runs,
-        v2: v2.data?.runs,
-        queue: queue.data,
-        requests: v2.data?.requests,
-        uat: uat.data,
-        statusKnown,
-        uatKnown: statusKnown && uat.isSuccess && !uat.isError,
-        from: route.full,
-        now,
-      }),
-    [
-      world,
-      runs,
-      v2.data,
-      queue.data,
-      uat.data,
-      uat.isSuccess,
-      uat.isError,
-      statusKnown,
-      route.full,
-      now,
-    ],
-  );
+  const { board, counts, now, session, v2, queue, uat, statusKnown } = useCockpitSessions(route.full);
   const fallback =
     (
       [
@@ -347,7 +290,7 @@ export function SessionWorkspace() {
                   </small>
                 </span>
                 <strong>
-                  {!lane.known && !lane.cards.length ? "—" : lane.cards.length}
+                  {!lane.known && !lane.cards.length ? "—" : lane.id === "needs" ? counts.needs : lane.id === "running" ? counts.running : lane.cards.length}
                 </strong>
               </button>
             );

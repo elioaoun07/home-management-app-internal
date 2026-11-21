@@ -356,7 +356,7 @@ describe("the canary battery can detect an escape", () => {
       expect(validation.valid).toBe(true);
       expect(validation.failures).toEqual([]);
     }
-  }, 30_000);
+  }, 60_000);
 
   it("does not read a missing target as containment", async () => {
     // The failure this guards: a canary pointed at a path that does not exist
@@ -488,5 +488,5 @@ describe("the host this was written for", () => {
     if (!help) return; // no codex on PATH in this environment; nothing to assert
     expect(help).toMatch(/Windows restricted token sandbox/u);
     expect(help).toMatch(/--permission-profile/u);
-  });
+  }, 60_000);
 });

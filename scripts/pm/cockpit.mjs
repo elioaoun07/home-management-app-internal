@@ -1,5 +1,5 @@
 // R97: a read-only view over A1–A4. No ingest, detector definitions or new store.
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { check } from "../os/check.mjs";
 import { collect } from "../os/score.mjs";
@@ -8,23 +8,37 @@ import { openStore, assertVersion } from "../os/store.mjs";
 import { safeFacts, redact } from "../os/privacy.mjs";
 import { pmFacts } from "../os/item.mjs";
 import { weekOf } from "./shared/metrics.mjs";
+import { writeSnapshot } from "../os/scan.mjs";
 
-export function cockpit(root) {
+export function cockpit(
+  root,
+  { refreshRegistry = false, deliverySnapshot = null } = {},
+) {
   const warnings = [];
   let setup = null,
     conflicts = [],
     records = [],
     deliveries = [],
-    groups = [];
+    groups = [],
+    nativeSessions = [],
+    sessionsAvailable = false;
   try {
-    const result = check(root);
+    let result = check(root);
+    if (
+      refreshRegistry === "force" ||
+      (refreshRegistry && result.rows.some((row) => row.code === "DRIFT"))
+    ) {
+      writeSnapshot(result.setup, root);
+      result = check(root);
+    }
     setup = result.setup;
     conflicts = result.rows;
   } catch (error) {
     warnings.push("Setup unavailable: " + redact(error.message));
   }
   try {
-    const data = collect({ root });
+    const data = collect({ root, deliverySnapshot });
+    nativeSessions = data.nativeSessions;
     deliveries = data.deliveries;
     const byId = new Map(data.records.map((r) => [r.session.id, r]));
     if (existsSync(join(root, ".os/os.db"))) {
@@ -78,6 +92,7 @@ export function cockpit(root) {
       return { ...group, trend };
     });
     if (data.deliveryWarning) warnings.push(data.deliveryWarning);
+    sessionsAvailable = true;
   } catch (error) {
     warnings.push("Sessions unavailable: " + redact(error.message));
   }
@@ -88,6 +103,32 @@ export function cockpit(root) {
   } catch (error) {
     warnings.push("Filing evidence unavailable: " + redact(error.message));
   }
+  const marker = join(root, ".os/recorder-unavailable");
+  const since = existsSync(marker) ? readFileSync(marker, "utf8").trim() : null;
+  const recorder = {
+    state: since !== null ? "unavailable" : "recording",
+    since,
+  };
+  // Only native transcript observations establish skill use; projected Local
+  // sessions cannot claim a skill merely because a work item recommends it.
+  const skills = new Map();
+  for (const session of nativeSessions) {
+    const seen = new Set();
+    for (const skill of session.skills || []) {
+      if (typeof skill.name !== "string") continue;
+      const current = skills.get(skill.name) || {
+        name: skill.name,
+        lastUsed: null,
+        sessions: 0,
+      };
+      const at = skill.at || session.startedAt;
+      if (at && (!current.lastUsed || at > current.lastUsed))
+        current.lastUsed = at;
+      if (!seen.has(skill.name)) current.sessions++;
+      seen.add(skill.name);
+      skills.set(skill.name, current);
+    }
+  }
   return safeFacts({
     setup,
     conflicts,
@@ -96,5 +137,11 @@ export function cockpit(root) {
     groups,
     filed,
     warnings,
+    recorder,
+    skillUsage: {
+      available: recorder.state === "recording" && sessionsAvailable,
+      recordedSessions: nativeSessions.length,
+      skills: [...skills.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    },
   });
 }

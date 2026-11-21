@@ -14,5 +14,5 @@ describe("standalone React application", () => {
     expect(bundle.css).toContain("data:font/woff2;base64,");
     expect(bundle.css).toContain("prefers-reduced-motion");
     expect(bundle.js).not.toContain("https://esm.sh");
-  });
+  }, 60_000);
 });

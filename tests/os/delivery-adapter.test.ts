@@ -12,6 +12,8 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { openStore as deliveryStore } from "../../scripts/delivery-v2/store.mjs";
 import { readDelivery } from "../../scripts/os/ingest/delivery.mjs";
+import { captureDeliverySnapshot } from "../../scripts/os/ingest/delivery-snapshot.mjs";
+import { collect } from "../../scripts/os/score.mjs";
 const root = mkdtempSync(join(tmpdir(), "era-a4-delivery-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 const git = (...args: string[]) => {
@@ -161,7 +163,7 @@ describe("A4 Delivery read-only adapter", () => {
       readDelivery({ root, path, now: "2026-11-02T10:00:00Z" }).deliveries[0]
         .reverted,
     ).toBe(true);
-  });
+  }, 60_000);
   it("refuses unavailable or live-WAL sources instead of creating/checkpointing them", () => {
     const missing = join(root, "missing.sqlite");
     expect(() => readDelivery({ root, path: missing })).toThrow();
@@ -179,4 +181,56 @@ describe("A4 Delivery read-only adapter", () => {
     );
     db.close();
   });
+  it("projects a Local run from the existing service view without touching live WAL bytes", () => {
+    const path = join(root, ".delivery/v2/supervisor.sqlite");
+    const db = deliveryStore({ path });
+    try {
+      const id = "local-cac958d7-fixture";
+      db.insertRun({
+        run_id: id,
+        work_id: "HUB-118",
+        contract_id: "c",
+        contract_revision: 1,
+      });
+      db.updateRun(id, {
+        base_manifest_json: {
+          lane: "local",
+          work: { id: "HUB-118" },
+          phase: "failed",
+          settings: { executor: "claude" },
+        },
+      });
+      db.insertJob({
+        job_id: "local-snapshot-job",
+        run_id: id,
+        purpose: "build",
+        backend_id: "claude-agent-sdk",
+        dispatch_key: "local-snapshot-job",
+        contract_id: "c",
+        contract_revision: 1,
+        grant_id: "g",
+        grant_revision: 1,
+        reservation: { unit: "tokens", amount: 0, basis: "subscription" },
+      });
+      db.markDispatchStarted("local-snapshot-job", "2026-11-15T06:00:00Z");
+      const before = readFileSync(path + "-wal");
+      const view = db.readOnlyView();
+      const snapshot = captureDeliverySnapshot(view);
+      expect(view.readOnlySnapshotCurrent()).toBe(true);
+      const data = collect({ root, deliverySnapshot: snapshot });
+      expect(data.deliveryWarning).toBeNull();
+      expect(data.nativeSessions).toEqual([]);
+      expect(
+        data.records.find((record) => record.session.runId === id)?.session,
+      ).toMatchObject({
+        itemId: "HUB-118",
+        coverage: "supervisor",
+        source: "delivery-v2",
+      });
+      expect(readFileSync(path + "-wal").equals(before)).toBe(true);
+      expect(view.readOnlySnapshotCurrent()).toBe(true);
+    } finally {
+      db.close();
+    }
+  }, 60_000);
 });

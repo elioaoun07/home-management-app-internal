@@ -1,0 +1,16 @@
+.board-perf {
+  position: absolute;
+  z-index: 30;
+  right: 12px;
+  bottom: 12px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--ink);
+  background: var(--surface);
+  font: 11px var(--font-mono, monospace);
+  pointer-events: none;
+}
+.board-perf[hidden] {
+  display: none;
+}

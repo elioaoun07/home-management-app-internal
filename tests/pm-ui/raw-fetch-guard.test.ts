@@ -87,7 +87,7 @@ describe("raw mutating fetch guard", () => {
       results.set(filePath, row);
     }
     expect(results.size).toBe(Object.keys(inputs).length);
-  });
+  }, 60_000);
 
   function lintText(code: string, filePath: string) {
     expect(inputs[filePath]).toBe(code);

@@ -543,7 +543,7 @@ export function openStore({ path, now = () => new Date().toISOString(), readOnly
     readOnlyView() {
       const version = () => String(db.prepare("PRAGMA data_version").get().data_version) + ":" + String(db.prepare("SELECT total_changes() AS changes").get().changes);
       const observed = version();
-      const names = ["getRun", "listRuns", "getWorkRef", "listWorkRefs", "getContract", "getGrant", "getJob", "listJobs", "listAllJobs", "listOutstandingJobs", "countUsageReadings", "listUsageReadings", "listSubagentActivity", "listDecisions", "getDecision", "getPlan", "listPlans", "listCandidates", "listEvidence", "latestResult", "listResults", "getApplication", "listApplications", "listAllApplications", "listActiveApplications"];
+      const names = ["getRun", "listRuns", "getWorkRef", "listWorkRefs", "getContract", "getGrant", "getJob", "listJobs", "listAllJobs", "listOutstandingJobs", "countUsageReadings", "listUsageReadings", "listSubagentActivity", "listActivity", "listDecisions", "getDecision", "getPlan", "listPlans", "listCandidates", "listEvidence", "latestResult", "listResults", "getApplication", "listApplications", "listAllApplications", "listActiveApplications"];
       return Object.freeze({ ...Object.fromEntries(names.map(name => [name, api[name].bind(api)])), close() {},
         readOnlySnapshotCurrent: () => { try { return version() === observed; } catch { return false; } },
       });

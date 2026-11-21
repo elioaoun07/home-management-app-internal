@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tierAlias, pmFacts } from "./item.mjs";
@@ -7,9 +7,9 @@ import { readCodex } from "./ingest/codex.mjs";
 import { readClaude } from "./ingest/claude.mjs";
 import { eventFile, gitFact } from "./runtime.mjs";
 import { assertVersion, openStore } from "./store.mjs";
-import { evaluate, readRange } from "./eval.mjs";
+import { evaluate, readRange, readWorkingTree } from "./eval.mjs";
 
-/** @param {{root: string, transcript: string, sessionId?: string|null, range?: string|null, agent?:string, itemId?:string|null, tier?:string|null}} input */
+/** @param {{root: string, transcript: string, sessionId?: string|null, range?: string|null, agent?:string, itemId?:string|null, tier?:string|null, workingTree?:boolean}} input */
 export async function ingest({
   root,
   transcript,
@@ -18,7 +18,10 @@ export async function ingest({
   agent = "claude",
   itemId = null,
   tier = null,
+  workingTree = false,
 }) {
+  const marker = resolve(root, ".os/recorder-unavailable");
+  const markerBefore = existsSync(marker) ? readFileSync(marker, "utf8") : null;
   if (!["claude", "codex"].includes(agent))
     throw new Error("Unsupported agent");
   const facts = await (agent === "codex" ? readCodex : readClaude)(
@@ -61,13 +64,31 @@ export async function ingest({
     (start?.git?.head && stop?.git?.head
       ? `${start.git.head}..${stop.git.head}`
       : null);
-  const context = selectedRange ? readRange(root, selectedRange) : null;
+  const uncommitted =
+    workingTree &&
+    !range &&
+    stop?.git?.dirty &&
+    start?.git?.head &&
+    start.git.head === stop.git.head;
+  // A lifecycle with no commit still contains the actual work. Only evaluate
+  // that snapshot while HEAD still matches the recorded Stop; a later import
+  // must not attribute another session's tree to this flight.
+  const context =
+    uncommitted && gitFact(root, "rev-parse", "HEAD") === stop.git.head
+      ? readWorkingTree(root, stop.git.head)
+      : selectedRange
+        ? readRange(root, selectedRange)
+        : null;
   const evaluation = context ? evaluate(context) : null;
   if (!evaluation)
     warnings.push(
       "Rule verdicts unavailable: supply --range <base>..<head> for historical sessions",
     );
-  if (start?.git?.dirty || stop?.git?.dirty)
+  if (context?.scope === "uncommitted")
+    warnings.push(
+      "Uncommitted working-tree snapshot: verdicts include pre-existing dirty changes",
+    );
+  else if (start?.git?.dirty || stop?.git?.dirty)
     warnings.push(
       "Dirty worktree observed: verdicts cover committed range only",
     );
@@ -83,10 +104,11 @@ export async function ingest({
     model: facts.model,
     effort: facts.effort,
     startedAt: start?.timestamp ?? facts.startedAt,
-    endedAt:
-      stop && !stop.blocked && stop.exitCode === 0
+    endedAt: stop
+      ? !stop.blocked && stop.exitCode === 0
         ? stop.timestamp
-        : (facts.endedAt ?? null),
+        : null
+      : (facts.endedAt ?? null),
     lastObservedAt: facts.lastObservedAt,
     branch: start?.git?.branch ?? facts.branch,
     worktree: start?.git?.worktree ?? facts.worktree,
@@ -96,7 +118,9 @@ export async function ingest({
     rangeSource: range
       ? "explicit import range"
       : evaluation
-        ? "runner lifecycle"
+        ? context.scope === "uncommitted"
+          ? "runner lifecycle: uncommitted working tree"
+          : "runner lifecycle"
         : null,
     skills: facts.skills,
     reads: facts.reads,
@@ -144,6 +168,15 @@ export async function ingest({
       item,
     );
     store.put(record);
+    // A successful durable ingest establishes recovery. Preserve an outage
+    // that began after this import observed the marker.
+    if (
+      markerBefore !== null &&
+      (!stop || (!stop.blocked && stop.exitCode === 0)) &&
+      existsSync(marker) &&
+      readFileSync(marker, "utf8") === markerBefore
+    )
+      unlinkSync(marker);
   } finally {
     store.close();
   }
@@ -161,10 +194,15 @@ if (
       range = null,
       agent = "claude",
       itemId = null,
-      tier = null;
+      tier = null,
+      workingTree = false;
     while (args.length) {
-      const flag = args.shift(),
-        value = args.shift();
+      const flag = args.shift();
+      if (flag === "--working-tree") {
+        workingTree = true;
+        continue;
+      }
+      const value = args.shift();
       if (
         !value ||
         !["--session", "--range", "--agent", "--item", "--tier"].includes(flag)
@@ -190,6 +228,7 @@ if (
       agent,
       itemId,
       tier,
+      workingTree,
     });
     process.stdout.write(
       `Ingested ${session.id}; pnpm os:report ${session.id}\n`,

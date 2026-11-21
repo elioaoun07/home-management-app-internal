@@ -1,30 +1,43 @@
+import { useEffect, useState } from "react";
 import { Check, FileText, GitBranch, ListChecks } from "lucide-react";
 import { Markdown, RunOrb } from "./components";
-import { bareTitle } from "./deliveryHomeModel";
 import { LocalActions, type LocalRunView } from "./LocalDelivery";
 import { useGameLayer } from "./GameLayer";
 import { LocalRunGame } from "./LocalRunGame";
+import { LocalChat } from "./LocalChat";
 import {
+  displayTitle,
   LOCAL_CHECKS,
   localCheckLabel,
-  localFailureTitle,
-  localRunLabel,
   localRunStages,
 } from "./localRunModel";
 import "./local-run.css";
+import { liveness, clock } from "./localRunLiveness";
+import { localRunFailure, stripAnsi } from "./localRunFailure";
+import { buildTimeline, sceneAt } from "./localRunScene";
 
 export function LocalRunReview({
   run,
   busy,
   act,
   patch,
+  poll,
+  retry,
 }: {
   run: LocalRunView;
   busy: boolean;
   act: (action: "review" | "ship" | "undo" | "cancel") => void;
   patch: string | null;
+  poll?: { dataUpdatedAt: number; isError: boolean };
+  retry?: () => void;
 }) {
   const game = useGameLayer();
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (game.enabled) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [game.enabled]);
   if (game.enabled)
     return (
       <LocalRunGame
@@ -33,16 +46,19 @@ export function LocalRunReview({
         busy={busy}
         act={act}
         patch={patch}
+        poll={poll}
+        retry={retry}
       />
     );
   const running =
     ["preparing", "building", "checking"].includes(run.phase) &&
-    !run.interrupted;
+    !run.interrupted &&
+    !run.parked;
+  const health = liveness(run, now, poll);
+  const snapshot = sceneAt(buildTimeline(run), now);
   const stages = localRunStages(run);
-  const title = bareTitle(run.work.title, run.work.id).replace(
-    /\s+— criteria$/u,
-    "",
-  );
+  const failure = localRunFailure(run);
+  const title = displayTitle(run);
   return (
     <>
       <header className="run-heading">
@@ -62,7 +78,22 @@ export function LocalRunReview({
         />
         <div>
           <span className="eyebrow">Local session</span>
-          <h2 role="status">{localRunLabel(run)}</h2>
+          <h2 aria-live="off">
+            {health.caption}
+            {snapshot.elapsed !== null && (
+              <>
+                {" "}
+                ·{" "}
+                <time>
+                  {clock(snapshot.elapsed)}
+                  {run.activity.length >= 200 ? "+" : ""}
+                </time>
+              </>
+            )}
+          </h2>
+          <span className="stage-announcement" role="status">
+            {health.state}
+          </span>
           {run.settings && (
             <p>
               {[run.settings.executor, run.settings.model, run.settings.effort]
@@ -97,17 +128,20 @@ export function LocalRunReview({
           </div>
         ))}
       </nav>
-      {(run.error || run.interrupted) && (
+      {(run.error || run.failure || run.interrupted) && (
         <section className="local-run-failure" aria-label="Session issue">
           <h2 role="alert">
             {run.interrupted
               ? "Session interrupted"
-              : localFailureTitle(run.error!)}
+              : failure?.title}
           </h2>
+          {!run.interrupted && run.failure && failure?.excerpt && (
+            <pre className="black-box-excerpt">{failure.excerpt}</pre>
+          )}
           {run.error && (
             <details>
               <summary>Error details</summary>
-              <pre>{run.error}</pre>
+              <pre>{stripAnsi(run.error!)}</pre>
             </details>
           )}
           {run.work.campaign && ["failed", "cancelled"].includes(run.phase) && (
@@ -121,6 +155,7 @@ export function LocalRunReview({
         </section>
       )}
       <LocalActions run={run} busy={busy} act={act} />
+      <LocalChat run={run} />
       <div className="run-story-grid local-run-story">
         <section className="local-run-plan" aria-label="Plan">
           <h2>

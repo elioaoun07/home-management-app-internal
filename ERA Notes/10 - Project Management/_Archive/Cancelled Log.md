@@ -38,4 +38,5 @@ tags:
 - ❌ 2026-09-26 — **DLV-93** Limit repairs and complete a second V1 product item. _(cancelled: owner check; V1 is frozen and replaced by Delivery V2; owner scope decision 2026-09-26)_
 
 ## PM Tooling
+- ❌ 2026-11-15 — **R98** The owner picks a skill, fills a form generated from its declared inputs, and gets a ready prompt or launched session without follow-up input questions. _(cancelled: owner retired Prompt tools under R127; native generic-prompt expansion is not pursued. D3 keeps the forms and sidecars, without commissioning typed item intake)_ — [original criteria](<../PM Tooling/PM Tooling — Master Book.md#r98>)
 - ❌ 2026-09-26 — **R42** Live-verify `/pm/live`'s mobile rebuild on a real phone: confirm the `SegmentedPanes` swipe (not just the tap) reliably advances panes. _(cancelled: owner check on the V1 session view; V1 is frozen and replaced by Delivery V2; owner scope decision 2026-09-26)_

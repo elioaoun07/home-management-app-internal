@@ -1,0 +1,23 @@
+[41m[1m FAIL [22m[49m tests/os/recorder.test.ts[2m > [22mA3 hook passthrough[2m > [22mleaves the real guard working with the wrapper removed
+[31m[1mAssertionError[22m: expected 1 to be +0 // Object.is equality[39m
+[41m[1m FAIL [22m[49m tests/os/recorder.test.ts[2m > [22mA3 hook passthrough[2m > [22mpreserves denial/output when .os is unwritable or payload is invalid
+[31m[1mAssertionError[22m: expected 1 to be +0 // Object.is equality[39m
+[41m[1m FAIL [22m[49m tests/os/recorder.test.ts[2m > [22mA3 hook passthrough[2m > [22mredacts diagnostics at write time without changing hook output
+[31m[1mAssertionError[22m: expected 1 to be +0 // Object.is equality[39m
+[41m[1m FAIL [22m[49m tests/os/recorder.test.ts[2m > [22mA3 hook passthrough[2m > [22mrecords lifecycle setup/base and auto-ingests Stop without affecting exit
+[31m[1mAssertionError[22m: expected 1 to be +0 // Object.is equality[39m
+[41m[1m FAIL [22m[49m tests/os/recorder.test.ts[2m > [22mA3 read-only transcript ingest and durable report[2m > [22mderives skills/reads/checks, deduplicates streaming usage and survives reopen/reingest
+[31m[1mAssertionError[22m: expected 1 to be +0 // Object.is equality[39m
+[41m[1m FAIL [22m[49m tests/os/recorder.test.ts[2m > [22mA3 read-only transcript ingest and durable report[2m > [22mrefuses unknown versions, bad identity and truncated JSON without replacing stored evidence
+[31m[1mAssertionError[22m: expected 1 to be +0 // Object.is equality[39m
+[41m[1m FAIL [22m[49m tests/os/recorder.test.ts[2m > [22mA3 read-only transcript ingest and durable report[2m > [22mrolls back a failed replacement and refuses unknown row versions
+[31m[1mAssertionError[22m: expected 1 to be +0 // Object.is equality[39m
+[41m[1m FAIL [22m[49m tests/os/registry.test.ts[2m > [22mA1 conflict classes, isolated repositories[2m > [22mrecognizes a generated mirror of the wired pre-commit script, while drift remains visible
+[31m[1mAssertionError[22m: expected [ { code: 'DEAD', …(3) } ] to deeply equal [][39m
+[41m[1m FAIL [22m[49m tests/os/setup.test.ts[2m > [22mA0 generated setup[2m > [22mruns the generated guard from a subdirectory in a repo path containing spaces
+[31m[1mAssertionError[22m: node:internal/modules/cjs/loader:1386
+Error: Cannot find module 'C:\Users\aoune\AppData\Local\Temp\era-a0-with spaces-6UGBdA\portable\scripts\scripts\run-agent-hook.mjs'
+[41m[1m FAIL [22m[49m tests/os/setup.test.ts[2m > [22mA0 generated setup[2m > [22mGit invokes the executable pre-commit, and failed checks reject an isolated commit
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+[2m Test Files [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m317 passed[39m[22m[2m | [22m[33m3 skipped[39m[90m (323)[39m
+[2m      Tests [22m [1m[31m10 failed[39m[22m[2m | [22m[1m[32m5020 passed[39m[22m[2m | [22m[33m24 skipped[39m[90m (5054)[39m

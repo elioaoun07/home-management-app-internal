@@ -1,4 +1,18 @@
 import type { LocalRunView } from "./LocalDelivery";
+import { bareTitle } from "./deliveryHomeModel";
+
+/** The id is displayed separately; stored criteria headings may repeat it. */
+export function displayTitle(run: {
+  work: Pick<LocalRunView["work"], "id" | "title">;
+}) {
+  let title = run.work.title;
+  let next = bareTitle(title, run.work.id);
+  while (next !== title) {
+    title = next;
+    next = bareTitle(title, run.work.id);
+  }
+  return title.replace(/\s+— criteria$/u, "");
+}
 
 export const LOCAL_CHECKS = ["typecheck", "lint", "test", "pm:lint"] as const;
 const labels: Record<string, string> = {

@@ -7,6 +7,7 @@ import {
 } from "../../scripts/pm/app/LocalDelivery";
 import type { LocalRunView } from "../../scripts/pm/app/LocalDelivery";
 import { LocalRunReview } from "../../scripts/pm/app/LocalRunReview";
+import { BlackBox } from "../../scripts/pm/app/BlackBox";
 import {
   localCheckLabel,
   localRunStages,
@@ -43,6 +44,14 @@ describe("Local delivery controls", () => {
     expect(actions({ ...base, phase: "push-pending" })).not.toMatch(
       /disabled="">Retry push/,
     );
+  });
+  it("keeps recovery actions available for interrupted attempts and merges", () => {
+    for (const phase of ["preparing", "building", "checking"]) {
+      expect(actions({ ...base, phase, interrupted: true })).toContain(">Cancel<");
+      expect(actions({ ...base, phase, interrupted: true }, true)).toMatch(/disabled="">Cancel/);
+    }
+    expect(actions({ ...base, phase: "merging", canShip: true })).not.toMatch(/disabled="">Ship/);
+    expect(actions({ ...base, phase: "cancelled", interrupted: true })).not.toContain(">Cancel<");
   });
   it("shows only the three Local checks plus labelled advisories", () => {
     const html = renderToStaticMarkup(
@@ -153,5 +162,13 @@ describe("Local session review", () => {
         error: null,
       }),
     ).toBe("Inconclusive");
+  });
+  it.each(["Calm", "Game"])("shows the structured reason before collapsed raw output in %s", mode => {
+    const structured = { ...run, error: "raw fixture hook chatter", failure: { code: "native-error", step: "Build", detail: "Sandbox required but unavailable" } } satisfies LocalRunView;
+    const html = renderToStaticMarkup(mode === "Game" ? createElement(BlackBox, { run: structured }) : createElement(LocalRunReview, { run: structured, busy: false, act: () => {}, patch: null }));
+    expect(html).toContain("Agent ended early");
+    expect(html.indexOf("Sandbox required but unavailable")).toBeLessThan(html.indexOf("<summary>Error details</summary>"));
+    expect(html).toMatch(/<details[^>]*><summary>Error details<\/summary>/u);
+    expect(html.indexOf("raw fixture hook chatter")).toBeGreaterThan(html.indexOf("<summary>Error details</summary>"));
   });
 });

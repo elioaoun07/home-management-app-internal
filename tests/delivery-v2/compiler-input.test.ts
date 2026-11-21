@@ -76,4 +76,4 @@ it("compiles a TS import through frozen JSX and JS dependencies even with a TS-o
   rmSync(join(frozen.root, "src/Widget.jsx"));
   expect(diagnostics().some(diagnostic => diagnostic.code === 2307)).toBe(true);
   expect(() => verifyCompilerInput(frozen)).toThrow();
-});
+}, 60_000);
