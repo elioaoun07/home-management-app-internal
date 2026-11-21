@@ -55,9 +55,12 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Outcome:** No cron route accepts `Bearer undefined`.
 
 **Kind:** bug
-**Touches:** `src/app/api/cron/purge-recycle-bin/route.ts`, `src/app/api/cron/gcal-reconcile/route.ts`
+**Implementation:** done
+**UAT:** pending
+**Touches:** `src/lib/cronAuth.ts`, `src/app/api/cron/*/route.ts` (all six), `scripts/os/detectors/hr-8-cron-guards.mjs`
 
-- **Source:** [Major Bug Sweep S2](<../Research/Major Bug Sweep.md#s2>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Source:** [Major Bug Sweep S2](<../Research/Major Bug Sweep.md#s2>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; implemented 2026-11-21: new `isCronAuthorized(req)` (`src/lib/cronAuth.ts`: unset or empty secret rejects everything, timing-safe compare, secret read per call) now gates all six cron routes, so `purge-recycle-bin` and `gcal-reconcile` no longer accept `Bearer undefined`. The HR-8 detector accepts the helper only when imported from `@/lib/cronAuth` (fixture + test added). Evidence: `src/app/api/cron/cronAuth.test.ts` (every handler of all six routes; red on the two routes before the fix, green after) and `src/lib/cronAuth.test.ts`. Not run: a Preview deployment without the secret, or the real scheduler call.
+- **Owner UAT:** [Major Bug Sweep S2 UAT](<../Research/Major Bug Sweep.md#s2>): on a Preview deployment without `CRON_SECRET`, `curl -H "Authorization: Bearer undefined" <preview>/api/cron/purge-recycle-bin` → 401; on production the scheduler's next call to each cron route still succeeds (check its last-run trace).
 - **Acceptance:** With `CRON_SECRET` unset, `Authorization: Bearer undefined` returns 401 on all six cron routes. One shared `isCronAuthorized(req)` is used by all six.
 - **Tier:** CLAUDE_LOW; owner review (cron). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
 - **Reading guide:** Both routes compare at line 22; the other four guard first (for example `item-reminders/route.ts:84-86`).
@@ -810,6 +813,7 @@ Item plans use the [execution-plan convention](<../_Conventions.md#9-item-execut
 - ✅ 2026-07-10 — **Google Calendar backup sync** (one-way, Calendar API not ICS) for Scheduled notifications, with three same-day fix passes — including catching its own "code-complete"… → [record](<../_Archive/Shipped/Notifications & Alerts.md#2026-07-10--google-calendar-backup-sync>)
 - ✅ 2026-07-10 — private-thread exclusion enforced on the immediate Hub push path as well as the cron, closing an owner-only visibility leak; the Budget/Reminder purpose allowlist removed from both paths
 - ✅ 2026-07-10 — `console.*` stripped from `/api/notifications/in-app` and `/api/notifications/actions`
+- ✅ 2026-11-21 — **NOTIF-22** Refuse cron calls when the secret is unset → [record](<../_Archive/Shipped/Notifications & Alerts.md#notif-22>)
 
 Routing NOTIF-1.1–1.6 is recorded complete in the 2026-09-02 baseline. The historical ship date is unrecorded; the stale Phase1 DoD checkbox is retired on that evidence.
 

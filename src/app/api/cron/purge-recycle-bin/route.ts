@@ -8,6 +8,7 @@
 //       { "path": "/api/cron/purge-recycle-bin", "schedule": "0 3 * * *" }
 //     ]
 //   }
+import { isCronAuthorized } from "@/lib/cronAuth";
 import { RECYCLE_BIN_MODULES } from "@/lib/recycleBin/registry";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
@@ -18,8 +19,7 @@ export const dynamic = "force-dynamic";
 const RETENTION_DAYS = 30;
 
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

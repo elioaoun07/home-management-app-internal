@@ -14,8 +14,6 @@ owner: Elio
 
 ## Now
 
-- [ ] **NOTIF-22** Refuse cron calls when the secret is unset — [criteria](<Notifications & Alerts — Master Book.md#notif-22>) _(friction - S)_
-
 ## Next
 
 **Needs you**

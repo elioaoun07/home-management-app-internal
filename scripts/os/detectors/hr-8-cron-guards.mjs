@@ -52,6 +52,17 @@ export function detect(context) {
           literal(node.parent.parent.parent.moduleSpecifier) ===
             "@/lib/supabase/admin",
       ).map((node) => node.name.text);
+      // The shared gate: `if (!isCronAuthorized(req)) return 401`, imported
+      // from the one module that rejects an unset secret and a mismatched
+      // Bearer header (NOTIF-22). A same-named local function does not count.
+      const gateNames = nodes(
+        tree,
+        (node) =>
+          ts.isImportSpecifier(node) &&
+          (node.propertyName ?? node.name).text === "isCronAuthorized" &&
+          literal(node.parent.parent.parent.moduleSpecifier) ===
+            "@/lib/cronAuth",
+      ).map((node) => node.name.text);
       const calls = nodes(tree, ts.isCallExpression);
       const admin =
         calls.some((node) =>
@@ -138,7 +149,27 @@ export function detect(context) {
                   (header(test.right) && bearer(test.left))),
             ) && /\b(?:401|403)\b/.test(printed(entry.thenStatement)),
         );
-        if (!unset || !auth)
+        const shared = guards.some(
+          (entry) =>
+            rejects(
+              entry.expression,
+              (test) => {
+                const call =
+                  ts.isPrefixUnaryExpression(test) &&
+                  test.operator === ts.SyntaxKind.ExclamationToken
+                    ? unwrapped(test.operand)
+                    : null;
+                return (
+                  call &&
+                  ts.isCallExpression(call) &&
+                  ts.isIdentifier(call.expression) &&
+                  gateNames.includes(call.expression.text) &&
+                  call.arguments.length === 1
+                );
+              },
+            ) && /\b(?:401|403)\b/.test(printed(entry.thenStatement)),
+        );
+        if (!shared && (!unset || !auth))
           rows.push(
             finding(
               node,

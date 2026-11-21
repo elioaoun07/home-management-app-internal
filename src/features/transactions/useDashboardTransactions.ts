@@ -525,40 +525,41 @@ export function useDeleteTransaction() {
       const isSilent = typeof input === "object" && input._silent;
       if (isSilent) return; // Caller handles its own toast (e.g. undo flows)
 
-      const deleted = context?.deletedTransaction;
+      const transactionId = typeof input === "string" ? input : input.id;
+      const accountId = context?.accountId;
+      let undone = false;
       toast.success("Transaction deleted", {
         icon: ToastIcons.delete,
         duration: 4000,
         action: {
           label: "Undo",
+          // Restore the soft-deleted original: same id, fields and links, and
+          // the server re-applies exactly the balance delta the delete
+          // reversed. Never re-create it — the original stays in the Recycle
+          // Bin, so a later restore would count the money twice (BUD-89).
           onClick: async () => {
+            if (undone) return;
+            undone = true;
             try {
-              if (deleted) {
-                const response = await fetch("/api/transactions", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    date: deleted.date,
-                    amount: deleted.amount,
-                    description: deleted.description,
-                    account_id: deleted.account_id,
-                    category_id: deleted.category_id,
-                    subcategory_id: deleted.subcategory_id,
-                    is_private: deleted.is_private,
-                  }),
-                });
-                if (!response.ok) throw new Error("Failed to recreate");
-                queryClient.invalidateQueries({ queryKey: ["transactions"] });
-                queryClient.invalidateQueries({
-                  queryKey: ["transactions-today"],
-                });
-                queryClient.invalidateQueries({
-                  queryKey: ["account-balance"],
-                });
-                toast.success("Deletion undone");
-              }
+              const response = await safeFetch("/api/recycle-bin/restore", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  module: "transactions",
+                  id: transactionId,
+                }),
+              });
+              if (!response.ok) throw new Error("Failed to restore");
+              invalidateAccountData(queryClient, accountId);
+              queryClient.invalidateQueries({ queryKey: ["transactions"] });
+              queryClient.invalidateQueries({
+                queryKey: ["transactions-today"],
+              });
+              queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+              queryClient.invalidateQueries({ queryKey: ["recycle-bin"] });
+              toast.success("Deletion undone");
             } catch {
-              toast.error("Failed to undo");
+              toast.error("Failed to undo", { icon: ToastIcons.error });
             }
           },
         },

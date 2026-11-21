@@ -88,9 +88,12 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Outcome:** Undo after deleting a transaction restores the original row; no copy is created.
 
 **Kind:** bug
-**Touches:** `src/features/transactions/useDashboardTransactions.ts`
+**Implementation:** done
+**UAT:** pending
+**Touches:** `src/features/transactions/useDashboardTransactions.ts`, `src/features/transactions/deleteUndo.test.ts`
 
-- **Source:** [Major Bug Sweep M1](<../Research/Major Bug Sweep.md#m1>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; not started.
+- **Source:** [Major Bug Sweep M1](<../Research/Major Bug Sweep.md#m1>) (2026-11-04: evidence, fix, test and UAT). Filed 2026-11-10; implemented 2026-11-21: the delete toast's Undo now calls `safeFetch("/api/recycle-bin/restore", { module: "transactions", id })` with the original id (no cached row needed, double tap sends one request) and refreshes account data, transactions, balance and the bin. Worked example (Wallet, expense account): 100 → add $12.50 → 87.50 → delete → 100 → Undo → 87.50, the same row back, bin empty. Before: Undo POSTed a copy (87.50) while the original stayed in the bin, so a later restore made it 75.00 with two rows. Evidence: `deleteUndo.test.ts` runs the real `getBalanceDelta` against an in-memory server (all 6 cases failed on the old hook, pass now); typecheck and the restore-route, balance and transactions suites pass. Not run: a real delete → Undo → Recycle Bin pass against the app.
+- **Owner UAT:** [Major Bug Sweep M1 UAT](<../Research/Major Bug Sweep.md#m1>) steps 1–4 on a test account, including an LBP-change or split-bill transaction to confirm fields survive.
 - **Acceptance:** Undo calls `/api/recycle-bin/restore` with the original id and never `POST /api/transactions`. After delete → Undo → open Recycle Bin, the row is not there and the balance equals its value before the delete. A hook test asserts both.
 - **Tier:** CLAUDE_MID, effort high; owner review (money). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
 - **Reading guide:** `src/features/transactions/useDashboardTransactions.ts:537-548` builds the copy today; ERA's inverse already calls restore. Load `money-rules`.
@@ -2305,6 +2308,7 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - ✅ 2026-10-24 — **BUD-86** Incoming partner transfer acknowledgment: bottom sheet (amount, Cancel / Acknowledge) opens when the household partner sends a transfer → [record](<../_Archive/Shipped/Budget.md#bud-86>)
 - ✅ 2026-11-03 — **BUD-87** Create transfers exactly once with optimistic, race-safe balances — [criteria](<Budget — Master Book.md#bud-87>)
 - ✅ 2026-11-03 — **BUD-88** Accept every written change type in balance history — [criteria](<Budget — Master Book.md#bud-88>)
+- ✅ 2026-11-21 — **BUD-89** Restore the original transaction on Undo → [record](<../_Archive/Shipped/Budget.md#bud-89>)
 
 ## Delivery session log
 

@@ -30,6 +30,8 @@ tags:
 
 - Transaction details (including Activity → Spending) show an owner-editable **Split** checkbox: add/re-add requests the active household partner; cancel clears the five pending split fields; completed and partner-viewed splits are locked. Both directions have Undo and change no amounts, balances or history. The toggle uses online-only `safeFetch` and refreshes transaction, pending-split and notification caches. Notification writes are scoped server-side to the transaction and verified collaborator; partial failure returns 502 after saving metadata, followed by client refresh. Live two-user/RLS and mobile visual verification remain pending (2026-10-31).
 
+- **Delete is a soft delete and its Undo is a restore (BUD-89, 2026-11-21).** The delete toast's Undo calls `POST /api/recycle-bin/restore` with `{ module: "transactions", id }`; the route re-applies exactly the balance delta the delete reversed. It never re-creates the row: a copy would leave the original in the Recycle Bin, and restoring that later counts the money twice. Undo needs only the id, so it works even when the row was in no cached list.
+
 ## See Also
 
 - [[Statement Import Guide]] — CSV/PDF import

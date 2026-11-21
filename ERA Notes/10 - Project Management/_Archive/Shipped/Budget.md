@@ -1,6 +1,6 @@
 ---
 created: 2026-11-11
-updated: 2026-11-11
+updated: 2026-11-21
 type: archive
 status: superseded
 owner: Elio
@@ -218,5 +218,9 @@ owner: Elio
 ### BUD-86
 
 - ✅ 2026-10-24 — **BUD-86** Incoming partner transfer acknowledgment: bottom sheet (amount, Cancel / Acknowledge) opens when the household partner sends a transfer. `src/components/expense/IncomingTransferSheet.tsx`, mounted in `DeferredComponents.tsx`; polls `/api/transfers` every 60 s, household transfers under 48 h. Acknowledge is device-local (localStorage), Cancel hides until next load; no DB change, no money logic touched. 2026-10-24 follow-up: Cancel removed; acknowledgement now synced via new `transfer_acknowledgements` table + `/api/transfers/acknowledgements` (owner must run `migrations/2026-10-24_transfer-acknowledgements.sql`; until then falls back to localStorage). Code-shipped; not device-verified.
+
+### BUD-89
+
+- ✅ 2026-11-21 — **BUD-89** Restore the original transaction on Undo — [criteria](<../../Budget/Budget — Master Book.md#bud-89>) (Delete Undo now restores the original via POST /api/recycle-bin/restore (safeFetch, original id, one request on double tap) instead of POSTing a copy. deleteUndo.test.ts: real getBalanceDelta + in-memory server, 6 cases red on old hook, green now; typecheck clean; restore-route/balance/transactions suites pass. Worked example Wallet 100 -> 87.50 -> delete 100 -> Undo 87.50, bin empty. Owner UAT pending.)
 
 ## State log

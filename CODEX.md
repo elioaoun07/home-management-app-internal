@@ -58,7 +58,7 @@ Playbooks live in `.claude/skills/<name>/SKILL.md` (verified templates, evidence
 5. **Mobile-first** — always verify on mobile viewport
 6. **Never use `fetch()` for mutations** — use `safeFetch()` from `src/lib/safeFetch.ts` (default timeout **8 s**). Calls that may exceed 8 s (AI, uploads, imports) **must** pass `timeoutMs`. A timeout is latency, not offline: it must never mark offline or enqueue a mutation. Details: `ERA Notes/01 - Architecture/Sync and Offline.md` §Verified Connectivity.
 7. **Never trust `navigator.onLine`** — use `isReallyOnline()` from `src/lib/connectivityManager.ts`. It probes `/api/health` every 30s for real connectivity.
-8. **Cron routes**: verify `Authorization: Bearer {CRON_SECRET}`, use `supabaseAdmin()` (not `supabaseServer()`), add `export const maxDuration = 60`.
+8. **Cron routes**: gate with `isCronAuthorized(req)` from `src/lib/cronAuth.ts` (rejects an unset `CRON_SECRET`; never hand-roll the Bearer compare), use `supabaseAdmin()` (not `supabaseServer()`), add `export const maxDuration = 60`.
 9. **Unique constraint violations** (`error.code === "23505"`) → return `409 Conflict`, not 500.
 10. **Theme changes invalidate ALL queries** — use `--theme-bg` CSS variable and `data-theme` attribute, never hardcode background colors.
 11. **Never edit `src/components/ui/`** — enforced by PreToolUse hook.

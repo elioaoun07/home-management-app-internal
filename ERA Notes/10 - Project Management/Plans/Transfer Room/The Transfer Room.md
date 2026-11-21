@@ -7,6 +7,17 @@ scope: PM Command Center / Local Delivery / Game
 
 # The Transfer Room
 
+**Current implementation plans after the owner playtest**
+
+1. [A conversation with ERA](<01 - A conversation with ERA.md>) specifies asking from any station and carrying a question and its evidence to the seat.
+2. [Walk inside ERA’s brain](<02 - Watching ERA work.md>) is the level and animation specification. It covers first-person movement, six phase chambers, eleven stations, two fully walkable art treatments and camera transitions.
+
+The [delivery sphere atlas](<Delivery sphere atlas.md>) supplies the topic mapping and art direction for both plans. Start with Plan 2 to build the room and Plan 1 to wire the first playable conversation.
+
+The following concept documents the first bench prototype, R131. Use its control and replay notes for compatibility when implementing the new plans.
+
+## The R131 bench prototype
+
 You sit across a workbench from ERA. Between you is a short brass track, just long enough for one glass cassette to pass from one pair of hands to another. Beyond ERA’s shoulder you can see the pale strip of morning through a high window. At your left thumb is a heavy jog wheel. Turn it one click and the room goes back **one recorded action**. The edit lifts off the glass. The output that belonged to that instant opens right where you were looking.
 
 ![Concept painting of the owner’s seat. ERA releases a glass cassette onto a brass sled aimed toward the viewer. A jog wheel sits within reach on the left.](handoff.png)

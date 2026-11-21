@@ -9,6 +9,7 @@
 // "How do I know it ran": google_calendar_connections.last_synced_at is
 // updated on every successful per-item sync inside syncItemToGoogleCalendar.
 
+import { isCronAuthorized } from "@/lib/cronAuth";
 import { deleteItemFromGoogleCalendar, syncItemToGoogleCalendar } from "@/lib/gcal/sync";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
@@ -17,10 +18,6 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const ITEMS_PER_USER_LIMIT = 200;
-
-function isAuthorized(request: NextRequest): boolean {
-  return request.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`;
-}
 
 async function reconcile(): Promise<{ synced: number; cleaned: number; errors: number }> {
   const admin = supabaseAdmin();
@@ -75,7 +72,7 @@ async function reconcile(): Promise<{ synced: number; cleaned: number; errors: n
 }
 
 export async function POST(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const result = await reconcile();

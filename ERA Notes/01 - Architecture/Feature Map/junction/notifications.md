@@ -28,7 +28,7 @@ Push + in-app notifications. Sources: item alerts, recurring payment reminders, 
 
 - **"Change notification copy"** → the cron runner that posts the notification (e.g. `src/app/api/cron/<runner>/route.ts`).
 - **"Add a new notification source"** →
-  1. New cron route. Verify `Bearer CRON_SECRET`, use `supabaseAdmin()`, set `maxDuration = 60` (Hard Rule #8/15).
+  1. New cron route. Gate with `isCronAuthorized(req)` (`src/lib/cronAuth.ts`), use `supabaseAdmin()`, set `maxDuration = 60` (Hard Rule #8/15).
   2. Insert into `notifications`.
   3. Push via the subscribe endpoint.
   4. Add toggle in `NotificationSettings.tsx` + `notification_preferences`.
@@ -37,6 +37,7 @@ Push + in-app notifications. Sources: item alerts, recurring payment reminders, 
 ## Gotchas
 
 - Cron routes are the typical place where Hard Rule #6 (long `timeoutMs`) and #8/#15 (Bearer auth + `supabaseAdmin` + `maxDuration`) all apply at once.
+- All six `src/app/api/cron/*` routes share `isCronAuthorized` (NOTIF-22). It reads `CRON_SECRET` per call and refuses everything when it is unset; a hand-written compare against a template of `process.env.CRON_SECRET` accepts the literal `Bearer undefined`. `pm/notify` still has its own inline guard.
 - Tapping a push notification deep-links via `DeepLinkHandler` → `TabContext` pendingIds — don't bypass this; it preserves tab state.
 
 ## Connected modules

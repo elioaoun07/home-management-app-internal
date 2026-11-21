@@ -283,6 +283,23 @@ describe("detector boundaries", () => {
       expect(check("HR-8", [change(file, broken, valid)]).verdict).toBe("fail");
     }
   });
+  it("accepts the shared cron gate only when imported from @/lib/cronAuth and answering 401", () => {
+    const file = "src/app/api/cron/cards/route.ts",
+      valid = fixtures("hr-8-cron-guards")[3].changes[0].after!;
+    expect(check("HR-8", [change(file, valid)]).verdict).toBe("pass");
+    for (const broken of [
+      valid.replace("@/lib/cronAuth", "@/lib/other"),
+      valid.replace(
+        "import { isCronAuthorized } from '@/lib/cronAuth';\n",
+        "const isCronAuthorized = (_req: Request) => true;\n",
+      ),
+      valid.replace("!isCronAuthorized(req)", "isCronAuthorized(req)"),
+      valid.replace("!isCronAuthorized(req)", "!isCronAuthorized()"),
+      valid.replace("status: 401", "status: 200"),
+    ]) {
+      expect(check("HR-8", [change(file, broken, valid)]).verdict).toBe("fail");
+    }
+  });
   it("refuses to load detectors without their three fixture contracts", () => {
     expect(loadDetectors()).toHaveLength(21);
     expect(() => loadDetectors(resolve("tests/os/missing-fixtures"))).toThrow();

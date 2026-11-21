@@ -17,6 +17,7 @@
  * 6. Marks alert as fired and reschedules recurring alerts to the next occurrence
  */
 
+import { isCronAuthorized } from "@/lib/cronAuth";
 import { sendPushToUser } from "@/lib/pushSender";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { buildFullRRuleString } from "@/lib/utils/date";
@@ -25,8 +26,6 @@ import { RRule } from "rrule";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-const CRON_SECRET = process.env.CRON_SECRET;
 
 type AlertRow = {
   id: string;
@@ -81,10 +80,7 @@ function deriveOccurrenceDate(alert: {
 }
 
 export async function GET(req: NextRequest) {
-  if (
-    !CRON_SECRET ||
-    req.headers.get("authorization") !== `Bearer ${CRON_SECRET}`
-  ) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

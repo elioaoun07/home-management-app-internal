@@ -16,6 +16,7 @@
  * 6. Use deduplication to avoid sending same notification multiple times
  */
 
+import { isCronAuthorized } from "@/lib/cronAuth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/pushSender";
 import { NextRequest, NextResponse } from "next/server";
@@ -23,13 +24,10 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const CRON_SECRET = process.env.CRON_SECRET;
-
 export async function GET(req: NextRequest) {
   try {
     // Verify cron secret (required — never skip)
-    const authHeader = req.headers.get("authorization");
-    if (!CRON_SECRET || authHeader !== `Bearer ${CRON_SECRET}`) {
+    if (!isCronAuthorized(req)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

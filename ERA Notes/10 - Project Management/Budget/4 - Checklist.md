@@ -14,7 +14,6 @@ owner: Elio
 
 ## Now
 
-- [ ] **BUD-89** Restore the original transaction on Undo — [criteria](<Budget — Master Book.md#bud-89>) _(blocker - S)_
 - [ ] **BUD-95** Send a private cache header on the transactions read — [criteria](<Budget — Master Book.md#bud-95>) _(friction - S)_
 
 ## Next

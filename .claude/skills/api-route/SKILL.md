@@ -90,6 +90,7 @@ Any GET that returns user-owned rows must ALSO return the active household partn
 ## Cron routes (verified against `src/app/api/cron/purge-recycle-bin/route.ts`)
 
 ```ts
+import { isCronAuthorized } from "@/lib/cronAuth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -97,8 +98,9 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Never hand-roll the Bearer compare: `Bearer ${process.env.CRON_SECRET}`
+  // accepts the literal "Bearer undefined" when the secret is unset (NOTIF-22).
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const supabase = supabaseAdmin();
@@ -106,7 +108,7 @@ export async function GET(req: NextRequest) {
 }
 ```
 
-All three lines are mandatory: `maxDuration`, the Bearer check, `supabaseAdmin()` (Hard Rule 8). Register the schedule in `vercel.json` crons.
+All three are mandatory: `maxDuration`, the `isCronAuthorized` gate from `src/lib/cronAuth.ts`, `supabaseAdmin()` (Hard Rule 8). The HR-8 detector accepts only that import. Register the schedule in `vercel.json` crons.
 
 ## Performance rules (these are correctness rules here)
 
@@ -123,4 +125,4 @@ All three lines are mandatory: `maxDuration`, the Bearer check, `supabaseAdmin()
 - [ ] Household partner data included on user-owned GETs (or `own=true` documented)
 - [ ] Every table/column used exists in `migrations/schema.sql` (you read it)
 - [ ] No secrets/service errors leaked in response bodies; `Cache-Control: no-store` on user data
-- [ ] Cron variant: `maxDuration = 60` + Bearer `CRON_SECRET` + `supabaseAdmin()`
+- [ ] Cron variant: `maxDuration = 60` + `isCronAuthorized(req)` + `supabaseAdmin()`

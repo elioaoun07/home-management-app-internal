@@ -20,14 +20,13 @@
  * Endpoint: GET /api/cron/daily-reminder
  */
 
+import { isCronAuthorized } from "@/lib/cronAuth";
 import { sendPushToUser } from "@/lib/pushSender";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-const CRON_SECRET = process.env.CRON_SECRET;
 
 // Helper: Check if current UTC time matches a target time (within 5-minute window)
 function isTimeMatch(
@@ -116,8 +115,7 @@ export async function GET(req: NextRequest) {
     console.log("[Daily Reminder] Starting execution");
 
     // Verify cron secret (required — never skip)
-    const authHeader = req.headers.get("authorization");
-    if (!CRON_SECRET || authHeader !== `Bearer ${CRON_SECRET}`) {
+    if (!isCronAuthorized(req)) {
       console.log("[Daily Reminder] Unauthorized request");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

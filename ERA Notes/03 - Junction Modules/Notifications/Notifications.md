@@ -39,7 +39,7 @@ Key columns:
 | `POST /api/cron/daily-reminder` | Every 5 min | "Did you log your transactions?" reminders |
 | `POST /api/cron/item-reminders` | Every 1 min | Due items/tasks/events push alerts |
 
-Both require `Authorization: Bearer CRON_SECRET` header.
+Every cron route requires `Authorization: Bearer CRON_SECRET`, checked by the shared `isCronAuthorized` (`src/lib/cronAuth.ts`); with `CRON_SECRET` unset every call is refused with 401.
 
 **Vercel cron config (`vercel.json`):**
 ```json
