@@ -87,6 +87,9 @@ export function useStageClock(
       insigniaUntil = 0;
     let composed = false;
     const pauseAnimations = createAnimationPause(root);
+    let seatQuiet: boolean | undefined;
+    let seatLatest = current.current.snapshot.latest?.id;
+    let seatReplayTimer: number | undefined;
     let selection = {
       time: current.current.time,
       cursor: current.current.snapshot.latest?.id,
@@ -193,9 +196,25 @@ export function useStageClock(
       );
       const sample = playback.sample(now);
       if (!engine) {
+        const advancing = c.playing && visible && document.visibilityState !== "hidden";
+        if (advancing && seatReplayTimer === undefined)
+          seatReplayTimer = window.setInterval(facts, TIMING.facts);
+        else if (!advancing && seatReplayTimer !== undefined) {
+          clearInterval(seatReplayTimer);
+          seatReplayTimer = undefined;
+        }
         const rows = playback.observations(now);
-        if (c.playing && !disabled() && rows.length) {
-          const row = rows.at(-1)!;
+        const mute = disabled();
+        if (mute !== seatQuiet) {
+          seatQuiet = mute;
+          root.dispatchEvent(new CustomEvent("pm-stage-life", { detail: { vitality: 0, tier: 0, muted: mute } }));
+        }
+        const latest = c.snapshot.latest;
+        const row = c.time === null && latest?.id !== seatLatest && ["live", "thinking"].includes(c.state)
+          ? latest
+          : c.playing ? rows.at(-1) : undefined;
+        seatLatest = latest?.id;
+        if (!mute && row) {
           root.dispatchEvent(new CustomEvent("pm-stage-cue", { detail: { kind: row.kind } }));
         }
         if ((sample.gap ?? "") !== previousUi) {
@@ -208,7 +227,7 @@ export function useStageClock(
           lastSecond = second;
           if (c.state !== "link-down") boardClock.tick();
         }
-        root.toggleAttribute("data-seat-paused", disabled());
+        root.toggleAttribute("data-seat-paused", mute);
         return;
       }
       const zones = zoneEvidence(c.snapshot, sample.beat, c.attention);
@@ -380,13 +399,11 @@ export function useStageClock(
       resize.observe(region);
       for (const hud of root.querySelectorAll(".board-comms,.board-telemetry,.board-replay-strip,.board-console-drawer,.board-console-drawer > summary,.board-rail,.board-dock")) resize.observe(hud);
     }
-    const timer = window.setInterval(() => {
-      if (engine || current.current.playing) facts();
-      else if (current.current.state !== "link-down" && Math.floor(performance.now() / TIMING.second) !== lastSecond) {
-        lastSecond = Math.floor(performance.now() / TIMING.second);
-        boardClock.tick();
-      }
-    }, TIMING.facts);
+    const timer = engine
+      ? window.setInterval(facts, TIMING.facts)
+      : window.setInterval(() => {
+          if (seatReplayTimer === undefined && current.current.state !== "link-down" && document.visibilityState !== "hidden") boardClock.tick();
+        }, TIMING.second);
     const wake = () => facts();
     document.addEventListener("visibilitychange", wake);
     preference.addEventListener("change", wake);
@@ -398,6 +415,7 @@ export function useStageClock(
       notify.current = () => {};
       cancelAnimationFrame(raf);
       clearInterval(timer);
+      clearInterval(seatReplayTimer);
       observer.disconnect();
       resize.disconnect();
       engine?.dispose();

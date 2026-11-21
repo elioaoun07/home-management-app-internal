@@ -5,36 +5,16 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// GET - Get drink selection for a session OR get all drinks for a tag (admin)
+// GET - Get the drink selection for a session. Public: a guest reads only
+// their own row. The host's all-guests view is the authenticated
+// /api/guest-portal/admin/orders route (HUB-118).
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get("session_id");
-    const tagId = searchParams.get("tag_id");
-    const all = searchParams.get("all"); // For admin view
 
     const db = supabaseAdmin();
 
-    // Admin view - get all drink selections for a tag
-    if (all === "true" && tagId) {
-      const { data: drinks, error } = await db
-        .from("guest_drinks")
-        .select("*")
-        .eq("tag_id", tagId)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("[GuestDrinks] Admin fetch error:", error);
-        return NextResponse.json(
-          { error: "Failed to fetch drinks" },
-          { status: 500 },
-        );
-      }
-
-      return NextResponse.json({ drinks: drinks || [] });
-    }
-
-    // Single session view
     if (!sessionId) {
       return NextResponse.json(
         { error: "session_id required" },

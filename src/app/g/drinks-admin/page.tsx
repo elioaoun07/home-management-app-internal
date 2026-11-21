@@ -3,6 +3,7 @@
 
 import { cn } from "@/lib/utils";
 import { AlertTriangle, Loader2, RefreshCw, Wine } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 interface DrinkOrder {
@@ -38,65 +39,48 @@ const drinkLabels: Record<string, { label: string; emoji: string }> = {
   other: { label: "Other", emoji: "✨" },
 };
 
+type Access = "pending" | "ok" | "signin" | "denied" | "none";
+
 export default function DrinksAdminPage() {
   const [drinks, setDrinks] = useState<DrinkOrder[]>([]);
   const [allergies, setAllergies] = useState<AllergyRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tagId, setTagId] = useState<string | null>(null);
+  const [access, setAccess] = useState<Access>("pending");
 
-  // First fetch the tag ID for "home"
-  useEffect(() => {
-    fetch("/api/guest-portal/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tag_slug: "home", fingerprint: "admin-check" }),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.tag?.id) {
-          setTagId(data.tag.id);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
+  // Host-only: the server resolves the portal from the signed-in host's own
+  // tags and refuses everyone else (HUB-118).
   const fetchData = useCallback(async () => {
-    if (!tagId) return;
     setLoading(true);
     try {
-      // Fetch drinks and allergies in parallel
-      const [drinksRes, allergiesRes] = await Promise.all([
-        fetch(`/api/guest-portal/drinks?tag_id=${tagId}&all=true`),
-        fetch(`/api/guest-portal/allergies?tag_id=${tagId}&all=true`),
-      ]);
-
-      if (drinksRes.ok) {
-        const data = await drinksRes.json();
+      const res = await fetch("/api/guest-portal/admin/orders", {
+        cache: "no-store",
+      });
+      if (res.status === 401) return setAccess("signin");
+      if (res.status === 403) return setAccess("denied");
+      if (res.status === 404) return setAccess("none");
+      if (res.ok) {
+        const data = await res.json();
         setDrinks(data.drinks || []);
-      }
-      if (allergiesRes.ok) {
-        const data = await allergiesRes.json();
         setAllergies(data.allergies || []);
+        setAccess("ok");
       }
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, [tagId]);
+  }, []);
 
   useEffect(() => {
-    if (tagId) {
-      fetchData();
-    }
-  }, [tagId, fetchData]);
+    fetchData();
+  }, [fetchData]);
 
-  // Auto-refresh every 10 seconds
+  // Auto-refresh every 10 seconds while access is granted
   useEffect(() => {
-    if (!tagId) return;
+    if (access !== "ok") return;
     const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
-  }, [tagId, fetchData]);
+  }, [access, fetchData]);
 
   // Create a map of session_id to allergies for quick lookup
   const allergyMap = allergies.reduce(
@@ -121,6 +105,25 @@ export default function DrinksAdminPage() {
     },
     {} as Record<string, number>,
   );
+
+  if (access === "signin" || access === "denied" || access === "none") {
+    return (
+      <div className="min-h-[100dvh] bg-[#0a1628] px-4 py-6 flex items-center justify-center">
+        {access === "signin" ? (
+          <Link
+            href="/login?redirect=/g/drinks-admin"
+            className="px-5 py-2.5 rounded-xl bg-[#0f1d2e]/80 border border-[#f59e0b]/20 text-sm text-[#f59e0b] hover:border-[#f59e0b]/40 transition-all"
+          >
+            Sign in
+          </Link>
+        ) : (
+          <p className="text-sm text-[#38bdf8]/50">
+            {access === "denied" ? "No access" : "No portal"}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[100dvh] bg-[#0a1628] px-4 py-6">
@@ -193,7 +196,7 @@ export default function DrinksAdminPage() {
         )}
 
         {/* Empty state */}
-        {!loading && drinks.length === 0 && (
+        {access === "ok" && !loading && drinks.length === 0 && (
           <div className="text-center py-20">
             <Wine className="w-12 h-12 mx-auto mb-3 text-[#f59e0b]/30" />
             <p className="text-sm text-[#38bdf8]/50">No drink orders yet</p>

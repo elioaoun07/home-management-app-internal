@@ -17,6 +17,8 @@ The owner’s role is the second person at the bench. ERA can prepare the work a
 
 **Read next** · [Controls and Replay](<Controls and Replay.md>) for steps, outputs and exact playback · [Build and Playtest](<Build and Playtest.md>) for a playable first cut, frame budgets and an owner comparison.
 
+**Local Game preview, 2026-11-21.** Open a Local Delivery run with Game enabled and choose **Take seat**. The browser remembers Seat or Overview. Both use the same retained recording. [R131 acceptance](<../../PM Tooling/PM Tooling — Master Book.md#r131>) · [Owner scenarios](<../../../../docs/Delivery-UAT.md#local-delivery-transfer-room--r131>)
+
 ## What led here
 
 In the saved R129 Overview, the whole delivery line fits on one slab. It is easy to learn that Verify sits beside Handover. In Follow, the camera enlarges those machines, while the place you act from is still a column of cards outside the scene. At 390 pixels the board fits, but the stations recede enough that the labels carry much of the work. These are observations from stills. The reported hiccups need a moving trace to diagnose. [Overview still](../../../../.pm/r129-evidence/1358-blue-open-overview.png) · [Follow still](../../../../.pm/r129-evidence/1358-blue-open-follow.png)

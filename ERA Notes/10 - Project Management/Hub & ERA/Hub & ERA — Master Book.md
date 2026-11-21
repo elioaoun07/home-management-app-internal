@@ -172,9 +172,12 @@ The remaining retained defects, decisions and enhancements are indexed below and
 **Outcome:** Only the tag's host (or household partner) can list every guest's allergies and drinks.
 
 **Kind:** bug
-**Touches:** `src/app/api/guest-portal/allergies/route.ts`, `src/app/api/guest-portal/drinks/route.ts`, `src/app/g/drinks-admin/page.tsx`
+**Implementation:** done
+**UAT:** pending
+**Touches:** `src/app/api/guest-portal/allergies/route.ts`, `src/app/api/guest-portal/drinks/route.ts`, `src/app/g/drinks-admin/page.tsx`, `src/app/api/guest-portal/admin/orders/route.ts`, `migrations/2026-11-21_guest-drinks-enable-rls.sql`
 
-- **Source:** [Major Bug Sweep S1](<../Research/Major Bug Sweep.md#s1>) (2026-11-04: evidence, fix, test and UAT); re-verified 2026-11-10: [Fable 2 note](<../Fable 2/02 - Standalone Modules/Guest Portal/Guest Data Exposure Still Unqueued.md>). Filed 2026-11-10; not started.
+- **Source:** [Major Bug Sweep S1](<../Research/Major Bug Sweep.md#s1>) (2026-11-04: evidence, fix, test and UAT); re-verified 2026-11-10: [Fable 2 note](<../Fable 2/02 - Standalone Modules/Guest Portal/Guest Data Exposure Still Unqueued.md>). Filed 2026-11-10; implemented 2026-11-21: the `all` branches are gone from the public routes, the host view is `GET /api/guest-portal/admin/orders` (401 anonymous · 403 other host · 404 unknown tag · 200 host or active partner) and `/g/drinks-admin` calls only it. Evidence: `src/app/api/guest-portal/bulkReads.test.ts` (red before the fix, green after) and `admin/orders/route.test.ts`; anonymous curl on a dev server gave 401 / 400. Not run: a signed-in host, partner or other account against the real database.
+- **Owner UAT:** [Major Bug Sweep S1 UAT](<../Research/Major Bug Sweep.md#s1>) steps 2–4 (logged out → 401/400; host → list; unrelated account → "No access"), then run `migrations/2026-11-21_guest-drinks-enable-rls.sql` after confirming `guest_drinks` still has RLS off (the only evidence is the 2026-08-04 snapshot).
 - **Acceptance:** Anonymous `GET ?all=true` → 401; host of another tag → 403; owning host → 200. The public routes no longer accept `all`. `/g/drinks-admin` requires login and resolves the tag from the host's own tags.
 - **Tier:** CLAUDE_MID, effort high; owner review (auth). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
 - **Reading guide:** `src/app/api/guest-portal/allergies/route.ts:14-18`. If a refreshed `migrations/db-state.json` still shows RLS disabled on `guest_drinks`, hand the owner the migration in the same change (Hard Rules 24, 26).
@@ -3059,6 +3062,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-10-12 — **HUB-113** ERA's composer completes and understands everyday captures from the household's own wording — [criteria](<Hub & ERA — Master Book.md#hub-113>)
 - ✅ 2026-10-12 — ERA composer mic/send are one WhatsApp-style button: mic when empty, Send when text → [record](<../_Archive/Shipped/Hub & ERA.md#2026-10-12--era-composer-micsend-are-one-whatsapp-style-button-mic-when-empty>)
 - ✅ 2026-10-12 — **HUB-115** Polish ERA's top-layer motion while preserving functionality — [criteria](<Hub & ERA — Master Book.md#hub-115>)
+- ✅ 2026-11-21 — **HUB-118** Require host sign-in for Guest Portal bulk reads → [record](<../_Archive/Shipped/Hub & ERA.md#hub-118>)
 
 ## Delivery session log
 

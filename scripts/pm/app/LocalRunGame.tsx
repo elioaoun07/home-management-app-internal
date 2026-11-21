@@ -14,6 +14,7 @@ import { StagePresence } from "./StagePresence";
 import { LocalChat } from "./LocalChat";
 import { TransferRoom } from "./TransferRoom";
 import type { LocalActivityEvent } from "./localRunActivityModel";
+import { resolveMark, type RoomMark } from "./transferRoomModel";
 import { openQuestion } from "./localChatModel";
 import { type AttentionItem } from "./localRunAttention";
 import {
@@ -77,7 +78,8 @@ export function LocalRunGame({
     [fileFilter, setFileFilter] = useState<string | null>(null);
   const [replayMode, setReplayMode] = useState<ReplayMode>("recap"),
     [replayTime, setReplayTime] = useState<number | null>(null),
-    [replayCursor, setReplayCursor] = useState<string | null>(null);
+    [replayCursor, setReplayCursor] = useState<string | null>(null),
+    [replayMark, setReplayMark] = useState<RoomMark | null>(null);
   const [playing, setPlaying] = useState(false),
     [speed, setSpeed] = useState<1 | 4>(1),
     [tempo, setTempo] = useState<StageTempo>(1);
@@ -97,7 +99,9 @@ export function LocalRunGame({
     panel = useRef<HTMLElement>(null);
   const realHealth = useRunHealth(run, poll);
   const replay = replayTime !== null;
-  const cursorMissing = !!replayCursor && !timeline.events.some((event) => event.id === replayCursor);
+  const cursorMissing = replay && !!replayCursor && (replayMark
+    ? !resolveMark(timeline.events, replayMark)
+    : !timeline.events.some((event) => event.id === replayCursor));
   const observed = useRef(Date.now());
   if (realHealth.state !== "link-down") observed.current = Date.now();
   const snapshot = useMemo(
@@ -199,10 +203,10 @@ export function LocalRunGame({
         return;
       }
       if (item.action.run === "brief") {
-        acknowledge(item.id);
+        if (!replay) acknowledge(item.id);
         openTool("brief");
       } else if (item.action.run === "summary") {
-        acknowledge(item.id);
+        if (!replay) acknowledge(item.id);
         setFileFilter(null);
         openTool("activity");
       } else if (item.action.run === "review") action("review");
@@ -222,7 +226,7 @@ export function LocalRunGame({
         (entry) => entry.zone === zone && entry.state === "open",
       );
       if (item) setSelectedAttentionId(item.id);
-      if (zone === "brief") {
+      if (zone === "brief" && !replay) {
         const brief = attention.find(
           (entry) => entry.kind === "plan" && entry.zone === "brief",
         );
@@ -230,22 +234,25 @@ export function LocalRunGame({
       }
       openTool(ZONE_BY_ID[zone].tab);
     },
-    [attention, acknowledge, openTool],
+    [attention, acknowledge, openTool, replay],
   );
   const onReplayRow = useCallback((at: number, id: string | null) => {
     if (cursorMissing) return;
     setReplayTime(at);
     setReplayCursor(id);
-  }, [cursorMissing]);
+    if (replayMark && replayMark.id !== id) setReplayMark(null);
+  }, [cursorMissing, replayMark]);
   const seek = useCallback((event: LocalActivityEvent) => {
     setPlaying(false);
     setReplayTime(Date.parse(event.at));
     setReplayCursor(event.id);
+    setReplayMark(event);
   }, []);
   const live = useCallback(() => {
     setPlaying(false);
     setReplayTime(null);
     setReplayCursor(null);
+    setReplayMark(null);
   }, []);
   const play = () => {
     if (!timeline.events.length) return;
@@ -254,6 +261,7 @@ export function LocalRunGame({
       (replayTime >= (timeline.end ?? 0) && (!replayCursor || replayCursor === finalId)))) {
       setReplayTime(timeline.start);
       setReplayCursor(timeline.events[0]?.id ?? null);
+      setReplayMark(null);
     }
     setPlaying(cursorMissing || !playing);
   };
@@ -264,6 +272,7 @@ export function LocalRunGame({
     if (next === "seat") {
       setVisitedSeat(true);
       setConsoleOpen(false);
+      setRailOpen(false);
     }
     try {
       localStorage.setItem("pm-local-game-view", next);
@@ -317,6 +326,7 @@ export function LocalRunGame({
           question={!!ask}
           onLive={live}
           onSeek={seek}
+          onChanges={() => openTool("changes")}
           onTransportKey={(key) => key === " " ? play() : live()}
           onQuestion={() => {
             live();
@@ -343,7 +353,7 @@ export function LocalRunGame({
         canAct={canAct}
         selectedAttentionId={selectedAttentionId}
         onRailOpenChange={onRailOpenChange}
-        suppressRailAutoOpen={consoleOpen && typeof matchMedia !== "undefined" && matchMedia(`(max-width: ${HUD.railBelow}px)`).matches}
+        suppressRailAutoOpen={view === "seat" || (consoleOpen && typeof matchMedia !== "undefined" && matchMedia(`(max-width: ${HUD.railBelow}px)`).matches)}
         renderAge={(since: number | null) => <AttentionAge since={since} />}
         clock={
           <BoardClock
@@ -366,7 +376,7 @@ export function LocalRunGame({
           passed={snapshot.run.checks.filter(check => check.exit === 0 && !check.error).length}
           files={(replayTime === null || snapshot.run.head) ? (patch?.match(/^diff --git /gm)?.length ?? 0) : 0} />}
         dockControls={<LocalRunReplay timeline={timeline} time={replayTime} cursor={replayCursor}
-          onCursor={setReplayCursor} replayMode={replayMode} gap={staging.gap} tempo={tempo} onTempo={setTempo}
+          onCursor={(id) => { setReplayCursor(id); setReplayMark(null); }} replayMode={replayMode} gap={staging.gap} tempo={tempo} onTempo={setTempo}
           onMode={value => { setPlaying(false); setReplayMode(value); }}
           onTime={time => { setPlaying(false); setReplayTime(time); }}
           playing={playing && !cursorMissing} onPlay={play} speed={speed} onSpeed={setSpeed}

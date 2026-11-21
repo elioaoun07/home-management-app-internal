@@ -6,6 +6,8 @@ status: proposed
 
 # Build and playtest
 
+**Implementation, 2026-11-21.** The Local Game offers Seat and Overview, an inline evidence reader for all zones, exact-action jogging and two comparison pins. It uses three compressed art layers, the existing replay clock and the existing attention controls. Choosing **Take seat** remembers the view in that browser. The owner’s comparison and physical-device frame pacing remain part of acceptance. [Fixture results](../../../../.pm/r131-evidence/result.json)
+
 The first playable scene is the moment a cassette crosses the bench. Can Elio tell what ERA just did, reach the evidence, and feel that the near end of the sled belongs to him? Build that minute before furnishing the rest of the room. The setting and control specification are in [The Transfer Room](<The Transfer Room.md>) and [Controls and Replay](<Controls and Replay.md>).
 
 ## First playable cut

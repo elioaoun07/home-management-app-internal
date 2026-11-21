@@ -494,3 +494,18 @@ These failure cases are fixture-verified; no new failure needs to be deliberatel
 | Message instead of answering | With a question open, send a message rather than answering. | The question shows "Not answered", and the session resumes with your message. |
 | Game | Switch to Game while a question is open, then open Activity. | Needs you shows the question card. Activity has the chat with the message box. |
 | Cancel | Cancel a run while a question is open. | The question shows "Not answered". Messages and answers are refused. |
+
+## Local Delivery Transfer Room — R131
+
+**Owner UAT:** Pending. Open a retained Local Delivery run on the desktop in `pnpm pm`. Enable **Game** in Settings and choose **Take seat**. Use a finished or handover-ready run with a Plan, edits and a check output. A second interrupted or failed run helps compare the endings. [Criteria](<../ERA Notes/10 - Project Management/PM Tooling/PM Tooling — Master Book.md#r131>) · [Design](<../ERA Notes/10 - Project Management/Plans/Transfer Room/The Transfer Room.md>)
+
+| Scenario | Action | Expect |
+|---|---|---|
+| Read a step | Open Plan. Open Build, then an edit. Back out and open Verify and a host check. | The brief, recorded path and check output are reachable. Back returns to the selected row. |
+| Play back an action | Open an edit and choose Replay here. Move one action with the jog wheel, arrow keys or Previous and Next buttons. Pin two actions and open Compare. | Each movement selects one recorded action, including rows with the same time. Each pin shows its own available output. |
+| Switch views | From a selected action, switch to Overview and then Take seat. | The same action remains selected and the reader opens where you left it. |
+| Receive work | Replay across a ready handover, then choose Live on a run awaiting owner test. Open Handoff and Test steps. | The cassette arrives on the near side. The existing UAT wizard opens from Live. A historical handoff has readable evidence. |
+| Read while ERA works | Keep an output open during a new receipt or owner question during your normal work. | Now updates and the reader stays in place. Question returns to Live and focuses the existing answer card. |
+| Compare the experience | Watch the same retained minute from Overview and Seat, then repeat with sound off. Try it in a narrow window and with reduced motion. | You can point to your place at the bench, read the latest observed action and find the moment the decision becomes yours. Record any hitch and what you were doing when it happened. |
+
+Run the perceptual and playback comparison described in Build and Playtest. Fixture screenshots and replay assertions cover the implementation paths in Blue and Pink. Owner comfort, immersion and physical-device frame pacing require this pass. [Playtest](<../ERA Notes/10 - Project Management/Plans/Transfer Room/Build and Playtest.md>) · [Fixture results](../.pm/r131-evidence/result.json)

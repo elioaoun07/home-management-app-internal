@@ -1,6 +1,6 @@
 ---
 created: 2026-11-11
-updated: 2026-11-11
+updated: 2026-11-21
 type: archive
 status: superseded
 owner: Elio
@@ -592,5 +592,9 @@ Item plans use the [execution-plan convention](<../../_Conventions.md#9-item-exe
 ### 2026-10-12 · ERA composer mic/send are one WhatsApp-style button: mic when empty,…
 
 - ✅ 2026-10-12 — ERA composer mic/send are one WhatsApp-style button: mic when empty, Send when text; tap toggles voice, hold listens until release — four icon-only starter chips above the bar (expense, reminder, event, shopping) write "I paid " / "Remind me to " / "Add an event for " / "Add to shopping list " — `CommandBar.tsx`; phone acceptance of release-sends-phrase pending.
+
+### HUB-118
+
+- ✅ 2026-11-21 — **HUB-118** Require host sign-in for Guest Portal bulk reads — [criteria](<../../Hub & ERA/Hub & ERA — Master Book.md#hub-118>) (Implementation: public guest drinks/allergies routes no longer accept all; host view GET /api/guest-portal/admin/orders (401/403/404/200 incl. household partner) read via service role after ownership check; /g/drinks-admin uses only it. Replay tests: bulkReads.test.ts (red before fix, green after), admin/orders/route.test.ts; typecheck + eslint clean; dev-server curl anonymous -> 401/400. Owner UAT + guest_drinks RLS migration run pending.)
 
 ## State log

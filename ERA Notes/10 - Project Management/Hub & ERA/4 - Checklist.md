@@ -16,8 +16,6 @@ Reports filed from the ERA chat arrive under **ERA reports** in Now automaticall
 
 ## Now
 
-- [ ] **HUB-118** Require host sign-in for Guest Portal bulk reads — [criteria](<Hub & ERA — Master Book.md#hub-118>) _(blocker - S)_
-
 **ERA reports**
 
 - [ ] **HUB-87** ERA handles "Add Mop Chores today" — [criteria](<Hub & ERA — Master Book.md#hub-87>) _(friction - S)_

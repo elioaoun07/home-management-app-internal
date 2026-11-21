@@ -12,7 +12,7 @@ tags: []
 
 # G Drinks Admin
 
-> TODO: one-sentence description.
+> Host-only list of every guest's drink order and allergies for the host's portal; signed-out visitors see a Sign in link, other accounts see "No access".
 
 ## Files
 
@@ -26,13 +26,11 @@ tags: []
 
 ## API routes
 
-- `/api/guest-portal/session`
-- `/api/guest-portal/drinks`
-- `/api/guest-portal/allergies`
+- `GET /api/guest-portal/admin/orders` (auth required; polled every 10 s)
 
 ## DB tables
 
-- TODO
+- `guest_portal_tags`, `guest_drinks`, `guest_allergies`
 
 ## How to get here
 
@@ -45,7 +43,7 @@ tags: []
 
 ## Related vault doc
 
-- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)
+- `ERA Notes/02 - Standalone Modules/Guest Portal/Overview.md`
 
 ## Screenshots
 

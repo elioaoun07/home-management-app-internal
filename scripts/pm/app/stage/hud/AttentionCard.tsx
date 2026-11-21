@@ -119,7 +119,7 @@ export function AttentionCard({
               {item.action.label}
             </button>
           ))}
-        {item.kind === "sql" && (
+        {item.kind === "sql" && item.action.run === "copy-path" && (
           <button
             type="button"
             className="secondary"

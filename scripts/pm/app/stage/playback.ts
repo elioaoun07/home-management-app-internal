@@ -42,12 +42,14 @@ export function createBoardPlayback(initial: PlaybackInput, now: number) {
       terminalPhase: initial.timeline.run.phase,
     });
   let anchor = now,
-    position = 0,
+    position = initial.time === null
+      ? 0
+      : presentationAtRecorded(plan, initial.time, initial.snapshot.latest?.id),
     queue: StagedBeat[] = [],
     ceremonies: StagedCeremony[] = [],
     previous = initial.timeline;
   let emittedUntil = now,
-    replayEmitted = -1;
+    replayEmitted = position - 0.001;
   const seen = new Set(initial.timeline.events.map((event) => event.id));
   const active = () => input.time !== null && input.playing;
   const presentation = (at: number) =>
@@ -56,7 +58,7 @@ export function createBoardPlayback(initial: PlaybackInput, now: number) {
       position + (active() ? Math.max(0, at - anchor) * input.speed : 0),
     );
   let fallback: { kind: CeremonyKind; start: number; duration: number } | null =
-    ["preparing", "building", "checking"].includes(initial.snapshot.phase)
+    initial.time === null && ["preparing", "building", "checking"].includes(initial.snapshot.phase)
       ? { kind: "boot", start: now, duration: 2500 * initial.tempo }
       : null;
   return {

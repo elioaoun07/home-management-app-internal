@@ -169,14 +169,16 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 **Outcome:** Local Game has a Transfer Room with a first-person bench, direct access to step outputs and exact action replay.
 **Kind:** feature
-**Touches:** `scripts/pm/app/`, `scripts/pm/assets/`, `scripts/pm-server.mjs`, `tests/pm-ui/`, Delivery UAT and vault guidance.
+**Touches:** `scripts/pm/app/`, `scripts/pm/assets/`, `scripts/pm-server.mjs`, `tests/pm-ui/`, `docs/Delivery-UAT.md`, `ERA Notes/`
+**Implementation:** done
+**UAT:** pending
 
 - **Acceptance:** Seat and Overview share the same run and cursor. Each of the eleven zones opens its recorded evidence, including individual actions beyond the first thirty. Plan opens the frozen brief.
 - **Acceptance:** Jogging and comparing equal-time rows reveals only the evidence at each cursor. A poll can update Now without displacing the reader. Historical inspection sends no delivery commands.
 - **Acceptance:** A recorded handover brings the cassette to the owner. Current questions and UAT remain accessible through their existing controls. Failed, interrupted and link-down cases read distinctly.
 - **Acceptance:** Verify Blue and Pink at desktop and 390 px with reduced motion, keyboard and synthetic playback. Owner comfort, immersion and physical-device frame pacing are evaluated separately.
 
-[Design and implementation plan](<../Plans/Transfer Room/The Transfer Room.md>)
+[Design and implementation plan](<../Plans/Transfer Room/The Transfer Room.md>) · [Owner scenarios](<../../../docs/Delivery-UAT.md#local-delivery-transfer-room--r131>) · [Fixture results](../../../.pm/r131-evidence/result.json)
 
 ### R129
 
@@ -2046,6 +2048,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-11-16 — **R129** Make every label on the Local Game board readable → [record](<../_Archive/Shipped/PM Tooling.md#r129>)
 - ✅ 2026-11-16 — **R130** Record Codex sessions and score the working tree → [record](<../_Archive/Shipped/PM Tooling.md#r130>)
 - ✅ 2026-11-16 — **R121** Recover an interrupted Local attempt → [record](<../_Archive/Shipped/PM Tooling.md#r121>)
+- ✅ 2026-11-21 — **R131** Sit across from ERA and read, replay or receive a delivery → [record](<../_Archive/Shipped/PM Tooling.md#r131>)
 
 ## Delivery session log
 

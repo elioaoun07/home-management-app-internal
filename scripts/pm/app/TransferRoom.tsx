@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowLeftRight, BookOpen, ChevronLeft, ChevronRight, Disc3, 
 import { Markdown } from "./components";
 import { BlackBox } from "./BlackBox";
 import { LocalChat } from "./LocalChat";
+import { LocalRunVerificationPanel } from "./LocalRunVerificationPanel";
 import { chatThread } from "./localChatModel";
 import type { LocalActivityEvent } from "./localRunActivityModel";
 import { stripAnsi } from "./localRunFailure";
@@ -23,6 +24,11 @@ const zoneLabel = (zone: ZoneId) => {
 const time = (value: string) => new Date(value).toLocaleTimeString([], { hour12: false });
 const actor = (event: LocalActivityEvent) =>
   event.agent?.role === "subagent" ? event.agent.id || "Subagent" : event.agent?.executor;
+const roomArt = {
+  "--room-work-plate": 'url("/assets/transfer-room.webp")',
+  "--room-handoff-plate": 'url("/assets/transfer-handoff.webp")',
+  "--room-cassette": 'url("/assets/transfer-cassette.webp")',
+} as CSSProperties;
 type Filter = ZoneId | "all";
 type Reader = { zone: Filter; mark: RoomMark | null };
 type OpenMoment = NonNullable<ReturnType<typeof roomMoment>>;
@@ -66,7 +72,7 @@ function ComparePane({ moment, label }: { moment: OpenMoment | null; label: stri
 }
 
 export function TransferRoom({
-  active, timeline, scene, health, liveHealth, replay, cursorMissing, playing, zones, question, onLive, onSeek, onTransportKey, onQuestion, testSteps,
+  active, timeline, scene, health, liveHealth, replay, cursorMissing, playing, zones, question, onLive, onSeek, onTransportKey, onQuestion, onChanges, testSteps,
 }: {
   active: boolean;
   timeline: LocalTimeline;
@@ -82,11 +88,13 @@ export function TransferRoom({
   onSeek: (event: LocalActivityEvent) => void;
   onTransportKey: (key: " " | "l") => void;
   onQuestion: () => void;
+  onChanges: () => void;
   testSteps?: ReactNode;
 }) {
   const [reader, setReader] = useState<Reader | null>(null);
   const [pins, setPins] = useState<readonly [RoomMark | null, RoomMark | null]>([null, null]);
   const [compare, setCompare] = useState(false);
+  const [smallPane, setSmallPane] = useState<"A" | "B">("A");
   const latest = timeline.events.at(-1);
   const selected = scene.latest;
   const selectedKind = selected?.kind ?? "event";
@@ -104,6 +112,7 @@ export function TransferRoom({
   const compareTop = useRef(0);
   const listTop = useRef(0);
   const reselect = useRef<(() => void) | null>(null);
+  const drag = useRef<{ x: number; start: number; current: number } | null>(null);
   const focusReader = () => {
     readerTitle.current?.focus({ preventScroll: true });
     readerTitle.current?.scrollIntoView({ block: "nearest", behavior: "instant" });
@@ -112,9 +121,12 @@ export function TransferRoom({
   function openZone(zone: Filter, control: HTMLElement) {
     returnTo.current = control;
     listTop.current = 0;
+    if (readerBody.current) readerBody.current.scrollTop = 0;
     reselect.current = focusReader;
     setCompare(false);
-    setReader({ zone, mark: null });
+    const rows = ["all", "brief", "verify", "handover", "test", "ship", "think"].includes(zone)
+      ? [] : roomRows(scene, zone);
+    setReader({ zone, mark: rows.length === 1 ? rows[0] : null });
   }
 
   function openRow(event: LocalActivityEvent) {
@@ -173,8 +185,10 @@ export function TransferRoom({
     <section
       aria-label="Transfer Room"
       className="transfer-room"
+      style={roomArt}
       hidden={!active}
       data-reader={!!reader || compare}
+      data-comparing={compare}
       onKeyDown={(event) => {
         if (event.key === "Escape" && (reader || compare)) {
           event.stopPropagation();
@@ -188,14 +202,16 @@ export function TransferRoom({
           <span className="room-kicker">Now</span>
           <strong>{status}</strong>
           {latest && <>
-            <span className="room-now-event" title={latest.paths[0] || latest.summary}>{latest.label}{actor(latest) ? ` · ${actor(latest)}` : ""}</span>
+            <span className="room-now-event" title={latest.paths[0] || latest.summary}>
+              {[latest.label, latest.paths[0]?.split("/").at(-1) || latest.detail, actor(latest)].filter(Boolean).join(" · ")}
+            </span>
             <time dateTime={latest.at}>{time(latest.at)}</time>
           </>}
           {question && <button type="button" className="room-question" onClick={onQuestion}>Question</button>}
         </div>
-        <div className="room-bay" data-seat-state={health.state} data-cassette={cassette}>
+        <div className="room-bay" data-seat-state={health.state} data-cassette={cassette} data-has-work={scene.plates > 0 || !!scene.run.head} data-owner={(!replay && question) || cassette === "received"}>
           <div className="room-picture" aria-hidden="true">
-            <div className="room-backdrop" />
+            <div className="room-backdrop"><div className="room-handoff-pose" /></div>
             <div className="room-worklight" />
             <div className="room-eye" />
             <div className="room-sled">
@@ -205,12 +221,28 @@ export function TransferRoom({
             <span className="room-scan" key={selected?.id} data-kind={
               (replay ? playing : liveHealth.active) && !question ? selectedKind : undefined
             } />
+            <div className="room-wheel-grip"
+              onPointerDown={(event) => {
+                if (event.button !== 0 || !timeline.events.length) return;
+                event.currentTarget.setPointerCapture(event.pointerId);
+                drag.current = { x: event.clientX, start: Math.max(position, 0), current: Math.max(position, 0) };
+              }}
+              onPointerMove={(event) => {
+                const gesture = drag.current;
+                if (!gesture) return;
+                const index = Math.max(0, Math.min(timeline.events.length - 1, gesture.start + Math.trunc((event.clientX - gesture.x) / 18)));
+                if (index === gesture.current) return;
+                gesture.current = index;
+                jog(timeline.events[index]);
+              }}
+              onLostPointerCapture={() => { drag.current = null; }}
+            />
           </div>
-          <div className="room-scene-label">
-            <span className="room-kicker">{replay ? "Replay" : "At the bench"}</span>
+          {replay && <div className="room-scene-label">
+            <span className="room-kicker">Replay</span>
             <strong>{fault ? localRunLabel(scene.run) : cassette === "received" ? "Your turn" : localRunLabel(scene.run)}</strong>
-            {replay && selected && <time dateTime={selected.at}>{time(selected.at)}</time>}
-          </div>
+            {selected && <time dateTime={selected.at}>{time(selected.at)}</time>}
+          </div>}
           <button className="room-cassette-button" type="button" onClick={(event) => openZone(
             fault ? "all" : cassette === "received" ? "handover" : cassette === "verify" ? "verify" : ["shipped", "reverted"].includes(cassette) ? "ship" : "build",
             event.currentTarget,
@@ -264,8 +296,14 @@ export function TransferRoom({
         </header>
         <div className="room-reader-body" ref={readerBody}>
           {compare ? <>
-            <button type="button" onClick={() => setPins(([a, b]) => [b, a])}><ArrowLeftRight size={15} /> Swap</button>
-            <div className="room-comparison"><ComparePane label="A" moment={momentA} /><ComparePane label="B" moment={momentB} /></div>
+            <div className="room-output-actions">
+              <button type="button" onClick={() => setPins(([a, b]) => [b, a])}><ArrowLeftRight size={15} /> Swap</button>
+              <div className="room-compare-tabs" role="group" aria-label="Compare moments">
+                <button type="button" aria-pressed={smallPane === "A"} onClick={() => setSmallPane("A")}>A</button>
+                <button type="button" aria-pressed={smallPane === "B"} onClick={() => setSmallPane("B")}>B</button>
+              </div>
+            </div>
+            <div className="room-comparison" data-pane={smallPane}><ComparePane label="A" moment={momentA} /><ComparePane label="B" moment={momentB} /></div>
           </> : reader?.mark ? (
             opened ? <>
               <EventOutput event={opened} scene={scene} />
@@ -278,6 +316,7 @@ export function TransferRoom({
                   compareTop.current = readerBody.current?.scrollTop ?? 0;
                   if (readerBody.current) readerBody.current.scrollTop = 0;
                   reselect.current = focusReader;
+                  setSmallPane("A");
                   setCompare(true);
                 }}>Compare</button>}
               </div>
@@ -290,11 +329,18 @@ export function TransferRoom({
             </nav>
             {reader.zone === "brief" && (scene.run.work.brief ? <Markdown raw={scene.run.work.brief} /> : <p className="quiet">Plan not recorded</p>)}
             {fault && reader.zone === "all" && <BlackBox run={scene.run} hideAttempt />}
-            {reader.zone === "verify" && <ul className="room-check-summary">{scene.seals.map((seal) => (
-              <li key={seal.name}>{seal.name} · {seal.state}</li>
-            ))}</ul>}
+            {reader.zone === "build" && scene.run.head && <button type="button" onClick={onChanges}>Changes</button>}
+            {reader.zone === "verify" && <LocalRunVerificationPanel viewRun={scene.run} snapshot={scene} passed={scene.counts.checks} />}
             {(reader.zone === "test" || reader.zone === "handover") && <>
-              {handover && <><p>{handover.acceptance.state} · {handover.scenarios.length} scenarios</p><ol className="room-paths">{handover.scenarios.map((scenario, index) => <li key={index}>{scenario.title}</li>)}</ol></>}
+              {handover && <>
+                {handover.summary && <p>{handover.summary}</p>}
+                <p>{handover.acceptance.state} · {handover.scenarios.length} scenarios</p>
+                <ol className="room-paths">{handover.scenarios.map((scenario) => <li key={scenario.id}>
+                  <details><summary>{scenario.title}</summary><ol>{scenario.steps.map((step, index) =>
+                    <li key={index}><strong>{step.action}</strong><p>{step.expected}</p></li>,
+                  )}</ol></details>
+                </li>)}</ol>
+              </>}
               {testSteps}
             </>}
             {reader.zone === "ship" && scene.run.merge && <code>{scene.run.merge}</code>}

@@ -13,6 +13,7 @@ owner: Elio
 **Now** is this week's sprint. **Next** is the ordered queue. **Later** is parked or conditional. Each ID links to its acceptance. Finish one with `pnpm pm:ship <ID>`.
 
 ## Now
+- [ ] **TRIP-33** Attach a saved document snapshot to a trip — [criteria](<Trips — Master Book.md#trip-33>) _(friction - M)_
 
 ## Next
 
@@ -49,7 +50,6 @@ owner: Elio
 - [ ] **TRIP-9** Brief the return day in ERA — [criteria](<Trips — Master Book.md#trip-9>) _(annoyance - M)_
 - [ ] **TRIP-10** Select catalogue or stock references for packing — [criteria](<Trips — Master Book.md#trip-10>) _(annoyance - M)_
 - [ ] **TRIP-11** Show the trip account's real spend on Overview — [criteria](<Trips — Master Book.md#trip-11>) _(annoyance - M)_
-- [ ] **TRIP-33** Attach a saved document snapshot to a trip — [criteria](<Trips — Master Book.md#trip-33>) _(friction - M)_
 
 **Parked**
 

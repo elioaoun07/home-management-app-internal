@@ -1,6 +1,6 @@
 ---
 created: 2026-11-11
-updated: 2026-11-16
+updated: 2026-11-21
 type: archive
 status: superseded
 owner: Elio
@@ -651,6 +651,10 @@ owner: Elio
 ### R121
 
 - ✅ 2026-11-16 — **R121** Recover an interrupted Local attempt — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r121>) (Agentic OS v0: 2488 replay tests passed, 8 opt-in skips; typecheck and scoped lint pass; 24 Blue/Pink desktop/mobile browser profiles pass. Implementation verified; owner W1, native hook approval and device UAT remain pending.)
+
+### R131
+
+- ✅ 2026-11-21 — **R131** Sit across from ERA and read, replay or receive a delivery — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r131>) (1008 PM UI tests, typecheck, scoped ESLint and PM build pass. Four Chromium fixture profiles verify exact replay, comparison, view restoration, handoff and live question without writes. Owner immersion and physical-device frame pacing pending.)
 
 ## State log
 
