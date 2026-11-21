@@ -109,6 +109,8 @@ ERA typing memory API (HUB-113): `GET /api/era/capture-memory`, authenticated an
 
 ## PM Command Center (shared local and phone navigation)
 
+In Game mode, Search (magnifier) offers **Library** (open book). `#/library/room` opens the observatory. Campaign and item IDs identify individual shelves and readers in the URL. The header book opens project documents at `#/library`.
+
 Local delivery (DLV-150–153): existing Deliver and run hash routes mount `LocalDelivery.tsx` on loopback; Confined retains the previous lane. Local server endpoints `/api/delivery/v2/local`, `/local/readiness` and `/local/run` require a browser owner session and an observed loopback socket. Ship merges/pushes after current-head UAT and any required review; Undo reverts the merge. No new Next.js page, icon or install identity.
 
 Local Delivery opens with **Review & sign off** (R81): search a work ID or title, choose To test / Not ready / Feedback / History / All, then Start test / Continue / View steps. The existing `#/delivery/test/<handover id>` route retains review search and filters on Back. Apply/conflict decisions live under **Delivery actions**. Phone UAT relay remains R79.

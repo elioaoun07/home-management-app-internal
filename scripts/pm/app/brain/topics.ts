@@ -1,4 +1,5 @@
 import type { ERAModuleKey } from "@/components/shared/ERAMark";
+import { FACES } from "@/features/era/faceRegistry";
 
 const inherited = {
   financial: ["Budget", 175], recipe: ["Recipes", 28], schedule: ["Schedule", 256],
@@ -14,6 +15,21 @@ export const topics = {
 } as const;
 export type Topic = keyof typeof topics;
 
+export function isModuleTopic(topic: Topic): topic is ERAModuleKey {
+  return Object.hasOwn(inherited, topic);
+}
+
+const explicitTopics = new Map<string, Topic>();
+for (const topic of Object.keys(topics) as Topic[]) {
+  explicitTopics.set(topic, topic);
+  explicitTopics.set(topics[topic][0].toLowerCase(), topic);
+}
+for (const face of FACES) explicitTopics.set(face.key, face.eraModuleKey);
+explicitTopics.set("expense", "financial");
+explicitTopics.set("expenses", "financial");
+explicitTopics.set("catalogue", "memory");
+explicitTopics.set("inventory", "memory");
+
 export const campaigns = {
   Budget: ["BUD", "financial"], Schedule: ["SCH", "schedule"], Kitchen: ["KIT", "recipe"],
   Trips: ["TRIP", "trip"], "Hub & ERA": ["HUB", "chat"], "Notifications & Alerts": ["NOTIF", "notifications"],
@@ -22,7 +38,7 @@ export const campaigns = {
 } as const satisfies Record<string, readonly [string, Topic]>;
 
 export function deliveryTopic(work: { id: string; campaign?: string; topic?: string }): Topic {
-  if (work.topic) return Object.hasOwn(topics, work.topic) ? work.topic as Topic : "general";
+  if (work.topic?.trim()) return explicitTopics.get(work.topic.trim().toLowerCase()) ?? "general";
   const id = /^([A-Z]+)(-?)\d+[A-Z]?(?:\.\d+[A-Z]?)*$/u.exec(work.id.trim().toUpperCase());
   const byId = id && (id[1] === "R" ? !id[2] : !!id[2])
     ? Object.values(campaigns).find(([prefix]) => prefix === id[1]) : undefined;

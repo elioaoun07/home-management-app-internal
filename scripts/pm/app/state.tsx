@@ -23,6 +23,7 @@ import type { Planning } from "./planningTypes";
 export const pmKeys = {
   all: ["pm-app"] as const,
   data: ["pm-app", "data"] as const,
+  libraryRecord: (campaign: string, id: string) => ["pm-app", "library-record", campaign, id] as const,
   runs: ["pm-app", "runs"] as const,
   mode: ["pm-app", "mode"] as const,
   capabilities: ["pm-app", "capabilities"] as const,

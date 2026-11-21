@@ -51,6 +51,7 @@ export function StagePresence({
   const [notify, setNotify] = useState(false);
   const [pocket, setPocket] = useState<Window | null>(null);
   const audio = useRef<StageSound | null>(null);
+  const roomBus = useRef<((output: AudioDestinationNode | null) => void) | null>(null);
   const soundRef = useRef(sound);
   soundRef.current = sound;
   const prior = useRef(state);
@@ -78,6 +79,23 @@ export function StagePresence({
   }, [stageRef]);
   useEffect(() => {
     const stage = stageRef.current;
+    const roomAccess = (event: Event) => {
+      const { connect, activate, signal } = (event as CustomEvent<{
+        connect: (output: AudioDestinationNode | null) => void; activate: boolean; signal: AbortSignal;
+      }>).detail;
+      if (roomBus.current !== connect) {
+        roomBus.current = connect;
+        signal.addEventListener("abort", () => {
+          if (roomBus.current === connect) roomBus.current = null;
+        }, { once: true });
+      }
+      if (activate && soundRef.current && navigator.userActivation?.isActive && !audio.current) {
+        audio.current = createStageSound();
+        void audio.current?.resume().catch(() => {});
+      }
+      connect(soundRef.current ? audio.current?.roomOutput ?? null : null);
+    };
+    stage?.addEventListener("pm-room-audio", roomAccess);
     const cue = (event: Event) => {
       if (!soundRef.current) return;
       const detail = (event as CustomEvent<{ kind: string; seal?: boolean }>)
@@ -115,6 +133,9 @@ export function StagePresence({
     };
     document.addEventListener("keydown", key);
     return () => {
+      stage?.removeEventListener("pm-room-audio", roomAccess);
+      roomBus.current?.(null);
+      roomBus.current = null;
       stage?.removeEventListener("pm-stage-cue", cue);
       stage?.removeEventListener("pm-stage-life", life);
       document.removeEventListener("keydown", key);
@@ -199,6 +220,8 @@ export function StagePresence({
     if (enabled && !audio.current) audio.current = createStageSound();
     if (enabled) void audio.current?.resume().catch(() => {});
     else audio.current?.ambience(0, 0, true);
+    soundRef.current = enabled;
+    roomBus.current?.(enabled ? audio.current?.roomOutput ?? null : null);
     setSound(enabled);
     try {
       localStorage.setItem("pm-game-sound", enabled ? "on" : "off");

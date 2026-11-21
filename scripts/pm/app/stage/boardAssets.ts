@@ -2,11 +2,13 @@ import { ART, BOARD, BUDGET, ZONES, ZONE_BY_ID, type ZoneId, type ZoneGroup } fr
 import { bakeStatic, bakeZonePart, ZONE_ART } from "./board";
 import { bakeGlow } from "./fx";
 import { desaturatePalette } from "./palette";
+import { box, project } from "./iso";
 import type { BoardFacts, BoardMotionFrame, Sprite, StagePalette } from "./types";
 import type { MachineEvidence } from "./machineEvidence";
 
 export interface BoardAssets {
   image: HTMLCanvasElement;
+  foreground: HTMLCanvasElement;
   parts: Partial<Record<ZoneId, Sprite>>;
   offParts: Partial<Record<ZoneId, Sprite>>;
   bodies: Record<ZoneId, { reached: Sprite; off: Sprite }>;
@@ -50,7 +52,25 @@ export function bakeBoardAssets(palette: StagePalette): BoardAssets {
     bodies[zone.id] = { reached: bakeBody(zone.id, palette), off: bakeBody(zone.id, dimPalette) };
   }
   const glows = Object.fromEntries(Object.entries(palette.zones).map(([id, m]) => [id, bakeGlow(m.top)])) as BoardAssets["glows"];
-  return { image, parts, offParts, bodies, glows, dimPalette, milliseconds: performance.now() - start };
+  // Only opaque equipment hides a boot. Ground shadows belong on the floor.
+  const foreground = document.createElement("canvas");
+  foreground.width = BOARD.bounds.width * BUDGET.motionDpr;
+  foreground.height = BOARD.bounds.height * BUDGET.motionDpr;
+  const cover = foreground.getContext("2d")!;
+  cover.scale(BUDGET.motionDpr, BUDGET.motionDpr);
+  cover.translate(-BOARD.bounds.x, -BOARD.bounds.y);
+  const solid = { ...palette, shadow: "transparent" };
+  for (const zone of ZONES.filter(z => z.pad.y >= BOARD.front[0])) {
+    const m = project(zone.machine.x, zone.machine.y), lamp = ART.lamp;
+    cover.save();
+    cover.translate(m.x, m.y);
+    ZONE_ART[zone.id].bake(cover, { palette: solid, zone: zone.id });
+    box(cover, solid.trim, lamp.x - 3, lamp.y - 3, 6, 6, 6, lamp.post);
+    const bulb = project(lamp.x, lamp.y, 6 + lamp.post);
+    cover.beginPath(); cover.arc(bulb.x, bulb.y, lamp.r, 0, Math.PI * 2); cover.fill();
+    cover.restore();
+  }
+  return { image, foreground, parts, offParts, bodies, glows, dimPalette, milliseconds: performance.now() - start };
 }
 
 /** Moving documents/screens carry current factual marks in their cached image. */

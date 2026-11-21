@@ -668,6 +668,56 @@ owner: Elio
 
 - ✅ 2026-11-21 — **R134** Keep the laptop cockpit connected after rebuild — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r134>) (Reproduced the 4 s local health timeout during snapshot work. With the fix, the isolated full PM corpus served health in 17 ms under four concurrent snapshot reads. Desktop and 390 px Chromium recovered in place after a server restart. 1092 tests, typecheck, scoped lint, and PM build passed. Owner restart pending.)
 
+### R135
+
+- ✅ 2026-11-21 — **R135** Make ERA and the active delivery phase readable in motion — [criteria](#r135) (Board and room fixtures passed with zero writes and page errors. Hardware Chrome on Radeon 880M measured 16.8 ms desktop and 16.9 ms at an emulated 390 px viewport. Owner visual and physical-device UAT pending.)
+
+**Outcome:** The owner can recognize ERA at the doorway, find the active instrument from its light path, and walk the phase circuit with responsive controls.
+**Kind:** feature
+**Touches:** `scripts/pm/app/`, `tests/pm-ui/`, `docs/Delivery-UAT.md`, `ERA Notes/`
+**Implementation:** done
+**UAT:** the owner rejected this visual treatment on 2026-11-21. [R136](#r136) carries the replacement artwork and movement review.
+
+- **Acceptance:** Board compositions keep the operator, tool contact and machine readable on desktop and a 390 px window. Read, edit, waiting and stopped poses follow retained evidence through the existing camera views.
+- **Acceptance:** The room uses the real ERA mark proportions and a legible clockwise Plan → Setup → Build → Verify → Test → Ship order. Preparation breathes gently, active Build gains brighter moving accents, and source-to-destination light identifies the exact workstation. Verify stamps appear only as results return. Rewinding, quiet and reduced motion settle correctly.
+- **Acceptance:** Desktop walk/look and paired touch work with the same collision path. Compare the same route before and after, recording device, render scale and frame-time percentiles. Owner immersion and physical phone verification remain separate.
+
+The fixture recorded visible motion at a fixed camera, exact Bench and Verify transitions, stable paused replay, two-thumb navigation, and zero delivery writes or page errors. One hardware Chrome pass per viewport on the Radeon 880M measured desktop movement p95 at 16.8 ms and 390 px emulation at 16.9 ms. The narrow drawing buffer rose from 390 × 587 to 682 × 1027.
+
+[Execution briefs](<../../Plans/Transfer Room/03 - Start here - visual review and run order.md>) · [Owner UAT](<../../../../docs/Delivery-UAT.md#era-and-the-phase-circuit--r135>) · [Fixture results](<../../../../.pm/transfer-room-implementation/room/result.json>) · [Hardware traces](<../../../../.pm/transfer-room-implementation/performance/results.json>)
+
+### R136
+
+- ✅ 2026-11-21 — **R136** Walk through a plasma-brain laboratory with a recognizable robot operator — [criteria](#r136) (Verified the nine-pose technician, MRI plasma globe, live phase conductor, textured laboratory, neural vault, first-person controls and opt-in sound in Chrome. PM suite 1035/1035 and Board gallery 89/89. Final Radeon 880M walk p95 was 16.8 ms desktop and 16.9 ms at 390 px emulated. Owner visual and physical phone UAT pending.)
+
+**Outcome:** The Local Game has a recognizable robot technician and a walkable laboratory centered on a glass plasma globe containing a sculpted brain.
+**Kind:** feature
+**Touches:** `scripts/pm/app/`, `scripts/pm/assets/`, `tests/pm-ui/`, `docs/Delivery-UAT.md`, `ERA Notes/`
+**Implementation:** done
+**UAT:** owner rejected the technician, anatomical centerpiece and Walk performance. R137 tracks the corrections.
+
+- **Acceptance:** The Board shows distinct resting, walking, reading and tool-contact poses at the actual playing scale.
+- **Acceptance:** From the doorway and the side, the brain reads as a folded volume within glass. Live preparation and Build have different electrical activity, and rewound evidence settles. Workstations read as physical places in a lit facility.
+- **Acceptance:** Desktop walking, mouse look, sprinting, collision sliding, two-thumb travel, reduced motion and return from a reader work in the ordinary room. Record a Chrome walkthrough and report measured frame pacing separately from the owner’s visual and device review.
+
+The local Chrome fixture covered live preparation, Build, Bench, Verify, settled replay, both finishes, the inner vault and a return to Board. At 1280 × 720 the final Radeon 880M walking route measured 16.8 ms p95. At 390 × 844 emulated it measured 16.9 ms p95. Neither measured route recorded a frame longer than 50 ms. [Walkthrough](<../../../../.pm/r136-evidence/walkthrough.webm>) · [Frame times](<../../../../.pm/r136-evidence/performance/results.json>) · [Owner UAT](<../../../../docs/Delivery-UAT.md#plasma-laboratory--r136>)
+
+### R137
+
+- ✅ 2026-11-21 — **R137** Ground the Board robot, restore ERA’s topic spheres and fix Walk frame pacing — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r137>) (Verified the grounded robot crossing, ERA topic designs, retained-run polling and Walk on hardware and software graphics. Typecheck, scoped lint, build and 1039 PM tests passed. Owner visual and device review pending.)
+
+### R138
+
+- ✅ 2026-11-21 — **R138** Restore full-resolution Walk and rebuild the Trips room’s materials and instruments — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r138>) (Rebuilt the Walk observatory, topic plasma and instruments. At 2516 x 1089 two Radeon walks measured 16.7 ms median and 16.8 ms p95 at native resolution. Two SwiftShader walks measured 25.0 ms median and 33.5 ms p95 with native resting detail. Checked the running PM route, gameplay, touch emulation, the 1039-test offline PM suite, lint, types and build. Owner screen review pending.)
+
+### R140
+
+- ✅ 2026-11-21 — **R140** Choose a campaign item in the orbital Library and enter its local delivery room — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r140>) (Verified all eleven real campaign cabinets, BUD-95 and finished BUD-89. Desktop and mobile browser fixtures cover themed readers, both operators, refusal, and exact run arrival. Typecheck and scoped lint pass. PM UI suite: 1057 passed, one separate R139 renderer budget assertion disagrees with the concurrent renderer change. Owner live launch and archived-reader server restart pending.)
+
+### R139
+
+- ✅ 2026-11-21 — **R139** Keep Walk sharp during movement and show ERA’s rotation and recorded failure in the chamber — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r139>) (Radeon 880M held 2516x1089 at 16.7 ms median across two walks. SwiftShader Native detail preserved every pixel in the 10,488-pixel sign comparison. Healthy rotation, recorded Seal fracture, intermittent arc and replay recovery passed in Chrome. 1058 PM UI tests passed. Owner display review pending.)
+
 ## State log
 
 _Moved from the Master Book on 2026-11-11._

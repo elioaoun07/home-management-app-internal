@@ -1,51 +1,99 @@
 import * as T from "three";
+export { createLibraryWorld } from "../libraryWorld";
 import { canStand, chair, spawn, stations, type Area } from "./layout";
-import { makeRoom, makeSphere, point, release } from "./art";
+import { makeRoom, makeSphere, release } from "./art";
+import { chamberReflections } from "./chamber";
+import { roomRenderBudget } from "./renderBudget";
+import { ambientRegion } from "./ambientRegion";
+import { stillFrame } from "./stillFrame";
+import { motionAntialias } from "./motionAntialias";
+import { createIllumination } from "./illumination";
+import { advanceGait, advanceWalk, maxNavigationElapsed, movementKey, restingGait } from "./navigation";
+import { createRoomProfiler } from "./profiler";
+import { createRoomSound } from "./sound";
+import { applySoftwareLighting } from "./softwareLighting";
 import type { Pose, Presence, Signal, Target, WorldApi, WorldControls, WorldState } from "./protocol";
 
-const MAX_FRAME = .05;
 const standEye = 1.65;
-const keys = new Set(["w", "a", "s", "d", "arrowleft", "arrowright", "arrowup", "arrowdown"]);
+const mouseSensitivity = .0025;
+
+type Drag = { id: number; x: number; y: number; travel: number; paired: boolean };
+
+let lastDeviceWasSoftware = false;
+
+function openRoomRenderer() {
+  const options = { alpha: false, powerPreference: "high-performance" as const };
+  let renderer = new T.WebGLRenderer({ ...options, antialias: !lastDeviceWasSoftware, preserveDrawingBuffer: lastDeviceWasSoftware, stencil: lastDeviceWasSoftware });
+  const gl = renderer.getContext(), device = gl.getExtension("WEBGL_debug_renderer_info");
+  const software = !!device && /swiftshader|llvmpipe|software rasterizer|basic render driver/i.test(gl.getParameter(device.UNMASKED_RENDERER_WEBGL));
+  // Antialiasing is a creation-only context option. CPU drivers rasterize
+  // every MSAA sample in software. Negotiate once before attaching the canvas.
+  if (software && !gl.getContextAttributes()?.preserveDrawingBuffer) {
+    renderer.dispose();
+    renderer.forceContextLoss();
+    // Request packed depth/stencil explicitly. On ANGLE a depth-only default
+    // surface still uses packed storage; a depth-only blit would be rejected.
+    renderer = new T.WebGLRenderer({ ...options, antialias: false, preserveDrawingBuffer: true, stencil: true });
+  }
+  lastDeviceWasSoftware = software;
+  return { renderer, software };
+}
 
 export function createWorld(host: HTMLElement, input: WorldControls, initial: WorldState): WorldApi {
-  const renderer = new T.WebGLRenderer({ alpha: false, antialias: true, powerPreference: "high-performance" });
+  const { renderer, software } = openRoomRenderer();
+  input.softwareRenderer?.(software);
   renderer.domElement.setAttribute("aria-hidden", "true");
   renderer.outputColorSpace = T.SRGBColorSpace;
   renderer.toneMapping = T.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.13;
   host.append(renderer.domElement);
+  const profiler = createRoomProfiler(host, renderer);
+  renderer.info.autoReset = false;
+  const budget = roomRenderBudget(software);
 
-  const scene = new T.Scene(), room = makeRoom();
+  const scene = new T.Scene(), room = makeRoom(invalidate, software);
+  const reflections = software ? null : chamberReflections();
+  scene.environment = reflections;
+  scene.environmentIntensity = .43;
   scene.add(room.outer, room.inner, room.light, room.key, room.warm);
+  if (software) {
+    applySoftwareLighting(room.outer);
+    applySoftwareLighting(room.inner);
+  }
   const camera = new T.PerspectiveCamera(65, 1, .08, 63);
   camera.rotation.order = "YXZ";
-  const coreLight = new T.PointLight("#91bbff", 37, 10, 2);
-  scene.add(coreLight);
+  const illumination = createIllumination(scene, room);
+  const still = software ? stillFrame(renderer.getContext() as WebGL2RenderingContext) : null;
+  const antialias = software ? motionAntialias(renderer) : null;
+  const opticalLayer = 1;
+  const opticalObjects: T.Object3D[] = [...illumination.opticalObjects, ...room.faultCable.opticalObjects];
+  if (software) {
+    room.outer.traverse(node => {
+      if (node instanceof T.Mesh && node.material === room.receiver) opticalObjects.push(node);
+    });
+    for (const object of opticalObjects) object.layers.enable(opticalLayer);
+    scene.traverse(node => { if (node instanceof T.Light) node.layers.enable(opticalLayer); });
+  }
 
   let state = initial, area: Area = "room", pose: Pose = { ...spawn };
   let interiorPose: Pose = { ...pose }, savedRoom: Pose = { ...pose };
   let resumeCore = false, enteredCore = false;
-  let sphere = makeSphere(state.topic, state.finish === "illustrated");
+  let sphere = makeSphere(state.topic, state.finish === "illustrated", software);
+  if (software) sphere.orb.traverse(node => node.layers.enable(opticalLayer));
   scene.add(sphere.orb);
   let presence: Presence = { target: null, zone: null, area };
   let disposed = false, visible = true, frame = 0, last = 0, renderNeeded = true;
   let transition: { start: number; position: T.Vector3; rotation: T.Quaternion } | null = null;
-  let flight: { start: number; signal: Signal; path: T.CatmullRomCurve3 } | null = null;
   let latestSignal = initial.signal?.id ?? null;
-  const start = performance.now(), motion = matchMedia("(prefers-reduced-motion: reduce)");
+  let faultWake = 0;
+  const motion = matchMedia("(prefers-reduced-motion: reduce)");
   const clean = new AbortController(), opts = { signal: clean.signal };
-  const held = new Set<string>(), pad = { x: 0, y: 0 };
-  let dragging: { id: number; side: "look" | "move"; x: number; y: number; travel: number } | null = null;
-
-  const traceMaterial = new T.LineBasicMaterial({ color: sphere.tint, transparent: true, opacity: 0 });
-  const traces = Array.from({ length: 3 }, () => {
-    const geometry = new T.BufferGeometry().setAttribute("position", new T.BufferAttribute(new Float32Array(33 * 3), 3));
-    const line = new T.Line(geometry, traceMaterial);
-    line.frustumCulled = false; line.visible = false;
-    scene.add(line); return line;
-  });
-  const impulse = new T.Mesh(new T.SphereGeometry(.082, 12, 8), new T.MeshBasicMaterial({ color: "#e0f1ff" }));
-  impulse.visible = false; scene.add(impulse);
+  const sound = createRoomSound(host, clean.signal);
+  const held = new Set<string>(), pad = { x: 0, y: 0, sprint: false };
+  const velocity = { x: 0, z: 0 }, lookDelta = { yaw: 0, pitch: 0 };
+  const gait = restingGait();
+  const drags: Partial<Record<"move" | "look", Drag>> = {};
+  let askHeld = false, lockPending = false;
 
   function palette() {
     const style = getComputedStyle(host);
@@ -54,26 +102,31 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
     const blend = (base: string, amount: number) => new T.Color(base).lerp(theme, amount);
     scene.background = blend(illustrated ? "#15163b" : "#0b1722", .64);
     scene.fog = new T.Fog(scene.background, 23, 55);
-    room.materials.hull.color.copy(blend(illustrated ? "#454b9d" : "#243441", .38));
-    room.materials.floor.color.copy(blend(illustrated ? "#363e75" : "#303f50", .52));
-    room.materials.panel.color.copy(blend(illustrated ? "#6267ad" : "#435b70", .28));
+    room.materials.hull.color.copy(blend(illustrated ? "#515998" : "#4b5156", .16));
+    room.materials.floor.color.copy(blend(illustrated ? "#8793cb" : "#929fa7", .17));
+    room.materials.panel.color.copy(blend(illustrated ? "#7376b9" : "#64727b", .14));
     room.materials.bevel.color.set(illustrated ? "#d09f70" : "#8a9fae");
     room.materials.pale.color.set(illustrated ? "#f1d7a1" : "#c0cdd9");
-    room.light.intensity = illustrated ? 2.3 : 1.72;
-    room.warm.intensity = illustrated ? 1.65 : 1.16;
+    room.light.intensity = illustrated ? 1.12 : .60;
+    room.key.intensity = illustrated ? 1.45 : 1.55;
+    room.warm.intensity = illustrated ? .47 : .32;
     for (const material of Object.values(room.materials)) {
-      material.roughness = illustrated ? 1 : .52;
+      material.roughness = illustrated ? .77 : .48;
     }
-    traceMaterial.color.copy(sphere.tint);
-    coreLight.color.copy(sphere.tint);
+    room.materials.bevel.metalness = illustrated ? .35 : .79;
+    room.materials.hull.metalness = illustrated ? .26 : .64;
+    room.materials.floor.metalness = illustrated ? .21 : .49;
+    room.materials.floor.roughness = illustrated ? .74 : .51;
+    room.materials.panel.metalness = illustrated ? .20 : .50;
     invalidate();
   }
 
   const position = new T.Vector3(), direction = new T.Vector3(), targetRotation = new T.Quaternion();
-  const Euler = new T.Euler(0, 0, 0, "YXZ");
+  const euler = new T.Euler(0, 0, 0, "YXZ");
   const goal = new T.PerspectiveCamera();
-  const standLook = (target: { x: number; z: number }) => {
-    pose.yaw = Math.atan2(pose.x - target.x, pose.z - target.z); pose.pitch = 0;
+  const standLook = (target: T.Vector3) => {
+    pose.yaw = Math.atan2(pose.x - target.x, pose.z - target.z);
+    pose.pitch = Math.atan2(target.y - standEye, Math.hypot(target.x - pose.x, target.z - pose.z));
   };
 
   function wantCamera() {
@@ -86,12 +139,17 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
       goal.position.copy(position); goal.lookAt(0, 2.02, 0);
       targetRotation.copy(goal.quaternion);
     } else {
-      position.set(pose.x, standEye, pose.z);
-      targetRotation.setFromEuler(Euler.set(pose.pitch, pose.yaw, 0));
+      position.set(pose.x + Math.cos(pose.yaw) * gait.sway, standEye + gait.lift, pose.z - Math.sin(pose.yaw) * gait.sway);
+      targetRotation.setFromEuler(euler.set(pose.pitch, pose.yaw, 0));
     }
   }
   function moveCamera(now: number) {
     wantCamera();
+    const fov = baseFov + (state.view === "walk" ? gait.sprint * 3.5 : 0);
+    if (Math.abs(camera.fov - fov) > .015 || !gait.sprint && camera.fov !== fov) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
     if (transition) {
       const f = state.quiet || motion.matches ? 1 : Math.min(1, (now - transition.start) / 430);
       const ease = f * f * (3 - 2 * f);
@@ -103,35 +161,93 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
     }
   }
 
+  function removeDrag(side: "move" | "look") {
+    const drag = drags[side];
+    if (!drag) return;
+    delete drags[side];
+    if (side === "move") {
+      pad.x = 0; pad.y = 0; pad.sprint = false;
+      delete host.dataset.thumb;
+    }
+    if (host.hasPointerCapture(drag.id)) host.releasePointerCapture(drag.id);
+  }
+
+  function resetInputs() {
+    sound.silence();
+    held.clear();
+    askHeld = false;
+    removeDrag("move"); removeDrag("look");
+    velocity.x = 0; velocity.z = 0;
+    lookDelta.yaw = 0; lookDelta.pitch = 0;
+    Object.assign(gait, restingGait());
+    last = 0;
+    invalidate();
+  }
   function clear() {
-    held.clear(); pad.x = 0; pad.y = 0;
-    if (dragging && host.hasPointerCapture(dragging.id)) host.releasePointerCapture(dragging.id);
-    dragging = null;
+    resetInputs();
     if (document.pointerLockElement === host) document.exitPointerLock();
   }
 
   const active = () => state.view === "walk" && !state.paused && document.visibilityState !== "hidden";
+  const navigationActive = () => active() && (
+    (held.size > Number(held.has("ShiftLeft")) + Number(held.has("ShiftRight"))) ||
+    pad.x !== 0 || pad.y !== 0 || velocity.x !== 0 || velocity.z !== 0 ||
+    lookDelta.yaw !== 0 || lookDelta.pitch !== 0 || gait.weight !== 0
+  );
   function walk(dt: number) {
-    if (!active()) return;
     const spin = Number(held.has("arrowleft")) - Number(held.has("arrowright"));
     const tilt = Number(held.has("arrowup")) - Number(held.has("arrowdown"));
-    look(spin * dt * 1.4, tilt * dt * 1.4);
+    const turnTime = dt <= maxNavigationElapsed ? dt : 0;
+    pose.yaw += lookDelta.yaw + spin * turnTime * 1.4;
+    pose.pitch = T.MathUtils.clamp(pose.pitch + lookDelta.pitch + tilt * turnTime * 1.4, -1.40, 1.40);
+    lookDelta.yaw = 0; lookDelta.pitch = 0;
     const forward = Number(held.has("w")) - Number(held.has("s")) - pad.y;
     const side = Number(held.has("d")) - Number(held.has("a")) + pad.x;
-    const amount = Math.hypot(forward, side);
-    if (!amount) return;
-    const step = 2.4 * dt / Math.max(1, amount);
-    const x = step * (-Math.sin(pose.yaw) * forward + Math.cos(pose.yaw) * side);
-    const z = step * (-Math.cos(pose.yaw) * forward - Math.sin(pose.yaw) * side);
-    if (canStand({ x: pose.x + x, z: pose.z }, area)) pose.x += x;
-    if (canStand({ x: pose.x, z: pose.z + z }, area)) pose.z += z;
+    const sprint = held.has("ShiftLeft") || held.has("ShiftRight") || pad.sprint;
+    const distance = forward || side || velocity.x || velocity.z
+      ? advanceWalk(pose, velocity, area, forward, side, dt, sprint) : 0;
+    sound.travel(distance, dt);
+    if (!state.quiet && !motion.matches) advanceGait(gait, distance, dt);
   }
 
-  function look(yaw: number, pitch: number) {
-    pose.yaw += yaw; pose.pitch = T.MathUtils.clamp(pose.pitch + pitch, -1.13, 1.13);
+  async function captureMouse() {
+    if (!active() || disposed || !visible || lockPending || !host.requestPointerLock || document.pointerLockElement) return;
+    host.focus({ preventScroll: true });
+    lockPending = true;
+    try {
+      await host.requestPointerLock({ unadjustedMovement: true });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "NotSupportedError" && active() && !disposed) {
+        try { await host.requestPointerLock(); } catch { /* Drag look remains active. */ }
+      }
+    } finally {
+      lockPending = false;
+      if ((!active() || !visible || disposed || document.activeElement !== host) && document.pointerLockElement === host)
+        document.exitPointerLock();
+    }
   }
 
+  function aim(yaw: number, pitch: number) {
+    lookDelta.yaw += yaw; lookDelta.pitch += pitch;
+    transition = null;
+    invalidate();
+  }
+
+  let locatedView: WorldState["view"] | null = null;
+  const locatedPosition = new T.Vector3(), locatedRotation = new T.Quaternion();
+  const publishedPose = { x: NaN, z: NaN, yaw: NaN, pitch: NaN };
+  let poseText = "";
   function locate() {
+    if (pose.x !== publishedPose.x || pose.z !== publishedPose.z ||
+        pose.yaw !== publishedPose.yaw || pose.pitch !== publishedPose.pitch) {
+      Object.assign(publishedPose, pose);
+      const text = `${pose.x.toFixed(3)},${pose.z.toFixed(3)},${pose.yaw.toFixed(3)},${pose.pitch.toFixed(3)}`;
+      if (text !== poseText) { poseText = text; host.dataset.pose = text; }
+    }
+    if (locatedView === state.view && presence.area === area &&
+        locatedPosition.equals(camera.position) && locatedRotation.equals(camera.quaternion)) return;
+    locatedView = state.view;
+    locatedPosition.copy(camera.position); locatedRotation.copy(camera.quaternion);
     let target: Target | null = null, zone: Presence["zone"] = null;
     if (state.view === "walk") {
       let nearest = Infinity, forward = .83;
@@ -154,129 +270,171 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
     if (presence.target !== target || presence.area !== area || presence.zone !== zone) {
       presence = { area, target, zone }; input.presence(presence);
     }
-    host.dataset.pose = [pose.x, pose.z, pose.yaw, pose.pitch].map(v => v.toFixed(3)).join(",");
   }
 
-  function moveToView() {
+  function moveToView(previousView: WorldState["view"]) {
     clear();
-    transition = state.quiet || motion.matches ? null : {
+    const overheadCut = state.view === "map" || previousView === "map";
+    const distantSeat = Math.hypot(pose.x - chair.x, pose.z - chair.z) > 2.6;
+    transition = state.quiet || motion.matches || overheadCut || distantSeat ? null : {
       start: performance.now(), position: camera.position.clone(), rotation: camera.quaternion.clone(),
     };
-    // From a distant position, dissolve instead of flying through the well.
-    if (state.view === "seat" && Math.hypot(pose.x - chair.x, pose.z - chair.z) > 2.6) transition = null;
-    if (!state.quiet && !motion.matches) {
-      renderer.domElement.animate([{ opacity: transition ? .86 : .2 }, { opacity: 1 }], { duration: 300, easing: "ease-out" });
-    }
     invalidate();
   }
 
+  const canAnimate = () => !state.paused && !state.quiet && !motion.matches;
+  const roomAlive = () => canAnimate() && (!state.lighting.failed || (area === "room" && !!state.lighting.faultZone));
   function paintSignal(signal: Signal) {
-    if (area !== "room" || state.quiet || motion.matches) { invalidate(); return; }
-    const end = room.markers.get(signal.kind === "question" || signal.kind === "handover" ? "seat" : signal.zone);
-    if (!end) return;
-    const inside = point(0, 2.22, 0);
-    let path = [inside, point(end.x * .19, .075, end.z * .19), point(end.x * .66, .048, end.z * .66), end];
-    if (signal.kind === "read") path = path.reverse();
-    const curve = new T.CatmullRomCurve3(path);
-    flight = { signal, path: curve, start: performance.now() };
-    let seed = 0;
-    for (const char of signal.id) seed = (seed * 31 + char.charCodeAt(0)) | 0;
-    for (const [index, trace] of traces.entries()) {
-      const g = trace.geometry.getAttribute("position");
-      for (let i = 0; i <= 32; i++) {
-        const t = i / 32, p = curve.getPoint(t);
-        const ripple = Math.sin(t * 21 + index * 2.2 + seed % 49) * Math.sin(Math.PI * t) * index * .092;
-        g.setXYZ(i, p.x + ripple, p.y + Math.abs(ripple) * .34, p.z + ripple);
-      }
-      g.needsUpdate = true; trace.visible = index === 0 || signal.kind === "edit";
+    if (!state.lighting.failed && area === "room" && canAnimate() && visible && !document.hidden) {
+      illumination.play(signal, performance.now());
     }
     invalidate();
   }
 
   function paint(now: number) {
-    const energy = ({ preparing: .44, building: 1.02, checking: 1.38, "uat-ready": .63, shipped: 1.15 } as Record<string, number>)[state.phase] ?? .3;
-    const quiet = state.quiet || motion.matches;
+    sound.position(pose, state.lighting.energy, state.lighting.working,
+      active() && visible && document.hasFocus() && !state.replay && !state.quiet && !motion.matches);
     for (const wall of room.cutaway) wall.visible = state.view !== "map";
     room.marker.visible = state.view === "map";
     room.marker.position.set(pose.x, .11, pose.z);
     room.marker.rotation.z = pose.yaw;
-    let boost = 0;
-    let travel = 0;
-    if (flight) {
-      const ms = flight.signal.kind === "handover" ? 650 : flight.signal.kind === "edit" ? 500 : 315;
-      travel = Math.min(1, (now - flight.start) / ms);
-      boost = Math.sin(Math.PI * travel) * .58;
-      impulse.position.copy(flight.path.getPoint(travel));
-      impulse.visible = travel < 1 && !quiet;
-      for (const trace of traces) trace.geometry.setDrawRange(0, Math.max(2, Math.ceil(33 * travel)));
-      traceMaterial.opacity = quiet ? 0 : .60 * (1 - travel * travel);
-      if (travel === 1 || quiet) { flight = null; for (const trace of traces) trace.visible = false; }
-    } else {
-      impulse.visible = false;
-    }
-    sphere.orb.scale.setScalar(area === "core" ? 2.10 : 1);
-    sphere.orb.position.set(0, area === "core" ? 2.76 : 2.22, 0);
-    sphere.fibers.rotation.y = !quiet && area === "core" ? Math.sin((now - start) / 3100) * .27 : 0;
-    sphere.glow.emissiveIntensity = energy + boost + (quiet ? 0 : Math.sin((now - start) / 830) * .07);
-    sphere.shell.uniforms.energy.value = energy + boost;
-    sphere.shell.uniforms.tick.value = quiet ? 0 : (now - start) / 1250;
-    sphere.aura.material.opacity = Math.min(.84, .31 + energy * .17 + boost * .26);
-    sphere.nucleus.emissiveIntensity = .42 + boost * .93;
-    coreLight.position.copy(sphere.orb.position);
-    coreLight.intensity = 22 + energy * 13 + boost * 29;
-    for (const [zone, machine] of room.machines) {
-      if (zone === "exit" || zone === "previous" || zone === "next" || zone === "present") {
-        machine.stamp.visible = zone === "exit" || state.core[zone === "previous" ? 0 : zone === "present" ? 1 : 2];
-        continue;
-      }
-      const status = zone === "seat" || zone === "core" ? undefined : state.stamps[zone];
-      machine.stamp.visible = !!status;
-      const color = status === "failed" ? "#f4b475" : status === "inconclusive" ? "#dfc9e2" : status === "passed" ? "#c3ffd9" : sphere.tint;
-      machine.light.emissive.set(color);
-      machine.light.emissiveIntensity = status ? .6 : .08;
-      if (machine.stamp.material instanceof T.MeshStandardMaterial) {
-        machine.stamp.material.emissive.set(color);
-        machine.stamp.material.emissiveIntensity = .64;
-      }
-      machine.stamp.scale.x = status?.includes("pending") ? .52 : 1;
-      const contact = flight?.signal.zone === zone ? Math.sin(Math.PI * travel) : 0;
-      machine.moving.position.z = contact ? contact * .23 : status && zone === "build" ? .12 : 0;
-      machine.moving.scale.y = status === "failed" ? .70 : status === "inconclusive" ? .86 : 1;
-    }
+    const working = state.lighting.working && (!state.replay || state.playing);
+    illumination.paint(now, state, sphere, area, canAnimate(), canAnimate() && working);
   }
 
+  let bufferWidth = 0, bufferHeight = 0, sizeDirty = true, baseFov = 65;
+  let appliedScale = 0, lastMotionAt = -Infinity, wasMoving = false, wasFlying = false;
+  let lastSteady = false;
+  const damage = ambientRegion();
+  const noPath: readonly T.Vector3[] = [];
   function resize() {
     const { width, height } = host.getBoundingClientRect();
     if (!width || !height) return;
-    renderer.setPixelRatio(Math.min(devicePixelRatio, width < 670 ? 1.0 : 1.5));
-    renderer.setSize(width, height, false);
-    camera.aspect = width / height;
-    camera.fov = state.view === "map" && width < height ? 78 : 65;
-    camera.updateProjectionMatrix();
+    budget.resize(width, height, devicePixelRatio);
+    sizeDirty ||= width !== bufferWidth || height !== bufferHeight;
+    bufferWidth = width; bufferHeight = height;
+    baseFov = state.view === "map" && width < height ? 78 : 65;
+    const aspect = width / height;
+    if (camera.aspect !== aspect) {
+      camera.aspect = aspect;
+      camera.updateProjectionMatrix();
+    }
     invalidate();
   }
 
-  function invalidate() {
-    renderNeeded = true;
+  function schedule() {
+    if (faultWake) { window.clearTimeout(faultWake); faultWake = 0; }
     if (!frame && visible && !disposed && document.visibilityState !== "hidden")
       frame = requestAnimationFrame(tick);
   }
+  function invalidate() {
+    renderNeeded = true;
+    schedule();
+  }
   function tick(now: number) {
     frame = 0;
-    if (disposed || !visible || document.visibilityState === "hidden") return;
-    const dt = last ? Math.min(MAX_FRAME, Math.max(0, (now - last) / 1000)) : 0;
+    if (disposed || !visible || document.hidden) return;
+    const frameStart = profiler?.recording ? performance.now() : 0;
+    const dt = last ? Math.max(0, (now - last) / 1000) : 0;
     last = now;
-    const moving = active() && (held.size > 0 || pad.x !== 0 || pad.y !== 0);
+    const moving = navigationActive();
     if (moving) walk(dt);
-    if (renderNeeded || moving || flight || transition || !state.quiet && !motion.matches && area === "core" && !state.paused) {
+    if (moving || transition) lastMotionAt = now;
+    // Avoid resizing on every brief key release or mouse event. The final
+    // frame after travel always reaches the display's resting resolution.
+    const motionFrame = now - lastMotionAt < 260;
+    const refined = !motionFrame && wasMoving;
+    if (renderNeeded || moving || illumination.flying || transition || roomAlive() || refined) {
+      const invalidated = renderNeeded;
+      renderNeeded = false;
+      if (motionFrame && wasMoving) budget.sample(dt * 1000, profiler?.gpuMs);
+      const scale = motionFrame && !state.nativeMotion ? budget.scale : budget.restingScale;
+      if (profiler?.recording) {
+        profiler.display.mode = motionFrame ? "moving" : "settled";
+        profiler.display.movementScale = motionFrame ? scale : budget.scale;
+        profiler.display.refinedScale = budget.restingScale;
+      }
+      const resized = sizeDirty || scale !== appliedScale;
+      // Resizing a WebGL canvas clears it. Allocate and paint in the same
+      // animation frame, including on window resize and quality changes.
+      if (resized && bufferWidth && bufferHeight) {
+        renderer.setDrawingBufferSize(bufferWidth, bufferHeight, scale);
+        appliedScale = scale;
+        sizeDirty = false;
+      }
       moveCamera(now);
       locate();
       paint(now);
-      renderer.render(scene, camera);
-      renderNeeded = false;
+      const renderStart = profiler?.recording ? performance.now() : 0;
+      const activePath = state.lighting.failed ? room.faultCable.damagePath : state.lighting.endpoint === "seat" ? room.seatCircuit.path :
+        state.lighting.endpoint ? room.circuits.get(state.lighting.endpoint)?.path : undefined;
+      const cached = !!still?.supported && !motionFrame && !illumination.flying && illumination.steady && roomAlive();
+      if (!cached || invalidated || resized || wasFlying || lastSteady !== illumination.steady) still?.invalidate();
+      renderer.info.reset();
+      profiler?.beginRender();
+      const rebuild = cached && !!still && !still.valid;
+      if (rebuild && still) {
+        const movingObjects = [sphere.orb, ...opticalObjects].filter(object => object.visible);
+        for (const object of movingObjects) object.visible = false;
+        renderer.render(scene, camera);
+        still.store();
+        for (const object of movingObjects) object.visible = true;
+      }
+      if (cached && still?.valid) {
+        const w = renderer.domElement.width, h = renderer.domElement.height;
+        const region = damage(camera, w, h, sphere.orb.position, area === "core" ? .96 : 2.06, area === "room" ? activePath ?? noPath : noPath)
+          ?? { x: 0, y: 0, width: w, height: h };
+        if (region.width && region.height) {
+          const bottom = h - region.y - region.height;
+          still.restore(region.x, bottom, region.width, region.height);
+          const background = scene.background;
+          scene.background = null;
+          renderer.autoClear = false;
+          camera.layers.set(opticalLayer);
+          if (state.nativeMotion) {
+            const dpr = renderer.getPixelRatio();
+            renderer.setScissor(region.x / dpr, bottom / dpr, region.width / dpr, region.height / dpr);
+            renderer.setScissorTest(true);
+          }
+          renderer.render(scene, camera);
+          if (state.nativeMotion) renderer.setScissorTest(false);
+          camera.layers.set(0);
+          renderer.autoClear = true;
+          scene.background = background;
+          if (state.nativeMotion && !rebuild) antialias?.drawNative(region.x, bottom, region.width, region.height);
+        }
+        if (state.nativeMotion && rebuild) antialias?.drawNative();
+      } else {
+        renderer.render(scene, camera);
+        if (state.nativeMotion) antialias?.drawNative();
+        else if (motionFrame) antialias?.draw();
+      }
+      if (profiler?.recording) profiler.display.cachedRoom = cached && !!still?.valid;
+      profiler?.finishFrame(now, frameStart, renderStart, profiler.recording ? performance.now() : 0);
+      lastSteady = illumination.steady;
+      wasFlying = illumination.flying;
     }
-    if (moving || flight || transition || !state.quiet && !motion.matches && area === "core" && !state.paused) frame = requestAnimationFrame(tick);
-    else last = 0;
+    wasMoving = motionFrame;
+    if (renderNeeded || motionFrame || illumination.flying || transition) schedule();
+    else if (roomAlive()) {
+      const delay = state.lighting.failed ? room.faultCable.nextWake(now / 1000) : 0;
+      if (delay === 0) schedule();
+      else if (Number.isFinite(delay)) {
+        last = 0;
+        faultWake = window.setTimeout(schedule, Math.max(12, Math.ceil(delay * 1000)));
+      }
+    } else { last = 0; budget.resetTiming(); }
+  }
+
+  function suspend() {
+    window.clearTimeout(faultWake); faultWake = 0;
+    cancelAnimationFrame(frame);
+    frame = 0;
+    last = 0;
+    clear();
+    illumination.clear();
+    illumination.resetClock();
+    budget.resetTiming();
   }
 
   function clickMap(event: PointerEvent) {
@@ -293,62 +451,126 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
 
   host.addEventListener("keydown", event => {
     if (state.paused || event.altKey || event.ctrlKey || event.metaKey) return;
-    const key = event.key.toLowerCase();
-    if (key === "q") { event.preventDefault(); return; }
+    if (!event.repeat && active()) sound.activate();
+    if (event.key === "Escape" && document.pointerLockElement === host) {
+      clear();
+      return;
+    }
+    if (event.code === "KeyQ") {
+      event.preventDefault();
+      if (!event.repeat) askHeld = true;
+      return;
+    }
     if (!active()) return;
-    if (key === "e" && presence.target && !event.repeat) {
+    if (event.code === "KeyE" && presence.target && !event.repeat) {
       event.preventDefault(); input.inspect(presence.target); return;
     }
-    if (keys.has(key)) { event.preventDefault(); held.add(key); invalidate(); }
+    const action = movementKey(event.code, event.key);
+    if (action) {
+      event.preventDefault();
+      if (event.repeat && !held.has(action)) return;
+      transition = null;
+      held.add(action); invalidate();
+    }
   }, opts);
   host.addEventListener("keyup", event => {
-    const key = event.key.toLowerCase();
-    held.delete(key);
-    if (key === "q" && !state.paused && !event.altKey && !event.metaKey && !event.ctrlKey) input.ask();
+    held.delete(movementKey(event.code, event.key));
+    if (event.code === "KeyQ" && askHeld) {
+      askHeld = false;
+      if (!state.paused && !event.altKey && !event.metaKey && !event.ctrlKey) input.ask();
+    }
   }, opts);
   host.addEventListener("pointerdown", event => {
     if (event.button !== 0 || state.paused) return;
+    if (active()) sound.activate();
     host.focus({ preventScroll: true });
     if (state.view === "map") { clickMap(event); return; }
-    if (!active() || dragging || document.pointerLockElement === host) return;
-    const bounds = host.getBoundingClientRect();
-    const side = event.pointerType === "touch" && event.clientX < bounds.left + bounds.width * .45 ? "move" : "look";
-    dragging = { id: event.pointerId, side, x: event.clientX, y: event.clientY, travel: 0 };
-    host.setPointerCapture(event.pointerId);
-  }, opts);
-  host.addEventListener("pointermove", event => {
     if (!active()) return;
     if (document.pointerLockElement === host) {
-      look(-event.movementX * .0027, -event.movementY * .0027); invalidate(); return;
+      if (presence.target) input.inspect(presence.target);
+      return;
     }
-    if (!dragging || dragging.id !== event.pointerId) return;
+    const bounds = host.getBoundingClientRect();
+    const side = event.pointerType === "touch" && event.clientX < bounds.left + bounds.width * .45 ? "move" : "look";
+    if (drags[side]) return;
+    const other = drags[side === "move" ? "look" : "move"];
+    if (other) other.paired = true;
+    drags[side] = { id: event.pointerId, x: event.clientX, y: event.clientY, travel: 0, paired: !!other };
+    if (side === "move") {
+      host.style.setProperty("--stick-x", (event.clientX - bounds.left) + "px");
+      host.style.setProperty("--stick-y", (event.clientY - bounds.top) + "px");
+      host.style.setProperty("--stick-dx", "0px");
+      host.style.setProperty("--stick-dy", "0px");
+      host.dataset.thumb = "true";
+    }
+    host.setPointerCapture(event.pointerId);
+  }, opts);
+  document.addEventListener("mousemove", event => {
+    if (active() && document.pointerLockElement === host)
+      aim(-event.movementX * mouseSensitivity, -event.movementY * mouseSensitivity);
+  }, opts);
+  host.addEventListener("pointermove", event => {
+    if (!active() || document.pointerLockElement === host) return;
+    const dragging = drags.move?.id === event.pointerId ? drags.move :
+      drags.look?.id === event.pointerId ? drags.look : undefined;
+    if (!dragging) return;
     const x = event.clientX - dragging.x, y = event.clientY - dragging.y;
-    dragging.travel += Math.hypot(x, y);
-    if (dragging.side === "move") {
-      pad.x = T.MathUtils.clamp(x / 45, -1, 1); pad.y = T.MathUtils.clamp(y / 45, -1, 1);
+    const travel = Math.hypot(x, y);
+    if (dragging === drags.move) {
+      dragging.travel = Math.max(dragging.travel, travel);
+      const amount = T.MathUtils.clamp((travel - 4) / 41, 0, 1);
+      // A radial pad maps a diagonal thumb movement to the same top speed.
+      pad.x = travel ? x * amount / travel : 0;
+      pad.y = travel ? y * amount / travel : 0;
+      pad.sprint = -y > 70 && pad.y < -.65;
+      host.style.setProperty("--stick-dx", (pad.x * 26).toFixed(1) + "px");
+      host.style.setProperty("--stick-dy", (pad.y * 26).toFixed(1) + "px");
+      transition = null;
+      invalidate();
     } else {
-      look(-x * .007, -y * .007); dragging.x = event.clientX; dragging.y = event.clientY;
+      dragging.travel += travel;
+      dragging.x = event.clientX; dragging.y = event.clientY;
+      const sensitivity = event.pointerType === "touch" ? .0057 : mouseSensitivity;
+      aim(-x * sensitivity, -y * sensitivity);
+    }
+  }, opts);
+  function finishDrag(event: PointerEvent) {
+    const side = drags.move?.id === event.pointerId ? "move" :
+      drags.look?.id === event.pointerId ? "look" : null;
+    if (!side) return;
+    const dragging = drags[side];
+    const released = event.type === "pointerup";
+    const tap = released && dragging && dragging.travel < 6 && !dragging.paired;
+    removeDrag(side);
+    if (!released && side === "move") { velocity.x = 0; velocity.z = 0; }
+    if (tap && active()) {
+      if (event.pointerType === "mouse") void captureMouse();
+      else if (presence.target) input.inspect(presence.target);
     }
     invalidate();
-  }, opts);
-  host.addEventListener("pointerup", event => {
-    if (dragging?.id !== event.pointerId) return;
-    const tap = dragging.travel < 6 && event.pointerType !== "mouse";
-    dragging = null; pad.x = 0; pad.y = 0;
-    if (tap && presence.target && active()) input.inspect(presence.target);
-  }, opts);
-  host.addEventListener("lostpointercapture", () => { dragging = null; pad.x = 0; pad.y = 0; }, opts);
+  }
+  host.addEventListener("pointerup", finishDrag, opts);
+  host.addEventListener("pointercancel", finishDrag, opts);
+  host.addEventListener("lostpointercapture", finishDrag, opts);
   host.addEventListener("blur", clear, opts);
-  document.addEventListener("pointerlockchange", () => { if (document.pointerLockElement !== host) clear(); }, opts);
-  document.addEventListener("visibilitychange", () => { if (document.hidden) { clear(); last = 0; } else invalidate(); }, opts);
-  motion.addEventListener("change", invalidate, opts);
+  window.addEventListener("blur", clear, opts);
+  window.addEventListener("resize", resize, opts);
+  document.addEventListener("pointerlockchange", () => {
+    if (document.pointerLockElement === host) host.dataset.mouseLook = "true";
+    else if (host.dataset.mouseLook) { delete host.dataset.mouseLook; clear(); }
+  }, opts);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) suspend(); else invalidate(); }, opts);
+  motion.addEventListener("change", () => {
+    if (motion.matches) { transition = null; Object.assign(gait, restingGait()); }
+    invalidate();
+  }, opts);
   renderer.domElement.addEventListener("webglcontextlost", event => {
     event.preventDefault(); input.failure();
   }, opts);
   const resizeObserver = new ResizeObserver(resize); resizeObserver.observe(host);
   const visibilityObserver = new IntersectionObserver(([entry]) => {
     visible = entry.isIntersecting;
-    if (visible) invalidate(); else { clear(); last = 0; }
+    if (visible) invalidate(); else suspend();
   });
   visibilityObserver.observe(host);
   const theme = new MutationObserver(palette);
@@ -358,20 +580,31 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
   resize();
   moveCamera(performance.now());
   return {
+    captureMouse,
     update(next) {
+      const previous = state;
       const viewChanged = state.view !== next.view;
       const remesh = state.finish !== next.finish || state.topic !== next.topic;
       const becamePaused = !state.paused && next.paused;
       const enteringQuiet = !state.quiet && next.quiet;
       state = next;
+      if (next.paused || next.replay || next.quiet || next.view !== "walk") sound.silence();
       if (becamePaused) clear();
+      const frozenReplay = next.replay && !next.playing &&
+        (!previous.replay || previous.playing || previous.cursor !== next.cursor);
+      if (becamePaused || enteringQuiet || frozenReplay || previous.lighting.failed !== next.lighting.failed) {
+        illumination.clear();
+        illumination.resetClock();
+      }
       if (enteringQuiet) {
         transition = null;
-        renderer.domElement.getAnimations().forEach(animation => animation.cancel());
+        Object.assign(gait, restingGait());
       }
       if (remesh) {
         scene.remove(sphere.orb); release(sphere.orb);
-        sphere = makeSphere(state.topic, state.finish === "illustrated"); scene.add(sphere.orb); palette();
+        sphere = makeSphere(state.topic, state.finish === "illustrated", software);
+        if (software) sphere.orb.traverse(node => node.layers.enable(opticalLayer));
+        scene.add(sphere.orb); palette();
       }
       if (viewChanged) {
         if (state.view !== "walk" && area === "core") {
@@ -382,13 +615,17 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
           resumeCore = false;
           savedRoom = { ...pose }; pose = { ...interiorPose }; area = "core";
           room.inner.visible = true; room.outer.visible = false;
-          invalidate(); resize(); return;
+          clear(); transition = null;
         }
-        moveToView(); resize();
+        if (area === "room") moveToView(previous.view);
+        resize();
       }
-      if (next.signal?.id !== latestSignal) {
-        latestSignal = next.signal?.id ?? null;
-        if (next.signal && (next.signal.kind !== "question" || !next.quiet)) paintSignal(next.signal);
+      if (next.signal && next.signal.id !== latestSignal) {
+        latestSignal = next.signal.id;
+        if (next.replay ? next.playing : !previous.replay && (
+          next.lighting.working || next.lighting.owner ||
+          ["ship", "revert", "failure"].includes(next.signal.kind)
+        )) paintSignal(next.signal);
       }
       invalidate();
     },
@@ -397,34 +634,54 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
       if (!station) return;
       if (area === "core") this.exit();
       pose = { ...pose, ...station.arrival };
-      standLook(station); clear(); transition = null; invalidate();
+      const target = room.markers.get(zone);
+      if (target) standLook(target);
+      clear(); transition = null; invalidate();
       host.focus({ preventScroll: true });
     },
-    reset() { if (area === "core") this.exit(); pose = { ...spawn }; transition = null; invalidate(); },
+    inspectBreak() {
+      const zone = state.lighting.faultZone;
+      if (!zone || state.view !== "walk" || area !== "room") return;
+      room.faultCable.set(zone);
+      const tip = room.faultCable.supplyPath.at(-1);
+      const station = room.markers.get(zone);
+      if (!tip || !station) return;
+      const outward = tip.clone().setY(0).normalize();
+      const side = new T.Vector3(-outward.z, 0, outward.x);
+      const vantage = tip.clone().addScaledVector(outward, -2.5).addScaledVector(side, .85);
+      if (canStand(vantage, area)) { pose.x = vantage.x; pose.z = vantage.z; }
+      standLook(tip.clone().lerp(station, .24));
+      clear(); transition = null; invalidate(); host.focus({ preventScroll: true });
+    },
+    reset() {
+      if (area === "core") this.exit();
+      clear(); pose = { ...spawn }; transition = null; invalidate();
+    },
     enter() {
       if (area === "core") return;
       savedRoom = { ...pose };
-      pose = enteredCore ? { ...interiorPose } : { x: 0, z: 3.28, yaw: 0, pitch: 0 };
+      pose = enteredCore ? { ...interiorPose } : { x: 1.16, z: 3.42, yaw: .327, pitch: .14 };
       enteredCore = true;
       area = "core"; room.outer.visible = false; room.inner.visible = true;
-      flight = null; transition = null; clear();
-      if (!state.quiet && !motion.matches) renderer.domElement.animate([{opacity:.12},{opacity:1}], 320);
+      illumination.clear(); transition = null; resetInputs();
       invalidate(); host.focus({ preventScroll: true });
     },
     exit() {
       if (area !== "core") return;
       interiorPose = { ...pose }; area = "room"; pose = { ...savedRoom };
       room.inner.visible = false; room.outer.visible = true;
-      transition = null; clear();
-      if (!state.quiet && !motion.matches) renderer.domElement.animate([{opacity:.12},{opacity:1}], 280);
+      transition = null; resetInputs();
       invalidate(); host.focus({ preventScroll: true });
     },
     play: paintSignal,
     dispose() {
       if (disposed) return;
-      disposed = true; clear(); clean.abort(); cancelAnimationFrame(frame);
+      disposed = true; clear(); clean.abort(); cancelAnimationFrame(frame); window.clearTimeout(faultWake);
       resizeObserver.disconnect(); visibilityObserver.disconnect(); theme.disconnect();
-      release(scene); traces.forEach(line => line.geometry.dispose()); traceMaterial.dispose();
+      profiler?.dispose();
+      still?.dispose();
+      antialias?.dispose();
+      room.dispose(); reflections?.dispose(); release(scene);
       renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();
     },
   };

@@ -135,6 +135,21 @@
   .header-tools .search-shortcut {
     display: none;
   }
+  .game-shell[data-game="true"] .header-tools .search-shortcut {
+    display: inline-flex;
+  }
+  .game-shell[data-game="true"] .header-tools {
+    gap: 2px;
+  }
+  .game-shell[data-game="true"] .app-header {
+    padding-inline: clamp(6px, 2vw, 14px);
+    gap: 4px;
+  }
+  @media (max-width: 365px) {
+    .game-shell[data-game="true"] .wordmark b {
+      display: none;
+    }
+  }
   .primary-nav.desktop-nav {
     display: none;
   }

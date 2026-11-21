@@ -4,7 +4,7 @@ type Line = { raw: string; type: string; level?: number; text?: string };
 
 const acceptanceLabel = /^Acceptance(?: criteria)?$/i;
 const metadataLabel =
-  /^(?:Outcome|Kind|Touches|Source|Tier|Reading guide|Provenance|Depends on|Implementation|UAT|Evidence|Progress|Verify|Verification|Execution(?: plan)?|Readiness|Owner check|UAT instructions|Status)(?:\s*[—:(-].*)?$/i;
+  /^(?:Outcome|Kind|Touches|Source|Tier|Plan(?: brief)?|Reading guide|Provenance|Depends on|Implementation|UAT|Evidence|Progress|Verify|Verification|Execution(?: plan)?|Readiness|Owner check|UAT instructions|Status)(?:\s*[—:(-].*)?$/i;
 
 function labelOf(line: Line) {
   if (!["text", "bullet", "checkbox"].includes(line.type)) return null;
@@ -21,6 +21,11 @@ function labelOf(line: Line) {
  * Only explicit labels establish boundaries; unfamiliar formats retain the full brief.
  */
 export function acceptanceMarkdown(raw: string): string {
+  return fieldMarkdown(raw, acceptanceLabel, raw);
+}
+
+/** Isolate an authored display field. Ambiguous Markdown keeps the caller's fallback. */
+export function fieldMarkdown(raw: string, field: RegExp, fallback: string): string {
   const lines: Line[] = scanLines(raw).lines;
   // Reference definitions can have continuation titles outside the selected block.
   // The shared scanner does not model that syntax; retain it rather than break links.
@@ -29,17 +34,17 @@ export function acceptanceMarkdown(raw: string): string {
       (line) => line.type === "text" && /^ {0,3}\[[^\]]+\]:/.test(line.raw),
     )
   )
-    return raw;
+    return fallback;
   const ranges: Array<{ start: number; end: number }> = [];
   for (let start = 0; start < lines.length; start += 1) {
     const line = lines[start];
     const label = labelOf(line);
     const heading =
       line.type === "heading" &&
-      acceptanceLabel.test((line.text || "").replace(/:$/, "").trim());
+      field.test((line.text || "").replace(/:$/, "").trim());
     if (
       !heading &&
-      (!label || !acceptanceLabel.test(label.label) || label.indent > 3)
+      (!label || !field.test(label.label) || label.indent > 3)
     )
       continue;
     let end = start + 1;
@@ -49,7 +54,7 @@ export function acceptanceMarkdown(raw: string): string {
       // For a bold label, a following heading has no explicit relationship;
       // retain the full contract rather than guess whether it ends the criteria.
       if (next.type === "heading") {
-        if (!heading) return raw;
+        if (!heading) return fallback;
         if ((next.level || 0) <= (line.level || 0)) break;
       }
       const nextLabel = labelOf(next);
@@ -57,7 +62,7 @@ export function acceptanceMarkdown(raw: string): string {
         !heading &&
         nextLabel &&
         nextLabel.indent <= (label?.indent || 0) &&
-        (acceptanceLabel.test(nextLabel.label) ||
+        (field.test(nextLabel.label) || acceptanceLabel.test(nextLabel.label) ||
           metadataLabel.test(nextLabel.label))
       )
         break;
@@ -65,7 +70,7 @@ export function acceptanceMarkdown(raw: string): string {
     ranges.push({ start, end });
     start = end - 1;
   }
-  if (!ranges.length) return raw;
+  if (!ranges.length) return fallback;
   return ranges
     .map(({ start, end }) =>
       lines

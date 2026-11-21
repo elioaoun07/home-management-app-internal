@@ -7,7 +7,9 @@ import {
   type BoardPoint,
 } from "./config";
 import { project } from "./iso";
+import { createServiceWalk } from "./serviceWalk";
 import { beatZone } from "./board";
+import { zoneForEvent } from "./zoneModel";
 import type { BoardFacts, BoardMotionFrame } from "./types";
 const ease = (t: number) => {
   const n = Math.max(0, Math.min(1, t));
@@ -45,17 +47,17 @@ export function eraDestination(
   const zone =
     facts.state === "Cancelled" || facts.state === "cancelled"
       ? "brief"
-      : (act?.zone ?? beatZone(frame, facts));
+      : (act?.zone ??
+        ((!frame.beat || frame.settled || frame.reducedMotion) && facts.snapshot.phase === "building"
+          ? zoneForEvent(facts.snapshot.latest ?? frame.beat?.event ?? null)
+          : null) ??
+        beatZone(frame, facts));
   const config = ZONE_BY_ID[zone];
   return config.eraStand ?? { x: config.machine.x + 40, y: BOARD.belt.walkway };
 }
 /** Coordinates are choreography of recorded facts, never a progress estimate. */
 export function createMotionState() {
-  let worker: BoardPoint = { x: 104, y: 160 },
-    from = { ...worker },
-    destination = { ...worker },
-    travel = 1,
-    lastKey = "";
+  let walk = createServiceWalk(), destination = walk.center;
   let previousBuild: BoardPoint | null = null,
     buildFrom: BoardPoint | null = null,
     buildTime = 1;
@@ -68,23 +70,20 @@ export function createMotionState() {
     worker(facts: BoardFacts, frame: BoardMotionFrame, dt: number) {
       const waiting =
         frame.beat &&
+        !frame.reducedMotion && !frame.settled &&
         ["think", "decide"].includes(frame.beat.stage) &&
         !facts.attention?.some((i) => i.level === "act" && i.state === "open");
-      const target = waiting ? worker : eraDestination(facts, frame),
-        key = `${target.x}:${target.y}`;
-      if (key !== lastKey) {
-        lastKey = key;
-        from = { ...worker };
-        destination = target;
-        travel = 0;
-      }
-      travel = Math.min(
-        1,
-        travel + (dt * 1000) / (TIMING.travel * frame.tempo),
-      );
-      worker = lerp(from, destination, ease(travel));
-      return project(worker.x, worker.y, 7);
+      if (!waiting) destination = eraDestination(facts, frame);
+      return walk.update(destination, dt, frame.tempo, !!(frame.reducedMotion || frame.settled));
     },
+    get workerHeading() {
+      return walk.heading;
+    },
+    get workerTravelling() {
+      return walk.moving;
+    },
+    get feet() { return walk.feet; },
+    get footing() { return walk.center; },
     build(facts: BoardFacts, frame: BoardMotionFrame, dt: number) {
       const target = buildStop(facts);
       if (!previousBuild) {
@@ -133,6 +132,7 @@ export function createMotionState() {
             : route(target, u);
       } else point = lerp(from, target, u);
       return {
+        ground: point,
         point: project(
           point.x,
           point.y,
@@ -168,16 +168,13 @@ export function createMotionState() {
       return cap;
     },
     get travelling() {
-      return travel < 1 || buildTime < 1;
+      return walk.moving || buildTime < 1;
     },
     reset() {
-      worker = { x: 104, y: 160 };
-      from = { ...worker };
-      destination = { ...worker };
-      lastKey = "";
+      walk = createServiceWalk();
+      destination = walk.center;
       previousBuild = null;
       buildFrom = null;
-      travel = 1;
       buildTime = 1;
     },
   };

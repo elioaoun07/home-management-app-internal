@@ -1,7 +1,8 @@
 import { memo, useRef, type CSSProperties } from "react";
-import { BOARD, READOUTS, TIMING } from "./config";
+import { READOUTS, TIMING } from "./config";
 import { eraDestination } from "./motion";
 import { boardPoint } from "./board";
+import { deckHeight } from "./serviceWalk";
 import type { BoardFacts, StageTempo } from "./types";
 /** Compositor-only life remains active while the stale Canvas clock sleeps. */
 export const StaleLife = memo(function StaleLife({
@@ -20,7 +21,7 @@ export const StaleLife = memo(function StaleLife({
       elapsed: 0,
       tempo: 1,
     });
-    held.current = boardPoint(stand.x, stand.y, BOARD.pad.raise + 1);
+    held.current = boardPoint(stand.x, stand.y, deckHeight(stand));
   } else if (facts.state !== "link-down") held.current = null;
   const point = held.current;
   if (!point) return null;
@@ -30,7 +31,7 @@ export const StaleLife = memo(function StaleLife({
     top: point.y,
     "--stale-dish-width": `${s.dishWidth}px`,
     "--stale-dish-height": `${s.dishHeight}px`,
-    "--stale-dish-y": `${s.dishY}px`,
+    "--stale-dish-y": `${s.dishY - s.dishHeight - s.stem}px`,
     "--stale-stem": `${s.stem}px`,
     "--stale-sonar-width": `${s.sonarWidth}px`,
     "--stale-sonar-height": `${s.sonarHeight}px`,

@@ -7,9 +7,15 @@ scope: PM Command Center / Local Delivery / Game
 
 # The Transfer Room
 
+**Current game, R137.** ERA’s centerpiece takes its shape from the delivery topic. Trips uses a compass, Expense uses the rising Budget trail, and Schedule uses a dial with unequal hands. From the Board, choose **Explore 3D** to see the mark suspended at the center of the room. The recorded work determines which station draws power. The Board operator uses the same isometric projection and material colors as the workstations. [Sphere atlas](<Delivery sphere atlas.md>) · [Controls](<Controls and Replay.md>) · [Owner UAT](<../../../../docs/Delivery-UAT.md#board-robot-era-identity-and-walk--r137>)
+
+**Walk, R138.** The Trips compass hangs above a machined receiver that picks up its green light. Look across the instrument benches towards the orbital horizon, then turn up to see the canopy meet the roof ribs. The exterior and canopy use separate image plates. Desks, fittings, working instruments, the seat and the capsule are 3D geometry. [Observatory](../../../../scripts/pm/assets/transfer-observatory.webp) · [Canopy](../../../../scripts/pm/assets/transfer-canopy.webp) · [Owner UAT](<../../../../docs/Delivery-UAT.md#trips-walk-at-full-window-size--r138>)
+
 **Walkable implementation, R132 (2026-11-21)**
 
 Open a Local Game run and select **Explore 3D**. Map, Walk, Seat, the core interior and both material treatments share the recording and output reader. Q opens questions from your current station or action. The browser fixture covers interaction and fallback. Owner perception, physical performance and a review of every topic design are pending. [Owner UAT](<../../../../docs/Delivery-UAT.md#walk-inside-eras-brain--r132>)
+
+**Phase circuit implementation, R135 (2026-11-21).** The Board operator now uses an articulated tool. Explore 3D lights the recorded instrument and connects it to ERA. Review this in a retained run and check the physical phone separately. [Visual baseline and brief sequence](<03 - Start here - visual review and run order.md>) · [Owner UAT](<../../../../docs/Delivery-UAT.md#era-and-the-phase-circuit--r135>) · [Preparation to Verify clip](../../../../.pm/transfer-room-implementation/room/prepare-build-verify.webm) · [Hardware benchmark](../../../../.pm/transfer-room-implementation/performance/results.json)
 
 **Design and implementation plans**
 

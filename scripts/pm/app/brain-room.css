@@ -20,6 +20,27 @@
 }
 .era-brain-viewport:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .era-brain-viewport > canvas { display: block; width: 100%; height: 100%; pointer-events: none; }
+.era-brain[data-view="walk"] .era-brain-viewport { cursor: crosshair; }
+.era-brain-viewport[data-thumb]::before, .era-brain-viewport[data-thumb]::after {
+  content: "";
+  position: absolute;
+  left: var(--stick-x);
+  top: var(--stick-y);
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--ink) 52%, transparent);
+  pointer-events: none;
+  translate: -50% -50%;
+  z-index: 1;
+}
+.era-brain-viewport[data-thumb]::before {
+  width: 72px; height: 72px;
+  background: color-mix(in srgb, var(--theme-bg) 28%, transparent);
+}
+.era-brain-viewport[data-thumb]::after {
+  width: 24px; height: 24px;
+  background: color-mix(in srgb, var(--ink) 34%, transparent);
+  transform: translate(var(--stick-dx), var(--stick-dy));
+}
 .era-brain-header, .era-brain-bar {
   display: flex;
   align-items: start;
@@ -48,7 +69,13 @@
   min-height: 34px;
   font-size: 12px;
 }
-.era-brain-identity svg { color: var(--accent); }
+.era-brain .era-brain-identity .era-mark *,
+.era-brain .era-brain-identity .era-mark *::before,
+.era-brain .era-brain-identity .era-mark *::after {
+  animation-play-state: paused;
+}
+.era-brain .era-brain-identity .era-cue-fin .trail { animation-delay: -2s; }
+.era-brain-identity .era-cue:not(.active) { display: none; }
 .era-brain-identity span { color: var(--ink-muted); margin-inline-start: 6px; }
 .era-brain button, .era-brain select, .era-brain-dialog button {
   display: inline-flex;
@@ -73,8 +100,41 @@
   inset: 50% auto auto 50%;
   translate: -50% -50%;
   pointer-events: none;
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 2px var(--theme-bg);
+}
+.era-brain-reticle[data-target="true"]::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 1px solid var(--ink);
+  box-shadow: 0 0 2px var(--theme-bg);
+}
+.era-brain-look-hud { display: none; }
+.era-brain:has(.era-brain-viewport:is([data-mouse-look], [data-thumb])) :is(.era-brain-header .era-brain-actions, .era-brain-bar, .era-brain-follow) {
+  visibility: hidden;
+}
+.era-brain-viewport[data-mouse-look] ~ .era-brain-look-hud {
+  display: flex;
+  position: absolute;
+  bottom: 10px; left: 50%;
+  translate: -50% 0;
+  gap: 12px;
+  padding: 5px 9px;
+  border-radius: 5px;
+  background: var(--theme-bg);
+  color: var(--ink-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.era-brain-look-hud kbd {
   color: var(--ink);
-  filter: drop-shadow(0 1px 3px var(--theme-bg));
+  font: inherit;
+  font-weight: 650;
 }
 .era-brain-notice {
   grid-row: 2;

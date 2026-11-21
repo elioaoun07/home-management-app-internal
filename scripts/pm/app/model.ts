@@ -167,6 +167,8 @@ export const backPath = (from: string | null, fallback = "/") =>
   from?.startsWith("/") && !from.startsWith("//") ? from : fallback;
 export const workPath = (work: Work, from = "/explore") =>
   `/work/${encodeURIComponent(work.module)}/${encodeURIComponent(work.id)}?from=${encodeURIComponent(from)}`;
+export const launchPath = (work: Work, from: string) =>
+  `/deliver/${encodeURIComponent(work.module)}/${encodeURIComponent(work.id)}?from=${encodeURIComponent(from)}`;
 export const canDeliver = (work: Work) => !work.blocked && !/\bHELD\b/i.test(work.text) && !deliveryBlockReason({ file: work.file, state: work.state, contract: work.contract });
 
 /** One completed outcome per identity; an explicitly reopened item stays open. */

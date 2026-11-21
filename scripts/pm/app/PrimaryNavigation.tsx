@@ -44,7 +44,8 @@ export function primarySection(parts: string[]) {
       "project",
       "projects",
     ].includes(root) ||
-    (root === "delivery" && parts[1] === "new")
+    (root === "delivery" && parts[1] === "new") ||
+    (root === "library" && parts[1] === "room")
   )
     return "/sprints";
   if (["delivery", "sessions", "uat-item"].includes(root)) return "/sessions";

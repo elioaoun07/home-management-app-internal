@@ -20,6 +20,7 @@ import { DeliveryHome } from "./DeliveryHome";
 import type { Capabilities, Preflight, Recommendation, Work } from "./types";
 import { Explore } from "./Explore";
 import { useGameLayer } from "./GameLayer";
+import { libraryDeliveryBlock } from "./libraryShelves";
 
 export function Delivery() {
   return (
@@ -42,11 +43,12 @@ export function Launch() {
   const { world } = useWorld();
   const route = useRoute();
   const work = selectionFromRoute(world, route.parts, route.query);
-  return work && !canDeliver(work) ? (
+  const libraryBlock = work && route.query.get("library") === "1" ? libraryDeliveryBlock(world, work) : null;
+  return work && (libraryBlock || !canDeliver(work)) ? (
     <div className="focus-page">
       <Back />
       <Empty
-        title={work.state === "done" ? "Already done" : "Not ready to deliver"}
+        title={libraryBlock || (work.state === "done" ? "Already done" : "Not ready to deliver")}
       >
         <a className="secondary" href={`#${workPath(work)}`}>
           View item
@@ -68,6 +70,15 @@ const paces = [
 ];
 function LaunchWork({ work }: { work: Work }) {
   const route = useRoute();
+  const game = useGameLayer();
+  if (game.enabled && route.query.get("library") === "1") {
+    return offersLocalLane() ? <LocalLaunch work={work} /> : (
+      <div className="focus-page">
+        <Back />
+        <Empty title="Open on the laptop">The delivery room runs in the local Command Center.</Empty>
+      </div>
+    );
+  }
   return offersLocalLane() && route.query.get("lane") !== "confined" ? (
     <LocalLaunch work={work} />
   ) : (

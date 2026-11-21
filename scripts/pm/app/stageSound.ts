@@ -20,6 +20,7 @@ const rowPitch: Record<string, number> = {
 };
 
 export interface StageSound {
+  roomOutput: AudioDestinationNode;
   play: (kind: StageTone | string) => void;
   resume: () => Promise<void>;
   close: () => void;
@@ -109,6 +110,7 @@ export function createStageSound(): StageSound | null {
     };
   };
   return {
+    roomOutput: context.destination,
     play(kind) {
       if (context.state !== "running") return;
       if (kind === "seal") {

@@ -170,6 +170,7 @@ export function DeliveryWorkshop({
                   <button
                     className="board-zone-name"
                     data-zone={zone.id}
+                    data-row={zone.pad.y < BOARD.front[0] ? "rear" : "front"}
                     data-state={
                       zones.zones.find((item) => item.id === zone.id)?.status
                     }
@@ -219,6 +220,7 @@ export function DeliveryWorkshop({
               <output
                 className="board-zone-chip foundry-command-chip"
                 data-zone={staging.zone ?? undefined}
+                data-row={ZONE_BY_ID[chip.id].pad.y < BOARD.front[0] ? "rear" : "front"}
                 title={staging.label}
                 tabIndex={0}
                 style={{ left: chip.chipX, top: chip.chipY }}

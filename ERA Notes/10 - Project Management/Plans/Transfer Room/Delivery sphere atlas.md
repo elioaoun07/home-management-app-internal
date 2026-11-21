@@ -1,10 +1,14 @@
 ---
 type: art-and-interaction-specification
-status: proposed
+status: reference
 scope: Local Delivery / ERA sphere identity
 ---
 
 # ERA delivery sphere atlas
+
+The R137 renderer uses these fifteen topic designs and a neutral General sphere. Each image uses the game’s geometry, materials and doorway viewing angle. The compact header uses the corresponding shared ERA mark where the app has one.
+
+![The implemented ERA spheres, including the Budget trail, Schedule hands and Trips compass.](<Delivery sphere atlas.webp>)
 
 Use this alongside [the first-person level and animation plan](<02 - Watching ERA work.md>). Each run has one recognizable topic sphere. Walking around it reveals its depth. The delivery changes its energy, the player chooses their viewpoint, and the selected topic survives every change of phase, material style and camera.
 

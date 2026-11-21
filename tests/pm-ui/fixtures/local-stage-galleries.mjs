@@ -12,6 +12,7 @@ export async function galleryBundle() {
     outdir: ".pm/r123-test-gallery",
     platform: "browser",
     format: "iife",
+    loader: { ".webp": "dataurl" },
     jsx: "automatic",
     logLevel: "error",
   });
@@ -114,10 +115,13 @@ export async function runGalleries(browser, assets, evidence, record, check) {
           if (mode === "era") {
             assert.equal(result.width, Math.round(176 * Math.min(profile.dpr, 2)));
             assert.equal(result.height, Math.round(192 * Math.min(profile.dpr, 2)));
-            for (const face of ["top", "left", "right"])
-              assert.ok(result.exact[face] >= 5, `ERA has visible saturated ${face} shell tone`);
+            for (const face of ["top", "left", "right"]) assert.ok(result.exact[face] >= 5);
+            assert.ok(result.chromatic > 10 && result.shadow > 2, "the operator has lit optics and a contact shadow");
+            assert.ok(result.bounds.height >= result.height * .35 && result.bounds.height < result.height * .42,
+              "the service robot fits beside its machine at playing size");
+          } else {
+            assert.equal(result.strokes, 0);
           }
-          assert.equal(result.strokes, 0);
           assert.ok(result.bakeMs <= 150);
           assert.ok(
             result.bounds.x > 0 &&

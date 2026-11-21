@@ -121,17 +121,18 @@ export function signalFor(scene: LocalScene): Signal | null {
   const zone = roomZone(row);
   const special: Record<string, Signal["kind"]> = {
     "Installing dependencies": "setup", "Native session started": "setup", "Host checks started": "start-check",
+    "Committing candidate": "seal",
     "Ready for owner UAT": "handover", "Owner shipped merge": "ship", "Owner reverted merge": "revert",
   };
   if (Object.hasOwn(special, row.summary) && row.kind === "event") {
     const kind = special[row.summary];
-    const location = { setup: "setup", "start-check": "verify", handover: "handover", ship: "ship", revert: "ship" } as const;
+    const location = { setup: "setup", seal: "seal", "start-check": "verify", handover: "handover", ship: "ship", revert: "ship" } as const;
     return { id: row.id, zone: location[kind as keyof typeof location], kind };
   }
   if (row.kind === "check") {
     const check = scene.run.checks.find(item => item.name === row.detail);
     return check ? { id: row.id, zone: "verify", kind: "check", result: check.error || check.exit === null ? "inconclusive" : check.exit === 0 ? "passed" : "failed" } : null;
   }
-  return zone && ["edit","read","command","failure"].includes(row.kind)
+  return zone && ["edit","read","command","message","failure"].includes(row.kind)
     ? { id: row.id, zone, kind: row.kind as Signal["kind"] } : null;
 }

@@ -51,6 +51,7 @@ export interface BoardMotionFrame {
   wallTime?: number;
   tempo: StageTempo;
   reducedMotion?: boolean;
+  settled?: boolean;
   ceremony?: {
     kind: CeremonyKind;
     progress: number;

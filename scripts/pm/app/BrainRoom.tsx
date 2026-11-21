@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Armchair, CircleDot, Crosshair, Footprints, Map, MessageCircle, ScanLine, X } from "lucide-react";
+import { Armchair, CircleDot, Footprints, Map, MessageCircle, ScanLine, X } from "lucide-react";
+import { ERAMark } from "@/components/shared/ERAMark";
+import { useRoomSettled } from "./LibraryArrival";
 import type { LocalActivityEvent } from "./localRunActivityModel";
 import type { LocalScene, LocalTimeline } from "./localRunScene";
 import type { LocalLiveness } from "./localRunLiveness";
-import { roomCassette, roomRows, roomZone } from "./transferRoomModel";
+import { roomRows, roomZone } from "./transferRoomModel";
 import type { ZoneId } from "./stage/config";
 import { stations, zoneNames, type Finish, type View } from "./brain/layout";
-import type { Presence, Signal, Target, WorldApi, WorldControls, WorldState } from "./brain/protocol";
-import { deliveryTopic, topics } from "./brain/topics";
+import type { Presence, RoomLighting, Signal, Target, WorldApi, WorldControls, WorldState } from "./brain/protocol";
+import { deliveryTopic, isModuleTopic, topics } from "./brain/topics";
 import { answerQuestion, questionLabels, questionsForPhase, signalFor, suggestions, type Answer, type Context, type Evidence, type Question } from "./brain/questions";
 import "./brain-room.css";
 
@@ -21,39 +23,32 @@ const isStation = (target: Target | null): target is ZoneId =>
 const safePref = (key: string, value?: string) => {
   try { if (value !== undefined) localStorage.setItem(key, value); else return localStorage.getItem(key); } catch { return null; }
 };
-const stamp = (scene: LocalScene): WorldState["stamps"] => {
-  const stamps: Partial<Record<ZoneId, string>> = {};
-  if (scene.run.work.brief) stamps.brief = "brief";
-  for (const row of scene.events) {
-    const zone = roomZone(row);
-    if (zone && row.label !== "Tool requested" && zone !== "verify" && zone !== "ship" && zone !== "handover" && zone !== "test") stamps[zone] = row.kind;
-  }
-  for (const check of scene.run.checks) {
-    const status = check.error || check.exit === null ? "inconclusive" : check.exit === 0 ? "passed" : "failed";
-    if (stamps.verify !== "failed" && (status !== "passed" || !stamps.verify)) stamps.verify = status;
-  }
-  if (roomCassette(scene) === "received") stamps.handover = "ready";
-  if (scene.objectivesAccepted) stamps.test = "accepted";
-  if (["shipped", "reverted", "push-pending", "revert-push-pending"].includes(scene.phase)) stamps.ship = scene.phase;
-  return stamps;
-};
 
 export function BrainRoom({
-  view, onView, onBoard, scene, timeline, health, replay, playing, question, reading, inspected,
+  view, onView, onBoard, scene, timeline, health, lighting, replay, playing, question, reading, inspected,
   onZone, onEvidence, onQuestion,
 }: {
   view: View; onView: (view: View) => void; onBoard: () => void;
   scene: LocalScene; timeline: LocalTimeline; health: LocalLiveness;
+  lighting: RoomLighting;
   replay: boolean; playing: boolean; question: boolean; reading: boolean; inspected: LocalActivityEvent | null;
   onZone: (zone: ZoneId | "all", source: HTMLElement) => void;
   onEvidence: (row: LocalActivityEvent, source: HTMLElement) => void;
   onQuestion: () => void;
 }) {
   const viewport = useRef<HTMLDivElement>(null), api = useRef<WorldApi | null>(null);
+  const controlsHelp = useId();
   const dialog = useRef<HTMLDialogElement>(null), opener = useRef<HTMLElement | null>(null);
   const [load, setLoad] = useState<"loading" | "ready" | "failed">("loading");
+  const roomSettled = useRoomSettled();
+  useEffect(() => {
+    if (load !== "loading") roomSettled?.();
+  }, [load, roomSettled]);
   const [attempt, setAttempt] = useState(0);
   const [presence, setPresence] = useState(initialPresence);
+  const [software, setSoftware] = useState(false);
+  const [nativePreference, setNativePreference] = useState(() => safePref("pm-room-native-motion"));
+  const nativeMotion = nativePreference == null ? !software : nativePreference === "true";
   const [finish, setFinish] = useState<Finish>(() => safePref("pm-room-finish") === "illustrated" ? "illustrated" : "realistic");
   const [quiet, setQuiet] = useState(() => safePref("pm-room-low-motion") === "true");
   const [opened, setOpened] = useState(false);
@@ -63,17 +58,20 @@ export function BrainRoom({
   const [capture, setCapture] = useState<{ context: Context; scene: LocalScene; replay: boolean; health: LocalLiveness; question: boolean }>();
   const [tracking, setTracking] = useState<Signal | null>(null);
   const queued = useRef<ZoneId | null>(null);
+  const queuedTrace = useRef<Signal | null>(null);
   const topic = deliveryTopic(scene.run.work);
-  const index = scene.latest ? timeline.events.findIndex(row => row.id === scene.latest?.id) : -1;
+  const cursor = scene.latest?.id ?? null;
+  const index = useMemo(() => cursor === null ? -1 : timeline.events.findIndex(row => row.id === cursor), [timeline.events, cursor]);
   const previous = scene.events.at(-2), present = scene.latest, next = timeline.events[index + 1];
   const visibleSignal = useMemo(() => signalFor(scene), [scene]);
-  const animationSignal = !replay && question
-    ? { id: "owner-question:" + scene.run.questions?.findLast(q => q.state === "open")?.id, zone: "handover", kind: "question" } as const
-    : playing || !replay && health.state !== "link-down" ? visibleSignal : null;
-  const worldState: WorldState = {
-    view, finish, topic, phase: scene.phase, paused: opened || reading || load !== "ready",
-    quiet, signal: animationSignal, stamps: stamp(scene), core: [!!previous, !!present, !!next],
-  };
+  const openQuestionId = question ? scene.run.questions?.findLast(q => q.state === "open")?.id : undefined;
+  const paused = opened || reading || load !== "ready";
+  const hasPrevious = !!previous, hasNext = !!next;
+  const worldState = useMemo<WorldState>(() => ({
+    view, nativeMotion, finish, topic, paused, quiet, replay, playing, cursor, lighting,
+    signal: openQuestionId ? { id: "owner-question:" + openQuestionId, zone: "handover", kind: "question" } : visibleSignal,
+    core: [hasPrevious, cursor !== null, hasNext],
+  }), [view, nativeMotion, finish, topic, paused, quiet, replay, playing, cursor, lighting, openQuestionId, visibleSignal, hasPrevious, hasNext]);
   const current = useRef({ state: worldState, controls: {} as WorldControls });
   current.current.state = worldState;
 
@@ -104,6 +102,7 @@ export function BrainRoom({
     if (row) onEvidence(row, source);
   }
   current.current.controls = {
+    softwareRenderer: setSoftware,
     presence: setPresence, ask: () => showAsk(viewport.current), inspect,
     failure: () => setLoad("failed"),
   };
@@ -115,6 +114,7 @@ export function BrainRoom({
     void (import(path) as Promise<WorldModule>).then(({ createWorld }) => {
       if (!alive) return;
       world = createWorld(host, {
+        softwareRenderer: value => current.current.controls.softwareRenderer(value),
         presence: value => current.current.controls.presence(value),
         ask: () => current.current.controls.ask(),
         inspect: target => current.current.controls.inspect(target),
@@ -124,7 +124,13 @@ export function BrainRoom({
     }).catch(() => { if (alive) setLoad("failed"); });
     return () => { alive = false; world?.dispose(); api.current = null; };
   }, [attempt]);
-  useEffect(() => { api.current?.update(current.current.state); });
+  useEffect(() => {
+    api.current?.update(worldState);
+    if (api.current && !worldState.paused && queuedTrace.current) {
+      api.current.play(queuedTrace.current);
+      queuedTrace.current = null;
+    }
+  }, [worldState]);
   useEffect(() => {
     if (load === "ready" && current.current.state.view === "walk") viewport.current?.focus({ preventScroll: true });
   }, [load]);
@@ -172,7 +178,8 @@ export function BrainRoom({
       { id: row.id, zone, kind: row.kind === "read" || row.kind === "edit" || row.kind === "command" ? row.kind : "setup" } satisfies Signal;
     if (!signal) return;
     setTracking(signal);
-    api.current?.play(signal);
+    if (worldState.paused) queuedTrace.current = signal;
+    else api.current?.play(signal);
   }
 
   const candidates = capture ? suggestions(capture.context, capture.scene.phase) : [];
@@ -184,12 +191,25 @@ export function BrainRoom({
   const canInspect = chosenTarget && (!seekKinds.some(key => key === chosenTarget) ||
     (chosenTarget === "previous" ? previous : chosenTarget === "next" ? next : present));
 
-  return <div className="era-brain" data-view={view} data-load={load} data-area={presence.area} data-finish={finish}>
+  return <div className="era-brain" data-view={view} data-load={load} data-area={presence.area} data-finish={finish}
+    data-core-state={lighting.failed ? "damaged" : "healthy"} data-fault-station={lighting.faultZone ?? undefined}
+    data-active-station={lighting.endpoint ?? undefined}>
     <div ref={viewport} className="era-brain-viewport" tabIndex={0} role="region" aria-label="3D room"
-      aria-keyshortcuts="W A S D ArrowLeft ArrowRight ArrowUp ArrowDown E Q" />
-    {load === "ready" && view === "walk" && <span className="era-brain-reticle" aria-hidden="true"><Crosshair size={17} /></span>}
+      aria-describedby={controlsHelp}
+      aria-keyshortcuts="W A S D Shift+W ArrowLeft ArrowRight ArrowUp ArrowDown E Q Escape" />
+    <span id={controlsHelp} className="stage-announcement">Click to look, WASD to move, Shift to sprint, E to interact, Q to ask, Escape to release. On touch, move with your left thumb and look with your right.</span>
+    {load === "ready" && view === "walk" && <>
+      <span className="era-brain-reticle" data-target={!!canInspect} aria-hidden="true" />
+      <div className="era-brain-look-hud" aria-hidden="true">
+        {canInspect && <span><kbd>E</kbd> {targetLabel}</span>}
+        <span><kbd>WASD</kbd> Move</span><span><kbd>Shift</kbd> Sprint</span><span><kbd>Esc</kbd> Release</span>
+      </div>
+    </>}
     <div className="era-brain-header">
-      <div className="era-brain-identity"><CircleDot size={17} aria-hidden="true" /><strong>{topics[topic][0]}</strong>
+      <div className="era-brain-identity">
+        {isModuleTopic(topic) ? <ERAMark module={topic} size={22} /> :
+          <CircleDot size={18} aria-hidden="true" style={{ color: `hsl(${topics[topic][1]} 72% 70%)` }} />}
+        <strong>{topics[topic][0]}</strong>
         <span>{presence.area === "core" ? "Inside ERA" : presence.zone ? zoneNames[presence.zone] : view === "map" ? "Overview" : view === "seat" ? "Seat" : "Walk"}</span>
       </div>
       <div className="era-brain-actions">
@@ -197,6 +217,10 @@ export function BrainRoom({
           const nextFinish = finish === "realistic" ? "illustrated" : "realistic";
           setFinish(nextFinish); safePref("pm-room-finish", nextFinish);
         }}>{finish === "realistic" ? "Realistic" : "Illustrated"}</button>
+        {(software || globalThis.devicePixelRatio > 1) && <button type="button" aria-pressed={nativeMotion} title="Keep full resolution while moving" onClick={() => {
+          const next = String(!nativeMotion);
+          setNativePreference(next); safePref("pm-room-native-motion", next);
+        }}>Native detail</button>}
         <button type="button" aria-pressed={quiet} onClick={() => { setQuiet(!quiet); safePref("pm-room-low-motion", String(!quiet)); }}>Low motion</button>
         <button type="button" onClick={onBoard}>Board</button>
       </div>
@@ -222,13 +246,13 @@ export function BrainRoom({
             }}><option value="" disabled>Go to station</option>{stations.map(s => <option key={s.id} value={s.id}>{zoneNames[s.id]}</option>)}</select>
           </label> : <button type="button" onClick={() => api.current?.exit()}>Back to room</button>}
           {presence.area === "room" && <button type="button" onClick={() => { api.current?.reset(); viewport.current?.focus(); }}>Recenter</button>}
-          {presence.area === "room" && <button type="button" className="era-brain-mouse" onClick={() => {
-            viewport.current?.focus({ preventScroll: true });
-            try { void Promise.resolve(viewport.current?.requestPointerLock()).catch(() => {}); } catch { /* drag-to-look is available */ }
-          }}>Mouse look</button>}
+          <button type="button" className="era-brain-mouse" title="Click to look · WASD to walk · Shift to sprint · Esc to release"
+            onClick={() => api.current?.captureMouse()}>Mouse look</button>
           {presence.area === "core" && <button type="button" disabled={!next} onClick={() => inspect("next")}>Step forward</button>}
         </>}
-        {view !== "seat" && presence.area === "room" && visibleSignal && <button type="button" onClick={() => track()}>Track</button>}
+        {view === "walk" && presence.area === "room" && lighting.faultZone
+          ? <button type="button" onClick={() => api.current?.inspectBreak()}>Inspect break</button>
+          : view !== "seat" && presence.area === "room" && visibleSignal && <button type="button" onClick={() => track()}>Track</button>}
       </div>
     </div>
     {tracking && <button type="button" className="era-brain-follow" onClick={() => {

@@ -10,6 +10,12 @@ From your seat, ERA works across the bench. The wheel is on your left, the casse
 
 ## Find a step and read its output
 
+ERA’s collector turns while you observe a healthy recording, including when the replay slider rests on one event. The activity and station power still follow that event. **Low motion** holds the collector still. At a failed frame the glass cracks and the mechanism powers down. When the run identifies the failed step, **Inspect break** takes you to its torn cable. Rewind before the failure to restore the clear globe and intact cable.
+
+**Native detail** locks walking to the same resolution as the stationary view. Walk enables it by default with hardware graphics. On software graphics, turning it on also keeps identical edge smoothing through starts and stops. Larger windows take longer to draw at that setting. Walk remembers the choice on this browser.
+
+In **Explore 3D → Walk**, click inside the room to capture the mouse. Use WASD to walk, hold **Shift** to sprint and press **Esc** to release. **E** interacts with the station in reach, and **Q** opens its questions. Drag and the arrow keys also turn the view. On touch, hold the left side to move and drag the right side to look. **Low motion** keeps the camera level. The existing Game **Sound** setting controls the deck footsteps and plasma hum.
+
 Choose a phase on the bench edge, then a zone. The reader lists that zone’s actions in recorder order. Choose an action to open its **Output**, with the actor, time and recorded summary at the top. **Replay here** parks the wheel on that exact action. Back returns to the same row, scroll position and keyboard focus. A phase or zone with just one recorded output opens it directly. **Plan** is a direct shortcut to Brief, including during Plan & build. The six existing tools remain available, including Worktree and Host limits.
 
 | Delivery phase | Zones on the bench | What opens |

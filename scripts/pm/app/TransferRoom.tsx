@@ -14,6 +14,7 @@ import { ZONE_BY_ID, type ZoneId } from "./stage/config";
 import type { ZoneBoardState } from "./stage/zoneModel";
 import { BrainRoom } from "./BrainRoom";
 import type { View } from "./brain/layout";
+import { roomLighting } from "./brain/lighting";
 import { resolveMark, roomCassette, roomCheck, roomMoment, roomRows, roomStepRow, roomSteps, roomZone, type RoomMark } from "./transferRoomModel";
 import "./transfer-room.css";
 
@@ -177,8 +178,13 @@ export function TransferRoom({
     setPins((current) => slot === 0 ? [event, current[1]] : [current[0], event]);
   const comparisonReady = !!pins[0] && !!pins[1];
   const position = timeline.events.findIndex((event) => event.id === selected?.id);
-  const status = liveHealth.state === "thinking"
-    ? liveHealth.caption.split(" · ")[0] : liveHealth.caption;
+  const roomReplay = !!brain && replay;
+  const currentHealth = roomReplay ? health : liveHealth;
+  const { active: working, state: healthState } = currentHealth;
+  const lighting = useMemo(() => roomLighting(scene, zones, { active: working, state: healthState }, question), [scene, zones, working, healthState, question]);
+  const currentEvent = roomReplay ? selected : latest;
+  const status = currentHealth.state === "thinking"
+    ? currentHealth.caption.split(" · ")[0] : currentHealth.caption;
   const handover = scene.run.handover;
   const fault = scene.phase === "failed" || scene.run.interrupted;
   const preview = selected && (selected.paths[0] ?? (selected.kind === "message" ? selected.summary : selected.detail));
@@ -203,17 +209,17 @@ export function TransferRoom({
       <div className="room-deck">
         <div className="room-now">
           <Radio size={14} aria-hidden="true" />
-          <span className="room-kicker">Now</span>
+          <span className="room-kicker">{roomReplay ? "Replay" : "Now"}</span>
           <strong>{status}</strong>
-          {latest && <>
-            <span className="room-now-event" title={latest.paths[0] || latest.summary}>
-              {[latest.label, latest.paths[0]?.split("/").at(-1) || latest.detail, actor(latest)].filter(Boolean).join(" · ")}
+          {currentEvent && <>
+            <span className="room-now-event" title={currentEvent.paths[0] || currentEvent.summary}>
+              {[currentEvent.label, currentEvent.paths[0]?.split("/").at(-1) || currentEvent.detail, actor(currentEvent)].filter(Boolean).join(" · ")}
             </span>
-            <time dateTime={latest.at}>{time(latest.at)}</time>
+            <time dateTime={currentEvent.at}>{time(currentEvent.at)}</time>
           </>}
           {question && <button type="button" className="room-question" onClick={onQuestion}>Question</button>}
         </div>
-        {brain ? <BrainRoom key={scene.run.run_id} {...brain} scene={scene} timeline={timeline} health={liveHealth}
+        {brain ? <BrainRoom key={scene.run.run_id} {...brain} scene={scene} timeline={timeline} health={currentHealth} lighting={lighting}
           replay={replay} playing={playing} question={question} reading={!!reader || compare || brain.blocked}
           inspected={opened} onZone={openZone} onQuestion={onQuestion}
           onEvidence={(event, source) => {
@@ -269,7 +275,8 @@ export function TransferRoom({
           {roomSteps.map(({ label, zones: group }) => {
             const lit = group.some((zone) => zones.zones.some((fact) => fact.id === zone && fact.status !== "off" && fact.status !== "skipped"));
             const checked = group.some((zone) => zone === reader?.zone);
-            return <button key={label} type="button" aria-pressed={checked} data-reached={lit} onClick={(event) => openZone(group.find((zone) => zone === label.toLowerCase()) ?? group[0], event.currentTarget)}>{label}</button>;
+            const powered = !!brain && group.some(zone => zone === lighting.endpoint);
+            return <button key={label} type="button" aria-pressed={checked} aria-current={powered ? "step" : undefined} data-reached={lit} onClick={(event) => openZone(group.find((zone) => zone === label.toLowerCase()) ?? group[0], event.currentTarget)}>{label}</button>;
           })}
           <button type="button" onClick={(event) => openZone("all", event.currentTarget)} aria-pressed={reader?.zone === "all"}>All actions</button>
         </nav>

@@ -29,7 +29,8 @@ import { fileURLToPath } from "node:url";
 import { campaignDirs, masterBookRel, sweepAll, todayIso, CHECKLIST_NAME } from "./archive.mjs";
 import { parseHistory } from "./shared/history.mjs";
 import { headingAnchors } from "./shared/links.mjs";
-import { fileTasks } from "./shared/tasks.mjs";
+import { fileTasks, groupedTasks, OWNER_GROUP } from "./shared/tasks.mjs";
+export { groupedTasks, OWNER_GROUP } from "./shared/tasks.mjs";
 import { cleanInlineText } from "./shared/text.mjs";
 import { normalizeWorkId } from "./shared/work-id.mjs";
 import { executionKind } from "./shared/work-lifecycle.mjs";
@@ -316,7 +317,6 @@ export function compactBook({ bookRaw, checklistRaw, campaign, bookRel, archiveR
 // ---------------------------------------------------------- generated index
 
 /** Checklist group label for rows only the owner can close (_Conventions §2). */
-export const OWNER_GROUP = "Needs you";
 export const INDEX_START = "<!-- pm:generated:start -->";
 export const INDEX_END = "<!-- pm:generated:end -->";
 
@@ -398,20 +398,6 @@ export function renderIndexBlock({ campaigns, planning, today }) {
   }
   out.push(`| **Total** | ${totals.join(" | ")} | |`, "", INDEX_END);
   return out.join("\n");
-}
-
-/** Checklist rows with the bold group label they sit under (`**Needs you**`, `**ERA reports**`, …). */
-export function groupedTasks(checklistRaw) {
-  const lines = String(checklistRaw).split("\n");
-  const groupAt = new Map();
-  let group = null;
-  lines.forEach((line, index) => {
-    if (/^#{1,6}\s/.test(line)) group = null;
-    const label = line.match(/^\*\*([^*]+)\*\*\s*$/);
-    if (label) group = label[1];
-    groupAt.set(index, group);
-  });
-  return fileTasks(checklistRaw).map((task) => ({ ...task, group: groupAt.get(task.line) ?? null }));
 }
 
 /** Labels of `### <ID>` sections that declare `**UAT:** pending`. */

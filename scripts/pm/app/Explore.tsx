@@ -1,5 +1,6 @@
 import { useDeferredValue, useState } from "react";
-import { Search, ArrowRight, X } from "lucide-react";
+import { BookOpen, Search, ArrowRight, X } from "lucide-react";
+import { useGameLayer } from "./GameLayer";
 import { useRoute, useWorld, go } from "./state";
 import {
   bucketOf,
@@ -31,6 +32,7 @@ export const countsOf = (work: Work[]): Record<Bucket, number> => ({
 });
 export function Explore() {
   const { world, runs } = useWorld();
+  const game = useGameLayer();
   const route = useRoute();
   const mode = ["board", "list"].includes(route.query.get("view") || "")
     ? (route.query.get("view") as "board" | "list")
@@ -98,6 +100,11 @@ export function Explore() {
       >
         Done <span>{doneCount}</span>
       </a>
+      {game.enabled && (
+        <a className="secondary" href={`#/library/room?from=${encodeURIComponent(route.full)}`}>
+          <BookOpen size={16} aria-hidden="true" /> Library
+        </a>
+      )}
     </nav>
   );
   const search = (

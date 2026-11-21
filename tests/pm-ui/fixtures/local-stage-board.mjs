@@ -145,7 +145,7 @@ export async function fixtureAssets(evidence) {
   const sourceFacts = sourceSnapshot();
   writeFileSync(evidence + "/served-pm.js", bundle.js);
   writeFileSync(evidence + "/served-pm.css", bundle.css);
-  return { fixture, base, bundle, bundleFacts, sourceFacts };
+  return { fixture, base, bundle, bundleFacts, sourceFacts, artDir: resolve("scripts/pm/assets") };
 }
 export function chromiumExecutable() {
   return [
@@ -215,6 +215,11 @@ export async function routeFixture(context, assets, writes, initial) {
       });
     if (url.pathname === "/app/assets/brain-room.js")
       return route.fulfill({ contentType: "text/javascript", body: assets.bundle.room });
+    if (assets.artDir && /^\/assets\/transfer-[a-z0-9-]+\.webp$/u.test(url.pathname)) {
+      const file = join(assets.artDir, basename(url.pathname));
+      return existsSync(file) ? route.fulfill({ path: file, contentType: "image/webp" }) :
+        route.fulfill({ status: 404, body: "Missing room artwork" });
+    }
     if (url.pathname === "/api/delivery/v2/session" && state.sessionFailed)
       return route.fulfill({
         status: 503,

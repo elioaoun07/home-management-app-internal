@@ -79,6 +79,12 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟠 **R139 — 2026-11-21.** The Trips screenshot shows stair-stepped outlines and fuzzy labels while walking. R138 reduced the wide software view to 911 × 394 during input. Its animation clock also stopped whenever live work stopped, leaving a failed recording with an illuminated, intact globe.
+
+🟠 **R138 — 2026-11-21.** The owner’s wide Trips capture shows stepped roof edges, unreadable panels and flat machinery. At 2,516 × 1,089 the previous software renderer settled at 644 × 279 after the walk. R138 compares the same camera and route on both graphics backends.
+
+🟠 **R137 — 2026-11-21.** The owner reported a floating military-looking Board operator, a literal brain in place of ERA and Walk approaching 5 fps. The technician sprite was raised above the rendered aisle and drawn over foreground machines. The high-DPI software-renderer reproduction took seconds per frame. [Owner review](<../../../docs/Delivery-UAT.md#board-robot-era-identity-and-walk--r137>)
+
 🟠 **R134 — The Windows cockpit shows Offline after rebuild (2026-11-21).** A local work snapshot delayed the health probe past its three-second deadline. Repeated source file checks and Master Book scans consumed most of the snapshot time on the live checkout.
 
 🟠 **R129 — Board readouts are unreadable and overlap (2026-11-16).** On run `local-cac958d7` at 1358 × 849, 15 on-board labels render at 7.6 px (`MAIN`, commit, `RETRY`, four counts, four check names and states); the check chips overlap `04 THINK` and hide `LINT`. Dock counters are 8 px, tab labels 9 px, badges 7 px (`local-run-mission.css:26,45,46`). R125 corrected only the eleven zone names.
@@ -166,6 +172,60 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### R140
+
+**Implementation:** done
+**UAT:** pending
+
+- **Outcome:** Browse the PM backlog in an orbital library, read an item and choose its delivery crew.
+- **Acceptance:** Game mode exposes Library from Search. Campaign cabinets overlook space and open shelves for current, next, blocked, later and finished work. Themed item readers display the available acceptance criteria, outcome, plan and checklist. Eligible work enters local Delivery with the selected bot, model and effort. A confirmed start opens that run’s Walk room through a blink transition. Refusals stay visible. Keyboard, mobile and reduced-motion paths remain usable.
+- **Owner check:** Restart the relay-enabled laptop PM server to load the historical record reader. In Game mode, choose Search → Library and deliver an eligible item when you intend to start a real local session.
+
+### R139
+
+**Outcome:** Walking resolves the instrument and station edges. Healthy ERA rotates at rest. A recorded failure powers the sphere down, fractures its glass and opens the cable to the affected step.
+**Kind:** fix
+**Touches:** `scripts/pm/app/brain/`, `scripts/pm/app/BrainRoom.tsx`, `tests/pm-ui/`, `docs/Delivery-UAT.md`
+**Implementation:** done
+**UAT:** pending — owner review on the affected display.
+
+- **Acceptance:** Inspect a held-input image and measure frame timing at the owner’s wide viewport on hardware and software WebGL.
+- **Acceptance:** A healthy sphere turns while waiting. Low motion keeps it still. The recorded cursor determines when glass breaks and which physical lead is damaged. Scrubbing earlier restores both.
+- **Acceptance:** A failed sphere has no powered plasma. A single interrupted lead shows short, localized bursts between two dark intervals. Reduced motion keeps the break legible at rest.
+- **Evidence:** Wide Radeon walk at native resolution, identical native software sign pixels across input, recorded Seal break and rewind. [Walk verification](<../../../docs/Delivery-UAT.md#walk-motion-and-failure--r139>)
+
+### R138
+
+**Outcome:** A wide Walk view resolves the Trips compass, roof construction and instrument markings up close. Walk keeps responding during input and presents a sharp image at rest on accelerated and software WebGL.
+**Kind:** fix
+**Touches:** `scripts/pm/app/brain/`, `scripts/pm/assets/`, `tests/pm-ui/`, `docs/Delivery-UAT.md`, `ERA Notes/`
+**Implementation:** done
+**UAT:** pending — owner visual review on the affected display.
+
+On 2026-11-21 two Chrome walks on the Radeon 880M kept the full 2516 × 1089 drawing buffer and measured 16.7 ms median and 16.8 ms at the 95th percentile. SwiftShader measured 25.0 ms median and 33.5 ms at the 95th percentile in both repeats, with a 911 × 394 moving buffer and native detail at rest. The previous software build measured 33.4 ms median and 66.8 ms at the 95th percentile and stayed at 644 × 279 after input ended. [Captures and gameplay checks](<../../../docs/Delivery-UAT.md#trips-walk-at-full-window-size--r138>)
+
+- **Acceptance:** Capture both builds at the same viewing angle and viewport width. Inspect the surface of the sphere receiver, station sign, foreground instrument and ceiling at native size.
+- **Acceptance:** Record actual walking and resting buffer dimensions, frame times and renderer name. A busy route must still resolve to full display detail when it settles.
+- **Acceptance:** Exercise real first-person movement, touch, replay, changes of station, the inner room and return to the Board. Check that the live server serves the candidate art and game.
+
+### R137
+
+**Outcome:** The Board robot belongs to the isometric workshop and walks on its floor. In Walk, the current delivery topic determines ERA’s sphere, and moving or turning keeps the room visibly stable.
+**Kind:** fix
+**Touches:** `scripts/pm/app/`, `scripts/pm/assets/`, `tests/pm-ui/`, `docs/Delivery-UAT.md`, `ERA Notes/`
+**Implementation:** done
+**UAT:** pending — owner review in the affected browser.
+
+The owner’s subsequent Trips screenshot rejected Walk’s image quality. The board changes retain their existing review status. R138 follows up on the room and its renderer.
+
+- **Acceptance:** Watch a station change and an instrument contact. Feet follow a navigable route, settle on the floor and pass behind foreground equipment. The robot shares the board’s projection and palette.
+- **Acceptance:** Open Trip, Expense/Budget and Schedule recordings. Each has its own recognizable ERA mark from the doorway and the interior, with working lights tied to the recorded phase and the cursor.
+- **Acceptance:** Record walk-and-turn frame intervals on high-DPI hardware and software WebGL. Check camera recovery after a stall, stable light during travel, and returning through a reader and the Board.
+
+Chrome followed the robot from Build through Seal to Verify. A rolling 200-event session preserved the camera and canvas during a station change. Desktop and phone emulation covered phase lighting, two-thumb movement, reader return and a pixel-stable paused replay. The live PM server served the verified assets. TypeScript, scoped lint, the game build and 1,039 PM tests passed. [Board crossing](../../../.pm/r137-board/service-walk.webm) · [Sphere designs](<../Plans/Transfer Room/Delivery sphere atlas.md>) · [Walk checks](../../../.pm/r137-evidence/acceptance/result.json)
+
+At a 1920 × 1080 viewport and DPR 2, the Radeon 880M recorded 16.7 ms median and 16.9 ms p95 on the route. SwiftShader improved from 2,380 ms median to 33.3 ms. Its p95 was 41.8 ms and p99 was 91.8 ms, at a final 704 × 333 scene buffer. [Hardware trace](../../../.pm/r137-evidence/hardware-after/results.json) · [Software baseline](../../../.pm/r137-evidence/software-before/results.json) · [Software trace](../../../.pm/r137-evidence/software-final/results.json)
 
 ### R134
 
@@ -2088,6 +2148,12 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-11-21 — **R132** Walk through ERA’s delivery room and inspect recorded work → [record](<../_Archive/Shipped/PM Tooling.md#r132>)
 - ✅ 2026-11-21 — **R133** Start and update the laptop Command Center from Windows → [record](<../_Archive/Shipped/PM Tooling.md#r133>)
 - ✅ 2026-11-21 — **R134** Keep the laptop cockpit connected after rebuild → [record](<../_Archive/Shipped/PM Tooling.md#r134>)
+- ✅ 2026-11-21 — **R135** Make ERA and the active delivery phase readable in motion → [record](<../_Archive/Shipped/PM Tooling.md#r135>)
+- ✅ 2026-11-21 — **R136** Walk through a plasma-brain laboratory with a recognizable robot operator → [record](<../_Archive/Shipped/PM Tooling.md#r136>)
+- ✅ 2026-11-21 — **R137** Ground the Board robot, restore ERA’s topic spheres and fix Walk frame pacing → [record](<../_Archive/Shipped/PM Tooling.md#r137>)
+- ✅ 2026-11-21 — **R138** Restore full-resolution Walk and rebuild the Trips room’s materials and instruments → [record](<../_Archive/Shipped/PM Tooling.md#r138>)
+- ✅ 2026-11-21 — **R140** Choose a campaign item in the orbital Library and enter its local delivery room → [record](<../_Archive/Shipped/PM Tooling.md#r140>)
+- ✅ 2026-11-21 — **R139** Keep Walk sharp during movement and show ERA’s rotation and recorded failure in the chamber → [record](<../_Archive/Shipped/PM Tooling.md#r139>)
 
 ## Delivery session log
 

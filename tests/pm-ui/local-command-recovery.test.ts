@@ -55,6 +55,19 @@ it("a read-only status check never POSTs even when the receipt is missing", asyn
   expect(safeFetch).not.toHaveBeenCalled();
 });
 
+it("reconciles a racing Local admission using the same UUID", async () => {
+  let admitted = false;
+  const transport = client(async () => admitted
+    ? response({ recorded: true, outcome: { ok: true, run_id: "local-original" } })
+    : response({ error: "unknown-command" }, 404));
+  vi.mocked(safeFetch).mockResolvedValueOnce(response({ error: "local-launch-pending", command_id: "original" }, 409));
+  const request = { action: "start", command_id: "original" };
+  await expect(transport.v2Command("local", request)).rejects.toMatchObject({ state: "acknowledged", command_id: "original" });
+  admitted = true;
+  expect(await transport.v2Command("local", request)).toMatchObject({ run_id: "local-original" });
+  expect(safeFetch).toHaveBeenCalledTimes(1);
+});
+
 it("surfaces a revoked browser session without marking the laptop offline or retrying writes", async () => {
   const transport = client(async () => response({ error: "local-session-required", detail: "this browser's session is not recognised" }, 401));
   const listener = vi.fn(); transport.subscribe(listener);

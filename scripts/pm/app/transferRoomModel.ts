@@ -2,14 +2,10 @@ import type { LocalActivityEvent } from "./localRunActivityModel";
 import { sceneAt, type LocalScene, type LocalTimeline } from "./localRunScene";
 import { zoneForEvent } from "./stage/zoneModel";
 import type { ZoneId } from "./stage/config";
+import { bays } from "./brain/layout";
 
-export const roomSteps = [
-  { label: "Setup", zones: ["setup"] },
-  { label: "Build", zones: ["explore", "think", "build", "bench", "seal"] },
-  { label: "Verify", zones: ["verify"] },
-  { label: "Test", zones: ["handover", "test"] },
-  { label: "Ship", zones: ["ship"] },
-] as const satisfies readonly { label: string; zones: readonly ZoneId[] }[];
+export const roomSteps: readonly { label: string; zones: readonly ZoneId[] }[] =
+  bays.slice(1).map(({ name: label, zones }) => ({ label, zones }));
 
 export function roomZone(event: LocalActivityEvent): ZoneId | null {
   if (event.kind === "event" && event.label !== "Tool requested") {

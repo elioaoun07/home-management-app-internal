@@ -14,13 +14,12 @@ import {
 import { bakeBoardAssets, bakePartFacts } from "../../../scripts/pm/app/stage/boardAssets";
 import { machineEvidence } from "../../../scripts/pm/app/stage/machineEvidence";
 import { project } from "../../../scripts/pm/app/stage/iso";
-import { eraShell, resolveStagePalette } from "../../../scripts/pm/app/stage/palette";
-import { bakeEra, drawEra, ERA_SCALE } from "../../../scripts/pm/app/stage/actors/era";
+import { resolveStagePalette } from "../../../scripts/pm/app/stage/palette";
+import { bakeEra, drawEra } from "../../../scripts/pm/app/stage/actors/era";
 import {
   bakeBuild,
   drawBuild,
 } from "../../../scripts/pm/app/stage/actors/build";
-import { bakeGlow } from "../../../scripts/pm/app/stage/fx";
 import { buildTimeline, sceneAt } from "../../../scripts/pm/app/localRunScene";
 import {
   localRunAttention,
@@ -79,7 +78,8 @@ function pixelFacts(
     maxX = -1,
     maxY = -1,
     ink = 0,
-    shadow = 0;
+    shadow = 0,
+    chromatic = 0;
   const exact: Record<string, number> = {},
     rgb = Object.fromEntries(
       Object.entries(tones).map(([key, tone]) => [
@@ -100,6 +100,9 @@ function pixelFacts(
     maxX = Math.max(maxX, x);
     maxY = Math.max(maxY, y);
     ink++;
+    if (data[i + 3] === 255 &&
+      Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]) >= 80)
+      chromatic++;
     if (
       data[i] === 0 &&
       data[i + 1] === 0 &&
@@ -117,6 +120,7 @@ function pixelFacts(
     height: value.height,
     ink,
     shadow,
+    chromatic,
     strokes,
     tones,
     exact,
@@ -130,7 +134,7 @@ function pixelFacts(
     },
   };
 }
-export function renderGallery(request: Request) {
+export async function renderGallery(request: Request) {
   document.documentElement.dataset.theme = request.theme;
   host.replaceChildren();
   const p = resolveStagePalette(host),
@@ -161,7 +165,7 @@ export function renderGallery(request: Request) {
     request.mode === "board"
       ? BOARD.bounds.width
       : request.mode === "era"
-        ? 110 * ERA_SCALE
+        ? 176
         : request.mode === "build"
           ? 110
           : 420;
@@ -169,7 +173,7 @@ export function renderGallery(request: Request) {
     request.mode === "board"
       ? BOARD.bounds.height
       : request.mode === "era"
-        ? 120 * ERA_SCALE
+        ? 192
         : request.mode === "build"
           ? 150
           : 340;
@@ -188,7 +192,7 @@ export function renderGallery(request: Request) {
   const partImages: HTMLCanvasElement[] = [];
   let orbDpr = 1;
   let orbTones = p.zones.build;
-  let tones = request.mode === "era" ? eraShell(p) : p.hull;
+  let tones = p.hull;
   try {
   if (request.mode === "zone") {
     const id = request.id!;
@@ -222,7 +226,11 @@ export function renderGallery(request: Request) {
       at = project(stop.x, stop.y);
     drawBuild(c, bakeBuild(snapshot, p), at.x, at.y);
   } else if (request.mode === "era") {
-    drawEra(c, bakeEra(p, bakeGlow(p.emissive)), p, 55 * ERA_SCALE, 112 * ERA_SCALE, 1, "upright", {
+    drawEra(c, bakeEra(p), width / 2, height - 15, 0, {
+      gesture: "edit",
+      facing: 1,
+      target: { x: 27, y: -43 },
+      extension: 1,
       static: true,
     });
   } else drawBuild(c, bakeBuild(snapshot, p), 55, 132);
@@ -253,8 +261,8 @@ export function renderGallery(request: Request) {
   };
 }
 /** Native-pixel crop from the exact test gallery, with no DOM heading/label. */
-export function renderCrop(request: Request) {
-  const facts = renderGallery(request), source = host.querySelector("canvas")!;
+export async function renderCrop(request: Request) {
+  const facts = await renderGallery(request), source = host.querySelector("canvas")!;
   const padding = Math.round(12 * Math.min(2, devicePixelRatio));
   const crop = document.createElement("canvas");
   crop.width = facts.bounds.width + padding * 2;

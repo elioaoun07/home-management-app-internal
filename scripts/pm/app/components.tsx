@@ -37,6 +37,7 @@ import {
   canDeliver,
   deliveryAttemptDate,
   historyPath,
+  launchPath,
   runFor,
   spacePath,
   workPath,
@@ -642,11 +643,7 @@ export function OutcomeButton({
     <button
       className="primary deliver-button"
       disabled={disabled || !canDeliver(work)}
-      onClick={() =>
-        go(
-          `/deliver/${encodeURIComponent(work.module)}/${encodeURIComponent(work.id)}?from=${encodeURIComponent(from)}`,
-        )
-      }
+        onClick={() => go(launchPath(work, from))}
     >
       <Zap size={17} />
       Deliver

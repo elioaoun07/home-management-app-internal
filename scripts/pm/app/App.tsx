@@ -31,6 +31,7 @@ import { Setup } from "./Setup";
 import { Sessions } from "./Sessions";
 import { Score } from "./Score";
 import { Library } from "./Library";
+import { OrbitalLibrary } from "./OrbitalLibrary";
 import { cockpitAlias } from "./cockpitModel";
 import "./cockpit.css";
 import { Explore, SpaceView } from "./Explore";
@@ -87,6 +88,8 @@ export function App() {
   const reduced = useReducedMotion();
   const main = useRef<HTMLElement>(null);
   const root = route.parts[0] || "";
+  const inCabinet = root === "library" && route.parts[1] === "room" && !!route.parts[2];
+  const viewKey = inCabinet ? `/library/room/${encodeURIComponent(route.parts[2])}` : route.path;
   const section = primarySection(route.parts);
   useEffect(() => {
     const alias = cockpitAlias(root, route.query, route.parts.length > 1);
@@ -110,7 +113,7 @@ export function App() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
     main.current?.focus({ preventScroll: true });
-  }, [route.path]);
+  }, [viewKey]);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "k") {
@@ -152,7 +155,7 @@ export function App() {
       );
       break;
     case "library":
-      view = <Library />;
+      view = route.parts[1] === "room" ? <OrbitalLibrary /> : <Library />;
       break;
     case "sprints":
       view = <Sprints />;
@@ -313,10 +316,10 @@ export function App() {
           </div>
         )}
         <main ref={main} id="main-content" className="app-main" tabIndex={-1}>
-          <Boundary key={route.path}>
+          <Boundary key={viewKey}>
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
-                key={route.path}
+                key={viewKey}
                 initial={{ opacity: 0, y: reduced ? 0 : 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: reduced ? 0 : -6 }}

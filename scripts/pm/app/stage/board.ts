@@ -1,5 +1,6 @@
 import { ART, BOARD, LAMPS, ZONES, ZONE_BY_ID, type ZoneId } from "./config";
 import { box, cylinder, polygon, project } from "./iso";
+import { CROSSINGS, CROSSING_WIDTH, deckHeight } from "./serviceWalk";
 import type {
   BoardFacts,
   BoardMotionFrame,
@@ -56,8 +57,9 @@ export function boardPlacements(): BoardPlacement[] {
 }
 const depthOrder = [...ZONES].sort((a, b) => a.machine.x + a.machine.y - b.machine.x - b.machine.y);
 function zoneStrip(c: CanvasRenderingContext2D, p: StagePalette, zone: (typeof ZONES)[number]) {
-  box(c, p.zones[zone.group], zone.pad.x + ART.stripe.inset, zone.pad.y + zone.pad.depth - ART.stripe.front,
-    BOARD.pad.raise, zone.pad.width - ART.stripe.inset * 2, ART.stripe.depth, ART.stripe.height);
+  const notch = zone.pad.width * 0.42;
+  box(c, p.zones[zone.group], zone.pad.x + (zone.pad.width - notch) / 2,
+    zone.pad.y + zone.pad.depth - ART.stripe.front, BOARD.pad.raise, notch, 2, ART.stripe.height);
 }
 export function bakeStatic(c: CanvasRenderingContext2D, p: StagePalette, machines = true) {
   const s = BOARD.slab;
@@ -75,6 +77,8 @@ export function bakeStatic(c: CanvasRenderingContext2D, p: StagePalette, machine
     );
     if (machines) zoneStrip(c, p, z);
   }
+  const aisleWidth = BOARD.belt.return - BOARD.belt.outbound - BOARD.belt.width;
+  box(c, p.board, 0, BOARD.belt.walkway - aisleWidth / 2, 0, BOARD.belt.turnStart, aisleWidth, 1);
   for (const y of [BOARD.belt.outbound, BOARD.belt.return]) {
     box(
       c,
@@ -86,7 +90,7 @@ export function bakeStatic(c: CanvasRenderingContext2D, p: StagePalette, machine
       BOARD.belt.width,
       3,
     );
-    for (let x = 8; x < BOARD.belt.turnEnd; x += 24) {
+    for (let x = 30; x < BOARD.belt.turnEnd; x += 48) {
       const direction = y === BOARD.belt.outbound ? 1 : -1;
       polygon(
         c,
@@ -101,7 +105,23 @@ export function bakeStatic(c: CanvasRenderingContext2D, p: StagePalette, machine
     }
   }
   box(c, p.trim, BOARD.belt.turnStart, BOARD.belt.outbound, 0, 24, 60, 3);
-  for (let x = 50; x < 770; x += 128) box(c, p.trim, x, 96, 0, 7, 34, 1);
+  // The operator's rear service lane and crossings share the geometry used by the feet.
+  box(c, p.board, 0, 97, -.5, BOARD.belt.turnStart, 22, .5);
+  for (let x = 8; x < BOARD.belt.turnStart; x += 32)
+    box(c, p.trim, x, 116, 0, 12, 1.3, .3);
+  const y = BOARD.belt.outbound, half = BOARD.belt.width / 2;
+  for (const x of CROSSINGS) {
+    const left = x - CROSSING_WIDTH / 2, right = x + CROSSING_WIDTH / 2;
+    const ends = [y - half - 9, y - half, y + half, y + half + 9];
+    for (let i = 0; i < 3; i++) {
+      const near = ends[i], far = ends[i + 1];
+      const a = deckHeight({ x, y: near }), b = deckHeight({ x, y: far });
+      polygon(c, [project(left, near, a), project(right, near, a), project(right, far, b), project(left, far, b)], p.pad.top);
+      polygon(c, [project(right, near, a), project(right, far, b), project(right, far), project(right, near)], p.pad.right);
+    }
+    for (const edge of [left + 1, right - 2.5])
+      box(c, p.hull, edge, y - half, 5, 1.5, BOARD.belt.width, .3);
+  }
   if (!machines) return;
   for (const zone of depthOrder) {
     const point = project(zone.machine.x, zone.machine.y);

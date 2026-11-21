@@ -7,6 +7,10 @@ import {
   needsBoardAnimation,
 } from "../../scripts/pm/app/stage/motion";
 import { project } from "../../scripts/pm/app/stage/iso";
+import { CROSSINGS, createServiceWalk, deckHeight, serviceRoute } from "../../scripts/pm/app/stage/serviceWalk";
+import { operatorPose } from "../../scripts/pm/app/stage/renderMotion";
+import { buildTimeline, sceneAt } from "../../scripts/pm/app/localRunScene";
+import { boardRun, epoch, row } from "./local-board-fixtures";
 import type {
   BoardFacts,
   BoardMotionFrame,
@@ -51,12 +55,86 @@ describe("solid board choreography", () => {
         ...frame(),
         beat: { action: "edit", stage: "think" },
       } as BoardMotionFrame;
-    expect(m.worker(f, v, 0.5)).toEqual(project(104, 160, 7));
+    expect(m.worker(f, v, 0.5)).toEqual(project(78, 108));
     v.beat!.stage = "decide";
-    expect(m.worker(f, v, 0.4)).toEqual(project(104, 160, 7));
+    expect(m.worker(f, v, 0.4)).toEqual(project(78, 108));
     v.beat!.stage = "travel";
-    expect(m.worker(f, v, 0.7)).toEqual(project(360, 160, 7));
-    expect(m.worker(f, v, 0.7)).toEqual(project(616, 160, 7));
+    m.worker(f, v, .7);
+    expect(m.footing.y).toBe(108);
+    expect(m.footing.x).toBeGreaterThan(78);
+    expect(m.worker(f, v, 3)).toEqual(project(591, 108));
+  });
+  it("mirrors travel when recorded work returns from Build to Explore", () => {
+    const motion = createMotionState(), value = facts(), view = frame();
+    motion.worker(value, view, 4);
+    expect(motion.workerHeading).toBe(1);
+    value.activeZone = "explore";
+    const point = motion.worker(value, view, 0.5);
+    expect(operatorPose(value, view, motion, point, "live")).toMatchObject({ gesture: "travel", facing: -1 });
+  });
+  it("snaps the paused operator to the selected read or edit and folds it during quiet", () => {
+    const timeline = buildTimeline(boardRun({
+      activity: [row(0, "status", "Native session started"), row(1, "command", "Get-Content src/model.ts"), row(1, "edit", "src/model.ts", 2)],
+    }));
+    const motion = createMotionState(), value = facts(), view = { ...frame(), settled: true };
+    value.snapshot = sceneAt(timeline, epoch + 1000, "native:2");
+    let point = motion.worker(value, view, 2);
+    expect(point).toEqual(project(591, 108));
+    expect(operatorPose(value, view, motion, point, "live")).toMatchObject({
+      gesture: "edit", facing: 1, static: true, extension: 1,
+    });
+    value.snapshot = sceneAt(timeline, epoch + 1000, "native:1");
+    point = motion.worker(value, view, 2);
+    expect(point).toEqual(project(320, 108));
+    expect(operatorPose(value, view, motion, point, "live")).toMatchObject({ gesture: "scan", extension: 1 });
+    expect(operatorPose(value, view, motion, point, "quiet")).toMatchObject({ gesture: "park", extension: 0 });
+    expect(operatorPose(value, view, motion, point, "signallost")).toMatchObject({ gesture: "idle", ghost: true, extension: 0 });
+  });
+  it("crosses the conveyor only on a raised bridge, including an interrupted crossing", () => {
+    for (const start of [{ x: 591, y: 108 }, { x: 384, y: 129 }]) {
+      const route = serviceRoute(start, { x: 232, y: 160 });
+      for (let distance = 0; distance < route.length; distance++) {
+        const point = route.at(distance);
+        if (point.y > 122.5 && point.y < 137.5) {
+          expect(CROSSINGS).toContain(point.x);
+          expect(deckHeight(point)).toBe(5);
+        }
+      }
+    }
+  });
+  it("plants a sole in the same world position across successive animation frames", () => {
+    const w = createServiceWalk(), target = { x: 232, y: 160 };
+    let last: { x: number; y: number; lift: number }[] | undefined;
+    let frames = 0, planted = 0;
+    for (let i = 0; i < 180; i++) {
+      const base = w.update(target, 1 / 60, 1, false);
+      if (!w.moving) break;
+      frames++;
+      const soles = w.feet.map(f => ({ ...f, x: f.x + base.x, y: f.y + base.y }));
+      expect(soles.some(sole => sole.lift === 0)).toBe(true);
+      if (last) for (const [i, foot] of soles.entries()) {
+        if (foot.lift !== 0 || last[i].lift !== 0) continue;
+        expect(foot.x).toBeCloseTo(last[i].x, 7);
+        expect(foot.y).toBeCloseTo(last[i].y, 7);
+        planted++;
+      }
+      last = soles;
+    }
+    expect(frames).toBeGreaterThan(55);
+    expect(planted).toBeGreaterThan(frames * .8);
+    expect(w.center).toEqual(target);
+    expect(w.feet.map(f => f.lift)).toEqual([0, 0]);
+  });
+  it("keeps the planted foot when a new recorded action interrupts a swing", () => {
+    const w = createServiceWalk(), verify = { x: 636, y: 160 };
+    let base = w.update(verify, 0, 1, false);
+    for (let n = 0; n < 240 && w.feet[1].lift < 2; n++) base = w.update(verify, 1 / 60, 1, false);
+    expect(w.feet[1].lift).toBeGreaterThanOrEqual(2);
+    const planted = { x: base.x + w.feet[0].x, y: base.y + w.feet[0].y };
+    base = w.update({ x: 78, y: 108 }, 1 / 60, 1, false);
+    expect(w.feet[0].lift).toBe(0);
+    expect(base.x + w.feet[0].x).toBeCloseTo(planted.x, 7);
+    expect(base.y + w.feet[0].y).toBeCloseTo(planted.y, 7);
   });
   it("carries the build around the belt turn before returning through SEAL", () => {
     const m = createMotionState(),

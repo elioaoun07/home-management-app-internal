@@ -43,7 +43,7 @@ export function createBoardEngine(options: BoardEngineOptions) {
     glow = bakeGlow(palette.emissive),
     ownerGlow = bakeGlow(palette.warn),
     smoke = bakeGlow(palette.muted),
-    era = bakeEra(palette, glow);
+    era = bakeEra(palette);
   let assets = bakeBoardAssets(palette);
   let parts = assets.parts, partsKey = "";
   let build: Sprite | null = null,
@@ -112,7 +112,7 @@ export function createBoardEngine(options: BoardEngineOptions) {
       prepare(motion, motionDpr);
       painter.draw(
         motion,
-        { facts, palette, glow, ownerGlow, smoke, era, parts, offParts: assets.offParts,
+        { facts, palette, glow, ownerGlow, smoke, era, foreground: assets.foreground, parts, offParts: assets.offParts,
           dimPalette: assets.dimPalette, glows: assets.glows, evidence, build },
         lastFrame,
         0,
@@ -161,7 +161,7 @@ export function createBoardEngine(options: BoardEngineOptions) {
     glow = bakeGlow(palette.emissive);
     ownerGlow = bakeGlow(palette.warn);
     smoke = bakeGlow(palette.muted);
-    era = bakeEra(palette, glow);
+    era = bakeEra(palette);
     assets = bakeBoardAssets(palette);
     partsKey = "";
     buildKey = "";
@@ -217,7 +217,7 @@ export function createBoardEngine(options: BoardEngineOptions) {
       prepare(motion, motionDpr);
       const particles = painter.draw(
         motion,
-        { facts, palette, glow, ownerGlow, smoke, era, parts, offParts: assets.offParts,
+        { facts, palette, glow, ownerGlow, smoke, era, foreground: assets.foreground, parts, offParts: assets.offParts,
           dimPalette: assets.dimPalette, glows: assets.glows, evidence, build },
         composeStill ? { ...frame, reducedMotion: true } : frame,
         dt,

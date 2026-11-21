@@ -94,6 +94,7 @@ export function useStageClock(
       time: current.current.time,
       cursor: current.current.snapshot.latest?.id,
       mode: current.current.replayMode,
+      playing: current.current.playing,
     };
     const disabled = () =>
       preference.matches ||
@@ -124,6 +125,7 @@ export function useStageClock(
         wallTime: wall,
         tempo: c.tempo,
         reducedMotion: preference.matches,
+        settled: c.time !== null && !c.playing,
         ceremony: sample.ceremony
           ? {
               ...sample.ceremony,
@@ -174,7 +176,8 @@ export function useStageClock(
         (c.time === null && selection.time !== null) ||
         (c.time !== null &&
           !c.playing &&
-          (c.time !== selection.time ||
+          (selection.playing ||
+            c.time !== selection.time ||
             c.snapshot.latest?.id !== selection.cursor ||
             c.replayMode !== selection.mode))
       ) {
@@ -185,6 +188,7 @@ export function useStageClock(
         time: c.time,
         cursor: c.snapshot.latest?.id,
         mode: c.replayMode,
+        playing: c.playing,
       };
       playback.update(
         {

@@ -45,6 +45,7 @@ import {
 import { archiveItem, monthlySweep, restoreSnapshots } from "./pm/archive.mjs";
 import { hostAllowed } from "./pm/net.mjs";
 import { readSourceFile } from "./pm/scan.mjs";
+import { readLibraryRecord } from "./pm/library-record.mjs";
 import { createSnapshotReader, readPlanningCorpus } from "./pm/snapshot.mjs";
 import { createAppWatcher } from "./pm/app-build.mjs";
 import { appAsset, buildAppShell } from "./pm/app-shell.mjs";
@@ -602,6 +603,11 @@ const server = createServer(async (req, res) => {
       const src = readSourceFile(ROOT, rel);
       if (!src) return sendJson(res, 404, { error: "not embedded" });
       return sendJson(res, 200, src);
+    }
+
+    if (req.method === "GET" && path === "/api/library/record") {
+      const record = await readLibraryRecord(PM_DIR, u.searchParams.get("campaign"), u.searchParams.get("id"));
+      return sendJson(res, 200, record);
     }
 
     if (req.method === "GET" && path === "/api/events") {

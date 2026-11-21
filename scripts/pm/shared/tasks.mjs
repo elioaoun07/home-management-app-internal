@@ -36,6 +36,22 @@ export function fileTasks(raw) {
 
 export const checklistItems = fileTasks;
 
+export const OWNER_GROUP = "Needs you";
+
+/** Checklist rows with their declared group between headings. */
+export function groupedTasks(checklistRaw) {
+  const lines = String(checklistRaw).split("\n");
+  const groupAt = new Map();
+  let group = null;
+  lines.forEach((line, index) => {
+    if (/^#{1,6}\s/.test(line)) group = null;
+    const label = line.match(/^\*\*([^*]+)\*\*\s*$/);
+    if (label) group = label[1];
+    groupAt.set(index, group);
+  });
+  return fileTasks(checklistRaw).map((task) => ({ ...task, group: groupAt.get(task.line) ?? null }));
+}
+
 export function severityItems(raw) {
   const out = [];
   let inLegend = false;

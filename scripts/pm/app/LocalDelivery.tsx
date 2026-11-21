@@ -8,6 +8,9 @@ import { client, go, pmKeys, useRoute, useWorld } from "./state";
 import { RefusedCommand, transport } from "./transport";
 import { useGameLayer } from "./GameLayer";
 import { DeliveryMission } from "./DeliveryMission";
+import { LibraryCrew } from "./LibraryCrew";
+import { LibraryArrival, LibraryEyelids } from "./LibraryArrival";
+import { durableV2Command, storedIntent } from "./commandIntents";
 import { effortsFor } from "./v2model";
 import { launchRecommendation } from "./launchRecommendationModel";
 import { LaunchRecommendation } from "./LaunchRecommendation";
@@ -135,8 +138,18 @@ export function LocalLaunch({ work }: { work: Work }) {
   const selectionTouched = useRef(false);
   const route = useRoute();
   const game = useGameLayer();
+  const library = game.enabled && route.query.get("library") === "1";
+  const [arrival, setArrival] = useState<string | null>(null);
   const starting = useRef(false);
   const session = useV2Session();
+  const intent = `local-start:${work.file}:${work.idChip || work.id}`;
+  const scope = `${session.data?.scope}:${session.data?.actor}`;
+  const previous = useQuery({
+    queryKey: pmKeys.v2intent(scope, intent),
+    queryFn: () => storedIntent(scope, intent, localStorage),
+    enabled: library && connected && !!session.data?.paired,
+  });
+  const pendingBody = library ? previous.data?.body : null;
   const catalogue = useQuery({
     queryKey: pmKeys.v2executors,
     queryFn: ({ signal }) => transport().v2Executors(signal),
@@ -149,25 +162,42 @@ export function LocalLaunch({ work }: { work: Work }) {
     setExecutor(recommendation.executor); setModel(recommendation.model); setEffort(recommendation.effort);
   };
   useEffect(() => {
+    if (pendingBody) {
+      selectionTouched.current = true;
+      setExecutor(String(pendingBody.executor));
+      setModel(String(pendingBody.model || ""));
+      setEffort(String(pendingBody.effort || ""));
+      return;
+    }
     if (selectionTouched.current || !recommendation?.supported) return;
     setExecutor(recommendation.executor); setModel(recommendation.model); setEffort(recommendation.effort);
-  }, [recommendation?.executor, recommendation?.model, recommendation?.effort, recommendation?.supported]);
+  }, [pendingBody, recommendation?.executor, recommendation?.model, recommendation?.effort, recommendation?.supported]);
+  useEffect(() => {
+    if (!arrival) return;
+    const timer = window.setTimeout(() => go(`/delivery/run/${encodeURIComponent(arrival)}?arrival=library`),
+      matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 240);
+    return () => clearTimeout(timer);
+  }, [arrival]);
   const start = useMutation({
-    mutationFn: () =>
-      v2Post<{ run_id: string }>(
-        "local",
-        {
-          action: "start",
-          command_id: crypto.randomUUID(),
-          id: work.idChip || work.id,
-          file: work.file,
-          executor,
-          model: model || null,
-          effort: effort || null,
-        },
-        120_000,
-      ),
-    onSuccess: (result) => go(`/delivery/run/${result.run_id}`),
+    mutationFn: async () => {
+      const body = pendingBody || {
+        action: "start",
+        id: work.idChip || work.id,
+        file: work.file,
+        executor,
+        model: model || null,
+        effort: effort || null,
+      };
+      const result = library
+        ? await durableV2Command<{ run_id: string }>("local", intent, body, 120_000)
+        : await v2Post<{ run_id: string }>("local", { ...body, command_id: crypto.randomUUID() }, 120_000);
+      if (!result.run_id?.startsWith("local-")) throw new Error("Session ID unavailable");
+      return result;
+    },
+    onSuccess: (result) => {
+      if (library) setArrival(result.run_id);
+      else go(`/delivery/run/${result.run_id}`);
+    },
     onSettled: () => {
       starting.current = false;
       return client.invalidateQueries({ queryKey: pmKeys.all });
@@ -180,31 +210,34 @@ export function LocalLaunch({ work }: { work: Work }) {
   const query = new URLSearchParams(route.query);
   query.set("lane", "confined");
   if (session.data && !session.data.paired) return <PairV2 />;
+  const busy = start.isPending || !!arrival;
+  const locked = busy || !!pendingBody;
+  const selectExecutor = (id: string) => {
+    selectionTouched.current = true;
+    setExecutor(id);
+    setModel("");
+    setEffort("");
+    start.reset();
+  };
   const controls = (
     <>
-      <LaunchRecommendation recommendation={recommendation} disabled={start.isPending} onRestore={() => {
+      <LaunchRecommendation recommendation={recommendation} disabled={locked} onRestore={() => {
         selectionTouched.current = true; restoreRecommendation(); start.reset();
       }} />
-      <label>
+      {!library && <label>
         Executor
         <select
           value={executor}
-          disabled={start.isPending}
-          onChange={(event) => {
-            selectionTouched.current = true;
-            setExecutor(event.target.value);
-            setModel("");
-            setEffort("");
-            start.reset();
-          }}
+          disabled={locked}
+          onChange={(event) => selectExecutor(event.target.value)}
         >
           <option value="claude">Claude{recommendation?.executor === "claude" ? " ✨" : ""}</option>
           <option value="codex">Codex{recommendation?.executor === "codex" ? " ✨" : ""}</option>
         </select>
-      </label>
+      </label>}
       <div className="budget-fields">
         <label htmlFor="local-model">Model
-          <select id="local-model" aria-label="Model" value={model} disabled={start.isPending || !chosen} onChange={event => {
+          <select id="local-model" aria-label="Model" value={model} disabled={locked || !chosen} onChange={event => {
             selectionTouched.current = true; setModel(event.target.value); setEffort(""); start.reset();
           }}>
             <option value="">Default</option>
@@ -212,7 +245,7 @@ export function LocalLaunch({ work }: { work: Work }) {
           </select>
         </label>
         <label htmlFor="local-effort">Effort
-          <select id="local-effort" aria-label="Effort" value={effort} disabled={start.isPending || !chosen} onChange={event => {
+          <select id="local-effort" aria-label="Effort" value={effort} disabled={locked || !chosen} onChange={event => {
             selectionTouched.current = true; setEffort(event.target.value); start.reset();
           }}>
             <option value="">Default</option>
@@ -220,7 +253,9 @@ export function LocalLaunch({ work }: { work: Work }) {
           </select>
         </label>
       </div>
-      <ErrorNotice error={catalogue.error || session.error || (refusal ? null : start.error)} retry={catalogue.error ? () => void catalogue.refetch() : undefined} />
+      <ErrorNotice error={catalogue.error || session.error || previous.error || (refusal ? null : start.error)} retry={
+        catalogue.error ? () => void catalogue.refetch() : previous.error ? () => void previous.refetch() : undefined
+      } />
       {refusal && (
         <section aria-label="Start result" role="status">
           <h2>Start blocked</h2>
@@ -230,7 +265,7 @@ export function LocalLaunch({ work }: { work: Work }) {
       <div className="gate-actions">
         <button
           className="primary"
-          disabled={!connected || !session.data?.paired || start.isPending}
+          disabled={!connected || !session.data?.paired || busy || (library && (!previous.isSuccess || (!pendingBody && !chosen)))}
           onClick={() => {
             if (starting.current) return;
             selectionTouched.current = true;
@@ -238,9 +273,9 @@ export function LocalLaunch({ work }: { work: Work }) {
             start.mutate();
           }}
         >
-          {start.isPending ? "Checking…" : "Start"}
+          {arrival ? "Entering room…" : start.isPending ? "Checking…" : pendingBody ? "Resume start" : "Start"}
         </button>
-        {!start.isPending && (
+        {!library && !start.isPending && (
           <a className="secondary" href={`#${route.path}?${query}`}>
             Confined
           </a>
@@ -255,7 +290,14 @@ export function LocalLaunch({ work }: { work: Work }) {
       className={`focus-page launch-page${game.enabled ? " delivery-game-page" : ""}`}
     >
       <Back fallback="/delivery" />
-      {game.enabled ? (
+      {library ? (
+        <>
+          <LibraryCrew work={work} executor={executor} onSelect={selectExecutor} locked={locked} checking={start.isPending && !arrival}>
+            {controls}
+          </LibraryCrew>
+          {arrival && <LibraryEyelids closing />}
+        </>
+      ) : game.enabled ? (
         <DeliveryMission
           work={work}
           lane="local"
@@ -294,6 +336,7 @@ export function LocalActions({ run, busy, act }: { run: Pick<LocalRunView, "phas
 export function LocalRun({ id }: { id: string }) {
   const session = useV2Session();
   const game = useGameLayer();
+  const route = useRoute();
   const [patch, setPatch] = useState<{ runId: string; value: string } | null>(
     null,
   );
@@ -336,6 +379,8 @@ export function LocalRun({ id }: { id: string }) {
   if (session.data && !session.data.paired) return <PairV2 />;
   if (!offersLocalLane()) return <p>Open on the laptop</p>;
   return (
+    <LibraryArrival key={id} active={game.enabled && route.query.get("arrival") === "library"}
+      error={!!(session.error || detail.error)}>
     <div
       className={`run-page local-run-page${game.enabled ? " local-run-game-page" : ""}`}
     >
@@ -362,5 +407,6 @@ export function LocalRun({ id }: { id: string }) {
         </>
       )}
     </div>
+    </LibraryArrival>
   );
 }

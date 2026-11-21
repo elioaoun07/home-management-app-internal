@@ -221,7 +221,10 @@ export function createLocalTransport(): Transport {
       if (!response.ok) {
         const failure = authFailure(payload, response.status, sentCsrf);
         // The same id is still running on the server: not a failure.
-        if (firstRefusal(payload) === "command-without-recorded-outcome" && command_id) throw new PendingCommand(command_id, "acknowledged");
+        if (command_id && (firstRefusal(payload) === "command-without-recorded-outcome" ||
+          (path === "local" && payload.error === "local-launch-pending" && payload.command_id === command_id))) {
+          throw new PendingCommand(command_id, "acknowledged");
+        }
         lastAck = { at: new Date().toISOString(), state: "refused" };
         if (response.status >= 500 && command_id) throw new PendingCommand(command_id, "unknown");
         throw new RefusedCommand(failure.message, response.status, payload);

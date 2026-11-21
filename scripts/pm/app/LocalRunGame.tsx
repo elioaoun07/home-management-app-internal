@@ -26,7 +26,7 @@ import {
   useRunHealth,
   useAttentionProjection,
 } from "./useLocalAttention";
-import { useWorld } from "./state";
+import { useRoute, useWorld } from "./state";
 import { cleanStageStreak, cleanShipIncrement } from "./stage/game";
 import { zoneEvidence } from "./stage/zoneModel";
 import { HUD, ZONE_BY_ID, type ZoneId } from "./stage/config";
@@ -65,6 +65,7 @@ export function LocalRunGame({
     run,
   );
   const timeline = useMemo(() => buildTimeline(run), [run]);
+  const arrivingFromLibrary = useRoute().query.get("arrival") === "library";
   const [view, setView] = useState<"overview" | "seat">(() => {
     try {
       return localStorage.getItem("pm-local-game-view") === "seat" ? "seat" : "overview";
@@ -72,8 +73,8 @@ export function LocalRunGame({
       return "overview";
     }
   });
-  const [visitedSeat, setVisitedSeat] = useState(view === "seat");
-  const [brainView, setBrainView] = useState<View | null>(null);
+  const [visitedSeat, setVisitedSeat] = useState(arrivingFromLibrary || view === "seat");
+  const [brainView, setBrainView] = useState<View | null>(arrivingFromLibrary ? "walk" : null);
   const inRoom = !!brainView || view === "seat";
   const consoleId = useId();
   const [tool, setTool] = useState<Tool>("activity"),
@@ -88,7 +89,7 @@ export function LocalRunGame({
     [tempo, setTempo] = useState<StageTempo>(1);
   const [positions, setPositions] = useState<BoardPlacement[]>([]),
     [railOpen, setRailOpen] = useState(() =>
-      typeof matchMedia === "undefined" || !matchMedia(`(max-width: ${HUD.railCollapseBelow - 1}px)`).matches),
+      !arrivingFromLibrary && (typeof matchMedia === "undefined" || !matchMedia(`(max-width: ${HUD.railCollapseBelow - 1}px)`).matches)),
     [selectedAttentionId, setSelectedAttentionId] = useState<string>();
   const [staging, setStaging] = useState<StagingUi>({
     zone: null,

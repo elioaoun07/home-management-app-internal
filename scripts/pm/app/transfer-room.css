@@ -246,6 +246,11 @@
 }
 .room-steps button { flex: 1 0 auto; white-space: nowrap; }
 .room-steps button[data-reached="true"] { box-shadow: inset 0 -2px color-mix(in srgb, var(--accent) 48%, transparent); }
+.room-steps button[aria-current="step"] {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 -2px var(--accent);
+}
 .room-jog { border-top: 1px solid var(--line); }
 .room-jog > button { min-width: 40px; }
 .room-jog output { color: var(--ink-muted); font: 11px var(--font-mono, monospace); }

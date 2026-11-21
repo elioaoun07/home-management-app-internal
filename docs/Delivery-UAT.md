@@ -1,5 +1,42 @@
 # Delivery — owner UAT
 
+## Walk motion and failure — R139
+
+In **Game → Explore 3D**, walk and turn while looking at a ceiling edge, the station lettering and the outline of ERA. Stop in the same aisle and compare. The healthy collector keeps rotating while you watch, even at a held replay cursor. **Low motion** holds it still.
+
+On a high-density display, hardware graphics starts with **Native detail** enabled. On software graphics, turn it on to keep the resting resolution and edge smoothing throughout a walk. Turn it off for faster movement at large window sizes. Walk remembers your choice.
+
+Open a failed recording. The sphere should be dark and cracked. Choose **Inspect break** for the affected step. Both torn ends stay visible between brief discharges. Scrub back one event and return to the failed frame to check recovery. [Walk controls](<../ERA Notes/10 - Project Management/Plans/Transfer Room/Controls and Replay.md>)
+
+At 2516 × 1089, two Radeon 880M runs held native resolution throughout the route. Moving frames took 16.7 ms at the median and 16.8–16.9 ms at the 95th percentile. Software graphics drew 1481 × 641 during the adaptive walk, up from 911 × 394, with a 33.5–41.8 ms median. With **Native detail** enabled, all 10,488 pixels in the station-sign comparison matched at rest and with movement input held. [Same-angle comparison](../.pm/r139-evidence/moving-edges.png) · [Hardware measurements](../.pm/r139-evidence/hardware-final/results.json) · [Software measurements](../.pm/r139-evidence/software-final/results.json)
+
+A separate full-resolution software strafe took 125 ms per frame at the median, about 8 FPS. The Radeon also held 3752 × 1778 on a 2× density display with a 16.7 ms median. [Full-detail software strafe](../.pm/r139-evidence/native-detail/results.json) · [High-density hardware walk](../.pm/r139-evidence/high-dpi/results.json)
+
+The retained failed delivery identifies Seal. Desktop Chrome and a 390 px touch viewport exercised the room. Replay checks cover the powered collector, fracture, quiet wire, discharge and rewind. [Retained recording](../.pm/r139-evidence/retained-failed-globe.png) · [Seal discharge](../.pm/r139-evidence/gameplay/seal-sparks.webm)
+
+## Trips Walk at full window size — R138
+
+Open a Trips delivery recording in **Game → Explore 3D**. Choose **Setup** under **Go to station**, turn toward ERA, then walk across the room to Verify. Look at the deck through the moving compass, the edges of the roof against the windows, and the instrument names as you approach. Stop moving and check that the canopy, sign lettering and glass regain full detail. Scrub from preparation into Build and Verify to see the working instrument and its power line change. [Renderer and art](<../ERA Notes/10 - Project Management/Plans/Transfer Room/The Transfer Room.md>)
+
+Two repeat walks in Chrome tested the same 2516 × 1089 viewport on the Radeon 880M and SwiftShader. The Radeon rendered at native size throughout. SwiftShader reduced its moving buffer under load and resolved to native size after input stopped. The screenshots use the same position and viewing angle. [Before and after](../.pm/r138-evidence/Trips-comparison.webp) · [Radeon measurements](../.pm/r138-evidence/hardware-final/results.json) · [Software measurements](../.pm/r138-evidence/software-final/results.json) · [Trips walkthrough](../.pm/r138-evidence/served/trips-walk.webm)
+
+Desktop and 390 px touch-emulation checks cover walking, selecting a station, phase lighting, a paused replay, entering ERA and returning to the Board. Physical-phone performance and owner assessment on the affected screen remain open. [Browser checks](../.pm/r138-evidence/acceptance/result.json)
+
+## Board robot, ERA identity and Walk — R137
+
+1. In a Local Delivery **Game**, play across a read and an edit. Follow the feet through a station change and watch the tool meet the Build console. Switch to a paused edit to inspect the contact.
+2. Choose **Explore 3D** in a Trips, Budget or Schedule run. Look for the compass needle, rising trail or clock hands. Walk sideways around the globe. Play or seek from preparation to Build to see the destination station and power level change.
+3. Walk and turn together at your usual desktop resolution. Visit a station, open and close its reader, then return to Board. On a touch device, move with your left thumb while dragging with your right. Owner appearance and physical-device acceptance are pending.
+
+## Plasma laboratory — R136
+
+Owner result on 21 November 2026 — rejected. The operator floated, the literal brain displaced ERA’s mark, and Walk flickered and lagged. The original scenarios below describe the rejected build.
+
+1. Open an existing Local Delivery run in **Game → Board**. Pause a read and an edit. ERA should be a recognizable ivory robot with its gaze lowered for a read and its tool touching the Build tile on an edit.
+2. Choose **Explore 3D**. At the doorway, look for the two folded hemispheres inside a reflective globe. In live preparation the electrical activity is restrained. In Build the discharges grow and the destination bay lights up. Walk around the glass and check the brain, reflection and background move at different depths.
+3. Click the room, walk with WASD and hold Shift in a clear aisle. Slide past a bench, release the mouse with Esc, then enter **Inside ERA**. Open and close a recorded action. Check that the camera returns to the location you chose.
+4. On your phone, move with the left thumb while turning with the right. Compare normal and Low motion. On desktop, compare the captured view at your usual window size with the actual walkthrough. [Walkthrough](../.pm/r136-evidence/walkthrough.webm)
+
 ## Local lane — DLV-150–153
 
 **Implementation handover, 2026-11-11. Owner results: pending.** Scope: [DLV-150](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-150>), [DLV-151](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-151>), [DLV-152](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-152>), [DLV-153](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-153>). Exact source changes and replay verification are in `.tmp/dlv-150-153/task.diff` and `verification.md`. This working checkout is not a deployed or signed-off build.
@@ -523,3 +560,15 @@ Restart the local PM server to load the separate 3D asset, then reopen an existi
 | Handoff and fallback | Use a run with a genuine handoff, or the synthetic browser fixture. Inspect Verify before and after the returned check, then Handover. Repeat at 390 px, in Pink, and with low motion. | Only an observed result lights verification. The live handoff retains the existing Test steps and owner controls. **Board** switches to the flat view. A renderer load failure still leaves the phase reader and local questions usable. |
 
 The synthetic browser pass covers the interaction and fallback in Chromium with software graphics. Physical frame pacing, the feel of the room, and visual review of the whole topic atlas are pending owner UAT. Freeform SDK consultation remains the optional follow-up from Plan 1. [Fixture evidence](../.pm/r132-evidence/result.json)
+
+## ERA and the phase circuit — R135
+
+Use the same retained edit in **Board** and **Explore 3D**. Use **Full** replay to see preparation, Build and Verify at their recorded pace. [Criteria](<../ERA Notes/10 - Project Management/PM Tooling/PM Tooling — Master Book.md#r135>) · [Visual baseline](<../ERA Notes/10 - Project Management/Plans/Transfer Room/03 - Start here - visual review and run order.md>)
+
+| Try | Expect |
+| --- | --- |
+| Pause a read and an edit in Board, then play through an edit in Follow. | ERA aims the lens toward the read surface. Its tool extends to the Build instrument, makes contact and retracts. The active machine, evidence shelf and owner rail remain legible. |
+| Stand at the entrance through preparation and an edit. Switch to Map. | The pearl starts gently, then the bright edge moves around the rings. A pulse reaches the recorded instrument. Its branch stays lit between nearby actions. Map shows the clockwise path from Plan to Ship. |
+| Step from a worker test command to a host check start, a returned result and back one row. | Bench and Verify are distinct destinations. The check displays its shape only after the recorded result. |
+| Strafe or drag to look, round the rear of the sphere and take a seat. Try paired touch at narrow width. | Movement and look are independent. The sphere has parallax. Standing returns to the same position and leaves the selected evidence readable. |
+| Stop playback, turn on Low motion or open an output. | The scene holds its evidence and settles. Your next input determines the camera. |
