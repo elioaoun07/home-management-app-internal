@@ -111,7 +111,7 @@ export function BrainRoom({
     if (!host) return;
     let alive = true, world: WorldApi | undefined;
     const path = attempt ? modulePath + "?retry=" + attempt : modulePath;
-    void (import(path) as Promise<WorldModule>).then(({ createWorld }) => {
+    void (import(/* webpackIgnore: true */ /* turbopackIgnore: true */ path) as Promise<WorldModule>).then(({ createWorld }) => {
       if (!alive) return;
       world = createWorld(host, {
         softwareRenderer: value => current.current.controls.softwareRenderer(value),
