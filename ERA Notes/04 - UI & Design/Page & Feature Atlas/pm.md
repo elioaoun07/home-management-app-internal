@@ -18,6 +18,8 @@ tags:
 
 ## Files
 
+**Explore 3D (2026-11-21, R132).** In the local Game run view, Explore 3D opens first-person exploration. Map and Seat use the same 3D level. The phase strip opens the plan and recorded outputs. Q or Ask ERA opens local questions and sources. Delivery topics choose a sphere profile. Board returns to the flat view. [Owner UAT](<../../../docs/Delivery-UAT.md#walk-inside-eras-brain--r132>).
+
 **Transfer Room (2026-11-21, R131).** In a Local Game run, **Take seat** opens a first-person workbench. Use the step strip to reach the plan and recorded outputs. The jog wheel advances by action identity, and two pinned actions can be compared. **Overview** returns to the existing board with the same cursor. A ready handover brings the cassette to the operator. Live questions and owner controls remain available through the existing attention rail. [Design and implementation](<../../10 - Project Management/Plans/Transfer Room/The Transfer Room.md>).
 
 **Readable Local board and recovery (2026-11-16, R129 / R121 / DLV-161 parts 1–2):** factual labels and checks occupy a camera-reserved screen-space shelf with 11 px desktop / 10 px phone text floors. Dock counters wrap and disabled rail controls retain readable contrast. Blue/Pink desktop/phone fixture evidence is in `.pm/r129-evidence/`; actual-owner FPS remains pending. Interrupted phases expose Cancel through both canonical controls and Game admission. Ship can retry an owned interrupted merge; unknown ownership and unrelated edits remain protected. [Owner scenarios](<../../../docs/Delivery-UAT.md#agentic-os-v0-corrections--dlv-161-parts-12--r121--r129--r130>).

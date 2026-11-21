@@ -26,32 +26,29 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  if (req.method !== "GET") return;
-  if ((req.headers.get("accept") || "").includes("text/event-stream")) return;
-  const path = new URL(req.url).pathname;
-  event.respondWith(CACHEABLE.includes(path) ? networkFirst(req) : fetch(req));
+  const url = new URL(req.url);
+  if (req.method !== "GET" || url.origin !== self.location.origin || !CACHEABLE.includes(url.pathname)) return;
+  const network = fetch(req);
+  // Cache the copy in the background. A slow cache write or quota failure
+  // cannot delay a fresh response or turn it into an offline fallback.
+  event.waitUntil(network.then(response => stash(req, response)).catch(() => {}));
+  event.respondWith(network.catch(() => cachedResponse(req)));
 });
 
-async function stash(req) {
-  const response = await fetch(req);
-  if (!response.ok) return response;
+async function stash(req, response) {
+  response ??= await fetch(req);
+  if (!response.ok) return;
   const headers = new Headers(response.headers);
   headers.set("x-pm-cached-at", new Date().toISOString());
-  const body = await response.clone().arrayBuffer();
+  const body = response.clone().body;
   const cache = await caches.open(CACHE);
   await cache.put(req, new Response(body, { status: response.status, statusText: response.statusText, headers }));
-  return response;
 }
 
-async function networkFirst(req) {
-  try {
-    return await stash(req);
-  } catch {
-    const cached = await caches.match(req);
-    if (!cached) throw new Error("offline and nothing cached yet");
-    const headers = new Headers(cached.headers);
-    headers.set("x-pm-offline", "1");
-    const body = await cached.clone().arrayBuffer();
-    return new Response(body, { status: cached.status, statusText: cached.statusText, headers });
-  }
+async function cachedResponse(req) {
+  const cached = await caches.match(req, { cacheName: CACHE });
+  if (!cached) throw new Error("offline and nothing cached yet");
+  const headers = new Headers(cached.headers);
+  headers.set("x-pm-offline", "1");
+  return new Response(cached.body, { status: cached.status, statusText: cached.statusText, headers });
 }

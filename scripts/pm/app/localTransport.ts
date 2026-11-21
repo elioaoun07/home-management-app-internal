@@ -1,7 +1,7 @@
 // Local transport: the views served by `pnpm pm`, talking to the Node server on
 // this machine. Same requests the app always made, now behind the transport seam.
 import { RequestTimeoutError, safeFetch } from "@/lib/safeFetch";
-import { isReallyOnline, startProbing } from "@/lib/connectivityManager";
+import { isReallyOnline, probeNow, startProbing } from "@/lib/connectivityManager";
 import { PendingCommand, PmError, RefusedCommand, type ConnectionState, type Transport, type TransportEvent } from "./transport";
 import type { Snapshot, UatHandover, UatSummary, V2Assessment, V2Queue, V2Allowances, V2TestGate, V2Session, V2Readiness } from "./types";
 
@@ -103,6 +103,18 @@ export function createLocalTransport(): Transport {
       const connectivity = () => emit({ type: "connection" });
       window.addEventListener("connectivity-changed", connectivity);
       const source = new EventSource("/api/events");
+      let interrupted = false;
+      source.onerror = () => {
+        if (!interrupted) void probeNow();
+        interrupted = true;
+      };
+      source.onopen = () => {
+        const recovering = interrupted;
+        interrupted = false;
+        void probeNow().then(online => {
+          if (recovering && online && source.readyState === EventSource.OPEN) connectivity();
+        });
+      };
       source.onmessage = () => emit({ type: "data" });
       source.addEventListener("delivery", () => emit({ type: "delivery" }));
       source.addEventListener("ui", () => emit({ type: "ui" }));
@@ -111,6 +123,8 @@ export function createLocalTransport(): Transport {
         window.removeEventListener("connectivity-changed", connectivity);
       };
     },
+
+    reconnect: probeNow,
 
     subscribe(listener) {
       listeners.add(listener);

@@ -34,6 +34,8 @@
     "pm": "node --disable-warning=ExperimentalWarning scripts/pm-server.mjs",
     "pm:ready": "node --disable-warning=ExperimentalWarning scripts/delivery-v2/ready-cli.mjs",
     "pm:bridge": "node --disable-warning=ExperimentalWarning scripts/pm-server.mjs --bridge",
+    "pm:desktop:install": "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File scripts/pm/windows/Install-PmDesktop.ps1",
+    "pm:desktop:uninstall": "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File scripts/pm/windows/Install-PmDesktop.ps1 -Uninstall",
     "pm:pair": "node scripts/delivery-v2/local-auth.mjs pair",
     "pm:steward": "node scripts/delivery-v2/steward-mcp.mjs",
     "pm:support": "node scripts/delivery-v2/support-cli.mjs",

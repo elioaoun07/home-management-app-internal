@@ -18,6 +18,9 @@ const options = (plugins = []) => ({
   logLevel: "silent",
   plugins,
 });
+function roomOptions(plugins = []) {
+  return { ...options(plugins), entryPoints: [join(HERE, "app/brain/world.ts")], outfile: "brain-room.js", outdir: undefined };
+}
 function assets(result) {
   const js = result.outputFiles.find((file) => file.path.endsWith(".js"))?.text,
     css = result.outputFiles.find((file) => file.path.endsWith(".css"))?.text;
@@ -25,10 +28,18 @@ function assets(result) {
   return { js, css };
 }
 export async function buildApp() {
-  return assets(await esbuild.build(options()));
+  const [main, room] = await Promise.all([esbuild.build(options()), esbuild.build(roomOptions())]);
+  return { ...assets(main), room: room.outputFiles[0].text };
 }
 export async function createAppWatcher(onRebuild = () => {}) {
-  let current;
+  let main, room, published;
+  const publish = () => {
+    if (!main || !room) return;
+    if (published?.js === main.js && published.css === main.css && published.room === room) return;
+    const changed = !!published;
+    published = { ...main, room };
+    if (changed) onRebuild();
+  };
   const ctx = await esbuild.context(
     options([
       {
@@ -36,17 +47,25 @@ export async function createAppWatcher(onRebuild = () => {}) {
         setup(build) {
           build.onEnd((result) => {
             if (!result.errors.length) {
-              current = assets(result);
-              onRebuild();
+              main = assets(result);
+              publish();
             }
           });
         },
       },
     ]),
   );
-  await ctx.rebuild();
-  await ctx.watch();
-  return { current: () => current, dispose: () => ctx.dispose() };
+  const world = await esbuild.context(roomOptions([{
+    name: "pm-room-cache",
+    setup(build) {
+      build.onEnd((result) => {
+        if (!result.errors.length) { room = result.outputFiles[0].text; publish(); }
+      });
+    },
+  }]));
+  await Promise.all([ctx.rebuild(), world.rebuild()]);
+  await Promise.all([ctx.watch(), world.watch()]);
+  return { current: () => published, dispose: () => Promise.all([ctx.dispose(), world.dispose()]) };
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const result = await buildApp();

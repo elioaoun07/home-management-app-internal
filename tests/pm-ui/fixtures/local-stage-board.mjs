@@ -213,6 +213,8 @@ export async function routeFixture(context, assets, writes, initial) {
         contentType: "text/css",
         body: assets.bundle.css,
       });
+    if (url.pathname === "/app/assets/brain-room.js")
+      return route.fulfill({ contentType: "text/javascript", body: assets.bundle.room });
     if (url.pathname === "/api/delivery/v2/session" && state.sessionFailed)
       return route.fulfill({
         status: 503,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Armchair, Map, Maximize, RotateCw, X } from "lucide-react";
+import { Armchair, Footprints, Map, Maximize, RotateCw, X } from "lucide-react";
 import { LocalActions, type LocalRunView } from "./LocalDelivery";
 import { DeliveryWorkshop } from "./DeliveryWorkshop";
 import { LocalRunConsole, type Tool } from "./LocalRunConsole";
@@ -33,6 +33,7 @@ import { HUD, ZONE_BY_ID, type ZoneId } from "./stage/config";
 import { BoardClock, BoardTelemetry, AttentionAge } from "./stage/ClockLeaves";
 import type { BoardPlacement } from "./stage/types";
 import type { StageTempo, ReplayMode } from "./stage/director";
+import type { View } from "./brain/layout";
 import "./local-run-game.css";
 
 export function LocalRunGame({
@@ -72,6 +73,8 @@ export function LocalRunGame({
     }
   });
   const [visitedSeat, setVisitedSeat] = useState(view === "seat");
+  const [brainView, setBrainView] = useState<View | null>(null);
+  const inRoom = !!brainView || view === "seat";
   const consoleId = useId();
   const [tool, setTool] = useState<Tool>("activity"),
     [consoleOpen, setConsoleOpen] = useState(false),
@@ -137,12 +140,12 @@ export function LocalRunGame({
     () =>
       zoneEvidence(
         snapshot,
-        view === "overview" && staging.event && staging.beat !== "idle"
+        !inRoom && staging.event && staging.beat !== "idle"
           ? { event: staging.event, stage: staging.beat }
           : null,
         attention,
       ),
-    [snapshot, staging.event, staging.beat, attention, view],
+    [snapshot, staging.event, staging.beat, attention, inRoom],
   );
   const replayAttention = useMemo(() => replay ? attention.map((item): AttentionItem =>
     item.action.run === "brief" || item.action.run === "summary"
@@ -280,6 +283,17 @@ export function LocalRunGame({
       // The choice still applies to the current run.
     }
   };
+  const explore = () => {
+    setVisitedSeat(true);
+    setBrainView("walk");
+    setConsoleOpen(false);
+    setRailOpen(false);
+  };
+  const showBoard = () => {
+    setBrainView(null);
+    setView("overview");
+    try { localStorage.setItem("pm-local-game-view", "overview"); } catch { /* optional preference */ }
+  };
   const ask = realAttention.find((item) => item.kind === "question" && item.state === "open");
   const test = !replay ? realAttention.find((item) => item.kind === "test" && item.action.href) : undefined;
   const onEnd = useCallback(() => setPlaying(false), []);
@@ -299,7 +313,7 @@ export function LocalRunGame({
     onEnd,
     onStage: setStaging,
     onPlacements: setPositions,
-  }, view);
+  }, inRoom ? "seat" : "overview");
   const theater = () => {
     if (document.fullscreenElement)
       void document.exitFullscreen().catch(() => {});
@@ -312,9 +326,10 @@ export function LocalRunGame({
         positions={positions}
         staging={staging}
         railOpen={railOpen}
-        seated={view === "seat"}
+        seated={inRoom}
         seat={visitedSeat && <TransferRoom
-          active={view === "seat"}
+          active={inRoom}
+          brain={brainView ? { view: brainView, onView: setBrainView, onBoard: showBoard, blocked: consoleOpen } : undefined}
           timeline={timeline}
           scene={snapshot}
           health={health}
@@ -353,7 +368,7 @@ export function LocalRunGame({
         canAct={canAct}
         selectedAttentionId={selectedAttentionId}
         onRailOpenChange={onRailOpenChange}
-        suppressRailAutoOpen={view === "seat" || (consoleOpen && typeof matchMedia !== "undefined" && matchMedia(`(max-width: ${HUD.railBelow}px)`).matches)}
+        suppressRailAutoOpen={inRoom || (consoleOpen && typeof matchMedia !== "undefined" && matchMedia(`(max-width: ${HUD.railBelow}px)`).matches)}
         renderAge={(since: number | null) => <AttentionAge since={since} />}
         clock={
           <BoardClock
@@ -395,11 +410,13 @@ export function LocalRunGame({
         }
         theaterControl={
           <>
-            <button type="button" className="stage-presence-button room-view-switch"
+            {!brainView && <button type="button" className="stage-presence-button room-view-switch"
+              aria-label="Explore 3D" onClick={explore}><Footprints size={16} /><span>Explore 3D</span></button>}
+            {!brainView && <button type="button" className="stage-presence-button room-view-switch"
               aria-label={view === "seat" ? "Overview" : "Take seat"} onClick={toggleView}>
               {view === "seat" ? <Map size={16} /> : <Armchair size={16} />}
               <span>{view === "seat" ? "Overview" : "Take seat"}</span>
-            </button>
+            </button>}
             <button
               type="button"
               className="stage-presence-button"

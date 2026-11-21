@@ -509,3 +509,17 @@ These failure cases are fixture-verified; no new failure needs to be deliberatel
 | Compare the experience | Watch the same retained minute from Overview and Seat, then repeat with sound off. Try it in a narrow window and with reduced motion. | You can point to your place at the bench, read the latest observed action and find the moment the decision becomes yours. Record any hitch and what you were doing when it happened. |
 
 Run the perceptual and playback comparison described in Build and Playtest. Fixture screenshots and replay assertions cover the implementation paths in Blue and Pink. Owner comfort, immersion and physical-device frame pacing require this pass. [Playtest](<../ERA Notes/10 - Project Management/Plans/Transfer Room/Build and Playtest.md>) · [Fixture results](../.pm/r131-evidence/result.json)
+
+## Walk inside ERA’s brain — R132
+
+Restart the local PM server to load the separate 3D asset, then reopen an existing Local Delivery recording. In **Game**, choose **Explore 3D**. Repeat in both visual treatments. The room uses recorded evidence, so you can walk through these scenarios with retained runs. [Criteria](<../ERA Notes/10 - Project Management/PM Tooling/PM Tooling — Master Book.md#r132>) · [Design](<../ERA Notes/10 - Project Management/Plans/Transfer Room/02 - Watching ERA work.md>)
+
+| Scenario | Action | Expect |
+|---|---|---|
+| Walk and inspect | Open [HUB-118](http://127.0.0.1:4317/#/delivery/run/local-cac958d7-1f8e-4e65-9cb8-1471c839f796). Walk with WASD and look with mouse drag or arrow keys. At Build, press E on a station or select its labeled control. Open an edit and choose **Replay here**. | The camera translates on the floor. Walls and the core well block movement. The named action appears in the existing reader. |
+| Ask and sit | Close the output, then approach Build and press Q. Ask what changed. Choose **Discuss at seat** and open the cited file. Close the output and choose **Stand up**. | The exchange moves to the seat. The exact row and prior standing pose survive. |
+| Enter ERA | Approach **Inside ERA** at the inner rim. Inspect a receipt between the rings. Choose **Back to room**. | Walk independently in the core. Selecting a prior or next action seeks exactly one row. The exterior returns to the saved pose. |
+| Sparse and failed recordings | Open [TRIP-33](http://127.0.0.1:4317/#/delivery/run/local-c7059ebf-f657-470c-9f6c-bc80ae3672a9) and ask **Where did it stop?** Walk to Ship, then replay its first receipt. Try **Why was it cancelled?** on Live. | The Trips compass stays active as an identity. The answer names dependency installation and recorded cancellation. Ship stays incomplete. The earlier replay cannot reveal the later cancellation. |
+| Handoff and fallback | Use a run with a genuine handoff, or the synthetic browser fixture. Inspect Verify before and after the returned check, then Handover. Repeat at 390 px, in Pink, and with low motion. | Only an observed result lights verification. The live handoff retains the existing Test steps and owner controls. **Board** switches to the flat view. A renderer load failure still leaves the phase reader and local questions usable. |
+
+The synthetic browser pass covers the interaction and fallback in Chromium with software graphics. Physical frame pacing, the feel of the room, and visual review of the whole topic atlas are pending owner UAT. Freeform SDK consultation remains the optional follow-up from Plan 1. [Fixture evidence](../.pm/r132-evidence/result.json)

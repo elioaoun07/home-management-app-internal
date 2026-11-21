@@ -928,7 +928,7 @@ const V2_RUNS_PUBLISHED = 30;
  *   env?:Record<string, string|undefined>, createClientImpl?:any,
  *   pushImpl?:((push:{title:string, body:string, url:string, tag:string}) => any)|null}} deps
  */
-export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildData = null, env = process.env, createClientImpl = createClient, pushImpl = null }) {
+export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildData = null, buildPlanningData = buildData, env = process.env, createClientImpl = createClient, pushImpl = null }) {
   const ownerId = env.PM_OWNER_USER_ID;
   const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = env.NEXT_SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
@@ -937,7 +937,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
     console.log(
       "[pm-bridge] disabled — missing PM_OWNER_USER_ID / NEXT_PUBLIC_SUPABASE_URL / NEXT_SUPABASE_SERVICE_ROLE_KEY",
     );
-    return { start() {}, publishTasks() {}, publishSession() {}, publishFleet() {}, publishV2() {}, stop() {} };
+    return { start() {}, publishCorpus() {}, publishTasks() {}, publishSession() {}, publishFleet() {}, publishV2() {}, stop() {}, isBusy: () => false };
   }
 
   const ROOT = deliveryCtx.ROOT;
@@ -961,6 +961,8 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
   let eraIssuesTimer = null;
   let channel = null;
   let drainEnabled = false;
+  let starting = false;
+  let importsInFlight = 0;
   let credential = null;
   let availability = null;
   const drain = { lastClaimAt: null, lastReceiptAt: null, lastCommandId: null };
@@ -1030,7 +1032,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
   async function publishCorpusOnce() {
     try {
       await loadPublishedDocs();
-      const data = buildData();
+      const data = await buildData();
       const withheld = [];
       const files = data.files.filter((file) => {
         if (!secretsIn(file.raw).length) return true;
@@ -1344,7 +1346,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
     try {
       outcome = cmd.type === "planning"
         ? process.env.PM_SPRINT_RELAY === "1" && typeof buildData === "function"
-          ? await executePlanningCommand({ cmd, installation_id, route: (req) => routePlanning(req, { root: ROOT, pmDir: PM_DIR, data: buildData() }), credential: bridgeCredential() })
+          ? await executePlanningCommand({ cmd, installation_id, route: async (req) => routePlanning(req, { root: ROOT, pmDir: PM_DIR, data: await buildPlanningData() }), credential: bridgeCredential() })
           : { ok: false, error: "sprint-relay-not-enabled" }
         : V2_COMMAND_TYPES[cmd.type]
         ? deliveryV2Ctx
@@ -1465,6 +1467,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
    * Writes go through the same undo journal as phone captures.
    */
   async function importEraIssues() {
+    importsInFlight++;
     try {
       const reports = await fetchEraIssueReports(supabase);
       const plan = applyEraIssueImport({
@@ -1480,6 +1483,8 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
       }
     } catch (err) {
       console.error("[pm-bridge] ERA report import failed:", err.message);
+    } finally {
+      importsInFlight--;
     }
   }
 
@@ -1514,9 +1519,10 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
     // Realtime safety net — a missed event should never silently strand a
     // pending command (e.g. a Pause) with no fallback path.
     pollTimer = setInterval(drainOnce, POLL_FALLBACK_MS);
+    starting = true;
     reconcileClaimed()
       .catch((err) => console.error("[pm-bridge] reconcile error:", err.message))
-      .finally(() => drainOnce());
+      .finally(() => { starting = false; return drainOnce(); });
 
     console.log(`[pm-bridge] started — installation ${installation_id}, publishing to Supabase, draining pm_commands`);
   }
@@ -1540,6 +1546,7 @@ export function createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx = null, buildD
   return {
     start,
     stop,
+    isBusy: () => draining || starting || importsInFlight > 0,
     publishTasks,
     publishSession,
     publishFleet,

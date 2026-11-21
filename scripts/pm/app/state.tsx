@@ -1,4 +1,5 @@
 import {
+  useCallback,
   createContext,
   useContext,
   useEffect,
@@ -71,6 +72,7 @@ const WorldContext = createContext<{
   readError: Error | null;
   runError: Error | null;
   runsReady: boolean;
+  reconnect: () => Promise<void>;
 } | null>(null);
 export const useWorld = () => {
   const context = useContext(WorldContext);
@@ -149,6 +151,10 @@ function ProjectData({ children }: { children: ReactNode }) {
     networkMode: "always",
   });
   const [connection, setConnection] = useState(() => source.connection());
+  const reconnect = useCallback(async () => {
+    await source.reconnect?.();
+    await client.invalidateQueries({ queryKey: pmKeys.all }, { cancelRefetch: false });
+  }, [source]);
   const world = useMemo(
     () => (data.data ? buildWorld(data.data) : null),
     [data.data],
@@ -212,6 +218,7 @@ function ProjectData({ children }: { children: ReactNode }) {
         readError: data.error,
         runError: runs.error,
         runsReady: runs.isSuccess && !runs.isError,
+        reconnect,
       }}
     >
       {children}

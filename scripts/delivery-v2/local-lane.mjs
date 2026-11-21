@@ -725,6 +725,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     });
   }
   return { readiness, start, list, detail, review, ship, undo, cancel, answer, message,
+    isWorking: () => tasks.size > 0,
     wait: id => tasks.get(id)?.promise || Promise.resolve(),
   };
 }

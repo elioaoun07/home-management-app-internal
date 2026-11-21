@@ -79,6 +79,8 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🟠 **R134 — The Windows cockpit shows Offline after rebuild (2026-11-21).** A local work snapshot delayed the health probe past its three-second deadline. Repeated source file checks and Master Book scans consumed most of the snapshot time on the live checkout.
+
 🟠 **R129 — Board readouts are unreadable and overlap (2026-11-16).** On run `local-cac958d7` at 1358 × 849, 15 on-board labels render at 7.6 px (`MAIN`, commit, `RETRY`, four counts, four check names and states); the check chips overlap `04 THINK` and hide `LINT`. Dock counters are 8 px, tab labels 9 px, badges 7 px (`local-run-mission.css:26,45,46`). R125 corrected only the eleven zone names.
 
 🟠 **R130 — The recorder misses Codex and cannot score an uncommitted session (2026-11-16).** 75 Codex transcripts dated 15–16 November left no event file and no stored session. Seven of eight stored Claude sessions have `base = head` with a dirty tree, so their verdict range is empty and Bridge shows 26 of 27 Unknown. Session `28e443a6` (Fable) is stored as Haiku, `CLAUDE_LOW`.
@@ -164,6 +166,40 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 The remaining retained defects, decisions and enhancements are indexed below and ordered once in the checklist. Historical study claims are not new production incidents.
 
 ## Acceptance Criteria Index
+
+### R134
+
+**Outcome:** The laptop cockpit opens after a rebuild and returns to live work after a local server interruption.
+**Kind:** bug
+**Implementation:** done
+**UAT:** pending — owner restarts the publishing bridge from the desktop panel and checks the existing browser tab.
+
+- **Acceptance:** Snapshot reads share one current projection and leave the loopback health endpoint responsive. Local edits invalidate that projection. Reconnect verifies the server and refreshes work in place. Cached work remains readable during a genuine outage.
+
+### R133
+
+**Outcome:** The owner signs in to Windows and can open, restart or rebuild the laptop PM Command Center from a desktop shortcut.
+**Kind:** tooling
+**Implementation:** done
+**UAT:** pending — first owner sign-in and phone reconnection from the installed shortcut.
+
+- Installation sets up a current-user Startup shortcut and an **ERA PM Command Center** desktop shortcut. The background bridge uses the checkout selected during installation, even when launched from another directory.
+- The desktop panel opens the local cockpit, restarts the managed bridge, checks a fresh local UI build before restarting, and opens its log. A failed build preserves the running instance. An existing manually started PM process stays under the owner's control.
+- The [laptop runbook](<../../06 - Setup & Onboarding/PM Relay Setup.md#using-the-windows-shortcut>) distinguishes automatic UI and document updates from laptop backend restarts and hosted deployments. Installation and removal are repeatable.
+
+### R132
+
+**Outcome:** Local Delivery Game includes a walkable 3D room with topic spheres, evidence navigation and questions from the floor and seat.
+**Kind:** feature
+**Touches:** `scripts/pm/`, `tests/pm-ui/`, `docs/Delivery-UAT.md`, `ERA Notes/`
+**Implementation:** done
+**UAT:** pending
+
+- **Acceptance:** Walk around the core and into six phase bays in both treatments, ask about a recorded edit, sit, stand and return to the same walk pose and exact replay moment.
+- **Acceptance:** Every current campaign and header identity resolves to a designed sphere. Camera moves, topic art and presets issue no delivery or provider commands. Only eligible projected evidence controls the scene.
+- **Acceptance:** The board and reader remain available for a missing renderer. Verify narrow and desktop controls, reduced motion and exact-row replay. Owner immersion and physical performance are evaluated separately.
+
+[Implementation plans](<../Plans/Transfer Room/The Transfer Room.md>) · [Owner UAT](<../../../docs/Delivery-UAT.md#walk-inside-eras-brain--r132>) · [Browser results](../../../.pm/r132-evidence/result.json)
 
 ### R131
 
@@ -2049,6 +2085,9 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-11-16 — **R130** Record Codex sessions and score the working tree → [record](<../_Archive/Shipped/PM Tooling.md#r130>)
 - ✅ 2026-11-16 — **R121** Recover an interrupted Local attempt → [record](<../_Archive/Shipped/PM Tooling.md#r121>)
 - ✅ 2026-11-21 — **R131** Sit across from ERA and read, replay or receive a delivery → [record](<../_Archive/Shipped/PM Tooling.md#r131>)
+- ✅ 2026-11-21 — **R132** Walk through ERA’s delivery room and inspect recorded work → [record](<../_Archive/Shipped/PM Tooling.md#r132>)
+- ✅ 2026-11-21 — **R133** Start and update the laptop Command Center from Windows → [record](<../_Archive/Shipped/PM Tooling.md#r133>)
+- ✅ 2026-11-21 — **R134** Keep the laptop cockpit connected after rebuild → [record](<../_Archive/Shipped/PM Tooling.md#r134>)
 
 ## Delivery session log
 

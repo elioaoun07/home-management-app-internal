@@ -113,6 +113,7 @@ function candAbs(cand, absDir, root) {
 export function collectSources(files, root, opts = {}) {
   const keysOnly = !!opts.keysOnly;
   const sources = {};
+  const checked = new Set();
   function addSource(rel, abs) {
     if (sources[rel]) return;
     if (keysOnly) {
@@ -130,14 +131,15 @@ export function collectSources(files, root, opts = {}) {
   for (const f of files) {
     for (const cand of candidatesFrom(f.raw)) {
       const abs = candAbs(cand, f.absDir, root);
-      if (!abs || !existsSync(abs)) continue;
+      if (!abs || !TEXT_EXTS.has(extname(abs).toLowerCase()) || checked.has(abs)) continue;
+      checked.add(abs);
       let st;
       try {
         st = statSync(abs);
       } catch {
         continue;
       }
-      if (!st.isFile() || !TEXT_EXTS.has(extname(abs).toLowerCase())) continue;
+      if (!st.isFile()) continue;
       const rel = relative(root, abs).replace(/\\/g, "/");
       if (rel.startsWith("..")) continue; // outside the repo
       addSource(rel, abs);

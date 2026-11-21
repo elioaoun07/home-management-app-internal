@@ -64,10 +64,16 @@ class Boundary extends Component<{ children: ReactNode }, { error: boolean }> {
 }
 export function App() {
   const route = useRoute();
-  const { world, runs, connected, readError, runError, connection } =
+  const { world, runs, connected, readError, runError, connection, reconnect } =
     useWorld();
   const v2 = useV2Runs();
   const capabilities = transport().capabilities;
+  const [reconnecting, setReconnecting] = useState(false);
+  async function reconnectLocal() {
+    setReconnecting(true);
+    try { await reconnect(); }
+    finally { setReconnecting(false); }
+  }
   const [capture, setCapture] = useState(false);
   const [settings, setSettings] = useState(false);
   const [theme, setTheme] = useState(() => {
@@ -287,7 +293,9 @@ export function App() {
           <div className="offline-banner" role="status">
             {readError ? "Refresh unavailable" : "Offline"} · viewing{" "}
             {world.cachedAt ? "saved work" : "last known work"}
-            <button onClick={() => location.reload()}>Reconnect</button>
+            <button disabled={reconnecting} onClick={() => capabilities.kind === "local" ? void reconnectLocal() : location.reload()}>
+              {reconnecting ? "Connecting…" : "Reconnect"}
+            </button>
           </div>
         )}
         {capabilities.kind === "relay" && (

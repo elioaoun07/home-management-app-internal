@@ -1,6 +1,6 @@
 ---
 created: 2026-09-12
-updated: 2026-10-03
+updated: 2026-11-21
 type: runbook
 status: active
 owner: Elio
@@ -30,6 +30,29 @@ Until this runs: V2 commands from the phone are refused by the old `pm_commands.
 | Keep awake | the laptop must stay on and connected | a sleeping laptop shows `Laptop · Offline` and `Workers · Unknown` |
 
 Relay state on the laptop (gitignored): `.delivery/pm-relay/installation.json`, `commands.ndjson` (claim → started → effected → reported), `attention.json`, `bridge.lock`. Apply journals and backups: `%LOCALAPPDATA%/era-delivery-v2/<hash>/applications/`.
+
+### Using the Windows shortcut
+
+Install once in PowerShell from the checkout you want to run. On this laptop:
+
+```powershell
+Set-Location -LiteralPath 'C:\Users\aoune\WebApp\budget-app'
+pnpm pm:desktop:install
+```
+
+At your next Windows sign-in, the Startup shortcut launches `pnpm pm --bridge --no-open` in that checkout. The bridge runs in the background. Double-click **ERA PM Command Center** on your desktop for the controls. The shortcuts keep pointing at the working checkout after updates. If you move the repo, run the installer from its new location.
+
+| When | What to do |
+|---|---|
+| You want your local Library, sessions or 3D room | Choose **Open**. |
+| You edited a PM note, or changed the local cockpit screens or styles | Keep working. The running server watches PM Markdown and rebuilds the cockpit UI automatically. Refresh the browser if you still see the older screen. |
+| You updated the laptop server, bridge, build script or `.env` | Finish active delivery work, then choose **Restart**. It loads the checkout and settings again. |
+| You pulled a mix of changes or want to check that the UI compiles | Choose **Rebuild + restart**. It runs `pnpm pm:build-app` first. If compilation fails, the running server stays available. Choose **View log** for the error. |
+| You changed the hosted `/pm/live` interface or want the deployed `/pm` reading copy refreshed | Use your normal ERA deployment. The app build also regenerates the hosted `/pm` document snapshot. |
+
+If the panel detects a PM server you started in a terminal, open **Sessions**, wait for active work to finish, then press **Ctrl+C** in that original terminal. Choose **Open** in the desktop panel to start using the managed bridge. Run `pnpm pm:desktop:uninstall` from the checkout to remove the desktop and Startup shortcuts.
+
+An open laptop tab refreshes when the local server comes back. **Reconnect** checks the server and refreshes work in place. If the banner persists, check the desktop panel and **View log**.
 
 ## 3. Phone
 

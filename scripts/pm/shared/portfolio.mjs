@@ -2,7 +2,7 @@
 // phone views (moved out of the classic namespace in Command Center Phase 6;
 // `src/lib/portfolio.js` re-exports it).
 import { cleanInlineText } from "./text.mjs";
-import { idSection, workIds } from "./work-id.mjs";
+import { createIdSectionReader, workIds } from "./work-id.mjs";
 import { dependencyIds } from "./declarations.mjs";
 import { executionKind } from "./work-lifecycle.mjs";
 import { isTerminal, sessionForTask, workTitle } from "./product.mjs";
@@ -74,7 +74,7 @@ export function acceptanceStatements(raw = "") {
 // Shared with Delivery V2 coordination, so a prerequisite reads the same everywhere.
 const dependencies = dependencyIds;
 
-export function buildPortfolio(baseCampaigns, decisions = []) {
+export function buildPortfolio(baseCampaigns, decisions = [], idSection = createIdSectionReader()) {
   /** @type {PortfolioItem[]} */
   const items = baseCampaigns.flatMap((campaign) => campaign.items.map((task) => {
     const brief = idSection(campaign.book?.raw, task.idChip);

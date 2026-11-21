@@ -85,6 +85,7 @@ export interface Transport {
   capabilities: TransportCapabilities;
   /** Begin live updates; returns the stop function. */
   start(): () => void;
+  reconnect?(): Promise<unknown>;
   subscribe(listener: (event: TransportEvent) => void): () => void;
   connection(): ConnectionState;
   snapshot(signal?: AbortSignal): Promise<Snapshot>;

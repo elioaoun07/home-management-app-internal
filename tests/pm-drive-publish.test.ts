@@ -306,10 +306,10 @@ describe("configuration and isolation", () => {
     expect(source).not.toMatch(/\.(?:apply|approve|dispatch|deliver|reconcile|launch|settle|resume|cancel|put[A-Z]\w*|set[A-Z]\w*)\(/u);
   });
 
-  it("is wired into the PM server only as schedule() triggers, and the CLI opens the store read-only", () => {
+  it("only schedules publication from the PM server and allows managed shutdown to observe and stop it", () => {
     const server = readFileSync(join(__dirname, "..", "scripts", "pm-server.mjs"), "utf8");
     const uses = [...server.matchAll(/\bdrive\??\.(\w+)/gu)].map((m) => m[1]);
-    expect(new Set(uses)).toEqual(new Set(["schedule"]));
+    expect(new Set(uses)).toEqual(new Set(["schedule", "isBusy", "stop"]));
     const cli = readFileSync(join(__dirname, "..", "scripts", "pm", "drive-publish-cli.mjs"), "utf8");
     expect(cli).toMatch(/openStore\(\{ path: STORE_PATH, readOnly: true \}\)/u);
   });

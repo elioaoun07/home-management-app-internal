@@ -656,6 +656,18 @@ owner: Elio
 
 - ✅ 2026-11-21 — **R131** Sit across from ERA and read, replay or receive a delivery — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r131>) (1008 PM UI tests, typecheck, scoped ESLint and PM build pass. Four Chromium fixture profiles verify exact replay, comparison, view restoration, handoff and live question without writes. Owner immersion and physical-device frame pacing pending.)
 
+### R132
+
+- ✅ 2026-11-21 — **R132** Walk through ERA’s delivery room and inspect recorded work — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r132>) (Walkable 3D Local Delivery, 15 topic profiles and neutral fallback, exact replay and local Q&A. PM UI suite 1012 passed, typecheck, scoped ESLint and PM build pass. Desktop Blue and narrow Pink fixture cover first-person movement, seat, core and fallback with no writes. Owner UAT and optional SDK consultation pending.)
+
+### R133
+
+- ✅ 2026-11-21 — **R133** Start and update the laptop Command Center from Windows — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r133>) (Installed and read back both Windows shortcuts for this checkout. Verified Open and Rebuild with the real PM server in a separate credential-free checkout. Desktop, bridge, publisher, and restart checks passed, including busy and failed-build retention. Owner sign-in and phone reconnection pending.)
+
+### R134
+
+- ✅ 2026-11-21 — **R134** Keep the laptop cockpit connected after rebuild — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r134>) (Reproduced the 4 s local health timeout during snapshot work. With the fix, the isolated full PM corpus served health in 17 ms under four concurrent snapshot reads. Desktop and 390 px Chromium recovered in place after a server restart. 1092 tests, typecheck, scoped lint, and PM build passed. Owner restart pending.)
+
 ## State log
 
 _Moved from the Master Book on 2026-11-11._

@@ -7,7 +7,11 @@ scope: PM Command Center / Local Delivery / Game
 
 # The Transfer Room
 
-**Current implementation plans after the owner playtest**
+**Walkable implementation, R132 (2026-11-21)**
+
+Open a Local Game run and select **Explore 3D**. Map, Walk, Seat, the core interior and both material treatments share the recording and output reader. Q opens questions from your current station or action. The browser fixture covers interaction and fallback. Owner perception, physical performance and a review of every topic design are pending. [Owner UAT](<../../../../docs/Delivery-UAT.md#walk-inside-eras-brain--r132>)
+
+**Design and implementation plans**
 
 1. [A conversation with ERA](<01 - A conversation with ERA.md>) specifies asking from any station and carrying a question and its evidence to the seat.
 2. [Walk inside ERA’s brain](<02 - Watching ERA work.md>) is the level and animation specification. It covers first-person movement, six phase chambers, eleven stations, two fully walkable art treatments and camera transitions.

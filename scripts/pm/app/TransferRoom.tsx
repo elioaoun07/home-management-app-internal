@@ -12,6 +12,8 @@ import type { LocalScene, LocalTimeline } from "./localRunScene";
 import type { LocalLiveness } from "./localRunLiveness";
 import { ZONE_BY_ID, type ZoneId } from "./stage/config";
 import type { ZoneBoardState } from "./stage/zoneModel";
+import { BrainRoom } from "./BrainRoom";
+import type { View } from "./brain/layout";
 import { resolveMark, roomCassette, roomCheck, roomMoment, roomRows, roomStepRow, roomSteps, roomZone, type RoomMark } from "./transferRoomModel";
 import "./transfer-room.css";
 
@@ -72,7 +74,7 @@ function ComparePane({ moment, label }: { moment: OpenMoment | null; label: stri
 }
 
 export function TransferRoom({
-  active, timeline, scene, health, liveHealth, replay, cursorMissing, playing, zones, question, onLive, onSeek, onTransportKey, onQuestion, onChanges, testSteps,
+  active, timeline, scene, health, liveHealth, replay, cursorMissing, playing, zones, question, onLive, onSeek, onTransportKey, onQuestion, onChanges, testSteps, brain,
 }: {
   active: boolean;
   timeline: LocalTimeline;
@@ -90,6 +92,7 @@ export function TransferRoom({
   onQuestion: () => void;
   onChanges: () => void;
   testSteps?: ReactNode;
+  brain?: { view: View; onView: (view: View) => void; onBoard: () => void; blocked: boolean };
 }) {
   const [reader, setReader] = useState<Reader | null>(null);
   const [pins, setPins] = useState<readonly [RoomMark | null, RoomMark | null]>([null, null]);
@@ -187,6 +190,7 @@ export function TransferRoom({
       className="transfer-room"
       style={roomArt}
       hidden={!active}
+      data-brain={!!brain}
       data-reader={!!reader || compare}
       data-comparing={compare}
       onKeyDown={(event) => {
@@ -209,7 +213,16 @@ export function TransferRoom({
           </>}
           {question && <button type="button" className="room-question" onClick={onQuestion}>Question</button>}
         </div>
-        <div className="room-bay" data-seat-state={health.state} data-cassette={cassette} data-has-work={scene.plates > 0 || !!scene.run.head} data-owner={(!replay && question) || cassette === "received"}>
+        {brain ? <BrainRoom key={scene.run.run_id} {...brain} scene={scene} timeline={timeline} health={liveHealth}
+          replay={replay} playing={playing} question={question} reading={!!reader || compare || brain.blocked}
+          inspected={opened} onZone={openZone} onQuestion={onQuestion}
+          onEvidence={(event, source) => {
+            returnTo.current = source;
+            setCompare(false);
+            onSeek(event);
+            openRow(event);
+          }}
+        /> : <div className="room-bay" data-seat-state={health.state} data-cassette={cassette} data-has-work={scene.plates > 0 || !!scene.run.head} data-owner={(!replay && question) || cassette === "received"}>
           <div className="room-picture" aria-hidden="true">
             <div className="room-backdrop"><div className="room-handoff-pose" /></div>
             <div className="room-worklight" />
@@ -244,13 +257,13 @@ export function TransferRoom({
             {selected && <time dateTime={selected.at}>{time(selected.at)}</time>}
           </div>}
           <button className="room-cassette-button" type="button" onClick={(event) => openZone(
-            fault ? "all" : cassette === "received" ? "handover" : cassette === "verify" ? "verify" : ["shipped", "reverted"].includes(cassette) ? "ship" : "build",
+            fault || scene.phase === "cancelled" ? "all" : cassette === "received" ? "handover" : cassette === "verify" ? "verify" : ["shipped", "reverted"].includes(cassette) ? "ship" : "build",
             event.currentTarget,
           )}>
-            {fault ? "Error details" : cassette === "received" ? "Handoff" : cassette === "verify" ? "Checks" : "Cassette"}
+            {fault ? "Error details" : scene.phase === "cancelled" ? "Last activity" : cassette === "received" ? "Handoff" : cassette === "verify" ? "Checks" : "Cassette"}
           </button>
           {preview && <span className="room-preview" title={preview}>{preview}</span>}
-        </div>
+        </div>}
         <nav className="room-steps" aria-label="Room steps">
           <button type="button" onClick={(event) => openZone("brief", event.currentTarget)} aria-pressed={reader?.zone === "brief"}><BookOpen size={15} /> Plan</button>
           {roomSteps.map(({ label, zones: group }) => {
@@ -260,7 +273,7 @@ export function TransferRoom({
           })}
           <button type="button" onClick={(event) => openZone("all", event.currentTarget)} aria-pressed={reader?.zone === "all"}>All actions</button>
         </nav>
-        <div className="room-jog" aria-label="Jog wheel">
+        {!brain && <div className="room-jog" aria-label="Jog wheel">
           <button type="button" aria-label="Previous action" onClick={() => jog(previous)} disabled={!previous}><ChevronLeft size={20} /></button>
           <label className="room-wheel">
             <Disc3 size={24} aria-hidden="true" style={{ "--room-detent": `${(Math.max(0, position) % 12) * 30}deg` } as CSSProperties} />
@@ -280,7 +293,7 @@ export function TransferRoom({
           <button type="button" aria-label="Next action" onClick={() => jog(next)} disabled={!next}><ChevronRight size={20} /></button>
           <output aria-live={playing ? "off" : "polite"}>{cursorMissing ? "Action unavailable" : replay && selected ? selected.label : "Live"}</output>
           {replay && <button type="button" onClick={onLive}>Live</button>}
-        </div>
+        </div>}
       </div>
       {(reader || compare) && <section className="room-reader" aria-label="Room output">
         <header>

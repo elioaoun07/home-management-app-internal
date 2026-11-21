@@ -12,7 +12,7 @@ import { deriveCampaigns, parseDecisions } from "./shared/product.mjs";
 import { buildPortfolio } from "./shared/portfolio.mjs";
 import { workOutcomes } from "./shared/metrics.mjs";
 import { deliveryBlockReason } from "./shared/work-lifecycle.mjs";
-import { idSection, workIds } from "./shared/work-id.mjs";
+import { createIdSectionReader, workIds } from "./shared/work-id.mjs";
 import { applyPlanningCommand, emptyPlanning, PlanningError, PLANNING_FILE, planningCommandSchema, validatePlanning } from "./shared/planning.mjs";
 
 const digest = (value) => createHash("sha256").update(value).digest("hex");
@@ -41,11 +41,11 @@ export function readPlanning(pmDir) {
  * The history parser decides completed/cancelled exact identities, and reopened
  * checklist rows win. Missing rows without receipts never become completed.
  */
-function planningCorpus(data) {
+function planningCorpus(data, readSection = createIdSectionReader()) {
   const files = data.files.map((file) => ({ ...file, module: file.relPath.split("/")[0], inFabled: /^(superseded|baseline-frozen|template)$/u.test(String(parseFrontmatter(file.raw).meta.status || "")) }));
   const tasks = files.flatMap((file) => fileTasks(file.raw).map((task) => ({ ...task, file: file.relPath, module: file.module, key: `${file.relPath}::${task.cbidx}` })));
   const choices = parseDecisions(files.find((file) => file.relPath === "_Decisions.md")?.raw);
-  const portfolio = buildPortfolio(deriveCampaigns(files, tasks, data.cancelledLog || ""), choices);
+  const portfolio = buildPortfolio(deriveCampaigns(files, tasks, data.cancelledLog || ""), choices, readSection);
   const history = portfolio.campaigns.flatMap((campaign) => [...campaign.shipped, ...campaign.cancelled]);
   const outcomes = workOutcomes({ work: portfolio.items, history });
   return { portfolio, outcomes };
@@ -53,7 +53,11 @@ function planningCorpus(data) {
 
 /** @returns {Record<string, import("./app/planningTypes").PlanningReadiness>} */
 export function buildPlanningFacts(data) {
-  const { portfolio, outcomes } = planningCorpus(data);
+  const readSection = createIdSectionReader();
+  return planningFacts(planningCorpus(data, readSection), readSection);
+}
+
+function planningFacts({ portfolio, outcomes }, readSection) {
   const backlog = {
     open: new Set(portfolio.items.filter((item) => item.state === "open").map((item) => item.idChip)),
     completed: new Set(outcomes.completed.map((entry) => entry.workId)),
@@ -71,10 +75,10 @@ export function buildPlanningFacts(data) {
     const bookRaw = portfolio.campaigns.find((campaign) => campaign.name === item.module)?.book?.raw || "";
     // Portfolio excerpts stop at Provenance, but current executable guidance and
     // owner-evidence declarations can follow it in the same canonical section.
-    const fullContract = idSection(bookRaw, item.idChip)?.body || "";
+    const fullContract = readSection(bookRaw, item.idChip)?.body || "";
     const declarations = fullContract.replace(/<!--[\s\S]*?-->/gu, "");
     const planDependencies = declaredPlanDependencies(declarations);
-    const itemDeclared = itemFacts({ alias: item.idChip, title: item.text, bookRaw });
+    const itemDeclared = itemFacts({ alias: item.idChip, title: item.text, bookRaw, readSection });
     const declared = { ...itemDeclared, dependencyIds: [...new Set([...itemDeclared.dependencyIds, ...planDependencies.flatMap(workIds)])].filter((key) => key !== item.idChip) };
     const reasons = itemReasons({ facts: declared, backlog });
     const lifecycle = deliveryBlockReason({ ...item, contract: fullContract });
@@ -208,8 +212,10 @@ export function observePlanningProgress({ root, pmDir, data, now = new Date().to
     const raw = existsSync(journal) ? readFileSync(journal, "utf8") : "";
     const prior = raw.split(/\r?\n/u).filter(Boolean).map((line) => JSON.parse(line));
     const entries = new Map(prior.map((event) => [event.key, event]));
-    const facts = buildPlanningFacts(data);
-    const { outcomes } = planningCorpus(data);
+    const readSection = createIdSectionReader();
+    const corpus = planningCorpus(data, readSection);
+    const facts = planningFacts(corpus, readSection);
+    const { outcomes } = corpus;
     const receipts = new Map([...outcomes.completed, ...outcomes.cancelled].map((outcome) => [outcome.workId, outcome]));
     const observedAt = new Date(now).toISOString();
     const events = [];

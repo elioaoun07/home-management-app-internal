@@ -43,6 +43,7 @@ export interface LocalRunView {
     id: string;
     title: string;
     campaign?: string;
+    topic?: string;
     file?: string;
     brief?: string;
   };

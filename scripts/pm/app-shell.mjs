@@ -8,5 +8,7 @@ export function appAsset(path, bundle) {
     ? { type: "text/javascript; charset=utf-8", body: bundle.js }
     : path === "/app/assets/pm.css"
       ? { type: "text/css; charset=utf-8", body: bundle.css }
-      : null;
+      : path === "/app/assets/brain-room.js" && bundle.room
+        ? { type: "text/javascript; charset=utf-8", body: bundle.room }
+        : null;
 }

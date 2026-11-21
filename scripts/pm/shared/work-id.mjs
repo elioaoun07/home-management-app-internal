@@ -35,6 +35,10 @@ export function workIds(text = "") {
 export function idSections(raw = "", id, level = 3) {
   const key = normalizeWorkId(id);
   if (!key || !raw) return [];
+  return scanIdSections(raw, level, key);
+}
+
+function scanIdSections(raw, level, key) {
   const lines = String(raw).split("\n");
   const anchors = new Map(headingAnchors(raw).map((entry) => [entry.line, entry.anchor]));
   const heading = new RegExp(`^#{${level}}\\s+(.+?)\\s*#*\\s*$`);
@@ -42,7 +46,7 @@ export function idSections(raw = "", id, level = 3) {
   const sections = [];
   lines.forEach((line, index) => {
     const match = line.replace(/\r$/, "").match(heading);
-    if (!match || normalizeWorkId(match[1]) !== key) return;
+    if (!match || (key && normalizeWorkId(match[1]) !== key)) return;
     let end = index + 1;
     while (end < lines.length && !boundary.test(lines[end])) end++;
     sections.push({
@@ -59,6 +63,24 @@ export function idSections(raw = "", id, level = 3) {
 export function idSection(raw, id, level = 3) {
   const sections = idSections(raw, id, level);
   return sections.length === 1 ? sections[0] : null;
+}
+
+/** Reuse the section index within one document projection. */
+export function createIdSectionReader() {
+  const books = new Map();
+  return (raw, id) => {
+    const key = normalizeWorkId(id);
+    if (!raw || !key) return null;
+    if (!books.has(raw)) {
+      const sections = new Map();
+      for (const section of scanIdSections(raw, 3, null)) {
+        const headingKey = normalizeWorkId(section.heading);
+        sections.set(headingKey, sections.has(headingKey) ? null : section);
+      }
+      books.set(raw, sections);
+    }
+    return books.get(raw).get(key) ?? null;
+  };
 }
 
 const CHIP_LINE = new RegExp(String.raw`^\s*-\s*\[[ xX]\]\s*\*\*(${CHIP_ID_SOURCE})\*\*`, "i");

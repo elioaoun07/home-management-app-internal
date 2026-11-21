@@ -638,7 +638,7 @@ export function createDrivePublisher(options) {
     clearTimeout(retryTimer);
   }
 
-  return { schedule, publishNow, stop, state: () => state };
+  return { schedule, publishNow, stop, isBusy: () => Boolean(inFlight), state: () => state };
 }
 
 /**

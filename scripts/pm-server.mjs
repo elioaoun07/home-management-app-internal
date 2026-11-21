@@ -27,7 +27,7 @@ import {
 import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 
 import {
@@ -44,10 +44,12 @@ import {
 } from "./pm/mutations.mjs";
 import { archiveItem, monthlySweep, restoreSnapshots } from "./pm/archive.mjs";
 import { hostAllowed } from "./pm/net.mjs";
-import { collectSources, readCancelledLog, readSourceFile, walk, walkDirectories } from "./pm/scan.mjs";
+import { readSourceFile } from "./pm/scan.mjs";
+import { createSnapshotReader, readPlanningCorpus } from "./pm/snapshot.mjs";
 import { createAppWatcher } from "./pm/app-build.mjs";
 import { appAsset, buildAppShell } from "./pm/app-shell.mjs";
 import { routeHealth } from "./pm/health.mjs";
+import { createDesktopLifecycle, deliveryRestartBlocker, validDesktopId } from "./pm/desktop-lifecycle.mjs";
 import { assertExpectedCheckbox, assertRestoreCurrent, guardUndo } from "./pm/write-guards.mjs";
 import { createBridge, createRollupsSnapshotBuilder } from "./pm/bridge.mjs";
 import { createDrivePublisher, readDeliveryFromStore, resolveDriveRoot } from "./pm/drive-publish.mjs";
@@ -63,7 +65,7 @@ import {
 import { createDeliveryV2Context, routeDeliveryV2 } from "./delivery-v2/service.mjs";
 import { readDispatchMode } from "./delivery-v2/entry.mjs";
 import { issuePairingCode } from "./delivery-v2/local-auth.mjs";
-import { observePlanningProgress, planningSnapshot, routePlanning } from "./pm/planning.mjs";
+import { observePlanningProgress, routePlanning } from "./pm/planning.mjs";
 import { createCockpitReader } from "./pm/cockpit-reader.mjs";
 import { routeCockpitRescan } from "./pm/cockpit-route.mjs";
 import { captureDeliverySnapshot } from "./os/ingest/delivery-snapshot.mjs";
@@ -108,10 +110,16 @@ const HOST = hostArg
   ? hostArg.slice(7)
   : process.env.PM_HOST || (argv.includes("--lan") ? "0.0.0.0" : "127.0.0.1");
 const LAN_MODE = HOST !== "127.0.0.1" && HOST !== "localhost";
+const desktopInstance = process.env.PM_DESKTOP_INSTANCE;
+if (desktopInstance !== undefined && (!validDesktopId(desktopInstance) || LAN_MODE)) {
+  throw new Error("PM desktop requires a valid instance ID and a loopback host.");
+}
 const BRIDGE_ENABLED = (process.env.PM_BRIDGE === "1" || argv.includes("--bridge")) && !argv.includes("--no-bridge");
 // Phase 4: the bridge relays the same corpus the local app reads (`buildData`,
 // a hoisted function below) and Delivery V2 commands through the same context.
-const bridge = BRIDGE_ENABLED ? createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx, buildData: () => buildData() }) : null;
+const snapshotReader = createSnapshotReader({ root: ROOT, pmDir: PM_DIR, pmRel: PM_REL });
+const buildPlanningData = () => readPlanningCorpus(PM_DIR);
+const bridge = BRIDGE_ENABLED ? createBridge({ PM_DIR, deliveryCtx, deliveryV2Ctx, buildData, buildPlanningData }) : null;
 
 // One-way Google Drive mirror of PM docs + delivery status (scripts/pm/drive-publish.mjs).
 // Reads only; failures are logged and retried, never thrown into a request or the delivery path.
@@ -162,28 +170,9 @@ function escapeRe(s) {
 }
 
 // Build the live data payload (md bodies inline; source bodies fetched lazily).
-function buildData() {
-  const files = walk(PM_DIR);
-  const sourceKeys = Object.keys(
-    collectSources(files, ROOT, { keysOnly: true }),
-  );
-  const data = {
-    cockpit: cockpitReader.read(),
-    directories: walkDirectories(PM_DIR),
-    generatedAt: new Date().toISOString(),
-    cancelledLog: readCancelledLog(PM_DIR),
-    repoRootFileUrl: pathToFileURL(ROOT).href.replace(/\/$/, "") + "/",
-    repoRootPath: ROOT.replace(/\\/g, "/"),
-    pmDirRepoRel: PM_REL.replace(/\\/g, "/"),
-    sourceKeys,
-    files: files.map((f) => ({
-      relPath: f.relPath,
-      raw: f.raw,
-      mtimeMs: f.mtimeMs,
-      repoDir: relative(ROOT, f.absDir).replace(/\\/g, "/"),
-    })),
-  };
-  return { ...data, ...planningSnapshot(PM_DIR, data) };
+async function buildData() {
+  const data = await snapshotReader.read();
+  return { ...data, cockpit: cockpitReader.read() };
 }
 
 // ---- mutation operations (throw {status,msg} on failure) ----
@@ -391,7 +380,7 @@ let watchTimer = null;
 function observeSprints() {
   // This is the explicit-write / filesystem-watcher path. GET /api/data remains
   // read-only; changes made from CLI/chat are observed here, without backdating.
-  try { observePlanningProgress({ root: ROOT, pmDir: PM_DIR, data: buildData() }); }
+  try { observePlanningProgress({ root: ROOT, pmDir: PM_DIR, data: buildPlanningData() }); }
   catch (error) { console.error("[pm] sprint observation failed:", error.message); }
 }
 let eraSyncing = null;
@@ -430,6 +419,7 @@ function runUatFeedbackSync() {
   return uatSyncing;
 }
 function broadcast() {
+  snapshotReader.invalidate();
   observeSprints();
   for (const res of sseClients) {
     try {
@@ -461,6 +451,7 @@ function broadcastCockpit() {
 }
 try {
   watch(PM_DIR, { recursive: true }, () => {
+    snapshotReader.invalidate();
     if (Date.now() < suppressUntil) return; // ignore our own writes
     clearTimeout(watchTimer);
     watchTimer = setTimeout(broadcast, 250);
@@ -549,7 +540,11 @@ function readBody(req) {
   });
 }
 
+let activeRequests = 0;
+let restarting = false;
 const server = createServer(async (req, res) => {
+  if (restarting) return sendJson(res, 503, { error: "PM is restarting" });
+  activeRequests++;
   try {
     // DNS-rebinding guard: localhost always; private LAN hosts only with --lan.
     if (!hostAllowed(req.headers.host, { lan: LAN_MODE })) {
@@ -599,7 +594,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && path === "/api/data") {
-      return sendJson(res, 200, buildData());
+      return sendJson(res, 200, await buildData());
     }
 
     if (req.method === "GET" && path === "/api/source") {
@@ -646,7 +641,7 @@ const server = createServer(async (req, res) => {
       // are the reason loopback binding alone is not the authentication story.
       if (path.startsWith("/api/delivery/v2/")) {
         if (path === "/api/delivery/v2/planning" && req.method === "POST") {
-          const result = routePlanning({ headers: req.headers, body }, { root: ROOT, pmDir: PM_DIR, data: buildData() });
+          const result = routePlanning({ headers: req.headers, body }, { root: ROOT, pmDir: PM_DIR, data: buildPlanningData() });
           if (result.status === 200) broadcast();
           return sendJson(res, result.status, result.json);
         }
@@ -687,6 +682,7 @@ const server = createServer(async (req, res) => {
       }
       suppressUntil = Date.now() + 700; // mute our own fs.watch echo
       const result = guardUndo(PM_DIR, handler(body));
+      snapshotReader.invalidate();
       observeSprints();
       driveSchedule("pm"); // the watcher is muted for our own writes
       return sendJson(res, 200, result);
@@ -706,8 +702,33 @@ const server = createServer(async (req, res) => {
   } catch (err) {
     const status = err && err.status ? err.status : 500;
     sendJson(res, status, { error: String((err && err.message) || err) });
+  } finally {
+    activeRequests--;
   }
 });
+
+function startDesktopControls(port) {
+  const desktop = createDesktopLifecycle({
+    dir: join(ROOT, ".pm", "desktop"), instance: desktopInstance, port,
+    blocker() {
+      if (activeRequests) return "PM is handling a request. Try again in a moment.";
+      if (bridge?.isBusy() || eraSyncing || uatSyncing || drive?.isBusy()) return "PM is syncing. Try again in a moment.";
+      return deliveryRestartBlocker(deliveryV2Ctx);
+    },
+    shutdown() {
+      // Admission and the idle check run in the same event-loop turn.
+      restarting = true;
+      bridge?.stop();
+      drive?.stop();
+      cockpitReader.stop();
+      server.close();
+      for (const client of sseClients) client.end();
+      server.closeAllConnections();
+      void appWatcher.dispose().finally(() => process.exit(0));
+    },
+  });
+  process.once("exit", desktop.stop);
+}
 
 function openBrowser(url) {
   const cmd =
@@ -783,6 +804,7 @@ function listen(port, attemptsLeft) {
     }
     if (bridge) bridge.start();
     else if (process.env.PM_BRIDGE === "1") console.log("[pm-bridge] disabled by --no-bridge");
+    if (desktopInstance) startDesktopControls(port);
     if (!noOpen) openBrowser(url);
   });
 }
@@ -803,4 +825,4 @@ try {
   console.error("Monthly sweep failed (checklists untouched):", error.message);
 }
 
-listen(PORT, 10);
+listen(PORT, desktopInstance ? 0 : 10);

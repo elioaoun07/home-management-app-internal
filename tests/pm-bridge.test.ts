@@ -16,6 +16,7 @@ import {
   ALLOWED_TYPES,
   buildSessionExtras,
   capSessionSnapshot,
+  createBridge,
   createCommandExecutor,
   createHistorySnapshotBuilder,
   createRollupsSnapshotBuilder,
@@ -28,6 +29,18 @@ import { textHash } from "../scripts/delivery/packet.mjs";
 import { createDeliveryContext } from "../scripts/delivery/server-routes.mjs";
 
 const cleanupDirs: string[] = [];
+it("keeps local cockpit, library and delivery notifications usable with an unconfigured bridge", () => {
+  const bridge = createBridge({ PM_DIR: "", deliveryCtx: {}, env: {},
+    createClientImpl: () => { throw new Error("Unexpected relay client"); } });
+  bridge.start();
+  bridge.publishCorpus();
+  bridge.publishTasks();
+  bridge.publishFleet();
+  bridge.publishSession("fixture");
+  expect(bridge.isBusy()).toBe(false);
+  bridge.stop();
+});
+
 afterEach(() => {
   while (cleanupDirs.length) {
     const dir = cleanupDirs.pop();

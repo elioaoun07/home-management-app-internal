@@ -219,9 +219,9 @@ export function classify(paths, rules) {
  *
  * @param {{alias:(string|null), title?:string, bookRaw?:(string|null)}} input
  */
-export function itemFacts({ alias, title = "", bookRaw = null }) {
+export function itemFacts({ alias, title = "", bookRaw = null, readSection = idSection }) {
   const key = normalizeWorkId(alias);
-  const section = key ? idSection(bookRaw || "", key) : null;
+  const section = key ? readSection(bookRaw || "", key) : null;
   const contract = section ? section.body.split(/\*\*Provenance:\*\*/u)[0] : "";
   return deepFreeze({
     key,
